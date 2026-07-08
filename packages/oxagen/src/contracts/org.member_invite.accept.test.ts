@@ -33,7 +33,7 @@ describe("org.member.invite.accept capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("org.member_invite.accept")).toBe(orgMemberInviteAccept);
+    expect(getCapability("accept_member_invite")).toBe(orgMemberInviteAccept);
   });
 
   it("allows the invitee to accept (defaultEffect allow, low risk)", () => {

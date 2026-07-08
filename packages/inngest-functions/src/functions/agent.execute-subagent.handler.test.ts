@@ -134,7 +134,7 @@ function makeStep(): StepCtx {
   };
 }
 
-function makeClaim(id: string, attempts = 1, capabilityName = "agent.memory.recall") {
+function makeClaim(id: string, attempts = 1, capabilityName = "recall_memory") {
   return { id, childMessageId: `msg-${id}`, capabilityName, inputPayload: {}, attempts };
 }
 

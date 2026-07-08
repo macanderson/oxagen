@@ -103,7 +103,7 @@ describe("messageToBlocks", () => {
           {
             type: "tool-call",
             toolCallId: "t1",
-            capability: "graph.search",
+            capability: "search_graph",
             status: "success",
             durationMs: 420,
             resultPreview: { hits: 3 },
@@ -117,7 +117,7 @@ describe("messageToBlocks", () => {
       { kind: "text", text: "Here you go." },
       {
         kind: "tool",
-        capability: "graph.search",
+        capability: "search_graph",
         status: "success",
         durationMs: 420,
         resultPreview: '{"hits":3}',
@@ -250,7 +250,7 @@ describe("conversationToMarkdown", () => {
             id: "a",
             role: "assistant",
             contentBlocks: [
-              { type: "tool-call", capability: "ontology.query", status: "success", durationMs: 90 },
+              { type: "tool-call", capability: "query_ontology", status: "success", durationMs: 90 },
               { type: "code-execute", language: "ts", code: "const x = 1;" },
             ],
           }),

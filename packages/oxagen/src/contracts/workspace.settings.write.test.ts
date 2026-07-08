@@ -23,6 +23,6 @@ describe("workspace.settings.write capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("workspace.settings.write")).toBe(workspaceSettingsWrite);
+    expect(getCapability("update_workspace_settings")).toBe(workspaceSettingsWrite);
   });
 });

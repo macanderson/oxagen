@@ -33,7 +33,7 @@ describe("agent.task.background.start capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("agent.background_task.start")).toBe(
+    expect(getCapability("start_background_task")).toBe(
       agentTaskBackgroundStart,
     );
   });

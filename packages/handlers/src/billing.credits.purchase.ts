@@ -40,7 +40,7 @@ export const billingCreditsPurchaseHandler: CapabilityHandler<
       actorUserId: ctx.userId ?? null,
       orgId: ctx.orgId,
       workspaceId: ctx.workspaceId ?? null,
-      capability: "billing.credits.purchase",
+      capability: "purchase_credits",
       outcome: "success",
       ip: null,
       userAgent: null,

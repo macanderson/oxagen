@@ -24,7 +24,7 @@ describe("agent.subagent.fanout.get capability", () => {
       runs: [
         {
           runId: "sar_1",
-          capabilityName: "agent.tool.list",
+          capabilityName: "list_agent_tools",
           status: "completed",
           errorReason: null,
           startedAt: "2026-06-16T00:00:01.000Z",
@@ -36,7 +36,7 @@ describe("agent.subagent.fanout.get capability", () => {
         },
         {
           runId: "sar_2",
-          capabilityName: "agent.memory.recall",
+          capabilityName: "recall_memory",
           status: "failed",
           errorReason: "boom",
           startedAt: null,
@@ -81,6 +81,6 @@ describe("agent.subagent.fanout.get capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("agent.subagent_fanout.get")).toBe(agentSubagentFanoutGet);
+    expect(getCapability("get_subagent_fanout")).toBe(agentSubagentFanoutGet);
   });
 });

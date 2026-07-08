@@ -3,7 +3,7 @@ import { registerCapability } from "../registry";
 import { environmentSummarySchema } from "./environment.create";
 
 export const environmentSetDefault = registerCapability({
-  name: "environment.set_default",
+  name: "set_default_environment",
   domain: "environment",
   description: "Promote an environment to the workspace default. Atomically swaps the existing default; the promoted environment is reactivated.",
   mode: "sync",

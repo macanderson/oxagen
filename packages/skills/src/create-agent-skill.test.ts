@@ -23,7 +23,7 @@ describe("create-agent builtin skill", () => {
     expect(skill.metadata?.weight).toBe("high");
     expect(skill.metadata?.category).toBe("meta");
     expect(skill.description.length).toBeGreaterThan(10);
-    expect(skill.body).toContain("agent.definition.suggest");
+    expect(skill.body).toContain("suggest_agent_def");
     // References agent-builder as the interactive deploy counterpart.
     expect(skill.body).toContain("agent-builder");
   });

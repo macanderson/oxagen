@@ -3,7 +3,7 @@ import { pluginCredentialReauth } from "./plugin.credential.reauth";
 
 describe("plugin.credential.reauth contract", () => {
   it("registers with the correct name", () => {
-    expect(pluginCredentialReauth.name).toBe("plugin.credential.reauth");
+    expect(pluginCredentialReauth.name).toBe("reauth_plugin_credential");
   });
 
   it("includes api and mcp surfaces", () => {

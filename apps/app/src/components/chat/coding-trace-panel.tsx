@@ -71,15 +71,38 @@ export interface CodingTraceRow {
  * Capabilities that read as "running code" rather than a generic tool call —
  * everything else observed in `toolCalls` falls into the generic "Tool
  * calls" bucket. Mirrors the code-run affordances already special-cased in
- * `chat-shell-client.tsx` (`agent.code.execute` → `CodeExecuteCard`) plus the
- * durable-sandbox and repo-mutation surface.
+ * `chat-shell-client.tsx` (`execute_code` → `CodeExecuteCard`) plus the
+ * durable-sandbox and repo-mutation surface. (ADR-025: verb-first snake_case
+ * names have no shared dotted prefix, so the family is an explicit set.)
  */
+const CODE_RUN_CAPABILITIES = new Set<string>([
+  "execute_code",
+  // durable sandbox family
+  "start_sandbox",
+  "run_sandbox_command",
+  "snapshot_sandbox",
+  "stop_sandbox",
+  "list_sandbox_files",
+  "read_sandbox_file",
+  // repo-mutation surface
+  "open_pr",
+  "get_pr",
+  "get_pr_diff",
+  "get_ci_status",
+  "create_branch",
+  "create_repo",
+  "fork_repo",
+  "sync_repo",
+  "put_repo_file",
+  "get_repo_metrics",
+  "configure_repo",
+  "pause_repo",
+  "resume_repo",
+  "edit_repo_file",
+]);
+
 export function isCodeRunCapability(capability: string): boolean {
-  return (
-    capability === "agent.code.execute" ||
-    capability.startsWith("agent.sandbox") ||
-    capability.startsWith("repo.")
-  );
+  return CODE_RUN_CAPABILITIES.has(capability);
 }
 
 /** Split an `order` timeline key (`"<kind>:<id>"`) into its parts. */

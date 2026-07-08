@@ -89,14 +89,14 @@ describe("ToolCallContentBlock", () => {
     const block: ToolCallContentBlock = {
       type: "tool-call",
       toolCallId: "tc-abc",
-      capability: "agent.code.execute",
+      capability: "execute_code",
       inputPreview: { code: "2+2" },
       riskLevel: "low",
       status: "pending",
     };
     expect(block.type).toBe("tool-call");
     expect(block.toolCallId).toBe("tc-abc");
-    expect(block.capability).toBe("agent.code.execute");
+    expect(block.capability).toBe("execute_code");
     expect(block.riskLevel).toBe("low");
     expect(block.status).toBe("pending");
   });
@@ -783,13 +783,13 @@ describe("StreamEvent union — member shapes", () => {
       type: "tool-call-start",
       messageId: "msg-2",
       toolCallId: "tc-ev",
-      capability: "web.search",
+      capability: "search_web",
       inputPreview: { query: "test" },
       riskLevel: "low",
     };
     expect(evt.type).toBe("tool-call-start");
     if (evt.type === "tool-call-start") {
-      expect(evt.capability).toBe("web.search");
+      expect(evt.capability).toBe("search_web");
       expect(evt.riskLevel).toBe("low");
     }
   });

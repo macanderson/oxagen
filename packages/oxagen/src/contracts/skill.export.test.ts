@@ -93,7 +93,7 @@ describe("skill.export capability", () => {
   // ── registry ──────────────────────────────────────────────────────────────
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("skill.export")).toBe(skillExport);
+    expect(getCapability("export_skill")).toBe(skillExport);
   });
 
   it("has noBillingGate set", () => {

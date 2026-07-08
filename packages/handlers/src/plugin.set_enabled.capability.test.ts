@@ -18,7 +18,7 @@ vi.mock("@oxagen/database/security", () => ({
   makeSecurityEventInserter: vi.fn().mockReturnValue(vi.fn()),
 }));
 
-import { handler } from "./plugin.workspace.set_enabled";
+import { handler } from "./plugin.set_enabled";
 
 // ── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -52,7 +52,7 @@ function mockListingLookup(listing: Record<string, unknown> | null) {
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
-describe("plugin.workspace.set_enabled handler — capability guard", () => {
+describe("set_plugin_enabled handler (workspace scope) — capability guard", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -72,7 +72,7 @@ describe("plugin.workspace.set_enabled handler — capability guard", () => {
     });
 
     await expect(
-      handler({ orgListingId: "porg-cap-1", enabled: true }, ctx),
+      handler({ scope: "workspace", orgListingId: "porg-cap-1", enabled: true }, ctx),
     ).rejects.toThrow("Workspace-level enable/disable for Oxagen Plugins arrives in Phase 2");
   });
 
@@ -91,11 +91,11 @@ describe("plugin.workspace.set_enabled handler — capability guard", () => {
     });
 
     await expect(
-      handler({ orgListingId: "porg-cap-1", enabled: false }, ctx),
+      handler({ scope: "workspace", orgListingId: "porg-cap-1", enabled: false }, ctx),
     ).rejects.toThrow("Workspace-level enable/disable for Oxagen Plugins arrives in Phase 2");
   });
 
-  it("error message directs user to plugin.org.set_enabled", async () => {
+  it("error message directs user to scope='org'", async () => {
     mockListingLookup({
       id: "porg-cap-1",
       orgId: "org-1",
@@ -110,8 +110,8 @@ describe("plugin.workspace.set_enabled handler — capability guard", () => {
     });
 
     await expect(
-      handler({ orgListingId: "porg-cap-1", enabled: true }, ctx),
-    ).rejects.toThrow("plugin.org.set_enabled");
+      handler({ scope: "workspace", orgListingId: "porg-cap-1", enabled: true }, ctx),
+    ).rejects.toThrow("scope='org'");
   });
 
   it("does NOT hit a denylist check before enabling (denylist removed)", async () => {
@@ -143,7 +143,7 @@ describe("plugin.workspace.set_enabled handler — capability guard", () => {
       }),
     );
 
-    await handler({ orgListingId: "porg-mcp-1", enabled: true }, ctx);
+    await handler({ scope: "workspace", orgListingId: "porg-mcp-1", enabled: true }, ctx);
 
     // Exactly 2 calls: listing lookup + upsert. No denylist call.
     expect(mocks.withTenantDb).toHaveBeenCalledTimes(2);
@@ -176,7 +176,7 @@ describe("plugin.workspace.set_enabled handler — capability guard", () => {
       }),
     );
 
-    const result = await handler({ orgListingId: "porg-mcp-1", enabled: true }, ctx) as {
+    const result = await handler({ scope: "workspace", orgListingId: "porg-mcp-1", enabled: true }, ctx) as {
       workspaceServerId: string | null;
     };
     expect(result.workspaceServerId).toBe("mcp-pub-1");
@@ -189,7 +189,7 @@ describe("plugin.workspace.set_enabled handler — capability guard", () => {
         actorUserId: "user-1",
         orgId: "org-1",
         workspaceId: "ws-1",
-        capability: "plugin.workspace.set_enabled",
+        capability: "set_plugin_enabled",
         outcome: "success",
       }),
     );
@@ -220,7 +220,7 @@ describe("plugin.workspace.set_enabled handler — capability guard", () => {
       }),
     );
 
-    const result = await handler({ orgListingId: "porg-mcp-1", enabled: false }, ctx) as {
+    const result = await handler({ scope: "workspace", orgListingId: "porg-mcp-1", enabled: false }, ctx) as {
       workspaceServerId: string | null;
     };
     expect(result.workspaceServerId).toBeNull();
@@ -228,7 +228,7 @@ describe("plugin.workspace.set_enabled handler — capability guard", () => {
     expect(mocks.emitSecurityEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         eventType: "plugin.enabled_changed",
-        capability: "plugin.workspace.set_enabled",
+        capability: "set_plugin_enabled",
         workspaceId: "ws-1",
         outcome: "success",
       }),
@@ -250,21 +250,21 @@ describe("plugin.workspace.set_enabled handler — capability guard", () => {
     });
 
     await expect(
-      handler({ orgListingId: "porg-cap-1", enabled: true }, ctx),
+      handler({ scope: "workspace", orgListingId: "porg-cap-1", enabled: true }, ctx),
     ).rejects.toThrow();
     expect(mocks.emitSecurityEvent).not.toHaveBeenCalled();
   });
 
   it("throws when workspaceId is missing", async () => {
     await expect(
-      handler({ orgListingId: "porg-1", enabled: true }, ctxNoWorkspace),
+      handler({ scope: "workspace", orgListingId: "porg-1", enabled: true }, ctxNoWorkspace),
     ).rejects.toThrow("workspaceId is required");
   });
 
   it("throws when installed plugin not found", async () => {
     mockListingLookup(null);
     await expect(
-      handler({ orgListingId: "porg-nonexistent", enabled: true }, ctx),
+      handler({ scope: "workspace", orgListingId: "porg-nonexistent", enabled: true }, ctx),
     ).rejects.toThrow("not found or deleted");
   });
 });

@@ -7,7 +7,7 @@ import {
 
 describe("a2a.card.get contract", () => {
   it("declares the expected capability metadata", () => {
-    expect(a2aCardGet.name).toBe("a2a.card.get");
+    expect(a2aCardGet.name).toBe("get_a2a_card");
     expect(a2aCardGet.domain).toBe("a2a");
     expect(a2aCardGet.mode).toBe("sync");
     expect(a2aCardGet.scoped).toBe(true);

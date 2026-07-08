@@ -109,7 +109,7 @@ export async function readEnvironmentsAction(args: {
 }): Promise<EnvironmentSummary[]> {
   const scope = await resolveScope(args.orgSlug, args.workspaceSlug);
   return runInTenantScope({ orgId: scope.orgId, workspaceId: scope.workspaceId }, async () => {
-    const out = (await invoke("environment.list", {}, vaultCtx(scope), {
+    const out = (await invoke("list_environments", {}, vaultCtx(scope), {
       surface: "agent",
     })) as { environments: EnvironmentSummary[] };
     return out.environments;
@@ -122,7 +122,7 @@ export async function readSecretKeysAction(args: {
 }): Promise<SecretKeySummary[]> {
   const scope = await resolveScope(args.orgSlug, args.workspaceSlug);
   return runInTenantScope({ orgId: scope.orgId, workspaceId: scope.workspaceId }, async () => {
-    const out = (await invoke("secret.key.list", {}, vaultCtx(scope), {
+    const out = (await invoke("list_secret_keys", {}, vaultCtx(scope), {
       surface: "agent",
     })) as { keys: SecretKeySummary[] };
     return out.keys;
@@ -163,7 +163,7 @@ export async function importEnvAction(args: {
   return asManager(args, async (scope) => {
     try {
       const out = (await invoke(
-        "secret.import_env",
+        "import_env_secrets",
         { text: args.text, environmentId: args.environmentId ?? null, commit: args.commit },
         vaultCtx(scope),
         { surface: "agent" },
@@ -187,7 +187,7 @@ export async function upsertKeyAction(args: {
   return asManager(args, async (scope) => {
     try {
       const out = (await invoke(
-        "secret.key.upsert",
+        "upsert_secret_key",
         {
           key: args.key,
           sensitive: args.sensitive,
@@ -215,7 +215,7 @@ export async function setValueAction(args: {
   return asManager(args, async (scope) => {
     try {
       await invoke(
-        "secret.value.set",
+        "set_secret_value",
         { keyId: args.keyId, environmentId: args.environmentId, value: args.value },
         vaultCtx(scope),
         { surface: "agent" },
@@ -237,7 +237,7 @@ export async function unsetValueAction(args: {
   return asManager(args, async (scope) => {
     try {
       await invoke(
-        "secret.value.unset",
+        "unset_secret_value",
         { keyId: args.keyId, environmentId: args.environmentId },
         vaultCtx(scope),
         { surface: "agent" },
@@ -257,7 +257,7 @@ export async function deleteKeyAction(args: {
 }): Promise<ActionResult> {
   return asManager(args, async (scope) => {
     try {
-      await invoke("secret.key.delete", { keyId: args.keyId }, vaultCtx(scope), {
+      await invoke("delete_secret_key", { keyId: args.keyId }, vaultCtx(scope), {
         surface: "agent",
       });
       revalidate(args);
@@ -277,7 +277,7 @@ export async function createEnvironmentAction(args: {
   return asManager(args, async (scope) => {
     try {
       const out = (await invoke(
-        "environment.create",
+        "create_environment",
         { name: args.name, slug: args.slug },
         vaultCtx(scope),
         { surface: "agent" },
@@ -298,7 +298,7 @@ export async function setDefaultEnvironmentAction(args: {
   return asManager(args, async (scope) => {
     try {
       const out = (await invoke(
-        "environment.set_default",
+        "set_default_environment",
         { environmentId: args.environmentId },
         vaultCtx(scope),
         { surface: "agent" },

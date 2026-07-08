@@ -87,7 +87,7 @@ authCliTokenRoute.post("/token", async (c) => {
     actorUserId: data.userId,
     orgId: data.orgId,
     workspaceId: null,
-    capability: "api.key.create",
+    capability: "create_api_key",
     outcome: "success",
     ip: null,
     userAgent: null,

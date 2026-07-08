@@ -10,7 +10,7 @@ type Story = StoryObj<typeof meta>;
 
 export const GenericFallback: Story = {
   args: {
-    capability: "web.fetch",
+    capability: "fetch_web_page",
     output: {
       url: "https://example.com/nautilus",
       title: "USS Nautilus (SSN-571)",

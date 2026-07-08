@@ -125,6 +125,6 @@ describe("repo.sync capability", () => {
   // ── registry ──────────────────────────────────────────────────────────────
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("repo.sync")).toBe(repoSync);
+    expect(getCapability("sync_repo")).toBe(repoSync);
   });
 });

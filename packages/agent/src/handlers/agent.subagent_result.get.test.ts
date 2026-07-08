@@ -34,7 +34,7 @@ function joinedRow(overrides: Partial<JoinedRow> = {}): JoinedRow {
   return {
     publicId: "sar_1",
     fanoutUuid: "fanuuid_1",
-    capabilityName: "web.search",
+    capabilityName: "search_web",
     status: "completed",
     summary: "3 hits for q1",
     inputPayload: { query: "q1" },
@@ -79,7 +79,7 @@ describe("agent.subagent.result.get handler", () => {
     expect(result).toMatchObject({
       runId: "sar_1",
       fanoutId: "fan_1",
-      capabilityName: "web.search",
+      capabilityName: "search_web",
       status: "completed",
       summary: "3 hits for q1",
       input: { query: "q1" },

@@ -16,58 +16,15 @@ import type { CapabilityDeclaration } from "./types";
 // `globalThis` so every instance shares one source of truth instead of each
 // holding a partial copy.
 const REGISTRY_KEY = Symbol.for("@oxagen/oxagen.capabilityRegistry");
-// Alias → canonical-name index (ADR-022). Anchored on globalThis for the same
-// bundler/HMR duplicate-module reasons as the registry itself.
-const ALIAS_KEY = Symbol.for("@oxagen/oxagen.capabilityAliasIndex");
-// Aliases already warned about, so a deprecated call logs at most once per
-// process instead of spamming every invocation.
-const ALIAS_WARNED_KEY = Symbol.for("@oxagen/oxagen.capabilityAliasWarned");
 
 type GlobalWithRegistry = typeof globalThis & {
   [REGISTRY_KEY]?: Map<string, CapabilityDeclaration>;
-  [ALIAS_KEY]?: Map<string, string>;
-  [ALIAS_WARNED_KEY]?: Set<string>;
 };
 
 const globalRef = globalThis as GlobalWithRegistry;
 const registry: Map<string, CapabilityDeclaration> =
   globalRef[REGISTRY_KEY] ??
   (globalRef[REGISTRY_KEY] = new Map<string, CapabilityDeclaration>());
-const aliasIndex: Map<string, string> =
-  globalRef[ALIAS_KEY] ?? (globalRef[ALIAS_KEY] = new Map<string, string>());
-const aliasWarned: Set<string> =
-  globalRef[ALIAS_WARNED_KEY] ??
-  (globalRef[ALIAS_WARNED_KEY] = new Set<string>());
-
-// Injected deprecation sink (ADR-022). Surfaces wire this at bootstrap to emit
-// a telemetry counter when a legacy alias is resolved; kept behind a setter so
-// the dependency-light registry never imports @oxagen/telemetry. When unset,
-// the first hit per alias falls back to a single console.warn.
-type AliasDeprecationSink = (alias: string, canonical: string) => void;
-let _aliasDeprecationSink: AliasDeprecationSink | null = null;
-
-export function setAliasDeprecationSink(sink: AliasDeprecationSink | null): void {
-  _aliasDeprecationSink = sink;
-}
-
-function reportAliasHit(alias: string, canonical: string): void {
-  if (aliasWarned.has(alias)) return;
-  aliasWarned.add(alias);
-  if (_aliasDeprecationSink) {
-    try {
-      _aliasDeprecationSink(alias, canonical);
-    } catch {
-      // A broken sink must never break capability resolution.
-    }
-    return;
-  }
-  if (process.env.NODE_ENV !== "production") {
-    console.warn(
-      `[oxagen] Capability "${alias}" is a deprecated alias for "${canonical}" (ADR-022). ` +
-        `Update the caller to the canonical name.`,
-    );
-  }
-}
 
 // A stable "signature" of a declaration's descriptor, used to tell a benign
 // duplicate-module re-registration (the bundler evaluated one contract twice)
@@ -117,56 +74,11 @@ export function registerCapability<C extends CapabilityDeclaration>(cap: C): C {
     return existing as C;
   }
   registry.set(cap.name, cap as CapabilityDeclaration);
-  // Index every retired alias to this canonical name (ADR-022). A collision
-  // with a real capability name is an authoring bug — never let an alias
-  // shadow a live capability; the canonical registry entry always wins.
-  for (const alias of cap.aliases ?? []) {
-    if (registry.has(alias)) {
-      if (process.env.NODE_ENV !== "production") {
-        console.warn(
-          `[oxagen] Alias "${alias}" of "${cap.name}" collides with a live capability name; ignoring the alias.`,
-        );
-      }
-      continue;
-    }
-    aliasIndex.set(alias, cap.name);
-  }
   return cap;
 }
 
-/**
- * Resolve a name to its canonical form (ADR-022): returns the name unchanged if
- * it is a live capability name, else the canonical name it aliases, else the
- * input untouched (unknown names pass through so callers still hit the usual
- * "unknown capability" path). Pure — never warns.
- */
-export function resolveCanonicalName(name: string): string {
-  if (registry.has(name)) return name;
-  return aliasIndex.get(name) ?? name;
-}
-
-/**
- * Every name a capability answers to — its canonical name plus all retired
- * aliases. Used by the IAM layer to match legacy `role_grants`/`grants`/
- * `policies` rows keyed by an old name (ADR-022). Accepts a canonical OR alias
- * name. Returns `[name]` for an unknown name.
- */
-export function namesForCapability(name: string): string[] {
-  const canonical = resolveCanonicalName(name);
-  const cap = registry.get(canonical);
-  if (!cap) return [name];
-  return [canonical, ...(cap.aliases ?? [])];
-}
-
 export function getCapability(name: string): CapabilityDeclaration | undefined {
-  const direct = registry.get(name);
-  if (direct) return direct;
-  const canonical = aliasIndex.get(name);
-  if (canonical) {
-    reportAliasHit(name, canonical);
-    return registry.get(canonical);
-  }
-  return undefined;
+  return registry.get(name);
 }
 
 export function listCapabilities(): CapabilityDeclaration[] {
@@ -175,6 +87,4 @@ export function listCapabilities(): CapabilityDeclaration[] {
 
 export function clearRegistryForTests(): void {
   registry.clear();
-  aliasIndex.clear();
-  aliasWarned.clear();
 }

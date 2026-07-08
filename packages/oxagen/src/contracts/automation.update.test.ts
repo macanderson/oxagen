@@ -37,6 +37,6 @@ describe("automation.update capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("automation.update")).toBe(automationUpdate);
+    expect(getCapability("update_automation")).toBe(automationUpdate);
   });
 });

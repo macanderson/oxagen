@@ -87,9 +87,9 @@ describe("subagent dispatch", () => {
       workspaceId: "ws_1",
       parentMessageId: "msg_parent",
       children: [
-        { capability: "agent.memory.recall", input: { q: "a" } },
-        { capability: "agent.memory.recall", input: { q: "b" } },
-        { capability: "agent.memory.recall", input: { q: "c" } },
+        { capability: "recall_memory", input: { q: "a" } },
+        { capability: "recall_memory", input: { q: "b" } },
+        { capability: "recall_memory", input: { q: "c" } },
       ],
     });
 
@@ -114,7 +114,7 @@ describe("subagent dispatch", () => {
     mocks.runsRows = [
       {
         childMessageId: "c1",
-        capabilityName: "agent.memory.recall",
+        capabilityName: "recall_memory",
         status: "completed",
         outputPayload: { result: 1 },
         errorReason: null,
@@ -126,7 +126,7 @@ describe("subagent dispatch", () => {
     expect(snap!.status).toBe("pending");
     expect(snap!.results).toHaveLength(1);
     expect(snap!.results[0]!.childMessageId).toBe("c1");
-    expect(snap!.results[0]!.capability).toBe("agent.memory.recall");
+    expect(snap!.results[0]!.capability).toBe("recall_memory");
     expect(snap!.results[0]!.status).toBe("completed");
   });
 

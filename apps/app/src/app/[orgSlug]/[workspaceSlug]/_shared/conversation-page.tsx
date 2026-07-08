@@ -21,11 +21,11 @@ import { budgetPolicyReadHandler } from "@oxagen/handlers/budget.policy.read";
 import { conversationListHandler } from "@oxagen/handlers/conversation.list";
 import { logger } from "@oxagen/handlers/logger";
 // Side-effect import: bind every foundation handler into the shared kernel so
-// invoke("workspace.budget_policy.read", …) below can resolve its handler.
+// invoke("get_budget_policy", …) below can resolve its handler.
 // Without this the call silently throws "No handler registered" (see CLAUDE.md
 // gotcha) — caught below and treated as fail-open null governance regardless.
 import "@oxagen/handlers/register";
-// Side-effect import: bind the agent handlers so invoke("agent.definition.get")
+// Side-effect import: bind the agent handlers so invoke("get_agent_def")
 // below can resolve when the Ask page binds a published agent (?agent=…).
 // Idempotent (registerHandlersOnce); a lookup failure is caught + degrades to
 // showing no bound-agent name.
@@ -314,7 +314,7 @@ export async function ConversationPage({ params, searchParams, actions }: Conver
       // check) degrades to `null` (no governance) so a broken governance row
       // never blocks the chat page from rendering.
       runInTenantScope({ orgId: tenant.id, workspaceId: workspace.id }, () =>
-        invoke("workspace.budget_policy.read", {}, userCtx, { surface: "agent" }),
+        invoke("get_budget_policy", {}, userCtx, { surface: "agent" }),
       )
         .then(
           (raw): WorkspaceBudgetGovernance => {
@@ -365,7 +365,7 @@ export async function ConversationPage({ params, searchParams, actions }: Conver
   if (boundAgentId) {
     boundAgentName = await runInTenantScope(
       { orgId: tenant.id, workspaceId: workspace.id },
-      () => invoke("agent.definition.get", { agentId: boundAgentId }, userCtx, { surface: "agent" }),
+      () => invoke("get_agent_def", { agentId: boundAgentId }, userCtx, { surface: "agent" }),
     )
       .then((def) => (def as { name?: string }).name ?? boundAgentId)
       .catch((err: unknown) =>

@@ -85,6 +85,6 @@ describe("eval.run.get capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("eval.run.get")).toBe(evalRunGet);
+    expect(getCapability("get_eval_run")).toBe(evalRunGet);
   });
 });

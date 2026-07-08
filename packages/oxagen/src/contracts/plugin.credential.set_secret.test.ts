@@ -3,7 +3,7 @@ import { pluginCredentialSetSecret } from "./plugin.credential.set_secret";
 
 describe("plugin.credential.set_secret contract", () => {
   it("registers with the correct name", () => {
-    expect(pluginCredentialSetSecret.name).toBe("plugin.credential.set_secret");
+    expect(pluginCredentialSetSecret.name).toBe("set_plugin_secret");
   });
   it("includes api and mcp surfaces", () => {
     expect(pluginCredentialSetSecret.surfaces).toContain("api");

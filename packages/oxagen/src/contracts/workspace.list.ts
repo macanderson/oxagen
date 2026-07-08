@@ -27,7 +27,7 @@ export const workspaceListItemSchema = z.object({
 });
 
 export const workspaceList = registerCapability({
-  name: "workspace.list",
+  name: "list_workspaces",
   domain: "workspace",
   description:
     "List the workspaces inside an organization the authenticated user belongs to. Backs the CLI workspace picker in `oxagen init`.",

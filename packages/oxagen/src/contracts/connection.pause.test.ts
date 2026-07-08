@@ -22,6 +22,6 @@ describe("connection.pause capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("connection.pause")).toBe(connectionPause);
+    expect(getCapability("pause_connection")).toBe(connectionPause);
   });
 });

@@ -100,7 +100,7 @@ function makeToolCall(overrides: Partial<LiveToolCall> = {}): LiveToolCall {
   return {
     toolCallId: "tc_1",
     messageId: "m_1",
-    capability: "agent.sandbox.start",
+    capability: "start_sandbox",
     inputPreview: {},
     riskLevel: "low",
     status: "completed",
@@ -138,7 +138,7 @@ describe("findActiveSandboxSessionId", () => {
 
   it("ignores unrelated capabilities", async () => {
     const { findActiveSandboxSessionId } = await import("./workspace-context-panel");
-    const tc = makeToolCall({ capability: "agent.code.execute" });
+    const tc = makeToolCall({ capability: "execute_code" });
     expect(findActiveSandboxSessionId({ tc_1: tc })).toBeNull();
   });
 

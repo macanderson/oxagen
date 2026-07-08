@@ -6,8 +6,7 @@ import { registerCapability } from "../registry";
 // filtered to one file — useful for debugging a stuck fleet (a lock that
 // outlives its owning turn is visible here until TTL/sweep reap it).
 export const agentFileLockList = registerCapability({
-  name: "agent.file_lock.list",
-  aliases: ["agent.file.lock.list"],
+  name: "list_file_locks",
   domain: "agent",
   description: "List every currently-live file lock in the workspace, optionally filtered to one file.",
   mode: "sync",

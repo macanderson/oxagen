@@ -82,6 +82,6 @@ describe("conversation.archive capability", () => {
   // ── registry ──────────────────────────────────────────────────────────────
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("conversation.archive")).toBe(conversationArchive);
+    expect(getCapability("archive_conversation")).toBe(conversationArchive);
   });
 });

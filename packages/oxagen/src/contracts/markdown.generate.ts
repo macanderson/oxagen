@@ -17,7 +17,7 @@ const fileRenderDirective = z.object({
 });
 
 export const markdownGenerate = registerCapability({
-  name: "markdown.generate",
+  name: "generate_markdown",
   domain: "document",
   description:
     "Persist a Markdown document as a first-class generated asset. " +

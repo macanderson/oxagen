@@ -6,7 +6,7 @@ import { registerCapability } from "../registry";
 // worker from picking them up. Returns a summary so callers can confirm the
 // cancellation without a follow-up poll.
 export const agentSubagentCancel = registerCapability({
-  name: "agent.subagent.cancel",
+  name: "cancel_subagent",
   domain: "agent",
   description:
     "Cancel an in-progress subagent fan-out; transitions the fanout and all non-terminal child runs to a terminal status so no further work is performed.",

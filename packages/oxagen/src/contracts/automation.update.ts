@@ -21,7 +21,7 @@ const triggerConfig = z.object({
 });
 
 export const automationUpdate = registerCapability({
-  name: "automation.update",
+  name: "update_automation",
   domain: "automation",
   description:
     "Edit an existing automation: rename it, change its description, and/or replace its trigger configuration (conditions / schedule). Enable/disable is handled separately by automation.enable / automation.disable. Partial update — omit a field to leave it unchanged.",

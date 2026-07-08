@@ -499,7 +499,7 @@ describe("chat stream: execution recording (SOC 2 audit trail)", () => {
     await res.text(); // drain so the stream's start() callback (which fires the audit) completes
 
     const execCall = mocks.invoke.mock.calls.find(
-      (c) => c[0] === "chat.message.execution",
+      (c) => c[0] === "get_message_execution",
     );
     expect(execCall).toBeDefined();
     const input = execCall?.[1] as Record<string, unknown>;
@@ -521,7 +521,7 @@ describe("chat stream: execution recording (SOC 2 audit trail)", () => {
     const text = await res.text();
     expect(text).toContain("[DONE]");
     expect(mocks.invoke).toHaveBeenCalledWith(
-      "chat.message.execution",
+      "get_message_execution",
       expect.objectContaining({ messageId: "asmsg-1" }),
       expect.anything(),
       expect.anything(),
@@ -555,7 +555,7 @@ describe("chat stream: tool-call events", () => {
   beforeEach(() => {
     mocks.materializeTools.mockResolvedValue({
       tools: {},
-      nameMap: { agent_code_execute: "agent.code.execute" },
+      nameMap: { agent_code_execute: "execute_code" },
     });
     mocks.streamAgentReply.mockReturnValue(
       streamResult(toolStream(), {
@@ -573,7 +573,7 @@ describe("chat stream: tool-call events", () => {
       (e) => (e as { type: string }).type === "tool-call-start",
     ) as { type: string; capability: string; toolCallId: string } | undefined;
     expect(start).toBeDefined();
-    expect(start?.capability).toBe("agent.code.execute");
+    expect(start?.capability).toBe("execute_code");
     expect(start?.toolCallId).toBe("tc-1");
   });
 

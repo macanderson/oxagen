@@ -36,6 +36,6 @@ describe("agent.ui.render handler", () => {
   });
 
   it("registry name agent.ui.render is present in agentHandlerNames", () => {
-    expect(agentHandlerNames).toContain("agent.ui.render");
+    expect(agentHandlerNames).toContain("render_agent_ui");
   });
 });

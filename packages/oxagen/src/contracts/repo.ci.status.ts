@@ -55,7 +55,7 @@ export const ciOverallSchema = z.enum([
 ]);
 
 export const repoCiStatus = registerCapability({
-  name: "repo.ci.status",
+  name: "get_ci_status",
   domain: "repo",
   description: "Read CI check-run and commit-status results for a ref in a GitHub repository.",
   mode: "sync",

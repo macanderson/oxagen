@@ -74,7 +74,7 @@ const MESSAGE_ROWS = [
     contentBlocks: [
       { type: "reasoning", text: "consider the roadmap", durationMs: 1200 },
       { type: "text", text: "Ship the wedge." },
-      { type: "tool-call", capability: "graph.search", status: "success", durationMs: 300 },
+      { type: "tool-call", capability: "search_graph", status: "success", durationMs: 300 },
       { type: "code-execute", language: "ts", code: "const x = 1;", status: "success" },
     ],
     metadata: {},

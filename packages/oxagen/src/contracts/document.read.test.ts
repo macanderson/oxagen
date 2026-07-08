@@ -94,6 +94,6 @@ describe("document.read capability", () => {
   // ── registry ──────────────────────────────────────────────────────────────
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("document.read")).toBe(documentRead);
+    expect(getCapability("read_document")).toBe(documentRead);
   });
 });

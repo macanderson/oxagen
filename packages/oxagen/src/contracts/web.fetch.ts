@@ -2,7 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const webFetch = registerCapability({
-  name: "web.fetch",
+  name: "fetch_web_page",
   domain: "web",
   description:
     "Fetch a URL and return its content as clean markdown text. Useful for reading web pages, documentation, or articles.",

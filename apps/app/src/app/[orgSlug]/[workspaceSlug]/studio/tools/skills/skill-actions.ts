@@ -47,7 +47,7 @@ export async function installSkill(
   const { ctx } = auth.scope;
 
   try {
-    await invoke("skill.workspace.install", { skillSlug: parsed.data.skillSlug }, ctx, {
+    await invoke("install_skill", { skillSlug: parsed.data.skillSlug }, ctx, {
       surface: "agent",
     });
     const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };
@@ -81,7 +81,7 @@ export async function editSkill(
 
   try {
     const out = await invoke(
-      "skill.version.upload",
+      "upload_skill_version",
       {
         skillSlug: parsed.data.skillSlug,
         content: parsed.data.content,
@@ -121,7 +121,7 @@ export async function activateVersion(
 
   try {
     await invoke(
-      "skill.version.activate",
+      "activate_skill_version",
       { skillSlug: parsed.data.skillSlug, versionId: parsed.data.versionId },
       ctx,
       { surface: "agent" },
@@ -155,7 +155,7 @@ export async function exportSkill(
 
   try {
     const out = await invoke(
-      "skill.export",
+      "export_skill",
       { skillSlug: parsed.data.skillSlug, versionId: parsed.data.versionId },
       ctx,
       { surface: "agent" },
@@ -204,7 +204,7 @@ export async function draftSkillAction(
   const { ctx } = auth.scope;
 
   try {
-    const out = await invoke("skill.draft", { prompt }, ctx, { surface: "agent" });
+    const out = await invoke("draft_skill", { prompt }, ctx, { surface: "agent" });
     const typed = out as { draft: SkillDraftResult };
     return { ok: true, draft: typed.draft };
   } catch (err) {
@@ -277,7 +277,7 @@ export async function createSkillAction(
 
   try {
     const out = await invoke(
-      "skill.create",
+      "create_skill",
       { name, slug, description, body: fullBody, activate },
       ctx,
       { surface: "agent" },

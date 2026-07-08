@@ -410,7 +410,7 @@ export async function wandResolveApprovalAction(
 
   try {
     await invoke(
-      "agent.approval.resolve",
+      "resolve_approval",
       parsed.data,
       buildCapabilityContext({ orgId, workspaceId, userId: session.user.id }),
       { surface: "agent" },
@@ -454,7 +454,7 @@ export async function wandResolveConsentAction(
 
   try {
     await invoke(
-      "agent.mcp_consent.resolve",
+      "resolve_mcp_consent",
       parsed.data,
       buildCapabilityContext({ orgId, workspaceId, userId: session.user.id }),
       { surface: "agent" },
@@ -510,7 +510,7 @@ export async function wandResolvePlanAction(
 
   try {
     await invoke(
-      "agent.plan.approve",
+      "approve_plan",
       parsed.data,
       buildCapabilityContext({ orgId, workspaceId, userId: session.user.id }),
       { surface: "agent" },

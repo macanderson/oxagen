@@ -24,23 +24,23 @@ describe("detectSimpleIntents — deterministic schema-edit parsing", () => {
   it("drops a schema (drop/delete/remove + name, plural-tolerant)", () => {
     for (const msg of ["drop the support schema entirely", "delete the support schema", "remove the supports schema"]) {
       expect(detectSimpleIntents(msg, SCHEMAS)).toEqual([
-        { capability: "schema.delete", input: { schemaName: "support" } },
+        { capability: "delete_schema", input: { schemaName: "support" } },
       ]);
     }
   });
 
   it("disables / enables a schema", () => {
     expect(detectSimpleIntents("disable the billing schema", SCHEMAS)).toEqual([
-      { capability: "schema.toggle", input: { schemaName: "billing", enabled: false } },
+      { capability: "toggle_schema", input: { schemaName: "billing", enabled: false } },
     ]);
     expect(detectSimpleIntents("deactivate subscription", SCHEMAS)).toEqual([
-      { capability: "schema.toggle", input: { schemaName: "subscription", enabled: false } },
+      { capability: "toggle_schema", input: { schemaName: "subscription", enabled: false } },
     ]);
     expect(detectSimpleIntents("enable the billing schema", SCHEMAS)).toEqual([
-      { capability: "schema.toggle", input: { schemaName: "billing", enabled: true } },
+      { capability: "toggle_schema", input: { schemaName: "billing", enabled: true } },
     ]);
     expect(detectSimpleIntents("turn on subscription", SCHEMAS)).toEqual([
-      { capability: "schema.toggle", input: { schemaName: "subscription", enabled: true } },
+      { capability: "toggle_schema", input: { schemaName: "subscription", enabled: true } },
     ]);
   });
 
@@ -51,11 +51,11 @@ describe("detectSimpleIntents — deterministic schema-edit parsing", () => {
     );
     expect(out).toEqual([
       {
-        capability: "schema.property.upsert",
+        capability: "upsert_schema_property",
         input: { schemaName: "subscription", ownerKind: "node", ownerName: "Subscription", key: "number_of_licenses", dataType: "integer", required: false },
       },
       {
-        capability: "schema.property.upsert",
+        capability: "upsert_schema_property",
         input: { schemaName: "subscription", ownerKind: "node", ownerName: "Subscription", key: "customer_since", dataType: "date", required: false },
       },
     ]);
@@ -95,28 +95,28 @@ describe("describeMutations — assistant reply summary", () => {
   it("summarizes property upserts (singular vs plural) with schema name + keys", () => {
     expect(
       describeMutations([
-        mut("schema.property.upsert", { schemaName: "billing", key: "tax_id" }),
+        mut("upsert_schema_property", { schemaName: "billing", key: "tax_id" }),
       ]),
     ).toContain("Added 1 property (`tax_id`) to the billing schema.");
     const many = describeMutations([
-      mut("schema.property.upsert", { schemaName: "billing", key: "a" }),
-      mut("schema.property.upsert", { schemaName: "billing", key: "b" }),
+      mut("upsert_schema_property", { schemaName: "billing", key: "a" }),
+      mut("upsert_schema_property", { schemaName: "billing", key: "b" }),
     ]);
     expect(many).toContain("Added 2 properties (`a`, `b`)");
   });
 
   it("summarizes delete / toggle / label-delete and falls back when empty", () => {
-    expect(describeMutations([mut("schema.delete", { schemaName: "support" })])).toContain(
+    expect(describeMutations([mut("delete_schema", { schemaName: "support" })])).toContain(
       "Dropped the support schema.",
     );
-    expect(describeMutations([mut("schema.toggle", { schemaName: "billing", enabled: true })])).toContain(
+    expect(describeMutations([mut("toggle_schema", { schemaName: "billing", enabled: true })])).toContain(
       "Activated the billing schema.",
     );
-    expect(describeMutations([mut("schema.toggle", { schemaName: "billing", enabled: false })])).toContain(
+    expect(describeMutations([mut("toggle_schema", { schemaName: "billing", enabled: false })])).toContain(
       "Deactivated the billing schema.",
     );
     expect(
-      describeMutations([mut("schema.label.delete", { schemaName: "billing", name: "Invoice" })]),
+      describeMutations([mut("delete_schema_label", { schemaName: "billing", name: "Invoice" })]),
     ).toContain("Removed the Invoice label from billing.");
     expect(describeMutations([])).toBe("Applied the requested change.");
   });
@@ -125,11 +125,11 @@ describe("describeMutations — assistant reply summary", () => {
 describe("dedupeMutations — keep the first of each logical mutation", () => {
   it("drops later duplicates keyed by capability + identity fields", () => {
     const out = dedupeMutations([
-      mut("schema.delete", { schemaName: "support" }),
-      mut("schema.delete", { schemaName: "support" }),
-      mut("schema.property.upsert", { schemaName: "billing", ownerName: "Invoice", key: "tax_id" }),
-      mut("schema.property.upsert", { schemaName: "billing", ownerName: "Invoice", key: "tax_id" }),
-      mut("schema.property.upsert", { schemaName: "billing", ownerName: "Invoice", key: "total" }),
+      mut("delete_schema", { schemaName: "support" }),
+      mut("delete_schema", { schemaName: "support" }),
+      mut("upsert_schema_property", { schemaName: "billing", ownerName: "Invoice", key: "tax_id" }),
+      mut("upsert_schema_property", { schemaName: "billing", ownerName: "Invoice", key: "tax_id" }),
+      mut("upsert_schema_property", { schemaName: "billing", ownerName: "Invoice", key: "total" }),
     ]);
     expect(out).toHaveLength(3);
     expect(out.map((m) => m.input.key).filter(Boolean)).toEqual(["tax_id", "total"]);
@@ -157,7 +157,7 @@ describe("buildProposedMutations — LLM structured output → normalized mutati
         ],
       }),
     );
-    const label = out.find((m) => m.capability === "schema.label.upsert");
+    const label = out.find((m) => m.capability === "upsert_schema_label");
     expect(label?.input.schemaName).toBe("crm"); // trimmed
     expect(label?.input.displayName).toBe("Customer"); // humanized fallback
     const props = label?.input.properties as Array<Record<string, unknown>>;
@@ -165,7 +165,7 @@ describe("buildProposedMutations — LLM structured output → normalized mutati
     expect(props[0]?.required).toBe(false); // defaulted
     expect(props[1]?.dataType).toBe("string"); // missing dataType → string
 
-    const rel = out.find((m) => m.capability === "schema.relationship.upsert");
+    const rel = out.find((m) => m.capability === "upsert_schema_relationship");
     expect(rel?.input.name).toBe("PLACES_ORDER"); // normalizeRelName
     expect(rel?.input.displayName).toBe("Places Order"); // humanize
     expect(rel?.input.cardinality).toBe("one_to_many"); // many_to_one → one_to_many
@@ -176,21 +176,21 @@ describe("buildProposedMutations — LLM structured output → normalized mutati
       resp({
         assistantMessage: "ok",
         mutations: [
-          { capability: "schema.label.delete", input: { schemaName: "billing", name: "Invoice" } },
-          { capability: "schema.label.delete", input: { schemaName: "billing" } }, // no name → dropped
-          { capability: "schema.property.upsert", input: { schemaName: "billing", ownerName: "Invoice", key: "tax_id" } },
-          { capability: "schema.toggle", input: { schemaName: "billing", enabled: true } },
-          { capability: "schema.toggle", input: { schemaName: "billing" } }, // no enabled → dropped
+          { capability: "delete_schema_label", input: { schemaName: "billing", name: "Invoice" } },
+          { capability: "delete_schema_label", input: { schemaName: "billing" } }, // no name → dropped
+          { capability: "upsert_schema_property", input: { schemaName: "billing", ownerName: "Invoice", key: "tax_id" } },
+          { capability: "toggle_schema", input: { schemaName: "billing", enabled: true } },
+          { capability: "toggle_schema", input: { schemaName: "billing" } }, // no enabled → dropped
         ],
       }),
     );
     const caps = out.map((m) => m.capability);
     expect(caps).toEqual([
-      "schema.label.delete",
-      "schema.property.upsert",
-      "schema.toggle",
+      "delete_schema_label",
+      "upsert_schema_property",
+      "toggle_schema",
     ]);
-    const prop = out.find((m) => m.capability === "schema.property.upsert");
+    const prop = out.find((m) => m.capability === "upsert_schema_property");
     expect(prop?.input.ownerKind).toBe("node"); // defaulted
     expect(prop?.input.dataType).toBe("string"); // normalized
     expect(prop?.input.required).toBe(false); // defaulted

@@ -33,6 +33,6 @@ describe("agent.subagent.cancel capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("agent.subagent.cancel")).toBe(agentSubagentCancel);
+    expect(getCapability("cancel_subagent")).toBe(agentSubagentCancel);
   });
 });

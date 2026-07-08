@@ -2,7 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const imageAnalyze = registerCapability({
-  name: "image.analyze",
+  name: "analyze_image",
   domain: "image",
   description: "Analyze an image by ID — returns description, tags, and analysis",
   mode: "sync",

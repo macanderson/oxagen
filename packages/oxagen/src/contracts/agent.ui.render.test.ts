@@ -4,7 +4,7 @@ import { getCapability } from "../registry";
 
 describe("agent.ui.render capability", () => {
   it("is registered", () => {
-    expect(getCapability("agent.ui.render")).toBeDefined();
+    expect(getCapability("render_agent_ui")).toBeDefined();
   });
 
   it("parses a valid input with componentId only", () => {

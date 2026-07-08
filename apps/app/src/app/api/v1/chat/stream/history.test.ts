@@ -50,16 +50,16 @@ function fileComponent(toolCallId: string, name: string): AssistantContentBlock 
 describe("summarizeCompletedActions", () => {
   it("lists completed tool calls and marks them DONE", () => {
     const blocks: AssistantContentBlock[] = [
-      toolCall("tc1", "markdown.generate"),
+      toolCall("tc1", "generate_markdown"),
       fileComponent("tc1", "uss-nautilus-the-first-nuclear-submarine.md"),
-      toolCall("tc2", "mermaid.generate"),
-      toolCall("tc3", "svg.generate"),
+      toolCall("tc2", "generate_mermaid"),
+      toolCall("tc3", "generate_svg"),
     ];
     const summary = summarizeCompletedActions(blocks);
     expect(summary).toContain("DONE, do not repeat");
-    expect(summary).toContain("markdown.generate → uss-nautilus-the-first-nuclear-submarine.md");
-    expect(summary).toContain("mermaid.generate");
-    expect(summary).toContain("svg.generate");
+    expect(summary).toContain("generate_markdown → uss-nautilus-the-first-nuclear-submarine.md");
+    expect(summary).toContain("generate_mermaid");
+    expect(summary).toContain("generate_svg");
   });
 
   it("includes code executions and plans", () => {
@@ -86,12 +86,12 @@ describe("summarizeCompletedActions", () => {
 
   it("omits errored tool calls (they may be retried)", () => {
     const blocks: AssistantContentBlock[] = [
-      toolCall("tc1", "image.generate", "failed"),
-      toolCall("tc2", "markdown.generate"),
+      toolCall("tc1", "generate_image", "failed"),
+      toolCall("tc2", "generate_markdown"),
     ];
     const summary = summarizeCompletedActions(blocks);
-    expect(summary).not.toContain("image.generate");
-    expect(summary).toContain("markdown.generate");
+    expect(summary).not.toContain("generate_image");
+    expect(summary).toContain("generate_markdown");
   });
 
   it("returns empty string when there are no re-runnable actions", () => {
@@ -106,20 +106,20 @@ describe("summarizeCompletedActions", () => {
 describe("buildAssistantHistoryText", () => {
   it("appends the completion summary to assistant text", () => {
     const out = buildAssistantHistoryText("I'll generate all three artifacts now.", [
-      toolCall("tc1", "markdown.generate"),
+      toolCall("tc1", "generate_markdown"),
     ]);
     expect(out.startsWith("I'll generate all three artifacts now.")).toBe(true);
-    expect(out).toContain("markdown.generate");
+    expect(out).toContain("generate_markdown");
     expect(out).toContain("DONE");
   });
 
   it("synthesizes a summary when the assistant text is empty (tool-only turn)", () => {
     const out = buildAssistantHistoryText("", [
-      toolCall("tc1", "markdown.generate"),
+      toolCall("tc1", "generate_markdown"),
       fileComponent("tc1", "report.md"),
     ]);
     expect(out.length).toBeGreaterThan(0);
-    expect(out).toContain("markdown.generate → report.md");
+    expect(out).toContain("generate_markdown → report.md");
   });
 
   it("returns the text alone when there are no blocks", () => {
@@ -143,7 +143,7 @@ describe("buildHistoryMessages (regression for the re-execution bug)", () => {
         role: "assistant",
         content: "",
         contentBlocks: [
-          toolCall("tc1", "markdown.generate"),
+          toolCall("tc1", "generate_markdown"),
           fileComponent("tc1", "nautilus.md"),
         ],
       },
@@ -156,7 +156,7 @@ describe("buildHistoryMessages (regression for the re-execution bug)", () => {
     expect(messages.map((m) => m.role)).toEqual(["user", "assistant", "user"]);
     expect(messages[0]!.content).toBe("make a markdown doc about nautilus");
     expect(messages[1]!.role).toBe("assistant");
-    expect(messages[1]!.content).toContain("markdown.generate → nautilus.md");
+    expect(messages[1]!.content).toContain("generate_markdown → nautilus.md");
     expect(messages[1]!.content).toContain("DONE, do not repeat");
     expect(messages[2]!.content).toBe("make an image");
   });

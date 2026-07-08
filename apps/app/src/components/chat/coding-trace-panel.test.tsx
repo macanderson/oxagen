@@ -52,8 +52,8 @@ function makeFanout(overrides: Partial<LiveFanout> = {}): LiveFanout {
     fanoutId: "fanout_1",
     parentMessageId: "m_1",
     children: [
-      { childMessageId: "c1", capability: "agent.subagent.dispatch", status: "running" },
-      { childMessageId: "c2", capability: "agent.subagent.dispatch", status: "running" },
+      { childMessageId: "c1", capability: "dispatch_subagent", status: "running" },
+      { childMessageId: "c2", capability: "dispatch_subagent", status: "running" },
     ],
     status: "running",
     ...overrides,
@@ -63,18 +63,18 @@ function makeFanout(overrides: Partial<LiveFanout> = {}): LiveFanout {
 describe("isCodeRunCapability", () => {
   it("classifies known code-run capabilities as code runs", async () => {
     const { isCodeRunCapability } = await import("./coding-trace-panel");
-    expect(isCodeRunCapability("agent.code.execute")).toBe(true);
-    expect(isCodeRunCapability("agent.sandbox.exec")).toBe(true);
-    expect(isCodeRunCapability("agent.sandbox.start")).toBe(true);
-    expect(isCodeRunCapability("repo.file.put")).toBe(true);
-    expect(isCodeRunCapability("repo.pr.open")).toBe(true);
+    expect(isCodeRunCapability("execute_code")).toBe(true);
+    expect(isCodeRunCapability("run_sandbox_command")).toBe(true);
+    expect(isCodeRunCapability("start_sandbox")).toBe(true);
+    expect(isCodeRunCapability("put_repo_file")).toBe(true);
+    expect(isCodeRunCapability("open_pr")).toBe(true);
   });
 
   it("classifies everything else as a generic tool call", async () => {
     const { isCodeRunCapability } = await import("./coding-trace-panel");
     expect(isCodeRunCapability("graph.query")).toBe(false);
     expect(isCodeRunCapability("memory.recall")).toBe(false);
-    expect(isCodeRunCapability("web.search")).toBe(false);
+    expect(isCodeRunCapability("search_web")).toBe(false);
   });
 });
 
@@ -102,7 +102,7 @@ describe("groupCodingTraceStages", () => {
   it("splits tool calls into generic 'tool' vs 'code' buckets by capability", async () => {
     const { groupCodingTraceStages } = await import("./coding-trace-panel");
     const generic = makeToolCall({ toolCallId: "tc_generic", capability: "graph.query" });
-    const codeRun = makeToolCall({ toolCallId: "tc_code", capability: "agent.code.execute" });
+    const codeRun = makeToolCall({ toolCallId: "tc_code", capability: "execute_code" });
     const groups = groupCodingTraceStages({
       order: ["tool:tc_generic", "tool:tc_code"],
       plans: {},
@@ -114,7 +114,7 @@ describe("groupCodingTraceStages", () => {
     expect(groups.tool).toHaveLength(1);
     expect(groups.tool[0]?.label).toBe("graph.query");
     expect(groups.code).toHaveLength(1);
-    expect(groups.code[0]?.label).toBe("agent.code.execute");
+    expect(groups.code[0]?.label).toBe("execute_code");
   });
 
   it("maps tool-call status to tone (failed/running/done)", async () => {
@@ -251,7 +251,7 @@ describe("CodingTracePanel", () => {
 
   it("renders stage sections with row counts and deep-link hrefs", async () => {
     const { CodingTracePanel } = await import("./coding-trace-panel");
-    const codeRun = makeToolCall({ toolCallId: "tc_code", capability: "agent.code.execute" });
+    const codeRun = makeToolCall({ toolCallId: "tc_code", capability: "execute_code" });
     render(
       <CodingTracePanel
         order={["plan:plan_1", "tool:tc_code"]}

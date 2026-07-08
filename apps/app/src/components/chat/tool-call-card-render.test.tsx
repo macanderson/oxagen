@@ -30,7 +30,7 @@ vi.mock("lucide-react", async (importOriginal) => {
 describe("ToolCallCard", () => {
   const baseProps = {
     toolCallId: "tc-1",
-    capability: "web.search",
+    capability: "search_web",
     inputPreview: { query: "hello" },
     riskLevel: "low" as const,
     status: "completed" as const,
@@ -41,25 +41,25 @@ describe("ToolCallCard", () => {
     render(<ToolCallCard {...baseProps} />);
     expect(screen.getByText("Search the web")).toBeInTheDocument();
     // The raw dotted string never appears in the collapsed row.
-    expect(screen.queryByText("web.search")).not.toBeInTheDocument();
+    expect(screen.queryByText("search_web")).not.toBeInTheDocument();
   });
 
   it("derives a label for uncurated capabilities", () => {
-    render(<ToolCallCard {...baseProps} capability="semantic.edge.suggest" />);
+    render(<ToolCallCard {...baseProps} capability="suggest_semantic_edges" />);
     expect(screen.getByText("Suggest semantic edge")).toBeInTheDocument();
-    expect(screen.queryByText("semantic.edge.suggest")).not.toBeInTheDocument();
+    expect(screen.queryByText("suggest_semantic_edges")).not.toBeInTheDocument();
   });
 
   it("exposes the raw capability as the header button title", () => {
     render(<ToolCallCard {...baseProps} />);
     const toggle = screen.getByRole("button", { name: /tool call details/i });
-    expect(toggle).toHaveAttribute("title", "web.search");
+    expect(toggle).toHaveAttribute("title", "search_web");
   });
 
   it("shows the raw capability inside the expanded body", async () => {
     render(<ToolCallCard {...baseProps} />);
     await userEvent.click(screen.getByRole("button", { name: /tool call details/i }));
-    expect(screen.getByText("web.search")).toBeInTheDocument();
+    expect(screen.getByText("search_web")).toBeInTheDocument();
   });
 
   it("never renders a risk badge, even for elevated risk", () => {
@@ -207,7 +207,7 @@ describe("ToolCallCard", () => {
   it("sets data-capability and data-status attributes", () => {
     const { container } = render(<ToolCallCard {...baseProps} />);
     const root = container.querySelector("[data-component='tool-call-card']");
-    expect(root).toHaveAttribute("data-capability", "web.search");
+    expect(root).toHaveAttribute("data-capability", "search_web");
     expect(root).toHaveAttribute("data-status", "completed");
   });
 });

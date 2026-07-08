@@ -8,7 +8,7 @@ import { registerCapability } from "../registry";
 //
 // Authorization: org Owner or Admin only.
 export const apiKeyRotate = registerCapability({
-  name: "api.key.rotate",
+  name: "rotate_api_key",
   domain: "api_key",
   description:
     "Atomically issue a replacement API key and revoke the old one. The replacement inherits the old key's scope/workspace/expiry and is returned once — never recoverable after this call. Audited as api_key.created + api_key.revoked.",

@@ -8,8 +8,7 @@ import { registerCapability } from "../registry";
 // by lockId alone (@oxagen/ontology's forceReleaseFileLock), without needing
 // the original holder's internal agentId.
 export const agentFileLockRelease = registerCapability({
-  name: "agent.file_lock.release",
-  aliases: ["agent.file.lock.release"],
+  name: "release_file_lock",
   domain: "agent",
   description:
     "Force-release a file lock by its lockId — for clearing a lock a crashed/stuck agent left behind. Does not require the original holder's agentId.",

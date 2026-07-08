@@ -47,7 +47,7 @@ export class AgentSuggestError extends Error {
 async function loadCreateAgentSkillBody(ctx: CapabilityContext): Promise<string> {
   try {
     const loaded = (await invoke(
-      "agent.skill.load",
+      "load_skill",
       { skillSlug: CREATE_AGENT_SKILL_SLUG },
       ctx,
     )) as { loaded: boolean; body: string };
@@ -117,23 +117,23 @@ async function invokeSafe<T>(
 async function assembleCandidates(ctx: CapabilityContext): Promise<Candidates> {
   const [schemaOut, skillOut, mcpOut, agentOut, catalogOut, wsSkillOut] = await Promise.all([
     invokeSafe<{ schemas: Array<{ schemaName: string; displayName: string; enabled: boolean }> }>(
-      "schema.list",
+      "list_schemas",
       ctx,
       { schemas: [] },
     ),
     invokeSafe<{ skills: Array<{ slug: string; name?: string; description: string }> }>(
-      "agent.skill.list",
+      "list_agent_skills",
       ctx,
       { skills: [] },
     ),
     invokeSafe<{ servers: Array<{ publicId: string; name: string }> }>(
-      "agent.mcp.list",
+      "list_mcp_servers",
       ctx,
       { servers: [] },
     ),
     invokeSafe<{
       agents: Array<{ slug: string; description: string | null; status: string }>;
-    }>("agent.definition.list", ctx, { agents: [] }),
+    }>("list_agent_defs", ctx, { agents: [] }),
     // Catalog MCP servers not yet installed in this workspace — recommendation
     // candidates. Ask for the not-installed slice directly; belt-and-suspenders
     // dedup against agent.mcp.list below handles registries lagging the flag.
@@ -144,7 +144,7 @@ async function assembleCandidates(ctx: CapabilityContext): Promise<Candidates> {
         description: string;
         installed: boolean;
       }>;
-    }>("plugin.catalog.browse", ctx, { servers: [] }, {
+    }>("browse_plugin_catalog", ctx, { servers: [] }, {
       pluginType: "mcp_server",
       installed: false,
       limit: 50,
@@ -153,7 +153,7 @@ async function assembleCandidates(ctx: CapabilityContext): Promise<Candidates> {
     // disabled skills. Carries a publicId, not a slug; joined by name below.
     invokeSafe<{
       skills: Array<{ id: string; name: string; description: string; enabled: boolean }>;
-    }>("skill.workspace.list", ctx, { skills: [] }),
+    }>("list_workspace_skills", ctx, { skills: [] }),
   ]);
 
   const functions = listCapabilities()

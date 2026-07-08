@@ -33,7 +33,7 @@ describe("GET /a2a/card", () => {
     const body = await res.json();
     expect(body.protocolVersion).toBe("1.0");
     const [name, input] = h.invoke.mock.calls[0]!;
-    expect(name).toBe("a2a.card.get");
+    expect(name).toBe("get_a2a_card");
     expect((input as { baseUrl: string }).baseUrl).toBe(
       "https://api.example.test",
     );

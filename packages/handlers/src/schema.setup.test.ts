@@ -81,7 +81,7 @@ describe("schemaSetupHandler (@oxagen/handlers)", () => {
     // By default, first invoke call = schema.recommend
     // Subsequent invoke calls = schema.label.upsert / schema.relationship.upsert / schema.toggle / schema.registry.config
     mocks.invoke.mockImplementation(async (capability: string) => {
-      if (capability === "schema.recommend") {
+      if (capability === "recommend_schema") {
         return MOCK_RECOMMENDATION;
       }
       // All other invocations return a simple success shape
@@ -100,9 +100,9 @@ describe("schemaSetupHandler (@oxagen/handlers)", () => {
     expect(result.relationshipTypesCreated).toBe(1);
     // In interactive mode, should NOT invoke schema.label.upsert etc.
     const invokeCalls = mocks.invoke.mock.calls.map((c) => c[0]);
-    expect(invokeCalls).not.toContain("schema.label.upsert");
-    expect(invokeCalls).not.toContain("schema.relationship.upsert");
-    expect(invokeCalls).not.toContain("schema.toggle");
+    expect(invokeCalls).not.toContain("upsert_schema_label");
+    expect(invokeCalls).not.toContain("upsert_schema_relationship");
+    expect(invokeCalls).not.toContain("toggle_schema");
   });
 
   it("returns pinnedVersionId=null in interactive mode when registry has none", async () => {
@@ -138,7 +138,7 @@ describe("schemaSetupHandler (@oxagen/handlers)", () => {
   it("uses sampleLimit from input in schema.recommend call", async () => {
     await schemaSetupHandler({ sampleLimit: 500 }, CTX);
 
-    const recommendCall = mocks.invoke.mock.calls.find((c) => c[0] === "schema.recommend");
+    const recommendCall = mocks.invoke.mock.calls.find((c) => c[0] === "recommend_schema");
     expect(recommendCall).toBeDefined();
     expect(recommendCall![1]).toMatchObject({ sampleLimit: 500 });
   });
@@ -146,7 +146,7 @@ describe("schemaSetupHandler (@oxagen/handlers)", () => {
   it("defaults sampleLimit to 200 when not provided", async () => {
     await schemaSetupHandler({}, CTX);
 
-    const recommendCall = mocks.invoke.mock.calls.find((c) => c[0] === "schema.recommend");
+    const recommendCall = mocks.invoke.mock.calls.find((c) => c[0] === "recommend_schema");
     expect(recommendCall![1]).toMatchObject({ sampleLimit: 200 });
   });
 
@@ -161,10 +161,10 @@ describe("schemaSetupHandler (@oxagen/handlers)", () => {
     const result = await schemaSetupHandler({ noInteractive: true }, CTX);
 
     const invokeCalls = mocks.invoke.mock.calls.map((c) => c[0] as string);
-    expect(invokeCalls).toContain("schema.recommend");
-    expect(invokeCalls).toContain("schema.label.upsert");
-    expect(invokeCalls).toContain("schema.relationship.upsert");
-    expect(invokeCalls).toContain("schema.toggle");
+    expect(invokeCalls).toContain("recommend_schema");
+    expect(invokeCalls).toContain("upsert_schema_label");
+    expect(invokeCalls).toContain("upsert_schema_relationship");
+    expect(invokeCalls).toContain("toggle_schema");
     expect(result.schemasCreated).toBe(1);
     expect(result.labelsCreated).toBe(1);
     expect(result.relationshipTypesCreated).toBe(1);
@@ -177,7 +177,7 @@ describe("schemaSetupHandler (@oxagen/handlers)", () => {
 
     await schemaSetupHandler({ noInteractive: true }, CTX);
 
-    const labelUpsertCall = mocks.invoke.mock.calls.find((c) => c[0] === "schema.label.upsert");
+    const labelUpsertCall = mocks.invoke.mock.calls.find((c) => c[0] === "upsert_schema_label");
     expect(labelUpsertCall).toBeDefined();
     expect(labelUpsertCall![1]).toMatchObject({
       schemaName: "Person",
@@ -194,7 +194,7 @@ describe("schemaSetupHandler (@oxagen/handlers)", () => {
 
     await schemaSetupHandler({ noInteractive: true }, CTX);
 
-    const relUpsertCall = mocks.invoke.mock.calls.find((c) => c[0] === "schema.relationship.upsert");
+    const relUpsertCall = mocks.invoke.mock.calls.find((c) => c[0] === "upsert_schema_relationship");
     expect(relUpsertCall).toBeDefined();
     expect(relUpsertCall![1]).toMatchObject({
       schemaName: "Person",
@@ -211,7 +211,7 @@ describe("schemaSetupHandler (@oxagen/handlers)", () => {
 
     await schemaSetupHandler({ noInteractive: true }, CTX);
 
-    const toggleCall = mocks.invoke.mock.calls.find((c) => c[0] === "schema.toggle");
+    const toggleCall = mocks.invoke.mock.calls.find((c) => c[0] === "toggle_schema");
     expect(toggleCall).toBeDefined();
     expect(toggleCall![1]).toMatchObject({ schemaName: "Person", enabled: true });
   });
@@ -223,7 +223,7 @@ describe("schemaSetupHandler (@oxagen/handlers)", () => {
 
     await schemaSetupHandler({ noInteractive: true, enforcement: "strict" }, CTX);
 
-    const configCall = mocks.invoke.mock.calls.find((c) => c[0] === "schema.registry.config");
+    const configCall = mocks.invoke.mock.calls.find((c) => c[0] === "get_registry_config");
     expect(configCall).toBeDefined();
     expect(configCall![1]).toMatchObject({ enforcementMode: "strict" });
   });
@@ -235,13 +235,13 @@ describe("schemaSetupHandler (@oxagen/handlers)", () => {
 
     await schemaSetupHandler({ noInteractive: true }, CTX);
 
-    const configCall = mocks.invoke.mock.calls.find((c) => c[0] === "schema.registry.config");
+    const configCall = mocks.invoke.mock.calls.find((c) => c[0] === "get_registry_config");
     expect(configCall).toBeUndefined();
   });
 
   it("handles empty proposal (0 schemas) in non-interactive mode", async () => {
     mocks.invoke.mockImplementation(async (capability: string) => {
-      if (capability === "schema.recommend") {
+      if (capability === "recommend_schema") {
         return {
           proposal: { schemas: [] },
           rationale: "No data found",
@@ -263,7 +263,7 @@ describe("schemaSetupHandler (@oxagen/handlers)", () => {
 
   it("handles multiple schemas in proposal in non-interactive mode", async () => {
     mocks.invoke.mockImplementation(async (capability: string) => {
-      if (capability === "schema.recommend") {
+      if (capability === "recommend_schema") {
         return {
           proposal: {
             schemas: [
@@ -343,7 +343,7 @@ describe("schemaSetupHandler (@oxagen/handlers)", () => {
 
     await schemaSetupHandler({ noInteractive: true }, mcpCtx);
 
-    const recommendCall = mocks.invoke.mock.calls.find((c) => c[0] === "schema.recommend");
+    const recommendCall = mocks.invoke.mock.calls.find((c) => c[0] === "recommend_schema");
     expect(recommendCall![3]).toMatchObject({ surface: "mcp" });
   });
 
@@ -356,7 +356,7 @@ describe("schemaSetupHandler (@oxagen/handlers)", () => {
 
     await schemaSetupHandler({ noInteractive: true }, unknownCtx);
 
-    const recommendCall = mocks.invoke.mock.calls.find((c) => c[0] === "schema.recommend");
+    const recommendCall = mocks.invoke.mock.calls.find((c) => c[0] === "recommend_schema");
     expect(recommendCall![3]).toMatchObject({ surface: "api" });
   });
 });

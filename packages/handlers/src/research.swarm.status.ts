@@ -41,7 +41,7 @@ export const researchSwarmStatusHandler: CapabilityHandler<typeof researchSwarmS
   // timed_out (age 0 >= 0) → mapped to "failed", so a running swarm never showed
   // progress and never completed. Omit it to use the contract default window.
   const aggregateResult = (await invoke(
-    "agent.subagent.aggregate",
+    "aggregate_subagents",
     {
       fanoutId,
       // Server-side post-processing needs each child's full input (the query)

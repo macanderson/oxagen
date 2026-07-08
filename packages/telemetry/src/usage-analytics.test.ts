@@ -84,7 +84,7 @@ describe("readUsageBreakdown", () => {
         { group_key: "ws-a", ...agg({ input_tokens: "100", output_tokens: "40", cached_tokens: "10", cost_micros: "5000", executions: "3" }) },
       ],
       capability: [
-        { group_key: "ontology.query", ...agg({ input_tokens: "60", cost_micros: "3000", executions: "2" }) },
+        { group_key: "query_ontology", ...agg({ input_tokens: "60", cost_micros: "3000", executions: "2" }) },
       ],
       principal: [
         {
@@ -118,7 +118,7 @@ describe("readUsageBreakdown", () => {
     expect(out.byWorkspace[0]).toMatchObject({ key: "ws-a", provider: "" });
     // Principal-spine dimensions (migration 0023).
     expect(out.byCapability[0]).toMatchObject({
-      key: "ontology.query",
+      key: "query_ontology",
       provider: "",
       costMicros: 3000,
       executions: 2,

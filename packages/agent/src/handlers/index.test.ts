@@ -11,7 +11,7 @@ import { TEST_CTX as CTX } from "../test-utils/fixtures";
 
 describe("handler registry", () => {
   it("resolveHandler returns a function for a registered capability", async () => {
-    const fn = await resolveHandler("agent.tool.list");
+    const fn = await resolveHandler("list_agent_tools");
     expect(typeof fn).toBe("function");
   });
 
@@ -20,7 +20,7 @@ describe("handler registry", () => {
   });
 
   it("invokeCapability dispatches through the resolved handler", async () => {
-    const res = await invokeCapability("agent.tool.list", { includeExternal: false }, CTX);
+    const res = await invokeCapability("list_agent_tools", { includeExternal: false }, CTX);
     expect(res).toEqual({ tools: [] });
   });
 
@@ -30,11 +30,11 @@ describe("handler registry", () => {
   // "agentSandboxFilesListHandler"). resolveHandler must fall back to the
   // module's unique `*Handler` export — regression coverage for the fix.
   it.each([
-    "agent.sandbox_file.list",
-    "agent.sandbox_file.read",
-    "agent.background_task.start",
-    "agent.file_lock.acquire",
-    "agent.mcp_consent.resolve",
+    "list_sandbox_files",
+    "read_sandbox_file",
+    "start_background_task",
+    "acquire_file_lock",
+    "resolve_mcp_consent",
   ])(
     "resolves a handler function for snake_case capability %s",
     async (cap) => {
@@ -47,16 +47,16 @@ describe("handler registry", () => {
   // Exercise every agent-lifecycle loader so the lazy import() arrows are
   // covered and each handler module's expected export name is verified.
   it.each([
-    "agent.definition.create",
-    "agent.definition.update",
-    "agent.definition.publish",
-    "agent.definition.get",
-    "agent.definition.list",
-    "agent.deploy",
-    "agent.trigger.create",
-    "agent.trigger.update",
-    "agent.trigger.delete",
-    "agent.trigger.list",
+    "create_agent_def",
+    "update_agent_def",
+    "publish_agent_def",
+    "get_agent_def",
+    "list_agent_defs",
+    "deploy_agent",
+    "create_trigger",
+    "update_trigger",
+    "delete_trigger",
+    "list_triggers",
   ])(
     "resolves a handler function for %s",
     async (cap) => {

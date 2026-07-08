@@ -26,7 +26,7 @@ export async function listAgentTools(
   includeExternal = true,
 ): Promise<AgentToolRow[]> {
   const out = (await invoke(
-    "agent.tool.list",
+    "list_agent_tools",
     { includeExternal },
     ctx,
     { surface: "agent" },

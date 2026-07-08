@@ -149,7 +149,7 @@ describe("tenant scope", () => {
           principalId: PRINCIPAL,
           principalKind: "agent",
           userId: USER,
-          capabilityName: "ontology.query",
+          capabilityName: "query_ontology",
         },
         () => getPrincipalAttribution(),
       );
@@ -157,7 +157,7 @@ describe("tenant scope", () => {
         principalId: PRINCIPAL,
         principalKind: "agent",
         userId: USER,
-        capabilityName: "ontology.query",
+        capabilityName: "query_ontology",
       });
     });
 

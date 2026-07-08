@@ -257,7 +257,7 @@ function derivePathFromHtmlUrl(htmlUrl: string | undefined): string {
 const STRUCTURAL_RENDER_TRANSFORMS: Readonly<
   Record<string, (output: unknown) => ResolvedRenderDirective | null>
 > = {
-  "agent.repo.edit": (output) => {
+  "edit_repo_file": (output) => {
     if (!isRecord(output)) return null;
     const changedFiles = Array.isArray(output.changedFiles)
       ? output.changedFiles.filter((f): f is string => typeof f === "string")
@@ -292,7 +292,7 @@ const STRUCTURAL_RENDER_TRANSFORMS: Readonly<
       },
     };
   },
-  "repo.file.put": (output) => {
+  "put_repo_file": (output) => {
     if (!isRecord(output)) return null;
     const htmlUrl = typeof output.htmlUrl === "string" ? output.htmlUrl : undefined;
     const commitSha = typeof output.commitSha === "string" ? output.commitSha : undefined;
@@ -321,7 +321,7 @@ const STRUCTURAL_RENDER_TRANSFORMS: Readonly<
       },
     };
   },
-  "agent.sandbox.exec": (output) => {
+  "run_sandbox_command": (output) => {
     if (!isRecord(output)) return null;
     const stdout = typeof output.stdout === "string" ? output.stdout : "";
     const stderr = typeof output.stderr === "string" ? output.stderr : "";
@@ -339,19 +339,19 @@ const STRUCTURAL_RENDER_TRANSFORMS: Readonly<
   },
   // repo.pr.get output IS the pr-stats card's props (the card interface mirrors
   // the contract output field-for-field), so this is a guarded pass-through.
-  "repo.pr.get": (output) => {
+  "get_pr": (output) => {
     if (!isRecord(output) || typeof output.number !== "number") return null;
     return { componentId: "pr-stats", props: output };
   },
   // repo.ci.status output IS the ci-status card's props.
-  "repo.ci.status": (output) => {
+  "get_ci_status": (output) => {
     if (!isRecord(output) || !Array.isArray(output.runs)) return null;
     return { componentId: "ci-status", props: output };
   },
   // repo.pr.diff → the existing code-diff card. Map the PR file list onto the
   // card's flat {path, patch, additions, deletions} shape; parseUnifiedDiff
   // renders full hunks from the real `patch` text.
-  "repo.pr.diff": (output) => {
+  "get_pr_diff": (output) => {
     if (!isRecord(output) || !Array.isArray(output.files)) return null;
     const files = output.files
       .filter(isRecord)
@@ -378,25 +378,25 @@ const STRUCTURAL_RENDER_TRANSFORMS: Readonly<
 // (archive.create, documents.generate, graph.stats, image/video) are NOT listed
 // here — the embedded directive wins upstream.
 export const CURATED_RENDER_HINTS: Readonly<Record<string, CapabilityRenderHint>> = {
-  "graph.node.get": {
+  "get_node": {
     componentId: "graph-node-card",
     recordLinks: [
       { field: "node.nodeId", recordType: "graph.node", labelField: "node.displayName" },
     ],
     titleField: "node.displayName",
   },
-  "graph.node.upsert": {
+  "upsert_node": {
     componentId: "graph-node-card",
     recordLinks: [{ field: "nodeId", recordType: "graph.node" }],
   },
-  "graph.node.list": { componentId: "graph-node-list-card" },
-  "graph.node.search": { componentId: "graph-node-list-card" },
-  "graph.edge.upsert": { componentId: "graph-edge-card" },
-  "research.swarm.status": { componentId: "research-swarm-card" },
-  "research.swarm.start": { componentId: "research-swarm-card" },
-  "conversation.list": { componentId: "conversation-list-card" },
-  "agent.definition.list": { componentId: "agent-definition-list-card" },
-  "web.search": { componentId: "web-search-card" },
+  "list_nodes": { componentId: "graph-node-list-card" },
+  "search_nodes": { componentId: "graph-node-list-card" },
+  "upsert_edge": { componentId: "graph-edge-card" },
+  "get_research_status": { componentId: "research-swarm-card" },
+  "start_research_swarm": { componentId: "research-swarm-card" },
+  "list_conversations": { componentId: "conversation-list-card" },
+  "list_agent_defs": { componentId: "agent-definition-list-card" },
+  "search_web": { componentId: "web-search-card" },
 };
 
 // ── Curated chain metadata (prioritized capabilities) ────────────────────────
@@ -414,67 +414,67 @@ const EMPTY_CHAIN: CapabilityChainMeta = Object.freeze({
 export const CURATED_CHAIN_META: Readonly<
   Record<string, Partial<CapabilityChainMeta>>
 > = {
-  "web.search": {
+  "search_web": {
     produces: ["search.results"],
     consumes: ["query", "topic"],
-    chainHints: ["graph.node.upsert", "document.generate"],
+    chainHints: ["upsert_node", "generate_document"],
   },
-  "web.fetch": {
+  "fetch_web_page": {
     produces: ["document.text"],
     consumes: ["url"],
-    chainHints: ["graph.node.upsert"],
+    chainHints: ["upsert_node"],
   },
-  "research.swarm.start": {
+  "start_research_swarm": {
     produces: ["swarm.id"],
     consumes: ["topic"],
-    chainHints: ["research.swarm.status"],
+    chainHints: ["get_research_status"],
   },
-  "research.swarm.status": {
+  "get_research_status": {
     produces: ["search.results", "swarm.id"],
     consumes: ["swarm.id"],
-    chainHints: ["graph.node.upsert", "graph.edge.upsert", "document.generate"],
+    chainHints: ["upsert_node", "upsert_edge", "generate_document"],
   },
-  "graph.node.upsert": {
+  "upsert_node": {
     produces: ["graph.nodeId"],
     consumes: ["entity", "graph.label", "document.text"],
-    chainHints: ["graph.edge.upsert"],
+    chainHints: ["upsert_edge"],
   },
-  "graph.edge.upsert": {
+  "upsert_edge": {
     produces: ["graph.edgeId"],
     consumes: ["graph.nodeId", "relationship"],
     chainHints: [],
   },
-  "graph.node.get": {
+  "get_node": {
     produces: ["graph.node"],
     consumes: ["graph.nodeId"],
-    chainHints: ["graph.node.list"],
+    chainHints: ["list_nodes"],
   },
-  "graph.node.search": {
+  "search_nodes": {
     produces: ["graph.nodeId"],
     consumes: ["query"],
-    chainHints: ["graph.node.get"],
+    chainHints: ["get_node"],
   },
-  "graph.node.list": {
+  "list_nodes": {
     produces: ["graph.nodeId"],
     consumes: [],
-    chainHints: ["graph.node.get"],
+    chainHints: ["get_node"],
   },
-  "document.generate": {
+  "generate_document": {
     produces: ["asset.id"],
     consumes: ["document.text"],
-    chainHints: ["archive.create"],
+    chainHints: ["create_archive"],
   },
-  "document.pdf.create": {
+  "create_pdf": {
     produces: ["asset.id"],
     consumes: ["document.text"],
     chainHints: [],
   },
-  "archive.create": {
+  "create_archive": {
     produces: ["asset.id"],
     consumes: ["asset.id", "document.text"],
     chainHints: [],
   },
-  "conversation.list": {
+  "list_conversations": {
     produces: ["conversation.id"],
     consumes: [],
     chainHints: [],

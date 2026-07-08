@@ -75,6 +75,6 @@ describe("eval.dataset.get capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("eval.dataset.get")).toBe(evalDatasetGet);
+    expect(getCapability("get_dataset")).toBe(evalDatasetGet);
   });
 });

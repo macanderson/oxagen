@@ -148,7 +148,7 @@ async function emitFormatTelemetry(
         source_system: `handler:${ctx.surface}`,
         stream_offset: null,
         payload: JSON.stringify({
-          capability: "code.format",
+          capability: "format_code",
           language: input.language,
           durationMs,
           requestId: ctx.requestId,

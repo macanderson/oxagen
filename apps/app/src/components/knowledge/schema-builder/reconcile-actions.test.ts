@@ -64,7 +64,7 @@ describe("schemaReconcileDispatchAction", () => {
     expect(result).toEqual({ executionId: "aex_1" });
     expect(mockInvoke).toHaveBeenCalledTimes(1);
     const [capability, input, ctx, opts] = mockInvoke.mock.calls[0]!;
-    expect(capability).toBe("schema.reconcile.dispatch");
+    expect(capability).toBe("dispatch_schema_reconcile");
     expect(input).toEqual({ versionId: "scv_1", prune: true });
     expect(ctx).toEqual(expect.objectContaining({ orgId: "org-1", workspaceId: "ws-1", userId: "user-1" }));
     // The crux of the fix: contract surface must be one the contract exposes.
@@ -116,7 +116,7 @@ describe("schemaReconcileStatusAction", () => {
     expect(result.status).toBe("running");
     expect(result.totalNodes).toBe(28);
     const [capability, input, , opts] = mockInvoke.mock.calls[0]!;
-    expect(capability).toBe("schema.reconcile.status");
+    expect(capability).toBe("get_reconcile_status");
     expect(input).toEqual({ executionId: "aex_1" });
     expect(opts).toEqual({ surface: "api" });
     expect((opts as { surface: string }).surface).not.toBe("agent");

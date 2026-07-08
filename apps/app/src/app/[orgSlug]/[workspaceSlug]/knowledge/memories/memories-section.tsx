@@ -49,7 +49,7 @@ export async function MemoriesSection({
       { orgId, workspaceId },
       () =>
         invoke(
-          "agent.memory.list",
+          "list_memories",
           { limit: 100, offset: 0 },
           {
             orgId,

@@ -3,7 +3,7 @@ import { commandMenuSearch, SEARCHABLE_KINDS } from "./command.menu.search";
 
 describe("command.menu.search contract", () => {
   it("is registered on api and agent surfaces", () => {
-    expect(commandMenuSearch.name).toBe("command.menu.search");
+    expect(commandMenuSearch.name).toBe("search_command_menu");
     expect(commandMenuSearch.surfaces).toContain("api");
     expect(commandMenuSearch.surfaces).toContain("agent");
   });

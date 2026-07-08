@@ -54,7 +54,7 @@ const builtinCap = () =>
 // inject a fake — so we use the real contract name.
 const pluginClaimedCap = () =>
   registerCapability({
-    name: "image.generate",
+    name: "generate_image",
     domain: "image",
     description: "Generate an image (claimed by oxagen/media-image in tests).",
     mode: "sync" as const,
@@ -74,7 +74,7 @@ const pluginClaimedCap = () =>
 // when orgId is absent, so we need a surface where the scope check is bypassed.
 const pluginClaimedUnscopedCap = () =>
   registerCapability({
-    name: "svg.generate",
+    name: "generate_svg",
     domain: "svg",
     description: "Generate SVG (claimed by oxagen/media-svg, unscoped in test).",
     mode: "sync" as const,
@@ -117,27 +117,27 @@ describe("kernel capability entitlement gate", () => {
     const gate = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
     setCapabilityEntitlementGate(gate);
     pluginClaimedCap();
-    registerHandler("image.generate", async () => async (input) => input);
+    registerHandler("generate_image", async () => async (input) => input);
 
-    await invoke("image.generate", { v: "hi" }, ctx);
+    await invoke("generate_image", { v: "hi" }, ctx);
 
     expect(gate).toHaveBeenCalledOnce();
     // Entitlement is workspace-scoped — the gate receives (name, orgId, workspaceId).
-    expect(gate).toHaveBeenCalledWith("image.generate", ctx.orgId, ctx.workspaceId);
+    expect(gate).toHaveBeenCalledWith("generate_image", ctx.orgId, ctx.workspaceId);
   });
 
   it("propagates the gate throw with code capability_not_installed", async () => {
     const error = capabilityNotInstalledError(
-      "image.generate",
+      "generate_image",
       "oxagen/media-image",
       "Image Generation",
     );
     const gate = vi.fn<() => Promise<void>>().mockRejectedValue(error);
     setCapabilityEntitlementGate(gate);
     pluginClaimedCap();
-    registerHandler("image.generate", async () => async (input) => input);
+    registerHandler("generate_image", async () => async (input) => input);
 
-    await expect(invoke("image.generate", { v: "hi" }, ctx)).rejects.toMatchObject({
+    await expect(invoke("generate_image", { v: "hi" }, ctx)).rejects.toMatchObject({
       code: "capability_not_installed",
     });
   });
@@ -145,9 +145,9 @@ describe("kernel capability entitlement gate", () => {
   it("allows when no gate is registered (default-open)", async () => {
     // clearCapabilityEntitlementGate() already called in afterEach; no gate here.
     pluginClaimedCap();
-    registerHandler("image.generate", async () => async (input) => input);
+    registerHandler("generate_image", async () => async (input) => input);
 
-    await expect(invoke("image.generate", { v: "hi" }, ctx)).resolves.toEqual({ v: "hi" });
+    await expect(invoke("generate_image", { v: "hi" }, ctx)).resolves.toEqual({ v: "hi" });
   });
 
   it("skips the gate when orgId is empty (system/internal invocation)", async () => {
@@ -159,10 +159,10 @@ describe("kernel capability entitlement gate", () => {
     // before we reach the entitlement gate — we want to assert the gate itself
     // is bypassed when orgId is absent, not that TenantScope rejects first.
     pluginClaimedUnscopedCap();
-    registerHandler("svg.generate", async () => async (input) => input);
+    registerHandler("generate_svg", async () => async (input) => input);
 
     // ctxNoOrg has orgId: "" — entitlement gate must be bypassed.
-    await expect(invoke("svg.generate", { v: "hi" }, ctxNoOrg)).resolves.toEqual({
+    await expect(invoke("generate_svg", { v: "hi" }, ctxNoOrg)).resolves.toEqual({
       v: "hi",
     });
     expect(gate).not.toHaveBeenCalled();
@@ -172,21 +172,21 @@ describe("kernel capability entitlement gate", () => {
 describe("capabilityNotInstalledError", () => {
   it("produces a CapabilityError with the expected code and message", () => {
     const err = capabilityNotInstalledError(
-      "video.generate",
+      "generate_video",
       "oxagen/media-video",
       "Video Generation",
     );
     expect(err).toBeInstanceOf(CapabilityError);
     expect(err.code).toBe("capability_not_installed");
-    expect(err.capability).toBe("video.generate");
-    expect(err.message).toContain("video.generate");
+    expect(err.capability).toBe("generate_video");
+    expect(err.message).toContain("generate_video");
     expect(err.message).toContain("Video Generation");
     expect(err.message).toContain("oxagen/media-video");
     expect(err.message).toContain("marketplace");
   });
 
   it("carries the name CapabilityError", () => {
-    const err = capabilityNotInstalledError("svg.generate", "oxagen/media-svg", "SVG Generation");
+    const err = capabilityNotInstalledError("generate_svg", "oxagen/media-svg", "SVG Generation");
     expect(err.name).toBe("CapabilityError");
   });
 });

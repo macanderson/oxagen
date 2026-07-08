@@ -58,7 +58,7 @@ export async function updateModelSettingsAction(
   };
 
   try {
-    await invoke("workspace.model_settings.write", parsed.data, ctx, { surface: "agent" });
+    await invoke("update_model_settings", parsed.data, ctx, { surface: "agent" });
     return { ok: true };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Failed to update settings." };

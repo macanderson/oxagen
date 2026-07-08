@@ -43,7 +43,7 @@ export async function ConnectionsSection({
   let connections: ConnectionListOutput["connections"] = [];
   try {
     const result = (await runInTenantScope({ orgId, workspaceId }, () =>
-      invoke("connection.list", {}, ctx, { surface: "agent" }),
+      invoke("list_connections", {}, ctx, { surface: "agent" }),
     )) as ConnectionListOutput;
     connections = result.connections;
   } catch (e) {

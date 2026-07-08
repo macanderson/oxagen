@@ -3,7 +3,7 @@ import { registerCapability } from "../registry";
 import { dataTypeEnum, constraintsSchema } from "./schema.types";
 
 export const schemaPropertyUpsert = registerCapability({
-  name: "schema.property.upsert",
+  name: "upsert_schema_property",
   domain: "schema",
   description: "Create/update a property on a node label or relationship type in the draft.",
   mode: "sync",

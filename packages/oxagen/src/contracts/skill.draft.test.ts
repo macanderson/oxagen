@@ -113,7 +113,7 @@ describe("skill.draft capability", () => {
   // ── capability registry ───────────────────────────────────────────────────
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("skill.draft")).toBe(skillDraft);
+    expect(getCapability("draft_skill")).toBe(skillDraft);
   });
 
   it("has mode sync and is scoped", () => {

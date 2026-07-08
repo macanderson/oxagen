@@ -21,6 +21,6 @@ describe("agent.trigger.delete capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("agent.trigger.delete")).toBe(agentTriggerDelete);
+    expect(getCapability("delete_trigger")).toBe(agentTriggerDelete);
   });
 });

@@ -74,7 +74,7 @@ export function sanitizeSandboxEnv(
 }
 
 export const agentCodeExecute = registerCapability({
-  name: "agent.code.execute",
+  name: "execute_code",
   domain: "agent",
   description:
     "Execute a code snippet in an isolated sandbox and return stdout, stderr, and exit code. Supports node, python, and shell. Requires SANDBOX_ENABLED=true.",

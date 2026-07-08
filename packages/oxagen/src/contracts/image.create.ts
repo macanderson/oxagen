@@ -2,7 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const imageCreate = registerCapability({
-  name: "image.create",
+  name: "create_image",
   domain: "image",
   description: "Generate an image from a prompt and persist it as a workspace asset",
   mode: "sync",

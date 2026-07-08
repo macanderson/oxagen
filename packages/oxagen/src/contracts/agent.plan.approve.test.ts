@@ -50,6 +50,6 @@ describe("agent.plan.approve capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("agent.plan.approve")).toBe(agentPlanApprove);
+    expect(getCapability("approve_plan")).toBe(agentPlanApprove);
   });
 });

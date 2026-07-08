@@ -67,7 +67,7 @@ describe("code.format capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("code.format")).toBe(codeFormat);
+    expect(getCapability("format_code")).toBe(codeFormat);
   });
 
   it("declares the api, mcp, and agent surfaces", () => {

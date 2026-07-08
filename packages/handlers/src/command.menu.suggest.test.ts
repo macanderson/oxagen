@@ -51,7 +51,7 @@ const MINIMAL_INPUT = {
     summary: "Run of playbook churn-investigate v3. Status: failed at step 'normalize'.",
   },
   recentEntities: [] as Array<{ kind: string; id: string; label?: string }>,
-  capabilities: ["agent.compose"] as string[],
+  capabilities: ["run_capability_chain"] as string[],
   locale: "en",
 };
 

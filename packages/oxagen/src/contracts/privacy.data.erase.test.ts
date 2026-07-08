@@ -7,7 +7,7 @@ const ISO_FUTURE = "2026-07-09T00:00:00.000Z";
 
 describe("privacy.data.erase capability", () => {
   it("is registered", () => {
-    expect(getCapability("privacy.data.erase")).toBeDefined();
+    expect(getCapability("erase_data")).toBeDefined();
   });
 
   it("parses user-scope input with confirm: true", () => {

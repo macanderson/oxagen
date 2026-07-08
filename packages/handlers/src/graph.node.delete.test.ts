@@ -88,7 +88,7 @@ describe("graphNodeDeleteHandler", () => {
     await Promise.resolve();
     expect(mocks.insertToolInvocation).toHaveBeenCalledTimes(1);
     const row = mocks.insertToolInvocation.mock.calls[0]?.[0] as Record<string, unknown>;
-    expect(row.capability_name).toBe("graph.node.delete");
+    expect(row.capability_name).toBe("delete_node");
     expect(row.org_id).toBe(CTX.orgId);
     expect(row.workspace_id).toBe(CTX.workspaceId);
     expect(row.risk_level).toBe("high");

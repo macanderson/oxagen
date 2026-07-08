@@ -4,7 +4,7 @@ import { getCapability } from "../registry";
 
 describe("browser.read capability", () => {
   it("is registered with the browser domain and correct metadata", () => {
-    const cap = getCapability("browser.read");
+    const cap = getCapability("read_page");
     expect(cap).toBeDefined();
     expect(cap?.domain).toBe("browser");
     expect(cap?.scoped).toBe(true);

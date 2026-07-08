@@ -17,16 +17,16 @@ export const TOOL_EMOJIS: Record<string, string> = {
 
   // Knowledge & graph
   MCP: "🔗",
-  "semantic.edge.suggest": "🧠",
-  "semantic.relationship.approve": "✅",
+  "suggest_semantic_edges": "🧠",
+  "approve_semantic_relationship": "✅",
   "knowledge.query": "🔍",
 
   // LLM & inference
-  "agent.subagent.dispatch": "🚀",
+  "dispatch_subagent": "🚀",
 
   // Workflow & process
-  "workflow.run": "▶️",
-  "workflow.cancel": "⏹️",
+  "run_workflow": "▶️",
+  "cancel_workflow": "⏹️",
 
   // Default — tools without a mapping render with no emoji at all.
   default: "",

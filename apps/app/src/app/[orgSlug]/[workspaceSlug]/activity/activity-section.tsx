@@ -37,7 +37,7 @@ export async function ActivitySection({
   try {
     result = (await runInTenantScope({ orgId, workspaceId }, () =>
       invoke(
-        "agent.execution.list",
+        "list_executions",
         { limit: 25, before },
         {
           orgId,

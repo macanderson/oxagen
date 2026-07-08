@@ -3,7 +3,7 @@ import { registerCapability } from "../registry";
 import { FieldErrorSchema } from "./schema.shared";
 
 export const schemaValidateNode = registerCapability({
-  name: "schema.validate.node",
+  name: "validate_schema_node",
   domain: "schema",
   description: "Validate a node's properties against the workspace schema. Returns conformance score and field-level errors.",
   mode: "sync",

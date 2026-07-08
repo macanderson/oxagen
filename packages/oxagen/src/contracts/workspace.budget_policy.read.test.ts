@@ -4,7 +4,7 @@ import { getCapability } from "../registry";
 
 describe("workspace.budget.policy.read capability", () => {
   it("is registered under its name", () => {
-    expect(getCapability("workspace.budget_policy.read")).toBe(workspaceBudgetPolicyRead);
+    expect(getCapability("get_budget_policy")).toBe(workspaceBudgetPolicyRead);
   });
 
   it("is workspace-scoped, low-risk, readable by all workspace roles", () => {

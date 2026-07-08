@@ -242,6 +242,6 @@ describe("orgMemberRemoveHandler", () => {
     expect(event.eventType).toBe("org.member_removed");
     expect(event.orgId).toBe("org-abc");
     expect(event.outcome).toBe("success");
-    expect(event.capability).toBe("org.member.remove");
+    expect(event.capability).toBe("remove_org_member");
   });
 });

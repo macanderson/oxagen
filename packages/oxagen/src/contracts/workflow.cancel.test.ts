@@ -4,7 +4,7 @@ import { getCapability } from "../registry";
 
 describe("workflow.cancel capability", () => {
   it("is registered", () => {
-    expect(getCapability("workflow.cancel")).toBeDefined();
+    expect(getCapability("cancel_workflow")).toBeDefined();
   });
 
   it("parses a valid input with a public ID", () => {

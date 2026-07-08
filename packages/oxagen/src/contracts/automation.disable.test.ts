@@ -43,7 +43,7 @@ describe("automation.disable capability", () => {
   // ── declaration invariants ────────────────────────────────────────────────
 
   it("is registered under automation.disable", () => {
-    expect(getCapability("automation.disable")).toBe(automationDisable);
+    expect(getCapability("disable_automation")).toBe(automationDisable);
   });
 
   it("exposes all four surfaces", () => {

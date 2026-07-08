@@ -2,7 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const userPreferencesWrite = registerCapability({
-  name: "user.preferences.write",
+  name: "update_user_preferences",
   domain: "user",
   description:
     "Update the calling user's UI and model preferences (partial update — only provided fields are changed)",

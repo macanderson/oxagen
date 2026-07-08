@@ -130,12 +130,12 @@ describe("propertyPairsToRecord", () => {
 
 function wireInvoke() {
   invoke.mockImplementation(async (cap: string, input: unknown) => {
-    if (cap === "prompt.settings.read") return { additionalInstructions: "" };
-    if (cap === "graph.node.upsert") {
+    if (cap === "get_prompt_settings") return { additionalInstructions: "" };
+    if (cap === "upsert_node") {
       const name = (input as { displayName: string }).displayName;
       return { nodeId: `node_${name}`, created: true };
     }
-    if (cap === "graph.edge.upsert") return { edgeId: "e_1", created: true };
+    if (cap === "upsert_edge") return { edgeId: "e_1", created: true };
     throw new Error(`unexpected invoke ${cap}`);
   });
 }
@@ -182,8 +182,8 @@ describe("graphIngestHandler", () => {
     expect(out.summary).toContain("1 relationship");
 
     // graph.node.upsert called per entity; graph.edge.upsert called once.
-    const nodeCalls = invoke.mock.calls.filter((c) => c[0] === "graph.node.upsert");
-    const edgeCalls = invoke.mock.calls.filter((c) => c[0] === "graph.edge.upsert");
+    const nodeCalls = invoke.mock.calls.filter((c) => c[0] === "upsert_node");
+    const edgeCalls = invoke.mock.calls.filter((c) => c[0] === "upsert_edge");
     expect(nodeCalls).toHaveLength(2);
     expect(edgeCalls).toHaveLength(1);
     // graph.edge.upsert now carries `relationshipType` (not edgeType).
@@ -214,7 +214,7 @@ describe("graphIngestHandler", () => {
     const out = await graphIngestHandler({ text: "Acme signed MSA-1.", maxEntities: 25 }, ctx);
 
     // Only the in-vocabulary relationship is upserted.
-    const edgeCalls = invoke.mock.calls.filter((c) => c[0] === "graph.edge.upsert");
+    const edgeCalls = invoke.mock.calls.filter((c) => c[0] === "upsert_edge");
     expect(edgeCalls).toHaveLength(1);
     expect((edgeCalls[0]?.[1] as { relationshipType: string }).relationshipType).toBe("SIGNED_CONTRACT");
     expect(out.relationships.map((r) => r.relationshipType)).toEqual(["SIGNED_CONTRACT"]);
@@ -236,13 +236,13 @@ describe("graphIngestHandler", () => {
 
   it("continues when a single entity upsert fails", async () => {
     invoke.mockImplementation(async (cap: string, input: unknown) => {
-      if (cap === "prompt.settings.read") return { additionalInstructions: "" };
-      if (cap === "graph.node.upsert") {
+      if (cap === "get_prompt_settings") return { additionalInstructions: "" };
+      if (cap === "upsert_node") {
         const name = (input as { displayName: string }).displayName;
         if (name === "Bad") throw new Error("neo4j down");
         return { nodeId: `node_${name}`, created: true };
       }
-      if (cap === "graph.edge.upsert") return { edgeId: "e_1", created: true };
+      if (cap === "upsert_edge") return { edgeId: "e_1", created: true };
       throw new Error("unexpected");
     });
     generateObjectFor.mockResolvedValue({
@@ -285,7 +285,7 @@ describe("graphIngestHandler", () => {
       ctx,
     );
 
-    const nodeCall = invoke.mock.calls.find((c) => c[0] === "graph.node.upsert");
+    const nodeCall = invoke.mock.calls.find((c) => c[0] === "upsert_node");
     const props = (nodeCall?.[1] as { properties: Record<string, unknown> }).properties;
     // Domain properties captured…
     expect(props.hull_number).toBe("SSN-571");
@@ -315,7 +315,7 @@ describe("graphIngestHandler", () => {
 
     const out = await graphIngestHandler({ text: "x", maxEntities: 25 }, ctx);
     expect(out.entities.map((e) => e.name)).toEqual(["USS Nautilus"]);
-    const nodeCalls = invoke.mock.calls.filter((c) => c[0] === "graph.node.upsert");
+    const nodeCalls = invoke.mock.calls.filter((c) => c[0] === "upsert_node");
     expect(nodeCalls).toHaveLength(1);
   });
 

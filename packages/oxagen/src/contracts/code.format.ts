@@ -19,7 +19,7 @@ export const codeFormatLanguageSchema = z
   .describe("Language to format");
 
 export const codeFormat = registerCapability({
-  name: "code.format",
+  name: "format_code",
   domain: "code",
   description:
     "Run a language-aware formatter on source inside the sandbox and return " +

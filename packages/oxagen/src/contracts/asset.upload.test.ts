@@ -4,7 +4,7 @@ import { getCapability } from "../registry";
 
 describe("asset.upload capability", () => {
   it("is registered", () => {
-    expect(getCapability("asset.upload")).toBeDefined();
+    expect(getCapability("upload_asset")).toBeDefined();
   });
 
   it("parses valid input — image kind", () => {

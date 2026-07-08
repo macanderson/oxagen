@@ -327,7 +327,7 @@ describe("agent.code.execute capability", () => {
   // ── registry ──────────────────────────────────────────────────────────────
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("agent.code.execute")).toBe(agentCodeExecute);
+    expect(getCapability("execute_code")).toBe(agentCodeExecute);
   });
 });
 

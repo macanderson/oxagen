@@ -3,7 +3,7 @@ import { ontologyNeighbors } from "./ontology.neighbors";
 
 describe("ontology.neighbors contract", () => {
   it("is a read-only traversal primitive on api/mcp/agent/cli", () => {
-    expect(ontologyNeighbors.name).toBe("ontology.neighbors");
+    expect(ontologyNeighbors.name).toBe("get_ontology_neighbors");
     for (const s of ["api", "mcp", "agent", "cli"]) {
       expect(ontologyNeighbors.surfaces).toContain(s);
     }

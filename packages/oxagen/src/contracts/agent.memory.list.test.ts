@@ -98,6 +98,6 @@ describe("agent.memory.list capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("agent.memory.list")).toBe(agentMemoryList);
+    expect(getCapability("list_memories")).toBe(agentMemoryList);
   });
 });
