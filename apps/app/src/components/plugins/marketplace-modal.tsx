@@ -332,6 +332,10 @@ export function MarketplaceModal({
                   role="tab"
                   aria-selected={isActive}
                   onClick={() => {
+                    // Re-clicking the active tab is a no-op: clearing the list
+                    // without a tab change would blank results with no refetch
+                    // (the fetch effect keys off activeTab).
+                    if (value === activeTab) return;
                     setActiveTab(value);
                     setSelected(new Set());
                     setServers([]);
