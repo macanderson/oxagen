@@ -709,6 +709,32 @@ class OxagenAgent(BaseInstalledAgent):
             env=self._forwarded_env(),
         )
 
+        # Telemetry harvest: with OXAGEN_CLI_DEBUG=1 the CLI writes a rich
+        # per-LLM-call log (model routing, per-step tokens, latency, stage
+        # budgets, prompt hashes) to $HOME/.oxagen/logs — the structured signal
+        # the bypass TUI stream in oxagen.txt does NOT carry. Copy it into
+        # agent_dir so Harbor collects it as a trial artifact (agent/oxagen-debug/).
+        # A SEPARATE exec (not appended to the run command) so the agent turn's
+        # exit code is never masked; `|| true` + try/except keep it best-effort —
+        # telemetry capture must never fail a trial. Same shell/user as the run,
+        # so $HOME resolves identically (cold: container default; warm: pinned).
+        if _is_truthy(os.environ.get("OXAGEN_CLI_DEBUG")):
+            try:
+                await self.exec_as_agent(
+                    environment,
+                    command=(
+                        f'cp -r "$HOME/.oxagen/logs" '
+                        f"{EnvironmentPaths.agent_dir}/oxagen-debug 2>/dev/null || true"
+                    ),
+                    env=self._forwarded_env(),
+                )
+            except Exception as exc:  # noqa: BLE001 — telemetry is best-effort
+                print(
+                    f"oxagen-adapter: debug-log harvest failed ({exc}); "
+                    "trial telemetry will be limited to oxagen.txt + result.json",
+                    file=sys.stderr,
+                )
+
         # Warm mode: download updated memory back to the host after the run so
         # the next trial inherits it.  This is the cross-trial persistence
         # mechanism — Harbor deletes the container after each trial
