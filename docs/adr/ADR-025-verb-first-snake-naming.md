@@ -46,9 +46,10 @@ disambiguating word:
 - `run_workflow`, `list_workflows`, `get_workflow_status`
 
 **2–3 words.** A 4th word is allowed **only** where global uniqueness truly demands
-it (rare) and is flagged by the lint. The wave produced exactly two four-word names,
-both scope-disambiguated (`set_org_plugin_enabled`, `set_workspace_plugin_enabled`)
-pending a handler-level merge (§5).
+it (rare) and is flagged by the lint. The wave initially produced two four-word,
+scope-disambiguated names (`set_org_plugin_enabled`, `set_workspace_plugin_enabled`);
+these have since been collapsed into the single `set_plugin_enabled` with a `scope`
+argument (§5), so no four-word capability names remain.
 
 Dots and kebab-case are illegal. The dotted `domain.subject.action` form is retired.
 
@@ -98,10 +99,14 @@ and are not registered capabilities (they live in the agent engine, outside
 
 ### 5. Merges: scope-collapse vs true duplicates
 
-- **Scope-collapse (deferred):** `plugin.org.set_enabled` + `plugin.workspace.set_enabled`
-  should collapse to `set_plugin_enabled(scope)`, but their handlers differ, so the
-  merge is deferred (needs handler consolidation). They are named
-  `set_org_plugin_enabled` / `set_workspace_plugin_enabled` for now.
+- **Scope-collapse (DONE):** the former `plugin.org.set_enabled` +
+  `plugin.workspace.set_enabled` are collapsed into a single `set_plugin_enabled`
+  capability that takes a `scope: "org" | "workspace"` argument. The one handler
+  branches on `scope` (org → toggle the org-listing flag; workspace → upsert/disable
+  the workspace `agent.mcp_servers` row); output is `{ ok, workspaceServerId }`
+  (`workspaceServerId` null for org scope and workspace disable). Contract, handler,
+  API route (`POST /plugin/set-enabled`), MCP tool, docs, and tests are all merged;
+  the two old contracts/files are deleted.
 - **Flagged possible-duplicates — VERIFIED DISTINCT, not merged:**
   - `budget.policy.*` is a **per-user** turn budget (domain `user`) →
     `get_user_budget` / `update_user_budget`; `workspace.budget_policy.*` is the

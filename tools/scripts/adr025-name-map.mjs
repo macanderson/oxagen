@@ -254,7 +254,7 @@ export const MAP = {
   "plugin.org.install": "install_plugin",
   "plugin.org.install_bulk": "install_plugins_bulk",
   "plugin.org.list": "list_plugins",
-  "plugin.org.set_enabled": "set_org_plugin_enabled",
+  "plugin.org.set_enabled": "set_plugin_enabled",
   "plugin.org.uninstall": "uninstall_plugin",
   "plugin.registry.add": "add_plugin_registry",
   "plugin.registry.list": "list_plugin_registries",
@@ -263,7 +263,7 @@ export const MAP = {
   "plugin.schema.validate": "validate_plugin_schema",
   "plugin.settings.set_auth_alerts": "set_auth_alerts",
   "plugin.version.list": "list_plugin_versions",
-  "plugin.workspace.set_enabled": "set_workspace_plugin_enabled",
+  "plugin.workspace.set_enabled": "set_plugin_enabled",
 
   // ── privacy ───────────────────────────────────────────────────────────────
   "privacy.data.erase": "erase_data",
@@ -384,25 +384,20 @@ export const MAP = {
   "workspace.settings.write": "update_workspace_settings",
 };
 
-// Names that intentionally use a 4th word because uniqueness demanded it.
-// Both are the scope-disambiguated set_*_plugin_enabled pair (see DEFERRED_MERGES):
-// the scope word (org/workspace) is load-bearing until the merge to
-// set_plugin_enabled(scope) is executed.
-export const FOUR_WORD = new Set([
-  "set_org_plugin_enabled",
-  "set_workspace_plugin_enabled",
-]);
+// No capability name uses a 4th word: the only four-word names were the
+// scope-disambiguated set_*_plugin_enabled pair, now collapsed into the
+// three-word set_plugin_enabled (see COMPLETED_MERGES).
+export const FOUR_WORD = new Set([]);
 
-// Scope-collapse merge candidates: two capabilities that differ only by scope
-// and SHOULD collapse to one canonical name with the scope as an argument, but
-// whose handlers differ, so the merge is DEFERRED (needs handler consolidation).
-// Disambiguated by a scope word here to preserve uniqueness + behavior meanwhile.
-export const DEFERRED_MERGES = [
+// Scope-collapse merges that have been EXECUTED: two capabilities that differed
+// only by scope, collapsed into one canonical name that takes the scope as an
+// argument. The one handler branches on scope.
+export const COMPLETED_MERGES = [
   {
     canonical: "set_plugin_enabled",
     members: ["plugin.org.set_enabled", "plugin.workspace.set_enabled"],
-    disambiguated: ["set_org_plugin_enabled", "set_workspace_plugin_enabled"],
-    reason: "org- vs workspace-scoped enable have different handlers; collapse to set_plugin_enabled(scope) needs handler consolidation.",
+    argument: 'scope: "org" | "workspace"',
+    reason: "org- vs workspace-scoped enable collapsed to set_plugin_enabled(scope); the single handler branches on scope.",
   },
 ];
 

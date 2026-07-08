@@ -388,15 +388,9 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./plugin.org.uninstall")).handler as CapabilityHandlerFn,
   );
   registerHandler(
-    "plugin.org.set_enabled",
+    "set_plugin_enabled",
     async () =>
-      (await import("./plugin.org.set_enabled")).handler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "plugin.workspace.set_enabled",
-    async () =>
-      (await import("./plugin.workspace.set_enabled"))
-        .handler as CapabilityHandlerFn,
+      (await import("./plugin.set_enabled")).handler as CapabilityHandlerFn,
   );
   registerHandler(
     "plugin.credential.set_secret",

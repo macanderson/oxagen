@@ -251,9 +251,12 @@ export async function togglePlugin(
 
   try {
     await runInTenantScope({ orgId: org.id, workspaceId: ws.id }, () =>
-      invoke("plugin.workspace.set_enabled", { orgListingId, enabled }, ctx, {
-        surface: "agent",
-      }),
+      invoke(
+        "set_plugin_enabled",
+        { scope: "workspace", orgListingId, enabled },
+        ctx,
+        { surface: "agent" },
+      ),
     );
     const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };
     revalidatePath(capabilitiesPath(routeCtx));

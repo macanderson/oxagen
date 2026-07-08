@@ -6,10 +6,10 @@
  * tests assert each handler emits the correct event through the consolidated
  * registry helper emitSecurityEvent — and that failures do NOT emit.
  *
- * Covered here: plugin.org.uninstall, plugin.org.set_enabled,
+ * Covered here: plugin.org.uninstall, set_plugin_enabled (org scope),
  * plugin.org.install_bulk.
- * (plugin.org.install and plugin.workspace.set_enabled are covered in their
- * own *.capability.test.ts files.)
+ * (plugin.org.install and set_plugin_enabled workspace scope are covered in
+ * their own *.capability.test.ts files.)
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -41,7 +41,7 @@ vi.mock("@oxagen/oxagen/plugins", () => ({
 }));
 
 import { handler as uninstallHandler } from "./plugin.org.uninstall";
-import { handler as setEnabledHandler } from "./plugin.org.set_enabled";
+import { handler as setEnabledHandler } from "./plugin.set_enabled";
 import { handler as installBulkHandler } from "./plugin.org.install_bulk";
 
 // ── Fixtures ─────────────────────────────────────────────────────────────────
@@ -139,13 +139,13 @@ describe("plugin.org.uninstall — audit event", () => {
   });
 });
 
-// ── plugin.org.set_enabled ───────────────────────────────────────────────────
+// ── set_plugin_enabled (scope="org") ─────────────────────────────────────────
 
-describe("plugin.org.set_enabled — audit event", () => {
+describe("set_plugin_enabled (org scope) — audit event", () => {
   it("emits plugin.enabled_changed on success", async () => {
     mockDbOk();
     const out = (await setEnabledHandler(
-      { orgListingId: "porg-1", enabled: false },
+      { scope: "org", orgListingId: "porg-1", enabled: false },
       ctx,
     )) as { ok: boolean };
     expect(out.ok).toBe(true);
@@ -156,7 +156,7 @@ describe("plugin.org.set_enabled — audit event", () => {
         actorUserId: "user-1",
         orgId: "org-1",
         workspaceId: "ws-1",
-        capability: "plugin.org.set_enabled",
+        capability: "set_plugin_enabled",
         outcome: "success",
       }),
     );
@@ -165,7 +165,7 @@ describe("plugin.org.set_enabled — audit event", () => {
   it("does NOT emit when the update fails", async () => {
     mockDbFail();
     await expect(
-      setEnabledHandler({ orgListingId: "porg-1", enabled: true }, ctx),
+      setEnabledHandler({ scope: "org", orgListingId: "porg-1", enabled: true }, ctx),
     ).rejects.toThrow("db down");
     expect(mocks.emitSecurityEvent).not.toHaveBeenCalled();
   });

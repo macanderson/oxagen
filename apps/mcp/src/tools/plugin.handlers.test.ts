@@ -278,28 +278,43 @@ describe("plugin.org.list handler", () => {
   });
 });
 
-// ── plugin.org.set_enabled ────────────────────────────────────────────────────
+// ── plugin.set_enabled (scope-parameterised: org | workspace) ────────────────
 
-import handler_pluginOrgSetEnabled, {
-  schema as pluginOrgSetEnabledSchema,
-  metadata as pluginOrgSetEnabledMetadata,
-} from "./plugin.org.set_enabled";
+import handler_pluginSetEnabled, {
+  schema as pluginSetEnabledSchema,
+  metadata as pluginSetEnabledMetadata,
+} from "./plugin.set_enabled";
 
-describe("plugin.org.set_enabled handler", () => {
+describe("plugin.set_enabled handler", () => {
   it("exports schema and metadata", () => {
-    expect(pluginOrgSetEnabledSchema).toBeDefined();
-    expect(pluginOrgSetEnabledMetadata.name).toBe("set_org_plugin_enabled");
+    expect(pluginSetEnabledSchema).toBeDefined();
+    expect(pluginSetEnabledMetadata.name).toBe("set_plugin_enabled");
   });
 
-  it("calls invoke with set_enabled args", async () => {
-    const fakeOutput = { ok: true };
+  it("calls invoke with scope='org' args", async () => {
+    const fakeOutput = { ok: true, workspaceServerId: null };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
-    const args = { orgListingId: "orl_1", enabled: true };
-    await handler_pluginOrgSetEnabled(args);
+    const args = { scope: "org" as const, orgListingId: "orl_1", enabled: true };
+    await handler_pluginSetEnabled(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
-      "set_org_plugin_enabled",
+      "set_plugin_enabled",
+      args,
+      fakeCtx,
+      { surface: "mcp" },
+    );
+  });
+
+  it("calls invoke with scope='workspace' args", async () => {
+    const fakeOutput = { ok: true, workspaceServerId: "wss_1" };
+    mocks.invoke.mockResolvedValue(fakeOutput);
+
+    const args = { scope: "workspace" as const, orgListingId: "orl_1", enabled: true };
+    await handler_pluginSetEnabled(args);
+
+    expect(mocks.invoke).toHaveBeenCalledWith(
+      "set_plugin_enabled",
       args,
       fakeCtx,
       { surface: "mcp" },
@@ -444,35 +459,6 @@ describe("plugin.settings.set_auth_alerts handler", () => {
 
     expect(mocks.invoke).toHaveBeenCalledWith(
       "set_auth_alerts",
-      args,
-      fakeCtx,
-      { surface: "mcp" },
-    );
-  });
-});
-
-// ── plugin.workspace.set_enabled ─────────────────────────────────────────────
-
-import handler_pluginWorkspaceSetEnabled, {
-  schema as pluginWorkspaceSetEnabledSchema,
-  metadata as pluginWorkspaceSetEnabledMetadata,
-} from "./plugin.workspace.set_enabled";
-
-describe("plugin.workspace.set_enabled handler", () => {
-  it("exports schema and metadata", () => {
-    expect(pluginWorkspaceSetEnabledSchema).toBeDefined();
-    expect(pluginWorkspaceSetEnabledMetadata.name).toBe("set_workspace_plugin_enabled");
-  });
-
-  it("calls invoke with workspace set_enabled args", async () => {
-    const fakeOutput = { workspaceServerId: "wss_1" };
-    mocks.invoke.mockResolvedValue(fakeOutput);
-
-    const args = { orgListingId: "orl_1", enabled: true };
-    await handler_pluginWorkspaceSetEnabled(args);
-
-    expect(mocks.invoke).toHaveBeenCalledWith(
-      "set_workspace_plugin_enabled",
       args,
       fakeCtx,
       { surface: "mcp" },
