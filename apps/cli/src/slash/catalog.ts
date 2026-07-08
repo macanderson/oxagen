@@ -211,14 +211,44 @@ export function slashQuery(value: string): string | null {
 }
 
 /**
- * Filter the catalog to entries whose name starts with `query` (case-insensitive).
- * An empty query returns the whole catalog. Order is preserved from the catalog
- * (builtin → cli → custom, alphabetical within each tier).
+ * How well `query` matches `name` (both already lower-cased). Higher is better;
+ * 0 means no match. Three tiers so the menu surfaces the most likely command
+ * first: a prefix (`mo` → `model`) beats a mid-word substring (`del` → `model`),
+ * which beats a scattered subsequence (`mdl` → `model`). Within a tier an
+ * earlier / shorter hit scores slightly higher, but the dominant signal is the
+ * tier — see `filterSlashCatalog`, which keeps the catalog's own order as the
+ * stable tie-break so results never jitter between keystrokes.
+ */
+export function matchScore(name: string, query: string): number {
+  if (query === "") return 1;
+  const prefix = name.startsWith(query);
+  if (prefix) return 3_000 - name.length; // shorter prefix match ranks first
+  const idx = name.indexOf(query);
+  if (idx !== -1) return 2_000 - idx; // earlier substring ranks first
+  // Subsequence: every query char appears in order, not necessarily adjacent.
+  let qi = 0;
+  for (let ni = 0; ni < name.length && qi < query.length; ni++) {
+    if (name[ni] === query[qi]) qi++;
+  }
+  return qi === query.length ? 1_000 - name.length : 0;
+}
+
+/**
+ * Filter + rank the catalog against `query` (case-insensitive). An empty query
+ * returns the whole catalog unchanged. Otherwise entries are scored by
+ * `matchScore` (prefix ▸ substring ▸ subsequence) and sorted best-first; ties
+ * keep the catalog's original order (builtin → cli → custom, insertion order
+ * within a tier) so the list is fully deterministic and never reorders on an
+ * equal-scoring keystroke.
  */
 export function filterSlashCatalog(
   catalog: ReadonlyArray<SlashCatalogEntry>,
   query: string,
 ): SlashCatalogEntry[] {
   if (query === "") return [...catalog];
-  return catalog.filter((c) => c.name.toLowerCase().startsWith(query));
+  const scored = catalog
+    .map((entry, index) => ({ entry, index, score: matchScore(entry.name.toLowerCase(), query) }))
+    .filter((s) => s.score > 0);
+  scored.sort((a, b) => b.score - a.score || a.index - b.index);
+  return scored.map((s) => s.entry);
 }

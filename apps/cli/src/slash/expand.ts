@@ -31,12 +31,28 @@ export function parseInvocation(input: string): { name: string; args: string } |
   return { name: rest.slice(0, space), args: rest.slice(space + 1).trim() };
 }
 
-/** Apply $ARGUMENTS / $1..$9 substitution to a template. */
+/**
+ * Apply $ARGUMENTS / $1..$9 substitution to a template.
+ *
+ * Two properties matter, both handled by a SINGLE function-replacement pass:
+ *
+ *   1. Args are inserted verbatim. `String.prototype.replace(pattern, string)`
+ *      interprets `$&`, `$'`, `` $` `` and `$1` in the replacement *string* as
+ *      special patterns, so user args containing those sequences would be
+ *      corrupted (e.g. a commit message `fix $& regex`). A function replacement
+ *      is treated literally — args land exactly as typed.
+ *   2. Args are inserted ONCE, never re-scanned. Running two sequential
+ *      `.replace` passes (`$ARGUMENTS` then `$1..$9`) meant a literal `$1`
+ *      *inside* the user's args — freshly inserted by the first pass — got
+ *      expanded by the second pass into the first positional. Matching both
+ *      placeholders in one pass over the ORIGINAL template closes that hole:
+ *      inserted text is part of the output, never a match target.
+ */
 export function applyArgs(template: string, args: string): string {
   const positionals = args.length > 0 ? args.split(/\s+/) : [];
-  return template
-    .replace(/\$ARGUMENTS\b/g, args)
-    .replace(/\$([1-9])\b/g, (_, d: string) => positionals[Number(d) - 1] ?? "");
+  return template.replace(/\$ARGUMENTS\b|\$([1-9])\b/g, (_match, digit?: string) =>
+    digit === undefined ? args : positionals[Number(digit) - 1] ?? "",
+  );
 }
 
 /** Expand against an already-loaded registry. Returns null if name is unknown. */

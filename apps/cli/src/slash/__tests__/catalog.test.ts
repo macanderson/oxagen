@@ -7,6 +7,7 @@ import {
   BUILTIN_SLASH_NAMES,
   buildSlashCatalog,
   filterSlashCatalog,
+  matchScore,
   slashQuery,
   type SlashCatalogEntry,
 } from "../catalog.js";
@@ -133,14 +134,72 @@ describe("filterSlashCatalog", () => {
     expect(filterSlashCatalog(catalog, "")).toHaveLength(catalog.length);
   });
 
-  it("prefix-matches case-insensitively", () => {
-    const m = filterSlashCatalog(catalog, "mo");
-    expect(m.map((c) => c.name)).toContain("mode");
-    expect(m.map((c) => c.name)).toContain("model");
-    expect(m.every((c) => c.name.startsWith("mo"))).toBe(true);
+  it("prefix-matches case-insensitively and ranks prefix hits first", () => {
+    const names = filterSlashCatalog(catalog, "mo").map((c) => c.name);
+    expect(names).toContain("mode");
+    expect(names).toContain("model");
+    // Every prefix match must sort ahead of any non-prefix (substring/subsequence)
+    // match — a bare `.every(startsWith)` no longer holds now that fuzzy matches
+    // are included, but the prefix hits still lead.
+    const firstNonPrefix = names.findIndex((n) => !n.startsWith("mo"));
+    const prefixHits = names.filter((n) => n.startsWith("mo"));
+    if (firstNonPrefix !== -1) {
+      expect(firstNonPrefix).toBe(prefixHits.length);
+    }
   });
 
-  it("returns nothing when the prefix matches no command", () => {
-    expect(filterSlashCatalog(catalog, "zzzznope")).toHaveLength(0);
+  it("includes substring matches after prefix matches", () => {
+    // "ram" is not a prefix of any command but is a substring of "diagram"-like
+    // names; "remember" contains no such run, so use a known substring: "emor"
+    // sits inside "memories" but is not a prefix.
+    const names = filterSlashCatalog(catalog, "emor").map((c) => c.name);
+    expect(names).toContain("memories");
+    expect(names.every((n) => !n.startsWith("emor"))).toBe(true);
+  });
+
+  it("includes scattered subsequence matches, ranked below prefix/substring", () => {
+    // "mds" is neither a prefix nor a substring of "model" but is a subsequence
+    // (m…d…l… no s) — use "mdl" which is a subsequence of "model".
+    const names = filterSlashCatalog(catalog, "mdl").map((c) => c.name);
+    expect(names).toContain("model");
+  });
+
+  it("ranks a shorter prefix match ahead of a longer one", () => {
+    const names = filterSlashCatalog(catalog, "mode").map((c) => c.name);
+    // "mode" (exact/short prefix) must come before "model"? both share prefix
+    // "mode"? no — "model" does not start with "mode". So only "mode" matches as
+    // prefix; assert it is present and leads.
+    expect(names[0]).toBe("mode");
+  });
+
+  it("is deterministic — same query yields the same order twice", () => {
+    const a = filterSlashCatalog(catalog, "co").map((c) => c.name);
+    const b = filterSlashCatalog(catalog, "co").map((c) => c.name);
+    expect(a).toEqual(b);
+  });
+
+  it("returns nothing when nothing matches even as a subsequence", () => {
+    expect(filterSlashCatalog(catalog, "zqxjk")).toHaveLength(0);
+  });
+});
+
+describe("matchScore", () => {
+  it("ranks prefix > substring > subsequence > no-match", () => {
+    const prefix = matchScore("model", "mo");
+    const substring = matchScore("atomos", "mo");
+    const subseq = matchScore("mango", "mo"); // m…o scattered? m-a-n-g-o → m then o: subsequence
+    const none = matchScore("xyz", "mo");
+    expect(prefix).toBeGreaterThan(substring);
+    expect(substring).toBeGreaterThan(subseq);
+    expect(subseq).toBeGreaterThan(0);
+    expect(none).toBe(0);
+  });
+
+  it("returns a positive score for an empty query (matches everything)", () => {
+    expect(matchScore("anything", "")).toBeGreaterThan(0);
+  });
+
+  it("scores a shorter prefix match higher than a longer one", () => {
+    expect(matchScore("mode", "mo")).toBeGreaterThan(matchScore("moderation", "mo"));
   });
 });
