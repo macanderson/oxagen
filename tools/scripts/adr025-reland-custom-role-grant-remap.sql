@@ -1,14 +1,21 @@
--- ADR-025 re-land: remap CUSTOM-role role_grants from the OLD dotted capability_id
--- to the snake canonical name. Generated from tools/scripts/adr025-name-map.mjs.
--- Run ONLY per docs/specs/adr025-reland-runbook.md — AFTER db:seed-iam (which
--- recreates grants for is_system_default=true roles only). This fixes the
--- is_system_default=false (custom) roles the seed does NOT touch. Requires
--- pgcrypto for digest(). Wrapped in a transaction so you inspect before COMMIT.
+-- ADR-025 re-land: remap CUSTOM-role (is_system_default=false) role_grants from the
+-- OLD dotted capability_id to the snake canonical name. Generated from
+-- tools/scripts/adr025-name-map.mjs. Run ONLY per docs/specs/adr025-reland-runbook.md,
+-- AFTER db:seed-iam (which recreates grants for is_system_default=true roles only).
+--
+-- COLLISION-SAFE: the scope-merge maps TWO old names to one new name
+--   plugin.org.set_enabled + plugin.workspace.set_enabled -> set_plugin_enabled
+-- If a single custom role held BOTH old grants, a naive UPDATE would recompute an
+-- identical public_id (public_id = rlg_+sha256(role_id:new_name)[:24]) for both rows and
+-- hit the public_id UNIQUE constraint, aborting the whole statement. The dedup DELETE
+-- below removes the extra row(s) per (role_id,new_name) BEFORE the UPDATE so it can't collide.
+--
+-- Requires pgcrypto for digest(). Transaction-wrapped — inspect counts, then COMMIT.
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 BEGIN;
 
-WITH remap(old_name, new_name) AS (
-  VALUES
+CREATE TEMP TABLE _adr025_remap (old_name text PRIMARY KEY, new_name text NOT NULL) ON COMMIT DROP;
+INSERT INTO _adr025_remap (old_name, new_name) VALUES
   ('a2a.card.get', 'get_a2a_card'),
   ('agent.approval.resolve', 'resolve_approval'),
   ('agent.background_task.cancel', 'cancel_background_task'),
@@ -302,16 +309,29 @@ WITH remap(old_name, new_name) AS (
   ('workspace.model_settings.read', 'get_model_settings'),
   ('workspace.model_settings.write', 'update_model_settings'),
   ('workspace.settings.read', 'get_workspace_settings'),
-  ('workspace.settings.write', 'update_workspace_settings')
+  ('workspace.settings.write', 'update_workspace_settings');
+
+-- (1) Dedup collisions: when a custom role holds >1 OLD grant collapsing to the SAME
+-- new_name, keep one row and delete the rest (deterministic: lowest old capability_id).
+WITH mapped AS (
+  SELECT rg.id,
+         row_number() OVER (PARTITION BY rg.role_id, r.new_name
+                            ORDER BY rg.capability_id) AS rn
+  FROM iam.role_grants rg
+  JOIN _adr025_remap r ON r.old_name = rg.capability_id
+  JOIN iam.roles ro   ON ro.id = rg.role_id AND ro.is_system_default = false
 )
+DELETE FROM iam.role_grants WHERE id IN (SELECT id FROM mapped WHERE rn > 1);
+
+-- (2) Remap the survivors dotted->snake and recompute public_id.
 UPDATE iam.role_grants rg
 SET capability_id = r.new_name,
     public_id     = 'rlg_' || substr(encode(digest(rg.role_id::text || ':' || r.new_name, 'sha256'), 'hex'), 1, 24)
-FROM remap r
+FROM _adr025_remap r
 JOIN iam.roles ro ON ro.id = rg.role_id AND ro.is_system_default = false
 WHERE rg.capability_id = r.old_name;
 
--- Inspect, then COMMIT (or ROLLBACK). Remaining dotted rows after COMMIT are
--- inert duplicates on system roles (db:seed-iam already inserted their snake rows):
---   SELECT count(*) FROM iam.role_grants WHERE capability_id LIKE '%.%';
+-- Inspect, then COMMIT (or ROLLBACK). Custom-role dotted grants should now be 0:
+--   SELECT count(*) FROM iam.role_grants rg JOIN iam.roles ro ON ro.id=rg.role_id
+--   WHERE ro.is_system_default=false AND rg.capability_id LIKE '%.%';
 COMMIT;
