@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => {
   const createBranch = vi.fn();
   const openPullRequest = vi.fn();
   const getAuthenticatedUser = vi.fn();
+  const getFileContent = vi.fn();
   const withTenantDb = vi.fn();
 
   const mockClient = {
@@ -28,6 +29,7 @@ const mocks = vi.hoisted(() => {
     createBranch,
     openPullRequest,
     getAuthenticatedUser,
+    getFileContent,
   };
 
   return {
@@ -36,6 +38,7 @@ const mocks = vi.hoisted(() => {
     forkRepo,
     createBranch,
     openPullRequest,
+    getFileContent,
     mockClient,
     withTenantDb,
   };
@@ -235,8 +238,11 @@ describe("repo.create handler", () => {
 
 describe("repo.file.put handler", () => {
   it(
-    "calls putFile with correct args",
+    "calls putFile with correct args and emits a real unified diff for a new file",
     withToken(async () => {
+      // No prior content — this is a create, so the diff should be a
+      // "whole file added" patch (before = "").
+      mocks.getFileContent.mockResolvedValueOnce(null);
       mocks.putFile.mockResolvedValueOnce({
         commitSha: "abc123",
         htmlUrl: "https://github.com/myorg/myrepo/blob/main/src/index.ts",
@@ -254,6 +260,12 @@ describe("repo.file.put handler", () => {
         ctx,
       );
 
+      expect(mocks.getFileContent).toHaveBeenCalledWith({
+        owner: "myorg",
+        repo: "myrepo",
+        path: "src/index.ts",
+        ref: "main",
+      });
       expect(mocks.putFile).toHaveBeenCalledWith({
         owner: "myorg",
         repo: "myrepo",
@@ -262,10 +274,78 @@ describe("repo.file.put handler", () => {
         message: "Add index.ts",
         branch: "main",
       });
-      expect(result).toEqual({
-        commitSha: "abc123",
+      expect(result.commitSha).toBe("abc123");
+      expect(result.htmlUrl).toBe(
+        "https://github.com/myorg/myrepo/blob/main/src/index.ts",
+      );
+      expect(result.diffs).toHaveLength(1);
+      expect(result.diffs?.[0]).toMatchObject({
+        path: "src/index.ts",
+        additions: 1,
+        deletions: 0,
+      });
+      expect(result.diffs?.[0]?.patch).toContain("+export const x = 1;");
+    }),
+  );
+
+  it(
+    "diffs against the prior content when updating an existing file",
+    withToken(async () => {
+      mocks.getFileContent.mockResolvedValueOnce("export const x = 0;");
+      mocks.putFile.mockResolvedValueOnce({
+        commitSha: "def456",
         htmlUrl: "https://github.com/myorg/myrepo/blob/main/src/index.ts",
       });
+
+      const result = await repoFilePutHandler(
+        {
+          owner: "myorg",
+          repo: "myrepo",
+          path: "src/index.ts",
+          content: "export const x = 1;",
+          message: "Update index.ts",
+          branch: "main",
+        },
+        ctx,
+      );
+
+      expect(result.diffs).toHaveLength(1);
+      expect(result.diffs?.[0]).toMatchObject({
+        path: "src/index.ts",
+        additions: 1,
+        deletions: 1,
+      });
+      expect(result.diffs?.[0]?.patch).toContain("-export const x = 0;");
+      expect(result.diffs?.[0]?.patch).toContain("+export const x = 1;");
+    }),
+  );
+
+  it(
+    "still returns a commit result when reading the prior content fails",
+    withToken(async () => {
+      mocks.getFileContent.mockRejectedValueOnce(new Error("network blip"));
+      mocks.putFile.mockResolvedValueOnce({
+        commitSha: "ghi789",
+        htmlUrl: "https://github.com/myorg/myrepo/blob/main/src/index.ts",
+      });
+
+      const result = await repoFilePutHandler(
+        {
+          owner: "myorg",
+          repo: "myrepo",
+          path: "src/index.ts",
+          content: "export const x = 1;",
+          message: "Add index.ts",
+          branch: "main",
+        },
+        ctx,
+      );
+
+      expect(result.commitSha).toBe("ghi789");
+      // Falls back to diffing against "" (treated as a new file) rather than
+      // failing the whole commit over a non-critical diff-enrichment error.
+      expect(result.diffs).toHaveLength(1);
+      expect(result.diffs?.[0]?.additions).toBe(1);
     }),
   );
 });

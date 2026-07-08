@@ -206,16 +206,21 @@ export function resolveRecordLinks(
 // `terminal-trace` instead take FLAT, component-specific props (`{ files }` /
 // `{ stdout, stderr, exitCode, … }`) — the same "embedded render directive"
 // pattern archive.create/graph.stats/media use, except the reshaping happens
-// HERE instead of in the contract's output. That's necessary because neither
-// `agent.repo.edit` nor `repo.file.put`'s output schema carries a full
-// unified-diff patch body (repo.edit exposes only changed file PATHS;
-// repo.file.put exposes a commit URL) — see packages/oxagen/src/contracts/
-// agent.repo.edit.ts and repo.file.put.ts. A transform returns `null` when the
-// capability's output doesn't have enough shape to render (falls through to
-// the standard hint/generic path below); `agent.sandbox.exec` only maps to
-// "terminal-trace" when its combined stdout+stderr exceeds
-// TERMINAL_TRACE_LINE_THRESHOLD lines — smaller output stays on whatever the
-// standard path already resolves (today: the generic capability-result card).
+// HERE instead of in the contract's output. `agent.repo.edit` and
+// `repo.file.put` now carry an optional `diffs` output field (per-file
+// `{ path, patch, additions, deletions }`, populated by
+// packages/handlers/src/agent.repo.edit.ts / repo.file.put.ts via
+// packages/handlers/src/lib/unified-diff.ts) — when present, that's mapped
+// straight onto the card's `files` prop so it renders full hunks; when
+// absent (diff computation failed, or an older execution predates the
+// field) the transforms fall back to a path-only row, same as before. See
+// packages/oxagen/src/contracts/agent.repo.edit.ts and repo.file.put.ts.
+// A transform returns `null` when the capability's output doesn't have
+// enough shape to render (falls through to the standard hint/generic path
+// below); `agent.sandbox.exec` only maps to "terminal-trace" when its
+// combined stdout+stderr exceeds TERMINAL_TRACE_LINE_THRESHOLD lines —
+// smaller output stays on whatever the standard path already resolves
+// (today: the generic capability-result card).
 const TERMINAL_TRACE_LINE_THRESHOLD = 40;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -254,15 +259,27 @@ const STRUCTURAL_RENDER_TRANSFORMS: Readonly<
     if (changedFiles.length === 0) return null;
     const prUrl = typeof output.prUrl === "string" ? output.prUrl : undefined;
     const prNumber = typeof output.prNumber === "number" ? output.prNumber : undefined;
+    // Per-file patch/stats, when the handler was able to compute them (see
+    // the module comment above `STRUCTURAL_RENDER_TRANSFORMS`). Keyed by path
+    // so each changedFiles entry can look up its own diff.
+    const diffsByPath = new Map<string, Record<string, unknown>>();
+    if (Array.isArray(output.diffs)) {
+      for (const d of output.diffs) {
+        if (isRecord(d) && typeof d.path === "string") diffsByPath.set(d.path, d);
+      }
+    }
     return {
       componentId: "code-diff",
       props: {
-        files: changedFiles.map((path) => ({
-          path,
-          patch: null,
-          additions: null,
-          deletions: null,
-        })),
+        files: changedFiles.map((path) => {
+          const d = diffsByPath.get(path);
+          return {
+            path,
+            patch: d && typeof d.patch === "string" ? d.patch : null,
+            additions: d && typeof d.additions === "number" ? d.additions : null,
+            deletions: d && typeof d.deletions === "number" ? d.deletions : null,
+          };
+        }),
         summary: typeof output.summary === "string" ? output.summary : undefined,
         externalUrl: prUrl,
         externalLabel: prUrl && prNumber !== undefined ? `PR #${prNumber}` : undefined,
@@ -274,10 +291,25 @@ const STRUCTURAL_RENDER_TRANSFORMS: Readonly<
     const htmlUrl = typeof output.htmlUrl === "string" ? output.htmlUrl : undefined;
     const commitSha = typeof output.commitSha === "string" ? output.commitSha : undefined;
     if (!htmlUrl && !commitSha) return null;
+    const diffs = Array.isArray(output.diffs) ? output.diffs.filter(isRecord) : [];
+    const firstDiff = diffs[0];
+    const path =
+      firstDiff && typeof firstDiff.path === "string"
+        ? firstDiff.path
+        : derivePathFromHtmlUrl(htmlUrl);
     return {
       componentId: "code-diff",
       props: {
-        files: [{ path: derivePathFromHtmlUrl(htmlUrl), patch: null, additions: null, deletions: null }],
+        files: [
+          {
+            path,
+            patch: firstDiff && typeof firstDiff.patch === "string" ? firstDiff.patch : null,
+            additions:
+              firstDiff && typeof firstDiff.additions === "number" ? firstDiff.additions : null,
+            deletions:
+              firstDiff && typeof firstDiff.deletions === "number" ? firstDiff.deletions : null,
+          },
+        ],
         externalUrl: htmlUrl,
         externalLabel: commitSha ? `commit ${commitSha.slice(0, 7)}` : undefined,
       },

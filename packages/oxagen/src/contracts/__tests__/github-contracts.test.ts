@@ -136,6 +136,41 @@ describe("repo.file.put", () => {
       repoFilePut.input.parse({ owner: "x", repo: "y", path: "z", message: "m" }),
     ).toThrow();
   });
+
+  it("output schema parses without diffs (backward compatible)", () => {
+    const parsed = repoFilePut.output.parse({
+      commitSha: "abc123",
+      htmlUrl: "https://github.com/myorg/myrepo/blob/main/src/index.ts",
+    });
+    expect(parsed.diffs).toBeUndefined();
+  });
+
+  it("output schema parses the optional diffs field with real patch text", () => {
+    const parsed = repoFilePut.output.parse({
+      commitSha: "abc123",
+      htmlUrl: "https://github.com/myorg/myrepo/blob/main/src/index.ts",
+      diffs: [
+        {
+          path: "src/index.ts",
+          patch: "--- a/src/index.ts\n+++ b/src/index.ts\n@@ -1 +1 @@\n-old\n+new\n",
+          additions: 1,
+          deletions: 1,
+        },
+      ],
+    });
+    expect(parsed.diffs).toHaveLength(1);
+    expect(parsed.diffs?.[0]).toMatchObject({ path: "src/index.ts", additions: 1, deletions: 1 });
+  });
+
+  it("output schema rejects a diffs entry missing required fields", () => {
+    expect(() =>
+      repoFilePut.output.parse({
+        commitSha: "abc123",
+        htmlUrl: "https://github.com/myorg/myrepo/blob/main/src/index.ts",
+        diffs: [{ path: "src/index.ts" }],
+      }),
+    ).toThrow();
+  });
 });
 
 // ── repo.fork ─────────────────────────────────────────────────────────────────

@@ -31,6 +31,9 @@ Use the coding agent to edit files in a connected GitHub repository and open a p
 | `branch` | `string` | Branch the agent's changes were pushed to. |
 | `changedFiles` | `string[]` | Relative paths of every file changed by the agent. |
 | `summary` | `string` | Final response text from the coding agent. |
+| `execBackend` | `"sandbox" \| "github-api"` | Which workspace backed the run. |
+| `warnings?` | `string[]` | Non-fatal advisories, e.g. shell execution was unavailable. |
+| `diffs?` | `{ path, patch, additions, deletions }[]` | Per-file unified-diff patch + line counts, when computable (real `git diff` on the sandbox backend; reconstructed from before/after content on the GitHub-API-only backend). Powers the chat `code-diff` card's full hunk view — absent when diff computation itself failed, in which case the card falls back to a path-only row. |
 
 ## Roles
 

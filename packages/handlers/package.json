@@ -38,6 +38,7 @@
     "@oxagen/tenancy": "workspace:*",
     "@oxagen/web": "workspace:*",
     "ai": "7.0.14",
+    "diff": "9.0.0",
     "docx": "9.7.1",
     "drizzle-orm": "0.45.2",
     "exceljs": "4.4.0",
