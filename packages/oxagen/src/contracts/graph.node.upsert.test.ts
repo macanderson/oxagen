@@ -153,6 +153,6 @@ describe("graph.node.upsert capability", () => {
   // ── registry ──────────────────────────────────────────────────────────────
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("graph.node.upsert")).toBe(graphNodeUpsert);
+    expect(getCapability("upsert_node")).toBe(graphNodeUpsert);
   });
 });

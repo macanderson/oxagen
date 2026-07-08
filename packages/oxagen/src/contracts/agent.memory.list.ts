@@ -22,7 +22,7 @@ import {
 export { agentMemoryRecordSchema };
 
 export const agentMemoryList = registerCapability({
-  name: "agent.memory.list",
+  name: "list_memories",
   domain: "agent",
   description:
     "List the workspace's AgentMemory nodes with optional weight/kind/node/citation filters and sort by recency or citation count; non-semantic browse counterpart to agent.memory.recall",

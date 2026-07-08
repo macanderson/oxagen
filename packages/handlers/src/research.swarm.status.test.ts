@@ -20,7 +20,7 @@ const ctx: CapabilityContext = {
 function webSearchChild(query: string, hits: Array<{ title: string; url: string; content: string; score?: number }>) {
   return {
     runId: `run_${query}`,
-    capabilityName: "web.search",
+    capabilityName: "search_web",
     status: "completed",
     summary: `${hits.length} results`,
     input: { query, maxResults: 5 },
@@ -57,8 +57,8 @@ describe("mapChildrenToResults", () => {
 
   it("skips malformed hits and empty children", () => {
     const results = mapChildrenToResults([
-      { runId: "r1", capabilityName: "web.search", status: "completed", summary: "1 result", input: { query: "q" }, output: { results: [{ nope: true }] }, outputBytes: 16, errorReason: null },
-      { runId: "r2", capabilityName: "web.search", status: "failed", summary: "failed", input: {}, output: null, outputBytes: 0, errorReason: "boom" },
+      { runId: "r1", capabilityName: "search_web", status: "completed", summary: "1 result", input: { query: "q" }, output: { results: [{ nope: true }] }, outputBytes: 16, errorReason: null },
+      { runId: "r2", capabilityName: "search_web", status: "failed", summary: "failed", input: {}, output: null, outputBytes: 0, errorReason: "boom" },
     ]);
     // First child keeps the query but yields no hits; second is fully empty → dropped.
     expect(results).toHaveLength(1);
@@ -101,7 +101,7 @@ describe("researchSwarmStatusHandler", () => {
 
     const out = await researchSwarmStatusHandler({ swarmId: "fan_1" }, ctx);
     expect(invoke).toHaveBeenCalledWith(
-      "agent.subagent.aggregate",
+      "aggregate_subagents",
       expect.objectContaining({ fanoutId: "fan_1" }),
       ctx,
     );
@@ -151,7 +151,7 @@ describe("researchSwarmStatusHandler", () => {
     await researchSwarmStatusHandler({ swarmId: "fan_3" }, ctx);
 
     expect(invoke).toHaveBeenCalledWith(
-      "agent.subagent.aggregate",
+      "aggregate_subagents",
       expect.objectContaining({ fanoutId: "fan_3" }),
       ctx,
     );

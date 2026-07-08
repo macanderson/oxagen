@@ -2,7 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const repoResume = registerCapability({
-  name: "repo.resume",
+  name: "resume_repo",
   domain: "repo",
   description: "Resume automatic syncing for a paused repository connection.",
   mode: "sync",

@@ -27,7 +27,7 @@ const BASE_INPUT: RecordExecutionInput = {
   inputTokens: 800,
   outputTokens: 200,
   estimatedCostUsd: "0.003200",
-  toolCalls: [{ toolName: "web.search", toolType: "builtin" }],
+  toolCalls: [{ toolName: "search_web", toolType: "builtin" }],
 };
 
 const FAKE_EMBEDDING = new Array(1536).fill(0.1);
@@ -108,7 +108,7 @@ describe("recordExecutionInGraph", () => {
 
     const params = mockNeoRun.mock.calls[0]![1] as Record<string, unknown>;
     const parsed = JSON.parse(params.properties as string) as Record<string, unknown>;
-    expect(parsed.toolNames).toEqual(["web.search"]);
+    expect(parsed.toolNames).toEqual(["search_web"]);
   });
 
   it("sets summary when provided", async () => {
@@ -255,7 +255,7 @@ describe("recordExecutionInGraph", () => {
     await recordExecutionInGraph({
       ...BASE_INPUT,
       originType: "fanout",
-      properties: { fanoutId: "fan-001", runId: "sar-001", capabilityName: "web.search", attempts: 2, dropped: null },
+      properties: { fanoutId: "fan-001", runId: "sar-001", capabilityName: "search_web", attempts: 2, dropped: null },
     });
 
     const mergeCall = mockNeoRun.mock.calls[0]!;
@@ -264,7 +264,7 @@ describe("recordExecutionInGraph", () => {
     expect(parsed).toMatchObject({
       fanoutId: "fan-001",
       runId: "sar-001",
-      capabilityName: "web.search",
+      capabilityName: "search_web",
       attempts: 2,
       originType: "fanout",
     });
@@ -282,8 +282,8 @@ describe("recordExecutionInGraph", () => {
 
   it("creates CALLED_TOOL edges for all toolCalls in a single UNWIND query", async () => {
     const toolCalls = [
-      { toolName: "web.search", toolType: "builtin" },
-      { toolName: "document.create", toolType: "capability" },
+      { toolName: "search_web", toolType: "builtin" },
+      { toolName: "create_document", toolType: "capability" },
     ];
     await recordExecutionInGraph({ ...BASE_INPUT, toolCalls });
 

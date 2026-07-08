@@ -520,7 +520,7 @@ chatStreamRoute.post("/", async (c) => {
         if (qaAgent && conversationId && assistantMsgId) {
           try {
             await invoke(
-              "chat.message.execution",
+              "get_message_execution",
               {
                 messageId: assistantMsgId,
                 agentId: qaAgent.id,

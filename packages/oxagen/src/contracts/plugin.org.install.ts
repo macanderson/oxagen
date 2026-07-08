@@ -10,7 +10,7 @@ const pluginTypeEnum = z.enum([
 ]);
 
 export const pluginOrgInstall = registerCapability({
-  name: "plugin.org.install",
+  name: "install_plugin",
   domain: "plugin",
   description: "Install a plugin into this workspace.",
   mode: "sync",

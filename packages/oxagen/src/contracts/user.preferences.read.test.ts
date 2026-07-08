@@ -81,7 +81,7 @@ describe("user.preferences.read capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("user.preferences.read")).toBe(userPreferencesRead);
+    expect(getCapability("get_user_preferences")).toBe(userPreferencesRead);
   });
 
   it("declares scoped:false (user-scoped, not workspace-scoped)", () => {

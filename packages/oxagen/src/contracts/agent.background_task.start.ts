@@ -2,8 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const agentTaskBackgroundStart = registerCapability({
-  name: "agent.background_task.start",
-  aliases: ["agent.task.background.start"],
+  name: "start_background_task",
   domain: "agent",
   description: "Dispatch a long-running task as a durable Inngest job; the chat returns a task handle the user can monitor in the tray",
   mode: "async",

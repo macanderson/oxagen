@@ -13,7 +13,7 @@ const promptOverrides = z
   .partial();
 
 export const promptSettingsWrite = registerCapability({
-  name: "prompt.settings.write",
+  name: "update_prompt_settings",
   domain: "workspace",
   description:
     "Update the workspace prompt configuration (partial). `additionalInstructions` and `autoImprovePrompts` are available on all plans; `overrides` (full prompt replacement) is enterprise-only.",

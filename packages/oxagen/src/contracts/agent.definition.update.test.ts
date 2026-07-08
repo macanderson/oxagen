@@ -50,6 +50,6 @@ describe("agent.definition.update capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("agent.definition.update")).toBe(agentDefinitionUpdate);
+    expect(getCapability("update_agent_def")).toBe(agentDefinitionUpdate);
   });
 });

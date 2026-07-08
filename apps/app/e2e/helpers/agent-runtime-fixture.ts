@@ -38,7 +38,7 @@ export interface FixtureOptions {
 // Capabilities granted to the seeded Owner role when bootstrapIam is true.
 // Union of every defaultEffect:"deny" capability the API-surface e2e specs
 // call (api-key-lifecycle, workspace-isolation).
-const IAM_E2E_GRANTS = ["conversation.list", "api.key.create", "api.key.revoke"] as const;
+const IAM_E2E_GRANTS = ["list_conversations", "create_api_key", "revoke_api_key"] as const;
 
 export interface DbState {
   toolCalls: Array<{ id: string; capability: string; status: string }>;
@@ -303,9 +303,9 @@ export async function setupAgentRuntimeFixture(
     const fanoutId = fanoutExisting.id;
     // child_message_id is a UUID column — use deterministic UUIDs.
     const subagentRuns = [
-      { publicId: `sr_e2e_${sfx}_001`, childMessageUuid: "00000000-e2e0-0000-0006-000000000001", capability: "agent.code.execute" },
-      { publicId: `sr_e2e_${sfx}_002`, childMessageUuid: "00000000-e2e0-0000-0006-000000000002", capability: "agent.code.execute" },
-      { publicId: `sr_e2e_${sfx}_003`, childMessageUuid: "00000000-e2e0-0000-0006-000000000003", capability: "agent.code.execute" },
+      { publicId: `sr_e2e_${sfx}_001`, childMessageUuid: "00000000-e2e0-0000-0006-000000000001", capability: "execute_code" },
+      { publicId: `sr_e2e_${sfx}_002`, childMessageUuid: "00000000-e2e0-0000-0006-000000000002", capability: "execute_code" },
+      { publicId: `sr_e2e_${sfx}_003`, childMessageUuid: "00000000-e2e0-0000-0006-000000000003", capability: "execute_code" },
     ];
     for (const run of subagentRuns) {
       await sql`
@@ -351,11 +351,11 @@ export async function setupAgentRuntimeFixture(
           orgId,
           runId: `e2e-run-${orgId}`,
           caps: [
-            "agent.memory.recall",
-            "agent.code.execute",
-            "agent.code.execute",
-            "agent.code.execute",
-            "agent.memory.write",
+            "recall_memory",
+            "execute_code",
+            "execute_code",
+            "execute_code",
+            "write_memory",
           ],
         },
       );

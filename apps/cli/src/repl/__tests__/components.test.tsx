@@ -384,14 +384,24 @@ describe("MessageView", () => {
     ...m,
   });
 
-  it("renders a tool call as an ⚡ [emoji Tool] chip with the arg", () => {
+  it("renders a tool call as an [emoji Tool] chip with the arg (no bolt gutter)", () => {
     const { lastFrame } = render(
       <MessageView msg={msg({ role: "tool", toolName: "Bash", content: "git push origin main" })} />,
     );
     const frame = lastFrame() ?? "";
-    expect(frame).toContain("⚡");
+    expect(frame).not.toContain("⚡");
     expect(frame).toContain("[💻 Bash]");
     expect(frame).toContain("git push origin main");
+  });
+
+  it("renders unmapped tools as a bare [name] chip — no wrench, no stray space", () => {
+    const { lastFrame } = render(
+      <MessageView msg={msg({ role: "tool", toolName: "totally.unknown", content: "arg" })} />,
+    );
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("[totally.unknown]");
+    expect(frame).not.toContain("🔧");
+    expect(frame).not.toContain("[ ");
   });
 
   it("keeps dotted capability tool names verbatim in the chip", () => {
@@ -406,7 +416,7 @@ describe("MessageView", () => {
       <MessageView
         msg={msg({
           role: "tool",
-          toolName: "agent.subagent.dispatch",
+          toolName: "dispatch_subagent",
           content: "break-fix → fix the failing test",
         })}
       />,
@@ -519,6 +529,42 @@ describe("TurnSummaryView", () => {
     expect(frame).toContain("94/100");
     expect(frame).toContain("interactive.tsx (+1)");
     expect(frame).toContain("cost");
+  });
+
+  it("shows the judge's reason for the score when judged", () => {
+    const { lastFrame } = render(
+      <TurnSummaryView
+        summary={{
+          complete: true,
+          quality: 88,
+          qualityReason: "All requested edits landed and the tests cover the new branch.",
+          filesTouched: [],
+          costUsd: 0.01,
+          judged: true,
+        }}
+      />,
+    );
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("88/100");
+    expect(frame).toContain("reason");
+    expect(frame).toContain("All requested edits landed");
+  });
+
+  it("truncates an over-long reason so the card stays compact", () => {
+    const { lastFrame } = render(
+      <TurnSummaryView
+        summary={{
+          complete: false,
+          quality: 40,
+          qualityReason: "gap ".repeat(200),
+          filesTouched: [],
+          costUsd: 0,
+          judged: true,
+        }}
+      />,
+    );
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("…");
   });
 
   it("marks gaps and omits the quality score in bare mode", () => {

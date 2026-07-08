@@ -33,7 +33,7 @@ export async function LineageSection({
   try {
     lineage = (await runInTenantScope({ orgId, workspaceId }, () =>
       invoke(
-        "agent.execution.lineage",
+        "get_execution_lineage",
         { executionId },
         {
           orgId,

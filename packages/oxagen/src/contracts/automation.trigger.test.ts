@@ -102,6 +102,6 @@ describe("automation.trigger capability", () => {
   // ── registry ──────────────────────────────────────────────────────────────
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("automation.trigger")).toBe(automationTrigger);
+    expect(getCapability("trigger_automation")).toBe(automationTrigger);
   });
 });

@@ -137,7 +137,7 @@ describe("api.key.revoke handler — auth + scope guards", () => {
       (e: unknown) =>
         e instanceof CapabilityError &&
         e.code === "authz_denied" &&
-        e.capability === "api.key.revoke",
+        e.capability === "revoke_api_key",
     );
   });
 
@@ -148,7 +148,7 @@ describe("api.key.revoke handler — auth + scope guards", () => {
       (e: unknown) =>
         e instanceof CapabilityError &&
         e.code === "authz_denied" &&
-        e.capability === "api.key.revoke",
+        e.capability === "revoke_api_key",
     );
   });
 });
@@ -168,7 +168,7 @@ describe("api.key.revoke handler — role gate", () => {
       (e: unknown) =>
         e instanceof CapabilityError &&
         e.code === "authz_denied" &&
-        e.capability === "api.key.revoke",
+        e.capability === "revoke_api_key",
     );
   });
 
@@ -184,7 +184,7 @@ describe("api.key.revoke handler — role gate", () => {
       (e: unknown) =>
         e instanceof CapabilityError &&
         e.code === "authz_denied" &&
-        e.capability === "api.key.revoke",
+        e.capability === "revoke_api_key",
     );
   });
 
@@ -200,7 +200,7 @@ describe("api.key.revoke handler — role gate", () => {
       (e: unknown) =>
         e instanceof CapabilityError &&
         e.code === "authz_denied" &&
-        e.capability === "api.key.revoke",
+        e.capability === "revoke_api_key",
     );
   });
 });
@@ -268,7 +268,7 @@ describe("api.key.revoke handler — happy path", () => {
     expect(mocks.emitSecurityEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         eventType: "api_key.revoked",
-        capability: "api.key.revoke",
+        capability: "revoke_api_key",
         outcome: "success",
         orgId: TEST_CTX.orgId,
       }),

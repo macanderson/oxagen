@@ -18,6 +18,6 @@ describe("connection.update capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("connection.update")).toBe(connectionUpdate);
+    expect(getCapability("update_connection")).toBe(connectionUpdate);
   });
 });

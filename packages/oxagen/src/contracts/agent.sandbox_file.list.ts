@@ -25,8 +25,7 @@ import { registerCapability } from "../registry";
 // means this capability works uniformly on whichever driver is active without
 // a second implementation to drift out of sync.
 export const agentSandboxFilesList = registerCapability({
-  name: "agent.sandbox_file.list",
-  aliases: ["agent.sandbox.files.list"],
+  name: "list_sandbox_files",
   domain: "agent",
   description:
     "List files and directories inside a durable sandbox session's workspace.",

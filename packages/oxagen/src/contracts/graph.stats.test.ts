@@ -118,6 +118,6 @@ describe("graph.stats capability", () => {
   // ── registry ──────────────────────────────────────────────────────────────
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("graph.stats")).toBe(graphStats);
+    expect(getCapability("get_graph_stats")).toBe(graphStats);
   });
 });

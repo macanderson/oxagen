@@ -52,6 +52,6 @@ export const graphNodeLabelAddHandler: CapabilityHandler<typeof graphNodeLabelAd
     }
   });
 
-  logger.info({ nodeId: input.nodeId, added, orgId, workspaceId }, "graph.node_label.add");
+  logger.info({ nodeId: input.nodeId, added, orgId, workspaceId }, "add_node_label");
   return { nodeId: input.nodeId, labels, added };
 };

@@ -60,7 +60,7 @@ beforeEach(() => {
 describe("dispatchExplore — graph", () => {
   it("assembles seed nodes, confirmed + inferred edges, and stats", async () => {
     routeInvoke({
-      "graph.stats": () => ({
+      "get_graph_stats": () => ({
         nodeCount: 3,
         edgeCount: 2,
         inferredEdgeCount: 1,
@@ -68,7 +68,7 @@ describe("dispatchExplore — graph", () => {
         edgesByType: { REL: 2 },
         lastModifiedAt: "",
       }),
-      "graph.node.list": () => ({
+      "list_nodes": () => ({
         nodes: [
           { id: "a", labels: ["KnowledgeNode", "Issue"], displayName: "A", properties: {} },
           { id: "b", labels: ["KnowledgeNode", "Topic"], displayName: "B", properties: {} },
@@ -78,7 +78,7 @@ describe("dispatchExplore — graph", () => {
         limit: 60,
         offset: 0,
       }),
-      "semantic.edge.list": () => ({
+      "list_semantic_edges": () => ({
         edges: [
           { id: "s1", sourceNodeId: "a", targetNodeId: "b", type: "CAUSES", confidence: 0.8, source: { connectorId: "c", sourceId: "s" }, inferredAt: "" },
         ],
@@ -86,7 +86,7 @@ describe("dispatchExplore — graph", () => {
         limit: 120,
         offset: 0,
       }),
-      "ontology.neighbors": (input) => {
+      "get_ontology_neighbors": (input) => {
         const nodeId = (input as { nodeId: string }).nodeId;
         if (nodeId === "a") {
           return {
@@ -114,12 +114,12 @@ describe("dispatchExplore — graph", () => {
 
   it("tolerates a failing semantic.edge.list", async () => {
     routeInvoke({
-      "graph.stats": () => ({ nodeCount: 1, edgeCount: 0, inferredEdgeCount: 0, nodesByLabel: {}, edgesByType: {}, lastModifiedAt: "" }),
-      "graph.node.list": () => ({ nodes: [{ id: "a", labels: ["Issue"], displayName: "A", properties: {} }], total: 1, hasMore: false, limit: 60, offset: 0 }),
-      "semantic.edge.list": () => {
+      "get_graph_stats": () => ({ nodeCount: 1, edgeCount: 0, inferredEdgeCount: 0, nodesByLabel: {}, edgesByType: {}, lastModifiedAt: "" }),
+      "list_nodes": () => ({ nodes: [{ id: "a", labels: ["Issue"], displayName: "A", properties: {} }], total: 1, hasMore: false, limit: 60, offset: 0 }),
+      "list_semantic_edges": () => {
         throw new Error("boom");
       },
-      "ontology.neighbors": () => ({ nodeId: "a", found: true, neighbors: [], truncated: false }),
+      "get_ontology_neighbors": () => ({ nodeId: "a", found: true, neighbors: [], truncated: false }),
     });
 
     const result = (await dispatchExplore({ op: "graph", ...tenant }, ctx)) as ExplorerGraphPayload;
@@ -131,7 +131,7 @@ describe("dispatchExplore — graph", () => {
 describe("dispatchExplore — expand", () => {
   it("returns the node's neighborhood as nodes + edges", async () => {
     routeInvoke({
-      "ontology.neighbors": () => ({
+      "get_ontology_neighbors": () => ({
         nodeId: "a",
         found: true,
         neighbors: [{ nodeId: "b", label: "Topic", displayName: "B", description: null, edgeType: "REL", direction: "in" }],
@@ -149,7 +149,7 @@ describe("dispatchExplore — expand", () => {
 describe("dispatchExplore — nodes", () => {
   it("maps the paginated list", async () => {
     routeInvoke({
-      "graph.node.list": () => ({
+      "list_nodes": () => ({
         nodes: [{ id: "a", labels: ["KnowledgeNode", "Issue"], displayName: "A", properties: {}, createdAt: "2026-01-01" }],
         total: 42,
         hasMore: true,
@@ -167,7 +167,7 @@ describe("dispatchExplore — nodes", () => {
 describe("dispatchExplore — search", () => {
   it("maps search hits to stub nodes", async () => {
     routeInvoke({
-      "graph.node.search": () => ({ nodes: [{ nodeId: "x", label: "Issue", displayName: "X", description: "d", score: 1 }] }),
+      "search_nodes": () => ({ nodes: [{ nodeId: "x", label: "Issue", displayName: "X", description: "d", score: 1 }] }),
     });
 
     const result = (await dispatchExplore({ op: "search", ...tenant, query: "x" }, ctx)) as ExplorerSearchPayload;
@@ -178,10 +178,10 @@ describe("dispatchExplore — search", () => {
 describe("dispatchExplore — node detail", () => {
   it("returns the node with properties and neighbors", async () => {
     routeInvoke({
-      "graph.node.get": () => ({
+      "get_node": () => ({
         node: { nodeId: "a", label: "Issue", displayName: "A", description: null, properties: { p: 1 }, createdAt: "", updatedAt: null },
       }),
-      "ontology.neighbors": () => ({
+      "get_ontology_neighbors": () => ({
         nodeId: "a",
         found: true,
         neighbors: [{ nodeId: "b", label: "Topic", displayName: "B", description: null, edgeType: "REL", direction: "out" }],
@@ -197,8 +197,8 @@ describe("dispatchExplore — node detail", () => {
 
   it("returns null node when the node is missing", async () => {
     routeInvoke({
-      "graph.node.get": () => ({ node: null }),
-      "ontology.neighbors": () => ({ nodeId: "a", found: false, neighbors: [], truncated: false }),
+      "get_node": () => ({ node: null }),
+      "get_ontology_neighbors": () => ({ nodeId: "a", found: false, neighbors: [], truncated: false }),
     });
 
     const result = (await dispatchExplore({ op: "node", ...tenant, nodeId: "a" }, ctx)) as ExplorerNodeDetailPayload;

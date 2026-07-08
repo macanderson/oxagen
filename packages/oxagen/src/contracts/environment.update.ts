@@ -3,7 +3,7 @@ import { registerCapability } from "../registry";
 import { environmentSummarySchema } from "./environment.create";
 
 export const environmentUpdate = registerCapability({
-  name: "environment.update",
+  name: "update_environment",
   domain: "environment",
   description: "Update a workspace environment's name, slug, description, or active state. The default environment cannot be deactivated.",
   mode: "sync",

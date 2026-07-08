@@ -69,8 +69,8 @@ const EXEC_PAYLOAD = {
   outputTokens: 340,
   estimatedCostUsd: "0.005200",
   toolCalls: [
-    { toolName: "web.search", toolType: "builtin" },
-    { toolName: "document.read", toolType: "capability" },
+    { toolName: "search_web", toolType: "builtin" },
+    { toolName: "read_document", toolType: "capability" },
   ],
   summary: "chat execution by agent agt-789: completed, 2 tool calls, 340 output tokens",
   displayName: "chat execution by agt-789",
@@ -112,7 +112,7 @@ describe("agent.sync-execution-to-graph Inngest function", () => {
 
       const call = mocks.recordExecutionInGraph.mock.calls[0]![0];
       expect(call.toolCalls).toHaveLength(2);
-      expect(call.toolCalls![0]).toEqual({ toolName: "web.search", toolType: "builtin" });
+      expect(call.toolCalls![0]).toEqual({ toolName: "search_web", toolType: "builtin" });
     });
 
     it("passes summary, displayName, and embedding fields to recordExecutionInGraph", async () => {

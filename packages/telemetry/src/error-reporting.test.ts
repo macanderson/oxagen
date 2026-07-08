@@ -72,7 +72,7 @@ describe("buildAlertPayload", () => {
       source: "api",
       errorClass: "TypeError",
       message: "cannot read x",
-      capability: "workflow.run",
+      capability: "run_workflow",
       requestId: "req_1",
       fingerprint: "abc",
     });
@@ -81,7 +81,7 @@ describe("buildAlertPayload", () => {
     expect(Array.isArray(payload.blocks)).toBe(true);
     // capability + request + fingerprint fields present when provided.
     const serialized = JSON.stringify(payload.blocks);
-    expect(serialized).toContain("workflow.run");
+    expect(serialized).toContain("run_workflow");
     expect(serialized).toContain("req_1");
     expect(serialized).toContain("abc");
   });
@@ -158,14 +158,14 @@ describe("captureError", () => {
       source: "mcp",
       orgId: "org-1",
       workspaceId: "ws-1",
-      capability: "ontology.neighbors",
+      capability: "get_ontology_neighbors",
       requestId: "req-9",
       severity: "fatal",
     });
     const row = lastRow();
     expect(row.org_id).toBe("org-1");
     expect(row.workspace_id).toBe("ws-1");
-    expect(row.capability).toBe("ontology.neighbors");
+    expect(row.capability).toBe("get_ontology_neighbors");
     expect(row.request_id).toBe("req-9");
     expect(row.severity).toBe("fatal");
   });

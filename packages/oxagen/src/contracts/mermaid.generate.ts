@@ -11,7 +11,7 @@ const renderDirectiveSchema = z.object({
 // ── Contract registration ─────────────────────────────────────────────────────
 
 export const mermaidGenerate = registerCapability({
-  name: "mermaid.generate",
+  name: "generate_mermaid",
   domain: "mermaid",
   description:
     "Produce a Mermaid diagram from validated diagram source text. " +

@@ -65,7 +65,7 @@ describe("code.patch capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("code.patch")).toBe(codePatch);
+    expect(getCapability("patch_code")).toBe(codePatch);
   });
 
   it("declares the api, mcp, and agent surfaces", () => {

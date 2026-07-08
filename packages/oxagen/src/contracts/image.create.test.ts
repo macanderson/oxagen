@@ -97,6 +97,6 @@ describe("image.create capability", () => {
   // ── registry ──────────────────────────────────────────────────────────────
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("image.create")).toBe(imageCreate);
+    expect(getCapability("create_image")).toBe(imageCreate);
   });
 });

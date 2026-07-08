@@ -195,6 +195,6 @@ describe("web.search capability", () => {
   // ── registry ──────────────────────────────────────────────────────────────
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("web.search")).toBe(webSearch);
+    expect(getCapability("search_web")).toBe(webSearch);
   });
 });

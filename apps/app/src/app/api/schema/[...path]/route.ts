@@ -20,12 +20,12 @@ export const runtime = "nodejs";
 // kernel rejects them over surface "api", so the in-app proxy must invoke them
 // over "agent". e.g. schema.delete ships ["agent"] to keep route/tool parity
 // truthful, but the schema-builder drawer still needs to drive it.
-const AGENT_SURFACE_CAPABILITIES = new Set(["schema.delete"]);
+const AGENT_SURFACE_CAPABILITIES = new Set(["delete_schema"]);
 
 const ADMIN_ONLY_CAPABILITIES = new Set([
-  "schema.toggle",
-  "schema.registry.config",
-  "schema.reconcile.dispatch",
+  "toggle_schema",
+  "get_registry_config",
+  "dispatch_schema_reconcile",
 ]);
 
 export async function POST(

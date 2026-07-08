@@ -90,6 +90,6 @@ describe("graph.node.get capability", () => {
   // ── registry ──────────────────────────────────────────────────────────────
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("graph.node.get")).toBe(graphNodeGet);
+    expect(getCapability("get_node")).toBe(graphNodeGet);
   });
 });

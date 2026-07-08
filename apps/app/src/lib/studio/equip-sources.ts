@@ -77,7 +77,7 @@ export async function listWorkspaceSkills(
   ctx: StudioCtx,
 ): Promise<WorkspaceSkillRow[]> {
   try {
-    const out = (await invoke("skill.workspace.list", {}, ctx)) as {
+    const out = (await invoke("list_workspace_skills", {}, ctx)) as {
       skills: Array<{
         id: string;
         name: string;

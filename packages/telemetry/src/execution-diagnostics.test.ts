@@ -95,7 +95,7 @@ describe("fetchErrorEventsForExecution", () => {
         error_class: "TypeError",
         message: "boom",
         stack: "at f (/a/b.ts:1:2)",
-        capability: "agent.code.execute",
+        capability: "execute_code",
         request_id: "req-1",
         fingerprint: "fp1",
         step_id: "\\N",

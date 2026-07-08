@@ -101,7 +101,7 @@ describe("updatePreferencesAction", () => {
 
     expect(mockInvoke).toHaveBeenCalledOnce();
     expect(mockInvoke).toHaveBeenCalledWith(
-      "user.preferences.write",
+      "update_user_preferences",
       expect.objectContaining({
         fontSize: "medium",
         density: "comfortable",

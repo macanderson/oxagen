@@ -4,7 +4,7 @@ import { getCapability } from "../registry";
 
 describe("budget.policy.write capability", () => {
   it("is registered under its name", () => {
-    expect(getCapability("budget.policy.write")).toBe(budgetPolicyWrite);
+    expect(getCapability("update_user_budget")).toBe(budgetPolicyWrite);
   });
 
   it("is user-scoped, low-risk, no approval", () => {

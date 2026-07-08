@@ -185,7 +185,7 @@ describe("checkIAM()", () => {
     });
 
     const result = await checkIAM({
-      capability: "chat.message.send",
+      capability: "send_message",
       ctx: CTX,
       defaultEffect: "deny",
       rawInputJson: "{}",
@@ -208,7 +208,7 @@ describe("checkIAM()", () => {
     });
 
     const result = await checkIAM({
-      capability: "chat.message.send",
+      capability: "send_message",
       ctx: CTX,
       defaultEffect: "deny",
       rawInputJson: "{}",
@@ -226,7 +226,7 @@ describe("checkIAM()", () => {
     mocks.resolve.mockReturnValue({ outcome: "pending_approval", trace: PENDING_TRACE });
 
     const result = await checkIAM({
-      capability: "chat.message.send",
+      capability: "send_message",
       ctx: CTX,
       defaultEffect: "require_approval",
       rawInputJson: "{}",
@@ -242,7 +242,7 @@ describe("checkIAM()", () => {
     mocks.resolve.mockReturnValue({ outcome: "allow", trace: ALLOW_TRACE });
 
     await checkIAM({
-      capability: "chat.message.send",
+      capability: "send_message",
       ctx: CTX,
       defaultEffect: "deny",
       rawInputJson: "{}",
@@ -259,7 +259,7 @@ describe("checkIAM()", () => {
 
     // Must not throw despite emitAudit failing.
     const result = await checkIAM({
-      capability: "chat.message.send",
+      capability: "send_message",
       ctx: CTX,
       defaultEffect: "deny",
       rawInputJson: "{}",
@@ -277,7 +277,7 @@ describe("checkIAM()", () => {
     expect(mocks.captureError).toHaveBeenCalledTimes(1);
     const call = mocks.captureError.mock.calls[0]?.[0] as { error: unknown; capability: string };
     expect(call.error).toBe(auditErr);
-    expect(call.capability).toBe("chat.message.send");
+    expect(call.capability).toBe("send_message");
   });
 
   // ── isAclCapability boundary cases ──────────────────────────────────────
@@ -321,7 +321,7 @@ describe("checkIAM()", () => {
     mocks.resolveOrgTier.mockResolvedValue("scale");
 
     const result = await checkIAM({
-      capability: "chat.message.send",
+      capability: "send_message",
       ctx: CTX,
       defaultEffect: "deny",
       rawInputJson: "{}",

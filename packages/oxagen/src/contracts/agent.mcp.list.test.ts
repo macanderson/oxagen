@@ -61,6 +61,6 @@ describe("agent.mcp.list capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("agent.mcp.list")).toBe(agentMcpList);
+    expect(getCapability("list_mcp_servers")).toBe(agentMcpList);
   });
 });

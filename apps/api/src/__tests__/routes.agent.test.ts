@@ -128,12 +128,12 @@ describe("agent.approval.resolve route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke once with contract name 'agent.approval.resolve' and surface 'api'", async () => {
+  it("calls invoke once with contract name 'resolve_approval' and surface 'api'", async () => {
     await app.fetch(
       post(PATH, { approvalId: "appr-1", decision: "denied", note: "bad" }),
     );
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("agent.approval.resolve");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("resolve_approval");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -170,10 +170,10 @@ describe("agent.mcp.list route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'agent.mcp.list' and empty input", async () => {
+  it("calls invoke with 'list_mcp_servers' and empty input", async () => {
     await app.fetch(get(PATH));
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("agent.mcp.list");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("list_mcp_servers");
     expect(mocks.invoke.mock.calls[0]?.[1]).toEqual({});
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
@@ -202,9 +202,9 @@ describe("agent.mcp.register route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'agent.mcp.register' and correct fields", async () => {
+  it("calls invoke with 'register_mcp_server' and correct fields", async () => {
     await app.fetch(post(PATH, VALID_BODY));
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("agent.mcp.register");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("register_mcp_server");
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.name).toBe("My Server");
     expect(body.transportType).toBe("streamable-http");
@@ -232,9 +232,9 @@ describe("agent.memory.recall route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'agent.memory.recall'", async () => {
+  it("calls invoke with 'recall_memory'", async () => {
     await app.fetch(post(PATH, { query: "test query" }));
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("agent.memory.recall");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("recall_memory");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -273,9 +273,9 @@ describe("agent.memory.write route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'agent.memory.write'", async () => {
+  it("calls invoke with 'write_memory'", async () => {
     await app.fetch(post(PATH, VALID_BODY));
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("agent.memory.write");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("write_memory");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -304,9 +304,9 @@ describe("agent.plan.approve route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'agent.plan.approve'", async () => {
+  it("calls invoke with 'approve_plan'", async () => {
     await app.fetch(post(PATH, { planId: "plan-1", decision: "deny" }));
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("agent.plan.approve");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("approve_plan");
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.planId).toBe("plan-1");
     expect(body.decision).toBe("deny");
@@ -335,9 +335,9 @@ describe("agent.skill.list route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'agent.skill.list' and empty input when no filter", async () => {
+  it("calls invoke with 'list_agent_skills' and empty input when no filter", async () => {
     await app.fetch(get(PATH));
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("agent.skill.list");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("list_agent_skills");
     expect(mocks.invoke.mock.calls[0]?.[1]).toEqual({});
   });
 
@@ -375,9 +375,9 @@ describe("agent.task.background.cancel route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'agent.background_task.cancel'", async () => {
+  it("calls invoke with 'cancel_background_task'", async () => {
     await app.fetch(post(PATH, { taskId: "task-1", reason: "user cancelled" }));
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("agent.background_task.cancel");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("cancel_background_task");
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.taskId).toBe("task-1");
     expect(body.reason).toBe("user cancelled");
@@ -415,9 +415,9 @@ describe("agent.task.background.read route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'agent.background_task.read' and taskId from path param", async () => {
+  it("calls invoke with 'get_background_task' and taskId from path param", async () => {
     await app.fetch(get(PATH));
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("agent.background_task.read");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("get_background_task");
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.taskId).toBe(taskId);
   });
@@ -438,9 +438,9 @@ describe("agent.task.background.start route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'agent.background_task.start'", async () => {
+  it("calls invoke with 'start_background_task'", async () => {
     await app.fetch(post(PATH, VALID_BODY));
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("agent.background_task.start");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("start_background_task");
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.kind).toBe("research");
   });
@@ -466,9 +466,9 @@ describe("agent.tool.list route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'agent.tool.list'", async () => {
+  it("calls invoke with 'list_agent_tools'", async () => {
     await app.fetch(post(PATH, { includeExternal: false }));
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("agent.tool.list");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("list_agent_tools");
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.includeExternal).toBe(false);
   });
@@ -520,9 +520,9 @@ describe("agent.definition.create route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'agent.definition.create' and surface 'api'", async () => {
+  it("calls invoke with 'create_agent_def' and surface 'api'", async () => {
     await app.fetch(post(PATH, VALID_BODY));
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("agent.definition.create");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("create_agent_def");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -556,9 +556,9 @@ describe("agent.definition.update route", () => {
     expect(res.status).toBe(200);
   });
 
-  it("calls invoke with 'agent.definition.update'", async () => {
+  it("calls invoke with 'update_agent_def'", async () => {
     await app.fetch(post(PATH, VALID_BODY));
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("agent.definition.update");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("update_agent_def");
   });
 
   it("missing config → 400", async () => {
@@ -584,9 +584,9 @@ describe("agent.definition.publish route", () => {
     expect(res.status).toBe(200);
   });
 
-  it("calls invoke with 'agent.definition.publish'", async () => {
+  it("calls invoke with 'publish_agent_def'", async () => {
     await app.fetch(post(PATH, { agentId: "agt_1", version: 2 }));
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("agent.definition.publish");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("publish_agent_def");
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.version).toBe(2);
   });
@@ -605,7 +605,7 @@ describe("agent.definition.get route", () => {
     mocks.invoke.mockResolvedValue({ agentId: "agt_1" });
     const res = await app.fetch(get("/agent/definitions/agt_1"));
     expect(res.status).toBe(200);
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("agent.definition.get");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("get_agent_def");
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.agentId).toBe("agt_1");
   });
@@ -620,7 +620,7 @@ describe("agent.definition.list route", () => {
     mocks.invoke.mockResolvedValue({ agents: [] });
     const res = await app.fetch(get(PATH));
     expect(res.status).toBe(200);
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("agent.definition.list");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("list_agent_defs");
     expect(mocks.invoke.mock.calls[0]?.[1]).toEqual({});
   });
 
@@ -645,7 +645,7 @@ describe("agent.deploy route", () => {
     mocks.invoke.mockResolvedValue({ agentId: "agt_1", deploymentStatus: "active" });
     const res = await app.fetch(post(PATH, { agentId: "agt_1", deploymentStatus: "active" }));
     expect(res.status).toBe(200);
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("agent.deploy");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("deploy_agent");
   });
 
   it("invalid deploymentStatus → 400", async () => {
@@ -670,7 +670,7 @@ describe("agent.trigger.create route", () => {
     });
     const res = await app.fetch(post(PATH, VALID_BODY));
     expect(res.status).toBe(201);
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("agent.trigger.create");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("create_trigger");
   });
 
   it("invalid trigger (event w/o source) → 400", async () => {
@@ -695,7 +695,7 @@ describe("agent.trigger.update route", () => {
     mocks.invoke.mockResolvedValue({ triggerId: "atr_1", triggerType: "schedule", enabled: false });
     const res = await app.fetch(post(PATH, VALID_BODY));
     expect(res.status).toBe(200);
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("agent.trigger.update");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("update_trigger");
   });
 
   it("invalid trigger → 400", async () => {
@@ -716,7 +716,7 @@ describe("agent.trigger.delete route", () => {
     mocks.invoke.mockResolvedValue({ triggerId: "atr_1", deleted: true });
     const res = await app.fetch(post(PATH, { triggerId: "atr_1" }));
     expect(res.status).toBe(200);
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("agent.trigger.delete");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("delete_trigger");
   });
 
   it("missing triggerId → 400", async () => {
@@ -733,7 +733,7 @@ describe("agent.trigger.list route", () => {
     mocks.invoke.mockResolvedValue({ triggers: [] });
     const res = await app.fetch(get("/agent/triggers/agt_1"));
     expect(res.status).toBe(200);
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("agent.trigger.list");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("list_triggers");
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.agentId).toBe("agt_1");
   });
@@ -752,9 +752,9 @@ describe("agent.subagent.fanout.list route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'agent.subagent_fanout.list' and default limit, surface api", async () => {
+  it("calls invoke with 'list_subagent_fanouts' and default limit, surface api", async () => {
     await app.fetch(get(PATH));
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("agent.subagent_fanout.list");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("list_subagent_fanouts");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.limit).toBe(50);
@@ -791,7 +791,7 @@ describe("agent.subagent.fanout.get route", () => {
     });
     const res = await app.fetch(get("/agent/subagent/fanout/fan_1"));
     expect(res.status).toBe(200);
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("agent.subagent_fanout.get");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("get_subagent_fanout");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.fanoutId).toBe("fan_1");

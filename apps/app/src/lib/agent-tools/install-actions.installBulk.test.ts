@@ -198,7 +198,7 @@ describe("installBulkPlugin server action", () => {
     });
 
     expect(mockInvoke).toHaveBeenCalledWith(
-      "plugin.org.install_bulk",
+      "install_plugins_bulk",
       { items: [{ pluginType: "agent_capability", pluginId: "cap-a" }] },
       expect.objectContaining({ orgId: "org-1", workspaceId: "ws-1" }),
       { surface: "agent" },
@@ -226,7 +226,7 @@ describe("installBulkPlugin server action", () => {
 
     expect(res.ok).toBe(true);
     expect(mockInvoke).toHaveBeenCalledWith(
-      "plugin.org.install_bulk",
+      "install_plugins_bulk",
       { items: [{ pluginType: "agent_capability", pluginId: "oxagen/media-image" }] },
       expect.objectContaining({ orgId: "org-1", workspaceId: "ws-1" }),
       { surface: "agent" },
@@ -245,7 +245,7 @@ describe("installBulkPlugin server action", () => {
     });
 
     expect(mockInvoke).toHaveBeenCalledWith(
-      "plugin.org.install_bulk",
+      "install_plugins_bulk",
       {
         items: [
           {
@@ -275,14 +275,14 @@ describe("installBulkPlugin server action", () => {
 
     expect(res.ok).toBe(true);
     expect(mockInvoke).toHaveBeenCalledWith(
-      "skill.workspace.install",
+      "install_skill",
       { slug: "summarize", workspace_id: "ws-1" },
       expect.objectContaining({ orgId: "org-1", workspaceId: "ws-1" }),
       { surface: "agent" },
     );
     // install_bulk is never called when there are no non-skill items.
     expect(mockInvoke).not.toHaveBeenCalledWith(
-      "plugin.org.install_bulk",
+      "install_plugins_bulk",
       expect.anything(),
       expect.anything(),
       expect.anything(),

@@ -139,6 +139,6 @@ describe("semantic.edge.suggest capability", () => {
   // ── registry ──────────────────────────────────────────────────────────────
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("semantic.edge.suggest")).toBe(semanticEdgeSuggest);
+    expect(getCapability("suggest_semantic_edges")).toBe(semanticEdgeSuggest);
   });
 });

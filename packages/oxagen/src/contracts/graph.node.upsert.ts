@@ -2,7 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const graphNodeUpsert = registerCapability({
-  name: "graph.node.upsert",
+  name: "upsert_node",
   domain: "graph",
   description: "MERGE a node in the knowledge graph. The node carries its real domain label (from `label`) plus the universal :GraphNode anchor. Creates or updates by externalId, or by a natural key derived from label+displayName+workspaceId.",
   mode: "sync",

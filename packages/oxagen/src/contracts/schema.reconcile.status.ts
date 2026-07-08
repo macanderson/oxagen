@@ -2,7 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const schemaReconcileStatus = registerCapability({
-  name: "schema.reconcile.status",
+  name: "get_reconcile_status",
   domain: "schema",
   description: "Poll the status of a schema reconciliation job.",
   mode: "sync",

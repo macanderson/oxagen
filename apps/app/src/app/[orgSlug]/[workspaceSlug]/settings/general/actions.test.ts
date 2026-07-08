@@ -118,7 +118,7 @@ describe("updateWorkspaceGeneralAction", () => {
     expect(result).toEqual({ ok: true, slug: "research" });
     expect(mockInvoke).toHaveBeenCalledTimes(1);
     expect(mockInvoke).toHaveBeenCalledWith(
-      "workspace.settings.write",
+      "update_workspace_settings",
       { name: "Research Renamed", slug: "research", description: "team space" },
       expect.objectContaining({ orgId: "org-1", workspaceId: "ws-1", userId: "user-1" }),
       { surface: "agent" },
@@ -188,7 +188,7 @@ describe("updateWorkspaceGeneralAction", () => {
     await updateWorkspaceGeneralAction(base());
 
     expect(mockInvoke).toHaveBeenCalledWith(
-      "workspace.settings.write",
+      "update_workspace_settings",
       { name: "Research", slug: "research", description: null },
       expect.anything(),
       { surface: "agent" },
@@ -199,7 +199,7 @@ describe("updateWorkspaceGeneralAction", () => {
     await updateWorkspaceGeneralAction(base({ description: "" }));
 
     expect(mockInvoke).toHaveBeenCalledWith(
-      "workspace.settings.write",
+      "update_workspace_settings",
       { name: "Research", slug: "research", description: null },
       expect.anything(),
       { surface: "agent" },

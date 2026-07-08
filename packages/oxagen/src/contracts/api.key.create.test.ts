@@ -56,7 +56,7 @@ describe("api.key.create capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("api.key.create")).toBe(apiKeyCreate);
+    expect(getCapability("create_api_key")).toBe(apiKeyCreate);
   });
 
   it("is high-sensitivity and default-deny", () => {

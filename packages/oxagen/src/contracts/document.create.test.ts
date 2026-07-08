@@ -92,6 +92,6 @@ describe("document.create capability", () => {
   // ── registry ──────────────────────────────────────────────────────────────
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("document.create")).toBe(documentCreate);
+    expect(getCapability("create_document")).toBe(documentCreate);
   });
 });

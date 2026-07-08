@@ -139,13 +139,12 @@ import { pluginCredentialSetSecret } from "./plugin.credential.set_secret";
 import { pluginOrgInstall } from "./plugin.org.install";
 import { pluginOrgInstallBulk } from "./plugin.org.install_bulk";
 import { pluginOrgList } from "./plugin.org.list";
-import { pluginOrgSetEnabled } from "./plugin.org.set_enabled";
+import { pluginSetEnabled } from "./plugin.set_enabled";
 import { pluginOrgUninstall } from "./plugin.org.uninstall";
 import { pluginRegistryAdd } from "./plugin.registry.add";
 import { pluginRegistryList } from "./plugin.registry.list";
 import { pluginRegistryRemove } from "./plugin.registry.remove";
 import { pluginSettingsSetAuthAlerts } from "./plugin.settings.set_auth_alerts";
-import { pluginWorkspaceSetEnabled } from "./plugin.workspace.set_enabled";
 import { workflowRun } from "./workflow.run";
 import { workflowStatus } from "./workflow.status";
 import { workflowCancel } from "./workflow.cancel";
@@ -550,13 +549,12 @@ export {
   pluginOrgInstall,
   pluginOrgInstallBulk,
   pluginOrgList,
-  pluginOrgSetEnabled,
+  pluginSetEnabled,
   pluginOrgUninstall,
   pluginRegistryAdd,
   pluginRegistryList,
   pluginRegistryRemove,
   pluginSettingsSetAuthAlerts,
-  pluginWorkspaceSetEnabled,
   workflowRun,
   workflowStatus,
   workflowCancel,
@@ -864,13 +862,12 @@ export const contracts = [
   pluginOrgInstall,
   pluginOrgInstallBulk,
   pluginOrgList,
-  pluginOrgSetEnabled,
+  pluginSetEnabled,
   pluginOrgUninstall,
   pluginRegistryAdd,
   pluginRegistryList,
   pluginRegistryRemove,
   pluginSettingsSetAuthAlerts,
-  pluginWorkspaceSetEnabled,
   workflowRun,
   workflowStatus,
   workflowCancel,

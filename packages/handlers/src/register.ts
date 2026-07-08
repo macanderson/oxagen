@@ -12,1148 +12,947 @@ import {
 // Wrapped in `registerHandlersOnce` so a dev bundler re-evaluating this module
 // on hot reload is a no-op instead of tripping the kernel's duplicate guard.
 registerHandlersOnce("@oxagen/handlers", () => {
-  registerHandler(
-    "agent.compose",
+  registerHandler("run_capability_chain",
     async () =>
       (await import("./agent.compose"))
         .agentComposeHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "agent.definition.suggest",
+  registerHandler("suggest_agent_def",
     async () =>
       (await import("./agent.definition.suggest"))
         .agentDefinitionSuggestHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "agent.memory_policy.read",
+  registerHandler("get_memory_policy",
     async () =>
       (await import("./agent.memory_policy.read"))
         .agentMemoryPolicyReadHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "agent.memory_policy.write",
+  registerHandler("update_memory_policy",
     async () =>
       (await import("./agent.memory_policy.write"))
         .agentMemoryPolicyWriteHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "graph.ingest",
+  registerHandler("ingest_graph",
     async () =>
       (await import("./graph.ingest"))
         .graphIngestHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "agent.subagent.logs",
+  registerHandler("get_subagent_logs",
     async () =>
       (await import("./agent.subagent.logs"))
         .agentSubagentLogsHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "api.key.create",
+  registerHandler("create_api_key",
     async () =>
       (await import("./api.key.create"))
         .apiKeyCreateHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "api.key.revoke",
+  registerHandler("revoke_api_key",
     async () =>
       (await import("./api.key.revoke"))
         .apiKeyRevokeHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "api.key.rotate",
+  registerHandler("rotate_api_key",
     async () =>
       (await import("./api.key.rotate"))
         .apiKeyRotateHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "asset.upload",
+  registerHandler("upload_asset",
     async () =>
       (await import("./asset.upload"))
         .assetUploadHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "org.create",
+  registerHandler("create_org",
     async () =>
       (await import("./org.create"))
         .organizationCreateHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "workspace.create",
+  registerHandler("create_workspace",
     async () =>
       (await import("./workspace.create"))
         .workspaceCreateHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "org.list",
+  registerHandler("list_orgs",
     async () =>
       (await import("./org.list")).orgListHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "workspace.list",
+  registerHandler("list_workspaces",
     async () =>
       (await import("./workspace.list"))
         .workspaceListHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "billing.subscription.read",
+  registerHandler("get_subscription",
     async () =>
       (await import("./billing.subscription.read"))
         .billingSubscriptionReadHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "billing.usage.breakdown",
+  registerHandler("get_usage_breakdown",
     async () =>
       (await import("./billing.usage.breakdown"))
         .billingUsageBreakdownHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "billing.subscription_upgrade.start",
+  registerHandler("start_subscription_upgrade",
     async () =>
       (await import("./billing.subscription_upgrade.start"))
         .billingSubscriptionUpgradeStartHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "billing.credits.purchase",
+  registerHandler("purchase_credits",
     async () =>
       (await import("./billing.credits.purchase"))
         .billingCreditsPurchaseHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "chat.message.send",
+  registerHandler("send_message",
     async () =>
       (await import("./chat.message.send"))
         .chatMessageSendHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "form.fill",
+  registerHandler("fill_form",
     async () =>
       (await import("./form.fill")).formFillHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "archive.create",
+  registerHandler("create_archive",
     async () =>
       (await import("./archive.create"))
         .archiveCreateHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "document.generate",
+  registerHandler("generate_document",
     async () =>
       (await import("./document.generate"))
         .documentsGenerateHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "document.pdf.create",
+  registerHandler("create_pdf",
     async () =>
       (await import("./document.pdf.create"))
         .documentsPdfCreateHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "markdown.generate",
+  registerHandler("generate_markdown",
     async () =>
       (await import("./markdown.generate"))
         .markdownGenerateHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "mermaid.generate",
+  registerHandler("generate_mermaid",
     async () =>
       (await import("./mermaid.generate"))
         .mermaidGenerateHandler as CapabilityHandlerFn,
   );
 
-  registerHandler(
-    "video.generate",
+  registerHandler("generate_video",
     async () =>
       (await import("./video.generate"))
         .videoGenerateHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "svg.generate",
+  registerHandler("generate_svg",
     async () =>
       (await import("./svg.generate"))
         .svgGenerateHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "image.generate",
+  registerHandler("generate_image",
     async () =>
       (await import("./image.generate"))
         .imageGenerateHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "system.install.instructions",
+  registerHandler("get_install_instructions",
     async () =>
       (await import("./system.install.instructions"))
         .systemInstallInstructionsHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "org.member.add",
+  registerHandler("add_org_member",
     async () =>
       (await import("./org.member.add"))
         .orgMemberAddHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "org.member_invite.accept",
+  registerHandler("accept_member_invite",
     async () =>
       (await import("./org.member_invite.accept"))
         .orgMemberInviteAcceptHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "org.member_invite.decline",
+  registerHandler("decline_member_invite",
     async () =>
       (await import("./org.member_invite.decline"))
         .orgMemberInviteDeclineHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "org.member.remove",
+  registerHandler("remove_org_member",
     async () =>
       (await import("./org.member.remove"))
         .orgMemberRemoveHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "org.member_role.change",
+  registerHandler("change_member_role",
     async () =>
       (await import("./org.member_role.change"))
         .orgMemberRoleChangeHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "user.preferences.read",
+  registerHandler("get_user_preferences",
     async () =>
       (await import("./user.preferences.read"))
         .userPreferencesReadHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "user.preferences.write",
+  registerHandler("update_user_preferences",
     async () =>
       (await import("./user.preferences.write"))
         .userPreferencesWriteHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "budget.policy.read",
+  registerHandler("get_user_budget",
     async () =>
       (await import("./budget.policy.read"))
         .budgetPolicyReadHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "budget.policy.write",
+  registerHandler("update_user_budget",
     async () =>
       (await import("./budget.policy.write"))
         .budgetPolicyWriteHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "workspace.model_settings.read",
+  registerHandler("get_model_settings",
     async () =>
       (await import("./workspace.model_settings.read"))
         .workspaceModelSettingsReadHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "workspace.model_settings.write",
+  registerHandler("update_model_settings",
     async () =>
       (await import("./workspace.model_settings.write"))
         .workspaceModelSettingsWriteHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "workspace.settings.read",
+  registerHandler("get_workspace_settings",
     async () =>
       (await import("./workspace.settings.read"))
         .workspaceSettingsReadHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "workspace.settings.write",
+  registerHandler("update_workspace_settings",
     async () =>
       (await import("./workspace.settings.write"))
         .workspaceSettingsWriteHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "org.settings.read",
+  registerHandler("get_org_settings",
     async () =>
       (await import("./org.settings.read"))
         .orgSettingsReadHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "org.settings.write",
+  registerHandler("update_org_settings",
     async () =>
       (await import("./org.settings.write"))
         .orgSettingsWriteHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "prompt.settings.read",
+  registerHandler("get_prompt_settings",
     async () =>
       (await import("./prompt.settings.read"))
         .promptSettingsReadHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "prompt.settings.write",
+  registerHandler("update_prompt_settings",
     async () =>
       (await import("./prompt.settings.write"))
         .promptSettingsWriteHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "conversation.list",
+  registerHandler("list_conversations",
     async () =>
       (await import("./conversation.list"))
         .conversationListHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "conversation.rename",
+  registerHandler("rename_conversation",
     async () =>
       (await import("./conversation.rename"))
         .conversationRenameHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "conversation.archive",
+  registerHandler("archive_conversation",
     async () =>
       (await import("./conversation.archive"))
         .conversationArchiveHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "conversation.delete",
+  registerHandler("delete_conversation",
     async () =>
       (await import("./conversation.delete"))
         .conversationDeleteHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "conversation.purge",
+  registerHandler("purge_conversations",
     async () =>
       (await import("./conversation.purge"))
         .conversationPurgeHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "conversation.files.list",
+  registerHandler("list_conversation_files",
     async () =>
       (await import("./conversation.files.list"))
         .conversationFilesListHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "conversation.export",
+  registerHandler("export_conversation",
     async () =>
       (await import("./conversation.export"))
         .conversationExportHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "conversation.attachment.add",
+  registerHandler("add_conversation_attachment",
     async () =>
       (await import("./conversation.attachment.add"))
         .conversationAttachmentAddHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "plugin.registry.list",
+  registerHandler("list_plugin_registries",
     async () =>
       (await import("./plugin.registry.list")).handler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "plugin.registry.add",
+  registerHandler("add_plugin_registry",
     async () =>
       (await import("./plugin.registry.add")).handler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "plugin.registry.remove",
+  registerHandler("remove_plugin_registry",
     async () =>
       (await import("./plugin.registry.remove")).handler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "plugin.catalog.browse",
+  registerHandler("browse_plugin_catalog",
     async () =>
       (await import("./plugin.catalog.browse")).handler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "plugin.catalog.sync",
+  registerHandler("sync_plugin_catalog",
     async () =>
       (await import("./plugin.catalog.sync.handler"))
         .handler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "plugin.org.list",
+  registerHandler("list_plugins",
     async () =>
       (await import("./plugin.org.list")).handler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "plugin.catalog.get",
+  registerHandler("get_catalog_plugin",
     async () =>
       (await import("./plugin.catalog.get")).handler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "plugin.org.install",
+  registerHandler("install_plugin",
     async () =>
       (await import("./plugin.org.install")).handler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "plugin.org.install_bulk",
+  registerHandler("install_plugins_bulk",
     async () =>
       (await import("./plugin.org.install_bulk"))
         .handler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "plugin.org.uninstall",
+  registerHandler("uninstall_plugin",
     async () =>
       (await import("./plugin.org.uninstall")).handler as CapabilityHandlerFn,
   );
   registerHandler(
-    "plugin.org.set_enabled",
+    "set_plugin_enabled",
     async () =>
-      (await import("./plugin.org.set_enabled")).handler as CapabilityHandlerFn,
+      (await import("./plugin.set_enabled")).handler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "plugin.workspace.set_enabled",
-    async () =>
-      (await import("./plugin.workspace.set_enabled"))
-        .handler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "plugin.credential.set_secret",
+  registerHandler("set_plugin_secret",
     async () =>
       (await import("./plugin.credential.set_secret"))
         .handler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "plugin.credential.reauth",
+  registerHandler("reauth_plugin_credential",
     async () =>
       (await import("./plugin.credential.reauth"))
         .handler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "notification.list",
+  registerHandler("list_notifications",
     async () =>
       (await import("./notification.list")).handler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "notification.mark",
+  registerHandler("mark_notification",
     async () =>
       (await import("./notification.mark")).handler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "plugin.settings.set_auth_alerts",
+  registerHandler("set_auth_alerts",
     async () =>
       (await import("./plugin.settings.set_auth_alerts"))
         .handler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "workflow.run",
+  registerHandler("run_workflow",
     async () =>
       (await import("./workflow.run"))
         .workflowRunHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "workflow.status",
+  registerHandler("get_workflow_status",
     async () =>
       (await import("./workflow.status"))
         .workflowStatusHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "workflow.cancel",
+  registerHandler("cancel_workflow",
     async () =>
       (await import("./workflow.cancel"))
         .workflowCancelHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "workspace.member.list",
+  registerHandler("list_workspace_members",
     async () =>
       (await import("./workspace.member.list"))
         .workspaceMemberListHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "workspace.budget_policy.read",
+  registerHandler("get_budget_policy",
     async () =>
       (await import("./workspace.budget_policy.read"))
         .workspaceBudgetPolicyReadHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "workspace.budget_policy.write",
+  registerHandler("update_budget_policy",
     async () =>
       (await import("./workspace.budget_policy.write"))
         .workspaceBudgetPolicyWriteHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "workspace.invite.send",
+  registerHandler("send_workspace_invite",
     async () =>
       (await import("./workspace.invite.send"))
         .workspaceInviteSendHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "conversation.chat",
+  registerHandler("post_conversation_message",
     async () =>
       (await import("./conversation.chat"))
         .conversationChatHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "image.create",
+  registerHandler("create_image",
     async () =>
       (await import("./image.create"))
         .imageCreateHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "image.list",
+  registerHandler("list_images",
     async () =>
       (await import("./image.list")).imageListHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "image.analyze",
+  registerHandler("analyze_image",
     async () =>
       (await import("./image.analyze"))
         .imageAnalyzeHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "document.create",
+  registerHandler("create_document",
     async () =>
       (await import("./document.create"))
         .documentCreateHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "document.list",
+  registerHandler("list_documents",
     async () =>
       (await import("./document.list"))
         .documentListHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "document.read",
+  registerHandler("read_document",
     async () =>
       (await import("./document.read"))
         .documentReadHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "automation.list",
+  registerHandler("list_automations",
     async () =>
       (await import("./automation.list"))
         .automationListHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "automation.create",
+  registerHandler("create_automation",
     async () =>
       (await import("./automation.create"))
         .automationCreateHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "automation.update",
+  registerHandler("update_automation",
     async () =>
       (await import("./automation.update"))
         .automationUpdateHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "automation.enable",
+  registerHandler("enable_automation",
     async () =>
       (await import("./automation.enable"))
         .automationEnableHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "automation.disable",
+  registerHandler("disable_automation",
     async () =>
       (await import("./automation.disable"))
         .automationDisableHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "automation.trigger",
+  registerHandler("trigger_automation",
     async () =>
       (await import("./automation.trigger"))
         .automationTriggerHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "skill.workspace.list",
+  registerHandler("list_workspace_skills",
     async () =>
       (await import("./skill.workspace.list"))
         .skillWorkspaceListHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "skill.workspace.install",
+  registerHandler("install_skill",
     async () =>
       (await import("./skill.workspace.install"))
         .skillWorkspaceInstallHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "skill.version.list",
+  registerHandler("list_skill_versions",
     async () =>
       (await import("./skill.version.list"))
         .skillVersionListHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "skill.version.get",
+  registerHandler("get_skill_version",
     async () =>
       (await import("./skill.version.get"))
         .skillVersionGetHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "skill.version.upload",
+  registerHandler("upload_skill_version",
     async () =>
       (await import("./skill.version.upload"))
         .skillVersionUploadHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "skill.version.activate",
+  registerHandler("activate_skill_version",
     async () =>
       (await import("./skill.version.activate"))
         .skillVersionActivateHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "skill.edit",
+  registerHandler("edit_skill",
     async () =>
       (await import("./skill.edit")).skillEditHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "skill.export",
+  registerHandler("export_skill",
     async () =>
       (await import("./skill.export"))
         .skillExportHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "skill.metrics.read",
+  registerHandler("get_skill_metrics",
     async () =>
       (await import("./skill.metrics.read"))
         .skillMetricsReadHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "skill.author",
+  registerHandler("author_skill",
     async () =>
       (await import("./skill.author"))
         .skillAuthorHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "skill.draft",
+  registerHandler("draft_skill",
     async () =>
       (await import("./skill.draft"))
         .skillDraftHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "skill.create",
+  registerHandler("create_skill",
     async () =>
       (await import("./skill.create"))
         .skillCreateHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "skill.enable",
+  registerHandler("set_skill_enabled",
     async () =>
       (await import("./skill.enable"))
         .skillEnableHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "agent.execution.record",
+  registerHandler("record_execution",
     async () =>
       (await import("./agent.execution.record"))
         .agentExecutionRecordHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "chat.message.execution",
+  registerHandler("get_message_execution",
     async () =>
       (await import("./chat.message.execution"))
         .chatMessageExecutionHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "connection.create",
+  registerHandler("create_connection",
     async () =>
       (await import("./connection.create"))
         .connectionCreateHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "connection.list",
+  registerHandler("list_connections",
     async () =>
       (await import("./connection.list"))
         .connectionListHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "connection.get",
+  registerHandler("get_connection",
     async () =>
       (await import("./connection.get"))
         .connectionGetHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "connection.delete",
+  registerHandler("delete_connection",
     async () =>
       (await import("./connection.delete"))
         .connectionDeleteHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "connection.update",
+  registerHandler("update_connection",
     async () =>
       (await import("./connection.update"))
         .connectionUpdateHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "connection.pause",
+  registerHandler("pause_connection",
     async () =>
       (await import("./connection.pause"))
         .connectionPauseHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "connection.preview",
+  registerHandler("preview_connection",
     async () =>
       (await import("./connection.preview"))
         .connectionPreviewHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "connection.mappings.get",
+  registerHandler("get_connection_mappings",
     async () =>
       (await import("./connection.mappings.get"))
         .connectionMappingsGetHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "connection.mappings.set",
+  registerHandler("set_connection_mappings",
     async () =>
       (await import("./connection.mappings.set"))
         .connectionMappingsSetHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "connection.mappings.suggest",
+  registerHandler("suggest_connection_mappings",
     async () =>
       (await import("./connection.mappings.suggest"))
         .connectionMappingsSuggestHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "graph.node.upsert",
+  registerHandler("upsert_node",
     async () =>
       (await import("./graph.node.upsert"))
         .graphNodeUpsertHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "graph.node_label.add",
+  registerHandler("add_node_label",
     async () =>
       (await import("./graph.node_label.add"))
         .graphNodeLabelAddHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "graph.node_label.remove",
+  registerHandler("remove_node_label",
     async () =>
       (await import("./graph.node_label.remove"))
         .graphNodeLabelRemoveHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "graph.node_label.get",
+  registerHandler("get_node_labels",
     async () =>
       (await import("./graph.node_label.get"))
         .graphNodeLabelsGetHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "graph.node.get",
+  registerHandler("get_node",
     async () =>
       (await import("./graph.node.get"))
         .graphNodeGetHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "graph.node.delete",
+  registerHandler("delete_node",
     async () =>
       (await import("./graph.node.delete"))
         .graphNodeDeleteHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "graph.node.search",
+  registerHandler("search_nodes",
     async () =>
       (await import("./graph.node.search"))
         .graphNodeSearchHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "graph.search",
+  registerHandler("search_graph",
     async () =>
       (await import("./graph.search")).graphSearchHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "graph.edge.upsert",
+  registerHandler("upsert_edge",
     async () =>
       (await import("./graph.edge.upsert"))
         .graphEdgeUpsertHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "graph.edge.delete",
+  registerHandler("delete_edge",
     async () =>
       (await import("./graph.edge.delete"))
         .graphEdgeDeleteHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "graph.cypher",
+  registerHandler("run_cypher",
     async () =>
       (await import("./graph.cypher"))
         .graphCypherHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "web.search",
+  registerHandler("search_web",
     async () =>
       (await import("./web.search")).webSearchHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "web.fetch",
+  registerHandler("fetch_web_page",
     async () =>
       (await import("./web.fetch")).webFetchHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "research.swarm.start",
+  registerHandler("start_research_swarm",
     async () =>
       (await import("./research.swarm.start"))
         .researchSwarmStartHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "research.swarm.status",
+  registerHandler("get_research_status",
     async () =>
       (await import("./research.swarm.status"))
         .researchSwarmStatusHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "agent.repo.edit",
+  registerHandler("edit_repo_file",
     async () =>
       (await import("./agent.repo.edit"))
         .agentRepoEditHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "repo.create",
+  registerHandler("create_repo",
     async () =>
       (await import("./repo.create")).repoCreateHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "repo.file.put",
+  registerHandler("put_repo_file",
     async () =>
       (await import("./repo.file.put"))
         .repoFilePutHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "repo.fork",
+  registerHandler("fork_repo",
     async () =>
       (await import("./repo.fork")).repoForkHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "repo.branch.create",
+  registerHandler("create_branch",
     async () =>
       (await import("./repo.branch.create"))
         .repoBranchCreateHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "repo.pr.open",
+  registerHandler("open_pr",
     async () =>
       (await import("./repo.pr.open")).repoPrOpenHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "repo.pr.get",
+  registerHandler("get_pr",
     async () =>
       (await import("./repo.pr.get")).repoPrGetHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "repo.pr.diff",
+  registerHandler("get_pr_diff",
     async () =>
       (await import("./repo.pr.diff")).repoPrDiffHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "repo.ci.status",
+  registerHandler("get_ci_status",
     async () =>
       (await import("./repo.ci.status"))
         .repoCiStatusHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "repo.sync",
+  registerHandler("sync_repo",
     async () =>
       (await import("./repo.sync")).repoSyncHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "repo.configure",
+  registerHandler("configure_repo",
     async () =>
       (await import("./repo.configure"))
         .repoConfigureHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "repo.pause",
+  registerHandler("pause_repo",
     async () =>
       (await import("./repo.pause")).repoPauseHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "repo.resume",
+  registerHandler("resume_repo",
     async () =>
       (await import("./repo.resume")).repoResumeHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "repo.metrics",
+  registerHandler("get_repo_metrics",
     async () =>
       (await import("./repo.metrics"))
         .repoMetricsHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "integration.install",
+  registerHandler("install_integration",
     async () =>
       (await import("./integration.install"))
         .integrationInstallHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "integration.configure",
+  registerHandler("configure_integration",
     async () =>
       (await import("./integration.configure"))
         .integrationConfigureHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "integration.list",
+  registerHandler("list_integrations",
     async () =>
       (await import("./integration.list"))
         .integrationListHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "integration.get",
+  registerHandler("get_integration",
     async () =>
       (await import("./integration.get"))
         .integrationGetHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "integration.sync",
+  registerHandler("sync_integration",
     async () =>
       (await import("./integration.sync"))
         .integrationSyncHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "integration.metrics",
+  registerHandler("get_integration_metrics",
     async () =>
       (await import("./integration.metrics"))
         .integrationMetricsHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "integration.delete",
+  registerHandler("delete_integration",
     async () =>
       (await import("./integration.delete"))
         .integrationDeleteHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "plugin.schema.get",
+  registerHandler("get_plugin_schema",
     async () =>
       (await import("./plugin.schema.get"))
         .pluginSchemaGetHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "plugin.schema.validate",
+  registerHandler("validate_plugin_schema",
     async () =>
       (await import("./plugin.schema.validate"))
         .pluginSchemaValidateHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "plugin.version.list",
+  registerHandler("list_plugin_versions",
     async () =>
       (await import("./plugin.version.list"))
         .pluginVersionListHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "semantic.edge.approve",
+  registerHandler("approve_semantic_edge",
     async () =>
       (await import("./semantic.edge.approve"))
         .semanticEdgeApproveHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "semantic.edge.infer",
+  registerHandler("infer_semantic_edges",
     async () =>
       (await import("./semantic.edge.infer"))
         .semanticEdgeInferHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "semantic.edge.list",
+  registerHandler("list_semantic_edges",
     async () =>
       (await import("./semantic.edge.list"))
         .semanticEdgeListHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "semantic.edge.suggest",
+  registerHandler("suggest_semantic_edges",
     async () =>
       (await import("./semantic.edge.suggest"))
         .semanticEdgeSuggestHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "graph.node.list",
+  registerHandler("list_nodes",
     async () =>
       (await import("./graph.node.list"))
         .graphNodeListHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "graph.export",
+  registerHandler("export_graph",
     async () =>
       (await import("./graph.export"))
         .graphExportHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "graph.sync.push",
+  registerHandler("push_graph",
     async () =>
       (await import("./graph.sync.push"))
         .graphSyncPushHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "graph.stats",
+  registerHandler("get_graph_stats",
     async () =>
       (await import("./graph.stats")).graphStatsHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "ontology.query",
+  registerHandler("query_ontology",
     async () =>
       (await import("./ontology.query"))
         .ontologyQueryHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "ontology.neighbors",
+  registerHandler("get_ontology_neighbors",
     async () =>
       (await import("./ontology.neighbors"))
         .ontologyNeighborsHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "audit.log.query",
+  registerHandler("query_audit_log",
     async () =>
       (await import("./audit.log.query"))
         .auditLogQueryHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "command.menu.search",
+  registerHandler("search_command_menu",
     async () =>
       (await import("./command.menu.search"))
         .commandMenuSearchHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "command.menu.suggest",
+  registerHandler("suggest_commands",
     async () =>
       (await import("./command.menu.suggest"))
         .commandMenuSuggestHandler as CapabilityHandlerFn,
   );
   // ── Schema Registry ───────────────────────────────────────────────────────────
-  registerHandler(
-    "schema.registry.get",
+  registerHandler("get_schema_registry",
     async () =>
       (await import("./schema.registry.get"))
         .schemaRegistryGetHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "schema.registry.config",
+  registerHandler("get_registry_config",
     async () =>
       (await import("./schema.registry.config"))
         .schemaRegistryConfigHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "schema.list",
+  registerHandler("list_schemas",
     async () =>
       (await import("./schema.list")).schemaListHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "schema.toggle",
+  registerHandler("toggle_schema",
     async () =>
       (await import("./schema.toggle"))
         .schemaToggleHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "schema.label.upsert",
+  registerHandler("upsert_schema_label",
     async () =>
       (await import("./schema.label.upsert"))
         .schemaLabelUpsertHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "schema.label.delete",
+  registerHandler("delete_schema_label",
     async () =>
       (await import("./schema.label.delete"))
         .schemaLabelDeleteHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "schema.delete",
+  registerHandler("delete_schema",
     async () =>
       (await import("./schema.delete"))
         .schemaDeleteHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "schema.relationship.upsert",
+  registerHandler("upsert_schema_relationship",
     async () =>
       (await import("./schema.relationship.upsert"))
         .schemaRelationshipUpsertHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "schema.relationship.delete",
+  registerHandler("delete_schema_relationship",
     async () =>
       (await import("./schema.relationship.delete"))
         .schemaRelationshipDeleteHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "schema.property.upsert",
+  registerHandler("upsert_schema_property",
     async () =>
       (await import("./schema.property.upsert"))
         .schemaPropertyUpsertHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "schema.property.delete",
+  registerHandler("delete_schema_property",
     async () =>
       (await import("./schema.property.delete"))
         .schemaPropertyDeleteHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "schema.version.create",
+  registerHandler("create_schema_version",
     async () =>
       (await import("./schema.version.create"))
         .schemaVersionCreateHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "schema.version.pin",
+  registerHandler("pin_schema_version",
     async () =>
       (await import("./schema.version.pin"))
         .schemaVersionPinHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "schema.version.list",
+  registerHandler("list_schema_versions",
     async () =>
       (await import("./schema.version.list"))
         .schemaVersionListHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "schema.version.diff",
+  registerHandler("diff_schema_versions",
     async () =>
       (await import("./schema.version.diff"))
         .schemaVersionDiffHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "schema.export",
+  registerHandler("export_schema",
     async () =>
       (await import("./schema.export"))
         .schemaExportHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "schema.recommend",
+  registerHandler("recommend_schema",
     async () =>
       (await import("./schema.recommend"))
         .schemaRecommendHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "schema.chat",
+  registerHandler("run_schema_chat",
     async () =>
       (await import("./schema.chat")).schemaChatHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "schema.setup",
+  registerHandler("setup_schema",
     async () =>
       (await import("./schema.setup"))
         .schemaSetupHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "schema.reconcile.dispatch",
+  registerHandler("dispatch_schema_reconcile",
     async () =>
       (await import("./schema.reconcile.dispatch"))
         .schemaReconcileDispatchHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "schema.reconcile.status",
+  registerHandler("get_reconcile_status",
     async () =>
       (await import("./schema.reconcile.status"))
         .schemaReconcileStatusHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "schema.validate.node",
+  registerHandler("validate_schema_node",
     async () =>
       (await import("./schema.validate.node"))
         .schemaValidateNodeHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "schema.validate.relationship",
+  registerHandler("validate_schema_relationship",
     async () =>
       (await import("./schema.validate.relationship"))
         .schemaValidateRelationshipHandler as CapabilityHandlerFn,
   );
   // Environments + credential vault (Spec: 2026-06-24-credential-vault-…).
-  registerHandler(
-    "environment.create",
+  registerHandler("create_environment",
     async () => (await import("./environment.create")).environmentCreateHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "environment.list",
+  registerHandler("list_environments",
     async () => (await import("./environment.list")).environmentListHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "environment.get",
+  registerHandler("get_environment",
     async () => (await import("./environment.get")).environmentGetHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "environment.update",
+  registerHandler("update_environment",
     async () => (await import("./environment.update")).environmentUpdateHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "environment.delete",
+  registerHandler("delete_environment",
     async () => (await import("./environment.delete")).environmentDeleteHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "environment.set_default",
+  registerHandler("set_default_environment",
     async () =>
       (await import("./environment.set_default")).environmentSetDefaultHandler as CapabilityHandlerFn,
   );
@@ -1225,84 +1024,68 @@ registerHandlersOnce("@oxagen/handlers", () => {
     "secret.key.upsert",
     async () => (await import("./secret.key.upsert")).secretKeyUpsertHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "secret.key.list",
+  registerHandler("list_secret_keys",
     async () => (await import("./secret.key.list")).secretKeyListHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "secret.key.delete",
+  registerHandler("delete_secret_key",
     async () => (await import("./secret.key.delete")).secretKeyDeleteHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "secret.value.set",
+  registerHandler("set_secret_value",
     async () => (await import("./secret.value.set")).secretValueSetHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "secret.value.unset",
+  registerHandler("unset_secret_value",
     async () => (await import("./secret.value.unset")).secretValueUnsetHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "secret.import_env",
+  registerHandler("import_env_secrets",
     async () => (await import("./secret.import_env")).secretImportEnvHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "secret.reveal",
+  registerHandler("reveal_secret",
     async () => (await import("./secret.reveal")).secretRevealHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "secret.export",
+  registerHandler("export_secrets",
     async () => (await import("./secret.export")).secretExportHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "code.map",
+  registerHandler("get_code_map",
     async () =>
       (await import("./code.map")).codeMapHandler as CapabilityHandlerFn,
   );
   // ── Evals v1 ──────────────────────────────────────────────────────────────────
-  registerHandler(
-    "eval.dataset.create",
+  registerHandler("create_dataset",
     async () =>
       (await import("./eval.dataset.create"))
         .evalDatasetCreateHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "eval.dataset.list",
+  registerHandler("list_datasets",
     async () =>
       (await import("./eval.dataset.list"))
         .evalDatasetListHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "eval.dataset.get",
+  registerHandler("get_dataset",
     async () =>
       (await import("./eval.dataset.get"))
         .evalDatasetGetHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "eval.dataset_item.add",
+  registerHandler("add_dataset_item",
     async () =>
       (await import("./eval.dataset_item.add"))
         .evalDatasetItemAddHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "eval.dataset.from_traces",
+  registerHandler("create_trace_dataset",
     async () =>
       (await import("./eval.dataset.from_traces"))
         .evalDatasetFromTracesHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "eval.run.start",
+  registerHandler("start_eval_run",
     async () =>
       (await import("./eval.run.start"))
         .evalRunStartHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "eval.run.status",
+  registerHandler("get_eval_status",
     async () =>
       (await import("./eval.run.status"))
         .evalRunStatusHandler as CapabilityHandlerFn,
   );
-  registerHandler(
-    "eval.run.get",
+  registerHandler("get_eval_run",
     async () =>
       (await import("./eval.run.get"))
         .evalRunGetHandler as CapabilityHandlerFn,

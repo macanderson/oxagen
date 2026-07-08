@@ -176,6 +176,6 @@ describe("graph.search capability", () => {
   // ── registry ──────────────────────────────────────────────────────────────
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("graph.search")).toBe(graphSearch);
+    expect(getCapability("search_graph")).toBe(graphSearch);
   });
 });

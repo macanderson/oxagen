@@ -33,7 +33,7 @@ export const conversationAssetItem = z.object({
 });
 
 export const conversationFilesList = registerCapability({
-  name: "conversation.files.list",
+  name: "list_conversation_files",
   domain: "conversation",
   description:
     "List the ready generated assets attached to a conversation, access-policy filtered, newest-first, keyset-paginated",

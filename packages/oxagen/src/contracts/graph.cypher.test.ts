@@ -107,6 +107,6 @@ describe("graph.cypher capability", () => {
   // ── registry ──────────────────────────────────────────────────────────────
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("graph.cypher")).toBe(graphCypher);
+    expect(getCapability("run_cypher")).toBe(graphCypher);
   });
 });

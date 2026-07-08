@@ -52,7 +52,7 @@ const mediaImageManifest = {
   category: "media",
   icon: "image-plus",
   color: "#6366f1",
-  contracts: ["image.generate"],
+  contracts: ["generate_image"],
   scopes: [],
 };
 

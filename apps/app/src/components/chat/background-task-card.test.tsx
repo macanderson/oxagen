@@ -20,15 +20,15 @@ afterEach(cleanup);
 describe("BackgroundTaskCard", () => {
   it("renders the label when provided, otherwise the raw kind", () => {
     render(
-      <BackgroundTaskCard taskId="t-1" kind="graph.ingest" status="pending" label="Ingest large doc" />,
+      <BackgroundTaskCard taskId="t-1" kind="ingest_graph" status="pending" label="Ingest large doc" />,
     );
     expect(screen.getByText("Ingest large doc")).toBeTruthy();
-    expect(screen.getByText("graph.ingest")).toBeTruthy();
+    expect(screen.getByText("ingest_graph")).toBeTruthy();
   });
 
   it("falls back to the kind when no label is set", () => {
-    render(<BackgroundTaskCard taskId="t-1" kind="graph.ingest" status="pending" />);
-    expect(screen.getAllByText("graph.ingest").length).toBeGreaterThan(0);
+    render(<BackgroundTaskCard taskId="t-1" kind="ingest_graph" status="pending" />);
+    expect(screen.getAllByText("ingest_graph").length).toBeGreaterThan(0);
   });
 
   it("surfaces the status as a data attribute and a human label", () => {

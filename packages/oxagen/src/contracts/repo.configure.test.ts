@@ -221,6 +221,6 @@ describe("repo.configure capability", () => {
   // ── registry ──────────────────────────────────────────────────────────────
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("repo.configure")).toBe(repoConfigure);
+    expect(getCapability("configure_repo")).toBe(repoConfigure);
   });
 });

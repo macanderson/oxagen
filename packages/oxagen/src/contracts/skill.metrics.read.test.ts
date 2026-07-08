@@ -124,7 +124,7 @@ describe("skill.metrics.read capability", () => {
   // ── registry ─────────────────────────────────────────────────────────────────
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("skill.metrics.read")).toBe(skillMetricsRead);
+    expect(getCapability("get_skill_metrics")).toBe(skillMetricsRead);
   });
 
   // ── contract metadata ────────────────────────────────────────────────────────

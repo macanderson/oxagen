@@ -2,7 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const agentDeploy = registerCapability({
-  name: "agent.deploy",
+  name: "deploy_agent",
   domain: "agent",
   description:
     "Set an agent's deployment posture. Activating requires a published active version (else a typed error); deactivating is always allowed and makes the agent's triggers dormant",

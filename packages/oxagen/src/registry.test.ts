@@ -4,10 +4,7 @@ import {
   clearRegistryForTests,
   getCapability,
   listCapabilities,
-  namesForCapability,
   registerCapability,
-  resolveCanonicalName,
-  setAliasDeprecationSink,
 } from "./registry";
 
 const makeCap = (name: string) => ({
@@ -71,64 +68,11 @@ describe("capability registry", () => {
   it("returns undefined for an unknown capability", () => {
     expect(getCapability("missing")).toBeUndefined();
   });
-});
 
-describe("capability aliases (ADR-022)", () => {
-  afterEach(() => {
-    clearRegistryForTests();
-    setAliasDeprecationSink(null);
-  });
-
-  const makeAliased = (name: string, aliases: string[]) => ({
-    ...makeCap(name),
-    aliases,
-  });
-
-  it("resolves getCapability through a legacy alias to the canonical contract", () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const cap = registerCapability(makeAliased("agent.file_lock.acquire", ["agent.file.lock.acquire"]));
-    expect(getCapability("agent.file.lock.acquire")).toBe(cap);
-    expect(getCapability("agent.file_lock.acquire")).toBe(cap);
-    warn.mockRestore();
-  });
-
-  it("resolveCanonicalName maps alias→canonical and passes unknown names through", () => {
-    registerCapability(makeAliased("org.create", ["organization.create"]));
-    expect(resolveCanonicalName("organization.create")).toBe("org.create");
-    expect(resolveCanonicalName("org.create")).toBe("org.create");
-    expect(resolveCanonicalName("nope.nope")).toBe("nope.nope");
-  });
-
-  it("namesForCapability returns canonical + aliases (from either a canonical or an alias name)", () => {
-    registerCapability(makeAliased("document.generate", ["documents.generate"]));
-    expect(namesForCapability("document.generate").sort()).toEqual(
-      ["document.generate", "documents.generate"],
-    );
-    expect(namesForCapability("documents.generate").sort()).toEqual(
-      ["document.generate", "documents.generate"],
-    );
-    expect(namesForCapability("unknown.name")).toEqual(["unknown.name"]);
-  });
-
-  it("reports an alias hit through the injected deprecation sink exactly once per alias", () => {
-    const sink = vi.fn();
-    setAliasDeprecationSink(sink);
-    registerCapability(makeAliased("notification.mark", ["notifications.mark"]));
-    getCapability("notifications.mark");
-    getCapability("notifications.mark");
-    // canonical lookups never report a deprecation
-    getCapability("notification.mark");
-    expect(sink).toHaveBeenCalledTimes(1);
-    expect(sink).toHaveBeenCalledWith("notifications.mark", "notification.mark");
-  });
-
-  it("never lets an alias shadow a live capability name", () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const live = registerCapability(makeCap("graph.node_label.get"));
-    // A second contract that (wrongly) claims the live name as an alias must not
-    // hijack it — the canonical registry entry always wins.
-    registerCapability(makeAliased("graph.other.get", ["graph.node_label.get"]));
-    expect(getCapability("graph.node_label.get")).toBe(live);
-    warn.mockRestore();
+  it("resolves getCapability by canonical name only (no alias fallback)", () => {
+    const cap = registerCapability(makeCap("test.canonical"));
+    expect(getCapability("test.canonical")).toBe(cap);
+    // A name that is not the canonical registered name never resolves.
+    expect(getCapability("test.legacy_name")).toBeUndefined();
   });
 });

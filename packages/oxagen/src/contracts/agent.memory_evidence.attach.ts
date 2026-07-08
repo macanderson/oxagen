@@ -10,8 +10,7 @@ import { evidenceSourceKindEnum } from "./agent.memory.model";
  * between decay passes.
  */
 export const agentMemoryEvidenceAttach = registerCapability({
-  name: "agent.memory_evidence.attach",
-  aliases: ["agent.memory.evidence.attach"],
+  name: "attach_memory_evidence",
   domain: "agent",
   description:
     "Attach supporting or refuting evidence to a memory, adjusting its confidence and refreshing the decay clock.",

@@ -8,11 +8,7 @@ import { getCapability } from "../registry";
 
 describe("agent.sandbox_file.read capability", () => {
   it("is registered under its canonical name", () => {
-    expect(getCapability("agent.sandbox_file.read")).toBeDefined();
-  });
-
-  it("resolves via the agent.sandbox.files.read alias", () => {
-    expect(getCapability("agent.sandbox.files.read")).toBeDefined();
+    expect(getCapability("read_sandbox_file")).toBeDefined();
   });
 
   it("does not gate on billing (a read-only file read consumes no AI tokens)", () => {

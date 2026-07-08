@@ -131,7 +131,7 @@ describe("code.format handler", () => {
     expect(row.event_type).toBe("code.format.ran");
     const payload = JSON.parse(row.payload as string) as Record<string, unknown>;
     expect(payload.language).toBe("json");
-    expect(payload.capability).toBe("code.format");
+    expect(payload.capability).toBe("format_code");
   });
 
   it("never fails the run when telemetry throws", async () => {

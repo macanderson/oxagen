@@ -32,7 +32,7 @@ vi.mock("next/cache", () => ({
 
 vi.mock("@oxagen/oxagen/contracts/api.key.create", () => ({
   apiKeyCreate: {
-    name: "api.key.create",
+    name: "create_api_key",
     input: { parse: (v: unknown) => v },
     output: { parse: (v: unknown) => v },
   },
@@ -65,7 +65,7 @@ describe("createApiKeyAction", () => {
   it("invokes api.key.create capability", async () => {
     await createApiKeyAction({ orgSlug: "acme", name: "CI Key" });
     const [capName] = vi.mocked(invoke).mock.calls[0]!;
-    expect(capName).toBe("api.key.create");
+    expect(capName).toBe("create_api_key");
   });
 
   it("passes name to the capability input", async () => {

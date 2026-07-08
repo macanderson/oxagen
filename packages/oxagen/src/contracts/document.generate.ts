@@ -17,8 +17,7 @@ const fileRenderDirective = z.object({
 });
 
 export const documentsGenerate = registerCapability({
-  name: "document.generate",
-  aliases: ["documents.generate"],
+  name: "generate_document",
   domain: "document",
   description:
     "Generate a DOCX document, XLSX spreadsheet, or PPTX presentation from structured content. " +

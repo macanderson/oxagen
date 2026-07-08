@@ -105,7 +105,7 @@ test.describe("agent run-trace span tree", () => {
         )
         VALUES (
           gen_random_uuid(), ${toolPublicId}, ${stepId}, ${fixture.orgId}, ${fixture.workspaceId},
-          'ontology.neighbors', 'capability', '{"nodeId":"n1"}'::jsonb,
+          'get_ontology_neighbors', 'capability', '{"nodeId":"n1"}'::jsonb,
           '{"neighbors":["a","b"]}'::jsonb, 'completed', 800, 4, 2
         )
         ON CONFLICT (public_id) DO UPDATE SET status = 'completed'
@@ -162,7 +162,7 @@ test.describe("agent run-trace span tree", () => {
     await expect(
       page.getByRole("heading", { name: execPublicId }),
     ).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByText("ontology.neighbors").first()).toBeVisible({
+    await expect(page.getByText("get_ontology_neighbors").first()).toBeVisible({
       timeout: 20_000,
     });
     // The step row is present too.

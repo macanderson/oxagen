@@ -2,7 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const schemaExport = registerCapability({
-  name: "schema.export",
+  name: "export_schema",
   domain: "schema",
   description: "Build a ZIP of a version (grouped by schema) via the archive.create plumbing; returns access-controlled serveUrl.",
   mode: "sync",

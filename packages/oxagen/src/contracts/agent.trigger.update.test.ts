@@ -35,6 +35,6 @@ describe("agent.trigger.update capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("agent.trigger.update")).toBe(agentTriggerUpdate);
+    expect(getCapability("update_trigger")).toBe(agentTriggerUpdate);
   });
 });

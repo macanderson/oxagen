@@ -3,7 +3,7 @@ import { registerCapability } from "../registry";
 import { agentTriggerSchema } from "../agent-schema";
 
 export const agentTriggerUpdate = registerCapability({
-  name: "agent.trigger.update",
+  name: "update_trigger",
   domain: "agent",
   description:
     "Update an existing agent trigger in place — replaces its type-specific binding and enabled flag, re-validated against agentTriggerSchema",

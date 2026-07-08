@@ -91,7 +91,7 @@ function registerFakes(): void {
   // swallows errors) has a real handler in tests. Returns an empty skill set
   // by default; individual tests can override the handler as needed.
   registerCapability({
-    name: "skill.workspace.list",
+    name: "list_workspace_skills",
     domain: "skill",
     description: "List skills available in the workspace",
     mode: "sync",
@@ -111,12 +111,12 @@ function registerFakes(): void {
       ),
     }),
   });
-  registerHandler("skill.workspace.list", async () => async () => ({ skills: [] }));
+  registerHandler("list_workspace_skills", async () => async () => ({ skills: [] }));
 
   // prompt.settings.read — required so readWorkspacePrompt has a handler.
   // Returns empty additional instructions by default.
   registerCapability({
-    name: "prompt.settings.read",
+    name: "get_prompt_settings",
     domain: "prompt",
     description: "Read workspace prompt settings",
     mode: "sync",
@@ -132,7 +132,7 @@ function registerFakes(): void {
     input: z.object({}),
     output: z.object({ additionalInstructions: z.string().nullable().optional() }),
   });
-  registerHandler("prompt.settings.read", async () => async () => ({ additionalInstructions: null }));
+  registerHandler("get_prompt_settings", async () => async () => ({ additionalInstructions: null }));
 
   registerCapability({
     name: "test.compose.search",
@@ -284,7 +284,7 @@ describe("agentComposeHandler", () => {
 
   it("buildCatalog excludes agent.compose itself and includes agent-surface caps", () => {
     const names = buildCatalog().map((c) => c.name);
-    expect(names).not.toContain("agent.compose");
+    expect(names).not.toContain("run_capability_chain");
     expect(names).toContain("test.compose.search");
   });
 
@@ -303,7 +303,7 @@ describe("agentComposeHandler", () => {
     // by registering everything fresh. We build the override set manually so we
     // never double-register.
     registerCapability({
-      name: "skill.workspace.list",
+      name: "list_workspace_skills",
       domain: "skill",
       description: "List skills",
       mode: "sync",
@@ -321,7 +321,7 @@ describe("agentComposeHandler", () => {
       }),
     });
     registerHandler(
-      "skill.workspace.list",
+      "list_workspace_skills",
       async () => async () => { throw new Error("skill listing DB timeout"); },
     );
 
@@ -341,7 +341,7 @@ describe("agentComposeHandler", () => {
     // and skill.workspace.list (throws). No test-compose-* needed since we
     // expect failure before planning starts.
     registerCapability({
-      name: "prompt.settings.read",
+      name: "get_prompt_settings",
       domain: "prompt",
       description: "Read workspace prompt settings",
       mode: "sync",
@@ -354,10 +354,10 @@ describe("agentComposeHandler", () => {
       input: z.object({}),
       output: z.object({ additionalInstructions: z.string().nullable().optional() }),
     });
-    registerHandler("prompt.settings.read", async () => async () => ({ additionalInstructions: null }));
+    registerHandler("get_prompt_settings", async () => async () => ({ additionalInstructions: null }));
 
     registerCapability({
-      name: "skill.workspace.list",
+      name: "list_workspace_skills",
       domain: "skill",
       description: "List skills",
       mode: "sync",
@@ -375,7 +375,7 @@ describe("agentComposeHandler", () => {
       }),
     });
     registerHandler(
-      "skill.workspace.list",
+      "list_workspace_skills",
       async () => async () => { throw new Error("skills IAM denied"); },
     );
 

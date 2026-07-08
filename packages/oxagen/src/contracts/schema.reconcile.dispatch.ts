@@ -2,7 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const schemaReconcileDispatch = registerCapability({
-  name: "schema.reconcile.dispatch",
+  name: "dispatch_schema_reconcile",
   domain: "schema",
   description: "Dispatch an async reconciliation job to re-label existing graph nodes and relationships against the pinned schema version.",
   mode: "async",

@@ -21,7 +21,7 @@ describe("agent.file.lock.release capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("agent.file_lock.release")).toBe(agentFileLockRelease);
+    expect(getCapability("release_file_lock")).toBe(agentFileLockRelease);
   });
 
   it("is gated to Owner/Admin ONLY — no Member default grant (force-release is an admin/debug action)", () => {

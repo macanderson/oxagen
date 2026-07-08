@@ -12,7 +12,7 @@ const summary = {
 
 describe("environment.update contract", () => {
   it("registers with the correct name", () => {
-    expect(environmentUpdate.name).toBe("environment.update");
+    expect(environmentUpdate.name).toBe("update_environment");
   });
   it("exposes the api, mcp, and agent surfaces", () => {
     expect(environmentUpdate.surfaces).toEqual(["api", "mcp", "agent"]);

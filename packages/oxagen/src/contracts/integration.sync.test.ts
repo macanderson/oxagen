@@ -124,6 +124,6 @@ describe("integration.sync capability", () => {
   // ── registry ──────────────────────────────────────────────────────────────
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("integration.sync")).toBe(integrationSync);
+    expect(getCapability("sync_integration")).toBe(integrationSync);
   });
 });

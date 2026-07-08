@@ -31,7 +31,7 @@ type JoinedRow = {
 function row(overrides: Partial<JoinedRow> = {}): JoinedRow {
   return {
     publicId: "sar_1",
-    capabilityName: "web.search",
+    capabilityName: "search_web",
     status: "completed",
     summary: "3 hits for q1",
     attempts: 1,
@@ -68,7 +68,7 @@ describe("agent.subagent.siblings handler", () => {
   it("returns compact sibling rows for the caller's fanout, EXCLUDING the caller", async () => {
     setupMocks([
       // caller row — must be dropped from the result
-      row({ publicId: "sar_1", capabilityName: "web.search", status: "running", summary: null }),
+      row({ publicId: "sar_1", capabilityName: "search_web", status: "running", summary: null }),
       row({
         publicId: "sar_2",
         capabilityName: "code.search",
@@ -78,7 +78,7 @@ describe("agent.subagent.siblings handler", () => {
       }),
       row({
         publicId: "sar_3",
-        capabilityName: "web.fetch",
+        capabilityName: "fetch_web_page",
         status: "failed",
         summary: null,
         attempts: 2,
@@ -103,7 +103,7 @@ describe("agent.subagent.siblings handler", () => {
       },
       {
         runId: "sar_3",
-        capabilityName: "web.fetch",
+        capabilityName: "fetch_web_page",
         status: "failed",
         summary: null,
         attempts: 2,

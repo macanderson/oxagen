@@ -112,7 +112,7 @@ export async function saveMemoryPolicyAction(
       // ["api","mcp","agent"] and does NOT include "app"; passing "app" throws
       // surface_denied. (Same as the workspace.settings.write precedent.)
       await invoke(
-        "agent.memory_policy.write",
+        "update_memory_policy",
         {
           halfLifeLowDays,
           halfLifeHighDays,
@@ -171,7 +171,7 @@ export async function readMemoryPolicyAction(args: {
       messageId: null as string | null,
     };
     const result = await invoke(
-      "agent.memory_policy.read",
+      "get_memory_policy",
       {},
       ctx,
       { surface: "agent" },

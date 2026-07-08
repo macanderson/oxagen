@@ -39,7 +39,7 @@ const traversedEdge = z
   .merge(edgeValiditySchema);
 
 export const ontologyQuery = registerCapability({
-  name: "ontology.query",
+  name: "query_ontology",
   domain: "ontology",
   description:
     "Multi-hop traversal FROM a known start node over named relationship type(s) to a given depth (1–5); " +

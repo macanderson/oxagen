@@ -26,7 +26,7 @@ const orgSettingsOutput = z.object({
 });
 
 export const orgSettingsRead = registerCapability({
-  name: "org.settings.read",
+  name: "get_org_settings",
   domain: "org",
   description:
     "Read the active organization's profile settings: name, slug, avatar, website, industry, employee size, and type.",

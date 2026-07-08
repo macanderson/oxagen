@@ -25,7 +25,7 @@ export async function requestOrgDataExportAction(orgSlug: string): Promise<Expor
   await assertOrgMember(org.id, session.user.id);
 
   const result = await invoke(
-    "privacy.data.export",
+    "export_data",
     { scope: "org", orgId: org.id },
     { userId: session.user.id, orgId: org.id, workspaceId: "00000000-0000-0000-0000-000000000000", apiKeyId: null, surface: "app", requestId: crypto.randomUUID(), messageId: null },
     { surface: "api" },
@@ -47,7 +47,7 @@ export async function requestOrgDataEraseAction(orgSlug: string): Promise<EraseR
   await assertSecurityManager(org.id, session.user.id);
 
   const result = await invoke(
-    "privacy.data.erase",
+    "erase_data",
     { scope: "org", orgId: org.id, confirm: true },
     { userId: session.user.id, orgId: org.id, workspaceId: "00000000-0000-0000-0000-000000000000", apiKeyId: null, surface: "app", requestId: crypto.randomUUID(), messageId: null },
     { surface: "api" },

@@ -97,11 +97,11 @@ describe("skill.version.activate capability", () => {
   // ── registry ───────────────────────────────────────────────────────────────
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("skill.version.activate")).toBe(skillVersionActivate);
+    expect(getCapability("activate_skill_version")).toBe(skillVersionActivate);
   });
 
   it("has the correct name", () => {
-    expect(skillVersionActivate.name).toBe("skill.version.activate");
+    expect(skillVersionActivate.name).toBe("activate_skill_version");
   });
 
   it("is scoped", () => {

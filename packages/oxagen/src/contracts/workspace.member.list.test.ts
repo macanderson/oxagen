@@ -116,6 +116,6 @@ describe("workspace.member.list capability", () => {
   // ── registry ──────────────────────────────────────────────────────────────
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("workspace.member.list")).toBe(workspaceMemberList);
+    expect(getCapability("list_workspace_members")).toBe(workspaceMemberList);
   });
 });

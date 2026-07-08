@@ -14,7 +14,7 @@ import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { invoke } from "@oxagen/oxagen";
 // Side-effect import: bind foundation handlers into the kernel so
-// invoke("workspace.budget_policy.read", …) resolves its handler.
+// invoke("get_budget_policy", …) resolves its handler.
 import "@oxagen/handlers/register";
 import type { WorkspaceBudgetPolicyReadOutput } from "@oxagen/oxagen/contracts/workspace.budget_policy.read";
 import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
@@ -60,7 +60,7 @@ export default async function WorkspaceBudgetPage({
       const role = (roleRows[0]?.role ?? "").toLowerCase();
 
       const read = (await invoke(
-        "workspace.budget_policy.read",
+        "get_budget_policy",
         {},
         {
           orgId: org.id,

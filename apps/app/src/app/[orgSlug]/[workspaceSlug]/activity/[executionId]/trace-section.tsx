@@ -31,7 +31,7 @@ export async function TraceSection({
   try {
     trace = (await runInTenantScope({ orgId, workspaceId }, () =>
       invoke(
-        "agent.trace.get",
+        "get_execution_trace",
         { executionId },
         {
           orgId,
