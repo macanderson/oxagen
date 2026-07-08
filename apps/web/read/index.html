@@ -151,6 +151,11 @@ main{flex:1;position:relative}
   filter:blur(10px);pointer-events:none;z-index:0;
 }
 
+/* The [hidden] attribute must win over the display:grid/flex set on the
+   state panels below — otherwise `el.hidden = true` leaves them visible (the
+   UA's [hidden]{display:none} loses to an author display rule). */
+[hidden]{display:none!important}
+
 /* ============ loading ============ */
 .loading-card{
   position:relative;z-index:1;display:grid;place-items:center;gap:16px;padding:64px 20px;text-align:center;color:var(--muted);
