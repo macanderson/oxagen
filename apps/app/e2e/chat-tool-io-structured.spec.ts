@@ -32,7 +32,7 @@ function events(messageId: string): StreamEvent[] {
       type: "tool-call-start",
       messageId,
       toolCallId: "tcl_swarm",
-      capability: "research.swarm.start",
+      capability: "start_research_swarm",
       inputPreview: SWARM_INPUT,
       riskLevel: "low",
     },
@@ -48,7 +48,7 @@ function events(messageId: string): StreamEvent[] {
     {
       type: "approval-required",
       approvalId: "apr_swarm",
-      capability: "research.swarm.start",
+      capability: "start_research_swarm",
       inputPreview: SWARM_INPUT,
       riskLevel: "high",
       expiresAt: new Date(Date.now() + 5 * 60_000).toISOString(),

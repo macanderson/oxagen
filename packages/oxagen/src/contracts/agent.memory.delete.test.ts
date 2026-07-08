@@ -28,7 +28,7 @@ describe("agent.memory.delete capability", () => {
     expect(parsed.memoryId).toBe("mem_abc");
   });
 
-  it("is registered under name 'agent.memory.delete'", () => {
+  it("is registered under name 'delete_memory'", () => {
     expect(getCapability("delete_memory")).toBe(agentMemoryDelete);
   });
 

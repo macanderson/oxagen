@@ -138,7 +138,7 @@ describe("agent.memory.remember capability", () => {
     expect(parsed.inferred.memoryKind).toBe("gotcha");
   });
 
-  it("is registered under name 'agent.memory.remember'", () => {
+  it("is registered under name 'save_memory'", () => {
     expect(getCapability("save_memory")).toBe(agentMemoryRemember);
   });
 

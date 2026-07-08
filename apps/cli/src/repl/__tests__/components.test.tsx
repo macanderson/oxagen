@@ -406,7 +406,7 @@ describe("MessageView", () => {
       <MessageView
         msg={msg({
           role: "tool",
-          toolName: "agent.subagent.dispatch",
+          toolName: "dispatch_subagent",
           content: "break-fix → fix the failing test",
         })}
       />,

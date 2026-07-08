@@ -117,6 +117,8 @@ const DOMAIN_ICONS: Record<string, LucideIcon> = {
   shell: Terminal,
   repo: GitBranch,
   git: GitBranch,
+  branch: GitBranch,
+  pr: GitBranch,
   image: ImageIcon,
   svg: ImageIcon,
   video: Video,
@@ -147,36 +149,33 @@ const DOMAIN_ICONS: Record<string, LucideIcon> = {
 
 // Leading segments that add no meaning to a derived label ("agent" prefixes
 // most runtime capabilities without describing what the call does).
-const GENERIC_PREFIXES = new Set(["agent"]);
-
 function capitalize(text: string): string {
   return text.length === 0 ? text : text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 /**
- * Derivation fallback: `domain.noun.verb` → "Verb domain noun". The final
- * segment is treated as the verb and the preceding segments as the noun
- * phrase, matching the contract naming convention (`semantic.edge.suggest` →
- * "Suggest semantic edge"). Underscores read as spaces.
+ * Derivation fallback for an uncurated capability. ADR-025 names are verb-first
+ * snake_case (`verb_noun_qualifier`), so the FIRST segment is the verb and the
+ * rest form the noun phrase: `suggest_semantic_edges` → "Suggest semantic
+ * edges". Splits on `_` or `.` so a legacy dotted or an MCP synthetic name is
+ * still rendered readably.
  */
 export function deriveToolCallLabel(capability: string): string {
   const segments = capability
-    .split(".")
-    .map((s) => s.trim().replace(/_/g, " ").toLowerCase())
+    .split(/[._]/)
+    .map((s) => s.trim().toLowerCase())
     .filter(Boolean);
   const first = segments[0];
   if (first === undefined) return capability;
   if (segments.length === 1) return capitalize(first);
-  const meaningful =
-    segments.length > 2 && GENERIC_PREFIXES.has(first) ? segments.slice(1) : segments;
-  const verb = meaningful[meaningful.length - 1];
-  const nounPhrase = meaningful.slice(0, -1).join(" ");
+  const verb = first;
+  const nounPhrase = segments.slice(1).join(" ");
   return capitalize(`${verb} ${nounPhrase}`.trim());
 }
 
-/** Resolve the domain icon for a capability; `Wrench` when no domain matches. */
+/** Resolve the domain icon for a capability; `Wrench` when no keyword matches. */
 export function toolCallIcon(capability: string): LucideIcon {
-  for (const segment of capability.split(".")) {
+  for (const segment of capability.split(/[._]/)) {
     const icon = DOMAIN_ICONS[segment.trim().toLowerCase()];
     if (icon) return icon;
   }

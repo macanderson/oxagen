@@ -93,7 +93,7 @@ beforeEach(() => {
       errorClass: "TypeError",
       message: "cannot read properties of undefined (reading 'x')",
       stack: "TypeError: x\n    at handle (/repo/packages/agent/src/broken.ts:42:10)",
-      capability: "agent.code.execute",
+      capability: "execute_code",
       requestId: "req-1",
       fingerprint: "fp1",
       stepId: "uuid-step-2",

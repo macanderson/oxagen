@@ -95,7 +95,7 @@ describe("agent.mcp.list handler", () => {
     expect(agentMcpListMetadata.name).toBe("list_mcp_servers");
   });
 
-  it("calls invoke with 'agent.mcp.list' and empty args", async () => {
+  it("calls invoke with 'list_mcp_servers' and empty args", async () => {
     mocks.invoke.mockResolvedValue(validOutput);
     const result = await handler_agentMcpList({});
 

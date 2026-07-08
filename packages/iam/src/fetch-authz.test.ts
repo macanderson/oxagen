@@ -187,14 +187,14 @@ describe("fetchAuthz()", () => {
       apiKeyId: null,
       orgId: "org_1",
       workspaceId: "ws_1",
-      capability: "chat.message.send",
+      capability: "send_message",
     });
 
     // Must NOT degrade to EMPTY_AUTHZ/defaultEffect — a synthetic deny policy
     // that resolve()'s rule 2 (org enforced deny) treats as a hard stop.
     expect(result.policies).toHaveLength(1);
     expect(result.policies[0]).toMatchObject({
-      capabilityId: "chat.message.send",
+      capabilityId: "send_message",
       scopeKind: "org",
       scopeId: "org_1",
       effect: "deny",
@@ -216,7 +216,7 @@ describe("fetchAuthz()", () => {
       apiKeyId: null,
       orgId: "org_1",
       workspaceId: "ws_1",
-      capability: "chat.message.send",
+      capability: "send_message",
     });
 
     expect(mocks.loggerError).toHaveBeenCalledOnce();
@@ -240,7 +240,7 @@ describe("fetchAuthz()", () => {
         apiKeyId: null,
         orgId: "org_1",
         workspaceId: "ws_1",
-        capability: "chat.message.send",
+        capability: "send_message",
       }),
     ).rejects.toThrow("connection refused");
   });
@@ -255,7 +255,7 @@ describe("fetchAuthz()", () => {
       apiKeyId: null,
       orgId: "org_1",
       workspaceId: "ws_1",
-      capability: "chat.message.send",
+      capability: "send_message",
     });
 
     // No selects should have fired — the function returns before any DB queries.
@@ -276,7 +276,7 @@ describe("fetchAuthz()", () => {
         principals: [{ ...PRINCIPAL_ROW, parentUserId: "usr_creator" }],
         roles: [roleRow],
         pra: [{ roleId: "role_admin" }],
-        roleGrants: [{ roleId: "role_admin", capabilityId: "markdown.generate", effect: "allow" }],
+        roleGrants: [{ roleId: "role_admin", capabilityId: "generate_markdown", effect: "allow" }],
       }),
     );
 
@@ -285,7 +285,7 @@ describe("fetchAuthz()", () => {
       apiKeyId: "aky_1",
       orgId: "org_1",
       workspaceId: "ws_1",
-      capability: "markdown.generate",
+      capability: "generate_markdown",
     });
 
     // The key acts as its creator — a real principal, with the creator's grants.
@@ -305,13 +305,13 @@ describe("fetchAuthz()", () => {
       apiKeyId: "aky_gone",
       orgId: "org_1",
       workspaceId: "ws_1",
-      capability: "markdown.generate",
+      capability: "generate_markdown",
     });
 
     expect(result.principal?.kind).toBe("service");
     expect(result.policies).toHaveLength(1);
     expect(result.policies[0]).toMatchObject({
-      capabilityId: "markdown.generate",
+      capabilityId: "generate_markdown",
       scopeKind: "org",
       scopeId: "org_1",
       effect: "deny",
@@ -327,7 +327,7 @@ describe("fetchAuthz()", () => {
       apiKeyId: "aky_nocreator",
       orgId: "org_1",
       workspaceId: "ws_1",
-      capability: "markdown.generate",
+      capability: "generate_markdown",
     });
 
     expect(result.policies).toHaveLength(1);
@@ -344,7 +344,7 @@ describe("fetchAuthz()", () => {
       apiKeyId: "aky_1",
       orgId: "org_1",
       workspaceId: "ws_1",
-      capability: "markdown.generate",
+      capability: "generate_markdown",
     });
 
     expect(result.principal?.kind).toBe("service");
@@ -365,7 +365,7 @@ describe("fetchAuthz()", () => {
       apiKeyId: "aky_1",
       orgId: "org_1",
       workspaceId: "ws_1",
-      capability: "markdown.generate",
+      capability: "generate_markdown",
     });
 
     // Must NOT degrade to EMPTY_AUTHZ (defaultEffect) on the m2m surface.
@@ -383,7 +383,7 @@ describe("fetchAuthz()", () => {
       apiKeyId: null,
       orgId: "org_1",
       workspaceId: "ws_1",
-      capability: "chat.message.send",
+      capability: "send_message",
     });
 
     expect(result.principal).toBeNull();
@@ -400,7 +400,7 @@ describe("fetchAuthz()", () => {
       buildDbMock({
         roles: [roleRow],
         pra: [praRow],
-        roleGrants: [{ roleId: "role_owner", capabilityId: "chat.message.send", effect: "allow" }],
+        roleGrants: [{ roleId: "role_owner", capabilityId: "send_message", effect: "allow" }],
       }),
     );
 
@@ -409,7 +409,7 @@ describe("fetchAuthz()", () => {
       apiKeyId: null,
       orgId: "org_1",
       workspaceId: "ws_1",
-      capability: "chat.message.send",
+      capability: "send_message",
     });
 
     expect(result.principal?.id).toBe("prn_internal");
@@ -428,7 +428,7 @@ describe("fetchAuthz()", () => {
       apiKeyId: null,
       orgId: "org_1",
       workspaceId: "ws_1",
-      capability: "chat.message.send",
+      capability: "send_message",
     });
 
     const memberRole = result.roles.find((r) => r.id === "role_member");
@@ -443,7 +443,7 @@ describe("fetchAuthz()", () => {
     const praRow = { roleId: "role_admin" };
     const roleGrantRow = {
       roleId: "role_admin",
-      capabilityId: "chat.message.send",
+      capabilityId: "send_message",
       effect: "allow",
     };
     // grants/policies tables were dropped in migration 0027 (replaced by
@@ -461,7 +461,7 @@ describe("fetchAuthz()", () => {
       apiKeyId: null,
       orgId: "org_1",
       workspaceId: "ws_1",
-      capability: "chat.message.send",
+      capability: "send_message",
     });
 
     expect(result.principal?.id).toBe("prn_internal");

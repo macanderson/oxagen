@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { agentSubagentDispatch } from "./agent.subagent.dispatch";
 import { getCapability } from "../registry";
 
-const MINIMAL_TASK = { capabilityName: "agent.code.execute", input: { code: "x", language: "node" } };
+const MINIMAL_TASK = { capabilityName: "execute_code", input: { code: "x", language: "node" } };
 
 describe("agent.subagent.dispatch capability", () => {
   // ── input: required fields ────────────────────────────────────────────────

@@ -222,13 +222,13 @@ describe("semantic.relationship.* contracts register", () => {
 
 describe("all 22 schema contracts register", () => {
   const expectedNames = [
-    "schema.registry.get", "schema.registry.config", "schema.list", "schema.toggle",
-    "schema.label.upsert", "schema.label.delete", "schema.relationship.upsert",
-    "schema.relationship.delete", "schema.property.upsert", "schema.property.delete",
-    "schema.version.create", "schema.version.pin", "schema.version.list",
-    "schema.version.diff", "schema.export", "schema.recommend", "schema.setup",
-    "schema.chat", "schema.validate.node", "schema.validate.relationship",
-    "schema.reconcile.dispatch", "schema.reconcile.status",
+    "get_schema_registry", "get_registry_config", "list_schemas", "toggle_schema",
+    "upsert_schema_label", "delete_schema_label", "upsert_schema_relationship",
+    "delete_schema_relationship", "upsert_schema_property", "delete_schema_property",
+    "create_schema_version", "pin_schema_version", "list_schema_versions",
+    "diff_schema_versions", "export_schema", "recommend_schema", "setup_schema",
+    "run_schema_chat", "validate_schema_node", "validate_schema_relationship",
+    "dispatch_schema_reconcile", "get_reconcile_status",
   ];
   for (const name of expectedNames) {
     it(`${name} registers`, () => {

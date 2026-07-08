@@ -23,7 +23,7 @@ const ORG_ID = "org_aaa";
 const WORKSPACE_ID = "ws_bbb";
 const PRINCIPAL_ID = "prn_ccc";
 const ROLE_ID = "rol_ddd";
-const CAPABILITY = "org.create";
+const CAPABILITY = "create_org";
 
 const basePrincipal: TestPrincipal = {
   id: PRINCIPAL_ID,
@@ -429,7 +429,7 @@ describe("resolve — capability matching is exact", () => {
     const rg = makeRoleGrant({ capabilityId: "organization.create", effect: "allow" });
     const result = resolve(
       baseInput({
-        capability: "org.create",
+        capability: "create_org",
         roles: [makeRole()],
         roleGrants: [rg],
         defaultEffect: "deny",

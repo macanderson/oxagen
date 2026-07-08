@@ -82,7 +82,7 @@ describe("billing.usage.breakdown capability", () => {
       ],
       byWorkspace: [],
       byCapability: [
-        { key: "ontology.query", provider: "", inputTokens: 60, outputTokens: 20, cachedTokens: 5, costMicros: 3000, executions: 2 },
+        { key: "query_ontology", provider: "", inputTokens: 60, outputTokens: 20, cachedTokens: 5, costMicros: 3000, executions: 2 },
       ],
       byPrincipal: [
         { principalId: "00000000-0000-0000-0000-0000000000e5", principalKind: "agent", inputTokens: 60, outputTokens: 20, cachedTokens: 5, costMicros: 3000, executions: 2 },

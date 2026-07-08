@@ -36,7 +36,7 @@ describe("agent.subagent.siblings capability", () => {
 
   const SIBLING = {
     runId: "sar_2",
-    capabilityName: "web.search",
+    capabilityName: "search_web",
     status: "completed" as const,
     summary: "3 hits",
     attempts: 1,

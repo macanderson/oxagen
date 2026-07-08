@@ -142,7 +142,7 @@ describe("agent.execution.record capability", () => {
   it("rejects an originType outside the CHECK constraint set", () => {
     // "workflow.run" (dot) and "user" are NOT valid — the DB CHECK only permits
     // the underscore tokens, so the contract must reject them at the boundary.
-    for (const bad of ["user", "workflow.run", "api", ""]) {
+    for (const bad of ["user", "run_workflow", "api", ""]) {
       expect(() =>
         agentExecutionRecord.input.parse({
           agentId: BASE_UUID_A,

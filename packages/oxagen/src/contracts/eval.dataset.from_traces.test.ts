@@ -19,12 +19,12 @@ describe("eval.dataset.from_traces capability", () => {
       name: "Recent chat traces",
       slug: "recent-chat-traces",
       description: "Sampled from chat.message.send",
-      capabilityName: "chat.message.send",
+      capabilityName: "send_message",
       sinceHours: 48,
       limit: 100,
     });
     expect(parsed.slug).toBe("recent-chat-traces");
-    expect(parsed.capabilityName).toBe("chat.message.send");
+    expect(parsed.capabilityName).toBe("send_message");
     expect(parsed.sinceHours).toBe(48);
     expect(parsed.limit).toBe(100);
   });

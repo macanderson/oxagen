@@ -432,7 +432,7 @@ describe("playbook-run-execute Inngest function", () => {
     const toolStep = {
       id: "st", stepKey: "run_tool", name: "RunTool", stepType: "tool",
       isAsync: false, exitOnError: true,
-      config: { capability: "web.fetch", input: { url: "https://example.com" } },
+      config: { capability: "fetch_web_page", input: { url: "https://example.com" } },
     };
 
     mocks.getCapability.mockReturnValue({ agent: { requiresApproval: false } });
@@ -456,7 +456,7 @@ describe("playbook-run-execute Inngest function", () => {
     const toolStep = {
       id: "st", stepKey: "risky_tool", name: "RiskyTool", stepType: "tool",
       isAsync: false, exitOnError: true,
-      config: { capability: "billing.credits.purchase", input: {} },
+      config: { capability: "purchase_credits", input: {} },
     };
 
     mocks.getCapability.mockReturnValue({ agent: { requiresApproval: true } });
@@ -751,7 +751,7 @@ describe("playbook-run-execute Inngest function", () => {
     const toolStep = {
       id: "st", stepKey: "run_tool", name: "RunTool", stepType: "tool",
       isAsync: false, exitOnError: true,
-      config: { capability: "web.fetch", input: { url: "https://example.com" } },
+      config: { capability: "fetch_web_page", input: { url: "https://example.com" } },
     };
 
     mocks.getCapability.mockReturnValue({ agent: { requiresApproval: false } });

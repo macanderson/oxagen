@@ -123,7 +123,7 @@ describe("agent.memory.update capability", () => {
     expect(parsed.lastReinforcedAt).toBeNull();
   });
 
-  it("is registered under name 'agent.memory.update'", () => {
+  it("is registered under name 'update_memory'", () => {
     expect(getCapability("update_memory")).toBe(agentMemoryUpdate);
   });
 

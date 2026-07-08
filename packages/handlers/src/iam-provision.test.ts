@@ -120,14 +120,14 @@ import { bootstrapOrgIAM, provisionMemberPrincipal } from "./iam-provision";
 
 const FAKE_CAPABILITIES = [
   {
-    name: "chat.message.send",
+    name: "send_message",
     defaultRoles: {
       org: { Owner: "allow", Admin: "allow" },
       workspace: { Owner: "allow", Member: "allow" },
     },
   },
   {
-    name: "org.create",
+    name: "create_org",
     defaultRoles: {
       org: { Owner: "allow" },
       workspace: {},
@@ -271,8 +271,8 @@ describe("bootstrapOrgIAM()", () => {
     expect(rgInserts.length).toBeGreaterThanOrEqual(5);
 
     const capabilities = rgInserts.map((r) => r.values["capabilityId"] as string);
-    expect(capabilities).toContain("chat.message.send");
-    expect(capabilities).toContain("org.create");
+    expect(capabilities).toContain("send_message");
+    expect(capabilities).toContain("create_org");
   });
 
   it("skips inserting an existing principal (idempotent — no duplicate insert)", async () => {

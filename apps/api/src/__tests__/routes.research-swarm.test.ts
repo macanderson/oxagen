@@ -101,7 +101,7 @@ describe("GET /research/swarm/status", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual(invokeResult);
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("research.swarm.status");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("get_research_status");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 

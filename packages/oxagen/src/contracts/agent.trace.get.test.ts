@@ -74,7 +74,7 @@ describe("agent.trace.get capability", () => {
           toolCalls: [
             {
               toolCallId: "atc_1",
-              toolName: "ontology.neighbors",
+              toolName: "get_ontology_neighbors",
               toolType: "capability",
               status: "completed",
               latencyMs: 800,
@@ -108,7 +108,7 @@ describe("agent.trace.get capability", () => {
         },
       ],
     });
-    expect(parsed.steps[0]?.toolCalls[0]?.toolName).toBe("ontology.neighbors");
+    expect(parsed.steps[0]?.toolCalls[0]?.toolName).toBe("get_ontology_neighbors");
     expect(parsed.children[0]?.executionId).toBe("aex_child");
   });
 

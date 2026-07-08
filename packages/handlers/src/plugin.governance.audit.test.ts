@@ -68,7 +68,7 @@ const fakeManifest = {
   visibility: "ga",
   category: "media",
   icon: "clapperboard",
-  contracts: ["video.generate"],
+  contracts: ["generate_video"],
   scopes: [],
 };
 
@@ -125,7 +125,7 @@ describe("plugin.org.uninstall — audit event", () => {
         actorUserId: "user-1",
         orgId: "org-1",
         workspaceId: "ws-1",
-        capability: "plugin.org.uninstall",
+        capability: "uninstall_plugin",
         outcome: "success",
         requestId: "req-1",
       }),
@@ -192,7 +192,7 @@ describe("plugin.org.install_bulk — audit event", () => {
     expect(mocks.emitSecurityEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         eventType: "plugin.installed",
-        capability: "plugin.org.install_bulk",
+        capability: "install_plugins_bulk",
         orgId: "org-1",
         outcome: "success",
       }),

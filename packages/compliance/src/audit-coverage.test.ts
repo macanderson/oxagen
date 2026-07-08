@@ -79,14 +79,14 @@ const REQUIRED_EMIT_PREFIXES: readonly string[] = [
   "plugin.workspace.", // workspace-level plugin enable/disable
   "plugin.credential.", // plugin credential set / reauth
   "plugin.registry.", // MCP registry source add / remove
-  "plugin.settings.set_auth_alerts", // org auth-alert notification policy
+  "set_auth_alerts", // org auth-alert notification policy
   "privacy.", // GDPR export / erasure requests
-  "workspace.create", // workspace creation (privileged bootstrap)
+  "create_workspace", // workspace creation (privileged bootstrap)
   "workspace.invite", // workspace member invitation
-  "workspace.settings.write", // workspace-profile mutation
-  "org.create", // org creation (privileged bootstrap)
+  "update_workspace_settings", // workspace-profile mutation
+  "create_org", // org creation (privileged bootstrap)
   "iam-provision", // IAM bootstrap helper (roles / principals / grants)
-  "prompt.settings.write", // system-prompt customization mutation
+  "update_prompt_settings", // system-prompt customization mutation
 ] as const;
 
 // Matches any of the four emit helpers exported from @oxagen/database/security

@@ -78,7 +78,7 @@ describe("researchSwarmStartHandler", () => {
       "dispatch_subagent",
       expect.objectContaining({
         tasks: expect.arrayContaining([
-          expect.objectContaining({ capabilityName: "web.search" }),
+          expect.objectContaining({ capabilityName: "search_web" }),
         ]),
       }),
       CTX,

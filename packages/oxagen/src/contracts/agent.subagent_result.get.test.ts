@@ -36,7 +36,7 @@ describe("agent.subagent.result.get capability", () => {
   const BASE_OUTPUT = {
     runId: "sar_abc",
     fanoutId: "fan_abc",
-    capabilityName: "web.search",
+    capabilityName: "search_web",
     status: "completed" as const,
     summary: "3 hits",
     input: { query: "q" },

@@ -44,7 +44,7 @@ describe("command.menu.suggest contract", () => {
         summary: "Run of playbook churn-investigate. Status: failed.",
       },
       recentEntities: [{ kind: "playbook", id: "plb_1", label: "Churn Investigate" }],
-      capabilities: ["agent.compose", "audit.log.query"],
+      capabilities: ["run_capability_chain", "query_audit_log"],
       locale: "en-US",
     });
     expect(parsed.pageEntity?.kind).toBe("run");
