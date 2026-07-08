@@ -261,6 +261,35 @@ def _best_of_n_models() -> str | None:
     return raw.strip() if raw and raw.strip() else None
 
 
+def _task_budget_flags() -> list[str]:
+    """Per-task USD spend cap (the CLI's `--budget`/`--budget-mode` guard,
+    enforced in the one-shot/bypass loop). SWE/Terminal-Bench's real cost sink
+    is a doomed hard task that thrashes to its timeout burning $10-15 while the
+    solvable tasks cost <$1 — a single per-task ceiling caps that tail without
+    touching the tasks that finish cheaply. Set OXAGEN_TASK_BUDGET_USD (e.g.
+    "3.50") to enable; OXAGEN_TASK_BUDGET_MODE overrides the mode (default
+    `enforce` — hard-stop the turn at the cap; `grace`/`prompt` also valid,
+    though `prompt` degrades to a stop in a non-interactive bench run). Unset ⇒
+    no cap (previous behavior). Self-documenting in the trial log like the
+    other flag builders."""
+    raw = os.environ.get("OXAGEN_TASK_BUDGET_USD")
+    if not raw or not raw.strip():
+        return []
+    try:
+        usd = float(raw.strip())
+    except ValueError:
+        print(
+            f"oxagen-adapter: OXAGEN_TASK_BUDGET_USD={raw!r} is not a number; "
+            "running with no per-task budget cap",
+            file=sys.stderr,
+        )
+        return []
+    if usd <= 0:
+        return []
+    mode = (os.environ.get("OXAGEN_TASK_BUDGET_MODE") or "enforce").strip()
+    return [f"--budget {usd:g}", f"--budget-mode {shlex.quote(mode)}"]
+
+
 def _verify_auto_enabled() -> bool:
     """Whether `solve` candidates auto-verify: union the test/lint/build
     commands every candidate actually ran and re-run that union in every
@@ -637,6 +666,7 @@ class OxagenAgent(BaseInstalledAgent):
             flags.append(f"--model {shlex.quote(self.model_name)}")
         if _is_truthy(os.environ.get("OXAGEN_NO_PIPELINE")):
             flags.append("--no-pipeline")
+        flags.extend(_task_budget_flags())
         return " ".join(flags)
 
     def _build_best_of_n_flags(self) -> str:
