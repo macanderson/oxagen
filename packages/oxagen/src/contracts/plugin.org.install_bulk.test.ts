@@ -3,7 +3,7 @@ import { pluginOrgInstallBulk } from "./plugin.org.install_bulk";
 
 describe("plugin.org.install_bulk contract", () => {
   it("registers with the correct name", () => {
-    expect(pluginOrgInstallBulk.name).toBe("plugin.org.install_bulk");
+    expect(pluginOrgInstallBulk.name).toBe("install_plugins_bulk");
   });
   it("includes api and mcp surfaces", () => {
     expect(pluginOrgInstallBulk.surfaces).toContain("api");

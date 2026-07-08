@@ -109,7 +109,7 @@ describe("updatePromptSettingsAction", () => {
     const res = await updatePromptSettingsAction(BASE);
     expect(res.ok).toBe(true);
     expect(mockInvoke).toHaveBeenCalledWith(
-      "prompt.settings.write",
+      "update_prompt_settings",
       { additionalInstructions: "Be concise.", overrides: null, autoImprovePrompts: true },
       expect.objectContaining({ orgId: "org-1", workspaceId: "ws-1", userId: "user-1" }),
       expect.objectContaining({ surface: expect.any(String) }),

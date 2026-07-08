@@ -81,7 +81,7 @@ describe("removeMemberAction", () => {
     await removeMemberAction({ orgSlug: "acme", targetUserId: "user-2" });
     expect(mockAssertOrgMember).toHaveBeenCalledWith(ORG.id, SESSION.user.id);
     expect(mockInvoke).toHaveBeenCalledWith(
-      "org.member.remove",
+      "remove_org_member",
       { targetUserId: "user-2" },
       expect.objectContaining({ orgId: ORG.id, userId: SESSION.user.id }),
       { surface: "agent" },
@@ -128,7 +128,7 @@ describe("changeMemberRoleAction", () => {
     expect(res).toEqual({ ok: true });
     expect(mockRevalidatePath).toHaveBeenCalledWith("/acme/members");
     expect(mockInvoke).toHaveBeenCalledWith(
-      "org.member_role.change",
+      "change_member_role",
       { targetUserId: "user-2", newRole: "admin" },
       expect.objectContaining({ orgId: ORG.id }),
       { surface: "agent" },

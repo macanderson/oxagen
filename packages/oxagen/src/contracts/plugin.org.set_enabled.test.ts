@@ -3,7 +3,7 @@ import { pluginOrgSetEnabled } from "./plugin.org.set_enabled";
 
 describe("plugin.org.set_enabled contract", () => {
   it("registers with the correct name", () => {
-    expect(pluginOrgSetEnabled.name).toBe("plugin.org.set_enabled");
+    expect(pluginOrgSetEnabled.name).toBe("set_org_plugin_enabled");
   });
 
   it("includes api and mcp surfaces", () => {

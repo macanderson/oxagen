@@ -444,7 +444,7 @@ describe("playbook-run-execute Inngest function", () => {
     const result = await capturedHandler!({ event: { data: BASE_EVENT }, step });
     expect(result).toMatchObject({ status: "completed", stepsExecuted: 1 });
     expect(mocks.kernelInvoke).toHaveBeenCalledWith(
-      "web.fetch",
+      "fetch_web_page",
       { url: "https://example.com" },
       expect.objectContaining({ surface: "runner", orgId: ORG_ID }),
     );

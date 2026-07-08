@@ -105,7 +105,7 @@ describe("skill.edit capability", () => {
   });
 
   it("has the correct name", () => {
-    expect(skillEdit.name).toBe("skill.edit");
+    expect(skillEdit.name).toBe("edit_skill");
   });
 
   it("is scoped", () => {

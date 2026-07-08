@@ -380,7 +380,7 @@ describe("wandResolveApprovalAction", () => {
     );
     expect(res.ok).toBe(true);
     expect(mockInvoke).toHaveBeenCalledWith(
-      "agent.approval.resolve",
+      "resolve_approval",
       expect.objectContaining({ approvalId: "appr-1", decision: "approved" }),
       expect.objectContaining({ orgId: "org-1", workspaceId: "ws-1" }),
       { surface: "agent" },
@@ -443,7 +443,7 @@ describe("wandResolveConsentAction", () => {
     );
     expect(res.ok).toBe(true);
     expect(mockInvoke).toHaveBeenCalledWith(
-      "agent.mcp_consent.resolve",
+      "resolve_mcp_consent",
       expect.objectContaining({ approvalId: "appr-1", decision: "granted", grantAllTools: true }),
       expect.objectContaining({ orgId: "org-1", workspaceId: "ws-1" }),
       { surface: "agent" },
@@ -558,7 +558,7 @@ describe("wandResolvePlanAction", () => {
     const res = await wandResolvePlanAction("acme", "main", "plan-1", "approved");
     expect(res.ok).toBe(true);
     expect(mockInvoke).toHaveBeenCalledWith(
-      "agent.plan.approve",
+      "approve_plan",
       expect.objectContaining({ planId: "plan-1", decision: "approve" }),
       expect.any(Object),
       { surface: "agent" },

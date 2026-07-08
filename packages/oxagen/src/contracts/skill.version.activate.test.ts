@@ -101,7 +101,7 @@ describe("skill.version.activate capability", () => {
   });
 
   it("has the correct name", () => {
-    expect(skillVersionActivate.name).toBe("skill.version.activate");
+    expect(skillVersionActivate.name).toBe("activate_skill_version");
   });
 
   it("is scoped", () => {

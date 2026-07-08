@@ -3,7 +3,7 @@ import { agentCompose } from "./agent.compose";
 
 describe("agent.compose contract", () => {
   it("registers on the api, mcp, and agent surfaces", () => {
-    expect(agentCompose.name).toBe("agent.compose");
+    expect(agentCompose.name).toBe("run_capability_chain");
     expect(agentCompose.surfaces).toEqual(["api", "mcp", "agent"]);
   });
 

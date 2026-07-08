@@ -3,7 +3,7 @@ import { pluginRegistryList } from "./plugin.registry.list";
 
 describe("plugin.registry.list contract", () => {
   it("registers with the correct name", () => {
-    expect(pluginRegistryList.name).toBe("plugin.registry.list");
+    expect(pluginRegistryList.name).toBe("list_plugin_registries");
   });
   it("has api+mcp surfaces and org admin roles", () => {
     expect(pluginRegistryList.surfaces).toContain("api");
