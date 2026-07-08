@@ -164,12 +164,12 @@ describe("filterSlashCatalog", () => {
     expect(names).toContain("model");
   });
 
-  it("ranks a shorter prefix match ahead of a longer one", () => {
-    const names = filterSlashCatalog(catalog, "mode").map((c) => c.name);
-    // "mode" (exact/short prefix) must come before "model"? both share prefix
-    // "mode"? no — "model" does not start with "mode". So only "mode" matches as
-    // prefix; assert it is present and leads.
-    expect(names[0]).toBe("mode");
+  it("keeps the catalog's own order among equally-tiered prefix matches", () => {
+    // Both /model and /mode are prefix matches for "mo"; the catalog lists
+    // /model before /mode, and the ranking must preserve that stable order
+    // rather than reshuffle by length.
+    const names = filterSlashCatalog(catalog, "mo").map((c) => c.name);
+    expect(names.indexOf("model")).toBeLessThan(names.indexOf("mode"));
   });
 
   it("is deterministic — same query yields the same order twice", () => {
@@ -199,7 +199,9 @@ describe("matchScore", () => {
     expect(matchScore("anything", "")).toBeGreaterThan(0);
   });
 
-  it("scores a shorter prefix match higher than a longer one", () => {
-    expect(matchScore("mode", "mo")).toBeGreaterThan(matchScore("moderation", "mo"));
+  it("gives equal-tier matches the same flat score (order is a tie-break, not the score)", () => {
+    // Two prefix matches of differing length score identically — intra-tier
+    // order is decided by the catalog, not by matchScore.
+    expect(matchScore("mode", "mo")).toBe(matchScore("moderation", "mo"));
   });
 });

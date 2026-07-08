@@ -210,27 +210,31 @@ export function slashQuery(value: string): string | null {
   return m ? m[1]!.toLowerCase() : null;
 }
 
+/** Match tiers, highest-first. Exposed for tests/readers of `matchScore`. */
+export const MATCH_PREFIX = 3;
+export const MATCH_SUBSTRING = 2;
+export const MATCH_SUBSEQUENCE = 1;
+export const MATCH_NONE = 0;
+
 /**
- * How well `query` matches `name` (both already lower-cased). Higher is better;
- * 0 means no match. Three tiers so the menu surfaces the most likely command
- * first: a prefix (`mo` → `model`) beats a mid-word substring (`del` → `model`),
- * which beats a scattered subsequence (`mdl` → `model`). Within a tier an
- * earlier / shorter hit scores slightly higher, but the dominant signal is the
- * tier — see `filterSlashCatalog`, which keeps the catalog's own order as the
- * stable tie-break so results never jitter between keystrokes.
+ * How well `query` matches `name` (both already lower-cased). Returns a flat
+ * TIER score: a prefix (`mo` → `model`) beats a mid-word substring
+ * (`del` → `model`), which beats a scattered subsequence (`mdl` → `model`);
+ * anything else is 0. The score deliberately carries no intra-tier ordering —
+ * `filterSlashCatalog` uses the catalog's own order as the tie-break so two
+ * equally-tiered commands keep their stable, documented order (e.g. `/model`
+ * before `/mode`) and the list never jitters between keystrokes.
  */
 export function matchScore(name: string, query: string): number {
-  if (query === "") return 1;
-  const prefix = name.startsWith(query);
-  if (prefix) return 3_000 - name.length; // shorter prefix match ranks first
-  const idx = name.indexOf(query);
-  if (idx !== -1) return 2_000 - idx; // earlier substring ranks first
+  if (query === "") return MATCH_PREFIX;
+  if (name.startsWith(query)) return MATCH_PREFIX;
+  if (name.includes(query)) return MATCH_SUBSTRING;
   // Subsequence: every query char appears in order, not necessarily adjacent.
   let qi = 0;
   for (let ni = 0; ni < name.length && qi < query.length; ni++) {
     if (name[ni] === query[qi]) qi++;
   }
-  return qi === query.length ? 1_000 - name.length : 0;
+  return qi === query.length ? MATCH_SUBSEQUENCE : MATCH_NONE;
 }
 
 /**
