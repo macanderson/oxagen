@@ -28,6 +28,7 @@ import type { RepoOption } from "./repo-selector";
 import type { EnvironmentOption } from "./environment-selector";
 import type { AgentOption } from "./agent-selector";
 import { SuggestedPromptChips } from "./suggested-prompt-chips";
+import type { ConversationMessageSummary } from "@/lib/page-context/suggested-prompts";
 import { ConversationFiles } from "./conversation-files";
 import { ConversationExportMenu } from "./conversation-export-menu";
 import { CodingTracePanel } from "./coding-trace-panel";
@@ -236,6 +237,7 @@ export function ChatShellClient({
     turnError,
     turnWarning,
     turnBudgetNotice,
+    suggestedPrompts,
     consume,
     reset,
     hasBlockingApproval,
@@ -243,6 +245,21 @@ export function ChatShellClient({
     signalApprovalResolved,
     signalConsentResolved,
   } = useToolStream();
+
+  // Trimmed recent history for the no-LLM suggestion fallback: keeps the chips
+  // conversation-aware on reload / before the first per-turn server suggestions
+  // arrive. Server-generated `suggestedPrompts` take precedence in the chips.
+  const conversationHistory = React.useMemo<ConversationMessageSummary[]>(
+    () =>
+      messages
+        .filter((m) => m.role === "user" || m.role === "assistant")
+        .slice(-6)
+        .map((m) => ({
+          role: m.role as "user" | "assistant",
+          content: m.content.slice(0, 300),
+        })),
+    [messages],
+  );
 
   // Surface a turn-level failure (provider/gateway error, billing block such as
   // insufficient_credits, or an unexpected server throw) as a toast — instead of
@@ -1183,6 +1200,8 @@ export function ChatShellClient({
           action={wrappedSendAction}
           conversationId={conversationId}
           parentMessageId={activeLeafMessageId}
+          suggestions={suggestedPrompts}
+          conversationHistory={conversationHistory}
           className="justify-center"
         />
       ) : null}
