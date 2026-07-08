@@ -182,29 +182,6 @@ button,input,textarea{font:inherit;color:inherit}
 .hexfield .float-b{animation:floatB 17s ease-in-out infinite alternate}
 @keyframes floatA{from{transform:translateY(0)}to{transform:translateY(-14px)}}
 @keyframes floatB{from{transform:translateY(0)}to{transform:translateY(11px)}}
-.ember-path{
-  stroke:url(#emberStroke);stroke-width:2.5;fill:none;stroke-linecap:round;stroke-linejoin:round;
-  stroke-dasharray:1120;stroke-dashoffset:1120;
-  animation:drawPath 2.1s .5s var(--ease-out) forwards;
-  filter:drop-shadow(0 0 6px rgba(253,154,76,.45));
-}
-@keyframes drawPath{to{stroke-dashoffset:0}}
-.path-node{fill:#0B0D13;stroke:var(--ember-c);stroke-width:2;opacity:0;animation:nodeIn .4s var(--ease-out) forwards}
-@keyframes nodeIn{from{opacity:0}to{opacity:1}}
-.spark{
-  offset-path:path("M120 566 L300 470 L480 372 L660 276 L800 344 L948 268");
-  offset-distance:0%;
-  animation:spark 4.5s 2.7s linear infinite;
-  opacity:0;
-}
-@keyframes spark{
-  0%{offset-distance:0%;opacity:0}
-  6%{opacity:1}
-  92%{opacity:1}
-  100%{offset-distance:100%;opacity:0}
-}
-.hexnote{font-family:"Aeonik Mono",monospace;font-size:11px;letter-spacing:.14em;fill:var(--faint);text-transform:uppercase}
-.hexnote.hot{fill:var(--ember-c)}
 
 .hero-in{position:relative;display:grid;grid-template-columns:minmax(0,1.02fr) minmax(0,.98fr);gap:56px;align-items:center}
 .hero-copy .eyebrow{margin-bottom:22px}
@@ -445,6 +422,7 @@ button,input,textarea{font:inherit;color:inherit}
 .manual-points{margin:22px 0 30px;padding:0;list-style:none;display:grid;gap:10px}
 .manual-points li{display:flex;gap:11px;color:var(--ink-soft);font-size:15px;align-items:baseline}
 .manual-points li::before{content:"—";color:var(--ember-c);flex:none}
+.manual-cta{margin:-8px 0 26px}
 
 /* ============ forms ============ */
 .lead-form{display:grid;gap:14px;max-width:520px}
@@ -535,8 +513,6 @@ footer{border-top:1px solid var(--line);background:var(--bg-raise);padding:64px 
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
   .ticker-track{animation:none;transform:none}
-  .spark{display:none}
-  .ember-path{stroke-dashoffset:0;animation:none}
   .hexfield .lit{opacity:.92;animation:none}
   .meter .fill{transform:scaleX(var(--w,.7));animation:none}
   .audit-line{opacity:1;transform:none;animation:none}
@@ -610,16 +586,6 @@ footer{border-top:1px solid var(--line);background:var(--bg-raise);padding:64px 
         <use class="hx dim" href="#hx6" x="760" y="660"/>
       </g>
       <use class="hx lit" href="#hx6" x="948" y="268"/>
-      <path class="ember-path" d="M120 566 L300 470 L480 372 L660 276 L800 344 L948 268"/>
-      <circle class="path-node" style="animation-delay:.6s" cx="120" cy="566" r="5"/>
-      <circle class="path-node" style="animation-delay:.9s" cx="300" cy="470" r="5"/>
-      <circle class="path-node" style="animation-delay:1.2s" cx="480" cy="372" r="5"/>
-      <circle class="path-node" style="animation-delay:1.5s" cx="660" cy="276" r="5"/>
-      <circle class="path-node" style="animation-delay:1.8s" cx="800" cy="344" r="5"/>
-      <circle class="path-node" style="animation-delay:2.1s" cx="948" cy="268" r="5"/>
-      <circle class="spark" r="4" fill="#FD9A4C"/>
-      <text class="hexnote" x="120" y="608" text-anchor="start">one graph query — deterministic</text>
-      <text class="hexnote hot" x="948" y="320" text-anchor="middle">argmin cost</text>
     </svg>
 
     <div class="wrap hero-in">
@@ -917,6 +883,10 @@ footer{border-top:1px solid var(--line);background:var(--bg-raise);padding:64px 
           <li>What to measure so results are repeatable, not lucky</li>
         </ul>
 
+        <p class="manual-cta reveal reveal-d1">
+          <a class="btn btn-ghost btn-sm" href="/read">Prefer the full reader? Open the book <span class="arr">→</span></a>
+        </p>
+
         <form class="lead-form reveal reveal-d2" id="manualForm" data-source="field-manual" novalidate>
           <div class="f-row">
             <div class="field">
@@ -948,14 +918,10 @@ footer{border-top:1px solid var(--line);background:var(--bg-raise);padding:64px 
           </div>
         </form>
 
-        <div class="unlocked reveal" id="manualUnlocked" hidden>
-          <div class="ok-line"><span class="ok-dot" aria-hidden="true">✓</span> You're in — enjoy the manual.</div>
-          <p>Read it right here in your browser, or take the EPUB with you. We'll only use
-          your email to follow up about Oxagen — no spam, ever.</p>
-          <div class="row">
-            <a class="btn btn-primary" href="/field-manual?unlocked=1">Read it in your browser <span class="arr">→</span></a>
-            <a class="btn btn-ghost" href="/field-manual/engineering-deterministic-ai-coding-agents.epub" download>Download the EPUB</a>
-          </div>
+        <div class="unlocked reveal" id="manualSuccess" hidden tabindex="-1">
+          <div class="ok-line"><span class="ok-dot" aria-hidden="true">✓</span> <span id="manualSuccessMsg">The link to the book has been sent to your email.</span></div>
+          <p>Check your inbox (and spam, just in case). We'll only use your email to follow
+          up about Oxagen — no spam, ever.</p>
         </div>
       </div>
     </div>
@@ -1090,8 +1056,19 @@ footer{border-top:1px solid var(--line);background:var(--bg-raise);padding:64px 
     ? "http://localhost:4000"
     : "https://api.oxagen.sh";
   var LEADS_URL = API_BASE + "/v1/marketing/leads";
-  var UNLOCK_KEY = "ox_fm_unlocked";
+  var CMS_LEADS_URL = API_BASE + "/v1/cms/leads";
   var reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  function buildTrackingCode() {
+    var qs = new URLSearchParams(location.search);
+    var keys = ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "tc", "tracking_code"];
+    var parts = [];
+    keys.forEach(function (k) {
+      var v = qs.get(k);
+      if (v) { parts.push(k + "=" + v); }
+    });
+    return parts.length ? parts.join("&") : undefined;
+  }
 
   /* ---------- nav scroll state ---------- */
   var nav = document.getElementById("nav");
@@ -1235,21 +1212,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-raise);padding:64px 
     status.classList.toggle("err", !!isErr);
   }
 
-  function markUnlocked() {
-    try { localStorage.setItem(UNLOCK_KEY, "1"); } catch (_) { /* private mode: fail open */ }
-    var form = document.getElementById("manualForm");
-    var unlocked = document.getElementById("manualUnlocked");
-    if (form && unlocked) {
-      form.hidden = true;
-      unlocked.hidden = false;
-      unlocked.classList.add("in-view");
-    }
-  }
-
-  try {
-    if (localStorage.getItem(UNLOCK_KEY) === "1") { markUnlocked(); }
-  } catch (_) { /* ignore */ }
-
+  /* demo form: unchanged — still posts to the public marketing/leads endpoint */
   function wireForm(form) {
     form.addEventListener("submit", function (ev) {
       ev.preventDefault();
@@ -1280,12 +1243,76 @@ footer{border-top:1px solid var(--line);background:var(--bg-raise);padding:64px 
       }).then(function (res) {
         if (!res.ok && res.status !== 204) { throw new Error("status " + res.status); }
         form.reset();
-        if (source === "field-manual") {
+        setStatus(form, "Thanks — we got it. We'll be in touch shortly. ✓");
+        btn.disabled = false;
+      }).catch(function () {
+        btn.disabled = false;
+        setStatus(
+          form,
+          'Something went wrong. Try again, or email <a href="mailto:success@oxagen.ai">success@oxagen.ai</a>.',
+          true
+        );
+      });
+    });
+  }
+
+  /* field-manual gate form: posts to the CMS lead-gate endpoint. Success never reveals a
+     book link — the server emails a single-use /read link. */
+  function wireManualForm(form) {
+    var successPanel = document.getElementById("manualSuccess");
+    var successMsg = document.getElementById("manualSuccessMsg");
+    var trackingCode = buildTrackingCode();
+
+    form.addEventListener("submit", function (ev) {
+      ev.preventDefault();
+      var btn = form.querySelector('button[type="submit"]');
+
+      if (!form.reportValidity()) { return; }
+
+      var fd = new FormData(form);
+      var fullName = String(fd.get("name") || "").trim();
+      var spaceIdx = fullName.indexOf(" ");
+      var firstName = spaceIdx === -1 ? fullName : fullName.slice(0, spaceIdx);
+      var lastName = spaceIdx === -1 ? "" : fullName.slice(spaceIdx + 1).trim();
+
+      var payload = {
+        firstName: firstName,
+        lastName: lastName || firstName,
+        email: String(fd.get("email") || "").trim().toLowerCase(),
+        source: "field-manual",
+        pagePath: location.pathname + location.search + location.hash,
+        website: String(fd.get("website") || "")
+      };
+      var role = String(fd.get("role") || "").trim();
+      var company = String(fd.get("company") || "").trim();
+      if (company) { payload.company = company; }
+      if (role) { payload.jobTitle = role; }
+      if (trackingCode) { payload.trackingCode = trackingCode; }
+
+      btn.disabled = true;
+      setStatus(form, "Sending…");
+
+      fetch(CMS_LEADS_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      }).then(function (res) {
+        return res.json().then(function (data) { return { status: res.status, data: data }; });
+      }).then(function (r) {
+        var data = r.data || {};
+        if (r.status >= 200 && r.status < 300 && data.ok) {
+          form.reset();
           setStatus(form, "");
-          markUnlocked();
+          form.hidden = true;
+          if (successMsg) { successMsg.textContent = data.message || "The link to the book has been sent to your email."; }
+          if (successPanel) { successPanel.hidden = false; successPanel.classList.add("in-view"); try { successPanel.focus(); } catch (_) { /* ignore */ } }
         } else {
-          setStatus(form, "Thanks — we got it. We'll be in touch shortly. ✓");
           btn.disabled = false;
+          setStatus(
+            form,
+            'Something went wrong. Try again, or email <a href="mailto:success@oxagen.ai">success@oxagen.ai</a>.',
+            true
+          );
         }
       }).catch(function () {
         btn.disabled = false;
@@ -1300,7 +1327,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-raise);padding:64px 
 
   var manualForm = document.getElementById("manualForm");
   var demoForm = document.getElementById("demoForm");
-  if (manualForm) wireForm(manualForm);
+  if (manualForm) wireManualForm(manualForm);
   if (demoForm) wireForm(demoForm);
 }());
 </script>

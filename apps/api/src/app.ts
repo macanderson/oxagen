@@ -253,6 +253,7 @@ import { auditLogQueryRoute } from "./routes/v1/audit.log.query";
 import { agentLlmRoute } from "./routes/v1/agent.llm";
 import { authCliTokenRoute } from "./routes/v1/auth.cli.token";
 import { telemetryUsageRoute } from "./routes/v1/telemetry.usage";
+import { cmsRoute } from "./routes/v1/cms";
 import { a2aWellKnownRoute } from "./routes/a2a/well-known";
 import { a2aRpcRoute } from "./routes/a2a/rpc";
 import { a2aCardGetRoute } from "./routes/v1/a2a.card.get";
@@ -306,6 +307,12 @@ app.route("/v1/auth/cli", authCliTokenRoute);
 // limit inside the route are the security boundary. Mounted BEFORE the
 // auth-gated /v1 groups for the same reason as /v1/auth/cli above.
 app.route("/v1/telemetry", telemetryUsageRoute);
+
+// Public, anonymous ebook lead gate for the marketing site (oxagen.sh). Same
+// security model as /v1/telemetry: no auth (callers are website visitors),
+// strict schema validation + per-IP rate limit inside the route. Mounted BEFORE
+// the auth-gated /v1 groups so a lead POST never hits authMiddleware.
+app.route("/v1/cms", cmsRoute);
 
 // /v1 user-level routes (org + workspace CRUD) require auth but no
 // org scope: a freshly-authenticated user can create their first

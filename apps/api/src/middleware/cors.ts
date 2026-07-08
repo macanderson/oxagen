@@ -25,7 +25,14 @@ import type { AppEnv } from "../app";
  * the allowlist is exactly the configured APP_URL / NEXT_PUBLIC_APP_URL.
  */
 function allowedOrigins(): Set<string> {
-  const origins = [process.env.APP_URL, process.env.NEXT_PUBLIC_APP_URL];
+  const origins = [
+    process.env.APP_URL,
+    process.env.NEXT_PUBLIC_APP_URL,
+    // The public marketing website (oxagen.sh) calls the /v1/cms/* lead routes
+    // cross-origin from the browser. In prod that origin must be explicitly
+    // allowed; MARKETING_URL carries it.
+    process.env.MARKETING_URL,
+  ];
   if (!isProductionRuntime()) {
     origins.push("http://localhost:3000");
   }
@@ -36,12 +43,23 @@ function allowedOrigins(): Set<string> {
   );
 }
 
+// The static marketing site can be served from any localhost port during local
+// development (a preview server, `python -m http.server`, etc.), so in
+// non-production we additionally echo any localhost/127.0.0.1 origin. This is
+// gated on non-production exactly like the localhost:3000 allowance above — a
+// production API never trusts localhost.
+const LOCALHOST_ORIGIN = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
+function isAllowedOrigin(origin: string): boolean {
+  if (allowedOrigins().has(origin)) return true;
+  if (!isProductionRuntime() && LOCALHOST_ORIGIN.test(origin)) return true;
+  return false;
+}
+
 export const corsMiddleware: MiddlewareHandler<AppEnv> = (c, next) => {
   // Resolved per request so env changes (and per-test overrides) take effect
   // without module reloads; the closure cost is negligible.
-  const allowed = allowedOrigins();
   return cors({
-    origin: (origin) => (allowed.has(origin) ? origin : null),
+    origin: (origin) => (isAllowedOrigin(origin) ? origin : null),
     credentials: true,
     allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowHeaders: ["Content-Type", "Authorization"],

@@ -24,6 +24,7 @@
     "atlas:status": "atlas migrate status --env local",
     "atlas:validate": "atlas migrate validate --dir \"file://atlas/migrations\"",
     "studio": "drizzle-kit studio",
+    "db:seed-books": "tsx --env-file-if-exists=.env.local src/seed-book-editions.ts",
     "test:unit": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:integration": "vitest run --config vitest.integration.config.ts"
