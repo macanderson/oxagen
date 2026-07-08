@@ -166,6 +166,7 @@ function AddMemberDialog({
           <Button
             variant={noSeats ? "outline" : "gradient"}
             size="sm"
+            className="max-md:h-11"
             startIcon={<UserPlus className="h-3.5 w-3.5" />}
             disabled={false}
           />
@@ -207,6 +208,7 @@ function AddMemberDialog({
               <Input
                 id="invite-email"
                 type="email"
+                className="max-md:h-11"
                 placeholder="teammate@company.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -221,7 +223,7 @@ function AddMemberDialog({
                 value={role}
                 onValueChange={(v) => setRole(v as typeof role)}
               >
-                <SelectTrigger id="invite-role">
+                <SelectTrigger id="invite-role" className="max-md:h-11">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectPopup>
@@ -239,11 +241,14 @@ function AddMemberDialog({
           </form>
         </DialogPanel>
 
-        <DialogFooter>
-          <DialogClose render={<Button variant="ghost" />}>Cancel</DialogClose>
+        <DialogFooter className="flex-wrap">
+          <DialogClose render={<Button variant="ghost" className="max-md:h-11" />}>
+            Cancel
+          </DialogClose>
           <Button
             type="submit"
             form="invite-form"
+            className="max-md:h-11"
             disabled={pending || noSeats}
           >
             {pending ? "Sending…" : "Send invitation"}
@@ -299,7 +304,7 @@ function RemoveMemberDialog({
           <Button
             variant="ghost"
             size="sm"
-            className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+            className="max-md:h-11 max-md:w-11 text-destructive hover:bg-destructive/10 hover:text-destructive"
           />
         }
       >
@@ -320,9 +325,16 @@ function RemoveMemberDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <DialogFooter>
-          <DialogClose render={<Button variant="ghost" />}>Cancel</DialogClose>
-          <Button variant="destructive" onClick={handleConfirm} disabled={pending}>
+        <DialogFooter className="flex-wrap">
+          <DialogClose render={<Button variant="ghost" className="max-md:h-11" />}>
+            Cancel
+          </DialogClose>
+          <Button
+            variant="destructive"
+            className="max-md:h-11"
+            onClick={handleConfirm}
+            disabled={pending}
+          >
             {pending ? "Removing…" : "Remove member"}
           </Button>
         </DialogFooter>
@@ -383,7 +395,7 @@ function RoleSelector({
       disabled={pending}
     >
       <SelectTrigger
-        className="h-7 min-w-[7rem] text-xs"
+        className="h-7 min-w-[7rem] text-xs max-md:h-11"
         aria-label={`Change role for ${member.displayName ?? member.email}`}
       >
         <SelectValue />
@@ -420,12 +432,15 @@ function MemberRow({
   const member = { ...initialMember, role };
 
   return (
-    <li key={member.publicId} className="flex items-center justify-between py-3">
+    <li
+      key={member.publicId}
+      className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between"
+    >
       <div className="flex flex-col">
         <span className="font-medium">{member.displayName ?? member.email}</span>
         <span className="text-xs text-muted-foreground">{member.email}</span>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {canManage && !isSelf ? (
           <>
             {/* Inline role selector for privileged users */}
@@ -484,7 +499,10 @@ function PendingInvitationsList({
     <Panel title={<span className="flex items-center gap-2"><Mail className="h-4 w-4 text-muted-foreground" />Pending invitations<Badge variant="secondary">{invitations.length}</Badge></span>}>
         <ul className="divide-y divide-border/60">
           {invitations.map((inv) => (
-            <li key={inv.publicId} className="flex items-center justify-between py-3">
+            <li
+              key={inv.publicId}
+              className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between"
+            >
               <div className="flex flex-col">
                 <span className="font-medium">{inv.email}</span>
                 <span className="text-xs text-muted-foreground">
@@ -496,6 +514,7 @@ function PendingInvitationsList({
                 <Button
                   variant="ghost"
                   size="sm"
+                  className="max-md:h-11 max-md:self-start"
                   onClick={() => handleDecline(inv.publicId, inv.email)}
                   disabled={declining}
                 >

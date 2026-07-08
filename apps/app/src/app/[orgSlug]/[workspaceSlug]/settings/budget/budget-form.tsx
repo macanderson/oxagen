@@ -123,7 +123,7 @@ export function WorkspaceBudgetForm({
         className="flex flex-col gap-6"
         noValidate
       >
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <Label htmlFor="workspace-budget-enabled" className="text-sm font-medium">
               Govern the turn budget
@@ -153,6 +153,7 @@ export function WorkspaceBudgetForm({
                 min={0.01}
                 step={0.01}
                 size="sm"
+                className="max-md:h-11"
                 disabled={disabled}
                 placeholder="e.g. 5.00"
                 value={limitUsd ?? ""}
@@ -174,7 +175,7 @@ export function WorkspaceBudgetForm({
                 value={mode}
                 onValueChange={(v) => setMode(v as TurnBudgetMode)}
               >
-                <SelectTrigger size="sm" className="w-full" disabled={disabled}>
+                <SelectTrigger size="sm" className="w-full max-md:h-11" disabled={disabled}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectPopup>
@@ -203,6 +204,7 @@ export function WorkspaceBudgetForm({
                   max={1000}
                   step={5}
                   size="sm"
+                  className="max-md:h-11"
                   disabled={disabled}
                   value={Math.round(gracePct * 100)}
                   onChange={(e) => {
@@ -264,6 +266,7 @@ export function WorkspaceBudgetForm({
             type="submit"
             variant="gradient"
             size="sm"
+            className="max-md:h-11"
             disabled={isSaving || !canEdit}
             startIcon={<Save className="h-3.5 w-3.5" aria-hidden="true" />}
           >

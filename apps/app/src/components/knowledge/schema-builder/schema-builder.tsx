@@ -201,7 +201,7 @@ export function SchemaBuilder({ slugs, isAdmin }: SchemaBuilderProps) {
               value={versionId ?? (registry.draftVersionId ? "draft" : registry.pinnedVersionId ?? "draft")}
               onValueChange={(v) => setVersionId(v == null || v === "draft" ? undefined : v)}
             >
-              <SelectTrigger className="h-7 text-xs w-36">
+              <SelectTrigger className="h-7 text-xs w-36 max-md:h-11">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -217,13 +217,13 @@ export function SchemaBuilder({ slugs, isAdmin }: SchemaBuilderProps) {
             </Select>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <ExportButton slugs={slugs} versionId={versionId} />
           <Button
             variant="outline"
             size="sm"
             onClick={() => setAssistantOpen(true)}
-            className="gap-1.5"
+            className="gap-1.5 max-md:h-11"
           >
             <Bot className="h-3.5 w-3.5" />
             Open AI Assistant
@@ -231,13 +231,14 @@ export function SchemaBuilder({ slugs, isAdmin }: SchemaBuilderProps) {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex items-center gap-1 border-b border-border">
+      {/* Tabs — horizontal scroll on mobile rather than wrapping/hiding, so every
+          tab stays reachable at 390px without shrinking the tap targets. */}
+      <div className="flex items-center gap-1 overflow-x-auto border-b border-border">
         {tabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
+            className={`shrink-0 px-4 py-2 max-md:min-h-11 text-sm font-medium transition-colors border-b-2 -mb-px ${
               activeTab === tab.id
                 ? "border-primary text-foreground"
                 : "border-transparent text-muted-foreground hover:text-foreground"
@@ -294,6 +295,7 @@ export function SchemaBuilder({ slugs, isAdmin }: SchemaBuilderProps) {
           <div className="flex justify-end">
             <Button
               size="sm"
+              className="max-md:h-11"
               onClick={() =>
                 setLabelDialog({ schemaName: registry.schemas[0]?.schemaName ?? "core" })
               }
@@ -311,7 +313,7 @@ export function SchemaBuilder({ slugs, isAdmin }: SchemaBuilderProps) {
             {allLabels.map((label, idx) => (
               <div
                 key={`${label.schemaName}/${label.name}`}
-                className={`flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-muted/40 transition-colors ${
+                className={`flex flex-col gap-1 px-4 py-3 cursor-pointer hover:bg-muted/40 transition-colors sm:flex-row sm:items-center sm:justify-between ${
                   idx > 0 ? "border-t border-border" : ""
                 }`}
                 onClick={() =>
@@ -340,6 +342,7 @@ export function SchemaBuilder({ slugs, isAdmin }: SchemaBuilderProps) {
           <div className="flex justify-end">
             <Button
               size="sm"
+              className="max-md:h-11"
               onClick={() =>
                 setRelationshipDialog({
                   schemaName: registry.schemas[0]?.schemaName ?? "core",
@@ -359,7 +362,7 @@ export function SchemaBuilder({ slugs, isAdmin }: SchemaBuilderProps) {
             {allRelationships.map((rel, idx) => (
               <div
                 key={`${rel.schemaName}/${rel.name}`}
-                className={`flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-muted/40 transition-colors ${
+                className={`flex flex-col gap-1 px-4 py-3 cursor-pointer hover:bg-muted/40 transition-colors sm:flex-row sm:items-center sm:justify-between ${
                   idx > 0 ? "border-t border-border" : ""
                 }`}
                 onClick={() =>
