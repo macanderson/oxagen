@@ -38,8 +38,14 @@ function write(cwd: string, data: StoreShape): void {
   try {
     mkdirSync(dirname(path), { recursive: true });
     writeFileSync(path, JSON.stringify(data, null, 2), "utf8");
-  } catch {
-    /* persistence is best-effort; the fleet still runs from memory */
+  } catch (err) {
+    // Persistence is best-effort — a failed write must never break the fleet —
+    // but leave a breadcrumb under OXAGEN_DEBUG so a silently-dropped plan
+    // (e.g. a full disk or permissions problem) is diagnosable.
+    if (process.env["OXAGEN_DEBUG"])
+      process.stderr.write(
+        `[fleet-store] write failed (${path}): ${err instanceof Error ? err.message : String(err)}\n`,
+      );
   }
 }
 
