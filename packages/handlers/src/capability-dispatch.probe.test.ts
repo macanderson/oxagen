@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { hasHandler, getCapability, listCapabilities } from "@oxagen/oxagen";
+import { resolveHandler as agentResolveHandler } from "@oxagen/agent";
 import "@oxagen/handlers/register";
 import "@oxagen/agent/register";
 
@@ -69,6 +70,26 @@ describe("ADR-025 naming realignment — dispatch probe", () => {
     for (const name of ["create_org", "set_plugin_enabled", "send_message", "list_agent_tools", "ingest_graph"]) {
       expect(getCapability(name), `contract ${name}`).toBeDefined();
       expect(hasHandler(name), `handler ${name}`).toBe(true);
+    }
+  });
+
+  // ACTUAL DISPATCH (not just registration): drive the agent package's real
+  // resolveHandler, which loads the handler MODULE by its snake key and returns
+  // the concrete handler function. A dotted key here would throw "No handler
+  // registered". Proves the realigned loader map dispatches end-to-end for the
+  // agent-runtime capabilities that were previously dotted call-sites.
+  it("agent handler loaders actually load a function for snake names (real dispatch)", async () => {
+    // All agent-runtime (LOADERS-registered) capabilities — previously dotted keys.
+    for (const name of [
+      "execute_code",
+      "list_agent_tools",
+      "recall_memory",
+      "deploy_agent",
+      "get_agent_def",
+      "start_background_task",
+    ]) {
+      const fn = await agentResolveHandler(name);
+      expect(typeof fn, `resolved handler for ${name}`).toBe("function");
     }
   });
 });
