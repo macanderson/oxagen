@@ -82,7 +82,11 @@ vi.mock("./workspace-context-panel", () => ({
 }));
 vi.mock("./activity-timeline", () => ({
   ActivityTimeline: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  TimelineItem: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  // Forward `id` so tests can assert the `#turn-entry-<key>` deep-link anchor
+  // the coding-trace-panel rail relies on actually lands on the DOM node.
+  TimelineItem: ({ children, id }: { children: React.ReactNode; id?: string }) => (
+    <div id={id}>{children}</div>
+  ),
 }));
 vi.mock("./chat-component-registry", () => ({
   CHAT_COMPONENTS: {},
@@ -494,6 +498,82 @@ describe("ChatShellClient — embedded mode (in-app panel)", () => {
       />,
     );
     expect(screen.queryByTestId("conversation-files")).not.toBeInTheDocument();
+  });
+
+  it("mounts the coding-trace-panel + workspace-context-panel rail by default, hides it when showFiles={false}", async () => {
+    cleanup();
+    await renderClient();
+    // Default (showFiles undefined → true) mounts the right rail.
+    expect(screen.getByTestId("coding-trace-panel")).toBeInTheDocument();
+    expect(screen.getByTestId("workspace-context-panel")).toBeInTheDocument();
+
+    cleanup();
+    const { ChatShellClient } = await import("./chat-shell-client");
+    render(
+      <ChatShellClient
+        conversationId={null}
+        conversationPublicId={null}
+        activeLeafMessageId={null}
+        messages={[]}
+        sendAction={noop}
+        resolveApprovalAction={async () => ({ ok: true })}
+        resolveConsentAction={async () => ({ ok: true })}
+        resolvePlanAction={async () => ({ ok: true })}
+        orgSlug="test-org"
+        workspaceSlug="test-ws"
+        modelConfig={modelConfig}
+        showFiles={false}
+      />,
+    );
+    expect(screen.queryByTestId("coding-trace-panel")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("workspace-context-panel")).not.toBeInTheDocument();
+  });
+});
+
+describe("ChatShellClient — turn-entry deep-link anchors", () => {
+  afterEach(() => {
+    mockStream.overrides = {};
+  });
+
+  it("stamps `#turn-entry-<key>` on each live timeline node for the coding-trace-panel rail to link to", async () => {
+    mockStream.overrides = {
+      toolCalls: {
+        tc1: {
+          toolCallId: "tc1",
+          messageId: "m1",
+          capability: "graph.query",
+          inputPreview: {},
+          riskLevel: "low",
+          status: "completed",
+          stdout: "",
+          stderr: "",
+          startedAt: Date.now(),
+        },
+      },
+      order: ["tool:tc1"],
+    };
+    await renderClient();
+    expect(document.querySelector("#turn-entry-tool\\:tc1")).toBeInTheDocument();
+  });
+
+  it("wraps the turn-result footer in a `#turn-result` anchor once turnUsage lands", async () => {
+    mockStream.overrides = {
+      order: ["text:m1:0"],
+      textSegments: { "text:m1:0": { key: "text:m1:0", messageId: "m1", text: "Done." } },
+      turnUsage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
+    };
+    await renderClient();
+    expect(document.querySelector("#turn-result")).toBeInTheDocument();
+  });
+
+  it("does not render the `#turn-result` anchor while the turn is still in flight", async () => {
+    mockStream.overrides = {
+      order: ["text:m1:0"],
+      textSegments: { "text:m1:0": { key: "text:m1:0", messageId: "m1", text: "Working…" } },
+      turnUsage: undefined,
+    };
+    await renderClient();
+    expect(document.querySelector("#turn-result")).not.toBeInTheDocument();
   });
 });
 

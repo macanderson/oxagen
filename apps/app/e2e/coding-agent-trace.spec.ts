@@ -161,7 +161,10 @@ function scriptedCodingTurnEvents(parentMessageId: string): StreamEvent[] {
 }
 
 test.describe("coding-agent-trace", () => {
-  test.beforeEach(() => {
+  // beforeAll (not beforeEach): this describe block has two tests that each
+  // capture their own screenshot — a beforeEach would wipe the first test's
+  // screenshot out from under it when the second test starts.
+  test.beforeAll(() => {
     if (fs.existsSync(SCREENSHOT_DIR)) {
       fs.rmSync(SCREENSHOT_DIR, { recursive: true, force: true });
     }
@@ -223,5 +226,77 @@ test.describe("coding-agent-trace", () => {
     // verified by checking the anchor becomes the in-view element.
     await codeRow.click();
     await expect(page.locator("#turn-entry-tool\\:tcl_code")).toBeInViewport();
+  });
+
+  test("shows the workspace-context-panel's Workspace tab once a sandbox session starts", async ({
+    page,
+  }) => {
+    const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "coding-trace-ws" });
+
+    await page.goto(`/${orgSlug}/default/ask`);
+    const composer = page.getByPlaceholder(/send a message/i);
+    await expect(composer).toBeVisible({ timeout: 10_000 });
+
+    // The Workspace tab's file tree calls through to the Hono API via the
+    // next.config fallback rewrite (agent.sandbox_file.list) — mock it here
+    // so the spec stays deterministic and never touches a real sandbox.
+    await page.route("**/agent/sandbox/files", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          entries: [
+            { path: "src", kind: "dir" },
+            { path: "src/index.ts", kind: "file", sizeBytes: 128 },
+          ],
+        }),
+      }),
+    );
+
+    const parentMessageId = "msg_parent_trace_ws";
+    const events: StreamEvent[] = [
+      {
+        type: "tool-call-start",
+        messageId: parentMessageId,
+        toolCallId: "tcl_sandbox_start",
+        capability: "agent.sandbox.start",
+        inputPreview: {},
+        riskLevel: "low",
+      },
+      {
+        type: "tool-call-end",
+        toolCallId: "tcl_sandbox_start",
+        status: "completed",
+        output: { sessionId: "sbx_e2e_1" },
+        durationMs: 800,
+      },
+      { type: "text", messageId: parentMessageId, text: "Sandbox is up." },
+      {
+        type: "usage",
+        usage: { promptTokens: 64, completionTokens: 16, totalTokens: 80, creditsCharged: 1 },
+      },
+    ];
+    await interceptAgentStream(page, { events, delayMs: 40 });
+
+    await composer.fill("Start a sandbox.");
+    await page.getByRole("button", { name: /send message/i }).click();
+
+    const panel = page.locator('[data-component="workspace-context-panel-tabs"]');
+    await expect(panel).toBeVisible({ timeout: 10_000 });
+    const workspaceTab = panel.getByRole("tab", { name: /workspace/i });
+    await expect(workspaceTab).toBeVisible({ timeout: 10_000 });
+
+    // The panel auto-switches to the Workspace tab the first time a sandbox
+    // appears — its file tree (fetched via the mocked route above) is visible.
+    // FileTreeCard renders each row's leaf name ("index.ts"); the full
+    // relative path ("src/index.ts") is the row's accessible name/title.
+    await expect(
+      panel.getByRole("button", { name: "View src/index.ts" }),
+    ).toBeVisible({ timeout: 10_000 });
+
+    await page.screenshot({
+      path: path.join(SCREENSHOT_DIR, "coding-agent-trace-workspace-tab.png"),
+      fullPage: true,
+    });
   });
 });

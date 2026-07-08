@@ -151,6 +151,41 @@ describe("groupCodingTraceStages", () => {
     expect(groups.subagent[0]?.tone).toBe("running");
   });
 
+  it("maps a completed fanout to tone 'done' and a non-running/completed fanout to 'failed'", async () => {
+    const { groupCodingTraceStages } = await import("./coding-trace-panel");
+    const completed = makeFanout({ fanoutId: "fanout_done", status: "completed" });
+    const timedOut = makeFanout({ fanoutId: "fanout_timeout", status: "timed_out" });
+    const groups = groupCodingTraceStages({
+      order: ["fanout:fanout_done", "fanout:fanout_timeout"],
+      plans: {},
+      toolCalls: {},
+      activeFanouts: { fanout_done: completed, fanout_timeout: timedOut },
+      turnUsage: undefined,
+      isStreaming: false,
+    });
+    const doneRow = groups.subagent.find((r) => r.key === "fanout:fanout_done");
+    const timeoutRow = groups.subagent.find((r) => r.key === "fanout:fanout_timeout");
+    expect(doneRow?.tone).toBe("done");
+    expect(doneRow?.active).toBe(false);
+    expect(timeoutRow?.tone).toBe("failed");
+    expect(timeoutRow?.active).toBe(false);
+  });
+
+  it("maps a resolved (non-pending) plan to tone 'done'", async () => {
+    const { groupCodingTraceStages } = await import("./coding-trace-panel");
+    const approved = makePlan({ status: "approved" });
+    const groups = groupCodingTraceStages({
+      order: ["plan:plan_1"],
+      plans: { plan_1: approved },
+      toolCalls: {},
+      activeFanouts: {},
+      turnUsage: undefined,
+      isStreaming: false,
+    });
+    expect(groups.plan[0]?.tone).toBe("done");
+    expect(groups.plan[0]?.active).toBe(false);
+  });
+
   it("adds a 'Turn complete' result row once turnUsage lands", async () => {
     const { groupCodingTraceStages } = await import("./coding-trace-panel");
     const groups = groupCodingTraceStages({
