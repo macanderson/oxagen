@@ -2,15 +2,19 @@
  * environments — Agent Environments & Credential Vault (Spec:
  * docs/superpowers/specs/2026-06-24-credential-vault-environments-sandboxes-spec.md §5).
  *
- * Phase 0 ("Vault + Environments core", §18) ships four tables. Sandbox
- * templates, agent bindings, and network agents (§5.2–§5.3, §5.6, §5.8) land
- * with their owning tickets so nothing ships as dead schema.
+ * Phase 0 ("Vault + Environments core", §18) shipped four tables. Phase 1
+ * ("Sandbox templates + portable artifacts", §5.2–§5.3, §5.6) adds three more.
+ * Network agents (§5.8) still land with their owning ticket so nothing ships
+ * as dead schema.
  *
  * Tables:
- *   §5.1  environments      (env_…) — one is_default per workspace; seeded "default"
- *   §5.4  secret_keys       (sk_…)  — vault root: key + sensitive flag + default value
- *   §5.5  secret_values     (sv_…)  — per-(key, environment) overrides
- *   §5.7  secret_access_log         — append-only audit for reveal/export (§7.3)
+ *   §5.1  environments               (env_…) — one is_default per workspace; seeded "default"
+ *   §5.4  secret_keys                (sk_…)  — vault root: key + sensitive flag + default value
+ *   §5.5  secret_values              (sv_…)  — per-(key, environment) overrides
+ *   §5.7  secret_access_log                  — append-only audit for reveal/export (§7.3)
+ *   §5.2  sandbox_templates          (sbx_…) — portable sandbox config; one is_default per environment
+ *   §5.3  sandbox_template_tools     (sbt_…) — preloaded tools for a template (replace-set)
+ *   §5.6  agent_environment_bindings (aeb_…) — agent → (environment, template); one is_primary per agent
  *
  * Conventions mirror schema-registry.ts:
  *   - No cross-schema FK .references() (app-enforced FKs avoid circular deps).
@@ -191,6 +195,141 @@ export const secretAccessLog = environmentsSchema.table(
     actionCheck: check(
       "secret_access_log_action_check",
       sql`${t.action} IN ('reveal', 'export')`,
+    ),
+  }),
+);
+
+// ── §5.2 environments.sandbox_templates ──────────────────────────────────────
+// A portable sandbox configuration bound to one environment: which provider &
+// image to run, resource caps, network posture, which vault keys to inject, and
+// non-sensitive literal config. Exactly one row per (workspace, environment)
+// carries is_default=true (DB partial-unique + handler guard). Templates are
+// EXPORTABLE as versioned manifests (secret NAMES only, never values) so a third
+// party can distribute a pre-optimized config via the plugin/marketplace path.
+
+export const sandboxTemplates = environmentsSchema.table(
+  "sandbox_templates",
+  {
+    ...idMixin("sbx"),
+    ...auditMixin(),
+    ...orgScopeMixin(),
+    ...softDeleteMixin(),
+    // App-enforced FK to environments.id (no .references() — cross-schema pattern).
+    environmentId: uuid("environment_id").notNull(),
+    name: text("name").notNull(),
+    // Case-insensitive workspace-unique handle (e.g. 'swe-bench-prewarmed').
+    slug: citext("slug").notNull(),
+    description: text("description"),
+    // Exactly one default per (workspace, environment) — see partial-unique in
+    // the migration. Runs that don't name a template resolve to it.
+    isDefault: boolean("is_default").notNull().default(false),
+    isActive: boolean("is_active").notNull().default(true),
+    // 'modal' | 'vercel' | 'docker'. Validated in zod (not a DB enum — extensible).
+    provider: text("provider").notNull().default("modal"),
+    // Image ref (digest-pinned encouraged) or language tag; null = driver default.
+    runtime: text("runtime"),
+    // { vcpu?, memoryMb?, timeoutMs?, diskMb? } — bounded in zod.
+    resources: jsonb("resources").notNull().default(sql`'{}'::jsonb`),
+    // { mode, config? } — mode ∈ public|static_egress|aws_privatelink|gcp_psc|
+    // reverse_tunnel|ssh_bastion (provisioner fails fast on unimplemented modes).
+    network: jsonb("network").notNull().default(sql`'{"mode":"public"}'::jsonb`),
+    // 'all' | { keyPublicIds: string[] } — which vault keys resolve for this run.
+    secretSelection: jsonb("secret_selection").notNull().default(sql`'"all"'::jsonb`),
+    // Non-sensitive literal KEY=value config (§19.3). NEVER secrets.
+    literalEnv: jsonb("literal_env").notNull().default(sql`'{}'::jsonb`),
+  },
+  (t) => ({
+    // One live template per (workspace, slug). Canonical WHERE in migration.
+    workspaceSlugUniq: unique("sandbox_templates_workspace_slug_uniq")
+      .on(t.workspaceId, t.slug)
+      .nullsNotDistinct(),
+    // Exactly one default per (workspace, environment). Placeholder — canonical
+    // partial-unique `(workspace_id, environment_id) WHERE is_default` in the migration.
+    workspaceEnvDefaultUniq: unique("sandbox_templates_workspace_env_default_uniq")
+      .on(t.workspaceId, t.environmentId)
+      .nullsNotDistinct(),
+    orgWorkspaceIdx: index("sandbox_templates_org_workspace_idx").on(
+      t.orgId,
+      t.workspaceId,
+    ),
+    environmentIdx: index("sandbox_templates_environment_idx").on(t.environmentId),
+  }),
+);
+
+// ── §5.3 environments.sandbox_template_tools ─────────────────────────────────
+// Tools preloaded into a template's sandbox at provision time. Replace-set
+// semantics (setTemplateTools swaps the whole set in one tx). `ref` is a
+// capability name / MCP server id / skill ref / tool id per `kind`; unknown refs
+// at provision time are skipped with a logged warning (portability must not
+// hard-depend on the target workspace's installed plugins).
+
+export const sandboxTemplateTools = environmentsSchema.table(
+  "sandbox_template_tools",
+  {
+    ...idMixin("sbt"),
+    ...auditMixin(),
+    ...orgScopeMixin(),
+    // App-enforced FK to sandbox_templates.id.
+    sandboxTemplateId: uuid("sandbox_template_id").notNull(),
+    // 'capability' | 'mcp_server' | 'agent_skill' | 'tool' (DB check below).
+    kind: text("kind").notNull(),
+    ref: text("ref").notNull(),
+    config: jsonb("config").notNull().default(sql`'{}'::jsonb`),
+  },
+  (t) => ({
+    // One row per (template, kind, ref).
+    templateKindRefUniq: unique("sandbox_template_tools_template_kind_ref_uniq").on(
+      t.sandboxTemplateId,
+      t.kind,
+      t.ref,
+    ),
+    templateIdx: index("sandbox_template_tools_template_idx").on(t.sandboxTemplateId),
+    orgWorkspaceIdx: index("sandbox_template_tools_org_workspace_idx").on(
+      t.orgId,
+      t.workspaceId,
+    ),
+    kindCheck: check(
+      "sandbox_template_tools_kind_check",
+      sql`${t.kind} IN ('capability', 'mcp_server', 'agent_skill', 'tool')`,
+    ),
+  }),
+);
+
+// ── §5.6 environments.agent_environment_bindings ─────────────────────────────
+// Binds an agent to an environment (and optionally a specific template within
+// it). Exactly one binding per agent carries is_primary=true (DB partial-unique
+// + handler guard) — the one used when a run doesn't name an environment. A null
+// sandbox_template_id means "use the environment's default template". Bindings
+// stay OUT of agent_versions.config (mutable operational config).
+
+export const agentEnvironmentBindings = environmentsSchema.table(
+  "agent_environment_bindings",
+  {
+    ...idMixin("aeb"),
+    ...auditMixin(),
+    ...orgScopeMixin(),
+    // App-enforced FKs (no .references() — cross-schema pattern).
+    agentId: uuid("agent_id").notNull(),
+    environmentId: uuid("environment_id").notNull(),
+    // Null → resolve to the environment's default template at run time.
+    sandboxTemplateId: uuid("sandbox_template_id"),
+    isPrimary: boolean("is_primary").notNull().default(false),
+  },
+  (t) => ({
+    // One binding per (agent, environment).
+    agentEnvUniq: unique("agent_environment_bindings_agent_env_uniq").on(
+      t.agentId,
+      t.environmentId,
+    ),
+    // Exactly one primary per agent. Placeholder — canonical partial-unique
+    // `(agent_id) WHERE is_primary` lives in the Atlas migration.
+    agentPrimaryUniq: unique("agent_environment_bindings_agent_primary_uniq")
+      .on(t.agentId)
+      .nullsNotDistinct(),
+    agentIdx: index("agent_environment_bindings_agent_idx").on(t.agentId),
+    orgWorkspaceIdx: index("agent_environment_bindings_org_workspace_idx").on(
+      t.orgId,
+      t.workspaceId,
     ),
   }),
 );
