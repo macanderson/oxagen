@@ -10,7 +10,6 @@ import { sanitizeSandboxEnv } from "./agent.code.execute";
 
 export const agentSandboxExec = registerCapability({
   name: "run_sandbox_command",
-  aliases: ["agent.sandbox.exec"],
   domain: "agent",
   description:
     "Run a shell command inside a durable sandbox session. Filesystem/process state persists across calls. Returns stdout, stderr, exit code.",

@@ -3,7 +3,6 @@ import { registerCapability } from "../registry";
 
 export const environmentDelete = registerCapability({
   name: "delete_environment",
-  aliases: ["environment.delete"],
   domain: "environment",
   description: "Soft-delete a workspace environment. The default environment cannot be deleted — promote another first.",
   mode: "sync",

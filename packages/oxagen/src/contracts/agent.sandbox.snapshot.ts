@@ -9,7 +9,6 @@ import { registerCapability } from "../registry";
 
 export const agentSandboxSnapshot = registerCapability({
   name: "snapshot_sandbox",
-  aliases: ["agent.sandbox.snapshot"],
   domain: "agent",
   description:
     "Capture a filesystem snapshot of a durable sandbox session so it can be restored after an idle reap or the 24h lifetime ceiling.",

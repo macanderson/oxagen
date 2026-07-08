@@ -3,7 +3,6 @@ import { registerCapability } from "../registry";
 
 export const schemaReconcileDispatch = registerCapability({
   name: "dispatch_schema_reconcile",
-  aliases: ["schema.reconcile.dispatch"],
   domain: "schema",
   description: "Dispatch an async reconciliation job to re-label existing graph nodes and relationships against the pinned schema version.",
   mode: "async",

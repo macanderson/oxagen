@@ -116,11 +116,11 @@ describe("organization.create route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'org.create'", async () => {
+  it("calls invoke with 'create_org'", async () => {
     await app.fetch(
       post(PATH, { name: "Acme Corp", slug: "acme-corp" }, V1),
     );
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("org.create");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("create_org");
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.name).toBe("Acme Corp");
     expect(body.slug).toBe("acme-corp");
@@ -158,9 +158,9 @@ describe("workspace.create route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'workspace.create'", async () => {
+  it("calls invoke with 'create_workspace'", async () => {
     await app.fetch(post(PATH, { name: "Dev", slug: "dev" }));
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("workspace.create");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("create_workspace");
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.slug).toBe("dev");
   });
@@ -192,9 +192,9 @@ describe("workspace.model.settings.read route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'workspace.model_settings.read' and empty input", async () => {
+  it("calls invoke with 'get_model_settings' and empty input", async () => {
     await app.fetch(get(PATH));
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("workspace.model_settings.read");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("get_model_settings");
     expect(mocks.invoke.mock.calls[0]?.[1]).toEqual({});
   });
 });
@@ -224,7 +224,7 @@ describe("workspace.model.settings.write route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'workspace.model_settings.write'", async () => {
+  it("calls invoke with 'update_model_settings'", async () => {
     await app.fetch(
       makeRequest(`${BASE}${PATH}`, {
         method: "PATCH",
@@ -232,7 +232,7 @@ describe("workspace.model.settings.write route", () => {
         body: JSON.stringify({ defaultTextTier: "fast" }),
       }),
     );
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("workspace.model_settings.write");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("update_model_settings");
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.defaultTextTier).toBe("fast");
   });
@@ -260,9 +260,9 @@ describe("org.member.add route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'org.member.add'", async () => {
+  it("calls invoke with 'add_org_member'", async () => {
     await app.fetch(post(PATH, { email: "bob@example.com", role: "Admin" }));
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("org.member.add");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("add_org_member");
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.email).toBe("bob@example.com");
     expect(body.role).toBe("Admin");
@@ -297,9 +297,9 @@ describe("org.member.invite.accept route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'org.member_invite.accept'", async () => {
+  it("calls invoke with 'accept_member_invite'", async () => {
     await app.fetch(post(PATH, { invitationPublicId: "inv_xyz" }));
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("org.member_invite.accept");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("accept_member_invite");
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.invitationPublicId).toBe("inv_xyz");
   });
@@ -321,9 +321,9 @@ describe("org.member.invite.decline route", () => {
     expect(res.status).toBe(200);
   });
 
-  it("calls invoke with 'org.member_invite.decline'", async () => {
+  it("calls invoke with 'decline_member_invite'", async () => {
     await app.fetch(post(PATH, { invitationPublicId: "inv_xyz" }));
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("org.member_invite.decline");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("decline_member_invite");
   });
 });
 
@@ -348,7 +348,7 @@ describe("org.member.remove route", () => {
     expect(res.status).toBe(200);
   });
 
-  it("calls invoke with 'org.member.remove'", async () => {
+  it("calls invoke with 'remove_org_member'", async () => {
     await app.fetch(
       makeRequest(`${BASE}${PATH}`, {
         method: "DELETE",
@@ -356,7 +356,7 @@ describe("org.member.remove route", () => {
         body: JSON.stringify({ targetUserId: "usr-2" }),
       }),
     );
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("org.member.remove");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("remove_org_member");
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.targetUserId).toBe("usr-2");
   });
@@ -383,7 +383,7 @@ describe("org.member.role.change route", () => {
     expect(res.status).toBe(200);
   });
 
-  it("calls invoke with 'org.member_role.change'", async () => {
+  it("calls invoke with 'change_member_role'", async () => {
     await app.fetch(
       makeRequest(`${BASE}${PATH}`, {
         method: "PATCH",
@@ -391,7 +391,7 @@ describe("org.member.role.change route", () => {
         body: JSON.stringify({ targetUserId: "usr-1", newRole: "Billing" }),
       }),
     );
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("org.member_role.change");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("change_member_role");
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.newRole).toBe("Billing");
   });
@@ -420,9 +420,9 @@ describe("user.preferences.read route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'user.preferences.read' and empty input", async () => {
+  it("calls invoke with 'get_user_preferences' and empty input", async () => {
     await app.fetch(get(PATH, V1));
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("user.preferences.read");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("get_user_preferences");
     expect(mocks.invoke.mock.calls[0]?.[1]).toEqual({});
   });
 });
@@ -444,7 +444,7 @@ describe("user.preferences.write route", () => {
     expect(res.status).toBe(200);
   });
 
-  it("calls invoke with 'user.preferences.write'", async () => {
+  it("calls invoke with 'update_user_preferences'", async () => {
     await app.fetch(
       makeRequest(`${V1}${PATH}`, {
         method: "PATCH",
@@ -452,7 +452,7 @@ describe("user.preferences.write route", () => {
         body: JSON.stringify({ density: "compact", enterToSubmit: false }),
       }),
     );
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("user.preferences.write");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("update_user_preferences");
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.density).toBe("compact");
     expect(body.enterToSubmit).toBe(false);
@@ -471,9 +471,9 @@ describe("notifications.list route", () => {
     expect(await res.json()).toEqual({ notifications: [] });
   });
 
-  it("calls invoke with 'notification.list' and defaults", async () => {
+  it("calls invoke with 'list_notifications' and defaults", async () => {
     await app.fetch(get(PATH));
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("notification.list");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("list_notifications");
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     // defaults: unreadOnly=false, limit=50
     expect(body.unreadOnly).toBe(false);
@@ -534,9 +534,9 @@ describe("notifications.mark route", () => {
     expect(res.status).toBe(200);
   });
 
-  it("calls invoke with 'notification.mark'", async () => {
+  it("calls invoke with 'mark_notification'", async () => {
     await app.fetch(post(PATH, { id: "ntf_xyz", archived: true }));
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("notification.mark");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("mark_notification");
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.id).toBe("ntf_xyz");
     expect(body.archived).toBe(true);

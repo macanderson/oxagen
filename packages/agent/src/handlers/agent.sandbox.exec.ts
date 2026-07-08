@@ -112,7 +112,7 @@ async function emitExecTelemetry(
         source_system: `handler:${ctx.surface}`,
         stream_offset: null,
         payload: JSON.stringify({
-          capability: "agent.sandbox.exec",
+          capability: "run_sandbox_command",
           sessionId: input.sessionId,
           image: row.image,
           durationMs: result.durationMs,

@@ -23,7 +23,7 @@ const ORG_ID = "org_aaa";
 const WORKSPACE_ID = "ws_bbb";
 const PRINCIPAL_ID = "prn_ccc";
 const ROLE_ID = "rol_ddd";
-const CAPABILITY = "org.create";
+const CAPABILITY = "create_org";
 
 const basePrincipal: TestPrincipal = {
   id: PRINCIPAL_ID,
@@ -422,27 +422,14 @@ describe("resolve — Rule 5: workspace require_approval", () => {
   });
 });
 
-describe("resolve — capability aliases (ADR-022)", () => {
-  it("matches a role grant keyed by a legacy alias when capabilityAliases is supplied", () => {
-    // A role_grants row written under the OLD name before the rename.
+describe("resolve — capability matching is exact", () => {
+  it("does NOT match a role grant keyed by a different capability name", () => {
+    // Capability names are matched exactly (no alias fallback): a role_grants
+    // row keyed by a name other than the invoked capability never grants access.
     const rg = makeRoleGrant({ capabilityId: "organization.create", effect: "allow" });
     const result = resolve(
       baseInput({
-        capability: "org.create",
-        capabilityAliases: ["org.create", "organization.create"],
-        roles: [makeRole()],
-        roleGrants: [rg],
-      }),
-    );
-    expect(result.outcome).toBe("allow");
-    expect(result.trace.decidedBy.rule).toBe("7:role_grant");
-  });
-
-  it("does NOT match an alias-keyed grant when no aliases are supplied (pre-alias behaviour)", () => {
-    const rg = makeRoleGrant({ capabilityId: "organization.create", effect: "allow" });
-    const result = resolve(
-      baseInput({
-        capability: "org.create",
+        capability: "create_org",
         roles: [makeRole()],
         roleGrants: [rg],
         defaultEffect: "deny",

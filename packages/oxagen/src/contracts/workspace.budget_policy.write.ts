@@ -6,7 +6,6 @@ const enforcementKind = z.enum(["default", "ceiling"]);
 
 export const workspaceBudgetPolicyWrite = registerCapability({
   name: "update_budget_policy",
-  aliases: ["workspace.budget_policy.write", "workspace.budget.policy.write"],
   domain: "workspace",
   description:
     "Set the workspace's governed per-turn dollar budget (partial update — only provided fields change). An org/workspace admin can dictate a budget for a workspace: turn it on/off, set the USD limit, choose the enforcement mode (grace = allow overage within a grace window then stop; prompt = ask to continue; enforce = hard stop), the grace cushion, and whether it is a soft `default` (seeds members who haven't set their own) or a hard `ceiling` (clamps members — they cannot exceed it and the mode can only get stricter). Owner/Admin only.",

@@ -3,7 +3,6 @@ import { registerCapability } from "../registry";
 
 export const userPreferencesWrite = registerCapability({
   name: "update_user_preferences",
-  aliases: ["user.preferences.write"],
   domain: "user",
   description:
     "Update the calling user's UI and model preferences (partial update — only provided fields are changed)",

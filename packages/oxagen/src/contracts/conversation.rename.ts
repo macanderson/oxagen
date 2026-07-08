@@ -6,7 +6,6 @@ import { registerCapability } from "../registry";
 // user can name an otherwise "New conversation" row.
 export const conversationRename = registerCapability({
   name: "rename_conversation",
-  aliases: ["conversation.rename"],
   domain: "conversation",
   description: "Rename a conversation (set its title)",
   mode: "sync",

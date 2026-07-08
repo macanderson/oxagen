@@ -17,7 +17,7 @@ export const ExecutedChain: Story = {
       steps: [
         {
           id: "step1",
-          capability: "research.swarm.start",
+          capability: "start_research_swarm",
           rationale: "Kick off a deep multi-query web research swarm.",
           status: "success",
           input: { topic: "USS Nautilus SSN-571 history crew reactor", depth: "deep" },
@@ -26,7 +26,7 @@ export const ExecutedChain: Story = {
         },
         {
           id: "step2",
-          capability: "research.swarm.status",
+          capability: "get_research_status",
           rationale: "Collect the aggregated search results.",
           status: "success",
           input: { swarmId: "$steps.step1.swarmId" },
@@ -35,7 +35,7 @@ export const ExecutedChain: Story = {
         },
         {
           id: "step3",
-          capability: "graph.ingest",
+          capability: "ingest_graph",
           rationale: "Extract entities + relationships and commit to the graph.",
           status: "success",
           input: { text: "…aggregated search text…" },
@@ -44,7 +44,7 @@ export const ExecutedChain: Story = {
         },
         {
           id: "step4",
-          capability: "billing.credits.purchase",
+          capability: "purchase_credits",
           rationale: "Would top up credits (not auto-run).",
           status: "skipped",
           input: null,

@@ -4,7 +4,6 @@ import { memoryClassEnum } from "./agent.memory.model";
 
 export const agentMemoryRecall = registerCapability({
   name: "recall_memory",
-  aliases: ["agent.memory.recall"],
   domain: "agent",
   description:
     "Query Neo4j AgentMemory by semantic similarity with optional class/enforcement filters; returns ranked memories scoped to the workspace",

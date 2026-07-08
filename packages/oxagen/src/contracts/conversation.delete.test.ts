@@ -72,6 +72,6 @@ describe("conversation.delete capability", () => {
   // ── registry ──────────────────────────────────────────────────────────────
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("conversation.delete")).toBe(conversationDelete);
+    expect(getCapability("delete_conversation")).toBe(conversationDelete);
   });
 });

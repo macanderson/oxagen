@@ -3,7 +3,6 @@ import { registerCapability } from "../registry";
 
 export const schemaVersionList = registerCapability({
   name: "list_schema_versions",
-  aliases: ["schema.version.list"],
   domain: "schema",
   description: "List versions (number, label, status, published_at, change_summary).",
   mode: "sync",

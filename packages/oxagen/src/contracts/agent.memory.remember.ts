@@ -18,7 +18,6 @@ import { memoryClassEnum, memoryKindSchema } from "./agent.memory.model";
  */
 export const agentMemoryRemember = registerCapability({
   name: "save_memory",
-  aliases: ["agent.memory.remember"],
   domain: "agent",
   description:
     "Capture a free-text memory: infer its kind + weight (unless pinned), embed it, and write it to the workspace AgentMemory graph. Backs the CLI /remember command.",

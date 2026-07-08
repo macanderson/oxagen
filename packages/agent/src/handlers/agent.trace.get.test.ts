@@ -187,7 +187,7 @@ describe("agent.trace.get handler", () => {
           id: "atcuuid_1",
           publicId: "atc_1",
           executionStepId: "aesuuid_1",
-          toolName: "ontology.neighbors",
+          toolName: "get_ontology_neighbors",
           toolType: "capability",
           status: "completed",
           latencyMs: 800,
@@ -205,7 +205,7 @@ describe("agent.trace.get handler", () => {
     expect(step.toolCalls).toHaveLength(1);
     const tc = step.toolCalls[0]!;
     expect(tc.toolCallId).toBe("atc_1");
-    expect(tc.toolName).toBe("ontology.neighbors");
+    expect(tc.toolName).toBe("get_ontology_neighbors");
     expect(tc.requestBytes).toBeGreaterThan(0);
     expect(tc.responseBytes).toBeGreaterThan(0);
     expect(tc.responsePreview).toContain("neighbors");
@@ -262,7 +262,7 @@ describe("agent.trace.get handler", () => {
           id: "atcuuid_1",
           publicId: "atc_1",
           executionStepId: "aesuuid_1",
-          toolName: "ontology.neighbors",
+          toolName: "get_ontology_neighbors",
           toolType: "capability",
           status: "completed",
           latencyMs: 800,

@@ -120,7 +120,7 @@ export default async function BillingUsagePage({
           messageId: null as string | null,
         };
         const result = (await invoke(
-          "billing.usage.breakdown",
+          "get_usage_breakdown",
           { start: start.toISOString(), end: end.toISOString() },
           ctx,
           { surface: "agent" },

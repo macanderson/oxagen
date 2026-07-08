@@ -157,6 +157,6 @@ describe("repo.metrics capability", () => {
   // ── registry ──────────────────────────────────────────────────────────────
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("repo.metrics")).toBe(repoMetrics);
+    expect(getCapability("get_repo_metrics")).toBe(repoMetrics);
   });
 });

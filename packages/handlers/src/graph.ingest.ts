@@ -75,7 +75,7 @@ export function sanitizeLabel(type: string): string {
 
 async function readWorkspacePrompt(ctx: CapabilityContext): Promise<string> {
   try {
-    const out = (await invoke("prompt.settings.read", {}, ctx)) as {
+    const out = (await invoke("get_prompt_settings", {}, ctx)) as {
       additionalInstructions?: string | null;
     };
     return out.additionalInstructions ?? "";
@@ -228,7 +228,7 @@ export const graphIngestHandler: CapabilityHandler<typeof graphIngest> = async (
     }
     try {
       const out = (await invoke(
-        "graph.node.upsert",
+        "upsert_node",
         {
           label: sanitizeLabel(e.type),
           displayName: e.name,
@@ -271,7 +271,7 @@ export const graphIngestHandler: CapabilityHandler<typeof graphIngest> = async (
     if (!fromId || !toId) continue; // skill discipline: no invented endpoints
     try {
       const out = (await invoke(
-        "graph.edge.upsert",
+        "upsert_edge",
         {
           fromNodeId: fromId,
           toNodeId: toId,

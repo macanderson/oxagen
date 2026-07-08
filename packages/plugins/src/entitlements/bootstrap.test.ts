@@ -50,7 +50,7 @@ describe("bootstrapEntitlementRuntime", () => {
       | ((capabilityName: string, orgId: string) => Promise<void>)
       | undefined;
     expect(gateFn).toBeDefined();
-    await gateFn!("svg.generate", "org-test");
-    expect(capabilityEntitlementGateMock).toHaveBeenCalledWith("svg.generate", "org-test");
+    await gateFn!("generate_svg", "org-test");
+    expect(capabilityEntitlementGateMock).toHaveBeenCalledWith("generate_svg", "org-test");
   });
 });

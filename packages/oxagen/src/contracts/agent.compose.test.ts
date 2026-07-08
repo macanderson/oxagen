@@ -24,7 +24,7 @@ describe("agent.compose contract", () => {
       plan: [
         {
           id: "step1",
-          capability: "web.search",
+          capability: "search_web",
           rationale: "find sources",
           inputJson: '{"query":"USS Nautilus"}',
           dependsOn: [],
@@ -33,7 +33,7 @@ describe("agent.compose contract", () => {
       steps: [
         {
           id: "step1",
-          capability: "web.search",
+          capability: "search_web",
           rationale: "find sources",
           status: "success",
           input: { query: "USS Nautilus" },

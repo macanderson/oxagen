@@ -8,7 +8,6 @@ import { registerCapability } from "../registry";
 
 export const agentSandboxStop = registerCapability({
   name: "stop_sandbox",
-  aliases: ["agent.sandbox.stop"],
   domain: "agent",
   description:
     "Terminate a durable sandbox session and release its resources. Call when the work is finished.",

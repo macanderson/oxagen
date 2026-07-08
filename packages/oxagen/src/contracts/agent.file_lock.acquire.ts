@@ -9,7 +9,6 @@ import { registerCapability } from "../registry";
 // without running a turn.
 export const agentFileLockAcquire = registerCapability({
   name: "acquire_file_lock",
-  aliases: ["agent.file_lock.acquire", "agent.file.lock.acquire"],
   domain: "agent",
   description:
     "Acquire (or renew) an exclusive, TTL-bounded lock on a file so no two agents edit it concurrently. Fails with granted:false when a DIFFERENT agent already holds a live lock.",

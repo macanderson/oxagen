@@ -6,7 +6,6 @@ import { registerCapability } from "../registry";
 
 export const browserFill = registerCapability({
   name: "fill_page",
-  aliases: ["browser.fill"],
   domain: "browser",
   description:
     "Fill a form field (by CSS selector) on the durable sandbox browser's current page. Playwright auto-waits for the element.",

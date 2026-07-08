@@ -3,7 +3,6 @@ import { registerCapability } from "../registry";
 
 export const secretKeyUpsert = registerCapability({
   name: "upsert_secret_key",
-  aliases: ["secret.key.upsert"],
   domain: "secret",
   description: "Create or update a vault secret key (workspace root). Sensitive keys (default) are envelope-encrypted; an optional default value applies when an environment has no override.",
   mode: "sync",

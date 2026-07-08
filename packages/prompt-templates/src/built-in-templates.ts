@@ -220,7 +220,7 @@ export const BUILT_IN_TEMPLATES: PromptTemplateInput[] = [
         "routePattern": "/{org}/{ws}/agents/runs/:runId"
       }
     ],
-    "capability": "agent.debug.trace",
+    "capability": "debug_execution",
     "autoSubmit": true,
     "variables": [
       {

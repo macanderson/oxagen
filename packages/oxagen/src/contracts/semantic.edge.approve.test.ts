@@ -126,6 +126,6 @@ describe("semantic.edge.approve capability", () => {
   // ── registry ──────────────────────────────────────────────────────────────
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("semantic.edge.approve")).toBe(semanticEdgeApprove);
+    expect(getCapability("approve_semantic_edge")).toBe(semanticEdgeApprove);
   });
 });

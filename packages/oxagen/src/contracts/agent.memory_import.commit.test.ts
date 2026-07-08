@@ -11,7 +11,7 @@ const oneDraft = {
 
 describe("agent.memory.import.commit capability", () => {
   it("is registered in the capability registry", () => {
-    expect(getCapability("agent.memory_import.commit")).toBeDefined();
+    expect(getCapability("commit_memory_import")).toBeDefined();
   });
 
   it("is a scoped, sync memory capability with deny default", () => {

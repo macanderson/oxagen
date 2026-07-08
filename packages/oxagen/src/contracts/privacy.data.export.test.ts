@@ -6,7 +6,7 @@ const VALID_UUID = "550e8400-e29b-41d4-a716-446655440000";
 
 describe("privacy.data.export capability", () => {
   it("is registered", () => {
-    expect(getCapability("privacy.data.export")).toBeDefined();
+    expect(getCapability("export_data")).toBeDefined();
   });
 
   it("parses user-scope input without orgId", () => {

@@ -12,7 +12,6 @@ const renderDirectiveSchema = z.object({
 
 export const svgGenerate = registerCapability({
   name: "generate_svg",
-  aliases: ["svg.generate"],
   domain: "svg",
   description:
     "Generate clean, sanitized, inline SVG markup from a natural-language prompt. " +

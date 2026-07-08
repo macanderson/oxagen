@@ -23,7 +23,7 @@ export async function GraphStatsSection({ orgId, workspaceId, userId }: GraphSta
       { orgId, workspaceId },
       () =>
         invoke(
-          "graph.stats",
+          "get_graph_stats",
           { includeByType: false },
           {
             orgId,

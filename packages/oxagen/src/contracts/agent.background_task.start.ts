@@ -3,7 +3,6 @@ import { registerCapability } from "../registry";
 
 export const agentTaskBackgroundStart = registerCapability({
   name: "start_background_task",
-  aliases: ["agent.background_task.start", "agent.task.background.start"],
   domain: "agent",
   description: "Dispatch a long-running task as a durable Inngest job; the chat returns a task handle the user can monitor in the tray",
   mode: "async",

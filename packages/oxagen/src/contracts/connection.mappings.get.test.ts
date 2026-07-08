@@ -37,7 +37,7 @@ describe("connection.mappings.get capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("connection.mappings.get")).toBe(connectionMappingsGet);
+    expect(getCapability("get_connection_mappings")).toBe(connectionMappingsGet);
   });
 
   it("is a read operation, no approval needed", () => {

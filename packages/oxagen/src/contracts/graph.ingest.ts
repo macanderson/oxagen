@@ -18,7 +18,6 @@ import { RELATIONSHIP_TYPE_PATTERN } from "../lib/relationship-type-pattern";
 
 export const graphIngest = registerCapability({
   name: "ingest_graph",
-  aliases: ["graph.ingest"],
   domain: "graph",
   description:
     "Extract entities and relationships from text and commit them to the knowledge graph as " +
@@ -38,7 +37,7 @@ export const graphIngest = registerCapability({
   },
   consumes: ["document.text", "search.results"],
   produces: ["graph.nodeId", "graph.relationshipId"],
-  chainHints: ["graph.node.list", "document.generate"],
+  chainHints: ["list_nodes", "generate_document"],
   render: { componentId: "graph-ingest-card" },
   input: z.object({
     text: z

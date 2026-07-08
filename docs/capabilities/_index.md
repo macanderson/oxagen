@@ -284,7 +284,7 @@ contract-first design, IAM enforcement, and instrumentation.
 - [plugin.org.install](plugin.org.install.md) — Install a catalog or custom server to the org allow-list; disabled by default
 - [plugin.org.install_bulk](plugin.org.install_bulk.md) — Install multiple catalog or custom plugin servers to the org allow-list in one request
 - [plugin.org.list](plugin.org.list.md) — List installed plugins and denylisted server names for the org with enabled/disabled status
-- [plugin.org.set_enabled](plugin.org.set_enabled.md) — Toggle the enabled flag on an org-level plugin listing
+- [set_plugin_enabled](plugin.set_enabled.md) — Enable/disable a plugin listing; scope='org' toggles the org listing flag, scope='workspace' upserts/disables the workspace mcp_servers row
 - [plugin.org.uninstall](plugin.org.uninstall.md) — Soft-delete a plugin listing from the org allow-list and remove dependent workspace installs
 - [plugin.registry.add](plugin.registry.add.md) — Add a custom MCP registry source for the org; triggers automatic catalog sync
 - [plugin.registry.list](plugin.registry.list.md) — List MCP registries available to the org including the default seed registry
@@ -294,7 +294,6 @@ contract-first design, IAM enforcement, and instrumentation.
 - [plugin.schema.validate](plugin.schema.validate.md) — Validate a config object against a plugin schema
 - [plugin.settings.set_auth_alerts](plugin.settings.set_auth_alerts.md) — Configure re-authentication alert preferences for the org
 - [plugin.version.list](plugin.version.list.md) — List version history with changelog and breaking-change flags
-- [plugin.workspace.set_enabled](plugin.workspace.set_enabled.md) — Enable/disable a plugin server for this workspace
 
 ## Privacy (2)
 

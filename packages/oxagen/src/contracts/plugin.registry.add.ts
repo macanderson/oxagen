@@ -3,7 +3,6 @@ import { registerCapability } from "../registry";
 
 export const pluginRegistryAdd = registerCapability({
   name: "add_plugin_registry",
-  aliases: ["plugin.registry.add"],
   domain: "plugin",
   description: "Add an MCP registry source for the workspace (any registry implementing the MCP Registry OpenAPI).",
   mode: "sync",

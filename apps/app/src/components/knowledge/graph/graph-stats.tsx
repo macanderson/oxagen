@@ -2,7 +2,7 @@
  * GraphStatsBoxes — at-a-glance counts for the knowledge graph.
  *
  * Pure presentational (no hooks), so it renders in both Server Components (the
- * Knowledge → Graph tab, server-fetched via invoke("graph.stats")) and Client
+ * Knowledge → Graph tab, server-fetched via invoke("get_graph_stats")) and Client
  * Components (the chat registry's "graph-stats" renderer, fed the agent's
  * graph.stats output). One component, one source of truth — no drift between the
  * page boxes and the agent-rendered boxes.

@@ -3,7 +3,6 @@ import { registerCapability } from "../registry";
 
 export const integrationList = registerCapability({
   name: "list_integrations",
-  aliases: ["integration.list"],
   domain: "integration",
   description: "Browse installed plugin instances with status, config summary, and sync metrics.",
   mode: "sync",

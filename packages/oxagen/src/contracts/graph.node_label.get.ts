@@ -8,7 +8,6 @@ import { registerCapability } from "../registry";
  */
 export const graphNodeLabelsGet = registerCapability({
   name: "get_node_labels",
-  aliases: ["graph.node_label.get", "graph.node.labels.get"],
   domain: "graph",
   description: "Read a node's full label set.",
   mode: "sync",

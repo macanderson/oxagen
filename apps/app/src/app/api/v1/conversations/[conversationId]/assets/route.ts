@@ -91,7 +91,7 @@ export async function GET(
 
   try {
     const out = await invoke(
-      "conversation.files.list",
+      "list_conversation_files",
       { conversationId, kind: undefined, limit: 200, cursor: null },
       capabilityCtx,
       { surface: "api" },

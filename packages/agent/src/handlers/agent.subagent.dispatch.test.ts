@@ -73,9 +73,9 @@ vi.mock("../registry-loader", () => ({
     getCapability: (name: string) =>
       (
         {
-          "agent.tool.list": { name, agent: { riskLevel: "low" as const } },
-          "agent.memory.recall": { name, agent: { riskLevel: "low" as const } },
-          "agent.code.execute": { name, agent: { riskLevel: "high" as const } },
+          "list_agent_tools": { name, agent: { riskLevel: "low" as const } },
+          "recall_memory": { name, agent: { riskLevel: "low" as const } },
+          "execute_code": { name, agent: { riskLevel: "high" as const } },
         } as Record<string, { name: string; agent: { riskLevel: "low" | "medium" | "high" } }>
       )[name],
   }),
@@ -104,8 +104,8 @@ describe("agent.subagent.dispatch handler", () => {
       {
         parentMessageId: "msg_1",
         tasks: [
-          { capabilityName: "agent.tool.list", input: {} },
-          { capabilityName: "agent.memory.recall", input: { query: "foo" } },
+          { capabilityName: "list_agent_tools", input: {} },
+          { capabilityName: "recall_memory", input: { query: "foo" } },
         ],
         maxParallel: 5,
       },
@@ -130,8 +130,8 @@ describe("agent.subagent.dispatch handler", () => {
       {
         parentMessageId: "msg_parent",
         tasks: [
-          { capabilityName: "agent.tool.list", input: {} },
-          { capabilityName: "agent.memory.recall", input: { query: "foo" } },
+          { capabilityName: "list_agent_tools", input: {} },
+          { capabilityName: "recall_memory", input: { query: "foo" } },
         ],
         maxParallel: 5,
       },
@@ -157,7 +157,7 @@ describe("agent.subagent.dispatch handler", () => {
       agentSubagentDispatchHandler(
         {
           parentMessageId: "msg_2",
-          tasks: [{ capabilityName: "agent.tool.list", input: {} }],
+          tasks: [{ capabilityName: "list_agent_tools", input: {} }],
           maxParallel: 2,
         },
         CTX,
@@ -170,7 +170,7 @@ describe("agent.subagent.dispatch handler", () => {
     await agentSubagentDispatchHandler(
       {
         parentMessageId: "msg_3",
-        tasks: [{ capabilityName: "agent.tool.list", input: {} }],
+        tasks: [{ capabilityName: "list_agent_tools", input: {} }],
         maxParallel: 10,
       },
       CTX,
@@ -198,7 +198,7 @@ describe("agent.subagent.dispatch handler", () => {
     await agentSubagentDispatchHandler(
       {
         parentMessageId: "msg_to",
-        tasks: [{ capabilityName: "agent.code.execute", input: {} }],
+        tasks: [{ capabilityName: "execute_code", input: {} }],
         maxParallel: 1,
         timeoutSeconds: 3600,
       },
@@ -213,7 +213,7 @@ describe("agent.subagent.dispatch handler", () => {
     await agentSubagentDispatchHandler(
       {
         parentMessageId: "msg_evt",
-        tasks: [{ capabilityName: "agent.tool.list", input: {} }],
+        tasks: [{ capabilityName: "list_agent_tools", input: {} }],
         maxParallel: 1,
       },
       CTX,
@@ -231,8 +231,8 @@ describe("agent.subagent.dispatch handler", () => {
         {
           parentMessageId: "msg_fail",
           tasks: [
-            { capabilityName: "agent.tool.list", input: {} },
-            { capabilityName: "agent.memory.recall", input: { query: "x" } },
+            { capabilityName: "list_agent_tools", input: {} },
+            { capabilityName: "recall_memory", input: { query: "x" } },
           ],
           maxParallel: 5,
         },
@@ -259,8 +259,8 @@ describe("agent.subagent.dispatch handler", () => {
         {
           parentMessageId: "msg_nested",
           tasks: [
-            { capabilityName: "agent.tool.list", input: {} },
-            { capabilityName: "agent.memory.recall", input: {} },
+            { capabilityName: "list_agent_tools", input: {} },
+            { capabilityName: "recall_memory", input: {} },
           ],
           maxParallel: 5,
         },
@@ -281,8 +281,8 @@ describe("agent.subagent.dispatch handler", () => {
       {
         parentMessageId: "msg_nested",
         tasks: [
-          { capabilityName: "agent.tool.list", input: {} },
-          { capabilityName: "agent.memory.recall", input: {} },
+          { capabilityName: "list_agent_tools", input: {} },
+          { capabilityName: "recall_memory", input: {} },
         ],
         maxParallel: 5,
       },

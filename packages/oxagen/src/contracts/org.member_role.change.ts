@@ -11,7 +11,6 @@ import { registerCapability } from "../registry";
 // Audited as org.role_changed.
 export const orgMemberRoleChange = registerCapability({
   name: "change_member_role",
-  aliases: ["org.member_role.change", "org.member.role.change"],
   domain: "org",
   description:
     "Change a member's org role. Replaces the existing org role assignment in the IAM layer and updates the legacy org_users.role column. Blocked if demoting the last org owner. Audited as org.role_changed.",

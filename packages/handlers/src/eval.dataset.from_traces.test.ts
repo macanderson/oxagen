@@ -89,7 +89,7 @@ describe("eval.dataset.from_traces handler", () => {
     const out = await evalDatasetFromTracesHandler(
       {
         name: "Traces DS",
-        capabilityName: "chat.message.send",
+        capabilityName: "send_message",
         sinceHours: 24,
         limit: 50,
       },
@@ -138,7 +138,7 @@ describe("eval.dataset.from_traces handler", () => {
     );
 
     const out = await evalDatasetFromTracesHandler(
-      { name: "Traces DS", capabilityName: "chat.message.send", sinceHours: 24, limit: 50 },
+      { name: "Traces DS", capabilityName: "send_message", sinceHours: 24, limit: 50 },
       CTX,
     );
 

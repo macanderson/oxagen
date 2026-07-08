@@ -9,7 +9,6 @@ import { memoryKindSchema } from "./agent.memory.model";
  */
 export const agentMemoryPromotionCandidates = registerCapability({
   name: "list_memory_promotions",
-  aliases: ["agent.memory_promotion.list", "agent.memory.promotion.candidates"],
   domain: "agent",
   description:
     "List the top OBSERVATION memories by citation pressure that are candidates for promotion to RULE/FACT.",

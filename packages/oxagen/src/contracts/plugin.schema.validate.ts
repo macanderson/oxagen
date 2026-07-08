@@ -23,7 +23,6 @@ const fieldErrorSchema = z.object({
 
 export const pluginSchemaValidate = registerCapability({
   name: "validate_plugin_schema",
-  aliases: ["plugin.schema.validate"],
   domain: "plugin",
   description:
     "Validate a connector plugin config object against its schema before install or configure. Returns field-level errors for form display.",

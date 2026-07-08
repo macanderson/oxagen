@@ -57,7 +57,7 @@ export const skillAuthorHandler: CapabilityHandler<typeof skillAuthor> = async (
 
   // ── Step 3: persist via the existing transactional installer ─────────────
   const installResult = (await invoke(
-    "skill.workspace.install",
+    "install_skill",
     {
       custom: {
         name: synthesis.name,

@@ -18,7 +18,6 @@ const definitionConfigInput = z.object({
 
 export const agentDefinitionCreate = registerCapability({
   name: "create_agent_def",
-  aliases: ["agent.definition.create"],
   domain: "agent",
   description:
     "Create a new agent definition — inserts the agent identity row (draft, inactive) and an immutable v1 version snapshot with the supplied, schema-validated config (graph access, tools, triggers, instructions)",

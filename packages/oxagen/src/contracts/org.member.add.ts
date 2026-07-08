@@ -6,7 +6,6 @@ import { registerCapability } from "../registry";
 // call fails with a typed SeatLimitError.
 export const orgMemberAdd = registerCapability({
   name: "add_org_member",
-  aliases: ["org.member.add"],
   domain: "org",
   description: "Invite a user to join the org by email. Enforces seat/license limits; fails with a typed error when no seat is available.",
   mode: "sync",

@@ -3,7 +3,6 @@ import { registerCapability } from "../registry";
 
 export const agentDefinitionPublish = registerCapability({
   name: "publish_agent_def",
-  aliases: ["agent.definition.publish"],
   domain: "agent",
   description:
     "Publish an agent version — marks it isPublished, computes a SHA-256 checksum over its canonical config, and sets it as the agent's active version. A published version is immutable thereafter",

@@ -9,7 +9,6 @@ import { registerCapability } from "../registry";
 
 export const agentExecutionList = registerCapability({
   name: "list_executions",
-  aliases: ["agent.execution.list"],
   domain: "agent",
   description:
     "List recent top-level agent runs (executions) for the workspace, newest first, with keyset pagination — each row's status, origin, duration, token/cost figures.",

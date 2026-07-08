@@ -10,7 +10,6 @@ import { complianceEnum, influenceEnum } from "./agent.memory.model";
  */
 export const agentMemoryCitationsList = registerCapability({
   name: "list_memory_citations",
-  aliases: ["agent.memory_citation.list", "agent.memory.citations.list"],
   domain: "agent",
   description:
     "List memory citations for an execution, optionally filtered by compliance (violations) or influence (what shaped the output).",

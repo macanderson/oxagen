@@ -9,7 +9,6 @@ import { registerCapability } from "../registry";
 // (docs/specs/graph-mediated-fanout).
 export const agentSubagentResultGet = registerCapability({
   name: "get_subagent_result",
-  aliases: ["agent.subagent_result.get", "agent.subagent.result.get"],
   domain: "agent",
   description:
     "Fetch ONE subagent child run's full input + output payloads by runId (from agent.subagent.aggregate " +

@@ -6,7 +6,6 @@ export const conversationExportFormat = z.enum(["markdown", "pdf"]);
 
 export const conversationExport = registerCapability({
   name: "export_conversation",
-  aliases: ["conversation.export"],
   domain: "conversation",
   description:
     "Export an entire conversation (active branch) as a Markdown document or a formatted PDF",

@@ -4,7 +4,6 @@ import { evalDatasetItemSchema } from "./eval-schema";
 
 export const evalDatasetItemAdd = registerCapability({
   name: "add_dataset_item",
-  aliases: ["eval.dataset_item.add", "eval.dataset.item.add"],
   domain: "eval",
   description:
     "Bulk-add cases to an eval dataset. Batch by design — one call inserts many items as a set and bumps the dataset's item count.",

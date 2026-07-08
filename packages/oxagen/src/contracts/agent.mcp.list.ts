@@ -3,7 +3,6 @@ import { registerCapability } from "../registry";
 
 export const agentMcpList = registerCapability({
   name: "list_mcp_servers",
-  aliases: ["agent.mcp.list"],
   domain: "agent",
   description: "List registered external MCP servers in the active workspace with their current health",
   mode: "sync",

@@ -7,7 +7,7 @@ import { pluginForContract } from "@oxagen/oxagen/plugins";
 import { listEntitledCapabilityPluginIds } from "@oxagen/plugins";
 import { getOxagenRegistry } from "../registry-loader";
 
-const logger = pino({ level: process.env.LOG_LEVEL ?? "info", base: { app: "agent.tool.list" } });
+const logger = pino({ level: process.env.LOG_LEVEL ?? "info", base: { app: "list_agent_tools" } });
 
 export type { AgentToolListInput, AgentToolListOutput };
 

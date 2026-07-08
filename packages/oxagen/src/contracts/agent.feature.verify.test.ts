@@ -4,7 +4,7 @@ import { getCapability } from "../registry";
 
 describe("agent.feature.verify capability", () => {
   it("is registered with the agent domain metadata", () => {
-    const cap = getCapability("agent.feature.verify");
+    const cap = getCapability("verify_feature");
     expect(cap).toBeDefined();
     expect(cap?.domain).toBe("agent");
     expect(cap?.scoped).toBe(true);

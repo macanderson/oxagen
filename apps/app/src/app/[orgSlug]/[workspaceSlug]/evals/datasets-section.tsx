@@ -33,7 +33,7 @@ export async function DatasetsSection({ orgId, workspaceId, userId }: DatasetsSe
   let datasets: EvalDatasetListOutput["datasets"] = [];
   try {
     const result = (await runInTenantScope({ orgId, workspaceId }, () =>
-      invoke("eval.dataset.list", {}, ctx, { surface: "agent" }),
+      invoke("list_datasets", {}, ctx, { surface: "agent" }),
     )) as EvalDatasetListOutput;
     datasets = result.datasets;
   } catch (e) {

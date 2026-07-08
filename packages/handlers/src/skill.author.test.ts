@@ -125,7 +125,7 @@ describe("skillAuthorHandler (@oxagen/handlers)", () => {
     expect(rawBody).toContain("name: pr-review");
   });
 
-  it("calls invoke('skill.workspace.install') with the assembled body", async () => {
+  it("calls invoke('install_skill') with the assembled body", async () => {
     const input = setupHappyPath();
     await skillAuthorHandler(input, TEST_CTX);
 
@@ -134,7 +134,7 @@ describe("skillAuthorHandler (@oxagen/handlers)", () => {
       string,
       { custom: { name: string; body: string } },
     ];
-    expect(capName).toBe("skill.workspace.install");
+    expect(capName).toBe("install_skill");
     expect(invokeInput.custom.name).toBe("pr-review");
     expect(invokeInput.custom.body).toContain("name: pr-review");
   });

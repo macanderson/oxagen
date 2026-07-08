@@ -8,7 +8,6 @@ import { registerCapability } from "../registry";
 // deposit the credits after payment via grantCreditPackForCheckout.
 export const billingCreditsPurchase = registerCapability({
   name: "purchase_credits",
-  aliases: ["billing.credits.purchase"],
   domain: "billing",
   description:
     "Start a Stripe Checkout session for a dynamic usage-credit purchase; returns a URL the customer opens to complete payment",

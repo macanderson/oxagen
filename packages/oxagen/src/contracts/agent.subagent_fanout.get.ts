@@ -7,7 +7,6 @@ import { registerCapability } from "../registry";
 // status, and callable from the agent/MCP/API surfaces.
 export const agentSubagentFanoutGet = registerCapability({
   name: "get_subagent_fanout",
-  aliases: ["agent.subagent_fanout.get", "agent.subagent.fanout.get"],
   domain: "agent",
   description:
     "Get one subagent fan-out with its child runs — each child's capability, status, timings, error reason, and input/output size + preview.",

@@ -3,7 +3,6 @@ import { registerCapability } from "../registry";
 
 export const skillWorkspaceList = registerCapability({
   name: "list_workspace_skills",
-  aliases: ["skill.workspace.list"],
   domain: "skill",
   description: "List skills available in the workspace",
   mode: "sync",

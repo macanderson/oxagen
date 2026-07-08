@@ -295,7 +295,7 @@ export const orgMemberRoleChangeHandler: CapabilityHandler<typeof orgMemberRoleC
     actorUserId: actorId,
     orgId: ctx.orgId,
     workspaceId: null,
-    capability: "org.member_role.change",
+    capability: "change_member_role",
     outcome: "success",
     ip: null,
     userAgent: null,

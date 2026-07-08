@@ -6,7 +6,7 @@ describe("agent.subagent.result.get capability", () => {
   // ── registration ──────────────────────────────────────────────────────────
 
   it("is registered under its contract name", () => {
-    expect(getCapability("agent.subagent_result.get")).toBe(agentSubagentResultGet);
+    expect(getCapability("get_subagent_result")).toBe(agentSubagentResultGet);
   });
 
   it("is a read-only sync capability on api/mcp/agent surfaces", () => {
@@ -36,7 +36,7 @@ describe("agent.subagent.result.get capability", () => {
   const BASE_OUTPUT = {
     runId: "sar_abc",
     fanoutId: "fan_abc",
-    capabilityName: "web.search",
+    capabilityName: "search_web",
     status: "completed" as const,
     summary: "3 hits",
     input: { query: "q" },

@@ -139,7 +139,7 @@ describe("tool-call-start", () => {
       type: "tool-call-start",
       toolCallId: "tc-2",
       messageId: MSG_ID,
-      capability: "web.fetch",
+      capability: "fetch_web_page",
       inputPreview: {},
       riskLevel: "medium",
     }));
@@ -366,7 +366,7 @@ describe("plan-proposed", () => {
       type: "plan-proposed",
       planId: "plan-1",
       title: "Research task",
-      steps: [{ id: "s1", summary: "Look it up", intent: "search", capability: "web.search", dependsOn: [] }],
+      steps: [{ id: "s1", summary: "Look it up", intent: "search", capability: "search_web", dependsOn: [] }],
       rationale: "Because",
     }));
     const p = s.plans["plan-1"];
@@ -406,7 +406,7 @@ describe("subagent-dispatched", () => {
       fanoutId: "fan-1",
       parentMessageId: MSG_ID,
       children: [
-        { childMessageId: "child-1", capability: "web.fetch", label: "Fetch" },
+        { childMessageId: "child-1", capability: "fetch_web_page", label: "Fetch" },
       ],
     }));
     const f = s.activeFanouts["fan-1"];
@@ -422,7 +422,7 @@ describe("subagent-completed", () => {
       type: "subagent-dispatched",
       fanoutId: "fan-1",
       parentMessageId: MSG_ID,
-      children: [{ childMessageId: "child-1", capability: "web.fetch" }],
+      children: [{ childMessageId: "child-1", capability: "fetch_web_page" }],
     }));
     s = reducer(s, event({
       type: "subagent-completed",

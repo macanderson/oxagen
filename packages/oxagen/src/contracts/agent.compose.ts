@@ -48,7 +48,6 @@ const composeStepResult = z.object({
 
 export const agentCompose = registerCapability({
   name: "run_capability_chain",
-  aliases: ["agent.compose"],
   domain: "agent",
   description:
     "Plan and execute a chain of capabilities to accomplish a goal. An LLM planner reads the " +
@@ -71,7 +70,7 @@ export const agentCompose = registerCapability({
   // produce a record id. Chain metadata kept minimal — it's a meta-capability.
   produces: ["document.text"],
   consumes: [],
-  chainHints: ["document.generate"],
+  chainHints: ["generate_document"],
   render: { componentId: "capability-chain-card" },
   input: z.object({
     goal: z.string().min(1).max(2000).describe("What to accomplish"),

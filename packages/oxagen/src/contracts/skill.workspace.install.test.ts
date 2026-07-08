@@ -132,7 +132,7 @@ describe("skill.workspace.install capability", () => {
   // ── registry ──────────────────────────────────────────────────────────────
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("skill.workspace.install")).toBe(skillWorkspaceInstall);
+    expect(getCapability("install_skill")).toBe(skillWorkspaceInstall);
   });
 
   it("has mode sync", () => {

@@ -11,7 +11,7 @@ let graphStatsImpl: () => Promise<unknown> = async () => ({});
 vi.mock("@oxagen/oxagen/kernel", () => ({
   invoke: async (name: string, _input: unknown, _ctx: unknown, opts?: { surface?: unknown }) => {
     invokeCalls.push({ name, surface: opts?.surface });
-    if (name === "graph.stats") return graphStatsImpl();
+    if (name === "get_graph_stats") return graphStatsImpl();
     return {};
   },
 }));
@@ -78,7 +78,7 @@ describe("schema.recommend — graph.stats signal mapping", () => {
     // The bug passed ctx.surface ("app"), which graph.stats's contract
     // (api/mcp/agent) rejects → swallowed → graph-blind proposal.
     await schemaRecommendHandler({ sampleLimit: 200 }, ctx("app"));
-    const statsCall = invokeCalls.find((c) => c.name === "graph.stats");
+    const statsCall = invokeCalls.find((c) => c.name === "get_graph_stats");
     expect(statsCall).toBeDefined();
     expect(statsCall?.surface).toBe("api");
     expect(statsCall?.surface).not.toBe("app");
@@ -88,7 +88,7 @@ describe("schema.recommend — graph.stats signal mapping", () => {
     // "runner" is a valid ctx surface but NOT a graph.stats contract surface;
     // the internal read must still resolve over "api".
     await schemaRecommendHandler({ sampleLimit: 200 }, ctx("runner"));
-    expect(invokeCalls.find((c) => c.name === "graph.stats")?.surface).toBe("api");
+    expect(invokeCalls.find((c) => c.name === "get_graph_stats")?.surface).toBe("api");
   });
 
   it("feeds the real node count + observed labels into the LLM prompt", async () => {

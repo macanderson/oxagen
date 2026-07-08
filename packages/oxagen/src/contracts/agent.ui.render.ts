@@ -3,7 +3,6 @@ import { registerCapability } from "../registry";
 
 export const agentUiRender = registerCapability({
   name: "render_agent_ui",
-  aliases: ["agent.ui.render"],
   domain: "agent",
   description: "Render a UI component from an agent response",
   mode: "sync",

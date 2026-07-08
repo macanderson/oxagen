@@ -3,7 +3,6 @@ import { registerCapability } from "../registry";
 
 export const skillEnable = registerCapability({
   name: "set_skill_enabled",
-  aliases: ["skill.enable"],
   domain: "skill",
   description:
     "Enable or disable a skill in the workspace. Disabled skills are hidden from the agent and excluded from tool materialization, but their versions and data are preserved.",

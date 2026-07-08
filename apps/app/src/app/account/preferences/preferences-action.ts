@@ -13,7 +13,7 @@ import { getSessionOrRedirect } from "@/lib/session";
 import { account } from "@/lib/routes";
 import { invoke } from "@oxagen/oxagen";
 // Side-effect import: bind every foundation handler into the shared kernel so
-// invoke("user.preferences.write", …) can resolve its handler at runtime.
+// invoke("update_user_preferences", …) can resolve its handler at runtime.
 import "@oxagen/handlers/register";
 import type { CapabilityContext } from "@oxagen/oxagen";
 
@@ -68,7 +68,7 @@ export async function updatePreferencesAction(
   };
 
   try {
-    await invoke("user.preferences.write", data, ctx, { surface: "agent" });
+    await invoke("update_user_preferences", data, ctx, { surface: "agent" });
   } catch {
     return { ok: false, error: "Failed to save preferences. Please try again." };
   }

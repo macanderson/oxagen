@@ -8,7 +8,6 @@ import { registerCapability } from "../registry";
 // are human-initiated by construction. Never weaken this to auto-approve.
 export const automationEnable = registerCapability({
   name: "enable_automation",
-  aliases: ["automation.enable"],
   domain: "automation",
   description:
     "Enable an automation trigger so it fires live. Requires explicit human confirmation — AI agents must never enable an automation without the user approving. Returns the new enabled state.",

@@ -3,7 +3,6 @@ import { registerCapability } from "../registry";
 
 export const connectionPreview = registerCapability({
   name: "preview_connection",
-  aliases: ["connection.preview"],
   domain: "connection",
   description:
     "Preview sample records from a data source connection. Used in the setup wizard to show what data will be ingested.",

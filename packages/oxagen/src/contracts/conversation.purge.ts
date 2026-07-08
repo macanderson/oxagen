@@ -9,7 +9,6 @@ import { registerCapability } from "../registry";
 // server-side in one set-based UPDATE.
 export const conversationPurge = registerCapability({
   name: "purge_conversations",
-  aliases: ["conversation.purge"],
   domain: "conversation",
   description:
     "Permanently delete every archived conversation the caller owns in this workspace (soft-delete: sets deleted_at; rows retained for audit)",

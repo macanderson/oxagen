@@ -28,7 +28,6 @@ const fieldDiffSchema = z.object({
 
 export const formFill = registerCapability({
   name: "fill_form",
-  aliases: ["form.fill"],
   domain: "form",
   description:
     "Generatively fill or suggest values for page-level form fields based on a natural-language instruction. " +

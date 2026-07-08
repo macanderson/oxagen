@@ -153,6 +153,6 @@ describe("web.fetch capability", () => {
   // ── registry ──────────────────────────────────────────────────────────────
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("web.fetch")).toBe(webFetch);
+    expect(getCapability("fetch_web_page")).toBe(webFetch);
   });
 });

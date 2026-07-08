@@ -3,7 +3,6 @@ import { registerCapability } from "../registry";
 
 export const agentTaskBackgroundCancel = registerCapability({
   name: "cancel_background_task",
-  aliases: ["agent.background_task.cancel", "agent.task.background.cancel"],
   domain: "agent",
   description: "Cancel a running background task; downstream Inngest steps stop on next checkpoint",
   mode: "sync",

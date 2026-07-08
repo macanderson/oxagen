@@ -4,7 +4,7 @@ import { getCapability } from "../registry";
 
 describe("telemetry.error.cluster capability", () => {
   it("is registered with the expected surfaces and low sensitivity", () => {
-    const cap = getCapability("telemetry.error.cluster");
+    const cap = getCapability("list_error_clusters");
     expect(cap).toBeDefined();
     expect(cap?.surfaces).toEqual(["api", "mcp", "agent"]);
     expect(cap?.mode).toBe("sync");

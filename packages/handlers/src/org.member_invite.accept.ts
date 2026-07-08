@@ -206,7 +206,7 @@ export const orgMemberInviteAcceptHandler: CapabilityHandler<typeof orgMemberInv
     actorUserId: ctx.userId,
     orgId: invitation.orgId,
     workspaceId: null,
-    capability: "org.member_invite.accept",
+    capability: "accept_member_invite",
     outcome: "success",
     ip: null,
     userAgent: null,

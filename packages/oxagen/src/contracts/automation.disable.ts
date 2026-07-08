@@ -5,7 +5,6 @@ import { registerCapability } from "../registry";
 // autonomous side effect), so unlike automation.enable it needs no approval.
 export const automationDisable = registerCapability({
   name: "disable_automation",
-  aliases: ["automation.disable"],
   domain: "automation",
   description:
     "Disable an automation trigger so it stops firing. Safe to call without confirmation. Returns the new enabled state.",

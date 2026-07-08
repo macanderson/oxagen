@@ -1,13 +1,13 @@
 # ADR-025 naming mapping — final resolved (EXECUTED)
 
-**Status:** Executed on branch `feat/adr024-naming-standard`. All 294 contract `name` fields have been rewritten to verb-first snake_case with the old dotted name preserved in `aliases[]`. See `docs/adr/ADR-025-verb-first-snake-naming.md` for the standard.
+**Status:** Executed on branch `feat/adr024-naming-standard`. All contract `name` fields have been rewritten to verb-first snake_case. The ADR-022 alias mechanism has been **removed** — there is one canonical name per capability, no shim. See `docs/adr/ADR-025-verb-first-snake-naming.md` for the standard.
 
-**Totals:** 294 capabilities renamed · 294 globally-unique new names · 0 true-duplicate merges (all flagged pairs verified DISTINCT) · 1 deferred scope-collapse merge (2 members) · 2 four-word names (both scope-disambiguated).
+**Totals:** 293 capabilities (294 renamed, then the scope-collapse merge removed one) · 293 globally-unique names · 0 true-duplicate merges (all flagged pairs verified DISTINCT) · 1 executed scope-collapse merge (2 members → 1) · 0 four-word names.
 
 ## Merges & collisions
 
-### Deferred scope-collapse merge (NOT executed — needs handler consolidation)
-- **set_plugin_enabled(scope)** ← `plugin.org.set_enabled` + `plugin.workspace.set_enabled`. org- vs workspace-scoped enable have different handlers; collapse to set_plugin_enabled(scope) needs handler consolidation. Disambiguated meanwhile as `set_org_plugin_enabled` / `set_workspace_plugin_enabled`.
+### Executed scope-collapse merge
+- **set_plugin_enabled(scope)** ← `plugin.org.set_enabled` + `plugin.workspace.set_enabled`. Collapsed into one capability taking `scope: "org" | "workspace"`; the single handler branches on scope (org → toggle org-listing flag; workspace → upsert/disable the workspace `agent.mcp_servers` row). The two old contracts and their route/tool/handler/docs files are deleted.
 
 ### Flagged possible-duplicates — VERIFIED DISTINCT, kept separate (no merge)
 - `budget.policy.read/write` vs `workspace.budget_policy.read/write`: budget.policy.* is a per-USER personal turn budget (domain "user"); workspace.budget_policy.* is the org/workspace-governed budget. Distinct scopes → get_user_budget vs get_budget_policy.
@@ -21,7 +21,7 @@
 - `upsert_graph_relationship` vs `upsert_schema_relationship` (graph data vs schema definition).
 - `get_user_budget` vs `get_budget_policy` (per-user vs workspace-governed budget).
 - `get_registry_config` (schema registry config) vs `get_schema_registry` (registry entry).
-- `set_org_plugin_enabled` / `set_workspace_plugin_enabled` — the two four-word names (deferred merge).
+- (The former `set_org_plugin_enabled` / `set_workspace_plugin_enabled` four-word names are gone — merged into `set_plugin_enabled(scope)`.)
 
 ## Full mapping (294)
 
@@ -219,7 +219,7 @@
 | `plugin.org.install` | `install_plugin` | `plugin.org.install` | no |  |
 | `plugin.org.install_bulk` | `install_plugins_bulk` | `plugin.org.install_bulk` | no |  |
 | `plugin.org.list` | `list_plugins` | `plugin.org.list` | no |  |
-| `plugin.org.set_enabled` | `set_org_plugin_enabled` | `plugin.org.set_enabled` | deferred | scope-collapse merge to set_plugin_enabled(scope) — DEFERRED (handler consolidation) |
+| `plugin.org.set_enabled` | `set_plugin_enabled` | `plugin.set_enabled` | merged | scope-collapse merge → `set_plugin_enabled(scope)` (EXECUTED) |
 | `plugin.org.uninstall` | `uninstall_plugin` | `plugin.org.uninstall` | no |  |
 | `plugin.registry.add` | `add_plugin_registry` | `plugin.registry.add` | no |  |
 | `plugin.registry.list` | `list_plugin_registries` | `plugin.registry.list` | no |  |
@@ -228,7 +228,7 @@
 | `plugin.schema.validate` | `validate_plugin_schema` | `plugin.schema.validate` | no |  |
 | `plugin.settings.set_auth_alerts` | `set_auth_alerts` | `plugin.settings.set_auth_alerts` | no |  |
 | `plugin.version.list` | `list_plugin_versions` | `plugin.version.list` | no |  |
-| `plugin.workspace.set_enabled` | `set_workspace_plugin_enabled` | `plugin.workspace.set_enabled` | deferred | scope-collapse merge to set_plugin_enabled(scope) — DEFERRED (handler consolidation) |
+| `plugin.workspace.set_enabled` | `set_plugin_enabled` | `plugin.set_enabled` | merged | scope-collapse merge → `set_plugin_enabled(scope)` (EXECUTED); merged into the row above |
 | `privacy.data.erase` | `erase_data` | `privacy.data.erase` | no |  |
 | `privacy.data.export` | `export_data` | `privacy.data.export` | no |  |
 | `prompt.settings.read` | `get_prompt_settings` | `prompt.settings.read` | no |  |

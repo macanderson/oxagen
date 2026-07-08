@@ -2,7 +2,8 @@
 
 **Status:** Accepted (user decision 2026-07-08)
 **Supersedes:** ADR-022 (dotted `domain.subject.action` canonical form) — the dotted
-canonical is retired; every old dotted name survives only as an `aliases[]` entry.
+canonical is retired and the ADR-022 alias mechanism is **removed entirely**. There is
+exactly one name per capability, the verb-first snake_case one; no shim, no fallback.
 **Related:** ADR-009 (unified capability/tool model via `surfaces`), `docs/VISION.md`
 
 > Numbering note: the naming-standard work was scoped as "ADR-024" but that number
@@ -45,9 +46,10 @@ disambiguating word:
 - `run_workflow`, `list_workflows`, `get_workflow_status`
 
 **2–3 words.** A 4th word is allowed **only** where global uniqueness truly demands
-it (rare) and is flagged by the lint. The wave produced exactly two four-word names,
-both scope-disambiguated (`set_org_plugin_enabled`, `set_workspace_plugin_enabled`)
-pending a handler-level merge (§5).
+it (rare) and is flagged by the lint. The wave initially produced two four-word,
+scope-disambiguated names (`set_org_plugin_enabled`, `set_workspace_plugin_enabled`);
+these have since been collapsed into the single `set_plugin_enabled` with a `scope`
+argument (§5), so no four-word capability names remain.
 
 Dots and kebab-case are illegal. The dotted `domain.subject.action` form is retired.
 
@@ -66,19 +68,25 @@ canonical name whose scope moves into the input. Where such a collapse requires
 consolidating two distinct handlers, it is deferred (§5) and the two names are
 temporarily disambiguated by a scope word so nothing breaks meanwhile.
 
-### 4. Aliases: nothing breaks on the rename
+### 4. No aliases — the rename is a hard, in-repo cutover
 
-Renaming never orphans a caller, an IAM grant, or a pinned client. Every renamed
-contract carries `aliases: [<old dotted name>, …]` (old dotted name prepended;
-pre-existing aliases preserved). The ADR-022 §6 alias mechanism is unchanged and
-load-bearing:
+The ADR-022 alias mechanism is **removed**. There is no `aliases[]` field, no alias
+index in the registry, no alias fallback in `getCapability`, and no alias matching in
+IAM. A capability answers to exactly one name — its canonical verb-first snake_case
+name — and nothing else.
 
-- The **registry** indexes each alias to its canonical contract; `getCapability(alias)`
-  resolves to the new name.
+This is safe because the rename is an atomic, in-repo cutover: every contract, route,
+MCP tool, CLI command, handler, test, and import site is renamed together on this
+branch, so no in-repo caller ever references an old name. The prior alias shim existed
+only to bridge a staged rollout; a single-commit-wave rename does not need it, and the
+dead machinery would be pure bloat.
+
+- The **registry** resolves `getCapability(name)` by canonical name only.
 - The **kernel** dispatches, gates (IAM / billing / entitlement), and **meters** every
-  call under the canonical (new) name, whichever name the caller used.
-- **IAM** matches legacy `role_grants` rows keyed by an old dotted name via the alias
-  index — no data migration.
+  call under the one canonical name.
+- **IAM** matches `role_grants` rows by the exact canonical `capability_id`. Any durable
+  rows written under an old dotted name are realigned by the rename mapping, not by a
+  runtime alias.
 - **API HTTP paths and CLI paths are unaffected** — they are hand-authored and
   independent of the capability name.
 - **Billing is safe by construction** — revenue keys on `model` + `execution_step_id`,
@@ -91,10 +99,14 @@ and are not registered capabilities (they live in the agent engine, outside
 
 ### 5. Merges: scope-collapse vs true duplicates
 
-- **Scope-collapse (deferred):** `plugin.org.set_enabled` + `plugin.workspace.set_enabled`
-  should collapse to `set_plugin_enabled(scope)`, but their handlers differ, so the
-  merge is deferred (needs handler consolidation). They are named
-  `set_org_plugin_enabled` / `set_workspace_plugin_enabled` for now.
+- **Scope-collapse (DONE):** the former `plugin.org.set_enabled` +
+  `plugin.workspace.set_enabled` are collapsed into a single `set_plugin_enabled`
+  capability that takes a `scope: "org" | "workspace"` argument. The one handler
+  branches on `scope` (org → toggle the org-listing flag; workspace → upsert/disable
+  the workspace `agent.mcp_servers` row); output is `{ ok, workspaceServerId }`
+  (`workspaceServerId` null for org scope and workspace disable). Contract, handler,
+  API route (`POST /plugin/set-enabled`), MCP tool, docs, and tests are all merged;
+  the two old contracts/files are deleted.
 - **Flagged possible-duplicates — VERIFIED DISTINCT, not merged:**
   - `budget.policy.*` is a **per-user** turn budget (domain `user`) →
     `get_user_budget` / `update_user_budget`; `workspace.budget_policy.*` is the
@@ -109,18 +121,16 @@ and are not registered capabilities (they live in the agent engine, outside
 snake_case charset (no dots, no kebab), verb-first (first word in the closed verb
 set), 2+ words (4+ is a non-blocking warning), and **global uniqueness** (hard fail on
 any duplicate). The ADR-022 `GRANDFATHER` map is **emptied** — every previously
-grandfathered name was renamed to a conforming verb-first form (each carries its old
-dotted name in `aliases[]`). A non-conforming name is now a bug to fix, never a
-grandfather entry.
+grandfathered name was renamed to a conforming verb-first form. A non-conforming name
+is now a bug to fix, never a grandfather entry.
 
 ## Consequences
 
-- **All 294 registered capabilities renamed** to verb-first snake_case, each with the
-  old dotted name (plus any prior aliases) in `aliases[]`. The authoritative old→new
-  mapping is `docs/specs/adr025-naming-mapping.md`; the machine-readable source is
+- **All 294 registered capabilities renamed** to verb-first snake_case. The authoritative
+  old→new mapping is `docs/specs/adr025-naming-mapping.md`; the machine-readable source is
   `tools/scripts/adr025-name-map.mjs`.
-- **Nothing breaks at runtime:** callers resolve through the alias index, IAM grants
-  keep matching, external REST/CLI paths are unchanged, and metering attributes to the
+- **Nothing breaks in-repo:** every in-repo caller, route, tool, and test is renamed in
+  the same wave, external REST/CLI paths are unchanged, and metering attributes to the
   canonical name.
 - **Contract/route/mcp/docs FILE names and the ~895 dotted contract-import sites are a
   separate realignment phase.** The functional rename (contract `name` + aliases) is
@@ -130,6 +140,4 @@ grandfather entry.
   That move + the import/index/app-mount/docs updates is tracked as the follow-up file
   phase.
 - **Follow-ups:** (a) rename contract/route/mcp/docs files to the new names and rewrite
-  import sites, clearing the manifest file-path gaps; (b) execute the deferred
-  `set_plugin_enabled(scope)` handler merge; (c) retire aliases once no durable row
-  references an old dotted name.
+  import sites, clearing the manifest file-path gaps.

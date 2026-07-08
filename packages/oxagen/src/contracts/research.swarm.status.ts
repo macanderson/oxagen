@@ -3,7 +3,6 @@ import { registerCapability } from "../registry";
 
 export const researchSwarmStatus = registerCapability({
   name: "get_research_status",
-  aliases: ["research.swarm.status"],
   domain: "research",
   description:
     "Poll the status of a running research swarm. Returns task completion progress AND the actual web-search results collected by each subagent — title, url, and content snippet per hit — so the agent can summarize them and feed them into graph ingestion. Delegates to agent.subagent.aggregate internally.",
@@ -23,7 +22,7 @@ export const researchSwarmStatus = registerCapability({
   // extraction. graph.ingest is the natural next step.
   produces: ["search.results"],
   consumes: ["swarm.id"],
-  chainHints: ["graph.ingest", "document.generate"],
+  chainHints: ["ingest_graph", "generate_document"],
   render: { componentId: "research-swarm-card" },
   input: z.object({
     swarmId: z.string().describe("Swarm ID returned by research.swarm.start"),

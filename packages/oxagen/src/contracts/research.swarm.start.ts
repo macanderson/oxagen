@@ -3,7 +3,6 @@ import { registerCapability } from "../registry";
 
 export const researchSwarmStart = registerCapability({
   name: "start_research_swarm",
-  aliases: ["research.swarm.start"],
   domain: "research",
   description:
     "Fan out parallel web searches for a topic, generate diverse query variations, and dispatch them as concurrent subagent tasks. Returns a swarmId to poll via research.swarm.status.",

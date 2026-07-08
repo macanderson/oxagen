@@ -6,7 +6,7 @@ const oneDoc = { filename: "rules.md", content: "- never push to main" };
 
 describe("agent.memory.import.parse capability", () => {
   it("is registered in the capability registry", () => {
-    expect(getCapability("agent.memory_import.parse")).toBeDefined();
+    expect(getCapability("parse_memory_import")).toBeDefined();
   });
 
   it("is a scoped, sync, read-only memory capability with deny default", () => {

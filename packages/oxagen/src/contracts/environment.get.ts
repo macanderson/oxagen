@@ -4,7 +4,6 @@ import { environmentSummarySchema } from "./environment.create";
 
 export const environmentGet = registerCapability({
   name: "get_environment",
-  aliases: ["environment.get"],
   domain: "environment",
   description: "Fetch a single workspace environment by its public id.",
   mode: "sync",

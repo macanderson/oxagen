@@ -84,7 +84,7 @@ describe("approval runtime", () => {
       orgId: "ten_1",
       workspaceId: "ws_1",
       messageId: "msg_1",
-      capabilityName: "agent.code.execute",
+      capabilityName: "execute_code",
       inputPreview: { foo: "bar" },
       riskLevel: "high",
       ttlMs: 10_000,
@@ -97,7 +97,7 @@ describe("approval runtime", () => {
       riskLevel: string;
       expiresAt: Date;
     };
-    expect(row.capabilityName).toBe("agent.code.execute");
+    expect(row.capabilityName).toBe("execute_code");
     expect(row.inputPreview).toEqual({ foo: "bar" });
     expect(row.riskLevel).toBe("high");
     expect(row.expiresAt).toBeInstanceOf(Date);

@@ -62,7 +62,7 @@ describe("GitHub write contracts — shared metadata", () => {
 
 // ── 8a: repo.create input schema ─────────────────────────────────────────────
 
-describe("repo.create", () => {
+describe("create_repo", () => {
   it("name is repo.create", () => {
     expect(repoCreate.name).toBe("create_repo");
   });
@@ -113,7 +113,7 @@ describe("repo.create", () => {
 
 // ── repo.file.put ─────────────────────────────────────────────────────────────
 
-describe("repo.file.put", () => {
+describe("put_repo_file", () => {
   it("name is repo.file.put", () => {
     expect(repoFilePut.name).toBe("put_repo_file");
   });
@@ -175,7 +175,7 @@ describe("repo.file.put", () => {
 
 // ── repo.fork ─────────────────────────────────────────────────────────────────
 
-describe("repo.fork", () => {
+describe("fork_repo", () => {
   it("name is repo.fork", () => {
     expect(repoFork.name).toBe("fork_repo");
   });
@@ -198,7 +198,7 @@ describe("repo.fork", () => {
 
 // ── repo.branch.create ────────────────────────────────────────────────────────
 
-describe("repo.branch.create", () => {
+describe("create_branch", () => {
   it("name is repo.branch.create", () => {
     expect(repoBranchCreate.name).toBe("create_branch");
   });
@@ -225,7 +225,7 @@ describe("repo.branch.create", () => {
 
 // ── 8b: repo.pr.open input schema ────────────────────────────────────────────
 
-describe("repo.pr.open", () => {
+describe("open_pr", () => {
   it("name is repo.pr.open", () => {
     expect(repoPrOpen.name).toBe("open_pr");
   });

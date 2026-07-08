@@ -67,7 +67,7 @@ describe("agent.file.lock.acquire capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("agent.file_lock.acquire")).toBe(agentFileLockAcquire);
+    expect(getCapability("acquire_file_lock")).toBe(agentFileLockAcquire);
   });
 
   it("defaults to org Owner/Admin and workspace Owner/Member allow", () => {

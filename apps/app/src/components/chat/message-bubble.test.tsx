@@ -216,7 +216,7 @@ describe("MessageBubble", () => {
             {
               type: "tool-call",
               toolCallId: "tc1",
-              capability: "agent.ui.render",
+              capability: "render_agent_ui",
               inputPreview: {},
               riskLevel: "low",
               status: "completed",
@@ -231,7 +231,7 @@ describe("MessageBubble", () => {
             {
               type: "approval-request",
               approvalId: "ap1",
-              capability: "automation.enable",
+              capability: "enable_automation",
               inputPreview: {},
               riskLevel: "high",
               expiresAt: "2026-06-12T00:00:00Z",

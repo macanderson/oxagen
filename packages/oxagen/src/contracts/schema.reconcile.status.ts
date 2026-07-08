@@ -3,7 +3,6 @@ import { registerCapability } from "../registry";
 
 export const schemaReconcileStatus = registerCapability({
   name: "get_reconcile_status",
-  aliases: ["schema.reconcile.status"],
   domain: "schema",
   description: "Poll the status of a schema reconciliation job.",
   mode: "sync",

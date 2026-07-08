@@ -7,7 +7,6 @@ import { registerCapability } from "../registry";
 // already paused (not pending_setup / error).
 export const connectionPause = registerCapability({
   name: "pause_connection",
-  aliases: ["connection.pause"],
   domain: "connection",
   description:
     "Pause or resume syncing for a data source connection. Pausing stops ingestion while keeping the connection and its data intact; resuming returns it to connected.",

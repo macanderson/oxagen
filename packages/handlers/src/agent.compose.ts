@@ -153,7 +153,7 @@ function formatCatalog(catalog: CatalogEntry[]): string {
 
 async function readWorkspacePrompt(ctx: CapabilityContext): Promise<string> {
   try {
-    const out = (await invoke("prompt.settings.read", {}, ctx)) as {
+    const out = (await invoke("get_prompt_settings", {}, ctx)) as {
       additionalInstructions?: string | null;
     };
     return out.additionalInstructions ?? "";
@@ -163,7 +163,7 @@ async function readWorkspacePrompt(ctx: CapabilityContext): Promise<string> {
 }
 
 async function readEnabledSkills(ctx: CapabilityContext): Promise<string> {
-  const out = (await invoke("skill.workspace.list", {}, ctx)) as {
+  const out = (await invoke("list_workspace_skills", {}, ctx)) as {
     skills?: Array<{ name: string; description: string; enabled: boolean }>;
   };
   const enabled = (out.skills ?? []).filter((s) => s.enabled);

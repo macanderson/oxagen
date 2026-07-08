@@ -3,7 +3,6 @@ import { registerCapability } from "../registry";
 
 export const agentMcpConsentResolve = registerCapability({
   name: "resolve_mcp_consent",
-  aliases: ["agent.mcp_consent.resolve", "agent.mcp.consent.resolve"],
   domain: "agent",
   description:
     "Grant or deny first-use consent for an external MCP tool; the decision resumes the paused agent stream and is remembered for subsequent calls",

@@ -15,7 +15,6 @@ const definitionConfigInput = z.object({
 
 export const agentDefinitionUpdate = registerCapability({
   name: "update_agent_def",
-  aliases: ["agent.definition.update"],
   domain: "agent",
   description:
     "Update an agent definition by snapshotting a NEW unpublished version with the updated config — published versions are immutable and never edited in place; the version number is bumped",

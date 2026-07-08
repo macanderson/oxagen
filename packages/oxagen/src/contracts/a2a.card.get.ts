@@ -60,7 +60,6 @@ export type A2AAgentCard = z.output<typeof a2aAgentCard>;
 
 export const a2aCardGet = registerCapability({
   name: "get_a2a_card",
-  aliases: ["a2a.card.get"],
   domain: "a2a",
   description:
     "Read the current workspace's A2A (Agent2Agent) protocol Agent Card — the discovery document advertising the workspace's exposed agents as A2A skills, its JSON-RPC transport endpoint, and its authentication scheme",

@@ -39,73 +39,73 @@ export interface ToolCallMeta {
 // below unless overridden here.
 const CURATED: Record<string, { label: string; Icon?: LucideIcon }> = {
   // Code + sandbox
-  "agent.code.execute": { label: "Run code", Icon: Code2 },
-  "agent.sandbox.exec": { label: "Run command in sandbox", Icon: Terminal },
-  "agent.sandbox.start": { label: "Start sandbox", Icon: Terminal },
-  "agent.sandbox.stop": { label: "Stop sandbox", Icon: Terminal },
-  "agent.sandbox.snapshot": { label: "Snapshot sandbox", Icon: Terminal },
-  "agent.sandbox_file.list": { label: "List sandbox files", Icon: Terminal },
-  "code.diff": { label: "Compare code" },
-  "code.format": { label: "Format code" },
-  "code.patch": { label: "Apply code patch" },
-  "code.map": { label: "Map codebase" },
+  "execute_code": { label: "Run code", Icon: Code2 },
+  "run_sandbox_command": { label: "Run command in sandbox", Icon: Terminal },
+  "start_sandbox": { label: "Start sandbox", Icon: Terminal },
+  "stop_sandbox": { label: "Stop sandbox", Icon: Terminal },
+  "snapshot_sandbox": { label: "Snapshot sandbox", Icon: Terminal },
+  "list_sandbox_files": { label: "List sandbox files", Icon: Terminal },
+  "diff_code": { label: "Compare code" },
+  "format_code": { label: "Format code" },
+  "patch_code": { label: "Apply code patch" },
+  "get_code_map": { label: "Map codebase" },
   // Repo
-  "repo.pr.open": { label: "Open pull request" },
-  "repo.branch.create": { label: "Create branch" },
-  "repo.create": { label: "Create repository" },
-  "repo.fork": { label: "Fork repository" },
-  "repo.sync": { label: "Sync repository" },
-  "repo.file.put": { label: "Update repository file" },
-  "repo.metrics": { label: "Read repository metrics" },
-  "agent.repo.edit": { label: "Edit repository" },
+  "open_pr": { label: "Open pull request" },
+  "create_branch": { label: "Create branch" },
+  "create_repo": { label: "Create repository" },
+  "fork_repo": { label: "Fork repository" },
+  "sync_repo": { label: "Sync repository" },
+  "put_repo_file": { label: "Update repository file" },
+  "get_repo_metrics": { label: "Read repository metrics" },
+  "edit_repo_file": { label: "Edit repository" },
   // Media + documents
-  "image.generate": { label: "Generate image" },
-  "image.create": { label: "Create image" },
-  "image.analyze": { label: "Analyze image" },
-  "svg.generate": { label: "Generate SVG" },
-  "mermaid.generate": { label: "Generate diagram", Icon: Network },
-  "video.generate": { label: "Generate video" },
-  "markdown.generate": { label: "Generate document" },
-  "document.generate": { label: "Generate document" },
-  "document.create": { label: "Create document" },
-  "document.read": { label: "Read document" },
-  "document.list": { label: "List documents" },
-  "document.pdf.create": { label: "Create PDF" },
+  "generate_image": { label: "Generate image" },
+  "create_image": { label: "Create image" },
+  "analyze_image": { label: "Analyze image" },
+  "generate_svg": { label: "Generate SVG" },
+  "generate_mermaid": { label: "Generate diagram", Icon: Network },
+  "generate_video": { label: "Generate video" },
+  "generate_markdown": { label: "Generate document" },
+  "generate_document": { label: "Generate document" },
+  "create_document": { label: "Create document" },
+  "read_document": { label: "Read document" },
+  "list_documents": { label: "List documents" },
+  "create_pdf": { label: "Create PDF" },
   // Knowledge graph
-  "ontology.query": { label: "Query knowledge graph" },
-  "ontology.neighbors": { label: "Explore graph neighbors" },
-  "graph.search": { label: "Search knowledge graph" },
-  "graph.cypher": { label: "Query knowledge graph" },
-  "graph.node.search": { label: "Search graph nodes" },
-  "graph.stats": { label: "Read graph statistics" },
+  "query_ontology": { label: "Query knowledge graph" },
+  "get_ontology_neighbors": { label: "Explore graph neighbors" },
+  "search_graph": { label: "Search knowledge graph" },
+  "run_cypher": { label: "Query knowledge graph" },
+  "search_nodes": { label: "Search graph nodes" },
+  "get_graph_stats": { label: "Read graph statistics" },
   // Conversation + files
-  "conversation.files.list": { label: "List conversation files" },
-  "conversation.attachment.add": { label: "Add attachment" },
-  "chat.message.send": { label: "Send message" },
-  "asset.upload": { label: "Upload file" },
+  "list_conversation_files": { label: "List conversation files" },
+  "add_conversation_attachment": { label: "Add attachment" },
+  "send_message": { label: "Send message" },
+  "upload_asset": { label: "Upload file" },
   // Web + browser
-  "web.search": { label: "Search the web" },
-  "web.fetch": { label: "Fetch web page" },
-  "browser.navigate": { label: "Open web page" },
-  "browser.screenshot": { label: "Take screenshot" },
-  "browser.read": { label: "Read web page" },
+  "search_web": { label: "Search the web" },
+  "fetch_web_page": { label: "Fetch web page" },
+  "navigate_page": { label: "Open web page" },
+  "screenshot_page": { label: "Take screenshot" },
+  "read_page": { label: "Read web page" },
   // Workflows + agents
-  "workflow.run": { label: "Run workflow" },
-  "workflow.cancel": { label: "Cancel workflow" },
-  "workflow.status": { label: "Check workflow status" },
-  "agent.subagent.dispatch": { label: "Dispatch subagent" },
-  "agent.subagent.aggregate": { label: "Aggregate subagent results" },
+  "run_workflow": { label: "Run workflow" },
+  "cancel_workflow": { label: "Cancel workflow" },
+  "get_workflow_status": { label: "Check workflow status" },
+  "dispatch_subagent": { label: "Dispatch subagent" },
+  "aggregate_subagents": { label: "Aggregate subagent results" },
   "render_agent_ui": { label: "Render interactive view" },
-  "agent.feature.verify": { label: "Verify feature" },
-  "form.fill": { label: "Fill form" },
+  "verify_feature": { label: "Verify feature" },
+  "fill_form": { label: "Fill form" },
   // Memory
-  "agent.memory.recall": { label: "Recall memory" },
-  "agent.memory.remember": { label: "Save memory" },
-  "agent.memory.write": { label: "Save memory" },
-  "agent.memory.list": { label: "List memories" },
+  "recall_memory": { label: "Recall memory" },
+  "save_memory": { label: "Save memory" },
+  "write_memory": { label: "Save memory" },
+  "list_memories": { label: "List memories" },
   // Research
-  "research.swarm.start": { label: "Start research swarm" },
-  "research.swarm.status": { label: "Check research status" },
+  "start_research_swarm": { label: "Start research swarm" },
+  "get_research_status": { label: "Check research status" },
 };
 
 // Domain keyword → icon. Checked against each dot-segment in order, so
@@ -117,6 +117,8 @@ const DOMAIN_ICONS: Record<string, LucideIcon> = {
   shell: Terminal,
   repo: GitBranch,
   git: GitBranch,
+  branch: GitBranch,
+  pr: GitBranch,
   image: ImageIcon,
   svg: ImageIcon,
   video: Video,
@@ -147,36 +149,33 @@ const DOMAIN_ICONS: Record<string, LucideIcon> = {
 
 // Leading segments that add no meaning to a derived label ("agent" prefixes
 // most runtime capabilities without describing what the call does).
-const GENERIC_PREFIXES = new Set(["agent"]);
-
 function capitalize(text: string): string {
   return text.length === 0 ? text : text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 /**
- * Derivation fallback: `domain.noun.verb` → "Verb domain noun". The final
- * segment is treated as the verb and the preceding segments as the noun
- * phrase, matching the contract naming convention (`semantic.edge.suggest` →
- * "Suggest semantic edge"). Underscores read as spaces.
+ * Derivation fallback for an uncurated capability. ADR-025 names are verb-first
+ * snake_case (`verb_noun_qualifier`), so the FIRST segment is the verb and the
+ * rest form the noun phrase: `suggest_semantic_edges` → "Suggest semantic
+ * edges". Splits on `_` or `.` so a legacy dotted or an MCP synthetic name is
+ * still rendered readably.
  */
 export function deriveToolCallLabel(capability: string): string {
   const segments = capability
-    .split(".")
-    .map((s) => s.trim().replace(/_/g, " ").toLowerCase())
+    .split(/[._]/)
+    .map((s) => s.trim().toLowerCase())
     .filter(Boolean);
   const first = segments[0];
   if (first === undefined) return capability;
   if (segments.length === 1) return capitalize(first);
-  const meaningful =
-    segments.length > 2 && GENERIC_PREFIXES.has(first) ? segments.slice(1) : segments;
-  const verb = meaningful[meaningful.length - 1];
-  const nounPhrase = meaningful.slice(0, -1).join(" ");
+  const verb = first;
+  const nounPhrase = segments.slice(1).join(" ");
   return capitalize(`${verb} ${nounPhrase}`.trim());
 }
 
-/** Resolve the domain icon for a capability; `Wrench` when no domain matches. */
+/** Resolve the domain icon for a capability; `Wrench` when no keyword matches. */
 export function toolCallIcon(capability: string): LucideIcon {
-  for (const segment of capability.split(".")) {
+  for (const segment of capability.split(/[._]/)) {
     const icon = DOMAIN_ICONS[segment.trim().toLowerCase()];
     if (icon) return icon;
   }

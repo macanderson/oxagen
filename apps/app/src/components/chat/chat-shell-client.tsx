@@ -771,7 +771,7 @@ export function ChatShellClient({
               ? "failed"
               : "running";
         const active = tc.status === "pending" || tc.status === "running";
-        if (tc.capability === "agent.code.execute") {
+        if (tc.capability === "execute_code") {
           const preview = (tc.inputPreview as Record<string, unknown> | null) ?? {};
           const language = typeof preview.language === "string" ? preview.language : "node";
           const code = typeof preview.code === "string" ? preview.code : "";

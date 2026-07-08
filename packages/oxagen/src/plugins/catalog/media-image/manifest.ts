@@ -12,6 +12,6 @@ export const mediaImageManifest: OxagenPluginManifest = {
   category: "media",
   icon: "image-plus",
   color: "#6366f1",
-  contracts: ["image.generate", "image.create", "image.analyze", "image.list"],
+  contracts: ["generate_image", "create_image", "analyze_image", "list_images"],
   scopes: [],
 };

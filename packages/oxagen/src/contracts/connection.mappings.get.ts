@@ -3,7 +3,6 @@ import { registerCapability } from "../registry";
 
 export const connectionMappingsGet = registerCapability({
   name: "get_connection_mappings",
-  aliases: ["connection.mappings.get"],
   domain: "connection",
   description: "Get the current entity type mappings for a data source connection.",
   mode: "sync",

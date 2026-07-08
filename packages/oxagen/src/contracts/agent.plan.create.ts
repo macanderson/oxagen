@@ -13,7 +13,6 @@ const planTaskSchema = z.object({
 
 export const agentPlanCreate = registerCapability({
   name: "create_plan",
-  aliases: ["agent.plan.create"],
   domain: "agent",
   description:
     "Create a structured hierarchical execution plan with tasks, dependencies, and approval gates; the plan must be approved via agent.plan.approve before execution proceeds",

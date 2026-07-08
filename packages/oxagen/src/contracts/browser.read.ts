@@ -6,7 +6,6 @@ import { registerCapability } from "../registry";
 
 export const browserRead = registerCapability({
   name: "read_page",
-  aliases: ["browser.read"],
   domain: "browser",
   description:
     "Read visible text from the durable sandbox browser's current page (whole page, or a CSS-selected element) for assertions.",

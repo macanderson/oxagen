@@ -165,6 +165,6 @@ describe("graph.node.list capability", () => {
   // ── registry ──────────────────────────────────────────────────────────────
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("graph.node.list")).toBe(graphNodeList);
+    expect(getCapability("list_nodes")).toBe(graphNodeList);
   });
 });

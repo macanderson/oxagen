@@ -14,7 +14,7 @@ import { getSessionOrRedirect } from "@/lib/session";
 import { invoke } from "@oxagen/oxagen";
 import { budgetPolicyWrite } from "@oxagen/oxagen/contracts/budget.policy.write";
 // Side-effect import: bind every foundation handler into the shared kernel so
-// invoke("budget.policy.write", …) can resolve its handler at runtime.
+// invoke("update_user_budget", …) can resolve its handler at runtime.
 import "@oxagen/handlers/register";
 import type { CapabilityContext } from "@oxagen/oxagen";
 
@@ -56,7 +56,7 @@ export async function saveBudgetDefaultAction(
   };
 
   try {
-    await invoke("budget.policy.write", parsed.data, ctx, { surface: "agent" });
+    await invoke("update_user_budget", parsed.data, ctx, { surface: "agent" });
     return { ok: true };
   } catch (err) {
     return {

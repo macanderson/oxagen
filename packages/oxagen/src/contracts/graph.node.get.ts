@@ -3,7 +3,6 @@ import { registerCapability } from "../registry";
 
 export const graphNodeGet = registerCapability({
   name: "get_node",
-  aliases: ["graph.node.get"],
   domain: "graph",
   description: "Retrieve a KnowledgeNode by its publicId.",
   mode: "sync",

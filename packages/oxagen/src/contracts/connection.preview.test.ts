@@ -180,6 +180,6 @@ describe("connection.preview capability", () => {
   // ── registry ──────────────────────────────────────────────────────────────
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("connection.preview")).toBe(connectionPreview);
+    expect(getCapability("preview_connection")).toBe(connectionPreview);
   });
 });

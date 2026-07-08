@@ -537,7 +537,7 @@ describe("PATCH /connections/:id", () => {
     expect(res.status).toBe(200);
     expect(mocks.invoke).toHaveBeenCalledTimes(1);
     const [name, input] = mocks.invoke.mock.calls[0] as [string, Record<string, unknown>];
-    expect(name).toBe("connection.update");
+    expect(name).toBe("update_connection");
     expect(input.connectionId).toBe("con_ABC");
     expect(input.displayName).toBe("Renamed");
   });
@@ -551,7 +551,7 @@ describe("POST /connections/:id/pause", () => {
     const res = await post(`${BASE}/con_ABC/pause`, { paused: true });
     expect(res.status).toBe(200);
     const [name, input] = mocks.invoke.mock.calls[0] as [string, Record<string, unknown>];
-    expect(name).toBe("connection.pause");
+    expect(name).toBe("pause_connection");
     expect(input.connectionId).toBe("con_ABC");
     expect(input.paused).toBe(true);
   });

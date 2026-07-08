@@ -18,7 +18,7 @@ import { withTenantDb } from "@oxagen/database";
 import { eq, and, inArray, isNull, or, gt, sql } from "drizzle-orm";
 import { schema } from "@oxagen/database";
 import type { Grant, Role, RoleGrant, Policy } from "@oxagen/oxagen/iam";
-import { type ResolvedPrincipal, namesForCapability } from "@oxagen/oxagen";
+import { type ResolvedPrincipal } from "@oxagen/oxagen";
 import { logger } from "./logger";
 
 export interface AuthzData {
@@ -270,13 +270,7 @@ async function _fetchAuthz(args: FetchAuthzArgs): Promise<AuthzData> {
             .where(
               and(
                 inArray(schema.roleGrants.roleId, roleIds),
-                // Match the canonical name AND any retired alias (ADR-022) so a
-                // role_grants row written under an old name still grants access
-                // after a rename — no data migration required.
-                inArray(
-                  schema.roleGrants.capabilityId,
-                  namesForCapability(capability),
-                ),
+                eq(schema.roleGrants.capabilityId, capability),
               ),
             )
         : Promise.resolve([] as (typeof schema.roleGrants.$inferSelect)[]),

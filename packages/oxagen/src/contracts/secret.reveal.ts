@@ -7,7 +7,6 @@ import { registerCapability } from "../registry";
 // to environments.secret_access_log (Spec §7.3).
 export const secretReveal = registerCapability({
   name: "reveal_secret",
-  aliases: ["secret.reveal"],
   domain: "secret",
   description: "Reveal a single secret's plaintext value (override ?? default) for an environment. Owner/Admin only; every reveal is recorded in the access log.",
   mode: "sync",

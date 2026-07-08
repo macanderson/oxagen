@@ -773,7 +773,7 @@ export async function POST(request: NextRequest): Promise<Response> {
               { orgId: tenant.id, workspaceId: workspace.id },
               () =>
                 invoke(
-                  "agent.definition.get",
+                  "get_agent_def",
                   { agentId },
                   capCtx,
                   { surface: "agent" },
@@ -932,7 +932,7 @@ export async function POST(request: NextRequest): Promise<Response> {
               // (the member's own policy applies unchanged). A broken
               // governance row must never block a turn from running, exactly
               // like the TURN_BUDGET_OFF fallback above.
-              invoke("workspace.budget_policy.read", {}, capCtx, { surface: "agent" })
+              invoke("get_budget_policy", {}, capCtx, { surface: "agent" })
                 .then((raw) => governedBudgetFromRead(raw as SavedWorkspaceGovernance))
                 .catch(() => null),
             ]),
@@ -1047,7 +1047,7 @@ export async function POST(request: NextRequest): Promise<Response> {
                 execute: async (input: { instruction: string }) => {
                   const { instruction } = input;
                   const rawResult = await invoke(
-                    "form.fill",
+                    "fill_form",
                     {
                       route: pcRoute,
                       entitySummary: pcEntitySummary,

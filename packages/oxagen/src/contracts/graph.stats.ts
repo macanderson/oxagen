@@ -10,7 +10,6 @@ const renderDirectiveSchema = z.object({
 
 export const graphStats = registerCapability({
   name: "get_graph_stats",
-  aliases: ["graph.stats"],
   domain: "graph",
   description: "Workspace graph statistics: node count, edge count, inferred edge count, breakdown by type.",
   mode: "sync",

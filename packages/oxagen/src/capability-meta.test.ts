@@ -173,8 +173,8 @@ describe("resolveRecordLinks", () => {
 
 describe("getRenderHint / curated tables", () => {
   it("returns a curated hint for a prioritized capability", () => {
-    expect(getRenderHint("web.search")).toEqual({ componentId: "web-search-card" });
-    expect(getRenderHint("graph.node.get")?.componentId).toBe("graph-node-card");
+    expect(getRenderHint("search_web")).toEqual({ componentId: "web-search-card" });
+    expect(getRenderHint("get_node")?.componentId).toBe("graph-node-card");
   });
   it("returns undefined for an uncurated capability with no declared render", () => {
     expect(getRenderHint("totally.unknown.capability")).toBeUndefined();
@@ -194,7 +194,7 @@ describe("getRenderHint / curated tables", () => {
       render: { componentId: "declared-card" },
       produces: ["graph.nodeId"],
       consumes: ["topic"],
-      chainHints: ["graph.edge.upsert"],
+      chainHints: ["upsert_edge"],
     });
     expect(getRenderHint("test.meta.declared-render")).toEqual({ componentId: "declared-card" });
   });
@@ -207,9 +207,9 @@ describe("getRenderHint / curated tables", () => {
 
 describe("getCapabilityChain", () => {
   it("returns curated chain metadata", () => {
-    const chain = getCapabilityChain("web.search");
+    const chain = getCapabilityChain("search_web");
     expect(chain.produces).toContain("search.results");
-    expect(chain.chainHints).toContain("graph.node.upsert");
+    expect(chain.chainHints).toContain("upsert_node");
   });
   it("returns an empty chain for an uncurated capability", () => {
     expect(getCapabilityChain("totally.unknown.capability")).toEqual({
@@ -223,7 +223,7 @@ describe("getCapabilityChain", () => {
     const chain = getCapabilityChain("test.meta.declared-render");
     expect(chain.produces).toEqual(["graph.nodeId"]);
     expect(chain.consumes).toEqual(["topic"]);
-    expect(chain.chainHints).toEqual(["graph.edge.upsert"]);
+    expect(chain.chainHints).toEqual(["upsert_edge"]);
   });
   it("all curated produces/consumes tags are in the controlled vocabulary", () => {
     const vocab = new Set<string>(CAPABILITY_DATA_TAGS);
@@ -279,16 +279,16 @@ describe("shouldSynthesizeComponent", () => {
 describe("resolveRenderDirective", () => {
   it("routes a curated capability to its bespoke component with the envelope", () => {
     const output = { results: [{ title: "USS Nautilus", url: "https://x", content: "…", score: 1 }], totalResults: 1, searchId: "s_1" };
-    const d = resolveRenderDirective({ capability: "web.search", output, slugs: SLUGS });
+    const d = resolveRenderDirective({ capability: "search_web", output, slugs: SLUGS });
     expect(d).not.toBeNull();
     expect(d?.componentId).toBe("web-search-card");
-    expect(d?.props).toMatchObject({ capability: "web.search", output, orgSlug: "acme", workspaceSlug: "research" });
+    expect(d?.props).toMatchObject({ capability: "search_web", output, orgSlug: "acme", workspaceSlug: "research" });
     expect(Array.isArray(d?.props.links)).toBe(true);
   });
 
   it("resolves record links + title for graph.node.get", () => {
     const output = { node: { nodeId: "n_7", displayName: "Hyman Rickover", label: "Person" } };
-    const d = resolveRenderDirective({ capability: "graph.node.get", output, slugs: SLUGS });
+    const d = resolveRenderDirective({ capability: "get_node", output, slugs: SLUGS });
     expect(d?.componentId).toBe("graph-node-card");
     expect(d?.props.title).toBe("Hyman Rickover");
     const links = d?.props.links as Array<{ href: string | null; id: string }>;
@@ -297,9 +297,9 @@ describe("resolveRenderDirective", () => {
 
   it("falls back to the generic capability-result component for an uncurated, substantial output", () => {
     const output = { wordCount: 1200, title: "Page", content: "lots of text", statusCode: 200, url: "https://x", fetchedAt: "t" };
-    const d = resolveRenderDirective({ capability: "web.fetch", output, slugs: SLUGS });
+    const d = resolveRenderDirective({ capability: "fetch_web_page", output, slugs: SLUGS });
     expect(d?.componentId).toBe("capability-result");
-    expect(d?.props.capability).toBe("web.fetch");
+    expect(d?.props.capability).toBe("fetch_web_page");
   });
 
   it("returns null for a trivial uncurated ack (stays on the compact card)", () => {
@@ -308,7 +308,7 @@ describe("resolveRenderDirective", () => {
 
   it("omits slug props and yields href:null links when slugs are absent", () => {
     const output = { nodeId: "n_1", created: true };
-    const d = resolveRenderDirective({ capability: "graph.node.upsert", output });
+    const d = resolveRenderDirective({ capability: "upsert_node", output });
     expect(d?.props.orgSlug).toBeUndefined();
     const links = d?.props.links as Array<{ href: string | null }>;
     expect(links[0]?.href).toBeNull();
@@ -324,7 +324,7 @@ describe("resolveRenderDirective — structural transforms (coding-agent cards)"
       changedFiles: ["src/index.ts", "src/routes/health.ts"],
       summary: "Wired up the health-check route.",
     };
-    const d = resolveRenderDirective({ capability: "agent.repo.edit", output });
+    const d = resolveRenderDirective({ capability: "edit_repo_file", output });
     expect(d?.componentId).toBe("code-diff");
     expect(d?.props.files).toEqual([
       { path: "src/index.ts", patch: null, additions: null, deletions: null },
@@ -369,7 +369,7 @@ describe("resolveRenderDirective — structural transforms (coding-agent cards)"
 
   it("returns null for agent.repo.edit when changedFiles is empty (falls through to standard path)", () => {
     const d = resolveRenderDirective({
-      capability: "agent.repo.edit",
+      capability: "edit_repo_file",
       output: { prNumber: 1, prUrl: "x", branch: "b", changedFiles: [], summary: "s" },
     });
     // No changed files and no curated hint for agent.repo.edit — a substantial
@@ -382,7 +382,7 @@ describe("resolveRenderDirective — structural transforms (coding-agent cards)"
       commitSha: "a1b2c3d4e5f6",
       htmlUrl: "https://github.com/acme/repo/blob/main/src%2Fconfig.ts",
     };
-    const d = resolveRenderDirective({ capability: "repo.file.put", output });
+    const d = resolveRenderDirective({ capability: "put_repo_file", output });
     expect(d?.componentId).toBe("code-diff");
     expect(d?.props.files).toEqual([
       { path: "src/config.ts", patch: null, additions: null, deletions: null },
@@ -420,7 +420,7 @@ describe("resolveRenderDirective — structural transforms (coding-agent cards)"
 
   it("falls back to a generic 'file' path for repo.file.put when htmlUrl has no /blob/ segment", () => {
     const d = resolveRenderDirective({
-      capability: "repo.file.put",
+      capability: "put_repo_file",
       output: { commitSha: "abc1234", htmlUrl: "https://example.com/opaque" },
     });
     expect((d?.props.files as Array<{ path: string }>)[0]?.path).toBe("opaque");
@@ -429,7 +429,7 @@ describe("resolveRenderDirective — structural transforms (coding-agent cards)"
   it("maps large agent.sandbox.exec output to terminal-trace", () => {
     const stdout = Array.from({ length: 45 }, (_, i) => `line ${i}`).join("\n");
     const d = resolveRenderDirective({
-      capability: "agent.sandbox.exec",
+      capability: "run_sandbox_command",
       output: { exitCode: 0, stdout, stderr: "", executionMs: 500, timedOut: false, restored: false },
     });
     expect(d?.componentId).toBe("terminal-trace");
@@ -438,7 +438,7 @@ describe("resolveRenderDirective — structural transforms (coding-agent cards)"
 
   it("does NOT map small agent.sandbox.exec output to terminal-trace", () => {
     const d = resolveRenderDirective({
-      capability: "agent.sandbox.exec",
+      capability: "run_sandbox_command",
       output: {
         exitCode: 0,
         stdout: "ok",
@@ -455,7 +455,7 @@ describe("resolveRenderDirective — structural transforms (coding-agent cards)"
     const stdout = Array.from({ length: 20 }, (_, i) => `out ${i}`).join("\n");
     const stderr = Array.from({ length: 25 }, (_, i) => `err ${i}`).join("\n");
     const d = resolveRenderDirective({
-      capability: "agent.sandbox.exec",
+      capability: "run_sandbox_command",
       output: { exitCode: 1, stdout, stderr, executionMs: 200, timedOut: false, restored: false },
     });
     expect(d?.componentId).toBe("terminal-trace");
