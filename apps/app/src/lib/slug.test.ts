@@ -17,7 +17,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { slugify } from "./slug";
+import { slugify, isValidSlug, SLUG_PATTERN } from "./slug";
 
 // The regex the server validates against. We derive it here — if the source
 // module ever changes the rules the tests serve as a canary.
@@ -210,6 +210,43 @@ describe("slugify — server regex conformance", () => {
         expect(result.startsWith("-")).toBe(false);
         expect(result.endsWith("-")).toBe(false);
       }
+    }
+  });
+});
+
+describe("isValidSlug / SLUG_PATTERN", () => {
+  it("accepts well-formed kebab-case slugs", () => {
+    for (const s of ["oxagen", "acme", "mac-anderson", "a", "team-1", "x9"]) {
+      expect(isValidSlug(s)).toBe(true);
+    }
+  });
+
+  it("rejects static/metadata paths that fall through to [orgSlug]", () => {
+    for (const s of [
+      "favicon.ico",
+      "robots.txt",
+      "sitemap.xml",
+      "apple-touch-icon.png",
+      "manifest.webmanifest",
+    ]) {
+      expect(isValidSlug(s)).toBe(false);
+    }
+  });
+
+  it("rejects malformed slugs (empty, spaces, punctuation, bad hyphens, caps)", () => {
+    for (const s of ["", " ", "a b", "a_b", "-lead", "trail-", "a--b", "Acme", "café"]) {
+      expect(isValidSlug(s)).toBe(false);
+    }
+  });
+
+  it("agrees with the server validation regex used by the create actions", () => {
+    expect(SLUG_PATTERN.source).toBe(/^[a-z0-9]+(?:-[a-z0-9]+)*$/.source);
+  });
+
+  it("accepts every slugify() output that is non-empty", () => {
+    for (const input of ["Hello World", "Ácme Inc.", "  multi   space  ", "a@#b"]) {
+      const out = slugify(input);
+      if (out.length > 0) expect(isValidSlug(out)).toBe(true);
     }
   });
 });

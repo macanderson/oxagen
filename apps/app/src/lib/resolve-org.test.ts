@@ -74,7 +74,11 @@ vi.mock("react", async (importOriginal) => {
   return { ...actual, cache: (fn: unknown) => fn };
 });
 
-import { resolveOrg, resolveWorkspace } from "./resolve-org";
+import {
+  resolveOrg,
+  resolveOrgWithRedirect,
+  resolveWorkspace,
+} from "./resolve-org";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -106,6 +110,44 @@ describe("resolveOrg", () => {
     setMockRows([]);
     await expect(resolveOrg("nonexistent")).rejects.toThrow("NEXT_NOT_FOUND");
     expect(notFoundMock).toHaveBeenCalledOnce();
+  });
+
+  // (f) Malformed slugs (static/metadata paths that fall through to [orgSlug])
+  // short-circuit to notFound() WITHOUT a DB round-trip. Regression guard for
+  // the production incident where /favicon.ico, /robots.txt were run as org
+  // slug lookups (26 failed queries/12h). — OXA-1779
+  it.each(["favicon.ico", "robots.txt", "sitemap.xml", "apple-touch-icon.png"])(
+    "rejects %s with notFound() and never touches the DB",
+    async (badSlug) => {
+      setMockRows([{ id: "x", publicId: "x", name: "x", slug: badSlug }]);
+      await expect(resolveOrg(badSlug)).rejects.toThrow("NEXT_NOT_FOUND");
+      expect(notFoundMock).toHaveBeenCalledOnce();
+      expect(mockWithSystemDb).not.toHaveBeenCalled();
+    },
+  );
+});
+
+// The layout actually resolves via resolveOrgWithRedirect — assert the guard is
+// present on that (history-aware) path too, so a bad slug skips BOTH the org
+// query and the slug_history fallback query. — OXA-1779
+describe("resolveOrgWithRedirect (guard)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("rejects a dotted path before any DB query", async () => {
+    await expect(resolveOrgWithRedirect("favicon.ico")).rejects.toThrow(
+      "NEXT_NOT_FOUND",
+    );
+    expect(notFoundMock).toHaveBeenCalledOnce();
+    expect(mockWithSystemDb).not.toHaveBeenCalled();
+  });
+
+  it("still queries the DB for a well-formed slug", async () => {
+    setMockRows([{ id: "o1", publicId: "p1", name: "Acme", slug: "acme" }]);
+    const org = await resolveOrgWithRedirect("acme");
+    expect(org.slug).toBe("acme");
+    expect(mockWithSystemDb).toHaveBeenCalled();
   });
 });
 

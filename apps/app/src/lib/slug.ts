@@ -20,3 +20,23 @@ export function slugify(input: string): string {
     .replace(/-+/g, "-") // collapse repeated hyphens
     .replace(/^-+|-+$/g, ""); // trim leading/trailing hyphens
 }
+
+/**
+ * The canonical slug format the server actions validate against — lowercase
+ * kebab-case, no leading/trailing/double hyphens, no dots or other punctuation.
+ * This is the SAME pattern the org/workspace create + settings actions enforce;
+ * exported here so slug consumers (routing, resolvers) share one definition
+ * instead of re-inlining the regex.
+ */
+export const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+/**
+ * True when `value` is a well-formed slug. Cheap, allocation-free guard used to
+ * reject strings that could never be a real org/workspace slug BEFORE spending
+ * a DB round-trip on them — e.g. static/metadata paths that fall through to the
+ * `[orgSlug]` route (`favicon.ico`, `robots.txt`, `sitemap.xml`,
+ * `apple-touch-icon.png`), all of which contain a `.` and so fail this test.
+ */
+export function isValidSlug(value: string): boolean {
+  return SLUG_PATTERN.test(value);
+}
