@@ -30,7 +30,6 @@ import {
   DEFAULT_TIMEOUTS,
   withTimeout,
   callModelWithTimeout,
-  createTurnRunner,
   makeTurnController,
   makeStallDetector,
   wrapToolsWithTimeout,
@@ -273,83 +272,6 @@ describe("callModelWithTimeout", () => {
     controller.abort();
     await settled;
     expect(attempts).toBe(1);
-  });
-});
-
-// ── createTurnRunner (progress-guarded turn; no wall-clock cap) ────────────────
-
-describe("createTurnRunner", () => {
-  it("runs a turn of 200 sequential model calls to completion — never aborted by a turn timer", async () => {
-    // Real timers: 200 near-instant calls finish in ~0ms, far under the 300s
-    // inactivity window. The whole point of Bug 1 — a turn with hundreds of
-    // calls must not be capped by a turn timer.
-    const runner = createTurnRunner({ turnInactivityMs: 300_000 });
-    const reason = await runner.run(async () => {
-      for (let i = 0; i < 200; i++) {
-        await Promise.resolve();
-        runner.onProgress({ kind: "model_call_done", callId: `c${i}`, at: Date.now() });
-      }
-    });
-    expect(reason).toBe("completed");
-  });
-
-  it("aborts a stalled turn with reason=inactivity", async () => {
-    vi.useFakeTimers();
-    const logs: string[] = [];
-    const runner = createTurnRunner(
-      { turnInactivityMs: 5_000 },
-      { onLog: (l) => logs.push(l) },
-    );
-    // Work that never completes and never reports progress.
-    const reason = runner.run(
-      () =>
-        new Promise<void>((resolve) => {
-          runner.signal.addEventListener("abort", () => resolve(), { once: true });
-        }),
-    );
-    await vi.advanceTimersByTimeAsync(5_001);
-    await expect(reason).resolves.toBe("inactivity");
-    expect(logs.some((l) => l.includes("scope=turn") && l.includes("reason=inactivity"))).toBe(true);
-  });
-
-  it("does NOT abort a progressing turn even past the inactivity window", async () => {
-    // Real timers, tiny window: 5 iterations spaced 30ms apart (total 150ms ≫
-    // the 50ms window) — but each reports progress within the window, so the
-    // inactivity guard keeps resetting and never fires.
-    const runner = createTurnRunner({ turnInactivityMs: 50 });
-    const reason = await runner.run(async () => {
-      for (let i = 0; i < 5; i++) {
-        await new Promise((r) => setTimeout(r, 30));
-        runner.onProgress({ kind: "tool_call_done", callId: `t${i}`, at: Date.now() });
-      }
-    });
-    expect(reason).toBe("completed");
-  });
-
-  it("has no hard ceiling by default", async () => {
-    vi.useFakeTimers();
-    const runner = createTurnRunner({ turnInactivityMs: undefined });
-    let done = false;
-    const reason = runner.run(async () => {
-      await vi.advanceTimersByTimeAsync(60 * 60 * 1000); // 1 hour of pure work
-      done = true;
-    });
-    await vi.runAllTimersAsync();
-    await expect(reason).resolves.toBe("completed");
-    expect(done).toBe(true);
-  });
-
-  it("fires the optional hard ceiling when explicitly configured", async () => {
-    vi.useFakeTimers();
-    const runner = createTurnRunner({ turnHardCeilingMs: 2_000 });
-    const reason = runner.run(
-      () =>
-        new Promise<void>((resolve) => {
-          runner.signal.addEventListener("abort", () => resolve(), { once: true });
-        }),
-    );
-    await vi.advanceTimersByTimeAsync(2_001);
-    await expect(reason).resolves.toBe("hard_ceiling");
   });
 });
 

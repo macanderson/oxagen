@@ -22,7 +22,7 @@
  *     {@link TimeoutConfig.turnInactivityMs} guard aborts the turn only when *no*
  *     model or tool call has completed within that window. Any completed call
  *     resets it, so a turn with hundreds of calls is fine as long as calls keep
- *     landing ({@link createTurnRunner}).
+ *     landing ({@link makeStallDetector}).
  *   - **Legitimate silence gets escape hatches** — {@link makeStallDetector}
  *     `shouldDefer` keeps the guard from firing while a tool/fleet is executing
  *     (bounded by its own timeout), and `probe` makes one CI call-out before an
@@ -130,7 +130,7 @@ export function resolveCiWaitCapMs(): number {
  * Fixed per-operation defaults that are not part of the tunable policy above.
  *
  * NOTE: there is deliberately **no** `turnMs` here. A turn is never capped by
- * total elapsed time — see the module docblock and {@link createTurnRunner}.
+ * total elapsed time — see the module docblock and {@link makeStallDetector}.
  */
 export const TIMEOUTS = {
   /**
@@ -462,122 +462,6 @@ export function makeStallDetector(
 
   schedule();
   return { reset, stop };
-}
-
-// ── Turn runner (progress-based; the contract implementation) ─────────────────
-
-/** How a turn ended: it finished, or a guard aborted it. */
-export type TurnEndReason = "completed" | "inactivity" | "hard_ceiling";
-
-/** A single model call carries its own deadline; the turn does not impose one. */
-export interface ModelCall {
-  id: string;
-  model: string;
-  /** Defaults to {@link TimeoutConfig.perModelCallMs}. */
-  timeoutMs: number;
-  startedAt: number;
-}
-
-/** Emitted when a model or tool call completes — resets the inactivity guard. */
-export interface ProgressEvent {
-  kind: "model_call_done" | "tool_call_done";
-  callId: string;
-  at: number;
-}
-
-/**
- * Watches a turn by PROGRESS, not wall-clock:
- *  - a completed model/tool call emits a {@link ProgressEvent} via `onProgress`
- *  - the inactivity guard (if configured) resets on every ProgressEvent
- *  - the turn aborts only on inactivity or the optional hard ceiling
- */
-export interface TurnRunner {
-  onProgress(ev: ProgressEvent): void;
-  run(work: () => Promise<void>): Promise<TurnEndReason>;
-}
-
-/** A {@link TurnRunner} that also exposes its abort signal for the turn body. */
-export interface RunningTurnRunner extends TurnRunner {
-  /** Pass this to the turn's model/tool calls so guards can cancel them. */
-  readonly signal: AbortSignal;
-}
-
-/**
- * Build a progress-guarded turn runner. The turn completes as long as calls keep
- * landing; it aborts only when no call completes within `turnInactivityMs`
- * (progress-based) or, if set, when the last-resort `turnHardCeilingMs` elapses.
- */
-export function createTurnRunner(
-  cfg: Pick<TimeoutConfig, "turnInactivityMs" | "turnHardCeilingMs">,
-  opts?: { onLog?: (line: string) => void; callerSignal?: AbortSignal | null },
-): RunningTurnRunner {
-  const controller = makeTurnController(opts?.callerSignal, {
-    hardCeilingMs: cfg.turnHardCeilingMs,
-  });
-  let endReason: TurnEndReason | null = null;
-  let lastProgressAt = Date.now();
-  let guard: { reset: () => void; stop: () => void } | null = null;
-
-  // A hard-ceiling abort carries an AgentTimeoutError reason; surface it as the
-  // hard_ceiling end reason if it fired before any inactivity abort.
-  controller.signal.addEventListener(
-    "abort",
-    () => {
-      if (endReason === null && controller.signal.reason instanceof AgentTimeoutError) {
-        endReason = "hard_ceiling";
-      }
-    },
-    { once: true },
-  );
-
-  function onProgress(ev: ProgressEvent): void {
-    lastProgressAt = ev.at;
-    guard?.reset();
-  }
-
-  async function run(work: () => Promise<void>): Promise<TurnEndReason> {
-    endReason = null;
-
-    if (typeof cfg.turnInactivityMs === "number" && cfg.turnInactivityMs > 0) {
-      const window = cfg.turnInactivityMs;
-      guard = makeStallDetector(window, () => {
-        if (!controller.signal.aborted) {
-          const idleMs = Date.now() - lastProgressAt;
-          opts?.onLog?.(`[timeout] scope=turn reason=inactivity idle_ms=${idleMs}`);
-          endReason = "inactivity";
-          controller.abort(new AgentTimeoutError("turn inactivity", window));
-        }
-      });
-    }
-
-    const aborted = new Promise<"aborted">((resolve) => {
-      if (controller.signal.aborted) resolve("aborted");
-      else controller.signal.addEventListener("abort", () => resolve("aborted"), { once: true });
-    });
-
-    let workErr: unknown = null;
-    const done = work().then(
-      () => "done" as const,
-      (err: unknown) => {
-        workErr = err;
-        return "error" as const;
-      },
-    );
-
-    try {
-      const outcome = await Promise.race([done, aborted]);
-      if (outcome === "done") return "completed";
-      if (outcome === "aborted") return endReason ?? "completed";
-      // work threw: if a guard fired, report that; otherwise propagate.
-      if (endReason) return endReason;
-      throw workErr;
-    } finally {
-      guard?.stop();
-      guard = null;
-    }
-  }
-
-  return { onProgress, run, signal: controller.signal };
 }
 
 // ── Tool timeout wrapping ─────────────────────────────────────────────────────
