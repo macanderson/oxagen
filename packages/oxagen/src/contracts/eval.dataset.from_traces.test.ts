@@ -70,7 +70,7 @@ describe("eval.dataset.from_traces capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("eval.dataset.from_traces")).toBe(
+    expect(getCapability("create_trace_dataset")).toBe(
       evalDatasetFromTraces,
     );
   });

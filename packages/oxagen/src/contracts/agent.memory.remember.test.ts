@@ -139,7 +139,7 @@ describe("agent.memory.remember capability", () => {
   });
 
   it("is registered under name 'agent.memory.remember'", () => {
-    expect(getCapability("agent.memory.remember")).toBe(agentMemoryRemember);
+    expect(getCapability("save_memory")).toBe(agentMemoryRemember);
   });
 
   it("is scoped", () => {

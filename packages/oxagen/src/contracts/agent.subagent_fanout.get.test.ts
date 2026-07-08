@@ -81,6 +81,6 @@ describe("agent.subagent.fanout.get capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("agent.subagent_fanout.get")).toBe(agentSubagentFanoutGet);
+    expect(getCapability("get_subagent_fanout")).toBe(agentSubagentFanoutGet);
   });
 });

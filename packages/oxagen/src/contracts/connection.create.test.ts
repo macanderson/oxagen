@@ -83,7 +83,7 @@ describe("connection.create capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("connection.create")).toBe(connectionCreate);
+    expect(getCapability("create_connection")).toBe(connectionCreate);
   });
 
   it("requires approval", () => {

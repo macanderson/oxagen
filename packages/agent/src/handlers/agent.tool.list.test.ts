@@ -52,7 +52,7 @@ import { listEntitledCapabilityPluginIds } from "@oxagen/plugins";
 import { TEST_CTX as CTX } from "../test-utils/fixtures";
 
 const BUILTIN_CAP = {
-  name: "document.generate",
+  name: "generate_document",
   description: "Generates a document",
   domain: "documents",
   agent: { riskLevel: "low" as const, category: "documents", requiresApproval: false },
@@ -171,7 +171,7 @@ describe("agent.tool.list handler — entitlement filter (WP4)", () => {
     const result = await agentToolListHandler({ includeExternal: false }, CTX);
 
     expect(result.tools.map((t) => t.name)).toEqual([
-      "document.generate",
+      "generate_document",
       "media.svg.generate",
     ]);
   });
@@ -185,7 +185,7 @@ describe("agent.tool.list handler — entitlement filter (WP4)", () => {
 
     const result = await agentToolListHandler({ includeExternal: false }, CTX);
 
-    expect(result.tools.map((t) => t.name)).toEqual(["document.generate"]);
+    expect(result.tools.map((t) => t.name)).toEqual(["generate_document"]);
   });
 
   it("leaves builtin capabilities unaffected regardless of entitlement state", async () => {
@@ -195,7 +195,7 @@ describe("agent.tool.list handler — entitlement filter (WP4)", () => {
 
     const result = await agentToolListHandler({ includeExternal: false }, CTX);
 
-    expect(result.tools.map((t) => t.name)).toEqual(["document.generate"]);
+    expect(result.tools.map((t) => t.name)).toEqual(["generate_document"]);
     expect(listEntitledCapabilityPluginIds).not.toHaveBeenCalled();
   });
 
@@ -211,14 +211,14 @@ describe("agent.tool.list handler — entitlement filter (WP4)", () => {
     const result = await agentToolListHandler({ includeExternal: false }, CTX);
 
     // Plugin-claimed tool is excluded (fail-closed); builtins unaffected; no throw.
-    expect(result.tools.map((t) => t.name)).toEqual(["document.generate"]);
+    expect(result.tools.map((t) => t.name)).toEqual(["generate_document"]);
   });
 
   it("fetches the entitled set at most once per handler invocation", async () => {
-    const PLUGIN_B = { ...PLUGIN_MANIFEST, id: "oxagen/other", contracts: ["document.generate"] };
+    const PLUGIN_B = { ...PLUGIN_MANIFEST, id: "oxagen/other", contracts: ["generate_document"] };
     vi.mocked(pluginForContract).mockImplementation((name: string) => {
       if (name === "media.svg.generate") return PLUGIN_MANIFEST;
-      if (name === "document.generate") return PLUGIN_B;
+      if (name === "generate_document") return PLUGIN_B;
       return undefined;
     });
     vi.mocked(listEntitledCapabilityPluginIds).mockResolvedValue(

@@ -29,7 +29,7 @@ describe("agent.memory.delete capability", () => {
   });
 
   it("is registered under name 'agent.memory.delete'", () => {
-    expect(getCapability("agent.memory.delete")).toBe(agentMemoryDelete);
+    expect(getCapability("delete_memory")).toBe(agentMemoryDelete);
   });
 
   it("is scoped", () => {

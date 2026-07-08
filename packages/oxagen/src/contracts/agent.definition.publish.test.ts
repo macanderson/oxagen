@@ -34,7 +34,7 @@ describe("agent.definition.publish capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("agent.definition.publish")).toBe(
+    expect(getCapability("publish_agent_def")).toBe(
       agentDefinitionPublish,
     );
   });

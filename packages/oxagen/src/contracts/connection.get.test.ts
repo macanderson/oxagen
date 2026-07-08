@@ -65,7 +65,7 @@ describe("connection.get capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("connection.get")).toBe(connectionGet);
+    expect(getCapability("get_connection")).toBe(connectionGet);
   });
 
   it("is a read operation with low risk", () => {

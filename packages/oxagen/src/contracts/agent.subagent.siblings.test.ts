@@ -6,7 +6,7 @@ describe("agent.subagent.siblings capability", () => {
   // ── registration ──────────────────────────────────────────────────────────
 
   it("is registered under its contract name", () => {
-    expect(getCapability("agent.subagent.siblings")).toBe(agentSubagentSiblings);
+    expect(getCapability("list_subagent_siblings")).toBe(agentSubagentSiblings);
   });
 
   it("is a read-only sync capability on api/mcp/agent surfaces", () => {

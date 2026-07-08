@@ -263,6 +263,6 @@ describe("agent.subagent.dispatch capability", () => {
   // ── registry ──────────────────────────────────────────────────────────────
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("agent.subagent.dispatch")).toBe(agentSubagentDispatch);
+    expect(getCapability("dispatch_subagent")).toBe(agentSubagentDispatch);
   });
 });

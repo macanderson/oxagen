@@ -6,7 +6,7 @@ describe("audit.log.query capability", () => {
   // ── registration / metadata ───────────────────────────────────────────────
 
   it("is registered under its name with the audit domain", () => {
-    const cap = getCapability("audit.log.query");
+    const cap = getCapability("query_audit_log");
     expect(cap).toBeDefined();
     expect(auditLogQuery.domain).toBe("audit");
     expect(auditLogQuery.mode).toBe("sync");

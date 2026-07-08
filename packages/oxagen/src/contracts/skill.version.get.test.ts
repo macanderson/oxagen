@@ -168,7 +168,7 @@ describe("skill.version.get capability", () => {
   // ── registry ──────────────────────────────────────────────────────────────
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("skill.version.get")).toBe(skillVersionGet);
+    expect(getCapability("get_skill_version")).toBe(skillVersionGet);
   });
 
   it("has noBillingGate set", () => {

@@ -248,6 +248,6 @@ describe("research.swarm.status contract", () => {
   // ── registry ──────────────────────────────────────────────────────────────
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("research.swarm.status")).toBe(researchSwarmStatus);
+    expect(getCapability("get_research_status")).toBe(researchSwarmStatus);
   });
 });

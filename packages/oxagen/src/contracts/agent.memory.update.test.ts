@@ -124,7 +124,7 @@ describe("agent.memory.update capability", () => {
   });
 
   it("is registered under name 'agent.memory.update'", () => {
-    expect(getCapability("agent.memory.update")).toBe(agentMemoryUpdate);
+    expect(getCapability("update_memory")).toBe(agentMemoryUpdate);
   });
 
   it("is scoped", () => {

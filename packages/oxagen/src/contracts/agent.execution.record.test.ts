@@ -402,6 +402,6 @@ describe("agent.execution.record capability", () => {
   // ── registry ──────────────────────────────────────────────────────────────
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("agent.execution.record")).toBe(agentExecutionRecord);
+    expect(getCapability("record_execution")).toBe(agentExecutionRecord);
   });
 });

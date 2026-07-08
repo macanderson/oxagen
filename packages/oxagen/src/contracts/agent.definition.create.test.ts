@@ -68,6 +68,6 @@ describe("agent.definition.create capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("agent.definition.create")).toBe(agentDefinitionCreate);
+    expect(getCapability("create_agent_def")).toBe(agentDefinitionCreate);
   });
 });

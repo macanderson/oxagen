@@ -322,6 +322,6 @@ describe("agent.subagent.aggregate capability", () => {
   // ── registry ──────────────────────────────────────────────────────────────
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("agent.subagent.aggregate")).toBe(agentSubagentAggregate);
+    expect(getCapability("aggregate_subagents")).toBe(agentSubagentAggregate);
   });
 });

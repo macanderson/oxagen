@@ -35,6 +35,6 @@ describe("agent.file.lock.list capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("agent.file_lock.list")).toBe(agentFileLockList);
+    expect(getCapability("list_file_locks")).toBe(agentFileLockList);
   });
 });

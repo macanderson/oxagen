@@ -4,7 +4,7 @@ import { getCapability } from "../registry";
 
 describe("billing.subscription.upgrade.start capability", () => {
   it("is registered", () => {
-    expect(getCapability("billing.subscription_upgrade.start")).toBeDefined();
+    expect(getCapability("start_subscription_upgrade")).toBeDefined();
   });
 
   it("parses a valid input", () => {

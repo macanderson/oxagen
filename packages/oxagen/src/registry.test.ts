@@ -70,9 +70,9 @@ describe("capability registry", () => {
   });
 
   it("resolves getCapability by canonical name only (no alias fallback)", () => {
-    const cap = registerCapability(makeCap("org.create"));
-    expect(getCapability("org.create")).toBe(cap);
+    const cap = registerCapability(makeCap("test.canonical"));
+    expect(getCapability("test.canonical")).toBe(cap);
     // A name that is not the canonical registered name never resolves.
-    expect(getCapability("organization.create")).toBeUndefined();
+    expect(getCapability("test.legacy_name")).toBeUndefined();
   });
 });

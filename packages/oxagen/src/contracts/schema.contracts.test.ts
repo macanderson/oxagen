@@ -80,7 +80,7 @@ describe("PropertyInputSchema", () => {
 
 describe("schema.toggle contract", () => {
   it("registers and output shape is valid", () => {
-    const cap = getCapability("schema.toggle");
+    const cap = getCapability("toggle_schema");
     expect(cap).toBeDefined();
     const result = cap!.output.safeParse({
       schemaName: "sales_crm",
@@ -93,7 +93,7 @@ describe("schema.toggle contract", () => {
     expect(result.success).toBe(true);
   });
   it("rejects toggle output missing pinnedVersionId", () => {
-    const cap = getCapability("schema.toggle");
+    const cap = getCapability("toggle_schema");
     const result = cap!.output.safeParse({
       schemaName: "x",
       enabled: true,
@@ -107,7 +107,7 @@ describe("schema.toggle contract", () => {
 
 describe("schema.label.upsert contract", () => {
   it("registers and IO shape valid", () => {
-    const cap = getCapability("schema.label.upsert");
+    const cap = getCapability("upsert_schema_label");
     expect(cap).toBeDefined();
     const inputResult = cap!.input.safeParse({
       schemaName: "starter",
@@ -121,7 +121,7 @@ describe("schema.label.upsert contract", () => {
     expect(outputResult.success).toBe(true);
   });
   it("rejects label upsert missing required fields", () => {
-    const cap = getCapability("schema.label.upsert");
+    const cap = getCapability("upsert_schema_label");
     const result = cap!.input.safeParse({ name: "Customer" });
     expect(result.success).toBe(false);
   });
@@ -129,7 +129,7 @@ describe("schema.label.upsert contract", () => {
 
 describe("schema.validate.node contract", () => {
   it("registers and IO shape valid", () => {
-    const cap = getCapability("schema.validate.node");
+    const cap = getCapability("validate_schema_node");
     expect(cap).toBeDefined();
     const inputResult = cap!.input.safeParse({
       label: "Customer",
@@ -146,7 +146,7 @@ describe("schema.validate.node contract", () => {
     expect(outputResult.success).toBe(true);
   });
   it("rejects invalid outcome value", () => {
-    const cap = getCapability("schema.validate.node");
+    const cap = getCapability("validate_schema_node");
     const result = cap!.output.safeParse({
       valid: false,
       conformanceScore: 0.3,
@@ -160,7 +160,7 @@ describe("schema.validate.node contract", () => {
 
 describe("schema.recommend contract", () => {
   it("registers and IO shape valid", () => {
-    const cap = getCapability("schema.recommend");
+    const cap = getCapability("recommend_schema");
     expect(cap).toBeDefined();
     const inputResult = cap!.input.safeParse({ sampleLimit: 200 });
     expect(inputResult.success).toBe(true);
@@ -182,11 +182,11 @@ describe("schema.recommend contract", () => {
 
 describe("graph.relationship.upsert contract", () => {
   it("registers under new name", () => {
-    const cap = getCapability("graph.relationship.upsert");
+    const cap = getCapability("upsert_graph_relationship");
     expect(cap).toBeDefined();
   });
   it("accepts valid relationship type", () => {
-    const cap = getCapability("graph.relationship.upsert");
+    const cap = getCapability("upsert_graph_relationship");
     const result = cap!.input.safeParse({
       fromNodeId: "kn_abc",
       toNodeId: "kn_def",
@@ -195,7 +195,7 @@ describe("graph.relationship.upsert contract", () => {
     expect(result.success).toBe(true);
   });
   it("rejects injection strings", () => {
-    const cap = getCapability("graph.relationship.upsert");
+    const cap = getCapability("upsert_graph_relationship");
     const result = cap!.input.safeParse({
       fromNodeId: "kn_abc",
       toNodeId: "kn_def",
@@ -207,16 +207,16 @@ describe("graph.relationship.upsert contract", () => {
 
 describe("semantic.relationship.* contracts register", () => {
   it("semantic.relationship.approve registers", () => {
-    expect(getCapability("semantic.relationship.approve")).toBeDefined();
+    expect(getCapability("approve_semantic_relationship")).toBeDefined();
   });
   it("semantic.relationship.infer registers", () => {
-    expect(getCapability("semantic.relationship.infer")).toBeDefined();
+    expect(getCapability("infer_semantic_relationships")).toBeDefined();
   });
   it("semantic.relationship.list registers", () => {
-    expect(getCapability("semantic.relationship.list")).toBeDefined();
+    expect(getCapability("list_semantic_relationships")).toBeDefined();
   });
   it("semantic.relationship.suggest registers", () => {
-    expect(getCapability("semantic.relationship.suggest")).toBeDefined();
+    expect(getCapability("suggest_semantic_relationships")).toBeDefined();
   });
 });
 
