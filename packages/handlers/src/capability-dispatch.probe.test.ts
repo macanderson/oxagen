@@ -2,7 +2,21 @@ import { describe, it, expect } from "vitest";
 import { hasHandler, getCapability, listCapabilities } from "@oxagen/oxagen";
 import "@oxagen/handlers/register";
 import "@oxagen/agent/register";
-import { MAP } from "../../../tools/scripts/adr025-name-map.mjs";
+
+// A representative sample of OLD dotted (ADR-022) capability names that must no
+// longer resolve now that names are snake_case and aliases are removed.
+const OLD_DOTTED_NAMES = [
+  "org.create",
+  "plugin.org.set_enabled",
+  "plugin.workspace.set_enabled",
+  "chat.message.send",
+  "agent.tool.list",
+  "graph.ingest",
+  "agent.code.execute",
+  "agent.memory.recall",
+  "connection.list",
+  "workflow.run",
+];
 
 // Capabilities with NO kernel handler registration. These are PRE-EXISTING gaps
 // (verified unregistered on origin/main, the working reverted baseline — the
@@ -35,14 +49,19 @@ describe("ADR-025 naming realignment — dispatch probe", () => {
     expect(noHandler).toEqual([]);
   });
 
+  it("every registered capability name is snake_case (no dots remain)", () => {
+    const dotted = caps.map((c) => c.name).filter((n) => n.includes("."));
+    if (dotted.length) console.log("DOTTED NAMES REGISTERED:", dotted.join(", "));
+    expect(dotted).toEqual([]);
+  });
+
   it("no OLD dotted capability name resolves (aliases gone, keys realigned)", () => {
     const leaked: string[] = [];
-    for (const dotted of Object.keys(MAP)) {
-      if (dotted === MAP[dotted]) continue;
+    for (const dotted of OLD_DOTTED_NAMES) {
       if (getCapability(dotted) !== undefined) leaked.push("getCapability:" + dotted);
       if (hasHandler(dotted)) leaked.push("hasHandler:" + dotted);
     }
-    if (leaked.length) console.log("DOTTED LEAKS:", leaked.slice(0, 20).join(", "));
+    if (leaked.length) console.log("DOTTED LEAKS:", leaked.join(", "));
     expect(leaked).toEqual([]);
   });
 
