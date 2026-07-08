@@ -210,6 +210,11 @@ export const baseEnvSchema = z.object({
   // Server-side app origin for plugin OAuth authorize/callback URLs
   // (falls back to NEXT_PUBLIC_APP_URL at the call site).
   APP_URL: z.string().url().optional(),
+  // Public marketing website origin (oxagen.sh). Used by the /v1/cms/* lead
+  // routes to build the emailed reader link ({MARKETING_URL}/read?…) and by
+  // CORS to allow the static site's cross-origin lead/redeem fetches. Optional —
+  // resolveMarketingUrl() falls back to a per-environment default.
+  MARKETING_URL: z.string().url().optional(),
   // Public origin advertised in the A2A Agent Card / well-known URL. Optional —
   // A2A routes derive the origin from the live request; overrides only apply to
   // out-of-band card reads. Falls back to the API origin.

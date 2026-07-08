@@ -73,6 +73,7 @@ const DEPLOYED: EnvName[] = ["preview", "production"];
 const APP_PROD_URL = "https://app.oxagen.sh";
 const API_PROD_URL = "https://api.oxagen.sh";
 const MCP_PROD_URL = "https://mcp.oxagen.sh";
+const MARKETING_PROD_URL = "https://oxagen.sh";
 
 /**
  * The registry. Ordered for `.env.example` layout. `services`/`requiredIn`
@@ -1032,6 +1033,19 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "static",
     staticValue: { development: "http://localhost:3000", production: APP_PROD_URL },
+  },
+  MARKETING_URL: {
+    group: "Public URLs",
+    description:
+      "Public marketing website origin (oxagen.sh). The /v1/cms/* lead routes " +
+      "use it to build the emailed reader link and CORS allows it as a " +
+      "cross-origin caller. Not browser-exposed.",
+    secret: false,
+    clientExposed: false,
+    services: ["api"],
+    requiredIn: [],
+    valueOrigin: "static",
+    staticValue: { development: "http://localhost:8080", production: MARKETING_PROD_URL },
   },
   MCP_URL: {
     group: "Public URLs",

@@ -182,29 +182,6 @@ button,input,textarea{font:inherit;color:inherit}
 .hexfield .float-b{animation:floatB 17s ease-in-out infinite alternate}
 @keyframes floatA{from{transform:translateY(0)}to{transform:translateY(-14px)}}
 @keyframes floatB{from{transform:translateY(0)}to{transform:translateY(11px)}}
-.ember-path{
-  stroke:url(#emberStroke);stroke-width:2.5;fill:none;stroke-linecap:round;stroke-linejoin:round;
-  stroke-dasharray:1120;stroke-dashoffset:1120;
-  animation:drawPath 2.1s .5s var(--ease-out) forwards;
-  filter:drop-shadow(0 0 6px rgba(253,154,76,.45));
-}
-@keyframes drawPath{to{stroke-dashoffset:0}}
-.path-node{fill:#0B0D13;stroke:var(--ember-c);stroke-width:2;opacity:0;animation:nodeIn .4s var(--ease-out) forwards}
-@keyframes nodeIn{from{opacity:0}to{opacity:1}}
-.spark{
-  offset-path:path("M120 566 L300 470 L480 372 L660 276 L800 344 L948 268");
-  offset-distance:0%;
-  animation:spark 4.5s 2.7s linear infinite;
-  opacity:0;
-}
-@keyframes spark{
-  0%{offset-distance:0%;opacity:0}
-  6%{opacity:1}
-  92%{opacity:1}
-  100%{offset-distance:100%;opacity:0}
-}
-.hexnote{font-family:"Aeonik Mono",monospace;font-size:11px;letter-spacing:.14em;fill:var(--faint);text-transform:uppercase}
-.hexnote.hot{fill:var(--ember-c)}
 
 .hero-in{position:relative;display:grid;grid-template-columns:minmax(0,1.02fr) minmax(0,.98fr);gap:56px;align-items:center}
 .hero-copy .eyebrow{margin-bottom:22px}
@@ -536,8 +513,6 @@ footer{border-top:1px solid var(--line);background:var(--bg-raise);padding:64px 
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
   .ticker-track{animation:none;transform:none}
-  .spark{display:none}
-  .ember-path{stroke-dashoffset:0;animation:none}
   .hexfield .lit{opacity:.92;animation:none}
   .meter .fill{transform:scaleX(var(--w,.7));animation:none}
   .audit-line{opacity:1;transform:none;animation:none}
@@ -611,16 +586,6 @@ footer{border-top:1px solid var(--line);background:var(--bg-raise);padding:64px 
         <use class="hx dim" href="#hx6" x="760" y="660"/>
       </g>
       <use class="hx lit" href="#hx6" x="948" y="268"/>
-      <path class="ember-path" d="M120 566 L300 470 L480 372 L660 276 L800 344 L948 268"/>
-      <circle class="path-node" style="animation-delay:.6s" cx="120" cy="566" r="5"/>
-      <circle class="path-node" style="animation-delay:.9s" cx="300" cy="470" r="5"/>
-      <circle class="path-node" style="animation-delay:1.2s" cx="480" cy="372" r="5"/>
-      <circle class="path-node" style="animation-delay:1.5s" cx="660" cy="276" r="5"/>
-      <circle class="path-node" style="animation-delay:1.8s" cx="800" cy="344" r="5"/>
-      <circle class="path-node" style="animation-delay:2.1s" cx="948" cy="268" r="5"/>
-      <circle class="spark" r="4" fill="#FD9A4C"/>
-      <text class="hexnote" x="120" y="608" text-anchor="start">one graph query — deterministic</text>
-      <text class="hexnote hot" x="948" y="320" text-anchor="middle">argmin cost</text>
     </svg>
 
     <div class="wrap hero-in">

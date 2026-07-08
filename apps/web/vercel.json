@@ -2,6 +2,20 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "cleanUrls": true,
   "trailingSlash": false,
+  "redirects": [
+    { "source": "/field-manual", "destination": "/read?e=field-manual", "permanent": false },
+    { "source": "/field-manual/(.*)", "destination": "/read?e=field-manual", "permanent": false },
+    {
+      "source": "/research/deterministic-systems-optimizations-for-ai-agents",
+      "destination": "/read?e=page-flip-reader",
+      "permanent": false
+    },
+    {
+      "source": "/research/deterministic-systems-optimizations-for-ai-agents/index.html",
+      "destination": "/read?e=page-flip-reader",
+      "permanent": false
+    }
+  ],
   "headers": [
     {
       "source": "/(.*)",
@@ -15,13 +29,6 @@
       "source": "/fonts/(.*)",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
-      ]
-    },
-    {
-      "source": "/field-manual/engineering-deterministic-ai-coding-agents.epub",
-      "headers": [
-        { "key": "Content-Type", "value": "application/epub+zip" },
-        { "key": "Content-Disposition", "value": "attachment; filename=\"engineering-deterministic-ai-coding-agents.epub\"" }
       ]
     }
   ]
