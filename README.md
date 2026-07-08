@@ -217,8 +217,8 @@ pnpm cli:install      # one-shot install, no watcher
 
 ```bash
 oxagen --help
-oxagen auth whoami
-oxagen dev            # dev-stack launcher
+oxagen login                    # browser OAuth + PKCE; oxagen logout to clear the session
+oxagen "summarize this repo"    # one-shot agent prompt (omit the prompt for the interactive TUI)
 ```
 
 The CLI supports a local BYOK mode (no platform login) via `AI_GATEWAY_API_KEY` or `ANTHROPIC_API_KEY`. It collects anonymous, allowlist-validated usage telemetry — see [`TELEMETRY.md`](TELEMETRY.md) for the exact disclosure and one-command opt-out. Full command reference: [`apps/cli/README.md`](apps/cli/README.md).

@@ -30,11 +30,11 @@ docs/       capability specs, ADRs, architecture docs
 | Package | Key File | Purpose |
 |---|---|---|
 | `oxagen` | `src/kernel.ts` | Capability kernel — the one `invoke()` path |
-| `oxagen` | `src/contracts/` | ~173 capability contracts (Zod schemas + metadata) |
+| `oxagen` | `src/contracts/` | ~294 capability contracts (Zod schemas + metadata) |
 | `oxagen` | `src/iam/resolve.ts` | IAM policy resolution |
 | `handlers` | `src/register.ts` | All built-in capability handler registrations |
 | `agent` | `src/runtime/materialize-tools.ts` | Agent tool list builder |
-| `database` | `src/schema/` | 16 Drizzle Postgres schemas |
+| `database` | `src/schema/` | 18 Drizzle Postgres schemas |
 | `inngest-functions` | `src/functions/` | Durable background jobs |
 | `ingestion` | `src/pipeline.ts` | Universal connector pipeline |
 | `billing` | `src/metering.ts` | Credit gate + usage metering |
