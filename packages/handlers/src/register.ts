@@ -956,7 +956,72 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./environment.set_default")).environmentSetDefaultHandler as CapabilityHandlerFn,
   );
-  registerHandler("upsert_secret_key",
+  // Sandbox templates + portable artifacts + agent-environment bindings (Spec §5.2–§5.6).
+  registerHandler(
+    "sandbox.template.create",
+    async () =>
+      (await import("./sandbox.template.create")).sandboxTemplateCreateHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "sandbox.template.list",
+    async () =>
+      (await import("./sandbox.template.list")).sandboxTemplateListHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "sandbox.template.get",
+    async () =>
+      (await import("./sandbox.template.get")).sandboxTemplateGetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "sandbox.template.update",
+    async () =>
+      (await import("./sandbox.template.update")).sandboxTemplateUpdateHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "sandbox.template.delete",
+    async () =>
+      (await import("./sandbox.template.delete")).sandboxTemplateDeleteHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "sandbox.template.set_default",
+    async () =>
+      (await import("./sandbox.template.set_default"))
+        .sandboxTemplateSetDefaultHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "sandbox.template.set_tools",
+    async () =>
+      (await import("./sandbox.template.set_tools"))
+        .sandboxTemplateSetToolsHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "sandbox.template.export",
+    async () =>
+      (await import("./sandbox.template.export")).sandboxTemplateExportHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "sandbox.template.import",
+    async () =>
+      (await import("./sandbox.template.import")).sandboxTemplateImportHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "agent.environment.bind",
+    async () =>
+      (await import("./agent.environment.bind")).agentEnvironmentBindHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "agent.environment.unbind",
+    async () =>
+      (await import("./agent.environment.unbind"))
+        .agentEnvironmentUnbindHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "agent.environment.list",
+    async () =>
+      (await import("./agent.environment.list")).agentEnvironmentListHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "secret.key.upsert",
     async () => (await import("./secret.key.upsert")).secretKeyUpsertHandler as CapabilityHandlerFn,
   );
   registerHandler("list_secret_keys",

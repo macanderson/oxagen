@@ -222,4 +222,9 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "environments.secret_keys", policyClass: "standard" },
   { table: "environments.secret_values", policyClass: "standard" },
   { table: "environments.secret_access_log", policyClass: "standard" },
+  // Sandbox templates + portable artifacts (Phase 1, Spec §5.2–§5.3, §5.6).
+  //   All three carry org_id + workspace_id NOT NULL → standard tenant_isolation.
+  { table: "environments.sandbox_templates", policyClass: "standard" },
+  { table: "environments.sandbox_template_tools", policyClass: "standard" },
+  { table: "environments.agent_environment_bindings", policyClass: "standard" },
 ];

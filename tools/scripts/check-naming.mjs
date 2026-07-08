@@ -33,25 +33,38 @@ import { join, resolve } from "node:path";
 const ROOT = resolve(process.cwd());
 const CAP_DIR = join(ROOT, "packages/oxagen/src/contracts");
 
-// ── Verb vocabulary (ADR-025) ────────────────────────────────────────────────
-// The FIRST word of every capability name must be one of these imperative verbs.
-// Derived from the ADR-025 rename wave; extend only when a real capability needs
-// a verb no existing entry covers (a near-synonym is a smell, not a new entry).
-const VERBS = new Set([
-  "accept", "acquire", "activate", "add", "aggregate", "analyze", "approve",
-  "archive", "attach", "author", "browse", "cancel", "change", "cite", "click",
-  "commit", "compose", "configure", "create", "debug", "decline", "delete",
-  "deploy", "diff", "disable", "dispatch", "draft", "edit", "enable", "erase",
-  "exec", "execute", "export", "fetch", "fill", "fork", "format", "generate",
-  "get", "import", "infer", "ingest", "install", "list", "load", "map", "mark",
-  "navigate", "open", "parse", "patch", "pause", "pin", "post", "preview",
-  "promote", "publish", "purchase", "purge", "push", "put", "query", "read",
-  "reauth", "recall", "recommend", "reconcile", "record", "refresh", "register",
-  "release", "remember", "remove", "rename", "render", "resolve", "resume",
-  "reveal", "revoke", "rotate", "run", "save", "screenshot", "search", "send",
-  "set", "setup", "snapshot", "start", "stop", "submit", "suggest", "summarize",
-  "sync", "toggle", "trace", "trigger", "uninstall", "unset", "update", "upload",
-  "upsert", "validate", "verify", "write",
+// ── Closed action vocabulary (ADR-022 §4) ────────────────────────────────────
+// A genuine, verb-only set: the final segment of every 3-segment canonical name
+// MUST be one of these. Derived by auditing every terminal verb actually in use.
+// snake_case compounds (set_enabled, import_env) are single actions. Keep this
+// MINIMAL — add a verb only when a real capability needs one no existing verb
+// covers. (2-segment names are exempt from this check — see validate(): a
+// `domain.X` is either verb-elision or a subject read with an implied `get`.)
+const ACTIONS = new Set([
+  // read / list
+  "list", "get", "read", "query", "search", "preview", "browse", "fetch",
+  "summarize", "recommend", "recall", "trace",
+  // create / write
+  "create", "update", "write", "upsert", "add", "put", "record", "author",
+  "compose", "generate", "render", "remember", "cite", "attach", "import",
+  "ingest", "commit", "publish", "snapshot", "fork", "rename", "edit", "export",
+  // delete / lifecycle
+  "delete", "remove", "purge", "erase", "archive", "cancel", "stop", "start",
+  "run", "execute", "exec", "deploy", "resume", "pause", "trigger", "dispatch",
+  "aggregate", "promote", "acquire", "release", "push",
+  // config / toggles / auth
+  "set", "unset", "enable", "disable", "toggle", "configure", "setup",
+  "activate", "install", "uninstall", "register", "reauth", "rotate", "revoke",
+  "reveal", "pin", "purchase", "load", "map", "diff", "patch", "sync",
+  "reconcile", "approve", "decline", "accept", "resolve", "suggest", "infer",
+  "check", "verify", "validate", "analyze", "chat", "change", "mark", "send",
+  "open", "format", "parse", "upload", "refresh", "screenshot", "submit",
+  "fill", "click", "navigate",
+  // associative verbs — bind/unbind an agent to an environment (Spec §5.6).
+  "bind", "unbind",
+  // snake_case compound actions
+  "set_enabled", "set_default", "set_secret", "set_auth_alerts", "set_tools",
+  "import_env", "install_bulk", "from_traces",
 ]);
 
 // ── Grandfather list (emptied by ADR-025) ────────────────────────────────────
