@@ -27,11 +27,11 @@ export const apiKeyCreateHandler: CapabilityHandler<typeof apiKeyCreate> = async
   // ── Auth + scope guard ─────────────────────────────────────────────────────
   if (!ctx.userId && !ctx.apiKeyId) {
     logger.warn({ orgId: ctx.orgId }, "api.key.create: rejected — no authenticated principal");
-    throw new CapabilityError("api.key.create", "authz_denied", "Unauthorized: no authenticated principal");
+    throw new CapabilityError("create_api_key", "authz_denied", "Unauthorized: no authenticated principal");
   }
   if (!ctx.orgId) {
     logger.warn({}, "api.key.create: rejected — missing orgId");
-    throw new CapabilityError("api.key.create", "authz_denied", "Forbidden: orgId is required");
+    throw new CapabilityError("create_api_key", "authz_denied", "Forbidden: orgId is required");
   }
 
   const actorId = ctx.userId ?? ctx.apiKeyId ?? "system";
@@ -44,7 +44,7 @@ export const apiKeyCreateHandler: CapabilityHandler<typeof apiKeyCreate> = async
       { orgId: ctx.orgId, actorId, actorRole },
       "api.key.create: rejected — insufficient org role",
     );
-    throw new CapabilityError("api.key.create", "authz_denied", "Forbidden: only org Owners and Admins can create API keys");
+    throw new CapabilityError("create_api_key", "authz_denied", "Forbidden: only org Owners and Admins can create API keys");
   }
 
   // ── Generate key material ─────────────────────────────────────────────────
@@ -57,7 +57,7 @@ export const apiKeyCreateHandler: CapabilityHandler<typeof apiKeyCreate> = async
   // one). The resolveApiKey resolver returns the stored workspaceId to bind the
   // machine-auth scope to that workspace on each request.
   if (!ctx.workspaceId) {
-    throw new CapabilityError("api.key.create", "authz_denied", "Forbidden: workspaceId is required to create an API key");
+    throw new CapabilityError("create_api_key", "authz_denied", "Forbidden: workspaceId is required to create an API key");
   }
 
   const [inserted] = await withTenantDb((tx) =>
@@ -94,7 +94,7 @@ export const apiKeyCreateHandler: CapabilityHandler<typeof apiKeyCreate> = async
     actorUserId: ctx.userId ?? null,
     orgId: ctx.orgId,
     workspaceId: null,
-    capability: "api.key.create",
+    capability: "create_api_key",
     outcome: "success",
     ip: null,
     userAgent: null,

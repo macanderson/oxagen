@@ -14,7 +14,7 @@ export const schemaSetupHandler: CapabilityHandler<typeof schemaSetup> = async (
 
   // Step 1: Get a recommendation
   const recommendation = (await invoke(
-    "schema.recommend",
+    "recommend_schema",
     { sampleLimit: input.sampleLimit ?? 200 },
     ctx,
     { surface: toSurface(ctx.surface) },
@@ -75,7 +75,7 @@ export const schemaSetupHandler: CapabilityHandler<typeof schemaSetup> = async (
     // Create labels
     for (const label of schema.labels) {
       await invoke(
-        "schema.label.upsert",
+        "upsert_schema_label",
         {
           schemaName: schema.name,
           name: label.name,
@@ -97,7 +97,7 @@ export const schemaSetupHandler: CapabilityHandler<typeof schemaSetup> = async (
     // Create relationship types
     for (const rel of schema.relationshipTypes) {
       await invoke(
-        "schema.relationship.upsert",
+        "upsert_schema_relationship",
         {
           schemaName: schema.name,
           name: rel.name,
@@ -114,7 +114,7 @@ export const schemaSetupHandler: CapabilityHandler<typeof schemaSetup> = async (
 
     // Enable the schema (auto-publishes + auto-pins)
     await invoke(
-      "schema.toggle",
+      "toggle_schema",
       { schemaName: schema.name, enabled: true },
       ctx,
       { surface: toSurface(ctx.surface) },
@@ -126,7 +126,7 @@ export const schemaSetupHandler: CapabilityHandler<typeof schemaSetup> = async (
   // Apply enforcement config if provided
   if (input.enforcement) {
     await invoke(
-      "schema.registry.config",
+      "get_registry_config",
       { enforcementMode: input.enforcement },
       ctx,
       { surface: toSurface(ctx.surface) },

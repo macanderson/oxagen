@@ -231,7 +231,7 @@ export async function resolveApprovalAction(
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid" };
   try {
     await invoke(
-      "agent.approval.resolve",
+      "resolve_approval",
       parsed.data,
       capabilityContext({ orgId: ctx.orgId, workspaceId: ctx.workspaceId, userId: session.user.id }),
       { surface: "agent" },
@@ -255,7 +255,7 @@ export async function resolveConsentAction(
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid" };
   try {
     await invoke(
-      "agent.mcp_consent.resolve",
+      "resolve_mcp_consent",
       parsed.data,
       capabilityContext({ orgId: ctx.orgId, workspaceId: ctx.workspaceId, userId: session.user.id }),
       { surface: "agent" },
@@ -297,7 +297,7 @@ export async function resolvePlanAction(
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid" };
   try {
     await invoke(
-      "agent.plan.approve",
+      "approve_plan",
       parsed.data,
       capabilityContext({ orgId: ctx.orgId, workspaceId: ctx.workspaceId, userId: session.user.id }),
       { surface: "agent" },
@@ -320,7 +320,7 @@ export async function cancelBackgroundTaskAction(
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid" };
   try {
     await invoke(
-      "agent.background_task.cancel",
+      "cancel_background_task",
       parsed.data,
       capabilityContext({ orgId: ctx.orgId, workspaceId: ctx.workspaceId, userId: session.user.id }),
       { surface: "agent" },
@@ -344,7 +344,7 @@ export async function readBackgroundTaskAction(
       throw new Error(parsed.error.issues[0]?.message ?? "Invalid task id");
     }
     const out = await invoke(
-      "agent.background_task.read",
+      "get_background_task",
       parsed.data,
       capabilityContext({ orgId: ctx.orgId, workspaceId: ctx.workspaceId, userId: session.user.id }),
       { surface: "agent" },

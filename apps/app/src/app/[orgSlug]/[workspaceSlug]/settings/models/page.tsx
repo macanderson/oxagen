@@ -13,7 +13,7 @@ import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { invoke } from "@oxagen/oxagen";
 // Side-effect import: bind foundation handlers into the kernel so
-// invoke("workspace.model_settings.read", …) resolves its handler. Without this
+// invoke("get_model_settings", …) resolves its handler. Without this
 // the call silently has no handler at runtime (see CLAUDE.md gotcha).
 import "@oxagen/handlers/register";
 import type { WorkspaceModelSettingsReadOutput } from "@oxagen/oxagen/contracts/workspace.model_settings.read";
@@ -61,7 +61,7 @@ export default async function WorkspaceModelsPage({
       const role = (roleRows[0]?.role ?? "").toLowerCase();
 
       const read = (await invoke(
-        "workspace.model_settings.read",
+        "get_model_settings",
         {},
         {
           orgId: org.id,

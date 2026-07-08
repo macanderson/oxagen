@@ -33,7 +33,7 @@ export async function schemaReconcileDispatchAction(opts: {
   await assertWorkspaceMember(workspace.id, session.user.id);
 
   const result = await invoke(
-    "schema.reconcile.dispatch",
+    "dispatch_schema_reconcile",
     { versionId: opts.versionId, prune: opts.prune },
     {
       orgId: org.id,
@@ -78,7 +78,7 @@ export async function schemaReconcileStatusAction(
   await assertWorkspaceMember(workspace.id, session.user.id);
 
   const result = await invoke(
-    "schema.reconcile.status",
+    "get_reconcile_status",
     { executionId },
     {
       orgId: org.id,

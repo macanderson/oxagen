@@ -255,7 +255,7 @@ export const orgMemberRemoveHandler: CapabilityHandler<typeof orgMemberRemove> =
     actorUserId: actorId,
     orgId: ctx.orgId,
     workspaceId: null,
-    capability: "org.member.remove",
+    capability: "remove_org_member",
     outcome: "success",
     ip: null,
     userAgent: null,

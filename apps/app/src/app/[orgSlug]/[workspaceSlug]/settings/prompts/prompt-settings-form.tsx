@@ -27,7 +27,7 @@ import type { FieldDescriptor } from "@/lib/ask/fill-types";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
-type OverrideKey = "conversation.title" | "svg.generate" | "image.analyze";
+type OverrideKey = "conversation.title" | "generate_svg" | "analyze_image";
 
 interface OverrideField {
   key: OverrideKey;

@@ -45,7 +45,7 @@ export async function connectCustomMcpServer(
   try {
     const out = await runInTenantScope({ orgId: org.id, workspaceId: ws.id }, () =>
       invoke(
-        "plugin.org.install",
+        "install_plugin",
         {
           pluginType: "mcp_server" as const,
           custom: { name, endpointUrl, transport, authKind },

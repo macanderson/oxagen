@@ -33,7 +33,7 @@ export const billingSubscriptionUpgradeStartHandler: CapabilityHandler<
       actorUserId: ctx.userId ?? null,
       orgId: ctx.orgId,
       workspaceId: ctx.workspaceId ?? null,
-      capability: "billing.subscription_upgrade.start",
+      capability: "start_subscription_upgrade",
       outcome: "success",
       ip: null,
       userAgent: null,

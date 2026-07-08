@@ -171,7 +171,7 @@ export async function parseImportAction(input: {
     try {
       const trimmedRef = defaultNodeRef?.trim();
       const out = (await invoke(
-        "agent.memory_import.parse",
+        "parse_memory_import",
         {
           documents: cleaned,
           ...(trimmedRef ? { defaultNodeRef: trimmedRef } : {}),
@@ -246,7 +246,7 @@ export async function commitImportAction(input: {
 
     try {
       const out = (await invoke(
-        "agent.memory_import.commit",
+        "commit_memory_import",
         { drafts },
         ctx,
         { surface: "agent" },
