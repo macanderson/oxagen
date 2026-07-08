@@ -31,10 +31,12 @@ async function main(): Promise<void> {
   const module = renderGeneratedModule(files);
   await writeFile(GENERATED_FILE, module, "utf8");
   const pkgRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
+  // eslint-disable-next-line no-console -- codegen CLI progress output.
   console.log(`[embed-skills] wrote ${files.length} builtin skills → ${relative(pkgRoot, GENERATED_FILE)}`);
 }
 
 main().catch((err: unknown) => {
+  // eslint-disable-next-line no-console -- surface codegen failure to the CLI.
   console.error("[embed-skills] failed", err);
   process.exit(1);
 });

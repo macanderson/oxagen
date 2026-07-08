@@ -63,6 +63,29 @@ function errorToastTitle(code: string | undefined): string {
 }
 
 /**
+ * Read a human-readable error message from a failed stream response.
+ *
+ * The stream route returns `{ error: string }` JSON for the user-fixable
+ * failure modes (e.g. a 422 when an attachment can't be resolved, or no
+ * vision-capable model is configured). Surface THAT message instead of a bare
+ * "HTTP 422", which strands the user with no next step. Returns `null` when the
+ * body is missing, unparseable, or carries no non-empty `error` string, so the
+ * caller can fall back to a status-based message.
+ */
+export async function readErrorMessage(res: Response): Promise<string | null> {
+  try {
+    const data: unknown = await res.clone().json();
+    if (data && typeof data === "object" && "error" in data) {
+      const err = (data as { error?: unknown }).error;
+      if (typeof err === "string" && err.trim().length > 0) return err;
+    }
+  } catch {
+    // Non-JSON or empty body — fall back to the status-line message.
+  }
+  return null;
+}
+
+/**
  * Serialisable page context forwarded from the current page to the stream
  * route. Mirrors the `pageContext` field in the route's BodySchema.
  */
@@ -573,8 +596,16 @@ export function ChatShellClient({
           });
 
           if (!res.ok || !res.body) {
-            const errMsg = `Stream request failed (HTTP ${res.status})`;
-            console.warn("[chat]", errMsg);
+            // The stream route returns actionable JSON error bodies for the
+            // failure modes a user can fix — notably a 422 when an attachment
+            // can't be resolved ("remove and re-attach…") or no vision-capable
+            // model is configured. Surfacing only "HTTP 422" strands the user
+            // with no idea what to do, so prefer the server's `error` message
+            // when present and fall back to the status line otherwise.
+            const serverError = await readErrorMessage(res);
+            const errMsg =
+              serverError ?? `Stream request failed (HTTP ${res.status}) — please try again.`;
+            console.warn("[chat]", `Stream request failed (HTTP ${res.status})`, serverError ?? "");
             setStreamErrorRef.current(errMsg);
             setIsStreamingRef.current(false);
             return;
@@ -614,7 +645,7 @@ export function ChatShellClient({
             // Non-abort stream failures (network drop, mid-stream server crash,
             // ReadableStream error). Surface to the user so they know to retry
             // instead of silently leaving a blank or truncated assistant turn.
-            const msg = err.message || "Stream connection lost";
+            const msg = `${err.message || "Stream connection lost"} — please try again.`;
             console.warn("[chat] stream fetch failed", err);
             setStreamErrorRef.current(msg);
           }
@@ -1135,7 +1166,7 @@ export function ChatShellClient({
           data-testid="stream-error-banner"
           className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive"
         >
-          {streamError} — please try again.
+          {streamError}
         </div>
       ) : null}
 
