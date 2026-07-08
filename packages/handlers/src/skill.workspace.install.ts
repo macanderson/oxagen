@@ -2,24 +2,12 @@ import type { CapabilityHandler } from "@oxagen/oxagen";
 import { skillWorkspaceInstall } from "@oxagen/oxagen/contracts/skill.workspace.install";
 import { schema, withTenantDb, isUniqueViolation } from "@oxagen/database";
 import { and, eq, isNull, sql } from "drizzle-orm";
-import { createSkillRegistry } from "@oxagen/skills";
-import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { createBuiltinSkillRegistry } from "@oxagen/skills";
 import { logger } from "./logger";
 
-// Resolve the built-in skills directory LAZILY + guarded. In the CJS API bundle
-// `import.meta.url` is undefined, so a module-scope `fileURLToPath(import.meta.url)`
-// throws ERR_INVALID_ARG_TYPE and crashes the whole function at load
-// (FUNCTION_INVOCATION_FAILED — postmortem 2026-06-12). Compute it on demand with
-// a cwd-relative fallback when import.meta.url is absent.
-function skillsDir(): string {
-  try {
-    // <file> → src → handlers → packages, then skills/skills (built-in registry root)
-    return join(fileURLToPath(import.meta.url), "../../../skills/skills");
-  } catch {
-    return join(process.cwd(), "packages/skills/skills");
-  }
-}
+// Builtin templates are resolved from EMBEDDED module data, never a runtime
+// filesystem read: serverless bundlers drop packages/skills/skills/*.md, so a
+// `readdir` there returns ENOENT in prod (postmortem 2026-06-12).
 
 /**
  * Derive a workspace-safe slug from a custom skill name. The name must already
@@ -58,8 +46,8 @@ export const skillWorkspaceInstallHandler: CapabilityHandler<typeof skillWorkspa
   let installedFromSlug: string | null = null;
 
   if (templateSlug) {
-    // Builtin path: load from the filesystem registry.
-    const registry = createSkillRegistry({ fsRoot: skillsDir() });
+    // Builtin path: load from the embedded builtin registry (bundle-safe).
+    const registry = createBuiltinSkillRegistry();
     const builtin = await registry.get(templateSlug);
     if (!builtin) {
       throw new Error(

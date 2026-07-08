@@ -88,15 +88,19 @@ describe("seedSkillsFromFilesystem", () => {
     const slugs = [...store.skills.values()].map((r) => r.slug).sort();
     expect(slugs).toEqual([
       "agent-builder",
+      "brand-voice-design",
+      "ci-fixer",
       "coding",
       "create-agent",
       "debugging",
       "entity-extractor",
       "entity-resolver",
       "graph-ingestion",
+      "iam-rbac-setup",
       "relationship-extractor",
       "skill-builder",
       "summarization",
+      "swarm-research",
     ]);
   });
 

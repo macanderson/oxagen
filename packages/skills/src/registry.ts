@@ -8,7 +8,13 @@ export interface SkillRegistry {
 }
 
 export interface CreateSkillRegistryOptions {
-  fsRoot: string;
+  // Optional embedded builtins (bundle-safe module data). Prefer this over
+  // `fsRoot` for platform runtimes — see builtin.ts. Forms the base layer.
+  builtins?: Skill[];
+  // Optional filesystem directory of `*.skill.md` files. Used by the CLI, which
+  // ships the markdown, and by dev where the files are on disk. Overrides
+  // embedded builtins on slug collision so a local edit takes effect.
+  fsRoot?: string;
   // Optional adapter that yields tenant-defined skills. Callers wire this
   // to a Drizzle query in the API handler; the skills package stays
   // database-agnostic.
@@ -22,12 +28,16 @@ export function createSkillRegistry(
 
   async function load(): Promise<Skill[]> {
     if (cache) return cache;
-    const fs = await scanSkillsDir(options.fsRoot);
-    const tenant = options.dbAdapter ? await options.dbAdapter() : [];
-    // Tenant skills win on slug collision — workspaces can shadow built-ins
-    // intentionally without filesystem edits.
+    // Merge order = precedence: embedded builtins (base) < filesystem (dev/CLI
+    // override) < tenant (workspace shadow). Later layers win on slug collision.
     const merged = new Map<string, Skill>();
-    for (const skill of fs) merged.set(skill.slug, skill);
+    for (const skill of options.builtins ?? []) merged.set(skill.slug, skill);
+    if (options.fsRoot) {
+      for (const skill of await scanSkillsDir(options.fsRoot)) {
+        merged.set(skill.slug, skill);
+      }
+    }
+    const tenant = options.dbAdapter ? await options.dbAdapter() : [];
     for (const skill of tenant) merged.set(skill.slug, skill);
     cache = Array.from(merged.values());
     return cache;
