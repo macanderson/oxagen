@@ -1,7 +1,7 @@
 /**
  * Fleet Summary — the header band of the agents screen.
  *
- * Mirrors the agent-view header (the ◯ OXAGEN wordmark line) and adds the live
+ * Carries the ◯ OXAGEN wordmark line and adds the live
  * fleet vitals: how many agents are running / queued / done / failed, the running
  * token total, the estimated dollar cost so far, and the concurrency cap. It is a
  * pure function of the current {@link FleetSnapshot}.
@@ -22,7 +22,7 @@ export function FleetSummary({
 
   return (
     <Box flexDirection="column" marginBottom={1}>
-      {/* Wordmark line, matching `oxagen view`. */}
+      {/* Wordmark line. */}
       <Box>
         <Text color={theme.cyan} bold>
           {theme.ring}{" "}
