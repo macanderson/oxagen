@@ -2,8 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const repoPause = registerCapability({
-  name: "pause_repo",
-  aliases: ["repo.pause"],
+  name: "repo.pause",
   domain: "repo",
   description: "Pause automatic syncing for a repository connection.",
   mode: "sync",

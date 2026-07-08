@@ -2,8 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const agentTriggerList = registerCapability({
-  name: "list_triggers",
-  aliases: ["agent.trigger.list"],
+  name: "agent.trigger.list",
   domain: "agent",
   description:
     "List the (non-deleted) triggers configured for an agent in the current workspace",

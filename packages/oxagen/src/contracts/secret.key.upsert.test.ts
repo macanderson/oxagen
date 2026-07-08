@@ -3,7 +3,7 @@ import { secretKeyUpsert } from "./secret.key.upsert";
 
 describe("secret.key.upsert contract", () => {
   it("registers with the correct name", () => {
-    expect(secretKeyUpsert.name).toBe("upsert_secret_key");
+    expect(secretKeyUpsert.name).toBe("secret.key.upsert");
   });
   it("exposes the api, mcp, and agent surfaces", () => {
     expect(secretKeyUpsert.surfaces).toEqual(["api", "mcp", "agent"]);

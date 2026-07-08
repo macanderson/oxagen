@@ -3,8 +3,7 @@ import { registerCapability } from "../registry";
 import { semanticEdgeSchema } from "./semantic.edge.list";
 
 export const semanticRelationshipSuggest = registerCapability({
-  name: "suggest_semantic_relationships",
-  aliases: ["semantic.relationship.suggest"],
+  name: "semantic.relationship.suggest",
   domain: "semantic",
   description:
     "Returns inferred semantic relationships that are pending human review (below the auto-accept confidence threshold). Intended for the approval flow UI — relationships returned here are read-only candidates until a workspace member approves or dismisses them.",

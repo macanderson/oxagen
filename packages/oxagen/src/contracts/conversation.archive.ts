@@ -8,8 +8,7 @@ import { registerCapability } from "../registry";
 // permanent (soft-delete) destructive path. Set-based UPDATE over the id
 // list — no per-item round trip.
 export const conversationArchive = registerCapability({
-  name: "archive_conversation",
-  aliases: ["conversation.archive"],
+  name: "conversation.archive",
   domain: "conversation",
   description:
     "Archive or unarchive conversations (reversible — sets or clears archived_at, no data loss)",

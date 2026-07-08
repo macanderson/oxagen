@@ -2,8 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const connectionGet = registerCapability({
-  name: "get_connection",
-  aliases: ["connection.get"],
+  name: "connection.get",
   domain: "connection",
   description: "Get details of a single data source connection.",
   mode: "sync",

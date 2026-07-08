@@ -3,7 +3,7 @@ import { agentMemoryPolicyWrite } from "./agent.memory_policy.write";
 
 describe("agent.memory.policy.write contract", () => {
   it("registers on api+mcp+agent surfaces, workspace Owner only", () => {
-    expect(agentMemoryPolicyWrite.name).toBe("update_memory_policy");
+    expect(agentMemoryPolicyWrite.name).toBe("agent.memory_policy.write");
     expect(agentMemoryPolicyWrite.surfaces).toContain("api");
     expect(agentMemoryPolicyWrite.surfaces).toContain("mcp");
     expect(agentMemoryPolicyWrite.defaultRoles.workspace.Owner).toBe("allow");

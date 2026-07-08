@@ -107,7 +107,7 @@ describe("skill.version.upload capability", () => {
   });
 
   it("has the correct name", () => {
-    expect(skillVersionUpload.name).toBe("upload_skill_version");
+    expect(skillVersionUpload.name).toBe("skill.version.upload");
   });
 
   it("is scoped", () => {

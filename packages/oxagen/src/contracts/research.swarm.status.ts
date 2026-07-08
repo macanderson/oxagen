@@ -2,8 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const researchSwarmStatus = registerCapability({
-  name: "get_research_status",
-  aliases: ["research.swarm.status"],
+  name: "research.swarm.status",
   domain: "research",
   description:
     "Poll the status of a running research swarm. Returns task completion progress AND the actual web-search results collected by each subagent — title, url, and content snippet per hit — so the agent can summarize them and feed them into graph ingestion. Delegates to agent.subagent.aggregate internally.",

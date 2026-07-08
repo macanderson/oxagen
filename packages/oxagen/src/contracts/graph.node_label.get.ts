@@ -7,8 +7,8 @@ import { registerCapability } from "../registry";
  * for a curator agent to inspect which domains a node belongs to.
  */
 export const graphNodeLabelsGet = registerCapability({
-  name: "get_node_labels",
-  aliases: ["graph.node_label.get", "graph.node.labels.get"],
+  name: "graph.node_label.get",
+  aliases: ["graph.node.labels.get"],
   domain: "graph",
   description: "Read a node's full label set.",
   mode: "sync",

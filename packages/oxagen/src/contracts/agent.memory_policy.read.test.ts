@@ -3,7 +3,7 @@ import { agentMemoryPolicyRead } from "./agent.memory_policy.read";
 
 describe("agent.memory.policy.read contract", () => {
   it("registers on api+mcp+agent surfaces, workspace-readable", () => {
-    expect(agentMemoryPolicyRead.name).toBe("get_memory_policy");
+    expect(agentMemoryPolicyRead.name).toBe("agent.memory_policy.read");
     expect(agentMemoryPolicyRead.surfaces).toContain("api");
     expect(agentMemoryPolicyRead.surfaces).toContain("mcp");
     expect(agentMemoryPolicyRead.surfaces).toContain("agent");

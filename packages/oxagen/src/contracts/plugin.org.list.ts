@@ -2,8 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const pluginOrgList = registerCapability({
-  name: "list_plugins",
-  aliases: ["plugin.org.list"],
+  name: "plugin.org.list",
   domain: "plugin",
   description: "List installed plugins for this workspace.",
   mode: "sync",

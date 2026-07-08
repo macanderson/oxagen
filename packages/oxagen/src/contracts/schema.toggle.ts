@@ -2,8 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const schemaToggle = registerCapability({
-  name: "toggle_schema",
-  aliases: ["schema.toggle"],
+  name: "schema.toggle",
   domain: "schema",
   description: "Enable/disable a schema. Activation auto-publishes the current draft and auto-pins the resulting version — no separate publish/pin step.",
   mode: "sync",

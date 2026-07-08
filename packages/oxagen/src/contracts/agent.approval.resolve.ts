@@ -2,8 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const agentApprovalResolve = registerCapability({
-  name: "resolve_approval",
-  aliases: ["agent.approval.resolve"],
+  name: "agent.approval.resolve",
   domain: "agent",
   description: "Approve or deny a pending tool-call approval request; resolution resumes the paused agent stream",
   mode: "sync",

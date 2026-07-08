@@ -23,8 +23,7 @@ const pluginVersionEntrySchema = z.object({
 });
 
 export const pluginVersionList = registerCapability({
-  name: "list_plugin_versions",
-  aliases: ["plugin.version.list"],
+  name: "plugin.version.list",
   domain: "plugin",
   description:
     "List version history for a connector plugin including changelog entries and breaking-change flags. Used by org admins to review update impact before upgrading.",

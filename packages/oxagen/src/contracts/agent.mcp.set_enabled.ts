@@ -2,8 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const agentMcpSetEnabled = registerCapability({
-  name: "set_mcp_enabled",
-  aliases: ["agent.mcp.set_enabled"],
+  name: "agent.mcp.set_enabled",
   domain: "agent",
   description:
     "Enable or disable a registered external MCP server. Disabling stops its tools from registering but keeps tool-descriptor snapshots for replay; re-enabling re-captures snapshots. The change is audited.",

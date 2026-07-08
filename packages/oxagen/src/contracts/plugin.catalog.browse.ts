@@ -2,8 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const pluginCatalogBrowse = registerCapability({
-  name: "browse_plugin_catalog",
-  aliases: ["plugin.catalog.browse"],
+  name: "plugin.catalog.browse",
   domain: "plugin",
   description: "Search and filter the plugin marketplace by type, text, transport, and auth kind. Results are workspace-scoped — only registries enabled for the caller's org+workspace are queried.",
   mode: "sync",

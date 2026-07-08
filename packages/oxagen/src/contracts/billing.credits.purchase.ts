@@ -7,8 +7,7 @@ import { registerCapability } from "../registry";
 // but pay a discounted price. The Stripe webhook landing at apps/api will
 // deposit the credits after payment via grantCreditPackForCheckout.
 export const billingCreditsPurchase = registerCapability({
-  name: "purchase_credits",
-  aliases: ["billing.credits.purchase"],
+  name: "billing.credits.purchase",
   domain: "billing",
   description:
     "Start a Stripe Checkout session for a dynamic usage-credit purchase; returns a URL the customer opens to complete payment",

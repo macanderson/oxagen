@@ -2,8 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const secretKeyDelete = registerCapability({
-  name: "delete_secret_key",
-  aliases: ["secret.key.delete"],
+  name: "secret.key.delete",
   domain: "secret",
   description: "Soft-delete a vault secret key and hard-remove all of its per-environment overrides.",
   mode: "sync",

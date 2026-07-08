@@ -13,8 +13,7 @@ import { RELATIONSHIP_TYPE_PATTERN } from "../lib/relationship-type-pattern";
 import { observedAtField, supersedeField } from "../lib/temporal-query";
 
 export const graphEdgeUpsert = registerCapability({
-  name: "upsert_edge",
-  aliases: ["graph.edge.upsert"],
+  name: "graph.edge.upsert",
   domain: "graph",
   description:
     "DEPRECATED — use graph.relationship.upsert. MERGE a typed relationship between two " +

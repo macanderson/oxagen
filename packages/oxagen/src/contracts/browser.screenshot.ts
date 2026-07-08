@@ -6,8 +6,7 @@ import { registerCapability } from "../registry";
 // agent.feature.verify (the cross-LLM judge) reads to confirm the feature works.
 
 export const browserScreenshot = registerCapability({
-  name: "screenshot_page",
-  aliases: ["browser.screenshot"],
+  name: "browser.screenshot",
   domain: "browser",
   description:
     "Screenshot the durable sandbox browser's current page (or a CSS-selected element) and store it as a private workspace asset. Returns the asset key/url for the cross-LLM judge.",

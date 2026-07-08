@@ -101,7 +101,7 @@ describe("researchSwarmStatusHandler", () => {
 
     const out = await researchSwarmStatusHandler({ swarmId: "fan_1" }, ctx);
     expect(invoke).toHaveBeenCalledWith(
-      "aggregate_subagents",
+      "agent.subagent.aggregate",
       expect.objectContaining({ fanoutId: "fan_1" }),
       ctx,
     );
@@ -151,7 +151,7 @@ describe("researchSwarmStatusHandler", () => {
     await researchSwarmStatusHandler({ swarmId: "fan_3" }, ctx);
 
     expect(invoke).toHaveBeenCalledWith(
-      "aggregate_subagents",
+      "agent.subagent.aggregate",
       expect.objectContaining({ fanoutId: "fan_3" }),
       ctx,
     );

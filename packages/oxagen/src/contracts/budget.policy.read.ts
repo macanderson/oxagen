@@ -7,8 +7,7 @@ import { registerCapability } from "../registry";
 const budgetMode = z.enum(["grace", "prompt", "enforce"]);
 
 export const budgetPolicyRead = registerCapability({
-  name: "get_user_budget",
-  aliases: ["budget.policy.read"],
+  name: "budget.policy.read",
   domain: "user",
   description:
     "Read the calling user's saved per-turn budget: whether a dollar ceiling is enforced on each agent turn, the limit in USD, the enforcement mode (grace = allow overage within a grace window; prompt = ask to continue; enforce = hard stop), and the grace-window cushion.",

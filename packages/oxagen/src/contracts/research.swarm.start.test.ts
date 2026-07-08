@@ -6,7 +6,7 @@ describe("research.swarm.start contract", () => {
   // ── contract metadata ────────────────────────────────────────────────────
 
   it("registers with the correct name", () => {
-    expect(researchSwarmStart.name).toBe("start_research_swarm");
+    expect(researchSwarmStart.name).toBe("research.swarm.start");
   });
 
   it("belongs to the research domain", () => {

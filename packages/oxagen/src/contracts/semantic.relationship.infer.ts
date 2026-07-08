@@ -2,8 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const semanticRelationshipInfer = registerCapability({
-  name: "infer_semantic_relationships",
-  aliases: ["semantic.relationship.infer"],
+  name: "semantic.relationship.infer",
   domain: "semantic",
   description:
     "Run LLM inference to discover and link nodes across sources with confidence scores. Triggers an async job; relationships above the confidenceThreshold are auto-accepted, relationships below it are staged for UI review via semantic.relationship.suggest.",

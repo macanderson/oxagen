@@ -25,8 +25,7 @@ const fileRenderDirective = z.object({
  * activity, down to individual queries and results.
  */
 export const agentSubagentLogs = registerCapability({
-  name: "get_subagent_logs",
-  aliases: ["agent.subagent.logs"],
+  name: "agent.subagent.logs",
   domain: "agent",
   description:
     "Generate a downloadable markdown logfile for a fan-out (research swarm or any agent.subagent.dispatch). " +

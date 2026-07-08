@@ -112,7 +112,7 @@ describe("videoGenerateAction", () => {
 
     expect(mockInvoke).toHaveBeenCalledOnce();
     expect(mockInvoke).toHaveBeenCalledWith(
-      "generate_video",
+      "video.generate",
       expect.objectContaining({
         prompt: "A timelapse of a city at sunset",
         durationSeconds: 10,

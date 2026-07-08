@@ -3,7 +3,7 @@ import { graphNodeLabelAdd } from "./graph.node_label.add";
 
 describe("graph.node.label.add contract", () => {
   it("is an agent-only graph primitive requiring approval", () => {
-    expect(graphNodeLabelAdd.name).toBe("add_node_label");
+    expect(graphNodeLabelAdd.name).toBe("graph.node_label.add");
     expect(graphNodeLabelAdd.surfaces).toContain("agent");
     expect(graphNodeLabelAdd.surfaces).not.toContain("api");
     expect(graphNodeLabelAdd.surfaces).not.toContain("mcp");

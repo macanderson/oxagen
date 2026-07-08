@@ -14,8 +14,7 @@ import { registerCapability } from "../registry";
 // transparently. Omit `sessionKey` to always provision a fresh session.
 
 export const agentSandboxStart = registerCapability({
-  name: "start_sandbox",
-  aliases: ["agent.sandbox.start"],
+  name: "agent.sandbox.start",
   domain: "agent",
   description:
     "Provision or reconnect to a durable code-agent sandbox that persists across turns (clone a repo, build a feature, open a PR). Pass a stable sessionKey to reuse one warm sandbox. Requires SANDBOX_ENABLED=true and a session-capable driver (Modal).",

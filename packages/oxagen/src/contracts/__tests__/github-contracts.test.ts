@@ -64,7 +64,7 @@ describe("GitHub write contracts — shared metadata", () => {
 
 describe("repo.create", () => {
   it("name is repo.create", () => {
-    expect(repoCreate.name).toBe("create_repo");
+    expect(repoCreate.name).toBe("repo.create");
   });
 
   it("parses a minimal valid input (only name required)", () => {
@@ -115,7 +115,7 @@ describe("repo.create", () => {
 
 describe("repo.file.put", () => {
   it("name is repo.file.put", () => {
-    expect(repoFilePut.name).toBe("put_repo_file");
+    expect(repoFilePut.name).toBe("repo.file.put");
   });
 
   it("parses a valid input (owner, repo, path, content, message required)", () => {
@@ -177,7 +177,7 @@ describe("repo.file.put", () => {
 
 describe("repo.fork", () => {
   it("name is repo.fork", () => {
-    expect(repoFork.name).toBe("fork_repo");
+    expect(repoFork.name).toBe("repo.fork");
   });
 
   it("parses input with owner and repo (intoOrg optional)", () => {
@@ -200,7 +200,7 @@ describe("repo.fork", () => {
 
 describe("repo.branch.create", () => {
   it("name is repo.branch.create", () => {
-    expect(repoBranchCreate.name).toBe("create_branch");
+    expect(repoBranchCreate.name).toBe("repo.branch.create");
   });
 
   it("parses a minimal valid input (owner, repo, branch required)", () => {
@@ -227,7 +227,7 @@ describe("repo.branch.create", () => {
 
 describe("repo.pr.open", () => {
   it("name is repo.pr.open", () => {
-    expect(repoPrOpen.name).toBe("open_pr");
+    expect(repoPrOpen.name).toBe("repo.pr.open");
   });
 
   it("parses a minimal valid input (owner, repo, title, head, base required)", () => {

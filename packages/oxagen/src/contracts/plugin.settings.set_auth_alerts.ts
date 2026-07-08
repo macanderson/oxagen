@@ -7,8 +7,7 @@ import { registerCapability } from "../registry";
  * Only org Owners and Admins may change this setting.
  */
 export const pluginSettingsSetAuthAlerts = registerCapability({
-  name: "set_auth_alerts",
-  aliases: ["plugin.settings.set_auth_alerts"],
+  name: "plugin.settings.set_auth_alerts",
   domain: "plugin",
   description:
     "Update the org MCP auth-alert notification setting (which roles receive alerts and whether email is sent).",

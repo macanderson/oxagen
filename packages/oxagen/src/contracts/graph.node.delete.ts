@@ -2,8 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const graphNodeDelete = registerCapability({
-  name: "delete_node",
-  aliases: ["graph.node.delete"],
+  name: "graph.node.delete",
   domain: "graph",
   description: "Delete a KnowledgeNode and all its relationships from the graph.",
   mode: "sync",

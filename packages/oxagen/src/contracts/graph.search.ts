@@ -4,8 +4,7 @@ import { registerCapability } from "../registry";
 const KINDS = ["entity", "file", "symbol", "chunk", "memory", "execution", "document", "message", "asset"] as const;
 
 export const graphSearch = registerCapability({
-  name: "search_graph",
-  aliases: ["graph.search"],
+  name: "graph.search",
   domain: "graph",
   description:
     "Natural-language semantic (vector) search across the entire knowledge graph — customer entities, source code (files/symbols/chunks), agent memories, executions, documents and messages — ranked by embedding similarity. Distinct from graph.node.search, which is a lexical substring match.",

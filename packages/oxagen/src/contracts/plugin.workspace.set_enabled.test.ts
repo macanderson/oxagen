@@ -3,7 +3,7 @@ import { pluginWorkspaceSetEnabled } from "./plugin.workspace.set_enabled";
 
 describe("plugin.workspace.set_enabled contract", () => {
   it("registers with the correct name", () => {
-    expect(pluginWorkspaceSetEnabled.name).toBe("set_workspace_plugin_enabled");
+    expect(pluginWorkspaceSetEnabled.name).toBe("plugin.workspace.set_enabled");
   });
 
   it("includes api and mcp surfaces", () => {

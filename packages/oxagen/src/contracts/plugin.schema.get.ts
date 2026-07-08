@@ -156,8 +156,7 @@ export type ConnectorPluginSchema = typeof connectorPluginSchemaOutput._type;
 export { fieldValidationSchema, widgetTypeEnum, schemaFieldSchema };
 
 export const pluginSchemaGet = registerCapability({
-  name: "get_plugin_schema",
-  aliases: ["plugin.schema.get"],
+  name: "plugin.schema.get",
   domain: "plugin",
   description:
     "Fetch the typed config schema for a connector plugin, used to drive dynamic form rendering during install and configure flows.",

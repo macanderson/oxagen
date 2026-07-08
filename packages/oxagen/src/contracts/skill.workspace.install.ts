@@ -2,8 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const skillWorkspaceInstall = registerCapability({
-  name: "install_skill",
-  aliases: ["skill.workspace.install"],
+  name: "skill.workspace.install",
   domain: "skill",
   description:
     "Install a skill into a workspace — copies a builtin template (by slug) or a custom upload into a workspace-owned agent.skills row with skill_versions v1 (is_latest=true). Idempotent on slug.",

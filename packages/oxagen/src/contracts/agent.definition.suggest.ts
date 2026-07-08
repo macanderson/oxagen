@@ -18,8 +18,7 @@ const suggestedConfigSchema = z.object({
 });
 
 export const agentDefinitionSuggest = registerCapability({
-  name: "suggest_agent_def",
-  aliases: ["agent.definition.suggest"],
+  name: "agent.definition.suggest",
   domain: "agent",
   description:
     "AI-assisted agent setup: turn a plain-language description of what an agent should do into a complete draft agent configuration (identity, instructions, graph access, tools, triggers), grounded in the workspace's real skills, ontologies, MCP servers, and capabilities via the create-agent skill. Returns a suggestion shaped exactly like agent.definition.create input, plus a rationale and any warnings — nothing is persisted; the caller reviews, edits, and saves the draft explicitly.",

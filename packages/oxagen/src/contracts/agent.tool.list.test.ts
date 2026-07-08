@@ -31,7 +31,7 @@ describe("agent.tool.list capability", () => {
         },
       ],
     });
-    expect(parsed.tools[0]?.name).toBe("recall_memory");
+    expect(parsed.tools[0]?.name).toBe("agent.memory.recall");
   });
 
   it("rejects an invalid riskLevel", () => {

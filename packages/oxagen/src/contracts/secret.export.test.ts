@@ -3,7 +3,7 @@ import { secretExport } from "./secret.export";
 
 describe("secret.export contract", () => {
   it("registers with the correct name", () => {
-    expect(secretExport.name).toBe("export_secrets");
+    expect(secretExport.name).toBe("secret.export");
   });
   it("is reachable only via api and mcp (never the in-chat agent)", () => {
     expect(secretExport.surfaces).toEqual(["api", "mcp"]);

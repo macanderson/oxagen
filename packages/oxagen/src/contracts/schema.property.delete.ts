@@ -2,8 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const schemaPropertyDelete = registerCapability({
-  name: "delete_schema_property",
-  aliases: ["schema.property.delete"],
+  name: "schema.property.delete",
   domain: "schema",
   description: "Remove a property from the draft.",
   mode: "sync",

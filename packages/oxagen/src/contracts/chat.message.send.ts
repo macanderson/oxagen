@@ -6,8 +6,7 @@ import { registerCapability } from "../registry";
 // completes. The HTTP route emits an SSE / RSC stream that resolves to
 // this shape.
 export const chatMessageSend = registerCapability({
-  name: "send_message",
-  aliases: ["chat.message.send"],
+  name: "chat.message.send",
   domain: "chat",
   description: "Append a user message to a conversation and stream the assistant reply",
   mode: "async",

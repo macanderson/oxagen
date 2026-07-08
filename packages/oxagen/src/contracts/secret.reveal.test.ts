@@ -3,7 +3,7 @@ import { secretReveal } from "./secret.reveal";
 
 describe("secret.reveal contract", () => {
   it("registers with the correct name", () => {
-    expect(secretReveal.name).toBe("reveal_secret");
+    expect(secretReveal.name).toBe("secret.reveal");
   });
   it("is reachable only via api and mcp (never the in-chat agent)", () => {
     expect(secretReveal.surfaces).toEqual(["api", "mcp"]);

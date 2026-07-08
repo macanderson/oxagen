@@ -3,8 +3,7 @@ import { registerCapability } from "../registry";
 import { agentTriggerSchema } from "../agent-schema";
 
 export const agentTriggerCreate = registerCapability({
-  name: "create_trigger",
-  aliases: ["agent.trigger.create"],
+  name: "agent.trigger.create",
   domain: "agent",
   description:
     "Create a trigger for an agent — a manual, scheduled (cron), or event binding validated against agentTriggerSchema and persisted as an agent_triggers row",

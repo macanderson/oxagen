@@ -2,8 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const repoPrOpen = registerCapability({
-  name: "open_pr",
-  aliases: ["repo.pr.open"],
+  name: "repo.pr.open",
   domain: "repo",
   description: "Open a pull request in a GitHub repository.",
   mode: "sync",

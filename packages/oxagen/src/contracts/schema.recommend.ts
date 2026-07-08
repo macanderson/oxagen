@@ -3,8 +3,7 @@ import { registerCapability } from "../registry";
 import { dataTypeEnum } from "./schema.types";
 
 export const schemaRecommend = registerCapability({
-  name: "recommend_schema",
-  aliases: ["schema.recommend"],
+  name: "schema.recommend",
   domain: "schema",
   description: "AI onboarding: read existing graph (graph.stats + graph_observed_labels ClickHouse telemetry + sampled ontology.query) and the workspace's enabled schemas → propose a starter schema or additions.",
   mode: "sync",

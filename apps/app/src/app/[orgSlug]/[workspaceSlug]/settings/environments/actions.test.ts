@@ -160,7 +160,7 @@ describe("importEnvAction", () => {
     expect(res.rows).toEqual(PREVIEW_ROWS);
 
     expect(mockInvoke).toHaveBeenCalledWith(
-      "import_env_secrets",
+      "secret.import_env",
       {
         text: 'DATABASE_URL=postgres://localhost/db\nLOG_LEVEL=info',
         environmentId: null,
@@ -192,7 +192,7 @@ describe("importEnvAction", () => {
     expect(res.committed).toBe(true);
 
     expect(mockInvoke).toHaveBeenCalledWith(
-      "import_env_secrets",
+      "secret.import_env",
       expect.objectContaining({ commit: true }),
       expect.objectContaining({ orgId: "org-1", workspaceId: "ws-1" }),
       { surface: "agent" },
@@ -214,7 +214,7 @@ describe("importEnvAction", () => {
     });
 
     expect(mockInvoke).toHaveBeenCalledWith(
-      "import_env_secrets",
+      "secret.import_env",
       expect.objectContaining({ environmentId: null }),
       expect.any(Object),
       { surface: "agent" },
@@ -304,7 +304,7 @@ describe("setDefaultEnvironmentAction", () => {
     expect(res.environment).toEqual(ENV);
 
     expect(mockInvoke).toHaveBeenCalledWith(
-      "set_default_environment",
+      "environment.set_default",
       { environmentId: "env-1" },
       expect.objectContaining({ orgId: "org-1", workspaceId: "ws-1" }),
       { surface: "agent" },
@@ -374,7 +374,7 @@ describe("upsertKeyAction", () => {
     expect(res.id).toBe("key-abc123");
 
     expect(mockInvoke).toHaveBeenCalledWith(
-      "upsert_secret_key",
+      "secret.key.upsert",
       expect.objectContaining({
         key: "DATABASE_URL",
         sensitive: true,

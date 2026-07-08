@@ -75,7 +75,7 @@ describe("researchSwarmStartHandler", () => {
     expect(String(genCall.prompt)).toContain("3"); // shallow = 3 queries
 
     expect(mocks.invoke).toHaveBeenCalledWith(
-      "dispatch_subagent",
+      "agent.subagent.dispatch",
       expect.objectContaining({
         tasks: expect.arrayContaining([
           expect.objectContaining({ capabilityName: "web.search" }),

@@ -5,8 +5,7 @@ import { registerCapability } from "../registry";
 // so a later browser.submit acts on the value set here.
 
 export const browserFill = registerCapability({
-  name: "fill_page",
-  aliases: ["browser.fill"],
+  name: "browser.fill",
   domain: "browser",
   description:
     "Fill a form field (by CSS selector) on the durable sandbox browser's current page. Playwright auto-waits for the element.",

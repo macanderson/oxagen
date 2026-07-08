@@ -9,8 +9,7 @@ import { registerCapability } from "../registry";
 // output is one agent.subagent.result.get away, same steering rule as aggregate.
 // One indexed query over the fanout's runs; no graph round-trip on the hot path.
 export const agentSubagentSiblings = registerCapability({
-  name: "list_subagent_siblings",
-  aliases: ["agent.subagent.siblings"],
+  name: "agent.subagent.siblings",
   domain: "agent",
   description:
     "Given a running fanout child's runId, return its sibling runs as compact rows " +

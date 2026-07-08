@@ -12,7 +12,7 @@ const summary = {
 
 describe("environment.set_default contract", () => {
   it("registers with the correct name", () => {
-    expect(environmentSetDefault.name).toBe("set_default_environment");
+    expect(environmentSetDefault.name).toBe("environment.set_default");
   });
   it("exposes the api, mcp, and agent surfaces", () => {
     expect(environmentSetDefault.surfaces).toEqual(["api", "mcp", "agent"]);

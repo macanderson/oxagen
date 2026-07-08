@@ -114,7 +114,7 @@ describe("updateModelSettingsAction", () => {
 
     expect(mockInvoke).toHaveBeenCalledOnce();
     expect(mockInvoke).toHaveBeenCalledWith(
-      "update_model_settings",
+      "workspace.model_settings.write",
       expect.objectContaining({
         defaultTextTier: "balanced",
         defaultTextModel: "claude-3-sonnet",

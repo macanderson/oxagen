@@ -5,8 +5,7 @@ import { registerCapability } from "../registry";
 // long-press / double-click action menu in the history nav offers it so a
 // user can name an otherwise "New conversation" row.
 export const conversationRename = registerCapability({
-  name: "rename_conversation",
-  aliases: ["conversation.rename"],
+  name: "conversation.rename",
   domain: "conversation",
   description: "Rename a conversation (set its title)",
   mode: "sync",

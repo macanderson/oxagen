@@ -34,8 +34,7 @@ const neighborEntry = z.object({
   .merge(edgeValiditySchema);
 
 export const ontologyNeighbors = registerCapability({
-  name: "get_ontology_neighbors",
-  aliases: ["ontology.neighbors"],
+  name: "ontology.neighbors",
   domain: "ontology",
   description:
     "Return the one-hop neighborhood of a node — directly connected nodes, optionally filtered by " +

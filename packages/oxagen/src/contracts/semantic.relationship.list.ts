@@ -6,8 +6,7 @@ import { semanticEdgeSchema } from "./semantic.edge.list";
 export { semanticEdgeSchema as semanticRelationshipSchema } from "./semantic.edge.list";
 
 export const semanticRelationshipList = registerCapability({
-  name: "list_semantic_relationships",
-  aliases: ["semantic.relationship.list"],
+  name: "semantic.relationship.list",
   domain: "semantic",
   description:
     "Paginated browse of inferred semantic relationships for a workspace. Supports filtering by relationship type, connector source, and confidence band.",

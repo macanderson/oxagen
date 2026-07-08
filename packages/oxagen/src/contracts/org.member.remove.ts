@@ -12,8 +12,7 @@ import { registerCapability } from "../registry";
 //
 // Last-owner guard: removing the final owner is blocked to prevent org lockout.
 export const orgMemberRemove = registerCapability({
-  name: "remove_org_member",
-  aliases: ["org.member.remove"],
+  name: "org.member.remove",
   domain: "org",
   description:
     "Remove a member from the org. Revokes their role assignments and deactivates their principal. Blocked if the target is the last org owner. Audited as org.member_removed.",

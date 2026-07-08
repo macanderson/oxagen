@@ -17,7 +17,7 @@ const validOutput = {
 
 describe("secret.import_env contract", () => {
   it("registers with the correct name", () => {
-    expect(secretImportEnv.name).toBe("import_env_secrets");
+    expect(secretImportEnv.name).toBe("secret.import_env");
   });
   it("exposes the api, mcp, and agent surfaces", () => {
     expect(secretImportEnv.surfaces).toEqual(["api", "mcp", "agent"]);

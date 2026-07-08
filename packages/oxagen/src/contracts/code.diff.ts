@@ -7,8 +7,7 @@ import { registerCapability } from "../registry";
 const MAX_BLOB_BYTES = 1024 * 1024; // 1 MiB
 
 export const codeDiff = registerCapability({
-  name: "diff_code",
-  aliases: ["code.diff"],
+  name: "code.diff",
   domain: "code",
   description:
     "Produce a unified diff between two file blobs (before vs after), with " +

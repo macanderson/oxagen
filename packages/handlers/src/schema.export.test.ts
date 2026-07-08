@@ -261,7 +261,7 @@ describe("schemaExportHandler (@oxagen/handlers)", () => {
 
     // archive.create should have been invoked
     expect(mocks.invoke).toHaveBeenCalledWith(
-      "create_archive",
+      "archive.create",
       expect.objectContaining({
         archiveName: "schema-export-v2",
         entries: expect.arrayContaining([

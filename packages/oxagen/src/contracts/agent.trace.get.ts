@@ -116,8 +116,7 @@ const executionNode: z.ZodType<TraceExecutionNode> = z.lazy(() =>
 );
 
 export const agentTraceGet = registerCapability({
-  name: "get_execution_trace",
-  aliases: ["agent.trace.get"],
+  name: "agent.trace.get",
   domain: "agent",
   description:
     "Get one agent execution as a collapsible span tree — the run, its ordered steps, each step's tool calls with durations/tokens/cost/status, and child executions (subagent/A2A lineage).",

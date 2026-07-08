@@ -63,7 +63,7 @@ describe("agent.aggregate-fanout", () => {
     );
     // Reads the snapshot via the kernel and emits the aggregated event.
     expect(mocks.invoke).toHaveBeenCalledWith(
-      "aggregate_subagents",
+      "agent.subagent.aggregate",
       expect.objectContaining({ fanoutId: "fan_1" }),
       expect.objectContaining({ orgId: "org_1", workspaceId: "ws_1", surface: "runner" }),
     );

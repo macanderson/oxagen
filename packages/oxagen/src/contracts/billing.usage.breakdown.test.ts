@@ -8,7 +8,7 @@ const validInput = {
 
 describe("billing.usage.breakdown capability", () => {
   it("registers as a read-only, ungated, org-scoped billing capability", () => {
-    expect(billingUsageBreakdown.name).toBe("get_usage_breakdown");
+    expect(billingUsageBreakdown.name).toBe("billing.usage.breakdown");
     expect(billingUsageBreakdown.domain).toBe("billing");
     expect(billingUsageBreakdown.scoped).toBe(true);
     // Reading your own spend must not consume credits.
