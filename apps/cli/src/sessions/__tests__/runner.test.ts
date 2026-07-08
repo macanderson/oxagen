@@ -614,3 +614,68 @@ describe("runSession — streaming, budget, errors", () => {
     }
   });
 });
+
+describe("runSession — worker lifecycle bounds", () => {
+  it("aborts a worker gracefully when the max-lifetime ceiling elapses", async () => {
+    // Tiny lifetime ceiling: turn 1 settles, the worker parks in its (long) idle
+    // wait, and the max-lifetime bound fires during that wait — aborting the
+    // SESSION through the same graceful path as a cancel, so the session ends
+    // cancelled with a terminal error event naming the bound.
+    const saved = process.env["OXAGEN_WORKER_MAX_LIFETIME_MS"];
+    process.env["OXAGEN_WORKER_MAX_LIFETIME_MS"] = "40";
+    try {
+      const meta = await createMeta({ mode: "conversation", owner: "worker" });
+      const calls: RunTurnOptions[] = [];
+      const fake = makeFakeRunTurn({ calls });
+
+      // Long idle window so the ONLY thing that can end the session is the bound.
+      const result = await runSession({
+        store,
+        meta,
+        ai: fakeAi,
+        runTurnImpl: fake,
+        idleTimeoutMs: 60_000,
+      });
+
+      expect(result.state).toBe("cancelled");
+      const disk = await store.readEvents(meta.sid);
+      const err = disk.find((e) => e.type === "error");
+      expect(err).toBeTruthy();
+      if (err?.type === "error") {
+        expect(err.fatal).toBe(false);
+        expect(err.message).toMatch(/max lifetime|OXAGEN_WORKER_MAX_LIFETIME_MS/i);
+      }
+    } finally {
+      if (saved === undefined) delete process.env["OXAGEN_WORKER_MAX_LIFETIME_MS"];
+      else process.env["OXAGEN_WORKER_MAX_LIFETIME_MS"] = saved;
+    }
+  });
+
+  it("does not bound an interactive (tui) session — no lifetime abort", async () => {
+    // Same tiny ceiling, but a `tui`-owned session must ignore it entirely: a
+    // human is present. The session ends `done` on its own short idle window,
+    // never emitting the bound's error event.
+    const saved = process.env["OXAGEN_WORKER_MAX_LIFETIME_MS"];
+    process.env["OXAGEN_WORKER_MAX_LIFETIME_MS"] = "40";
+    try {
+      const meta = await createMeta({ mode: "conversation", owner: "tui" });
+      const calls: RunTurnOptions[] = [];
+      const fake = makeFakeRunTurn({ calls });
+
+      const result = await runSession({
+        store,
+        meta,
+        ai: fakeAi,
+        runTurnImpl: fake,
+        idleTimeoutMs: 30,
+      });
+
+      expect(result.state).toBe("done");
+      const disk = await store.readEvents(meta.sid);
+      expect(disk.some((e) => e.type === "error")).toBe(false);
+    } finally {
+      if (saved === undefined) delete process.env["OXAGEN_WORKER_MAX_LIFETIME_MS"];
+      else process.env["OXAGEN_WORKER_MAX_LIFETIME_MS"] = saved;
+    }
+  });
+});

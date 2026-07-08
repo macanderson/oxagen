@@ -30,7 +30,16 @@
  * The runner NEVER calls `process.exit`; it returns the session's fate so the
  * caller (the in-process manager, or the `fleet worker` entry) decides.
  */
-import { runTurn, diffChangedLines, type AgentAi } from "@oxagen/agent-engine";
+import {
+  runTurn,
+  diffChangedLines,
+  startMaxLifetime,
+  startRssWatchdog,
+  resolveBoundMs,
+  resolveBoundBytes,
+  type AgentAi,
+  type BoundHandle,
+} from "@oxagen/agent-engine";
 import {
   createTurnBudgetGuard,
   formatBudgetUsd,
@@ -79,6 +88,21 @@ import { debugLog } from "../lib/debug-log.js";
 
 /** Default idle window a conversation session waits for a follow-up before ending `done`. */
 const DEFAULT_IDLE_TIMEOUT_MS = 30 * 60 * 1000;
+/**
+ * Hard wall-clock ceiling for a detached worker session (default 2 h). The
+ * existing stall/inactivity/idle aborts only catch a session that STOPS making
+ * progress; a worker that keeps producing output can otherwise run unbounded.
+ * This ceiling aborts it gracefully (terminal event + normal fate path).
+ * Env-overridable via `OXAGEN_WORKER_MAX_LIFETIME_MS` (`0`/`off` disables).
+ */
+const DEFAULT_WORKER_MAX_LIFETIME_MS = 2 * 60 * 60 * 1000;
+/**
+ * RSS ceiling for a detached worker (default 4 GB). A long-lived worker whose
+ * memory climbs — accumulating trace/history state — is aborted gracefully at
+ * the ceiling rather than being OOM-killed mid-write. Env-overridable via
+ * `OXAGEN_WORKER_MAX_RSS_MB` (megabytes; `0`/`off` disables).
+ */
+const DEFAULT_WORKER_MAX_RSS_BYTES = 4 * 1024 * 1024 * 1024;
 /** Disk-coalescing flush cadence for text/reasoning deltas. */
 const COALESCE_FLUSH_MS = 150;
 /** Disk-coalescing size cap: a buffered delta run this big flushes immediately. */
@@ -243,6 +267,43 @@ export async function runSession(
     notifyWaiter?.();
   });
 
+  // ── Lifecycle bounds (detached workers only) ──────────────────────────────
+  // A `worker`-owned session is a dispatched, unattended agent — the process
+  // that must never run forever or grow memory without limit. Interactive
+  // sessions have a human present and their own idle window, so they are left
+  // unbounded here. Both bounds abort the SESSION controller through the same
+  // graceful path as SIGTERM (terminal event → normal `finally` teardown →
+  // fate), never `process.exit` mid-write. Both are env-overridable and can be
+  // disabled with `off`/`0`.
+  const lifecycleBounds: BoundHandle[] = [];
+  if (meta.owner === "worker") {
+    const abortForBound = (reason: string): void => {
+      // Surface why the worker is ending, then drive the standard cancel path.
+      emit({ type: "error", message: reason, fatal: false });
+      cancelRequested = true;
+      if (!sessionController.signal.aborted) sessionController.abort();
+      notifyWaiter?.();
+    };
+    lifecycleBounds.push(
+      startMaxLifetime({
+        ms: resolveBoundMs("OXAGEN_WORKER_MAX_LIFETIME_MS", DEFAULT_WORKER_MAX_LIFETIME_MS),
+        onExpire: () =>
+          abortForBound(
+            `worker exceeded its max lifetime; aborting gracefully (override with OXAGEN_WORKER_MAX_LIFETIME_MS)`,
+          ),
+      }),
+      startRssWatchdog({
+        maxRssBytes: resolveBoundBytes("OXAGEN_WORKER_MAX_RSS_MB", DEFAULT_WORKER_MAX_RSS_BYTES),
+        onWarn: (rss, max) =>
+          void debugLog("timeout", "session.rss-high", { sid, rssMb: Math.round(rss / 1048576), maxMb: Math.round(max / 1048576) }),
+        onLimit: (rss, max) =>
+          abortForBound(
+            `worker RSS ${Math.round(rss / 1048576)} MB reached its ${Math.round(max / 1048576)} MB ceiling; aborting gracefully (override with OXAGEN_WORKER_MAX_RSS_MB)`,
+          ),
+      }),
+    );
+  }
+
   // ── Per-session memory (like one-shot, keyed session-<sid>) ───────────────
   const memoryDisabled = process.env["OXAGEN_DISABLE_MEMORY"] === "1";
   const sessionMemory: SessionMemory | null = memoryDisabled
@@ -357,6 +418,7 @@ export async function runSession(
     emit({ type: "error", message: lastError, fatal: true });
   } finally {
     inboxTail.stop();
+    for (const bound of lifecycleBounds) bound.stop();
     flushDeltaBuffer();
     process.removeListener("SIGTERM", onSigterm);
     await extras?.closeMcp().catch(() => {});
