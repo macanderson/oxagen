@@ -4,7 +4,6 @@ import { dataTypeEnum, constraintsSchema } from "./schema.types";
 
 export const schemaPropertyUpsert = registerCapability({
   name: "upsert_schema_property",
-  aliases: ["schema.property.upsert"],
   domain: "schema",
   description: "Create/update a property on a node label or relationship type in the draft.",
   mode: "sync",

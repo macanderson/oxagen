@@ -18,7 +18,6 @@ import { memoryImportDraftSchema } from "./agent.memory_import.shared";
  */
 export const agentMemoryImportCommit = registerCapability({
   name: "commit_memory_import",
-  aliases: ["agent.memory_import.commit", "agent.memory.import.commit"],
   domain: "agent",
   description:
     "Write a batch of confirmed draft memories into the workspace AgentMemory graph. Per-item error capture — not all-or-nothing. Backs the bulk-import button.",

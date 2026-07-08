@@ -3,7 +3,6 @@ import { registerCapability } from "../registry";
 
 export const agentDefinitionList = registerCapability({
   name: "list_agent_defs",
-  aliases: ["agent.definition.list"],
   domain: "agent",
   description:
     "List the agent definitions in the current workspace with their identity, lifecycle status, deployment posture, and latest version number",

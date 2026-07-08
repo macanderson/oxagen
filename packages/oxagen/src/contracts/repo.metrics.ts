@@ -3,7 +3,6 @@ import { registerCapability } from "../registry";
 
 export const repoMetrics = registerCapability({
   name: "get_repo_metrics",
-  aliases: ["repo.metrics"],
   domain: "repo",
   description: "Get sync statistics and metrics for a repository connection.",
   mode: "sync",

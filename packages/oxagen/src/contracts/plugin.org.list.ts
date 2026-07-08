@@ -3,7 +3,6 @@ import { registerCapability } from "../registry";
 
 export const pluginOrgList = registerCapability({
   name: "list_plugins",
-  aliases: ["plugin.org.list"],
   domain: "plugin",
   description: "List installed plugins for this workspace.",
   mode: "sync",

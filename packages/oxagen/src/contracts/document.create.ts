@@ -3,7 +3,6 @@ import { registerCapability } from "../registry";
 
 export const documentCreate = registerCapability({
   name: "create_document",
-  aliases: ["document.create"],
   domain: "document",
   description: "Create a new document in the workspace",
   mode: "sync",

@@ -3,7 +3,6 @@ import { registerCapability } from "../registry";
 
 export const connectionMappingsSet = registerCapability({
   name: "set_connection_mappings",
-  aliases: ["connection.mappings.set"],
   domain: "connection",
   description:
     "Save entity type mappings for a data source connection. Activates the connection and starts ingestion once mappings are confirmed.",

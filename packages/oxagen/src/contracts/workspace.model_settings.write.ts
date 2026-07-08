@@ -3,7 +3,6 @@ import { registerCapability } from "../registry";
 
 export const workspaceModelSettingsWrite = registerCapability({
   name: "update_model_settings",
-  aliases: ["workspace.model_settings.write", "workspace.model.settings.write"],
   domain: "workspace",
   description: "Update the workspace-level model defaults (partial update — only provided fields are changed)",
   mode: "sync",

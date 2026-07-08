@@ -12,7 +12,6 @@ const renderDirectiveSchema = z.object({
 
 export const mermaidGenerate = registerCapability({
   name: "generate_mermaid",
-  aliases: ["mermaid.generate"],
   domain: "mermaid",
   description:
     "Produce a Mermaid diagram from validated diagram source text. " +

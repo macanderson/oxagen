@@ -3,7 +3,6 @@ import { registerCapability } from "../registry";
 
 export const agentRepoEdit = registerCapability({
   name: "edit_repo_file",
-  aliases: ["agent.repo.edit"],
   domain: "agent",
   description:
     "Use the coding agent to edit files in a connected GitHub repository and open a pull request with the changes.",

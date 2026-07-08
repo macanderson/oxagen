@@ -3,7 +3,6 @@ import { registerCapability } from "../registry";
 
 export const repoFork = registerCapability({
   name: "fork_repo",
-  aliases: ["repo.fork"],
   domain: "repo",
   description:
     "Fork a GitHub repository into the authenticated user's account or a specified organization.",

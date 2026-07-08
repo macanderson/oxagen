@@ -3,7 +3,6 @@ import { registerCapability } from "../registry";
 
 export const workflowCancel = registerCapability({
   name: "cancel_workflow",
-  aliases: ["workflow.cancel"],
   domain: "workflow",
   description: "Cancel a running or planning workflow, stopping all in-flight sub-tasks",
   mode: "sync",

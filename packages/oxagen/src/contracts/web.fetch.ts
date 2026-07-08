@@ -3,7 +3,6 @@ import { registerCapability } from "../registry";
 
 export const webFetch = registerCapability({
   name: "fetch_web_page",
-  aliases: ["web.fetch"],
   domain: "web",
   description:
     "Fetch a URL and return its content as clean markdown text. Useful for reading web pages, documentation, or articles.",

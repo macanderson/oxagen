@@ -3,7 +3,6 @@ import { registerCapability } from "../registry";
 
 export const agentMcpConsentList = registerCapability({
   name: "list_mcp_consents",
-  aliases: ["agent.mcp_consent.list", "agent.mcp.consent.list"],
   domain: "agent",
   description:
     "List external MCP tool consent grants in the active workspace (which tools the agent may invoke without re-prompting)",

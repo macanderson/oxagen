@@ -15,7 +15,6 @@ const fileRenderDirective = z.object({
 
 export const archiveCreate = registerCapability({
   name: "create_archive",
-  aliases: ["archive.create"],
   domain: "document",
   description:
     "Bundle one or more items — existing generated assets, inline base64 blobs, or plain text — " +

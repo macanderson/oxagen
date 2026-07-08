@@ -3,7 +3,6 @@ import { registerCapability } from "../registry";
 
 export const imageList = registerCapability({
   name: "list_images",
-  aliases: ["image.list"],
   domain: "image",
   description: "List images in the workspace",
   mode: "sync",

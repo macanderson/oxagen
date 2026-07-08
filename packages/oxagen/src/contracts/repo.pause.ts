@@ -3,7 +3,6 @@ import { registerCapability } from "../registry";
 
 export const repoPause = registerCapability({
   name: "pause_repo",
-  aliases: ["repo.pause"],
   domain: "repo",
   description: "Pause automatic syncing for a repository connection.",
   mode: "sync",

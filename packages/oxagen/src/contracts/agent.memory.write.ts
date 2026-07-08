@@ -4,7 +4,6 @@ import { memoryClassEnum, memoryKindSchema } from "./agent.memory.model";
 
 export const agentMemoryWrite = registerCapability({
   name: "write_memory",
-  aliases: ["agent.memory.write"],
   domain: "agent",
   description:
     "Persist a two-axis memory (class + kind) tied to a graph node per the oxagen-feature skill memory contract",

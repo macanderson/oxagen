@@ -7,7 +7,6 @@ import { registerCapability } from "../registry";
  */
 export const notificationsMark = registerCapability({
   name: "mark_notification",
-  aliases: ["notification.mark", "notifications.mark"],
   domain: "notification",
   description: "Mark a notification as read and/or archived for the calling user.",
   mode: "sync",

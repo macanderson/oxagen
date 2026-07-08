@@ -3,7 +3,6 @@ import { registerCapability } from "../registry";
 
 export const schemaDelete = registerCapability({
   name: "delete_schema",
-  aliases: ["schema.delete"],
   domain: "schema",
   description: "Drop an entire named schema from the draft — its labels, relationship types, and properties.",
   mode: "sync",

@@ -3,7 +3,6 @@ import { registerCapability } from "../registry";
 
 export const userPreferencesRead = registerCapability({
   name: "get_user_preferences",
-  aliases: ["user.preferences.read"],
   domain: "user",
   description: "Read the calling user's UI and model preferences",
   mode: "sync",

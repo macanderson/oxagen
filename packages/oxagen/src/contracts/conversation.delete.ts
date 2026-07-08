@@ -9,7 +9,6 @@ import { registerCapability } from "../registry";
 // the agent surface requires approval. Set-based UPDATE over the id list.
 export const conversationDelete = registerCapability({
   name: "delete_conversation",
-  aliases: ["conversation.delete"],
   domain: "conversation",
   description:
     "Permanently delete conversations from the user's view (soft-delete: sets deleted_at; row retained for audit, never restorable)",

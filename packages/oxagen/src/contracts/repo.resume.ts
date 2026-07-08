@@ -3,7 +3,6 @@ import { registerCapability } from "../registry";
 
 export const repoResume = registerCapability({
   name: "resume_repo",
-  aliases: ["repo.resume"],
   domain: "repo",
   description: "Resume automatic syncing for a paused repository connection.",
   mode: "sync",

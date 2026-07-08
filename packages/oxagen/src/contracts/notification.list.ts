@@ -8,7 +8,6 @@ import { registerCapability } from "../registry";
  */
 export const notificationsList = registerCapability({
   name: "list_notifications",
-  aliases: ["notification.list", "notifications.list"],
   domain: "notification",
   description:
     "List in-app notifications for the calling user. Supports filtering to unread-only and pagination.",

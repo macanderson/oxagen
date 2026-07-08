@@ -35,7 +35,6 @@ const touchedFileEntry = z.object({
 
 export const agentExecutionLineage = registerCapability({
   name: "get_execution_lineage",
-  aliases: ["agent.execution.lineage"],
   domain: "agent",
   description:
     "Get one agent execution's file-level lineage as a graph — the :Execution node plus every :SourceFile it touched via TOUCHED_FILE edges. Proves, as a real queryable graph, exactly which files an agent run modified.",

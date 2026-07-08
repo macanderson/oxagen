@@ -3,7 +3,6 @@ import { registerCapability } from "../registry";
 
 export const repoConfigure = registerCapability({
   name: "configure_repo",
-  aliases: ["repo.configure"],
   domain: "repo",
   description:
     "Set repo-specific configuration: filters, inference toggles, sync cadence, field mappings. Specializes connection.configure for code repository connectors.",

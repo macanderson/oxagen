@@ -22,7 +22,6 @@ import { RELATIONSHIP_TYPE_PATTERN } from "../lib/relationship-type-pattern";
  */
 export const graphSyncPush = registerCapability({
   name: "push_graph",
-  aliases: ["graph.sync.push"],
   domain: "graph",
   description:
     "Batch-upsert a content-addressed code or lineage subgraph into the workspace " +

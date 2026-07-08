@@ -3,7 +3,6 @@ import { registerCapability } from "../registry";
 
 export const skillExport = registerCapability({
   name: "export_skill",
-  aliases: ["skill.export"],
   domain: "skill",
   description: "Export the active (or a specified) version of a skill as a downloadable .skill.md string that round-trips through parseSkill",
   mode: "sync",

@@ -4,7 +4,6 @@ import { enforcementModeEnum } from "./schema.types";
 
 export const schemaSetup = registerCapability({
   name: "setup_schema",
-  aliases: ["schema.setup"],
   domain: "schema",
   description: "Interactive LLM-assisted registry walkthrough: recommend → intent Q&A (schema.chat) → apply → activate.",
   mode: "sync",

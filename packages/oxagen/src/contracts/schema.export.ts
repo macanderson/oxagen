@@ -3,7 +3,6 @@ import { registerCapability } from "../registry";
 
 export const schemaExport = registerCapability({
   name: "export_schema",
-  aliases: ["schema.export"],
   domain: "schema",
   description: "Build a ZIP of a version (grouped by schema) via the archive.create plumbing; returns access-controlled serveUrl.",
   mode: "sync",

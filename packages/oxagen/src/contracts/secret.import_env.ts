@@ -3,7 +3,6 @@ import { registerCapability } from "../registry";
 
 export const secretImportEnv = registerCapability({
   name: "import_env_secrets",
-  aliases: ["secret.import_env"],
   domain: "secret",
   description: "Parse pasted .env text and (optionally) upsert keys + set values for the workspace defaults or a chosen environment. Returns a preview of new vs override rows; commit must be explicit.",
   mode: "sync",

@@ -7,7 +7,6 @@ import { registerCapability } from "../registry";
 // adapter, and returns the CDN URL + canonical key.
 export const assetUpload = registerCapability({
   name: "upload_asset",
-  aliases: ["asset.upload"],
   domain: "asset",
   description:
     "Ingest a binary asset from a source URL into object storage and return its stored URL and key.",

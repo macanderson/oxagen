@@ -3,7 +3,6 @@ import { registerCapability } from "../registry";
 
 export const secretValueUnset = registerCapability({
   name: "unset_secret_value",
-  aliases: ["secret.value.unset"],
   domain: "secret",
   description: "Remove a secret's per-environment override so it falls back to the key's default value.",
   mode: "sync",

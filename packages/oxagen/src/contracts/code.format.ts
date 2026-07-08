@@ -20,7 +20,6 @@ export const codeFormatLanguageSchema = z
 
 export const codeFormat = registerCapability({
   name: "format_code",
-  aliases: ["code.format"],
   domain: "code",
   description:
     "Run a language-aware formatter on source inside the sandbox and return " +

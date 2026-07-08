@@ -3,7 +3,6 @@ import { registerCapability } from "../registry";
 
 export const agentPlanApprove = registerCapability({
   name: "approve_plan",
-  aliases: ["agent.plan.approve"],
   domain: "agent",
   description: "Approve, deny, or amend a previously-proposed plan; approval releases the agent stream to execute the plan's side-effectful steps",
   mode: "sync",

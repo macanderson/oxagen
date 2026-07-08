@@ -12,7 +12,6 @@ import { agentMemoryRecordSchema } from "./agent.memory.list";
  */
 export const agentMemoryPromote = registerCapability({
   name: "promote_memory",
-  aliases: ["agent.memory.promote"],
   domain: "agent",
   description:
     "Promote a memory to RULE or FACT, recording an auditable promotion event. FACT requires human confirmation and forces enforcement 100.",

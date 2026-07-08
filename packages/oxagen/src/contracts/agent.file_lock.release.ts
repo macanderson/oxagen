@@ -9,7 +9,6 @@ import { registerCapability } from "../registry";
 // the original holder's internal agentId.
 export const agentFileLockRelease = registerCapability({
   name: "release_file_lock",
-  aliases: ["agent.file_lock.release", "agent.file.lock.release"],
   domain: "agent",
   description:
     "Force-release a file lock by its lockId — for clearing a lock a crashed/stuck agent left behind. Does not require the original holder's agentId.",

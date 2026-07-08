@@ -3,7 +3,6 @@ import { registerCapability } from "../registry";
 
 export const pluginOrgSetEnabled = registerCapability({
   name: "set_org_plugin_enabled",
-  aliases: ["plugin.org.set_enabled"],
   domain: "plugin",
   description: "Toggle the enabled flag on a workspace plugin listing.",
   mode: "sync",

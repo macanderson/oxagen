@@ -7,7 +7,6 @@ import { registerCapability } from "../registry";
 // this shape.
 export const chatMessageSend = registerCapability({
   name: "send_message",
-  aliases: ["chat.message.send"],
   domain: "chat",
   description: "Append a user message to a conversation and stream the assistant reply",
   mode: "async",

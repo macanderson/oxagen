@@ -7,7 +7,6 @@ import { registerCapability } from "../registry";
 // outlives its owning turn is visible here until TTL/sweep reap it).
 export const agentFileLockList = registerCapability({
   name: "list_file_locks",
-  aliases: ["agent.file_lock.list", "agent.file.lock.list"],
   domain: "agent",
   description: "List every currently-live file lock in the workspace, optionally filtered to one file.",
   mode: "sync",

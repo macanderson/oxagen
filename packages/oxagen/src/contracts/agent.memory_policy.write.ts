@@ -4,7 +4,6 @@ import { memoryPolicySchema } from "./agent.memory_policy.read";
 
 export const agentMemoryPolicyWrite = registerCapability({
   name: "update_memory_policy",
-  aliases: ["agent.memory_policy.write", "agent.memory.policy.write"],
   domain: "agent",
   description:
     "Update the workspace memory decay policy: half-lives by weight and recall confidence threshold",

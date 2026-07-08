@@ -7,7 +7,6 @@ import { registerCapability } from "../registry";
 // the per-fanout child-run detail.
 export const agentSubagentFanoutList = registerCapability({
   name: "list_subagent_fanouts",
-  aliases: ["agent.subagent_fanout.list", "agent.subagent.fanout.list"],
   domain: "agent",
   description:
     "List subagent fan-outs for the active workspace with status and child-run counts. Optionally filter by the parent message that triggered the fan-out.",

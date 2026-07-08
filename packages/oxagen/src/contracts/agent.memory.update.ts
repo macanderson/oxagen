@@ -19,7 +19,6 @@ import { memoryKindSchema, memoryStatusEnum } from "./agent.memory.model";
  */
 export const agentMemoryUpdate = registerCapability({
   name: "update_memory",
-  aliases: ["agent.memory.update"],
   domain: "agent",
   description:
     "Edit an AgentMemory: change its lesson, kind, source, confidence/enforcement scores, or status. Re-embeds when the lesson changes so semantic recall stays accurate. Class changes go through agent.memory.promote.",

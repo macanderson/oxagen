@@ -18,7 +18,6 @@ import { memoryImportDraftSchema } from "./agent.memory_import.shared";
  */
 export const agentMemoryImportParse = registerCapability({
   name: "parse_memory_import",
-  aliases: ["agent.memory_import.parse", "agent.memory.import.parse"],
   domain: "agent",
   description:
     "Parse a batch of uploaded markdown documents into draft AgentMemory records, classifying each by kind + weight. Read-only: returns editable drafts for review, persists nothing.",

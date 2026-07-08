@@ -3,7 +3,6 @@ import { registerCapability } from "../registry";
 
 export const agentToolList = registerCapability({
   name: "list_agent_tools",
-  aliases: ["agent.tool.list"],
   domain: "agent",
   description: "List the capabilities surfaced as agent tools for the active workspace, after allowlist and risk filtering",
   mode: "sync",

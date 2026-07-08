@@ -3,7 +3,6 @@ import { registerCapability } from "../registry";
 
 export const workspaceModelSettingsRead = registerCapability({
   name: "get_model_settings",
-  aliases: ["workspace.model_settings.read", "workspace.model.settings.read"],
   domain: "workspace",
   description: "Read the workspace-level model defaults (text tier/model, image model, video model)",
   mode: "sync",

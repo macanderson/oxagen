@@ -12,7 +12,6 @@ import { conversationAssetItem } from "./conversation.files.list";
 // bypassed exactly like conversation.files.list.
 export const conversationAttachmentAdd = registerCapability({
   name: "add_conversation_attachment",
-  aliases: ["conversation.attachment.add"],
   domain: "conversation",
   description:
     "Link an already-uploaded asset to a conversation as a chat attachment and return its conversation-file record.",

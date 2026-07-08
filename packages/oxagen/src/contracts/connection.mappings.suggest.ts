@@ -3,7 +3,6 @@ import { registerCapability } from "../registry";
 
 export const connectionMappingsSuggest = registerCapability({
   name: "suggest_connection_mappings",
-  aliases: ["connection.mappings.suggest"],
   domain: "connection",
   description:
     "Use an LLM to suggest entity type mappings for a connection based on previewed record types. Part of the setup wizard flow.",

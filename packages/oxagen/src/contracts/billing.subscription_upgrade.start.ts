@@ -9,7 +9,6 @@ import { registerCapability } from "../registry";
 // links it (MCP / API). User approval is required regardless of surface.
 export const billingSubscriptionUpgradeStart = registerCapability({
   name: "start_subscription_upgrade",
-  aliases: ["billing.subscription_upgrade.start", "billing.subscription.upgrade.start"],
   domain: "billing",
   description: "Start a Stripe Checkout session for a plan change; returns a URL the user opens to complete the upgrade",
   mode: "sync",

@@ -5,7 +5,6 @@ import { registerCapability } from "../registry";
 // creates the org_users row, and provisions least-privilege IAM for the user.
 export const orgMemberInviteAccept = registerCapability({
   name: "accept_member_invite",
-  aliases: ["org.member_invite.accept", "org.member.invite.accept"],
   domain: "org",
   description: "Accept a pending org invitation. Creates the membership row and provisions least-privilege IAM.",
   mode: "sync",

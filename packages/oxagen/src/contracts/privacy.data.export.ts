@@ -3,7 +3,6 @@ import { registerCapability } from "../registry";
 
 export const privacyDataExport = registerCapability({
   name: "export_data",
-  aliases: ["privacy.data.export"],
   domain: "privacy",
   description:
     "Request a machine-readable ZIP export of personal or organizational data (GDPR Article 20 — right to data portability). Returns immediately with status 'queued'; poll via GET /v1/privacy/export/:exportId for the download URL.",

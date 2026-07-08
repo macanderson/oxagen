@@ -47,7 +47,6 @@ export const organizationCreateInputBase = z.object({
 
 export const organizationCreate = registerCapability({
   name: "create_org",
-  aliases: ["org.create", "organization.create"],
   domain: "org",
   description: "Create a new organization with a globally-unique slug",
   mode: "sync",

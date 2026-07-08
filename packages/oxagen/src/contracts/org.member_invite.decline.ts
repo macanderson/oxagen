@@ -5,7 +5,6 @@ import { registerCapability } from "../registry";
 // invitation 'declined'. The invitee or an org admin can decline.
 export const orgMemberInviteDecline = registerCapability({
   name: "decline_member_invite",
-  aliases: ["org.member_invite.decline", "org.member.invite.decline"],
   domain: "org",
   description: "Decline a pending org invitation. Frees the reserved seat.",
   mode: "sync",
