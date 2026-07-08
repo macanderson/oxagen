@@ -71,7 +71,7 @@ mocks.txUpdate.mockResolvedValue([]);
 
 // ── Mock @oxagen/skills ───────────────────────────────────────────────────────
 vi.mock("@oxagen/skills", () => ({
-  createSkillRegistry: () => ({
+  createBuiltinSkillRegistry: () => ({
     list: mocks.registryList,
     get: vi.fn(),
     refresh: vi.fn(),

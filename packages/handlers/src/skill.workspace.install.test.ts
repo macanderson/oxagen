@@ -85,7 +85,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 
 // ── Skills registry mock ──────────────────────────────────────────────────────
 vi.mock("@oxagen/skills", () => ({
-  createSkillRegistry: () => ({
+  createBuiltinSkillRegistry: () => ({
     get: mocks.registryGet,
     list: vi.fn().mockResolvedValue([]),
     refresh: vi.fn(),

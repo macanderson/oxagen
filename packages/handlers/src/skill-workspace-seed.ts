@@ -18,22 +18,13 @@
 import { schema, withTenantDb, withSystemDb } from "@oxagen/database";
 import type { Tx } from "@oxagen/database";
 import { and, eq, isNull, sql } from "drizzle-orm";
-import { createSkillRegistry } from "@oxagen/skills";
-import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { createBuiltinSkillRegistry } from "@oxagen/skills";
 import { logger } from "./logger";
 
-// Resolve the built-in skills directory LAZILY + guarded — a module-scope
-// `fileURLToPath(import.meta.url)` is undefined in the CJS API bundle and crashes
-// the whole function at load (FUNCTION_INVOCATION_FAILED — postmortem 2026-06-12).
-// Path must match skill.workspace.install.ts exactly (3 `..` → packages/skills/skills).
-function skillsDir(): string {
-  try {
-    return join(fileURLToPath(import.meta.url), "../../../skills/skills");
-  } catch {
-    return join(process.cwd(), "packages/skills/skills");
-  }
-}
+// Builtin skills are resolved from EMBEDDED module data (createBuiltinSkillRegistry),
+// never a runtime filesystem read. Serverless bundlers drop the sibling
+// packages/skills/skills/*.md, so a `readdir` there returns ENOENT in prod and
+// silently seeded ZERO skills — the root cause of the "no builtin on disk" error.
 
 interface SeedArgs {
   orgId: string;
@@ -54,7 +45,7 @@ async function runSeed(
   orgId: string,
   workspaceId: string,
 ): Promise<SeedWorkspaceSkillsResult> {
-  const registry = createSkillRegistry({ fsRoot: skillsDir() });
+  const registry = createBuiltinSkillRegistry();
   const templates = await registry.list();
 
   let inserted = 0;
