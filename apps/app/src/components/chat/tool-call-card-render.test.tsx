@@ -2,15 +2,13 @@
 /**
  * tool-call-card-render.test.tsx
  *
- * Render + interaction tests for the ToolCallCard component:
+ * Render + interaction tests for the ToolCallCard detail body:
  *   - Shows a human-readable label (never the raw dotted capability)
  *   - Shows the raw capability only in the expanded body + title attr
- *   - Shows/hides detail panel on toggle
- *   - Renders input preview in detail panel
- *   - Shows output when completed
- *   - Shows error reason when failed
- *   - Shows stdout / stderr in output stream section
- *   - Shows duration when not running
+ *   - Never renders a risk badge (the calm, minimal redesign)
+ *   - A failed call reads as a muted "failed", never destructive-red, in the row
+ *   - Shows/hides detail panel on toggle; hideHeader renders the body directly
+ *   - Renders input/result trees, output stream, and error section
  */
 
 import { describe, it, expect, vi, afterEach } from "vitest";
@@ -28,17 +26,6 @@ vi.mock("lucide-react", async (importOriginal) => {
     ChevronRight: vi.fn(() => <span data-testid="chevron-right" />),
   };
 });
-
-vi.mock("./risk-badge", () => ({
-  RiskBadge: ({ risk }: { risk: string }) =>
-    risk === "low" ? null : <span data-testid="risk-badge">{risk}</span>,
-}));
-
-vi.mock("./status-icon", () => ({
-  StatusIcon: ({ status }: { status: string }) => (
-    <span data-testid="status-icon" data-status={status} />
-  ),
-}));
 
 describe("ToolCallCard", () => {
   const baseProps = {
@@ -75,25 +62,26 @@ describe("ToolCallCard", () => {
     expect(screen.getByText("search_web")).toBeInTheDocument();
   });
 
-  it("does not render a risk chip for low risk", () => {
-    render(<ToolCallCard {...baseProps} />);
-    expect(screen.queryByTestId("risk-badge")).not.toBeInTheDocument();
+  it("never renders a risk badge, even for elevated risk", () => {
+    const { rerender } = render(<ToolCallCard {...baseProps} riskLevel="low" />);
+    expect(screen.queryByText(/^(low|medium|high)$/i)).not.toBeInTheDocument();
+    rerender(<ToolCallCard {...baseProps} riskLevel="high" />);
+    expect(screen.queryByText(/^(low|medium|high)$/i)).not.toBeInTheDocument();
   });
 
-  it("renders the risk badge for elevated risk", () => {
-    render(<ToolCallCard {...baseProps} riskLevel="high" />);
-    expect(screen.getByTestId("risk-badge")).toHaveTextContent("high");
-  });
-
-  it("marks the label with destructive text when the call failed", () => {
+  it("shows a muted 'failed' indicator (not destructive-red label) when the call failed", () => {
     render(<ToolCallCard {...baseProps} status="failed" />);
     const label = screen.getByText("Search the web");
-    expect(label.className).toContain("text-destructive");
+    expect(label.className).not.toContain("text-destructive");
+    // The failure reads as a quiet muted word.
+    const failed = screen.getByLabelText("Failed");
+    expect(failed).toHaveTextContent("failed");
+    expect(failed.className).toContain("text-muted-foreground");
   });
 
-  it("renders status icon with correct status", () => {
-    render(<ToolCallCard {...baseProps} />);
-    expect(screen.getByTestId("status-icon")).toHaveAttribute("data-status", "completed");
+  it("shows a muted completed check", () => {
+    render(<ToolCallCard {...baseProps} status="completed" />);
+    expect(screen.getByLabelText("Completed")).toBeInTheDocument();
   });
 
   it("shows duration when not running", () => {
@@ -197,6 +185,16 @@ describe("ToolCallCard", () => {
     expect(screen.getByText("Input")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: /tool call details/i }));
     expect(screen.queryByText("Input")).not.toBeInTheDocument();
+  });
+
+  it("hideHeader renders the body directly with no toggle button, keeping the test id", () => {
+    const { container } = render(<ToolCallCard {...baseProps} hideHeader />);
+    // No collapsible header button.
+    expect(screen.queryByRole("button", { name: /tool call details/i })).not.toBeInTheDocument();
+    // Body is shown immediately.
+    expect(screen.getByText("Input")).toBeInTheDocument();
+    // e2e continuity: the card keeps its test id.
+    expect(container.querySelector('[data-testid="tool-call-card-tc-1"]')).toBeInTheDocument();
   });
 
   it("labels the input section and shows the composing indicator when pending", async () => {

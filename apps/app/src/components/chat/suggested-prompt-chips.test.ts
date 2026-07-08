@@ -1,17 +1,39 @@
+// @vitest-environment jsdom
 /**
  * suggested-prompt-chips.test.ts
  *
- * Unit tests for SuggestedPromptChips pure helpers:
+ * Unit tests for SuggestedPromptChips pure helpers + rendering:
  *   1. buildChipFormData — constructs correct FormData for chip activation
  *   2. Chip count invariant — chips always render exactly 3 (tested via pure
  *      deriveSuggestions, which underpins useSuggestedPrompts)
  *   3. Auto-submit contract — buildChipFormData sets "content" to the prompt
  *   4. Send handler invocation — action is called with FormData on chip activation (not input-populate)
+ *   5. suggestions prop override — per-turn LLM chips replace the static fallback
  */
 
-import { describe, it, expect, vi } from "vitest";
-import { buildChipFormData } from "./suggested-prompt-chips";
+import { afterEach, describe, it, expect, vi } from "vitest";
+import * as React from "react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { buildChipFormData, SuggestedPromptChips } from "./suggested-prompt-chips";
 import { deriveSuggestions } from "@/lib/page-context/suggested-prompts";
+
+// Stub ONLY the hook (the static fallback source) so render tests are
+// deterministic; spread importOriginal so the real `deriveSuggestions` the
+// pure tests above rely on is preserved (see "mock spread transitive" gotcha).
+const { FALLBACK } = vi.hoisted(() => ({
+  FALLBACK: [
+    { label: "Fallback One", prompt: "fallback prompt one" },
+    { label: "Fallback Two", prompt: "fallback prompt two" },
+    { label: "Fallback Three", prompt: "fallback prompt three" },
+  ],
+}));
+vi.mock("@/lib/page-context/suggested-prompts", async (importOriginal) => {
+  const actual =
+    await importOriginal<
+      typeof import("@/lib/page-context/suggested-prompts")
+    >();
+  return { ...actual, useSuggestedPrompts: () => FALLBACK };
+});
 
 // ── buildChipFormData ─────────────────────────────────────────────────────────
 
@@ -214,5 +236,63 @@ describe("handleActivate error surfacing contract — action ok:false is NOT sil
     const result = await mockAction(fd) as { ok: boolean; error?: string };
     expect(result.ok).toBe(true);
     expect(result.error).toBeUndefined();
+  });
+});
+
+// ── suggestions prop override (rendered) ──────────────────────────────────────
+// When the per-turn `suggestions` prop is present and non-empty it REPLACES the
+// static useSuggestedPrompts() fallback; null/empty falls back to it. Auto-submit
+// stays intact regardless of the source.
+
+describe("SuggestedPromptChips — suggestions prop override", () => {
+  afterEach(cleanup);
+
+  const llmTrio = [
+    { label: "Turn Into An Agent", prompt: "Create an agent that does this." },
+    { label: "Automate This", prompt: "Automate this on a schedule." },
+    { label: "Add To Graph", prompt: "Wire this into the knowledge graph." },
+  ];
+
+  function renderChips(
+    props: Partial<React.ComponentProps<typeof SuggestedPromptChips>> = {},
+  ) {
+    const action = vi.fn().mockResolvedValue({ ok: true });
+    render(
+      React.createElement(SuggestedPromptChips, {
+        action,
+        conversationId: "conv-1",
+        parentMessageId: "msg-1",
+        ...props,
+      }),
+    );
+    return { action };
+  }
+
+  it("renders the LLM suggestions when the prop is non-empty (not the fallback)", () => {
+    renderChips({ suggestions: llmTrio });
+    for (const { label } of llmTrio) {
+      expect(screen.getByText(label)).toBeTruthy();
+    }
+    expect(screen.queryByText("Fallback One")).toBeNull();
+  });
+
+  it("falls back to the static suggestions when the prop is null", () => {
+    renderChips({ suggestions: null });
+    expect(screen.getByText("Fallback One")).toBeTruthy();
+    expect(screen.queryByText("Turn Into An Agent")).toBeNull();
+  });
+
+  it("falls back to the static suggestions when the prop is an empty array", () => {
+    renderChips({ suggestions: [] });
+    expect(screen.getByText("Fallback One")).toBeTruthy();
+  });
+
+  it("auto-submits the LLM prompt via the action on click", async () => {
+    const { action } = renderChips({ suggestions: llmTrio });
+    screen.getByText("Automate This").click();
+    await waitFor(() => expect(action).toHaveBeenCalledOnce());
+    const [fd] = action.mock.calls[0] as [FormData];
+    expect(fd.get("content")).toBe("Automate this on a schedule.");
+    expect(fd.get("conversationId")).toBe("conv-1");
   });
 });
