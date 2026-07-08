@@ -1,0 +1,81 @@
+# db-migrate.yml — manual, reusable Postgres migration runner.
+#
+# Why this exists: the main pipeline's `atlas migrate apply --env ci` step is
+# meant to migrate prod on every push to main, but org-billing gating can stop
+# Actions jobs from starting, so prod drifts behind the committed migrations
+# ("column ... does not exist" 500s). This workflow is a hand-triggered escape
+# hatch to apply the committed Atlas migrations to production (or preview) on
+# demand, using the same PRODUCTION_DATABASE_URL secret the pipeline uses.
+#
+# Safe by default: a run with apply=false only prints `atlas migrate status`
+# (the pending list) and changes nothing. Re-run with apply=true to apply.
+# Always read the status output first — if it shows migrations you did not
+# expect (e.g. the entire history pending, which means Atlas's revision table
+# is empty and it would try to re-create existing objects), STOP and do not
+# apply.
+name: DB Migrate (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Database to migrate
+        type: choice
+        options:
+          - production
+          - preview
+        default: production
+      apply:
+        description: "Apply migrations? Leave false for a dry-run status-only check."
+        type: boolean
+        default: false
+
+# Never let two migration runs against the same target overlap.
+concurrency:
+  group: db-migrate-${{ github.event.inputs.target }}
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    # Uses the GitHub Environment of the same name if it exists, so environment
+    # protection rules (required reviewers) gate production applies. Repo-level
+    # secrets still resolve when no environment secret shadows them.
+    environment: ${{ github.event.inputs.target }}
+    env:
+      # Mirror pipeline.yml: pick the prod or preview connection string. Atlas's
+      # `ci` env reads getenv("DATABASE_URL").
+      DATABASE_URL: ${{ github.event.inputs.target == 'production' && secrets.PRODUCTION_DATABASE_URL || secrets.PREVIEW_DATABASE_URL }}
+    defaults:
+      run:
+        working-directory: packages/database
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Atlas
+        uses: ariga/setup-atlas@v0
+        with:
+          version: v0.38.0
+
+      - name: Guard — DATABASE_URL is set
+        run: |
+          if [ -z "${DATABASE_URL:-}" ]; then
+            echo "::error::DATABASE_URL secret for target '${{ github.event.inputs.target }}' is empty. Check the PRODUCTION_DATABASE_URL / PREVIEW_DATABASE_URL secret."
+            exit 1
+          fi
+          echo "Target: ${{ github.event.inputs.target }} — DATABASE_URL is set (value masked)."
+
+      - name: Validate migration directory (checksums)
+        run: atlas migrate validate --dir "file://atlas/migrations"
+
+      - name: Status — pending migrations (dry run, changes nothing)
+        run: atlas migrate status --env ci
+
+      - name: Apply migrations
+        if: ${{ github.event.inputs.apply == 'true' }}
+        run: atlas migrate apply --env ci
+
+      - name: Status — after apply (should show no pending)
+        if: ${{ github.event.inputs.apply == 'true' }}
+        run: atlas migrate status --env ci
