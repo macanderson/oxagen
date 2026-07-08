@@ -8,7 +8,8 @@ import { registerCapability } from "../registry";
 // Takes no ids: the set is "all of my archived conversations here", resolved
 // server-side in one set-based UPDATE.
 export const conversationPurge = registerCapability({
-  name: "conversation.purge",
+  name: "purge_conversations",
+  aliases: ["conversation.purge"],
   domain: "conversation",
   description:
     "Permanently delete every archived conversation the caller owns in this workspace (soft-delete: sets deleted_at; rows retained for audit)",

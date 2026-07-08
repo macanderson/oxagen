@@ -12,7 +12,8 @@ import { registerCapability } from "../registry";
 // doesn't render is caught here, not shipped.
 
 export const agentFeatureVerify = registerCapability({
-  name: "agent.feature.verify",
+  name: "verify_feature",
+  aliases: ["agent.feature.verify"],
   domain: "agent",
   description:
     "Independent cross-LLM judge: a DIFFERENT vision model than the builder reads screenshots of a feature and returns a pass/fail verdict against the stated requirement. The proof-of-done gate.",

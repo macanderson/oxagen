@@ -176,6 +176,6 @@ describe("skill.version.get capability", () => {
   });
 
   it("exposes name correctly", () => {
-    expect(skillVersionGet.name).toBe("skill.version.get");
+    expect(skillVersionGet.name).toBe("get_skill_version");
   });
 });

@@ -73,7 +73,8 @@ export const semanticEdgeSchema = z.object({
 });
 
 export const semanticEdgeList = registerCapability({
-  name: "semantic.edge.list",
+  name: "list_semantic_edges",
+  aliases: ["semantic.edge.list"],
   domain: "semantic",
   description:
     "Paginated browse of inferred semantic edges for a workspace. Supports filtering by relationship type, connector source, and confidence band.",

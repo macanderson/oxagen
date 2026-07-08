@@ -372,7 +372,7 @@ describe("materializeTools", () => {
     const result = await formFillTool.execute!({ formId: "workspace-general", values: { name: "Prod" } });
     // Kernel invoke must have been called — not the agent-internal loader
     expect(invoke).toHaveBeenCalledWith(
-      "form.fill",
+      "fill_form",
       { formId: "workspace-general", values: { name: "Prod" } },
       CTX,
       { surface: "agent" },
@@ -408,7 +408,7 @@ describe("materializeTools", () => {
     expect(svgTool).toBeDefined();
     const result = await svgTool.execute!({ prompt: "a red circle" });
     expect(invoke).toHaveBeenCalledWith(
-      "svg.generate",
+      "generate_svg",
       { prompt: "a red circle" },
       CTX,
       { surface: "agent" },

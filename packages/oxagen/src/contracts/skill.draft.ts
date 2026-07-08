@@ -2,7 +2,8 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const skillDraft = registerCapability({
-  name: "skill.draft",
+  name: "draft_skill",
+  aliases: ["skill.draft"],
   domain: "skill",
   description:
     "Draft a skill configuration from a natural-language description without persisting anything. The model synthesises the full skill shape — display name, kebab-case slug, matcher description, weight, optional category, and the markdown body — and returns it for human review. Feed the confirmed draft to skill.create (or skill.workspace.install with a custom body) to save it. This is the AI-assisted first step of the skill setup flow.",

@@ -27,7 +27,8 @@ export const prDiffFileSchema = z.object({
 });
 
 export const repoPrDiff = registerCapability({
-  name: "repo.pr.diff",
+  name: "get_pr_diff",
+  aliases: ["repo.pr.diff"],
   domain: "repo",
   description: "Read the per-file unified-diff patches for a GitHub pull request.",
   mode: "sync",

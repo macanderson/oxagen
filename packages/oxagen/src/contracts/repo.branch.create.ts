@@ -2,7 +2,8 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const repoBranchCreate = registerCapability({
-  name: "repo.branch.create",
+  name: "create_branch",
+  aliases: ["repo.branch.create"],
   domain: "repo",
   description: "Create a new branch in a GitHub repository, optionally from another branch.",
   mode: "sync",

@@ -7,7 +7,8 @@ const renderDirectiveSchema = z.object({
 });
 
 export const imageGenerate = registerCapability({
-  name: "image.generate",
+  name: "generate_image",
+  aliases: ["image.generate"],
   domain: "image",
   description:
     "Generate an image from a natural-language prompt using the OpenAI image generation API " +

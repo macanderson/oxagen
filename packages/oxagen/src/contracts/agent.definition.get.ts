@@ -3,7 +3,8 @@ import { registerCapability } from "../registry";
 import { agentDefinitionConfigSchema } from "../agent-schema";
 
 export const agentDefinitionGet = registerCapability({
-  name: "agent.definition.get",
+  name: "get_agent_def",
+  aliases: ["agent.definition.get"],
   domain: "agent",
   description:
     "Fetch an agent definition with its active (or latest) version config, parsed and validated via parseAgentDefinitionConfig",

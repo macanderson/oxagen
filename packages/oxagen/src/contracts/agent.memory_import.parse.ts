@@ -17,8 +17,8 @@ import { memoryImportDraftSchema } from "./agent.memory_import.shared";
  * the per-call document/size caps keep a single request bounded.
  */
 export const agentMemoryImportParse = registerCapability({
-  name: "agent.memory_import.parse",
-  aliases: ["agent.memory.import.parse"],
+  name: "parse_memory_import",
+  aliases: ["agent.memory_import.parse", "agent.memory.import.parse"],
   domain: "agent",
   description:
     "Parse a batch of uploaded markdown documents into draft AgentMemory records, classifying each by kind + weight. Read-only: returns editable drafts for review, persists nothing.",

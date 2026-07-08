@@ -2,7 +2,8 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const documentCreate = registerCapability({
-  name: "document.create",
+  name: "create_document",
+  aliases: ["document.create"],
   domain: "document",
   description: "Create a new document in the workspace",
   mode: "sync",

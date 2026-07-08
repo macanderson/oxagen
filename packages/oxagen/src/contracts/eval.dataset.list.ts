@@ -2,7 +2,8 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const evalDatasetList = registerCapability({
-  name: "eval.dataset.list",
+  name: "list_datasets",
+  aliases: ["eval.dataset.list"],
   domain: "eval",
   description:
     "List the workspace's eval datasets with their item counts, source (manual or traces), and timestamps.",

@@ -6,7 +6,8 @@ import { registerCapability } from "../registry";
 // the resulting navigation/network to settle.
 
 export const browserSubmit = registerCapability({
-  name: "browser.submit",
+  name: "submit_page",
+  aliases: ["browser.submit"],
   domain: "browser",
   description:
     "Submit a form on the durable sandbox browser's current page (click the given selector, or press Enter) and wait for the result to settle.",

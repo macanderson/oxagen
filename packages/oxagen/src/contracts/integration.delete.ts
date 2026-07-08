@@ -2,7 +2,8 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const integrationDelete = registerCapability({
-  name: "integration.delete",
+  name: "delete_integration",
+  aliases: ["integration.delete"],
   domain: "integration",
   description: "Remove a plugin instance and optionally purge its graph data from Neo4j.",
   mode: "async",

@@ -3,7 +3,7 @@ import { commandMenuSuggest } from "./command.menu.suggest";
 
 describe("command.menu.suggest contract", () => {
   it("is registered on api and agent surfaces", () => {
-    expect(commandMenuSuggest.name).toBe("command.menu.suggest");
+    expect(commandMenuSuggest.name).toBe("suggest_commands");
     expect(commandMenuSuggest.surfaces).toContain("api");
     expect(commandMenuSuggest.surfaces).toContain("agent");
   });
