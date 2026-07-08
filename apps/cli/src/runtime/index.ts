@@ -1,11 +1,9 @@
 /**
- * Public surface of the model-runtime layer.
+ * Public surface of the model-runtime layer (Group 1).
  *
- * The on-device coordinator, the device/registry/resolver helpers, and the
- * model provisioning (download + optional runtime) live behind this barrel.
- * Cloud completions are not served here — those go through `@oxagen/ai`'s
- * gateway (metered), so this layer is on-device inference plus the shared
- * registry vocabulary the CLI's `models` command reads.
+ * Group 2's orchestrator imports from here to run the coordinator on device and
+ * dispatch workers to cloud models through one interface. Keep this surface
+ * stable — later groups depend on it.
  */
 export type {
   CapabilityRow,
@@ -26,9 +24,27 @@ export type {
 } from "./types.js";
 
 export {
+  buildProvider,
+  coordinatorProvider,
+  judgeProvider,
+  workerProvider,
+  ON_DEVICE_ID,
+  type BuildDeps,
+} from "./providers/factory.js";
+
+export {
+  AnthropicProvider,
+  GatewayCloudProvider,
+  MissingCredentialError,
+  OfflineError,
+  OpenAiProvider,
+  type CloudProviderDeps,
+  type GenerateFn,
+} from "./providers/cloud.js";
+
+export {
   AutoDownloadDisabledError,
   NoFittingModelError,
-  ON_DEVICE_ID,
   OnDeviceProvider,
   OptionalDepMissingError,
   type OnDeviceProviderDeps,

@@ -231,6 +231,14 @@ apps/cli/src/agent/
 ### TUI Components (Ink)
 ```
 apps/cli/src/tui/
+  agent-view/
+    index.tsx                   → main agent TUI
+    activity-feed.tsx           → tool call feed
+    budget-bar.tsx               → token budget display
+    compile-panel.tsx            → code compilation status
+    memory-panel.tsx             → memory display
+    session-panel.tsx            → session info
+    status-bar.tsx               → status line
   fleet-view/
     fleet-app.tsx                → fleet orchestrator TUI
     agent-row.tsx                → per-agent status row

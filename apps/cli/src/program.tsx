@@ -267,6 +267,16 @@ export function buildProgram(): Command {
       },
     );
 
+  // ── view: agent dashboard ───────────────────────────────────────────────────
+
+  program
+    .command("view")
+    .description("Launch the agent dashboard (memory, compile, sessions)")
+    .action(async () => {
+      const { launchAgentView } = await import("./tui/agent-view/index.js");
+      launchAgentView();
+    });
+
   // ── agents: the agents screen (fleet) ───────────────────────────────────────
 
   program
