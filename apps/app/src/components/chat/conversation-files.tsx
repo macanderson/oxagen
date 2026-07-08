@@ -59,6 +59,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { useLatestRef } from "@/lib/use-latest-ref";
 import type { ConversationAssetItem } from "@/app/api/v1/conversations/[conversationId]/assets/route";
 
 // ---------------------------------------------------------------------------
@@ -371,36 +372,51 @@ function AssetPreviewDialog({
 }
 
 // ---------------------------------------------------------------------------
-// Main component
+// Reusable list body (fetch + loading/error/empty/list states)
 // ---------------------------------------------------------------------------
 
-export interface ConversationFilesProps {
+export interface ConversationFilesListProps {
   /** publicId of the active conversation (from URL ?c= param). Null if no conversation yet. */
   conversationPublicId: string | null;
+  /**
+   * Whether this list should be fetching/showing data right now. The Sheet
+   * variant (`ConversationFiles`) passes its open state so the fetch only
+   * fires while the panel is visible; an always-visible embedding (e.g. a
+   * persistent side-panel tab) passes `true`.
+   */
+  active: boolean;
+  /** Called whenever the loaded asset count changes (undefined while loading/errored). */
+  onCountChange?: (count: number | undefined) => void;
 }
 
 /**
- * Conversation files panel. Renders a trigger button; clicking it fetches the
- * asset list and opens a Sheet overlay with the file list.
+ * The actual conversation-assets list: fetch lifecycle + loading/error/empty/
+ * list rendering, extracted from `ConversationFiles` so both the header Sheet
+ * trigger AND `WorkspaceContextPanel`'s "Files" tab share one fetch/render
+ * implementation instead of two copies drifting apart.
  *
  * Fetch lifecycle:
- *   - Idle: button shown, no fetch in flight.
- *   - On open: fetch starts; spinner shown inside the panel.
+ *   - Idle: no fetch in flight.
+ *   - On `active` becoming true: fetch starts; spinner shown.
  *   - Loaded: file list rendered (or an info Alert when empty).
  *   - Error: an error Alert with Retry (a 404 is treated as "no files", never
  *     surfaced as a scary error).
- *   - Re-open: data is re-fetched so newly generated files appear.
+ *   - Re-activate: data is re-fetched so newly generated files appear.
  */
-export function ConversationFiles({ conversationPublicId }: ConversationFilesProps) {
-  const [open, setOpen] = React.useState(false);
+export function ConversationFilesList({
+  conversationPublicId,
+  active,
+  onCountChange,
+}: ConversationFilesListProps) {
   const [assets, setAssets] = React.useState<ConversationAssetItem[] | null>(null);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [preview, setPreview] = React.useState<ConversationAssetItem | null>(null);
+  const [retryKey, setRetryKey] = React.useState(0);
 
-  // Fetch (or re-fetch) the asset list whenever the panel opens.
+  // Fetch (or re-fetch) the asset list whenever the list becomes active.
   React.useEffect(() => {
-    if (!open || !conversationPublicId) return;
+    if (!active || !conversationPublicId) return;
 
     let cancelled = false;
     setLoading(true);
@@ -433,9 +449,77 @@ export function ConversationFiles({ conversationPublicId }: ConversationFilesPro
     return () => {
       cancelled = true;
     };
-  }, [open, conversationPublicId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- retryKey deliberately re-triggers the same fetch
+  }, [active, conversationPublicId, retryKey]);
 
   const total = assets?.length ?? 0;
+  const onCountChangeRef = useLatestRef(onCountChange);
+  React.useEffect(() => {
+    onCountChangeRef.current?.(assets ? total : undefined);
+  }, [assets, total, onCountChangeRef]);
+
+  return (
+    <>
+      {loading ? (
+        <div className="flex items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
+          <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
+          <span>Loading files…</span>
+        </div>
+      ) : error ? (
+        <div className="p-2">
+          <Alert variant="error">
+            <AlertTitle>Couldn&apos;t load files</AlertTitle>
+            <AlertDescription className="mb-2">{error}</AlertDescription>
+            <button
+              type="button"
+              onClick={() => setRetryKey((k) => k + 1)}
+              className="text-xs font-medium text-foreground underline underline-offset-2 hover:opacity-80"
+            >
+              Retry
+            </button>
+          </Alert>
+        </div>
+      ) : total === 0 ? (
+        <div className="p-2">
+          <Alert variant="info">
+            <Paperclip className="size-4" aria-hidden="true" />
+            <AlertTitle>No files yet</AlertTitle>
+            <AlertDescription>
+              Files the assistant generates in this conversation — images,
+              documents, spreadsheets, and more — will appear here.
+            </AlertDescription>
+          </Alert>
+        </div>
+      ) : (
+        <div className="flex flex-col">
+          {assets!.map((item) => (
+            <AssetRow key={item.publicId} item={item} onPreview={setPreview} />
+          ))}
+        </div>
+      )}
+
+      <AssetPreviewDialog item={preview} onClose={() => setPreview(null)} />
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main component
+// ---------------------------------------------------------------------------
+
+export interface ConversationFilesProps {
+  /** publicId of the active conversation (from URL ?c= param). Null if no conversation yet. */
+  conversationPublicId: string | null;
+}
+
+/**
+ * Conversation files panel. Renders a trigger button; clicking it fetches the
+ * asset list (via `ConversationFilesList`) and opens a Sheet overlay with the
+ * file list.
+ */
+export function ConversationFiles({ conversationPublicId }: ConversationFilesProps) {
+  const [open, setOpen] = React.useState(false);
+  const [count, setCount] = React.useState<number | undefined>(undefined);
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -459,59 +543,21 @@ export function ConversationFiles({ conversationPublicId }: ConversationFilesPro
         <SheetHeader className="border-b border-border px-4 py-3">
           <SheetTitle className="text-base">
             Conversation Files
-            {total > 0 ? (
+            {count ? (
               <span className="ml-1.5 text-xs font-normal text-muted-foreground">
-                ({total})
+                ({count})
               </span>
             ) : null}
           </SheetTitle>
         </SheetHeader>
 
         <div className="min-h-0 flex-1 overflow-y-auto p-2">
-          {loading ? (
-            <div className="flex items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
-              <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
-              <span>Loading files…</span>
-            </div>
-          ) : error ? (
-            <div className="p-2">
-              <Alert variant="error">
-                <AlertTitle>Couldn&apos;t load files</AlertTitle>
-                <AlertDescription className="mb-2">{error}</AlertDescription>
-                <button
-                  type="button"
-                  onClick={() => {
-                    // Re-trigger the fetch by toggling the panel closed/open.
-                    setOpen(false);
-                    setTimeout(() => setOpen(true), 50);
-                  }}
-                  className="text-xs font-medium text-foreground underline underline-offset-2 hover:opacity-80"
-                >
-                  Retry
-                </button>
-              </Alert>
-            </div>
-          ) : total === 0 ? (
-            <div className="p-2">
-              <Alert variant="info">
-                <Paperclip className="size-4" aria-hidden="true" />
-                <AlertTitle>No files yet</AlertTitle>
-                <AlertDescription>
-                  Files the assistant generates in this conversation — images,
-                  documents, spreadsheets, and more — will appear here.
-                </AlertDescription>
-              </Alert>
-            </div>
-          ) : (
-            <div className="flex flex-col">
-              {assets!.map((item) => (
-                <AssetRow key={item.publicId} item={item} onPreview={setPreview} />
-              ))}
-            </div>
-          )}
+          <ConversationFilesList
+            conversationPublicId={conversationPublicId}
+            active={open}
+            onCountChange={setCount}
+          />
         </div>
-
-        <AssetPreviewDialog item={preview} onClose={() => setPreview(null)} />
       </SheetPopup>
     </Sheet>
   );

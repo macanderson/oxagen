@@ -72,6 +72,13 @@ vi.mock("./message-tree", () => ({ MessageTree: () => null }));
 vi.mock("./suggested-prompt-chips", () => ({ SuggestedPromptChips: () => null }));
 vi.mock("./conversation-files", () => ({
   ConversationFiles: () => <div data-testid="conversation-files" />,
+  ConversationFilesList: () => <div data-testid="conversation-files-list" />,
+}));
+vi.mock("./coding-trace-panel", () => ({
+  CodingTracePanel: () => <div data-testid="coding-trace-panel" />,
+}));
+vi.mock("./workspace-context-panel", () => ({
+  WorkspaceContextPanel: () => <div data-testid="workspace-context-panel" />,
 }));
 vi.mock("./activity-timeline", () => ({
   ActivityTimeline: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
