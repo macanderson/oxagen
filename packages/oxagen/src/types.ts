@@ -61,7 +61,15 @@ export type CapabilityLayer =
   | "mcp"
   | "unit"
   | "e2e"
-  | "docs";
+  | "docs"
+  // "app" — the capability is meant to be operable by a human in the Next.js
+  // app (apps/app). Declaring it is a BINDING PROMISE that a real, working UI
+  // invokes this capability. It is satisfied only when the capability has an
+  // entry in apps/app/capability-ui-map.json pointing at a page file that
+  // exists AND renders without an error page (proven by screenshot/e2e). See
+  // the "UI Capability Parity" law: tools/scripts/check_ui_parity.mjs enforces
+  // both directions (declared-app must be wired; app-invoked must declare app).
+  | "app";
 
 // Where a capability is exposed. A capability with `surfaces: ['agent']`
 // is invoked only by the in-app agent mid-stream and skips the /v1

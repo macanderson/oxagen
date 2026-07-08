@@ -21,6 +21,7 @@ A change that violates any of these does not merge — halt and surface the conf
 - **Pinned versions.** All dependency versions pinned exactly for reproducible builds — no floating ranges.
 - **Logging + instrumentation** everywhere it makes sense, at the right level, through the shared analytics package (§9).
 - **Thin wrappers only.** API, CLI, and MCP services are thin shells over shared `packages/`; business logic never reproduced in a service (§7).
+- **UI Capability Parity.** A capability that is invocable on any non-`app` surface (api / mcp / cli) and is meant to be operated by a human MUST have real, working UI in `apps/app` that invokes it — proven against a non-erroring page. Declaring the `app` layer in a contract is a binding promise: it requires a `apps/app/capability-ui-map.json` binding pointing at an existing `page` plus a runtime `proof` (screenshot under `verifications/<session>/` or an e2e spec). A missing or broken app surface is as merge-blocking as a missing API route. Enforced by `pnpm check:ui-parity` (forward gate `--strict`; reverse advisory), wired into `pnpm gate`. This is the app-surface twin of the capability-parity rule.
 - **Domain-layer organization, always.** Never a flat `models/` or `routes/` folder (§7).
 - **Versioned API.** Every endpoint is versioned (§7).
 - **Mobile-first.** Thumb-navigable interfaces outrank desktop (§9).
