@@ -50,8 +50,10 @@ const ACTIONS = new Set([
   "check", "verify", "validate", "analyze", "chat", "change", "mark", "send",
   "open", "format", "parse", "upload", "refresh", "screenshot", "submit",
   "fill", "click", "navigate",
+  // associative verbs — bind/unbind an agent to an environment (Spec §5.6).
+  "bind", "unbind",
   // snake_case compound actions
-  "set_enabled", "set_default", "set_secret", "set_auth_alerts",
+  "set_enabled", "set_default", "set_secret", "set_auth_alerts", "set_tools",
   "import_env", "install_bulk", "from_traces",
 ]);
 
