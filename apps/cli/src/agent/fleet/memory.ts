@@ -129,8 +129,14 @@ export function openFleetMemory(cwd: string): FleetMemory {
         appendFileSync(path, JSON.stringify(full) + "\n", "utf8");
         if (cache) cache.push(full);
         else cache = [full];
-      } catch {
-        /* memory is best-effort — never break the run over a failed append */
+      } catch (err) {
+        // Memory is best-effort — never break the run over a failed append —
+        // but leave a breadcrumb under OXAGEN_DEBUG so a silently-missing
+        // lesson record can be diagnosed rather than leaving an unexplained gap.
+        if (process.env["OXAGEN_DEBUG"])
+          process.stderr.write(
+            `[fleet-memory] record failed (${path}): ${err instanceof Error ? err.message : String(err)}\n`,
+          );
       }
     },
 
