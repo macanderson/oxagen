@@ -40,8 +40,8 @@ describe("toolCallMeta — curated map", () => {
     expect(meta.Icon).toBe(Terminal);
   });
 
-  it("maps agent.definition.list to 'List agents' with Bot (not the derived 'List definition')", () => {
-    const meta = toolCallMeta("agent.definition.list");
+  it("maps list_agent_defs to 'List agents' with Bot (not the derived label)", () => {
+    const meta = toolCallMeta("list_agent_defs");
     expect(meta.label).toBe("List agents");
     expect(meta.Icon).toBe(Bot);
   });
