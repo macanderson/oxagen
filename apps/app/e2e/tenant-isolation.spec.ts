@@ -72,11 +72,15 @@ test.describe("tenant isolation — cross-org access denial", () => {
     const sql = postgres(DATABASE_URL, { max: 2, prepare: false });
     try {
       await sql`
-        INSERT INTO org.organizations (public_id, name, slug, plan_type, status)
+        INSERT INTO org.organizations (public_id, name, slug, namespace, plan_type, status)
         VALUES (
           'org_' || substr(replace(gen_random_uuid()::text, '-', ''), 1, 22),
           'E2E Isolation Org B',
           ${ORG_B_SLUG},
+          -- namespace is NOT NULL + immutable and must match ^[a-z0-9]{2,6}$;
+          -- a random 6-hex handle satisfies both. ON CONFLICT (slug) leaves it
+          -- untouched on re-runs, so the immutability trigger never fires.
+          substr(md5(gen_random_uuid()::text), 1, 6),
           'free',
           'active'
         )

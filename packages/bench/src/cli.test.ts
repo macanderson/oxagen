@@ -10,7 +10,12 @@ vi.mock("./commands", () => ({
   handleBenchList: handleBenchListMock,
   handleBenchReplay: handleBenchReplayMock,
 }));
-vi.mock("@oxagen/telemetry", () => ({ closeClickhouse: closeClickhouseMock }));
+vi.mock("@oxagen/telemetry", () => ({
+  closeClickhouse: closeClickhouseMock,
+  // `cli.ts` calls this at module load to decide whether it was run directly;
+  // under vitest it must be a no-op guard (never the direct entry).
+  isDirectRunEntry: () => false,
+}));
 
 describe("parseFlags", () => {
   it("collects --key value pairs, boolean flags, -n as an alias for --limit, and positionals", async () => {

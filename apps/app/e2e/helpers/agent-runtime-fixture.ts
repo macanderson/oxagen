@@ -108,11 +108,15 @@ export async function setupAgentRuntimeFixture(
   const sql = getPg();
 
   const [tenantRow] = await sql<{ id: string }[]>`
-    INSERT INTO org.organizations (public_id, name, slug, plan_type, status)
+    INSERT INTO org.organizations (public_id, name, slug, namespace, plan_type, status)
     VALUES (
       'org_' || substr(replace(gen_random_uuid()::text, '-', ''), 1, 22),
       ${"E2E " + opts.orgSlug},
       ${opts.orgSlug},
+      -- namespace is NOT NULL + immutable (added by the namespace-identity
+      -- migration) and must match ^[a-z0-9]{2,6}$. A random 6-hex handle keeps
+      -- parallel-shard fixtures globally unique without a taken-set lookup.
+      substr(md5(gen_random_uuid()::text), 1, 6),
       'free',
       'active'
     )
@@ -145,8 +149,8 @@ export async function setupAgentRuntimeFixture(
   const userId = userRow.id;
 
   const [wsRow] = await sql<{ id: string }[]>`
-    INSERT INTO workspace.workspaces (public_id, org_id, name, slug)
-    VALUES ('wrk_' || substr(replace(gen_random_uuid()::text, '-', ''), 1, 22), ${orgId}, 'Main', ${opts.workspaceSlug})
+    INSERT INTO workspace.workspaces (public_id, org_id, name, slug, namespace)
+    VALUES ('wrk_' || substr(replace(gen_random_uuid()::text, '-', ''), 1, 22), ${orgId}, 'Main', ${opts.workspaceSlug}, substr(md5(gen_random_uuid()::text), 1, 6))
     ON CONFLICT (org_id, slug) DO UPDATE SET name = EXCLUDED.name
     RETURNING id
   `;
