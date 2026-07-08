@@ -50,9 +50,9 @@ async function windowMetrics(from: string, to: string) {
 
   const [fanout] = await select(`
     SELECT
-      countIf(capability_name = 'agent.subagent.dispatch')   AS dispatches,
-      countIf(capability_name = 'agent.subagent.aggregate')  AS aggregates,
-      countIf(capability_name = 'agent.subagent_result.get') AS result_gets,
+      countIf(capability_name = 'dispatch_subagent')   AS dispatches,
+      countIf(capability_name = 'aggregate_subagents')  AS aggregates,
+      countIf(capability_name = 'get_subagent_result') AS result_gets,
       countIf(surface = 'runner' AND parent_message_id IS NOT NULL) AS child_runs
     FROM tool_invocations
     WHERE ${range}
@@ -98,7 +98,7 @@ async function windowMetrics(from: string, to: string) {
   `);
 
   const [siblingReads] = await select(`
-    SELECT countIf(capability_name = 'agent.subagent.siblings') AS sibling_reads
+    SELECT countIf(capability_name = 'list_subagent_siblings') AS sibling_reads
     FROM tool_invocations
     WHERE ${range}
   `);
