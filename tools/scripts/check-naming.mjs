@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * check-naming.mjs — enforce the ADR-024 verb-first snake_case naming standard.
+ * check-naming.mjs — enforce the ADR-025 verb-first snake_case naming standard.
  *
  * Canonical form: `verb_noun` or `verb_noun_qualifier`. Imperative verb FIRST,
  * then the entity, then an optional disambiguating word. Lowercase [a-z0-9]
@@ -21,7 +21,7 @@
  * The lint validates every REAL capability — a contract file under
  * packages/oxagen/src/contracts that calls registerCapability(). Shared schema
  * modules (no registerCapability) are ignored. The ADR-022 GRANDFATHER map is
- * EMPTY: ADR-024 renamed every previously-grandfathered name to a conforming
+ * EMPTY: ADR-025 renamed every previously-grandfathered name to a conforming
  * verb-first snake form (each carries the old dotted name in aliases[]).
  *
  * Exit codes: 0 clean · 1 violations · 2 script error.
@@ -32,9 +32,9 @@ import { join, resolve } from "node:path";
 const ROOT = resolve(process.cwd());
 const CAP_DIR = join(ROOT, "packages/oxagen/src/contracts");
 
-// ── Verb vocabulary (ADR-024) ────────────────────────────────────────────────
+// ── Verb vocabulary (ADR-025) ────────────────────────────────────────────────
 // The FIRST word of every capability name must be one of these imperative verbs.
-// Derived from the ADR-024 rename wave; extend only when a real capability needs
+// Derived from the ADR-025 rename wave; extend only when a real capability needs
 // a verb no existing entry covers (a near-synonym is a smell, not a new entry).
 const VERBS = new Set([
   "accept", "acquire", "activate", "add", "aggregate", "analyze", "approve",
@@ -53,8 +53,8 @@ const VERBS = new Set([
   "upsert", "validate", "verify", "write",
 ]);
 
-// ── Grandfather list (emptied by ADR-024) ────────────────────────────────────
-// ADR-022 left 14 non-conforming names here. ADR-024 renamed all of them to
+// ── Grandfather list (emptied by ADR-025) ────────────────────────────────────
+// ADR-022 left 14 non-conforming names here. ADR-025 renamed all of them to
 // verb-first snake forms (old dotted names preserved as aliases). This map is
 // now empty and MUST stay empty — a non-conforming name is a bug to fix, never
 // a grandfather entry.
@@ -86,7 +86,7 @@ function readRealCapabilityNames() {
 function validate(name) {
   const problems = [];
   const warnings = [];
-  if (name.includes(".")) problems.push("dots are illegal (ADR-024 supersedes the dotted form — use verb_noun snake_case)");
+  if (name.includes(".")) problems.push("dots are illegal (ADR-025 supersedes the dotted form — use verb_noun snake_case)");
   if (name.includes("-")) problems.push("kebab-case is illegal (use snake_case)");
   if (!NAME_RE.test(name)) {
     problems.push("must be 2+ lowercase [a-z0-9] words joined by '_'");
@@ -123,7 +123,7 @@ function main() {
   }
   const dupes = [...byName.entries()].filter(([, files]) => files.length > 1);
 
-  console.log(`check-naming: validated ${caps.length} capabilities against ADR-024 (verb-first snake_case).`);
+  console.log(`check-naming: validated ${caps.length} capabilities against ADR-025 (verb-first snake_case).`);
 
   if (warnings.length) {
     console.warn(`\nWORD-COUNT WARNINGS (${warnings.length}, non-blocking):`);
@@ -147,12 +147,12 @@ function main() {
     }
     console.error(
       `\nFix the name to verb-first snake_case (add aliases:[<old>] so nothing breaks — ` +
-      `see ADR-024). A non-conforming name is a bug, not a grandfather entry.`,
+      `see ADR-025). A non-conforming name is a bug, not a grandfather entry.`,
     );
   }
 
   if (failed) process.exit(1);
-  console.log("All capability names conform to ADR-024 and are globally unique.");
+  console.log("All capability names conform to ADR-025 and are globally unique.");
 }
 
 main();

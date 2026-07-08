@@ -1,5 +1,5 @@
 // adr024-name-map.mjs — the authoritative old-dotted → new-snake capability
-// name mapping for the ADR-024 verb-first snake_case rename wave.
+// name mapping for the ADR-025 verb-first snake_case rename wave.
 //
 // Shape: verb_noun or verb_noun_qualifier. Imperative verb FIRST. Lowercase
 // [a-z0-9] words joined by "_". 2–3 words (a 4th only where uniqueness demands
