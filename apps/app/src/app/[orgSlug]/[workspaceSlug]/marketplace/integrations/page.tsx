@@ -36,6 +36,8 @@ const IN_APP_SETUP = new Set(["github"]);
 const DELIVERY_LABELS: Record<string, string> = {
   webhook: "Webhook",
   poll: "Polling",
+  rest_polling: "Polling",
+  sql_query: "SQL",
   oauth: "OAuth",
 };
 
