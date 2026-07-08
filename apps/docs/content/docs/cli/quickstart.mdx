@@ -19,7 +19,7 @@ Type a request and press Enter. The agent reads relevant files, proposes edits, 
 
 Every action is shown as it happens — tool calls, the agent's streaming answer — and `/hud` opens a heads-up display of every agent running this session (the current turn, any subagents it dispatched, and background monitors), with elapsed time, model, and cost per agent.
 
-Useful in-session slash commands work like `/name` (see [custom slash commands](/docs/cli/configuration#slash-commands)). Press `Ctrl-C` to interrupt a turn, and again to exit.
+Type `/` to open the menu of in-session [slash commands](/docs/cli/repl-commands) — set a model, switch permission mode, browse memories, review a diff — or run one of [your own](/docs/cli/custom-commands). Press `Ctrl-C` to interrupt a turn, and again to exit.
 
 A simple lookup question ("what's the flag to enable verbose mode?") answers directly, skipping the planner and completeness-judge steps a genuine coding task pays for — the REPL classifies the prompt's intent for free before choosing a path, so a factual question gets a fast answer without losing grounding (the agent still reads relevant files and your knowledge graph).
 
@@ -52,13 +52,13 @@ The `--mode` flag controls what the agent may do without asking:
 | Mode | Behavior |
 |---|---|
 | `ask` | Prompt before each file edit or command. (Default in the REPL.) |
-| `accept-edits` | Apply file edits automatically; still prompt for shell commands. |
+| `auto-edit` | Apply file edits automatically; still prompt for shell commands. (`accept-edits` is accepted too.) |
 | `bypass` | Run everything without prompting. |
 | `readonly` | Read, search, and explain only — no edits, no commands. |
 
 ```bash
 # Let it edit freely but confirm any shell command:
-oxagen --mode accept-edits "refactor the date helpers into a single module"
+oxagen --mode auto-edit "refactor the date helpers into a single module"
 
 # Investigate without touching anything:
 oxagen --mode readonly "where is rate limiting implemented and is it per-org?"
@@ -79,6 +79,8 @@ oxagen config model anthropic/claude-sonnet-5      # persisted
 
 If the gateway reports a slug as unknown, it has likely drifted — set a current one with `oxagen config model <slug>`.
 
+`-m/--model` sets the **worker** — the model that edits code. The pipeline also uses a separate judge and triage model, each independently configurable; see [Per-role models](/docs/cli/models#per-role-models-worker-judge-triage).
+
 ## Dispatch a fleet
 
 For a larger goal, `oxagen agents` plans it into tasks and runs several agents in parallel:
@@ -88,14 +90,14 @@ oxagen agents "add input validation to every public API route"
 ```
 
 - `--concurrency <n>` — how many agents run at once (default 4).
-- `--isolate` — run each agent in its own git worktree and merge the work back, so parallel agents never clobber each other's files.
+- Each agent runs in its own git worktree by default and merges the work back, so parallel agents never clobber each other's files. Pass `--no-isolate` to run them all directly against the working tree instead.
 - `--readonly` — analysis-only fleet (no edits or commands).
 
 ```bash
-oxagen agents --isolate --concurrency 6 "migrate components off the deprecated Button API"
+oxagen agents --concurrency 6 "migrate components off the deprecated Button API"
 ```
 
-Launch `oxagen view` for a dashboard of agent memory, the compiled context, and past sessions.
+For detached, long-lived sessions you can supervise from any terminal, see [Fleet](/docs/cli/fleet). Launch `oxagen view` for a dashboard of agent memory, the compiled context, and past sessions.
 
 ## Ground the agent in your knowledge graph
 
@@ -141,6 +143,8 @@ oxagen cost --session
 
 ## Next steps
 
+- [In-REPL slash commands](/docs/cli/repl-commands) — every `/command` in the interactive session.
+- [The agent engine](/docs/cli/agent-engine) — how a turn is planned, executed, and verified.
 - [Command reference](/docs/cli/commands) — every command and flag.
-- [Configuration](/docs/cli/configuration) — settings scopes, custom agents, slash commands, rules, and MCP servers.
-- [Knowledge graph](/docs/cli/knowledge-graph) — pull, search, and inspect your workspace graph.
+- [Custom commands, agents & rules](/docs/cli/custom-commands) — extend the CLI with your own.
+- [Agent memory](/docs/cli/memory) and [Knowledge graph](/docs/cli/knowledge-graph) — the two things the agent grounds on.

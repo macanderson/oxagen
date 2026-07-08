@@ -1,0 +1,140 @@
+---
+title: Custom commands, agents & rules
+description: Author your own slash commands, named agents, and hard-enforced rules as Markdown files with YAML frontmatter — the $ARGUMENTS templating, discovery order, and worked examples.
+---
+
+Three things the agent uses are just Markdown files with YAML frontmatter, committed alongside your code in `.oxagen/`:
+
+- **Slash commands** — parameterized prompt templates you invoke as `/name`.
+- **Agents** — reusable personas with their own system prompt, model, and tool allowlist.
+- **Rules** — guardrails the agent is told about *and* is mechanically blocked from violating.
+
+They share one loader, one discovery order, and one authoring workflow. Commit `.oxagen/` and your whole team inherits them.
+
+## Custom slash commands
+
+A slash command is a Markdown file whose **body is a prompt template**. Invoking `/name arg1 arg2` in the REPL expands the template with those arguments and runs it as a turn.
+
+### Scaffold one
+
+```bash
+oxagen command new review        # writes .oxagen/commands/review.md
+oxagen command list              # every command, built-in and custom
+oxagen command show review       # print a command's template
+oxagen command run review src/app.ts   # expand + run headless (no REPL)
+```
+
+`command new` refuses to overwrite an existing file. The name must start with a letter or digit and contain only letters, digits, `-`, and `_`.
+
+### File format
+
+```markdown
+---
+description: Review a file for bugs and style
+argument-hint: <file> [focus]
+model: anthropic/claude-opus-4-8
+---
+
+Review the file $1 for correctness and clarity.
+Focus especially on: $2
+
+Full args for reference: $ARGUMENTS
+```
+
+| Frontmatter key | Purpose |
+|---|---|
+| `description` | One-line summary shown in the `/` menu and `command list`. |
+| `argument-hint` | Argument syntax shown after the name in the menu, e.g. `<file> [focus]`. Note the **hyphen** in the key. |
+| `model` | Optional model slug this command runs on, overriding the session's worker model. |
+
+The `name` is the filename without `.md` (so `review.md` → `/review`). A command with no body is skipped.
+
+### Argument templating
+
+The body is expanded at invocation time:
+
+| Token | Expands to |
+|---|---|
+| `$ARGUMENTS` | The full argument string after the command name. |
+| `$1` … `$9` | Positional arguments, split on whitespace. A missing positional expands to an empty string. |
+
+Invoking `/review src/app.ts security` against the example above expands to — and runs on `anthropic/claude-opus-4-8`:
+
+```text
+Review the file src/app.ts for correctness and clarity.
+Focus especially on: security
+
+Full args for reference: src/app.ts security
+```
+
+(`$1` → `src/app.ts`, `$2` → `security`, `$ARGUMENTS` → `src/app.ts security`.)
+
+<Callout type="info">
+There is no `/new` inside the REPL — you scaffold with `oxagen command new` (or just drop a `.md` file in `.oxagen/commands/`), and the REPL picks it up. Once the file exists, `/review …` works in-session immediately.
+</Callout>
+
+## Custom agents
+
+An agent bundles a system prompt, a model, and a tool allowlist under a name you can dispatch:
+
+```bash
+oxagen agent new reviewer        # writes .oxagen/agents/reviewer.md
+oxagen agent list
+oxagen agent show reviewer
+oxagen --agent reviewer "review the changes on this branch for security issues"
+```
+
+The file is the same shape — YAML frontmatter plus a body that becomes the agent's system prompt:
+
+```markdown
+---
+description: Security-focused code reviewer
+model: anthropic/claude-opus-4-8
+---
+
+You are a meticulous security reviewer. For any diff you are shown, look for
+injection, auth bypass, secret exposure, and unsafe deserialization. Cite exact
+file:line locations. Do not comment on style.
+```
+
+Dispatch it one-shot with `oxagen --agent <name> "<prompt>"`, or reference it from a fleet plan.
+
+## Rules
+
+Rules are constraints the agent is told about **and hard-blocked from breaking** — "never force-push", "never touch production config". Unlike a memory or a prompt instruction, a rule is checked mechanically before a tool call runs.
+
+```bash
+oxagen rules new no-force-push                       # writes .oxagen/rules/no-force-push.md
+oxagen rules list
+oxagen rules show no-force-push
+oxagen rules check bash "git push --force origin main"   # dry-run against the guards
+```
+
+`rules check` lets you confirm a guard fires before you rely on it. The tool argument is one of `bash | edit | write | read`; the subject is the command (for `bash`) or a path (for `edit`/`write`/`read`).
+
+Rules can also be **mined and promoted** from recurring lessons the agent has recorded:
+
+```bash
+oxagen rules candidates          # recurring lessons ripe to become enforced rules
+oxagen rules promote <id> --yes  # write the candidate to .oxagen/rules/<id>.md
+```
+
+`rules promote` never writes without `--yes`.
+
+## Where definitions are discovered
+
+All three kinds load from three locations, merged so that a project definition overrides a user one, and `.claude/` paths are read for drop-in compatibility with Claude Code:
+
+| Order | Location | Scope |
+|---|---|---|
+| 1 | `~/.config/oxagen/<kind>/*.md` | User — all projects |
+| 2 | `<project>/.claude/<kind>/*.md` | Project — Claude Code interop |
+| 3 | `<project>/.oxagen/<kind>/*.md` | Project — Oxagen |
+
+…where `<kind>` is `commands`, `agents`, or `rules`. Later locations win, so a project command shadows a same-named user command.
+
+## Related
+
+- [In-REPL slash commands](/docs/cli/repl-commands) — the built-in `/name` commands your custom ones sit alongside.
+- [Configuration](/docs/cli/configuration) — the `settings.json` and `.oxagen/` layout.
+- [The agent engine](/docs/cli/agent-engine) — how a custom command's prompt flows through the pipeline.

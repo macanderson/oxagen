@@ -60,6 +60,13 @@
   /* set by JS */
   --pw:480px;--ph:621px;--padx:42px;--padt:44px;--padb:56px;--colw:396px;--gap:96px;--fs:16px;
   --reading-font:var(--serif);
+  /* code-block syntax palette (restrained; harmonizes with ember + indigo) */
+  --code-bg:#F6F2EB;--code-edge:#E7E1D6;--code-fg:#33383F;
+  --code-c:#9A968C;   /* comment  — warm gray, italic */
+  --code-s:#2F7D52;   /* string   — green            */
+  --code-n:#B45309;   /* number   — amber            */
+  --code-f:#C24E12;   /* function — ember (brand)    */
+  --code-p:#4A4F86;   /* param    — indigo (brand)   */
 }
 html.ink{
   --paper:#FFFFFF;--paper-edge:#F0F0F0;--ink:#111111;--ink-soft:#222222;
@@ -68,6 +75,9 @@ html.ink{
   --link:#111111;--ember-g:#666;--ember-f:#555;--ember-c:#444;
   --grad:linear-gradient(135deg,#777 0%,#555 100%);
   --desk:#1a1a1a;--desk-2:#222;
+  /* ink mode is deliberately monochrome — desaturate the code palette to grays */
+  --code-bg:#F4F4F4;--code-edge:#E0E0E0;--code-fg:#1F1F1F;
+  --code-c:#787878;--code-s:#3A3A3A;--code-n:#3A3A3A;--code-f:#111111;--code-p:#454545;
 }
 html.ink .paper img{filter:grayscale(1)}
 
@@ -284,6 +294,23 @@ body{
 .bk em{font-style:italic}
 .bk strong,.bk b{font-weight:620}
 .bk code{font-family:var(--mono);font-size:.82em;background:color-mix(in srgb,var(--ink) 7%,transparent);padding:.08em .35em;border-radius:4px;overflow-wrap:break-word}
+/* code blocks — one unified panel, not per-line pills */
+.bk pre{
+  break-inside:avoid;margin:1.15em 0;padding:.8em .95em;
+  background:var(--code-bg);border:1px solid var(--code-edge);border-left:2px solid var(--det);
+  border-radius:0 6px 6px 0;overflow-x:auto;
+  font-family:var(--mono);font-size:.7em;line-height:1.6;color:var(--code-fg);
+  white-space:pre;tab-size:2;-webkit-hyphens:none;hyphens:none;
+  -webkit-overflow-scrolling:touch;
+}
+/* neutralize the inline-code pill so the block reads as one surface */
+.bk pre code{font-family:inherit;font-size:inherit;background:none;padding:0;border-radius:0;color:inherit;overflow-wrap:normal;white-space:inherit}
+/* syntax tokens */
+.bk pre .c{color:var(--code-c);font-style:italic}
+.bk pre .a{color:var(--code-s)}
+.bk pre .k{color:var(--code-n)}
+.bk pre .f{color:var(--code-f)}
+.bk pre .p{color:var(--code-p)}
 .bk sup.cite{font-size:.62em;line-height:0;vertical-align:super;font-family:var(--mono)}
 .bk sup.cite a{color:var(--det);border-bottom:0;font-weight:600}
 .bk h3{font-size:1.16em;font-weight:640;line-height:1.3;letter-spacing:-.008em;margin:1.5em 0 .5em;break-after:avoid}
@@ -628,13 +655,13 @@ body{
   <pre><code><span class="c"># Instead of handing the model a shell and hoping:</span>
 <span class="c">#   grep -rn "error" logs/ | tail -500   ← probabilistic archaeology</span>
 
-result = run_code_with_trace(          <span class="c"># deterministic, runs in ms</span>
-    cmd=<span class="a">"pytest tests/test_billing.py::test_refund -x"</span>,
-    package_roots=[<span class="a">"app/"</span>],           <span class="c"># slice to code you own</span>
-    capture=[<span class="a">"exception"</span>, <span class="a">"locals"</span>, <span class="a">"executed_lines"</span>, <span class="a">"sql"</span>],
-    max_tokens=<span class="k">1200</span>,                   <span class="c"># hard budget, enforced by code</span>
+result = <span class="f">run_code_with_trace</span>(          <span class="c"># deterministic, runs in ms</span>
+    <span class="p">cmd</span>=<span class="a">"pytest tests/test_billing.py::test_refund -x"</span>,
+    <span class="p">package_roots</span>=[<span class="a">"app/"</span>],           <span class="c"># slice to code you own</span>
+    <span class="p">capture</span>=[<span class="a">"exception"</span>, <span class="a">"locals"</span>, <span class="a">"executed_lines"</span>, <span class="a">"sql"</span>],
+    <span class="p">max_tokens</span>=<span class="k">1200</span>,                   <span class="c"># hard budget, enforced by code</span>
 )
-context = result.to_prompt_block()     <span class="c"># 1.2k tokens of pure signal</span></code></pre>
+context = result.<span class="f">to_prompt_block</span>()     <span class="c"># 1.2k tokens of pure signal</span></code></pre>
 
   <p>The difference is architectural, not cosmetic. <code>grep | cat | tail</code> makes the <em>model</em> the filter — you pay tokens for every candidate line, and the filtering itself is probabilistic. <code>run_code_with_trace()</code> makes <em>code</em> the filter — filtering costs zero tokens, is identical on every run, and is testable like any other software. Bash is a fine escape hatch. It is a terrible primary retrieval engine, because every bash round-trip is another model call carrying the full conversation history with it.</p>
 
@@ -672,7 +699,7 @@ context = result.to_prompt_block()     <span class="c"># 1.2k tokens of pure sig
 
   <h3>From entities to a retrieval plan</h3>
   <p>The output of parsing isn't decoration; it's an execution plan that runs <em>before inference begins</em>:</p>
-  <pre><code>plan = build_retrieval_plan(prompt)
+  <pre><code>plan = <span class="f">build_retrieval_plan</span>(prompt)
 <span class="c"># {</span>
 <span class="c">#   anchors:   [File("billing/processors.py"), Symbol("DecimalConversionError"),</span>
 <span class="c">#               Route("POST /api/v2/refunds"), Issue(4821)]</span>
@@ -728,15 +755,15 @@ context = result.to_prompt_block()     <span class="c"># 1.2k tokens of pure sig
   <p>Compilers have modeled code as structure for seventy years: ASTs, symbol tables, call graphs, dependency graphs, cross-reference indexes. Your IDE resolves "go to definition" in milliseconds using exactly this machinery — no LLM involved. Yet the default agent loop discards all of it and hands the model a shell, forcing it to reconstruct structural knowledge through string matching:</p>
 
   <pre><code><span class="c"># The grep loop (typical agent trace, abbreviated):</span>
-grep -rn "process_refund" .        <span class="c"># 47 matches, 31 are tests/comments</span>
-cat billing/processors.py           <span class="c"># 800 lines into context</span>
-grep -rn "RefundProcessor" .        <span class="c"># which of these are real call sites?</span>
-cat api/handlers/refunds.py         <span class="c"># another 600 lines</span>
+<span class="f">grep</span> -rn <span class="a">"process_refund"</span> .        <span class="c"># 47 matches, 31 are tests/comments</span>
+<span class="f">cat</span> billing/processors.py           <span class="c"># 800 lines into context</span>
+<span class="f">grep</span> -rn <span class="a">"RefundProcessor"</span> .        <span class="c"># which of these are real call sites?</span>
+<span class="f">cat</span> api/handlers/refunds.py         <span class="c"># another 600 lines</span>
 <span class="c"># ... 6 more calls, ~30k tokens, and it still can't SEE the call graph</span>
 
 <span class="c"># The graph query:</span>
-g.callers(<span class="a">"process_refund"</span>, depth=<span class="k">2</span>)         <span class="c"># exact, ranked, 0 tokens</span>
-g.slice(symbol=<span class="a">"process_refund"</span>, budget=<span class="k">6000</span>) <span class="c"># minimal closed subgraph</span></code></pre>
+g.<span class="f">callers</span>(<span class="a">"process_refund"</span>, <span class="p">depth</span>=<span class="k">2</span>)         <span class="c"># exact, ranked, 0 tokens</span>
+g.<span class="f">slice</span>(<span class="p">symbol</span>=<span class="a">"process_refund"</span>, <span class="p">budget</span>=<span class="k">6000</span>) <span class="c"># minimal closed subgraph</span></code></pre>
 
   <p>One hundred greps approximate what one graph traversal computes. And the grep version isn't just slower — each round-trip is a model call that re-sends conversation history, injects 80–95% irrelevant lines (each one a distractor, per Part 2's evidence), and gives the model another opportunity to take a wrong turn. The graph version is deterministic: same query, same answer, forever.</p>
 
@@ -909,7 +936,7 @@ g.slice(symbol=<span class="a">"process_refund"</span>, budget=<span class="k">6
     <li><strong>Domain mapping</strong> — tables attach to the Part 5 domains, so a billing task automatically retrieves billing tables and only billing tables.</li>
   </ul>
 
-  <pre><code>ctx = schema.slice_for(anchors=[<span class="a">"RefundProcessor"</span>])
+  <pre><code>ctx = schema.<span class="f">slice_for</span>(<span class="p">anchors</span>=[<span class="a">"RefundProcessor"</span>])
 <span class="c"># orders(id, user_id→users.id, amount_cents INT NOT NULL, status ENUM,...)</span>
 <span class="c"># refunds(id, order_id→orders.id, amount_cents INT, reason TEXT,...)</span>
 <span class="c"># lineage: refunds.amount_cents renamed from amount in 0187 (PR #3122)</span>

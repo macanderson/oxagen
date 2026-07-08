@@ -29,6 +29,36 @@ Top on-device picks today (Apache-2.0, resolved by device fit):
 
 Run `oxagen models list` to see the full table, each model's best-fitting quantization, and which one resolves for *your* machine.
 
+## Per-role models: worker, judge, triage
+
+The [agent engine](/docs/cli/agent-engine) uses three distinct models, one per role. You can leave them at their engine defaults or set each independently — in the REPL, as a flag, or as a persistent `settings.json` key. Setting one via a slash command saves it to `.oxagen/settings.local.json` so it sticks across sessions.
+
+| Role | What it does | Slash command | `settings.json` key | Env var |
+|---|---|---|---|---|
+| **worker** | The executor — runs the tool loop and edits code. | `/worker-model` (alias `/model`) | `workerModel` (falls back to `model`) | `OXAGEN_MODEL` |
+| **judge** | The completeness advisor — grades the worker's output. Defaults to a model *distinct* from the worker. | `/judge-model` | `judgeModel` | `OXAGEN_LLM_ADVISOR` |
+| **triage** | The coordinator — drives planning and the evaluate stage. | `/triage-model` | `triageModel` | `OXAGEN_LLM_EVALUATOR` |
+
+Three ways to set the worker, for example:
+
+```text
+› /worker-model anthropic/claude-opus-4-8      # in the REPL, persisted to local settings
+```
+
+```bash
+oxagen -m anthropic/claude-opus-4-8 "…"         # one-shot flag (--worker-model is an alias)
+export OXAGEN_MODEL="anthropic/claude-opus-4-8" # this shell / CI
+oxagen settings set model anthropic/claude-opus-4-8 --scope project   # persistent default
+```
+
+The judge and triage roles follow the same pattern with `--judge-model` / `--triage-model` flags and their env vars. Models are plain Vercel AI Gateway slugs (`vendor/model`); there's no allowlist, so a drifted slug surfaces as an error on the next turn.
+
+<Callout type="info">
+The **judge defaults to a different model than the worker** so a model never grades its own output. Set `OXAGEN_JUDGE_PANEL` to grade with a cross-vendor panel instead of a single advisor. Leave `judgeModel`/`triageModel` unset to accept the engine's derived defaults — run `/judge-model` or `/triage-model` with no argument to see what will run.
+</Callout>
+
+Precedence for any role is: an explicit flag or slash command › the env var › the `settings.json` key › the engine default. Env projection only fills *unset* variables, so a shell export always wins.
+
 ## Install the runtime
 
 The native runtime is an optional dependency, so it never blocks `oxagen` install or CI. Add it when you want on-device execution:

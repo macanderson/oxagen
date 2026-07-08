@@ -5,9 +5,12 @@ description: How the agent reads and writes persistent memories from the workspa
 
 ## What agent memory is
 
-Agent memory is persistent, queryable knowledge scoped to a workspace. Unlike conversation history (which is a linear sequence of messages), memories are discrete facts, rules, and observations stored as nodes in the workspace knowledge graph (Neo4j). They survive across sessions, across conversations, and across different agents working in the same workspace.
+Agent memory — powered by Oxagen's memory engine, **Engram** — is persistent, queryable knowledge scoped to a workspace. Unlike conversation history (which is a linear sequence of messages), memories are discrete facts, rules, and observations stored as nodes in the workspace knowledge graph (Neo4j). They survive across sessions, across conversations, and across every agent working in the same workspace — including the [CLI](/docs/cli/memory).
 
-Memory has five kinds:
+Each memory has two independent axes:
+
+- **Class** — the epistemic ladder from tentative to settled: **OBSERVATION → RULE → FACT**. A confidence score (0–100) tracks how sure it is *true* and decays over time; a RULE also carries an enforcement score (1–100) for how strongly it should be followed. Promotion up the ladder records an auditable event; promotion to FACT requires human confirmation.
+- **Kind** — the content domain, an open label. Common kinds:
 
 | Kind | Description |
 |---|---|

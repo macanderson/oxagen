@@ -3,7 +3,7 @@ title: Command reference
 description: Every oxagen command and flag — the agentic loop, fleets, the knowledge graph, settings, agents, rules, MCP servers, environments, and secrets.
 ---
 
-Run `oxagen --help` for the live list, and append `--help` to any command for its flags. Commands that call the platform (`graph`, `env`, `secret`) require an [authenticated CLI](/docs/cli/account-setup); the rest run locally.
+Run `oxagen --help` for the live list, and append `--help` to any command for its flags. Commands that call the platform — `graph`, `memory`, `env`, `secret`, `eval`, `a2a`, `conversation`, `sandbox` — require an [authenticated CLI](/docs/cli/account-setup) (or BYOK where noted); the coding agent, `init`, `code`, `models`, `settings`, and the agent/command/rule scaffolds run locally.
 
 ## oxagen — run the agent
 
@@ -15,14 +15,35 @@ With no prompt in a terminal, opens the interactive REPL. With a prompt, runs on
 
 | Flag | Description |
 |---|---|
-| `-m, --model <slug>` | Gateway model slug (overrides config/default). |
-| `--agent <name>` | Run the one-shot prompt as a named [agent definition](/docs/cli/configuration#custom-agents). Requires a prompt. |
+| `-m, --model <slug>` | **Worker** model slug (overrides config/default). `--worker-model` is an alias. |
+| `--judge-model <slug>` | Judge (completeness advisor) model. See [Per-role models](/docs/cli/models#per-role-models-worker-judge-triage). |
+| `--triage-model <slug>` | Triage/coordinator (planner + evaluator) model. |
+| `--effort <level>` | Reasoning effort: `low` \| `medium` \| `high` \| `xhigh` \| `max` (omit for the model default). |
+| `--agent <name>` | Run the one-shot prompt as a named [agent definition](/docs/cli/custom-commands#custom-agents). Requires a prompt. |
 | `--readonly` | Read/search/explain only — no edits or commands. |
-| `--mode <mode>` | Permission mode: `ask`, `accept-edits`, `bypass`, `readonly`. REPL default is `ask`; one-shot is ungated unless set. |
+| `--mode <mode>` | Permission mode: `ask`, `auto-edit`, `bypass`, `readonly`. REPL default is `ask`; one-shot is ungated unless set. |
+| `--local` | BYOK: run with your own key (`AI_GATEWAY_API_KEY`, or `ANTHROPIC_API_KEY` for Claude), no Oxagen account. |
 | `--no-pipeline` | Skip prompt evaluation, context injection, and completeness judging (raw model loop). |
 | `--verbose` | Emit full per-turn telemetry: per-phase timing, model, tokens, cost, and tool results. |
+| `--output-format <fmt>` | One-shot output: `text` \| `json` (result envelope) \| `stream-json` (JSONL events). |
+| `--max-steps <n>` | Cap the agent's tool loop per round (default 256). |
 | `--budget <usd>` | Enable a session-scoped per-turn dollar budget, e.g. `--budget 2.50`. See [Per-turn budget](/docs/cli/budget). |
 | `--budget-mode <mode>` | What happens at the budget limit: `grace` \| `prompt` \| `enforce` (default `prompt`; ignored without `--budget`). |
+
+Inside the REPL, the same controls are [slash commands](/docs/cli/repl-commands) (`/model`, `/mode`, `/effort`, …).
+
+## oxagen init — set up a project
+
+```bash
+oxagen init [--no-link] [--json]
+```
+
+Scaffolds `.oxagen/` settings, builds the local **code graph** (tree-sitter parse of your repo into files, symbols, and call/import edges), infers domains, and links the project to an Oxagen workspace. Run it once per repo — it's what the REPL's `/init` runs. `--no-link` skips the workspace-link step and only scaffolds settings + builds the graph.
+
+```bash
+oxagen init                 # scaffold + build graph + link workspace
+oxagen init --no-link       # local setup only, no platform link
+```
 
 ## oxagen agents — dispatch a fleet
 
@@ -30,13 +51,53 @@ With no prompt in a terminal, opens the interactive REPL. With a prompt, runs on
 oxagen agents [goal...]
 ```
 
-Opens the agents screen. With a goal, plans it into tasks and runs them immediately.
+Opens the agents screen. With a goal, plans it into tasks and runs them immediately. See [Fleet](/docs/cli/fleet) for detached, long-lived sessions.
 
 | Flag | Default | Description |
 |---|---|---|
 | `--concurrency <n>` | `4` | Max agents running at once. |
 | `--readonly` | | Read/search/explain only — no edits or commands. |
-| `--isolate` | | Run each agent in its own git worktree; commit and merge work back. |
+| `--no-isolate` | | Run all agents directly against the working tree. **By default** each task runs in its own git worktree and merges back — this disables that. |
+| `--json` | | Headless: stream JSONL task events instead of the live screen. |
+
+Exit code is `1` if any task failed.
+
+## oxagen solve — best-of-N task solving
+
+```bash
+oxagen solve <prompt...> [-n <candidates>] [--verify <cmd>] [--models <slugs>] [--selector <slug>]
+```
+
+Runs several candidate solutions in parallel and keeps the winner — ideal for a hard bug where you want independent attempts judged objectively.
+
+| Flag | Description |
+|---|---|
+| `-n, --candidates <n>` | How many candidates (default 3, max 10). |
+| `--verify <cmd>` | Command run in each candidate; its output decides the winner, e.g. `'pnpm test:unit'`. |
+| `--verify-auto` | Re-run each candidate's own test/lint/build commands before selection, so "tests pass" is real evidence. |
+| `--models <slugs>` | Comma-separated slugs cycled across candidates for diversity. |
+| `--selector <slug>` | Model that picks the winning candidate. |
+| `--pipeline` | Run each candidate through the full evaluate/enhance/judge pipeline. |
+| `--readonly` / `--json` | Don't apply a winner / stream JSONL events. |
+
+```bash
+oxagen solve "fix the failing auth test" -n 5 \
+  --verify "pnpm --filter @oxagen/auth test:unit" --verify-auto
+```
+
+## oxagen pr — watch and fix CI
+
+```bash
+oxagen pr status [number]     # one-shot verdict: exit 0 green / 1 failing / 2 pending
+oxagen pr watch  [number] [--merge] [--interval <s>] [--timeout <min>]
+oxagen pr fix    [number] [--max-rounds <n>] [--yes]
+```
+
+Hand a pull request to the CLI to watch CI, or actively fix a red PR: it diagnoses, patches, pushes, and repeats until green — then asks before merging. Omit `number` to use the current branch's PR.
+
+```bash
+oxagen pr fix 684 --max-rounds 5 --yes      # iterate on CI, auto-merge when green
+```
 
 ## oxagen view — agent dashboard
 
@@ -63,6 +124,34 @@ oxagen replay [turn] [--list]
 ```
 
 Shows how a turn was handled: prompt, scores, injected context, model, and judge verdict. `turn` is an index (`1` = most recent) or id; omit for the latest. `--list` lists recent turns instead.
+
+## oxagen trace — a run as a span tree
+
+```bash
+oxagen trace <executionId> [--json]
+```
+
+Shows a full agent run as a span tree — steps, tool calls, and any child executions. `executionId` is a public id (`aex_…`) or UUID, printed by one-shot and fleet runs.
+
+## oxagen logs — CLI debug log
+
+```bash
+oxagen logs [-n <lines>] [--category <c>] [-f] [--path] [--clear] [--json]
+```
+
+Views the CLI's own debug log at `~/.oxagen/logs/cli.output` (captured when `OXAGEN_CLI_DEBUG=1`). Filter with `--category` (`invoke` \| `turn` \| `api` \| `code-graph` \| `graph-sync` \| `llm` \| `error`) and follow live with `-f`.
+
+```bash
+oxagen logs -f --category llm      # tail model calls as they happen
+```
+
+## oxagen telemetry — anonymous usage telemetry
+
+```bash
+oxagen telemetry [on|off|status]
+```
+
+Inspect or toggle anonymous CLI usage telemetry (on by default). Defaults to `status`.
 
 ## oxagen cost — model cost
 
@@ -110,6 +199,22 @@ oxagen graph status  [--json]
 `graph push` computes a git code delta and up-syncs it to the workspace knowledge graph. Use `--full` to ignore the saved cursor and push all tracked source files. `--repo <id>` overrides the repo identifier.
 
 `graph lineage` pushes CLI session execution lineage (touched files, turn edges) into the workspace knowledge graph. `--repo <id>` overrides the repo identifier used to link files to the code subgraph.
+
+## oxagen memory & remember — agent memory
+
+Capture and curate the workspace's [agent memory](/docs/cli/memory) — the lessons the agent recalls before acting. See that page for the full workflow.
+
+```bash
+oxagen remember "always use withTenantDb, never raw db()" --class RULE --enforcement 90
+oxagen memory list --class RULE --sort citations
+oxagen memory show <id>
+oxagen memory promote <id> --to rule --enforcement 80 --rationale "cited repeatedly"
+oxagen memory candidates            # observations ripe to promote
+oxagen memory import docs/conventions/*.md --yes
+oxagen memory rm <id>
+```
+
+The REPL equivalents are `/remember`, `/memories`, and `/forget`.
 
 ## oxagen config — local configuration
 
@@ -218,3 +323,91 @@ oxagen secret export [--env <slug>] [-o <path>]
 ```
 
 `--env <slug>` targets a specific environment override; omit it for the default value. `secret import` previews unless you pass `--yes`.
+
+## oxagen code — code utilities
+
+Semantic code-map retrieval and scriptable file utilities. Runs locally.
+
+```bash
+oxagen code map <query> [--kinds file,symbol,chunk,commit] [--domain <d>] [--limit <n>]
+oxagen code diff <before> <after> [--context <n>]
+oxagen code format <file> [--language json|python] [-w]
+oxagen code patch <diff-file> [--dir <dir>] [-w]
+```
+
+`code map` returns a structured map for a natural-language concept — relevant files, symbols, call edges, recent commits — faster than grep for conceptual questions:
+
+```bash
+oxagen code map "how does per-turn budgeting work" --domain billing
+```
+
+## oxagen eval — evaluate models and agents
+
+Score a dataset against a model or agent with an LLM judge. **Requires platform auth.**
+
+```bash
+oxagen eval datasets
+oxagen eval from-traces <name> --capability chat.message.send --since-hours 72
+oxagen eval run <datasetId> --model <slug> --judge-model <slug> --pass-threshold 0.7
+oxagen eval run-status <runId>
+oxagen eval run-get <runId>
+```
+
+`eval from-traces` builds a dataset from real, already-metered production traces; `eval run` starts an async run you poll with `run-status` / `run-get`.
+
+## oxagen sandbox — durable sandbox sessions
+
+Inspect the workspace of a durable code-agent sandbox session.
+
+```bash
+oxagen sandbox files <session-id> [--path <p>] [--depth <1-5>]
+oxagen sandbox cat   <session-id> <path> [--max-bytes <n>]
+```
+
+## oxagen conversation — export a conversation
+
+```bash
+oxagen conversation export <id> [--format md|pdf] [-o <file>]
+```
+
+Exports a conversation's active branch as Markdown or a formatted PDF (PDF is stored privately; prints the serve URL).
+
+## oxagen asset — upload a binary asset
+
+```bash
+oxagen asset upload <url> [--kind avatar|image|document|video] [--conversation <id>]
+```
+
+Ingests a binary asset from a public URL into object storage. `--conversation` attaches it as a private chat attachment.
+
+## oxagen a2a — Agent2Agent card
+
+```bash
+oxagen a2a card [--json]
+```
+
+Prints the workspace's [A2A](/docs/a2a/overview) Agent Card — exposed skills, transport endpoint, and auth scheme.
+
+## oxagen recover — restore agent work
+
+```bash
+oxagen recover [hash] [--all] [--json]
+```
+
+Lists or restores recorded agent commits from the commit ledger, so a crashed or reverted run never loses work. Omit `hash` to list; `--all` spans every repo.
+
+## oxagen file-lock — agent file locks
+
+The same TTL-bounded locks `write_file`/`edit_file` acquire automatically, so two agents never edit one file at once.
+
+```bash
+oxagen file-lock list [--path <p>]
+oxagen file-lock acquire <path> [--action read|write] [--ttl-ms <n>]
+oxagen file-lock release <lockId>
+```
+
+Use `file-lock release` to clear a lock a stuck agent left behind.
+
+## Login and logout
+
+`oxagen login` and `oxagen logout` manage the stored platform session — see [Account setup](/docs/cli/account-setup#4-authenticate-the-cli) for the full flow, including headless `--token` login for CI.
