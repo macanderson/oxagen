@@ -89,6 +89,7 @@ describe("seedSkillsFromFilesystem", () => {
     expect(slugs).toEqual([
       "agent-builder",
       "coding",
+      "create-agent",
       "debugging",
       "entity-extractor",
       "entity-resolver",

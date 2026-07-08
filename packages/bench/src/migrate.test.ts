@@ -19,7 +19,12 @@ const readFileSyncMock = vi.hoisted(() =>
 );
 const readdirSyncMock = vi.hoisted(() => vi.fn(() => ["0001_bench_schema.sql", "README.md"]));
 
-vi.mock("@oxagen/telemetry", () => ({ closeClickhouse: closeClickhouseMock }));
+vi.mock("@oxagen/telemetry", () => ({
+  closeClickhouse: closeClickhouseMock,
+  // `migrate.ts` calls this at module load to decide whether it was run
+  // directly; under vitest it must be a no-op guard (never the direct entry).
+  isDirectRunEntry: () => false,
+}));
 vi.mock("@oxagen/telemetry/bench-client", () => ({ chBenchCommand: commandMock }));
 vi.mock("@oxagen/telemetry/migrate", () => ({ splitStatements: splitStatementsMock }));
 vi.mock("node:fs", () => ({ readFileSync: readFileSyncMock, readdirSync: readdirSyncMock }));
