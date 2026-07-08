@@ -39,6 +39,7 @@ interface State {
   ranking: Array<{ id: string; score: number; note: string }>;
   applied: boolean;
   applyError?: string;
+  warnings: string[];
   frame: number;
 }
 
@@ -88,6 +89,8 @@ function reducer(s: State, a: Action): State {
       return { ...s, applied: true };
     case "apply-failed":
       return { ...s, applyError: e.error };
+    case "warning":
+      return { ...s, warnings: [...s.warnings, e.message] };
     default:
       return s;
   }
@@ -138,6 +141,7 @@ export function BestOfNApp({ emitter, total, prompt }: BestOfNAppProps): React.J
     reasoning: "",
     ranking: [],
     applied: false,
+    warnings: [],
     frame: 0,
   });
 
@@ -183,6 +187,12 @@ export function BestOfNApp({ emitter, total, prompt }: BestOfNAppProps): React.J
           ),
         )}
       </Box>
+
+      {state.warnings.map((w, i) => (
+        <Box key={`warn-${i}`} marginTop={1}>
+          <Text color="yellow">⚠ {w}</Text>
+        </Box>
+      ))}
 
       {state.phase === "selecting" && !state.winnerId && (
         <Box marginTop={1}>
