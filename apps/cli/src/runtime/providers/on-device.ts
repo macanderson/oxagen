@@ -44,6 +44,9 @@ import type {
   Quantization,
 } from "../types.js";
 
+/** The special model id that selects the local coordinator. */
+export const ON_DEVICE_ID = "on-device";
+
 /** The optional inference runtime is not installed. Offer to install it. */
 export class OptionalDepMissingError extends Error {
   constructor() {
