@@ -38,7 +38,7 @@ test.describe("skills AI-assisted setup wizard", () => {
     const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "skill-wiz" });
 
     // ── 2. Open Studio → Skills and launch the wizard ───────────────────────
-    await gotoStable(page, `/${orgSlug}/default/studio/skills`);
+    await gotoStable(page, `/${orgSlug}/default/studio/tools/skills`);
     await expect(page).not.toHaveURL(/\/login/);
 
     const newSkillBtn = page.getByTestId("new-skill-btn");
@@ -87,7 +87,7 @@ test.describe("skills AI-assisted setup wizard", () => {
 
     // ── 6. Save → land on the new skill's detail page ────────────────────────
     await page.getByTestId("new-skill-submit-btn").click();
-    await expect(page).toHaveURL(new RegExp(`/studio/skills/${slugValue}`), { timeout: 30_000 });
+    await expect(page).toHaveURL(new RegExp(`/studio/tools/skills/${slugValue}`), { timeout: 30_000 });
     await page.screenshot({ path: path.join(SCREENSHOTS_DIR, "04-skill-created.png") });
   });
 
@@ -96,7 +96,7 @@ test.describe("skills AI-assisted setup wizard", () => {
 
     const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "skill-wiz-back" });
 
-    await gotoStable(page, `/${orgSlug}/default/studio/skills`);
+    await gotoStable(page, `/${orgSlug}/default/studio/tools/skills`);
     await page.getByTestId("new-skill-btn").click();
 
     const promptText = "Teach the agent our code review checklist and when to apply it.";

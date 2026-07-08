@@ -62,7 +62,7 @@ test.describe("Page Screenshots", () => {
   });
 
   test("Settings Skills page", async ({ page }) => {
-    await page.goto(`${BASE}/${ORG}/${WS}/settings/skills`);
+    await page.goto(`${BASE}/${ORG}/${WS}/studio/tools/skills`);
     await page.waitForLoadState("networkidle");
     await page.waitForTimeout(1000);
     await page.screenshot({

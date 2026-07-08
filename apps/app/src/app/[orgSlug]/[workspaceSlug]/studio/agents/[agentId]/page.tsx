@@ -3,6 +3,7 @@ import { resolveStudioScope } from "@/lib/studio/scope";
 import { getAgent } from "@/lib/studio/agents";
 import { loadEquipSources } from "@/lib/studio/equip-sources";
 import { AgentBuilder } from "../agent-builder";
+import { installPlugin, installBulkPlugin } from "@/lib/agent-tools/install-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -65,6 +66,8 @@ export default async function EditAgentPage({ params }: PageProps) {
         // A subagent may not load itself; exclude the current agent from the pool.
         subagents: sources.subagents.filter((a) => a.ref !== agent.publicId),
       }}
+      installAction={installPlugin}
+      installBulkAction={installBulkPlugin}
     />
   );
 }
