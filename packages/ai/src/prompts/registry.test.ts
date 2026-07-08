@@ -92,10 +92,10 @@ describe("chatSystemPrompt — knowledge-graph-first context gathering", () => {
 
   it("names the graph capabilities to reach for first", () => {
     const prompt = chatSystemPrompt(CTX);
-    expect(prompt).toContain("graph.search");
-    expect(prompt).toContain("ontology.query");
-    expect(prompt).toContain("ontology.neighbors");
-    expect(prompt).toContain("agent.memory.recall");
+    expect(prompt).toContain("search_graph");
+    expect(prompt).toContain("query_ontology");
+    expect(prompt).toContain("get_ontology_neighbors");
+    expect(prompt).toContain("recall_memory");
   });
 
   it("frames other tools as a fallback when the graph has nothing", () => {
@@ -157,12 +157,12 @@ describe("chatSystemPrompt — tools/skills/MCP/plugins discoverability", () => 
     // #176 replaced list-then-load discovery with an injected skill index plus
     // agent.skill.load (progressive disclosure); the prompt no longer instructs
     // an explicit agent.skill.list call, so only the load contract is asserted.
-    expect(prompt).toContain("agent.skill.load");
+    expect(prompt).toContain("load_skill");
   });
 
   it("tells the agent MCP servers are available and how to list them", () => {
     const prompt = chatSystemPrompt(CTX);
-    expect(prompt).toContain("agent.mcp.list");
+    expect(prompt).toContain("list_mcp_servers");
     expect(prompt).toMatch(/MCP server/i);
     // External MCP tools surface with the mcp. prefix.
     expect(prompt).toContain("`mcp.`");
@@ -171,7 +171,7 @@ describe("chatSystemPrompt — tools/skills/MCP/plugins discoverability", () => 
   it("tells the agent installed plugins add tools and how to enumerate the live toolset", () => {
     const prompt = chatSystemPrompt(CTX);
     expect(prompt).toMatch(/installed capability plugins/i);
-    expect(prompt).toContain("agent.tool.list");
+    expect(prompt).toContain("list_agent_tools");
   });
 });
 
@@ -235,7 +235,7 @@ describe("chatSystemPrompt — memory & self-improvement", () => {
 
   it("instructs the agent to record new lessons via agent.memory.remember", () => {
     const prompt = chatSystemPrompt(CTX);
-    expect(prompt).toContain("agent.memory.remember");
+    expect(prompt).toContain("save_memory");
     expect(prompt.toLowerCase()).toContain("root cause");
   });
 

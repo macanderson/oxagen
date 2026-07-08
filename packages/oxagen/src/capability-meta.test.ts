@@ -354,7 +354,7 @@ describe("resolveRenderDirective — structural transforms (coding-agent cards)"
         // fall back to the path-only row without breaking the other file.
       ],
     };
-    const d = resolveRenderDirective({ capability: "agent.repo.edit", output });
+    const d = resolveRenderDirective({ capability: "edit_repo_file", output });
     expect(d?.componentId).toBe("code-diff");
     expect(d?.props.files).toEqual([
       {
@@ -404,7 +404,7 @@ describe("resolveRenderDirective — structural transforms (coding-agent cards)"
         },
       ],
     };
-    const d = resolveRenderDirective({ capability: "repo.file.put", output });
+    const d = resolveRenderDirective({ capability: "put_repo_file", output });
     expect(d?.componentId).toBe("code-diff");
     expect(d?.props.files).toEqual([
       {

@@ -25,7 +25,8 @@ const OLD_DOTTED_NAMES = [
 // hasHandler gate; the gate's job is to prove the dotted→snake realignment added
 // zero NEW no_handler, not to fix long-standing wiring gaps.
 const NO_HANDLER_OK = new Set<string>([
-  "render_agent_ui", // agent.ui.render — client-mapped (generateObject), no server handler by design
+  // render_agent_ui now HAS a real handler (main #701 added agent.ui.render.ts,
+  // bound under the snake key in the agent LOADERS) — no longer allowlisted.
   // Pre-existing gaps (no registerHandler on origin/main either):
   "upsert_graph_relationship", // graph.relationship.upsert — deprecation alias, no kernel handler
   "erase_data", // privacy.data.erase — handler file exists but never wired into register.ts
