@@ -22,22 +22,22 @@ export const TOOL_EMOJIS: Record<string, string> = {
   "knowledge.query": "🔍",
 
   // LLM & inference
-  "agent.code.execute": "⚡",
   "agent.subagent.dispatch": "🚀",
 
   // Workflow & process
   "workflow.run": "▶️",
   "workflow.cancel": "⏹️",
 
-  // Default
-  default: "🔧",
+  // Default — tools without a mapping render with no emoji at all.
+  default: "",
 };
 
 /**
- * Get emoji for a tool name.
+ * Get emoji for a tool name. Unmapped tools get an empty string — callers must
+ * not assume a glyph is always present.
  */
 export function getToolEmoji(toolName: string): string {
-  return TOOL_EMOJIS[toolName] ?? "🔧";
+  return TOOL_EMOJIS[toolName] ?? "";
 }
 
 /**
@@ -174,7 +174,10 @@ export function formatToolArgs(toolName: string, input: unknown): string {
 export function formatToolCall(toolName: string, input: unknown): string {
   const emoji = getToolEmoji(toolName);
   const name = toolName.toLowerCase().replace(/\./g, "-");
-  return `${emoji} ${name}(${formatToolArgs(toolName, input)})`;
+  // Unmapped tools carry no emoji — omit the separator space too so the line
+  // starts flush at the tool name.
+  const prefix = emoji ? `${emoji} ` : "";
+  return `${prefix}${name}(${formatToolArgs(toolName, input)})`;
 }
 
 /**
