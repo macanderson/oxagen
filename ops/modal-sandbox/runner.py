@@ -340,6 +340,10 @@ class SandboxExecRequest(BaseModel):
     timeout_ms: int
     env: dict[str, str] | None = None
     stdin: str | None = None
+    # Working directory to run the command in (durable-terminal cwd persistence).
+    # None → the image default. Optional so callers/drivers that predate the
+    # field behave exactly as before.
+    cwd: str | None = None
 
 
 class SandboxExecResponse(BaseModel):
@@ -349,6 +353,10 @@ class SandboxExecResponse(BaseModel):
     duration_ms: int
     timed_out: bool
     gone: bool  # True when the sandbox has been reaped; caller should snapshot-restore
+    # The shell's working directory AFTER the command ran. None when the trailer
+    # couldn't be captured (command self-`exit`ed, timed out, or a custom image
+    # without the trampoline); the caller then keeps its prior cwd.
+    cwd: str | None = None
 
 
 class SandboxSnapshotRequest(BaseModel):

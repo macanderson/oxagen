@@ -93,6 +93,7 @@ function toSandbox(row: {
   return {
     sessionId: row.publicId,
     sessionKey: row.sessionKey,
+    label: readLabel(row.metadata),
     // The DB CHECK constraint restricts these columns to the enum members, so
     // the narrowing cast is safe — no runtime value can fall outside the union.
     image: row.image as Sandbox["image"],
