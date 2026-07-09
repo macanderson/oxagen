@@ -915,6 +915,25 @@
       }
     },
     {
+      "name": "list_sandboxes",
+      "file": "agent.sandbox.list.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
+      }
+    },
+    {
       "name": "snapshot_sandbox",
       "file": "agent.sandbox.snapshot.ts",
       "domain": "agent",
