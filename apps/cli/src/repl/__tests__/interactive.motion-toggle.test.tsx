@@ -67,6 +67,7 @@ vi.mock("../../agent/model.js", () => ({
 }));
 vi.mock("../../agent/code-graph.js", () => ({
   queryCodeGraph: async () => "",
+  warmCodeGraph: () => {},
 }));
 
 // Keep every other config getter real (session resolution etc. relies on

@@ -106,6 +106,7 @@ vi.mock("../../agent/model.js", () => ({
 // avoids loading the tree-sitter builder / DuckDB store.
 vi.mock("../../agent/code-graph.js", () => ({
   queryCodeGraph: async () => "",
+  warmCodeGraph: () => {},
 }));
 
 const { ReplApp } = await import("../interactive.js");
@@ -118,10 +119,17 @@ const TEST_SESSION = {
   apiUrl: "http://localhost:4000",
 };
 
+// Real ReplApp mount (async session-memory, model-roles, plan-turn wiring)
+// under several parallel Ink suites on a loaded 2-core CI runner can take
+// several seconds before input is processed; the poll deadline and per-test
+// ceiling sit generously above that floor so the deterministic assertions below
+// never lose on budget alone.
+vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
+
 const tick = (ms = 15): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
-async function waitFor(cond: () => boolean, ms = 3000): Promise<void> {
+async function waitFor(cond: () => boolean, ms = 15_000): Promise<void> {
   const start = Date.now();
   while (!cond()) {
     if (Date.now() - start > ms) throw new Error("waitFor: condition timed out");

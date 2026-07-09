@@ -96,6 +96,7 @@ vi.mock("../../agent/model.js", () => ({
 
 vi.mock("../../agent/code-graph.js", () => ({
   queryCodeGraph: async () => "",
+  warmCodeGraph: () => {},
 }));
 
 // Planning fires a REAL structured-output LLM call (and the memory recall

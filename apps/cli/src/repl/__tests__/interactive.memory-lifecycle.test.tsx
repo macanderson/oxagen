@@ -43,6 +43,7 @@ vi.mock("@oxagen/agent-engine", async (importOriginal) => ({
 // tree-sitter builder or touch the DuckDB store.
 vi.mock("../../agent/code-graph.js", () => ({
   queryCodeGraph: async () => "",
+  warmCodeGraph: () => {},
 }));
 vi.mock("../../agent/trace-store.js", () => ({
   openTraceStore: () => ({

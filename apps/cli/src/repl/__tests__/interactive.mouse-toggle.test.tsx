@@ -68,6 +68,7 @@ vi.mock("../../agent/model.js", () => ({
 }));
 vi.mock("../../agent/code-graph.js", () => ({
   queryCodeGraph: async () => "",
+  warmCodeGraph: () => {},
 }));
 
 const { ReplApp } = await import("../interactive.js");

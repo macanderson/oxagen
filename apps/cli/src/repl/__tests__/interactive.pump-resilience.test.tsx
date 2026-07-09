@@ -109,6 +109,7 @@ vi.mock("../../agent/model.js", () => ({
 // test neither loads the tree-sitter builder nor touches the DuckDB store.
 vi.mock("../../agent/code-graph.js", () => ({
   queryCodeGraph: async () => "",
+  warmCodeGraph: () => {},
 }));
 
 // Planning fires a REAL structured-output LLM call (and the memory recall

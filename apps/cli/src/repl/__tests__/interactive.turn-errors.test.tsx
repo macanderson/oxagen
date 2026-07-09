@@ -112,6 +112,7 @@ vi.mock("../../agent/model.js", () => ({
 }));
 vi.mock("../../agent/code-graph.js", () => ({
   queryCodeGraph: async () => "",
+  warmCodeGraph: () => {},
 }));
 
 // Planning fires a REAL structured-output LLM call (and the memory recall
@@ -135,9 +136,17 @@ const TEST_SESSION = {
   apiUrl: "http://localhost:4000",
 };
 
+// Ink mount of the real ReplApp (model-roles resolution, plan-turn wiring,
+// memory recall) plus several parallel Ink suites contending for a loaded
+// 2-core CI runner can push the time-to-first-runTurn well past the stock 3s
+// poll / 5s vitest ceiling. Both are raised generously — these are
+// deterministic mocked-runTurn assertions, so the extra budget only affects how
+// long a genuine hang takes to surface, never a passing run.
+vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
+
 const tick = (ms = 15): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
-async function waitFor(cond: () => boolean, ms = 3000): Promise<void> {
+async function waitFor(cond: () => boolean, ms = 15_000): Promise<void> {
   const start = Date.now();
   while (!cond()) {
     if (Date.now() - start > ms) throw new Error("waitFor: condition timed out");

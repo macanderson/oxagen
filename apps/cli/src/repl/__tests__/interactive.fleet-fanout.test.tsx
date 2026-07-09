@@ -72,7 +72,7 @@ vi.mock("../../agent/adapters/index.js", async (importOriginal) => ({
 }));
 
 // Keep the harness hermetic: no tree-sitter build, no disk stores, no MCP.
-vi.mock("../../agent/code-graph.js", () => ({ queryCodeGraph: async () => "" }));
+vi.mock("../../agent/code-graph.js", () => ({ queryCodeGraph: async () => "", warmCodeGraph: () => {} }));
 vi.mock("../../slash/expand.js", () => ({ loadAndExpand: () => null }));
 vi.mock("../../project/init.js", () => ({
   isProjectInitialized: () => true,
@@ -129,7 +129,13 @@ const SESSION = {
 };
 
 const tick = (ms = 15): Promise<void> => new Promise((r) => setTimeout(r, ms));
-async function waitFor(cond: () => boolean, frame: () => string, ms = 20_000): Promise<void> {
+// This suite drives the REAL planner + Fleet orchestrator + engine loop (only
+// the model responses are canned), so each milestone is materially slower than
+// the mocked-runTurn suites — and slower still under several parallel Ink suites
+// on a loaded 2-core CI runner, where 20s was not enough headroom for the
+// fan-out to settle. Raise the per-milestone deadline (and the per-test ceiling
+// below) generously.
+async function waitFor(cond: () => boolean, frame: () => string, ms = 30_000): Promise<void> {
   const start = Date.now();
   while (!cond()) {
     if (Date.now() - start > ms) {
@@ -189,5 +195,5 @@ describe("TUI fleet fan-out (real planner path + real Fleet, canned AI)", () => 
     if (process.env["PROOF_OUT"]) {
       appendFileSync(process.env["PROOF_OUT"], proof.join("\n"));
     }
-  }, 40_000);
+  }, 60_000);
 });
