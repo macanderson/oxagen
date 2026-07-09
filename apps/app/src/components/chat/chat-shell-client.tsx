@@ -27,6 +27,7 @@ import type { McpServerSummary } from "./mcp-types";
 import type { RepoOption } from "./repo-selector";
 import type { EnvironmentOption } from "./environment-selector";
 import type { AgentOption } from "./agent-selector";
+import { deriveComposerPr } from "./composer-pr-status-chip";
 import { SuggestedPromptChips } from "./suggested-prompt-chips";
 import type { ConversationMessageSummary } from "@/lib/page-context/suggested-prompts";
 import { ConversationFiles } from "./conversation-files";
@@ -1087,6 +1088,28 @@ export function ChatShellClient({
     i++;
   }
 
+  // The open PR for this conversation, derived from the latest completed
+  // `edit_repo_file` / `open_pr` tool call. Feeds the composer's compact
+  // "PR #123 ●" status chip (live CI on hover). Recomputed only when the tool
+  // calls change — the walk is cheap, but memoising keeps the chip's prop
+  // identity stable so its CI fetch effect doesn't re-run every render.
+  const codeSessionPr = React.useMemo(
+    () =>
+      deriveComposerPr(
+        order
+          .filter((k) => k.startsWith("tool:"))
+          .map((k) => toolCalls[k.slice("tool:".length)])
+          .filter((tc): tc is NonNullable<typeof tc> => Boolean(tc))
+          .map((tc) => ({
+            capability: tc.capability,
+            status: tc.status,
+            inputPreview: (tc.inputPreview as Record<string, unknown> | null) ?? null,
+            output: (tc.output as Record<string, unknown> | undefined) ?? null,
+          })),
+      ),
+    [order, toolCalls],
+  );
+
   return (
     <div className="flex h-full w-full gap-4">
       <div className="mx-auto flex h-full min-w-0 max-w-3xl flex-1 flex-col gap-4">
@@ -1238,6 +1261,7 @@ export function ChatShellClient({
         orgSlug={orgSlug}
         workspaceSlug={workspaceSlug}
         boundAgentName={boundAgentName ?? null}
+        codeSessionPr={codeSessionPr}
       />
     </div>
       {/* Right rail: turn-trace stage rail + files/workspace tabbed panel.
