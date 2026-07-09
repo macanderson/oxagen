@@ -207,6 +207,12 @@ export const MENTION_TOKEN_REGEX =
 /** Extract every well-formed mention token from `text`, in document order. */
 export function parseMentions(text: string): ParsedMention[] {
   const out: ParsedMention[] = [];
+  // MENTION_TOKEN_REGEX is a shared `/g` regexp and `String.matchAll` seeds its
+  // iterator from the regexp's current `lastIndex`. A caller that ran a stateful
+  // `.test()` first (e.g. MarkdownMessage's mention detection) leaves lastIndex
+  // advanced, which would make matchAll skip the first — often the only — token.
+  // Reset so scanning is self-contained regardless of prior regex state.
+  MENTION_TOKEN_REGEX.lastIndex = 0;
   for (const match of text.matchAll(MENTION_TOKEN_REGEX)) {
     const raw = match[0];
     const type = match[1] ?? "";

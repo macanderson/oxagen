@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  MENTION_TOKEN_REGEX,
   MENTION_TYPES,
   applyMentionPlaceholders,
   matchMentionTypes,
@@ -82,6 +83,19 @@ describe("serializeMention / parseMentions", () => {
 
   it("returns an empty array for text without tokens", () => {
     expect(parseMentions("no tokens here [not:one]")).toEqual([]);
+  });
+
+  it("is immune to a caller leaving the shared regex's lastIndex advanced", () => {
+    const token = serializeMention(fileMention);
+    const text = `see ${token} now`;
+    // A stateful `.test()` (as MarkdownMessage runs for detection) advances the
+    // shared /g regexp's lastIndex; parseMentions must still find the token.
+    MENTION_TOKEN_REGEX.lastIndex = 0;
+    expect(MENTION_TOKEN_REGEX.test(text)).toBe(true);
+    expect(MENTION_TOKEN_REGEX.lastIndex).toBeGreaterThan(0);
+    const parsed = parseMentions(text);
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0]).toMatchObject(fileMention);
   });
 });
 
