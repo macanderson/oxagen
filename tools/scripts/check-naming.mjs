@@ -106,7 +106,7 @@ function validate(name) {
     return { problems, warnings }; // charset failure — later checks would be noise
   }
   const words = name.split("_");
-  if (!VERBS.has(words[0])) {
+  if (!ACTIONS.has(words[0])) {
     problems.push(`first word "${words[0]}" is not an imperative verb (name must be verb-first)`);
   }
   if (words.length > 3) {
