@@ -16,6 +16,7 @@
     "models",
     "budget",
     "memory",
-    "knowledge-graph"
+    "knowledge-graph",
+    "sandbox-templates"
   ]
 }

@@ -1038,6 +1038,19 @@ export function buildProgram(): Command {
     .description("Inspect durable code-agent sandbox sessions");
 
   sandbox
+    .command("list")
+    .description("List the durable sandbox sessions in the active workspace")
+    .option("--status <status>", "Filter by lifecycle status: running | idle | stopped | gone")
+    .option("--limit <n>", "Max sessions to return (1-100, default 50)")
+    .option("--json", "Emit raw JSON output")
+    .action(
+      async (opts: { status?: string; limit?: string; json?: boolean }) => {
+        const { handleSandboxList } = await import("./commands/sandbox.js");
+        await handleSandboxList(opts);
+      },
+    );
+
+  sandbox
     .command("files <session-id>")
     .description(
       "List files/directories inside a durable sandbox session's workspace",
