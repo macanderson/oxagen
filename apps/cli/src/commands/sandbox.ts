@@ -11,6 +11,19 @@
 import { apiPost } from "../lib/api.js";
 import { stdoutWriter, type CommandWriter } from "../lib/capture-writer.js";
 
+interface SandboxListResponse {
+  sandboxes: Array<{
+    sessionId: string;
+    sessionKey: string | null;
+    image: "node" | "python" | "shell" | "agent";
+    status: "running" | "idle" | "stopped" | "gone";
+    driver: string;
+    lastUsedAt: string | null;
+    expiresAt: string | null;
+    createdAt: string;
+  }>;
+}
+
 interface SandboxFilesResponse {
   entries: Array<{ path: string; kind: "file" | "dir"; sizeBytes: number }>;
 }
@@ -21,6 +34,35 @@ interface SandboxFileReadResponse {
   encoding: "utf8" | "base64";
   sizeBytes: number;
   truncated: boolean;
+}
+
+export async function handleSandboxList(
+  opts: { status?: string; limit?: string; json?: boolean },
+  writer: CommandWriter = stdoutWriter,
+): Promise<void> {
+  const body: Record<string, unknown> = {};
+  if (opts.status) body.status = opts.status;
+  if (opts.limit !== undefined) body.limit = parseInt(opts.limit, 10);
+
+  const res = await apiPost<SandboxListResponse>("agent/sandbox/list", body, writer);
+
+  if (opts.json) {
+    writer.write(JSON.stringify(res, null, 2));
+    return;
+  }
+
+  if (res.sandboxes.length === 0) {
+    writer.writeErr("(no sandbox sessions)");
+    return;
+  }
+
+  for (const s of res.sandboxes) {
+    const key = s.sessionKey ? ` key=${s.sessionKey}` : "";
+    const last = s.lastUsedAt ? ` last=${s.lastUsedAt}` : "";
+    writer.write(
+      `${s.sessionId} ${s.status} ${s.image} (${s.driver})${key}${last}`,
+    );
+  }
 }
 
 export async function handleSandboxFiles(

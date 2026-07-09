@@ -25,6 +25,7 @@ export default async function StudioLayout({
   const tabs = [
     { label: "Agents", href: workspace.studio.agents(ctx) },
     { label: "Agent Tools", href: workspace.studio.tools.root(ctx) },
+    { label: "Sandboxes", href: workspace.studio.sandboxes(ctx) },
   ];
 
   return (

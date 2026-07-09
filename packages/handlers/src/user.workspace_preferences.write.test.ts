@@ -1,211 +1,129 @@
-/**
- * Unit tests for update_workspace_user_preferences (write) handler.
- *
- * Strategy: mock withTenantDb so no DB is needed. Covers INSERT (no existing
- * row), UPDATE (existing row), partial update ("in input" semantics), explicit
- * null clears, markRepoPrompted stamping, and the auth/workspace guards.
- */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, expect, it, vi, beforeEach } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  withTenantDb: vi.fn(),
-  insertSpy: vi.fn(),
-  updateSpy: vi.fn(),
+  insertValues: vi.fn(),
+  onConflict: vi.fn(),
+  findFirst: vi.fn(),
 }));
+
+mocks.onConflict.mockResolvedValue([]);
+mocks.insertValues.mockReturnValue({ onConflictDoUpdate: mocks.onConflict });
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
-  return { ...real, withTenantDb: mocks.withTenantDb };
+  const tx = {
+    insert: (_t: unknown) => ({ values: mocks.insertValues }),
+    query: { workspaceUserPreferences: { findFirst: mocks.findFirst } },
+  };
+  return {
+    ...real,
+    withTenantDb: async (fn: (t: unknown) => Promise<unknown>) => fn(tx),
+  };
 });
 
-vi.mock("./logger", () => ({
-  logger: { info: vi.fn(), warn: vi.fn(), debug: vi.fn(), error: vi.fn() },
-}));
-
 import { userWorkspacePreferencesWriteHandler } from "./user.workspace_preferences.write";
-import { TEST_CTX, makeCTX } from "./test-utils/fixtures";
+import type { CapabilityContext } from "@oxagen/oxagen";
+import { TEST_CTX as CTX } from "./test-utils/fixtures";
 
-function makeReadTx(existing: Record<string, unknown> | undefined) {
-  return {
-    query: {
-      workspaceUserPreferences: {
-        findFirst: vi.fn().mockResolvedValue(existing),
-      },
-    },
-  };
+/** The captured upsert `set` payload (2nd arg to onConflictDoUpdate). */
+function capturedSet(): Record<string, unknown> {
+  const arg = mocks.onConflict.mock.calls[0]?.[0] as { set: Record<string, unknown> };
+  return arg.set;
+}
+/** The captured insert `values` payload. */
+function capturedInsert(): Record<string, unknown> {
+  return mocks.insertValues.mock.calls[0]?.[0] as Record<string, unknown>;
 }
 
-/** Captures the values passed to insert(...).values(...). */
-function makeInsertTx(capture: { values?: Record<string, unknown> }) {
-  return {
-    insert: mocks.insertSpy.mockReturnValue({
-      values: vi.fn((v: Record<string, unknown>) => {
-        capture.values = v;
-        return Promise.resolve(undefined);
-      }),
-    }),
-  };
-}
-
-/** Captures the values passed to update(...).set(...). */
-function makeUpdateTx(capture: { set?: Record<string, unknown> }) {
-  return {
-    update: mocks.updateSpy.mockReturnValue({
-      set: vi.fn((v: Record<string, unknown>) => {
-        capture.set = v;
-        return { where: vi.fn().mockResolvedValue(undefined) };
-      }),
-    }),
-  };
-}
-
-/**
- * Wire withTenantDb across the handler's three calls: read (existing?), the
- * write (insert or update), and the final re-read (returns `finalRow`).
- */
-function wire(
-  existing: Record<string, unknown> | undefined,
-  writeTx: unknown,
-  finalRow: Record<string, unknown>,
-) {
-  let call = 0;
-  mocks.withTenantDb.mockImplementation(
-    async (fn: (tx: unknown) => Promise<unknown>) => {
-      call++;
-      if (call === 1) return fn(makeReadTx(existing));
-      if (call === 2) return fn(writeTx);
-      return fn(makeReadTx(finalRow));
-    },
-  );
-}
+const STORED = {
+  defaultRepoConnectionId: "con_abc",
+  defaultRepoSlug: "acme/api",
+  defaultEnvironmentId: "env_prod",
+  repoDefaultPromptedAt: new Date("2026-01-01T00:00:00Z"),
+};
 
 describe("userWorkspacePreferencesWriteHandler", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    mocks.insertValues.mockClear();
+    mocks.onConflict.mockClear();
+    mocks.findFirst.mockReset();
+    mocks.onConflict.mockResolvedValue([]);
+    mocks.insertValues.mockReturnValue({ onConflictDoUpdate: mocks.onConflict });
+    mocks.findFirst.mockResolvedValue(STORED);
   });
 
-  it("INSERTs a new row when none exists and returns the re-read state", async () => {
-    const cap: { values?: Record<string, unknown> } = {};
-    wire(undefined, makeInsertTx(cap), {
-      defaultRepoConnectionId: "con_1",
-      defaultRepoSlug: "acme/web",
-      defaultEnvironmentId: null,
-      repoDefaultPromptedAt: null,
-    });
-
-    const result = await userWorkspacePreferencesWriteHandler(
-      { defaultRepoConnectionId: "con_1", defaultRepoSlug: "acme/web" },
-      TEST_CTX,
-    );
-
-    expect(mocks.insertSpy).toHaveBeenCalledTimes(1);
-    expect(mocks.updateSpy).not.toHaveBeenCalled();
-    // Insert carries tenant + user stamping.
-    expect(cap.values).toMatchObject({
-      orgId: "org_1",
-      workspaceId: "ws_1",
-      userId: "u_1",
-      defaultRepoConnectionId: "con_1",
-      defaultRepoSlug: "acme/web",
-    });
-    expect(result).toEqual({
-      defaultRepoConnectionId: "con_1",
-      defaultRepoSlug: "acme/web",
-      defaultEnvironmentId: null,
-      repoDefaultPrompted: false,
-    });
+  it("throws when there is no authenticated user", async () => {
+    const anon: CapabilityContext = { ...CTX, userId: null };
+    await expect(
+      userWorkspacePreferencesWriteHandler({ defaultRepoConnectionId: "con_x" }, anon),
+    ).rejects.toThrow(/authenticated user/);
   });
 
-  it("UPDATEs an existing row and returns the re-read state", async () => {
-    const cap: { set?: Record<string, unknown> } = {};
-    wire({ id: "wup_1" }, makeUpdateTx(cap), {
-      defaultRepoConnectionId: "con_2",
-      defaultRepoSlug: "acme/api",
-      defaultEnvironmentId: "env_9",
-      repoDefaultPromptedAt: new Date(),
-    });
-
-    const result = await userWorkspacePreferencesWriteHandler(
-      { defaultEnvironmentId: "env_9" },
-      TEST_CTX,
-    );
-
-    expect(mocks.updateSpy).toHaveBeenCalledTimes(1);
-    expect(mocks.insertSpy).not.toHaveBeenCalled();
-    expect(cap.set).toMatchObject({ defaultEnvironmentId: "env_9", updatedByUserId: "u_1" });
-    expect(result.defaultEnvironmentId).toBe("env_9");
-    expect(result.repoDefaultPrompted).toBe(true);
+  it("throws when there is no workspace context", async () => {
+    const noWs: CapabilityContext = { ...CTX, workspaceId: null };
+    await expect(
+      userWorkspacePreferencesWriteHandler({ defaultRepoConnectionId: "con_x" }, noWs),
+    ).rejects.toThrow(/workspace context/);
   });
 
-  it("only mutates fields present in the input (omitted field ⇒ not in the set clause)", async () => {
-    const cap: { set?: Record<string, unknown> } = {};
-    wire({ id: "wup_2" }, makeUpdateTx(cap), {
-      defaultRepoConnectionId: "con_x",
-      defaultRepoSlug: "acme/web",
-      defaultEnvironmentId: null,
-      repoDefaultPromptedAt: null,
-    });
-
+  it("sets the default repo connection + slug in the upsert", async () => {
     await userWorkspacePreferencesWriteHandler(
-      { defaultRepoConnectionId: "con_x" },
-      TEST_CTX,
+      { defaultRepoConnectionId: "con_new", defaultRepoSlug: "acme/web" },
+      CTX,
     );
-
-    expect(cap.set).toHaveProperty("defaultRepoConnectionId", "con_x");
-    // Untouched fields must be absent from the update set.
-    expect(cap.set).not.toHaveProperty("defaultRepoSlug");
-    expect(cap.set).not.toHaveProperty("defaultEnvironmentId");
+    const set = capturedSet();
+    expect(set.defaultRepoConnectionId).toBe("con_new");
+    expect(set.defaultRepoSlug).toBe("acme/web");
+    // Not-provided fields are absent from the partial update set.
+    expect("defaultEnvironmentId" in set).toBe(false);
+    expect("repoDefaultPromptedAt" in set).toBe(false);
   });
 
-  it("clears a field when null is explicitly supplied", async () => {
-    const cap: { set?: Record<string, unknown> } = {};
-    wire({ id: "wup_3" }, makeUpdateTx(cap), {
-      defaultRepoConnectionId: null,
-      defaultRepoSlug: null,
-      defaultEnvironmentId: null,
-      repoDefaultPromptedAt: null,
+  it("clears a default when explicitly passed null (vs omitting)", async () => {
+    await userWorkspacePreferencesWriteHandler({ defaultRepoConnectionId: null }, CTX);
+    const set = capturedSet();
+    expect("defaultRepoConnectionId" in set).toBe(true);
+    expect(set.defaultRepoConnectionId).toBeNull();
+  });
+
+  it("stamps repoDefaultPromptedAt when markRepoPrompted=true", async () => {
+    await userWorkspacePreferencesWriteHandler({ markRepoPrompted: true }, CTX);
+    const set = capturedSet();
+    expect(set.repoDefaultPromptedAt).toBeInstanceOf(Date);
+    // Also seeded into the insert path for the first-write case.
+    expect(capturedInsert().repoDefaultPromptedAt).toBeInstanceOf(Date);
+  });
+
+  it("does NOT stamp repoDefaultPromptedAt when markRepoPrompted is absent", async () => {
+    await userWorkspacePreferencesWriteHandler({ defaultEnvironmentId: "env_x" }, CTX);
+    expect("repoDefaultPromptedAt" in capturedSet()).toBe(false);
+  });
+
+  it("carries orgId, workspaceId and userId into the insert values", async () => {
+    await userWorkspacePreferencesWriteHandler({ defaultRepoConnectionId: "con_x" }, CTX);
+    const ins = capturedInsert();
+    expect(ins.orgId).toBe(CTX.orgId);
+    expect(ins.workspaceId).toBe(CTX.workspaceId);
+    expect(ins.userId).toBe(CTX.userId);
+  });
+
+  it("returns the canonical post-upsert row with derived repoDefaultPrompted", async () => {
+    const out = await userWorkspacePreferencesWriteHandler(
+      { defaultRepoConnectionId: "con_abc" },
+      CTX,
+    );
+    expect(out).toEqual({
+      defaultRepoConnectionId: "con_abc",
+      defaultRepoSlug: "acme/api",
+      defaultEnvironmentId: "env_prod",
+      repoDefaultPrompted: true,
     });
-
-    const result = await userWorkspacePreferencesWriteHandler(
-      { defaultRepoConnectionId: null },
-      TEST_CTX,
-    );
-
-    expect(cap.set).toHaveProperty("defaultRepoConnectionId", null);
-    expect(result.defaultRepoConnectionId).toBeNull();
   });
 
-  it("stamps repoDefaultPromptedAt when markRepoPrompted is true", async () => {
-    const cap: { set?: Record<string, unknown> } = {};
-    wire({ id: "wup_4" }, makeUpdateTx(cap), {
-      defaultRepoConnectionId: null,
-      defaultRepoSlug: null,
-      defaultEnvironmentId: null,
-      repoDefaultPromptedAt: new Date(),
-    });
-
-    const result = await userWorkspacePreferencesWriteHandler(
-      { markRepoPrompted: true },
-      TEST_CTX,
-    );
-
-    expect(cap.set?.repoDefaultPromptedAt).toBeInstanceOf(Date);
-    expect(result.repoDefaultPrompted).toBe(true);
-  });
-
-  it("throws before any DB access when userId is missing", async () => {
-    const noUser = makeCTX({ userId: null });
+  it("throws if the re-read finds no row after upsert", async () => {
+    mocks.findFirst.mockResolvedValue(undefined);
     await expect(
-      userWorkspacePreferencesWriteHandler({ markRepoPrompted: true }, noUser),
-    ).rejects.toThrow("requires an authenticated user");
-    expect(mocks.withTenantDb).not.toHaveBeenCalled();
-  });
-
-  it("throws before any DB access when workspaceId is missing", async () => {
-    const noWs = makeCTX({ workspaceId: undefined as unknown as string });
-    await expect(
-      userWorkspacePreferencesWriteHandler({ markRepoPrompted: true }, noWs),
-    ).rejects.toThrow("requires a workspace context");
-    expect(mocks.withTenantDb).not.toHaveBeenCalled();
+      userWorkspacePreferencesWriteHandler({ defaultRepoConnectionId: "con_x" }, CTX),
+    ).rejects.toThrow(/not found on re-read/);
   });
 });
