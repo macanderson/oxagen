@@ -235,10 +235,15 @@ export async function ConversationPage({ params, searchParams, actions }: Conver
           pendingPromptBehavior: "queue" as const,
         }),
       ),
-      loadEffectiveModelDefaults({
-        userId: session.user.id,
-        workspaceId: workspace.id,
-      }).catch((err: unknown) => logAndFallback(err, "effective-model-defaults load", null)),
+      // runInTenantScope is required here too: loadEffectiveModelDefaults reads
+      // workspace model settings via withTenantDb; without an active ALS scope
+      // it throws TenantScopeError and the defaults silently degrade to null.
+      runInTenantScope({ orgId: tenant.id, workspaceId: workspace.id }, () =>
+        loadEffectiveModelDefaults({
+          userId: session.user.id,
+          workspaceId: workspace.id,
+        }),
+      ).catch((err: unknown) => logAndFallback(err, "effective-model-defaults load", null)),
       // First page of active conversations for the history nav. Failure is
       // non-fatal — the nav renders empty rather than crashing the chat page.
       // runInTenantScope is required: conversationListHandler calls withTenantDb
