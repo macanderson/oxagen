@@ -340,14 +340,13 @@ describe("runSession — conversation loop", () => {
 
     // The second call's history is exactly the first turn's returned messages.
     expect(calls[1]?.history).toBe(returnedMessages[0]);
-    // The follow-up user message was logged as turn 2. `calls.length === 2` only
-    // means turn 2 *started* — the turn-2 user-message append is still queued
-    // behind the async appendFile chain (see untilDisk's note), so poll disk for
-    // it rather than snapshotting immediately (this raced under full-gate CI load).
+    // The follow-up user message was logged as turn 2. `calls.length === 2`
+    // only proves the in-memory emit ran; the disk append is queued behind an
+    // async `appendFile` (see `untilDisk`'s doc comment above), so poll rather
+    // than read once — this raced under CI load (1 message seen instead of 2).
     const disk = await untilDisk(
       meta.sid,
-      (events) => events.filter((e) => e.type === "message").length === 2,
-      15000,
+      (events) => events.filter((e) => e.type === "message").length >= 2,
     );
     const userMsgs = disk.filter((e) => e.type === "message");
     expect(userMsgs.length).toBe(2);

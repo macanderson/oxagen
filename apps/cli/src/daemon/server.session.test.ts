@@ -70,21 +70,31 @@ describe("session RPCs", () => {
     expect(result.sessions).toEqual([]);
   });
 
-  it("compile() with a sessionId records a turn, visible via session.list", async () => {
-    await client.compile(taskFrame("sess-1"));
+  // This is the first test in the file to actually call `compile()`, which
+  // dynamically imports `@oxagen/engram` and constructs its DuckDB-backed
+  // engines/store for the first time — a real, one-time cold-start cost that
+  // the default 5000ms vitest timeout doesn't reliably cover under a loaded CI
+  // runner (subsequent compiles in this file/process reuse the warmed module
+  // cache and stay fast). A longer ceiling here, not a sleep, absorbs that.
+  it(
+    "compile() with a sessionId records a turn, visible via session.list",
+    async () => {
+      await client.compile(taskFrame("sess-1"));
 
-    const result = (await client.listSessions()) as {
-      sessions: { sessionId: string; status: string; eventCount: number; parentId: string | null }[];
-    };
-    expect(result.sessions).toHaveLength(1);
-    expect(result.sessions[0]).toMatchObject({
-      sessionId: "sess-1",
-      status: "active",
-      parentId: null,
-    });
-    // session_start + turn_start + context_compiled + turn_end
-    expect(result.sessions[0]!.eventCount).toBe(4);
-  });
+      const result = (await client.listSessions()) as {
+        sessions: { sessionId: string; status: string; eventCount: number; parentId: string | null }[];
+      };
+      expect(result.sessions).toHaveLength(1);
+      expect(result.sessions[0]).toMatchObject({
+        sessionId: "sess-1",
+        status: "active",
+        parentId: null,
+      });
+      // session_start + turn_start + context_compiled + turn_end
+      expect(result.sessions[0]!.eventCount).toBe(4);
+    },
+    20_000,
+  );
 
   it("compile() called twice on the same sessionId accumulates turns", async () => {
     await client.compile(taskFrame("sess-2"));
