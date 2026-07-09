@@ -23,7 +23,7 @@ const {
   mockWithTenantDb,
   mockInvoke,
   mockRevalidatePath,
-  mockBuildStudioCtx,
+  mockBuildWorkbenchCtx,
   mockLoadEquipSources,
   dbState,
 } = vi.hoisted(() => {
@@ -49,7 +49,7 @@ const {
     mockWithTenantDb,
     mockInvoke: vi.fn(),
     mockRevalidatePath: vi.fn(),
-    mockBuildStudioCtx: vi.fn(() => ({ surface: "app" })),
+    mockBuildWorkbenchCtx: vi.fn(() => ({ surface: "app" })),
     mockLoadEquipSources: vi.fn(),
     dbState,
   };
@@ -69,8 +69,8 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 });
 vi.mock("@oxagen/oxagen", () => ({ invoke: mockInvoke }));
 vi.mock("@oxagen/handlers/register", () => ({}));
-vi.mock("@/lib/studio/scope", () => ({ buildStudioCtx: mockBuildStudioCtx }));
-vi.mock("@/lib/studio/equip-sources", () => ({ loadEquipSources: mockLoadEquipSources }));
+vi.mock("@/lib/workbench/scope", () => ({ buildWorkbenchCtx: mockBuildWorkbenchCtx }));
+vi.mock("@/lib/workbench/equip-sources", () => ({ loadEquipSources: mockLoadEquipSources }));
 vi.mock("@/lib/routes", () => ({
   workspace: {
     settings: {

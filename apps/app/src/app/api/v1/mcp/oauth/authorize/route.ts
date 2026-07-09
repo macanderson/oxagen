@@ -162,7 +162,7 @@ async function handleAuthorize(req: NextRequest): Promise<Response> {
   const state = randomUUID();
   const redirectUrl = `${url.origin}/api/v1/mcp/oauth/callback`;
   // Land back on whichever surface launched the flow (validated: same-origin
-  // path inside this org only); default = Studio → Agent Tools → MCP Servers.
+  // path inside this org only); default = Workbench → Agent Tools → MCP Servers.
   const returnTo = resolveReturnTo(
     url.searchParams.get('returnTo'),
     orgSlug,

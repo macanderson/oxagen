@@ -4,7 +4,7 @@ import { ArrowRight, BookOpen } from "lucide-react";
 // Importing the connectors barrel registers every built-in connector with the
 // global registry (server-only; this is a Server Component).
 import { listConnectors } from "@oxagen/ingestion/connectors";
-import { resolveStudioScope } from "@/lib/studio/scope";
+import { resolveWorkbenchScope } from "@/lib/workbench/scope";
 import { workspace } from "@/lib/routes";
 import { docsUrl } from "@/lib/docs-url";
 import { Badge } from "@/components/ui/badge";
@@ -49,7 +49,7 @@ const DELIVERY_LABELS: Record<string, string> = {
  */
 export default async function MarketplaceIntegrationsPage({ params }: PageProps) {
   const { orgSlug, workspaceSlug } = await params;
-  await resolveStudioScope(orgSlug, workspaceSlug);
+  await resolveWorkbenchScope(orgSlug, workspaceSlug);
 
   const ctx = { orgSlug, workspaceSlug };
   const connectors = listConnectors()

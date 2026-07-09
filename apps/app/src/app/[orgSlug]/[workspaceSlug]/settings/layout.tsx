@@ -20,9 +20,9 @@ export default async function SettingsLayout({
     { label: "Models", href: workspace.settings.models(ctx) },
     { label: "Budget", href: workspace.settings.budget(ctx) },
     { label: "GitHub", href: workspace.settings.github(ctx) },
-    // Lives under Studio → Agent Tools (the one equip home, PR #683) — the
+    // Lives under Workbench → Agent Tools (the one equip home, PR #683) — the
     // settings entry is the discoverability path for install + authenticate.
-    { label: "MCP Servers", href: workspace.studio.tools.mcp(ctx) },
+    { label: "MCP Servers", href: workspace.workbench.tools.mcp(ctx) },
     { label: "Prompts", href: workspace.settings.prompts(ctx) },
     { label: "Knowledge", href: workspace.settings.knowledge(ctx) },
     { label: "Memory", href: workspace.settings.memory(ctx) },

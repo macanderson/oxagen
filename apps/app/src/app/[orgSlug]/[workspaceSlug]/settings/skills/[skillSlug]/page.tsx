@@ -1,8 +1,8 @@
 /**
  * page.tsx — Workspace → Settings → Skills → [skillSlug] (moved).
  *
- * Skill detail now lives under Studio. This route is kept as a redirect for
- * old links/bookmarks. See studio/skills/[skillSlug]/page.tsx for the live
+ * Skill detail now lives under Workbench. This route is kept as a redirect for
+ * old links/bookmarks. See workbench/skills/[skillSlug]/page.tsx for the live
  * implementation.
  */
 import { redirect } from "next/navigation";
@@ -14,5 +14,5 @@ interface PageProps {
 
 export default async function WorkspaceSkillDetailRedirectPage({ params }: PageProps) {
   const { orgSlug, workspaceSlug, skillSlug } = await params;
-  redirect(workspace.studio.tools.skill({ orgSlug, workspaceSlug }, skillSlug));
+  redirect(workspace.workbench.tools.skill({ orgSlug, workspaceSlug }, skillSlug));
 }

@@ -38,7 +38,7 @@ describe("AgentDefinitionListCard", () => {
     expect(screen.queryByText("Agent definition list")).toBeNull();
   });
 
-  it("shows name on top, slug muted beneath, version, and deep-links to Studio", () => {
+  it("shows name on top, slug muted beneath, version, and deep-links to Workbench", () => {
     render(
       <AgentDefinitionListCard
         output={{ agents: [agent()] }}
@@ -50,7 +50,7 @@ describe("AgentDefinitionListCard", () => {
     expect(screen.getByText("ds-drift-auditor")).toBeTruthy();
     expect(screen.getByText("v3")).toBeTruthy();
     const link = screen.getByText("Design System Drift Auditor").closest("a");
-    expect(link?.getAttribute("href")).toBe("/acme/ws/studio/agents/agt_1");
+    expect(link?.getAttribute("href")).toBe("/acme/ws/workbench/agents/agt_1");
   });
 
   it("uses a blue (info) dot + 'Active' label for a deployed agent", () => {

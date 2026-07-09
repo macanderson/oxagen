@@ -212,7 +212,7 @@ const BodySchema = z.object({
     })
     .nullable()
     .default(null),
-  // Selected/bound agent (OXA app-agent-selector + Studio chat↔agent binding) —
+  // Selected/bound agent (OXA app-agent-selector + Workbench chat↔agent binding) —
   // the publicId (`agt_…`) of the agent chosen in the composer (or threaded
   // from the Ask page's `?agent=<publicId>` URL param), or null/omitted for the
   // default (generic chat) agent. When present, this turn is BOUND to that

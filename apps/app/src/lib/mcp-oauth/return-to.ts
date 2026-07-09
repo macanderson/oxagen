@@ -10,9 +10,9 @@
  * accepted; anything else falls back to the MCP Servers page.
  */
 
-/** Default landing page for the flow: Studio → Agent Tools → MCP Servers. */
+/** Default landing page for the flow: Workbench → Agent Tools → MCP Servers. */
 export function defaultMcpReturnTo(orgSlug: string, workspaceSlug: string): string {
-  return `/${orgSlug}/${workspaceSlug}/studio/tools/mcp`;
+  return `/${orgSlug}/${workspaceSlug}/workbench/tools/mcp`;
 }
 
 /**

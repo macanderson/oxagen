@@ -1,7 +1,7 @@
 {
   "$doc": "UI Capability Parity registry — the single source of truth binding every capability that is operable in the Next.js app (apps/app) to the concrete UI that invokes it. Law: a capability that declares the \"app\" layer in its contract MUST have a binding here whose `page` exists and renders without an error page; and any capability the app actually invokes MUST be declared + bound here. Enforced by `pnpm check:ui-parity` (tools/scripts/check_ui_parity.mjs). Do NOT hand-wave an entry — every binding must carry a runtime proof (screenshot committed under verifications/<session>/, or an e2e spec) captured against a working page.",
   "$binding_shape": {
-    "route": "URL path pattern the human navigates to, e.g. /[orgSlug]/[workspaceSlug]/studio/tools/mcp",
+    "route": "URL path pattern the human navigates to, e.g. /[orgSlug]/[workspaceSlug]/workbench/tools/mcp",
     "page": "repo-relative page.tsx (or route.ts) that renders/handles the surface",
     "entry": "the concrete UI affordance that invokes the capability (form submit, button, toggle) — human-readable",
     "testid": "optional data-testid on the entry-point element, for e2e assertion",
@@ -20,8 +20,8 @@
       "verifiedBy": "session_019E1ntgMUqV3uXN8gfsbkSG"
     },
     "skill.workspace.list": {
-      "route": "/[orgSlug]/[workspaceSlug]/studio/tools/skills",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/studio/tools/skills/page.tsx",
+      "route": "/[orgSlug]/[workspaceSlug]/workbench/tools/skills",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/tools/skills/page.tsx",
       "entry": "Skills table loads installed workspace skills on render",
       "testid": "skills-table",
       "proof": null,
@@ -38,8 +38,8 @@
       "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
     "skill.draft": {
-      "route": "/[orgSlug]/[workspaceSlug]/studio/tools/skills",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/studio/tools/skills/page.tsx",
+      "route": "/[orgSlug]/[workspaceSlug]/workbench/tools/skills",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/tools/skills/page.tsx",
       "entry": "\"New skill\" button → NewSkillDialog AI wizard (draftSkillAction)",
       "testid": "new-skill-btn",
       "proof": null,
@@ -47,8 +47,8 @@
       "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
     "skill.metrics.read": {
-      "route": "/[orgSlug]/[workspaceSlug]/studio/tools/skills",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/studio/tools/skills/page.tsx",
+      "route": "/[orgSlug]/[workspaceSlug]/workbench/tools/skills",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/tools/skills/page.tsx",
       "entry": "Skills table Last Used / Uses columns",
       "testid": "skills-table",
       "proof": null,
@@ -56,8 +56,8 @@
       "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
     "skill.export": {
-      "route": "/[orgSlug]/[workspaceSlug]/studio/tools/skills/[skillSlug]",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/studio/tools/skills/[skillSlug]/page.tsx",
+      "route": "/[orgSlug]/[workspaceSlug]/workbench/tools/skills/[skillSlug]",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/tools/skills/[skillSlug]/page.tsx",
       "entry": "SkillDetailPanel export/download (exportSkill)",
       "testid": null,
       "proof": null,
@@ -65,8 +65,8 @@
       "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
     "skill.version.list": {
-      "route": "/[orgSlug]/[workspaceSlug]/studio/tools/skills/[skillSlug]",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/studio/tools/skills/[skillSlug]/page.tsx",
+      "route": "/[orgSlug]/[workspaceSlug]/workbench/tools/skills/[skillSlug]",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/tools/skills/[skillSlug]/page.tsx",
       "entry": "Version history list in SkillDetailPanel",
       "testid": null,
       "proof": null,
@@ -74,8 +74,8 @@
       "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
     "skill.version.get": {
-      "route": "/[orgSlug]/[workspaceSlug]/studio/tools/skills/[skillSlug]",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/studio/tools/skills/[skillSlug]/page.tsx",
+      "route": "/[orgSlug]/[workspaceSlug]/workbench/tools/skills/[skillSlug]",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/tools/skills/[skillSlug]/page.tsx",
       "entry": "Skill detail load fetches active version content",
       "testid": "skill-detail-back-link",
       "proof": null,
@@ -83,8 +83,8 @@
       "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
     "skill.version.upload": {
-      "route": "/[orgSlug]/[workspaceSlug]/studio/tools/skills/[skillSlug]",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/studio/tools/skills/[skillSlug]/page.tsx",
+      "route": "/[orgSlug]/[workspaceSlug]/workbench/tools/skills/[skillSlug]",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/tools/skills/[skillSlug]/page.tsx",
       "entry": "SkillDetailPanel edit-and-save (editSkill → skill.version.upload)",
       "testid": null,
       "proof": null,
@@ -92,8 +92,8 @@
       "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
     "skill.version.activate": {
-      "route": "/[orgSlug]/[workspaceSlug]/studio/tools/skills/[skillSlug]",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/studio/tools/skills/[skillSlug]/page.tsx",
+      "route": "/[orgSlug]/[workspaceSlug]/workbench/tools/skills/[skillSlug]",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/tools/skills/[skillSlug]/page.tsx",
       "entry": "\"Activate\" on a version row (activateVersion)",
       "testid": null,
       "proof": null,
@@ -101,8 +101,8 @@
       "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
     "plugin.org.install": {
-      "route": "/[orgSlug]/[workspaceSlug]/studio/tools/mcp",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/studio/tools/mcp/page.tsx",
+      "route": "/[orgSlug]/[workspaceSlug]/workbench/tools/mcp",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/tools/mcp/page.tsx",
       "entry": "\"Install\" on a catalog search row (McpCatalogSearch → installPlugin); also marketplace agent-tools browse",
       "testid": "mcp-catalog-install-*",
       "proof": "apps/app/e2e/mcp-servers-authenticate.spec.ts",
@@ -119,8 +119,8 @@
       "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
     "plugin.workspace.set_enabled": {
-      "route": "/[orgSlug]/[workspaceSlug]/studio/tools/capabilities",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/studio/tools/capabilities/page.tsx",
+      "route": "/[orgSlug]/[workspaceSlug]/workbench/tools/capabilities",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/tools/capabilities/page.tsx",
       "entry": "Per-plugin enable/disable toggle (togglePlugin)",
       "testid": null,
       "proof": null,
@@ -128,8 +128,8 @@
       "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
     "plugin.org.uninstall": {
-      "route": "/[orgSlug]/[workspaceSlug]/studio/tools/capabilities",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/studio/tools/capabilities/page.tsx",
+      "route": "/[orgSlug]/[workspaceSlug]/workbench/tools/capabilities",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/tools/capabilities/page.tsx",
       "entry": "\"Remove\" on an installed-plugin row (uninstallPlugin)",
       "testid": null,
       "proof": null,
@@ -137,8 +137,8 @@
       "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
     "plugin.registry.list": {
-      "route": "/[orgSlug]/[workspaceSlug]/studio/tools/capabilities",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/studio/tools/capabilities/page.tsx",
+      "route": "/[orgSlug]/[workspaceSlug]/workbench/tools/capabilities",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/tools/capabilities/page.tsx",
       "entry": "Registry manager section (WorkspacePluginsPanel initialRegistries)",
       "testid": null,
       "proof": null,
@@ -353,8 +353,8 @@
       "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
     "agent.definition.get": {
-      "route": "/[orgSlug]/[workspaceSlug]/studio/agents/[agentId]",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/studio/agents/[agentId]/page.tsx",
+      "route": "/[orgSlug]/[workspaceSlug]/workbench/agents/[agentId]",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/agents/[agentId]/page.tsx",
       "entry": "EditAgentPage RSC → getAgent() → AgentBuilder edit mode",
       "testid": null,
       "proof": null,
@@ -470,8 +470,8 @@
       "verifiedBy": "session_01NwQYbMXBT77CTwujnPHRH7"
     },
     "list_agent_environments": {
-      "route": "/[orgSlug]/[workspaceSlug]/studio/agents/[agentId]",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/studio/agents/[agentId]/environments-actions.ts",
+      "route": "/[orgSlug]/[workspaceSlug]/workbench/agents/[agentId]",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/agents/[agentId]/environments-actions.ts",
       "entry": "AgentEnvironmentsCard bindings list via readAgentBindingsAction",
       "testid": "agent-environments-card",
       "proof": "apps/app/e2e/sandbox-templates.spec.ts",
@@ -479,8 +479,8 @@
       "verifiedBy": "session_01NwQYbMXBT77CTwujnPHRH7"
     },
     "bind_agent_environment": {
-      "route": "/[orgSlug]/[workspaceSlug]/studio/agents/[agentId]",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/studio/agents/[agentId]/environments-actions.ts",
+      "route": "/[orgSlug]/[workspaceSlug]/workbench/agents/[agentId]",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/agents/[agentId]/environments-actions.ts",
       "entry": "AgentEnvironmentsCard \"Bind\" / \"Make primary\" → bindAgentEnvironmentAction",
       "testid": "agent-bind-submit",
       "proof": "apps/app/e2e/sandbox-templates.spec.ts",
@@ -488,8 +488,8 @@
       "verifiedBy": "session_01NwQYbMXBT77CTwujnPHRH7"
     },
     "unbind_agent_environment": {
-      "route": "/[orgSlug]/[workspaceSlug]/studio/agents/[agentId]",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/studio/agents/[agentId]/environments-actions.ts",
+      "route": "/[orgSlug]/[workspaceSlug]/workbench/agents/[agentId]",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/agents/[agentId]/environments-actions.ts",
       "entry": "AgentEnvironmentsCard \"Unbind\" per row → unbindAgentEnvironmentAction",
       "testid": "agent-binding-unbind-production",
       "proof": "apps/app/e2e/sandbox-templates.spec.ts",

@@ -95,41 +95,41 @@ export const workspace = {
   // Ask — the front door (full-page ask/chat surface).
   ask: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/ask`,
 
-  // Studio — build interactive agents. Two surfaces: Agents (the builder)
+  // Workbench — build interactive agents. Two surfaces: Agents (the builder)
   // and Agent Tools — the single home for everything an agent can be
   // equipped with (skills, MCP servers, capabilities).
-  studio: {
-    root: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/studio`,
+  workbench: {
+    root: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/workbench`,
     agents: (ctx: Required<ScopeContext>): string =>
-      `${wsBase(ctx)}/studio/agents`,
+      `${wsBase(ctx)}/workbench/agents`,
     agentNew: (ctx: Required<ScopeContext>): string =>
-      `${wsBase(ctx)}/studio/agents/new`,
+      `${wsBase(ctx)}/workbench/agents/new`,
     agent: (ctx: Required<ScopeContext>, agentId: string): string =>
-      `${wsBase(ctx)}/studio/agents/${encodeURIComponent(agentId)}`,
+      `${wsBase(ctx)}/workbench/agents/${encodeURIComponent(agentId)}`,
     // Sandboxes — durable code-agent sandboxes: warm one, drive a terminal,
     // inspect its files. The detail page is keyed by the sbx_* session id.
     sandboxes: (ctx: Required<ScopeContext>): string =>
-      `${wsBase(ctx)}/studio/sandboxes`,
+      `${wsBase(ctx)}/workbench/sandboxes`,
     sandbox: (ctx: Required<ScopeContext>, sessionId: string): string =>
-      `${wsBase(ctx)}/studio/sandboxes/${encodeURIComponent(sessionId)}`,
+      `${wsBase(ctx)}/workbench/sandboxes/${encodeURIComponent(sessionId)}`,
     // Agent Tools hub — All Tools / Skills / MCP Servers / Capabilities.
     tools: {
       root: (ctx: Required<ScopeContext>): string =>
-        `${wsBase(ctx)}/studio/tools`,
+        `${wsBase(ctx)}/workbench/tools`,
       skills: (ctx: Required<ScopeContext>): string =>
-        `${wsBase(ctx)}/studio/tools/skills`,
+        `${wsBase(ctx)}/workbench/tools/skills`,
       skill: (ctx: Required<ScopeContext>, skillSlug: string): string =>
-        `${wsBase(ctx)}/studio/tools/skills/${encodeURIComponent(skillSlug)}`,
+        `${wsBase(ctx)}/workbench/tools/skills/${encodeURIComponent(skillSlug)}`,
       mcp: (ctx: Required<ScopeContext>): string =>
-        `${wsBase(ctx)}/studio/tools/mcp`,
+        `${wsBase(ctx)}/workbench/tools/mcp`,
       capabilities: (ctx: Required<ScopeContext>): string =>
-        `${wsBase(ctx)}/studio/tools/capabilities`,
+        `${wsBase(ctx)}/workbench/tools/capabilities`,
     },
   },
 
   // Marketplace — discover + install, two sides: Agent Tools (skills, MCP
   // servers, capabilities) and Integrations (data connectors). Managing what
-  // is already installed lives in Studio → Agent Tools, not here.
+  // is already installed lives in Workbench → Agent Tools, not here.
   marketplace: {
     root: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/marketplace`,
     agentTools: (ctx: Required<ScopeContext>): string =>
@@ -137,13 +137,13 @@ export const workspace = {
     integrations: (ctx: Required<ScopeContext>): string =>
       `${wsBase(ctx)}/marketplace/integrations`,
     // Legacy tabs — browse became the Agent Tools side; installed/mcp moved
-    // into Studio → Agent Tools. Builders retarget so old callers keep working.
+    // into Workbench → Agent Tools. Builders retarget so old callers keep working.
     browse: (ctx: Required<ScopeContext>): string =>
       `${wsBase(ctx)}/marketplace/agent-tools`,
     installed: (ctx: Required<ScopeContext>): string =>
-      `${wsBase(ctx)}/studio/tools/capabilities`,
+      `${wsBase(ctx)}/workbench/tools/capabilities`,
     mcp: (ctx: Required<ScopeContext>): string =>
-      `${wsBase(ctx)}/studio/tools/mcp`,
+      `${wsBase(ctx)}/workbench/tools/mcp`,
   },
 
   // Activity — recent agent runs + per-run span-tree trace viewer.
@@ -221,7 +221,7 @@ export const defaultTab: Record<string, string> = {
   // Workspace-scope parents
   knowledge: "repos",
   settings: "general",
-  studio: "agents",
+  workbench: "agents",
   marketplace: "agent-tools",
 
   // Org-scope parents

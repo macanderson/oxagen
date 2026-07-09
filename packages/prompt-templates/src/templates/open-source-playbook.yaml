@@ -14,4 +14,4 @@ variables:
     required: true
 body: |
   Find the playbook that spawned run {{run_id}} and show me a link to open it in the
-  Studio editor so I can review or modify its definition.
+  Workbench editor so I can review or modify its definition.

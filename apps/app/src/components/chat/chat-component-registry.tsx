@@ -166,7 +166,7 @@ export const CHAT_COMPONENTS = {
   ),
   // Compact, borderless roster of workspace agents (agent.definition.list) —
   // name + muted slug, latest version, and a live/deployed status dot per row,
-  // each deep-linked to the Studio agent page. Replaces the generic key/value
+  // each deep-linked to the Workbench agent page. Replaces the generic key/value
   // dump for this capability.
   "agent-definition-list-card": lazy(
     () => import("@/components/chat/registry-components/agent-definition-list-card"),

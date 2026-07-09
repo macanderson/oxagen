@@ -22,7 +22,7 @@ import { resolveAgentToolsManager } from "./authz";
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function capabilitiesPath(ctx: Required<ScopeContext>): string {
-  return workspace.studio.tools.capabilities(ctx);
+  return workspace.workbench.tools.capabilities(ctx);
 }
 
 // ── installPlugin ─────────────────────────────────────────────────────────────
@@ -106,7 +106,7 @@ export async function installPlugin(
     );
     const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };
     revalidatePath(capabilitiesPath(routeCtx));
-    revalidatePath(workspace.studio.tools.mcp(routeCtx));
+    revalidatePath(workspace.workbench.tools.mcp(routeCtx));
 
     const typed = out as { orgListingId: string; authKind?: "oauth" | "secret" | "none" };
     return { ok: true, orgListingId: typed.orgListingId, authKind: typed.authKind };

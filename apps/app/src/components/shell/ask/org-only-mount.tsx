@@ -4,7 +4,7 @@
  *
  * The workspace-layout (`/[orgSlug]/[workspaceSlug]/layout.tsx`) mounts its own
  * CommandMenu + AskDrawer with the full `{orgSlug, workspaceSlug}` context so
- * `enumerateNavTargets` includes workspace-scoped routes (Knowledge, Studio,
+ * `enumerateNavTargets` includes workspace-scoped routes (Knowledge, Workbench,
  * Settings…). Because the workspace layout is nested INSIDE the org layout in
  * Next.js App Router, both overlays would render on workspace pages without a
  * guard — producing duplicate dialogs and ambiguous keyboard focus.
