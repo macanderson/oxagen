@@ -155,7 +155,7 @@ describe("createGatewayAgentAi", () => {
     } as never);
     const call = streamTextMock.mock.calls[0]?.[0] as Record<string, unknown>;
     const messages = call["messages"] as Array<Record<string, unknown>>;
-    const cache = { anthropic: { cacheControl: { type: "ephemeral" } } };
+    const cache = { anthropic: { cacheControl: { type: "ephemeral", ttl: "1h" } } };
     expect(messages).toHaveLength(4);
     expect(messages[0]?.["providerOptions"]).toEqual(cache); // system
     expect(messages[1]?.["providerOptions"]).toBeUndefined(); // old history untouched
@@ -191,7 +191,7 @@ describe("createGatewayAgentAi", () => {
     expect("prompt" in call).toBe(false);
     expect(call["allowSystemInMessages"]).toBe(true);
     const messages = call["messages"] as Array<Record<string, unknown>>;
-    const cache = { anthropic: { cacheControl: { type: "ephemeral" } } };
+    const cache = { anthropic: { cacheControl: { type: "ephemeral", ttl: "1h" } } };
     expect(messages[0]).toMatchObject({ role: "system", content: "sys" });
     expect(messages[0]?.["providerOptions"]).toEqual(cache);
     expect(messages[1]).toMatchObject({ role: "user", content: "classify" });
@@ -212,7 +212,7 @@ describe("createGatewayAgentAi", () => {
       {
         role: "user",
         content: "hi",
-        providerOptions: { anthropic: { cacheControl: { type: "ephemeral" } } },
+        providerOptions: { anthropic: { cacheControl: { type: "ephemeral", ttl: "1h" } } },
       },
     ]);
     expect("prompt" in call).toBe(false);
