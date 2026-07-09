@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { sandboxTemplateManifestSchema } from "../contracts/sandbox-template-manifest";
 
 // ── Capability Pack Manifest Schema ───────────────────────────────────────────
 //
@@ -84,12 +85,17 @@ export const oxagenPluginManifestSchema = z.object({
   color: z.string().optional(),
 
   /**
-   * The capability contract names claimed by this plugin. At least one is
-   * required — zero-contract plugins are not valid capability packs. The
-   * registry additionally validates that no contract is claimed by more than
-   * one plugin.
+   * The capability contract names claimed by this plugin. The registry
+   * additionally validates that no contract is claimed by more than one plugin.
+   *
+   * May be empty ONLY for a template-distribution pack (one that ships
+   * `sandboxTemplates` but claims no capability). Enforced by the object-level
+   * refine below — a pack must claim at least one contract OR ship at least one
+   * sandbox template. A template-only pack must NOT claim a builtin capability
+   * name (e.g. `execute_code`), which would gate that always-on capability
+   * behind pack install.
    */
-  contracts: z.array(z.string().min(1)).min(1, "A plugin must claim at least one contract."),
+  contracts: z.array(z.string().min(1)),
 
   /**
    * Minimum billing plan tier required to install. Recorded now; enforced
@@ -102,6 +108,26 @@ export const oxagenPluginManifestSchema = z.object({
    * tokens). First-party plugins always have an empty array.
    */
   scopes: z.array(z.string()),
-});
+
+  /**
+   * Portable sandbox templates shipped by this pack (Spec §6 — the third-party
+   * distribution story). On install, each is imported into the workspace's
+   * default environment via the same service path as `import_sandbox_template`
+   * (non-default, idempotent by slug). The v1 manifest zod schema is the single
+   * source of truth (shared with the export/import contracts) — never copied.
+   * A pack may carry these WITHOUT claiming any capability contract.
+   */
+  sandboxTemplates: z.array(sandboxTemplateManifestSchema).optional(),
+})
+  .refine(
+    (m) => m.contracts.length > 0 || (m.sandboxTemplates?.length ?? 0) > 0,
+    {
+      // Message intentionally contains "at least one contract" so the existing
+      // empty-contracts test still matches.
+      message:
+        "A plugin must claim at least one contract or ship at least one sandbox template.",
+      path: ["contracts"],
+    },
+  );
 
 export type OxagenPluginManifest = z.infer<typeof oxagenPluginManifestSchema>;

@@ -3,6 +3,7 @@ import { mediaVideoManifest } from "./catalog/media-video/manifest";
 import { mediaImageManifest } from "./catalog/media-image/manifest";
 import { mediaSvgManifest } from "./catalog/media-svg/manifest";
 import { documentsManifest } from "./catalog/documents/manifest";
+import { sweBenchEvalsManifest } from "./catalog/swe-bench-evals/manifest";
 import { listCapabilities } from "../registry";
 
 // ── Plugin registry — bundler double-eval safety ─────────────────────────────
@@ -37,6 +38,7 @@ function buildRegistry(): {
     mediaImageManifest,
     mediaSvgManifest,
     documentsManifest,
+    sweBenchEvalsManifest,
   ];
 
   for (const raw of allManifests) {
