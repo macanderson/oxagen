@@ -410,6 +410,23 @@ def decode_output(raw: bytes | str) -> str:
     return raw.decode("utf-8", errors="replace")
 
 
+def _split_cwd_trailer(stdout: str) -> tuple[str, str | None]:
+    """
+    Split the RS-delimited cwd trailer `_FAST_ALIAS_TRAMPOLINE` appends to stdout.
+
+    Returns (clean_stdout, cwd).  cwd is None when the trailer is absent — the
+    command called `exit` itself so our trailer never ran, a custom template
+    image lacks the trampoline, or output was truncated by a timeout.  The
+    caller then keeps its prior directory.  rfind() is used so bytes the command
+    itself happened to print can never win over our always-last trailer.
+    """
+    idx = stdout.rfind(_CWD_SENTINEL)
+    if idx == -1:
+        return stdout, None
+    cwd = stdout[idx + len(_CWD_SENTINEL):].strip() or None
+    return stdout[:idx], cwd
+
+
 async def _run_sandbox(req: RunRequest) -> RunResponse:
     """
     Execute user code in a Modal Sandbox (Firecracker microVM).
