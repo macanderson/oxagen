@@ -57,6 +57,7 @@ export async function agentSandboxExecHandler(
     timeoutMs: input.timeoutMs,
     env,
     stdin: input.stdin,
+    cwd: input.cwd,
   });
 
   // The sandbox was reaped (idle timeout / TTL / OOM). Restore from the last
@@ -79,6 +80,7 @@ export async function agentSandboxExecHandler(
       // still strip reserved caller keys, exactly like the first attempt.
       env,
       stdin: input.stdin,
+      cwd: input.cwd,
     });
     if (result.gone) {
       // Restore itself didn't stick — surface rather than loop.
