@@ -10,15 +10,15 @@
 #   2. the oxagen CLI bundle + tree-sitter *.wasm assets
 #   3. the /usr/local/bin/oxagen wrapper (byte-identical to the one the
 #      adapter writes at runtime — see oxagen_agent.py install() step 2)
-#   4. a static ripgrep binary (optional — rgbin/ may be empty)
+#   4. static fast-search binaries rg/fd/fzf (optional — searchbin/ may be empty)
 #   5. /usr/local/lib/oxagen/.bundle.sha256 — the bundle's sha256, which the
 #      adapter reads at install time to skip the bundle/wasm re-upload
 #
 # Build context (staged by prewarm.py into a temp dir):
 #   Dockerfile        this file
 #   oxagen/           oxagen.mjs + *.wasm + .bundle.sha256
-#   rgbin/            rg (static x86_64 musl binary), or empty when the host
-#                     cache could not provision one
+#   searchbin/        rg + fd + fzf (static x86_64 binaries) — any subset the
+#                     host cache could provision (may be empty)
 #
 # The runtime adapter remains fully self-sufficient: if this image is absent
 # or the bake fails, the trial falls back to the normal build + runtime
@@ -32,8 +32,8 @@ FROM ${BASE_IMAGE}
 # so .bundle.sha256 lands alongside oxagen.mjs.
 COPY oxagen/ /usr/local/lib/oxagen/
 
-# Static ripgrep (no-op when rgbin/ is empty).
-COPY rgbin/ /usr/local/bin/
+# Static fast-search tools rg/fd/fzf (no-op when searchbin/ is empty).
+COPY searchbin/ /usr/local/bin/
 
 # Node 22 + the oxagen wrapper. Mirrors the adapter's _NODE_INSTALL_SCRIPT
 # fast-path semantics (keep existing Node >= 20) and its exact wrapper bytes.
@@ -61,7 +61,9 @@ RUN set -eu; \
     node --version; \
     printf '#!/bin/sh\nexec node /usr/local/lib/oxagen/oxagen.mjs "$@"\n' > /usr/local/bin/oxagen; \
     chmod +x /usr/local/bin/oxagen; \
-    if [ -f /usr/local/bin/rg ]; then chmod 755 /usr/local/bin/rg; fi; \
+    for b in rg fd fzf; do \
+      if [ -f "/usr/local/bin/$b" ]; then chmod 755 "/usr/local/bin/$b"; fi; \
+    done; \
     oxagen --version
 
 # DuckDB for the persistent context engine (OXAGEN_INSTALL_DUCKDB=1 — the
