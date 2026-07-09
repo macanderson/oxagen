@@ -10,7 +10,7 @@ import {
 import { sandboxTemplateSummarySchema } from "./sandbox.template.create";
 
 export const sandboxTemplateUpdate = registerCapability({
-  name: "sandbox.template.update",
+  name: "update_sandbox_template",
   domain: "sandbox",
   description:
     "Update a sandbox template's metadata, provider, runtime, resources, network, secret selection, literal config, or active state. A default template cannot be deactivated — promote another first.",

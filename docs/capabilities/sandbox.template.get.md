@@ -1,4 +1,4 @@
-# sandbox.template.get
+# get_sandbox_template
 
 **Domain:** sandbox
 **Mode:** sync
@@ -12,8 +12,8 @@
 Fetch a single sandbox template, including its full preloaded tool set, by
 public id. Used by the template detail/edit view and by any caller that needs
 a template's full config (provider, runtime, resources, network,
-secretSelection, literalEnv) before invoking `sandbox.template.update` or
-`sandbox.template.export`. Workspace members can read.
+secretSelection, literalEnv) before invoking `update_sandbox_template` or
+`export_sandbox_template`. Workspace members can read.
 
 ## Input
 
@@ -45,7 +45,7 @@ Content-Type: application/json
 
 ## MCP
 
-Tool name: `sandbox.template.get`
+Tool name: `get_sandbox_template`
 
 ## Errors
 

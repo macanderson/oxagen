@@ -3,7 +3,7 @@ import { registerCapability } from "../registry";
 import { agentEnvironmentBindingSchema } from "./agent.environment.bind";
 
 export const agentEnvironmentList = registerCapability({
-  name: "agent.environment.list",
+  name: "list_agent_environments",
   domain: "agent",
   description:
     "List an agent's environment bindings, with each binding's resolved template name.",

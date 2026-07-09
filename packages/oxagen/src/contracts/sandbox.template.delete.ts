@@ -2,7 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const sandboxTemplateDelete = registerCapability({
-  name: "sandbox.template.delete",
+  name: "delete_sandbox_template",
   domain: "sandbox",
   description:
     "Soft-delete a sandbox template. A default template cannot be deleted — promote another in the same environment first.",

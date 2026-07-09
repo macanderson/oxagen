@@ -1,4 +1,4 @@
-# sandbox.template.import
+# import_sandbox_template
 
 **Domain:** sandbox
 **Mode:** sync
@@ -10,7 +10,7 @@
 ## Intent
 
 Import a portable sandbox-template manifest (as produced by
-`sandbox.template.export`) into a chosen workspace environment. Creates the
+`export_sandbox_template`) into a chosen workspace environment. Creates the
 template (non-default unless `setAsDefault`), its tool rows, and upserts any
 missing vault secret keys the manifest references. Owner/Admin only.
 
@@ -34,7 +34,7 @@ as does a `slug` collision resolved automatically or via the `slug` override.
 
 | Field      | Type                    | Notes                                                                                          |
 | ---------- | ----------------------- | -------------------------------------------------------------------------------------------------- |
-| `template` | `SandboxTemplateSummary` | Newly created template, same shape as `sandbox.template.get`                                       |
+| `template` | `SandboxTemplateSummary` | Newly created template, same shape as `get_sandbox_template`                                       |
 | `warnings` | `string[]`              | Non-fatal issues: uninstalled tool refs, slug collisions, or other manifest fields the destination workspace couldn't fully resolve |
 
 ## Side effects
@@ -71,7 +71,7 @@ Content-Type: application/json
 
 ## MCP
 
-Tool name: `sandbox.template.import`
+Tool name: `import_sandbox_template`
 
 ## Errors
 

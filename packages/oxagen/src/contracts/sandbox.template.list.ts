@@ -3,7 +3,7 @@ import { registerCapability } from "../registry";
 import { sandboxTemplateSummarySchema } from "./sandbox.template.create";
 
 export const sandboxTemplateList = registerCapability({
-  name: "sandbox.template.list",
+  name: "list_sandbox_templates",
   domain: "sandbox",
   description:
     "List sandbox templates in the active workspace, optionally filtered to one environment.",

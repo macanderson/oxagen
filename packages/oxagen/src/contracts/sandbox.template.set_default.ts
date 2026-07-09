@@ -3,7 +3,7 @@ import { registerCapability } from "../registry";
 import { sandboxTemplateSummarySchema } from "./sandbox.template.create";
 
 export const sandboxTemplateSetDefault = registerCapability({
-  name: "sandbox.template.set_default",
+  name: "set_default_sandbox_template",
   domain: "sandbox",
   description:
     "Promote a sandbox template to its environment's default. Atomically swaps the existing default within that environment; the promoted template is reactivated.",

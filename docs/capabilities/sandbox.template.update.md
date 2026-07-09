@@ -1,4 +1,4 @@
-# sandbox.template.update
+# update_sandbox_template
 
 **Domain:** sandbox
 **Mode:** sync
@@ -13,7 +13,7 @@ Update a sandbox template's metadata, provider, runtime, resources, network,
 secret selection, literal config, or active state. This is a partial update —
 only supplied fields change. A default template cannot be deactivated via
 `isActive: false`; promote another template to default first via
-`sandbox.template.set_default`. Owner/Admin only.
+`set_default_sandbox_template`. Owner/Admin only.
 
 ## Input
 
@@ -35,12 +35,12 @@ only supplied fields change. A default template cannot be deactivated via
 
 | Field      | Type                    | Notes                                                                       |
 | ---------- | ----------------------- | ----------------------------------------------------------------------------- |
-| `template` | `SandboxTemplateSummary` | Updated template, same shape as `sandbox.template.get`                       |
+| `template` | `SandboxTemplateSummary` | Updated template, same shape as `get_sandbox_template`                       |
 
 ## Side effects
 
 Updates the matching row in `environments.sandbox_templates` (PostgreSQL) —
-tools are not touched by this capability; use `sandbox.template.set_tools` to
+tools are not touched by this capability; use `set_sandbox_template_tools` to
 replace the tool set. Metering, IAM, and audit run through the kernel.
 
 ## API
@@ -58,7 +58,7 @@ Content-Type: application/json
 
 ## MCP
 
-Tool name: `sandbox.template.update`
+Tool name: `update_sandbox_template`
 
 ## Errors
 
