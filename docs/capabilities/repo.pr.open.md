@@ -57,6 +57,7 @@ Content-Type: application/json
 - **Risk level:** high — creates a pull request visible to all repository collaborators.
 - The caller must have a valid GitHub credential stored via `plugin.credential.set_secret` for the GitHub integration.
 - The `head` branch must already exist and have at least one commit ahead of `base`.
+- `head` must differ from `base` — a PR from a branch onto itself is rejected with `400` before any GitHub call (OXA-2117).
 - Draft PRs can be marked ready for review on GitHub directly; the platform does not expose a separate `repo.pr.ready` capability.
 
 ## Related

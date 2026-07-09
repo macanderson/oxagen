@@ -20,7 +20,7 @@ export const repoPrOpen = registerCapability({
     owner: z.string().describe("Repository owner (user or organisation)"),
     repo: z.string().describe("Repository name"),
     title: z.string().describe("Pull request title"),
-    head: z.string().describe("Branch containing the changes (e.g. feature/my-branch)"),
+    head: z.string().describe("Branch containing the changes (e.g. feature/my-branch). Must differ from base."),
     base: z.string().describe("Branch the PR is targeting (e.g. main)"),
     body: z.string().optional().describe("Pull request description body (Markdown)"),
     draft: z.boolean().optional().describe("Open as a draft pull request"),
