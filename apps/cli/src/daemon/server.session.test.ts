@@ -8,13 +8,20 @@
  * taskFrame names a sessionId — mirrors server.code-graph.test.ts's pattern
  * for the graph.* RPCs (OXA-2071 sibling wiring).
  */
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { TaskFrame } from "@oxagen/engram";
 import { ContextDaemon } from "./server";
 import { DaemonClient } from "./client";
+
+// Every test here drives a real in-process daemon over a Unix socket; the
+// compile()/list round-trips take milliseconds locally but can exceed the 5s
+// vitest default when the full-gate `test` job starves the CI runner's CPU
+// (the CLI suite has been observed taking ~18min under that load). Give the RPC
+// round-trips generous headroom so load-induced slowness is not read as a hang.
+vi.setConfig({ testTimeout: 30_000 });
 
 let dir: string;
 let socketPath: string;
