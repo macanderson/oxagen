@@ -262,33 +262,6 @@
       "verifiedAt": null,
       "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
-    "environment.list": {
-      "route": "/[orgSlug]/[workspaceSlug]/settings/environments",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/environments/actions.ts",
-      "entry": "EnvironmentsBar list from readEnvironmentsAction",
-      "testid": null,
-      "proof": null,
-      "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
-    },
-    "secret.key.list": {
-      "route": "/[orgSlug]/[workspaceSlug]/settings/environments",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/environments/actions.ts",
-      "entry": "SecretsSection table from readSecretKeysAction",
-      "testid": null,
-      "proof": null,
-      "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
-    },
-    "secret.key.delete": {
-      "route": "/[orgSlug]/[workspaceSlug]/settings/environments",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/environments/actions.ts",
-      "entry": "\"Delete\" per row in SecretsSection → deleteKeyAction",
-      "testid": null,
-      "proof": null,
-      "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
-    },
     "org.member.remove": {
       "route": "/[orgSlug]/members",
       "page": "apps/app/src/app/[orgSlug]/members/page.tsx",
@@ -414,6 +387,132 @@
       "proof": null,
       "verifiedAt": null,
       "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
+    },
+    "list_sandbox_templates": {
+      "route": "/[orgSlug]/[workspaceSlug]/settings/environments",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/environments/page.tsx",
+      "entry": "SandboxTemplatesPanel list via readTemplatesAction",
+      "testid": "sandbox-templates-section",
+      "proof": "apps/app/e2e/sandbox-templates.spec.ts",
+      "verifiedAt": "2026-07-08",
+      "verifiedBy": "session_01NwQYbMXBT77CTwujnPHRH7"
+    },
+    "create_sandbox_template": {
+      "route": "/[orgSlug]/[workspaceSlug]/settings/environments",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/environments/sandbox-actions.ts",
+      "entry": "\"New template\" → TemplateDialog create → createTemplateAction",
+      "testid": "sandbox-template-save-btn",
+      "proof": "apps/app/e2e/sandbox-templates.spec.ts",
+      "verifiedAt": "2026-07-08",
+      "verifiedBy": "session_01NwQYbMXBT77CTwujnPHRH7"
+    },
+    "update_sandbox_template": {
+      "route": "/[orgSlug]/[workspaceSlug]/settings/environments",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/environments/sandbox-actions.ts",
+      "entry": "\"Edit\" → TemplateDialog save → updateTemplateAction",
+      "testid": null,
+      "proof": "apps/app/e2e/sandbox-templates.spec.ts",
+      "verifiedAt": "2026-07-08",
+      "verifiedBy": "session_01NwQYbMXBT77CTwujnPHRH7"
+    },
+    "delete_sandbox_template": {
+      "route": "/[orgSlug]/[workspaceSlug]/settings/environments",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/environments/sandbox-actions.ts",
+      "entry": "\"Delete\" per template row → deleteTemplateAction (promote-first guard)",
+      "testid": null,
+      "proof": "apps/app/e2e/sandbox-templates.spec.ts",
+      "verifiedAt": "2026-07-08",
+      "verifiedBy": "session_01NwQYbMXBT77CTwujnPHRH7"
+    },
+    "set_default_sandbox_template": {
+      "route": "/[orgSlug]/[workspaceSlug]/settings/environments",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/environments/sandbox-actions.ts",
+      "entry": "\"Set default\" per template row → setDefaultTemplateAction",
+      "testid": null,
+      "proof": "apps/app/e2e/sandbox-templates.spec.ts",
+      "verifiedAt": "2026-07-08",
+      "verifiedBy": "session_01NwQYbMXBT77CTwujnPHRH7"
+    },
+    "set_sandbox_template_tools": {
+      "route": "/[orgSlug]/[workspaceSlug]/settings/environments",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/environments/sandbox-actions.ts",
+      "entry": "TemplateDialog edit save replace-sets tools → setTemplateToolsAction",
+      "testid": null,
+      "proof": "apps/app/e2e/sandbox-templates.spec.ts",
+      "verifiedAt": "2026-07-08",
+      "verifiedBy": "session_01NwQYbMXBT77CTwujnPHRH7"
+    },
+    "export_sandbox_template": {
+      "route": "/[orgSlug]/[workspaceSlug]/settings/environments",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/environments/sandbox-actions.ts",
+      "entry": "\"Export\" per template row → exportTemplateAction → manifest download",
+      "testid": null,
+      "proof": "apps/app/e2e/sandbox-templates.spec.ts",
+      "verifiedAt": "2026-07-08",
+      "verifiedBy": "session_01NwQYbMXBT77CTwujnPHRH7"
+    },
+    "import_sandbox_template": {
+      "route": "/[orgSlug]/[workspaceSlug]/settings/environments",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/environments/sandbox-actions.ts",
+      "entry": "\"Import manifest\" → ImportDialog confirm → importTemplateAction",
+      "testid": "sandbox-import-confirm-btn",
+      "proof": "apps/app/e2e/sandbox-templates.spec.ts",
+      "verifiedAt": "2026-07-08",
+      "verifiedBy": "session_01NwQYbMXBT77CTwujnPHRH7"
+    },
+    "list_agent_environments": {
+      "route": "/[orgSlug]/[workspaceSlug]/studio/agents/[agentId]",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/studio/agents/[agentId]/environments-actions.ts",
+      "entry": "AgentEnvironmentsCard bindings list via readAgentBindingsAction",
+      "testid": "agent-environments-card",
+      "proof": "apps/app/e2e/sandbox-templates.spec.ts",
+      "verifiedAt": "2026-07-08",
+      "verifiedBy": "session_01NwQYbMXBT77CTwujnPHRH7"
+    },
+    "bind_agent_environment": {
+      "route": "/[orgSlug]/[workspaceSlug]/studio/agents/[agentId]",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/studio/agents/[agentId]/environments-actions.ts",
+      "entry": "AgentEnvironmentsCard \"Bind\" / \"Make primary\" → bindAgentEnvironmentAction",
+      "testid": "agent-bind-submit",
+      "proof": "apps/app/e2e/sandbox-templates.spec.ts",
+      "verifiedAt": "2026-07-08",
+      "verifiedBy": "session_01NwQYbMXBT77CTwujnPHRH7"
+    },
+    "unbind_agent_environment": {
+      "route": "/[orgSlug]/[workspaceSlug]/studio/agents/[agentId]",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/studio/agents/[agentId]/environments-actions.ts",
+      "entry": "AgentEnvironmentsCard \"Unbind\" per row → unbindAgentEnvironmentAction",
+      "testid": null,
+      "proof": "apps/app/e2e/sandbox-templates.spec.ts",
+      "verifiedAt": "2026-07-08",
+      "verifiedBy": "session_01NwQYbMXBT77CTwujnPHRH7"
+    },
+    "list_environments": {
+      "route": "/[orgSlug]/[workspaceSlug]/settings/environments",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/environments/actions.ts",
+      "entry": "EnvironmentsBar list from readEnvironmentsAction",
+      "testid": null,
+      "proof": "apps/app/e2e/sandbox-templates.spec.ts",
+      "verifiedAt": "2026-07-08",
+      "verifiedBy": "session_01NwQYbMXBT77CTwujnPHRH7"
+    },
+    "list_secret_keys": {
+      "route": "/[orgSlug]/[workspaceSlug]/settings/environments",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/environments/actions.ts",
+      "entry": "SecretsSection table from readSecretKeysAction",
+      "testid": null,
+      "proof": "apps/app/e2e/sandbox-templates.spec.ts",
+      "verifiedAt": "2026-07-08",
+      "verifiedBy": "session_01NwQYbMXBT77CTwujnPHRH7"
+    },
+    "delete_secret_key": {
+      "route": "/[orgSlug]/[workspaceSlug]/settings/environments",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/environments/actions.ts",
+      "entry": "\"Delete\" per row in SecretsSection → deleteKeyAction",
+      "testid": null,
+      "proof": "apps/app/e2e/sandbox-templates.spec.ts",
+      "verifiedAt": "2026-07-08",
+      "verifiedBy": "session_01NwQYbMXBT77CTwujnPHRH7"
     }
   }
 }
