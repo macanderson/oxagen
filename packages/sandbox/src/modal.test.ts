@@ -454,7 +454,13 @@ describe("createModalSandbox — createSession()", () => {
     const body = JSON.parse(init.body as string) as Record<string, unknown>;
     expect(body).toEqual({
       image: "python",
+      // Additive nullable template fields (imageRef / vcpu / diskMb) — null when
+      // the session uses a base-kind image with no per-template resource
+      // overrides, as this spec does.
+      image_ref: null,
       memory_mb: 1_024,
+      vcpu: null,
+      disk_mb: null,
       ttl_seconds: 3_600,
       idle_timeout_seconds: 120,
       network: "allow",
