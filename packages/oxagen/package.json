@@ -11,6 +11,7 @@
     "./registry": "./src/registry.ts",
     "./kernel": "./src/kernel.ts",
     "./agent-schema": "./src/agent-schema.ts",
+    "./avatar": "./src/avatar.ts",
     "./interactive-agent": "./src/interactive-agent.ts",
     "./capability-meta": "./src/capability-meta.ts",
     "./types": "./src/types.ts",

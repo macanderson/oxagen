@@ -113,6 +113,12 @@ export interface AgentRow {
   status: "draft" | "active" | "archived";
   deploymentStatus: "inactive" | "active";
   activeVersionId: string | null;
+  /** https:// URL or "avatar:v1:<json>" designed-avatar string; null when unset. */
+  avatarUrl: string | null;
+  /** LLM-inferred plain-text description of what the agent does; null until summarized. */
+  summary: string | null;
+  /** SHA-256 of the config `summary` was derived from; null until summarized. */
+  summaryChecksum: string | null;
 }
 
 const agentColumns = {
@@ -125,6 +131,9 @@ const agentColumns = {
   status: schema.agents.status,
   deploymentStatus: schema.agents.deploymentStatus,
   activeVersionId: schema.agents.activeVersionId,
+  avatarUrl: schema.agents.avatarUrl,
+  summary: schema.agents.summary,
+  summaryChecksum: schema.agents.summaryChecksum,
 } as const;
 
 /**
@@ -222,6 +231,9 @@ export async function resolveAgentForA2A(
       status: row.status as "active",
       deploymentStatus: row.deploymentStatus as "active",
       activeVersionId: row.activeVersionId,
+      avatarUrl: row.avatarUrl,
+      summary: row.summary,
+      summaryChecksum: row.summaryChecksum,
       activeVersion: row.activeVersionId2
         ? { id: row.activeVersionId2, instructions: config?.instructions ?? null }
         : null,

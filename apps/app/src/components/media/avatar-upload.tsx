@@ -1,10 +1,6 @@
 "use client";
 import * as React from "react";
 import NextImage from "next/image";
-import Cropper, { type Area } from "react-easy-crop";
-// react-easy-crop v5 ships its overlay/handle styles separately — without this
-// the crop area renders unstyled (no mask, no drag handles).
-import "react-easy-crop/react-easy-crop.css";
 import { Upload } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -18,6 +14,7 @@ import {
   DialogFooter,
   DialogClose,
 } from "@/components/ui/dialog";
+import { CropSurface, useCropUpload } from "./crop-upload";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -38,53 +35,6 @@ export interface AvatarUploadProps {
 }
 
 // ---------------------------------------------------------------------------
-// Canvas helper — crops `imageSrc` to the pixel region `area` and returns a
-// 512×512 WebP Blob. Factored here so it can be tree-shaken if only the types
-// are imported elsewhere, and to keep the component render surface lean.
-// ---------------------------------------------------------------------------
-
-async function getCroppedBlob(imageSrc: string, area: Area): Promise<Blob> {
-  // Load the source image off-screen so we can measure its natural dimensions.
-  const image = await new Promise<HTMLImageElement>((resolve, reject) => {
-    const img = new Image();
-    img.addEventListener("load", () => resolve(img));
-    img.addEventListener("error", reject);
-    img.src = imageSrc;
-  });
-
-  const canvas = document.createElement("canvas");
-  canvas.width = 512;
-  canvas.height = 512;
-
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("canvas 2d context unavailable");
-
-  // Draw the cropped source region scaled into the 512×512 output canvas.
-  ctx.drawImage(
-    image,
-    area.x,      // source x
-    area.y,      // source y
-    area.width,  // source width
-    area.height, // source height
-    0,           // dest x
-    0,           // dest y
-    512,         // dest width
-    512,         // dest height
-  );
-
-  return new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob(
-      (blob) => {
-        if (blob) resolve(blob);
-        else reject(new Error("canvas.toBlob produced null"));
-      },
-      "image/webp",
-      0.9,
-    );
-  });
-}
-
-// ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
@@ -99,43 +49,24 @@ export function AvatarUpload({
   // Controlled open state so we can reset transient state on close.
   const [open, setOpen] = React.useState(false);
 
-  // The data-URL of the file the user selected, kept as the Cropper source.
-  const [imageSrc, setImageSrc] = React.useState<string | null>(null);
-
-  // Cropper state: position, zoom, and the final pixel crop region.
-  const [crop, setCrop] = React.useState<{ x: number; y: number }>({ x: 0, y: 0 });
-  const [zoom, setZoom] = React.useState(1);
-  const [croppedAreaPixels, setCroppedAreaPixels] = React.useState<Area | null>(null);
-
-  // Upload lifecycle.
-  const [uploading, setUploading] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
+  // Crop/upload state machine shared with the avatar maker's Photo tab.
+  const cropUpload = useCropUpload({
+    onUploaded: (url) => {
+      onChange(url);
+      handleOpenChange(false);
+    },
+  });
 
   // Hidden file input ref — triggered by the visible button.
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
-  // -------------------------------------------------------------------------
-  // Helpers
-  // -------------------------------------------------------------------------
-
-  /** Reset all transient dialog state (crop, zoom, imageSrc, error). */
-  const resetTransient = React.useCallback(() => {
-    if (imageSrc) URL.revokeObjectURL(imageSrc);
-    setImageSrc(null);
-    setCrop({ x: 0, y: 0 });
-    setZoom(1);
-    setCroppedAreaPixels(null);
-    setError(null);
-    setUploading(false);
-  }, [imageSrc]);
-
   /** Called whenever the Dialog closes (X button, Escape, or Cancel). */
   const handleOpenChange = React.useCallback(
     (nextOpen: boolean) => {
-      if (!nextOpen) resetTransient();
+      if (!nextOpen) cropUpload.reset();
       setOpen(nextOpen);
     },
-    [resetTransient],
+    [cropUpload],
   );
 
   /** Called when the user picks a file from the OS file-picker. */
@@ -146,56 +77,11 @@ export function AvatarUpload({
       e.target.value = "";
       if (!file) return;
 
-      // Revoke any previous object URL to avoid memory leaks.
-      if (imageSrc) URL.revokeObjectURL(imageSrc);
-
-      const reader = new FileReader();
-      reader.addEventListener("load", () => {
-        setImageSrc(reader.result as string);
-        setError(null);
-        setOpen(true);
-      });
-      reader.readAsDataURL(file);
+      cropUpload.loadFile(file);
+      setOpen(true);
     },
-    [imageSrc],
+    [cropUpload],
   );
-
-  /** POSTs the cropped blob to the upload endpoint and calls `onChange`. */
-  const handleSave = React.useCallback(async () => {
-    if (!imageSrc || !croppedAreaPixels) return;
-
-    setUploading(true);
-    setError(null);
-
-    try {
-      const blob = await getCroppedBlob(imageSrc, croppedAreaPixels);
-
-      const fd = new FormData();
-      fd.append("file", blob, "avatar.webp");
-
-      const res = await fetch("/api/v1/upload/avatar", {
-        method: "POST",
-        body: fd,
-      });
-
-      // Parse response body regardless of status so we can surface server
-      // error messages in the dialog rather than throwing generically.
-      const json = (await res.json()) as { url?: string; error?: string };
-
-      if (!res.ok) {
-        throw new Error(json.error ?? `Upload failed (${res.status})`);
-      }
-
-      if (!json.url) throw new Error("Server returned no URL");
-
-      onChange(json.url);
-      handleOpenChange(false);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Upload failed");
-    } finally {
-      setUploading(false);
-    }
-  }, [imageSrc, croppedAreaPixels, onChange, handleOpenChange]);
 
   // -------------------------------------------------------------------------
   // Derived values
@@ -277,55 +163,18 @@ export function AvatarUpload({
           </DialogHeader>
 
           <DialogPanel className="gap-4">
-            {/* Cropper container — fixed height so the canvas has stable geometry */}
-            <div
-              className={cn(
-                "relative h-72 w-full overflow-hidden bg-black",
-                isCircle ? "rounded-full" : "rounded-md",
-              )}
-            >
-              {imageSrc && (
-                <Cropper
-                  image={imageSrc}
-                  crop={crop}
-                  zoom={zoom}
-                  aspect={1}
-                  cropShape={isCircle ? "round" : "rect"}
-                  showGrid={false}
-                  onCropChange={setCrop}
-                  onZoomChange={setZoom}
-                  onCropComplete={(_: Area, areaPixels: Area) => {
-                    setCroppedAreaPixels(areaPixels);
-                  }}
-                />
-              )}
-            </div>
-
-            {/* Zoom slider */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs text-muted-foreground" htmlFor="avatar-zoom-slider">
-                Zoom
-              </label>
-              <input
-                id="avatar-zoom-slider"
-                type="range"
-                aria-label="Zoom"
-                min={1}
-                max={3}
-                step={0.05}
-                value={zoom}
-                onChange={(e) => setZoom(Number(e.target.value))}
-                className="w-full accent-primary"
-                disabled={uploading}
+            {cropUpload.imageSrc && (
+              <CropSurface
+                imageSrc={cropUpload.imageSrc}
+                shape={shape}
+                crop={cropUpload.crop}
+                zoom={cropUpload.zoom}
+                uploading={cropUpload.uploading}
+                error={cropUpload.error}
+                onCropChange={cropUpload.setCrop}
+                onZoomChange={cropUpload.setZoom}
+                onCropComplete={cropUpload.onCropComplete}
               />
-            </div>
-
-            {/* Inline error — shown inside the dialog, not as a toast, so the
-                user can retry without re-selecting the file. */}
-            {error && (
-              <p className="text-sm text-destructive" role="alert">
-                {error}
-              </p>
             )}
           </DialogPanel>
 
@@ -336,7 +185,7 @@ export function AvatarUpload({
                 <Button
                   variant="outline"
                   size="lg"
-                  disabled={uploading}
+                  disabled={cropUpload.uploading}
                 />
               }
             >
@@ -346,10 +195,10 @@ export function AvatarUpload({
             {/* Save — disabled while uploading or before crop area is set */}
             <Button
               size="lg"
-              disabled={uploading || !croppedAreaPixels}
-              onClick={() => void handleSave()}
+              disabled={cropUpload.uploading || !cropUpload.canSave}
+              onClick={() => void cropUpload.save()}
             >
-              {uploading ? "Saving…" : "Save"}
+              {cropUpload.uploading ? "Saving…" : "Save"}
             </Button>
           </DialogFooter>
         </DialogPopup>

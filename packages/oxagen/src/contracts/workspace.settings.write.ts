@@ -1,8 +1,9 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
+import { avatarUrlSchema, avatarUrlOutputSchema } from "../avatar";
 
 // Partial update of the workspace general settings. Every field optional:
-//   omit = unchanged, value = set, null = clear (description only).
+//   omit = unchanged, value = set, null = clear (description + avatar).
 export const workspaceSettingsWrite = registerCapability({
   name: "update_workspace_settings",
   domain: "workspace",
@@ -31,11 +32,16 @@ export const workspaceSettingsWrite = registerCapability({
       )
       .optional(),
     description: z.string().max(2000).nullable().optional(),
+    // Omit = unchanged, a value = set (https:// URL or an "avatar:v1:<json>"
+    // designed-avatar string), null = clear the avatar. Models avatarUrl exactly
+    // like org.settings.write (partial, nullable-to-clear).
+    avatarUrl: avatarUrlSchema.nullable().optional(),
   }),
   output: z.object({
     name: z.string(),
     slug: z.string(),
     description: z.string().nullable(),
+    avatarUrl: avatarUrlOutputSchema,
   }),
 });
 

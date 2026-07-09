@@ -75,7 +75,8 @@ export async function agentDefinitionUpdateHandler(
     if (
       input.name !== undefined ||
       input.description !== undefined ||
-      input.agentType !== undefined
+      input.agentType !== undefined ||
+      input.avatarUrl !== undefined
     ) {
       await tx
         .update(schema.agents)
@@ -86,6 +87,10 @@ export async function agentDefinitionUpdateHandler(
             : {}),
           ...(input.agentType !== undefined
             ? { agentType: input.agentType }
+            : {}),
+          // null clears the avatar; a string sets it; undefined leaves unchanged.
+          ...(input.avatarUrl !== undefined
+            ? { avatarUrl: input.avatarUrl }
             : {}),
           updatedByUserId: userId,
         })

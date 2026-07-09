@@ -25,6 +25,8 @@ describe("agent.definition.list handler", () => {
         slug: "qa-chat",
         name: "QA",
         description: null,
+        avatarUrl: "avatar:v1:{\"emoji\":\"🤖\",\"bg\":\"#f59e0b\",\"mode\":\"full\"}",
+        summary: "Answers questions from the workspace graph.",
         agentType: "interactive_chat",
         status: "active",
         deploymentStatus: "active",
@@ -36,6 +38,8 @@ describe("agent.definition.list handler", () => {
         slug: "draft",
         name: "Draft",
         description: "wip",
+        avatarUrl: null,
+        summary: null,
         agentType: "custom",
         status: "draft",
         deploymentStatus: "inactive",
@@ -49,6 +53,11 @@ describe("agent.definition.list handler", () => {
     // agentType is surfaced so the selector can classify code vs chat agents.
     expect(out.agents[0]!.agentType).toBe("interactive_chat");
     expect(out.agents[1]!.agentType).toBe("custom");
+    // avatar + summary flow through; null when unset.
+    expect(out.agents[0]!.avatarUrl).toContain("avatar:v1:");
+    expect(out.agents[0]!.summary).toBe("Answers questions from the workspace graph.");
+    expect(out.agents[1]!.avatarUrl).toBeNull();
+    expect(out.agents[1]!.summary).toBeNull();
   });
 
   it("surfaces agentType 'code' so callers can flag a code agent", async () => {

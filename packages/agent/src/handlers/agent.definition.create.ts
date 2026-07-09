@@ -46,6 +46,7 @@ export async function agentDefinitionCreateHandler(
         slug: input.slug,
         name: input.name,
         description: input.description ?? null,
+        avatarUrl: input.avatarUrl ?? null,
         agentType: input.agentType,
         status: "draft",
         deploymentStatus: "inactive",

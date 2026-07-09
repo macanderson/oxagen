@@ -57,6 +57,29 @@ describe("workspace.settings.write handler", () => {
     expect(out.description).toBe("new desc");
   });
 
+  it("sets the avatarUrl column and returns it", async () => {
+    const avatar = "avatar:v1:{\"emoji\":\"🔬\",\"bg\":\"#2563eb\",\"mode\":\"full\"}";
+    mocks.findFirst
+      .mockResolvedValueOnce(EXISTING)
+      .mockResolvedValueOnce({ name: "Research", slug: "research", avatarUrl: avatar, settings: { description: "old" } });
+    const out = await workspaceSettingsWriteHandler({ avatarUrl: avatar }, CTX);
+
+    const setArg = mocks.set.mock.calls[0]![0] as { avatarUrl?: string | null };
+    expect(setArg.avatarUrl).toBe(avatar);
+    expect(out.avatarUrl).toBe(avatar);
+  });
+
+  it("clears the avatarUrl column when passed null", async () => {
+    mocks.findFirst
+      .mockResolvedValueOnce({ ...EXISTING, avatarUrl: "https://cdn.example.com/a.png" })
+      .mockResolvedValueOnce({ name: "Research", slug: "research", avatarUrl: null, settings: { description: "old" } });
+    const out = await workspaceSettingsWriteHandler({ avatarUrl: null }, CTX);
+
+    const setArg = mocks.set.mock.calls[0]![0] as { avatarUrl?: string | null };
+    expect(setArg.avatarUrl).toBeNull();
+    expect(out.avatarUrl).toBeNull();
+  });
+
   it("clears description by deleting the settings key when passed null", async () => {
     mocks.findFirst
       .mockResolvedValueOnce(EXISTING)

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
+import { avatarUrlSchema } from "../avatar";
 import {
   graphAccessSchema,
   agentToolSchema,
@@ -37,6 +38,9 @@ export const agentDefinitionUpdate = registerCapability({
     // as agentType ("coding" on / "custom" off), so editing an existing agent
     // must be able to flip it. Omitted → the agentType is left unchanged.
     agentType: z.string().optional(),
+    // Optional avatar change. Omit = unchanged, a value = set (https:// URL or an
+    // "avatar:v1:<json>" designed-avatar string), null = clear the avatar.
+    avatarUrl: avatarUrlSchema.nullable().optional(),
     config: definitionConfigInput,
   }),
   output: z.object({
