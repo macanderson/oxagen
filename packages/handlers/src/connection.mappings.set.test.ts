@@ -32,6 +32,15 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   return { ...real, withTenantDb: mocks.withTenantDb };
 });
 
+// The installation-access authorization gate makes its own oauth_accounts lookup
+// + GitHub /user/installations call and has a dedicated suite
+// (__tests__/github-installation-access.test.ts). These tests exercise the
+// deliveryConfig-merge + activation logic, so stub the gate to a no-op — otherwise
+// it fires on the github + installationId cases and throws 403 (no mocked token).
+vi.mock("./lib/github-installation-access", () => ({
+  assertGithubInstallationAccessible: vi.fn(),
+}));
+
 import { connectionMappingsSetHandler } from "./connection.mappings.set";
 
 // ── helper: build a mock transaction that returns fixed rows ──────────────────

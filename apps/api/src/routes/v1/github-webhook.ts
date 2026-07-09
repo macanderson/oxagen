@@ -25,7 +25,7 @@ import { Hono } from "hono";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { schema, withSystemDb } from "@oxagen/database";
 import { and, eq, isNull, sql } from "drizzle-orm";
-import { upsertGithubInstallation } from "./github-oauth";
+import { upsertGithubInstallation } from "./github-installations";
 import { eventClient } from "../../event-client";
 import { getConnector } from "@oxagen/ingestion/connectors";
 import { requireEnv } from "@oxagen/config/env";
