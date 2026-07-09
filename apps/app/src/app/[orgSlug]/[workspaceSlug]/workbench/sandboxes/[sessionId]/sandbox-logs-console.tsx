@@ -26,6 +26,8 @@ import { cn } from "@/lib/utils";
 import {
   parseAnsiLine,
 } from "@/components/chat/registry-components/terminal-trace-card";
+// Shared GitHub light/dark palette — same surface as the terminal & trace card.
+import "@/components/chat/registry-components/code-surface.css";
 import type { SandboxLogLine } from "@/lib/workbench/sandboxes";
 
 /** Injected loader — the page binds this to a `list_sandbox_logs` action. */
@@ -54,9 +56,9 @@ function normStream(value: unknown): Stream {
 }
 
 const STREAM_TAG_CLASS: Record<Stream, string> = {
-  stdout: "text-neutral-500",
+  stdout: "code-fg-muted",
   stderr: "text-error",
-  system: "text-neutral-600",
+  system: "code-fg-faint",
 };
 
 function LogLine({ line }: { line: SandboxLogLine }) {
@@ -74,7 +76,7 @@ function LogLine({ line }: { line: SandboxLogLine }) {
       <span className={cn("shrink-0 select-none", STREAM_TAG_CLASS[stream])}>
         [{stream}]
       </span>
-      <span className="min-w-0 flex-1 text-neutral-200">
+      <span className="code-fg min-w-0 flex-1">
         {parseAnsiLine(text).map((seg, i) => (
           <span key={i} className={seg.className}>
             {seg.text}
@@ -137,16 +139,16 @@ export function SandboxLogsConsole({
     <div
       data-testid="sandbox-logs-console"
       className={cn(
-        "flex flex-col overflow-hidden rounded-xl border border-border bg-black/90",
+        "code-surface flex flex-col overflow-hidden rounded-xl border",
         className,
       )}
     >
-      <div className="flex items-center justify-between gap-3 border-b border-white/10 px-3 py-2">
-        <span className="font-mono text-xs text-neutral-400">
+      <div className="code-border flex items-center justify-between gap-3 border-b px-3 py-2">
+        <span className="code-fg-muted font-mono text-xs">
           logs · {sessionId.length > 14 ? `${sessionId.slice(0, 12)}…` : sessionId}
         </span>
         <div className="flex items-center gap-3">
-          <label className="flex cursor-pointer items-center gap-1.5 text-xs text-neutral-400">
+          <label className="code-fg-muted flex cursor-pointer items-center gap-1.5 text-xs">
             <Switch
               data-testid="sandbox-logs-debug-toggle"
               checked={debug}
@@ -160,7 +162,7 @@ export function SandboxLogsConsole({
             type="button"
             variant="ghost"
             size="sm"
-            className="h-7 gap-1 px-2 text-xs text-neutral-300 hover:text-white"
+            className="code-fg-muted h-7 gap-1 px-2 text-xs"
             onClick={() => void refresh()}
             disabled={disabled || loading}
             data-testid="sandbox-logs-refresh"
@@ -186,7 +188,7 @@ export function SandboxLogsConsole({
             {error}
           </div>
         ) : lines.length === 0 ? (
-          <div className="text-neutral-600">
+          <div className="code-fg-faint">
             {disabled
               ? "Logs are unavailable for this sandbox."
               : loading

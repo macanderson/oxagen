@@ -5,6 +5,8 @@ import { Tabs, TabsPanel, TabsList, TabsTab } from "@/components/ui/tabs";
 import { StatusIcon } from "./status-icon";
 import { formatDuration } from "./tool-call-card";
 import { toolCallMeta } from "./tool-call-meta";
+// Shared GitHub light/dark palette — same surface as the terminal & trace card.
+import "@/components/chat/registry-components/code-surface.css";
 import type { ToolCallStatus } from "./stream-event-types";
 import { lazy, Suspense } from "react";
 
@@ -94,7 +96,7 @@ export function CodeExecuteCard({
         ) : null}
       </div>
 
-      <pre className="overflow-x-auto rounded-lg bg-muted/50 p-3 font-mono text-xs leading-relaxed">
+      <pre className="code-surface overflow-x-auto rounded-lg p-3 font-mono text-xs leading-relaxed">
         <code>{code}</code>
       </pre>
 
@@ -106,7 +108,7 @@ export function CodeExecuteCard({
         <TabsPanel value="stdout">
           <pre
             ref={stdoutRef}
-            className="max-h-48 overflow-y-auto rounded-lg bg-black/85 p-2 font-mono text-xs text-success"
+            className="code-surface-bare max-h-48 overflow-y-auto rounded-lg p-2 font-mono text-xs text-success"
           >
             {stdout ?? (status === "running" ? "Waiting for output…" : "")}
           </pre>
@@ -114,7 +116,7 @@ export function CodeExecuteCard({
         <TabsPanel value="stderr">
           <pre
             ref={stderrRef}
-            className="max-h-48 overflow-y-auto rounded-lg bg-black/85 p-2 font-mono text-xs text-error"
+            className="code-surface-bare max-h-48 overflow-y-auto rounded-lg p-2 font-mono text-xs text-error"
           >
             {stderr ?? ""}
           </pre>
