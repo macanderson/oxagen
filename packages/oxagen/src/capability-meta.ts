@@ -63,12 +63,12 @@ export type KnownDataTag = (typeof CAPABILITY_DATA_TAGS)[number];
 export const RECORD_LINK_ROUTES: Readonly<Record<string, string>> = {
   "graph.node": "/{orgSlug}/{workspaceSlug}/knowledge/nodes/{id}",
   conversation: "/{orgSlug}/{workspaceSlug}/chat/{id}",
-  // Agent detail lives at Studio → Agents → [agentId] (segment is the agent
+  // Agent detail lives at Workbench → Agents → [agentId] (segment is the agent
   // publicId, `agt_…`). Only opt-in callers that KNOW a value is an agent id
   // (e.g. the agents-list card) resolve this — `inferRecordTypeForField` still
   // never maps a bare `publicId` to "agent", so the generic fallback can't emit
   // an agent link from an ambiguous id.
-  agent: "/{orgSlug}/{workspaceSlug}/studio/agents/{id}",
+  agent: "/{orgSlug}/{workspaceSlug}/workbench/agents/{id}",
   asset: "/api/v1/assets/{id}",
 };
 

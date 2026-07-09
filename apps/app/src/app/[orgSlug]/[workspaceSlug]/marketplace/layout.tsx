@@ -7,13 +7,13 @@ import type { ScopeContext } from "@/lib/scope";
  * Marketplace layout — the discovery + install surface, two sides:
  *
  *   Agent Tools  — skills, MCP servers, and capabilities agents can be
- *                  equipped with. Installs land in Studio → Agent Tools.
+ *                  equipped with. Installs land in Workbench → Agent Tools.
  *   Integrations — data connectors that ingest external sources into the
  *                  knowledge graph. Connecting hands off to the setup wizard
  *                  under Knowledge → Repos.
  *
  * Managing what is already installed does NOT live here — that is
- * Studio → Agent Tools (skills / MCP servers / capabilities) and
+ * Workbench → Agent Tools (skills / MCP servers / capabilities) and
  * Knowledge → Repos (integrations).
  */
 export default async function MarketplaceLayout({

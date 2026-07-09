@@ -60,7 +60,7 @@ export default async function WorkspaceLayout({
   //
   // The org layout also mounts this overlay, but with only `{orgSlug}`
   // context — which causes `enumerateNavTargets` to omit every workspace
-  // route (Knowledge, Studio, Settings, …). Mounting here with the full
+  // route (Knowledge, Workbench, Settings, …). Mounting here with the full
   // `{orgSlug, workspaceSlug}` ctx restores the workspace nav surface on
   // `/{org}/{ws}/...` paths. `OrgOnlyMount` in the parent layout suppresses
   // the org-only copy on workspace paths so only one set renders.

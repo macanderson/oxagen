@@ -67,7 +67,7 @@ describe("MobileBottomBar — primary tabs", () => {
     expect(within(nav).getByRole("link", { name: "Activity" })).toHaveAttribute("href", "/acme/prod/activity");
     expect(within(nav).getByRole("link", { name: "Agents" })).toHaveAttribute(
       "href",
-      "/acme/prod/studio/agents",
+      "/acme/prod/workbench/agents",
     );
   });
 
@@ -83,7 +83,7 @@ describe("MobileBottomBar — primary tabs", () => {
     expect(screen.getByRole("button", { name: /more navigation/i })).toBeInTheDocument();
     expect(within(nav).getByRole("link", { name: "Agents" })).toBeInTheDocument();
     // Agent Tools is no longer a nav destination at all — it lives in the
-    // Studio tabs, so it must not appear in the bar or the More sheet.
+    // Workbench tabs, so it must not appear in the bar or the More sheet.
     expect(within(nav).queryByRole("link", { name: "Agent Tools" })).toBeNull();
     expect(within(nav).queryByRole("link", { name: "Marketplace" })).toBeNull();
     expect(within(nav).queryByRole("link", { name: "Settings" })).toBeNull();

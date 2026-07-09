@@ -155,7 +155,7 @@ export const BUILT_IN_TEMPLATES: PromptTemplateInput[] = [
     ],
     "applicableTo": [
       {
-        "routePattern": "/{org}/{ws}/studio/playbooks/:playbookId"
+        "routePattern": "/{org}/{ws}/workbench/playbooks/:playbookId"
       }
     ],
     "capability": "playbook.run.create",

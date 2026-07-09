@@ -80,7 +80,7 @@ describe("resolveRecordHref", () => {
   it("builds a conversation href", () => {
     expect(resolveRecordHref("conversation", "c_9", SLUGS)).toBe("/acme/research/chat/c_9");
     expect(resolveRecordHref("agent", "agt_1", SLUGS)).toBe(
-      "/acme/research/studio/agents/agt_1",
+      "/acme/research/workbench/agents/agt_1",
     );
   });
   it("builds an asset href WITHOUT requiring slugs", () => {

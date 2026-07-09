@@ -50,10 +50,10 @@ describe("mcpAuthorizeUrl", () => {
       orgSlug: "acme",
       workspaceSlug: "main",
       orgListingId: "listing-1",
-      returnTo: "/acme/main/studio/tools/mcp",
+      returnTo: "/acme/main/workbench/tools/mcp",
     });
 
-    expect(paramsOf(url).get("returnTo")).toBe("/acme/main/studio/tools/mcp");
+    expect(paramsOf(url).get("returnTo")).toBe("/acme/main/workbench/tools/mcp");
   });
 
   it("percent-encodes URL-significant characters so values round-trip losslessly", () => {

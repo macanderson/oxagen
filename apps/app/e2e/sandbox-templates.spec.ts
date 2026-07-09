@@ -131,7 +131,7 @@ test.describe("sandbox templates — create, set-default, export/import, bind ag
     });
 
     // ── 7. Create a draft agent + bind it to the environment ────────────────
-    await page.goto(`/${orgSlug}/default/studio/agents/new`);
+    await page.goto(`/${orgSlug}/default/workbench/agents/new`);
     await expect(page.getByTestId("step-describe")).toBeVisible({ timeout: 20_000 });
     await page.getByTestId("agent-describe-skip").click();
     await expect(page.getByTestId("step-identity")).toBeVisible();
@@ -143,7 +143,7 @@ test.describe("sandbox templates — create, set-default, export/import, bind ag
     await expect(page.getByText(/draft saved/i)).toBeVisible({ timeout: 20_000 });
 
     // Open the agent's detail page (where the Environments card renders).
-    await page.goto(`/${orgSlug}/default/studio/agents`);
+    await page.goto(`/${orgSlug}/default/workbench/agents`);
     // The row itself is not clickable — the name cell's link navigates to the
     // agent detail page.
     await page

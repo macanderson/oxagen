@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import "@oxagen/handlers/register";
-import { resolveStudioScope } from "@/lib/studio/scope";
+import { resolveWorkbenchScope } from "@/lib/workbench/scope";
 import {
   installPlugin,
   installBulkPlugin,
@@ -31,7 +31,7 @@ export default async function MarketplaceAgentToolsPage({ params }: PageProps) {
   const { orgSlug, workspaceSlug } = await params;
   // Gate: session + org membership. canManage is not needed for viewing —
   // the install actions themselves enforce it.
-  await resolveStudioScope(orgSlug, workspaceSlug);
+  await resolveWorkbenchScope(orgSlug, workspaceSlug);
 
   return (
     <BrowsePanel
