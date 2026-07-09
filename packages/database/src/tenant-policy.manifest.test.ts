@@ -163,9 +163,10 @@ describe("tenant policy manifest", () => {
     //      forced tenant_isolation RLS, 20260708130000_agent_file_locks.sql —
     //      bumped past the budget-policy prefix collision, PR #647).
     // 88 = 85 + environments.sandbox_templates + environments.sandbox_template_tools
-    //      + environments.agent_environment_bindings (Sandbox Templates Phase 1,
-    //      Spec §5.2–§5.3/§5.6, 20260712120000_sandbox_templates.sql — the PR
-    //      updated the manifest but not this ratchet).
+    //      + environments.agent_environment_bindings (portable sandbox templates
+    //      + agent-env bindings, org_id NOT NULL + tenant_isolation RLS,
+    //      20260712120000_sandbox_templates.sql, PR #718 — the manifest was
+    //      updated but this ratchet was not: a parallel-merge semantic conflict).
     expect(POLICY_MANIFEST.length).toBe(88);
   });
 
