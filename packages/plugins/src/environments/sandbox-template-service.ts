@@ -652,6 +652,237 @@ export async function importTemplate(
   });
 }
 
+// ── plugin-pack distribution (Spec §6 — the third-party story) ───────────────
+
+export interface PackTemplateInstall {
+  /** Slug the template landed under (bare or pack-prefixed on collision). */
+  slug: string;
+  /** Public id of the created/updated template. */
+  templateId: string;
+  /** false when an existing template was updated in place (idempotent re-install). */
+  created: boolean;
+}
+
+export interface InstallTemplatesFromPackResult {
+  installed: PackTemplateInstall[];
+  warnings: string[];
+}
+
+/** Derive the pack's slug segment from its id ("ns/slug" → "slug"). */
+function packSlugSegment(packId: string): string {
+  const seg = packId.includes("/") ? packId.slice(packId.lastIndexOf("/") + 1) : packId;
+  return seg.toLowerCase();
+}
+
+/** `${pack}-${slug}`, avoiding a redundant double prefix. */
+function prefixedTemplateSlug(packSeg: string, bareSlug: string): string {
+  if (bareSlug === packSeg || bareSlug.startsWith(`${packSeg}-`)) return bareSlug;
+  return `${packSeg}-${bareSlug}`;
+}
+
+/**
+ * Install a plugin pack's declared sandbox templates into the workspace's
+ * DEFAULT environment (Spec §6). Each template imports via the same shape as
+ * `import_sandbox_template`: non-default, tools preloaded, and any MISSING
+ * secret keys upserted by NAME only (never a value). Portability is preserved —
+ * an unknown tool ref does not fail the install, it surfaces in `warnings`.
+ *
+ * Idempotency + collision (§6): the template lands under its bare manifest slug;
+ * a re-install of the same pack finds that slug in the default environment and
+ * UPDATES it in place (no duplicate). If the bare slug is already taken by an
+ * UNRELATED template (one living in a different environment — slugs are unique
+ * per workspace), the pack falls back to a pack-namespaced slug so it never
+ * clobbers another template. Pack slugs are expected to be distinctive, so a
+ * bare-slug match inside the default environment is the pack's own prior install.
+ *
+ * NOTE: uninstalling the pack does NOT remove these templates — see
+ * plugin.org.uninstall. A template may already back a live agent binding, so
+ * removal is an explicit, user-driven action, never an uninstall side effect.
+ */
+export async function installTemplatesFromPack(
+  actor: SandboxTemplateActor,
+  input: { packId: string; templates: SandboxTemplateManifest[] },
+): Promise<InstallTemplatesFromPackResult> {
+  const warnings: string[] = [];
+  if (input.templates.length === 0) return { installed: [], warnings };
+
+  // Upsert every missing secret key across all templates FIRST (names only, no
+  // value), so secret_selection can resolve names → this workspace's key ids.
+  const existingKeys = await listSecretKeys({
+    orgId: actor.orgId,
+    workspaceId: actor.workspaceId,
+  });
+  const existingKeyNames = new Set(existingKeys.map((k) => k.key));
+  const keyIdByName = new Map(existingKeys.map((k) => [k.key, k.id]));
+  const seenKeys = new Map<string, { sensitive: boolean; memo: string | null }>();
+  for (const tpl of input.templates) {
+    for (const mk of tpl.secretKeys) {
+      if (existingKeyNames.has(mk.key) || seenKeys.has(mk.key)) continue;
+      seenKeys.set(mk.key, { sensitive: mk.sensitive, memo: mk.memo ?? null });
+    }
+  }
+  for (const [key, meta] of seenKeys) {
+    await upsertSecretKey(
+      { orgId: actor.orgId, workspaceId: actor.workspaceId, userId: actor.userId },
+      { key, sensitive: meta.sensitive, memo: meta.memo },
+    );
+  }
+  if (seenKeys.size > 0) {
+    const refreshed = await listSecretKeys({
+      orgId: actor.orgId,
+      workspaceId: actor.workspaceId,
+    });
+    for (const k of refreshed) keyIdByName.set(k.key, k.id);
+  }
+
+  const packSeg = packSlugSegment(input.packId);
+  const installed: PackTemplateInstall[] = [];
+
+  await withTenantDb(async (tx) => {
+    // Resolve the workspace default environment (§6 target).
+    const [defaultEnv] = await tx
+      .select({ id: schema.environments.id })
+      .from(schema.environments)
+      .where(
+        and(
+          eq(schema.environments.workspaceId, actor.workspaceId),
+          eq(schema.environments.isDefault, true),
+          isNull(schema.environments.deletedAt),
+        ),
+      )
+      .limit(1);
+    if (!defaultEnv) {
+      throw new Error(
+        "[sandbox-template] cannot install pack templates — the workspace has no default environment",
+      );
+    }
+
+    for (const manifest of input.templates) {
+      const bare = manifest.slug.toLowerCase();
+      if (!isValidEnvironmentSlug(bare)) {
+        throw new Error(`[sandbox-template] pack template has invalid slug: ${manifest.slug}`);
+      }
+      const prefixed = prefixedTemplateSlug(packSeg, bare);
+
+      // Translate the manifest's secret_selection into this workspace's key ids
+      // (identical to importTemplate: required keys form an explicit selection).
+      let secretSelection: SandboxSecretSelection = "all";
+      if (manifest.secretSelection !== "all") {
+        const requiredNames = manifest.secretKeys.filter((k) => k.required).map((k) => k.key);
+        const ids = requiredNames
+          .map((n) => keyIdByName.get(n))
+          .filter((v): v is string => typeof v === "string");
+        secretSelection = ids.length > 0 ? { keyPublicIds: ids } : "all";
+      }
+
+      // Find any live template already holding the bare or prefixed slug.
+      const rows = await tx
+        .select({
+          id: schema.sandboxTemplates.id,
+          publicId: schema.sandboxTemplates.publicId,
+          slug: schema.sandboxTemplates.slug,
+          environmentId: schema.sandboxTemplates.environmentId,
+        })
+        .from(schema.sandboxTemplates)
+        .where(
+          and(
+            eq(schema.sandboxTemplates.workspaceId, actor.workspaceId),
+            inArray(schema.sandboxTemplates.slug, [bare, prefixed]),
+            isNull(schema.sandboxTemplates.deletedAt),
+          ),
+        );
+      const byBare = rows.find((r) => r.slug === bare);
+      const byPrefixed = rows.find((r) => r.slug === prefixed);
+
+      let targetSlug: string;
+      let existing: { id: string; publicId: string } | undefined;
+      if (byPrefixed) {
+        targetSlug = prefixed;
+        existing = byPrefixed;
+      } else if (byBare && byBare.environmentId === defaultEnv.id) {
+        // Bare slug already lives in the default env → this pack's prior install.
+        targetSlug = bare;
+        existing = byBare;
+      } else if (byBare) {
+        // Bare slug is taken by an unrelated template in another environment.
+        targetSlug = prefixed;
+        existing = undefined;
+      } else {
+        targetSlug = bare;
+        existing = undefined;
+      }
+
+      const values = {
+        name: manifest.name,
+        description: manifest.description ?? null,
+        provider: manifest.provider,
+        runtime: manifest.runtime ?? null,
+        resources: manifest.resources,
+        network: manifest.network,
+        secretSelection,
+        literalEnv: manifest.literalEnv,
+        isActive: true,
+      };
+
+      let templateInternalId: string;
+      let publicId: string;
+      let created: boolean;
+      if (existing) {
+        await tx
+          .update(schema.sandboxTemplates)
+          .set({
+            ...values,
+            environmentId: defaultEnv.id,
+            updatedAt: new Date(),
+            updatedByUserId: actor.userId ?? null,
+          })
+          .where(eq(schema.sandboxTemplates.id, existing.id));
+        templateInternalId = existing.id;
+        publicId = existing.publicId;
+        created = false;
+      } else {
+        const [row] = await tx
+          .insert(schema.sandboxTemplates)
+          .values({
+            orgId: actor.orgId,
+            workspaceId: actor.workspaceId,
+            environmentId: defaultEnv.id,
+            slug: targetSlug,
+            isDefault: false,
+            ...values,
+            createdByUserId: actor.userId ?? null,
+            updatedByUserId: actor.userId ?? null,
+          })
+          .returning({
+            id: schema.sandboxTemplates.id,
+            publicId: schema.sandboxTemplates.publicId,
+          });
+        if (!row) throw new Error("[sandbox-template] pack template insert returned no row");
+        templateInternalId = row.id;
+        publicId = row.publicId;
+        created = true;
+      }
+
+      // Replace the tools set (idempotent) and surface preload advisories.
+      await replaceToolsTx(
+        tx,
+        actor,
+        templateInternalId,
+        manifest.tools.map((t) => ({ kind: t.kind, ref: t.ref, config: t.config })),
+      );
+      for (const t of manifest.tools) {
+        warnings.push(
+          `tool "${t.kind}:${t.ref}" from pack "${input.packId}" is preloaded only if installed in this workspace at provision time`,
+        );
+      }
+
+      installed.push({ slug: targetSlug, templateId: publicId, created });
+    }
+  });
+
+  return { installed, warnings };
+}
+
 // ── agent-environment bindings (Spec §5.6) ───────────────────────────────────
 
 const BINDING_COLUMNS = {
@@ -852,16 +1083,40 @@ export async function listAgentBindings(
 /**
  * Resolve which environment + sandbox template a run should use.
  *
- * Environment: explicit environmentId → the agent's PRIMARY binding →
- * the workspace default environment. Template: the resolved binding's template
- * (if any) → the environment's default template. Both must be active; each
- * failure raises a clear preflight error.
+ * An explicit `sandboxTemplateId` short-circuits the chain: that exact template
+ * (and its own environment) is used. Otherwise the environment resolves as
+ * explicit environmentId → the agent's PRIMARY binding → the workspace default
+ * environment, and the template as the resolved binding's template (if any) →
+ * the environment's default template. Both the environment and the template must
+ * be active; each failure raises a clear preflight error.
  */
 export async function resolveSandboxTemplateForRun(
   actor: SandboxTemplateActor,
-  input: { agentId?: string; environmentId?: string } = {},
+  input: { agentId?: string; environmentId?: string; sandboxTemplateId?: string } = {},
 ): Promise<ResolvedSandboxTemplate> {
   return withTenantDb(async (tx) => {
+    // 0. Explicit template pin — a caller (or template-driven run) that already
+    // chose a template. Its own environment governs secret resolution.
+    if (input.sandboxTemplateId) {
+      const row = await loadTemplateRow(tx, actor.workspaceId, input.sandboxTemplateId);
+      const pinnedEnv = await loadEnvironment(tx, actor.workspaceId, row.environmentPublicId);
+      if (!pinnedEnv.isActive) {
+        throw new Error(
+          `[sandbox-template] environment "${pinnedEnv.slug}" is inactive — activate it or choose another`,
+        );
+      }
+      const template = await loadTemplateWithTools(tx, actor.workspaceId, row.publicId);
+      if (!template.isActive) {
+        throw new Error(
+          `[sandbox-template] template "${template.slug}" is inactive — activate it or promote another default`,
+        );
+      }
+      return {
+        environment: { id: row.environmentPublicId, name: pinnedEnv.name, slug: pinnedEnv.slug },
+        template,
+      };
+    }
+
     // 1. Resolve the environment (internal row).
     let envRow: { id: string; name: string; slug: string; isActive: boolean } | null = null;
     let bindingTemplateInternalId: string | null = null;
