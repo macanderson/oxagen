@@ -43,7 +43,11 @@ vi.mock("@oxagen/database", () => ({
   },
 }));
 
-import { resolveAttachmentImages, resolveAttachmentMedia } from "./attachments";
+import {
+  resolveAttachmentImages,
+  resolveAttachmentMedia,
+  resolveAttachmentMediaDetailed,
+} from "./attachments";
 
 function fakeStream(bytes: number[]): ReadableStream<Uint8Array> {
   return new ReadableStream({
@@ -178,5 +182,57 @@ describe("resolveAttachmentMedia", () => {
     dbState.rows = [];
     await resolveAttachmentMedia(["gen_x"], SCOPE);
     expect(mockRunInTenantScope).toHaveBeenCalledWith(SCOPE, expect.any(Function));
+  });
+});
+
+describe("resolveAttachmentMediaDetailed", () => {
+  it("empty publicIds → empty result, no DB touch", async () => {
+    const r = await resolveAttachmentMediaDetailed([], SCOPE);
+    expect(r.resolved.size).toBe(0);
+    expect(r.notFound).toEqual([]);
+    expect(r.fetchFailed).toEqual([]);
+    expect(mockWithTenantDb).not.toHaveBeenCalled();
+  });
+
+  it("reports an id with no DB row under notFound (a user-fixable 422)", async () => {
+    dbState.rows = [
+      { publicId: "gen_known", storageKey: "key1", mimeType: "image/png", kind: "image" },
+    ];
+    const r = await resolveAttachmentMediaDetailed(["gen_known", "gen_missing"], SCOPE);
+    expect(r.resolved.has("gen_known")).toBe(true);
+    expect(r.notFound).toEqual(["gen_missing"]);
+    expect(r.fetchFailed).toEqual([]);
+  });
+
+  it("reports a row whose bytes fail to fetch under fetchFailed, NOT notFound (retryable 502)", async () => {
+    dbState.rows = [
+      { publicId: "gen_ok", storageKey: "key_ok", mimeType: "image/png", kind: "image" },
+      { publicId: "gen_bad", storageKey: "key_bad", mimeType: "image/png", kind: "image" },
+    ];
+    mockStorageGet.mockImplementation(async (key: string) => {
+      if (key === "key_bad") throw new Error("blob not found");
+      return { body: fakeStream([9, 9]), contentType: "image/png", sizeBytes: 2 };
+    });
+
+    const r = await resolveAttachmentMediaDetailed(["gen_ok", "gen_bad"], SCOPE);
+
+    // The good attachment still resolves — one bad blob no longer takes the
+    // whole batch down (the historical 500/misleading-422 defect).
+    expect(r.resolved.has("gen_ok")).toBe(true);
+    expect(Array.from(r.resolved.get("gen_ok")!.data)).toEqual([9, 9]);
+    expect(r.fetchFailed).toEqual(["gen_bad"]);
+    expect(r.notFound).toEqual([]);
+  });
+
+  it("resolves all when every row fetches cleanly", async () => {
+    dbState.rows = [
+      { publicId: "gen_1", storageKey: "k1", mimeType: "image/png", kind: "image" },
+      { publicId: "gen_2", storageKey: "k2", mimeType: "video/mp4", kind: "video" },
+    ];
+    const r = await resolveAttachmentMediaDetailed(["gen_1", "gen_2"], SCOPE);
+    expect(r.resolved.size).toBe(2);
+    expect(r.notFound).toEqual([]);
+    expect(r.fetchFailed).toEqual([]);
+    expect(r.resolved.get("gen_2")?.kind).toBe("video");
   });
 });
