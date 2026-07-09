@@ -18,6 +18,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { BUILTIN_SLASH_NAMES } from "../../slash/catalog.js";
+import { HELP } from "../components.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const INTERACTIVE_SOURCE = readFileSync(join(here, "../interactive.tsx"), "utf8");
@@ -30,9 +31,12 @@ const END_MARKER = "// User-defined slash commands";
 
 /**
  * The set of `/name` command names the inline dispatcher actually handles,
- * mined from `text === "/name"` and `text.startsWith("/name")` checks inside
- * the dispatcher block only (so the `!command` shell-out check and anything
- * outside the block can never leak in as a false "command").
+ * mined from the `cmd === "/name"` checks inside the dispatcher block only. The
+ * dispatcher matches on the leading command TOKEN (`const cmd = text.split(...)`)
+ * rather than a `text ===` / `text.startsWith` prefix, so this keys on
+ * `cmd === "/name"` — which also means the explanatory `text === "/help"` prose
+ * in the block's header comment is NOT mined as a command (it isn't a `cmd`
+ * check), keeping the extraction precise.
  */
 function dispatchedCommandNames(): Set<string> {
   const start = INTERACTIVE_SOURCE.indexOf(START_MARKER);
@@ -47,7 +51,7 @@ function dispatchedCommandNames(): Set<string> {
   const names = new Set<string>();
   // Command names may contain hyphens (e.g. /worker-model), so match [a-zA-Z-]+,
   // not just letters — otherwise "/worker-model" would mine as "worker".
-  const pattern = /text(?:\s*===\s*|\.startsWith\()"\/([a-zA-Z-]+)/g;
+  const pattern = /cmd\s*===\s*"\/([a-zA-Z-]+)"/g;
   for (const m of block.matchAll(pattern)) {
     names.add(m[1] as string);
   }
@@ -69,5 +73,21 @@ describe("slash command parity — catalog (menu/help) vs REPL dispatcher", () =
     const dispatched = dispatchedCommandNames();
     const extra = [...dispatched].filter((name) => !BUILTIN_SLASH_NAMES.has(name));
     expect(extra).toEqual([]);
+  });
+});
+
+describe("slash command parity — /help text lists every shipped built-in", () => {
+  // HELP is generated from BUILTIN_SLASH_COMMANDS (formatBuiltinCommandLines),
+  // so it can't drift from the catalog by construction — this pins that
+  // contract, and catches a regression if someone ever hand-writes HELP again.
+  it("every dispatched built-in appears in the /help text as /name", () => {
+    const dispatched = dispatchedCommandNames();
+    const missing = [...dispatched].filter((name) => !HELP.includes(`/${name}`));
+    expect(missing).toEqual([]);
+  });
+
+  it("every catalog built-in appears in the /help text as /name", () => {
+    const missing = [...BUILTIN_SLASH_NAMES].filter((name) => !HELP.includes(`/${name}`));
+    expect(missing).toEqual([]);
   });
 });
