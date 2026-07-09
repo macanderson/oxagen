@@ -40,9 +40,9 @@ import {
 } from "../agent/adapters/index.js";
 import { resolveApiContext } from "../lib/api.js";
 import {
-  prepareOnDeviceCoordinator,
-  type OnDeviceCoordinator,
-} from "../agent/adapters/on-device-agent-ai.js";
+  resolveCoordinatorAi,
+  type ResolvedCoordinator,
+} from "../agent/adapters/coordinator.js";
 import { getCoordinator, setCoordinator } from "../runtime/config.js";
 import { queryCodeGraph, warmCodeGraph } from "../agent/code-graph.js";
 import type { Session } from "../lib/session.js";
@@ -139,8 +139,7 @@ import { enterFullscreen } from "./alt-screen.js";
 import { resolveGitInfo } from "./git-info.js";
 import { useRepoInfo } from "./use-repo-info.js";
 import {
-  makeTurnController,
-  makeStallDetector,
+  createTurnRunner,
   AgentTimeoutError,
   resolveTurnInactivityMs,
 } from "../agent/timeouts.js";
@@ -440,9 +439,10 @@ export function ReplApp({
   // reads `activeAiRef.current` per turn, so a swap takes effect on the next turn
   // with no workspace re-creation.
   const activeAiRef = useRef<AgentAi>(aiRef.current);
-  // The lazily-built local coordinator (loaded GGUF weights). Null until the
-  // first `/coordinator local`; cached so re-toggling never reloads the weights.
-  const localCoordinatorRef = useRef<OnDeviceCoordinator | null>(null);
+  // The lazily-built local coordinator (loaded GGUF weights), resolved through
+  // the runtime provider factory (see agent/adapters/coordinator.ts). Null until
+  // the first `/coordinator local`; cached so re-toggling never reloads weights.
+  const localCoordinatorRef = useRef<ResolvedCoordinator | null>(null);
   // Where the coordinator runs: "remote" (platform gateway) or "local" (on-device).
   // Persisted coordinator drives the initial label, but the active port always
   // starts remote so REPL boot never blocks on loading local weights.
@@ -1865,7 +1865,12 @@ export function ReplApp({
           );
           try {
             let lastPct = -1;
-            const coord = await prepareOnDeviceCoordinator({
+            // Resolve through the runtime provider factory — the ONE live seam
+            // for coordinator transport selection (a future Ollama/ONNX provider
+            // drops in behind resolveCoordinatorAi with no change here).
+            const coord = await resolveCoordinatorAi({
+              baseAi: aiRef.current,
+              coordinatorId: "on-device",
               onProgress: (received, total) => {
                 if (!total) return;
                 const pct = Math.floor((received / total) * 100);
@@ -2272,29 +2277,28 @@ export function ReplApp({
       // and checks are still pending, the wait is legitimate — extend, capped
       // cumulatively at resolveCiWaitCapMs() (2h default). Per-model-call
       // timeouts live in the metered AI port.
-      const turnController = makeTurnController(controller.signal);
       const inactivityMs = resolveTurnInactivityMs();
       let inFlightTools = 0;
       let fleetInFlight = false;
       const ciProbe = createCiWaitProbe(cwd);
-      const stall = makeStallDetector(
-        inactivityMs,
-        () => {
-          if (!turnController.signal.aborted) {
-            const idleMs = Date.now() - (lastProgressRef.current ?? Date.now());
-            void debugLog("timeout", `[timeout] scope=turn reason=inactivity idle_ms=${idleMs}`);
-            turnController.abort(new AgentTimeoutError("turn inactivity", inactivityMs));
-          }
-        },
+      // The REPL tracks tools/fleet in its own closures (the stream sinks below
+      // mutate them), so the fleet-aware shouldDefer REPLACES the runner's
+      // built-in in-flight-tool default — fold both signals in here.
+      const runner = createTurnRunner(
+        { turnInactivityMs: inactivityMs },
         {
-          shouldDefer: () => inFlightTools > 0 || fleetInFlight,
-          probe: () => ciProbe.probe(),
+          callerSignal: controller.signal,
           onLog: (line) => void debugLog("timeout", line),
+          stall: {
+            shouldDefer: () => inFlightTools > 0 || fleetInFlight,
+            probe: () => ciProbe.probe(),
+          },
         },
       );
-      // Record progress: reset the inactivity guard AND advance the idle clock.
+      // Record progress: reset the inactivity guard AND advance the idle clock
+      // (lastProgressRef also feeds the ThinkingIndicator heartbeat).
       const noteProgress = (): void => {
-        stall.reset();
+        runner.noteProgress();
         lastProgressRef.current = Date.now();
       };
 
@@ -2479,7 +2483,7 @@ export function ReplApp({
             codeGraph: codeGraphRef.current,
             memory: turnMemory,
             agents: [...agentsRef.current.values()],
-            signal: turnController.signal,
+            signal: runner.signal,
           });
           noteProgress();
         }
@@ -2520,9 +2524,9 @@ export function ReplApp({
               projectContext: projectContextRef.current,
               agents: agentsRef.current,
               readOnly: modeRef.current === "readonly",
-              signal: turnController.signal,
+              signal: runner.signal,
               onTask: (ev) => {
-                if (turnController.signal.aborted) return;
+                if (runner.signal.aborted) return;
                 noteProgress();
                 // Task Progress checklist mirrors the fleet task lifecycle.
                 taskRegistry.update(ev.taskId, {
@@ -2565,7 +2569,7 @@ export function ReplApp({
                 }
               },
               onUpdate: (snap) => {
-                if (turnController.signal.aborted) return;
+                if (runner.signal.aborted) return;
                 noteProgress();
                 for (const a of snap.agents) {
                   if (a.status === "running") {
@@ -2682,14 +2686,14 @@ export function ReplApp({
           codeGraph: codeGraphRef.current,
           trace: traceStoreRef.current,
           graphSync: graphSyncRef.current,
-          signal: turnController.signal,
+          signal: runner.signal,
           // Always surface the pre-execution snapshot as a scope card in the
           // transcript, so the user ALWAYS sees both their original prompt and
           // the enhanced version the agent will run, plus the routed model and
           // an estimated cost — no setting required (feature 2). Long prompts
           // render truncated; Ctrl-O expands them (see ScopeCard).
           onScopeReview: (info) => {
-            if (turnController.signal.aborted) return;
+            if (runner.signal.aborted) return;
             noteProgress();
             closeStreamingBlocks();
             turn.push({ role: "scope", scope: info, content: "", timestamp: Date.now() });
@@ -2712,7 +2716,7 @@ export function ReplApp({
               }
             : {}),
           onStage: (stage) => {
-            if (turnController.signal.aborted) return;
+            if (runner.signal.aborted) return;
             noteProgress();
             // Heartbeat: name what's happening now so a silent step still tells
             // the user what it's doing (feature 1).
@@ -2735,7 +2739,7 @@ export function ReplApp({
             render();
           },
           onToolCall: (name, input) => {
-            if (turnController.signal.aborted) return;
+            if (runner.signal.aborted) return;
             // The tool is now EXECUTING — silence until it returns is expected,
             // so the inactivity guard defers while the count is non-zero.
             inFlightTools++;
@@ -2772,7 +2776,7 @@ export function ReplApp({
           onToolEvent: (e) => {
             // Tool finished — real progress; the in-flight deferral ends here.
             inFlightTools = Math.max(0, inFlightTools - 1);
-            if (turnController.signal.aborted) return;
+            if (runner.signal.aborted) return;
             noteProgress();
             void debugLog("turn", "turn.tool-done", {
               name: e.name,
@@ -2781,7 +2785,7 @@ export function ReplApp({
             });
           },
           onReasoning: (delta) => {
-            if (turnController.signal.aborted) return;
+            if (runner.signal.aborted) return;
             noteProgress();
             // Reasoning tokens are billed output — feed the live burn estimate
             // (real usage supersedes it when the call settles).
@@ -2803,7 +2807,7 @@ export function ReplApp({
             render();
           },
           onText: (delta) => {
-            if (turnController.signal.aborted) return;
+            if (runner.signal.aborted) return;
             noteProgress();
             streamCharsRef.current += delta.length;
             // Live burn: tick the status line/dock while the worker streams,
@@ -2824,7 +2828,7 @@ export function ReplApp({
             render();
           },
           onFileChange: (diff, changedFiles) => {
-            if (turnController.signal.aborted) return;
+            if (runner.signal.aborted) return;
             noteProgress();
             // Render the code changes as a syntax-highlighted diff message, so
             // the user sees exactly what changed — themed to the terminal
@@ -2936,10 +2940,10 @@ export function ReplApp({
         closeStreamingBlocks();
         // Distinguish the three exit paths: an explicit user cancel (Esc/Ctrl-C),
         // a timeout/stall (the turn deadline or stall detector fired on
-        // turnController with a typed AgentTimeoutError reason), or a real error.
+        // turn runner with a typed AgentTimeoutError reason), or a real error.
         const userCancelled = controller.signal.aborted;
-        const timeoutReason: unknown = turnController.signal.aborted
-          ? turnController.signal.reason
+        const timeoutReason: unknown = runner.signal.aborted
+          ? runner.signal.reason
           : undefined;
         const content = userCancelled
           ? "(cancelled)"
@@ -2971,7 +2975,7 @@ export function ReplApp({
         // turn's last committed content should land, not vanish mid-frame.
         renderThrottle.flush(() => [...base, ...turn]);
         if (renderThrottleRef.current === renderThrottle) renderThrottleRef.current = null;
-        stall.stop();
+        runner.stop();
         // This turn is over (success, error, or cancel) — retire its HUD entry.
         // It's this turn's own handle, so retiring it is safe even when an
         // overlapped later turn now owns the shared UI state guarded below.
