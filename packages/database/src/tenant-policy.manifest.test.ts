@@ -128,7 +128,7 @@ describe("tenant policy manifest", () => {
     expect(unique.size).toBe(tables.length);
   });
 
-  it("covers exactly the 85 policied tables of the v0.4.x schema", () => {
+  it("covers exactly the 88 policied tables of the v0.4.x schema", () => {
     // Intentional ratchet: adding a tenant-owned table means updating BOTH the
     // manifest and this count (and regenerating the Atlas RLS migration).
     // 62 = 63 baseline − plugin.org_denylist (removed 2026-06-17 workspace-scoping rebuild).
@@ -162,7 +162,11 @@ describe("tenant policy manifest", () => {
     //      authority + fencing-token counter, ADR-021 §5, orgScopeMixin +
     //      forced tenant_isolation RLS, 20260708130000_agent_file_locks.sql —
     //      bumped past the budget-policy prefix collision, PR #647).
-    expect(POLICY_MANIFEST.length).toBe(85);
+    // 88 = 85 + environments.sandbox_templates + environments.sandbox_template_tools
+    //      + environments.agent_environment_bindings (Sandbox Templates Phase 1,
+    //      Spec §5.2–§5.3/§5.6, 20260712120000_sandbox_templates.sql — the PR
+    //      updated the manifest but not this ratchet).
+    expect(POLICY_MANIFEST.length).toBe(88);
   });
 
   it("covers slug-history tables for org + workspace renames (OXA-1779)", () => {
