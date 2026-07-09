@@ -37,12 +37,7 @@ import { resolveApiContext } from "../lib/api.js";
 import { debugLog } from "../lib/debug-log.js";
 import { loadSettings } from "../settings/resolve.js";
 import { formatToolCallWithSpacing } from "./tool-formatter.js";
-import {
-  makeTurnController,
-  makeStallDetector,
-  AgentTimeoutError,
-  resolveTurnInactivityMs,
-} from "./timeouts.js";
+import { createTurnRunner, resolveTurnInactivityMs } from "./timeouts.js";
 import type { FixRunner, FixTurnResult } from "../lib/pr-fix.js";
 import type { Session } from "../lib/session.js";
 
@@ -98,21 +93,11 @@ export function createPrFixRunner(opts: CreatePrFixRunnerOptions): PrFixRunnerHa
   const profile: "headless" | undefined = process.stdout.isTTY ? undefined : "headless";
 
   const runFixer: FixRunner = async (prompt: string): Promise<FixTurnResult> => {
-    const turnController = makeTurnController();
-    const inactivityMs = resolveTurnInactivityMs();
-    let inFlightTools = 0;
     // No CI probe here: the fix loop's own poller (lib/pr-fix.ts waitForTerminal)
     // does the CI waiting OUTSIDE these turns; a fixer turn itself should never
-    // sit silent — an executing tool defers via shouldDefer.
-    const stall = makeStallDetector(
-      inactivityMs,
-      () => {
-        if (!turnController.signal.aborted) {
-          turnController.abort(new AgentTimeoutError("turn inactivity", inactivityMs));
-        }
-      },
-      { shouldDefer: () => inFlightTools > 0 },
-    );
+    // sit silent — the runner's default shouldDefer (in-flight tool count > 0)
+    // defers while a tool executes.
+    const runner = createTurnRunner({ turnInactivityMs: resolveTurnInactivityMs() });
 
     try {
       const result = await runTurn({
@@ -126,21 +111,21 @@ export function createPrFixRunner(opts: CreatePrFixRunnerOptions): PrFixRunnerHa
         maxSteps: FIX_TURN_MAX_STEPS,
         codeGraph,
         memory: createCombinedMemory(null, null, { server: serverMemory, recallQuery: prompt }),
-        signal: turnController.signal,
-        onText: () => stall.reset(),
+        signal: runner.signal,
+        onText: () => runner.noteProgress(),
         onToolCall: (name, input) => {
-          inFlightTools++;
-          stall.reset();
+          runner.noteToolStart();
+          runner.noteProgress();
           process.stderr.write(formatToolCallWithSpacing(name, input));
         },
         onToolEvent: () => {
-          inFlightTools = Math.max(0, inFlightTools - 1);
-          stall.reset();
+          runner.noteToolEnd();
+          runner.noteProgress();
         },
       });
       return { text: result.text };
     } finally {
-      stall.stop();
+      runner.stop();
     }
   };
 

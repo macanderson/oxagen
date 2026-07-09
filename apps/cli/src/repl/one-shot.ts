@@ -49,8 +49,7 @@ import { formatToolCall, formatToolCallWithSpacing } from "../agent/tool-formatt
 import { formatActivityLine } from "../tui/activity.js";
 import { debugLog } from "../lib/debug-log.js";
 import {
-  makeTurnController,
-  makeStallDetector,
+  createTurnRunner,
   AgentTimeoutError,
   resolveTurnInactivityMs,
 } from "../agent/timeouts.js";
@@ -226,21 +225,12 @@ export async function runOneShot(
   // it also makes one CI call-out: a turn that was watching still-pending
   // checks keeps waiting (capped at resolveCiWaitCapMs(), 2h default).
   const inactivityMs = resolveTurnInactivityMs();
-  const turnController = makeTurnController();
-  let inFlightTools = 0;
   const ciProbe = createCiWaitProbe(cwd);
-  const stall = makeStallDetector(
-    inactivityMs,
-    () => {
-      if (!turnController.signal.aborted) {
-        void debugLog("timeout", "[timeout] scope=turn reason=inactivity");
-        turnController.abort(new AgentTimeoutError("turn inactivity", inactivityMs));
-      }
-    },
+  const runner = createTurnRunner(
+    { turnInactivityMs: inactivityMs },
     {
-      shouldDefer: () => inFlightTools > 0,
-      probe: () => ciProbe.probe(),
       onLog: (line) => void debugLog("timeout", line),
+      stall: { probe: () => ciProbe.probe() },
     },
   );
 
@@ -276,7 +266,7 @@ export async function runOneShot(
     settings,
     readOnly,
     gatePermissions: false,
-    signal: turnController.signal,
+    signal: runner.signal,
     onBlocked: (name, reason) => {
       void debugLog("turn", "turn.tool-blocked", { name, reason });
       process.stderr.write(`  ⛔ ${name}: ${reason}\n`);
@@ -360,10 +350,10 @@ export async function runOneShot(
         ? null
         : createGraphSyncProvider({ ...options.session, cwd }),
       effort: resolveEffort(options.effort),
-      signal: turnController.signal,
+      signal: runner.signal,
       // Pipeline stage progress goes to stderr so stdout stays the clean answer.
       onStage: (stage) => {
-        stall.reset();
+        runner.noteProgress();
         void debugLog("turn", "turn.stage", { label: stage.label, detail: stage.detail });
         if (format === "stream-json") {
           emitJson({ type: "stage", label: stage.label, detail: stage.detail });
@@ -372,7 +362,7 @@ export async function runOneShot(
         }
       },
       onText: (delta) => {
-        stall.reset();
+        runner.noteProgress();
         streamed = true;
         if (format === "text") process.stdout.write(delta);
         else if (format === "stream-json") emitJson({ type: "text", delta });
@@ -381,16 +371,16 @@ export async function runOneShot(
       // Reasoning / chain-of-thought goes to stderr (dim), so the piped stdout
       // stays the clean answer while the thinking is still visible on a TTY.
       onReasoning: (delta) => {
-        stall.reset();
+        runner.noteProgress();
         if (format === "stream-json") emitJson({ type: "reasoning", delta });
         else process.stderr.write(`\x1b[2m${delta}\x1b[22m`);
       },
       // Tool activity goes to stderr so stdout stays the clean final answer
       // (pipeable). e.g. `oxagen "..." > out.md` captures only the answer.
       onToolCall: (name, input) => {
-        inFlightTools++;
+        runner.noteToolStart();
         ciProbe.noteToolCall(name, input);
-        stall.reset();
+        runner.noteProgress();
         void debugLog("turn", "turn.tool-call", { name, input });
         if (format === "stream-json") {
           emitJson({ type: "tool", phase: "start", name });
@@ -399,8 +389,8 @@ export async function runOneShot(
         }
       },
       onToolEvent: ({ name, ok, durationMs }) => {
-        inFlightTools = Math.max(0, inFlightTools - 1);
-        stall.reset();
+        runner.noteToolEnd();
+        runner.noteProgress();
         void debugLog("turn", "turn.tool-result", { name, ok, durationMs });
         if (format === "stream-json") {
           emitJson({ type: "tool", phase: "end", name, ok, durationMs });
@@ -438,8 +428,8 @@ export async function runOneShot(
     // A timeout/stall aborts turnController with a typed AgentTimeoutError whose
     // message is already user-facing; surface it verbatim rather than as a raw
     // AbortError from the AI SDK.
-    const reason: unknown = turnController.signal.aborted
-      ? turnController.signal.reason
+    const reason: unknown = runner.signal.aborted
+      ? runner.signal.reason
       : undefined;
     const message =
       reason instanceof AgentTimeoutError
@@ -454,7 +444,7 @@ export async function runOneShot(
     process.stderr.write(`Error: ${message}\n`);
     process.exitCode = 1;
   } finally {
-    stall.stop();
+    runner.stop();
     await extras.closeMcp();
     await memory?.close();
   }
@@ -510,25 +500,16 @@ export async function runAgentOneShot(
         workspaceSlug: options.session.workspaceSlug,
       });
   const ai = createMeteredAi(baseAi, { onLog: (line) => void debugLog("timeout", line) });
-  const turnController = makeTurnController();
   // Same progress guard as runOneShot: headless has no Esc, so this is the only
   // backstop against a hung turn. Defers while a tool executes; probes CI
   // before aborting a turn that was watching still-pending checks.
   const inactivityMs = resolveTurnInactivityMs();
-  let inFlightTools = 0;
   const ciProbe = createCiWaitProbe(cwd);
-  const stall = makeStallDetector(
-    inactivityMs,
-    () => {
-      if (!turnController.signal.aborted) {
-        void debugLog("timeout", "[timeout] scope=turn reason=inactivity");
-        turnController.abort(new AgentTimeoutError("turn inactivity", inactivityMs));
-      }
-    },
+  const runner = createTurnRunner(
+    { turnInactivityMs: inactivityMs },
     {
-      shouldDefer: () => inFlightTools > 0,
-      probe: () => ciProbe.probe(),
       onLog: (line) => void debugLog("timeout", line),
+      stall: { probe: () => ciProbe.probe() },
     },
   );
   const extras = await buildTurnExtras({
@@ -537,7 +518,7 @@ export async function runAgentOneShot(
     readOnly: options.readOnly,
     agentTools: agent.tools,
     gatePermissions: true,
-    signal: turnController.signal,
+    signal: runner.signal,
     onBlocked: (name, reason) => process.stderr.write(`  ⛔ ${name}: ${reason}\n`),
   });
   const enrichedContext = extras.systemAppend
@@ -575,26 +556,26 @@ export async function runAgentOneShot(
       }),
       codeGraph: createCodeGraphProvider((op, q, l) => queryCodeGraph(cwd, op, q, l)),
       trace: openTraceStore(cwd),
-      signal: turnController.signal,
+      signal: runner.signal,
       onText: (delta) => {
-        stall.reset();
+        runner.noteProgress();
         streamed = true;
         process.stdout.write(delta);
       },
       // Reasoning to stderr (dim) so piped stdout stays the clean answer.
       onReasoning: (delta) => {
-        stall.reset();
+        runner.noteProgress();
         process.stderr.write(`\x1b[2m${delta}\x1b[22m`);
       },
       onToolCall: (name, input) => {
-        inFlightTools++;
+        runner.noteToolStart();
         ciProbe.noteToolCall(name, input);
-        stall.reset();
+        runner.noteProgress();
         process.stderr.write(`  · ${formatToolCall(name, input)}\n`);
       },
       onToolEvent: () => {
-        inFlightTools = Math.max(0, inFlightTools - 1);
-        stall.reset();
+        runner.noteToolEnd();
+        runner.noteProgress();
       },
     });
     if (streamed) process.stdout.write("\n");
@@ -602,7 +583,7 @@ export async function runAgentOneShot(
     process.stderr.write(`Error: ${err instanceof Error ? err.message : String(err)}\n`);
     process.exitCode = 1;
   } finally {
-    stall.stop();
+    runner.stop();
     await extras.closeMcp();
     await memory?.close();
   }

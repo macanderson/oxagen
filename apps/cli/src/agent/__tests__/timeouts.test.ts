@@ -353,6 +353,92 @@ describe("createTurnRunner", () => {
   });
 });
 
+// ── createTurnRunner — manual mode (subsumes the hand-rolled compositions) ─────
+// The live surfaces (one-shot, pr-fix, sessions, planner) don't call run(): they
+// pass `signal` to runTurn and drive the eagerly-armed guard via
+// noteProgress / noteToolStart / noteToolEnd / stop. These cover that path.
+
+describe("createTurnRunner — manual mode", () => {
+  it("arms the inactivity guard eagerly and noteProgress() resets it", async () => {
+    vi.useFakeTimers();
+    const runner = createTurnRunner({ turnInactivityMs: 1_000 });
+    // 900ms in, report progress: the window restarts from 0.
+    await vi.advanceTimersByTimeAsync(900);
+    runner.noteProgress();
+    await vi.advanceTimersByTimeAsync(900);
+    expect(runner.signal.aborted).toBe(false);
+    // 1001ms silent since the last progress: the guard fires, controller aborts.
+    await vi.advanceTimersByTimeAsync(1_001);
+    expect(runner.signal.aborted).toBe(true);
+    expect(runner.signal.reason).toBeInstanceOf(AgentTimeoutError);
+    runner.stop();
+  });
+
+  it("defers the abort while a tool is in flight (default shouldDefer = tool count)", async () => {
+    vi.useFakeTimers();
+    const runner = createTurnRunner({ turnInactivityMs: 1_000 });
+    runner.noteToolStart();
+    // Two full windows elapse mid-tool: deferred both times.
+    await vi.advanceTimersByTimeAsync(2_001);
+    expect(runner.signal.aborted).toBe(false);
+    // Tool returns; nothing else lands: the next expiry fires for real.
+    runner.noteToolEnd();
+    await vi.advanceTimersByTimeAsync(1_001);
+    expect(runner.signal.aborted).toBe(true);
+    runner.stop();
+  });
+
+  it("wires a stall probe: a live CI wait extends the window instead of aborting", async () => {
+    vi.useFakeTimers();
+    const probe = vi.fn().mockResolvedValue(true);
+    const runner = createTurnRunner({ turnInactivityMs: 1_000 }, { stall: { probe } });
+    await vi.advanceTimersByTimeAsync(1_001);
+    expect(probe).toHaveBeenCalledOnce();
+    expect(runner.signal.aborted).toBe(false);
+    runner.stop();
+  });
+
+  it("honours a custom shouldDefer (e.g. a fleet still executing)", async () => {
+    vi.useFakeTimers();
+    let fleetInFlight = true;
+    const runner = createTurnRunner(
+      { turnInactivityMs: 1_000 },
+      { stall: { shouldDefer: () => fleetInFlight } },
+    );
+    await vi.advanceTimersByTimeAsync(2_001);
+    expect(runner.signal.aborted).toBe(false);
+    fleetInFlight = false;
+    await vi.advanceTimersByTimeAsync(1_001);
+    expect(runner.signal.aborted).toBe(true);
+    runner.stop();
+  });
+
+  it("logs scope=turn reason=inactivity through onLog when the guard fires", async () => {
+    vi.useFakeTimers();
+    const logs: string[] = [];
+    const runner = createTurnRunner({ turnInactivityMs: 1_000 }, { onLog: (l) => logs.push(l) });
+    await vi.advanceTimersByTimeAsync(1_001);
+    expect(runner.signal.aborted).toBe(true);
+    expect(logs.some((l) => l.includes("scope=turn") && l.includes("reason=inactivity"))).toBe(true);
+    runner.stop();
+  });
+
+  it("controller-only: no guard when turnInactivityMs is omitted, but the caller signal still chains", async () => {
+    vi.useFakeTimers();
+    const caller = new AbortController();
+    const runner = createTurnRunner({}, { callerSignal: caller.signal });
+    // No inactivity guard: an hour of silence never aborts it (planner path).
+    await vi.advanceTimersByTimeAsync(60 * 60 * 1000);
+    expect(runner.signal.aborted).toBe(false);
+    // The caller signal (Esc / Ctrl-C) still propagates.
+    caller.abort("esc");
+    await Promise.resolve();
+    expect(runner.signal.aborted).toBe(true);
+    // stop() is a safe no-op when no guard was armed.
+    expect(() => runner.stop()).not.toThrow();
+  });
+});
+
 // ── makeStallDetector ─────────────────────────────────────────────────────────
 
 describe("makeStallDetector", () => {
