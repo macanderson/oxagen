@@ -2,8 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const workspaceModelSettingsRead = registerCapability({
-  name: "workspace.model_settings.read",
-  aliases: ["workspace.model.settings.read"],
+  name: "get_model_settings",
   domain: "workspace",
   description: "Read the workspace-level model defaults (text tier/model, image model, video model)",
   mode: "sync",

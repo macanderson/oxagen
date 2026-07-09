@@ -132,7 +132,7 @@ describe("api.key.create handler — auth + scope guards", () => {
       (e: unknown) =>
         e instanceof CapabilityError &&
         e.code === "authz_denied" &&
-        e.capability === "api.key.create",
+        e.capability === "create_api_key",
     );
   });
 
@@ -143,7 +143,7 @@ describe("api.key.create handler — auth + scope guards", () => {
       (e: unknown) =>
         e instanceof CapabilityError &&
         e.code === "authz_denied" &&
-        e.capability === "api.key.create",
+        e.capability === "create_api_key",
     );
   });
 
@@ -154,7 +154,7 @@ describe("api.key.create handler — auth + scope guards", () => {
       (e: unknown) =>
         e instanceof CapabilityError &&
         e.code === "authz_denied" &&
-        e.capability === "api.key.create",
+        e.capability === "create_api_key",
     );
   });
 });
@@ -176,7 +176,7 @@ describe("api.key.create handler — role gate", () => {
       (e: unknown) =>
         e instanceof CapabilityError &&
         e.code === "authz_denied" &&
-        e.capability === "api.key.create",
+        e.capability === "create_api_key",
     );
   });
 
@@ -194,7 +194,7 @@ describe("api.key.create handler — role gate", () => {
       (e: unknown) =>
         e instanceof CapabilityError &&
         e.code === "authz_denied" &&
-        e.capability === "api.key.create",
+        e.capability === "create_api_key",
     );
   });
 
@@ -212,7 +212,7 @@ describe("api.key.create handler — role gate", () => {
       (e: unknown) =>
         e instanceof CapabilityError &&
         e.code === "authz_denied" &&
-        e.capability === "api.key.create",
+        e.capability === "create_api_key",
     );
   });
 });
@@ -253,7 +253,7 @@ describe("api.key.create handler — happy path", () => {
     expect(mocks.emitSecurityEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         eventType: "api_key.created",
-        capability: "api.key.create",
+        capability: "create_api_key",
         outcome: "success",
         orgId: TEST_CTX.orgId,
       }),

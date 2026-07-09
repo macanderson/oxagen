@@ -62,6 +62,9 @@ vi.mock("@oxagen/plugins", () => ({
 vi.mock("@modelcontextprotocol/sdk/client/auth.js", () => ({ auth: mockMcpAuth }));
 
 import { GET } from "./route";
+// Resolves to the vi.mock'd constructor above — imported so the returnTo tests
+// can assert what ctx the provider was constructed with.
+import { DbOAuthClientProvider } from "@oxagen/plugins";
 
 /** Build the HTTPAccessFallbackError shape that notFound() throws. */
 function notFoundSentinel(): Error {
@@ -161,5 +164,72 @@ describe("GET /api/v1/mcp/oauth/authorize — never crashes the function", () =>
     expect(res.headers.get("location")).toBe(
       "https://auth.example.com/authorize?x=1",
     );
+  });
+});
+
+describe("GET /api/v1/mcp/oauth/authorize — returnTo validation", () => {
+  function reqWithReturnTo(returnTo: string): Request {
+    return new Request(
+      "https://app.oxagen.sh/api/v1/mcp/oauth/authorize?orgSlug=acme&workspaceSlug=main&orgListingId=listing-1" +
+        `&returnTo=${encodeURIComponent(returnTo)}`,
+    );
+  }
+
+  /** Prime the listing + workspace lookups the happy path performs. */
+  function primeHappyLookups(): void {
+    mockWithSystemDb
+      .mockResolvedValueOnce({
+        id: "listing-1",
+        orgId: ORG.id,
+        endpointUrl: "https://mcp.example.com",
+      })
+      .mockResolvedValueOnce({ id: "ws-1" });
+  }
+
+  it("threads a valid same-org returnTo into the provider ctx and the already-authorized redirect", async () => {
+    primeHappyLookups();
+    mockMcpAuth.mockResolvedValueOnce("AUTHORIZED");
+
+    const res = await GET(
+      reqWithReturnTo("/acme/main/marketplace/agent-tools?tab=mcp") as never,
+    );
+
+    // The validated returnTo is what the provider persists into OAuth state
+    // (it is what the callback redirects back to).
+    expect(vi.mocked(DbOAuthClientProvider)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        returnTo: "/acme/main/marketplace/agent-tools?tab=mcp",
+      }),
+    );
+
+    // Already-authorized: redirect straight back to returnTo, preserving its
+    // own query string and appending the flow-result params.
+    expect(res.status).toBe(307);
+    const dest = new URL(res.headers.get("location") ?? "");
+    expect(dest.origin).toBe("https://app.oxagen.sh");
+    expect(dest.pathname).toBe("/acme/main/marketplace/agent-tools");
+    expect(dest.searchParams.get("tab")).toBe("mcp");
+    expect(dest.searchParams.get("mcp")).toBe("already-connected");
+    expect(dest.searchParams.get("listing")).toBe("listing-1");
+  });
+
+  it("falls back to the MCP Servers page when returnTo is an absolute URL (open-redirect guard)", async () => {
+    primeHappyLookups();
+    mockMcpAuth.mockResolvedValueOnce("AUTHORIZED");
+
+    const res = await GET(reqWithReturnTo("https://evil.com/phish") as never);
+
+    // The hostile value never reaches the provider ctx…
+    expect(vi.mocked(DbOAuthClientProvider)).toHaveBeenCalledWith(
+      expect.objectContaining({ returnTo: "/acme/main/studio/tools/mcp" }),
+    );
+
+    // …and the redirect stays on our origin, on the default MCP Servers page.
+    expect(res.status).toBe(307);
+    const dest = new URL(res.headers.get("location") ?? "");
+    expect(dest.origin).toBe("https://app.oxagen.sh");
+    expect(dest.pathname).toBe("/acme/main/studio/tools/mcp");
+    expect(dest.searchParams.get("mcp")).toBe("already-connected");
+    expect(dest.searchParams.get("listing")).toBe("listing-1");
   });
 });

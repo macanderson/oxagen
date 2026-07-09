@@ -48,7 +48,7 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
     actorUserId: ctx.userId ?? null,
     orgId: ctx.orgId,
     workspaceId: ctx.workspaceId ?? null,
-    capability: "plugin.org.uninstall",
+    capability: "uninstall_plugin",
     outcome: "success",
     ip: null,
     userAgent: null,

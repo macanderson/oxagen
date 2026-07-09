@@ -124,10 +124,10 @@ describe("document.create route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with contract name 'document.create' and surface 'api'", async () => {
+  it("calls invoke with contract name 'create_document' and surface 'api'", async () => {
     await app.fetch(post(PATH, { title: "My Doc", content: "Hello" }));
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("document.create");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("create_document");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -167,10 +167,10 @@ describe("document.list route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with contract name 'document.list' and surface 'api'", async () => {
+  it("calls invoke with contract name 'list_documents' and surface 'api'", async () => {
     await app.fetch(get(PATH));
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("document.list");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("list_documents");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -206,10 +206,10 @@ describe("document.read route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with contract name 'document.read' and surface 'api'", async () => {
+  it("calls invoke with contract name 'read_document' and surface 'api'", async () => {
     await app.fetch(get(PATH, { document_id: "doc-abc" }));
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("document.read");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("read_document");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -240,10 +240,10 @@ describe("image.create route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with contract name 'image.create' and surface 'api'", async () => {
+  it("calls invoke with contract name 'create_image' and surface 'api'", async () => {
     await app.fetch(post(PATH, { prompt: "A red cube" }));
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("image.create");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("create_image");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -285,10 +285,10 @@ describe("image.list route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with contract name 'image.list' and surface 'api'", async () => {
+  it("calls invoke with contract name 'list_images' and surface 'api'", async () => {
     await app.fetch(get(PATH));
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("image.list");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("list_images");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -323,10 +323,10 @@ describe("image.analyze route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with contract name 'image.analyze' and surface 'api'", async () => {
+  it("calls invoke with contract name 'analyze_image' and surface 'api'", async () => {
     await app.fetch(post(PATH, { image_id: "img-abc" }));
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("image.analyze");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("analyze_image");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 

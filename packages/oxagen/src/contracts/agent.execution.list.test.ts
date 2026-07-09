@@ -4,7 +4,7 @@ import { getCapability } from "../registry";
 
 describe("agent.execution.list capability", () => {
   it("is registered read-only with the expected surfaces", () => {
-    const cap = getCapability("agent.execution.list");
+    const cap = getCapability("list_executions");
     expect(cap).toBeDefined();
     expect(cap?.surfaces).toEqual(["api", "mcp", "agent"]);
     expect(cap?.sensitivity).toBe("low");

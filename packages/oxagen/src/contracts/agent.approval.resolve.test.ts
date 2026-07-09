@@ -47,6 +47,6 @@ describe("agent.approval.resolve capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("agent.approval.resolve")).toBe(agentApprovalResolve);
+    expect(getCapability("resolve_approval")).toBe(agentApprovalResolve);
   });
 });

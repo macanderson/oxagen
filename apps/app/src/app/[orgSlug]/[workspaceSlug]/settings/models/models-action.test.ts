@@ -163,7 +163,7 @@ describe("updateWorkspaceModelsAction", () => {
     });
     expect(res.ok).toBe(true);
     expect(mockInvoke).toHaveBeenCalledWith(
-      "workspace.model_settings.write",
+      "update_model_settings",
       {
         defaultTextTier: "balanced",
         defaultTextModel: "claude-sonnet",

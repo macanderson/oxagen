@@ -33,6 +33,7 @@ import {
 } from "@oxagen/database";
 import { rateLimiter } from "../../middleware/rate-limit";
 import {
+  captureLead,
   captureLeadAndIssueCode,
   findLeadByEmail,
   issueCodeForLead,
@@ -51,6 +52,7 @@ const EDITION_TITLES: Record<EditionSlug, string> = {
 
 /** User-facing success copy — the exact wording the product asked for. */
 const SENT_MESSAGE = "The link to the book has been sent to your email.";
+const DEMO_MESSAGE = "Thanks — we got it. We'll be in touch shortly.";
 const NOT_FOUND_MESSAGE =
   "We couldn’t find that email. Please fill out the form to get the book.";
 
@@ -76,6 +78,10 @@ const leadSchema = z
     referralSource: z.enum(REFERRAL_SOURCES).optional(),
     trackingCode: optionalTrimmed(500),
     edition: z.enum(EDITION_SLUGS).optional(),
+    // "book" (default) captures the lead AND emails a single-use reader link;
+    // "demo" captures the lead only — no code, no book email.
+    intent: z.enum(["book", "demo"]).optional(),
+    message: optionalTrimmed(2000),
     source: optionalTrimmed(120),
     pagePath: optionalTrimmed(1000),
     marketingConsent: z.boolean().optional(),
@@ -153,44 +159,54 @@ cmsRoute.post("/leads", async (c) => {
     );
   }
   const data = parsed.data;
+  const intent = data.intent ?? "book";
+  const successMessage = intent === "demo" ? DEMO_MESSAGE : SENT_MESSAGE;
 
   // Honeypot tripped → pretend success, drop silently (don't tip off bots).
   if (data.website && data.website.length > 0) {
-    return c.json({ ok: true, message: SENT_MESSAGE }, 200);
+    return c.json({ ok: true, message: successMessage }, 200);
   }
 
-  const edition: EditionSlug = data.edition ?? DEFAULT_EDITION_SLUG;
+  const leadInput = {
+    email: data.email,
+    firstName: data.firstName,
+    lastName: data.lastName,
+    jobTitle: data.jobTitle,
+    company: data.company,
+    companySize: data.companySize,
+    mobilePhone: data.mobilePhone,
+    country: data.country,
+    state: data.state,
+    city: data.city,
+    address1: data.address1,
+    address2: data.address2,
+    referralSource: data.referralSource,
+    trackingCode: data.trackingCode,
+    source: data.source ?? (intent === "demo" ? "demo" : "ebook-gate"),
+    pagePath: data.pagePath,
+    message: data.message,
+    marketingConsent: data.marketingConsent,
+  };
+
   try {
-    const { readUrl } = await captureLeadAndIssueCode(
-      {
-        email: data.email,
-        firstName: data.firstName,
-        lastName: data.lastName,
-        jobTitle: data.jobTitle,
-        company: data.company,
-        companySize: data.companySize,
-        mobilePhone: data.mobilePhone,
-        country: data.country,
-        state: data.state,
-        city: data.city,
-        address1: data.address1,
-        address2: data.address2,
-        referralSource: data.referralSource,
-        trackingCode: data.trackingCode,
-        source: data.source ?? "ebook-gate",
-        pagePath: data.pagePath,
-        marketingConsent: data.marketingConsent,
-      },
-      edition,
-      "signup",
-      clientCtx(c),
-    );
-    await emailReaderLink(data.email, edition, readUrl);
+    if (intent === "demo") {
+      // Demo requests capture the lead only — no book code, no book email.
+      await captureLead(leadInput);
+    } else {
+      const edition: EditionSlug = data.edition ?? DEFAULT_EDITION_SLUG;
+      const { readUrl } = await captureLeadAndIssueCode(
+        leadInput,
+        edition,
+        "signup",
+        clientCtx(c),
+      );
+      await emailReaderLink(data.email, edition, readUrl);
+    }
   } catch (err) {
     logger.error({ err }, "[cms] lead capture failed");
     return c.json({ error: "internal_error", message: "Failed to record your details" }, 500);
   }
-  return c.json({ ok: true, message: SENT_MESSAGE }, 200);
+  return c.json({ ok: true, message: successMessage }, 200);
 });
 
 // ── POST /v1/cms/book/redeem ──────────────────────────────────────────────────

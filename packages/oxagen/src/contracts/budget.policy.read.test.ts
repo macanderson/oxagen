@@ -4,7 +4,7 @@ import { getCapability } from "../registry";
 
 describe("budget.policy.read capability", () => {
   it("is registered under its name", () => {
-    expect(getCapability("budget.policy.read")).toBe(budgetPolicyRead);
+    expect(getCapability("get_user_budget")).toBe(budgetPolicyRead);
   });
 
   it("is user-scoped, low-risk, readable by all roles", () => {

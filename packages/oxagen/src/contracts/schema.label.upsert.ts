@@ -3,7 +3,7 @@ import { registerCapability } from "../registry";
 import { propertyInputSchema } from "./schema.types";
 
 export const schemaLabelUpsert = registerCapability({
-  name: "schema.label.upsert",
+  name: "upsert_schema_label",
   domain: "schema",
   description: "Create/update a node label on a schema within the draft version.",
   mode: "sync",

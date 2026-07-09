@@ -3,7 +3,7 @@ import { registerCapability } from "../registry";
 import { schemaSourceEnum, enforcementModeEnum, propertyInputSchema, cardinalityEnum } from "./schema.types";
 
 export const schemaRegistryGet = registerCapability({
-  name: "schema.registry.get",
+  name: "get_schema_registry",
   domain: "schema",
   description: "Resolve a workspace's registry: pinned version, draft version, enforcement mode, per-schema enabled state, label/relationship/property tree.",
   mode: "sync",

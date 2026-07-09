@@ -138,8 +138,8 @@ describe("agent.memory.remember capability", () => {
     expect(parsed.inferred.memoryKind).toBe("gotcha");
   });
 
-  it("is registered under name 'agent.memory.remember'", () => {
-    expect(getCapability("agent.memory.remember")).toBe(agentMemoryRemember);
+  it("is registered under name 'save_memory'", () => {
+    expect(getCapability("save_memory")).toBe(agentMemoryRemember);
   });
 
   it("is scoped", () => {

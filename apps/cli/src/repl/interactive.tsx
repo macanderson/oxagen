@@ -2763,13 +2763,23 @@ export function ReplApp({
             (t?.commandsRun?.length ?? 0) > 0 ||
             judged;
           if (t && didWork) {
+            // The score must never appear without its justification: surface
+            // the judge's reasoning, falling back to its concrete findings /
+            // remaining work when the verdict carries no prose.
+            const lastJudge = judged ? t.judgeRounds[t.judgeRounds.length - 1] : undefined;
+            const qualityReason = lastJudge
+              ? lastJudge.reasoning?.trim() ||
+                [...(lastJudge.findings ?? []), ...(lastJudge.remainingWork ?? [])].join("; ") ||
+                undefined
+              : undefined;
             turn.push({
               role: "assistant",
               content: "",
               timestamp: Date.now(),
               summary: {
                 complete: t.finalComplete,
-                quality: judged ? t.judgeRounds[t.judgeRounds.length - 1]?.confidence : undefined,
+                quality: lastJudge?.confidence,
+                qualityReason,
                 filesTouched: t.filesTouched ?? [],
                 costUsd: t.usage?.costUsd ?? 0,
                 judged,

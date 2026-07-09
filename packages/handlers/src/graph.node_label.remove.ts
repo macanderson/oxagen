@@ -50,6 +50,6 @@ export const graphNodeLabelRemoveHandler: CapabilityHandler<typeof graphNodeLabe
     }
   });
 
-  logger.info({ nodeId: input.nodeId, removed, orgId, workspaceId }, "graph.node_label.remove");
+  logger.info({ nodeId: input.nodeId, removed, orgId, workspaceId }, "remove_node_label");
   return { nodeId: input.nodeId, labels, removed };
 };

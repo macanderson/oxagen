@@ -30,7 +30,7 @@ export async function requestUserDataExportAction(): Promise<ExportResult> {
   const orgId = orgs[0]?.id ?? "";
 
   const result = await invoke(
-    "privacy.data.export",
+    "export_data",
     { scope: "user" },
     {
       userId: session.user.id,
@@ -59,7 +59,7 @@ export async function requestUserDataEraseAction(): Promise<EraseResult> {
   const orgId = orgs[0]?.id ?? "";
 
   const result = await invoke(
-    "privacy.data.erase",
+    "erase_data",
     { scope: "user", confirm: true },
     {
       userId: session.user.id,

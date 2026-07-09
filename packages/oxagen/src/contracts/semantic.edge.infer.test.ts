@@ -218,6 +218,6 @@ describe("semantic.edge.infer capability", () => {
   // ── registry ──────────────────────────────────────────────────────────────
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("semantic.edge.infer")).toBe(semanticEdgeInfer);
+    expect(getCapability("infer_semantic_edges")).toBe(semanticEdgeInfer);
   });
 });

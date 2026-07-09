@@ -2,7 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const automationCreate = registerCapability({
-  name: "automation.create",
+  name: "create_automation",
   domain: "automation",
   description:
     "Create a playbook and trigger for an automation. Use triggerType='event' for graph node changes (e.g. Contact status changes, new Commit nodes), 'schedule' for cron-based runs, or 'api' for manually-triggered playbooks. The steps array scaffolds the initial action — leave it empty to create a blank playbook. Always populate triggerConfig fully based on what the user described. Automations created by an AI agent ALWAYS start disabled regardless of the `enabled` input — a human must explicitly enable them via automation.enable.",

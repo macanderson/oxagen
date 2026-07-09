@@ -38,7 +38,7 @@ export async function RunDetailSection({
   let run: EvalRunGetOutput | null = null;
   try {
     run = (await runInTenantScope({ orgId, workspaceId }, () =>
-      invoke("eval.run.get", { runPublicId }, ctx, { surface: "agent" }),
+      invoke("get_eval_run", { runPublicId }, ctx, { surface: "agent" }),
     )) as EvalRunGetOutput;
   } catch (e) {
     console.error("eval.run.get failed:", e);

@@ -8,7 +8,7 @@ import { registerCapability } from "../registry";
 // Note: cannot snapshot while a command is mid-flight in the session.
 
 export const agentSandboxSnapshot = registerCapability({
-  name: "agent.sandbox.snapshot",
+  name: "snapshot_sandbox",
   domain: "agent",
   description:
     "Capture a filesystem snapshot of a durable sandbox session so it can be restored after an idle reap or the 24h lifetime ceiling.",

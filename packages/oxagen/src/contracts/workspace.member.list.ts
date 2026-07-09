@@ -2,7 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const workspaceMemberList = registerCapability({
-  name: "workspace.member.list",
+  name: "list_workspace_members",
   domain: "workspace",
   description: "List members of a workspace",
   mode: "sync",

@@ -43,7 +43,7 @@ describe("automation.enable capability", () => {
   // ── declaration invariants ────────────────────────────────────────────────
 
   it("is registered under automation.enable", () => {
-    expect(getCapability("automation.enable")).toBe(automationEnable);
+    expect(getCapability("enable_automation")).toBe(automationEnable);
   });
 
   it("exposes all four surfaces so every entry point can enable with its own human gate", () => {

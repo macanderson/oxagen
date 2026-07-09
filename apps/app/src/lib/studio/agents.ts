@@ -102,7 +102,7 @@ export async function listAgents(
   status?: "draft" | "active" | "archived",
 ): Promise<AgentListRow[]> {
   const out = (await invoke(
-    "agent.definition.list",
+    "list_agent_defs",
     { status },
     ctx,
     { surface: "agent" },
@@ -115,7 +115,7 @@ export async function getAgent(
   agentId: string,
 ): Promise<AgentDetail> {
   return (await invoke(
-    "agent.definition.get",
+    "get_agent_def",
     { agentId },
     ctx,
     { surface: "agent" },
@@ -133,7 +133,7 @@ export async function suggestAgentDefinition(
   input: { description: string; nameHint?: string; agentTypeHint?: string },
 ): Promise<SuggestAgentResult> {
   return (await invoke(
-    "agent.definition.suggest",
+    "suggest_agent_def",
     input,
     ctx,
     { surface: "agent" },
@@ -155,7 +155,7 @@ export async function createAgent(
   input: CreateAgentInput,
 ): Promise<{ agentId: string; publicId: string; slug: string; version: number }> {
   return (await invoke(
-    "agent.definition.create",
+    "create_agent_def",
     {
       slug: input.slug,
       name: input.name,
@@ -186,7 +186,7 @@ export async function updateAgent(
   input: UpdateAgentInput,
 ): Promise<{ agentId: string; version: number; isPublished: boolean }> {
   return (await invoke(
-    "agent.definition.update",
+    "update_agent_def",
     input,
     ctx,
     { surface: "agent" },
@@ -199,7 +199,7 @@ export async function publishAgent(
   version?: number,
 ): Promise<{ agentId: string; version: number; checksum: string }> {
   return (await invoke(
-    "agent.definition.publish",
+    "publish_agent_def",
     { agentId, version },
     ctx,
     { surface: "agent" },
@@ -212,7 +212,7 @@ export async function deployAgent(
   deploymentStatus: "inactive" | "active",
 ): Promise<{ agentId: string; deploymentStatus: "inactive" | "active" }> {
   return (await invoke(
-    "agent.deploy",
+    "deploy_agent",
     { agentId, deploymentStatus },
     ctx,
     { surface: "agent" },

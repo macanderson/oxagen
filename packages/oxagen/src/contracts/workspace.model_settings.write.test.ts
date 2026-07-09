@@ -63,7 +63,7 @@ describe("workspace.model.settings.write capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("workspace.model_settings.write")).toBe(workspaceModelSettingsWrite);
+    expect(getCapability("update_model_settings")).toBe(workspaceModelSettingsWrite);
   });
 
   it("declares scoped:true (workspace-scoped)", () => {

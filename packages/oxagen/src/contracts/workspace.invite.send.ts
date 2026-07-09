@@ -2,7 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const workspaceInviteSend = registerCapability({
-  name: "workspace.invite.send",
+  name: "send_workspace_invite",
   domain: "workspace",
   description: "Send a workspace invitation to an email address",
   mode: "sync",

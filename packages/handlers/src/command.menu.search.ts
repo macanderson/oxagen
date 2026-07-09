@@ -262,7 +262,7 @@ async function searchOntology(
     const labels = kind && labelMap[kind] ? [labelMap[kind] as string] : undefined;
 
     const result = (await invoke(
-      "graph.node.search",
+      "search_nodes",
       { query, labels, limit: 8 },
       ctx,
     )) as { nodes: Array<{ nodeId: string; label: string; displayName: string; description: string | null }> };

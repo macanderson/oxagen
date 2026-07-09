@@ -3,7 +3,7 @@ import { secretKeyDelete } from "./secret.key.delete";
 
 describe("secret.key.delete contract", () => {
   it("registers with the correct name", () => {
-    expect(secretKeyDelete.name).toBe("secret.key.delete");
+    expect(secretKeyDelete.name).toBe("delete_secret_key");
   });
   it("exposes the api, mcp, and agent surfaces", () => {
     expect(secretKeyDelete.surfaces).toEqual(["api", "mcp", "agent"]);

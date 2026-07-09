@@ -107,8 +107,15 @@ export interface GatewayAgentAiOptions {
   cwd?: string;
 }
 
+// 1-hour cache TTL, not the 5-minute default. Measured agent-loop cache hit
+// was ~48%: a long bash step (build, install, model download) between two LLM
+// calls routinely exceeds the 5-min default TTL, so the next call re-creates
+// the whole prefix from scratch (fresh price) instead of reading it cached.
+// A 1h TTL survives those gaps — cache *writes* cost 2x fresh input, but on a
+// 17+ step loop the read savings (10x) dominate. `ttl` rides the same
+// anthropic providerOptions namespace, ignored by non-Anthropic vendors.
 const ANTHROPIC_CACHE = {
-  anthropic: { cacheControl: { type: "ephemeral" } },
+  anthropic: { cacheControl: { type: "ephemeral", ttl: "1h" } },
 } as const;
 
 /**
@@ -182,13 +189,45 @@ export function createGatewayAgentAi(opts: GatewayAgentAiOptions = {}): AgentAi 
         abortSignal: args.abortSignal,
         ...(providerOptions ? { providerOptions } : {}),
         onError: args.onError,
-        onStepFinish: args.onStepFinish
-          ? (step) =>
-              args.onStepFinish?.({
-                toolCalls: step.toolCalls,
-                toolResults: step.toolResults,
-              })
-          : undefined,
+        // ALWAYS defined (even when the caller passes no onStepFinish) so we can
+        // capture per-LLM-call usage as a side-effect. The streaming path
+        // previously logged only the request shape, never the response usage —
+        // so per-turn token cost and the cache-read hit rate were invisible
+        // (only generateObject logged usage). That blind spot hid the true cost
+        // driver on long tool loops. Cache reads live under
+        // `inputTokenDetails.cacheReadTokens` in AI SDK v7 (see generateObject
+        // below). The engine port still receives only toolCalls/toolResults.
+        onStepFinish: (step) => {
+          const u = step.usage;
+          void debugLog("llm", "llm.stream.step", {
+            model: args.model,
+            inputTokens: u?.inputTokens ?? 0,
+            outputTokens: u?.outputTokens ?? 0,
+            cachedInputTokens: u?.inputTokenDetails?.cacheReadTokens ?? 0,
+            cacheWriteTokens: u?.inputTokenDetails?.cacheWriteTokens ?? 0,
+            finishReason: step.finishReason,
+          });
+          args.onStepFinish?.({
+            toolCalls: step.toolCalls,
+            toolResults: step.toolResults,
+          });
+        },
+        // Final per-turn rollup: total usage across every step of this stream,
+        // with the cache-read split — the decisive per-turn cost + cache-hit
+        // signal for tuning and for spotting an ineffective cache prefix.
+        onFinish: (final) => {
+          const u = final.totalUsage;
+          const cached = u?.inputTokenDetails?.cacheReadTokens ?? 0;
+          const fresh = u?.inputTokens ?? 0;
+          void debugLog("llm", "llm.stream.finish", {
+            model: args.model,
+            steps: final.steps?.length ?? 0,
+            inputTokens: fresh,
+            outputTokens: u?.outputTokens ?? 0,
+            cachedInputTokens: cached,
+            cacheHitPct: fresh + cached > 0 ? Math.round((100 * cached) / (fresh + cached)) : 0,
+          });
+        },
       });
     },
 

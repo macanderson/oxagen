@@ -4,7 +4,7 @@ import { getCapability } from "../registry";
 
 describe("browser.refresh capability", () => {
   it("is registered with the browser domain and correct metadata", () => {
-    const cap = getCapability("browser.refresh");
+    const cap = getCapability("refresh_page");
     expect(cap).toBeDefined();
     expect(cap?.domain).toBe("browser");
     expect(cap?.scoped).toBe(true);

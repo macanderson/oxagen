@@ -111,10 +111,10 @@ describe("schema.registry.get route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'schema.registry.get' and surface 'api'", async () => {
+  it("calls invoke with 'get_schema_registry' and surface 'api'", async () => {
     await authGet(PATH);
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("schema.registry.get");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("get_schema_registry");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -144,10 +144,10 @@ describe("schema.registry.config route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'schema.registry.config' and surface 'api'", async () => {
+  it("calls invoke with 'get_registry_config' and surface 'api'", async () => {
     await authPut(PATH, { enforcementMode: "lenient" });
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("schema.registry.config");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("get_registry_config");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -172,10 +172,10 @@ describe("schema.list route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'schema.list' and surface 'api'", async () => {
+  it("calls invoke with 'list_schemas' and surface 'api'", async () => {
     await authGet(PATH);
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("schema.list");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("list_schemas");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 });
@@ -193,10 +193,10 @@ describe("schema.toggle route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'schema.toggle' and surface 'api'", async () => {
+  it("calls invoke with 'toggle_schema' and surface 'api'", async () => {
     await authPost(PATH, { enabled: false });
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("schema.toggle");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("toggle_schema");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -227,10 +227,10 @@ describe("schema.label.upsert route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'schema.label.upsert' and surface 'api'", async () => {
+  it("calls invoke with 'upsert_schema_label' and surface 'api'", async () => {
     await authPut(PATH, { displayName: "Contact" });
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("schema.label.upsert");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("upsert_schema_label");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -262,10 +262,10 @@ describe("schema.label.delete route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'schema.label.delete' and surface 'api'", async () => {
+  it("calls invoke with 'delete_schema_label' and surface 'api'", async () => {
     await authDelete(PATH);
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("schema.label.delete");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("delete_schema_label");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -290,10 +290,10 @@ describe("schema.relationship.upsert route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'schema.relationship.upsert' and surface 'api'", async () => {
+  it("calls invoke with 'upsert_schema_relationship' and surface 'api'", async () => {
     await authPut(PATH, { displayName: "Employs" });
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("schema.relationship.upsert");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("upsert_schema_relationship");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -319,10 +319,10 @@ describe("schema.relationship.delete route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'schema.relationship.delete' and surface 'api'", async () => {
+  it("calls invoke with 'delete_schema_relationship' and surface 'api'", async () => {
     await authDelete(PATH);
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("schema.relationship.delete");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("delete_schema_relationship");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 });
@@ -340,10 +340,10 @@ describe("schema.version.list route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'schema.version.list' and surface 'api'", async () => {
+  it("calls invoke with 'list_schema_versions' and surface 'api'", async () => {
     await authGet(PATH);
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("schema.version.list");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("list_schema_versions");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -368,10 +368,10 @@ describe("schema.version.create route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'schema.version.create' and surface 'api'", async () => {
+  it("calls invoke with 'create_schema_version' and surface 'api'", async () => {
     await authPost(PATH, {});
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("schema.version.create");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("create_schema_version");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -397,10 +397,10 @@ describe("schema.version.pin route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'schema.version.pin' and surface 'api'", async () => {
+  it("calls invoke with 'pin_schema_version' and surface 'api'", async () => {
     await authPost(PATH, {});
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("schema.version.pin");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("pin_schema_version");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -424,10 +424,10 @@ describe("schema.version.diff route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'schema.version.diff' and surface 'api'", async () => {
+  it("calls invoke with 'diff_schema_versions' and surface 'api'", async () => {
     await authGet(`${PATH}?fromVersionId=v1&toVersionId=v2`);
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("schema.version.diff");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("diff_schema_versions");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -458,10 +458,10 @@ describe("schema.export route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'schema.export' and surface 'api'", async () => {
+  it("calls invoke with 'export_schema' and surface 'api'", async () => {
     await authGet(PATH);
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("schema.export");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("export_schema");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -486,10 +486,10 @@ describe("schema.validate.node route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'schema.validate.node' and surface 'api'", async () => {
+  it("calls invoke with 'validate_schema_node' and surface 'api'", async () => {
     await authPost(PATH, VALID_BODY);
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("schema.validate.node");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("validate_schema_node");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -521,10 +521,10 @@ describe("schema.reconcile.dispatch route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'schema.reconcile.dispatch' and surface 'api'", async () => {
+  it("calls invoke with 'dispatch_schema_reconcile' and surface 'api'", async () => {
     await authPost(PATH, VALID_BODY);
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("schema.reconcile.dispatch");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("dispatch_schema_reconcile");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -555,10 +555,10 @@ describe("schema.reconcile.status route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'schema.reconcile.status' and surface 'api'", async () => {
+  it("calls invoke with 'get_reconcile_status' and surface 'api'", async () => {
     await authGet(`${PATH}?executionId=aex-123`);
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("schema.reconcile.status");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("get_reconcile_status");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -588,10 +588,10 @@ describe("schema.property.upsert route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'schema.property.upsert' and surface 'api'", async () => {
+  it("calls invoke with 'upsert_schema_property' and surface 'api'", async () => {
     await authPut(PATH, { dataType: "string" });
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("schema.property.upsert");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("upsert_schema_property");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -625,10 +625,10 @@ describe("schema.property.delete route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'schema.property.delete' and passes path params", async () => {
+  it("calls invoke with 'delete_schema_property' and passes path params", async () => {
     await authDelete(PATH);
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("schema.property.delete");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("delete_schema_property");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.ownerKind).toBe("node");
@@ -650,10 +650,10 @@ describe("schema.recommend route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'schema.recommend' and surface 'api'", async () => {
+  it("calls invoke with 'recommend_schema' and surface 'api'", async () => {
     await authGet(PATH);
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("schema.recommend");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("recommend_schema");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -677,10 +677,10 @@ describe("schema.setup route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'schema.setup' and passes fields", async () => {
+  it("calls invoke with 'setup_schema' and passes fields", async () => {
     await authPost(PATH, { enforcement: "strict", noInteractive: true });
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("schema.setup");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("setup_schema");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.enforcement).toBe("strict");
@@ -702,10 +702,10 @@ describe("schema.validate.relationship route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'schema.validate.relationship' and passes fields", async () => {
+  it("calls invoke with 'validate_schema_relationship' and passes fields", async () => {
     await authPost(PATH, VALID_BODY);
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("schema.validate.relationship");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("validate_schema_relationship");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.type).toBe("EMPLOYS");
@@ -733,10 +733,10 @@ describe("schema.chat route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'schema.chat' and surface 'api'", async () => {
+  it("calls invoke with 'run_schema_chat' and surface 'api'", async () => {
     await authPost(PATH, { message: "hello" });
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("schema.chat");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("run_schema_chat");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -779,10 +779,10 @@ describe("graph.relationship.upsert route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'graph.relationship.upsert' and surface 'api'", async () => {
+  it("calls invoke with 'upsert_graph_relationship' and surface 'api'", async () => {
     await authPost(PATH, VALID_BODY);
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("graph.relationship.upsert");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("upsert_graph_relationship");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -821,10 +821,10 @@ describe("semantic.relationship.list route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'semantic.relationship.list' and surface 'api'", async () => {
+  it("calls invoke with 'list_semantic_relationships' and surface 'api'", async () => {
     await authGet(PATH);
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("semantic.relationship.list");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("list_semantic_relationships");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -852,10 +852,10 @@ describe("semantic.relationship.infer route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'semantic.relationship.infer' and surface 'api'", async () => {
+  it("calls invoke with 'infer_semantic_relationships' and surface 'api'", async () => {
     await authPost(PATH, VALID_BODY);
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("semantic.relationship.infer");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("infer_semantic_relationships");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 });
@@ -873,10 +873,10 @@ describe("semantic.relationship.suggest route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'semantic.relationship.suggest' and surface 'api'", async () => {
+  it("calls invoke with 'suggest_semantic_relationships' and surface 'api'", async () => {
     await authGet(PATH);
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("semantic.relationship.suggest");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("suggest_semantic_relationships");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -902,10 +902,10 @@ describe("semantic.relationship.approve route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'semantic.relationship.approve' and surface 'api'", async () => {
+  it("calls invoke with 'approve_semantic_relationship' and surface 'api'", async () => {
     await authPost(PATH, { decision: "reject" });
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("semantic.relationship.approve");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("approve_semantic_relationship");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 

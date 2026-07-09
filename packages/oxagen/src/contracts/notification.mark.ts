@@ -6,8 +6,7 @@ import { registerCapability } from "../registry";
  * Scoped to the acting user — users may only mark their own notifications.
  */
 export const notificationsMark = registerCapability({
-  name: "notification.mark",
-  aliases: ["notifications.mark"],
+  name: "mark_notification",
   domain: "notification",
   description: "Mark a notification as read and/or archived for the calling user.",
   mode: "sync",

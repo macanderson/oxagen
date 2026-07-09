@@ -33,7 +33,13 @@ const ConnectCustomMcpSchema = z.object({
 
 export async function connectCustomMcpServer(
   input: z.infer<typeof ConnectCustomMcpSchema>,
-): Promise<{ ok: boolean; orgListingId?: string; error?: string }> {
+): Promise<{
+  ok: boolean;
+  orgListingId?: string;
+  /** Effective auth kind after the install-time OAuth probe. */
+  authKind?: "oauth" | "secret" | "none";
+  error?: string;
+}> {
   const parsed = ConnectCustomMcpSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Invalid input" };
 
@@ -45,7 +51,7 @@ export async function connectCustomMcpServer(
   try {
     const out = await runInTenantScope({ orgId: org.id, workspaceId: ws.id }, () =>
       invoke(
-        "plugin.org.install",
+        "install_plugin",
         {
           pluginType: "mcp_server" as const,
           custom: { name, endpointUrl, transport, authKind },
@@ -55,8 +61,8 @@ export async function connectCustomMcpServer(
       ),
     );
     revalidatePath(workspace.marketplace.mcp({ orgSlug, workspaceSlug }));
-    const typed = out as { orgListingId: string };
-    return { ok: true, orgListingId: typed.orgListingId };
+    const typed = out as { orgListingId: string; authKind?: "oauth" | "secret" | "none" };
+    return { ok: true, orgListingId: typed.orgListingId, authKind: typed.authKind };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Connect failed" };
   }

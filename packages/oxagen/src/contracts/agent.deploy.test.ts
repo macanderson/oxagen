@@ -34,6 +34,6 @@ describe("agent.deploy capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("agent.deploy")).toBe(agentDeploy);
+    expect(getCapability("deploy_agent")).toBe(agentDeploy);
   });
 });

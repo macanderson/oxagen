@@ -10,6 +10,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+  captureLead: vi.fn(),
   captureLeadAndIssueCode: vi.fn(),
   findLeadByEmail: vi.fn(),
   issueCodeForLead: vi.fn(),
@@ -19,6 +20,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("../../lib/cms/access", () => ({
+  captureLead: mocks.captureLead,
   captureLeadAndIssueCode: mocks.captureLeadAndIssueCode,
   findLeadByEmail: mocks.findLeadByEmail,
   issueCodeForLead: mocks.issueCodeForLead,
@@ -47,6 +49,7 @@ vi.mock("@oxagen/database", () => ({
 import { cmsRoute } from "./cms";
 
 const SENT = "The link to the book has been sent to your email.";
+const DEMO_SENT = "Thanks — we got it. We'll be in touch shortly.";
 const NOT_FOUND = "We couldn’t find that email. Please fill out the form to get the book.";
 
 let ipCounter = 0;
@@ -141,6 +144,48 @@ describe("POST /v1/cms/leads", () => {
     const res = await post("/leads", VALID_LEAD);
     expect(res.status).toBe(200);
     expect(mocks.sendEmail).not.toHaveBeenCalled();
+  });
+
+  it("intent:demo captures the lead only — no book code, no book email", async () => {
+    mocks.captureLead.mockResolvedValue({ id: "lead_2", email: "ada@example.com" });
+    const res = await post("/leads", {
+      ...VALID_LEAD,
+      intent: "demo",
+      jobTitle: "CTO",
+      message: "We run 40 agents against a Rails monolith.",
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, message: DEMO_SENT });
+    expect(mocks.captureLead).toHaveBeenCalledTimes(1);
+    const [input] = mocks.captureLead.mock.calls[0]!;
+    expect(input.message).toBe("We run 40 agents against a Rails monolith.");
+    expect(input.jobTitle).toBe("CTO");
+    expect(input.source).toBe("demo");
+    expect(mocks.captureLeadAndIssueCode).not.toHaveBeenCalled();
+    expect(mocks.sendEmail).not.toHaveBeenCalled();
+  });
+
+  it("intent:demo honeypot echoes the demo success copy without capturing", async () => {
+    const res = await post("/leads", {
+      ...VALID_LEAD,
+      intent: "demo",
+      website: "http://spam.example",
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, message: DEMO_SENT });
+    expect(mocks.captureLead).not.toHaveBeenCalled();
+    expect(mocks.captureLeadAndIssueCode).not.toHaveBeenCalled();
+  });
+
+  it("intent:demo returns 500 when capture throws", async () => {
+    mocks.captureLead.mockRejectedValueOnce(new Error("db down"));
+    const res = await post("/leads", { ...VALID_LEAD, intent: "demo" });
+    expect(res.status).toBe(500);
+  });
+
+  it("rejects an unknown intent", async () => {
+    const res = await post("/leads", { ...VALID_LEAD, intent: "newsletter" });
+    expect(res.status).toBe(400);
   });
 });
 

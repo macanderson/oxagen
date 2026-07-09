@@ -103,7 +103,7 @@ describe("GET /skill/export", () => {
     expect(res.headers.get("x-skill-version")).toBe("3");
     expect(await res.text()).toBe(validOutput.content);
     const [name, input] = mocks.invoke.mock.calls[0] as [string, Record<string, unknown>];
-    expect(name).toBe("skill.export");
+    expect(name).toBe("export_skill");
     expect(input.skillId).toBe("skl_ABC");
     expect(input.versionNumber).toBeUndefined();
   });
@@ -142,7 +142,7 @@ describe("POST /skill/edit", () => {
     const out = (await res.json()) as { version_id: string };
     expect(out.version_id).toBe("slv_1");
     const [name, input] = mocks.invoke.mock.calls[0] as [string, Record<string, unknown>];
-    expect(name).toBe("skill.edit");
+    expect(name).toBe("edit_skill");
     expect(input.skill_id).toBe("skl_ABC");
     expect(input.body).toBe(validBody.body);
   });
@@ -162,7 +162,7 @@ describe("POST /graph/ingest", () => {
     const res = await authPost("/graph/ingest", { text: "Acme depends on Stripe." });
     expect(res.status).toBe(200);
     const [name, input] = mocks.invoke.mock.calls[0] as [string, Record<string, unknown>];
-    expect(name).toBe("graph.ingest");
+    expect(name).toBe("ingest_graph");
     expect(input.text).toBe("Acme depends on Stripe.");
     // maxEntities has a schema default of 25 applied at parse time.
     expect(input.maxEntities).toBe(25);

@@ -3,7 +3,7 @@ import { graphRelationshipUpsert } from "./graph.relationship.upsert";
 
 describe("graph.relationship.upsert contract", () => {
   it("registers across api/mcp/agent/cli surfaces", () => {
-    expect(graphRelationshipUpsert.name).toBe("graph.relationship.upsert");
+    expect(graphRelationshipUpsert.name).toBe("upsert_graph_relationship");
     for (const s of ["api", "mcp", "agent", "cli"]) {
       expect(graphRelationshipUpsert.surfaces).toContain(s);
     }

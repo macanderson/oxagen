@@ -5,7 +5,7 @@ category: investigate
 tags: [run, failure, summary, debug]
 applicableTo:
   - routePattern: /{org}/{ws}/agents/runs/:runId
-capability: agent.debug.trace
+capability: debug_execution
 autoSubmit: true
 variables:
   - name: run_id
@@ -13,7 +13,7 @@ variables:
     source: params.runId
     required: true
 body: |
-  Diagnose the failure of run {{run_id}} using agent.debug.trace with
+  Diagnose the failure of run {{run_id}} using debug_execution with
   summarize:true. Report the failing step, the error class and message, the
   ranked suspect files, and the root-cause diagnosis. Format as:
   Problem → Root Cause → Recommended Fix.

@@ -21,7 +21,7 @@ describe("agent.tool.list capability", () => {
     const parsed = agentToolList.output.parse({
       tools: [
         {
-          name: "agent.memory.recall",
+          name: "recall_memory",
           description: "Recall memories",
           domain: "agent",
           category: "memory",
@@ -31,7 +31,7 @@ describe("agent.tool.list capability", () => {
         },
       ],
     });
-    expect(parsed.tools[0]?.name).toBe("agent.memory.recall");
+    expect(parsed.tools[0]?.name).toBe("recall_memory");
   });
 
   it("rejects an invalid riskLevel", () => {
@@ -53,6 +53,6 @@ describe("agent.tool.list capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("agent.tool.list")).toBe(agentToolList);
+    expect(getCapability("list_agent_tools")).toBe(agentToolList);
   });
 });

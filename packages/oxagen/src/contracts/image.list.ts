@@ -2,7 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const imageList = registerCapability({
-  name: "image.list",
+  name: "list_images",
   domain: "image",
   description: "List images in the workspace",
   mode: "sync",

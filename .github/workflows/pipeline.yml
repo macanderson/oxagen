@@ -8,7 +8,12 @@ on:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # Auto-cancel superseded runs for PRs only. A push-to-main run contains the
+  # prod migrate job — cancelling the whole run mid-`atlas migrate apply`
+  # (the job-level db-migrate concurrency group only serializes migrate jobs,
+  # it does not shield them from run-level cancellation) would strand prod
+  # behind the committed migrations. Main runs always run to completion.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   # Container jobs bind-mount the workspace with a uid that differs from the
@@ -205,33 +210,23 @@ jobs:
 
       - uses: ./.github/actions/pnpm-install
 
-      - name: Detect migration changes
-        id: migration_changes
-        run: |
-          # Neo4j-backed integration tests (e.g. ontology file-lock,
-          # ingestion dedup/resolve) run in THIS unit lane and depend on the
-          # graph schema in packages/ontology/src/*.cypher. A schema.cypher-only
-          # change (composite constraints, vector indexes) must therefore also
-          # trigger the "Migrate ClickHouse and Neo4j" step below — otherwise the
-          # bare Neo4j service container stays unmigrated and those tests fail
-          # ("no such vector schema index", concurrent-MERGE lock hangs).
-          if git diff --name-only "${TURBO_BASE}"...HEAD | grep -qE '^packages/database/atlas/migrations/|^packages/telemetry/|^packages/ontology/src/.*\.cypher$'; then
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-          fi
-
+      # The postgres/clickhouse/neo4j services above are fresh, schema-less
+      # containers on every single job run (GitHub Actions never persists
+      # service-container state between runs) — so these three setup steps
+      # must run unconditionally on every push, exactly like the e2e job
+      # below does. A prior version gated them behind a diff check for
+      # "did this push touch migrations/telemetry/cypher", which silently
+      # left every DB-backed integration test (file-lock lease, ingestion
+      # upsert-entity, etc.) pointed at an empty schema on any push that
+      # didn't happen to touch those paths — i.e. almost every push.
       - name: Migrate Postgres (Atlas)
-        if: steps.migration_changes.outputs.changed == 'true'
         working-directory: packages/database
         run: atlas migrate apply --env ci
 
       - name: Migrate ClickHouse and Neo4j
-        if: steps.migration_changes.outputs.changed == 'true'
         run: DB_MIGRATE_STORES=clickhouse,neo4j npx tsx --env-file-if-exists=.env.local tools/scripts/db-migrate.ts
 
       - name: Seed platform defaults
-        if: steps.migration_changes.outputs.changed == 'true'
         run: npx tsx --env-file-if-exists=.env.local tools/scripts/seed-platform.ts
 
       - name: Build and unit tests (affected)

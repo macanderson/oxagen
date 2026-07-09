@@ -13,6 +13,7 @@ describe("agent.definition.get capability", () => {
       agentId: "agt_1",
       publicId: "agt_1",
       slug: "qa-chat",
+      agentKey: "acme.default.qa-chat",
       name: "QA Chat",
       description: null,
       agentType: "interactive_chat",
@@ -43,6 +44,7 @@ describe("agent.definition.get capability", () => {
         agentId: "a",
         publicId: "a",
         slug: "s",
+        agentKey: null,
         name: "n",
         description: null,
         agentType: "custom",
@@ -70,6 +72,7 @@ describe("agent.definition.get capability", () => {
         agentId: "a",
         publicId: "a",
         slug: "s",
+        agentKey: null,
         name: "n",
         description: null,
         agentType: "t",
@@ -91,6 +94,6 @@ describe("agent.definition.get capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("agent.definition.get")).toBe(agentDefinitionGet);
+    expect(getCapability("get_agent_def")).toBe(agentDefinitionGet);
   });
 });

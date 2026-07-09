@@ -45,7 +45,7 @@ import handler_conversationArchive, {
 describe("conversation.archive handler", () => {
   it("exports schema and metadata", () => {
     expect(conversationArchiveSchema).toBeDefined();
-    expect(conversationArchiveMetadata.name).toBe("conversation.archive");
+    expect(conversationArchiveMetadata.name).toBe("archive_conversation");
   });
 
   it("calls buildContext then invoke with correct args", async () => {
@@ -57,7 +57,7 @@ describe("conversation.archive handler", () => {
 
     expect(mocks.buildContext).toHaveBeenCalledOnce();
     expect(mocks.invoke).toHaveBeenCalledWith(
-      "conversation.archive",
+      "archive_conversation",
       args,
       fakeCtx,
       { surface: "mcp" },
@@ -83,7 +83,7 @@ import handler_conversationDelete, {
 describe("conversation.delete handler", () => {
   it("exports schema and metadata", () => {
     expect(conversationDeleteSchema).toBeDefined();
-    expect(conversationDeleteMetadata.name).toBe("conversation.delete");
+    expect(conversationDeleteMetadata.name).toBe("delete_conversation");
   });
 
   it("calls invoke with delete args", async () => {
@@ -94,7 +94,7 @@ describe("conversation.delete handler", () => {
     await handler_conversationDelete(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
-      "conversation.delete",
+      "delete_conversation",
       args,
       fakeCtx,
       { surface: "mcp" },
@@ -112,7 +112,7 @@ import handler_conversationList, {
 describe("conversation.list handler", () => {
   it("exports schema and metadata", () => {
     expect(conversationListSchema).toBeDefined();
-    expect(conversationListMetadata.name).toBe("conversation.list");
+    expect(conversationListMetadata.name).toBe("list_conversations");
   });
 
   it("calls invoke with list args", async () => {
@@ -123,7 +123,7 @@ describe("conversation.list handler", () => {
     await handler_conversationList(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
-      "conversation.list",
+      "list_conversations",
       args,
       fakeCtx,
       { surface: "mcp" },
@@ -141,7 +141,7 @@ import handler_conversationPurge, {
 describe("conversation.purge handler", () => {
   it("exports schema and metadata", () => {
     expect(conversationPurgeSchema).toBeDefined();
-    expect(conversationPurgeMetadata.name).toBe("conversation.purge");
+    expect(conversationPurgeMetadata.name).toBe("purge_conversations");
   });
 
   it("calls invoke with empty args for purge", async () => {
@@ -152,7 +152,7 @@ describe("conversation.purge handler", () => {
 
     expect(mocks.buildContext).toHaveBeenCalledOnce();
     expect(mocks.invoke).toHaveBeenCalledWith(
-      "conversation.purge",
+      "purge_conversations",
       {},
       fakeCtx,
       { surface: "mcp" },
@@ -170,7 +170,7 @@ import handler_conversationRename, {
 describe("conversation.rename handler", () => {
   it("exports schema and metadata", () => {
     expect(conversationRenameSchema).toBeDefined();
-    expect(conversationRenameMetadata.name).toBe("conversation.rename");
+    expect(conversationRenameMetadata.name).toBe("rename_conversation");
   });
 
   it("calls invoke with rename args", async () => {
@@ -181,7 +181,7 @@ describe("conversation.rename handler", () => {
     const result = await handler_conversationRename(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
-      "conversation.rename",
+      "rename_conversation",
       args,
       fakeCtx,
       { surface: "mcp" },
@@ -200,7 +200,7 @@ import handler_chatMessageSend, {
 describe("chat.message.send handler", () => {
   it("exports schema and metadata", () => {
     expect(chatMessageSendSchema).toBeDefined();
-    expect(chatMessageSendMetadata.name).toBe("chat.message.send");
+    expect(chatMessageSendMetadata.name).toBe("send_message");
   });
 
   it("calls invoke with send args", async () => {
@@ -222,7 +222,7 @@ describe("chat.message.send handler", () => {
     await handler_chatMessageSend(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
-      "chat.message.send",
+      "send_message",
       args,
       fakeCtx,
       { surface: "mcp" },

@@ -126,7 +126,7 @@ export async function updatePromptSettingsAction(
 
     try {
       const result = (await invoke(
-        "prompt.settings.write",
+        "update_prompt_settings",
         { additionalInstructions, overrides, autoImprovePrompts },
         ctx,
         { surface: "agent" },

@@ -12,7 +12,7 @@ import type { AgentToolRow } from "@/lib/studio/tools";
 
 function tool(overrides: Partial<AgentToolRow> = {}): AgentToolRow {
   return {
-    name: "repo.pr.get",
+    name: "get_pr",
     description: "Fetch a pull request by number.",
     domain: "repo",
     category: "vcs",
@@ -25,7 +25,7 @@ function tool(overrides: Partial<AgentToolRow> = {}): AgentToolRow {
 
 describe("filterTools", () => {
   const tools: AgentToolRow[] = [
-    tool({ name: "repo.pr.get", domain: "repo", category: "vcs", riskLevel: "low" }),
+    tool({ name: "get_pr", domain: "repo", category: "vcs", riskLevel: "low" }),
     tool({
       name: "billing.invoice.create",
       domain: "billing",
@@ -50,7 +50,7 @@ describe("filterTools", () => {
 
   it("matches by tool name (case-insensitive)", () => {
     const result = filterTools(tools, "PR.get", "all", "all");
-    expect(result.map((t) => t.name)).toEqual(["repo.pr.get"]);
+    expect(result.map((t) => t.name)).toEqual(["get_pr"]);
   });
 
   it("matches by domain", () => {
@@ -85,6 +85,6 @@ describe("filterTools", () => {
 
   it("treats a null category as non-matching for category-text search", () => {
     const result = filterTools(tools, "vcs", "all", "all");
-    expect(result.map((t) => t.name)).toEqual(["repo.pr.get"]);
+    expect(result.map((t) => t.name)).toEqual(["get_pr"]);
   });
 });

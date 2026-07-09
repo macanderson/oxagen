@@ -3,7 +3,7 @@ import { agentCompose } from "./agent.compose";
 
 describe("agent.compose contract", () => {
   it("registers on the api, mcp, and agent surfaces", () => {
-    expect(agentCompose.name).toBe("agent.compose");
+    expect(agentCompose.name).toBe("run_capability_chain");
     expect(agentCompose.surfaces).toEqual(["api", "mcp", "agent"]);
   });
 
@@ -24,7 +24,7 @@ describe("agent.compose contract", () => {
       plan: [
         {
           id: "step1",
-          capability: "web.search",
+          capability: "search_web",
           rationale: "find sources",
           inputJson: '{"query":"USS Nautilus"}',
           dependsOn: [],
@@ -33,7 +33,7 @@ describe("agent.compose contract", () => {
       steps: [
         {
           id: "step1",
-          capability: "web.search",
+          capability: "search_web",
           rationale: "find sources",
           status: "success",
           input: { query: "USS Nautilus" },

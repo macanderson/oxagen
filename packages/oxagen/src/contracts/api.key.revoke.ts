@@ -8,7 +8,7 @@ import { registerCapability } from "../registry";
 //
 // Authorization: org Owner or Admin only.
 export const apiKeyRevoke = registerCapability({
-  name: "api.key.revoke",
+  name: "revoke_api_key",
   domain: "api_key",
   description:
     "Revoke an API key by its public ID or internal ID. The key is soft-deleted and immediately invalid. Audited as api_key.revoked.",

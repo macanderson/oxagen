@@ -45,7 +45,7 @@ export function findActiveSandboxSessionId(
   let found: string | null = null;
   let latestStart = -Infinity;
   for (const tc of Object.values(toolCalls)) {
-    if (tc.capability !== "agent.sandbox.start" || tc.status !== "completed") continue;
+    if (tc.capability !== "start_sandbox" || tc.status !== "completed") continue;
     const output = tc.output as Record<string, unknown> | null;
     const sessionId = output && typeof output.sessionId === "string" ? output.sessionId : null;
     if (!sessionId) continue;

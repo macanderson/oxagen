@@ -31,6 +31,14 @@ vi.mock("./tool-call-card", () => ({
   ToolCallCard: () => <div data-testid="tool-call-card" />,
 }));
 
+// Consecutive tool-call blocks are merged into one ToolActivityGroup; the mock
+// exposes how many calls each group received so we can assert the merging.
+vi.mock("./tool-activity-group", () => ({
+  ToolActivityGroup: ({ items }: { items: Array<{ toolCallId: string }> }) => (
+    <div data-testid="tool-activity-group" data-count={items.length} />
+  ),
+}));
+
 vi.mock("./approval-card", () => ({
   ApprovalCard: () => <div data-testid="approval-card" />,
 }));
@@ -216,7 +224,7 @@ describe("MessageBubble", () => {
             {
               type: "tool-call",
               toolCallId: "tc1",
-              capability: "agent.ui.render",
+              capability: "render_agent_ui",
               inputPreview: {},
               riskLevel: "low",
               status: "completed",
@@ -231,7 +239,7 @@ describe("MessageBubble", () => {
             {
               type: "approval-request",
               approvalId: "ap1",
-              capability: "automation.enable",
+              capability: "enable_automation",
               inputPreview: {},
               riskLevel: "high",
               expiresAt: "2026-06-12T00:00:00Z",
@@ -258,7 +266,8 @@ describe("MessageBubble", () => {
     );
     expect(screen.getByTestId("activity-timeline")).toBeInTheDocument();
     expect(screen.getByTestId("reasoning-card")).toBeInTheDocument();
-    expect(screen.getByTestId("tool-call-card")).toBeInTheDocument();
+    // The lone tool-call block renders as a (single-item) activity group.
+    expect(screen.getByTestId("tool-activity-group")).toBeInTheDocument();
     expect(screen.getByTestId("code-execute-card")).toBeInTheDocument();
     expect(screen.getByTestId("approval-card")).toBeInTheDocument();
     expect(screen.getByTestId("plan-card")).toBeInTheDocument();
@@ -320,11 +329,55 @@ describe("MessageBubble", () => {
     );
     // All blocks render inside the timeline; each card type appears.
     expect(screen.getByTestId("activity-timeline")).toBeInTheDocument();
-    expect(screen.getByTestId("tool-call-card")).toBeInTheDocument();
+    expect(screen.getByTestId("tool-activity-group")).toBeInTheDocument();
     expect(screen.getByTestId("code-execute-card")).toBeInTheDocument();
     expect(screen.getByTestId("approval-card")).toBeInTheDocument();
     expect(screen.getByTestId("plan-card")).toBeInTheDocument();
     expect(screen.getAllByTestId("subagent-fanout")).toHaveLength(2);
+  });
+
+  it("merges a run of consecutive tool-call blocks into one activity group", async () => {
+    const { MessageBubble } = await import("./message-bubble");
+    render(
+      <MessageBubble
+        message={{
+          ...baseMessage,
+          role: "assistant",
+          contentBlocks: [
+            { type: "text", text: "working" },
+            { type: "tool-call", toolCallId: "t1", capability: "web.search", inputPreview: {}, riskLevel: "low", status: "completed" },
+            { type: "tool-call", toolCallId: "t2", capability: "web.fetch", inputPreview: {}, riskLevel: "low", status: "completed" },
+            { type: "tool-call", toolCallId: "t3", capability: "graph.search", inputPreview: {}, riskLevel: "low", status: "completed" },
+          ],
+        }}
+      />,
+    );
+    // One group holding all three consecutive calls.
+    const groups = screen.getAllByTestId("tool-activity-group");
+    expect(groups).toHaveLength(1);
+    expect(groups[0]).toHaveAttribute("data-count", "3");
+  });
+
+  it("splits tool-call runs around an interleaved non-tool block", async () => {
+    const { MessageBubble } = await import("./message-bubble");
+    render(
+      <MessageBubble
+        message={{
+          ...baseMessage,
+          role: "assistant",
+          contentBlocks: [
+            { type: "tool-call", toolCallId: "t1", capability: "web.search", inputPreview: {}, riskLevel: "low", status: "completed" },
+            { type: "text", text: "an aside" },
+            { type: "tool-call", toolCallId: "t2", capability: "web.fetch", inputPreview: {}, riskLevel: "low", status: "completed" },
+          ],
+        }}
+      />,
+    );
+    // Two separate groups, one on each side of the text block.
+    const groups = screen.getAllByTestId("tool-activity-group");
+    expect(groups).toHaveLength(2);
+    expect(groups[0]).toHaveAttribute("data-count", "1");
+    expect(groups[1]).toHaveAttribute("data-count", "1");
   });
 
   it("renders children when passed", async () => {

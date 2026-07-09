@@ -24,15 +24,34 @@ import type { AppEnv } from "../app";
  * credentialed cross-origin calls with the victim's session cookie. In prod
  * the allowlist is exactly the configured APP_URL / NEXT_PUBLIC_APP_URL.
  */
+/**
+ * The marketing site is reachable at both the apex and www hosts (Vercel
+ * 308-redirects one to the other, but a visitor's Origin header carries
+ * whichever host they loaded), so a single configured MARKETING_URL must
+ * allow both. Applied ONLY to the marketing origin — the app origin is a
+ * single canonical host and gets no twin.
+ */
+function withWwwTwin(origin: string): string[] {
+  try {
+    const url = new URL(origin);
+    const twinHost = url.hostname.startsWith("www.")
+      ? url.hostname.slice(4)
+      : `www.${url.hostname}`;
+    return [origin, `${url.protocol}//${twinHost}${url.port ? `:${url.port}` : ""}`];
+  } catch {
+    return [origin];
+  }
+}
+
 function allowedOrigins(): Set<string> {
-  const origins = [
-    process.env.APP_URL,
-    process.env.NEXT_PUBLIC_APP_URL,
-    // The public marketing website (oxagen.sh) calls the /v1/cms/* lead routes
-    // cross-origin from the browser. In prod that origin must be explicitly
-    // allowed; MARKETING_URL carries it.
-    process.env.MARKETING_URL,
-  ];
+  const origins = [process.env.APP_URL, process.env.NEXT_PUBLIC_APP_URL];
+  // The public marketing website (oxagen.sh / www.oxagen.sh) calls the
+  // /v1/cms/* lead routes cross-origin from the browser. In prod that origin
+  // must be explicitly allowed; MARKETING_URL carries it.
+  const marketing = process.env.MARKETING_URL?.replace(/\/$/, "");
+  if (marketing) {
+    origins.push(...withWwwTwin(marketing));
+  }
   if (!isProductionRuntime()) {
     origins.push("http://localhost:3000");
   }

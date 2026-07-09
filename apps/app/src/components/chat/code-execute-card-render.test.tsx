@@ -89,15 +89,15 @@ describe("CodeExecuteCard", () => {
     const { CodeExecuteCard } = await import("./code-execute-card");
     render(<CodeExecuteCard {...baseProps} />);
     expect(screen.getByText("Run code")).toBeInTheDocument();
-    expect(screen.queryByText("agent.code.execute")).not.toBeInTheDocument();
+    expect(screen.queryByText("execute_code")).not.toBeInTheDocument();
   });
 
   it("exposes the raw capability via data-capability and header title", async () => {
     const { CodeExecuteCard } = await import("./code-execute-card");
     render(<CodeExecuteCard {...baseProps} />);
     const root = document.querySelector("[data-component='code-execute-card']");
-    expect(root).toHaveAttribute("data-capability", "agent.code.execute");
-    expect(document.querySelector("[title='agent.code.execute']")).toBeInTheDocument();
+    expect(root).toHaveAttribute("data-capability", "execute_code");
+    expect(document.querySelector("[title='execute_code']")).toBeInTheDocument();
   });
 
   it("renders language badge", async () => {

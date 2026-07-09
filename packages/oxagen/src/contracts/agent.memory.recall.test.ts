@@ -57,6 +57,6 @@ describe("agent.memory.recall capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("agent.memory.recall")).toBe(agentMemoryRecall);
+    expect(getCapability("recall_memory")).toBe(agentMemoryRecall);
   });
 });

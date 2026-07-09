@@ -8,7 +8,7 @@
 
 import { invoke } from "@oxagen/oxagen";
 // Side-effect import: bind every foundation handler into the shared kernel so
-// invoke("video.generate", …) can resolve its handler at runtime.
+// invoke("generate_video", …) can resolve its handler at runtime.
 import "@oxagen/handlers/register";
 import { videoGenerate } from "@oxagen/oxagen/contracts/video.generate";
 import { getSessionOrRedirect } from "@/lib/session";
@@ -77,7 +77,7 @@ export async function videoGenerateAction(
   };
 
   try {
-    const result = (await invoke("video.generate", parsed.data, ctx, { surface: "agent" })) as {
+    const result = (await invoke("generate_video", parsed.data, ctx, { surface: "agent" })) as {
       jobId: string;
     };
     return { ok: true, queued: true, jobId: result.jobId };

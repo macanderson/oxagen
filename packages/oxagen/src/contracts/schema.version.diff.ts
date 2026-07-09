@@ -2,7 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const schemaVersionDiff = registerCapability({
-  name: "schema.version.diff",
+  name: "diff_schema_versions",
   domain: "schema",
   description: "Structural diff of two versions: added/removed/changed schemas, labels, relationship types, properties.",
   mode: "sync",

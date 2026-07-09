@@ -2,7 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const repoConfigure = registerCapability({
-  name: "repo.configure",
+  name: "configure_repo",
   domain: "repo",
   description:
     "Set repo-specific configuration: filters, inference toggles, sync cadence, field mappings. Specializes connection.configure for code repository connectors.",

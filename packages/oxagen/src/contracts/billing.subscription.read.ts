@@ -2,7 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const billingSubscriptionRead = registerCapability({
-  name: "billing.subscription.read",
+  name: "get_subscription",
   domain: "billing",
   description: "Read the current subscription, plan, and period bounds for the active tenant",
   mode: "sync",

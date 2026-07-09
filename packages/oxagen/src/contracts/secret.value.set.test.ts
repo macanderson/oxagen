@@ -3,7 +3,7 @@ import { secretValueSet } from "./secret.value.set";
 
 describe("secret.value.set contract", () => {
   it("registers with the correct name", () => {
-    expect(secretValueSet.name).toBe("secret.value.set");
+    expect(secretValueSet.name).toBe("set_secret_value");
   });
   it("exposes the api, mcp, and agent surfaces", () => {
     expect(secretValueSet.surfaces).toEqual(["api", "mcp", "agent"]);

@@ -101,7 +101,7 @@ export const [webSearchIngestGraph] = createFunction(
     const ok = await step.run("ingest", async () => {
       try {
         await runInTenantScope({ orgId, workspaceId }, () =>
-          invoke("graph.ingest", { text, ...(sourceUrl ? { sourceUrl } : {}) }, ctx),
+          invoke("ingest_graph", { text, ...(sourceUrl ? { sourceUrl } : {}) }, ctx),
         );
         return true;
       } catch (err) {

@@ -107,7 +107,7 @@ export const orgMemberAddHandler: CapabilityHandler<typeof orgMemberAdd> = async
     actorUserId: actorId,
     orgId: ctx.orgId,
     workspaceId: null,
-    capability: "org.member.add",
+    capability: "add_org_member",
     outcome: "success",
     ip: null,
     userAgent: null,

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const pluginCatalogGet = registerCapability({
-  name: "plugin.catalog.get",
+  name: "get_catalog_plugin",
   domain: "plugin",
   description: "Get full detail for one catalog server by name+version, fetched live from the workspace's enabled registries.",
   mode: "sync",

@@ -157,7 +157,7 @@ export const evalDatasetFromTracesHandler: CapabilityHandler<
 
       logger.info(
         { datasetId: dataset.publicId, itemCount: rows.length, meteredTurns: turnIds.length },
-        "eval.dataset.from_traces",
+        "create_trace_dataset",
       );
 
       return {

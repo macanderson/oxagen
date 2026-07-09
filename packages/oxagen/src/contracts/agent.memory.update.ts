@@ -18,7 +18,7 @@ import { memoryKindSchema, memoryStatusEnum } from "./agent.memory.model";
  * ZodEffects and break the MCP tool's `input.shape` spread.
  */
 export const agentMemoryUpdate = registerCapability({
-  name: "agent.memory.update",
+  name: "update_memory",
   domain: "agent",
   description:
     "Edit an AgentMemory: change its lesson, kind, source, confidence/enforcement scores, or status. Re-embeds when the lesson changes so semantic recall stays accurate. Class changes go through agent.memory.promote.",

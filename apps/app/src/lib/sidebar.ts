@@ -27,7 +27,6 @@ import {
   Terminal,
   User,
   Users,
-  Wrench,
   type LucideIcon,
 } from "lucide-react";
 
@@ -113,8 +112,9 @@ const workspaceConfig: SidebarConfig = {
       group: "primary",
     },
     // Studio group — build interactive agents. The Agent Builder is the
-    // centerpiece; Agent Tools is the single home for everything an agent
-    // can be equipped with (skills, MCP servers, capabilities).
+    // centerpiece. Agent Tools is NOT a primary nav item: it is the second
+    // tab of the Studio surface (studio/layout.tsx), always one click away
+    // from Agents, so promoting it here duplicated the destination.
     {
       id: "agents",
       label: "Agents",
@@ -122,16 +122,6 @@ const workspaceConfig: SidebarConfig = {
       href: (ctx) =>
         ctx.workspaceSlug
           ? workspace.studio.agents(ctx as Required<ScopeContext>)
-          : `/${ctx.orgSlug}`,
-      group: "tools",
-    },
-    {
-      id: "agent-tools",
-      label: "Agent Tools",
-      icon: Wrench,
-      href: (ctx) =>
-        ctx.workspaceSlug
-          ? workspace.studio.tools.root(ctx as Required<ScopeContext>)
           : `/${ctx.orgSlug}`,
       group: "tools",
     },

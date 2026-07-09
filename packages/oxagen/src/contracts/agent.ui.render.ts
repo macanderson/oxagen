@@ -2,7 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const agentUiRender = registerCapability({
-  name: "agent.ui.render",
+  name: "render_agent_ui",
   domain: "agent",
   description: "Render a UI component from an agent response",
   mode: "sync",

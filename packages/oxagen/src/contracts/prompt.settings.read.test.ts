@@ -3,7 +3,7 @@ import { promptSettingsRead } from "./prompt.settings.read";
 
 describe("prompt.settings.read contract", () => {
   it("declares api + mcp + agent surfaces and a workspace domain", () => {
-    expect(promptSettingsRead.name).toBe("prompt.settings.read");
+    expect(promptSettingsRead.name).toBe("get_prompt_settings");
     expect(promptSettingsRead.surfaces).toEqual(expect.arrayContaining(["api", "mcp", "agent"]));
     expect(promptSettingsRead.domain).toBe("workspace");
   });

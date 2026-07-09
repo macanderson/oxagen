@@ -52,7 +52,7 @@ describe("bootstrapIAMRuntime()", () => {
     bootstrapIAMRuntime();
     const [kernelFn] = mocks.setKernelIAMRuntime.mock.calls[0] ?? [];
     const result = await (kernelFn as (args: unknown) => Promise<unknown>)({
-      capability: "chat.message.send",
+      capability: "send_message",
       ctx: { orgId: "org_1", workspaceId: "ws_1", userId: "usr_1", apiKeyId: null, requestId: "req_1", surface: "api", messageId: null },
       defaultEffect: "deny",
       rawInputJson: "{}",
@@ -73,7 +73,7 @@ describe("bootstrapIAMRuntime()", () => {
     bootstrapIAMRuntime();
     const [kernelFn] = mocks.setKernelIAMRuntime.mock.calls[0] ?? [];
     const result = await (kernelFn as (args: unknown) => Promise<unknown>)({
-      capability: "chat.message.send",
+      capability: "send_message",
       ctx: { orgId: "org_1", workspaceId: "ws_1", userId: null, apiKeyId: null, requestId: "req_1", surface: "api", messageId: null },
       defaultEffect: "deny",
       rawInputJson: "{}",

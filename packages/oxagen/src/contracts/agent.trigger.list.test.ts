@@ -29,6 +29,6 @@ describe("agent.trigger.list capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("agent.trigger.list")).toBe(agentTriggerList);
+    expect(getCapability("list_triggers")).toBe(agentTriggerList);
   });
 });

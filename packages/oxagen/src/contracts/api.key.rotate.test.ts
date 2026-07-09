@@ -38,6 +38,6 @@ describe("api.key.rotate capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("api.key.rotate")).toBe(apiKeyRotate);
+    expect(getCapability("rotate_api_key")).toBe(apiKeyRotate);
   });
 });

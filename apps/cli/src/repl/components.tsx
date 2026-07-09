@@ -102,6 +102,12 @@ export interface TurnSummary {
   complete: boolean;
   /** Advisor confidence 0–100 → shown as the "quality" score. Absent in bare mode. */
   quality?: number;
+  /**
+   * Why the advisor scored the turn the way it did — its reasoning, or the
+   * concrete gaps it found. Shown under the score so a number never appears
+   * without its justification. Absent in bare mode.
+   */
+  qualityReason?: string;
   /** Relative paths the agent wrote or edited. */
   filesTouched: string[];
   /** Priced cost of the turn, USD. */
@@ -800,8 +806,8 @@ export const STAGE_COLOR: Record<StageKind, string> = {
 /**
  * A compact line announcing one pipeline stage as it happens. Rendered in the
  * same bracketed-chip grammar as tool calls, but with the stage's own dim glyph
- * (not the ⚡ action bolt) so pipeline chatter stays visually subordinate to the
- * concrete actions the agent takes.
+ * so pipeline chatter stays visually subordinate to the concrete actions the
+ * agent takes.
  */
 export function StageBadge({ stage }: { stage: StageEvent }): React.ReactElement {
   const color = STAGE_COLOR[stage.kind];
@@ -834,27 +840,23 @@ export const STAGE_LABEL: Record<StageKind, string> = {
 
 // ── Action chips ────────────────────────────────────────────────────────────
 
-/** The ⚡ action bolt that gutters every concrete agent action. */
-const ACTION_BOLT = "⚡";
-
 /**
- * One tool call, rendered as `⚡ [📖 Read]  src/foo.ts`. The bracket is tinted
+ * One tool call, rendered as `[📖 Read]  src/foo.ts`. The bracket is tinted
  * by what the tool does (see getToolAccent) so writes/deletes/commands/reads are
  * distinguishable at a glance; the argument trails, truncated to one line.
+ * Tools without a mapped emoji render as a bare `[name]` chip — no filler glyph.
  */
 function ToolChip({ msg }: { msg: Message }): React.ReactElement {
   const name = msg.toolName ?? "tool";
   const subagent = isSubagentDispatch(name);
-  // Subagent delegation gets its own grammar (`⚡ [🚀 Task]  slug → what`) and a
-  // violet accent; every other tool keeps the amber bolt with a use-colored chip.
+  // Subagent delegation gets its own grammar (`[🚀 Task]  slug → what`) and a
+  // violet accent; every other tool keeps a use-colored chip.
   const accent = subagent ? "#A78BFA" : getToolAccent(name);
+  const emoji = getToolEmoji(name);
   return (
     <Box paddingX={1} marginTop={1}>
-      <Text color={subagent ? accent : "#FBBF24"} bold>
-        {ACTION_BOLT}{" "}
-      </Text>
       <Text color={accent}>
-        [{getToolEmoji(name)} {subagent ? "Task" : toolDisplayLabel(name)}]
+        [{emoji ? `${emoji} ` : ""}{subagent ? "Task" : toolDisplayLabel(name)}]
       </Text>
       <Text>{"  "}</Text>
       <Text dimColor={!subagent} wrap="truncate-end">
@@ -976,7 +978,7 @@ export function ScopeCard({
   );
 }
 
-export function MessageView({
+function MessageViewImpl({
   msg,
   diffTheme,
   expanded = false,
@@ -1069,6 +1071,22 @@ export function MessageView({
   );
 }
 
+/**
+ * One transcript row. Wrapped in `React.memo` because the transcript re-renders
+ * on a hot path: in full-screen mode `TranscriptViewport` maps the visible
+ * committed rows on EVERY frame (each streamed token, the 1Hz clock tick), and
+ * every idle re-render of the container would otherwise re-run every row. A
+ * committed message object is immutable — the streaming updater in
+ * interactive.tsx only ever appends or replaces the LAST turn entry, so all
+ * prior rows keep a stable identity across frames — which makes the default
+ * shallow prop comparison a perfect fit: unchanged rows skip re-rendering, the
+ * one live/streaming row (a fresh object each token) re-renders, and toggling
+ * `expanded` (Ctrl-O) changes the prop so every row re-renders as intended.
+ * (In inline mode `<Static>` already prevents re-render of committed rows, so
+ * the memo is simply harmless there.)
+ */
+export const MessageView = React.memo(MessageViewImpl);
+
 // ── End-of-turn summary card ──────────────────────────────────────────────────
 
 /** One right-aligned label/value row inside the summary card. */
@@ -1088,12 +1106,19 @@ function SummaryRow({
 }
 
 /**
- * The headline outcome of a turn, as a rounded card: the completeness verdict
- * and advisor "quality" score, the files touched, and the priced cost. The
- * border warms green when complete and amber when the judge still sees gaps.
+ * The headline outcome of a turn, as a rounded card: the completeness verdict,
+ * the advisor "quality" score with the judge's reason for it, the files
+ * touched, and the priced cost. The border warms green when complete and amber
+ * when the judge still sees gaps.
  */
 export function TurnSummaryView({ summary }: { summary: TurnSummary }): React.ReactElement {
-  const { complete, quality, filesTouched, costUsd, judged } = summary;
+  const { complete, quality, qualityReason, filesTouched, costUsd, judged } = summary;
+  // The judge's reasoning is a paragraph of chain-of-thought; cap it so the
+  // card stays a card. The full verdict is always available via /replay.
+  const reason =
+    qualityReason && qualityReason.length > 280
+      ? qualityReason.slice(0, 280).trimEnd() + "…"
+      : qualityReason;
   const color = complete ? "#34D399" : "#FBBF24";
   const files =
     filesTouched.length === 0
@@ -1126,6 +1151,13 @@ export function TurnSummaryView({ summary }: { summary: TurnSummary }): React.Re
       {!judged ? (
         <SummaryRow label="review">
           <Text dimColor>not judged (bare mode)</Text>
+        </SummaryRow>
+      ) : null}
+      {judged && reason ? (
+        <SummaryRow label="reason">
+          <Text dimColor wrap="wrap">
+            {reason}
+          </Text>
         </SummaryRow>
       ) : null}
       <SummaryRow label="files">

@@ -38,7 +38,7 @@ export const evalDatasetItemAddHandler: CapabilityHandler<
 
     logger.info(
       { datasetId: dataset.publicId, added: input.items.length },
-      "eval.dataset_item.add",
+      "add_dataset_item",
     );
 
     return {

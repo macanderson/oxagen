@@ -7,7 +7,7 @@ import { registerCapability } from "../registry";
 // MCP hosts surface their own tool-call confirmation, and CLI/API calls
 // are human-initiated by construction. Never weaken this to auto-approve.
 export const automationEnable = registerCapability({
-  name: "automation.enable",
+  name: "enable_automation",
   domain: "automation",
   description:
     "Enable an automation trigger so it fires live. Requires explicit human confirmation — AI agents must never enable an automation without the user approving. Returns the new enabled state.",

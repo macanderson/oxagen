@@ -6,7 +6,7 @@ import type { CapabilityContext } from "../types";
 
 const logger = pino({
   level: process.env.LOG_LEVEL ?? "info",
-  base: { app: "agent.code.execute" },
+  base: { app: "execute_code" },
 });
 import type {
   AgentCodeExecuteInput,
@@ -99,7 +99,7 @@ async function emitRunTelemetry(
         source_system: `handler:${ctx.surface}`,
         stream_offset: null,
         payload: JSON.stringify({
-          capability: "agent.code.execute",
+          capability: "execute_code",
           language: input.language,
           network: input.network,
           durationMs: result.durationMs,

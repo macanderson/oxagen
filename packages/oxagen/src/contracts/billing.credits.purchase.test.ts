@@ -4,7 +4,7 @@ import { getCapability } from "../registry";
 
 describe("billing.credits.purchase capability", () => {
   it("is registered", () => {
-    expect(getCapability("billing.credits.purchase")).toBeDefined();
+    expect(getCapability("purchase_credits")).toBeDefined();
   });
 
   it("parses a valid input", () => {

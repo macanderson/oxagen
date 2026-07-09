@@ -33,7 +33,7 @@ export type InstallClient = z.output<typeof installClientSchema>;
 // ── Contract registration ─────────────────────────────────────────────────────
 
 export const systemInstallInstructions = registerCapability({
-  name: "system.install.instructions",
+  name: "get_install_instructions",
   domain: "system",
   description:
     "Return step-by-step MCP/CLI installation instructions for a given AI client " +

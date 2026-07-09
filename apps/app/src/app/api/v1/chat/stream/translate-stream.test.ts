@@ -222,8 +222,8 @@ describe("translateAgentStream — background-task lifecycle (OXA-1469)", () => 
       {
         type: "tool-call",
         toolCallId: "tc-1",
-        toolName: "agent.background_task.start",
-        input: { kind: "graph.ingest", label: "Ingest doc", payload: {} },
+        toolName: "start_background_task",
+        input: { kind: "ingest_graph", label: "Ingest doc", payload: {} },
       },
       {
         type: "tool-result",
@@ -245,7 +245,7 @@ describe("translateAgentStream — background-task lifecycle (OXA-1469)", () => 
     >[];
     expect(bg).toHaveLength(1);
     expect(bg[0]!.taskId).toBe("task-99");
-    expect(bg[0]!.kind).toBe("graph.ingest");
+    expect(bg[0]!.kind).toBe("ingest_graph");
     expect(bg[0]!.label).toBe("Ingest doc");
     expect(bg[0]!.status).toBe("pending");
     expect(bg[0]!.inngestRunId).toBe("run-77");
@@ -253,7 +253,7 @@ describe("translateAgentStream — background-task lifecycle (OXA-1469)", () => 
     // A terminal background-task block is persisted so the card survives refresh.
     const block = persistedBlocks.find((b) => b.type === "background-task");
     expect(block).toBeTruthy();
-    expect(block).toMatchObject({ taskId: "task-99", kind: "graph.ingest", status: "pending" });
+    expect(block).toMatchObject({ taskId: "task-99", kind: "ingest_graph", status: "pending" });
   });
 
   it("emits nothing when the start result has no taskId (graceful)", async () => {
@@ -262,7 +262,7 @@ describe("translateAgentStream — background-task lifecycle (OXA-1469)", () => 
       {
         type: "tool-call",
         toolCallId: "tc-2",
-        toolName: "agent.background_task.start",
+        toolName: "start_background_task",
         input: { kind: "agent.task", payload: {} },
       },
       { type: "tool-result", toolCallId: "tc-2", output: {} },
@@ -361,7 +361,7 @@ describe("createTurnTranslator — reasoning-id namespacing across steps (C2)", 
   it("does NOT namespace tool call ids (provider ids are already unique)", () => {
     const parts: unknown[] = [
       { type: "start-step" },
-      { type: "tool-call", toolCallId: "toolu_abc", toolName: "graph.stats", input: {} },
+      { type: "tool-call", toolCallId: "toolu_abc", toolName: "get_graph_stats", input: {} },
       { type: "tool-result", toolCallId: "toolu_abc", output: { ok: true } },
       { type: "finish-step" },
     ];
@@ -382,7 +382,7 @@ describe("createTurnTranslator — reasoning-id namespacing across steps (C2)", 
   it("skips preliminary tool-result parts (no premature tool-call-end)", () => {
     const parts: unknown[] = [
       { type: "start-step" },
-      { type: "tool-call", toolCallId: "tc-1", toolName: "graph.stats", input: {} },
+      { type: "tool-call", toolCallId: "tc-1", toolName: "get_graph_stats", input: {} },
       // Streamed partial output — must be ignored.
       { type: "tool-result", toolCallId: "tc-1", output: { partial: true }, preliminary: true },
       { type: "tool-result", toolCallId: "tc-1", output: { ok: true } },
@@ -422,7 +422,7 @@ describe("createTurnTranslator — parity with the single-pass wrapper", () => {
       { type: "reasoning-delta", id: "a", text: "think" },
       { type: "reasoning-end", id: "a" },
       { type: "text-delta", text: "answer " },
-      { type: "tool-call", toolCallId: "toolu_1", toolName: "graph.stats", input: { q: 1 } },
+      { type: "tool-call", toolCallId: "toolu_1", toolName: "get_graph_stats", input: { q: 1 } },
       { type: "tool-result", toolCallId: "toolu_1", output: { count: 3 } },
       { type: "text-delta", text: "done" },
       { type: "finish-step" },

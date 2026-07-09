@@ -34,6 +34,18 @@ const ctx = {
 const ITEM_A = { pluginType: "capability" as const, pluginId: "cap-a", catalogServerId: undefined };
 const ITEM_B = { pluginType: "mcp_server" as const, pluginId: "mcp-b", catalogServerId: undefined };
 
+// installOne resolves {id, authKind}; the bulk handler surfaces authKind on
+// each row so callers can prompt for OAuth right after a bulk install.
+const RESULT_A = { id: "listing-a", authKind: "none" as const };
+const RESULT_B = { id: "listing-b", authKind: "oauth" as const };
+
+type InstalledRow = {
+  pluginId: string | null;
+  orgListingId: string | null;
+  authKind: string | null;
+  error: string | null;
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe("plugin.org.install_bulk handler", () => {
@@ -44,19 +56,30 @@ describe("plugin.org.install_bulk handler", () => {
   // ── happy path ────────────────────────────────────────────────────────────
 
   it("returns all items as successful when every installOne succeeds", async () => {
-    mocks.installOne.mockResolvedValueOnce("listing-a").mockResolvedValueOnce("listing-b");
+    mocks.installOne.mockResolvedValueOnce(RESULT_A).mockResolvedValueOnce(RESULT_B);
 
     const result = await handler({ items: [ITEM_A, ITEM_B] }, ctx) as {
-      installed: Array<{ pluginId: string | null; orgListingId: string | null; error: string | null }>;
+      installed: InstalledRow[];
     };
 
     expect(result.installed).toHaveLength(2);
-    expect(result.installed[0]).toEqual({ pluginId: "cap-a", orgListingId: "listing-a", error: null });
-    expect(result.installed[1]).toEqual({ pluginId: "mcp-b", orgListingId: "listing-b", error: null });
+    expect(result.installed[0]).toEqual({
+      pluginId: "cap-a",
+      orgListingId: "listing-a",
+      authKind: "none",
+      error: null,
+    });
+    // The effective authKind (here an OAuth-protected server) passes through.
+    expect(result.installed[1]).toEqual({
+      pluginId: "mcp-b",
+      orgListingId: "listing-b",
+      authKind: "oauth",
+      error: null,
+    });
   });
 
   it("emits a security event for each successfully installed item", async () => {
-    mocks.installOne.mockResolvedValueOnce("listing-a").mockResolvedValueOnce("listing-b");
+    mocks.installOne.mockResolvedValueOnce(RESULT_A).mockResolvedValueOnce(RESULT_B);
 
     await handler({ items: [ITEM_A, ITEM_B] }, ctx);
 
@@ -78,22 +101,28 @@ describe("plugin.org.install_bulk handler", () => {
 
   it("captures per-item failures in installed[].error without throwing", async () => {
     mocks.installOne
-      .mockResolvedValueOnce("listing-a")
+      .mockResolvedValueOnce(RESULT_A)
       .mockRejectedValueOnce(new Error("plugin not found in catalog"));
 
     const result = await handler({ items: [ITEM_A, ITEM_B] }, ctx) as {
-      installed: Array<{ pluginId: string | null; orgListingId: string | null; error: string | null }>;
+      installed: InstalledRow[];
     };
 
     expect(result.installed).toHaveLength(2);
 
     // Successful item
-    expect(result.installed[0]).toEqual({ pluginId: "cap-a", orgListingId: "listing-a", error: null });
+    expect(result.installed[0]).toEqual({
+      pluginId: "cap-a",
+      orgListingId: "listing-a",
+      authKind: "none",
+      error: null,
+    });
 
-    // Failed item: error string embedded, orgListingId is null
+    // Failed item: error string embedded, orgListingId and authKind are null
     expect(result.installed[1]).toEqual({
       pluginId: "mcp-b",
       orgListingId: null,
+      authKind: null,
       error: "plugin not found in catalog",
     });
   });
@@ -104,7 +133,7 @@ describe("plugin.org.install_bulk handler", () => {
       .mockRejectedValueOnce(new Error("auth denied"));
 
     const result = await handler({ items: [ITEM_A, ITEM_B] }, ctx) as {
-      installed: Array<{ pluginId: string | null; orgListingId: string | null; error: string | null }>;
+      installed: InstalledRow[];
     };
 
     expect(result.installed).toHaveLength(2);
@@ -122,21 +151,26 @@ describe("plugin.org.install_bulk handler", () => {
   });
 
   it("handles a single item successfully", async () => {
-    mocks.installOne.mockResolvedValueOnce("listing-solo");
+    mocks.installOne.mockResolvedValueOnce({ id: "listing-solo", authKind: "secret" });
 
     const result = await handler({ items: [ITEM_A] }, ctx) as {
-      installed: Array<{ pluginId: string | null; orgListingId: string | null; error: string | null }>;
+      installed: InstalledRow[];
     };
 
     expect(result.installed).toHaveLength(1);
-    expect(result.installed[0]).toEqual({ pluginId: "cap-a", orgListingId: "listing-solo", error: null });
+    expect(result.installed[0]).toEqual({
+      pluginId: "cap-a",
+      orgListingId: "listing-solo",
+      authKind: "secret",
+      error: null,
+    });
   });
 
   it("stores non-Error rejection as a string in the error field", async () => {
     mocks.installOne.mockRejectedValueOnce("raw string rejection");
 
     const result = await handler({ items: [ITEM_A] }, ctx) as {
-      installed: Array<{ pluginId: string | null; orgListingId: string | null; error: string | null }>;
+      installed: InstalledRow[];
     };
 
     expect(result.installed[0]?.error).toBe("raw string rejection");

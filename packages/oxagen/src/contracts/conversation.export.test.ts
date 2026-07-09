@@ -73,7 +73,7 @@ describe("conversation.export capability", () => {
   // ── registration & governance posture ────────────────────────────────────
 
   it("registers in the capability registry", () => {
-    const cap = getCapability("conversation.export");
+    const cap = getCapability("export_conversation");
     expect(cap).toBeDefined();
     expect(cap?.domain).toBe("conversation");
     expect(cap?.mode).toBe("sync");

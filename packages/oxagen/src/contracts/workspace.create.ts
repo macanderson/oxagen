@@ -2,7 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const workspaceCreate = registerCapability({
-  name: "workspace.create",
+  name: "create_workspace",
   domain: "workspace",
   description: "Create a workspace within the active tenant",
   mode: "sync",

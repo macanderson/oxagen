@@ -41,7 +41,7 @@ const validTask = {
 
 describe("workflow.status capability", () => {
   it("is registered", () => {
-    expect(getCapability("workflow.status")).toBeDefined();
+    expect(getCapability("get_workflow_status")).toBeDefined();
   });
 
   it("parses a valid input", () => {

@@ -34,7 +34,7 @@ describe("api.key.revoke capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("api.key.revoke")).toBe(apiKeyRevoke);
+    expect(getCapability("revoke_api_key")).toBe(apiKeyRevoke);
   });
 
   it("is high-sensitivity, default-deny, and requires agent approval", () => {

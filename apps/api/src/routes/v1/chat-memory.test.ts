@@ -93,7 +93,7 @@ describe("recallWorkspaceMemoryMessage", () => {
     });
     expect(invokeFn).toHaveBeenCalledOnce();
     const call = invokeFn.mock.calls[0] as unknown as unknown[];
-    expect(call[0]).toBe("agent.memory.recall");
+    expect(call[0]).toBe("recall_memory");
     expect(call[1]).toMatchObject({ query: "how do I query the db", executionRef: "req_1" });
     expect(call[3]).toEqual({ surface: "agent" });
     expect(msg).not.toBeNull();

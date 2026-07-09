@@ -2,8 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const agentTaskBackgroundCancel = registerCapability({
-  name: "agent.background_task.cancel",
-  aliases: ["agent.task.background.cancel"],
+  name: "cancel_background_task",
   domain: "agent",
   description: "Cancel a running background task; downstream Inngest steps stop on next checkpoint",
   mode: "sync",

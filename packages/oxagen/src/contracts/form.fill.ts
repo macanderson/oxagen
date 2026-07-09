@@ -27,7 +27,7 @@ const fieldDiffSchema = z.object({
 // ── Contract registration ─────────────────────────────────────────────────────
 
 export const formFill = registerCapability({
-  name: "form.fill",
+  name: "fill_form",
   domain: "form",
   description:
     "Generatively fill or suggest values for page-level form fields based on a natural-language instruction. " +

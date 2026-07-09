@@ -2,7 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const agentMcpDelete = registerCapability({
-  name: "agent.mcp.delete",
+  name: "delete_mcp_server",
   domain: "agent",
   description:
     "Soft-delete a registered external MCP server. Its tools stop registering immediately, but tool-descriptor snapshots are retained >= 365 days for replay durability before a retention job purges them. The change is audited.",

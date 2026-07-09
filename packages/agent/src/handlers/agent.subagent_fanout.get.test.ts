@@ -87,7 +87,7 @@ describe("agent.subagent.fanout.get handler", () => {
     setup(fanout(), [
       {
         publicId: "sar_1",
-        capabilityName: "agent.tool.list",
+        capabilityName: "list_agent_tools",
         status: "completed",
         errorReason: null,
         inputPayload: { q: "x" },
@@ -111,7 +111,7 @@ describe("agent.subagent.fanout.get handler", () => {
     setup(fanout(), [
       {
         publicId: "sar_2",
-        capabilityName: "agent.memory.recall",
+        capabilityName: "recall_memory",
         status: "pending",
         errorReason: null,
         inputPayload: {},
