@@ -18,6 +18,8 @@ import type { CapabilityContext } from "../types";
 import { agentSandboxStartHandler } from "../handlers/agent.sandbox.start";
 import { agentSandboxExecHandler } from "../handlers/agent.sandbox.exec";
 import { agentSandboxStopHandler } from "../handlers/agent.sandbox.stop";
+import { releaseSession } from "../handlers/_sandbox-session";
+import { captureSandboxCommandLogs } from "../handlers/_sandbox-logs";
 
 /** Thrown when a sandbox-backed workspace is used with no driver configured. */
 export class SandboxWorkspaceUnavailableError extends Error {
@@ -187,6 +189,26 @@ export class ModalSandboxWorkspace implements Workspace {
     }
   }
 
+  /**
+   * Release the session at turn end WITHOUT tearing the sandbox down: mark it
+   * 'idle' and start its reap grace clock, so the next turn of the same
+   * conversation reconnects to this same warm sandbox (and its working tree,
+   * including uncommitted edits). The sandbox-reaper drops it ~2-3 min later if
+   * no turn resumes — recovering any dirty work to a branch first
+   * (spec: sandbox-session-lifecycle §4). Use this, NOT dispose(), for a
+   * persistent per-conversation coding session. Safe to call multiple times.
+   */
+  async release(): Promise<void> {
+    if (!this.sessionId) return;
+    const sessionId = this.sessionId;
+    try {
+      await this.withScope(() => releaseSession(this.ctx, sessionId));
+    } catch {
+      // Best-effort; a failed release just leaves the session 'running' until the
+      // reaper's stale-running backstop reclaims it. Work is never at risk.
+    }
+  }
+
   // ── Command execution ──────────────────────────────────────────────────────
 
   /** Run a command in the session, restoring-on-reap via the shared handler. */
@@ -219,10 +241,17 @@ export class ModalSandboxWorkspace implements Workspace {
     const sessionId = await this.ensureSession();
     // Run in the workspace root so relative paths resolve against the clone.
     const wrapped = `cd ${shq(this.root)} && ${command}`;
-    return this.execRaw(sessionId, {
+    const startedAt = Date.now();
+    const result = await this.execRaw(sessionId, {
       command: wrapped,
       timeoutMs: opts?.timeoutMs ?? this.defaultTimeoutMs,
     });
+    // Capture the agent's REAL command output for the sandbox inspector's log
+    // console (fire-and-forget; the ORIGINAL command, not the `cd` wrapper).
+    // Only exec() is captured — internal FS ops via execRaw are excluded so the
+    // console shows agent commands, not readFile/list/grep plumbing.
+    void captureSandboxCommandLogs(this.ctx, sessionId, command, result, Date.now() - startedAt);
+    return result;
   }
 
   // ── Filesystem: reads ──────────────────────────────────────────────────────

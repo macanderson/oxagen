@@ -22,6 +22,15 @@ const LIST_COLUMNS = {
   lastUsedAt: schema.sandboxSessions.lastUsedAt,
   expiresAt: schema.sandboxSessions.expiresAt,
   createdAt: schema.sandboxSessions.createdAt,
+  // Lifecycle & work-recovery fields (spec: sandbox-session-lifecycle) — so the
+  // listing surfaces reap/recovery state without a per-session round-trip.
+  recoveryStatus: schema.sandboxSessions.recoveryStatus,
+  recoveryBranch: schema.sandboxSessions.recoveryBranch,
+  recoveryCommit: schema.sandboxSessions.recoveryCommit,
+  graceDeadlineAt: schema.sandboxSessions.graceDeadlineAt,
+  dirty: schema.sandboxSessions.dirty,
+  flushedAt: schema.sandboxSessions.flushedAt,
+  recoveredAt: schema.sandboxSessions.recoveredAt,
 } as const;
 
 /**
@@ -70,6 +79,13 @@ function toSandbox(row: {
   lastUsedAt: Date | null;
   expiresAt: Date | null;
   createdAt: Date;
+  recoveryStatus: string;
+  recoveryBranch: string | null;
+  recoveryCommit: string | null;
+  graceDeadlineAt: Date | null;
+  dirty: boolean | null;
+  flushedAt: Date | null;
+  recoveredAt: Date | null;
 }): Sandbox {
   return {
     sessionId: row.publicId,
@@ -82,5 +98,13 @@ function toSandbox(row: {
     lastUsedAt: row.lastUsedAt ? row.lastUsedAt.toISOString() : null,
     expiresAt: row.expiresAt ? row.expiresAt.toISOString() : null,
     createdAt: row.createdAt.toISOString(),
+    // Lifecycle & work-recovery (spec: sandbox-session-lifecycle).
+    recoveryStatus: row.recoveryStatus,
+    recoveryBranch: row.recoveryBranch,
+    recoveryCommit: row.recoveryCommit,
+    graceDeadlineAt: row.graceDeadlineAt ? row.graceDeadlineAt.toISOString() : null,
+    dirty: row.dirty,
+    flushedAt: row.flushedAt ? row.flushedAt.toISOString() : null,
+    recoveredAt: row.recoveredAt ? row.recoveredAt.toISOString() : null,
   };
 }

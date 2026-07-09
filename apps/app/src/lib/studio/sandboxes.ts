@@ -29,6 +29,34 @@ export interface SandboxSummary {
   lastUsedAt: string | null;
   expiresAt: string | null;
   createdAt: string;
+  /**
+   * Session-lifecycle recovery + reap metadata. `list_sandboxes` grows these
+   * fields as the sibling capability change lands; until then they are absent
+   * at runtime, so every one is optional and the UI degrades gracefully.
+   */
+  /** "pending" | "recovered" | "failed" | undefined — recovery-flush state. */
+  recoveryStatus?: string;
+  /** Branch the sandbox's work was flushed to on recovery. */
+  recoveryBranch?: string | null;
+  /** Commit sha of the recovery flush, when available. */
+  recoveryCommit?: string | null;
+  /** ISO deadline: when an idle session is reaped unless it is reused first. */
+  graceDeadlineAt?: string | null;
+  /** True when the working tree has uncommitted changes. */
+  dirty?: boolean | null;
+  /** ISO time the working tree was last flushed to durable storage. */
+  flushedAt?: string | null;
+  /** ISO time the session's work was recovered to a branch. */
+  recoveredAt?: string | null;
+}
+
+/** One captured output line from a durable sandbox session. */
+export interface SandboxLogLine {
+  /** Which pipe the line came from; `system` is a lifecycle/echo/timing note. */
+  stream: "stdout" | "stderr" | "system";
+  text: string;
+  /** ISO timestamp of the line, when the capability records one. */
+  at?: string | null;
 }
 
 export interface SandboxExecResult {
@@ -66,7 +94,25 @@ export async function listSandboxes(
   const out = (await invoke("list_sandboxes", opts, ctx, {
     surface: "agent",
   })) as { sandboxes: SandboxSummary[] };
-  return out.sandboxes;
+  // The capability shapes each summary; the extended recovery/reap fields flow
+  // straight through this cast and are simply absent until the sibling change
+  // starts returning them.
+  return out.sandboxes ?? [];
+}
+
+/**
+ * Read the captured output log for a session. `level: "normal"` returns program
+ * output only; omitting `level` (the debug view) returns everything, including
+ * command echoes and timing/lifecycle notes.
+ */
+export async function listSandboxLogs(
+  ctx: StudioCtx,
+  input: { sessionId: string; level?: "normal" | "debug"; limit?: number },
+): Promise<SandboxLogLine[]> {
+  const out = (await invoke("list_sandbox_logs", input, ctx, {
+    surface: "agent",
+  })) as { lines?: SandboxLogLine[] };
+  return out.lines ?? [];
 }
 
 export async function startSandbox(

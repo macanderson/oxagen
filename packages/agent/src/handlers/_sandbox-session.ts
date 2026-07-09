@@ -233,7 +233,9 @@ export async function touchSession(ctx: CapabilityContext, id: string): Promise<
   await withTenantDb(async (tx) => {
     await tx
       .update(schema.sandboxSessions)
-      .set({ lastUsedAt: new Date(), status: "running", updatedByUserId: ctx.userId })
+      // Clear grace_deadline_at: an active turn is holding this session, so it
+      // must not be a reap candidate until it releases to 'idle' again.
+      .set({ lastUsedAt: new Date(), status: "running", graceDeadlineAt: null, updatedByUserId: ctx.userId })
       .where(
         and(
           eq(schema.sandboxSessions.id, id),
@@ -256,6 +258,7 @@ export async function rebindSession(
         sandboxId,
         status: "running",
         lastUsedAt: new Date(),
+        graceDeadlineAt: null,
         updatedByUserId: ctx.userId,
       })
       .where(
@@ -305,6 +308,64 @@ export async function markSessionStatus(
         and(
           eq(schema.sandboxSessions.id, id),
           eq(schema.sandboxSessions.workspaceId, ctx.workspaceId),
+        ),
+      );
+  });
+}
+
+// ── Session lifecycle: idle-release + grace configuration ───────────────────
+// (spec: docs/specs/sandbox-session-lifecycle/spec.md §4)
+
+/** Clamp an env-configured seconds value; fall back on NaN/≤0. */
+function envSeconds(name: string, fallback: number): number {
+  const raw = Number(process.env[name]);
+  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : fallback;
+}
+
+/**
+ * Grace window (seconds) between a session going idle and the reaper being
+ * allowed to flush it. Default 120s: with a 1-minute reaper cron the real-world
+ * drop lands inside the 2-3 minute target. Env: SANDBOX_SESSION_GRACE_SECONDS.
+ */
+export function sandboxGraceSeconds(): number {
+  return envSeconds("SANDBOX_SESSION_GRACE_SECONDS", 120);
+}
+
+/**
+ * Backstop window (seconds) for a 'running' session whose turn crashed without
+ * releasing — longer than any real turn. Env: SANDBOX_SESSION_STALE_RUNNING_SECONDS.
+ */
+export function sandboxStaleRunningSeconds(): number {
+  return envSeconds("SANDBOX_SESSION_STALE_RUNNING_SECONDS", 1800);
+}
+
+/**
+ * Release a session at turn end: mark it 'idle' and set the reap grace deadline,
+ * keeping the sandbox WARM instead of tearing it down. This is the crux of
+ * cross-turn persistence — the next turn's `findReusableSession` reconnects to
+ * the same live sandbox (and its working tree, including uncommitted edits).
+ *
+ * Guarded on the current status so an error path that already stopped/reaped the
+ * session is never resurrected to 'idle'. Keyed by public id (what the caller
+ * holds); a no-op when the session is gone.
+ */
+export async function releaseSession(ctx: CapabilityContext, publicId: string): Promise<void> {
+  const graceMs = sandboxGraceSeconds() * 1000;
+  await withTenantDb(async (tx) => {
+    await tx
+      .update(schema.sandboxSessions)
+      .set({
+        status: "idle",
+        lastUsedAt: new Date(),
+        graceDeadlineAt: new Date(Date.now() + graceMs),
+        updatedByUserId: ctx.userId,
+      })
+      .where(
+        and(
+          eq(schema.sandboxSessions.publicId, publicId),
+          eq(schema.sandboxSessions.workspaceId, ctx.workspaceId),
+          inArray(schema.sandboxSessions.status, ["running", "idle"]),
+          isNull(schema.sandboxSessions.deletedAt),
         ),
       );
   });
