@@ -67,6 +67,32 @@ Redeploy (same app name → same URL, additive):
 cd ops/modal-sandbox && uv sync && uv run modal deploy runner.py
 ```
 
+## Triage: `modal runner 500 <path>: Internal Server Error`
+
+A bare text `Internal Server Error` body (no JSON `detail`) means an
+**unhandled exception** escaped the deployed runner — as of v0.7.0 the
+create/restore/run endpoints catch these and return
+`{"detail":"<op> failed: <ExcType>: <message>"}` instead, so a bare-text 500
+also means the deployed runner predates v0.7.0. Steps:
+
+1. Check drift + version via `/openapi.json` (above); redeploy if stale.
+2. Read the traceback: `uv run modal app logs oxagen-sandbox`.
+3. Known cause (fixed in v0.7.0): `POST /sandbox/create {image:"agent"}` died
+   with `FileNotFoundError: local file browser/browserd.py does not exist`.
+   The durable `agent` image's `add_local_file` layers hydrate lazily at the
+   first `Sandbox.create` — *inside* the runner container, where the repo's
+   `browser/` dir doesn't exist. The runner image now bakes `browser/` at
+   `/assets/browser` and resolves paths from either location.
+4. Other candidates a surfaced detail will now name outright: Modal
+   credit/spend-limit exhaustion, registry-image pull failures for
+   template `image_ref`s, and SDK kwarg drift.
+
+Unit tests for the HTTP surface (no Modal account needed):
+
+```bash
+cd ops/modal-sandbox && uv run --group dev pytest test_runner.py
+```
+
 ## Cost guardrails
 
 A run at the default limits (Python 3.12, 512 MB, 5 s) costs ~$0.0003 of
