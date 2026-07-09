@@ -88,6 +88,10 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // user_preferences) are NOT row-scoped (no org_id; user-keyed lookups).
   { table: "auth.credentials", policyClass: "standard" },
   { table: "auth.api_keys", policyClass: "standard" },
+  // Per-(user, workspace) coding-agent defaults (default repo/environment).
+  // orgScopeMixin (org_id + workspace_id both NOT NULL) + tenant_isolation RLS
+  // in 20260713120000_workspace_user_preferences.sql → standard.
+  { table: "auth.workspace_user_preferences", policyClass: "standard" },
 
   // ── billing.* (org_id only; no workspace_id on any billing table) ─────────
   // plans / stripe_events / stripe_event_processing excluded: shared catalogs
