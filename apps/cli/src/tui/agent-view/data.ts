@@ -434,14 +434,23 @@ function candidateRoots(cwd: string): string[] {
   return [...new Set([cwd, realpathSafe(cwd), root, realpathSafe(root)])];
 }
 
+/** The live default: probe the daemon's code-graph store at its canonical path. */
+function defaultProbeCodeGraph(cwd: string): Promise<CodeGraphStatus> {
+  return probeCodeGraphAt(defaultCodeGraphDbPath(), cwd);
+}
+
 /**
- * Open the daemon's code-graph DuckDB READ-ONLY and report real counts for this
- * repo. Read-only never mutates and never blocks the daemon's writes; when the
- * file is absent it says so, and when the daemon holds a write lock (or the file
- * is unreadable) it reports `locked` rather than inventing a healthy state.
+ * Open a code-graph DuckDB file READ-ONLY and report real counts for `cwd`'s
+ * repo. Read-only never mutates and never blocks the daemon's writes; an absent
+ * file says so, and a file that can't be opened/read right now (a daemon write
+ * lock, an unloadable driver, or a corrupt file) reports `locked` rather than
+ * inventing a healthy state. Exported so the real read path is unit-tested
+ * against a genuine DuckDB file, not only mocked.
  */
-async function defaultProbeCodeGraph(cwd: string): Promise<CodeGraphStatus> {
-  const dbPath = defaultCodeGraphDbPath();
+export async function probeCodeGraphAt(
+  dbPath: string,
+  cwd: string,
+): Promise<CodeGraphStatus> {
   if (!existsSync(dbPath)) return { state: "absent", dbPath };
 
   let duckdb: DuckModuleRO;
@@ -485,11 +494,16 @@ async function queryCodeGraphStats(
     });
 
   try {
+    // Every aggregate is CAST to DOUBLE: DuckDB returns COUNT/HUGEINT values the
+    // native duckdb-node binding cannot serialize ("Do not know how to serialize
+    // a BigInt"), which aborts the PROCESS — not a catchable error. DOUBLE comes
+    // back as a plain JS number; file counts and ms timestamps are well within
+    // its exact-integer range.
     const nodeRows = await query(
       `SELECT root,
-              count(*) FILTER (WHERE kind = 'file') AS files,
-              count(*) FILTER (WHERE kind <> 'file') AS symbols,
-              count(*) FILTER (WHERE kind = 'file' AND embedding IS NOT NULL) AS embedded
+              CAST(count(*) FILTER (WHERE kind = 'file') AS DOUBLE) AS files,
+              CAST(count(*) FILTER (WHERE kind <> 'file') AS DOUBLE) AS symbols,
+              CAST(count(*) FILTER (WHERE kind = 'file' AND embedding IS NOT NULL) AS DOUBLE) AS embedded
        FROM code_nodes GROUP BY root`,
     );
 
@@ -504,9 +518,12 @@ async function queryCodeGraphStats(
     }
 
     const root = String(chosen["root"]);
-    const edgeRows = await query("SELECT count(*) AS cnt FROM code_edges WHERE root = ?", [root]);
+    const edgeRows = await query(
+      "SELECT CAST(count(*) AS DOUBLE) AS cnt FROM code_edges WHERE root = ?",
+      [root],
+    );
     const idxRows = await query(
-      "SELECT max(indexed_at) AS last FROM code_files WHERE root = ?",
+      "SELECT CAST(max(indexed_at) AS DOUBLE) AS last FROM code_files WHERE root = ?",
       [root],
     );
     const last = idxRows[0]?.["last"];

@@ -77,8 +77,7 @@ export function AgentView({ cwd, collect, refreshMs }: AgentViewProps): React.Re
       active = false;
       if (id) clearInterval(id);
     };
-    // collector is derived from the stable `collect`/`cwd`; re-subscribe only on those.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // `collector` is derived from the stable `collect`/`cwd`; re-subscribe only on those.
   }, [cwd, collect, refreshMs]);
 
   useInput((input, key) => {
