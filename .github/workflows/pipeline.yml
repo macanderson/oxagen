@@ -8,7 +8,12 @@ on:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # Auto-cancel superseded runs for PRs only. A push-to-main run contains the
+  # prod migrate job — cancelling the whole run mid-`atlas migrate apply`
+  # (the job-level db-migrate concurrency group only serializes migrate jobs,
+  # it does not shield them from run-level cancellation) would strand prod
+  # behind the committed migrations. Main runs always run to completion.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   # Container jobs bind-mount the workspace with a uid that differs from the
