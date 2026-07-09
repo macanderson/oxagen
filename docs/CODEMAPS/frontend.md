@@ -231,14 +231,15 @@ apps/cli/src/agent/
 ### TUI Components (Ink)
 ```
 apps/cli/src/tui/
-  agent-view/
-    index.tsx                   → main agent TUI
-    activity-feed.tsx           → tool call feed
-    budget-bar.tsx               → token budget display
-    compile-panel.tsx            → code compilation status
-    memory-panel.tsx             → memory display
-    session-panel.tsx            → session info
-    status-bar.tsx               → status line
+  agent-view/                   → `oxagen view`: audit agent work on real data only
+    data.ts                     → honest data layer: sessions/rollup/activity/
+                                  code-graph (DuckDB read-only)/daemon/auth (injectable probes)
+    index.tsx                   → shell: 3s real-read refresh, q/Esc/^C quit, non-TTY text snapshot
+    sessions-panel.tsx          → agent-runs audit table (ADR-023 session logs)
+    overview-panel.tsx          → state rollup + real spend (today/all-time)
+    activity-panel.tsx          → newest run's real events via toAggregateLine
+    code-graph-panel.tsx        → real code-graph stats (absent/locked/empty/ready)
+    status-bar.tsx              → real daemon/graph/auth health
   fleet-view/
     fleet-app.tsx                → fleet orchestrator TUI
     agent-row.tsx                → per-agent status row

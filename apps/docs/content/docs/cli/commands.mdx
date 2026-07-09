@@ -99,13 +99,21 @@ Hand a pull request to the CLI to watch CI, or actively fix a red PR: it diagnos
 oxagen pr fix 684 --max-rounds 5 --yes      # iterate on CI, auto-merge when green
 ```
 
-## oxagen view — agent dashboard
+## oxagen view — audit agent work
 
 ```bash
 oxagen view
 ```
 
-Launches the dashboard for agent memory, the compiled context, and past sessions.
+Opens a full-screen dashboard for **monitoring and auditing** the agent work done in this project. Every figure is read from a real local source — there is no demo data — so an unavailable source shows an explicit "not running" / "no data yet" state rather than a fabricated healthy one.
+
+- **Agent runs** — the retrospective audit table. One row per recorded run (interactive REPL or detached fleet worker), newest first, from the same on-disk session logs Mission Control reads: derived state, id, surface, task, model, turns, wall-clock duration, and recorded cost.
+- **Overview** — the fleet rollup: counts by state, the interactive-vs-fleet split, token usage, and **real spend** (today and all-time, summed from each run's recorded cost). The spend line is omitted when nothing has cost anything.
+- **Recent activity** — the newest run's real event log, folded to salient lines. This is a retrospective peek; for a live stream use [`oxagen fleet watch`](/docs/cli/fleet) / Mission Control.
+- **Code graph** — real stats from the daemon's local code-graph store, opened read-only: file / symbol / edge counts, embedding coverage, and last index time — or an honest `absent` / `locked` / `empty` state.
+- **Status bar** — actual health probes: daemon (a live socket ping), code-graph store state, and the effective auth mode (platform login or BYOK key).
+
+Data refreshes every few seconds from real reads. Press `q`, `Esc`, or `Ctrl-C` to quit. Piped or non-interactive (`oxagen view | cat`), it prints a one-shot text snapshot instead of the live view.
 
 ## oxagen daemon — context daemon
 
