@@ -102,6 +102,42 @@ export async function setWorkspaceSecret(input: SetWorkspaceSecretInput): Promis
   });
 }
 
+export interface WorkspaceCredentialStatus {
+  orgListingId: string;
+  authKind: string;
+  /** active | needs_reauth | revoked */
+  status: string;
+  expiresAt: Date | null;
+}
+
+/**
+ * Status-only bulk read for UI display (which installs are connected / need
+ * (re)auth). Never touches the encrypted columns, so it needs no KMS key and
+ * is safe to call from any server-rendered settings page.
+ */
+export async function listWorkspaceCredentialStatuses(key: {
+  orgId: string;
+  workspaceId: string;
+}): Promise<WorkspaceCredentialStatus[]> {
+  return withSystemDb(async (tx) =>
+    tx
+      .select({
+        orgListingId: schema.mcpCredentials.orgListingId,
+        authKind: schema.mcpCredentials.authKind,
+        status: schema.mcpCredentials.status,
+        expiresAt: schema.mcpCredentials.expiresAt,
+      })
+      .from(schema.mcpCredentials)
+      .where(
+        and(
+          // withSystemDb bypasses RLS — the orgId predicate is the tenant guard.
+          eq(schema.mcpCredentials.orgId, key.orgId),
+          eq(schema.mcpCredentials.workspaceId, key.workspaceId),
+        ),
+      ),
+  );
+}
+
 export interface WorkspaceSecret {
   secret: string | null;
   accessToken: string | null;

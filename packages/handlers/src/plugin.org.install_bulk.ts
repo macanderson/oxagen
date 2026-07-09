@@ -9,7 +9,7 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
   const installed = await Promise.all(
     items.map(async (item) => {
       try {
-        const orgListingId = await installOne(ctx, item);
+        const { id: orgListingId, authKind } = await installOne(ctx, item);
         // ── Emit audit event per installed item (fire-and-forget) ───────────
         emitSecurityEvent({
           eventType: "plugin.installed",
@@ -29,6 +29,7 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
         return {
           pluginId: item.pluginId ?? null,
           orgListingId,
+          authKind,
           error: null,
         };
       } catch (err) {
@@ -39,6 +40,7 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
         return {
           pluginId: item.pluginId ?? null,
           orgListingId: null,
+          authKind: null,
           error: err instanceof Error ? err.message : String(err),
         };
       }

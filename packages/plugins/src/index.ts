@@ -15,10 +15,12 @@ export type { ResolvedKms } from "./credentials/kms";
 export {
   setWorkspaceSecret,
   getWorkspaceSecret,
+  listWorkspaceCredentialStatuses,
 } from "./credentials/workspace-credential";
 export type {
   SetWorkspaceSecretInput,
   WorkspaceSecret,
+  WorkspaceCredentialStatus,
 } from "./credentials/workspace-credential";
 export * from "./registry";
 export * from "./oauth";

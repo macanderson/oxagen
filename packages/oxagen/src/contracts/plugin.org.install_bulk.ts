@@ -49,6 +49,7 @@ export const pluginOrgInstallBulk = registerCapability({
         // the app's installBulkPlugin action consumes — must stay in sync.
         pluginId: z.string().nullable(),
         orgListingId: z.string().nullable(),
+        authKind: z.enum(["oauth", "secret", "none"]).nullable(),
         error: z.string().nullable(),
       }),
     ),

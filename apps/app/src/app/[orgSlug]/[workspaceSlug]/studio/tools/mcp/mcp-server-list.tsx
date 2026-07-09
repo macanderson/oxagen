@@ -4,13 +4,18 @@
  *
  * Toggle/uninstall reuse the plugin-type-agnostic togglePlugin/uninstallPlugin
  * server actions from settings/plugins/plugin-actions.ts — no duplicated
- * enable/disable or delete logic.
+ * enable/disable or delete logic. OAuth listings additionally surface their
+ * credential status (from mcp.credentials) with an Authenticate /
+ * Re-authenticate action into the OAuth authorize route — an installed OAuth
+ * server does nothing until that flow completes.
  */
 import * as React from "react";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { CapabilityIcon } from "@/components/plugins/capability-icon";
-import { Trash2 } from "lucide-react";
+import { KeyRound, Trash2 } from "lucide-react";
+import { mcpAuthorizeUrl } from "@/lib/mcp-oauth/authorize-url";
 
 export interface McpServerRow {
   id: string;
@@ -21,6 +26,44 @@ export interface McpServerRow {
   transport: string | null;
   authKind: string;
   enabled: boolean;
+  /** mcp.credentials status for this listing, or null when no credential exists. */
+  credentialStatus: "active" | "needs_reauth" | "revoked" | null;
+}
+
+export interface ConnectionDisplay {
+  label: string;
+  variant: "success" | "warning" | "error" | "muted";
+  /** Text for the auth action button, or null when no action applies. */
+  action: "Authenticate" | "Re-authenticate" | null;
+}
+
+/**
+ * Pure status → display mapping, exported for unit tests. OAuth servers are
+ * the only kind whose connection state is driven by mcp.credentials; secret
+ * servers show Connected once a secret is stored; "none" needs nothing.
+ */
+export function connectionDisplay(
+  authKind: string,
+  credentialStatus: McpServerRow["credentialStatus"],
+): ConnectionDisplay {
+  if (authKind === "oauth") {
+    if (credentialStatus === "active") {
+      return { label: "Connected", variant: "success", action: "Re-authenticate" };
+    }
+    if (credentialStatus === "needs_reauth") {
+      return { label: "Needs re-auth", variant: "error", action: "Re-authenticate" };
+    }
+    if (credentialStatus === "revoked") {
+      return { label: "Revoked", variant: "error", action: "Authenticate" };
+    }
+    return { label: "Needs authentication", variant: "warning", action: "Authenticate" };
+  }
+  if (authKind === "secret") {
+    return credentialStatus === "active"
+      ? { label: "Connected", variant: "success", action: null }
+      : { label: "Secret required", variant: "muted", action: null };
+  }
+  return { label: "No auth needed", variant: "muted", action: null };
 }
 
 interface McpServerListProps {
@@ -110,6 +153,7 @@ export function McpServerList({
             <th className="px-4 py-2 text-left font-medium">Server</th>
             <th className="px-4 py-2 text-left font-medium">Endpoint</th>
             <th className="px-4 py-2 text-left font-medium">Auth</th>
+            <th className="px-4 py-2 text-left font-medium">Status</th>
             <th className="px-4 py-2 text-left font-medium">Enabled</th>
             <th className="px-4 py-2" />
           </tr>
@@ -158,6 +202,42 @@ export function McpServerList({
                   </Badge>
                 </td>
                 <td className="px-4 py-3">
+                  {(() => {
+                    const display = connectionDisplay(server.authKind, server.credentialStatus);
+                    return (
+                      <div className="flex items-center gap-2">
+                        <Badge
+                          variant={display.variant}
+                          size="sm"
+                          data-testid={`mcp-server-status-${server.id}`}
+                        >
+                          {display.label}
+                        </Badge>
+                        {display.action ? (
+                          <Button
+                            size="sm"
+                            variant={display.action === "Authenticate" ? "default" : "ghost"}
+                            render={
+                              <a
+                                href={mcpAuthorizeUrl({
+                                  orgSlug,
+                                  workspaceSlug,
+                                  orgListingId: server.id,
+                                  returnTo: `/${orgSlug}/${workspaceSlug}/studio/tools/mcp`,
+                                })}
+                                data-testid={`mcp-server-authenticate-${server.id}`}
+                              />
+                            }
+                          >
+                            <KeyRound className="h-3 w-3" aria-hidden="true" />
+                            {display.action}
+                          </Button>
+                        ) : null}
+                      </div>
+                    );
+                  })()}
+                </td>
+                <td className="px-4 py-3">
                   <Switch
                     checked={server.enabled}
                     onCheckedChange={(checked) => handleToggle(server, checked)}
@@ -181,7 +261,7 @@ export function McpServerList({
               </tr>
               {errors[server.id] && (
                 <tr>
-                  <td colSpan={5} className="px-4 pb-2">
+                  <td colSpan={6} className="px-4 pb-2">
                     <p className="text-xs text-destructive">{errors[server.id]}</p>
                   </td>
                 </tr>

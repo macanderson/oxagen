@@ -40,7 +40,13 @@ const InstallSchema = z.object({
 
 export async function installPlugin(
   input: z.infer<typeof InstallSchema>,
-): Promise<{ ok: boolean; orgListingId?: string; error?: string }> {
+): Promise<{
+  ok: boolean;
+  orgListingId?: string;
+  /** "oauth" → the server needs the OAuth authorize flow before it works. */
+  authKind?: "oauth" | "secret" | "none";
+  error?: string;
+}> {
   const parsed = InstallSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Invalid input" };
 
@@ -100,9 +106,10 @@ export async function installPlugin(
     );
     const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };
     revalidatePath(capabilitiesPath(routeCtx));
+    revalidatePath(workspace.studio.tools.mcp(routeCtx));
 
-    const typed = out as { orgListingId: string };
-    return { ok: true, orgListingId: typed.orgListingId };
+    const typed = out as { orgListingId: string; authKind?: "oauth" | "secret" | "none" };
+    return { ok: true, orgListingId: typed.orgListingId, authKind: typed.authKind };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Install failed" };
   }

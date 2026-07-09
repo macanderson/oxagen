@@ -4,10 +4,18 @@ import { ExternalLink, KeySquare } from "lucide-react";
 import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import "@oxagen/handlers/register";
+import { Suspense } from "react";
+import { listWorkspaceCredentialStatuses } from "@oxagen/plugins";
 import { resolveStudioScope } from "@/lib/studio/scope";
-import { togglePlugin, uninstallPlugin } from "@/lib/agent-tools/install-actions";
+import {
+  installPlugin,
+  togglePlugin,
+  uninstallPlugin,
+} from "@/lib/agent-tools/install-actions";
 import { connectCustomMcpServer } from "@/lib/agent-tools/mcp-actions";
 import { ConnectMcpForm } from "./connect-mcp-form";
+import { McpCatalogSearch } from "./mcp-catalog-search";
+import { McpOauthResultToast } from "./mcp-oauth-result-toast";
 import { McpServerList, type McpServerRow } from "./mcp-server-list";
 // McpInstallTabs is the presentational client component that renders the
 // per-client copy-paste install snippets — reused verbatim from
@@ -122,6 +130,19 @@ export default async function AgentToolsMcpPage({ params }: PageProps) {
     return [] as (typeof schema.pluginInstalledPlugins.$inferSelect)[];
   });
 
+  // Credential status per listing (status-only read, no decryption) — drives
+  // the Connected / Needs authentication badges and Authenticate actions.
+  const credentialStatuses = await listWorkspaceCredentialStatuses({
+    orgId: org.id,
+    workspaceId: ws.id,
+  }).catch((e: unknown) => {
+    console.error("MCP credential status query failed:", e);
+    return [];
+  });
+  const statusByListing = new Map(
+    credentialStatuses.map((c) => [c.orgListingId, c.status]),
+  );
+
   const initialServers: McpServerRow[] = rows.map((row) => ({
     id: row.id,
     name: row.name,
@@ -131,7 +152,14 @@ export default async function AgentToolsMcpPage({ params }: PageProps) {
     transport: row.transport,
     authKind: row.authKind,
     enabled: row.enabled,
+    credentialStatus:
+      (statusByListing.get(row.id) as McpServerRow["credentialStatus"]) ?? null,
   }));
+
+  // orgListingId → display name for the OAuth result toast.
+  const serverNames = Object.fromEntries(
+    rows.map((row) => [row.id, row.title ?? row.name]),
+  );
 
   // (c) Read the org's first active API key to inject into external-client snippets.
   let firstKey: string | null = null;
@@ -166,6 +194,29 @@ export default async function AgentToolsMcpPage({ params }: PageProps) {
 
   return (
     <div className="flex flex-col gap-8">
+      {/* OAuth flow outcome toast (?mcp=connected|error) — useSearchParams
+          requires a Suspense boundary. */}
+      <Suspense fallback={null}>
+        <McpOauthResultToast serverNames={serverNames} />
+      </Suspense>
+
+      {/* ── Install from the catalog ─────────────────────────────────────────── */}
+      <div className="rounded-xl border border-border/60 bg-card p-6">
+        <div className="mb-4">
+          <h2 className="text-sm font-semibold text-foreground">Install from the catalog</h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Search the MCP registry and install hosted servers into this workspace.
+            OAuth-protected servers (Stripe, GitHub, …) prompt you to authenticate right
+            after install.
+          </p>
+        </div>
+        <McpCatalogSearch
+          orgSlug={orgSlug}
+          workspaceSlug={workspaceSlug}
+          installAction={installPlugin}
+        />
+      </div>
+
       {/* ── Connect a custom MCP server ─────────────────────────────────────── */}
       <div className="rounded-xl border border-border/60 bg-card p-6">
         <div className="mb-4">
