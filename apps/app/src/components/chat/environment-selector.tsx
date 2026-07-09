@@ -85,7 +85,7 @@ export function EnvironmentSelector({
               <div className="flex items-center gap-2">
                 <span>{env.name}</span>
                 {env.isDefault && (
-                  <Badge variant="secondary" className="text-[10px]">
+                  <Badge variant="outline" className="text-[10px]">
                     Default
                   </Badge>
                 )}
