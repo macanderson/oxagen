@@ -124,6 +124,16 @@ export const agentCodeExecute = registerCapability({
           "BELOW the caller-supplied env (caller values win). Trusted vault secrets " +
           "are NOT subject to the reserved-key denylist.",
       ),
+    sandboxTemplateId: z
+      .string()
+      .min(1)
+      .optional()
+      .describe(
+        "Optional sandbox template id (sbx_…). When set, the template's provider, " +
+          "runtime image, resources, network mode, and vault secret selection + " +
+          "literal env are applied to this run; the template's own environment " +
+          "supplies the vault secrets. The caller-supplied env still wins on collision.",
+      ),
     timeoutMs: z
       .number()
       .int()

@@ -13,6 +13,7 @@ import {
   markSessionStatus,
   type SessionMeta,
 } from "./_sandbox-session";
+import { driverNetworkForMode, resolveRunTemplate } from "./_sandbox-template";
 
 export type { AgentSandboxStartInput, AgentSandboxStartOutput };
 
@@ -27,21 +28,45 @@ export async function agentSandboxStartHandler(
   input: AgentSandboxStartInput,
   ctx: CapabilityContext,
 ): Promise<AgentSandboxStartOutput> {
-  const driver = requireDurableDriver();
+  // Resolve an optional sandbox template. It governs the provider (must be
+  // session-capable), runtime image, resources, network mode, and the vault
+  // secret selection + literal env frozen onto the session for exec-time
+  // injection. Absent, behavior is unchanged.
+  const resolved = await resolveRunTemplate(ctx, input.sandboxTemplateId);
+  const template = resolved?.template;
+
+  // Fail fast on a not-yet-implemented network mode BEFORE requiring a driver or
+  // provisioning anything.
+  const network = template ? driverNetworkForMode(template.network.mode) : input.network;
+  // A template's provider must be session-capable; requireDurableDriver throws a
+  // clear error for docker/vercel or an unconfigured modal.
+  const driver = requireDurableDriver(template?.provider);
+
+  const memoryMb = template?.resources.memoryMb ?? input.memoryMb;
+  const environmentId = template ? resolved!.environment.id : input.environmentId;
 
   const meta: SessionMeta = {
-    memoryMb: input.memoryMb,
+    memoryMb,
     ttlSeconds: input.ttlSeconds,
     idleTimeoutSeconds: input.idleTimeoutSeconds,
-    network: input.network,
-    ...(input.environmentId ? { environmentId: input.environmentId } : {}),
+    network,
+    ...(environmentId ? { environmentId } : {}),
+    ...(template?.runtime ? { imageRef: template.runtime } : {}),
+    ...(template?.resources.vcpu !== undefined ? { vcpu: template.resources.vcpu } : {}),
+    ...(template?.resources.diskMb !== undefined ? { diskMb: template.resources.diskMb } : {}),
+    ...(template
+      ? { secretSelection: template.secretSelection, literalEnv: template.literalEnv }
+      : {}),
   };
   const spec: SandboxSessionSpec = {
     image: input.image,
-    memoryMb: input.memoryMb,
+    ...(template?.runtime ? { imageRef: template.runtime } : {}),
+    memoryMb,
+    ...(template?.resources.vcpu !== undefined ? { vcpu: template.resources.vcpu } : {}),
+    ...(template?.resources.diskMb !== undefined ? { diskMb: template.resources.diskMb } : {}),
     ttlSeconds: input.ttlSeconds,
     idleTimeoutSeconds: input.idleTimeoutSeconds,
-    network: input.network,
+    network,
     orgId: ctx.orgId,
     workspaceId: ctx.workspaceId,
     setupCmd: input.setupCmd,

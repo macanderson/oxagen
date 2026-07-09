@@ -65,6 +65,15 @@ export function describeCliCommands(program: Command): CliCommandMeta[] {
 }
 
 /**
+ * Commander reducer for a repeatable option: accumulate each occurrence into an
+ * array (e.g. `--env-var A=1 --env-var B=2` → `["A=1", "B=2"]`). Pairs are
+ * validated in the command handler, not here.
+ */
+function collectPair(value: string, previous: string[]): string[] {
+  return [...previous, value];
+}
+
+/**
  * Construct the full `oxagen` command tree. Pure: no parsing, no I/O, no
  * side effects — `index.tsx` parses it, the REPL only introspects it.
  */
@@ -1073,6 +1082,126 @@ export function buildProgram(): Command {
       },
     );
 
+  // ── sandbox template: portable sandbox-template CRUD + export/import ─────────
+
+  const sandboxTemplate = sandbox
+    .command("template")
+    .description("Manage portable sandbox templates (config + tools + secret key names)");
+
+  sandboxTemplate
+    .command("list")
+    .description("List sandbox templates, optionally filtered to one environment")
+    .option("--env <slug>", "Filter to one environment (slug or env_ id)")
+    .option("--json", "Emit raw JSON output")
+    .action(async (opts: { env?: string; json?: boolean }) => {
+      const { handleTemplateList } = await import("./commands/sandbox-template.js");
+      await handleTemplateList(opts);
+    });
+
+  sandboxTemplate
+    .command("get <slug-or-id>")
+    .description("Show one sandbox template with its resources, network, and tools")
+    .option("--env <slug>", "Environment to disambiguate a slug (slug or env_ id)")
+    .option("--json", "Emit raw JSON output")
+    .action(async (slugOrId: string, opts: { env?: string; json?: boolean }) => {
+      const { handleTemplateGet } = await import("./commands/sandbox-template.js");
+      await handleTemplateGet(slugOrId, opts);
+    });
+
+  sandboxTemplate
+    .command("create")
+    .description("Create a sandbox template under an environment")
+    .requiredOption("--env <slug>", "Environment to create it in (slug or env_ id)")
+    .requiredOption("--name <name>", "Human-readable template name")
+    .requiredOption("--slug <slug>", "Workspace-unique handle (e.g. swe-bench-prewarmed)")
+    .option("--description <text>", "Optional description")
+    .option("--provider <provider>", "modal | vercel | docker (default modal)")
+    .option("--runtime <ref>", "Image ref (digest-pinned encouraged) or language tag")
+    .option("--vcpu <n>", "vCPU count (1-4)")
+    .option("--memory-mb <n>", "Memory in MiB (≤8192)")
+    .option("--timeout-ms <n>", "Run timeout in ms (≤300000)")
+    .option("--disk-mb <n>", "Disk in MiB (≤20480)")
+    .option("--network-mode <mode>", "public | static_egress | aws_privatelink | gcp_psc | reverse_tunnel | ssh_bastion")
+    .option("--env-var <KEY=value>", "Non-sensitive literal env var (repeatable, NEVER secrets)", collectPair, [])
+    .option("--set-default", "Promote this template to its environment's default")
+    .option("--json", "Emit raw JSON output")
+    .action(
+      async (opts: {
+        env?: string;
+        name?: string;
+        slug?: string;
+        description?: string;
+        provider?: string;
+        runtime?: string;
+        vcpu?: string;
+        memoryMb?: string;
+        timeoutMs?: string;
+        diskMb?: string;
+        networkMode?: string;
+        envVar?: string[];
+        setDefault?: boolean;
+        json?: boolean;
+      }) => {
+        const { handleTemplateCreate } = await import("./commands/sandbox-template.js");
+        await handleTemplateCreate(opts);
+      },
+    );
+
+  sandboxTemplate
+    .command("rm <slug-or-id>")
+    .description("Soft-delete a sandbox template (promote another default first) — needs --yes")
+    .option("--env <slug>", "Environment to disambiguate a slug (slug or env_ id)")
+    .option("--yes", "Confirm the deletion")
+    .option("--json", "Emit raw JSON output")
+    .action(async (slugOrId: string, opts: { env?: string; yes?: boolean; json?: boolean }) => {
+      const { handleTemplateRemove } = await import("./commands/sandbox-template.js");
+      await handleTemplateRemove(slugOrId, opts);
+    });
+
+  sandboxTemplate
+    .command("set-default <slug-or-id>")
+    .description("Promote a template to its environment's default (atomic swap)")
+    .option("--env <slug>", "Environment to disambiguate a slug (slug or env_ id)")
+    .option("--json", "Emit raw JSON output")
+    .action(async (slugOrId: string, opts: { env?: string; json?: boolean }) => {
+      const { handleTemplateSetDefault } = await import("./commands/sandbox-template.js");
+      await handleTemplateSetDefault(slugOrId, opts);
+    });
+
+  sandboxTemplate
+    .command("export <slug-or-id>")
+    .description("Export a template as a portable v1 manifest (secret NAMES only) — stdout, or -o file")
+    .option("--env <slug>", "Environment to disambiguate a slug (slug or env_ id)")
+    .option("-o, --out <file>", "Write the manifest to a file instead of stdout")
+    .option("--json", "Emit raw JSON output (same manifest)")
+    .action(async (slugOrId: string, opts: { env?: string; out?: string; json?: boolean }) => {
+      const { handleTemplateExport } = await import("./commands/sandbox-template.js");
+      await handleTemplateExport(slugOrId, opts);
+    });
+
+  sandboxTemplate
+    .command("import")
+    .description("Import a manifest into an environment — previews first, needs --yes to write")
+    .requiredOption("--env <slug>", "Environment to import into (slug or env_ id)")
+    .option("-f, --file <file>", "Manifest JSON file (defaults to stdin)")
+    .option("--slug <slug>", "Override the manifest slug (resolve a collision)")
+    .option("--set-default", "Promote the imported template to the environment's default")
+    .option("--yes", "Apply the import (without it, only a preview is shown)")
+    .option("--json", "Emit raw JSON output")
+    .action(
+      async (opts: {
+        env?: string;
+        file?: string;
+        slug?: string;
+        setDefault?: boolean;
+        yes?: boolean;
+        json?: boolean;
+      }) => {
+        const { handleTemplateImport } = await import("./commands/sandbox-template.js");
+        await handleTemplateImport(opts);
+      },
+    );
+
   // ── init: scaffold project + global settings, build code graph ──────────────
 
   program
@@ -1373,6 +1502,52 @@ export function buildProgram(): Command {
     .action(async (name: string) => {
       const { agentNew } = await import("./commands/agent.js");
       agentNew(name);
+    });
+
+  // ── agent env: bind agents to environments + sandbox templates ───────────────
+  //
+  // Server-scoped (unlike `agent list/show/new`, which manage local .oxagen/
+  // agent files): the <agent> arg is an agent's public id (agt_…), slug, or
+  // agent-key, resolved against the workspace's agent definitions.
+
+  const agentEnv = agent
+    .command("env")
+    .description("Bind an agent to an environment (and optionally a sandbox template within it)");
+
+  agentEnv
+    .command("bind <agent>")
+    .description("Bind an agent to an environment (promotes to primary if it is the agent's first)")
+    .requiredOption("--env <slug>", "Environment to bind (slug or env_ id)")
+    .option("--template <slug>", "Pin a specific sandbox template (slug or sbx_ id) within the environment")
+    .option("--primary", "Make this the agent's primary binding (atomically demotes the previous)")
+    .option("--json", "Emit raw JSON output")
+    .action(
+      async (
+        agentHandle: string,
+        opts: { env?: string; template?: string; primary?: boolean; json?: boolean },
+      ) => {
+        const { handleAgentEnvBind } = await import("./commands/agent-env.js");
+        await handleAgentEnvBind(agentHandle, opts);
+      },
+    );
+
+  agentEnv
+    .command("unbind <agent>")
+    .description("Remove an agent's binding to an environment")
+    .requiredOption("--env <slug>", "Environment to unbind (slug or env_ id)")
+    .option("--json", "Emit raw JSON output")
+    .action(async (agentHandle: string, opts: { env?: string; json?: boolean }) => {
+      const { handleAgentEnvUnbind } = await import("./commands/agent-env.js");
+      await handleAgentEnvUnbind(agentHandle, opts);
+    });
+
+  agentEnv
+    .command("list <agent>")
+    .description("List an agent's environment bindings with each resolved template")
+    .option("--json", "Emit raw JSON output")
+    .action(async (agentHandle: string, opts: { json?: boolean }) => {
+      const { handleAgentEnvList } = await import("./commands/agent-env.js");
+      await handleAgentEnvList(agentHandle, opts);
     });
 
   // ── command: user-defined slash commands ────────────────────────────────────

@@ -17,14 +17,17 @@ describe("listOxagenPlugins", () => {
     clearPluginRegistryForTests();
   });
 
-  it("returns all four Phase 1 manifests", () => {
+  it("returns all first-party manifests", () => {
     const plugins = listOxagenPlugins();
-    expect(plugins).toHaveLength(4);
+    expect(plugins).toHaveLength(5);
     const ids = plugins.map((p) => p.id);
     expect(ids).toContain("oxagen/media-video");
     expect(ids).toContain("oxagen/media-image");
     expect(ids).toContain("oxagen/media-svg");
     expect(ids).toContain("oxagen/documents");
+    // Template-distribution proof pack (Spec §6) — ships a sandbox template,
+    // claims no capability contract.
+    expect(ids).toContain("oxagen/swe-bench-evals");
   });
 
   it("returns manifests that each pass the zod schema", async () => {
