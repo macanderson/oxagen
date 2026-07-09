@@ -765,22 +765,18 @@ function LiteralEnvEditor({
               className="max-md:h-11 font-mono"
               value={row.key}
               placeholder="LOG_LEVEL"
-              onChange={(e) => {
-                const next = [...rows];
-                next[i] = { key: e.target.value, value: row.value };
-                setRows(next);
-              }}
+              onChange={(e) =>
+                setRows(rows.map((r, idx) => (idx === i ? { ...r, key: e.target.value } : r)))
+              }
             />
             <span className="text-muted-foreground">=</span>
             <Input
               className="max-md:h-11 font-mono"
               value={row.value}
               placeholder="info"
-              onChange={(e) => {
-                const next = [...rows];
-                next[i] = { key: row.key, value: e.target.value };
-                setRows(next);
-              }}
+              onChange={(e) =>
+                setRows(rows.map((r, idx) => (idx === i ? { ...r, value: e.target.value } : r)))
+              }
             />
             <Button
               variant="ghost"
@@ -838,11 +834,13 @@ function ToolsEditor({
           <div key={i} className="flex items-center gap-2">
             <NativeSelect
               value={t.kind}
-              onChange={(v) => {
-                const next = [...tools];
-                next[i] = { ...t, kind: v as SandboxTemplateTool["kind"] };
-                setTools(next);
-              }}
+              onChange={(v) =>
+                setTools(
+                  tools.map((tool, idx) =>
+                    idx === i ? { ...tool, kind: v as SandboxTemplateTool["kind"] } : tool,
+                  ),
+                )
+              }
             >
               {TOOL_KINDS.map((k) => (
                 <option key={k} value={k}>
@@ -855,11 +853,9 @@ function ToolsEditor({
               list={listId}
               value={t.ref}
               placeholder="ref (capability name / skill or server id)"
-              onChange={(e) => {
-                const next = [...tools];
-                next[i] = { ...t, ref: e.target.value };
-                setTools(next);
-              }}
+              onChange={(e) =>
+                setTools(tools.map((tool, idx) => (idx === i ? { ...tool, ref: e.target.value } : tool)))
+              }
             />
             <Button
               variant="ghost"

@@ -160,6 +160,27 @@ describe("createModalSandbox — run() HTTP 200 success", () => {
     const body = JSON.parse(init.body as string) as { files?: Record<string, string> };
     expect(body.files).toEqual({ "util.js": "1", "src/a.js": "2" });
   });
+
+  it("sends a template's imageRef as the runner image, overriding the language default", async () => {
+    const fetchSpy = makeFetch(200, {
+      exit_code: 0, stdout: "", stderr: "", duration_ms: 1, timed_out: false, oom_killed: false,
+    });
+    const driver = createModalSandbox({ ...BASE_CONFIG, fetchImpl: fetchSpy });
+
+    await driver.run(
+      makeReq({ imageRef: "ghcr.io/acme/x@sha256:1", vcpu: 2, diskMb: 4_096 }),
+    );
+
+    const [, init] = (fetchSpy as ReturnType<typeof vi.fn>).mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(init.body as string) as {
+      image: string;
+      vcpu: unknown;
+      disk_mb: unknown;
+    };
+    expect(body.image).toBe("ghcr.io/acme/x@sha256:1");
+    expect(body.vcpu).toBe(2);
+    expect(body.disk_mb).toBe(4_096);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -467,6 +488,25 @@ describe("createModalSandbox — createSession()", () => {
       workspace_id: "wrk_z",
       setup_cmd: "git clone repo",
     });
+  });
+
+  it("forwards a template's imageRef/vcpu/diskMb as image_ref/vcpu/disk_mb", async () => {
+    const fetchSpy = makeFetch(200, handleBody);
+    const driver = makeSessionDriver(fetchSpy);
+
+    await driver.createSession(
+      makeSessionSpec({ imageRef: "ghcr.io/acme/x@sha256:2", vcpu: 3, diskMb: 8_192 }),
+    );
+
+    const [, init] = lastCall(fetchSpy);
+    const body = JSON.parse(init.body as string) as {
+      image_ref: unknown;
+      vcpu: unknown;
+      disk_mb: unknown;
+    };
+    expect(body.image_ref).toBe("ghcr.io/acme/x@sha256:2");
+    expect(body.vcpu).toBe(3);
+    expect(body.disk_mb).toBe(8_192);
   });
 
   it("sends setup_cmd: null when no setupCmd is provided", async () => {
