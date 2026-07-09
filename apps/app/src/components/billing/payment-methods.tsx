@@ -276,7 +276,7 @@ function PaymentMethodRow({ method, orgSlug, canManage, onMutate }: PaymentMetho
           )}
         </div>
         {method.isDefault && (
-          <Badge variant="secondary" size="sm">
+          <Badge variant="outline" size="sm">
             Default
           </Badge>
         )}

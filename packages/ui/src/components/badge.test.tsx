@@ -65,7 +65,7 @@ describe("Badge — render", () => {
   });
 
   it("applies variant class", () => {
-    render(<Badge variant="secondary">Beta</Badge>);
+    render(<Badge variant="outline">Beta</Badge>);
     const el = screen.getByText("Beta");
     expect(el.className).toContain("bg-secondary");
   });
