@@ -457,6 +457,7 @@ export {
   agentDefinitionPublish,
   agentDefinitionGet,
   agentDefinitionList,
+  a2aCardGet,
   agentDeploy,
   agentTriggerCreate,
   agentTriggerUpdate,
