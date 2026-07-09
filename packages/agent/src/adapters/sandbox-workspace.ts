@@ -19,6 +19,7 @@ import { agentSandboxStartHandler } from "../handlers/agent.sandbox.start";
 import { agentSandboxExecHandler } from "../handlers/agent.sandbox.exec";
 import { agentSandboxStopHandler } from "../handlers/agent.sandbox.stop";
 import { releaseSession } from "../handlers/_sandbox-session";
+import { captureSandboxCommandLogs } from "../handlers/_sandbox-logs";
 
 /** Thrown when a sandbox-backed workspace is used with no driver configured. */
 export class SandboxWorkspaceUnavailableError extends Error {
@@ -240,10 +241,17 @@ export class ModalSandboxWorkspace implements Workspace {
     const sessionId = await this.ensureSession();
     // Run in the workspace root so relative paths resolve against the clone.
     const wrapped = `cd ${shq(this.root)} && ${command}`;
-    return this.execRaw(sessionId, {
+    const startedAt = Date.now();
+    const result = await this.execRaw(sessionId, {
       command: wrapped,
       timeoutMs: opts?.timeoutMs ?? this.defaultTimeoutMs,
     });
+    // Capture the agent's REAL command output for the sandbox inspector's log
+    // console (fire-and-forget; the ORIGINAL command, not the `cd` wrapper).
+    // Only exec() is captured — internal FS ops via execRaw are excluded so the
+    // console shows agent commands, not readFile/list/grep plumbing.
+    void captureSandboxCommandLogs(this.ctx, sessionId, command, result, Date.now() - startedAt);
+    return result;
   }
 
   // ── Filesystem: reads ──────────────────────────────────────────────────────

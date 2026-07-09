@@ -337,6 +337,37 @@ export interface DevLogRow {
 export const insertDevLogs = (rows: readonly DevLogRow[]) =>
   insertRows("dev_logs", rows);
 
+// ── Durable-sandbox command output (spec: sandbox-session-lifecycle §5.2) ──────
+//
+// One row per line of a coding-session command's stdout/stderr, plus a
+// 'system'/'debug' line per command (echo + exit + duration). Powers the sandbox
+// inspector's log console; the debug toggle filters on `level`. Written
+// fire-and-forget from ModalSandboxWorkspace.exec — never fail a run on a log write.
+export interface SandboxLogRow {
+  org_id: string;
+  workspace_id: string;
+  /** Opaque durable-session public id (sbx_…). */
+  session_id: string;
+  /** "stdout" | "stderr" | "system". */
+  stream: string;
+  /** "normal" (program output) | "debug" (command echoes, timings, plumbing). */
+  level: "normal" | "debug";
+  /** The command this line belongs to (truncated); "" for continuation lines. */
+  command: string;
+  /** Line ordinal within one command's capture, for stable in-command ordering. */
+  seq: number;
+  line: string;
+  /** Exit code — only on the per-command 'system' line. */
+  exit_code?: number | null;
+  /** Duration ms — only on the per-command 'system' line. */
+  duration_ms?: number | null;
+  /** ISO-8601; omit to let ClickHouse default the column to now64(3). */
+  ts?: string;
+}
+
+export const insertSandboxLogs = (rows: readonly SandboxLogRow[]) =>
+  insertRows("sandbox_log_events", rows);
+
 export const insertEvents = (rows: readonly EventRow[]) => {
   const { trace_id, span_id } = currentTraceIds();
   return insertRows(
