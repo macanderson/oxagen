@@ -289,8 +289,16 @@ export class ModalSandboxWorkspace implements Workspace {
     const sessionId = await this.ensureSession();
     // Enumerate tracked+untracked files, then filter with the same glob→regex
     // the GitHub workspace uses, so glob semantics match across backends.
+    // fd (parallel traversal) when the image ships it; --hidden --no-ignore
+    // keeps its result set byte-identical to the find fallback. The fallback
+    // must be `command find`: the Modal runner's exec trampoline aliases
+    // find→fd for agent-typed commands, and fd cannot parse find's flags.
+    const enumerate =
+      "if command -v fd >/dev/null 2>&1; " +
+      "then fd --type f --hidden --no-ignore --exclude .git 2>/dev/null; " +
+      "else command find . -type f -not -path '*/.git/*' 2>/dev/null | sed 's|^\\./||'; fi";
     const res = await this.execRaw(sessionId, {
-      command: `cd ${shq(this.root)} && find . -type f -not -path '*/.git/*' 2>/dev/null | sed 's|^\\./||'`,
+      command: `cd ${shq(this.root)} && ${enumerate}`,
       timeoutMs: FS_TIMEOUT_MS,
     });
     const re = globToRegExp(pattern);
@@ -303,13 +311,23 @@ export class ModalSandboxWorkspace implements Workspace {
   async grep(pattern: string, opts?: { path?: string; glob?: string }): Promise<string[]> {
     const sessionId = await this.ensureSession();
     const searchPath = opts?.path ? shq(toRelPath(opts.path) || ".") : "'.'";
-    const include = opts?.glob ? ` --include=${shq(opts.glob)}` : "";
-    // Real recursive grep in the sandbox: -I skips binaries, -n gives line
-    // numbers, ERE for parity with the JS RegExp callers expect. Hits are capped
-    // to keep tool output bounded (ADR-021 §3).
+    // Real recursive search in the sandbox: ripgrep when the image ships it
+    // (parallel + SIMD, same file:line:text output), POSIX grep otherwise.
+    // The fallback must be `command grep` — the Modal runner's exec trampoline
+    // aliases grep→rg for agent-typed commands, and rg cannot parse grep's
+    // -rInE bundle. --hidden --no-ignore keeps rg's result set identical to
+    // grep -rI (both skip binaries). Hits are capped to keep tool output
+    // bounded (ADR-021 §3); the sed strips the ./ prefix so both branches emit
+    // identical paths and the .git post-filter actually applies.
+    const rgGlob = opts?.glob ? ` -g ${shq(opts.glob)}` : "";
+    const grepInclude = opts?.glob ? ` --include=${shq(opts.glob)}` : "";
+    const search =
+      "if command -v rg >/dev/null 2>&1; " +
+      `then rg --line-number --no-heading --hidden --no-ignore${rgGlob} -- ${shq(pattern)} ${searchPath}; ` +
+      `else command grep -rInE${grepInclude} -- ${shq(pattern)} ${searchPath}; fi`;
     const cmd =
-      `cd ${shq(this.root)} && grep -rInE${include} -- ${shq(pattern)} ${searchPath} ` +
-      `2>/dev/null | grep -v '^\\.git/' | head -n ${GREP_MAX_HITS}`;
+      `cd ${shq(this.root)} && { ${search}; } 2>/dev/null ` +
+      `| sed 's|^\\./||' | command grep -v '^\\.git/' | head -n ${GREP_MAX_HITS}`;
     const res = await this.execRaw(sessionId, { command: cmd, timeoutMs: FS_TIMEOUT_MS });
     return res.stdout.split("\n").filter((l) => l.length > 0);
   }

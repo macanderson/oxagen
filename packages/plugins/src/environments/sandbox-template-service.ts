@@ -940,6 +940,32 @@ async function bindingSummary(
   };
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Resolve an agent identifier (internal UUID, `agt_…` public id, or slug) to
+ * the internal UUID — `agent_environment_bindings.agent_id` is a uuid column,
+ * and callers (the app UI, MCP tools) hold the PUBLIC id, so passing the raw
+ * identifier through made every bind/unbind/list query throw at the driver.
+ */
+async function resolveAgentInternalId(
+  tx: Tx,
+  workspaceId: string,
+  identifier: string,
+): Promise<string> {
+  if (UUID_RE.test(identifier)) return identifier;
+  const match = identifier.startsWith("agt_")
+    ? eq(schema.agents.publicId, identifier)
+    : eq(schema.agents.slug, identifier);
+  const [row] = await tx
+    .select({ id: schema.agents.id })
+    .from(schema.agents)
+    .where(and(eq(schema.agents.workspaceId, workspaceId), match, isNull(schema.agents.deletedAt)))
+    .limit(1);
+  if (!row) throw new Error(`[sandbox-template] agent not found: ${identifier}`);
+  return row.id;
+}
+
 export async function bindAgentEnvironment(
   actor: SandboxTemplateActor,
   input: {
@@ -950,6 +976,7 @@ export async function bindAgentEnvironment(
   },
 ): Promise<AgentEnvironmentBinding> {
   return withTenantDb(async (tx) => {
+    const agentInternalId = await resolveAgentInternalId(tx, actor.workspaceId, input.agentId);
     const env = await loadEnvironment(tx, actor.workspaceId, input.environmentId);
 
     // A named template must belong to the same environment as the binding.
@@ -976,7 +1003,7 @@ export async function bindAgentEnvironment(
       .where(
         and(
           eq(schema.agentEnvironmentBindings.workspaceId, actor.workspaceId),
-          eq(schema.agentEnvironmentBindings.agentId, input.agentId),
+          eq(schema.agentEnvironmentBindings.agentId, agentInternalId),
         ),
       );
     const agentHasPrimary = existingForAgent.some((b) => b.isPrimary);
@@ -990,7 +1017,7 @@ export async function bindAgentEnvironment(
         .where(
           and(
             eq(schema.agentEnvironmentBindings.workspaceId, actor.workspaceId),
-            eq(schema.agentEnvironmentBindings.agentId, input.agentId),
+            eq(schema.agentEnvironmentBindings.agentId, agentInternalId),
             eq(schema.agentEnvironmentBindings.isPrimary, true),
           ),
         );
@@ -1016,7 +1043,7 @@ export async function bindAgentEnvironment(
         .values({
           orgId: actor.orgId,
           workspaceId: actor.workspaceId,
-          agentId: input.agentId,
+          agentId: agentInternalId,
           environmentId: env.id,
           sandboxTemplateId: templateInternalId,
           isPrimary: desiredPrimary,
@@ -1046,13 +1073,14 @@ export async function unbindAgentEnvironment(
   input: { agentId: string; environmentId: string },
 ): Promise<{ ok: true }> {
   await withTenantDb(async (tx) => {
+    const agentInternalId = await resolveAgentInternalId(tx, actor.workspaceId, input.agentId);
     const env = await loadEnvironment(tx, actor.workspaceId, input.environmentId);
     await tx
       .delete(schema.agentEnvironmentBindings)
       .where(
         and(
           eq(schema.agentEnvironmentBindings.workspaceId, actor.workspaceId),
-          eq(schema.agentEnvironmentBindings.agentId, input.agentId),
+          eq(schema.agentEnvironmentBindings.agentId, agentInternalId),
           eq(schema.agentEnvironmentBindings.environmentId, env.id),
         ),
       );
@@ -1065,13 +1093,14 @@ export async function listAgentBindings(
   input: { agentId: string },
 ): Promise<AgentEnvironmentBinding[]> {
   return withTenantDb(async (tx) => {
+    const agentInternalId = await resolveAgentInternalId(tx, actor.workspaceId, input.agentId);
     const rows = await tx
       .select(BINDING_COLUMNS)
       .from(schema.agentEnvironmentBindings)
       .where(
         and(
           eq(schema.agentEnvironmentBindings.workspaceId, actor.workspaceId),
-          eq(schema.agentEnvironmentBindings.agentId, input.agentId),
+          eq(schema.agentEnvironmentBindings.agentId, agentInternalId),
         ),
       );
     return Promise.all(rows.map((r) => bindingSummary(tx, actor.workspaceId, r)));
@@ -1095,6 +1124,9 @@ export async function resolveSandboxTemplateForRun(
   input: { agentId?: string; environmentId?: string; sandboxTemplateId?: string } = {},
 ): Promise<ResolvedSandboxTemplate> {
   return withTenantDb(async (tx) => {
+    const agentInternalId = input.agentId
+      ? await resolveAgentInternalId(tx, actor.workspaceId, input.agentId)
+      : null;
     // 0. Explicit template pin — a caller (or template-driven run) that already
     // chose a template. Its own environment governs secret resolution.
     if (input.sandboxTemplateId) {
@@ -1124,21 +1156,21 @@ export async function resolveSandboxTemplateForRun(
     if (input.environmentId) {
       envRow = await loadEnvironment(tx, actor.workspaceId, input.environmentId);
       // A binding for (agent, this env) may still pin a specific template.
-      if (input.agentId) {
+      if (agentInternalId) {
         const [b] = await tx
           .select({ sandboxTemplateId: schema.agentEnvironmentBindings.sandboxTemplateId })
           .from(schema.agentEnvironmentBindings)
           .where(
             and(
               eq(schema.agentEnvironmentBindings.workspaceId, actor.workspaceId),
-              eq(schema.agentEnvironmentBindings.agentId, input.agentId),
+              eq(schema.agentEnvironmentBindings.agentId, agentInternalId),
               eq(schema.agentEnvironmentBindings.environmentId, envRow.id),
             ),
           )
           .limit(1);
         bindingTemplateInternalId = b?.sandboxTemplateId ?? null;
       }
-    } else if (input.agentId) {
+    } else if (agentInternalId) {
       const [primary] = await tx
         .select({
           environmentInternalId: schema.agentEnvironmentBindings.environmentId,
@@ -1148,7 +1180,7 @@ export async function resolveSandboxTemplateForRun(
         .where(
           and(
             eq(schema.agentEnvironmentBindings.workspaceId, actor.workspaceId),
-            eq(schema.agentEnvironmentBindings.agentId, input.agentId),
+            eq(schema.agentEnvironmentBindings.agentId, agentInternalId),
             eq(schema.agentEnvironmentBindings.isPrimary, true),
           ),
         )

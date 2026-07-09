@@ -115,7 +115,7 @@ The **repo binding** needed for recovery rides in the existing `metadata` jsonb 
 new column, no contract change). Its presence marks a session as repo-backed
 (recoverable); its absence marks a raw/eval sandbox (snapshot-and-keep on dirty).
 
-Migration: `20260717150000_agent_sandbox_session_lifecycle.sql` (RLS/grants follow
+Migration: `20260719120000_agent_sandbox_session_lifecycle.sql` (RLS/grants follow
 the existing `sandbox_sessions` pattern; additive `ALTER TABLE ... ADD COLUMN`).
 
 ### 5.2 ClickHouse — `sandbox_log_events` (append-only, four-store law)

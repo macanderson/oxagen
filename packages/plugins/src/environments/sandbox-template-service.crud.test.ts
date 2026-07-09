@@ -507,7 +507,7 @@ describe("importTemplate — secretSelection round-trip", () => {
 function bindingRow(overrides: Record<string, unknown> = {}) {
   return {
     publicId: "bind-pub",
-    agentId: "agent-1",
+    agentId: "11111111-1111-4111-8111-111111111111",
     environmentInternalId: "env-int",
     sandboxTemplateInternalId: null,
     isPrimary: true,
@@ -529,13 +529,37 @@ describe("bindAgentEnvironment", () => {
     state.insertReturning = [[{ publicId: "bind-pub" }]];
 
     const result = await bindAgentEnvironment(actor, {
-      agentId: "agent-1",
+      agentId: "11111111-1111-4111-8111-111111111111",
       environmentId: "env-pub",
     });
 
     expect(result.isPrimary).toBe(true);
     expect(result.environmentName).toBe("Prod");
     expect(result.sandboxTemplateId).toBeNull();
+  });
+
+  it("resolves an agt_ public id to the internal uuid before querying bindings", async () => {
+    // Regression: the app UI sends the agent's PUBLIC id; passing it raw into
+    // the uuid agent_id column made every bind throw at the driver.
+    state.selectQueue = [
+      [{ id: "33333333-3333-4333-8333-333333333333" }] /* agent lookup by publicId */,
+      [envRow()],
+      [] /* existingForAgent: none */,
+      [bindingRow()],
+      [envSummaryRow()],
+    ];
+    state.insertReturning = [[{ publicId: "bind-pub" }]];
+
+    const result = await bindAgentEnvironment(actor, {
+      agentId: "agt_e2etest123",
+      environmentId: "env-pub",
+    });
+
+    expect(result.isPrimary).toBe(true);
+    const inserted = state.inserts.find((i) => i.table === schema.agentEnvironmentBindings);
+    expect(inserted?.values).toMatchObject({
+      agentId: "33333333-3333-4333-8333-333333333333",
+    });
   });
 
   it("demotes the agent's current primary when a new primary is bound (only-one-primary)", async () => {
@@ -548,7 +572,7 @@ describe("bindAgentEnvironment", () => {
     state.insertReturning = [[{ publicId: "bind2" }]];
 
     const result = await bindAgentEnvironment(actor, {
-      agentId: "agent-1",
+      agentId: "11111111-1111-4111-8111-111111111111",
       environmentId: "env-pub-b",
       isPrimary: true,
     });
@@ -569,7 +593,7 @@ describe("bindAgentEnvironment", () => {
 
     await expect(
       bindAgentEnvironment(actor, {
-        agentId: "agent-1",
+        agentId: "11111111-1111-4111-8111-111111111111",
         environmentId: "env-pub",
         sandboxTemplateId: "sbx-pub",
       }),
@@ -581,7 +605,7 @@ describe("unbindAgentEnvironment", () => {
   it("deletes the (agent, environment) binding", async () => {
     state.selectQueue = [[envRow()]];
     const result = await unbindAgentEnvironment(actor, {
-      agentId: "agent-1",
+      agentId: "11111111-1111-4111-8111-111111111111",
       environmentId: "env-pub",
     });
     expect(result).toEqual({ ok: true });
@@ -592,7 +616,7 @@ describe("unbindAgentEnvironment", () => {
 describe("listAgentBindings", () => {
   it("returns each binding resolved to its environment names", async () => {
     state.selectQueue = [[bindingRow()], [envSummaryRow()]];
-    const result = await listAgentBindings(actor, { agentId: "agent-1" });
+    const result = await listAgentBindings(actor, { agentId: "11111111-1111-4111-8111-111111111111" });
     expect(result).toHaveLength(1);
     expect(result[0]!.environmentName).toBe("Prod");
     expect(result[0]!.isPrimary).toBe(true);

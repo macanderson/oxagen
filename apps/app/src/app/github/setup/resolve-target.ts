@@ -46,6 +46,19 @@ export function buildSourcesPath(orgSlug: string, workspaceSlug: string): string
 }
 
 /**
+ * Build the GitHub SETTINGS URL for a workspace — the surface that hosts
+ * "Connect GitHub" (the identity leg) and the installations picker. This is the
+ * no-installation-match landing: a user who reaches the Setup URL but has no
+ * connection carrying this installation (e.g. a SECOND tenant who just installed
+ * the App, or a tenant whose only match lives in another org) must land somewhere
+ * they can actually CONNECT/attach — not on the repo picker, which assumes an
+ * existing token and dead-ends when there isn't one.
+ */
+export function buildSettingsGithubPath(orgSlug: string, workspaceSlug: string): string {
+  return `/${orgSlug}/${workspaceSlug}/settings/github?github_installed=1`;
+}
+
+/**
  * Resolve the in-app path GitHub's Setup URL redirect should land on.
  *
  * @param userId          the signed-in user (membership gate is applied in the queries)
@@ -66,12 +79,15 @@ export async function resolveGithubSetupTarget(
     }
   }
 
-  // 2. Fallback: the user's most recently joined workspace.
+  // 2. Fallback: the user's most recently joined workspace. Land on the GitHub
+  // SETTINGS surface (Connect / installations picker), NOT the repo picker —
+  // there is no matching connection here, so the repo picker would assume a
+  // token that may not exist and dead-end. Settings lets the user connect/attach.
   const fallback = await queries.mostRecentMembership(userId);
   const first = fallback[0];
   if (!first) return "/new-organization";
   if (first.workspaceSlug) {
-    return buildSourcesPath(first.orgSlug, first.workspaceSlug);
+    return buildSettingsGithubPath(first.orgSlug, first.workspaceSlug);
   }
   return `/${first.orgSlug}`;
 }

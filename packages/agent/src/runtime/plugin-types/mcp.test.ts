@@ -83,7 +83,7 @@ vi.mock("../../dispatch/mcp-client", () => ({
 
 // ── Imports ─────────────────────────────────────────────────────────────────
 import { inArray, eq } from "drizzle-orm";
-import { contributeMcpTools } from "./mcp";
+import { contributeMcpTools, resolveMcpOAuthRedirectUrl } from "./mcp";
 // connectMcp / materializeMcpTools are mocked above; import them so vi.mocked()
 // can spy on call counts in the healthStatus describe block below.
 import { connectMcp, materializeMcpTools } from "../../dispatch/mcp-client";
@@ -353,5 +353,34 @@ describe("contributeMcpTools — decrypts auth_config before connecting (OXA-198
         authConfig: { token: "legacy-plaintext-token" },
       }),
     );
+  });
+});
+
+describe("resolveMcpOAuthRedirectUrl — APP_URL fallback (OXA prod has only NEXT_PUBLIC_APP_URL)", () => {
+  const PATH = "/api/v1/mcp/oauth/callback";
+
+  it("uses APP_URL when set", () => {
+    expect(
+      resolveMcpOAuthRedirectUrl({ APP_URL: "https://app.example.com" }),
+    ).toBe("https://app.example.com" + PATH);
+  });
+
+  it("falls back to NEXT_PUBLIC_APP_URL when APP_URL is unset", () => {
+    expect(
+      resolveMcpOAuthRedirectUrl({ NEXT_PUBLIC_APP_URL: "https://app.oxagen.sh" }),
+    ).toBe("https://app.oxagen.sh" + PATH);
+  });
+
+  it("prefers APP_URL over NEXT_PUBLIC_APP_URL when both are set", () => {
+    expect(
+      resolveMcpOAuthRedirectUrl({
+        APP_URL: "https://primary.example.com",
+        NEXT_PUBLIC_APP_URL: "https://fallback.example.com",
+      }),
+    ).toBe("https://primary.example.com" + PATH);
+  });
+
+  it("degrades to a relative path only when neither var is set", () => {
+    expect(resolveMcpOAuthRedirectUrl({})).toBe(PATH);
   });
 });
