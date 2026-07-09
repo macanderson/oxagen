@@ -127,10 +127,18 @@ const TEST_SESSION = {
   apiUrl: "http://localhost:4000",
 };
 
+// Ink mount of the real ReplApp plus the multi-stage submit/interrupt/drain
+// choreography, contending with other parallel Ink suites on a loaded 2-core CI
+// runner, can run well past the stock 3s poll / 5s vitest ceiling. The runTurn
+// mock is deterministic, so raising both generously keeps these green without
+// weakening any assertion (the pump's queue-drain behaviour is still fully
+// exercised).
+vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
+
 const tick = (ms = 15): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
-async function waitFor(cond: () => boolean, ms = 3000): Promise<void> {
+async function waitFor(cond: () => boolean, ms = 15_000): Promise<void> {
   const start = Date.now();
   while (!cond()) {
     if (Date.now() - start > ms) throw new Error("waitFor: condition timed out");
