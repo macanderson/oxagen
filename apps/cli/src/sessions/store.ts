@@ -307,6 +307,13 @@ export class SessionStore {
 
     const enqueue = (work: () => Promise<void>): void => {
       queue = queue.then(work, work);
+      // A queued append/meta write can lose its race with process or temp-dir
+      // teardown (a late appendFile → ENOENT). Such a best-effort write must
+      // never crash the runtime as an unhandled rejection — attach an inert
+      // catch to the tail. `flush()` still `await`s `queue` and, as an
+      // independent handler on the same promise, continues to observe real
+      // write errors for callers that flush before exit.
+      queue.catch(() => {});
     };
 
     const scheduleMetaWrite = (): void => {
