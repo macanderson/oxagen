@@ -11,6 +11,7 @@ import { startStripeTunnel } from "./stripe-tunnel";
 import { startInngestDevServer } from "./inngest-dev";
 import { formatError } from "./lib/format-error";
 import { inspectAppPorts, type AppPort } from "./lib/preflight-ports";
+import { guardTurbopackCaches, markCleanShutdown } from "./lib/next-cache-guard";
 
 const ROOT = resolve(process.cwd());
 const COMPOSE_FILE = "docker-compose.dev.yml";
@@ -237,14 +238,35 @@ async function turbo(): Promise<void> {
   tapStream(sub.stdout, process.stdout, "stdout", shipper);
   tapStream(sub.stderr, process.stderr, "stderr", shipper);
 
+  // Forward SIGINT/SIGTERM to turbo and keep this process alive long enough
+  // to observe the graceful shutdown — without these handlers Node dies on
+  // the signal before the `finally` below (and the clean-shutdown marker)
+  // ever runs.
+  const forward = (sig: NodeJS.Signals): void => {
+    sub.kill(sig);
+  };
+  process.once("SIGINT", forward);
+  process.once("SIGTERM", forward);
+
+  let graceful = false;
   try {
     await sub;
+    graceful = true;
+  } catch (err) {
+    // A signal-terminated turbo (Ctrl-C, pnpm kill's SIGTERM) still shut its
+    // children down in order — that counts as clean. Anything else (crash,
+    // SIGKILL never reaches here) leaves the cache suspect.
+    const signal = (err as { signal?: string }).signal;
+    graceful = signal === "SIGINT" || signal === "SIGTERM";
   } finally {
+    process.removeListener("SIGINT", forward);
+    process.removeListener("SIGTERM", forward);
     // Flush the tail of the session and release the CH connection so the
     // process can exit cleanly on Ctrl-C / turbo shutdown.
     await shipper.close();
     await closeClickhouse();
   }
+  if (graceful) markCleanShutdown(ROOT);
 }
 
 async function main(): Promise<void> {
@@ -303,6 +325,13 @@ async function main(): Promise<void> {
   // API/app, so the runner's events (subagent fanouts, ingestion, video, …) are
   // consumed locally instead of vanishing toward Inngest Cloud.
   await startInngestDevServer();
+  guardTurbopackCaches(ROOT, (app) =>
+    console.log(
+      kleur.yellow(
+        `[dev] ${app}/.next was left by an unclean shutdown — clearing the Turbopack cache (a corrupt persisted manifest silently 404s real routes)`,
+      ),
+    ),
+  );
   await turbo();
 }
 
