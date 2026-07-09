@@ -198,6 +198,7 @@ export function SandboxTerminal({
               exitCode: -1,
               executionMs: 0,
               timedOut: false,
+              cwd: runCwd,
             };
             break;
           }
@@ -207,7 +208,7 @@ export function SandboxTerminal({
     } finally {
       setBusy(false);
     }
-  }, [input, busy, disabled, runCommand]);
+  }, [input, busy, disabled, runCommand, cwd]);
 
   const onKeyDown = useCallback(
     (e: KeyboardEvent<HTMLInputElement>) => {
@@ -284,6 +285,14 @@ export function SandboxTerminal({
         {entries.map((entry, i) => (
           <div key={i} className="mb-2">
             <div className="flex items-baseline gap-2">
+              {entry.cwd ? (
+                <span
+                  className="shrink-0 whitespace-pre text-info/80"
+                  title={entry.cwd}
+                >
+                  {entry.cwd}
+                </span>
+              ) : null}
               <span className="shrink-0 text-success">$</span>
               <span className="whitespace-pre-wrap break-words text-neutral-100">
                 {entry.command}
@@ -303,6 +312,15 @@ export function SandboxTerminal({
       </div>
 
       <div className="flex items-center gap-2 border-t border-white/10 px-3 py-2">
+        {cwd ? (
+          <span
+            data-testid="sandbox-terminal-cwd"
+            title={cwd}
+            className="shrink-0 max-w-[40%] truncate font-mono text-xs text-info/80"
+          >
+            {cwd}
+          </span>
+        ) : null}
         <span className="shrink-0 font-mono text-xs text-success">$</span>
         <input
           type="text"

@@ -16,6 +16,7 @@ import { agentSandboxListHandler } from "./agent.sandbox.list";
 const ROW = {
   publicId: "sbx_1",
   sessionKey: "conv_42",
+  metadata: {} as unknown,
   image: "agent",
   status: "running",
   driver: "modal",
@@ -45,6 +46,7 @@ describe("agent.sandbox.list handler", () => {
       {
         sessionId: "sbx_1",
         sessionKey: "conv_42",
+        label: null,
         image: "agent",
         status: "running",
         driver: "modal",
@@ -59,6 +61,24 @@ describe("agent.sandbox.list handler", () => {
         flushedAt: null,
         recoveredAt: null,
       },
+    ]);
+  });
+
+  it("surfaces the human label from session metadata (and null when absent)", async () => {
+    fake.enqueue([
+      { ...ROW, metadata: { label: "acme-api refactor", memoryMb: 2048 } },
+      { ...ROW, publicId: "sbx_2", metadata: { memoryMb: 2048 } },
+      { ...ROW, publicId: "sbx_3", metadata: { label: "   " } },
+    ]);
+
+    const out = await agentSandboxListHandler({ limit: 50 }, CTX);
+
+    // Present, non-blank label surfaces verbatim; a missing or whitespace-only
+    // label degrades to null (never leaks the raw metadata bag).
+    expect(out.sandboxes.map((s) => s.label)).toEqual([
+      "acme-api refactor",
+      null,
+      null,
     ]);
   });
 
