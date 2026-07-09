@@ -62,12 +62,13 @@ export function SandboxDetailClient({
   const [stopError, setStopError] = useState<string | null>(null);
 
   const runCommand: RunCommandFn = useCallback(
-    async (command) => {
+    async (command, opts) => {
       const res = await runSandboxCommandAction({
         orgSlug,
         workspaceSlug,
         sessionId,
         command,
+        cwd: opts?.cwd,
       });
       if (!res.ok) throw new Error(res.error);
       return res.result;

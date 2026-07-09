@@ -55,6 +55,14 @@ export const agentSandboxList = registerCapability({
           .string()
           .nullable()
           .describe("Caller-supplied reuse key, or null for ephemeral sessions."),
+        label: z
+          .string()
+          .nullable()
+          .optional()
+          .describe(
+            "Human-friendly name given when the sandbox was warmed, or null when " +
+              "unnamed. Sourced from the session metadata.",
+          ),
         image: z.enum(["node", "python", "shell", "agent"]),
         status: z.enum(["running", "idle", "stopped", "gone"]),
         driver: z.string().describe("Sandbox driver identifier (e.g. modal)."),

@@ -47,10 +47,33 @@ function errMessage(err: unknown, fallback: string): string {
 
 // ── Start / warm a sandbox ────────────────────────────────────────────────────
 
+/**
+ * Turn a human name into a readable, unique reuse key: `sbx_<slug>_<rand8>`. The
+ * slug makes the key recognizable in logs/registry; the random suffix keeps it
+ * unique so two same-named warms don't collide on the (workspace, sessionKey)
+ * uniqueness constraint. Bounded to stay well under the 200-char key limit.
+ */
+function seedSessionKey(name: string): string {
+  const slug = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40);
+  return `sbx_${slug || "sandbox"}_${crypto.randomUUID().slice(0, 8)}`;
+}
+
 const startSchema = z.object({
   ...scopeShape,
+  /** Required human name — every warmed sandbox is named so it's identifiable. */
+  name: z.string().trim().min(1, "Name your sandbox.").max(80),
+  /**
+   * Either a built-in preset id (oxagen-agent | node | python | blank) or a
+   * saved sandbox-template public id (`sbx_…`). Saved templates govern the
+   * image/runtime/resources server-side; presets carry an image + one-time
+   * setupCmd.
+   */
   templateId: z.string().min(1),
-  /** Optional stable reuse key so the warm sandbox can be reconnected later. */
+  /** Optional explicit reuse key; otherwise seeded from the name. */
   sessionKey: z.string().min(1).max(200).optional(),
 });
 
@@ -61,25 +84,36 @@ export async function startSandboxAction(
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
   }
-  const { orgSlug, workspaceSlug, templateId, sessionKey } = parsed.data;
+  const { orgSlug, workspaceSlug, name, templateId, sessionKey } = parsed.data;
   const { ctx, canManage } = await resolveWorkbenchScope(orgSlug, workspaceSlug);
   if (!canManage) {
     return { ok: false, error: "Only workspace owners and admins can start sandboxes." };
   }
-  const template = templateById(templateId);
-  // A stable key makes the sandbox reusable/warm across turns; generate one when
-  // the caller doesn't name it so a fresh start is still reconnectable.
-  const key = sessionKey ?? `sbx_${template.id}_${crypto.randomUUID().slice(0, 8)}`;
+  // A stable key makes the sandbox reusable/warm across turns; seed one from the
+  // name when the caller doesn't supply an explicit key.
+  const key = sessionKey ?? seedSessionKey(name);
+
+  // Saved sandbox templates carry a `sbx_…` public id; built-in presets use a
+  // bare slug. A saved template governs provider/runtime/resources server-side,
+  // so we pass its id through (previously dropped) and let the base image default.
+  const isSavedTemplate = templateId.startsWith("sbx_");
+  const startInput = isSavedTemplate
+    ? { label: name, sessionKey: key, sandboxTemplateId: templateId, network: "allow" as const }
+    : (() => {
+        const template = templateById(templateId);
+        return {
+          image: template.image,
+          label: name,
+          sessionKey: key,
+          setupCmd: template.setupCmd.length > 0 ? template.setupCmd : undefined,
+          network: "allow" as const,
+        };
+      })();
+
   try {
     const sandbox = await runInTenantScope(
       { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
-      () =>
-        startSandbox(ctx, {
-          image: template.image,
-          sessionKey: key,
-          setupCmd: template.setupCmd.length > 0 ? template.setupCmd : undefined,
-          network: "allow",
-        }),
+      () => startSandbox(ctx, startInput),
     );
     revalidatePath(workspace.workbench.sandboxes({ orgSlug, workspaceSlug }));
     return { ok: true, sandbox };
@@ -98,6 +132,9 @@ const runSchema = z.object({
   ...scopeShape,
   sessionId: z.string().min(1),
   command: z.string().min(1).max(100_000),
+  // Prior working directory, threaded back from the terminal so `cd` persists
+  // across commands. Optional — the first command in a session omits it.
+  cwd: z.string().min(1).max(4_096).optional(),
 });
 
 export async function runSandboxCommandAction(
@@ -107,7 +144,7 @@ export async function runSandboxCommandAction(
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
   }
-  const { orgSlug, workspaceSlug, sessionId, command } = parsed.data;
+  const { orgSlug, workspaceSlug, sessionId, command, cwd } = parsed.data;
   const { ctx, canManage } = await resolveWorkbenchScope(orgSlug, workspaceSlug);
   if (!canManage) {
     return { ok: false, error: "Only workspace owners and admins can run commands." };
@@ -115,7 +152,7 @@ export async function runSandboxCommandAction(
   try {
     const result = await runInTenantScope(
       { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
-      () => runSandboxCommand(ctx, { sessionId, command }),
+      () => runSandboxCommand(ctx, { sessionId, command, cwd }),
     );
     return { ok: true, result };
   } catch (err) {

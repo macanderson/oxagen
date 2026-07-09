@@ -164,7 +164,20 @@ DURABLE_IMAGES: dict[str, modal.Image] = {
     ),
 }
 
-# Alias trampoline for /sandbox/exec.  POSIX shells parse the whole `-c`
+# Working-directory persistence sentinel.
+#
+# Each /sandbox/exec runs a FRESH `sh -c` inside the durable container, so the
+# shell's cwd resets to the image default every call — a `cd` in one command is
+# invisible to the next.  The durable terminal (and any caller that wants a
+# stateful shell) fixes this by threading the working directory: it passes the
+# prior cwd in via OXAGEN_CWD and reads the resulting cwd back out.  The shell
+# emits its final `pwd` on stdout behind this RS-delimited sentinel; the runner
+# strips the trailer (`_split_cwd_trailer`) and returns it as the response's
+# `cwd`.  ASCII RS (0x1e) never appears in normal terminal output, so the split
+# is collision-proof; the token that follows it just aids log grepping.
+_CWD_SENTINEL = "\x1e__OXAGEN_CWD__="
+
+# Alias + cwd trampoline for /sandbox/exec.  POSIX shells parse the whole `-c`
 # string before running any of it, so aliases defined inside the command
 # string can never apply to that same string; defining them first and
 # `eval`-ing the real command (passed via $OXAGEN_EXEC_CMD) makes the shell
@@ -175,13 +188,25 @@ DURABLE_IMAGES: dict[str, modal.Image] = {
 # grep/find semantics.  The command -v guards keep custom template images
 # without the tools behaving byte-identically to before.  Per-call opt-out:
 # set OXAGEN_NO_FAST_ALIASES=1 in the exec env.
+#
+# After the aliases it restores the caller's OXAGEN_CWD (durable-terminal cwd
+# persistence) and, after the command, prints the final `pwd` behind
+# _CWD_SENTINEL.  The user command's exit code is captured BEFORE the trailer
+# so `cd` reporting can never mask a real failure.  `printf '\036…'` writes the
+# RS byte portably (busybox/dash/bash all honour octal escapes).
 _FAST_ALIAS_TRAMPOLINE = (
     'if [ -z "$OXAGEN_NO_FAST_ALIASES" ]; then '
     '[ -n "$BASH_VERSION" ] && shopt -s expand_aliases 2>/dev/null; '
     "command -v rg >/dev/null 2>&1 && alias grep=rg egrep=rg; "
     "command -v fd >/dev/null 2>&1 && alias find=fd && alias glob='fd --glob'; "
     "fi; "
-    'eval "$OXAGEN_EXEC_CMD"'
+    # Restore the caller's working directory.  Guarded on -d so a since-deleted
+    # dir falls back to the image default instead of aborting the command.
+    'if [ -n "$OXAGEN_CWD" ] && [ -d "$OXAGEN_CWD" ]; then cd "$OXAGEN_CWD"; fi; '
+    'eval "$OXAGEN_EXEC_CMD"; '
+    "__oxagen_rc=$?; "
+    "printf '\\036__OXAGEN_CWD__=%s' \"$(pwd 2>/dev/null)\"; "
+    "exit $__oxagen_rc"
 )
 
 RUNNER_SECRET = modal.Secret.from_name("oxagen-runner")
@@ -315,6 +340,10 @@ class SandboxExecRequest(BaseModel):
     timeout_ms: int
     env: dict[str, str] | None = None
     stdin: str | None = None
+    # Working directory to run the command in (durable-terminal cwd persistence).
+    # None → the image default. Optional so callers/drivers that predate the
+    # field behave exactly as before.
+    cwd: str | None = None
 
 
 class SandboxExecResponse(BaseModel):
@@ -324,6 +353,10 @@ class SandboxExecResponse(BaseModel):
     duration_ms: int
     timed_out: bool
     gone: bool  # True when the sandbox has been reaped; caller should snapshot-restore
+    # The shell's working directory AFTER the command ran. None when the trailer
+    # couldn't be captured (command self-`exit`ed, timed out, or a custom image
+    # without the trampoline); the caller then keeps its prior cwd.
+    cwd: str | None = None
 
 
 class SandboxSnapshotRequest(BaseModel):
@@ -383,6 +416,23 @@ def decode_output(raw: bytes | str) -> str:
     if isinstance(raw, str):
         return raw
     return raw.decode("utf-8", errors="replace")
+
+
+def _split_cwd_trailer(stdout: str) -> tuple[str, str | None]:
+    """
+    Split the RS-delimited cwd trailer `_FAST_ALIAS_TRAMPOLINE` appends to stdout.
+
+    Returns (clean_stdout, cwd).  cwd is None when the trailer is absent — the
+    command called `exit` itself so our trailer never ran, a custom template
+    image lacks the trampoline, or output was truncated by a timeout.  The
+    caller then keeps its prior directory.  rfind() is used so bytes the command
+    itself happened to print can never win over our always-last trailer.
+    """
+    idx = stdout.rfind(_CWD_SENTINEL)
+    if idx == -1:
+        return stdout, None
+    cwd = stdout[idx + len(_CWD_SENTINEL):].strip() or None
+    return stdout[:idx], cwd
 
 
 async def _run_sandbox(req: RunRequest) -> RunResponse:
@@ -640,8 +690,12 @@ async def sandbox_exec(
         # Route through the alias trampoline: the agent's command rides in
         # $OXAGEN_EXEC_CMD (env transport also sidesteps argv quoting issues)
         # and is eval'd after grep→rg / find→fd / glob aliases are defined.
+        # OXAGEN_CWD restores the caller's working directory so `cd` persists
+        # across exec calls (durable-terminal cwd persistence).
         exec_env = dict(req.env or {})
         exec_env["OXAGEN_EXEC_CMD"] = req.command
+        if req.cwd:
+            exec_env["OXAGEN_CWD"] = req.cwd
         p = await modal.Sandbox.exec.aio(
             sb,
             "sh", "-c", _FAST_ALIAS_TRAMPOLINE,
@@ -664,7 +718,10 @@ async def sandbox_exec(
         else:
             exit_code = wait_task.result()
 
-        stdout_str = decode_output(await p.stdout.read.aio())
+        # Peel the cwd trailer off stdout before returning it to the caller.
+        stdout_str, result_cwd = _split_cwd_trailer(
+            decode_output(await p.stdout.read.aio())
+        )
         stderr_str = decode_output(await p.stderr.read.aio())
 
     except Exception as exc:
@@ -686,6 +743,7 @@ async def sandbox_exec(
         duration_ms=duration_ms,
         timed_out=timed_out,
         gone=False,
+        cwd=result_cwd,
     )
 
 
