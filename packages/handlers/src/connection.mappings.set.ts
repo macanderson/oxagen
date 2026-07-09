@@ -5,6 +5,7 @@ import { eq, and, inArray } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
 import { eventClient } from "./event-client";
 import { logger } from "./logger";
+import { assertGithubInstallationAccessible } from "./lib/github-installation-access";
 
 type Mapping = {
   sourceRecordType: string;
@@ -87,6 +88,17 @@ export const connectionMappingsSetHandler: CapabilityHandler<typeof connectionMa
   // a valid value and would fail the CHECK on write.
   const willActivate = input.activateConnection && conn.status === "pending_setup";
   const isGithub = conn.connectorId === "github";
+
+  // AUTHORIZATION GATE: binding a GitHub App installation lets the server mint an
+  // installation token for it (GITHUB_APP_PRIVATE_KEY is server-held), so a
+  // client-supplied installationId MUST be proven reachable by the acting user
+  // on GitHub before we trust it — otherwise a workspace could PUT an arbitrary
+  // installationId (bypassing the wizard picker) and read a GitHub org's private
+  // repos it has no access to. Fail-closed; the OAuth callback is exempt (its id
+  // arrives via GitHub's HMAC-verified redirect, not client input).
+  if (isGithub && input.installationId !== undefined) {
+    await assertGithubInstallationAccessible(ctx, input.installationId);
+  }
 
   // Seed default mappings for every GitHub record type the connector emits, so
   // the ingestion pipeline never silently skips pull_request/issue/release/commit

@@ -156,6 +156,31 @@ describe("ModalSandboxWorkspace", () => {
     expect(await ws.glob("**/*.ts")).toEqual(["src/a.ts", "src/nested/c.ts"]);
   });
 
+  it("glob prefers fd with an alias-immune `command find` fallback", async () => {
+    const ws = new ModalSandboxWorkspace({ ctx: CTX, sessionKey: "k" });
+    await ws.glob("**/*.ts");
+    const call = h.execFn.mock.calls.find((c) => c[0].command.includes("-type f"))!;
+    const cmd = call[0].command as string;
+    expect(cmd).toContain("command -v fd");
+    expect(cmd).toContain("fd --type f --hidden --no-ignore --exclude .git");
+    // Bare `find` would be alias-expanded to fd by the runner's exec
+    // trampoline and choke on find's expression flags.
+    expect(cmd).toContain("command find . -type f -not -path '*/.git/*'");
+  });
+
+  it("grep prefers rg with an alias-immune `command grep` fallback and normalized paths", async () => {
+    const ws = new ModalSandboxWorkspace({ ctx: CTX, sessionKey: "k" });
+    await ws.grep("TODO", { glob: "*.ts" });
+    const call = h.execFn.mock.calls.find((c) => c[0].command.includes("--line-number"))!;
+    const cmd = call[0].command as string;
+    expect(cmd).toContain("command -v rg");
+    expect(cmd).toContain("rg --line-number --no-heading --hidden --no-ignore -g '*.ts' -- 'TODO' '.'");
+    expect(cmd).toContain("command grep -rInE --include='*.ts' -- 'TODO' '.'");
+    // ./-prefix normalization so the .git post-filter applies to both branches.
+    expect(cmd).toContain("sed 's|^\\./||'");
+    expect(cmd).toContain("command grep -v '^\\.git/'");
+  });
+
   it("getChangedFiles reads back every changed path's content", async () => {
     const ws = new ModalSandboxWorkspace({ ctx: CTX, sessionKey: "k" });
     await ws.writeFile("src/a.ts", "AAA");

@@ -71,8 +71,9 @@ build).
 Independently, the adapter (`oxagen_agent.py`) fast-paths its `install()`:
 it compares `/usr/local/lib/oxagen/.bundle.sha256` in the container against
 the local bundle and skips the bundle/wasm upload on a match, and probes
-`command -v rg` before uploading ripgrep. The Node install script already
-fast-exits when Node ≥ 20 is present.
+`command -v <tool>` for each of `rg` / `fd` / `fzf` before uploading that
+static binary. The Node install script already fast-exits when Node ≥ 20 is
+present.
 
 ## Fallback guarantees
 

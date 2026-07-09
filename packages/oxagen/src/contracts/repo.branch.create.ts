@@ -19,7 +19,11 @@ export const repoBranchCreate = registerCapability({
   input: z.object({
     owner: z.string().describe("Repository owner (user or organisation)"),
     repo: z.string().describe("Repository name"),
-    branch: z.string().describe("Name of the new branch to create"),
+    branch: z
+      .string()
+      .describe(
+        "Name of the new branch to create. Must not be the repository's default branch name (rejected with 403).",
+      ),
     fromBranch: z
       .string()
       .optional()

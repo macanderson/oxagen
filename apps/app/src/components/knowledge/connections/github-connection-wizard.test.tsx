@@ -69,6 +69,7 @@ const STATUS_NOT_CONNECTED = {
   connected: false,
   installations: [],
   manageUrl: "",
+  identityUrl: "",
   installUrl: "",
 };
 
@@ -76,6 +77,7 @@ const STATUS_CONNECTED = {
   connected: true,
   installations: [],
   manageUrl: "",
+  identityUrl: "",
   installUrl: "",
 };
 

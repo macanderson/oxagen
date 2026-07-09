@@ -48,6 +48,17 @@ from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel
 
 # ---------------------------------------------------------------------------
+# Fast search toolchain — every image ships ripgrep (rg), fd, and fzf so agent
+# shell commands never fall back to grep/find, which scan gitignored trees
+# (node_modules etc.) and run 50-100× slower on real repos.  Debian names the
+# fd binary `fdfind`, hence the /usr/local/bin/fd symlink; Alpine names it fd.
+# ---------------------------------------------------------------------------
+
+_FAST_SEARCH_APT: tuple[str, ...] = ("ripgrep", "fd-find", "fzf")
+_FAST_SEARCH_APK = "apk add --no-cache ripgrep fd fzf"
+_FD_SYMLINK = 'ln -sf "$(command -v fdfind)" /usr/local/bin/fd'
+
+# ---------------------------------------------------------------------------
 # Browser asset resolution.
 #
 # The durable "agent" image bakes browserd/browserctl in via add_local_file.
@@ -84,9 +95,12 @@ def _browser_asset(name: str) -> str:
 # ---------------------------------------------------------------------------
 
 LANG_IMAGES: dict[str, modal.Image] = {
-    "node":   modal.Image.from_registry("node:20-alpine", add_python=None),
-    "python": modal.Image.debian_slim(python_version="3.12"),
-    "shell":  modal.Image.from_registry("alpine:3.20", add_python=None),
+    "node":   modal.Image.from_registry("node:20-alpine", add_python=None)
+              .run_commands(_FAST_SEARCH_APK),
+    "python": modal.Image.debian_slim(python_version="3.12")
+              .apt_install(*_FAST_SEARCH_APT).run_commands(_FD_SYMLINK),
+    "shell":  modal.Image.from_registry("alpine:3.20", add_python=None)
+              .run_commands(_FAST_SEARCH_APK),
 }
 
 # (code filename inside /work, argv for exec)
@@ -115,9 +129,12 @@ LANG_ENTRY: dict[str, tuple[str, list[str]]] = {
 # ---------------------------------------------------------------------------
 
 DURABLE_IMAGES: dict[str, modal.Image] = {
-    "node":   modal.Image.from_registry("node:20").apt_install("git"),
-    "python": modal.Image.debian_slim(python_version="3.12").apt_install("git"),
-    "shell":  modal.Image.debian_slim(python_version="3.12").apt_install("git"),
+    "node":   modal.Image.from_registry("node:20")
+              .apt_install("git", *_FAST_SEARCH_APT).run_commands(_FD_SYMLINK),
+    "python": modal.Image.debian_slim(python_version="3.12")
+              .apt_install("git", *_FAST_SEARCH_APT).run_commands(_FD_SYMLINK),
+    "shell":  modal.Image.debian_slim(python_version="3.12")
+              .apt_install("git", *_FAST_SEARCH_APT).run_commands(_FD_SYMLINK),
     # "agent" = Debian slim + Python 3.12 + git + curl + Playwright/Chromium.
     # add_local_file(local_path, remote_path, copy=True) bakes the file into the
     # image layer at build time (copy=True is required so the subsequent chmod
@@ -125,7 +142,7 @@ DURABLE_IMAGES: dict[str, modal.Image] = {
     # the cwd where `modal deploy runner.py` is invoked (ops/modal-sandbox/).
     "agent": (
         modal.Image.debian_slim(python_version="3.12")
-        .apt_install("git", "curl")
+        .apt_install("git", "curl", *_FAST_SEARCH_APT)
         .pip_install("playwright==1.49.0")
         .run_commands(
             "playwright install-deps chromium",
@@ -140,9 +157,32 @@ DURABLE_IMAGES: dict[str, modal.Image] = {
         # deployed runner container (see the resolver's comment above).
         .add_local_file(_browser_asset("browserd.py"), "/usr/local/bin/browserd", copy=True)
         .add_local_file(_browser_asset("browserctl.py"), "/usr/local/bin/browserctl", copy=True)
-        .run_commands("chmod +x /usr/local/bin/browserd /usr/local/bin/browserctl")
+        .run_commands(
+            "chmod +x /usr/local/bin/browserd /usr/local/bin/browserctl",
+            _FD_SYMLINK,
+        )
     ),
 }
+
+# Alias trampoline for /sandbox/exec.  POSIX shells parse the whole `-c`
+# string before running any of it, so aliases defined inside the command
+# string can never apply to that same string; defining them first and
+# `eval`-ing the real command (passed via $OXAGEN_EXEC_CMD) makes the shell
+# re-parse the command AFTER the aliases exist.  Works in dash, busybox ash,
+# and bash (bash additionally needs expand_aliases in non-interactive mode).
+# Scope is deliberately the top-level agent command only — nested scripts
+# (make, repo test suites) spawn their own clean /bin/sh and keep real
+# grep/find semantics.  The command -v guards keep custom template images
+# without the tools behaving byte-identically to before.  Per-call opt-out:
+# set OXAGEN_NO_FAST_ALIASES=1 in the exec env.
+_FAST_ALIAS_TRAMPOLINE = (
+    'if [ -z "$OXAGEN_NO_FAST_ALIASES" ]; then '
+    '[ -n "$BASH_VERSION" ] && shopt -s expand_aliases 2>/dev/null; '
+    "command -v rg >/dev/null 2>&1 && alias grep=rg egrep=rg; "
+    "command -v fd >/dev/null 2>&1 && alias find=fd && alias glob='fd --glob'; "
+    "fi; "
+    'eval "$OXAGEN_EXEC_CMD"'
+)
 
 RUNNER_SECRET = modal.Secret.from_name("oxagen-runner")
 
@@ -597,10 +637,15 @@ async def sandbox_exec(
     timed_out = False
 
     try:
+        # Route through the alias trampoline: the agent's command rides in
+        # $OXAGEN_EXEC_CMD (env transport also sidesteps argv quoting issues)
+        # and is eval'd after grep→rg / find→fd / glob aliases are defined.
+        exec_env = dict(req.env or {})
+        exec_env["OXAGEN_EXEC_CMD"] = req.command
         p = await modal.Sandbox.exec.aio(
             sb,
-            "sh", "-c", req.command,
-            env=req.env or None,
+            "sh", "-c", _FAST_ALIAS_TRAMPOLINE,
+            env=exec_env,
         )
 
         if req.stdin:

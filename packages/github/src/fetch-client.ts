@@ -231,6 +231,21 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
     return { login: data.login };
   }
 
+  async function getRepoInfo(args: {
+    owner: string;
+    repo: string;
+  }): Promise<{ fullName: string; htmlUrl: string; defaultBranch: string }> {
+    const data = await request<GHRepo>(
+      "GET",
+      `/repos/${args.owner}/${args.repo}`,
+    );
+    return {
+      fullName: data.full_name,
+      htmlUrl: data.html_url,
+      defaultBranch: data.default_branch,
+    };
+  }
+
   async function createRepoInOrg(args: {
     org?: string;
     name: string;
@@ -583,6 +598,7 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
 
   return {
     getAuthenticatedUser,
+    getRepoInfo,
     createRepoInOrg,
     putFile,
     forkRepo,

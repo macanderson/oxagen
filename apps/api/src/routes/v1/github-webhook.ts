@@ -25,6 +25,7 @@ import { Hono } from "hono";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { schema, withSystemDb } from "@oxagen/database";
 import { and, eq, isNull, sql } from "drizzle-orm";
+import { upsertGithubInstallation } from "./github-oauth";
 import { eventClient } from "../../event-client";
 import { getConnector } from "@oxagen/ingestion/connectors";
 import { requireEnv } from "@oxagen/config/env";
@@ -69,6 +70,22 @@ function recordKey(record: unknown): string {
   if (typeof r["id"] === "number" || typeof r["id"] === "string") return String(r["id"]);
   if (typeof r["number"] === "number") return String(r["number"]);
   return "record";
+}
+
+/** Pause every live GitHub connection backed by an installation (uninstall/suspend). */
+async function pauseGithubConnections(installationId: string): Promise<void> {
+  await withSystemDb((tx) =>
+    tx
+      .update(schema.sourceConnections)
+      .set({ status: "paused", updatedAt: new Date() })
+      .where(
+        and(
+          eq(schema.sourceConnections.connectorId, "github"),
+          sql`${schema.sourceConnections.deliveryConfig} ->> 'installationId' = ${installationId}`,
+          isNull(schema.sourceConnections.deletedAt),
+        ),
+      ),
+  );
 }
 
 githubAppWebhookRoute.post("/", async (c) => {
@@ -123,22 +140,45 @@ githubAppWebhookRoute.post("/", async (c) => {
   // GitHub delivers these to the App webhook automatically (no subscription).
   if (eventName === "installation" || eventName === "installation_repositories") {
     const action = typeof body["action"] === "string" ? body["action"] : "";
-    if (installationId && (action === "deleted" || action === "suspend")) {
-      // App removed/suspended for this installation → pause its connections so
-      // they stop appearing live and no further events are routed to them.
-      await withSystemDb((tx) =>
-        tx
-          .update(schema.sourceConnections)
-          .set({ status: "paused", updatedAt: new Date() })
-          .where(
-            and(
-              eq(schema.sourceConnections.connectorId, "github"),
-              sql`${schema.sourceConnections.deliveryConfig} ->> 'installationId' = ${installationId}`,
-              isNull(schema.sourceConnections.deletedAt),
-            ),
-          ),
-      );
+    const now = new Date();
+
+    if (installationId) {
+      // The installation payload (present on both event types) carries the
+      // account + app details we keep in the registry.
+      const inst = (body["installation"] ?? {}) as {
+        account?: { login?: string; id?: number | string; type?: string } | null;
+        app_slug?: string;
+        repository_selection?: string;
+      };
+      const meta = {
+        accountLogin: inst.account?.login ?? null,
+        accountId: inst.account?.id != null ? String(inst.account.id) : null,
+        accountType: inst.account?.type ?? null,
+        appSlug: inst.app_slug ?? null,
+        repositorySelection: inst.repository_selection ?? null,
+      };
+
+      if (action === "deleted" || action === "suspend") {
+        // App uninstalled/suspended → record the lifecycle in the registry (the
+        // system of record) AND pause its connections so they stop appearing
+        // live and no further events are routed to them.
+        await upsertGithubInstallation({
+          installationId,
+          ...meta,
+          ...(action === "deleted" ? { deletedAt: now } : { suspendedAt: now }),
+        });
+        await pauseGithubConnections(installationId);
+      } else {
+        // created / unsuspend / new_permissions_accepted / repos added|removed →
+        // the installation is live: refresh its registry metadata and clear any
+        // prior suspend/uninstall. We deliberately do NOT auto-resume paused
+        // connections — without a paused-reason column we cannot distinguish an
+        // app-suspend pause from a user pause, so the user re-activates after an
+        // unsuspend rather than risk silently un-pausing a user-paused connection.
+        await upsertGithubInstallation({ installationId, ...meta, reactivate: true });
+      }
     }
+
     return c.json({ received: true, lifecycle: eventName, action }, 200);
   }
 

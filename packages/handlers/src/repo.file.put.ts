@@ -1,6 +1,7 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { repoFilePut } from "@oxagen/oxagen/contracts/repo.file.put";
 import { createGitHubClient } from "@oxagen/github";
+import { assertNonDefaultBranchWrite } from "./lib/default-branch-guard";
 import { resolveGitHubToken } from "./lib/github-token";
 import { diffFileContents } from "./lib/unified-diff";
 import { logger } from "./logger";
@@ -11,6 +12,15 @@ export const repoFilePutHandler: CapabilityHandler<typeof repoFilePut> = async (
 ) => {
   const token = await resolveGitHubToken(ctx);
   const gh = createGitHubClient({ token });
+
+  // Hard invariant (OXA-2117): commits land on a work branch, never the
+  // default branch — omitting `branch` would silently target it.
+  await assertNonDefaultBranchWrite(gh, {
+    owner: input.owner,
+    repo: input.repo,
+    branch: input.branch,
+    capability: "put_repo_file",
+  });
 
   // Snapshot the file's current content on the target branch BEFORE
   // overwriting it (null when the file doesn't exist yet — a new-file
