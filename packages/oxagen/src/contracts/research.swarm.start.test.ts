@@ -6,7 +6,7 @@ describe("research.swarm.start contract", () => {
   // ── contract metadata ────────────────────────────────────────────────────
 
   it("registers with the correct name", () => {
-    expect(researchSwarmStart.name).toBe("research.swarm.start");
+    expect(researchSwarmStart.name).toBe("start_research_swarm");
   });
 
   it("belongs to the research domain", () => {
@@ -238,6 +238,6 @@ describe("research.swarm.start contract", () => {
   // ── registry ──────────────────────────────────────────────────────────────
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("research.swarm.start")).toBe(researchSwarmStart);
+    expect(getCapability("start_research_swarm")).toBe(researchSwarmStart);
   });
 });

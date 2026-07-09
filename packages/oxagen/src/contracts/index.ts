@@ -139,13 +139,12 @@ import { pluginCredentialSetSecret } from "./plugin.credential.set_secret";
 import { pluginOrgInstall } from "./plugin.org.install";
 import { pluginOrgInstallBulk } from "./plugin.org.install_bulk";
 import { pluginOrgList } from "./plugin.org.list";
-import { pluginOrgSetEnabled } from "./plugin.org.set_enabled";
+import { pluginSetEnabled } from "./plugin.set_enabled";
 import { pluginOrgUninstall } from "./plugin.org.uninstall";
 import { pluginRegistryAdd } from "./plugin.registry.add";
 import { pluginRegistryList } from "./plugin.registry.list";
 import { pluginRegistryRemove } from "./plugin.registry.remove";
 import { pluginSettingsSetAuthAlerts } from "./plugin.settings.set_auth_alerts";
-import { pluginWorkspaceSetEnabled } from "./plugin.workspace.set_enabled";
 import { workflowRun } from "./workflow.run";
 import { workflowStatus } from "./workflow.status";
 import { workflowCancel } from "./workflow.cancel";
@@ -287,6 +286,18 @@ import { environmentGet } from "./environment.get";
 import { environmentUpdate } from "./environment.update";
 import { environmentDelete } from "./environment.delete";
 import { environmentSetDefault } from "./environment.set_default";
+import { sandboxTemplateCreate } from "./sandbox.template.create";
+import { sandboxTemplateList } from "./sandbox.template.list";
+import { sandboxTemplateGet } from "./sandbox.template.get";
+import { sandboxTemplateUpdate } from "./sandbox.template.update";
+import { sandboxTemplateDelete } from "./sandbox.template.delete";
+import { sandboxTemplateSetDefault } from "./sandbox.template.set_default";
+import { sandboxTemplateSetTools } from "./sandbox.template.set_tools";
+import { sandboxTemplateExport } from "./sandbox.template.export";
+import { sandboxTemplateImport } from "./sandbox.template.import";
+import { agentEnvironmentBind } from "./agent.environment.bind";
+import { agentEnvironmentUnbind } from "./agent.environment.unbind";
+import { agentEnvironmentList } from "./agent.environment.list";
 import { secretKeyUpsert } from "./secret.key.upsert";
 import { secretKeyList } from "./secret.key.list";
 import { secretKeyDelete } from "./secret.key.delete";
@@ -379,6 +390,35 @@ export type {
   AgentMemoryCitationsListInput,
   AgentMemoryCitationsListOutput,
 } from "./agent.memory_citation.list";
+
+// Sandbox-template value objects + portable manifest v1 (shared schema module).
+export {
+  sandboxProviderSchema,
+  sandboxResourcesSchema,
+  sandboxNetworkModeSchema,
+  sandboxNetworkSchema,
+  sandboxSecretSelectionSchema,
+  sandboxLiteralEnvSchema,
+  sandboxToolKindSchema,
+  sandboxTemplateToolSchema,
+  manifestSecretKeySchema,
+  sandboxTemplateManifestSchema,
+  SANDBOX_TEMPLATE_MANIFEST_KIND,
+  SECRET_KEY_NAME_PATTERN,
+} from "./sandbox-template-manifest";
+export type {
+  SandboxProvider,
+  SandboxResources,
+  SandboxNetworkMode,
+  SandboxNetwork,
+  SandboxSecretSelection,
+  SandboxLiteralEnv,
+  SandboxToolKind,
+  SandboxTemplateTool,
+  ManifestSecretKey,
+  SandboxTemplateManifest,
+  SandboxTemplateManifestInput,
+} from "./sandbox-template-manifest";
 
 export {
   apiKeyCreate,
@@ -509,13 +549,12 @@ export {
   pluginOrgInstall,
   pluginOrgInstallBulk,
   pluginOrgList,
-  pluginOrgSetEnabled,
+  pluginSetEnabled,
   pluginOrgUninstall,
   pluginRegistryAdd,
   pluginRegistryList,
   pluginRegistryRemove,
   pluginSettingsSetAuthAlerts,
-  pluginWorkspaceSetEnabled,
   workflowRun,
   workflowStatus,
   workflowCancel,
@@ -656,6 +695,18 @@ export {
   environmentUpdate,
   environmentDelete,
   environmentSetDefault,
+  sandboxTemplateCreate,
+  sandboxTemplateList,
+  sandboxTemplateGet,
+  sandboxTemplateUpdate,
+  sandboxTemplateDelete,
+  sandboxTemplateSetDefault,
+  sandboxTemplateSetTools,
+  sandboxTemplateExport,
+  sandboxTemplateImport,
+  agentEnvironmentBind,
+  agentEnvironmentUnbind,
+  agentEnvironmentList,
   secretKeyUpsert,
   secretKeyList,
   secretKeyDelete,
@@ -811,13 +862,12 @@ export const contracts = [
   pluginOrgInstall,
   pluginOrgInstallBulk,
   pluginOrgList,
-  pluginOrgSetEnabled,
+  pluginSetEnabled,
   pluginOrgUninstall,
   pluginRegistryAdd,
   pluginRegistryList,
   pluginRegistryRemove,
   pluginSettingsSetAuthAlerts,
-  pluginWorkspaceSetEnabled,
   workflowRun,
   workflowStatus,
   workflowCancel,
@@ -960,6 +1010,18 @@ export const contracts = [
   environmentUpdate,
   environmentDelete,
   environmentSetDefault,
+  sandboxTemplateCreate,
+  sandboxTemplateList,
+  sandboxTemplateGet,
+  sandboxTemplateUpdate,
+  sandboxTemplateDelete,
+  sandboxTemplateSetDefault,
+  sandboxTemplateSetTools,
+  sandboxTemplateExport,
+  sandboxTemplateImport,
+  agentEnvironmentBind,
+  agentEnvironmentUnbind,
+  agentEnvironmentList,
   secretKeyUpsert,
   secretKeyList,
   secretKeyDelete,

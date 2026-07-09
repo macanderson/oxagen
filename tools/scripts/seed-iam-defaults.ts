@@ -110,9 +110,22 @@ async function main(): Promise<void> {
       return `rlg_${digest}`;
     }
 
-    let inserted = 0;
-    let skipped = 0;
+    // Materialize every row client-side, then bulk-insert in chunks. The
+    // previous one-INSERT-per-row loop meant ~specs × orgs sequential
+    // round-trips (~30k against prod over a WAN — an hour-plus); chunked
+    // multi-row inserts finish in seconds. ON CONFLICT DO NOTHING also
+    // resolves duplicates arising within a single statement, so re-runs and
+    // intra-chunk collisions stay idempotent.
+    interface GrantRow {
+      id: string;
+      public_id: string;
+      org_id: string;
+      role_id: string;
+      capability_id: string;
+      effect: Effect;
+    }
 
+    const rows: GrantRow[] = [];
     for (const spec of specs) {
       // Find all system roles matching (scope_kind, name) across all orgs.
       const matchingRoles = systemRoles.filter(
@@ -120,29 +133,34 @@ async function main(): Promise<void> {
       );
 
       for (const role of matchingRoles) {
-        const publicId = makePublicId(role.id, spec.capabilityId);
-
-        const result = await sql`
-          INSERT INTO iam.role_grants (id, public_id, org_id, role_id, capability_id, effect)
-          VALUES (
-            gen_random_uuid(),
-            ${publicId},
-            ${role.org_id},
-            ${role.id},
-            ${spec.capabilityId},
-            ${spec.effect}
-          )
-          ON CONFLICT DO NOTHING
-          RETURNING id
-        `;
-
-        if (result.length > 0) {
-          inserted++;
-        } else {
-          skipped++;
-        }
+        rows.push({
+          id: crypto.randomUUID(),
+          public_id: makePublicId(role.id, spec.capabilityId),
+          org_id: role.org_id,
+          role_id: role.id,
+          capability_id: spec.capabilityId,
+          effect: spec.effect,
+        });
       }
     }
+
+    let inserted = 0;
+    const CHUNK = 500;
+    for (let i = 0; i < rows.length; i += CHUNK) {
+      const chunk = rows.slice(i, i + CHUNK);
+      const result = await sql`
+        INSERT INTO iam.role_grants ${sql(chunk, "id", "public_id", "org_id", "role_id", "capability_id", "effect")}
+        ON CONFLICT DO NOTHING
+        RETURNING id
+      `;
+      inserted += result.length;
+      console.log(
+        kleur.dim(
+          `[seed-iam] ${Math.min(i + CHUNK, rows.length)}/${rows.length} rows processed`,
+        ),
+      );
+    }
+    const skipped = rows.length - inserted;
 
     console.log(
       kleur.green(

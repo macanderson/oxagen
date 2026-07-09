@@ -58,7 +58,7 @@ const fakeManifests = [
     category: "media",
     icon: "video",
     color: "#f59e0b",
-    contracts: ["video.generate"],
+    contracts: ["generate_video"],
     scopes: [],
   },
   {
@@ -71,7 +71,7 @@ const fakeManifests = [
     category: "media",
     icon: "image-plus",
     color: "#6366f1",
-    contracts: ["image.generate"],
+    contracts: ["generate_image"],
     scopes: [],
   },
   {
@@ -84,7 +84,7 @@ const fakeManifests = [
     category: "media",
     icon: "pen-tool",
     color: "#0ea5e9",
-    contracts: ["svg.generate"],
+    contracts: ["generate_svg"],
     scopes: [],
   },
   {
@@ -97,7 +97,7 @@ const fakeManifests = [
     category: "documents",
     icon: "notebook-pen",
     color: "#10b981",
-    contracts: ["document.generate"],
+    contracts: ["generate_document"],
     scopes: [],
   },
   {

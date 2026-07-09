@@ -147,7 +147,7 @@ export async function createMemoryAction(input: {
       // Only send pinned fields; omitting them lets the handler's classifier
       // infer the class/kind from the lesson text.
       const out = (await invoke(
-        "agent.memory.remember",
+        "save_memory",
         {
           text: trimmed,
           ...(memoryKind ? { memoryKind } : {}),
@@ -219,7 +219,7 @@ export async function updateMemoryAction(input: {
 
     try {
       const memory = (await invoke(
-        "agent.memory.update",
+        "update_memory",
         { memoryId, ...updates },
         ctx,
         { surface: "agent" },
@@ -273,7 +273,7 @@ export async function deleteMemoryAction(input: {
 
     try {
       await invoke(
-        "agent.memory.delete",
+        "delete_memory",
         { memoryId },
         ctx,
         { surface: "agent" },
@@ -332,7 +332,7 @@ export async function promoteMemoryAction(input: {
 
     try {
       const memory = (await invoke(
-        "agent.memory.promote",
+        "promote_memory",
         {
           memoryId,
           toClass,
@@ -393,7 +393,7 @@ export async function promotionCandidatesAction(input: {
 
     try {
       const out = (await invoke(
-        "agent.memory_promotion.list",
+        "list_memory_promotions",
         { ...(limit != null ? { limit } : {}) },
         ctx,
         { surface: "agent" },

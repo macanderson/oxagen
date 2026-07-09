@@ -10,7 +10,7 @@ const pluginTypeEnum = z.enum([
 ]);
 
 export const pluginOrgInstall = registerCapability({
-  name: "plugin.org.install",
+  name: "install_plugin",
   domain: "plugin",
   description: "Install a plugin into this workspace.",
   mode: "sync",
@@ -41,5 +41,9 @@ export const pluginOrgInstall = registerCapability({
   }),
   output: z.object({
     orgListingId: z.string(),
+    // Effective auth kind persisted on the listing. "oauth" means the server
+    // will not work until the user completes the OAuth authorize flow — the
+    // UI uses this to prompt for authentication right after install.
+    authKind: z.enum(["oauth", "secret", "none"]),
   }),
 });

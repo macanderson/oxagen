@@ -71,7 +71,7 @@ describe("user.preferences.write capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("user.preferences.write")).toBe(userPreferencesWrite);
+    expect(getCapability("update_user_preferences")).toBe(userPreferencesWrite);
   });
 
   it("declares scoped:false (user-scoped)", () => {

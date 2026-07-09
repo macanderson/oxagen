@@ -72,7 +72,7 @@ describe("graph.export capability", () => {
 
   // ── registry ────────────────────────────────────────────────────────────────
   it("is registered as a scoped, read capability on api + mcp", () => {
-    const cap = getCapability("graph.export");
+    const cap = getCapability("export_graph");
     expect(cap).toBeDefined();
     expect(cap?.scoped).toBe(true);
     expect(cap?.surfaces).toEqual(["api", "mcp"]);

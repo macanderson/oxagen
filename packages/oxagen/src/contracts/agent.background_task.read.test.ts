@@ -44,7 +44,7 @@ describe("agent.task.background.read capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("agent.background_task.read")).toBe(
+    expect(getCapability("get_background_task")).toBe(
       agentTaskBackgroundRead,
     );
   });

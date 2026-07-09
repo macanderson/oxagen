@@ -28,7 +28,7 @@ const executionStepSchema = z.object({
 });
 
 export const chatMessageExecution = registerCapability({
-  name: "chat.message.execution",
+  name: "get_message_execution",
   domain: "chat",
   description:
     "Record an agent execution that originated from a chat message; atomically links the execution to the message for observability and UI streaming",

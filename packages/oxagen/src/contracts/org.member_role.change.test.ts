@@ -42,7 +42,7 @@ describe("org.member.role.change capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("org.member_role.change")).toBe(orgMemberRoleChange);
+    expect(getCapability("change_member_role")).toBe(orgMemberRoleChange);
   });
 
   it("is high-risk and default-deny", () => {

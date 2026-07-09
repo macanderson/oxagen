@@ -38,7 +38,7 @@ function trace(): AgentTraceGetOutput {
         toolCalls: [
           {
             toolCallId: "atc_1",
-            toolName: "ontology.neighbors",
+            toolName: "get_ontology_neighbors",
             toolType: "capability",
             status: "completed",
             latencyMs: 800,
@@ -80,7 +80,7 @@ describe("SpanTree", () => {
     // Root id appears (in the tree row and the default detail panel).
     expect(screen.getAllByText("aex_root").length).toBeGreaterThan(0);
     expect(screen.getByText("step 1")).toBeInTheDocument();
-    expect(screen.getByText("ontology.neighbors")).toBeInTheDocument();
+    expect(screen.getByText("get_ontology_neighbors")).toBeInTheDocument();
     // Child execution row renders too.
     expect(screen.getByText("aex_child")).toBeInTheDocument();
   });
@@ -88,7 +88,7 @@ describe("SpanTree", () => {
   it("shows the response preview in the detail panel when a tool call is selected", async () => {
     const user = userEvent.setup();
     render(<SpanTree trace={trace()} />);
-    await user.click(screen.getByText("ontology.neighbors"));
+    await user.click(screen.getByText("get_ontology_neighbors"));
     expect(screen.getByText("Response preview")).toBeInTheDocument();
     expect(
       screen.getByText('{"neighbors":["a","b"]}'),
@@ -102,7 +102,7 @@ describe("SpanTree", () => {
     const collapseButtons = screen.getAllByRole("button", { name: "Collapse" });
     await user.click(collapseButtons[0]!);
     expect(screen.queryByText("step 1")).not.toBeInTheDocument();
-    expect(screen.queryByText("ontology.neighbors")).not.toBeInTheDocument();
+    expect(screen.queryByText("get_ontology_neighbors")).not.toBeInTheDocument();
   });
 
   it("copies an id from the detail panel", async () => {

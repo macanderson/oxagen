@@ -35,7 +35,7 @@ export async function PendingInferencesSection({
       { orgId, workspaceId },
       () =>
         invoke(
-          "semantic.edge.suggest",
+          "suggest_semantic_edges",
           { limit: 50 },
           {
             orgId,

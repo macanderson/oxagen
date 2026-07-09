@@ -2,7 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const graphNodeList = registerCapability({
-  name: "graph.node.list",
+  name: "list_nodes",
   domain: "graph",
   description: "Paginated browse of all nodes in the workspace graph. Enables graph explorer UI.",
   mode: "sync",

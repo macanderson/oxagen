@@ -814,7 +814,7 @@ export function ChatShellClient({
         if (!tc) return null;
         // Only code-execute renders individually here; every other tool call is
         // merged into a ToolActivityGroup by the timeline builder below.
-        if (tc.capability !== "agent.code.execute") return null;
+        if (tc.capability !== "execute_code") return null;
         const tone: TimelineTone =
           tc.status === "completed"
             ? "done"
@@ -1034,7 +1034,7 @@ export function ChatShellClient({
     const sep = key.indexOf(":");
     if (key.slice(0, sep) !== "tool") return null;
     const tc = toolCalls[key.slice(sep + 1)];
-    if (!tc || tc.capability === "agent.code.execute") return null;
+    if (!tc || tc.capability === "execute_code") return null;
     return tc;
   };
 

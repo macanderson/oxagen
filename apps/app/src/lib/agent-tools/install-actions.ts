@@ -40,7 +40,13 @@ const InstallSchema = z.object({
 
 export async function installPlugin(
   input: z.infer<typeof InstallSchema>,
-): Promise<{ ok: boolean; orgListingId?: string; error?: string }> {
+): Promise<{
+  ok: boolean;
+  orgListingId?: string;
+  /** "oauth" → the server needs the OAuth authorize flow before it works. */
+  authKind?: "oauth" | "secret" | "none";
+  error?: string;
+}> {
   const parsed = InstallSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Invalid input" };
 
@@ -76,7 +82,7 @@ export async function installPlugin(
       const slug = parsed.data.catalogServerId ?? parsed.data.pluginId;
       if (!slug) return { ok: false, error: "skill slug is required" };
       await runInTenantScope({ orgId: org.id, workspaceId: ws.id }, () =>
-        invoke("skill.workspace.install", { slug, workspace_id: ws.id }, ctx, { surface: "agent" }),
+        invoke("install_skill", { slug, workspace_id: ws.id }, ctx, { surface: "agent" }),
       );
       const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };
       revalidatePath(capabilitiesPath(routeCtx));
@@ -96,13 +102,14 @@ export async function installPlugin(
       }
     }
     const out = await runInTenantScope({ orgId: org.id, workspaceId: ws.id }, () =>
-      invoke("plugin.org.install", installInput, ctx, { surface: "agent" }),
+      invoke("install_plugin", installInput, ctx, { surface: "agent" }),
     );
     const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };
     revalidatePath(capabilitiesPath(routeCtx));
+    revalidatePath(workspace.studio.tools.mcp(routeCtx));
 
-    const typed = out as { orgListingId: string };
-    return { ok: true, orgListingId: typed.orgListingId };
+    const typed = out as { orgListingId: string; authKind?: "oauth" | "secret" | "none" };
+    return { ok: true, orgListingId: typed.orgListingId, authKind: typed.authKind };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Install failed" };
   }
@@ -168,7 +175,7 @@ export async function installBulkPlugin(
       }
       try {
         await runInTenantScope({ orgId: org.id, workspaceId: ws.id }, () =>
-          invoke("skill.workspace.install", { slug, workspace_id: ws.id }, ctx, { surface: "agent" }),
+          invoke("install_skill", { slug, workspace_id: ws.id }, ctx, { surface: "agent" }),
         );
       } catch (e) {
         failures.push(e instanceof Error ? e.message : "skill install failed");
@@ -205,7 +212,7 @@ export async function installBulkPlugin(
     if (bulkItems.length > 0) {
       attempted += bulkItems.length;
       const result = (await runInTenantScope({ orgId: org.id, workspaceId: ws.id }, () =>
-        invoke("plugin.org.install_bulk", { items: bulkItems }, ctx, { surface: "agent" }),
+        invoke("install_plugins_bulk", { items: bulkItems }, ctx, { surface: "agent" }),
       )) as { installed: Array<{ pluginId: string | null; orgListingId: string | null; error: string | null }> };
 
       // The handler always returns HTTP 200; partial failures are embedded in the
@@ -251,9 +258,12 @@ export async function togglePlugin(
 
   try {
     await runInTenantScope({ orgId: org.id, workspaceId: ws.id }, () =>
-      invoke("plugin.workspace.set_enabled", { orgListingId, enabled }, ctx, {
-        surface: "agent",
-      }),
+      invoke(
+        "set_plugin_enabled",
+        { scope: "workspace", orgListingId, enabled },
+        ctx,
+        { surface: "agent" },
+      ),
     );
     const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };
     revalidatePath(capabilitiesPath(routeCtx));
@@ -284,7 +294,7 @@ export async function uninstallPlugin(
 
   try {
     await runInTenantScope({ orgId: org.id, workspaceId: ws.id }, () =>
-      invoke("plugin.org.uninstall", { orgListingId }, ctx, { surface: "agent" }),
+      invoke("uninstall_plugin", { orgListingId }, ctx, { surface: "agent" }),
     );
     const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };
     revalidatePath(capabilitiesPath(routeCtx));
@@ -316,7 +326,7 @@ export async function addRegistry(
 
   try {
     const out = await invoke(
-      "plugin.registry.add",
+      "add_plugin_registry",
       { name: parsed.data.name, baseUrl: parsed.data.baseUrl },
       ctx,
       { surface: "agent" },
@@ -351,7 +361,7 @@ export async function removeRegistry(
 
   try {
     const out = await invoke(
-      "plugin.registry.remove",
+      "remove_plugin_registry",
       { registryId: parsed.data.registryId },
       ctx,
       { surface: "agent" },

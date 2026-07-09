@@ -91,6 +91,6 @@ describe("agent.definition.get capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("agent.definition.get")).toBe(agentDefinitionGet);
+    expect(getCapability("get_agent_def")).toBe(agentDefinitionGet);
   });
 });

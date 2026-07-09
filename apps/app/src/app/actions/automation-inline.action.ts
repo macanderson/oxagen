@@ -106,7 +106,7 @@ export async function createAutomationInlineAction(
 
   try {
     const result = (await invoke(
-      "automation.create",
+      "create_automation",
       contractInput,
       ctx,
     )) as AutomationCreateOutput;
@@ -154,7 +154,7 @@ export async function enableAutomationInlineAction(
 
   try {
     const result = (await invoke(
-      "automation.enable",
+      "enable_automation",
       { automation_id: input.automation_id },
       ctx,
     )) as AutomationEnableOutput;

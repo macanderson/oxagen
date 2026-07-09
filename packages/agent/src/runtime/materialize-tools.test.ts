@@ -5,7 +5,7 @@ import { z } from "zod";
 // one high-risk agent, one non-agent.* agent-surface capability (form.fill).
 const FIXTURE = [
   {
-    name: "org.create",
+    name: "create_org",
     description: "non-agent capability",
     surfaces: ["api", "mcp"] as const,
     input: z.object({}),
@@ -26,7 +26,7 @@ const FIXTURE = [
   },
   {
     // Non-agent.* name but surfaced on agent — this is the gap-1 scenario.
-    name: "form.fill",
+    name: "fill_form",
     description: "fill a form with AI-proposed values",
     surfaces: ["agent"] as const,
     agent: { riskLevel: "low" as const },
@@ -244,17 +244,16 @@ describe("materializeTools", () => {
   });
 
   it("returns only agent-surfaced capabilities, keyed by model-safe names", async () => {
-    // Dotted capability names (form.fill) are sanitized to ^[a-zA-Z0-9_-]+$
+    // Capability names are verb-first snake_case (already model-safe: ^[a-zA-Z0-9_-]+$);
     // so the gateway accepts them; undotted names (capA/capB) pass through.
     const { tools } = await materializeTools(CTX);
-    expect(Object.keys(tools).sort()).toEqual(["capA", "capB", "form_fill"]);
-    expect(tools["org.create"]).toBeUndefined();
-    expect(tools["form.fill"]).toBeUndefined();
+    expect(Object.keys(tools).sort()).toEqual(["capA", "capB", "fill_form"]);
+    expect(tools["create_org"]).toBeUndefined();
   });
 
   it("maps every model-safe tool name back to its real capability name", async () => {
     const { nameMap } = await materializeTools(CTX);
-    expect(nameMap["form_fill"]).toBe("form.fill");
+    expect(nameMap["fill_form"]).toBe("fill_form");
     expect(nameMap["capA"]).toBe("capA");
     // No alias may contain a dot — that is the whole point of the sanitizer.
     for (const alias of Object.keys(nameMap)) {
@@ -367,12 +366,12 @@ describe("materializeTools", () => {
     vi.mocked(invoke).mockResolvedValueOnce({ filled: true });
     const { tools } = await materializeTools(CTX);
     // Keyed by the model-safe alias; execute still invokes the real "form.fill".
-    const formFillTool = tools["form_fill"] as { execute?: (i: unknown) => Promise<unknown> };
+    const formFillTool = tools["fill_form"] as { execute?: (i: unknown) => Promise<unknown> };
     expect(formFillTool).toBeDefined();
     const result = await formFillTool.execute!({ formId: "workspace-general", values: { name: "Prod" } });
     // Kernel invoke must have been called — not the agent-internal loader
     expect(invoke).toHaveBeenCalledWith(
-      "form.fill",
+      "fill_form",
       { formId: "workspace-general", values: { name: "Prod" } },
       CTX,
       { surface: "agent" },
@@ -389,7 +388,7 @@ describe("materializeTools", () => {
     vi.mocked(invoke).mockResolvedValueOnce({ svg: "<svg/>" });
     const customFixture = [
       {
-        name: "svg.generate",
+        name: "generate_svg",
         description: "generate an svg",
         surfaces: ["agent"] as const,
         agent: { riskLevel: "low" as const },
@@ -404,11 +403,11 @@ describe("materializeTools", () => {
     vi.resetModules();
     const { materializeTools: mt } = await import("./materialize-tools");
     const { tools } = await mt(CTX);
-    const svgTool = tools["svg_generate"] as { execute?: (i: unknown) => Promise<unknown> };
+    const svgTool = tools["generate_svg"] as { execute?: (i: unknown) => Promise<unknown> };
     expect(svgTool).toBeDefined();
     const result = await svgTool.execute!({ prompt: "a red circle" });
     expect(invoke).toHaveBeenCalledWith(
-      "svg.generate",
+      "generate_svg",
       { prompt: "a red circle" },
       CTX,
       { surface: "agent" },
@@ -804,7 +803,7 @@ describe("materializeTools — entitlement filter (WP4)", () => {
     expect(tools.capB).toBeUndefined();
     // Builtin capabilities (capA, form.fill) are unaffected.
     expect(tools.capA).toBeDefined();
-    expect(tools["form_fill"]).toBeDefined();
+    expect(tools["fill_form"]).toBeDefined();
   });
 
   it("leaves builtin capabilities unaffected regardless of entitlement state", async () => {
@@ -816,7 +815,7 @@ describe("materializeTools — entitlement filter (WP4)", () => {
     vi.mocked(listEntitledCapabilityPluginIds).mockResolvedValue(new Set<string>());
     const { tools } = await materializeTools(CTX);
     expect(tools.capA).toBeDefined();
-    expect(tools["form_fill"]).toBeDefined();
+    expect(tools["fill_form"]).toBeDefined();
     expect(tools.capB).toBeUndefined();
   });
 
@@ -833,7 +832,7 @@ describe("materializeTools — entitlement filter (WP4)", () => {
     expect(tools.capB).toBeUndefined();
     // Builtin capabilities are unaffected.
     expect(tools.capA).toBeDefined();
-    expect(tools["form_fill"]).toBeDefined();
+    expect(tools["fill_form"]).toBeDefined();
   });
 
   it("fetches the entitled set at most once per materializeTools call", async () => {

@@ -118,6 +118,6 @@ describe("graph.edge.delete capability", () => {
   // ── registry ──────────────────────────────────────────────────────────────
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("graph.edge.delete")).toBe(graphEdgeDelete);
+    expect(getCapability("delete_edge")).toBe(graphEdgeDelete);
   });
 });

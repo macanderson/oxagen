@@ -48,6 +48,6 @@ describe("connection.list capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("connection.list")).toBe(connectionList);
+    expect(getCapability("list_connections")).toBe(connectionList);
   });
 });

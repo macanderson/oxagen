@@ -2,7 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const skillEnable = registerCapability({
-  name: "skill.enable",
+  name: "set_skill_enabled",
   domain: "skill",
   description:
     "Enable or disable a skill in the workspace. Disabled skills are hidden from the agent and excluded from tool materialization, but their versions and data are preserved.",

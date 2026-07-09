@@ -65,7 +65,7 @@ describe("svg.generate capability", () => {
   });
 
   it("has the expected contract metadata", () => {
-    expect(svgGenerate.name).toBe("svg.generate");
+    expect(svgGenerate.name).toBe("generate_svg");
     expect(svgGenerate.surfaces).toContain("api");
     expect(svgGenerate.surfaces).toContain("mcp");
     expect(svgGenerate.surfaces).toContain("agent");

@@ -3,7 +3,7 @@ import { pluginCatalogGet } from "./plugin.catalog.get";
 
 describe("plugin.catalog.get contract", () => {
   it("registers with the correct name", () => {
-    expect(pluginCatalogGet.name).toBe("plugin.catalog.get");
+    expect(pluginCatalogGet.name).toBe("get_catalog_plugin");
   });
   it("has api+mcp surfaces and org admin roles", () => {
     expect(pluginCatalogGet.surfaces).toContain("api");

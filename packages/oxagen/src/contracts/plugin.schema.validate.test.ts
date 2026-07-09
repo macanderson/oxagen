@@ -194,6 +194,6 @@ describe("plugin.schema.validate capability", () => {
   // ── registry ──────────────────────────────────────────────────────────────
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("plugin.schema.validate")).toBe(pluginSchemaValidate);
+    expect(getCapability("validate_plugin_schema")).toBe(pluginSchemaValidate);
   });
 });

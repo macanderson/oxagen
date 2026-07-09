@@ -2,8 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const agentMcpConsentList = registerCapability({
-  name: "agent.mcp_consent.list",
-  aliases: ["agent.mcp.consent.list"],
+  name: "list_mcp_consents",
   domain: "agent",
   description:
     "List external MCP tool consent grants in the active workspace (which tools the agent may invoke without re-prompting)",

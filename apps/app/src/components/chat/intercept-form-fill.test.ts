@@ -87,7 +87,7 @@ describe("interceptFormFillEvents", () => {
       type: "tool-call-start",
       toolCallId: "tc-other",
       messageId: MSG_ID,
-      capability: "agent.code.execute",
+      capability: "execute_code",
       inputPreview: {},
       riskLevel: "low",
     };

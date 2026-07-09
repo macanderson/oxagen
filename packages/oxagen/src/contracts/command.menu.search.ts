@@ -38,7 +38,7 @@ const searchResultRow = z.object({
 });
 
 export const commandMenuSearch = registerCapability({
-  name: "command.menu.search",
+  name: "search_command_menu",
   domain: "command",
   description:
     "Full-text entity search for the Command Menu. Accepts an optional entity-kind filter " +

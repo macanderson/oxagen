@@ -1,5 +1,6 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render } from "ink-testing-library";
+import { Box, Text } from "ink";
 import {
   ApprovalPrompt,
   humanizeTokens,
@@ -416,7 +417,7 @@ describe("MessageView", () => {
       <MessageView
         msg={msg({
           role: "tool",
-          toolName: "agent.subagent.dispatch",
+          toolName: "dispatch_subagent",
           content: "break-fix → fix the failing test",
         })}
       />,
@@ -469,6 +470,77 @@ describe("MessageView", () => {
     const frame = lastFrame() ?? "";
     expect(frame).toContain("💭 thinking");
     expect(frame).toContain("weighing two approaches");
+  });
+
+  // ── Memoization (perf regression guard) ──
+  // MessageView is wrapped in React.memo so the transcript's hot re-render path
+  // (fullscreen TranscriptViewport maps every visible row each streamed frame)
+  // skips rows whose msg object is unchanged. These lock that in.
+
+  it("is a React.memo component (unchanged rows can bail out of re-render)", () => {
+    expect((MessageView as unknown as { $$typeof: symbol }).$$typeof).toBe(
+      Symbol.for("react.memo"),
+    );
+  });
+
+  it("uses the default shallow prop comparison (no custom compare that could defeat it)", () => {
+    // A null/undefined `compare` means React.memo bails whenever every prop is
+    // referentially equal — exactly the "unchanged msg object" case.
+    expect((MessageView as unknown as { compare?: unknown }).compare ?? null).toBeNull();
+  });
+
+  // Count the memoized component's ACTUAL renders by spying on the inner render
+  // function (React.memo's `.type`), which React skips calling when it bails.
+  // Profiler is unusable here: its onRender fires per container commit even when
+  // the memoized child bails, so it can't isolate the child's own renders.
+  type MemoHandle = { type: (props: { msg: Message }) => React.ReactElement };
+
+  it("does not re-render a row whose msg object is unchanged when its parent re-renders", () => {
+    const handle = MessageView as unknown as MemoHandle;
+    const original = handle.type;
+    const spy = vi.fn(original);
+    handle.type = spy;
+    try {
+      const stable = msg({ role: "assistant", content: "an unchanged committed row" });
+      function Harness({ tick }: { tick: number }): React.ReactElement {
+        return (
+          <Box flexDirection="column">
+            <MessageView msg={stable} />
+            {/* An unrelated sibling that changes, forcing the harness to
+                re-render without touching MessageView's props. */}
+            <Text>tick {tick}</Text>
+          </Box>
+        );
+      }
+      const { rerender } = render(<Harness tick={0} />);
+      const afterMount = spy.mock.calls.length;
+      expect(afterMount).toBeGreaterThan(0); // it did render on mount
+      rerender(<Harness tick={1} />);
+      // Same msg identity → React.memo bails → the inner render is NOT called.
+      expect(spy.mock.calls.length).toBe(afterMount);
+    } finally {
+      handle.type = original;
+    }
+  });
+
+  it("does re-render the row when the msg object identity changes", () => {
+    const handle = MessageView as unknown as MemoHandle;
+    const original = handle.type;
+    const spy = vi.fn(original);
+    handle.type = spy;
+    try {
+      function Harness({ m }: { m: Message }): React.ReactElement {
+        return <MessageView msg={m} />;
+      }
+      const { rerender } = render(<Harness m={msg({ content: "first" })} />);
+      const afterMount = spy.mock.calls.length;
+      rerender(<Harness m={msg({ content: "second" })} />);
+      // A fresh msg object (as the live streaming row produces each token) is
+      // not shallow-equal, so the inner render runs again.
+      expect(spy.mock.calls.length).toBeGreaterThan(afterMount);
+    } finally {
+      handle.type = original;
+    }
   });
 });
 

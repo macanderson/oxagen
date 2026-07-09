@@ -17,16 +17,16 @@ export const TOOL_EMOJIS: Record<string, string> = {
 
   // Knowledge & graph
   MCP: "🔗",
-  "semantic.edge.suggest": "🧠",
-  "semantic.relationship.approve": "✅",
+  "suggest_semantic_edges": "🧠",
+  "approve_semantic_relationship": "✅",
   "knowledge.query": "🔍",
 
   // LLM & inference
-  "agent.subagent.dispatch": "🚀",
+  "dispatch_subagent": "🚀",
 
   // Workflow & process
-  "workflow.run": "▶️",
-  "workflow.cancel": "⏹️",
+  "run_workflow": "▶️",
+  "cancel_workflow": "⏹️",
 
   // Default — tools without a mapping render with no emoji at all.
   default: "",
@@ -57,11 +57,12 @@ export function getToolAccent(toolName: string): string {
 
 /**
  * Human-facing label for a tool chip. Single-word core tools (Read, Edit, Bash)
- * read best Title-cased; dotted capability names (`semantic.edge.suggest`) are
- * precise identifiers a developer recognizes, so they're kept verbatim.
+ * read best Title-cased; capability names (`suggest_semantic_edges`, legacy
+ * `semantic.edge.suggest`) are precise identifiers a developer recognizes, so
+ * they're kept verbatim.
  */
 export function toolDisplayLabel(toolName: string): string {
-  if (!toolName.includes(".")) {
+  if (!toolName.includes(".") && !toolName.includes("_")) {
     return toolName.charAt(0).toUpperCase() + toolName.slice(1);
   }
   return toolName;

@@ -70,7 +70,7 @@ export async function fillFormAction(input: FillFormActionInput): Promise<FormFi
     };
 
     const rawResult = await invoke(
-      "form.fill",
+      "fill_form",
       {
         route: input.context.route,
         entitySummary: input.context.entitySummary,

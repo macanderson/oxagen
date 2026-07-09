@@ -4,7 +4,7 @@ import { getCapability } from "../registry";
 
 describe("agent.sandbox.files.list capability", () => {
   it("is registered", () => {
-    expect(getCapability("agent.sandbox_file.list")).toBeDefined();
+    expect(getCapability("list_sandbox_files")).toBeDefined();
   });
 
   it("does not gate on billing (a read-only listing consumes no AI tokens)", () => {

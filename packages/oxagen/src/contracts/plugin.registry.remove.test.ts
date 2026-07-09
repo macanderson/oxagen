@@ -3,7 +3,7 @@ import { pluginRegistryRemove } from "./plugin.registry.remove";
 
 describe("plugin.registry.remove contract", () => {
   it("registers with the correct name", () => {
-    expect(pluginRegistryRemove.name).toBe("plugin.registry.remove");
+    expect(pluginRegistryRemove.name).toBe("remove_plugin_registry");
   });
   it("has api+mcp surfaces and org admin roles", () => {
     expect(pluginRegistryRemove.surfaces).toContain("api");

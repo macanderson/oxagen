@@ -42,7 +42,7 @@ export interface ActivityEvent {
 }
 
 /** Braille spinner frames — shared by every animated "running" glyph. */
-const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+export const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
 export interface ActivityGlyph {
   glyph: string;

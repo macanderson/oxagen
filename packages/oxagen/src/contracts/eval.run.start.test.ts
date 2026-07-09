@@ -86,7 +86,7 @@ describe("eval.run.start capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("eval.run.start")).toBe(evalRunStart);
+    expect(getCapability("start_eval_run")).toBe(evalRunStart);
   });
 
   it("is billing-gated (does not set noBillingGate)", () => {

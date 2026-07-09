@@ -18,7 +18,7 @@ describe("agent.mcp.delete capability", () => {
   });
 
   it("is registered with high sensitivity", () => {
-    expect(getCapability("agent.mcp.delete")).toBe(agentMcpDelete);
+    expect(getCapability("delete_mcp_server")).toBe(agentMcpDelete);
     expect(agentMcpDelete.sensitivity).toBe("high");
   });
 });

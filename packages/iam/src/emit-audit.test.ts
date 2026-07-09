@@ -75,7 +75,7 @@ describe("emitAudit()", () => {
 
   it("calls insertAuditEvent exactly once with the correct capability and outcome", async () => {
     await emitAudit({
-      capability: "chat.message.send",
+      capability: "send_message",
       ctx: CTX,
       principal: null,
       result: ALLOW_RESULT,
@@ -85,14 +85,14 @@ describe("emitAudit()", () => {
 
     expect(mocks.insertAuditEvent).toHaveBeenCalledTimes(1);
     const row = mocks.insertAuditEvent.mock.calls[0]?.[0] as AuditEventRow;
-    expect(row.capability).toBe("chat.message.send");
+    expect(row.capability).toBe("send_message");
     expect(row.outcome).toBe("allow");
     expect(row.org_id).toBe("org_emit_test");
   });
 
   it("computes a chain_hash string of length 64 (SHA-256 hex)", async () => {
     await emitAudit({
-      capability: "chat.message.send",
+      capability: "send_message",
       ctx: CTX,
       principal: null,
       result: ALLOW_RESULT,
@@ -109,7 +109,7 @@ describe("emitAudit()", () => {
   it("chain_hash changes when prevHash changes (hash chains over prevHash)", async () => {
     mocks.latestAuditChainHash.mockResolvedValueOnce("hash_a");
     await emitAudit({
-      capability: "chat.message.send",
+      capability: "send_message",
       ctx: CTX,
       principal: null,
       result: ALLOW_RESULT,
@@ -122,7 +122,7 @@ describe("emitAudit()", () => {
     mocks.insertAuditEvent.mockResolvedValue(undefined);
     mocks.latestAuditChainHash.mockResolvedValueOnce("hash_b");
     await emitAudit({
-      capability: "chat.message.send",
+      capability: "send_message",
       ctx: CTX,
       principal: null,
       result: ALLOW_RESULT,
@@ -142,7 +142,7 @@ describe("emitAudit()", () => {
     mocks.latestAuditChainHash.mockRejectedValue(new Error("clickhouse read failed"));
 
     await emitAudit({
-      capability: "chat.message.send",
+      capability: "send_message",
       ctx: CTX,
       principal: null,
       result: ALLOW_RESULT,
@@ -159,7 +159,7 @@ describe("emitAudit()", () => {
 
   it("sets scope_kind to 'workspace' when workspaceId is present in ctx", async () => {
     await emitAudit({
-      capability: "chat.message.send",
+      capability: "send_message",
       ctx: { ...CTX, workspaceId: "ws_scope_test" },
       principal: null,
       result: ALLOW_RESULT,
@@ -174,7 +174,7 @@ describe("emitAudit()", () => {
 
   it("sets scope_kind to 'org' and scope_id to orgId when workspaceId is absent", async () => {
     await emitAudit({
-      capability: "chat.message.send",
+      capability: "send_message",
       ctx: { ...CTX, workspaceId: "" },
       principal: null,
       result: ALLOW_RESULT,
@@ -194,7 +194,7 @@ describe("emitAudit()", () => {
     };
 
     await emitAudit({
-      capability: "chat.message.send",
+      capability: "send_message",
       ctx: CTX,
       principal: null,
       result: { outcome: "deny", reason: "org_enforced_deny", trace: DENY_TRACE },
@@ -243,7 +243,7 @@ describe("emitAudit()", () => {
 
   it("null principal → acting_principal_id is nil UUID, kind service, human_principal_id null", async () => {
     await emitAudit({
-      capability: "chat.message.send",
+      capability: "send_message",
       ctx: CTX,
       principal: null,
       result: ALLOW_RESULT,
@@ -268,7 +268,7 @@ describe("emitAudit()", () => {
     };
 
     await emitAudit({
-      capability: "chat.message.send",
+      capability: "send_message",
       ctx: CTX,
       principal: humanPrincipal,
       result: ALLOW_RESULT,
@@ -312,7 +312,7 @@ describe("emitAudit()", () => {
     const rawInputJson = '{"content":"hello world"}';
 
     await emitAudit({
-      capability: "chat.message.send",
+      capability: "send_message",
       ctx: CTX,
       principal: null,
       result: ALLOW_RESULT,
@@ -327,7 +327,7 @@ describe("emitAudit()", () => {
 
   it("payload_hash differs for different rawInputJson values", async () => {
     await emitAudit({
-      capability: "chat.message.send",
+      capability: "send_message",
       ctx: CTX,
       principal: null,
       result: ALLOW_RESULT,
@@ -341,7 +341,7 @@ describe("emitAudit()", () => {
     mocks.latestAuditChainHash.mockResolvedValue("prev_hash_abc");
 
     await emitAudit({
-      capability: "chat.message.send",
+      capability: "send_message",
       ctx: CTX,
       principal: null,
       result: ALLOW_RESULT,
@@ -359,7 +359,7 @@ describe("emitAudit()", () => {
     mocks.latestAuditChainHash.mockResolvedValue("specific_prev_hash");
 
     await emitAudit({
-      capability: "chat.message.send",
+      capability: "send_message",
       ctx: CTX,
       principal: null,
       result: ALLOW_RESULT,
@@ -381,7 +381,7 @@ describe("emitAudit()", () => {
     mocks.latestAuditChainHash.mockRejectedValue(new Error("read timeout"));
 
     await emitAudit({
-      capability: "chat.message.send",
+      capability: "send_message",
       ctx: CTX,
       principal: null,
       result: ALLOW_RESULT,
@@ -413,7 +413,7 @@ describe("emitAudit()", () => {
       // tamper chain).
       await expect(
         emitAudit({
-          capability: "chat.message.send",
+          capability: "send_message",
           ctx: CTX,
           principal: null,
           result: ALLOW_RESULT,
@@ -449,7 +449,7 @@ describe("emitAudit()", () => {
     try {
       await expect(
         emitAudit({
-          capability: "chat.message.send",
+          capability: "send_message",
           ctx: CTX,
           principal: null,
           result: ALLOW_RESULT,
@@ -479,7 +479,7 @@ describe("emitAudit()", () => {
 
     await expect(
       emitAudit({
-        capability: "chat.message.send",
+        capability: "send_message",
         ctx: CTX,
         principal: null,
         result: ALLOW_RESULT,
@@ -497,7 +497,7 @@ describe("emitAudit()", () => {
 
     await expect(
       emitAudit({
-        capability: "chat.message.send",
+        capability: "send_message",
         ctx: CTX,
         principal: null,
         result: ALLOW_RESULT,
@@ -544,7 +544,7 @@ describe("emitAudit() — audit target and client IP", () => {
 
   it("records target_kind/target_id from the declarative audit target", async () => {
     await emitAudit({
-      capability: "ontology.neighbors",
+      capability: "get_ontology_neighbors",
       ctx: CTX,
       principal: null,
       result: ALLOW_RESULT,
@@ -560,7 +560,7 @@ describe("emitAudit() — audit target and client IP", () => {
 
   it("keeps target columns null when no target is supplied", async () => {
     await emitAudit({
-      capability: "chat.message.send",
+      capability: "send_message",
       ctx: CTX,
       principal: null,
       result: ALLOW_RESULT,
@@ -575,7 +575,7 @@ describe("emitAudit() — audit target and client IP", () => {
 
   it("records the surface-extracted client IP from ctx.clientIp", async () => {
     await emitAudit({
-      capability: "chat.message.send",
+      capability: "send_message",
       ctx: { ...CTX, clientIp: "203.0.113.7" },
       principal: null,
       result: ALLOW_RESULT,
@@ -589,7 +589,7 @@ describe("emitAudit() — audit target and client IP", () => {
 
   it("keeps ip null when the surface extracted no client IP", async () => {
     await emitAudit({
-      capability: "chat.message.send",
+      capability: "send_message",
       ctx: CTX,
       principal: null,
       result: ALLOW_RESULT,

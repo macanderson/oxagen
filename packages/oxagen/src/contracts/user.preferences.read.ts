@@ -2,7 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const userPreferencesRead = registerCapability({
-  name: "user.preferences.read",
+  name: "get_user_preferences",
   domain: "user",
   description: "Read the calling user's UI and model preferences",
   mode: "sync",

@@ -21,7 +21,7 @@ import { RELATIONSHIP_TYPE_PATTERN } from "../lib/relationship-type-pattern";
  * so no cross-workspace collision or leak is possible.
  */
 export const graphSyncPush = registerCapability({
-  name: "graph.sync.push",
+  name: "push_graph",
   domain: "graph",
   description:
     "Batch-upsert a content-addressed code or lineage subgraph into the workspace " +

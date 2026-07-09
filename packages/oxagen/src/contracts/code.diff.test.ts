@@ -76,7 +76,7 @@ describe("code.diff capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("code.diff")).toBe(codeDiff);
+    expect(getCapability("diff_code")).toBe(codeDiff);
   });
 
   it("declares the api, mcp, and agent surfaces", () => {

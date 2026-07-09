@@ -104,10 +104,10 @@ describe("environment.create route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'environment.create' and surface 'api'", async () => {
+  it("calls invoke with 'create_environment' and surface 'api'", async () => {
     await app.fetch(post(PATH, VALID_BODY));
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("environment.create");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("create_environment");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -146,10 +146,10 @@ describe("environment.list route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'environment.list' and surface 'api'", async () => {
+  it("calls invoke with 'list_environments' and surface 'api'", async () => {
     await app.fetch(post(PATH, {}));
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("environment.list");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("list_environments");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -173,10 +173,10 @@ describe("environment.get route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'environment.get' and surface 'api'", async () => {
+  it("calls invoke with 'get_environment' and surface 'api'", async () => {
     await app.fetch(post(PATH, { environmentId: "env-1" }));
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("environment.get");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("get_environment");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -207,10 +207,10 @@ describe("environment.update route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'environment.update' and surface 'api'", async () => {
+  it("calls invoke with 'update_environment' and surface 'api'", async () => {
     await app.fetch(post(PATH, { environmentId: "env-1" }));
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("environment.update");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("update_environment");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -242,10 +242,10 @@ describe("environment.delete route", () => {
     expect(await res.json()).toEqual({ ok: true });
   });
 
-  it("calls invoke with 'environment.delete' and surface 'api'", async () => {
+  it("calls invoke with 'delete_environment' and surface 'api'", async () => {
     await app.fetch(post(PATH, { environmentId: "env-1" }));
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("environment.delete");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("delete_environment");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -270,10 +270,10 @@ describe("environment.set_default route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'environment.set_default' and surface 'api'", async () => {
+  it("calls invoke with 'set_default_environment' and surface 'api'", async () => {
     await app.fetch(post(PATH, { environmentId: "env-2" }));
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("environment.set_default");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("set_default_environment");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -297,10 +297,10 @@ describe("secret.key.upsert route", () => {
     expect(await res.json()).toEqual({ id: "sk-1" });
   });
 
-  it("calls invoke with 'secret.key.upsert' and surface 'api'", async () => {
+  it("calls invoke with 'upsert_secret_key' and surface 'api'", async () => {
     await app.fetch(post(PATH, { key: "API_TOKEN", sensitive: true }));
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("secret.key.upsert");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("upsert_secret_key");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -334,10 +334,10 @@ describe("secret.key.list route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'secret.key.list' and surface 'api'", async () => {
+  it("calls invoke with 'list_secret_keys' and surface 'api'", async () => {
     await app.fetch(post(PATH, {}));
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("secret.key.list");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("list_secret_keys");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -360,10 +360,10 @@ describe("secret.key.delete route", () => {
     expect(await res.json()).toEqual({ ok: true });
   });
 
-  it("calls invoke with 'secret.key.delete' and surface 'api'", async () => {
+  it("calls invoke with 'delete_secret_key' and surface 'api'", async () => {
     await app.fetch(post(PATH, { keyId: "sk-2" }));
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("secret.key.delete");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("delete_secret_key");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -388,10 +388,10 @@ describe("secret.value.set route", () => {
     expect(await res.json()).toEqual({ ok: true });
   });
 
-  it("calls invoke with 'secret.value.set' and surface 'api'", async () => {
+  it("calls invoke with 'set_secret_value' and surface 'api'", async () => {
     await app.fetch(post(PATH, VALID_BODY));
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("secret.value.set");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("set_secret_value");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -424,10 +424,10 @@ describe("secret.value.unset route", () => {
     expect(await res.json()).toEqual({ ok: true });
   });
 
-  it("calls invoke with 'secret.value.unset' and surface 'api'", async () => {
+  it("calls invoke with 'unset_secret_value' and surface 'api'", async () => {
     await app.fetch(post(PATH, VALID_BODY));
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("secret.value.unset");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("unset_secret_value");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -452,10 +452,10 @@ describe("secret.reveal route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'secret.reveal' and surface 'api'", async () => {
+  it("calls invoke with 'reveal_secret' and surface 'api'", async () => {
     await app.fetch(post(PATH, { keyId: "sk-1", environmentId: "env-1" }));
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("secret.reveal");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("reveal_secret");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -490,10 +490,10 @@ describe("secret.export route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'secret.export' and surface 'api'", async () => {
+  it("calls invoke with 'export_secrets' and surface 'api'", async () => {
     await app.fetch(post(PATH, {}));
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("secret.export");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("export_secrets");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -525,10 +525,10 @@ describe("secret.import_env route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'secret.import_env' and surface 'api'", async () => {
+  it("calls invoke with 'import_env_secrets' and surface 'api'", async () => {
     await app.fetch(post(PATH, VALID_BODY));
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("secret.import_env");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("import_env_secrets");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 

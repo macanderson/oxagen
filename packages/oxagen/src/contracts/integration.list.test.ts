@@ -213,6 +213,6 @@ describe("integration.list capability", () => {
   // ── registry ──────────────────────────────────────────────────────────────
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("integration.list")).toBe(integrationList);
+    expect(getCapability("list_integrations")).toBe(integrationList);
   });
 });

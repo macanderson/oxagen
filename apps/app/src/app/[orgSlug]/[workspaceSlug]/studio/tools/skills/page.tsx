@@ -4,7 +4,7 @@
  * Lists all skills installed in the workspace: name, source/provenance,
  * active version, last updated, last used, and usage count, and offers a
  * "+ New skill" create flow. Data is loaded via
- * invoke('skill.workspace.list') + invoke('skill.metrics.read').
+ * invoke('list_workspace_skills') + invoke('get_skill_metrics').
  *
  * Moved from settings/skills — the old route now redirects here (see
  * settings/skills/page.tsx).
@@ -50,7 +50,7 @@ export default async function StudioSkillsPage({ params }: PageProps) {
   // Fetch installed skills list.
   let skillItems: SkillListItem[] = [];
   try {
-    const result = await invoke("skill.workspace.list", {}, ctx, { surface: "agent" });
+    const result = await invoke("list_workspace_skills", {}, ctx, { surface: "agent" });
     const typed = result as { skills: SkillListItem[] };
     skillItems = typed.skills ?? [];
   } catch {
@@ -62,7 +62,7 @@ export default async function StudioSkillsPage({ params }: PageProps) {
   if (skillItems.length > 0) {
     try {
       const metricsResult = await invoke(
-        "skill.metrics.read",
+        "get_skill_metrics",
         { slugs: skillItems.map((s) => s.slug) },
         ctx,
         { surface: "agent" },

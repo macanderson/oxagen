@@ -4,7 +4,7 @@ import { getCapability } from "../registry";
 
 describe("agent.sandbox.start capability", () => {
   it("is registered with the durable-session metadata", () => {
-    const cap = getCapability("agent.sandbox.start");
+    const cap = getCapability("start_sandbox");
     expect(cap).toBeDefined();
     expect(cap?.domain).toBe("agent");
     expect(cap?.scoped).toBe(true);

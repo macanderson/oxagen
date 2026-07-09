@@ -4,7 +4,7 @@ import { getCapability } from "../registry";
 
 describe("workflow.run capability", () => {
   it("is registered", () => {
-    expect(getCapability("workflow.run")).toBeDefined();
+    expect(getCapability("run_workflow")).toBeDefined();
   });
 
   it("parses a valid minimal input", () => {

@@ -8,7 +8,7 @@ import { logger } from "./logger";
 
 // Result → knowledge-graph projection happens at the web.search handler, not
 // here: every fanned-out web.search child runs through the kernel
-// (agent.execute-subagent → invoke("web.search")), and that handler emits
+// (agent.execute-subagent → invoke("search_web")), and that handler emits
 // `web/search.completed`, which `web.search.ingest-graph` feeds to graph.ingest
 // (LLM extraction → idempotent node/edge upserts). So swarm searches AND the
 // in-chat agent's direct searches build the graph through the same path. The
@@ -47,12 +47,12 @@ export const researchSwarmStartHandler: CapabilityHandler<typeof researchSwarmSt
   // Fan out a web.search task per query via agent.subagent.dispatch.
   // The agent.subagent.dispatch handler is registered at boot by @oxagen/agent/register.
   const dispatchResult = (await invoke(
-    "agent.subagent.dispatch",
+    "dispatch_subagent",
     {
       parentMessageId: ctx.messageId ?? ctx.requestId,
       maxParallel: input.maxParallel,
       tasks: queries.map((query) => ({
-        capabilityName: "web.search",
+        capabilityName: "search_web",
         input: {
           query,
           maxResults: 5,

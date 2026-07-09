@@ -47,6 +47,6 @@ describe("agent.mcp.consent.list capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("agent.mcp_consent.list")).toBe(agentMcpConsentList);
+    expect(getCapability("list_mcp_consents")).toBe(agentMcpConsentList);
   });
 });

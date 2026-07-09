@@ -2,7 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const skillVersionList = registerCapability({
-  name: "skill.version.list",
+  name: "list_skill_versions",
   domain: "skill",
   description:
     "List the time-ordered version history for a workspace skill, including version number, active status, latest flag, author, and timestamp",

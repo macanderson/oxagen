@@ -46,7 +46,7 @@ const fakeManifest = {
   visibility: "ga",
   category: "media",
   icon: "clapperboard",
-  contracts: ["video.generate"],
+  contracts: ["generate_video"],
   scopes: [],
 };
 
@@ -247,7 +247,7 @@ describe("plugin.org.install handler — audit event", () => {
         actorUserId: "user-1",
         orgId: "org-1",
         workspaceId: "ws-1",
-        capability: "plugin.org.install",
+        capability: "install_plugin",
         outcome: "success",
         requestId: "req-1",
       }),

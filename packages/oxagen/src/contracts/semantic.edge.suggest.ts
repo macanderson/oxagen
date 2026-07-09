@@ -3,7 +3,7 @@ import { registerCapability } from "../registry";
 import { semanticEdgeSchema } from "./semantic.edge.list";
 
 export const semanticEdgeSuggest = registerCapability({
-  name: "semantic.edge.suggest",
+  name: "suggest_semantic_edges",
   domain: "semantic",
   description:
     "Returns inferred semantic edges that are pending human review (below the auto-accept confidence threshold). Intended for the approval flow UI — edges returned here are read-only candidates until a workspace member approves or dismisses them.",

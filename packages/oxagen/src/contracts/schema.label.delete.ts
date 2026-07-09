@@ -2,7 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const schemaLabelDelete = registerCapability({
-  name: "schema.label.delete",
+  name: "delete_schema_label",
   domain: "schema",
   description: "Remove a node label and its properties from the draft.",
   mode: "sync",

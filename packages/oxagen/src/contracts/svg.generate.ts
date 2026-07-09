@@ -11,7 +11,7 @@ const renderDirectiveSchema = z.object({
 // ── Contract registration ─────────────────────────────────────────────────────
 
 export const svgGenerate = registerCapability({
-  name: "svg.generate",
+  name: "generate_svg",
   domain: "svg",
   description:
     "Generate clean, sanitized, inline SVG markup from a natural-language prompt. " +

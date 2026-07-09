@@ -143,6 +143,6 @@ describe("workspace.invite.send capability", () => {
   // ── registry ──────────────────────────────────────────────────────────────
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("workspace.invite.send")).toBe(workspaceInviteSend);
+    expect(getCapability("send_workspace_invite")).toBe(workspaceInviteSend);
   });
 });

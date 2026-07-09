@@ -163,6 +163,6 @@ describe("agent.skill.load capability", () => {
   // ── registry ──────────────────────────────────────────────────────────────
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("agent.skill.load")).toBe(agentSkillLoad);
+    expect(getCapability("load_skill")).toBe(agentSkillLoad);
   });
 });

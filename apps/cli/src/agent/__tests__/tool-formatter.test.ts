@@ -67,9 +67,9 @@ describe("formatToolCall", () => {
     );
   });
 
-  it("renders dotted capability names with dashes and no raw JSON", () => {
-    const line = formatToolCall("semantic.edge.suggest", { nodeId: "n1", limit: 3 });
-    expect(line).toContain("semantic-edge-suggest(");
+  it("renders snake capability names verbatim and no raw JSON", () => {
+    const line = formatToolCall("suggest_semantic_edges", { nodeId: "n1", limit: 3 });
+    expect(line).toContain("suggest_semantic_edges(");
     expect(line).not.toContain("{");
   });
 
@@ -109,7 +109,7 @@ describe("toolDisplayLabel", () => {
   });
 
   it("keeps dotted capability names verbatim (precise identifiers)", () => {
-    expect(toolDisplayLabel("semantic.edge.suggest")).toBe("semantic.edge.suggest");
+    expect(toolDisplayLabel("suggest_semantic_edges")).toBe("suggest_semantic_edges");
     expect(toolDisplayLabel("knowledge.query")).toBe("knowledge.query");
   });
 });
@@ -121,13 +121,13 @@ describe("getToolAccent", () => {
     expect(getToolAccent("Delete")).toBe("#FB7185"); // red — destruction
     expect(getToolAccent("Bash")).toBe("#FBBF24"); // amber — command
     expect(getToolAccent("Read")).toBe("#7CE8F4"); // cyan — read
-    expect(getToolAccent("agent.subagent.dispatch")).toBe("#A78BFA"); // violet — delegation
+    expect(getToolAccent("dispatch_subagent")).toBe("#A78BFA"); // violet — delegation
   });
 });
 
 describe("isSubagentDispatch / subagentInfo", () => {
   it("detects delegation tools", () => {
-    expect(isSubagentDispatch("agent.subagent.dispatch")).toBe(true);
+    expect(isSubagentDispatch("dispatch_subagent")).toBe(true);
     expect(isSubagentDispatch("spawnAgent")).toBe(true);
     expect(isSubagentDispatch("Read")).toBe(false);
   });
@@ -146,10 +146,10 @@ describe("isSubagentDispatch / subagentInfo", () => {
 
   it("formats a dispatch call as `slug → task`", () => {
     expect(
-      formatToolArgs("agent.subagent.dispatch", { agent: "show-agent", task: "wire the indicator" }),
+      formatToolArgs("dispatch_subagent", { agent: "show-agent", task: "wire the indicator" }),
     ).toBe("show-agent → wire the indicator");
     // Slug-only and task-only inputs still degrade gracefully.
-    expect(formatToolArgs("agent.subagent.dispatch", { agent: "solo" })).toBe("solo");
-    expect(formatToolArgs("agent.subagent.dispatch", { task: "just do it" })).toBe("just do it");
+    expect(formatToolArgs("dispatch_subagent", { agent: "solo" })).toBe("solo");
+    expect(formatToolArgs("dispatch_subagent", { task: "just do it" })).toBe("just do it");
   });
 });

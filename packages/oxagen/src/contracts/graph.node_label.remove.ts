@@ -12,8 +12,7 @@ import { LABEL_PATTERN } from "../lib/label-pattern";
  * membership check.
  */
 export const graphNodeLabelRemove = registerCapability({
-  name: "graph.node_label.remove",
-  aliases: ["graph.node.label.remove"],
+  name: "remove_node_label",
   domain: "graph",
   description: "Remove one or more labels from a node (multi-label, idempotent, leaves other labels intact).",
   mode: "sync",

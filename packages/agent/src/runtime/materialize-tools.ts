@@ -165,6 +165,17 @@ export function toModelToolName(capabilityName: string): string {
     .slice(0, MODEL_TOOL_NAME_MAX);
 }
 
+// The sandbox-execution capability family (verb-first snake_case, ADR-025):
+// the one-shot code runner plus the durable sandbox session tools. All require
+// SANDBOX_ENABLED + a configured driver, so they are gated together.
+const SANDBOX_FAMILY = new Set<string>([
+  "execute_code", // was agent.code.execute
+  "start_sandbox", // was agent.sandbox.start
+  "run_sandbox_command", // was agent.sandbox.exec
+  "snapshot_sandbox", // was agent.sandbox.snapshot
+  "stop_sandbox", // was agent.sandbox.stop
+]);
+
 const RISK_ORDER: Record<string, number> = { low: 0, medium: 1, high: 2 };
 
 function passesRisk(
@@ -237,14 +248,12 @@ export async function materializeTools(
     if (opts.allowlist && !opts.allowlist.has(cap.name)) continue;
     if (!passesRisk(cap, opts.riskCeiling)) continue;
     // Gate the entire sandbox-execution family on a configured driver: both the
-    // one-shot agent.code.execute and the durable agent.sandbox.* session tools
-    // require SANDBOX_ENABLED + a driver. Advertising a tool the model cannot
-    // actually run wastes billed steps on guaranteed failures (ADR-021 §3).
-    if (
-      !sandboxAvailable &&
-      (cap.name === "agent.code.execute" || cap.name.startsWith("agent.sandbox."))
-    )
-      continue;
+    // one-shot execute_code and the durable sandbox session tools require
+    // SANDBOX_ENABLED + a driver. Advertising a tool the model cannot actually
+    // run wastes billed steps on guaranteed failures (ADR-021 §3). (ADR-025:
+    // capability names are verb-first snake_case; the former dotted
+    // agent.code.execute / agent.sandbox.* set maps to these canonical names.)
+    if (!sandboxAvailable && SANDBOX_FAMILY.has(cap.name)) continue;
 
     // Entitlement filter: if this capability is claimed by a plugin, verify the
     // org has that plugin installed and enabled. Lazily fetch the entitled set

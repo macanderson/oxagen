@@ -3,7 +3,7 @@ import { graphNodeLabelsGet } from "./graph.node_label.get";
 
 describe("graph.node.labels.get contract", () => {
   it("is a read-only agent primitive readable by viewers", () => {
-    expect(graphNodeLabelsGet.name).toBe("graph.node_label.get");
+    expect(graphNodeLabelsGet.name).toBe("get_node_labels");
     expect(graphNodeLabelsGet.surfaces).toContain("agent");
     expect(graphNodeLabelsGet.agent?.requiresApproval).toBe(false);
     expect(graphNodeLabelsGet.defaultRoles.workspace.Viewer).toBe("allow");

@@ -641,22 +641,36 @@ async function loadKeyByKeyName(
 // ── provisioning reuse (Spec §11/§12) ─────────────────────────────────────────
 
 /**
+/**
+ * A sandbox-template secret selection: every live key ('all') or an explicit
+ * allow-list of key public ids. Mirrors the contract's SandboxSecretSelection
+ * (kept structurally local so the vault service takes no contract dependency).
+ */
+export type SecretSelection = "all" | { keyPublicIds: string[] };
+
+/**
  * Resolve the full key→value env map for an environment (override ?? default),
  * skipping unset keys, decrypting sensitive values. Used by the sandbox
  * provisioner and connector workers to inject the trusted vault env. This is
  * system injection into an ephemeral sandbox (not a human reveal), so it is NOT
  * access-logged — the run itself is metered. Callers outside a scoped handler
  * (e.g. Inngest steps) MUST wrap this in runInTenantScope.
+ *
+ * `selection` filters which keys resolve (Spec §5.2 secret_selection): 'all'
+ * (default) resolves every live key; `{ keyPublicIds }` resolves only those
+ * keys. A public id in the selection that no longer exists is silently skipped.
  */
 export async function resolveEnvironmentSecrets(actor: {
   orgId: string;
   workspaceId: string;
   environmentId: string;
+  selection?: SecretSelection;
 }): Promise<Record<string, string>> {
   const kms = resolveVaultKms();
+  const selection = actor.selection ?? "all";
   return withTenantDb(async (tx) => {
     const environmentId = await loadEnvironmentId(tx, actor.workspaceId, actor.environmentId);
-    const keys = await tx
+    const allKeys = await tx
       .select(KEY_COLUMNS)
       .from(schema.secretKeys)
       .where(
@@ -665,6 +679,10 @@ export async function resolveEnvironmentSecrets(actor: {
           isNull(schema.secretKeys.deletedAt),
         ),
       );
+    const keys =
+      selection === "all"
+        ? allKeys
+        : allKeys.filter((k) => selection.keyPublicIds.includes(k.publicId));
     const rows = await tx
       .select({
         secretKeyId: schema.secretValues.secretKeyId,

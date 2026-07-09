@@ -57,6 +57,6 @@ describe("conversation.purge capability", () => {
   // ── registry ──────────────────────────────────────────────────────────────
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("conversation.purge")).toBe(conversationPurge);
+    expect(getCapability("purge_conversations")).toBe(conversationPurge);
   });
 });

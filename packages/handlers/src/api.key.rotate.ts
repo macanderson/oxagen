@@ -22,10 +22,10 @@ import { logger } from "./logger";
 export const apiKeyRotateHandler: CapabilityHandler<typeof apiKeyRotate> = async (input, ctx) => {
   // ── Auth + scope guard ─────────────────────────────────────────────────────
   if (!ctx.userId && !ctx.apiKeyId) {
-    throw new CapabilityError("api.key.rotate", "authz_denied", "Unauthorized: no authenticated principal");
+    throw new CapabilityError("rotate_api_key", "authz_denied", "Unauthorized: no authenticated principal");
   }
   if (!ctx.orgId) {
-    throw new CapabilityError("api.key.rotate", "authz_denied", "Forbidden: orgId is required");
+    throw new CapabilityError("rotate_api_key", "authz_denied", "Forbidden: orgId is required");
   }
 
   const actorId = ctx.userId ?? ctx.apiKeyId ?? "system";
@@ -33,7 +33,7 @@ export const apiKeyRotateHandler: CapabilityHandler<typeof apiKeyRotate> = async
   // ── Role gate ─────────────────────────────────────────────────────────────
   if (!(await actorCanManageApiKeys(ctx.orgId, actorId))) {
     logger.warn({ orgId: ctx.orgId, actorId }, "api.key.rotate: rejected — insufficient org role");
-    throw new CapabilityError("api.key.rotate", "authz_denied", "Forbidden: only org Owners and Admins can rotate API keys");
+    throw new CapabilityError("rotate_api_key", "authz_denied", "Forbidden: only org Owners and Admins can rotate API keys");
   }
 
   const now = new Date();
@@ -111,7 +111,7 @@ export const apiKeyRotateHandler: CapabilityHandler<typeof apiKeyRotate> = async
     actorUserId: ctx.userId ?? null,
     orgId: ctx.orgId,
     workspaceId: null,
-    capability: "api.key.rotate",
+    capability: "rotate_api_key",
     outcome: "success",
     ip: null,
     userAgent: null,
@@ -122,7 +122,7 @@ export const apiKeyRotateHandler: CapabilityHandler<typeof apiKeyRotate> = async
     actorUserId: ctx.userId ?? null,
     orgId: ctx.orgId,
     workspaceId: null,
-    capability: "api.key.rotate",
+    capability: "rotate_api_key",
     outcome: "success",
     ip: null,
     userAgent: null,

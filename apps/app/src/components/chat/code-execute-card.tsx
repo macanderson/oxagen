@@ -71,16 +71,16 @@ export function CodeExecuteCard({
 
   // Same compact header language as ToolCallCard: icon + human label; the raw
   // capability string only appears in the `title` attribute and data attrs.
-  const { label, Icon } = toolCallMeta("agent.code.execute");
+  const { label, Icon } = toolCallMeta("execute_code");
 
   return (
     <div
       className="rounded-lg border bg-card text-card-foreground my-1 space-y-2 p-2.5 text-sm animate-in"
       data-component="code-execute-card"
-      data-capability="agent.code.execute"
+      data-capability="execute_code"
       data-status={status}
     >
-      <div className="flex min-h-9 items-center gap-2" title="agent.code.execute">
+      <div className="flex min-h-9 items-center gap-2" title="execute_code">
         <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
         <span className="truncate text-xs font-medium">{label}</span>
         <Badge variant="muted" size="sm" className="uppercase">

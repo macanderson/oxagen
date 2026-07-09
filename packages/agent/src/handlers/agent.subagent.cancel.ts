@@ -145,7 +145,7 @@ async function emitCancelTelemetry(
       source_system: `handler:${ctx.surface}`,
       stream_offset: null,
       payload: JSON.stringify({
-        capability: "agent.subagent.cancel",
+        capability: "cancel_subagent",
         fanoutId,
         cancelledChildren,
         durationMs,

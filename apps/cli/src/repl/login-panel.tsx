@@ -22,9 +22,8 @@
 import { Box, Text, useInput } from "ink";
 import React, { useEffect, useRef, useState } from "react";
 import { theme } from "../tui/theme.js";
+import { SPINNER_FRAMES } from "../tui/activity.js";
 import { runBrowserLogin, type InteractiveLoginResult } from "../commands/auth.js";
-
-const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
 function maskToken(token: string): string {
   if (token.length <= 8) return "****";

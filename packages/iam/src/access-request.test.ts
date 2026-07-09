@@ -59,7 +59,7 @@ describe("createAccessRequest()", () => {
 
   it("returns null when principal is null (graceful degradation — IAM tables may not exist)", async () => {
     const result = await createAccessRequest({
-      capability: "chat.message.send",
+      capability: "send_message",
       ctx: CTX,
       principal: null,
     });
@@ -80,7 +80,7 @@ describe("createAccessRequest()", () => {
     mocks.dbFn.mockReturnValue({ insert: mocks.insertFn });
 
     const result = await createAccessRequest({
-      capability: "chat.message.send",
+      capability: "send_message",
       ctx: CTX,
       principal: PRINCIPAL,
       justification: "need access for demo",
@@ -99,7 +99,7 @@ describe("createAccessRequest()", () => {
     mocks.dbFn.mockReturnValue({ insert: mocks.insertFn });
 
     const result = await createAccessRequest({
-      capability: "chat.message.send",
+      capability: "send_message",
       ctx: CTX,
       principal: PRINCIPAL,
     });
@@ -118,7 +118,7 @@ describe("createAccessRequest()", () => {
     mocks.dbFn.mockReturnValue({ insert: mocks.insertFn });
 
     const result = await createAccessRequest({
-      capability: "chat.message.send",
+      capability: "send_message",
       ctx: CTX,
       principal: PRINCIPAL,
     });
@@ -142,7 +142,7 @@ describe("createAccessRequest()", () => {
     mocks.dbFn.mockReturnValue({ insert: mocks.insertFn });
 
     await createAccessRequest({
-      capability: "chat.message.send",
+      capability: "send_message",
       ctx: { ...CTX, workspaceId: "ws_scope_test" },
       principal: PRINCIPAL,
     });
@@ -165,7 +165,7 @@ describe("createAccessRequest()", () => {
     mocks.dbFn.mockReturnValue({ insert: mocks.insertFn });
 
     await createAccessRequest({
-      capability: "chat.message.send",
+      capability: "send_message",
       ctx: { ...CTX, workspaceId: "" },
       principal: PRINCIPAL,
     });
@@ -193,7 +193,7 @@ describe("createAccessRequest()", () => {
     const ctxNullWs: CapabilityContext = { ...CTX, workspaceId: null as unknown as string };
 
     await createAccessRequest({
-      capability: "chat.message.send",
+      capability: "send_message",
       ctx: ctxNullWs,
       principal: PRINCIPAL,
     });

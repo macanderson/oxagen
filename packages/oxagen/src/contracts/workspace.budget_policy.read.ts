@@ -5,8 +5,7 @@ const budgetMode = z.enum(["grace", "prompt", "enforce"]);
 const enforcementKind = z.enum(["default", "ceiling"]);
 
 export const workspaceBudgetPolicyRead = registerCapability({
-  name: "workspace.budget_policy.read",
-  aliases: ["workspace.budget.policy.read"],
+  name: "get_budget_policy",
   domain: "workspace",
   description:
     "Read the workspace's governed per-turn dollar budget: whether the org/workspace enforces a budget on each agent turn in this workspace, the limit in USD, the enforcement mode (grace/prompt/enforce), the grace cushion, and whether it is a soft default (seeds members) or a hard ceiling (members cannot exceed it). Readable by all members so the composer can show an enforced ceiling.",

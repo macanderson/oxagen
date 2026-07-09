@@ -26,7 +26,7 @@ const errorCluster = z.object({
 });
 
 export const telemetryErrorCluster = registerCapability({
-  name: "telemetry.error.cluster",
+  name: "list_error_clusters",
   domain: "telemetry",
   description:
     "Cluster recent captured errors by fingerprint to see which error classes are recurring and how often across the org — the triage overview. Prefer this over reading raw errors when you want the SHAPE of what's failing platform-wide. Anti-trigger: to diagnose ONE specific failed execution (failing step, stack, suspect files) use agent.debug.trace; this is the fleet-wide histogram, not a single-run frame.",

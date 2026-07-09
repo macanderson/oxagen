@@ -225,6 +225,6 @@ describe("orgMemberRoleChangeHandler", () => {
     expect(event.eventType).toBe("org.role_changed");
     expect(event.orgId).toBe("org-abc");
     expect(event.outcome).toBe("success");
-    expect(event.capability).toBe("org.member_role.change");
+    expect(event.capability).toBe("change_member_role");
   });
 });

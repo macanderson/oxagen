@@ -101,11 +101,11 @@ describe("skill.edit capability", () => {
   // ── registry ───────────────────────────────────────────────────────────────
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("skill.edit")).toBe(skillEdit);
+    expect(getCapability("edit_skill")).toBe(skillEdit);
   });
 
   it("has the correct name", () => {
-    expect(skillEdit.name).toBe("skill.edit");
+    expect(skillEdit.name).toBe("edit_skill");
   });
 
   it("is scoped", () => {

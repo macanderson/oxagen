@@ -42,7 +42,7 @@ describe("conversation.export tool", () => {
   it("exports schema and metadata", () => {
     expect(conversationExportSchema.conversationId).toBeDefined();
     expect(conversationExportSchema.format).toBeDefined();
-    expect(conversationExportMetadata.name).toBe("conversation.export");
+    expect(conversationExportMetadata.name).toBe("export_conversation");
     // PDF export persists an asset — must not advertise read-only.
     expect(conversationExportMetadata.annotations?.readOnlyHint).toBe(false);
     expect(conversationExportMetadata.annotations?.destructiveHint).toBe(false);
@@ -63,7 +63,7 @@ describe("conversation.export tool", () => {
 
     expect(mocks.buildContext).toHaveBeenCalledOnce();
     expect(mocks.invoke).toHaveBeenCalledWith(
-      "conversation.export",
+      "export_conversation",
       args,
       fakeCtx,
       { surface: "mcp" },

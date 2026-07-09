@@ -9,7 +9,7 @@ export const AGGREGATE_CHILD_OUTPUT_CAP_BYTES = 8 * 1024;
 export const AGGREGATE_MERGED_CAP_BYTES = 16 * 1024;
 
 export const agentSubagentAggregate = registerCapability({
-  name: "agent.subagent.aggregate",
+  name: "aggregate_subagents",
   domain: "agent",
   description:
     "Return the status, per-child summaries, conflict list, and execution timeline for a subagent fanout. " +

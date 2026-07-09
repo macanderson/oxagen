@@ -86,7 +86,7 @@ export const workspaceInviteSendHandler: CapabilityHandler<typeof workspaceInvit
     actorUserId: ctx.userId,
     orgId: ctx.orgId,
     workspaceId: ctx.workspaceId ?? null,
-    capability: "workspace.invite.send",
+    capability: "send_workspace_invite",
     outcome: "success",
     ip: null,
     userAgent: null,

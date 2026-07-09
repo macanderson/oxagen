@@ -94,7 +94,7 @@ export async function GET(
 
   try {
     const out = (await invoke(
-      "conversation.export",
+      "export_conversation",
       { conversationId, format },
       capabilityCtx,
       { surface: "api" },

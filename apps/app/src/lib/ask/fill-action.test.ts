@@ -115,7 +115,7 @@ describe("fillFormAction", () => {
     const [capabilityName, capInput, ctx, opts] = vi.mocked(invoke).mock.calls[0]!;
 
     // Capability name
-    expect(capabilityName).toBe("form.fill");
+    expect(capabilityName).toBe("fill_form");
 
     // Context carries correct tenant + surface info
     expect(ctx.orgId).toBe("org-abc");

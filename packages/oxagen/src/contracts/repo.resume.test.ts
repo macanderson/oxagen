@@ -77,6 +77,6 @@ describe("repo.resume capability", () => {
   // ── registry ──────────────────────────────────────────────────────────────
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("repo.resume")).toBe(repoResume);
+    expect(getCapability("resume_repo")).toBe(repoResume);
   });
 });

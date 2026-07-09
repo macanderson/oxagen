@@ -92,7 +92,7 @@ describe("buildSystemPrompt — profiles", () => {
       expect(p).toContain("A2A");
       expect(p).toContain("message.metadata.skillId");
       expect(p).toContain("tasks/resubscribe");
-      expect(p.toLowerCase()).toContain("agent.trace.get");
+      expect(p.toLowerCase()).toContain("get_execution_trace");
     }
   });
 });

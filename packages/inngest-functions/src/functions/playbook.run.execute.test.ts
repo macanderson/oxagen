@@ -432,7 +432,7 @@ describe("playbook-run-execute Inngest function", () => {
     const toolStep = {
       id: "st", stepKey: "run_tool", name: "RunTool", stepType: "tool",
       isAsync: false, exitOnError: true,
-      config: { capability: "web.fetch", input: { url: "https://example.com" } },
+      config: { capability: "fetch_web_page", input: { url: "https://example.com" } },
     };
 
     mocks.getCapability.mockReturnValue({ agent: { requiresApproval: false } });
@@ -444,7 +444,7 @@ describe("playbook-run-execute Inngest function", () => {
     const result = await capturedHandler!({ event: { data: BASE_EVENT }, step });
     expect(result).toMatchObject({ status: "completed", stepsExecuted: 1 });
     expect(mocks.kernelInvoke).toHaveBeenCalledWith(
-      "web.fetch",
+      "fetch_web_page",
       { url: "https://example.com" },
       expect.objectContaining({ surface: "runner", orgId: ORG_ID }),
     );
@@ -456,7 +456,7 @@ describe("playbook-run-execute Inngest function", () => {
     const toolStep = {
       id: "st", stepKey: "risky_tool", name: "RiskyTool", stepType: "tool",
       isAsync: false, exitOnError: true,
-      config: { capability: "billing.credits.purchase", input: {} },
+      config: { capability: "purchase_credits", input: {} },
     };
 
     mocks.getCapability.mockReturnValue({ agent: { requiresApproval: true } });
@@ -751,7 +751,7 @@ describe("playbook-run-execute Inngest function", () => {
     const toolStep = {
       id: "st", stepKey: "run_tool", name: "RunTool", stepType: "tool",
       isAsync: false, exitOnError: true,
-      config: { capability: "web.fetch", input: { url: "https://example.com" } },
+      config: { capability: "fetch_web_page", input: { url: "https://example.com" } },
     };
 
     mocks.getCapability.mockReturnValue({ agent: { requiresApproval: false } });

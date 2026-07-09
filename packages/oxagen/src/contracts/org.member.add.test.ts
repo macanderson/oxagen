@@ -45,7 +45,7 @@ describe("org.member.add capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("org.member.add")).toBe(orgMemberAdd);
+    expect(getCapability("add_org_member")).toBe(orgMemberAdd);
   });
 
   it("defaults to deny with seat-sensitive metadata", () => {

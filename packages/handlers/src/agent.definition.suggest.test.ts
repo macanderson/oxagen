@@ -89,18 +89,18 @@ function setupWorld(opts: { skillLoaded?: boolean; schemas?: unknown[] } = {}) {
 
   mocks.invoke.mockImplementation(async (cap: string) => {
     switch (cap) {
-      case "agent.skill.load":
+      case "load_skill":
         return { loaded: skillLoaded, body: skillLoaded ? SKILL_BODY : "" };
-      case "schema.list":
+      case "list_schemas":
         return { schemas };
-      case "agent.skill.list":
+      case "list_agent_skills":
         return {
           skills: [
             { slug: "summarization", name: "Summarise Text", description: "Summarise text" },
             { slug: "deep-review", name: "Deep Review", description: "Deep code review" },
           ],
         };
-      case "skill.workspace.list":
+      case "list_workspace_skills":
         // Same two skills, now with their enabled flag: "deep-review" is disabled,
         // so it is a recommendation candidate, not an equipable one.
         return {
@@ -109,7 +109,7 @@ function setupWorld(opts: { skillLoaded?: boolean; schemas?: unknown[] } = {}) {
             { id: "sk_review", name: "Deep Review", description: "Deep code review", enabled: false },
           ],
         };
-      case "plugin.catalog.browse":
+      case "browse_plugin_catalog":
         // Catalog MCP servers not registered in this workspace (the local server
         // "GitHub"/mcp_srv1 is a differently-named label, so neither is excluded).
         return {
@@ -130,9 +130,9 @@ function setupWorld(opts: { skillLoaded?: boolean; schemas?: unknown[] } = {}) {
           nextOffset: null,
           total: 2,
         };
-      case "agent.mcp.list":
+      case "list_mcp_servers":
         return { servers: [{ publicId: "mcp_srv1", name: "GitHub" }] };
-      case "agent.definition.list":
+      case "list_agent_defs":
         return {
           agents: [
             { slug: "existing-agent", description: "already here", status: "active" },
@@ -150,7 +150,7 @@ function setupWorld(opts: { skillLoaded?: boolean; schemas?: unknown[] } = {}) {
   // capability itself (which the handler must exclude from candidates).
   mocks.listCapabilities.mockReturnValue([
     { name: "graph.query", description: "Query the knowledge graph" },
-    { name: "agent.definition.suggest", description: "self — must be excluded" },
+    { name: "suggest_agent_def", description: "self — must be excluded" },
   ]);
   mocks.getSurfaces.mockReturnValue(["agent"]);
 }
@@ -336,7 +336,7 @@ describe("agentDefinitionSuggestHandler (@oxagen/handlers)", () => {
     const base = mocks.invoke.getMockImplementation()!;
     // schema.list is unavailable; every other read keeps working.
     mocks.invoke.mockImplementation(async (cap: string, input: unknown, ctx: unknown) => {
-      if (cap === "schema.list") throw new Error("clickhouse is on fire");
+      if (cap === "list_schemas") throw new Error("clickhouse is on fire");
       return base(cap, input, ctx);
     });
     mocks.generateObjectFor.mockResolvedValue({ object: baseSynthesis() });
@@ -496,7 +496,7 @@ describe("agentDefinitionSuggestHandler (@oxagen/handlers)", () => {
     setupWorld();
     const base = mocks.invoke.getMockImplementation()!;
     mocks.invoke.mockImplementation(async (cap: string, input: unknown, ctx: unknown) => {
-      if (cap === "plugin.catalog.browse") throw new Error("registry unreachable");
+      if (cap === "browse_plugin_catalog") throw new Error("registry unreachable");
       return base(cap, input, ctx);
     });
     const synth = {
@@ -528,7 +528,7 @@ describe("agentDefinitionSuggestHandler (@oxagen/handlers)", () => {
     // as an existing agent so the de-conflict must ALSO stay within 18 chars.
     const base = mocks.invoke.getMockImplementation()!;
     mocks.invoke.mockImplementation(async (cap: string, input: unknown, ctx: unknown) => {
-      if (cap === "agent.definition.list") {
+      if (cap === "list_agent_defs") {
         return {
           agents: [
             { slug: "audit-schema-addit", description: "collision", status: "active" },

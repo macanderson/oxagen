@@ -90,6 +90,6 @@ describe("agent.definition.suggest capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("agent.definition.suggest")).toBe(agentDefinitionSuggest);
+    expect(getCapability("suggest_agent_def")).toBe(agentDefinitionSuggest);
   });
 });

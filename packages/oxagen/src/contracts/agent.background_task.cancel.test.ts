@@ -38,7 +38,7 @@ describe("agent.task.background.cancel capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("agent.background_task.cancel")).toBe(
+    expect(getCapability("cancel_background_task")).toBe(
       agentTaskBackgroundCancel,
     );
   });

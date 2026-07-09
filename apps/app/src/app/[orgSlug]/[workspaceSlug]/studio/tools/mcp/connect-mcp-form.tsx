@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/components/ui/toast";
 import { Plug } from "lucide-react";
+import { AuthenticateDialog } from "./authenticate-dialog";
 
 type TransportValue = "streamable-http" | "sse" | "stdio";
 type AuthKindValue = "oauth" | "secret" | "none";
@@ -46,7 +47,12 @@ interface ConnectMcpFormProps {
     endpointUrl: string;
     transport: TransportValue;
     authKind: AuthKindValue;
-  }) => Promise<{ ok: boolean; orgListingId?: string; error?: string }>;
+  }) => Promise<{
+    ok: boolean;
+    orgListingId?: string;
+    authKind?: AuthKindValue;
+    error?: string;
+  }>;
 }
 
 export function ConnectMcpForm({ orgSlug, workspaceSlug, connectAction }: ConnectMcpFormProps) {
@@ -58,6 +64,10 @@ export function ConnectMcpForm({ orgSlug, workspaceSlug, connectAction }: Connec
   const [authKind, setAuthKind] = React.useState<AuthKindValue>("none");
   const [pending, setPending] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [authPrompt, setAuthPrompt] = React.useState<{
+    orgListingId: string;
+    serverTitle: string;
+  } | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -85,11 +95,21 @@ export function ConnectMcpForm({ orgSlug, workspaceSlug, connectAction }: Connec
       });
       return;
     }
+    // The install probe may have upgraded the effective auth kind (a server
+    // the user marked "none" that is actually OAuth-protected).
+    const effectiveAuthKind = result.authKind ?? authKind;
+    const serverTitle = name.trim();
     toast.add({
-      title: `${name.trim()} connected`,
-      description: "The MCP server is now installed for this workspace.",
+      title: `${serverTitle} installed`,
+      description:
+        effectiveAuthKind === "oauth"
+          ? "One more step: authenticate to activate it."
+          : "The MCP server is now installed for this workspace.",
       type: "success",
     });
+    if (effectiveAuthKind === "oauth" && result.orgListingId) {
+      setAuthPrompt({ orgListingId: result.orgListingId, serverTitle });
+    }
     setName("");
     setEndpointUrl("");
     setTransport("streamable-http");
@@ -184,6 +204,20 @@ export function ConnectMcpForm({ orgSlug, workspaceSlug, connectAction }: Connec
           {pending ? "Connecting…" : "Connect server"}
         </Button>
       </div>
+
+      {authPrompt ? (
+        <AuthenticateDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setAuthPrompt(null);
+          }}
+          orgSlug={orgSlug}
+          workspaceSlug={workspaceSlug}
+          orgListingId={authPrompt.orgListingId}
+          serverTitle={authPrompt.serverTitle}
+          returnTo={`/${orgSlug}/${workspaceSlug}/studio/tools/mcp`}
+        />
+      ) : null}
     </form>
   );
 }

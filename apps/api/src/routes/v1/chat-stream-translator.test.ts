@@ -43,7 +43,7 @@ const SCRIPTED_PARTS: unknown[] = [
   { type: "finish-step" },
 ];
 
-const TOOL_NAME_MAP: Record<string, string> = { graph_query: "ontology.query" };
+const TOOL_NAME_MAP: Record<string, string> = { graph_query: "query_ontology" };
 
 function drive(parts: unknown[]): {
   events: ApiStreamEvent[];
@@ -77,12 +77,12 @@ describe("createApiStreamTranslator — SSE wire parity", () => {
       { type: "reasoning-delta", reasoningId: "r1", text: "thinking" },
       { type: "reasoning-end", reasoningId: "r1", durationMs: 0 },
       { type: "text", text: "Hello " },
-      { type: "tool-input-start", toolCallId: "c1", capability: "ontology.query" },
+      { type: "tool-input-start", toolCallId: "c1", capability: "query_ontology" },
       { type: "tool-input-delta", toolCallId: "c1", delta: '{"q":' },
       {
         type: "tool-call-start",
         toolCallId: "c1",
-        capability: "ontology.query",
+        capability: "query_ontology",
         inputPreview: { q: "x" },
         riskLevel: "low",
       },

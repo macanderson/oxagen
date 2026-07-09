@@ -8,8 +8,7 @@ import { registerCapability } from "../registry";
 // script, a human debugging a stuck fleet) can hold or probe a lock directly,
 // without running a turn.
 export const agentFileLockAcquire = registerCapability({
-  name: "agent.file_lock.acquire",
-  aliases: ["agent.file.lock.acquire"],
+  name: "acquire_file_lock",
   domain: "agent",
   description:
     "Acquire (or renew) an exclusive, TTL-bounded lock on a file so no two agents edit it concurrently. Fails with granted:false when a DIFFERENT agent already holds a live lock.",

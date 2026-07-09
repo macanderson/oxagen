@@ -17,6 +17,6 @@ describe("workspace.settings.read capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("workspace.settings.read")).toBe(workspaceSettingsRead);
+    expect(getCapability("get_workspace_settings")).toBe(workspaceSettingsRead);
   });
 });

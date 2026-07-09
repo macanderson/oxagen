@@ -46,7 +46,7 @@ describe("connection.delete capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("connection.delete")).toBe(connectionDelete);
+    expect(getCapability("delete_connection")).toBe(connectionDelete);
   });
 
   it("is async mode", () => {

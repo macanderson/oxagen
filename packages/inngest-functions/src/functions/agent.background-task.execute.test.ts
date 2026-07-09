@@ -130,7 +130,7 @@ const BASE_EVENT = {
     workspaceId: "ws_1",
     taskId: "task_pub_1",
     kind: "export",
-    payload: { capability: "agent.memory.recall", q: "test" },
+    payload: { capability: "recall_memory", q: "test" },
   },
 };
 
@@ -166,7 +166,7 @@ describe("agentBackgroundTaskExecute Inngest handler", () => {
       unknown,
       Record<string, unknown>,
     ];
-    expect(capName).toBe("agent.memory.recall");
+    expect(capName).toBe("recall_memory");
     expect(capCtx.orgId).toBe("org_1");
     expect(capCtx.workspaceId).toBe("ws_1");
     expect(capCtx.surface).toBe("runner");

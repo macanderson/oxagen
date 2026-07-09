@@ -2,7 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const pluginCredentialSetSecret = registerCapability({
-  name: "plugin.credential.set_secret",
+  name: "set_plugin_secret",
   domain: "plugin",
   description: "Store or update an encrypted credential (API key or OAuth token) for a plugin server in this workspace.",
   mode: "sync",

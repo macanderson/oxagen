@@ -84,6 +84,6 @@ describe("image.analyze capability", () => {
   // ── registry ──────────────────────────────────────────────────────────────
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("image.analyze")).toBe(imageAnalyze);
+    expect(getCapability("analyze_image")).toBe(imageAnalyze);
   });
 });

@@ -97,7 +97,7 @@ export default async function AgentToolsCapabilitiesPage({ params }: PageProps) 
     isDefault: boolean;
   }> = [];
   try {
-    const result = await invoke("plugin.registry.list", {}, ctx, { surface: "agent" });
+    const result = await invoke("list_plugin_registries", {}, ctx, { surface: "agent" });
     const typed = result as typeof initialRegistries extends Array<infer T> ? { registries: T[] } : never;
     initialRegistries = typed.registries;
   } catch (err) {

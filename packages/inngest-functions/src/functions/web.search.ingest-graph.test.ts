@@ -94,7 +94,7 @@ describe("web.search.ingest-graph", () => {
       Record<string, unknown>,
       Record<string, unknown>,
     ];
-    expect(cap).toBe("graph.ingest");
+    expect(cap).toBe("ingest_graph");
     expect(input.sourceUrl).toBe("https://a.com");
     expect(String(input.text)).toContain("Search query: ai memory startups");
     expect(String(input.text)).toContain("Mem0 raises $24M");

@@ -196,7 +196,7 @@ describe("conversation.files.list capability", () => {
   // ── registry ──────────────────────────────────────────────────────────────
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("conversation.files.list")).toBe(conversationFilesList);
+    expect(getCapability("list_conversation_files")).toBe(conversationFilesList);
   });
 
   it("has noBillingGate=true", () => {

@@ -11,6 +11,6 @@ export const mediaVideoManifest: OxagenPluginManifest = {
   category: "media",
   icon: "video",
   color: "#f59e0b",
-  contracts: ["video.generate"],
+  contracts: ["generate_video"],
   scopes: [],
 };

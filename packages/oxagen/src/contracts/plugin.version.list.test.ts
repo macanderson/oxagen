@@ -226,6 +226,6 @@ describe("plugin.version.list capability", () => {
   // ── registry ──────────────────────────────────────────────────────────────
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("plugin.version.list")).toBe(pluginVersionList);
+    expect(getCapability("list_plugin_versions")).toBe(pluginVersionList);
   });
 });

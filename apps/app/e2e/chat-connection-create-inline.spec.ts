@@ -38,7 +38,7 @@ function connectionFormEvents(
       type: "tool-call-start",
       messageId: "e2e-conn-msg-01",
       toolCallId,
-      capability: "agent.ui.render",
+      capability: "render_agent_ui",
       inputPreview: { componentId },
       riskLevel: "low",
     },

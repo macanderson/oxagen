@@ -4,7 +4,7 @@ import { getCapability } from "../registry";
 
 describe("conversation.attachment.add capability", () => {
   it("is registered", () => {
-    expect(getCapability("conversation.attachment.add")).toBeDefined();
+    expect(getCapability("add_conversation_attachment")).toBeDefined();
   });
 
   it("does not gate on billing (file linkage consumes no AI tokens)", () => {
