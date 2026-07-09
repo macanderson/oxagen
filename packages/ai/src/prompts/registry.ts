@@ -15,6 +15,7 @@
  */
 
 import { slashCommandsPromptSection } from "./slash-commands";
+import { mentionGrammarPrompt } from "./mentions";
 
 /** Lightweight skill descriptor for the prompt skill index (progressive disclosure). */
 export interface SkillIndexEntry {
@@ -299,6 +300,10 @@ This workspace can connect GitHub repositories. When the user asks about a pull 
 ---
 
 ${slashCommandsPromptSection()}
+
+---
+
+${mentionGrammarPrompt()}
 
 ---
 

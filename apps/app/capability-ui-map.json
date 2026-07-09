@@ -10,6 +10,15 @@
     "verifiedBy": "session id / agent that captured the proof"
   },
   "bindings": {
+    "search_references": {
+      "route": "/[orgSlug]/[workspaceSlug]/chat",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/chat/page.tsx",
+      "entry": "Composer @-mention picker (type '@' → pick a reference type → scoped search) and mention-chip hover hydration → POST /api/reference-search → invoke(\"search_references\")",
+      "testid": "mention-menu",
+      "proof": "apps/app/e2e/chat-mentions.spec.ts",
+      "verifiedAt": "2026-07-09",
+      "verifiedBy": "session_019E1ntgMUqV3uXN8gfsbkSG"
+    },
     "skill.workspace.list": {
       "route": "/[orgSlug]/[workspaceSlug]/studio/tools/skills",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/studio/tools/skills/page.tsx",
