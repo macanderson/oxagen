@@ -252,6 +252,8 @@ import { workspaceSettingsRead } from "./workspace.settings.read";
 import { workspaceSettingsWrite } from "./workspace.settings.write";
 import { commandMenuSearch } from "./command.menu.search";
 import { commandMenuSuggest } from "./command.menu.suggest";
+import { referenceSearch } from "./reference.search";
+import { referenceCite } from "./reference.cite";
 import { skillAuthor } from "./skill.author";
 import { skillDraft } from "./skill.draft";
 import { schemaRegistryGet } from "./schema.registry.get";
@@ -665,6 +667,8 @@ export {
   workspaceSettingsWrite,
   commandMenuSearch,
   commandMenuSuggest,
+  referenceSearch,
+  referenceCite,
   skillAuthor,
   skillDraft,
   schemaRegistryGet,
@@ -983,6 +987,8 @@ export const contracts = [
   workspaceSettingsWrite,
   commandMenuSearch,
   commandMenuSuggest,
+  referenceSearch,
+  referenceCite,
   skillAuthor,
   skillDraft,
   schemaRegistryGet,

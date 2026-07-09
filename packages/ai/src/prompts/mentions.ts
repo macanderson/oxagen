@@ -208,7 +208,11 @@ export const MENTION_TOKEN_REGEX =
 export function parseMentions(text: string): ParsedMention[] {
   const out: ParsedMention[] = [];
   for (const match of text.matchAll(MENTION_TOKEN_REGEX)) {
-    const [raw, type, slug, location, label] = match;
+    const raw = match[0];
+    const type = match[1] ?? "";
+    const slug = match[2] ?? "";
+    const location = match[3] ?? "";
+    const label = match[4] ?? "";
     if (!isMentionType(type)) continue; // unknown type — leave as plain text
     out.push({
       type,
