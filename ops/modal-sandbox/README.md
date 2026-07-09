@@ -32,7 +32,7 @@ openssl rand -hex 32   # copy the output
 modal secret create oxagen-runner MODAL_RUNNER_TOKEN=<paste-here>
 
 # 4. Deploy. Prints the public URL on success.
-modal deploy ops/modal/runner.py
+cd ops/modal-sandbox && uv sync && uv run modal deploy runner.py
 
 # 5. Wire the env on Vercel + .env.local:
 #    MODAL_RUNNER_URL   = https://<workspace>--oxagen-sandbox-fastapi-app.modal.run
@@ -45,6 +45,26 @@ modal deploy ops/modal/runner.py
 
 ```bash
 curl "$MODAL_RUNNER_URL/healthz"   # → {"status":"ok"}
+```
+
+## Redeploy on every runner.py change
+
+The TypeScript driver (`packages/sandbox/src/modal.ts`) ships with every
+monorepo deploy, but this runner only updates via `modal deploy` — nothing in
+CI ties the two together. If the driver gets a route the deployed runner
+doesn't have, every call fails with FastAPI's
+`404 {"detail":"Not Found"}` (e.g. `modal runner 404 /sandbox/create`).
+
+Diagnose drift by comparing the deployed spec against `runner.py`:
+
+```bash
+curl "$MODAL_RUNNER_URL/openapi.json" | jq '{version: .info.version, routes: (.paths | keys)}'
+```
+
+Redeploy (same app name → same URL, additive):
+
+```bash
+cd ops/modal-sandbox && uv sync && uv run modal deploy runner.py
 ```
 
 ## Cost guardrails
