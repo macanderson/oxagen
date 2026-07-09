@@ -558,9 +558,9 @@ export interface TurnRunnerOptions {
  * turn** — it composes {@link makeTurnController} + {@link makeStallDetector} so
  * no live surface has to hand-roll that pairing. Every headless and interactive
  * loop routes through it: `repl/one-shot.ts` (both entrypoints),
- * `agent/pr-fix-runner.ts`, `agent/planner.ts` (controller-only), and
- * `sessions/runner.ts`. `repl/interactive.tsx` converts to it next (it needs a
- * fleet-aware `shouldDefer`, supplied via {@link TurnRunnerStallOptions}).
+ * `agent/pr-fix-runner.ts`, `agent/planner.ts` (controller-only),
+ * `sessions/runner.ts`, and `repl/interactive.tsx` (whose fleet-aware
+ * `shouldDefer` comes in via {@link TurnRunnerStallOptions}).
  *
  * The turn completes as long as calls keep landing; it aborts only when no
  * progress (a stream delta, stage, or tool start/end — via {@link noteProgress})
