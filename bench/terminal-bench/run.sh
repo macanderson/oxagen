@@ -77,11 +77,12 @@ fi
 # init (local code graph) is ALREADY on by default — see OXAGEN_SKIP_INIT
 # (this recipe leaves it unset). The one piece that's off by default and
 # actually required for "local code graph" to mean anything is
-# OXAGEN_INSTALL_DUCKDB: without it, install()'s `oxagen init` pre-build still
-# runs, but builds an IN-MEMORY graph that's discarded the moment that process
-# exits — the later `run()` invocation (a separate process) starts cold either
-# way. OXAGEN_INSTALL_DUCKDB=1 is what makes the pre-build persist to disk so
-# run() actually reuses it.
+# OXAGEN_INSTALL_DUCKDB: without it, the `oxagen init` pre-build (now at the head
+# of run(), immediately before the task prompt) still runs, but builds an
+# IN-MEMORY graph that's discarded the moment the init process exits — the task
+# `oxagen <task>` invocation (a separate process) then starts cold either way.
+# OXAGEN_INSTALL_DUCKDB=1 is what makes the pre-build persist to disk so the task
+# process actually reuses it.
 #
 # OXAGEN_BEST_OF_N_PIPELINE=1 (dedicated gate, independent of
 # OXAGEN_NO_PIPELINE, which only affects the one-shot baseline) makes every
