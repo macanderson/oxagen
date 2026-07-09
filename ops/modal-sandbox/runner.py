@@ -690,8 +690,12 @@ async def sandbox_exec(
         # Route through the alias trampoline: the agent's command rides in
         # $OXAGEN_EXEC_CMD (env transport also sidesteps argv quoting issues)
         # and is eval'd after grep→rg / find→fd / glob aliases are defined.
+        # OXAGEN_CWD restores the caller's working directory so `cd` persists
+        # across exec calls (durable-terminal cwd persistence).
         exec_env = dict(req.env or {})
         exec_env["OXAGEN_EXEC_CMD"] = req.command
+        if req.cwd:
+            exec_env["OXAGEN_CWD"] = req.cwd
         p = await modal.Sandbox.exec.aio(
             sb,
             "sh", "-c", _FAST_ALIAS_TRAMPOLINE,

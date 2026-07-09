@@ -10,6 +10,19 @@ export type { AgentSandboxListInput, AgentSandboxListOutput };
 
 type Sandbox = AgentSandboxListOutput["sandboxes"][number];
 
+/**
+ * Pull the human-friendly `label` out of the session's metadata JSON blob.
+ * Metadata is an untyped jsonb bag (`SessionMeta`), so we defensively check the
+ * shape rather than trust a cast — a non-string / missing label degrades to null.
+ */
+function readLabel(metadata: unknown): string | null {
+  if (metadata && typeof metadata === "object") {
+    const label = (metadata as { label?: unknown }).label;
+    if (typeof label === "string" && label.trim().length > 0) return label;
+  }
+  return null;
+}
+
 // Columns projected for the listing. Deliberately excludes the driver-internal
 // sandboxId / snapshotId — the client never needs the live driver handle, only
 // the opaque public id (sbx_…).
