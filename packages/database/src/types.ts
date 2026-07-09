@@ -22,6 +22,7 @@ import type {
   principalRoleAssignments,
   accessRequests,
   userPreferences,
+  workspaceUserPreferences,
   fontSizeEnum,
   densityEnum,
   pendingPromptBehaviorEnum,
@@ -100,6 +101,12 @@ export type UserPreferences = InferSelectModel<typeof userPreferences>;
 
 /** INSERT shape for `auth.user_preferences` (id/timestamps optional). */
 export type NewUserPreferences = InferInsertModel<typeof userPreferences>;
+
+/** Full SELECT row from `auth.workspace_user_preferences`. */
+export type WorkspaceUserPreferences = InferSelectModel<typeof workspaceUserPreferences>;
+
+/** INSERT shape for `auth.workspace_user_preferences` (id/timestamps optional). */
+export type NewWorkspaceUserPreferences = InferInsertModel<typeof workspaceUserPreferences>;
 
 /**
  * Closed set of font-size preference values.
