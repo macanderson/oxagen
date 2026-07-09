@@ -127,6 +127,11 @@ export const leads = cmsSchema.table(
     source: text("source"),
     /** Landing page path + hash at submit time, for attribution. */
     pagePath: text("page_path"),
+    /**
+     * Free-form note from the lead (the demo form's "What are you building?").
+     * Book-gate submissions leave it null.
+     */
+    message: text("message"),
     /** Explicit marketing-contact consent (defaults true; the form states it). */
     marketingConsent: boolean("marketing_consent").notNull().default(true),
   },
