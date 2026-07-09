@@ -144,7 +144,13 @@ test.describe("sandbox templates — create, set-default, export/import, bind ag
 
     // Open the agent's detail page (where the Environments card renders).
     await page.goto(`/${orgSlug}/default/studio/agents`);
-    await page.getByTestId(`agent-row-${agentSlug}`).click();
+    // The row itself is not clickable — the name cell's link navigates to the
+    // agent detail page.
+    await page
+      .getByTestId(`agent-row-${agentSlug}`)
+      .getByRole("link")
+      .first()
+      .click();
     await expect(page.getByTestId("agent-environments-card")).toBeVisible({
       timeout: 20_000,
     });
@@ -152,7 +158,7 @@ test.describe("sandbox templates — create, set-default, export/import, bind ag
     // Bind the Production environment (bind_agent_environment).
     await page
       .getByTestId("agent-bind-env-select")
-      .selectOption({ label: /Production/ });
+      .selectOption({ label: "Production" });
     await page.getByTestId("agent-bind-submit").click();
     await expect(
       page.getByTestId("agent-binding-row-production"),
