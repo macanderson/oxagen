@@ -121,6 +121,8 @@ import { svgGenerate } from "./svg.generate";
 import { systemInstallInstructions } from "./system.install.instructions";
 import { userPreferencesRead } from "./user.preferences.read";
 import { userPreferencesWrite } from "./user.preferences.write";
+import { userWorkspacePreferencesRead } from "./user.workspace_preferences.read";
+import { userWorkspacePreferencesWrite } from "./user.workspace_preferences.write";
 import { budgetPolicyRead } from "./budget.policy.read";
 import { budgetPolicyWrite } from "./budget.policy.write";
 import { workspaceBudgetPolicyRead } from "./workspace.budget_policy.read";
@@ -531,6 +533,8 @@ export {
   systemInstallInstructions,
   userPreferencesRead,
   userPreferencesWrite,
+  userWorkspacePreferencesRead,
+  userWorkspacePreferencesWrite,
   budgetPolicyRead,
   budgetPolicyWrite,
   workspaceBudgetPolicyRead,
@@ -844,6 +848,8 @@ export const contracts = [
   systemInstallInstructions,
   userPreferencesRead,
   userPreferencesWrite,
+  userWorkspacePreferencesRead,
+  userWorkspacePreferencesWrite,
   budgetPolicyRead,
   budgetPolicyWrite,
   workspaceBudgetPolicyRead,
