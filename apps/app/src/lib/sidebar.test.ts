@@ -79,8 +79,8 @@ describe("resolveSidebarMode", () => {
 //   workspace: 7 items (Ask, Knowledge, Activity | Agents, Agent Tools |
 //       Marketplace, Settings)
 //     — Activity is the agent run-trace surface (recent runs + per-run span
-//       tree). The Studio group holds Agents (the builder) and Agent Tools
-//       (the single equip home: skills, MCP servers, capabilities).
+//       tree). The Studio group holds Agents (the builder); Agent Tools is a
+//       tab inside the Studio surface, not a primary nav item.
 //       Marketplace + Settings are pinned to the footer group. The old
 //       catch-all Automation area stays removed; "Workflows" is gone too
 //       (banned term).
@@ -89,10 +89,10 @@ describe("resolveSidebarMode", () => {
 // ---------------------------------------------------------------------------
 
 describe("getSidebarConfig item counts", () => {
-  it("workspace config has exactly 7 items", () => {
+  it("workspace config has exactly 6 items", () => {
     const config = getSidebarConfig("workspace");
     expect(config.mode).toBe("workspace");
-    expect(config.items).toHaveLength(7);
+    expect(config.items).toHaveLength(6);
   });
 
   it("org config has 6 items by default (access filtered for non-enterprise)", () => {
@@ -120,10 +120,10 @@ describe("getSidebarConfig item counts", () => {
     expect(returnItems[0]?.id).toBe("back");
   });
 
-  it("workspace config 'tools' group holds exactly Agents and Agent Tools", () => {
+  it("workspace config 'tools' group holds exactly Agents (Agent Tools lives in the Studio tabs, not the nav)", () => {
     const items = getSidebarConfig("workspace").items;
     const toolsItems = items.filter((item) => item.group === "tools");
-    expect(toolsItems.map((i) => i.id)).toEqual(["agents", "agent-tools"]);
+    expect(toolsItems.map((i) => i.id)).toEqual(["agents"]);
   });
 
   it("does NOT surface standalone Skills / Tools / Subagent Runs / Workflows / Automation items", () => {
@@ -134,13 +134,14 @@ describe("getSidebarConfig item counts", () => {
     expect(ids).not.toContain("agent-runs");
     expect(ids).not.toContain("workflows");
     expect(ids).not.toContain("automation");
+    // Agent Tools is reachable via the Studio tabs, never as its own nav item.
+    expect(ids).not.toContain("agent-tools");
     // The clean spec tree, in order. Activity is the run-trace surface.
     expect(ids).toEqual([
       "ask",
       "knowledge",
       "activity",
       "agents",
-      "agent-tools",
       "marketplace",
       "settings",
     ]);
@@ -196,10 +197,6 @@ describe("href builders produce correct paths", () => {
 
     it("agents -> /{org}/{ws}/studio/agents", () => {
       expect(findItem("agents").href(wsCtx)).toBe("/acme/production/studio/agents");
-    });
-
-    it("agent-tools -> /{org}/{ws}/studio/tools", () => {
-      expect(findItem("agent-tools").href(wsCtx)).toBe("/acme/production/studio/tools");
     });
 
     it("settings -> /{org}/{ws}/settings", () => {
