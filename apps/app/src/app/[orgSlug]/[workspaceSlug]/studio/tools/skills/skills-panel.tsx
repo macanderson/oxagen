@@ -137,7 +137,7 @@ export function SkillsPanel({
         <div className="rounded-md border bg-card overflow-x-auto" data-testid="skills-table">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b bg-muted/40">
+              <tr className="border-b">
                 <th className="px-4 py-3 text-left font-medium text-muted-foreground">Name</th>
                 <th className="px-4 py-3 text-left font-medium text-muted-foreground">Source</th>
                 <th className="px-4 py-3 text-left font-medium text-muted-foreground">Version</th>

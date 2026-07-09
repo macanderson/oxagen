@@ -80,7 +80,7 @@ export default async function StudioAgentsPage({ params }: PageProps) {
         >
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b bg-muted/40">
+              <tr className="border-b">
                 <th className="px-4 py-3 text-left font-medium text-muted-foreground">
                   Name
                 </th>

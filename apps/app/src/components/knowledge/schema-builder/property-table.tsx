@@ -56,7 +56,7 @@ export function PropertyTable({
             Description + Example get the largest share since that's the data the
             user is typing and reading back. */}
         <table className="w-full table-fixed text-sm">
-          <thead className="bg-muted/50">
+          <thead className="border-b border-border">
             <tr>
               <th className="px-3 py-2 text-left font-medium text-muted-foreground w-[16%]">Key</th>
               <th className="px-3 py-2 text-left font-medium text-muted-foreground w-[14%]">Type</th>

@@ -60,8 +60,8 @@ export function DatasetsClient({ datasets }: DatasetsClientProps) {
   return (
     <div className="rounded-lg border border-border/60" data-testid="evals-datasets-table">
       <table className="w-full border-collapse text-sm">
-        <thead className="bg-muted/60">
-          <tr className="text-left text-xs uppercase tracking-wide text-muted-foreground">
+        <thead>
+          <tr className="border-b border-border/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
             <th className="px-4 py-2 font-medium">Name</th>
             <th className="px-4 py-2 font-medium">Slug</th>
             <th className="px-4 py-2 font-medium">Items</th>

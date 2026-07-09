@@ -34,10 +34,9 @@ const Card = React.forwardRef<HTMLDivElement, CardProps>(
 Card.displayName = "Card";
 
 /**
- * CardHeader — a SUBTLY TINTED header (Graphite skin): just a hint of separation
- * from the card surface — a touch of gray on the white card in light mode, one
- * step up from the near-black card in dark mode — with the normal flipping ink
- * (dark text in light, soft white in dark). `rounded-t-xl` matches the Card
+ * CardHeader — a FLAT header that blends with the card surface: no shaded
+ * band, just a hairline `border-b` separating it from the body (the ink still
+ * flips per-theme via `--card-header-fg`). `rounded-t-xl` matches the Card
  * radius so it sits flush; the descendant `[&_p]` rule dims CardDescription to
  * 70% of the header ink so it stays legible.
  */
