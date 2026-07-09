@@ -11,6 +11,7 @@
 import { Box, Text } from "ink";
 import React, { useMemo } from "react";
 import { theme } from "../tui/theme.js";
+import { sunsetColorAt } from "../tui/banner.js";
 import { formatUsd } from "../agent/model-router.js";
 import { MessageView, humanizeTokens, type Message } from "./components.js";
 import type { DiffTheme } from "../tui/terminal-theme.js";
@@ -208,29 +209,76 @@ export function TranscriptViewport({
 
 // ── Live-stats panel dock ─────────────────────────────────────────────────────
 
-/** One bordered, captioned panel — the dock's shared shape (mirrors agent-sidebar.tsx's private Panel). */
+/**
+ * Split a string into runs of same-colored characters along the app's sunset
+ * gradient (the SAME amber→burnt-red sweep the OXAGEN banner uses), mapping
+ * character `i` of the whole dock row to its horizontal position `t ∈ [0,1]`.
+ * `spanStart`/`spanEnd` locate this fragment within the full row so a panel's
+ * title continues the gradient exactly where the previous panel left off,
+ * rather than restarting per-panel — the five panels read as one sweep.
+ */
+function gradientTextRuns(
+  text: string,
+  spanStart: number,
+  spanEnd: number,
+): Array<{ text: string; color: string }> {
+  const runs: Array<{ text: string; color: string }> = [];
+  const len = text.length;
+  let run = "";
+  let color = "";
+  for (let i = 0; i < len; i++) {
+    const local = len <= 1 ? 0 : i / (len - 1);
+    const c = sunsetColorAt(spanStart + (spanEnd - spanStart) * local);
+    if (c === color) {
+      run += text[i];
+    } else {
+      if (run) runs.push({ text: run, color });
+      run = text[i] ?? "";
+      color = c;
+    }
+  }
+  if (run) runs.push({ text: run, color });
+  return runs;
+}
+
+/**
+ * One bordered, captioned panel — the dock's shared shape (mirrors
+ * agent-sidebar.tsx's private Panel). Its caption and border are painted with
+ * the OXAGEN sunset gradient: `gradientStart`/`gradientEnd` are the panel's
+ * `t ∈ [0,1]` position within the full dock row, so all panels together sweep
+ * the identical amber→burnt-red gradient as the ASCII banner.
+ */
 function DockPanel({
   title,
-  accent,
+  gradientStart,
+  gradientEnd,
   width,
   children,
 }: {
   title: string;
-  accent: string;
+  gradientStart: number;
+  gradientEnd: number;
   width: number;
   children: React.ReactNode;
 }): React.ReactElement {
+  // Border tone = the gradient color at the panel's midpoint, so each box's
+  // frame sits at its own point along the same sweep the titles trace.
+  const borderColor = sunsetColorAt((gradientStart + gradientEnd) / 2);
   return (
     <Box
       flexDirection="column"
       width={width}
       height={DOCK_PANEL_HEIGHT}
       borderStyle="round"
-      borderColor={theme.dim}
+      borderColor={borderColor}
       paddingX={1}
     >
-      <Text color={accent} bold>
-        {title}
+      <Text bold>
+        {gradientTextRuns(title, gradientStart, gradientEnd).map((run, i) => (
+          <Text key={i} color={run.color} bold>
+            {run.text}
+          </Text>
+        ))}
       </Text>
       <Box flexDirection="column">{children}</Box>
     </Box>
@@ -304,6 +352,17 @@ export function TelemetryDock({
   const gap = DOCK_PANEL_GAP;
   const panelWidth = dockPanelWidth(cols);
 
+  // Each panel owns one equal slice of the [0,1] gradient axis, in left→right
+  // order, so the five panels' captions + borders together sweep the exact
+  // amber→burnt-red sunset gradient the OXAGEN banner uses. Kept as a helper so
+  // adding/removing a panel only requires updating DOCK_PANEL_COUNT.
+  const span = (
+    index: number,
+  ): { gradientStart: number; gradientEnd: number } => ({
+    gradientStart: index / DOCK_PANEL_COUNT,
+    gradientEnd: (index + 1) / DOCK_PANEL_COUNT,
+  });
+
   const { models, turn, tools } = telemetry;
   const elapsedMs = turn.turnStartedAt != null ? now - turn.turnStartedAt : 0;
   const elapsedSec = Math.max(1, elapsedMs / 1000);
@@ -316,7 +375,7 @@ export function TelemetryDock({
 
   return (
     <Box flexDirection="row" gap={gap}>
-      <DockPanel title="MODELS" accent={theme.violet} width={panelWidth}>
+      <DockPanel title="MODELS" {...span(0)} width={panelWidth}>
         <Text wrap="truncate-end">
           {label("triage", 8)}
           <Text dimColor>{models.planner ?? "—"}</Text>
@@ -331,7 +390,7 @@ export function TelemetryDock({
         </Text>
       </DockPanel>
 
-      <DockPanel title="TURN" accent={theme.cyan} width={panelWidth}>
+      <DockPanel title="TURN" {...span(1)} width={panelWidth}>
         <Text wrap="truncate-end">
           {label("phase", 7)}
           <Text color={theme.cyan}>{PHASE_TITLE[turn.phase] ?? turn.phase}</Text>
@@ -350,7 +409,7 @@ export function TelemetryDock({
         </Text>
       </DockPanel>
 
-      <DockPanel title="TOKENS" accent={AMBER} width={panelWidth}>
+      <DockPanel title="TOKENS" {...span(2)} width={panelWidth}>
         <Text wrap="truncate-end">
           <Text color={theme.cyan}>{"↑"}{humanizeTokens(metrics.sessionTokensIn)}</Text>
           {"  "}
@@ -366,7 +425,7 @@ export function TelemetryDock({
         </Text>
       </DockPanel>
 
-      <DockPanel title="TOOLS" accent={GREEN} width={panelWidth}>
+      <DockPanel title="TOOLS" {...span(3)} width={panelWidth}>
         <Text wrap="truncate-end" dimColor>
           {toolCell(TRACKED_TOOLS[0])}  {toolCell(TRACKED_TOOLS[1])}
         </Text>
@@ -378,7 +437,7 @@ export function TelemetryDock({
         </Text>
       </DockPanel>
 
-      <DockPanel title="REPO" accent="#F472B6" width={panelWidth}>
+      <DockPanel title="REPO" {...span(4)} width={panelWidth}>
         <Text wrap="truncate-end" dimColor>
           {abbreviatePath(repo.root, Math.max(6, panelWidth - 4))}
         </Text>
