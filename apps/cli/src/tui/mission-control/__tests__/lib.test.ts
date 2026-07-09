@@ -11,6 +11,7 @@ import {
   emptyLine,
   foldFocusEvents,
   formatElapsed,
+  hasLiveTimers,
   parseAtRef,
   stateGlyph,
   sumUsage,
@@ -93,6 +94,30 @@ describe("roster math", () => {
   it("sums usage across the roster", () => {
     const total = sumUsage([view({}), view({})]);
     expect(total).toEqual({ inputTokens: 2, outputTokens: 4, costUsd: 1 });
+  });
+});
+
+describe("hasLiveTimers", () => {
+  it("is true while any session is active (queued/running/waiting)", () => {
+    for (const s of ["queued", "running", "waiting"] as const) {
+      expect(hasLiveTimers([view({ derivedState: "done" }), view({ derivedState: s })], false)).toBe(
+        true,
+      );
+    }
+  });
+  it("is false when every session is inert and not draining", () => {
+    const inert = [
+      view({ derivedState: "done" }),
+      view({ derivedState: "failed" }),
+      view({ derivedState: "cancelled" }),
+      view({ derivedState: "orphaned" }),
+    ];
+    expect(hasLiveTimers(inert, false)).toBe(false);
+    expect(hasLiveTimers([], false)).toBe(false);
+  });
+  it("is true while draining even if no session is active", () => {
+    expect(hasLiveTimers([view({ derivedState: "done" })], true)).toBe(true);
+    expect(hasLiveTimers([], true)).toBe(true);
   });
 });
 

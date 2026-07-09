@@ -978,7 +978,7 @@ export function ScopeCard({
   );
 }
 
-export function MessageView({
+function MessageViewImpl({
   msg,
   diffTheme,
   expanded = false,
@@ -1070,6 +1070,22 @@ export function MessageView({
     </Box>
   );
 }
+
+/**
+ * One transcript row. Wrapped in `React.memo` because the transcript re-renders
+ * on a hot path: in full-screen mode `TranscriptViewport` maps the visible
+ * committed rows on EVERY frame (each streamed token, the 1Hz clock tick), and
+ * every idle re-render of the container would otherwise re-run every row. A
+ * committed message object is immutable — the streaming updater in
+ * interactive.tsx only ever appends or replaces the LAST turn entry, so all
+ * prior rows keep a stable identity across frames — which makes the default
+ * shallow prop comparison a perfect fit: unchanged rows skip re-rendering, the
+ * one live/streaming row (a fresh object each token) re-renders, and toggling
+ * `expanded` (Ctrl-O) changes the prop so every row re-renders as intended.
+ * (In inline mode `<Static>` already prevents re-render of committed rows, so
+ * the memo is simply harmless there.)
+ */
+export const MessageView = React.memo(MessageViewImpl);
 
 // ── End-of-turn summary card ──────────────────────────────────────────────────
 

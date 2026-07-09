@@ -40,6 +40,7 @@ import {
   countByState,
   editLine,
   emptyLine,
+  hasLiveTimers,
   parseAtRef,
   sumUsage,
   type LineState,
@@ -202,11 +203,20 @@ export function MissionControlApp({
     };
   }, [manager]);
 
-  // Steady animation tick for elapsed clocks (spinners / live timers).
+  // Animation tick for the live elapsed clocks. The state glyphs are static and
+  // the clocks resolve to whole seconds (formatElapsed), so one tick per second
+  // is all the display needs — and only while something is actually counting.
+  // When the fleet is idle (no active session, not draining) nothing changes
+  // second-to-second, so we schedule no interval at all rather than redraw an
+  // identical frame forever. The clocks are computed from `Date.now()`, so when
+  // work resumes the tick restarts and every elapsed value is correct with no
+  // drift from the paused stretch.
+  const animating = hasLiveTimers(roster, draining);
   useEffect(() => {
-    const id = setInterval(() => setFrame((f) => f + 1), 100);
+    if (!animating) return;
+    const id = setInterval(() => setFrame((f) => f + 1), 1000);
     return () => clearInterval(id);
-  }, []);
+  }, [animating]);
 
   // ── Selection ──────────────────────────────────────────────────────────────
 
