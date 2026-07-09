@@ -191,7 +191,7 @@ describe("plugin.org.install handler", () => {
   });
 
   it("calls invoke with install args", async () => {
-    const fakeOutput = { orgListingId: "orl_1" };
+    const fakeOutput = { orgListingId: "orl_1", authKind: "none" as const };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = {
