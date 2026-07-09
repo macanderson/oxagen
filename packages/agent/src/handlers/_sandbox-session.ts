@@ -18,6 +18,7 @@ import {
   type SandboxImageKind,
   type SandboxSessionSpec,
 } from "@oxagen/sandbox";
+import type { SecretSelection } from "@oxagen/plugins";
 import type { CapabilityContext } from "../types";
 
 export class DurableSandboxUnavailableError extends Error {
@@ -50,10 +51,17 @@ export class SandboxSessionGoneError extends Error {
   }
 }
 
-/** Resolve the active driver and narrow it to a durable-capable one, or throw. */
-export function requireDurableDriver(): DurableSandboxDriver {
+/**
+ * Resolve the active driver and narrow it to a durable-capable one, or throw.
+ *
+ * An optional `provider` (from a sandbox template) selects that driver instead
+ * of the deployment default. A provider whose driver cannot hold durable
+ * sessions (docker, vercel) or is unconfigured (modal without creds) fails fast
+ * — a template that demands a non-session provider never provisions.
+ */
+export function requireDurableDriver(provider?: string): DurableSandboxDriver {
   if (!isSandboxAvailable()) throw new DurableSandboxUnavailableError();
-  const driver = getSandbox();
+  const driver = getSandbox(provider);
   if (!isDurableSandboxDriver(driver)) throw new DurableSandboxUnavailableError();
   return driver;
 }
@@ -73,6 +81,18 @@ export interface SessionMeta {
    * migration — and absent for sessions started without an environment.
    */
   environmentId?: string;
+  /**
+   * Sandbox-template config frozen onto the session at start time so every
+   * `agent.sandbox.exec` run and any snapshot restore reproduce the exact
+   * environment. All optional (absent for sessions started without a template).
+   */
+  imageRef?: string;
+  vcpu?: number;
+  diskMb?: number;
+  /** Template vault secret selection (Spec §5.2) applied at exec-time injection. */
+  secretSelection?: SecretSelection;
+  /** Template literal_env — non-sensitive config injected at lowest precedence. */
+  literalEnv?: Record<string, string>;
 }
 
 export interface SessionRow {
@@ -117,7 +137,10 @@ function toRow(raw: Record<string, unknown> | undefined): SessionRow | null {
 export function specFromRow(row: SessionRow, ctx: CapabilityContext): SandboxSessionSpec {
   return {
     image: row.image,
+    ...(row.metadata.imageRef ? { imageRef: row.metadata.imageRef } : {}),
     memoryMb: row.metadata.memoryMb,
+    ...(row.metadata.vcpu !== undefined ? { vcpu: row.metadata.vcpu } : {}),
+    ...(row.metadata.diskMb !== undefined ? { diskMb: row.metadata.diskMb } : {}),
     ttlSeconds: row.metadata.ttlSeconds,
     idleTimeoutSeconds: row.metadata.idleTimeoutSeconds,
     network: row.metadata.network,
