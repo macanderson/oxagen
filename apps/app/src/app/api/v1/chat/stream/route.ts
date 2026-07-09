@@ -58,7 +58,7 @@ import { streamMediaGeneration } from "./media-generation";
 import { createTurnTranslator, emitUsageEvent } from "./translate-stream";
 import { formatStreamError } from "./stream-parts";
 import { buildHistoryMessages, collectRecentAttachmentPublicIds } from "./history";
-import { resolveAttachmentImages, resolveAttachmentMedia } from "./attachments";
+import { resolveAttachmentImages, resolveAttachmentMediaDetailed } from "./attachments";
 import { decideAttachmentRouting } from "./attachment-routing";
 import {
   recallWorkspaceMemoryDetailed,
@@ -452,11 +452,33 @@ export async function POST(request: NextRequest): Promise<Response> {
   let videoAttachments: Array<{ data: Buffer; mediaType: string }> = [];
   if (attachments.length > 0) {
     const publicIds = attachments.map((a) => a.publicId);
-    const resolved = await resolveAttachmentMedia(publicIds, {
-      orgId: tenant.id,
-      workspaceId: workspace.id,
-    });
-    if (resolved.size !== publicIds.length) {
+    const { resolved, notFound, fetchFailed } = await resolveAttachmentMediaDetailed(
+      publicIds,
+      { orgId: tenant.id, workspaceId: workspace.id },
+    );
+    // A genuinely missing row is user-fixable (unknown/foreign/not-ready/
+    // deleted) → 422 with the "re-attach" guidance. A row that EXISTS but whose
+    // bytes momentarily failed to fetch is NOT the user's fault → retryable 502.
+    // Splitting the two ends the historical P0 where every attachment failure
+    // (including transient storage blips) was blamed on the user.
+    if (fetchFailed.length > 0) {
+      logger.error(
+        { orgId: tenant.id, workspaceId: workspace.id, fetchFailed, notFound },
+        "[chat/stream] attachment bytes failed to fetch from storage",
+      );
+      return NextResponse.json(
+        {
+          error:
+            "We found your attachment but couldn't load it from storage just now. This is usually temporary — please try sending again in a moment.",
+        },
+        { status: 502 },
+      );
+    }
+    if (notFound.length > 0) {
+      logger.warn(
+        { orgId: tenant.id, workspaceId: workspace.id, notFound },
+        "[chat/stream] attachment publicIds did not resolve for this tenant",
+      );
       return NextResponse.json(
         {
           error:

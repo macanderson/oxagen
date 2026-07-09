@@ -17,6 +17,12 @@ import type { Message } from "../components.js";
 import type { SessionMetrics } from "../../agent/metrics.js";
 import type { RepoInfo } from "../use-repo-info.js";
 
+/** Drop ANSI SGR color escapes so a caption split into per-character gradient
+ *  runs still asserts as its plain text (the dock titles use the sunset sweep). */
+function stripAnsi(s: string): string {
+  return s.replace(/\u001b\[[0-9;]*m/g, "");
+}
+
 function emptyMetrics(): SessionMetrics {
   return {
     turnTokensIn: 0,
@@ -223,7 +229,11 @@ describe("TelemetryDock", () => {
         repo={fixtureRepo({ root: "/Users/mac/oxagen-repl2", branch: "main", prNumber: 42 })}
       />,
     );
-    const frame = lastFrame() ?? "";
+    // The panel captions are painted with the OXAGEN sunset gradient, so each
+    // title is split into per-character color runs — ANSI escapes are
+    // interleaved between letters and "MODELS" is no longer one raw substring.
+    // Strip color to assert the plain caption text renders.
+    const frame = stripAnsi(lastFrame() ?? "");
     expect(frame).toContain("MODELS");
     expect(frame).toContain("TURN");
     expect(frame).toContain("TOKENS");
@@ -239,6 +249,30 @@ describe("TelemetryDock", () => {
     expect(frame).toContain("main");
     expect(frame).toContain("#42");
     expect(frame).toContain("oxagen-repl2"); // tail of the worktree root path
+  });
+
+  it("paints the panel captions with the OXAGEN sunset gradient (not the old per-panel accents)", () => {
+    const { lastFrame } = render(
+      <TelemetryDock
+        telemetry={INITIAL_TELEMETRY_STATE}
+        metrics={emptyMetrics()}
+        cacheHit={0}
+        isStreaming={false}
+        now={0}
+        cols={120}
+        repo={fixtureRepo()}
+      />,
+    );
+    const raw = lastFrame() ?? "";
+    // The gradient's endpoints: amber (250;168;…) sweeps to burnt red
+    // (185;28;28). The leftmost panel (MODELS) must carry the amber end and the
+    // rightmost (REPO) the burnt-red end — proving the five panels sweep the
+    // single banner gradient left→right rather than five independent accents.
+    expect(raw).toContain("\u001b[38;2;251;191;36m"); // amber (#FBBF24), MODELS side
+    expect(raw).toContain("\u001b[38;2;185;28;28m"); // burnt red (#B91C1C), REPO side
+    // The old fixed accents must be gone: violet (124;232;244 was cyan) /
+    // pink #F472B6 = 244;114;182.
+    expect(raw).not.toContain("\u001b[38;2;244;114;182m"); // old REPO pink
   });
 
   it("ticks tok/s and ↓ from the in-flight stream estimate before any usage settles", () => {

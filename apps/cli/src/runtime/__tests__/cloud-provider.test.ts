@@ -53,6 +53,10 @@ describe("GatewayCloudProvider", () => {
     expect(caps.contextWindow).toBe(200000);
   });
 
+  it("exposes the concrete gateway slug via slug() (what the coordinator seam hands the engine)", () => {
+    expect(provider().slug()).toBe(HAIKU.slug);
+  });
+
   it("is available only when a credential resolves", async () => {
     expect(await provider().isAvailable()).toBe(true);
     expect(await provider({ resolveKey: () => null }).isAvailable()).toBe(false);

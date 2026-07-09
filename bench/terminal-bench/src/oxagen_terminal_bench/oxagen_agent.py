@@ -290,6 +290,29 @@ def _task_budget_flags() -> list[str]:
     return [f"--budget {usd:g}", f"--budget-mode {shlex.quote(mode)}"]
 
 
+def _max_steps_flags() -> list[str]:
+    """Per-task hard step cap (`--max-steps`, honored directly by the engine's
+    `while steps < maxSteps` loop). A RELIABLE per-task bound that — unlike the
+    dollar budget guard, which is starved by a `result.usage`-vs-`step.usage`
+    discrepancy through the gateway's openai-compatible provider and so never
+    fires in bypass (documented, deferred) — cannot silently no-op: a doomed
+    task that thrashes is stopped at the cap while solvable tasks (~17-21 steps
+    observed) finish well under it. Set OXAGEN_MAX_STEPS (e.g. "60"); unset ⇒
+    the engine default (256)."""
+    raw = os.environ.get("OXAGEN_MAX_STEPS")
+    if not raw or not raw.strip():
+        return []
+    try:
+        n = int(raw.strip())
+    except ValueError:
+        print(
+            f"oxagen-adapter: OXAGEN_MAX_STEPS={raw!r} is not an int; using engine default",
+            file=sys.stderr,
+        )
+        return []
+    return [f"--max-steps {n}"] if n >= 1 else []
+
+
 def _verify_auto_enabled() -> bool:
     """Whether `solve` candidates auto-verify: union the test/lint/build
     commands every candidate actually ran and re-run that union in every
@@ -667,6 +690,7 @@ class OxagenAgent(BaseInstalledAgent):
         if _is_truthy(os.environ.get("OXAGEN_NO_PIPELINE")):
             flags.append("--no-pipeline")
         flags.extend(_task_budget_flags())
+        flags.extend(_max_steps_flags())
         return " ".join(flags)
 
     def _build_best_of_n_flags(self) -> str:

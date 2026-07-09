@@ -1,5 +1,52 @@
 # Changelog
 
+## v1.1.1
+
+This release delivers a major MCP authentication overhaul (OAuth detection + self-healing install flow), AI-assisted setup wizards for agents and skills, a new sandbox-templates system for portable agent environments, a from-scratch CLI Mission Control / fleet management surface for running multiple agent sessions, and a platform-wide standardization of capability naming (ADR-024/025) that touches nearly every contract, handler, and route. It also includes a large batch of infra, CI, and marketing-site fixes, plus numerous CLI stability and UX improvements.
+
+### Features
+- **MCP Servers install→authenticate UX**: detects OAuth-protected MCP servers at install time, self-heals on OAuth callback, and surfaces credential/auth status in the UI (963739c2, 2f02968c, d3a00e00, fd89dd2a, d4df88bb)
+- **AI-assisted setup wizards**: new `agent.definition.suggest` capability powers an AI-assisted agent builder flow, and a new `skill.draft` capability powers a 3-step AI-assisted skill wizard in Studio → Skills (5bb94881, 7f8beed6, c9c79416, 6e26b2e7, 55727caa, e6fbfce5)
+- **Sandbox templates & agent-environment bindings**: new database schema, 12 contracts, handlers, and a sandbox-template service for portable, reusable agent execution environments (4ef9399f, 5a113296, d89b6d99, dc5ede55)
+- **CLI Mission Control & fleet management**: new `oxagen fleet` command tree (dispatch/ls/watch/attach/send/cancel/logs/clean/worker) with a full session-fleet runtime, plus a Mission Control TUI for multi-agent oversight (49cdc094, 322e096b, e7dc31f7, f360bd2d)
+- **CLI `/diff` panel**: keyboard-navigable changed-files list with syntax-highlighted, line-numbered diffs (32fb14ba)
+- **CLI usage/budget metering**: per-turn streaming usage/cache capture with a per-task budget cap, plus a machine-readable solve-path cost/token/step summary (9d415ace, 33b729af, 5b47b76a)
+- **CLI per-function model config**: `/triage-model`, `/judge-model`, `/worker-model` (fc7f0afa)
+- **Marketplace consolidation**: agent equipping folded into Studio → Agent Tools; marketplace becomes two-sided, with inline agent equipping and a thumb-first mobile wizard (5765ebb1, a5699b37)
+- **Chat improvements**: per-turn conversation-aware suggested prompt chips, a coding-trace-panel + workspace-context-panel rail, a compact Agents card, a prompt-cache token-layer meter, and syntax-highlighted light/dark code diffs (78733efd, a48e0317, 2297f09e, e8f3900d, a14e6111, 4dd80a26)
+- **One-thumb mobile settings nav**: bottom-sheet section switcher with responsive layouts (3da6e201)
+- **Unified-diff patches**: `repo.edit`/`file.put` now emit a proper unified diff (90c8c030)
+- **Ebook lead-gate & interactive reader**: new CMS schema, lead-gate API/email, and an interactive page-flip book reader on the marketing site (ee242a28, 72d91229, e28303ad, 9a042804, 1aa5a274)
+- **Immutable agent/tenant identity (ADR-024)**: namespaced, immutable `org_ns.workspace_ns.slug` agent identity; agent slugs are now permanently reserved (no recycling); immutable namespace exposed on org/workspace reads (d12de961, 97f28d0a, 3e41ed47, 94e98611, e0931a5c)
+- **IAM principal attribution**: IAM principal threaded through handlers/scope/audit, with usage breakdown by capability and acting principal (e174b313, 70b3398a, 2b2c25b4, a845b083)
+- **UI Capability Parity enforcement**: `check:ui-parity` gate ensures every human-operable capability has real, working UI, backfilled for 45 app-surfaced capabilities (09fb1984, fc5b3449)
+- Animated adaptive terminal SVG for the landing page, and new investor/roadmap decks (12cf6455, 74ee1230)
+
+### Fixes
+- Founder headshot broken image link on decks (be986d0b)
+- `vercel-migrate`: direct binary download with an exact pending-count guard; production migrations now auto-apply in the Vercel build (0ca3a787, f11a56bb)
+- Marketing site: fixed CORS for apex/www, rewired the demo form to CMS leads (a998f329)
+- CI: Postgres/ClickHouse/Neo4j migrations now run unconditionally in the test job instead of being gated behind a (broken) diff check (88470820)
+- Removed the non-functional first-party GitHub MCP integration and its dangling imports (8ea38530, 713f6663)
+- Skills: builtin skills are now embedded as bundle-safe module data so `create-agent` never bricks (699bb8d6, 267d088d)
+- Chat stream now surfaces the real error body on attachment failures instead of a generic 422 (0a1be81c)
+- Marketplace: re-clicking the active tab no longer blanks results; connector delivery methods (`rest_polling`/`sql_query`) show human-readable labels (7c1f3e29, c173b926)
+- Agent Builder equip-source fetches are now timeout-guarded so the wizard always renders (d7256c01)
+- Reject impossible org/workspace slugs before hitting the database (b3425074)
+- Correct pricing for `gpt-5.5-pro`/`gpt-5.5`/`gemini-3-pro` from gateway truth (6813cbe5)
+- Restored the bench/web importer accidentally dropped by a sparse lockfile regen (a2494913)
+- CLI: hardened slash-arg expansion and fuzzy-ranked slash menu (a2ad55d6); idle Mission Control's render timer when the fleet is quiet (893634a6); removed fabricated "live" telemetry from `oxagen view` (191a126d); fixed fullscreen transcript scrolling and height estimates (71712f3f, 731cde23); fixed Mission Control composer misrouting fast-typed input (972e9cc6); memoized `MessageView` and deduped spinner frames (515d81e4)
+- CLI: bounded detached worker sessions by max-lifetime/RSS ceiling and plugged lifecycle leak seams (9b0e9cc4, ef926f64)
+
+### Internal
+- **ADR-024 / ADR-025**: standardized all 294 capabilities to verb-first `snake_case` naming, removed the legacy alias mechanism, and reconciled the resulting handler/route/UI/telemetry/test surfaces platform-wide (4d25360a, 08bc5ce0, 21057706, 986d72f6, 70e6fd4d, a161c7b3, b566e106, and numerous `reland`/reconciliation commits)
+- CLI commands migrated onto a "universal output discipline" (consistent JSON envelopes) across settings, telemetry, agent, command, rules, config, graph pull/lineage/push, replay, recover, asset upload, a2a card, conversation export, file-lock, and the daemon lifecycle (87abc83a, fd105cfe, 063c7426, 6e23e962, 834787d5, 863129f1, edcb2b34, d4cc1342, e841b849, b64652ed, 843c58b4, 9df0a595)
+- Removed dead code paths: the cloud `ModelProvider` runtime half and `createTurnRunner` (7c8214fd, 10c35a44)
+- New reusable manual DB-migration GitHub Actions workflow for applying Atlas migrations to prod on demand (62f9a9a1)
+- Batched IAM role-grant seeding in 500-row chunks; capped CLI/bench cache TTL at 1h with a per-task max-steps cap (7ad4bdf7, 5b47b76a)
+- Expanded test coverage across CLI (fleet, mission control, session runner/manager, diff panel), MCP OAuth flows, contracts, and kernel dispatch probes
+- Docs: ADR-024/ADR-025 write-ups, sandbox-templates implementation plan, RBAC design specs, prod IAM re-seed runbook, and refreshed CLI reference docs (custom commands, REPL slash commands, agent engine, memory, models)
+
 ## v1.1.0
 
 This release lands three major architectural efforts: the ADR-021 deterministic-first inference doctrine (judge tiering, fast-path planning, structured tools), the ADR-022 capability naming standard (a repo-wide rename of `domain.subject.action` contracts with alias-shim backward compatibility), and the ADR-023 CLI fleet/session-event-log redesign (detached session dispatch, a universal output layer, and a filesystem-backed event store). On top of that foundation, the app gains a new Studio (Agent Builder, Tools, Skills), a Marketplace surface, per-turn dollar budget governance across CLI/app/API, Postgres-backed file locking for concurrent agent edits, conversation export, and a round of mobile-usability and chat-context work. A large number of merge-repair and CI-stability fixes round out the release.

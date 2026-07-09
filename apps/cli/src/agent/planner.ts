@@ -23,7 +23,7 @@ import {
   AgentTimeoutError,
   DEFAULT_TIMEOUTS,
   callModelWithTimeout,
-  makeTurnController,
+  createTurnRunner,
   withTimeout,
 } from "./timeouts.js";
 import { emptyUsage, type ModelTier, type Plan, type Task } from "./fleet/types.js";
@@ -133,11 +133,13 @@ export async function planTasks(opts: PlanOptions): Promise<Plan> {
   const cwd = opts.cwd;
   if (!resolveAiCredential(cwd)) throw new MissingAiKeyError();
 
-  // Wire the caller's abort signal (Esc/Ctrl-C) into a controller. There is NO
-  // planning-phase wall-clock cap: timeouts live on the individual calls below
-  // (enhancement via withTimeout; the LLM call via callModelWithTimeout).
-  const planController = makeTurnController(opts.signal);
-  const planSignal = planController.signal;
+  // Wire the caller's abort signal (Esc/Ctrl-C) into a controller-only turn
+  // runner (no inactivity guard: planning is a single enhance + one model call,
+  // both individually bounded). There is NO planning-phase wall-clock cap:
+  // timeouts live on the individual calls below (enhancement via withTimeout;
+  // the LLM call via callModelWithTimeout).
+  const planRunner = createTurnRunner({}, { callerSignal: opts.signal });
+  const planSignal = planRunner.signal;
 
   // Enhance the goal so the planner sees the real code involved. Bound
   // separately so a slow code-graph build doesn't eat the whole planning budget.

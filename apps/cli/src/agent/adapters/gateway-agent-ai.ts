@@ -107,8 +107,15 @@ export interface GatewayAgentAiOptions {
   cwd?: string;
 }
 
+// 1-hour cache TTL, not the 5-minute default. Measured agent-loop cache hit
+// was ~48%: a long bash step (build, install, model download) between two LLM
+// calls routinely exceeds the 5-min default TTL, so the next call re-creates
+// the whole prefix from scratch (fresh price) instead of reading it cached.
+// A 1h TTL survives those gaps — cache *writes* cost 2x fresh input, but on a
+// 17+ step loop the read savings (10x) dominate. `ttl` rides the same
+// anthropic providerOptions namespace, ignored by non-Anthropic vendors.
 const ANTHROPIC_CACHE = {
-  anthropic: { cacheControl: { type: "ephemeral" } },
+  anthropic: { cacheControl: { type: "ephemeral", ttl: "1h" } },
 } as const;
 
 /**

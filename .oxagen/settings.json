@@ -19,7 +19,10 @@
       "Bash(git add apps/app/src/components/knowledge/memories/memories-bulk-import.tsx\ngit commit -m \"fix(app): restore missing 'import {' in memories-bulk-import.tsx\n\nThe import block for ALL_CLASSES/CLASS_CONFIG/RECOMMENDED_MEMORY_KINDS/MemoryClass\nfrom './memories-client' was missing its opening 'import {' line, causing three\nTypeScript parse errors (TS1005, TS1109, TS1434) that failed typecheck and the\nTurbopack build in CI.\n\nFixes the main CI red on run 28522554831.\"\n2>&1)",
       "Bash(grep -n \"KIND_CONFIG\" apps/app/src/components/knowledge/memories/memories-client.tsx | head -20)",
       "Edit(../oxagen-bang-terminal/apps/cli/src/agent/tasks/store.ts)",
-      "Write(../oxagen-ugly-badges/apps/app/e2e/_badge-recon.spec.ts)"
+      "Write(../oxagen-ugly-badges/apps/app/e2e/_badge-recon.spec.ts)",
+      "Bash(cd /Users/macanderson/Workspaces/oxagen-platform && echo \"=== apps/cli/package.json bin ===\"; python3 -c 'import json; d=json.load(open(\"apps/cli/package.json\")); print(json.dumps(d.get(\"bin\"),indent=2)); print(\"name\",d.get(\"name\"))'; echo \"=== npm normalize test ===\"; cd /tmp && rm -rf npmbintest && mkdir npmbintest && cd npmbintest && cp /Users/macanderson/Workspaces/oxagen-platform/apps/cli/dist-standalone/package.json . && echo \"// stub\" > oxagen.mjs && npm pkg fix 2>&1 | tail -5; echo \"--- bin after fix ---\"; python3 -c 'import json; print(json.dumps(json.load(open(\"package.json\")).get(\"bin\"),indent=2))')",
+      "Bash(cd /Users/macanderson/Workspaces/oxagen-platform/apps/app && rm -rf e2e/screenshots && timeout 300 npx playwright test chat-attachments.spec.ts -g \"uploads a PNG\" --project=chromium --reporter=list 2>&1 | tail -60)",
+      "Bash(cd /Users/macanderson/Workspaces/oxagen-platform/apps/app && rm -rf e2e/screenshots && npx playwright test chat-attachments.spec.ts -g \"uploads a PNG\" --project=chromium --reporter=list 2>&1 | tail -70)"
     ],
     "deny": [
       "Bash(rm -rf*)",

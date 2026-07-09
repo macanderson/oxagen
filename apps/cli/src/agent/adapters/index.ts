@@ -23,3 +23,14 @@ export {
   gatewayReasoningOptions,
   type GatewayAgentAiOptions,
 } from "./gateway-agent-ai.js";
+export {
+  prepareOnDeviceCoordinator,
+  type OnDeviceCoordinator,
+  type PrepareOnDeviceOptions,
+} from "./on-device-agent-ai.js";
+export {
+  resolveCoordinatorAi,
+  meteredCloudGenerate,
+  type ResolvedCoordinator,
+  type ResolveCoordinatorOptions,
+} from "./coordinator.js";

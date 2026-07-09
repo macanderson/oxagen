@@ -271,10 +271,10 @@ export function buildProgram(): Command {
 
   program
     .command("view")
-    .description("Launch the agent dashboard (memory, compile, sessions)")
+    .description("Audit agent work — recent runs, cost, code-graph, and health")
     .action(async () => {
       const { launchAgentView } = await import("./tui/agent-view/index.js");
-      launchAgentView();
+      await launchAgentView({ cwd: process.cwd() });
     });
 
   // ── agents: the agents screen (fleet) ───────────────────────────────────────
