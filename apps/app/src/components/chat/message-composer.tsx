@@ -54,6 +54,18 @@ import { SlashCommandMenu } from "./slash-command-menu";
 // pulls telemetry/clickhouse/opentelemetry (async_hooks) into the client bundle
 // and breaks the build. slash-commands.ts is dependency-free.
 import { matchSlashCommands, type SlashCommand } from "@oxagen/ai/slash-commands";
+// Same client-safe-subpath rule as slash-commands: mentions.ts is dependency-free.
+import {
+  applyMentionPlaceholders,
+  mentionPlaceholder,
+  matchMentionTypes,
+  type MentionTypeInfo,
+  type PendingMention,
+} from "@oxagen/ai/mentions";
+import { MentionMenu } from "./mentions/mention-menu";
+import { MentionChip } from "./mentions/mention-chip";
+import { useMentionSearch } from "./mentions/use-mention-search";
+import type { MentionSearchResult } from "./mentions/mention-meta";
 import type { RepoOption } from "./repo-selector";
 import type { EnvironmentOption } from "./environment-selector";
 import { AgentSelector, type AgentOption } from "./agent-selector";
@@ -92,6 +104,13 @@ export interface UploadedAttachmentMeta {
   url: string;
   /** Set on a keyframe image to the server publicId of its source video. */
   keyframeForVideo?: string;
+}
+
+/** A pending @-mention plus the picked search row's display extras, so the
+ * composer's chip strip can show description/properties without refetching. */
+interface ComposerMention extends PendingMention {
+  properties: Record<string, unknown>;
+  description: string | null;
 }
 
 function toUploadedMeta(attachments: PendingAttachment[]): UploadedAttachmentMeta[] {
@@ -490,6 +509,41 @@ export function MessageComposer({
   );
   const slashOpen = slashQuery !== null && slashCommands.length > 0;
 
+  // ── @-mentions ────────────────────────────────────────────────────────────
+  // Two-stage picker anchored at a typed "@": stage 1 picks the reference TYPE
+  // (files, repos, agents, graph nodes, …), stage 2 runs a type-scoped
+  // search_references lookup. A selection inserts a readable "@Label"
+  // placeholder; at submit each placeholder is swapped for its full
+  // [:type|:slug|:location|:label] token (applyMentionPlaceholders) so the
+  // literal token travels inline in `content` — the agent is taught the
+  // grammar and the transcript re-renders tokens as inspectable chips.
+  const [mentionAnchor, setMentionAnchor] = React.useState<number | null>(null);
+  const [mentionStage, setMentionStage] = React.useState<"type" | "search">("type");
+  const [mentionTypeSel, setMentionTypeSel] = React.useState<MentionTypeInfo | null>(null);
+  const [mentionQuery, setMentionQuery] = React.useState("");
+  const [mentionActiveIndex, setMentionActiveIndex] = React.useState(0);
+  const [pendingMentions, setPendingMentions] = React.useState<ComposerMention[]>([]);
+  const mentionOpen = mentionAnchor !== null;
+  const mentionTypes = React.useMemo(
+    () => matchMentionTypes(mentionStage === "type" ? mentionQuery : ""),
+    [mentionStage, mentionQuery],
+  );
+  const { results: mentionResults, loading: mentionLoading } = useMentionSearch({
+    orgSlug,
+    workspaceSlug,
+    type: mentionTypeSel?.type ?? null,
+    query: mentionQuery,
+    enabled: mentionOpen && mentionStage === "search",
+  });
+  const mentionItemCount = mentionStage === "type" ? mentionTypes.length : mentionResults.length;
+  const closeMentionMenu = React.useCallback(() => {
+    setMentionAnchor(null);
+    setMentionStage("type");
+    setMentionTypeSel(null);
+    setMentionQuery("");
+    setMentionActiveIndex(0);
+  }, []);
+
   // Ref mirror of the code-mode + pin + agent selection so dispatchQueued
   // (queue-drain path) reads the CURRENT selection at drain time, same pattern
   // as activeServerIdsRef/parentMessageIdRef below.
@@ -540,8 +594,38 @@ export function MessageComposer({
       } else if (slashQuery !== null) {
         setSlashQuery(null);
       }
+      // @-mention trigger/tracking. Unlike slash commands the trigger works
+      // mid-message: an "@" at the start or after whitespace opens the picker,
+      // and the query is whatever sits between the anchor and the caret. Any
+      // newline or edit that invalidates the anchor closes the menu.
+      const caret = e.target.selectionStart ?? value.length;
+      if (mentionAnchor !== null) {
+        const valid =
+          caret > mentionAnchor &&
+          value[mentionAnchor] === "@" &&
+          !value.slice(mentionAnchor + 1, caret).includes("\n");
+        if (!valid) {
+          closeMentionMenu();
+        } else {
+          const q = value.slice(mentionAnchor + 1, caret);
+          if (q !== mentionQuery) {
+            setMentionQuery(q);
+            setMentionActiveIndex(0);
+          }
+        }
+      } else if (
+        caret > 0 &&
+        value[caret - 1] === "@" &&
+        (caret === 1 || /\s/.test(value[caret - 2] ?? ""))
+      ) {
+        setMentionAnchor(caret - 1);
+        setMentionStage("type");
+        setMentionTypeSel(null);
+        setMentionQuery("");
+        setMentionActiveIndex(0);
+      }
     },
-    [slashQuery],
+    [slashQuery, mentionAnchor, mentionQuery, closeMentionMenu],
   );
 
   // Apply a chosen slash command. Client-action commands (e.g. /pin) run
@@ -575,6 +659,68 @@ export function MessageComposer({
       }
     },
     [togglePin],
+  );
+
+  // Stage 1 → 2: the user picked a reference type. Reset the typed filter back
+  // to a bare "@" in the textarea and scope the live search to the type.
+  const applyMentionType = React.useCallback(
+    (info: MentionTypeInfo) => {
+      const ta = formRef.current?.elements.namedItem("content") as
+        | HTMLTextAreaElement
+        | null;
+      if (ta && mentionAnchor !== null) {
+        const caret = ta.selectionStart ?? ta.value.length;
+        ta.value = ta.value.slice(0, mentionAnchor + 1) + ta.value.slice(caret);
+        ta.focus();
+        ta.setSelectionRange(mentionAnchor + 1, mentionAnchor + 1);
+      }
+      setMentionTypeSel(info);
+      setMentionStage("search");
+      setMentionQuery("");
+      setMentionActiveIndex(0);
+    },
+    [mentionAnchor],
+  );
+
+  // Stage 2 selection: swap the "@query" for a readable "@Label" placeholder
+  // and remember the structured mention for token substitution at submit.
+  const applyMentionResult = React.useCallback(
+    (result: MentionSearchResult) => {
+      const ta = formRef.current?.elements.namedItem("content") as
+        | HTMLTextAreaElement
+        | null;
+      if (ta && mentionAnchor !== null) {
+        const mention = {
+          type: result.type,
+          slug: result.slug,
+          location: result.location,
+          label: result.label,
+        };
+        const placeholder = mentionPlaceholder(mention);
+        const caret = ta.selectionStart ?? ta.value.length;
+        const before = ta.value.slice(0, mentionAnchor);
+        const after = ta.value.slice(caret);
+        ta.value = `${before}${placeholder} ${after}`;
+        const newCaret = before.length + placeholder.length + 1;
+        ta.focus();
+        ta.setSelectionRange(newCaret, newCaret);
+        if (!inputHasContentRef.current) {
+          inputHasContentRef.current = true;
+          onInputHasContentChangeRef.current?.(true);
+        }
+        setPendingMentions((prev) => [
+          ...prev,
+          {
+            placeholder,
+            mention,
+            properties: result.properties,
+            description: result.description,
+          },
+        ]);
+      }
+      closeMentionMenu();
+    },
+    [mentionAnchor, closeMentionMenu],
   );
 
   // Refs that always reflect the latest prop values so the queue-drain effect
@@ -878,6 +1024,11 @@ export function MessageComposer({
     attachmentsSnapshot: UploadedAttachmentMeta[] = [],
   ): FormData {
     const fd = new FormData(form);
+    // Swap "@Label" mention placeholders for their full reference tokens so
+    // the literal [:type|:slug|:location|:label] text travels in `content`.
+    const contentValue = String(fd.get("content") ?? "");
+    const contentWithTokens = applyMentionPlaceholders(contentValue, pendingMentions);
+    if (contentWithTokens !== contentValue) fd.set("content", contentWithTokens);
     if (conversationId) fd.set("conversationId", conversationId);
     if (parentMessageId) fd.set("parentMessageId", parentMessageId);
     if (attachmentsSnapshot.length > 0) {
@@ -961,17 +1112,22 @@ export function MessageComposer({
         onInterrupt?.();
         const fd = buildFormData(e.currentTarget, model, attachmentsSnapshot);
         formRef.current?.reset();
+        setPendingMentions([]);
+        closeMentionMenu();
         clearAttachments();
         dispatch(fd);
       } else {
         // queue mode: capture the message, model state, and attachments; clear
-        // the textarea + pending strip.
+        // the textarea + pending strip. Mention placeholders are tokenized at
+        // queue time so the drained FormData needs no mention state.
         const snapshot = model;
-        const content = contentRaw;
+        const content = applyMentionPlaceholders(contentRaw, pendingMentions);
         setQueue((prev) => [
           ...prev,
           { id: nextQueueId(), content, modelState: snapshot, attachments: attachmentsSnapshot },
         ]);
+        setPendingMentions([]);
+        closeMentionMenu();
         clearAttachments();
         (formRef.current?.elements.namedItem("content") as HTMLTextAreaElement | null)?.dispatchEvent(new Event("input"));
         // Reset the native textarea value directly so the placeholder reappears.
@@ -988,6 +1144,8 @@ export function MessageComposer({
 
     const fd = buildFormData(e.currentTarget, model, attachmentsSnapshot);
     formRef.current?.reset();
+    setPendingMentions([]);
+    closeMentionMenu();
     clearAttachments();
     // Notify parent that input is now empty after reset (chips should reappear).
     if (inputHasContentRef.current) {
@@ -1136,6 +1294,46 @@ export function MessageComposer({
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     // IME composition guard — never submit during composition.
     if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+
+    // @-mention menu navigation takes precedence while it's open — same
+    // contract as the slash menu below: Enter/Tab select, arrows cycle,
+    // Escape dismisses, and nothing leaks through to submit.
+    if (mentionOpen) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        if (mentionItemCount > 0) setMentionActiveIndex((i) => (i + 1) % mentionItemCount);
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        if (mentionItemCount > 0) {
+          setMentionActiveIndex((i) => (i - 1 + mentionItemCount) % mentionItemCount);
+        }
+        return;
+      }
+      if (e.key === "Enter" || e.key === "Tab") {
+        if (mentionStage === "type") {
+          e.preventDefault();
+          const info = mentionTypes[mentionActiveIndex] ?? mentionTypes[0];
+          if (info) applyMentionType(info);
+          return;
+        }
+        if (mentionResults.length > 0) {
+          e.preventDefault();
+          const result = mentionResults[mentionActiveIndex] ?? mentionResults[0];
+          if (result) applyMentionResult(result);
+          return;
+        }
+        // No results to select — close the menu and let Enter behave normally
+        // (submit/newline) so a literal "@..." can still be sent as text.
+        closeMentionMenu();
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        closeMentionMenu();
+        return;
+      }
+    }
 
     // Slash-command menu navigation takes precedence while it's open — Enter
     // selects the highlighted command instead of submitting the form.
@@ -1304,6 +1502,20 @@ export function MessageComposer({
             onHoverIndex={setSlashActiveIndex}
           />
         ) : null}
+        {mentionOpen ? (
+          <MentionMenu
+            stage={mentionStage}
+            types={mentionTypes}
+            results={mentionResults}
+            selectedType={mentionTypeSel}
+            activeIndex={mentionActiveIndex}
+            loading={mentionLoading}
+            query={mentionQuery}
+            onSelectType={applyMentionType}
+            onSelectResult={applyMentionResult}
+            onHoverIndex={setMentionActiveIndex}
+          />
+        ) : null}
         <Textarea
           name="content"
           required
@@ -1312,7 +1524,10 @@ export function MessageComposer({
           disabled={pending || disabled}
           onKeyDown={onKeyDown}
           onChange={handleTextareaChange}
-          onBlur={() => setSlashQuery(null)}
+          onBlur={() => {
+            setSlashQuery(null);
+            closeMentionMenu();
+          }}
           onPaste={canAttach ? handlePaste : undefined}
           className={cn(
             "border-none bg-transparent shadow-none focus-visible:ring-0",
@@ -1326,6 +1541,24 @@ export function MessageComposer({
         <div className="flex flex-wrap gap-2" data-testid="attachment-strip">
           {visibleAttachments.map((a) => (
             <AttachmentChip key={a.id} attachment={a} onRemove={removeAttachment} />
+          ))}
+        </div>
+      ) : null}
+      {/* Pending @-mention strip — the structured references attached to this
+          draft. Each chip is hover-inspectable; removing one only detaches the
+          reference (the "@Label" text stays as plain words). */}
+      {pendingMentions.length > 0 && !composerCollapsed ? (
+        <div className="flex flex-wrap gap-1.5" data-testid="mention-strip">
+          {pendingMentions.map((m, index) => (
+            <MentionChip
+              key={`${m.mention.type}:${m.mention.slug}:${index}`}
+              mention={m.mention}
+              properties={m.properties}
+              description={m.description}
+              onRemove={() =>
+                setPendingMentions((prev) => prev.filter((_, i) => i !== index))
+              }
+            />
           ))}
         </div>
       ) : null}

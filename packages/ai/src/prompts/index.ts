@@ -13,16 +13,22 @@ export {
 } from "./slash-commands";
 export type { SlashCommand } from "./slash-commands";
 export {
+  MENTION_PROTOCOL,
   MENTION_TYPES,
   MENTION_TOKEN_REGEX,
+  applyMentionPlaceholders,
   isMentionType,
   matchMentionTypes,
+  mentionFromHref,
   mentionGrammarPrompt,
+  mentionPlaceholder,
+  mentionToHref,
   mentionTypeInfo,
   parseMentions,
   serializeMention,
   splitTextByMentions,
   stripMentions,
+  textWithMentionLinks,
 } from "./mentions";
 export type {
   ChatMention,
@@ -30,4 +36,5 @@ export type {
   MentionType,
   MentionTypeInfo,
   ParsedMention,
+  PendingMention,
 } from "./mentions";

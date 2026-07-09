@@ -259,6 +259,102 @@ export function stripMentions(text: string): string {
 }
 
 /**
+ * A mention the composer is holding while the user finishes typing. The
+ * textarea shows the readable `placeholder` (e.g. `@proxy.ts`); at submit,
+ * {@link applyMentionPlaceholders} swaps each placeholder for its full token.
+ */
+export interface PendingMention {
+  readonly placeholder: string;
+  readonly mention: ChatMention;
+}
+
+/** The display placeholder inserted into the composer for a mention. */
+export function mentionPlaceholder(mention: ChatMention): string {
+  return `@${mention.label}`;
+}
+
+function findPlaceholder(text: string, placeholder: string): number {
+  let from = 0;
+  for (;;) {
+    const i = text.indexOf(placeholder, from);
+    if (i === -1) return -1;
+    const before = i === 0 ? "" : text[i - 1]!;
+    const after =
+      i + placeholder.length >= text.length ? "" : text[i + placeholder.length]!;
+    // A placeholder the user edited into a longer word no longer refers to the
+    // mention — require non-word boundaries on both sides.
+    const beforeOk = before === "" || !/[\w@]/.test(before);
+    const afterOk = after === "" || !/\w/.test(after);
+    if (beforeOk && afterOk) return i;
+    from = i + 1;
+  }
+}
+
+/**
+ * Replace each pending mention's `@Label` placeholder (leftmost surviving
+ * occurrence, in insertion order) with its serialized token. Placeholders the
+ * user edited away are skipped — their mention is silently dropped.
+ */
+export function applyMentionPlaceholders(
+  text: string,
+  mentions: readonly PendingMention[],
+): string {
+  let out = text;
+  for (const { placeholder, mention } of mentions) {
+    const idx = findPlaceholder(out, placeholder);
+    if (idx === -1) continue;
+    out =
+      out.slice(0, idx) + serializeMention(mention) + out.slice(idx + placeholder.length);
+  }
+  return out;
+}
+
+/**
+ * Mention ↔ markdown-link bridge. Message renderers convert tokens to
+ * `[label](oxagen-mention://type?slug=…&location=…&label=…)` links so chips
+ * render inline through the markdown pipeline (with a custom anchor
+ * component), without breaking paragraph/list structure.
+ */
+export const MENTION_PROTOCOL = "oxagen-mention:";
+
+const MENTION_HREF_REGEX = /^oxagen-mention:\/\/([a-z_]+)\?(.*)$/;
+
+export function mentionToHref(mention: ChatMention): string {
+  const params = new URLSearchParams({
+    slug: mention.slug,
+    location: mention.location,
+    label: mention.label,
+  });
+  // Raw parens would terminate a markdown "(url)" early; URLSearchParams
+  // leaves them unescaped, so encode them explicitly.
+  const query = params.toString().replaceAll("(", "%28").replaceAll(")", "%29");
+  return `${MENTION_PROTOCOL}//${mention.type}?${query}`;
+}
+
+export function mentionFromHref(href: string): ChatMention | null {
+  const match = MENTION_HREF_REGEX.exec(href);
+  if (!match) return null;
+  const type = match[1] ?? "";
+  if (!isMentionType(type)) return null;
+  const params = new URLSearchParams(match[2] ?? "");
+  const slug = params.get("slug");
+  const label = params.get("label");
+  if (!slug || !label) return null;
+  return { type, slug, location: params.get("location") ?? "", label };
+}
+
+/** Replace mention tokens with markdown links for chip-aware renderers. */
+export function textWithMentionLinks(text: string): string {
+  return splitTextByMentions(text)
+    .map((segment) => {
+      if (segment.kind === "text") return segment.text;
+      const label = segment.mention.label.replaceAll("[", "\\[").replaceAll("]", "\\]");
+      return `[${label}](${mentionToHref(segment.mention)})`;
+    })
+    .join("");
+}
+
+/**
  * System-prompt section teaching the agent the mention grammar. Static (no
  * per-turn data) so it is safe inside the cached system block.
  */

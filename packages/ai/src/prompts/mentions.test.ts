@@ -2,13 +2,17 @@ import { describe, expect, it } from "vitest";
 
 import {
   MENTION_TYPES,
+  applyMentionPlaceholders,
   matchMentionTypes,
+  mentionFromHref,
   mentionGrammarPrompt,
+  mentionToHref,
   mentionTypeInfo,
   parseMentions,
   serializeMention,
   splitTextByMentions,
   stripMentions,
+  textWithMentionLinks,
   type ChatMention,
 } from "./mentions";
 
@@ -25,7 +29,7 @@ describe("serializeMention / parseMentions", () => {
     expect(token).toBe(
       "[:file|:apps/app/src/proxy.ts|:apps/app/src/proxy.ts|:proxy.ts]",
     );
-    const [parsed] = parseMentions(`please look at ${token} first`);
+    const parsed = parseMentions(`please look at ${token} first`)[0]!;
     expect(parsed).toMatchObject(fileMention);
     expect(parsed.raw).toBe(token);
     expect(parsed.start).toBe("please look at ".length);
@@ -41,7 +45,7 @@ describe("serializeMention / parseMentions", () => {
     };
     const token = serializeMention(nasty);
     expect(token).not.toMatch(/\|(?!:)/); // no unencoded pipes inside fields
-    const [parsed] = parseMentions(token);
+    const parsed = parseMentions(token)[0]!;
     expect(parsed).toMatchObject(nasty);
   });
 
@@ -52,7 +56,7 @@ describe("serializeMention / parseMentions", () => {
       location: "",
       label: "two\nlines",
     };
-    const [parsed] = parseMentions(serializeMention(m));
+    const parsed = parseMentions(serializeMention(m))[0]!;
     expect(parsed.label).toBe("two\nlines");
   });
 
@@ -87,7 +91,7 @@ describe("splitTextByMentions", () => {
     const segments = splitTextByMentions(`fix ${token} now`);
     expect(segments).toHaveLength(3);
     expect(segments[0]).toEqual({ kind: "text", text: "fix " });
-    expect(segments[1].kind).toBe("mention");
+    expect(segments[1]?.kind).toBe("mention");
     expect(segments[2]).toEqual({ kind: "text", text: " now" });
   });
 
@@ -127,6 +131,71 @@ describe("mention type registry", () => {
       "edge",
     ]);
     expect(matchMentionTypes("zzz")).toEqual([]);
+  });
+});
+
+describe("applyMentionPlaceholders", () => {
+  const pending = (label: string, slug = "s1") => ({
+    placeholder: `@${label}`,
+    mention: { type: "file", slug, location: slug, label } as const,
+  });
+
+  it("replaces a placeholder with the serialized token", () => {
+    const out = applyMentionPlaceholders("fix @proxy.ts now", [
+      pending("proxy.ts"),
+    ]);
+    expect(out).toBe("fix [:file|:s1|:s1|:proxy.ts] now");
+  });
+
+  it("requires word boundaries — edited placeholders are dropped", () => {
+    expect(
+      applyMentionPlaceholders("fix @proxy.tsx now", [pending("proxy.ts")]),
+    ).toBe("fix @proxy.tsx now");
+    expect(
+      applyMentionPlaceholders("mail me@proxy.ts now", [pending("proxy.ts")]),
+    ).toBe("mail me@proxy.ts now");
+  });
+
+  it("allows trailing punctuation after the placeholder", () => {
+    const out = applyMentionPlaceholders("see @proxy.ts.", [
+      pending("proxy.ts"),
+    ]);
+    expect(out).toBe("see [:file|:s1|:s1|:proxy.ts].");
+  });
+
+  it("maps duplicate labels to occurrences in insertion order", () => {
+    const out = applyMentionPlaceholders("@a then @a", [
+      pending("a", "first"),
+      pending("a", "second"),
+    ]);
+    expect(out).toBe("[:file|:first|:first|:a] then [:file|:second|:second|:a]");
+  });
+});
+
+describe("mention href bridge", () => {
+  it("round-trips a mention through the href", () => {
+    const m: ChatMention = {
+      type: "node",
+      slug: "node_1",
+      location: "graph://node/node_1",
+      label: "Billing Policy (v2)",
+    };
+    const href = mentionToHref(m);
+    expect(href.startsWith("oxagen-mention://node?")).toBe(true);
+    expect(href).not.toContain("(");
+    expect(mentionFromHref(href)).toEqual(m);
+  });
+
+  it("rejects non-mention hrefs", () => {
+    expect(mentionFromHref("https://example.com")).toBeNull();
+    expect(mentionFromHref("oxagen-mention://bogus?slug=x&label=y")).toBeNull();
+    expect(mentionFromHref("oxagen-mention://node?label=y")).toBeNull();
+  });
+
+  it("converts tokens to markdown links", () => {
+    const token = serializeMention(fileMention);
+    const out = textWithMentionLinks(`fix ${token} now`);
+    expect(out).toMatch(/^fix \[proxy\.ts\]\(oxagen-mention:\/\/file\?.*\) now$/);
   });
 });
 
