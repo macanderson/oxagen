@@ -99,6 +99,9 @@ export async function agentSandboxExecHandler(
     executionMs: result.durationMs,
     timedOut: result.timedOut,
     restored,
+    // Surface the post-command working directory so a stateful caller can thread
+    // it into the next exec. null when the driver couldn't capture it.
+    cwd: result.cwd ?? null,
   };
 }
 
