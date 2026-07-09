@@ -1,17 +1,22 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import type { CapabilityContext } from "@oxagen/oxagen";
 
 // ── hoisted stubs ─────────────────────────────────────────────────────────────
+// Query chain: select().from().leftJoin().where().orderBy() — the terminal
+// .orderBy() resolves the rows (mirrors the handler's tenant-scoped read).
 const mocks = vi.hoisted(() => ({
-  selectWhere: vi.fn(),
+  selectOrderBy: vi.fn(),
 }));
 
-mocks.selectWhere.mockResolvedValue([]);
+mocks.selectOrderBy.mockResolvedValue([]);
 
 const makeTx = () => ({
   select: () => ({
     from: () => ({
-      where: mocks.selectWhere,
+      leftJoin: () => ({
+        where: () => ({
+          orderBy: mocks.selectOrderBy,
+        }),
+      }),
     }),
   }),
 });
@@ -31,18 +36,23 @@ import { skillWorkspaceListHandler } from "./skill.workspace.list";
 
 import { TEST_CTX as CTX } from "./test-utils/fixtures";
 
+// A row as the leftJoin SELECT returns it (DB column shape, not contract shape).
 const makeSkillRow = (overrides: Record<string, unknown> = {}) => ({
   publicId: "skl_abc",
+  slug: "summarize",
   name: "Summarize",
   description: "Summarizes documents",
+  source: "tenant",
   enabled: true,
+  updatedAt: new Date("2026-07-01T12:00:00.000Z"),
+  activeVersionNumber: 1,
   ...overrides,
 });
 
 describe("skillWorkspaceListHandler (@oxagen/handlers)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.selectWhere.mockResolvedValue([]);
+    mocks.selectOrderBy.mockResolvedValue([]);
   });
 
   it("returns empty skills array when no rows exist", async () => {
@@ -50,34 +60,59 @@ describe("skillWorkspaceListHandler (@oxagen/handlers)", () => {
     expect(result).toEqual({ skills: [] });
   });
 
-  it("maps DB rows to contract output shape", async () => {
-    mocks.selectWhere.mockResolvedValueOnce([makeSkillRow()]);
+  it("maps DB rows to the full contract output shape", async () => {
+    mocks.selectOrderBy.mockResolvedValueOnce([makeSkillRow()]);
     const result = await skillWorkspaceListHandler({}, CTX);
 
     expect(result.skills).toHaveLength(1);
     const skill = result.skills[0]!;
     expect(skill.id).toBe("skl_abc");
+    expect(skill.slug).toBe("summarize");
     expect(skill.name).toBe("Summarize");
     expect(skill.description).toBe("Summarizes documents");
+    expect(skill.source).toBe("tenant");
     expect(skill.enabled).toBe(true);
+    // Version number is rendered as a "v"-prefixed label for the list.
+    expect(skill.activeVersion).toBe("v1");
+    expect(skill.updatedAt).toBe("2026-07-01T12:00:00.000Z");
   });
 
   it("coerces null description to empty string", async () => {
-    mocks.selectWhere.mockResolvedValueOnce([makeSkillRow({ description: null })]);
+    mocks.selectOrderBy.mockResolvedValueOnce([makeSkillRow({ description: null })]);
     const result = await skillWorkspaceListHandler({}, CTX);
     expect(result.skills[0]!.description).toBe("");
   });
 
+  it("returns activeVersion null when no version is pinned (null join)", async () => {
+    mocks.selectOrderBy.mockResolvedValueOnce([
+      makeSkillRow({ activeVersionNumber: null }),
+    ]);
+    const result = await skillWorkspaceListHandler({}, CTX);
+    expect(result.skills[0]!.activeVersion).toBeNull();
+  });
+
+  it("returns updatedAt null when the column is null", async () => {
+    mocks.selectOrderBy.mockResolvedValueOnce([makeSkillRow({ updatedAt: null })]);
+    const result = await skillWorkspaceListHandler({}, CTX);
+    expect(result.skills[0]!.updatedAt).toBeNull();
+  });
+
   it("returns disabled skill with enabled=false", async () => {
-    mocks.selectWhere.mockResolvedValueOnce([makeSkillRow({ enabled: false })]);
+    mocks.selectOrderBy.mockResolvedValueOnce([makeSkillRow({ enabled: false })]);
     const result = await skillWorkspaceListHandler({}, CTX);
     expect(result.skills[0]!.enabled).toBe(false);
   });
 
+  it("preserves source provenance (builtin vs tenant)", async () => {
+    mocks.selectOrderBy.mockResolvedValueOnce([makeSkillRow({ source: "builtin" })]);
+    const result = await skillWorkspaceListHandler({}, CTX);
+    expect(result.skills[0]!.source).toBe("builtin");
+  });
+
   it("returns multiple skills in order received", async () => {
-    mocks.selectWhere.mockResolvedValueOnce([
-      makeSkillRow({ publicId: "skl_1", name: "Skill A" }),
-      makeSkillRow({ publicId: "skl_2", name: "Skill B", enabled: false }),
+    mocks.selectOrderBy.mockResolvedValueOnce([
+      makeSkillRow({ publicId: "skl_1", slug: "a", name: "Skill A" }),
+      makeSkillRow({ publicId: "skl_2", slug: "b", name: "Skill B", enabled: false }),
     ]);
     const result = await skillWorkspaceListHandler({}, CTX);
     expect(result.skills).toHaveLength(2);
@@ -87,20 +122,20 @@ describe("skillWorkspaceListHandler (@oxagen/handlers)", () => {
 
   it("invokes the query builder once (confirms tenant-scoped path)", async () => {
     await skillWorkspaceListHandler({}, CTX);
-    expect(mocks.selectWhere).toHaveBeenCalledTimes(1);
+    expect(mocks.selectOrderBy).toHaveBeenCalledTimes(1);
   });
 
   // ── error paths ───────────────────────────────────────────────────────────
 
   it("propagates DB error when the query rejects", async () => {
-    mocks.selectWhere.mockRejectedValueOnce(new Error("DB connection failed"));
+    mocks.selectOrderBy.mockRejectedValueOnce(new Error("DB connection failed"));
 
     await expect(skillWorkspaceListHandler({}, CTX)).rejects.toThrow("DB connection failed");
   });
 
   it("propagates DB error when withTenantDb rejects", async () => {
     // Simulate a scenario where the transaction itself cannot be obtained.
-    mocks.selectWhere.mockRejectedValueOnce(new Error("transaction rollback"));
+    mocks.selectOrderBy.mockRejectedValueOnce(new Error("transaction rollback"));
 
     await expect(skillWorkspaceListHandler({}, CTX)).rejects.toThrow("transaction rollback");
   });
