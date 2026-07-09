@@ -42,7 +42,9 @@ describe("plugin.org.install_bulk contract", () => {
     });
     expect(parsed.installed).toHaveLength(2);
     expect(parsed.installed[0]?.pluginId).toBe("oxagen/media-image");
+    expect(parsed.installed[0]?.authKind).toBe("none");
     expect(parsed.installed[1]?.pluginId).toBeNull();
+    expect(parsed.installed[1]?.authKind).toBeNull();
   });
 
   it("requires pluginId (not catalogServerId) on each installed item", () => {
