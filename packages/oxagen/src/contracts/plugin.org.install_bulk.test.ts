@@ -29,8 +29,13 @@ describe("plugin.org.install_bulk contract", () => {
   it("accepts the handler's real installed[] shape (pluginId, nullable)", () => {
     const parsed = pluginOrgInstallBulk.output.parse({
       installed: [
-        { pluginId: "oxagen/media-image", orgListingId: "listing-1", error: null },
-        { pluginId: null, orgListingId: null, error: "boom" },
+        {
+          pluginId: "oxagen/media-image",
+          orgListingId: "listing-1",
+          authKind: "none",
+          error: null,
+        },
+        { pluginId: null, orgListingId: null, authKind: null, error: "boom" },
       ],
     });
     expect(parsed.installed).toHaveLength(2);
