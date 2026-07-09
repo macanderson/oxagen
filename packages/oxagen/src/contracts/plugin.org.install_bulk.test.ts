@@ -29,13 +29,17 @@ describe("plugin.org.install_bulk contract", () => {
   it("accepts the handler's real installed[] shape (pluginId, nullable)", () => {
     const parsed = pluginOrgInstallBulk.output.parse({
       installed: [
-        { pluginId: "oxagen/media-image", orgListingId: "listing-1", error: null },
-        { pluginId: null, orgListingId: null, error: "boom" },
+        // Success rows carry the effective authKind; failure rows carry null
+        // (the handler always sets the key — see plugin.org.install_bulk.ts).
+        { pluginId: "oxagen/media-image", orgListingId: "listing-1", authKind: "none", error: null },
+        { pluginId: null, orgListingId: null, authKind: null, error: "boom" },
       ],
     });
     expect(parsed.installed).toHaveLength(2);
     expect(parsed.installed[0]?.pluginId).toBe("oxagen/media-image");
+    expect(parsed.installed[0]?.authKind).toBe("none");
     expect(parsed.installed[1]?.pluginId).toBeNull();
+    expect(parsed.installed[1]?.authKind).toBeNull();
   });
 
   it("requires pluginId (not catalogServerId) on each installed item", () => {
