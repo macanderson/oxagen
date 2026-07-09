@@ -40,9 +40,15 @@ ATLAS_DIR="${HOME}/.atlas-bin"
 ATLAS="${ATLAS_DIR}/atlas"
 
 if [ ! -x "$ATLAS" ]; then
-  echo "[vercel-migrate] installing Atlas ${ATLAS_VERSION}…"
+  # Fetch the release binary directly — the atlasgo.sh installer sudo-moves
+  # into /usr/local/bin, which build containers don't allow.
+  OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
+  ARCH="$(uname -m)"
+  case "$ARCH" in x86_64) ARCH="amd64" ;; aarch64) ARCH="arm64" ;; esac
+  echo "[vercel-migrate] installing Atlas ${ATLAS_VERSION} (${OS}-${ARCH})…"
   mkdir -p "$ATLAS_DIR"
-  curl -sSf https://atlasgo.sh | ATLAS_VERSION="$ATLAS_VERSION" ATLAS_INSTALL_DIR="$ATLAS_DIR" ATLAS_NO_MODIFY_PATH=1 sh
+  curl -fsSL -o "$ATLAS" "https://release.ariga.io/atlas/atlas-${OS}-${ARCH}-${ATLAS_VERSION}"
+  chmod +x "$ATLAS"
 fi
 "$ATLAS" version
 
@@ -53,11 +59,13 @@ echo "[vercel-migrate] validating migration directory checksums…"
 "$ATLAS" migrate validate --dir "file://atlas/migrations"
 
 echo "[vercel-migrate] migration status (before):"
+"$ATLAS" migrate status --env ci
 STATUS_JSON="$("$ATLAS" migrate status --env ci --format '{{ json . }}')"
-echo "$STATUS_JSON"
 
-CURRENT="$(printf '%s' "$STATUS_JSON" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{const s=JSON.parse(d);console.log(s.Current ?? "")})')"
-PENDING_COUNT="$(printf '%s' "$STATUS_JSON" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{const s=JSON.parse(d);console.log((s.Pending ?? []).length)})')"
+# process.stdout.write, not console.log — console.log colorizes primitives
+# when FORCE_COLOR is set, and stray ANSI codes would break the guards below.
+CURRENT="$(printf '%s' "$STATUS_JSON" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{const s=JSON.parse(d);process.stdout.write(String(s.Current ?? ""))})')"
+PENDING_COUNT="$(printf '%s' "$STATUS_JSON" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{const s=JSON.parse(d);process.stdout.write(String((s.Pending ?? []).length))})')"
 
 if [ "$PENDING_COUNT" = "0" ]; then
   echo "[vercel-migrate] no pending migrations — nothing to do."
