@@ -69,7 +69,7 @@ export default async function WorkbenchSkillDetailPage({ params }: PageProps) {
   let versions: SkillVersion[] = [];
   if (skill) {
     try {
-      const out = await invoke("list_skill_versions", { skillSlug }, ctx, { surface: "agent" });
+      const out = await invoke("list_skill_versions", { skillSlug }, ctx);
       const typed = out as {
         versions: Array<{
           id: string;
