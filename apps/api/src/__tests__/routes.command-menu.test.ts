@@ -114,10 +114,10 @@ describe("command.menu.suggest route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with contract name 'command.menu.suggest' and surface 'api'", async () => {
+  it("calls invoke with contract name 'suggest_commands' and surface 'api'", async () => {
     await app.fetch(post(PATH, { route: "/acme/prod/ask" }));
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("command.menu.suggest");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("suggest_commands");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -187,10 +187,10 @@ describe("command.menu.search route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with contract name 'command.menu.search' and surface 'api'", async () => {
+  it("calls invoke with contract name 'search_command_menu' and surface 'api'", async () => {
     await app.fetch(post(PATH, { query: "run", orgSlug: "acme", workspaceSlug: "prod" }));
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("command.menu.search");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("search_command_menu");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 

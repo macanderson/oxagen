@@ -32,7 +32,7 @@ function events(messageId: string): StreamEvent[] {
       type: "tool-call-start",
       messageId,
       toolCallId: "tcl_swarm",
-      capability: "research.swarm.start",
+      capability: "start_research_swarm",
       inputPreview: SWARM_INPUT,
       riskLevel: "low",
     },
@@ -48,7 +48,7 @@ function events(messageId: string): StreamEvent[] {
     {
       type: "approval-required",
       approvalId: "apr_swarm",
-      capability: "research.swarm.start",
+      capability: "start_research_swarm",
       inputPreview: SWARM_INPUT,
       riskLevel: "high",
       expiresAt: new Date(Date.now() + 5 * 60_000).toISOString(),
@@ -72,13 +72,20 @@ test.describe("chat.tool-io — tool calls render typed UI, never raw JSON", () 
     await composer.fill("Research Captain William Anderson");
     await page.getByRole("button", { name: /send message/i }).click();
 
-    // The tool-call card appears (collapsed). Expand it.
-    const toolCard = page.locator('[data-component="tool-call-card"]').first();
-    await expect(toolCard).toBeVisible({ timeout: 12_000 });
-    // The card renders collapsed (defaultOpen=false) — expand it deterministically.
-    const expandBtn = toolCard.getByRole("button", { name: /expand tool call details/i });
-    await expect(expandBtn).toBeVisible();
-    await expandBtn.click();
+    // Tool calls now render inside a collapsed ToolActivityGroup strip. Expand
+    // the group, then the tool's row, to reveal its card. The card renders with
+    // its header hidden (the row toggle is the disclosure), so the typed body is
+    // visible immediately once the row is open — no separate expand step.
+    const activityGroup = page.getByTestId("tool-activity-group");
+    await expect(activityGroup).toBeVisible({ timeout: 12_000 });
+    await activityGroup.getByRole("button", { name: /expand tool activity/i }).click();
+
+    const activityRow = page.getByTestId("tool-activity-row-tcl_swarm");
+    await expect(activityRow).toBeVisible({ timeout: 8_000 });
+    await activityRow.getByRole("button").first().click();
+
+    const toolCard = page.getByTestId("tool-call-card-tcl_swarm");
+    await expect(toolCard).toBeVisible({ timeout: 8_000 });
 
     // Humanized labels — not raw camelCase JSON keys.
     await expect(toolCard.getByText("Search depth")).toBeVisible({ timeout: 8_000 });

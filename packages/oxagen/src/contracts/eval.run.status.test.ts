@@ -41,6 +41,6 @@ describe("eval.run.status capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("eval.run.status")).toBe(evalRunStatus);
+    expect(getCapability("get_eval_status")).toBe(evalRunStatus);
   });
 });

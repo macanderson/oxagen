@@ -3,7 +3,7 @@ import { notificationsList } from "./notification.list";
 
 describe("notifications.list contract", () => {
   it("has the correct name and domain", () => {
-    expect(notificationsList.name).toBe("notification.list");
+    expect(notificationsList.name).toBe("list_notifications");
     expect(notificationsList.domain).toBe("notification");
   });
 

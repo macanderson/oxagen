@@ -142,9 +142,9 @@ export const schemaChatHandler: CapabilityHandler<typeof schemaChat> = async (in
 ${draft.text}
 
 CRITICAL EXECUTION RULE: You are an EXECUTOR, not an advisor. When the user asks to drop / delete / remove / rename / add / change / enable / disable anything, you MUST emit the mutation(s) that perform it in this same response. NEVER reply with only an acknowledgement or a question. Use the EXACT existing names from the draft summary above. Worked examples:
-- "drop the support schema" -> mutations: [{ "capability": "schema.delete", "input": { "schemaName": "support" } }]
-- "add a number_of_licenses field to the subscriptions schema" -> mutations: [{ "capability": "schema.property.upsert", "input": { "schemaName": "subscription", "ownerKind": "node", "ownerName": "Subscription", "key": "number_of_licenses", "dataType": "integer", "required": false } }]
-- "disable the billing schema" -> mutations: [{ "capability": "schema.toggle", "input": { "schemaName": "billing", "enabled": false } }]
+- "drop the support schema" -> mutations: [{ "capability": "delete_schema", "input": { "schemaName": "support" } }]
+- "add a number_of_licenses field to the subscriptions schema" -> mutations: [{ "capability": "upsert_schema_property", "input": { "schemaName": "subscription", "ownerKind": "node", "ownerName": "Subscription", "key": "number_of_licenses", "dataType": "integer", "required": false } }]
+- "disable the billing schema" -> mutations: [{ "capability": "toggle_schema", "input": { "schemaName": "billing", "enabled": false } }]
 
 
 Return your answer in TWO parts:
@@ -290,7 +290,7 @@ export function detectSimpleIntents(message: string, schemas: DraftSchema[]): Mu
     if (schema && ownerName && fields.length > 0) {
       for (const key of fields) {
         out.push({
-          capability: "schema.property.upsert",
+          capability: "upsert_schema_property",
           input: { schemaName: schema.name, ownerKind: "node", ownerName, key, dataType: inferDataType(key), required: false },
         });
       }
@@ -301,19 +301,19 @@ export function detectSimpleIntents(message: string, schemas: DraftSchema[]): Mu
   // DROP / DELETE / REMOVE a whole schema
   if (/\b(drop|delete|remove)\b/.test(m) && /\bschema\b/.test(m)) {
     const schema = matchSchema(m, schemas);
-    if (schema) return [{ capability: "schema.delete", input: { schemaName: schema.name } }];
+    if (schema) return [{ capability: "delete_schema", input: { schemaName: schema.name } }];
   }
 
   // DISABLE / DEACTIVATE / TURN OFF
   if (/\b(disable|deactivate|inactivate)\b|\bturn\s+off\b/.test(m)) {
     const schema = matchSchema(m, schemas);
-    if (schema) return [{ capability: "schema.toggle", input: { schemaName: schema.name, enabled: false } }];
+    if (schema) return [{ capability: "toggle_schema", input: { schemaName: schema.name, enabled: false } }];
   }
 
   // ENABLE / ACTIVATE / TURN ON
   if (/\b(enable|activate)\b|\bturn\s+on\b/.test(m)) {
     const schema = matchSchema(m, schemas);
-    if (schema) return [{ capability: "schema.toggle", input: { schemaName: schema.name, enabled: true } }];
+    if (schema) return [{ capability: "toggle_schema", input: { schemaName: schema.name, enabled: true } }];
   }
 
   return out;
@@ -322,17 +322,17 @@ export function detectSimpleIntents(message: string, schemas: DraftSchema[]): Mu
 /** Human-readable summary of fast-path mutations for the assistant reply. */
 export function describeMutations(muts: Mutation[]): string {
   const parts: string[] = [];
-  const props = muts.filter((m) => m.capability === "schema.property.upsert");
+  const props = muts.filter((m) => m.capability === "upsert_schema_property");
   if (props.length > 0) {
     const schemaName = props[0]?.input.schemaName;
     const keys = props.map((p) => `\`${String(p.input.key)}\``).join(", ");
     parts.push(`Added ${props.length} propert${props.length === 1 ? "y" : "ies"} (${keys}) to the ${schemaName} schema.`);
   }
   for (const m of muts) {
-    if (m.capability === "schema.delete") parts.push(`Dropped the ${m.input.schemaName} schema.`);
-    else if (m.capability === "schema.toggle") {
+    if (m.capability === "delete_schema") parts.push(`Dropped the ${m.input.schemaName} schema.`);
+    else if (m.capability === "toggle_schema") {
       parts.push(`${m.input.enabled ? "Activated" : "Deactivated"} the ${m.input.schemaName} schema.`);
-    } else if (m.capability === "schema.label.delete") parts.push(`Removed the ${m.input.name} label from ${m.input.schemaName}.`);
+    } else if (m.capability === "delete_schema_label") parts.push(`Removed the ${m.input.name} label from ${m.input.schemaName}.`);
   }
   return parts.join(" ") || "Applied the requested change.";
 }
@@ -394,7 +394,7 @@ export function buildProposedMutations(object: z.infer<typeof chatResponseSchema
     for (const label of schema.labels ?? []) {
       if (!label.name) continue;
       out.push({
-        capability: "schema.label.upsert",
+        capability: "upsert_schema_label",
         input: {
           schemaName,
           name: label.name,
@@ -410,7 +410,7 @@ export function buildProposedMutations(object: z.infer<typeof chatResponseSchema
       if (!rel.name) continue;
       const cardinality = normalizeCardinality(rel.cardinality);
       out.push({
-        capability: "schema.relationship.upsert",
+        capability: "upsert_schema_relationship",
         input: {
           schemaName,
           name: normalizeRelName(rel.name),
@@ -431,27 +431,27 @@ export function buildProposedMutations(object: z.infer<typeof chatResponseSchema
   for (const m of object.mutations ?? []) {
     const input: Record<string, unknown> = { ...m.input };
     const cap = m.capability;
-    if (cap === "schema.label.upsert" || cap === "schema.label.delete") {
+    if (cap === "upsert_schema_label" || cap === "delete_schema_label") {
       if (!input.name || !input.schemaName) continue;
-      if (cap === "schema.label.upsert" && !input.displayName) input.displayName = humanize(String(input.name));
-    } else if (cap === "schema.relationship.upsert" || cap === "schema.relationship.delete") {
+      if (cap === "upsert_schema_label" && !input.displayName) input.displayName = humanize(String(input.name));
+    } else if (cap === "upsert_schema_relationship" || cap === "delete_schema_relationship") {
       if (!input.name || !input.schemaName) continue;
       input.name = normalizeRelName(String(input.name));
-      if (cap === "schema.relationship.upsert") {
+      if (cap === "upsert_schema_relationship") {
         if (!input.displayName) input.displayName = humanize(String(input.name));
         const c = normalizeCardinality(input.cardinality);
         if (c) input.cardinality = c; else delete input.cardinality;
       }
-    } else if (cap === "schema.property.upsert") {
+    } else if (cap === "upsert_schema_property") {
       if (!input.ownerName || !input.key || !input.schemaName) continue;
       if (!input.ownerKind) input.ownerKind = "node";
       input.dataType = normalizeDataType(input.dataType);
       if (typeof input.required !== "boolean") input.required = false;
-    } else if (cap === "schema.property.delete") {
+    } else if (cap === "delete_schema_property") {
       if (!input.ownerName || !input.key) continue;
-    } else if (cap === "schema.delete") {
+    } else if (cap === "delete_schema") {
       if (!input.schemaName) continue;
-    } else if (cap === "schema.toggle") {
+    } else if (cap === "toggle_schema") {
       if (!input.schemaName || typeof input.enabled !== "boolean") continue;
     }
     out.push({ capability: cap, input });

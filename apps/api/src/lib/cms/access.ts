@@ -71,6 +71,7 @@ export interface LeadInput {
   trackingCode?: string | null;
   source?: string | null;
   pagePath?: string | null;
+  message?: string | null;
   marketingConsent?: boolean;
 }
 
@@ -106,6 +107,7 @@ async function upsertLeadTx(tx: Tx, input: LeadInput): Promise<LeadRow> {
       trackingCode: input.trackingCode ?? null,
       source: input.source ?? null,
       pagePath: input.pagePath ?? null,
+      message: input.message ?? null,
       marketingConsent: input.marketingConsent ?? true,
     })
     .onConflictDoUpdate({
@@ -126,6 +128,7 @@ async function upsertLeadTx(tx: Tx, input: LeadInput): Promise<LeadRow> {
         trackingCode: sql`COALESCE(${input.trackingCode ?? null}, ${leads.trackingCode})`,
         source: sql`COALESCE(${input.source ?? null}, ${leads.source})`,
         pagePath: sql`COALESCE(${input.pagePath ?? null}, ${leads.pagePath})`,
+        message: sql`COALESCE(${input.message ?? null}, ${leads.message})`,
         updatedAt: sql`now()`,
       },
     })
@@ -190,6 +193,14 @@ export async function captureLeadAndIssueCode(
     });
     return { readUrl: readerUrl(edition, code), leadId: lead.id };
   });
+}
+
+/**
+ * Capture/refresh a lead WITHOUT minting a book code — used by submissions
+ * that aren't requesting the book (e.g. the homepage "Get a demo" form).
+ */
+export async function captureLead(input: LeadInput): Promise<LeadRow> {
+  return withSystemDb((tx) => upsertLeadTx(tx, input));
 }
 
 /** Look up an existing lead by email (for the resend flow). */

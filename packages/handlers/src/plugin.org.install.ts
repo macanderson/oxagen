@@ -11,6 +11,7 @@ import {
   listServers,
 } from "@oxagen/plugins/registry";
 import type { AuthKind } from "@oxagen/plugins/registry";
+import { detectOAuthProtected, installTemplatesFromPack } from "@oxagen/plugins";
 import { upsertCapabilityInstall } from "./capability-install";
 import { logger } from "./logger";
 
@@ -37,15 +38,23 @@ export interface InstallOneInput {
   };
 }
 
+export interface InstallOneResult {
+  id: string;
+  /** Effective auth kind on the listing — "oauth" means the server will not
+   * work until the user completes the OAuth flow. */
+  authKind: "oauth" | "secret" | "none";
+}
+
 /**
  * Shared install logic — called by both plugin.org.install and plugin.org.install_bulk.
  * Workspace scope comes from ctx, never the request body (IDOR-safe).
- * Returns the installed plugin row id on success. Throws a descriptive Error on failure.
+ * Returns the installed plugin row id + effective authKind on success.
+ * Throws a descriptive Error on failure.
  */
 export async function installOne(
   ctx: CapabilityContext,
   input: InstallOneInput,
-): Promise<string> {
+): Promise<InstallOneResult> {
   if (!ctx.workspaceId) {
     throw new Error(
       "[plugin.org.install] workspaceId is required (scoped capability)",
@@ -88,7 +97,35 @@ export async function installOne(
         manifest,
       }),
     );
-    return installedId;
+
+    // Seed any portable sandbox templates this pack ships (Spec §6) into the
+    // workspace default environment, idempotently. Best-effort: a seeding
+    // failure (e.g. no default environment) must not fail the pack install —
+    // the capability listing is already committed — so it is logged, not thrown.
+    if (manifest.sandboxTemplates && manifest.sandboxTemplates.length > 0) {
+      try {
+        const result = await installTemplatesFromPack(
+          { orgId: ctx.orgId, workspaceId: ctx.workspaceId!, userId: ctx.userId },
+          { packId: pluginId, templates: manifest.sandboxTemplates },
+        );
+        logger.info(
+          {
+            pluginId,
+            orgId: ctx.orgId,
+            workspaceId: ctx.workspaceId,
+            installed: result.installed.map((t) => t.slug),
+          },
+          "plugin.org.install: seeded pack sandbox templates",
+        );
+      } catch (err) {
+        logger.error(
+          { err, pluginId, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+          "plugin.org.install: failed to seed pack sandbox templates (pack listing still installed)",
+        );
+      }
+    }
+
+    return { id: installedId, authKind: "none" };
   }
 
   // ── MCP server / integration / agent_skill / knowledge_source path ──────────
@@ -184,6 +221,28 @@ export async function installOne(
     }
   }
 
+  // ── OAuth detection probe ────────────────────────────────────────────────────
+  // Registry metadata cannot declare OAuth (deriveAuthKind only yields
+  // "secret"/"none"), so an OAuth-protected remote like mcp.stripe.com would be
+  // stored as authKind "none" — the UI would never prompt to authenticate and
+  // the agent runtime would 401 silently. Probe the live endpoint (RFC 9728
+  // well-known / 401 challenge) and upgrade to "oauth". Never downgrades an
+  // explicit "oauth"/"secret" choice, and a probe failure keeps the derived kind.
+  if (
+    (pluginType === "mcp_server" || pluginType === "integration") &&
+    authKind === "none" &&
+    /^https?:\/\//.test(endpointUrl)
+  ) {
+    const oauthProtected = await detectOAuthProtected(endpointUrl);
+    if (oauthProtected) {
+      authKind = "oauth";
+      logger.info(
+        { serverName: name, endpointUrl },
+        "plugin.org.install: endpoint is OAuth-protected, upgrading authKind to oauth",
+      );
+    }
+  }
+
   // Resolve icon URL from the catalog_servers table (if synced) for a richer
   // installed-plugins display. Falls back to null if no catalog entry exists.
   let resolvedIconUrl: string | null = null;
@@ -241,24 +300,33 @@ export async function installOne(
         ],
         set: {
           iconUrl: sql`EXCLUDED.icon_url`,
+          // Upgrade-only auth-kind heal: a reinstall that probed OAuth fixes a
+          // pre-probe listing stored as "none", but a transient probe failure
+          // ("none") never downgrades a known-oauth row.
+          authKind: sql`CASE WHEN EXCLUDED.auth_kind = 'oauth' THEN 'oauth' ELSE ${schema.pluginInstalledPlugins.authKind} END`,
           updatedAt: sql`now()`,
         },
       })
-      .returning({ id: schema.pluginInstalledPlugins.id });
+      .returning({
+        id: schema.pluginInstalledPlugins.id,
+        authKind: schema.pluginInstalledPlugins.authKind,
+      });
     return row ?? null;
   });
 
   if (!inserted) {
     throw new Error("[plugin.org.install] Insert returned no row.");
   }
-  return inserted.id;
+  // Report the PERSISTED authKind (the upgrade-only conflict clause may keep a
+  // pre-existing "oauth" that this call's probe missed).
+  return { id: inserted.id, authKind: inserted.authKind as InstallOneResult["authKind"] };
 }
 
 export const handler: CapabilityHandlerFn = async (input, ctx) => {
   const typed = input as InstallOneInput;
-  let orgListingId: string;
+  let installed: InstallOneResult;
   try {
-    orgListingId = await installOne(ctx, typed);
+    installed = await installOne(ctx, typed);
   } catch (err) {
     logger.error(
       {
@@ -278,7 +346,7 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
     actorUserId: ctx.userId ?? null,
     orgId: ctx.orgId,
     workspaceId: ctx.workspaceId ?? null,
-    capability: "plugin.org.install",
+    capability: "install_plugin",
     outcome: "success",
     ip: null,
     userAgent: null,
@@ -287,12 +355,13 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
 
   logger.info(
     {
-      orgListingId,
+      orgListingId: installed.id,
+      authKind: installed.authKind,
       orgId: ctx.orgId,
       workspaceId: ctx.workspaceId,
       pluginType: typed.pluginType,
     },
     "plugin.org.install: ok",
   );
-  return { orgListingId };
+  return { orgListingId: installed.id, authKind: installed.authKind };
 };

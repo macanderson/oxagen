@@ -1,7 +1,7 @@
 {
   "capabilities": [
     {
-      "name": "a2a.card.get",
+      "name": "get_a2a_card",
       "file": "a2a.card.get.ts",
       "domain": "a2a",
       "mode": "sync",
@@ -12,14 +12,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "agent.approval.resolve",
+      "name": "resolve_approval",
       "file": "agent.approval.resolve.ts",
       "domain": "agent",
       "mode": "sync",
@@ -30,15 +30,15 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
         "e2e": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "agent.background_task.cancel",
+      "name": "cancel_background_task",
       "file": "agent.background_task.cancel.ts",
       "domain": "agent",
       "mode": "sync",
@@ -49,15 +49,15 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
         "e2e": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "agent.background_task.read",
+      "name": "get_background_task",
       "file": "agent.background_task.read.ts",
       "domain": "agent",
       "mode": "sync",
@@ -68,15 +68,15 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
         "e2e": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "agent.background_task.start",
+      "name": "start_background_task",
       "file": "agent.background_task.start.ts",
       "domain": "agent",
       "mode": "async",
@@ -87,15 +87,15 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
         "e2e": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "agent.code.execute",
+      "name": "execute_code",
       "file": "agent.code.execute.ts",
       "domain": "agent",
       "mode": "sync",
@@ -106,14 +106,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "agent.compose",
+      "name": "run_capability_chain",
       "file": "agent.compose.ts",
       "domain": "agent",
       "mode": "sync",
@@ -124,14 +124,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "agent.debug.trace",
+      "name": "debug_execution",
       "file": "agent.debug.trace.ts",
       "domain": "agent",
       "mode": "sync",
@@ -142,14 +142,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "agent.definition.create",
+      "name": "create_agent_def",
       "file": "agent.definition.create.ts",
       "domain": "agent",
       "mode": "sync",
@@ -160,15 +160,15 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
         "e2e": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "agent.definition.get",
+      "name": "get_agent_def",
       "file": "agent.definition.get.ts",
       "domain": "agent",
       "mode": "sync",
@@ -179,16 +179,16 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
         "e2e": false,
-        "docs": true,
+        "docs": false,
         "app": true
       }
     },
     {
-      "name": "agent.definition.list",
+      "name": "list_agent_defs",
       "file": "agent.definition.list.ts",
       "domain": "agent",
       "mode": "sync",
@@ -199,15 +199,15 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
         "e2e": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "agent.definition.publish",
+      "name": "publish_agent_def",
       "file": "agent.definition.publish.ts",
       "domain": "agent",
       "mode": "sync",
@@ -218,15 +218,15 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
         "e2e": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "agent.definition.suggest",
+      "name": "suggest_agent_def",
       "file": "agent.definition.suggest.ts",
       "domain": "agent",
       "mode": "sync",
@@ -237,14 +237,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "agent.definition.update",
+      "name": "update_agent_def",
       "file": "agent.definition.update.ts",
       "domain": "agent",
       "mode": "sync",
@@ -255,15 +255,15 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
         "e2e": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "agent.deploy",
+      "name": "deploy_agent",
       "file": "agent.deploy.ts",
       "domain": "agent",
       "mode": "sync",
@@ -274,15 +274,69 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
         "e2e": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "agent.execution.lineage",
+      "name": "bind_agent_environment",
+      "file": "agent.environment.bind.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false,
+        "app": true
+      }
+    },
+    {
+      "name": "list_agent_environments",
+      "file": "agent.environment.list.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false,
+        "app": true
+      }
+    },
+    {
+      "name": "unbind_agent_environment",
+      "file": "agent.environment.unbind.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false,
+        "app": true
+      }
+    },
+    {
+      "name": "get_execution_lineage",
       "file": "agent.execution.lineage.ts",
       "domain": "agent",
       "mode": "sync",
@@ -293,14 +347,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
+        "api": false,
+        "mcp": false,
         "unit": false,
         "docs": false
       }
     },
     {
-      "name": "agent.execution.list",
+      "name": "list_executions",
       "file": "agent.execution.list.ts",
       "domain": "agent",
       "mode": "sync",
@@ -311,15 +365,15 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "e2e": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "e2e": false,
+        "docs": false
       }
     },
     {
-      "name": "agent.execution.record",
+      "name": "record_execution",
       "file": "agent.execution.record.ts",
       "domain": "agent",
       "mode": "sync",
@@ -329,15 +383,15 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
         "e2e": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "agent.feature.verify",
+      "name": "verify_feature",
       "file": "agent.feature.verify.ts",
       "domain": "agent",
       "mode": "sync",
@@ -347,14 +401,14 @@
         "agent"
       ],
       "layers": {
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "agent.file_lock.acquire",
+      "name": "acquire_file_lock",
       "file": "agent.file_lock.acquire.ts",
       "domain": "agent",
       "mode": "sync",
@@ -365,14 +419,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "agent.file_lock.list",
+      "name": "list_file_locks",
       "file": "agent.file_lock.list.ts",
       "domain": "agent",
       "mode": "sync",
@@ -383,14 +437,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "agent.file_lock.release",
+      "name": "release_file_lock",
       "file": "agent.file_lock.release.ts",
       "domain": "agent",
       "mode": "sync",
@@ -401,14 +455,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "agent.mcp.delete",
+      "name": "delete_mcp_server",
       "file": "agent.mcp.delete.ts",
       "domain": "agent",
       "mode": "sync",
@@ -418,14 +472,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "agent.mcp.list",
+      "name": "list_mcp_servers",
       "file": "agent.mcp.list.ts",
       "domain": "agent",
       "mode": "sync",
@@ -436,15 +490,15 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
         "e2e": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "agent.mcp.register",
+      "name": "register_mcp_server",
       "file": "agent.mcp.register.ts",
       "domain": "agent",
       "mode": "sync",
@@ -454,15 +508,15 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
         "e2e": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "agent.mcp.set_enabled",
+      "name": "set_mcp_enabled",
       "file": "agent.mcp.set_enabled.ts",
       "domain": "agent",
       "mode": "sync",
@@ -472,14 +526,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "agent.mcp_consent.list",
+      "name": "list_mcp_consents",
       "file": "agent.mcp_consent.list.ts",
       "domain": "agent",
       "mode": "sync",
@@ -490,14 +544,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "agent.mcp_consent.resolve",
+      "name": "resolve_mcp_consent",
       "file": "agent.mcp_consent.resolve.ts",
       "domain": "agent",
       "mode": "sync",
@@ -508,14 +562,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "agent.memory.cite",
+      "name": "cite_memory",
       "file": "agent.memory.cite.ts",
       "domain": "agent",
       "mode": "sync",
@@ -526,14 +580,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
+        "api": false,
+        "mcp": false,
         "unit": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "agent.memory.delete",
+      "name": "delete_memory",
       "file": "agent.memory.delete.ts",
       "domain": "agent",
       "mode": "sync",
@@ -544,14 +598,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "agent.memory.list",
+      "name": "list_memories",
       "file": "agent.memory.list.ts",
       "domain": "agent",
       "mode": "sync",
@@ -562,15 +616,15 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
         "e2e": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "agent.memory.promote",
+      "name": "promote_memory",
       "file": "agent.memory.promote.ts",
       "domain": "agent",
       "mode": "sync",
@@ -581,14 +635,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
+        "api": false,
+        "mcp": false,
         "unit": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "agent.memory.recall",
+      "name": "recall_memory",
       "file": "agent.memory.recall.ts",
       "domain": "agent",
       "mode": "sync",
@@ -599,15 +653,15 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
         "e2e": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "agent.memory.remember",
+      "name": "save_memory",
       "file": "agent.memory.remember.ts",
       "domain": "agent",
       "mode": "sync",
@@ -618,14 +672,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "agent.memory.update",
+      "name": "update_memory",
       "file": "agent.memory.update.ts",
       "domain": "agent",
       "mode": "sync",
@@ -636,14 +690,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "agent.memory.write",
+      "name": "write_memory",
       "file": "agent.memory.write.ts",
       "domain": "agent",
       "mode": "sync",
@@ -654,16 +708,16 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
         "e2e": false,
-        "docs": true,
+        "docs": false,
         "app": true
       }
     },
     {
-      "name": "agent.memory_citation.list",
+      "name": "list_memory_citations",
       "file": "agent.memory_citation.list.ts",
       "domain": "agent",
       "mode": "sync",
@@ -674,14 +728,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
+        "api": false,
+        "mcp": false,
         "unit": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "agent.memory_evidence.attach",
+      "name": "attach_memory_evidence",
       "file": "agent.memory_evidence.attach.ts",
       "domain": "agent",
       "mode": "sync",
@@ -692,14 +746,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
+        "api": false,
+        "mcp": false,
         "unit": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "agent.memory_import.commit",
+      "name": "commit_memory_import",
       "file": "agent.memory_import.commit.ts",
       "domain": "agent",
       "mode": "sync",
@@ -710,14 +764,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "agent.memory_import.parse",
+      "name": "parse_memory_import",
       "file": "agent.memory_import.parse.ts",
       "domain": "agent",
       "mode": "sync",
@@ -728,14 +782,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "agent.memory_policy.read",
+      "name": "get_memory_policy",
       "file": "agent.memory_policy.read.ts",
       "domain": "agent",
       "mode": "sync",
@@ -746,14 +800,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "agent.memory_policy.write",
+      "name": "update_memory_policy",
       "file": "agent.memory_policy.write.ts",
       "domain": "agent",
       "mode": "sync",
@@ -764,14 +818,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "agent.memory_promotion.list",
+      "name": "list_memory_promotions",
       "file": "agent.memory_promotion.list.ts",
       "domain": "agent",
       "mode": "sync",
@@ -782,14 +836,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
+        "api": false,
+        "mcp": false,
         "unit": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "agent.plan.approve",
+      "name": "approve_plan",
       "file": "agent.plan.approve.ts",
       "domain": "agent",
       "mode": "sync",
@@ -800,15 +854,15 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
         "e2e": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "agent.plan.create",
+      "name": "create_plan",
       "file": "agent.plan.create.ts",
       "domain": "agent",
       "mode": "sync",
@@ -819,14 +873,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "agent.repo.edit",
+      "name": "edit_repo_file",
       "file": "agent.repo.edit.ts",
       "domain": "agent",
       "mode": "sync",
@@ -837,13 +891,13 @@
       ],
       "layers": {
         "api": false,
-        "mcp": true,
+        "mcp": false,
         "unit": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "agent.sandbox.exec",
+      "name": "run_sandbox_command",
       "file": "agent.sandbox.exec.ts",
       "domain": "agent",
       "mode": "sync",
@@ -854,14 +908,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "agent.sandbox.snapshot",
+      "name": "snapshot_sandbox",
       "file": "agent.sandbox.snapshot.ts",
       "domain": "agent",
       "mode": "sync",
@@ -872,14 +926,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "agent.sandbox.start",
+      "name": "start_sandbox",
       "file": "agent.sandbox.start.ts",
       "domain": "agent",
       "mode": "sync",
@@ -890,14 +944,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "agent.sandbox.stop",
+      "name": "stop_sandbox",
       "file": "agent.sandbox.stop.ts",
       "domain": "agent",
       "mode": "sync",
@@ -908,14 +962,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "agent.sandbox_file.list",
+      "name": "list_sandbox_files",
       "file": "agent.sandbox_file.list.ts",
       "domain": "agent",
       "mode": "sync",
@@ -927,14 +981,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "agent.sandbox_file.read",
+      "name": "read_sandbox_file",
       "file": "agent.sandbox_file.read.ts",
       "domain": "agent",
       "mode": "sync",
@@ -946,14 +1000,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "agent.skill.list",
+      "name": "list_agent_skills",
       "file": "agent.skill.list.ts",
       "domain": "agent",
       "mode": "sync",
@@ -964,15 +1018,15 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
         "e2e": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "agent.skill.load",
+      "name": "load_skill",
       "file": "agent.skill.load.ts",
       "domain": "agent",
       "mode": "sync",
@@ -983,15 +1037,15 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
         "e2e": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "agent.subagent.aggregate",
+      "name": "aggregate_subagents",
       "file": "agent.subagent.aggregate.ts",
       "domain": "agent",
       "mode": "sync",
@@ -1002,15 +1056,15 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
         "e2e": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "agent.subagent.cancel",
+      "name": "cancel_subagent",
       "file": "agent.subagent.cancel.ts",
       "domain": "agent",
       "mode": "sync",
@@ -1021,14 +1075,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "agent.subagent.dispatch",
+      "name": "dispatch_subagent",
       "file": "agent.subagent.dispatch.ts",
       "domain": "agent",
       "mode": "async",
@@ -1039,15 +1093,15 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
         "e2e": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "agent.subagent.logs",
+      "name": "get_subagent_logs",
       "file": "agent.subagent.logs.ts",
       "domain": "agent",
       "mode": "sync",
@@ -1058,14 +1112,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "agent.subagent.siblings",
+      "name": "list_subagent_siblings",
       "file": "agent.subagent.siblings.ts",
       "domain": "agent",
       "mode": "sync",
@@ -1076,14 +1130,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "agent.subagent_fanout.get",
+      "name": "get_subagent_fanout",
       "file": "agent.subagent_fanout.get.ts",
       "domain": "agent",
       "mode": "sync",
@@ -1094,15 +1148,15 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
         "e2e": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "agent.subagent_fanout.list",
+      "name": "list_subagent_fanouts",
       "file": "agent.subagent_fanout.list.ts",
       "domain": "agent",
       "mode": "sync",
@@ -1113,15 +1167,15 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
         "e2e": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "agent.subagent_result.get",
+      "name": "get_subagent_result",
       "file": "agent.subagent_result.get.ts",
       "domain": "agent",
       "mode": "sync",
@@ -1132,14 +1186,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "agent.tool.list",
+      "name": "list_agent_tools",
       "file": "agent.tool.list.ts",
       "domain": "agent",
       "mode": "sync",
@@ -1150,15 +1204,15 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
         "e2e": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "agent.trace.get",
+      "name": "get_execution_trace",
       "file": "agent.trace.get.ts",
       "domain": "agent",
       "mode": "sync",
@@ -1169,15 +1223,15 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "e2e": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "e2e": false,
+        "docs": false
       }
     },
     {
-      "name": "agent.trigger.create",
+      "name": "create_trigger",
       "file": "agent.trigger.create.ts",
       "domain": "agent",
       "mode": "sync",
@@ -1188,15 +1242,15 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
         "e2e": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "agent.trigger.delete",
+      "name": "delete_trigger",
       "file": "agent.trigger.delete.ts",
       "domain": "agent",
       "mode": "sync",
@@ -1207,15 +1261,15 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
         "e2e": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "agent.trigger.list",
+      "name": "list_triggers",
       "file": "agent.trigger.list.ts",
       "domain": "agent",
       "mode": "sync",
@@ -1226,15 +1280,15 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
         "e2e": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "agent.trigger.update",
+      "name": "update_trigger",
       "file": "agent.trigger.update.ts",
       "domain": "agent",
       "mode": "sync",
@@ -1245,15 +1299,15 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
         "e2e": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "agent.ui.render",
+      "name": "render_agent_ui",
       "file": "agent.ui.render.ts",
       "domain": "agent",
       "mode": "sync",
@@ -1262,12 +1316,12 @@
       ],
       "layers": {
         "schema": true,
-        "docs": true,
-        "unit": true
+        "docs": false,
+        "unit": false
       }
     },
     {
-      "name": "api.key.create",
+      "name": "create_api_key",
       "file": "api.key.create.ts",
       "domain": "api_key",
       "mode": "sync",
@@ -1277,15 +1331,15 @@
         "agent"
       ],
       "layers": {
-        "api": true,
-        "docs": true,
-        "mcp": true,
-        "unit": true,
+        "api": false,
+        "docs": false,
+        "mcp": false,
+        "unit": false,
         "app": true
       }
     },
     {
-      "name": "api.key.revoke",
+      "name": "revoke_api_key",
       "file": "api.key.revoke.ts",
       "domain": "api_key",
       "mode": "sync",
@@ -1294,15 +1348,15 @@
         "mcp"
       ],
       "layers": {
-        "api": true,
-        "docs": true,
-        "mcp": true,
-        "unit": true,
+        "api": false,
+        "docs": false,
+        "mcp": false,
+        "unit": false,
         "app": true
       }
     },
     {
-      "name": "api.key.rotate",
+      "name": "rotate_api_key",
       "file": "api.key.rotate.ts",
       "domain": "api_key",
       "mode": "sync",
@@ -1311,15 +1365,15 @@
         "mcp"
       ],
       "layers": {
-        "api": true,
-        "docs": true,
-        "mcp": true,
-        "unit": true,
+        "api": false,
+        "docs": false,
+        "mcp": false,
+        "unit": false,
         "app": true
       }
     },
     {
-      "name": "archive.create",
+      "name": "create_archive",
       "file": "archive.create.ts",
       "domain": "document",
       "mode": "sync",
@@ -1330,14 +1384,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "asset.upload",
+      "name": "upload_asset",
       "file": "asset.upload.ts",
       "domain": "asset",
       "mode": "sync",
@@ -1348,15 +1402,15 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
         "e2e": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "audit.log.query",
+      "name": "query_audit_log",
       "file": "audit.log.query.ts",
       "domain": "audit",
       "mode": "sync",
@@ -1368,14 +1422,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "automation.create",
+      "name": "create_automation",
       "file": "automation.create.ts",
       "domain": "automation",
       "mode": "sync",
@@ -1387,14 +1441,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "automation.disable",
+      "name": "disable_automation",
       "file": "automation.disable.ts",
       "domain": "automation",
       "mode": "sync",
@@ -1406,14 +1460,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "automation.enable",
+      "name": "enable_automation",
       "file": "automation.enable.ts",
       "domain": "automation",
       "mode": "sync",
@@ -1425,14 +1479,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "automation.list",
+      "name": "list_automations",
       "file": "automation.list.ts",
       "domain": "automation",
       "mode": "sync",
@@ -1444,13 +1498,13 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "docs": true,
-        "mcp": true
+        "api": false,
+        "docs": false,
+        "mcp": false
       }
     },
     {
-      "name": "automation.trigger",
+      "name": "trigger_automation",
       "file": "automation.trigger.ts",
       "domain": "automation",
       "mode": "sync",
@@ -1462,13 +1516,13 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "docs": true,
-        "mcp": true
+        "api": false,
+        "docs": false,
+        "mcp": false
       }
     },
     {
-      "name": "automation.update",
+      "name": "update_automation",
       "file": "automation.update.ts",
       "domain": "automation",
       "mode": "sync",
@@ -1480,14 +1534,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "billing.credits.purchase",
+      "name": "purchase_credits",
       "file": "billing.credits.purchase.ts",
       "domain": "billing",
       "mode": "sync",
@@ -1498,15 +1552,15 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "e2e": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "e2e": false,
+        "docs": false
       }
     },
     {
-      "name": "billing.subscription.read",
+      "name": "get_subscription",
       "file": "billing.subscription.read.ts",
       "domain": "billing",
       "mode": "sync",
@@ -1517,15 +1571,15 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
         "e2e": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "billing.subscription_upgrade.start",
+      "name": "start_subscription_upgrade",
       "file": "billing.subscription_upgrade.start.ts",
       "domain": "billing",
       "mode": "sync",
@@ -1536,15 +1590,15 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
         "e2e": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "billing.usage.breakdown",
+      "name": "get_usage_breakdown",
       "file": "billing.usage.breakdown.ts",
       "domain": "billing",
       "mode": "sync",
@@ -1555,15 +1609,15 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "e2e": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "e2e": false,
+        "docs": false
       }
     },
     {
-      "name": "browser.click",
+      "name": "click_page",
       "file": "browser.click.ts",
       "domain": "browser",
       "mode": "sync",
@@ -1573,14 +1627,14 @@
         "agent"
       ],
       "layers": {
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "browser.fill",
+      "name": "fill_page",
       "file": "browser.fill.ts",
       "domain": "browser",
       "mode": "sync",
@@ -1590,14 +1644,14 @@
         "agent"
       ],
       "layers": {
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "browser.navigate",
+      "name": "navigate_page",
       "file": "browser.navigate.ts",
       "domain": "browser",
       "mode": "sync",
@@ -1607,14 +1661,14 @@
         "agent"
       ],
       "layers": {
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "browser.read",
+      "name": "read_page",
       "file": "browser.read.ts",
       "domain": "browser",
       "mode": "sync",
@@ -1624,14 +1678,14 @@
         "agent"
       ],
       "layers": {
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "browser.refresh",
+      "name": "refresh_page",
       "file": "browser.refresh.ts",
       "domain": "browser",
       "mode": "sync",
@@ -1641,14 +1695,14 @@
         "agent"
       ],
       "layers": {
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "browser.screenshot",
+      "name": "screenshot_page",
       "file": "browser.screenshot.ts",
       "domain": "browser",
       "mode": "sync",
@@ -1658,14 +1712,14 @@
         "agent"
       ],
       "layers": {
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "browser.submit",
+      "name": "submit_page",
       "file": "browser.submit.ts",
       "domain": "browser",
       "mode": "sync",
@@ -1675,14 +1729,14 @@
         "agent"
       ],
       "layers": {
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "budget.policy.read",
+      "name": "get_user_budget",
       "file": "budget.policy.read.ts",
       "domain": "user",
       "mode": "sync",
@@ -1693,14 +1747,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "docs": true,
-        "mcp": true,
-        "unit": true
+        "api": false,
+        "docs": false,
+        "mcp": false,
+        "unit": false
       }
     },
     {
-      "name": "budget.policy.write",
+      "name": "update_user_budget",
       "file": "budget.policy.write.ts",
       "domain": "user",
       "mode": "sync",
@@ -1711,15 +1765,15 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "docs": true,
-        "mcp": true,
-        "unit": true,
+        "api": false,
+        "docs": false,
+        "mcp": false,
+        "unit": false,
         "app": true
       }
     },
     {
-      "name": "chat.message.execution",
+      "name": "get_message_execution",
       "file": "chat.message.execution.ts",
       "domain": "chat",
       "mode": "sync",
@@ -1729,15 +1783,15 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
         "e2e": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "chat.message.send",
+      "name": "send_message",
       "file": "chat.message.send.ts",
       "domain": "chat",
       "mode": "async",
@@ -1747,15 +1801,15 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "e2e": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "e2e": false,
+        "docs": false
       }
     },
     {
-      "name": "code.diff",
+      "name": "diff_code",
       "file": "code.diff.ts",
       "domain": "code",
       "mode": "sync",
@@ -1766,14 +1820,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "code.format",
+      "name": "format_code",
       "file": "code.format.ts",
       "domain": "code",
       "mode": "sync",
@@ -1784,14 +1838,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "code.map",
+      "name": "get_code_map",
       "file": "code.map.ts",
       "domain": "code",
       "mode": "sync",
@@ -1803,14 +1857,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "code.patch",
+      "name": "patch_code",
       "file": "code.patch.ts",
       "domain": "code",
       "mode": "sync",
@@ -1821,14 +1875,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "command.menu.search",
+      "name": "search_command_menu",
       "file": "command.menu.search.ts",
       "domain": "command",
       "mode": "sync",
@@ -1838,13 +1892,13 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "command.menu.suggest",
+      "name": "suggest_commands",
       "file": "command.menu.suggest.ts",
       "domain": "command",
       "mode": "sync",
@@ -1854,14 +1908,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "unit": true,
-        "docs": true,
+        "api": false,
+        "unit": false,
+        "docs": false,
         "app": true
       }
     },
     {
-      "name": "connection.create",
+      "name": "create_connection",
       "file": "connection.create.ts",
       "domain": "connection",
       "mode": "sync",
@@ -1873,13 +1927,13 @@
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "connection.delete",
+      "name": "delete_connection",
       "file": "connection.delete.ts",
       "domain": "connection",
       "mode": "async",
@@ -1891,13 +1945,13 @@
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "connection.get",
+      "name": "get_connection",
       "file": "connection.get.ts",
       "domain": "connection",
       "mode": "sync",
@@ -1909,13 +1963,13 @@
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "connection.list",
+      "name": "list_connections",
       "file": "connection.list.ts",
       "domain": "connection",
       "mode": "sync",
@@ -1927,14 +1981,14 @@
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": true,
-        "unit": true,
-        "docs": true,
+        "mcp": false,
+        "unit": false,
+        "docs": false,
         "app": true
       }
     },
     {
-      "name": "connection.mappings.get",
+      "name": "get_connection_mappings",
       "file": "connection.mappings.get.ts",
       "domain": "connection",
       "mode": "sync",
@@ -1946,13 +2000,13 @@
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "connection.mappings.set",
+      "name": "set_connection_mappings",
       "file": "connection.mappings.set.ts",
       "domain": "connection",
       "mode": "sync",
@@ -1964,13 +2018,13 @@
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "connection.mappings.suggest",
+      "name": "suggest_connection_mappings",
       "file": "connection.mappings.suggest.ts",
       "domain": "connection",
       "mode": "sync",
@@ -1982,13 +2036,13 @@
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "connection.pause",
+      "name": "pause_connection",
       "file": "connection.pause.ts",
       "domain": "connection",
       "mode": "sync",
@@ -2000,13 +2054,13 @@
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "connection.preview",
+      "name": "preview_connection",
       "file": "connection.preview.ts",
       "domain": "connection",
       "mode": "sync",
@@ -2018,13 +2072,13 @@
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "connection.update",
+      "name": "update_connection",
       "file": "connection.update.ts",
       "domain": "connection",
       "mode": "sync",
@@ -2036,13 +2090,13 @@
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "conversation.archive",
+      "name": "archive_conversation",
       "file": "conversation.archive.ts",
       "domain": "conversation",
       "mode": "sync",
@@ -2053,15 +2107,15 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false,
         "app": true
       }
     },
     {
-      "name": "conversation.attachment.add",
+      "name": "add_conversation_attachment",
       "file": "conversation.attachment.add.ts",
       "domain": "conversation",
       "mode": "sync",
@@ -2072,14 +2126,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "conversation.chat",
+      "name": "post_conversation_message",
       "file": "conversation.chat.ts",
       "domain": "conversation",
       "mode": "sync",
@@ -2089,13 +2143,13 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "docs": true,
-        "mcp": true
+        "api": false,
+        "docs": false,
+        "mcp": false
       }
     },
     {
-      "name": "conversation.delete",
+      "name": "delete_conversation",
       "file": "conversation.delete.ts",
       "domain": "conversation",
       "mode": "sync",
@@ -2106,15 +2160,15 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false,
         "app": true
       }
     },
     {
-      "name": "conversation.export",
+      "name": "export_conversation",
       "file": "conversation.export.ts",
       "domain": "conversation",
       "mode": "sync",
@@ -2125,14 +2179,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "conversation.files.list",
+      "name": "list_conversation_files",
       "file": "conversation.files.list.ts",
       "domain": "conversation",
       "mode": "sync",
@@ -2143,14 +2197,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "conversation.list",
+      "name": "list_conversations",
       "file": "conversation.list.ts",
       "domain": "conversation",
       "mode": "sync",
@@ -2161,16 +2215,16 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
         "e2e": false,
-        "docs": true,
+        "docs": false,
         "app": true
       }
     },
     {
-      "name": "conversation.purge",
+      "name": "purge_conversations",
       "file": "conversation.purge.ts",
       "domain": "conversation",
       "mode": "sync",
@@ -2181,15 +2235,15 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "docs": true,
-        "mcp": true,
-        "unit": true,
+        "api": false,
+        "docs": false,
+        "mcp": false,
+        "unit": false,
         "app": true
       }
     },
     {
-      "name": "conversation.rename",
+      "name": "rename_conversation",
       "file": "conversation.rename.ts",
       "domain": "conversation",
       "mode": "sync",
@@ -2200,15 +2254,15 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "docs": true,
-        "mcp": true,
-        "unit": true,
+        "api": false,
+        "docs": false,
+        "mcp": false,
+        "unit": false,
         "app": true
       }
     },
     {
-      "name": "document.create",
+      "name": "create_document",
       "file": "document.create.ts",
       "domain": "document",
       "mode": "sync",
@@ -2218,13 +2272,13 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "docs": true,
-        "mcp": true
+        "api": false,
+        "docs": false,
+        "mcp": false
       }
     },
     {
-      "name": "document.generate",
+      "name": "generate_document",
       "file": "document.generate.ts",
       "domain": "document",
       "mode": "sync",
@@ -2235,14 +2289,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "document.list",
+      "name": "list_documents",
       "file": "document.list.ts",
       "domain": "document",
       "mode": "sync",
@@ -2252,13 +2306,13 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "docs": true,
-        "mcp": true
+        "api": false,
+        "docs": false,
+        "mcp": false
       }
     },
     {
-      "name": "document.pdf.create",
+      "name": "create_pdf",
       "file": "document.pdf.create.ts",
       "domain": "document",
       "mode": "sync",
@@ -2269,14 +2323,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "document.read",
+      "name": "read_document",
       "file": "document.read.ts",
       "domain": "document",
       "mode": "sync",
@@ -2286,13 +2340,13 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "docs": true,
-        "mcp": true
+        "api": false,
+        "docs": false,
+        "mcp": false
       }
     },
     {
-      "name": "environment.create",
+      "name": "create_environment",
       "file": "environment.create.ts",
       "domain": "environment",
       "mode": "sync",
@@ -2302,14 +2356,14 @@
         "agent"
       ],
       "layers": {
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "environment.delete",
+      "name": "delete_environment",
       "file": "environment.delete.ts",
       "domain": "environment",
       "mode": "sync",
@@ -2319,14 +2373,14 @@
         "agent"
       ],
       "layers": {
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "environment.get",
+      "name": "get_environment",
       "file": "environment.get.ts",
       "domain": "environment",
       "mode": "sync",
@@ -2336,14 +2390,14 @@
         "agent"
       ],
       "layers": {
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "environment.list",
+      "name": "list_environments",
       "file": "environment.list.ts",
       "domain": "environment",
       "mode": "sync",
@@ -2353,15 +2407,15 @@
         "agent"
       ],
       "layers": {
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false,
         "app": true
       }
     },
     {
-      "name": "environment.set_default",
+      "name": "set_default_environment",
       "file": "environment.set_default.ts",
       "domain": "environment",
       "mode": "sync",
@@ -2371,14 +2425,14 @@
         "agent"
       ],
       "layers": {
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "environment.update",
+      "name": "update_environment",
       "file": "environment.update.ts",
       "domain": "environment",
       "mode": "sync",
@@ -2388,14 +2442,14 @@
         "agent"
       ],
       "layers": {
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "eval.dataset.create",
+      "name": "create_dataset",
       "file": "eval.dataset.create.ts",
       "domain": "eval",
       "mode": "sync",
@@ -2406,14 +2460,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "eval.dataset.from_traces",
+      "name": "create_trace_dataset",
       "file": "eval.dataset.from_traces.ts",
       "domain": "eval",
       "mode": "sync",
@@ -2424,14 +2478,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "eval.dataset.get",
+      "name": "get_dataset",
       "file": "eval.dataset.get.ts",
       "domain": "eval",
       "mode": "sync",
@@ -2442,14 +2496,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "eval.dataset.list",
+      "name": "list_datasets",
       "file": "eval.dataset.list.ts",
       "domain": "eval",
       "mode": "sync",
@@ -2460,15 +2514,15 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false,
         "app": true
       }
     },
     {
-      "name": "eval.dataset_item.add",
+      "name": "add_dataset_item",
       "file": "eval.dataset_item.add.ts",
       "domain": "eval",
       "mode": "batch",
@@ -2479,14 +2533,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "eval.run.get",
+      "name": "get_eval_run",
       "file": "eval.run.get.ts",
       "domain": "eval",
       "mode": "sync",
@@ -2497,15 +2551,15 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false,
         "app": true
       }
     },
     {
-      "name": "eval.run.start",
+      "name": "start_eval_run",
       "file": "eval.run.start.ts",
       "domain": "eval",
       "mode": "async",
@@ -2516,14 +2570,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "eval.run.status",
+      "name": "get_eval_status",
       "file": "eval.run.status.ts",
       "domain": "eval",
       "mode": "sync",
@@ -2534,14 +2588,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "form.fill",
+      "name": "fill_form",
       "file": "form.fill.ts",
       "domain": "form",
       "mode": "sync",
@@ -2552,14 +2606,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "graph.cypher",
+      "name": "run_cypher",
       "file": "graph.cypher.ts",
       "domain": "graph",
       "mode": "sync",
@@ -2571,14 +2625,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "graph.edge.delete",
+      "name": "delete_edge",
       "file": "graph.edge.delete.ts",
       "domain": "graph",
       "mode": "sync",
@@ -2590,14 +2644,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "graph.edge.upsert",
+      "name": "upsert_edge",
       "file": "graph.edge.upsert.ts",
       "domain": "graph",
       "mode": "sync",
@@ -2609,14 +2663,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "graph.export",
+      "name": "export_graph",
       "file": "graph.export.ts",
       "domain": "graph",
       "mode": "sync",
@@ -2626,14 +2680,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "graph.ingest",
+      "name": "ingest_graph",
       "file": "graph.ingest.ts",
       "domain": "graph",
       "mode": "sync",
@@ -2644,15 +2698,15 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false,
         "app": true
       }
     },
     {
-      "name": "graph.node.delete",
+      "name": "delete_node",
       "file": "graph.node.delete.ts",
       "domain": "graph",
       "mode": "sync",
@@ -2664,14 +2718,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "graph.node.get",
+      "name": "get_node",
       "file": "graph.node.get.ts",
       "domain": "graph",
       "mode": "sync",
@@ -2683,15 +2737,15 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false,
         "app": true
       }
     },
     {
-      "name": "graph.node.list",
+      "name": "list_nodes",
       "file": "graph.node.list.ts",
       "domain": "graph",
       "mode": "sync",
@@ -2702,14 +2756,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "graph.node.search",
+      "name": "search_nodes",
       "file": "graph.node.search.ts",
       "domain": "graph",
       "mode": "sync",
@@ -2721,14 +2775,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "graph.node.upsert",
+      "name": "upsert_node",
       "file": "graph.node.upsert.ts",
       "domain": "graph",
       "mode": "sync",
@@ -2740,14 +2794,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "graph.node_label.add",
+      "name": "add_node_label",
       "file": "graph.node_label.add.ts",
       "domain": "graph",
       "mode": "sync",
@@ -2756,12 +2810,12 @@
       ],
       "layers": {
         "schema": true,
-        "unit": true,
-        "docs": true
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "graph.node_label.get",
+      "name": "get_node_labels",
       "file": "graph.node_label.get.ts",
       "domain": "graph",
       "mode": "sync",
@@ -2770,12 +2824,12 @@
       ],
       "layers": {
         "schema": true,
-        "unit": true,
-        "docs": true
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "graph.node_label.remove",
+      "name": "remove_node_label",
       "file": "graph.node_label.remove.ts",
       "domain": "graph",
       "mode": "sync",
@@ -2784,12 +2838,12 @@
       ],
       "layers": {
         "schema": true,
-        "unit": true,
-        "docs": true
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "graph.relationship.upsert",
+      "name": "upsert_graph_relationship",
       "file": "graph.relationship.upsert.ts",
       "domain": "graph",
       "mode": "sync",
@@ -2801,14 +2855,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "graph.search",
+      "name": "search_graph",
       "file": "graph.search.ts",
       "domain": "graph",
       "mode": "sync",
@@ -2820,14 +2874,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "graph.stats",
+      "name": "get_graph_stats",
       "file": "graph.stats.ts",
       "domain": "graph",
       "mode": "sync",
@@ -2838,15 +2892,15 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false,
         "app": true
       }
     },
     {
-      "name": "graph.sync.push",
+      "name": "push_graph",
       "file": "graph.sync.push.ts",
       "domain": "graph",
       "mode": "sync",
@@ -2857,14 +2911,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
+        "api": false,
+        "mcp": false,
         "unit": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "image.analyze",
+      "name": "analyze_image",
       "file": "image.analyze.ts",
       "domain": "image",
       "mode": "sync",
@@ -2874,13 +2928,13 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "docs": true,
-        "mcp": true
+        "api": false,
+        "docs": false,
+        "mcp": false
       }
     },
     {
-      "name": "image.create",
+      "name": "create_image",
       "file": "image.create.ts",
       "domain": "image",
       "mode": "sync",
@@ -2890,13 +2944,13 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "docs": true,
-        "mcp": true
+        "api": false,
+        "docs": false,
+        "mcp": false
       }
     },
     {
-      "name": "image.generate",
+      "name": "generate_image",
       "file": "image.generate.ts",
       "domain": "image",
       "mode": "sync",
@@ -2907,14 +2961,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "image.list",
+      "name": "list_images",
       "file": "image.list.ts",
       "domain": "image",
       "mode": "sync",
@@ -2924,13 +2978,13 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "docs": true,
-        "mcp": true
+        "api": false,
+        "docs": false,
+        "mcp": false
       }
     },
     {
-      "name": "integration.configure",
+      "name": "configure_integration",
       "file": "integration.configure.ts",
       "domain": "integration",
       "mode": "sync",
@@ -2943,13 +2997,13 @@
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "integration.delete",
+      "name": "delete_integration",
       "file": "integration.delete.ts",
       "domain": "integration",
       "mode": "async",
@@ -2962,13 +3016,13 @@
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "integration.get",
+      "name": "get_integration",
       "file": "integration.get.ts",
       "domain": "integration",
       "mode": "sync",
@@ -2981,13 +3035,13 @@
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "integration.install",
+      "name": "install_integration",
       "file": "integration.install.ts",
       "domain": "integration",
       "mode": "async",
@@ -3000,13 +3054,13 @@
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "integration.list",
+      "name": "list_integrations",
       "file": "integration.list.ts",
       "domain": "integration",
       "mode": "sync",
@@ -3019,13 +3073,13 @@
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "integration.metrics",
+      "name": "get_integration_metrics",
       "file": "integration.metrics.ts",
       "domain": "integration",
       "mode": "sync",
@@ -3037,13 +3091,13 @@
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "integration.sync",
+      "name": "sync_integration",
       "file": "integration.sync.ts",
       "domain": "integration",
       "mode": "async",
@@ -3056,13 +3110,13 @@
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "markdown.generate",
+      "name": "generate_markdown",
       "file": "markdown.generate.ts",
       "domain": "document",
       "mode": "sync",
@@ -3073,14 +3127,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "mermaid.generate",
+      "name": "generate_mermaid",
       "file": "mermaid.generate.ts",
       "domain": "mermaid",
       "mode": "sync",
@@ -3091,14 +3145,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "notification.list",
+      "name": "list_notifications",
       "file": "notification.list.ts",
       "domain": "notification",
       "mode": "sync",
@@ -3108,15 +3162,15 @@
         "agent"
       ],
       "layers": {
-        "api": true,
-        "docs": true,
-        "mcp": true,
-        "unit": true,
+        "api": false,
+        "docs": false,
+        "mcp": false,
+        "unit": false,
         "app": true
       }
     },
     {
-      "name": "notification.mark",
+      "name": "mark_notification",
       "file": "notification.mark.ts",
       "domain": "notification",
       "mode": "sync",
@@ -3126,15 +3180,15 @@
         "agent"
       ],
       "layers": {
-        "api": true,
-        "docs": true,
-        "mcp": true,
-        "unit": true,
+        "api": false,
+        "docs": false,
+        "mcp": false,
+        "unit": false,
         "app": true
       }
     },
     {
-      "name": "ontology.neighbors",
+      "name": "get_ontology_neighbors",
       "file": "ontology.neighbors.ts",
       "domain": "ontology",
       "mode": "sync",
@@ -3146,14 +3200,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "ontology.query",
+      "name": "query_ontology",
       "file": "ontology.query.ts",
       "domain": "ontology",
       "mode": "sync",
@@ -3165,14 +3219,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "org.create",
+      "name": "create_org",
       "file": "org.create.ts",
       "domain": "org",
       "mode": "sync",
@@ -3183,15 +3237,15 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "e2e": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "e2e": false,
+        "docs": false
       }
     },
     {
-      "name": "org.list",
+      "name": "list_orgs",
       "file": "org.list.ts",
       "domain": "org",
       "mode": "sync",
@@ -3202,14 +3256,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
+        "api": false,
+        "mcp": false,
         "unit": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "org.member.add",
+      "name": "add_org_member",
       "file": "org.member.add.ts",
       "domain": "org",
       "mode": "sync",
@@ -3220,15 +3274,15 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
         "e2e": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "org.member.remove",
+      "name": "remove_org_member",
       "file": "org.member.remove.ts",
       "domain": "org",
       "mode": "sync",
@@ -3238,15 +3292,15 @@
         "agent"
       ],
       "layers": {
-        "api": true,
-        "docs": true,
-        "mcp": true,
-        "unit": true,
+        "api": false,
+        "docs": false,
+        "mcp": false,
+        "unit": false,
         "app": true
       }
     },
     {
-      "name": "org.member_invite.accept",
+      "name": "accept_member_invite",
       "file": "org.member_invite.accept.ts",
       "domain": "org",
       "mode": "sync",
@@ -3257,15 +3311,15 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
         "e2e": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "org.member_invite.decline",
+      "name": "decline_member_invite",
       "file": "org.member_invite.decline.ts",
       "domain": "org",
       "mode": "sync",
@@ -3276,15 +3330,15 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
         "e2e": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "org.member_role.change",
+      "name": "change_member_role",
       "file": "org.member_role.change.ts",
       "domain": "org",
       "mode": "sync",
@@ -3294,15 +3348,15 @@
         "agent"
       ],
       "layers": {
-        "api": true,
-        "docs": true,
-        "mcp": true,
-        "unit": true,
+        "api": false,
+        "docs": false,
+        "mcp": false,
+        "unit": false,
         "app": true
       }
     },
     {
-      "name": "org.settings.read",
+      "name": "get_org_settings",
       "file": "org.settings.read.ts",
       "domain": "org",
       "mode": "sync",
@@ -3313,14 +3367,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "org.settings.write",
+      "name": "update_org_settings",
       "file": "org.settings.write.ts",
       "domain": "org",
       "mode": "sync",
@@ -3331,14 +3385,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "plugin.catalog.browse",
+      "name": "browse_plugin_catalog",
       "file": "plugin.catalog.browse.ts",
       "domain": "plugin",
       "mode": "sync",
@@ -3348,14 +3402,14 @@
         "agent"
       ],
       "layers": {
-        "api": true,
-        "docs": true,
-        "mcp": true,
-        "unit": true
+        "api": false,
+        "docs": false,
+        "mcp": false,
+        "unit": false
       }
     },
     {
-      "name": "plugin.catalog.get",
+      "name": "get_catalog_plugin",
       "file": "plugin.catalog.get.ts",
       "domain": "plugin",
       "mode": "sync",
@@ -3365,14 +3419,14 @@
         "agent"
       ],
       "layers": {
-        "api": true,
-        "docs": true,
-        "mcp": true,
-        "unit": true
+        "api": false,
+        "docs": false,
+        "mcp": false,
+        "unit": false
       }
     },
     {
-      "name": "plugin.catalog.sync",
+      "name": "sync_plugin_catalog",
       "file": "plugin.catalog.sync.ts",
       "domain": "plugin",
       "mode": "sync",
@@ -3381,14 +3435,14 @@
         "mcp"
       ],
       "layers": {
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "plugin.credential.reauth",
+      "name": "reauth_plugin_credential",
       "file": "plugin.credential.reauth.ts",
       "domain": "plugin",
       "mode": "sync",
@@ -3398,14 +3452,14 @@
         "agent"
       ],
       "layers": {
-        "api": true,
-        "docs": true,
-        "mcp": true,
-        "unit": true
+        "api": false,
+        "docs": false,
+        "mcp": false,
+        "unit": false
       }
     },
     {
-      "name": "plugin.credential.set_secret",
+      "name": "set_plugin_secret",
       "file": "plugin.credential.set_secret.ts",
       "domain": "plugin",
       "mode": "sync",
@@ -3415,14 +3469,14 @@
         "agent"
       ],
       "layers": {
-        "api": true,
-        "docs": true,
-        "mcp": true,
-        "unit": true
+        "api": false,
+        "docs": false,
+        "mcp": false,
+        "unit": false
       }
     },
     {
-      "name": "plugin.org.install",
+      "name": "install_plugin",
       "file": "plugin.org.install.ts",
       "domain": "plugin",
       "mode": "sync",
@@ -3432,15 +3486,15 @@
         "agent"
       ],
       "layers": {
-        "api": true,
-        "docs": true,
-        "mcp": true,
-        "unit": true,
+        "api": false,
+        "docs": false,
+        "mcp": false,
+        "unit": false,
         "app": true
       }
     },
     {
-      "name": "plugin.org.install_bulk",
+      "name": "install_plugins_bulk",
       "file": "plugin.org.install_bulk.ts",
       "domain": "plugin",
       "mode": "sync",
@@ -3450,15 +3504,15 @@
         "agent"
       ],
       "layers": {
-        "api": true,
-        "docs": true,
-        "mcp": true,
-        "unit": true,
+        "api": false,
+        "docs": false,
+        "mcp": false,
+        "unit": false,
         "app": true
       }
     },
     {
-      "name": "plugin.org.list",
+      "name": "list_plugins",
       "file": "plugin.org.list.ts",
       "domain": "plugin",
       "mode": "sync",
@@ -3468,31 +3522,14 @@
         "agent"
       ],
       "layers": {
-        "api": true,
-        "docs": true,
-        "mcp": true,
-        "unit": true
+        "api": false,
+        "docs": false,
+        "mcp": false,
+        "unit": false
       }
     },
     {
-      "name": "plugin.org.set_enabled",
-      "file": "plugin.org.set_enabled.ts",
-      "domain": "plugin",
-      "mode": "sync",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
-      "layers": {
-        "api": true,
-        "docs": true,
-        "mcp": true,
-        "unit": true
-      }
-    },
-    {
-      "name": "plugin.org.uninstall",
+      "name": "uninstall_plugin",
       "file": "plugin.org.uninstall.ts",
       "domain": "plugin",
       "mode": "sync",
@@ -3502,15 +3539,15 @@
         "agent"
       ],
       "layers": {
-        "api": true,
-        "docs": true,
-        "mcp": true,
-        "unit": true,
+        "api": false,
+        "docs": false,
+        "mcp": false,
+        "unit": false,
         "app": true
       }
     },
     {
-      "name": "plugin.registry.add",
+      "name": "add_plugin_registry",
       "file": "plugin.registry.add.ts",
       "domain": "plugin",
       "mode": "sync",
@@ -3520,14 +3557,14 @@
         "agent"
       ],
       "layers": {
-        "api": true,
-        "docs": true,
-        "mcp": true,
-        "unit": true
+        "api": false,
+        "docs": false,
+        "mcp": false,
+        "unit": false
       }
     },
     {
-      "name": "plugin.registry.list",
+      "name": "list_plugin_registries",
       "file": "plugin.registry.list.ts",
       "domain": "plugin",
       "mode": "sync",
@@ -3537,15 +3574,15 @@
         "agent"
       ],
       "layers": {
-        "api": true,
-        "docs": true,
-        "mcp": true,
-        "unit": true,
+        "api": false,
+        "docs": false,
+        "mcp": false,
+        "unit": false,
         "app": true
       }
     },
     {
-      "name": "plugin.registry.remove",
+      "name": "remove_plugin_registry",
       "file": "plugin.registry.remove.ts",
       "domain": "plugin",
       "mode": "sync",
@@ -3555,14 +3592,14 @@
         "agent"
       ],
       "layers": {
-        "api": true,
-        "docs": true,
-        "mcp": true,
-        "unit": true
+        "api": false,
+        "docs": false,
+        "mcp": false,
+        "unit": false
       }
     },
     {
-      "name": "plugin.schema.get",
+      "name": "get_plugin_schema",
       "file": "plugin.schema.get.ts",
       "domain": "plugin",
       "mode": "sync",
@@ -3574,13 +3611,13 @@
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "plugin.schema.validate",
+      "name": "validate_plugin_schema",
       "file": "plugin.schema.validate.ts",
       "domain": "plugin",
       "mode": "sync",
@@ -3592,13 +3629,30 @@
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "plugin.settings.set_auth_alerts",
+      "name": "set_plugin_enabled",
+      "file": "plugin.set_enabled.ts",
+      "domain": "plugin",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "api": false,
+        "docs": false,
+        "mcp": false,
+        "unit": false
+      }
+    },
+    {
+      "name": "set_auth_alerts",
       "file": "plugin.settings.set_auth_alerts.ts",
       "domain": "plugin",
       "mode": "sync",
@@ -3608,14 +3662,14 @@
         "agent"
       ],
       "layers": {
-        "api": true,
-        "docs": true,
-        "mcp": true,
-        "unit": true
+        "api": false,
+        "docs": false,
+        "mcp": false,
+        "unit": false
       }
     },
     {
-      "name": "plugin.version.list",
+      "name": "list_plugin_versions",
       "file": "plugin.version.list.ts",
       "domain": "plugin",
       "mode": "sync",
@@ -3627,31 +3681,13 @@
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "plugin.workspace.set_enabled",
-      "file": "plugin.workspace.set_enabled.ts",
-      "domain": "plugin",
-      "mode": "sync",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
-      "layers": {
-        "api": true,
-        "docs": true,
-        "mcp": true,
-        "unit": true,
-        "app": true
-      }
-    },
-    {
-      "name": "privacy.data.erase",
+      "name": "erase_data",
       "file": "privacy.data.erase.ts",
       "domain": "privacy",
       "mode": "async",
@@ -3662,14 +3698,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "privacy.data.export",
+      "name": "export_data",
       "file": "privacy.data.export.ts",
       "domain": "privacy",
       "mode": "async",
@@ -3680,14 +3716,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "prompt.settings.read",
+      "name": "get_prompt_settings",
       "file": "prompt.settings.read.ts",
       "domain": "workspace",
       "mode": "sync",
@@ -3698,14 +3734,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "docs": true,
-        "mcp": true,
-        "unit": true
+        "api": false,
+        "docs": false,
+        "mcp": false,
+        "unit": false
       }
     },
     {
-      "name": "prompt.settings.write",
+      "name": "update_prompt_settings",
       "file": "prompt.settings.write.ts",
       "domain": "workspace",
       "mode": "sync",
@@ -3716,14 +3752,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "docs": true,
-        "mcp": true,
-        "unit": true
+        "api": false,
+        "docs": false,
+        "mcp": false,
+        "unit": false
       }
     },
     {
-      "name": "repo.branch.create",
+      "name": "create_branch",
       "file": "repo.branch.create.ts",
       "domain": "repo",
       "mode": "sync",
@@ -3734,13 +3770,13 @@
       ],
       "layers": {
         "api": false,
-        "mcp": true,
+        "mcp": false,
         "unit": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "repo.ci.status",
+      "name": "get_ci_status",
       "file": "repo.ci.status.ts",
       "domain": "repo",
       "mode": "sync",
@@ -3751,13 +3787,13 @@
       ],
       "layers": {
         "api": false,
-        "mcp": true,
+        "mcp": false,
         "unit": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "repo.configure",
+      "name": "configure_repo",
       "file": "repo.configure.ts",
       "domain": "repo",
       "mode": "sync",
@@ -3770,13 +3806,13 @@
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "repo.create",
+      "name": "create_repo",
       "file": "repo.create.ts",
       "domain": "repo",
       "mode": "sync",
@@ -3787,13 +3823,13 @@
       ],
       "layers": {
         "api": false,
-        "mcp": true,
+        "mcp": false,
         "unit": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "repo.file.put",
+      "name": "put_repo_file",
       "file": "repo.file.put.ts",
       "domain": "repo",
       "mode": "sync",
@@ -3804,13 +3840,13 @@
       ],
       "layers": {
         "api": false,
-        "mcp": true,
+        "mcp": false,
         "unit": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "repo.fork",
+      "name": "fork_repo",
       "file": "repo.fork.ts",
       "domain": "repo",
       "mode": "sync",
@@ -3821,13 +3857,13 @@
       ],
       "layers": {
         "api": false,
-        "mcp": true,
+        "mcp": false,
         "unit": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "repo.metrics",
+      "name": "get_repo_metrics",
       "file": "repo.metrics.ts",
       "domain": "repo",
       "mode": "sync",
@@ -3839,13 +3875,13 @@
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "repo.pause",
+      "name": "pause_repo",
       "file": "repo.pause.ts",
       "domain": "repo",
       "mode": "sync",
@@ -3858,13 +3894,13 @@
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "repo.pr.diff",
+      "name": "get_pr_diff",
       "file": "repo.pr.diff.ts",
       "domain": "repo",
       "mode": "sync",
@@ -3875,13 +3911,13 @@
       ],
       "layers": {
         "api": false,
-        "mcp": true,
+        "mcp": false,
         "unit": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "repo.pr.get",
+      "name": "get_pr",
       "file": "repo.pr.get.ts",
       "domain": "repo",
       "mode": "sync",
@@ -3892,13 +3928,13 @@
       ],
       "layers": {
         "api": false,
-        "mcp": true,
+        "mcp": false,
         "unit": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "repo.pr.open",
+      "name": "open_pr",
       "file": "repo.pr.open.ts",
       "domain": "repo",
       "mode": "sync",
@@ -3909,13 +3945,13 @@
       ],
       "layers": {
         "api": false,
-        "mcp": true,
+        "mcp": false,
         "unit": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "repo.resume",
+      "name": "resume_repo",
       "file": "repo.resume.ts",
       "domain": "repo",
       "mode": "sync",
@@ -3928,13 +3964,13 @@
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "repo.sync",
+      "name": "sync_repo",
       "file": "repo.sync.ts",
       "domain": "repo",
       "mode": "async",
@@ -3947,13 +3983,13 @@
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "research.swarm.start",
+      "name": "start_research_swarm",
       "file": "research.swarm.start.ts",
       "domain": "research",
       "mode": "async",
@@ -3964,14 +4000,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "research.swarm.status",
+      "name": "get_research_status",
       "file": "research.swarm.status.ts",
       "domain": "research",
       "mode": "sync",
@@ -3982,14 +4018,175 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "schema.chat",
+      "name": "create_sandbox_template",
+      "file": "sandbox.template.create.ts",
+      "domain": "sandbox",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false,
+        "app": true
+      }
+    },
+    {
+      "name": "delete_sandbox_template",
+      "file": "sandbox.template.delete.ts",
+      "domain": "sandbox",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false,
+        "app": true
+      }
+    },
+    {
+      "name": "export_sandbox_template",
+      "file": "sandbox.template.export.ts",
+      "domain": "sandbox",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false,
+        "app": true
+      }
+    },
+    {
+      "name": "get_sandbox_template",
+      "file": "sandbox.template.get.ts",
+      "domain": "sandbox",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
+      }
+    },
+    {
+      "name": "import_sandbox_template",
+      "file": "sandbox.template.import.ts",
+      "domain": "sandbox",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false,
+        "app": true
+      }
+    },
+    {
+      "name": "list_sandbox_templates",
+      "file": "sandbox.template.list.ts",
+      "domain": "sandbox",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false,
+        "app": true
+      }
+    },
+    {
+      "name": "set_default_sandbox_template",
+      "file": "sandbox.template.set_default.ts",
+      "domain": "sandbox",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false,
+        "app": true
+      }
+    },
+    {
+      "name": "set_sandbox_template_tools",
+      "file": "sandbox.template.set_tools.ts",
+      "domain": "sandbox",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false,
+        "app": true
+      }
+    },
+    {
+      "name": "update_sandbox_template",
+      "file": "sandbox.template.update.ts",
+      "domain": "sandbox",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false,
+        "app": true
+      }
+    },
+    {
+      "name": "run_schema_chat",
       "file": "schema.chat.ts",
       "domain": "schema",
       "mode": "sync",
@@ -4001,11 +4198,11 @@
         "schema": true,
         "api": false,
         "unit": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "schema.delete",
+      "name": "delete_schema",
       "file": "schema.delete.ts",
       "domain": "schema",
       "mode": "sync",
@@ -4014,11 +4211,11 @@
       ],
       "layers": {
         "schema": true,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "schema.export",
+      "name": "export_schema",
       "file": "schema.export.ts",
       "domain": "schema",
       "mode": "sync",
@@ -4030,13 +4227,13 @@
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": true,
+        "mcp": false,
         "unit": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "schema.label.delete",
+      "name": "delete_schema_label",
       "file": "schema.label.delete.ts",
       "domain": "schema",
       "mode": "sync",
@@ -4048,13 +4245,13 @@
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": true,
+        "mcp": false,
         "unit": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "schema.label.upsert",
+      "name": "upsert_schema_label",
       "file": "schema.label.upsert.ts",
       "domain": "schema",
       "mode": "sync",
@@ -4067,13 +4264,13 @@
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": true,
+        "mcp": false,
         "unit": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "schema.list",
+      "name": "list_schemas",
       "file": "schema.list.ts",
       "domain": "schema",
       "mode": "sync",
@@ -4086,13 +4283,13 @@
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": true,
+        "mcp": false,
         "unit": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "schema.property.delete",
+      "name": "delete_schema_property",
       "file": "schema.property.delete.ts",
       "domain": "schema",
       "mode": "sync",
@@ -4104,13 +4301,13 @@
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": true,
+        "mcp": false,
         "unit": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "schema.property.upsert",
+      "name": "upsert_schema_property",
       "file": "schema.property.upsert.ts",
       "domain": "schema",
       "mode": "sync",
@@ -4123,13 +4320,13 @@
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": true,
+        "mcp": false,
         "unit": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "schema.recommend",
+      "name": "recommend_schema",
       "file": "schema.recommend.ts",
       "domain": "schema",
       "mode": "sync",
@@ -4142,13 +4339,13 @@
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": true,
+        "mcp": false,
         "unit": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "schema.reconcile.dispatch",
+      "name": "dispatch_schema_reconcile",
       "file": "schema.reconcile.dispatch.ts",
       "domain": "schema",
       "mode": "async",
@@ -4160,13 +4357,13 @@
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": true,
+        "mcp": false,
         "unit": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "schema.reconcile.status",
+      "name": "get_reconcile_status",
       "file": "schema.reconcile.status.ts",
       "domain": "schema",
       "mode": "sync",
@@ -4178,13 +4375,13 @@
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": true,
+        "mcp": false,
         "unit": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "schema.registry.config",
+      "name": "get_registry_config",
       "file": "schema.registry.config.ts",
       "domain": "schema",
       "mode": "sync",
@@ -4196,13 +4393,13 @@
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": true,
+        "mcp": false,
         "unit": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "schema.registry.get",
+      "name": "get_schema_registry",
       "file": "schema.registry.get.ts",
       "domain": "schema",
       "mode": "sync",
@@ -4214,13 +4411,13 @@
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": true,
+        "mcp": false,
         "unit": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "schema.relationship.delete",
+      "name": "delete_schema_relationship",
       "file": "schema.relationship.delete.ts",
       "domain": "schema",
       "mode": "sync",
@@ -4232,13 +4429,13 @@
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": true,
+        "mcp": false,
         "unit": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "schema.relationship.upsert",
+      "name": "upsert_schema_relationship",
       "file": "schema.relationship.upsert.ts",
       "domain": "schema",
       "mode": "sync",
@@ -4251,13 +4448,13 @@
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": true,
+        "mcp": false,
         "unit": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "schema.setup",
+      "name": "setup_schema",
       "file": "schema.setup.ts",
       "domain": "schema",
       "mode": "sync",
@@ -4270,13 +4467,13 @@
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": true,
+        "mcp": false,
         "unit": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "schema.toggle",
+      "name": "toggle_schema",
       "file": "schema.toggle.ts",
       "domain": "schema",
       "mode": "sync",
@@ -4288,13 +4485,13 @@
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": true,
+        "mcp": false,
         "unit": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "schema.validate.node",
+      "name": "validate_schema_node",
       "file": "schema.validate.node.ts",
       "domain": "schema",
       "mode": "sync",
@@ -4307,13 +4504,13 @@
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": true,
+        "mcp": false,
         "unit": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "schema.validate.relationship",
+      "name": "validate_schema_relationship",
       "file": "schema.validate.relationship.ts",
       "domain": "schema",
       "mode": "sync",
@@ -4326,13 +4523,13 @@
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": true,
+        "mcp": false,
         "unit": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "schema.version.create",
+      "name": "create_schema_version",
       "file": "schema.version.create.ts",
       "domain": "schema",
       "mode": "sync",
@@ -4344,13 +4541,13 @@
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": true,
+        "mcp": false,
         "unit": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "schema.version.diff",
+      "name": "diff_schema_versions",
       "file": "schema.version.diff.ts",
       "domain": "schema",
       "mode": "sync",
@@ -4362,13 +4559,13 @@
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": true,
+        "mcp": false,
         "unit": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "schema.version.list",
+      "name": "list_schema_versions",
       "file": "schema.version.list.ts",
       "domain": "schema",
       "mode": "sync",
@@ -4380,13 +4577,13 @@
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": true,
+        "mcp": false,
         "unit": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "schema.version.pin",
+      "name": "pin_schema_version",
       "file": "schema.version.pin.ts",
       "domain": "schema",
       "mode": "sync",
@@ -4398,13 +4595,13 @@
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": true,
+        "mcp": false,
         "unit": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "secret.export",
+      "name": "export_secrets",
       "file": "secret.export.ts",
       "domain": "secret",
       "mode": "sync",
@@ -4413,14 +4610,14 @@
         "mcp"
       ],
       "layers": {
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "secret.import_env",
+      "name": "import_env_secrets",
       "file": "secret.import_env.ts",
       "domain": "secret",
       "mode": "sync",
@@ -4430,14 +4627,14 @@
         "agent"
       ],
       "layers": {
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "secret.key.delete",
+      "name": "delete_secret_key",
       "file": "secret.key.delete.ts",
       "domain": "secret",
       "mode": "sync",
@@ -4447,15 +4644,15 @@
         "agent"
       ],
       "layers": {
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false,
         "app": true
       }
     },
     {
-      "name": "secret.key.list",
+      "name": "list_secret_keys",
       "file": "secret.key.list.ts",
       "domain": "secret",
       "mode": "sync",
@@ -4465,15 +4662,15 @@
         "agent"
       ],
       "layers": {
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false,
         "app": true
       }
     },
     {
-      "name": "secret.key.upsert",
+      "name": "upsert_secret_key",
       "file": "secret.key.upsert.ts",
       "domain": "secret",
       "mode": "sync",
@@ -4483,14 +4680,14 @@
         "agent"
       ],
       "layers": {
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "secret.reveal",
+      "name": "reveal_secret",
       "file": "secret.reveal.ts",
       "domain": "secret",
       "mode": "sync",
@@ -4499,14 +4696,14 @@
         "mcp"
       ],
       "layers": {
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "secret.value.set",
+      "name": "set_secret_value",
       "file": "secret.value.set.ts",
       "domain": "secret",
       "mode": "sync",
@@ -4516,14 +4713,14 @@
         "agent"
       ],
       "layers": {
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "secret.value.unset",
+      "name": "unset_secret_value",
       "file": "secret.value.unset.ts",
       "domain": "secret",
       "mode": "sync",
@@ -4533,14 +4730,14 @@
         "agent"
       ],
       "layers": {
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "semantic.edge.approve",
+      "name": "approve_semantic_edge",
       "file": "semantic.edge.approve.ts",
       "domain": "semantic",
       "mode": "sync",
@@ -4552,13 +4749,13 @@
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "semantic.edge.infer",
+      "name": "infer_semantic_edges",
       "file": "semantic.edge.infer.ts",
       "domain": "semantic",
       "mode": "async",
@@ -4570,13 +4767,13 @@
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "semantic.edge.list",
+      "name": "list_semantic_edges",
       "file": "semantic.edge.list.ts",
       "domain": "semantic",
       "mode": "sync",
@@ -4588,13 +4785,13 @@
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "semantic.edge.suggest",
+      "name": "suggest_semantic_edges",
       "file": "semantic.edge.suggest.ts",
       "domain": "semantic",
       "mode": "sync",
@@ -4606,13 +4803,13 @@
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "semantic.relationship.approve",
+      "name": "approve_semantic_relationship",
       "file": "semantic.relationship.approve.ts",
       "domain": "semantic",
       "mode": "sync",
@@ -4624,13 +4821,13 @@
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": true,
+        "mcp": false,
         "unit": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "semantic.relationship.infer",
+      "name": "infer_semantic_relationships",
       "file": "semantic.relationship.infer.ts",
       "domain": "semantic",
       "mode": "async",
@@ -4642,13 +4839,13 @@
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": true,
+        "mcp": false,
         "unit": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "semantic.relationship.list",
+      "name": "list_semantic_relationships",
       "file": "semantic.relationship.list.ts",
       "domain": "semantic",
       "mode": "sync",
@@ -4660,13 +4857,13 @@
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": true,
+        "mcp": false,
         "unit": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "semantic.relationship.suggest",
+      "name": "suggest_semantic_relationships",
       "file": "semantic.relationship.suggest.ts",
       "domain": "semantic",
       "mode": "sync",
@@ -4678,13 +4875,13 @@
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": true,
+        "mcp": false,
         "unit": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "skill.author",
+      "name": "author_skill",
       "file": "skill.author.ts",
       "domain": "skill",
       "mode": "sync",
@@ -4695,14 +4892,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "skill.create",
+      "name": "create_skill",
       "file": "skill.create.ts",
       "domain": "skill",
       "mode": "sync",
@@ -4713,14 +4910,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
+        "api": false,
+        "mcp": false,
         "unit": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "skill.draft",
+      "name": "draft_skill",
       "file": "skill.draft.ts",
       "domain": "skill",
       "mode": "sync",
@@ -4731,15 +4928,15 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false,
         "app": true
       }
     },
     {
-      "name": "skill.edit",
+      "name": "edit_skill",
       "file": "skill.edit.ts",
       "domain": "skill",
       "mode": "sync",
@@ -4749,13 +4946,13 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "docs": true,
-        "mcp": true
+        "api": false,
+        "docs": false,
+        "mcp": false
       }
     },
     {
-      "name": "skill.enable",
+      "name": "set_skill_enabled",
       "file": "skill.enable.ts",
       "domain": "skill",
       "mode": "sync",
@@ -4766,14 +4963,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
+        "api": false,
+        "mcp": false,
         "unit": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "skill.export",
+      "name": "export_skill",
       "file": "skill.export.ts",
       "domain": "skill",
       "mode": "sync",
@@ -4783,14 +4980,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "docs": true,
-        "mcp": true,
+        "api": false,
+        "docs": false,
+        "mcp": false,
         "app": true
       }
     },
     {
-      "name": "skill.metrics.read",
+      "name": "get_skill_metrics",
       "file": "skill.metrics.read.ts",
       "domain": "skill",
       "mode": "sync",
@@ -4800,14 +4997,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "docs": true,
-        "mcp": true,
+        "api": false,
+        "docs": false,
+        "mcp": false,
         "app": true
       }
     },
     {
-      "name": "skill.version.activate",
+      "name": "activate_skill_version",
       "file": "skill.version.activate.ts",
       "domain": "skill",
       "mode": "sync",
@@ -4817,14 +5014,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "docs": true,
-        "mcp": true,
+        "api": false,
+        "docs": false,
+        "mcp": false,
         "app": true
       }
     },
     {
-      "name": "skill.version.get",
+      "name": "get_skill_version",
       "file": "skill.version.get.ts",
       "domain": "skill",
       "mode": "sync",
@@ -4834,14 +5031,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "docs": true,
-        "mcp": true,
+        "api": false,
+        "docs": false,
+        "mcp": false,
         "app": true
       }
     },
     {
-      "name": "skill.version.list",
+      "name": "list_skill_versions",
       "file": "skill.version.list.ts",
       "domain": "skill",
       "mode": "sync",
@@ -4851,14 +5048,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "docs": true,
-        "mcp": true,
+        "api": false,
+        "docs": false,
+        "mcp": false,
         "app": true
       }
     },
     {
-      "name": "skill.version.upload",
+      "name": "upload_skill_version",
       "file": "skill.version.upload.ts",
       "domain": "skill",
       "mode": "sync",
@@ -4868,14 +5065,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "docs": true,
-        "mcp": true,
+        "api": false,
+        "docs": false,
+        "mcp": false,
         "app": true
       }
     },
     {
-      "name": "skill.workspace.install",
+      "name": "install_skill",
       "file": "skill.workspace.install.ts",
       "domain": "skill",
       "mode": "sync",
@@ -4885,14 +5082,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "docs": true,
-        "mcp": true,
+        "api": false,
+        "docs": false,
+        "mcp": false,
         "app": true
       }
     },
     {
-      "name": "skill.workspace.list",
+      "name": "list_workspace_skills",
       "file": "skill.workspace.list.ts",
       "domain": "skill",
       "mode": "sync",
@@ -4902,14 +5099,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "docs": true,
-        "mcp": true,
+        "api": false,
+        "docs": false,
+        "mcp": false,
         "app": true
       }
     },
     {
-      "name": "svg.generate",
+      "name": "generate_svg",
       "file": "svg.generate.ts",
       "domain": "svg",
       "mode": "sync",
@@ -4920,14 +5117,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "system.install.instructions",
+      "name": "get_install_instructions",
       "file": "system.install.instructions.ts",
       "domain": "system",
       "mode": "sync",
@@ -4938,14 +5135,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "telemetry.error.cluster",
+      "name": "list_error_clusters",
       "file": "telemetry.error.cluster.ts",
       "domain": "telemetry",
       "mode": "sync",
@@ -4956,14 +5153,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "user.preferences.read",
+      "name": "get_user_preferences",
       "file": "user.preferences.read.ts",
       "domain": "user",
       "mode": "sync",
@@ -4974,14 +5171,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "docs": true,
-        "mcp": true,
-        "unit": true
+        "api": false,
+        "docs": false,
+        "mcp": false,
+        "unit": false
       }
     },
     {
-      "name": "user.preferences.write",
+      "name": "update_user_preferences",
       "file": "user.preferences.write.ts",
       "domain": "user",
       "mode": "sync",
@@ -4992,15 +5189,15 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "docs": true,
-        "mcp": true,
-        "unit": true,
+        "api": false,
+        "docs": false,
+        "mcp": false,
+        "unit": false,
         "app": true
       }
     },
     {
-      "name": "video.generate",
+      "name": "generate_video",
       "file": "video.generate.ts",
       "domain": "video",
       "mode": "sync",
@@ -5011,15 +5208,15 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false,
         "app": true
       }
     },
     {
-      "name": "web.fetch",
+      "name": "fetch_web_page",
       "file": "web.fetch.ts",
       "domain": "web",
       "mode": "sync",
@@ -5030,15 +5227,15 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
         "e2e": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "web.search",
+      "name": "search_web",
       "file": "web.search.ts",
       "domain": "web",
       "mode": "sync",
@@ -5049,15 +5246,15 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
         "e2e": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "workflow.cancel",
+      "name": "cancel_workflow",
       "file": "workflow.cancel.ts",
       "domain": "workflow",
       "mode": "sync",
@@ -5069,13 +5266,13 @@
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "workflow.run",
+      "name": "run_workflow",
       "file": "workflow.run.ts",
       "domain": "workflow",
       "mode": "async",
@@ -5087,13 +5284,13 @@
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "workflow.status",
+      "name": "get_workflow_status",
       "file": "workflow.status.ts",
       "domain": "workflow",
       "mode": "sync",
@@ -5105,13 +5302,13 @@
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "workspace.budget_policy.read",
+      "name": "get_budget_policy",
       "file": "workspace.budget_policy.read.ts",
       "domain": "workspace",
       "mode": "sync",
@@ -5122,15 +5319,15 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "docs": true,
-        "mcp": true,
-        "unit": true,
+        "api": false,
+        "docs": false,
+        "mcp": false,
+        "unit": false,
         "app": true
       }
     },
     {
-      "name": "workspace.budget_policy.write",
+      "name": "update_budget_policy",
       "file": "workspace.budget_policy.write.ts",
       "domain": "workspace",
       "mode": "sync",
@@ -5141,15 +5338,15 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "docs": true,
-        "mcp": true,
-        "unit": true,
+        "api": false,
+        "docs": false,
+        "mcp": false,
+        "unit": false,
         "app": true
       }
     },
     {
-      "name": "workspace.create",
+      "name": "create_workspace",
       "file": "workspace.create.ts",
       "domain": "workspace",
       "mode": "sync",
@@ -5160,15 +5357,15 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "e2e": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "e2e": false,
+        "docs": false
       }
     },
     {
-      "name": "workspace.invite.send",
+      "name": "send_workspace_invite",
       "file": "workspace.invite.send.ts",
       "domain": "workspace",
       "mode": "sync",
@@ -5178,13 +5375,13 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "docs": false
       }
     },
     {
-      "name": "workspace.list",
+      "name": "list_workspaces",
       "file": "workspace.list.ts",
       "domain": "workspace",
       "mode": "sync",
@@ -5195,14 +5392,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
+        "api": false,
+        "mcp": false,
         "unit": false,
-        "docs": true
+        "docs": false
       }
     },
     {
-      "name": "workspace.member.list",
+      "name": "list_workspace_members",
       "file": "workspace.member.list.ts",
       "domain": "workspace",
       "mode": "sync",
@@ -5212,13 +5409,13 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "docs": false
       }
     },
     {
-      "name": "workspace.model_settings.read",
+      "name": "get_model_settings",
       "file": "workspace.model_settings.read.ts",
       "domain": "workspace",
       "mode": "sync",
@@ -5229,15 +5426,15 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "docs": true,
-        "mcp": true,
-        "unit": true,
+        "api": false,
+        "docs": false,
+        "mcp": false,
+        "unit": false,
         "app": true
       }
     },
     {
-      "name": "workspace.model_settings.write",
+      "name": "update_model_settings",
       "file": "workspace.model_settings.write.ts",
       "domain": "workspace",
       "mode": "sync",
@@ -5248,15 +5445,15 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "docs": true,
-        "mcp": true,
-        "unit": true,
+        "api": false,
+        "docs": false,
+        "mcp": false,
+        "unit": false,
         "app": true
       }
     },
     {
-      "name": "workspace.settings.read",
+      "name": "get_workspace_settings",
       "file": "workspace.settings.read.ts",
       "domain": "workspace",
       "mode": "sync",
@@ -5267,14 +5464,14 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
-      "name": "workspace.settings.write",
+      "name": "update_workspace_settings",
       "file": "workspace.settings.write.ts",
       "domain": "workspace",
       "mode": "sync",
@@ -5285,10 +5482,10 @@
       ],
       "layers": {
         "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
       }
     }
   ]

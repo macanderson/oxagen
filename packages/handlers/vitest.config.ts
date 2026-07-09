@@ -33,7 +33,7 @@ export default defineConfig({
         "src/plugin.org.install.ts",
         "src/plugin.org.install_bulk.ts",
         "src/plugin.org.list.ts",
-        "src/plugin.org.set_enabled.ts",
+        "src/plugin.set_enabled.ts",
         "src/plugin.org.uninstall.ts",
         "src/plugin.registry.add.ts",
         "src/plugin.registry.list.ts",
@@ -41,7 +41,6 @@ export default defineConfig({
         "src/plugin.schema.get.ts",
         "src/plugin.schema.validate.ts",
         "src/plugin.settings.set_auth_alerts.ts",
-        "src/plugin.workspace.set_enabled.ts",
         // NOTE: repo.*.ts and integration.{delete,get,install,list,metrics}.ts
         // were previously excluded here as "stubs pending tests". They are now
         // wired to ingestion.source_connections / connector_schemas / Inngest and

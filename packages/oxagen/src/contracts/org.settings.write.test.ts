@@ -28,6 +28,6 @@ describe("org.settings.write capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("org.settings.write")).toBe(orgSettingsWrite);
+    expect(getCapability("update_org_settings")).toBe(orgSettingsWrite);
   });
 });

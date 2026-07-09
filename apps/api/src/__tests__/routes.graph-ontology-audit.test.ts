@@ -100,10 +100,10 @@ describe("graph.search route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'graph.search' and surface 'api'", async () => {
+  it("calls invoke with 'search_graph' and surface 'api'", async () => {
     await app.fetch(post(PATH, { query: "search term" }));
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("graph.search");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("search_graph");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -144,10 +144,10 @@ describe("graph.export route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'graph.export' and surface 'api'", async () => {
+  it("calls invoke with 'export_graph' and surface 'api'", async () => {
     await app.fetch(post(PATH, {}));
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("graph.export");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("export_graph");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -181,10 +181,10 @@ describe("ontology.query route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'ontology.query' and surface 'api'", async () => {
+  it("calls invoke with 'query_ontology' and surface 'api'", async () => {
     await app.fetch(post(PATH, VALID_BODY));
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("ontology.query");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("query_ontology");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -230,10 +230,10 @@ describe("ontology.neighbors route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'ontology.neighbors' and surface 'api'", async () => {
+  it("calls invoke with 'get_ontology_neighbors' and surface 'api'", async () => {
     await app.fetch(post(PATH, VALID_BODY));
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("ontology.neighbors");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("get_ontology_neighbors");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -266,10 +266,10 @@ describe("audit.log.query route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'audit.log.query' and surface 'api'", async () => {
+  it("calls invoke with 'query_audit_log' and surface 'api'", async () => {
     await app.fetch(post(PATH, {}));
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("audit.log.query");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("query_audit_log");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 

@@ -97,7 +97,7 @@ export const privacyDataEraseHandler: CapabilityHandler<
     actorUserId: ctx.userId,
     orgId,
     workspaceId: ctx.workspaceId ?? null,
-    capability: "privacy.data.erase",
+    capability: "erase_data",
     outcome: "success",
     ip: null,
     userAgent: null,

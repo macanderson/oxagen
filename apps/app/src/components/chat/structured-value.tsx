@@ -177,18 +177,35 @@ function RecordGrid({ record, depth }: { record: Record<string, unknown>; depth:
   if (entries.length === 0) {
     return <span className="text-xs text-muted-foreground">No fields</span>;
   }
+  // Scalar pairs flow two-per-row on wide screens to use horizontal space
+  // instead of one tall stack. Container values (nested objects / arrays) span
+  // the full row so their trees never get squeezed into a half-width column.
   return (
-    <dl className="grid grid-cols-[minmax(5rem,max-content)_minmax(0,1fr)] gap-x-4 gap-y-1.5">
-      {entries.map(([key, val]) => (
-        <React.Fragment key={key}>
-          <dt className="truncate pt-px text-xs text-muted-foreground" title={humanizeKey(key)}>
-            {humanizeKey(key)}
-          </dt>
-          <dd className="min-w-0 text-xs text-foreground">
-            <StructuredValue value={val} keyHint={key} depth={depth + 1} />
-          </dd>
-        </React.Fragment>
-      ))}
+    <dl className="grid grid-cols-[minmax(5rem,max-content)_minmax(0,1fr)] gap-x-4 gap-y-1.5 md:grid-cols-[minmax(5rem,max-content)_minmax(0,1fr)_minmax(5rem,max-content)_minmax(0,1fr)]">
+      {entries.map(([key, val]) =>
+        isScalar(val) ? (
+          <React.Fragment key={key}>
+            <dt className="truncate pt-px text-xs text-muted-foreground" title={humanizeKey(key)}>
+              {humanizeKey(key)}
+            </dt>
+            <dd className="min-w-0 text-xs text-foreground">
+              <StructuredValue value={val} keyHint={key} depth={depth + 1} />
+            </dd>
+          </React.Fragment>
+        ) : (
+          <div
+            key={key}
+            className="col-span-2 grid min-w-0 grid-cols-[minmax(5rem,max-content)_minmax(0,1fr)] gap-x-4 md:col-span-4"
+          >
+            <dt className="truncate pt-px text-xs text-muted-foreground" title={humanizeKey(key)}>
+              {humanizeKey(key)}
+            </dt>
+            <dd className="min-w-0 text-xs text-foreground">
+              <StructuredValue value={val} keyHint={key} depth={depth + 1} />
+            </dd>
+          </div>
+        ),
+      )}
     </dl>
   );
 }

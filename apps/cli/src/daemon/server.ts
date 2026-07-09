@@ -240,7 +240,7 @@ export class ContextDaemon {
         return this.handleGraphBuild(request.params);
       case "graph.query":
         return this.handleGraphQuery(request.params);
-      case "graph.search":
+      case "search_graph":
         return this.handleGraphSearch(request.params);
       case "session.fork":
         return this.handleSessionFork(request.params);

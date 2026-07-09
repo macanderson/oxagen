@@ -3,8 +3,7 @@ import { registerCapability } from "../registry";
 import { evalDatasetItemSchema } from "./eval-schema";
 
 export const evalDatasetItemAdd = registerCapability({
-  name: "eval.dataset_item.add",
-  aliases: ["eval.dataset.item.add"],
+  name: "add_dataset_item",
   domain: "eval",
   description:
     "Bulk-add cases to an eval dataset. Batch by design — one call inserts many items as a set and bumps the dataset's item count.",

@@ -8,7 +8,7 @@ import { registerCapability } from "../registry";
 // the user's perspective, the UI ALWAYS gates it behind a confirm dialog and
 // the agent surface requires approval. Set-based UPDATE over the id list.
 export const conversationDelete = registerCapability({
-  name: "conversation.delete",
+  name: "delete_conversation",
   domain: "conversation",
   description:
     "Permanently delete conversations from the user's view (soft-delete: sets deleted_at; row retained for audit, never restorable)",

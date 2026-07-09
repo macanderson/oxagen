@@ -328,6 +328,6 @@ describe("automation.create capability", () => {
   // ── registry ──────────────────────────────────────────────────────────────
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("automation.create")).toBe(automationCreate);
+    expect(getCapability("create_automation")).toBe(automationCreate);
   });
 });

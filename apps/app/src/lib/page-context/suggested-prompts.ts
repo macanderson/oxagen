@@ -123,101 +123,124 @@ export function lastAssistantText(
 }
 
 /**
- * Derive conversation-continuation suggestions from the last few turns.
- * Returns up to 3 prompts that encourage deeper engagement with the thread.
+ * Build-oriented suggestion bank for conversation mode (the no-LLM fallback).
+ *
+ * Every entry pushes the user toward CREATING something real in Oxagen — an
+ * agent, an automation, a connector, a graph query, an eval suite, a billing
+ * meter, an MCP tool, an API route — rather than passively summarizing the
+ * thread. The per-turn LLM path (stream "suggested-prompts" event) is the
+ * primary, conversation-specific source; this bank is what shows on an empty
+ * state, a page reload, or when generation fails.
+ */
+const BUILD_SUGGESTION_BANK: readonly SuggestedPrompt[] = [
+  {
+    label: "Turn Into An Agent",
+    prompt:
+      "Create a reusable Oxagen agent that does what we just worked through, and equip it with the tools and skills it needs.",
+  },
+  {
+    label: "Automate This",
+    prompt:
+      "Design an automation or workflow that runs this for me end to end on a schedule or trigger.",
+  },
+  {
+    label: "Add To Knowledge Graph",
+    prompt:
+      "Wire the key facts from our conversation into the workspace knowledge graph so future agents can cite them.",
+  },
+  {
+    label: "Expose As MCP Tool",
+    prompt:
+      "Turn this into an MCP tool I can call from my other agents and IDE — define the contract, inputs, and output.",
+  },
+  {
+    label: "Set Up An Eval",
+    prompt:
+      "Create an eval suite that checks the quality of what we just produced, with a few concrete test cases.",
+  },
+  {
+    label: "Meter And Bill It",
+    prompt:
+      "Set up a usage meter for this so I can track consumption and bill customers for it.",
+  },
+  {
+    label: "Connect A Data Source",
+    prompt:
+      "Recommend and connect a data source that would make this better, and map it into the knowledge graph.",
+  },
+  {
+    label: "Query The Graph",
+    prompt:
+      "Explore the knowledge graph for entities and relationships related to what we just discussed.",
+  },
+  {
+    label: "Draft A Skill",
+    prompt:
+      "Package the approach we just took into a reusable agent skill I can share with my team.",
+  },
+  {
+    label: "Publish To Marketplace",
+    prompt:
+      "Help me package and publish what we built as a listing in the Oxagen marketplace.",
+  },
+  {
+    label: "Wire Up An API Route",
+    prompt:
+      "Expose this capability as a REST API endpoint I can call from my app, with the request and response shape.",
+  },
+  {
+    label: "Scale With A Fleet",
+    prompt:
+      "Show me how to run this across many inputs at once using a fleet of subagents, then aggregate the results.",
+  },
+];
+
+/**
+ * Deterministic, non-cryptographic string hash (djb2). Used only to derive a
+ * stable rotation seed from conversation content — never for security. Pure so
+ * the same conversation always yields the same trio (testable, no Math.random).
+ */
+export function hashString(input: string): number {
+  let h = 5381;
+  for (let i = 0; i < input.length; i++) {
+    // h * 33 + charCode, kept in the 32-bit unsigned range.
+    h = (((h << 5) + h) + input.charCodeAt(i)) >>> 0;
+  }
+  return h;
+}
+
+/**
+ * Pick `count` distinct items from `bank` starting at `seed`, stepping by one
+ * and wrapping — a deterministic rotation so a changing seed surfaces a
+ * different (but stable-per-seed) window of the bank.
+ */
+function pickRotating<T>(bank: readonly T[], seed: number, count: number): T[] {
+  const n = bank.length;
+  if (n === 0) return [];
+  const start = ((seed % n) + n) % n;
+  const out: T[] = [];
+  for (let i = 0; i < count && i < n; i++) {
+    out.push(bank[(start + i) % n]!);
+  }
+  return out;
+}
+
+/**
+ * Derive build-oriented conversation suggestions from the last few turns.
+ *
+ * Returns exactly 3 prompts (given a non-empty bank) that push the user toward
+ * building something in Oxagen. Selection ROTATES deterministically per turn:
+ * the seed combines the history length (which grows every turn) with a hash of
+ * the latest assistant reply, so each turn surfaces a different trio while the
+ * SAME conversation state always yields the same trio (deterministic, testable).
  */
 export function deriveConversationSuggestions(
   history: ConversationMessageSummary[],
 ): SuggestedPrompt[] {
-  const lastAssistant = lastAssistantText(history);
-  const turnCount = history.filter((m) => m.role === "user").length;
-
-  const suggestions: SuggestedPrompt[] = [];
-
-  // When there's an assistant reply, offer follow-up prompts based on its content.
-  if (lastAssistant) {
-    const snippet = lastAssistant.slice(0, 120);
-    const seemsCodey =
-      snippet.includes("```") ||
-      snippet.includes("function") ||
-      snippet.includes("const ") ||
-      snippet.includes("import ");
-    const seemsListy = snippet.includes("\n-") || snippet.includes("\n1.");
-    const seemsExplainy =
-      snippet.includes("because") ||
-      snippet.includes("means") ||
-      snippet.includes("refers to");
-
-    if (seemsCodey) {
-      suggestions.push({
-        label: "Explain This Code",
-        prompt: "Can you explain how the code you just provided works, step by step?",
-      });
-      suggestions.push({
-        label: "Add Error Handling",
-        prompt: "Please add proper error handling and edge-case coverage to the code you just wrote.",
-      });
-      suggestions.push({
-        label: "Write Tests For It",
-        prompt: "Write unit tests for the code you just provided, covering the main cases and edge cases.",
-      });
-    } else if (seemsListy) {
-      suggestions.push({
-        label: "Go Deeper",
-        prompt: "Pick the most important item from your list and explain it in more detail.",
-      });
-      suggestions.push({
-        label: "Prioritize These",
-        prompt: "Rank the items you listed by importance or impact, and explain your reasoning.",
-      });
-      suggestions.push({
-        label: "Action Plan",
-        prompt: "Turn your list into a concrete step-by-step action plan I can follow right now.",
-      });
-    } else if (seemsExplainy) {
-      suggestions.push({
-        label: "Give An Example",
-        prompt: "Can you give a concrete, real-world example of what you just explained?",
-      });
-      suggestions.push({
-        label: "Simplify This",
-        prompt: "Explain that again in simpler terms — as if I were new to this topic.",
-      });
-      suggestions.push({
-        label: "What's Next?",
-        prompt: "Given what you just explained, what should I do or learn next?",
-      });
-    } else {
-      suggestions.push({
-        label: "Tell Me More",
-        prompt: "Can you expand on what you just said? I'd like more detail.",
-      });
-      suggestions.push({
-        label: "Summarize So Far",
-        prompt: "Summarize the key points from our conversation so far, including any decisions or action items.",
-      });
-      suggestions.push({
-        label: "What Should I Do?",
-        prompt: "Based on everything we've discussed, what concrete next step do you recommend?",
-      });
-    }
-  } else if (turnCount > 0) {
-    // User has sent messages but no assistant reply yet (or history has only user turns).
-    suggestions.push({
-      label: "Summarize So Far",
-      prompt: "Summarize the key points from our conversation so far.",
-    });
-    suggestions.push({
-      label: "What's Next?",
-      prompt: "Based on what we've discussed, what should I focus on next?",
-    });
-    suggestions.push({
-      label: "Open Questions",
-      prompt: "What open questions or unresolved items remain from our conversation?",
-    });
-  }
-
-  return suggestions.slice(0, 3);
+  if (history.length === 0) return [];
+  const lastAssistant = lastAssistantText(history) ?? "";
+  const seed = history.length + hashString(lastAssistant.slice(0, 200));
+  return pickRotating(BUILD_SUGGESTION_BANK, seed, 3);
 }
 
 /**

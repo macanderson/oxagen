@@ -3,7 +3,7 @@ import { registerCapability } from "../registry";
 import { propertyInputSchema, cardinalityEnum, relationshipTypeNameSchema } from "./schema.types";
 
 export const schemaRelationshipUpsert = registerCapability({
-  name: "schema.relationship.upsert",
+  name: "upsert_schema_relationship",
   domain: "schema",
   description: "Create/update a relationship type on a schema within the draft version.",
   mode: "sync",

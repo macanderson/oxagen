@@ -105,6 +105,6 @@ describe("document.list capability", () => {
   // ── registry ──────────────────────────────────────────────────────────────
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("document.list")).toBe(documentList);
+    expect(getCapability("list_documents")).toBe(documentList);
   });
 });

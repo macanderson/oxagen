@@ -2,7 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const graphCypher = registerCapability({
-  name: "graph.cypher",
+  name: "run_cypher",
   domain: "graph",
   description:
     "Execute a Cypher query against the knowledge graph. " +

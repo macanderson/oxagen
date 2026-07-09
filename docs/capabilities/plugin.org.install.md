@@ -30,6 +30,7 @@ Install a catalog server (from the marketplace) or a custom server to the org al
 | Field | Type | Notes |
 |---|---|---|
 | `orgListingId` | `string` | Public ID of the created `plugin.org_listings` row. |
+| `authKind` | `"oauth" \| "secret" \| "none"` | Effective auth kind persisted on the listing. Remote endpoints are probed at install (RFC 9728 well-known / 401 challenge); `"oauth"` means the server will not work until the user completes the OAuth authorize flow (`GET /api/v1/mcp/oauth/authorize`). |
 
 ## Roles
 

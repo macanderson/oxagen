@@ -2,7 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const agentMcpRegister = registerCapability({
-  name: "agent.mcp.register",
+  name: "register_mcp_server",
   domain: "agent",
   description: "Register an external MCP server with the workspace; its tools become available to the agent after health check",
   mode: "sync",

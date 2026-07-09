@@ -27,6 +27,6 @@ describe("org.member.invite.decline capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("org.member_invite.decline")).toBe(orgMemberInviteDecline);
+    expect(getCapability("decline_member_invite")).toBe(orgMemberInviteDecline);
   });
 });

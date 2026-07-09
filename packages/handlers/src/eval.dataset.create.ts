@@ -39,7 +39,7 @@ export const evalDatasetCreateHandler: CapabilityHandler<
       if (!row) throw new Error("eval_datasets insert failed");
       logger.info(
         { datasetId: row.publicId, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
-        "eval.dataset.create",
+        "create_dataset",
       );
       return { datasetId: row.publicId, publicId: row.publicId, slug: row.slug };
     });

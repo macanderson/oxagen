@@ -101,6 +101,6 @@ describe("integration.delete capability", () => {
   // ── registry ──────────────────────────────────────────────────────────────
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("integration.delete")).toBe(integrationDelete);
+    expect(getCapability("delete_integration")).toBe(integrationDelete);
   });
 });

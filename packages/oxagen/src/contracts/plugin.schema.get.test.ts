@@ -327,6 +327,6 @@ describe("plugin.schema.get capability", () => {
   // ── registry ──────────────────────────────────────────────────────────────
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("plugin.schema.get")).toBe(pluginSchemaGet);
+    expect(getCapability("get_plugin_schema")).toBe(pluginSchemaGet);
   });
 });

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const pluginRegistryRemove = registerCapability({
-  name: "plugin.registry.remove",
+  name: "remove_plugin_registry",
   domain: "plugin",
   description: "Remove a workspace MCP registry source (including the default — removes the default and promotes the most-recently-created remaining registry, if any).",
   mode: "sync",

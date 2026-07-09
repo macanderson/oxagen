@@ -89,7 +89,7 @@ describe("connection.mappings.suggest capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("connection.mappings.suggest")).toBe(connectionMappingsSuggest);
+    expect(getCapability("suggest_connection_mappings")).toBe(connectionMappingsSuggest);
   });
 
   it("is an AI category, low risk, no approval required", () => {

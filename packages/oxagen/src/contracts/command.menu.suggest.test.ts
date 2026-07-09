@@ -3,7 +3,7 @@ import { commandMenuSuggest } from "./command.menu.suggest";
 
 describe("command.menu.suggest contract", () => {
   it("is registered on api and agent surfaces", () => {
-    expect(commandMenuSuggest.name).toBe("command.menu.suggest");
+    expect(commandMenuSuggest.name).toBe("suggest_commands");
     expect(commandMenuSuggest.surfaces).toContain("api");
     expect(commandMenuSuggest.surfaces).toContain("agent");
   });
@@ -44,7 +44,7 @@ describe("command.menu.suggest contract", () => {
         summary: "Run of playbook churn-investigate. Status: failed.",
       },
       recentEntities: [{ kind: "playbook", id: "plb_1", label: "Churn Investigate" }],
-      capabilities: ["agent.compose", "audit.log.query"],
+      capabilities: ["run_capability_chain", "query_audit_log"],
       locale: "en-US",
     });
     expect(parsed.pageEntity?.kind).toBe("run");

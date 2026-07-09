@@ -22,6 +22,7 @@ import type {
 } from "@oxagen/agent-engine";
 import { streamText, generateObject } from "ai";
 import { OnDeviceProvider } from "../../runtime/providers/on-device.js";
+import { buildProvider, ON_DEVICE_ID } from "../../runtime/providers/factory.js";
 import {
   createOnDeviceLanguageModel,
   type OnDeviceComplete,
@@ -58,7 +59,11 @@ export interface PrepareOnDeviceOptions {
 export async function prepareOnDeviceCoordinator(
   opts: PrepareOnDeviceOptions = {},
 ): Promise<OnDeviceCoordinator> {
-  const provider = opts.provider ?? new OnDeviceProvider();
+  // Route the default construction through the runtime factory so buildProvider
+  // is the single live seam for coordinator resolution (ON_DEVICE_ID always
+  // yields an OnDeviceProvider — the cast is exact). An injected provider (the
+  // coordinator seam / tests) wins.
+  const provider = opts.provider ?? (buildProvider(ON_DEVICE_ID) as OnDeviceProvider);
 
   // Fail fast with a typed error (dep missing / nothing fits / not cached) and
   // stream download progress before we ever start a turn.

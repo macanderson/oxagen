@@ -3,7 +3,7 @@ import { registerCapability } from "../registry";
 import { observedAtField, supersedeField } from "../lib/temporal-query";
 
 export const semanticEdgeApprove = registerCapability({
-  name: "semantic.edge.approve",
+  name: "approve_semantic_edge",
   domain: "semantic",
   description:
     "Approve or reject an inferred semantic edge candidate. Approved edges are materialised as permanent Neo4j relationships typed by the inferred relationship kind itself (e.g. :IMPLEMENTS, :DEPENDS_ON), with inferred/origin properties marking provenance; rejected edges are soft-dismissed with an audit trail.",

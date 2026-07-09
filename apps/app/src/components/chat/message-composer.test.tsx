@@ -2197,8 +2197,8 @@ describe("MessageComposer — attachments", () => {
 
 // ── code mode ──────────────────────────────────────────────────────────────────
 //
-// ChatAgentToolbar/RepoSelector/EnvironmentSelector are NOT mocked here — they
-// render for real on top of the shared `@/components/ui/select` mock above,
+// ComposerContextControls/RepoSelector/EnvironmentSelector are NOT mocked here
+// — they render for real on top of the shared `@/components/ui/select` mock above,
 // whose onValueChange always fires with "high" (see the reasoning-effort
 // tests). A single-repo fixture with key "high" lets a click on the repo
 // Select resolve deterministically through that shared mock.
@@ -2496,8 +2496,8 @@ describe("MessageComposer — collapsible composer", () => {
   });
 });
 
-describe("MessageComposer — agent toolbar collapse wiring", () => {
-  it("collapses the repo/env picker row via the toolbar's own toggle", async () => {
+describe("MessageComposer — compact context controls in code mode", () => {
+  it("shows the compact context controls in code mode with 'Select …' labels and no pin toggle", async () => {
     const { MessageComposer } = await import("./message-composer");
     const { container } = render(
       <MessageComposer
@@ -2510,15 +2510,13 @@ describe("MessageComposer — agent toolbar collapse wiring", () => {
       />,
     );
     await userEvent.click(screen.getByRole("button", { name: "Toggle code mode" }));
-    const repoTrigger = container.querySelector('[aria-label="Select repository"]')!;
-    expect(repoTrigger).not.toBeNull();
-    // Expanded: the picker row is visible (no hidden class on its ancestor).
-    expect(repoTrigger.closest("div[class*='hidden']")).toBeNull();
-
-    await userEvent.click(screen.getByRole("button", { name: "Hide code mode toolbar" }));
-    // Collapsed: the picker row is CSS-hidden and the toggle flips its label.
-    expect(screen.getByRole("button", { name: "Show code mode toolbar" })).toBeInTheDocument();
-    expect(repoTrigger.closest("div[class*='hidden']")).not.toBeNull();
+    const controls = screen.getByTestId("composer-context-controls");
+    expect(controls).toHaveAttribute("data-mode", "code");
+    // Code mode uses the default "Select …" labels for the compact selectors.
+    expect(container.querySelector('[aria-label="Select repository"]')).not.toBeNull();
+    expect(container.querySelector('[aria-label="Select environment"]')).not.toBeNull();
+    // Both selections are required to send in code mode, so no pin affordance.
+    expect(screen.queryByTestId("pin-to-chat")).toBeNull();
   });
 });
 
@@ -2649,7 +2647,7 @@ describe("MessageComposer — pin context & slash commands", () => {
     }
   });
 
-  it("renders the chat context bar when NOT in code mode and repos are available", async () => {
+  it("renders the compact context controls in PIN mode when NOT in code mode and repos are available", async () => {
     const { MessageComposer } = await import("./message-composer");
     const { container } = render(
       <MessageComposer
@@ -2661,14 +2659,16 @@ describe("MessageComposer — pin context & slash commands", () => {
         availableEnvironments={[CODE_ENV_DEFAULT]}
       />,
     );
-    expect(screen.getByTestId("chat-context-bar")).toBeInTheDocument();
-    // The context bar's selectors use the "Pinned …" labels; the code-mode
-    // toolbar's "Select repository" selector must NOT be present yet.
+    const controls = screen.getByTestId("composer-context-controls");
+    expect(controls).toHaveAttribute("data-mode", "pin");
+    // Pin mode's selectors use the "Pinned …" labels and expose the pin toggle;
+    // the code-mode "Select repository" label must NOT be present yet.
     expect(container.querySelector('[aria-label="Pinned repository"]')).not.toBeNull();
     expect(container.querySelector('[aria-label="Select repository"]')).toBeNull();
+    expect(screen.getByTestId("pin-to-chat")).toBeInTheDocument();
   });
 
-  it("swaps the context bar for the code-mode toolbar once code mode is on", async () => {
+  it("switches the controls from pin mode to code mode once code mode is on", async () => {
     const { MessageComposer } = await import("./message-composer");
     const { container } = render(
       <MessageComposer
@@ -2680,14 +2680,14 @@ describe("MessageComposer — pin context & slash commands", () => {
         availableEnvironments={[CODE_ENV_DEFAULT]}
       />,
     );
-    expect(screen.getByTestId("chat-context-bar")).toBeInTheDocument();
+    expect(screen.getByTestId("composer-context-controls")).toHaveAttribute("data-mode", "pin");
 
     await userEvent.click(screen.getByRole("button", { name: "Toggle code mode" }));
 
-    // Code mode replaces the pin bar with the sandbox toolbar (its selector
-    // uses the default "Select repository" label).
+    // Same single control row, now in code mode (default "Select …" labels, no pin).
+    expect(screen.getByTestId("composer-context-controls")).toHaveAttribute("data-mode", "code");
     expect(container.querySelector('[aria-label="Select repository"]')).not.toBeNull();
-    expect(screen.queryByTestId("chat-context-bar")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("pin-to-chat")).toBeNull();
   });
 
   it("opens the slash-command menu when the input is a lone slash token", async () => {

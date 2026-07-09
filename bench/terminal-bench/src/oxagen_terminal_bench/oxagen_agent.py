@@ -261,6 +261,58 @@ def _best_of_n_models() -> str | None:
     return raw.strip() if raw and raw.strip() else None
 
 
+def _task_budget_flags() -> list[str]:
+    """Per-task USD spend cap (the CLI's `--budget`/`--budget-mode` guard,
+    enforced in the one-shot/bypass loop). SWE/Terminal-Bench's real cost sink
+    is a doomed hard task that thrashes to its timeout burning $10-15 while the
+    solvable tasks cost <$1 — a single per-task ceiling caps that tail without
+    touching the tasks that finish cheaply. Set OXAGEN_TASK_BUDGET_USD (e.g.
+    "3.50") to enable; OXAGEN_TASK_BUDGET_MODE overrides the mode (default
+    `enforce` — hard-stop the turn at the cap; `grace`/`prompt` also valid,
+    though `prompt` degrades to a stop in a non-interactive bench run). Unset ⇒
+    no cap (previous behavior). Self-documenting in the trial log like the
+    other flag builders."""
+    raw = os.environ.get("OXAGEN_TASK_BUDGET_USD")
+    if not raw or not raw.strip():
+        return []
+    try:
+        usd = float(raw.strip())
+    except ValueError:
+        print(
+            f"oxagen-adapter: OXAGEN_TASK_BUDGET_USD={raw!r} is not a number; "
+            "running with no per-task budget cap",
+            file=sys.stderr,
+        )
+        return []
+    if usd <= 0:
+        return []
+    mode = (os.environ.get("OXAGEN_TASK_BUDGET_MODE") or "enforce").strip()
+    return [f"--budget {usd:g}", f"--budget-mode {shlex.quote(mode)}"]
+
+
+def _max_steps_flags() -> list[str]:
+    """Per-task hard step cap (`--max-steps`, honored directly by the engine's
+    `while steps < maxSteps` loop). A RELIABLE per-task bound that — unlike the
+    dollar budget guard, which is starved by a `result.usage`-vs-`step.usage`
+    discrepancy through the gateway's openai-compatible provider and so never
+    fires in bypass (documented, deferred) — cannot silently no-op: a doomed
+    task that thrashes is stopped at the cap while solvable tasks (~17-21 steps
+    observed) finish well under it. Set OXAGEN_MAX_STEPS (e.g. "60"); unset ⇒
+    the engine default (256)."""
+    raw = os.environ.get("OXAGEN_MAX_STEPS")
+    if not raw or not raw.strip():
+        return []
+    try:
+        n = int(raw.strip())
+    except ValueError:
+        print(
+            f"oxagen-adapter: OXAGEN_MAX_STEPS={raw!r} is not an int; using engine default",
+            file=sys.stderr,
+        )
+        return []
+    return [f"--max-steps {n}"] if n >= 1 else []
+
+
 def _verify_auto_enabled() -> bool:
     """Whether `solve` candidates auto-verify: union the test/lint/build
     commands every candidate actually ran and re-run that union in every
@@ -521,16 +573,42 @@ class OxagenAgent(BaseInstalledAgent):
         if not _is_truthy(os.environ.get("OXAGEN_SKIP_INIT")) and not _is_truthy(
             os.environ.get("OXAGEN_NO_PIPELINE")
         ):
+            # init is explicitly NON-FATAL (the script ends `|| echo "init
+            # failed (non-fatal)"`), but a Harbor exec *timeout* raises before
+            # that shell fallback runs — on large repos (django, astropy) the
+            # tree-sitter parse blew the old 300s cap and KILLED the whole
+            # trial in agent_setup, $0 spent, before a single LLM call
+            # (job single-shot-r8, 2026-07-07). Give it a generous budget AND
+            # swallow any failure here so a slow/failed pre-build degrades to
+            # a cold graph (built lazily at first use) instead of aborting the
+            # trial. Timeout overridable via OXAGEN_INIT_TIMEOUT_SEC.
+            init_timeout = 300
+            raw_init_timeout = os.environ.get("OXAGEN_INIT_TIMEOUT_SEC")
+            if raw_init_timeout:
+                try:
+                    init_timeout = max(1, int(raw_init_timeout.strip()))
+                except ValueError:
+                    pass
+            else:
+                init_timeout = 600
             # Pass env via the exec env= channel (same as the run() call
             # below), NOT inlined into the command string: Harbor logs every
             # command verbatim to trial.log, so an inline `env KEY=...` prefix
             # wrote the AI_GATEWAY_API_KEY secret into the log file.
-            await self.exec_as_agent(
-                environment,
-                command=_INIT_SCRIPT,
-                env=self._forwarded_env(),
-                timeout_sec=300,  # tree-sitter parse of a large repo can take 2–3 min
-            )
+            try:
+                await self.exec_as_agent(
+                    environment,
+                    command=_INIT_SCRIPT,
+                    env=self._forwarded_env(),
+                    timeout_sec=init_timeout,
+                )
+            except Exception as exc:  # noqa: BLE001 — init is best-effort by design
+                print(
+                    f"oxagen-adapter: `oxagen init` pre-build did not finish "
+                    f"({type(exc).__name__}: {exc}); continuing with a cold code "
+                    f"graph (built lazily at first use).",
+                    file=sys.stderr,
+                )
 
         # 6) Warm mode: upload prior-trial memory into the container so this
         #    trial starts with accumulated state from all preceding trials.
@@ -611,6 +689,8 @@ class OxagenAgent(BaseInstalledAgent):
             flags.append(f"--model {shlex.quote(self.model_name)}")
         if _is_truthy(os.environ.get("OXAGEN_NO_PIPELINE")):
             flags.append("--no-pipeline")
+        flags.extend(_task_budget_flags())
+        flags.extend(_max_steps_flags())
         return " ".join(flags)
 
     def _build_best_of_n_flags(self) -> str:
@@ -682,6 +762,32 @@ class OxagenAgent(BaseInstalledAgent):
             command=command,
             env=self._forwarded_env(),
         )
+
+        # Telemetry harvest: with OXAGEN_CLI_DEBUG=1 the CLI writes a rich
+        # per-LLM-call log (model routing, per-step tokens, latency, stage
+        # budgets, prompt hashes) to $HOME/.oxagen/logs — the structured signal
+        # the bypass TUI stream in oxagen.txt does NOT carry. Copy it into
+        # agent_dir so Harbor collects it as a trial artifact (agent/oxagen-debug/).
+        # A SEPARATE exec (not appended to the run command) so the agent turn's
+        # exit code is never masked; `|| true` + try/except keep it best-effort —
+        # telemetry capture must never fail a trial. Same shell/user as the run,
+        # so $HOME resolves identically (cold: container default; warm: pinned).
+        if _is_truthy(os.environ.get("OXAGEN_CLI_DEBUG")):
+            try:
+                await self.exec_as_agent(
+                    environment,
+                    command=(
+                        f'cp -r "$HOME/.oxagen/logs" '
+                        f"{EnvironmentPaths.agent_dir}/oxagen-debug 2>/dev/null || true"
+                    ),
+                    env=self._forwarded_env(),
+                )
+            except Exception as exc:  # noqa: BLE001 — telemetry is best-effort
+                print(
+                    f"oxagen-adapter: debug-log harvest failed ({exc}); "
+                    "trial telemetry will be limited to oxagen.txt + result.json",
+                    file=sys.stderr,
+                )
 
         # Warm mode: download updated memory back to the host after the run so
         # the next trial inherits it.  This is the cross-trial persistence

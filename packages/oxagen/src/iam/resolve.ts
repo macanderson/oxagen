@@ -103,15 +103,6 @@ export interface ResolveInput {
   principal: ResolvedPrincipal;
   /** The capability identifier string, e.g. "org.create". */
   capability: string;
-  /**
-   * Legacy names this capability was previously known by (ADR-022). A grant,
-   * policy, or role-grant row keyed by any of these OR by `capability` matches.
-   * Lets existing `role_grants` rows written under an old name keep granting
-   * access after a rename, without a data migration. Absent/empty → only
-   * `capability` matches (the pre-alias behaviour). The caller (fetch-authz)
-   * derives this from the contract's `aliases`.
-   */
-  capabilityAliases?: readonly string[];
   /** The scope of the invocation — org or workspace. */
   scope: ResolveScope;
   /** Direct grants for this principal. Pre-fetched by the caller. */
@@ -186,11 +177,9 @@ export function resolve(input: ResolveInput): ResolveResult {
     clientIp: input.clientIp ?? null,
   };
 
-  // Capability matching is alias-aware (ADR-022): a row keyed by the canonical
-  // name OR any retired alias is relevant. Existing grants written under an old
-  // name therefore keep resolving after a rename.
-  const capabilityNames = new Set<string>([capability, ...(input.capabilityAliases ?? [])]);
-  const matchesCapability = (id: string): boolean => capabilityNames.has(id);
+  // Capability matching is exact: a grant, policy, or role-grant row is relevant
+  // only when it is keyed by this capability's canonical name.
+  const matchesCapability = (id: string): boolean => id === capability;
 
   const steps: TraceStep[] = [];
 

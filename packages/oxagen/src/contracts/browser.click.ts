@@ -4,7 +4,7 @@ import { registerCapability } from "../registry";
 // Click an element (by CSS selector) on the durable sandbox browser's page.
 
 export const browserClick = registerCapability({
-  name: "browser.click",
+  name: "click_page",
   domain: "browser",
   description:
     "Click an element (by CSS selector) on the durable sandbox browser's current page. Playwright auto-waits for the element to be actionable.",

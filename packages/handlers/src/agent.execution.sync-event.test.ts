@@ -56,8 +56,8 @@ describe("emitExecutionSyncEvent — terminal statuses", () => {
       outputTokens: 50,
       estimatedCostUsd: 0.0123,
       steps: [
-        { toolCalls: [{ toolName: "web.search", toolType: "capability" }] },
-        { toolCalls: [{ toolName: "graph.ingest", toolType: "capability" }] },
+        { toolCalls: [{ toolName: "search_web", toolType: "capability" }] },
+        { toolCalls: [{ toolName: "ingest_graph", toolType: "capability" }] },
         { toolCalls: null },
       ],
     });
@@ -84,8 +84,8 @@ describe("emitExecutionSyncEvent — terminal statuses", () => {
       estimatedCostUsd: "0.0123",
     });
     expect(payload.data.toolCalls).toEqual([
-      { toolName: "web.search", toolType: "capability" },
-      { toolName: "graph.ingest", toolType: "capability" },
+      { toolName: "search_web", toolType: "capability" },
+      { toolName: "ingest_graph", toolType: "capability" },
     ]);
   });
 
@@ -135,7 +135,7 @@ describe("emitExecutionSyncEvent — embedding", () => {
       status: "completed",
       agentId: "agt-5",
       outputTokens: 100,
-      steps: [{ toolCalls: [{ toolName: "web.search", toolType: "builtin" }] }],
+      steps: [{ toolCalls: [{ toolName: "search_web", toolType: "builtin" }] }],
     });
 
     expect(mockEmbedText).toHaveBeenCalledOnce();
@@ -146,7 +146,7 @@ describe("emitExecutionSyncEvent — embedding", () => {
     // Summary text must describe the execution meaningfully
     expect(text).toContain("chat");
     expect(text).toContain("completed");
-    expect(text).toContain("web.search");
+    expect(text).toContain("search_web");
     // Telemetry shape must match EmbedTextOpts
     expect(opts.telemetry.orgId).toBe("org-1");
     expect(opts.telemetry.workspaceId).toBe("ws-1");
@@ -189,7 +189,7 @@ describe("emitExecutionSyncEvent — summary", () => {
       status: "completed",
       agentId: "agt-5",
       outputTokens: 200,
-      steps: [{ toolCalls: [{ toolName: "web.search", toolType: "builtin" }] }],
+      steps: [{ toolCalls: [{ toolName: "search_web", toolType: "builtin" }] }],
     });
 
     const payload = mockSend.mock.calls[0]![0] as { data: Record<string, unknown> };
@@ -198,7 +198,7 @@ describe("emitExecutionSyncEvent — summary", () => {
     expect(summary).toContain("chat");
     expect(summary).toContain("completed");
     expect(summary).toContain("agt-5");
-    expect(summary).toContain("web.search");
+    expect(summary).toContain("search_web");
     expect(summary).toContain("200");
   });
 

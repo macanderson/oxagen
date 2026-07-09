@@ -10,7 +10,7 @@ metadata:
 
 Load this skill when you must produce an agent configuration as a **structured
 object** from a description — the AI-assisted setup path behind
-`agent.definition.suggest`. This is the structured-generation counterpart to
+`suggest_agent_def`. This is the structured-generation counterpart to
 `agent-builder`: `agent-builder` is the conversational, step-by-step deploy
 workflow a human drives; this skill is for filling one complete
 `AgentDefinitionConfig` in a single pass. When the goal is an interactive

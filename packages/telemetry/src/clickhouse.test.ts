@@ -395,7 +395,7 @@ describe("insert helpers — insertRows delegation", () => {
       invocation_id: "inv1",
       org_id: "o1",
       workspace_id: "w1",
-      capability_name: "chat.message.send",
+      capability_name: "send_message",
       message_id: "m1",
       parent_message_id: null,
       execution_step_id: null,
@@ -465,7 +465,7 @@ describe("insert helpers — insertRows delegation", () => {
         principalId: PRINCIPAL,
         principalKind: "agent",
         userId: USER,
-        capabilityName: "ontology.query",
+        capabilityName: "query_ontology",
       },
       () => mod.insertTokenUsage([row]),
     );
@@ -474,7 +474,7 @@ describe("insert helpers — insertRows delegation", () => {
     expect(values[0]!.principal_id).toBe(PRINCIPAL);
     expect(values[0]!.principal_kind).toBe("agent");
     expect(values[0]!.user_id).toBe(USER);
-    expect(values[0]!.capability_name).toBe("ontology.query");
+    expect(values[0]!.capability_name).toBe("query_ontology");
   });
 
   it("explicit caller attribution wins over the ambient scope (no spoof-by-scope)", async () => {
@@ -485,7 +485,7 @@ describe("insert helpers — insertRows delegation", () => {
       invocation_id: "inv2",
       org_id: ORG,
       workspace_id: WS,
-      capability_name: "chat.message.send",
+      capability_name: "send_message",
       message_id: "m1",
       parent_message_id: null,
       execution_step_id: null,
@@ -528,7 +528,7 @@ describe("insert helpers — insertRows delegation", () => {
       event_id: "ae1",
       org_id: "o1",
       workspace_id: "w1",
-      capability: "chat.message.send",
+      capability: "send_message",
       scope_kind: "org",
       scope_id: "o1",
       acting_principal_id: "u1",
@@ -782,7 +782,7 @@ describe("latestAuditChainHash", () => {
       json: vi.fn().mockResolvedValue([{ chain_hash: "abc123def456" }]),
     });
 
-    const hash = await mod.latestAuditChainHash({ orgId: "o1", capability: "chat.message.send" });
+    const hash = await mod.latestAuditChainHash({ orgId: "o1", capability: "send_message" });
     expect(hash).toBe("abc123def456");
   });
 
@@ -791,7 +791,7 @@ describe("latestAuditChainHash", () => {
       json: vi.fn().mockResolvedValue([]),
     });
 
-    const hash = await mod.latestAuditChainHash({ orgId: "o1", capability: "chat.message.send" });
+    const hash = await mod.latestAuditChainHash({ orgId: "o1", capability: "send_message" });
     expect(hash).toBe("");
   });
 

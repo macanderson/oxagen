@@ -496,27 +496,96 @@ export interface TurnRunner {
   run(work: () => Promise<void>): Promise<TurnEndReason>;
 }
 
-/** A {@link TurnRunner} that also exposes its abort signal for the turn body. */
+/**
+ * A {@link TurnRunner} that also exposes the primitives every live surface used
+ * to hand-roll around {@link makeTurnController} + {@link makeStallDetector}:
+ * its abort signal, a progress reset, in-flight-tool tracking, and a stop hook.
+ */
 export interface RunningTurnRunner extends TurnRunner {
-  /** Pass this to the turn's model/tool calls so guards can cancel them. */
+  /** Pass this to the turn's model/tool calls (and `buildTurnExtras`) so guards can cancel them. */
   readonly signal: AbortSignal;
+  /**
+   * Reset the inactivity guard AND advance the idle clock. Call on every unit of
+   * progress — a stream delta (text/reasoning), a stage, or a tool start/end.
+   * The lightweight sibling of {@link onProgress} for surfaces that don't build a
+   * {@link ProgressEvent}.
+   */
+  noteProgress(): void;
+  /**
+   * Note that a tool started executing. The default `shouldDefer` keeps the guard
+   * from firing while any tool is in flight — an executing tool is bounded by its
+   * own timeout and produces no events until it returns, so silence during it is
+   * expected, not a stall.
+   */
+  noteToolStart(): void;
+  /** Note that a tool finished (clamped ≥ 0). */
+  noteToolEnd(): void;
+  /** Stop the inactivity guard. Call in the turn's `finally`. */
+  stop(): void;
+}
+
+/** Escape-hatch wiring for the turn's inactivity guard (see {@link makeStallDetector}). */
+export interface TurnRunnerStallOptions {
+  /**
+   * Consulted first when the window expires. Return true to defer instead of
+   * firing. Defaults to the runner's own in-flight-tool count (`> 0`) — override
+   * only to add extra deferral signals (e.g. a fleet still executing). Overriding
+   * REPLACES the default, so fold the tool count back in if you still need it.
+   */
+  shouldDefer?: () => boolean;
+  /**
+   * Last-chance async check-in before firing (the CI-wait call-out). Omit for
+   * surfaces that must never sit silent (e.g. the PR-fix loop, whose CI waiting
+   * happens outside the turn).
+   */
+  probe?: () => Promise<boolean> | boolean;
+  /** Cap on cumulative probe extensions (ms). Default {@link resolveCiWaitCapMs}. */
+  probeCapMs?: number;
+}
+
+/** Options for {@link createTurnRunner}. */
+export interface TurnRunnerOptions {
+  /** Structured-log sink for the turn guard AND the stall defer/extend/abort lines. */
+  onLog?: (line: string) => void;
+  /** Caller signal (Esc / Ctrl-C, or a parent session controller) chained into the turn. */
+  callerSignal?: AbortSignal | null;
+  /** Inactivity-guard escape hatches. Omit for a bare progress guard. */
+  stall?: TurnRunnerStallOptions;
 }
 
 /**
- * Build a progress-guarded turn runner. The turn completes as long as calls keep
- * landing; it aborts only when no call completes within `turnInactivityMs`
- * (progress-based) or, if set, when the last-resort `turnHardCeilingMs` elapses.
+ * Build a progress-guarded turn runner. **This is THE canonical way to run a
+ * turn** — it composes {@link makeTurnController} + {@link makeStallDetector} so
+ * no live surface has to hand-roll that pairing. Every headless and interactive
+ * loop routes through it: `repl/one-shot.ts` (both entrypoints),
+ * `agent/pr-fix-runner.ts`, `agent/planner.ts` (controller-only),
+ * `sessions/runner.ts`, and `repl/interactive.tsx` (whose fleet-aware
+ * `shouldDefer` comes in via {@link TurnRunnerStallOptions}).
+ *
+ * The turn completes as long as calls keep landing; it aborts only when no
+ * progress (a stream delta, stage, or tool start/end — via {@link noteProgress})
+ * lands within `turnInactivityMs` (progress-based, deferred while a tool is in
+ * flight and after a live CI-wait probe), or, if set, when the last-resort
+ * `turnHardCeilingMs` elapses. The inactivity guard is armed eagerly at
+ * construction — the same moment every surface used to arm its hand-rolled
+ * detector — so `signal` / `noteProgress` / `stop` can be used directly around a
+ * `runTurn` call without calling {@link run}. `run(work)` remains for callers
+ * that want the runner to own the race and hand back a {@link TurnEndReason}.
+ *
+ * Leaving `turnInactivityMs` undefined builds a controller-only runner (no guard)
+ * — the drop-in for a plain {@link makeTurnController} that still wires the
+ * caller signal and optional hard ceiling.
  */
 export function createTurnRunner(
   cfg: Pick<TimeoutConfig, "turnInactivityMs" | "turnHardCeilingMs">,
-  opts?: { onLog?: (line: string) => void; callerSignal?: AbortSignal | null },
+  opts?: TurnRunnerOptions,
 ): RunningTurnRunner {
   const controller = makeTurnController(opts?.callerSignal, {
     hardCeilingMs: cfg.turnHardCeilingMs,
   });
   let endReason: TurnEndReason | null = null;
   let lastProgressAt = Date.now();
-  let guard: { reset: () => void; stop: () => void } | null = null;
+  let inFlightTools = 0;
 
   // A hard-ceiling abort carries an AgentTimeoutError reason; surface it as the
   // hard_ceiling end reason if it fired before any inactivity abort.
@@ -530,26 +599,53 @@ export function createTurnRunner(
     { once: true },
   );
 
-  function onProgress(ev: ProgressEvent): void {
-    lastProgressAt = ev.at;
-    guard?.reset();
-  }
-
-  async function run(work: () => Promise<void>): Promise<TurnEndReason> {
-    endReason = null;
-
-    if (typeof cfg.turnInactivityMs === "number" && cfg.turnInactivityMs > 0) {
-      const window = cfg.turnInactivityMs;
-      guard = makeStallDetector(window, () => {
+  // Arm the inactivity guard eagerly — matching every live surface, which builds
+  // its stall detector the moment the turn's port is assembled, not lazily on run.
+  let guard: { reset: () => void; stop: () => void } | null = null;
+  const window = cfg.turnInactivityMs;
+  if (typeof window === "number" && window > 0) {
+    guard = makeStallDetector(
+      window,
+      () => {
         if (!controller.signal.aborted) {
           const idleMs = Date.now() - lastProgressAt;
           opts?.onLog?.(`[timeout] scope=turn reason=inactivity idle_ms=${idleMs}`);
           endReason = "inactivity";
           controller.abort(new AgentTimeoutError("turn inactivity", window));
         }
-      });
-    }
+      },
+      {
+        shouldDefer: opts?.stall?.shouldDefer ?? (() => inFlightTools > 0),
+        ...(opts?.stall?.probe ? { probe: opts.stall.probe } : {}),
+        ...(opts?.stall?.probeCapMs !== undefined ? { probeCapMs: opts.stall.probeCapMs } : {}),
+        ...(opts?.onLog ? { onLog: opts.onLog } : {}),
+      },
+    );
+  }
 
+  function noteProgress(): void {
+    lastProgressAt = Date.now();
+    guard?.reset();
+  }
+
+  function onProgress(ev: ProgressEvent): void {
+    lastProgressAt = ev.at;
+    guard?.reset();
+  }
+
+  function noteToolStart(): void {
+    inFlightTools++;
+  }
+
+  function noteToolEnd(): void {
+    inFlightTools = Math.max(0, inFlightTools - 1);
+  }
+
+  function stop(): void {
+    guard?.stop();
+  }
+
+  async function run(work: () => Promise<void>): Promise<TurnEndReason> {
     const aborted = new Promise<"aborted">((resolve) => {
       if (controller.signal.aborted) resolve("aborted");
       else controller.signal.addEventListener("abort", () => resolve("aborted"), { once: true });
@@ -572,12 +668,11 @@ export function createTurnRunner(
       if (endReason) return endReason;
       throw workErr;
     } finally {
-      guard?.stop();
-      guard = null;
+      stop();
     }
   }
 
-  return { onProgress, run, signal: controller.signal };
+  return { onProgress, noteProgress, noteToolStart, noteToolEnd, run, stop, signal: controller.signal };
 }
 
 // ── Tool timeout wrapping ─────────────────────────────────────────────────────

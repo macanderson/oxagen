@@ -123,7 +123,7 @@ describe("code.map capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("code.map")).toBe(codeMap);
+    expect(getCapability("get_code_map")).toBe(codeMap);
   });
 
   it("declares the api, mcp, agent, and cli surfaces", () => {

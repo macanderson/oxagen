@@ -35,6 +35,6 @@ describe("org.settings.read capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("org.settings.read")).toBe(orgSettingsRead);
+    expect(getCapability("get_org_settings")).toBe(orgSettingsRead);
   });
 });

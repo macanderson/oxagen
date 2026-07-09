@@ -99,13 +99,21 @@ Hand a pull request to the CLI to watch CI, or actively fix a red PR: it diagnos
 oxagen pr fix 684 --max-rounds 5 --yes      # iterate on CI, auto-merge when green
 ```
 
-## oxagen view — agent dashboard
+## oxagen view — audit agent work
 
 ```bash
 oxagen view
 ```
 
-Launches the dashboard for agent memory, the compiled context, and past sessions.
+Opens a full-screen dashboard for **monitoring and auditing** the agent work done in this project. Every figure is read from a real local source — there is no demo data — so an unavailable source shows an explicit "not running" / "no data yet" state rather than a fabricated healthy one.
+
+- **Agent runs** — the retrospective audit table. One row per recorded run (interactive REPL or detached fleet worker), newest first, from the same on-disk session logs Mission Control reads: derived state, id, surface, task, model, turns, wall-clock duration, and recorded cost.
+- **Overview** — the fleet rollup: counts by state, the interactive-vs-fleet split, token usage, and **real spend** (today and all-time, summed from each run's recorded cost). The spend line is omitted when nothing has cost anything.
+- **Recent activity** — the newest run's real event log, folded to salient lines. This is a retrospective peek; for a live stream use [`oxagen fleet watch`](/docs/cli/fleet) / Mission Control.
+- **Code graph** — real stats from the daemon's local code-graph store, opened read-only: file / symbol / edge counts, embedding coverage, and last index time — or an honest `absent` / `locked` / `empty` state.
+- **Status bar** — actual health probes: daemon (a live socket ping), code-graph store state, and the effective auth mode (platform login or BYOK key).
+
+Data refreshes every few seconds from real reads. Press `q`, `Esc`, or `Ctrl-C` to quit. Piped or non-interactive (`oxagen view | cat`), it prints a one-shot text snapshot instead of the live view.
 
 ## oxagen daemon — context daemon
 
@@ -255,6 +263,18 @@ oxagen agent new  <name>     # scaffold .oxagen/agents/<name>.md
 
 Run one with `oxagen --agent <name> "…"`.
 
+### oxagen agent env — bind agents to environments
+
+Bind a **platform** agent to an [environment](/docs/cli/sandbox-templates) (and optionally a specific [sandbox template](/docs/cli/sandbox-templates) within it), so the agent provisions its sandbox from that config. The `<agent>` is a public id (`agt_…`), slug, or agent-key. **Requires platform auth.**
+
+```bash
+oxagen agent env bind   <agent> --env <slug> [--template <slug>] [--primary]
+oxagen agent env unbind <agent> --env <slug>
+oxagen agent env list   <agent> [--json]
+```
+
+The first binding for an agent becomes its primary automatically; `--primary` promotes another (atomically demoting the previous). Unbinding the primary falls back to the workspace default environment and its default template.
+
 ## oxagen command — custom slash commands
 
 ```bash
@@ -363,6 +383,25 @@ Inspect the workspace of a durable code-agent sandbox session.
 oxagen sandbox files <session-id> [--path <p>] [--depth <1-5>]
 oxagen sandbox cat   <session-id> <path> [--max-bytes <n>]
 ```
+
+### oxagen sandbox template — portable sandbox templates
+
+Manage [sandbox templates](/docs/cli/sandbox-templates): the portable config (provider, runtime image, resource caps, network posture, literal env, preloaded tools, and required secret **key names**) an agent's sandbox is provisioned from. Export/import move a template between workspaces or orgs as a v1 manifest that carries secret **names only, never values**. **Requires platform auth.**
+
+```bash
+oxagen sandbox template list [--env <slug>] [--json]
+oxagen sandbox template get  <slug-or-id> [--env <slug>] [--json]
+oxagen sandbox template create --env <slug> --name <name> --slug <slug> \
+  [--provider modal|vercel|docker] [--runtime <ref>] \
+  [--vcpu <n>] [--memory-mb <n>] [--timeout-ms <n>] [--disk-mb <n>] \
+  [--network-mode public|static_egress|…] [--env-var KEY=value]… [--set-default]
+oxagen sandbox template rm          <slug-or-id> [--env <slug>] --yes
+oxagen sandbox template set-default <slug-or-id> [--env <slug>]
+oxagen sandbox template export      <slug-or-id> [-o <file>]     # stdout by default
+oxagen sandbox template import --env <slug> [-f <file>] [--slug <override>] [--set-default] [--yes]
+```
+
+`--env-var` is repeatable and is for **non-secret** config only. `import` prints a preview (with warnings) and only writes when you pass `--yes`; `rm` likewise needs `--yes`. `export` prints the manifest to stdout unless `-o <file>` is given.
 
 ## oxagen conversation — export a conversation
 

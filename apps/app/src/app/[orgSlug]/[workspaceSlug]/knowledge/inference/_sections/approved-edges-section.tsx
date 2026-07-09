@@ -27,7 +27,7 @@ export async function ApprovedEdgesSection({ orgId, workspaceId, userId }: Appro
       { orgId, workspaceId },
       () =>
         invoke(
-          "semantic.edge.list",
+          "list_semantic_edges",
           { limit: 100, offset: 0 },
           {
             orgId,

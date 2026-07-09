@@ -111,7 +111,7 @@ export class DaemonClient {
   async searchCodeGraph(pattern: string, limit = 20, root?: string): Promise<unknown> {
     const response = await this.send({
       id: crypto.randomUUID(),
-      method: "graph.search",
+      method: "search_graph",
       params: { pattern, limit, ...(root ? { root } : {}) },
     });
     if (response.error) throw new Error(response.error.message);

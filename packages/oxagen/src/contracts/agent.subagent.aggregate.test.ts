@@ -219,7 +219,7 @@ describe("agent.subagent.aggregate capability", () => {
       timeline: [
         {
           runId: "run_1",
-          capabilityName: "agent.code.execute",
+          capabilityName: "execute_code",
           status: "completed",
           startedAt: "2024-01-01T00:00:00.000Z",
           completedAt: "2024-01-01T00:00:01.000Z",
@@ -247,7 +247,7 @@ describe("agent.subagent.aggregate capability", () => {
       timeline: [
         {
           runId: "run_1",
-          capabilityName: "agent.code.execute",
+          capabilityName: "execute_code",
           status: "running",
           startedAt: null,
           completedAt: null,
@@ -322,6 +322,6 @@ describe("agent.subagent.aggregate capability", () => {
   // ── registry ──────────────────────────────────────────────────────────────
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("agent.subagent.aggregate")).toBe(agentSubagentAggregate);
+    expect(getCapability("aggregate_subagents")).toBe(agentSubagentAggregate);
   });
 });

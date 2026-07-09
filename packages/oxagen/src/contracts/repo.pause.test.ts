@@ -66,6 +66,6 @@ describe("repo.pause capability", () => {
   // ── registry ──────────────────────────────────────────────────────────────
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("repo.pause")).toBe(repoPause);
+    expect(getCapability("pause_repo")).toBe(repoPause);
   });
 });

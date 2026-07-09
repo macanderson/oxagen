@@ -43,7 +43,7 @@ import handler_pluginCatalogBrowse, {
 describe("plugin.catalog.browse handler", () => {
   it("exports schema and metadata", () => {
     expect(pluginCatalogBrowseSchema).toBeDefined();
-    expect(pluginCatalogBrowseMetadata.name).toBe("plugin.catalog.browse");
+    expect(pluginCatalogBrowseMetadata.name).toBe("browse_plugin_catalog");
   });
 
   it("calls buildContext then invoke with correct args", async () => {
@@ -55,7 +55,7 @@ describe("plugin.catalog.browse handler", () => {
 
     expect(mocks.buildContext).toHaveBeenCalledOnce();
     expect(mocks.invoke).toHaveBeenCalledWith(
-      "plugin.catalog.browse",
+      "browse_plugin_catalog",
       args,
       fakeCtx,
       { surface: "mcp" },
@@ -81,7 +81,7 @@ import handler_pluginCatalogGet, {
 describe("plugin.catalog.get handler", () => {
   it("exports schema and metadata", () => {
     expect(pluginCatalogGetSchema).toBeDefined();
-    expect(pluginCatalogGetMetadata.name).toBe("plugin.catalog.get");
+    expect(pluginCatalogGetMetadata.name).toBe("get_catalog_plugin");
   });
 
   it("calls invoke with catalog get args", async () => {
@@ -105,7 +105,7 @@ describe("plugin.catalog.get handler", () => {
     await handler_pluginCatalogGet(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
-      "plugin.catalog.get",
+      "get_catalog_plugin",
       args,
       fakeCtx,
       { surface: "mcp" },
@@ -123,7 +123,7 @@ import handler_pluginCredentialReauth, {
 describe("plugin.credential.reauth handler", () => {
   it("exports schema and metadata", () => {
     expect(pluginCredentialReauthSchema).toBeDefined();
-    expect(pluginCredentialReauthMetadata.name).toBe("plugin.credential.reauth");
+    expect(pluginCredentialReauthMetadata.name).toBe("reauth_plugin_credential");
   });
 
   it("calls invoke with reauth args", async () => {
@@ -134,7 +134,7 @@ describe("plugin.credential.reauth handler", () => {
     await handler_pluginCredentialReauth(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
-      "plugin.credential.reauth",
+      "reauth_plugin_credential",
       args,
       fakeCtx,
       { surface: "mcp" },
@@ -152,7 +152,7 @@ import handler_pluginCredentialSetSecret, {
 describe("plugin.credential.set_secret handler", () => {
   it("exports schema and metadata", () => {
     expect(pluginCredentialSetSecretSchema).toBeDefined();
-    expect(pluginCredentialSetSecretMetadata.name).toBe("plugin.credential.set_secret");
+    expect(pluginCredentialSetSecretMetadata.name).toBe("set_plugin_secret");
   });
 
   it("calls invoke with set_secret args", async () => {
@@ -169,7 +169,7 @@ describe("plugin.credential.set_secret handler", () => {
     await handler_pluginCredentialSetSecret(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
-      "plugin.credential.set_secret",
+      "set_plugin_secret",
       args,
       fakeCtx,
       { surface: "mcp" },
@@ -187,11 +187,11 @@ import handler_pluginOrgInstall, {
 describe("plugin.org.install handler", () => {
   it("exports schema and metadata", () => {
     expect(pluginOrgInstallSchema).toBeDefined();
-    expect(pluginOrgInstallMetadata.name).toBe("plugin.org.install");
+    expect(pluginOrgInstallMetadata.name).toBe("install_plugin");
   });
 
   it("calls invoke with install args", async () => {
-    const fakeOutput = { orgListingId: "orl_1" };
+    const fakeOutput = { orgListingId: "orl_1", authKind: "none" as const };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = {
@@ -204,7 +204,7 @@ describe("plugin.org.install handler", () => {
     await handler_pluginOrgInstall(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
-      "plugin.org.install",
+      "install_plugin",
       args,
       fakeCtx,
       { surface: "mcp" },
@@ -222,7 +222,7 @@ import handler_pluginOrgInstallBulk, {
 describe("plugin.org.install_bulk handler", () => {
   it("exports schema and metadata", () => {
     expect(pluginOrgInstallBulkSchema).toBeDefined();
-    expect(pluginOrgInstallBulkMetadata.name).toBe("plugin.org.install_bulk");
+    expect(pluginOrgInstallBulkMetadata.name).toBe("install_plugins_bulk");
   });
 
   it("calls invoke with bulk install args", async () => {
@@ -235,7 +235,7 @@ describe("plugin.org.install_bulk handler", () => {
     await handler_pluginOrgInstallBulk(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
-      "plugin.org.install_bulk",
+      "install_plugins_bulk",
       args,
       fakeCtx,
       { surface: "mcp" },
@@ -253,7 +253,7 @@ import handler_pluginOrgList, {
 describe("plugin.org.list handler", () => {
   it("exports schema and metadata", () => {
     expect(pluginOrgListSchema).toBeDefined();
-    expect(pluginOrgListMetadata.name).toBe("plugin.org.list");
+    expect(pluginOrgListMetadata.name).toBe("list_plugins");
   });
 
   it("calls invoke with org list args", async () => {
@@ -264,7 +264,7 @@ describe("plugin.org.list handler", () => {
     await handler_pluginOrgList(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
-      "plugin.org.list",
+      "list_plugins",
       args,
       fakeCtx,
       { surface: "mcp" },
@@ -278,28 +278,43 @@ describe("plugin.org.list handler", () => {
   });
 });
 
-// ── plugin.org.set_enabled ────────────────────────────────────────────────────
+// ── plugin.set_enabled (scope-parameterised: org | workspace) ────────────────
 
-import handler_pluginOrgSetEnabled, {
-  schema as pluginOrgSetEnabledSchema,
-  metadata as pluginOrgSetEnabledMetadata,
-} from "./plugin.org.set_enabled";
+import handler_pluginSetEnabled, {
+  schema as pluginSetEnabledSchema,
+  metadata as pluginSetEnabledMetadata,
+} from "./plugin.set_enabled";
 
-describe("plugin.org.set_enabled handler", () => {
+describe("plugin.set_enabled handler", () => {
   it("exports schema and metadata", () => {
-    expect(pluginOrgSetEnabledSchema).toBeDefined();
-    expect(pluginOrgSetEnabledMetadata.name).toBe("plugin.org.set_enabled");
+    expect(pluginSetEnabledSchema).toBeDefined();
+    expect(pluginSetEnabledMetadata.name).toBe("set_plugin_enabled");
   });
 
-  it("calls invoke with set_enabled args", async () => {
-    const fakeOutput = { ok: true };
+  it("calls invoke with scope='org' args", async () => {
+    const fakeOutput = { ok: true, workspaceServerId: null };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
-    const args = { orgListingId: "orl_1", enabled: true };
-    await handler_pluginOrgSetEnabled(args);
+    const args = { scope: "org" as const, orgListingId: "orl_1", enabled: true };
+    await handler_pluginSetEnabled(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
-      "plugin.org.set_enabled",
+      "set_plugin_enabled",
+      args,
+      fakeCtx,
+      { surface: "mcp" },
+    );
+  });
+
+  it("calls invoke with scope='workspace' args", async () => {
+    const fakeOutput = { ok: true, workspaceServerId: "wss_1" };
+    mocks.invoke.mockResolvedValue(fakeOutput);
+
+    const args = { scope: "workspace" as const, orgListingId: "orl_1", enabled: true };
+    await handler_pluginSetEnabled(args);
+
+    expect(mocks.invoke).toHaveBeenCalledWith(
+      "set_plugin_enabled",
       args,
       fakeCtx,
       { surface: "mcp" },
@@ -317,7 +332,7 @@ import handler_pluginOrgUninstall, {
 describe("plugin.org.uninstall handler", () => {
   it("exports schema and metadata", () => {
     expect(pluginOrgUninstallSchema).toBeDefined();
-    expect(pluginOrgUninstallMetadata.name).toBe("plugin.org.uninstall");
+    expect(pluginOrgUninstallMetadata.name).toBe("uninstall_plugin");
   });
 
   it("calls invoke with uninstall args", async () => {
@@ -328,7 +343,7 @@ describe("plugin.org.uninstall handler", () => {
     await handler_pluginOrgUninstall(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
-      "plugin.org.uninstall",
+      "uninstall_plugin",
       args,
       fakeCtx,
       { surface: "mcp" },
@@ -346,7 +361,7 @@ import handler_pluginRegistryAdd, {
 describe("plugin.registry.add handler", () => {
   it("exports schema and metadata", () => {
     expect(pluginRegistryAddSchema).toBeDefined();
-    expect(pluginRegistryAddMetadata.name).toBe("plugin.registry.add");
+    expect(pluginRegistryAddMetadata.name).toBe("add_plugin_registry");
   });
 
   it("calls invoke with registry add args", async () => {
@@ -357,7 +372,7 @@ describe("plugin.registry.add handler", () => {
     await handler_pluginRegistryAdd(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
-      "plugin.registry.add",
+      "add_plugin_registry",
       args,
       fakeCtx,
       { surface: "mcp" },
@@ -375,7 +390,7 @@ import handler_pluginRegistryList, {
 describe("plugin.registry.list handler", () => {
   it("exports schema and metadata", () => {
     expect(pluginRegistryListSchema).toBeDefined();
-    expect(pluginRegistryListMetadata.name).toBe("plugin.registry.list");
+    expect(pluginRegistryListMetadata.name).toBe("list_plugin_registries");
   });
 
   it("calls invoke with empty args for list", async () => {
@@ -385,7 +400,7 @@ describe("plugin.registry.list handler", () => {
     await handler_pluginRegistryList({});
 
     expect(mocks.invoke).toHaveBeenCalledWith(
-      "plugin.registry.list",
+      "list_plugin_registries",
       {},
       fakeCtx,
       { surface: "mcp" },
@@ -403,7 +418,7 @@ import handler_pluginRegistryRemove, {
 describe("plugin.registry.remove handler", () => {
   it("exports schema and metadata", () => {
     expect(pluginRegistryRemoveSchema).toBeDefined();
-    expect(pluginRegistryRemoveMetadata.name).toBe("plugin.registry.remove");
+    expect(pluginRegistryRemoveMetadata.name).toBe("remove_plugin_registry");
   });
 
   it("calls invoke with registry remove args", async () => {
@@ -414,7 +429,7 @@ describe("plugin.registry.remove handler", () => {
     await handler_pluginRegistryRemove(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
-      "plugin.registry.remove",
+      "remove_plugin_registry",
       args,
       fakeCtx,
       { surface: "mcp" },
@@ -432,7 +447,7 @@ import handler_pluginSettingsSetAuthAlerts, {
 describe("plugin.settings.set_auth_alerts handler", () => {
   it("exports schema and metadata", () => {
     expect(pluginSettingsSetAuthAlertsSchema).toBeDefined();
-    expect(pluginSettingsSetAuthAlertsMetadata.name).toBe("plugin.settings.set_auth_alerts");
+    expect(pluginSettingsSetAuthAlertsMetadata.name).toBe("set_auth_alerts");
   });
 
   it("calls invoke with auth alert settings args", async () => {
@@ -443,36 +458,7 @@ describe("plugin.settings.set_auth_alerts handler", () => {
     await handler_pluginSettingsSetAuthAlerts(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
-      "plugin.settings.set_auth_alerts",
-      args,
-      fakeCtx,
-      { surface: "mcp" },
-    );
-  });
-});
-
-// ── plugin.workspace.set_enabled ─────────────────────────────────────────────
-
-import handler_pluginWorkspaceSetEnabled, {
-  schema as pluginWorkspaceSetEnabledSchema,
-  metadata as pluginWorkspaceSetEnabledMetadata,
-} from "./plugin.workspace.set_enabled";
-
-describe("plugin.workspace.set_enabled handler", () => {
-  it("exports schema and metadata", () => {
-    expect(pluginWorkspaceSetEnabledSchema).toBeDefined();
-    expect(pluginWorkspaceSetEnabledMetadata.name).toBe("plugin.workspace.set_enabled");
-  });
-
-  it("calls invoke with workspace set_enabled args", async () => {
-    const fakeOutput = { workspaceServerId: "wss_1" };
-    mocks.invoke.mockResolvedValue(fakeOutput);
-
-    const args = { orgListingId: "orl_1", enabled: true };
-    await handler_pluginWorkspaceSetEnabled(args);
-
-    expect(mocks.invoke).toHaveBeenCalledWith(
-      "plugin.workspace.set_enabled",
+      "set_auth_alerts",
       args,
       fakeCtx,
       { surface: "mcp" },

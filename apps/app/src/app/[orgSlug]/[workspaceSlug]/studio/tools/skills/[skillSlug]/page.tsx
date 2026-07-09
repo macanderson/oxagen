@@ -3,8 +3,8 @@
  *
  * Shows version history, edit-to-new-version, activate, and download for a
  * single installed skill. Data is loaded via:
- *   invoke('skill.version.list')   — version history
- *   invoke('skill.version.get')    — active version content
+ *   invoke('list_skill_versions')   — version history
+ *   invoke('get_skill_version')    — active version content
  *
  * Passes server actions (editSkill, activateVersion, exportSkill) as props so
  * the "use client" SkillDetailPanel component can call them without crossing
@@ -46,7 +46,7 @@ export default async function StudioSkillDetailPage({ params }: PageProps) {
   // Fetch skill detail + active version content.
   let skill: SkillDetailData | null = null;
   try {
-    const out = await invoke("skill.version.get", { skillSlug }, ctx, { surface: "agent" });
+    const out = await invoke("get_skill_version", { skillSlug }, ctx, { surface: "agent" });
     const typed = out as {
       id: string;
       slug: string;
@@ -66,7 +66,7 @@ export default async function StudioSkillDetailPage({ params }: PageProps) {
   let versions: SkillVersion[] = [];
   if (skill) {
     try {
-      const out = await invoke("skill.version.list", { skillSlug }, ctx, { surface: "agent" });
+      const out = await invoke("list_skill_versions", { skillSlug }, ctx, { surface: "agent" });
       const typed = out as {
         versions: Array<{
           id: string;

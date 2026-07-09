@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { ToolCallCard } from "./tool-call-card";
+import { ToolActivityGroup, type ToolActivityItem } from "./tool-activity-group";
 import { ApprovalCard } from "./approval-card";
 import { ConsentCard } from "./consent-card";
 import { PlanCard, type AgentCapability } from "./plan-card";
@@ -13,7 +14,7 @@ import { CodeExecuteCard } from "./code-execute-card";
 import { ReasoningCard } from "./reasoning-card";
 import { ActivityTimeline, TimelineItem, type TimelineItemProps } from "./activity-timeline";
 import { CHAT_COMPONENTS, logUnknownComponent, UnknownComponentCard } from "./chat-component-registry";
-import type { AssistantContentBlock } from "./stream-event-types";
+import type { AssistantContentBlock, ToolCallContentBlock } from "./stream-event-types";
 import { MarkdownMessage } from "./markdown-message";
 import { MessageFooter } from "./message-footer";
 import ImagePreview from "./registry-components/image-preview";
@@ -143,15 +144,42 @@ export function MessageBubble({
         {hasBlocks ? (
           useTimeline ? (
             <ActivityTimeline>
-              {blocks!.map((block, idx) => (
-                <TimelineItem key={blockKey(block, idx)} tone={blockTone(block)}>
-                  {renderBlock(block, idx, callbacks)}
-                </TimelineItem>
-              ))}
+              {groupBlocks(blocks!).map((unit) =>
+                unit.kind === "tool-group" ? (
+                  <TimelineItem
+                    key={`tool-group:${unit.blocks[0]!.toolCallId}`}
+                    tone={toolGroupTone(unit.blocks)}
+                  >
+                    <ToolActivityGroup
+                      items={unit.blocks.map(toolCallBlockToItem)}
+                      live={false}
+                    />
+                  </TimelineItem>
+                ) : (
+                  <TimelineItem
+                    key={blockKey(unit.block, unit.idx)}
+                    tone={blockTone(unit.block)}
+                  >
+                    {renderBlock(unit.block, unit.idx, callbacks)}
+                  </TimelineItem>
+                ),
+              )}
             </ActivityTimeline>
           ) : (
             <div className="space-y-2">
-              {blocks!.map((block, idx) => renderBlock(block, idx, callbacks))}
+              {groupBlocks(blocks!).map((unit) =>
+                unit.kind === "tool-group" ? (
+                  <ToolActivityGroup
+                    key={`tool-group:${unit.blocks[0]!.toolCallId}`}
+                    items={unit.blocks.map(toolCallBlockToItem)}
+                    live={false}
+                  />
+                ) : (
+                  <React.Fragment key={blockKey(unit.block, unit.idx)}>
+                    {renderBlock(unit.block, unit.idx, callbacks)}
+                  </React.Fragment>
+                ),
+              )}
             </div>
           )
         ) : (
@@ -170,6 +198,60 @@ export function MessageBubble({
       </div>
     </div>
   );
+}
+
+// A renderable unit: either a single block, or a run of consecutive tool-call
+// blocks merged into one compact activity group. Merging keeps the frequent,
+// low-signal tool calls from dominating the persisted conversation history.
+type BlockUnit =
+  | { kind: "single"; block: AssistantContentBlock; idx: number }
+  | { kind: "tool-group"; blocks: ToolCallContentBlock[]; startIdx: number };
+
+function groupBlocks(blocks: AssistantContentBlock[]): BlockUnit[] {
+  const units: BlockUnit[] = [];
+  let i = 0;
+  while (i < blocks.length) {
+    const block = blocks[i]!;
+    if (block.type === "tool-call") {
+      const run: ToolCallContentBlock[] = [];
+      const startIdx = i;
+      while (i < blocks.length && blocks[i]!.type === "tool-call") {
+        run.push(blocks[i] as ToolCallContentBlock);
+        i++;
+      }
+      units.push({ kind: "tool-group", blocks: run, startIdx });
+    } else {
+      units.push({ kind: "single", block, idx: i });
+      i++;
+    }
+  }
+  return units;
+}
+
+function toolCallBlockToItem(block: ToolCallContentBlock): ToolActivityItem {
+  return {
+    toolCallId: block.toolCallId,
+    capability: block.capability,
+    inputPreview: block.inputPreview,
+    riskLevel: block.riskLevel,
+    status: block.status,
+    output: block.output,
+    stdout: block.stdout,
+    stderr: block.stderr,
+    errorReason: block.errorReason,
+    durationMs: block.durationMs,
+  };
+}
+
+// The rail dot for a tool group stays calm: running while anything is in-flight,
+// otherwise done — never "failed", so a single failed call doesn't paint the
+// whole thread with an alarm color.
+function toolGroupTone(
+  blocks: ToolCallContentBlock[],
+): NonNullable<TimelineItemProps["tone"]> {
+  return blocks.some((b) => b.status === "pending" || b.status === "running")
+    ? "running"
+    : "done";
 }
 
 // Dispatch switch — kept exhaustive so a missing block type is a type

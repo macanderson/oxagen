@@ -38,6 +38,6 @@ describe("agent.mcp.consent.resolve capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("agent.mcp_consent.resolve")).toBe(agentMcpConsentResolve);
+    expect(getCapability("resolve_mcp_consent")).toBe(agentMcpConsentResolve);
   });
 });

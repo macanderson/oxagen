@@ -1,20 +1,24 @@
 /**
  * Interactive REPL — the default `oxagen` experience.
  *
- * Renders INLINE, in the terminal's normal screen buffer (never the alternate
- * buffer), so:
- *   - Finished turns commit to the terminal's own scrollback via Ink's
- *     `<Static>` — the user scrolls up with a trackpad/mouse/Shift-PageUp the
- *     same way they would in `less` or any other normal-buffer program.
- *   - A thinking indicator (spinner + elapsed time + live token estimate) and a
- *     session token counter in the status bar
- *   - Multi-turn history, project rules, and Oxagen context-engine memory
- *   - Slash commands (/help, /model, /clear, /exit), prompt queue, Esc/Ctrl-C cancel
+ * Two render modes, chosen at launch by TTY detection (see `useTerminalSize` /
+ * `launchRepl`):
+ *   - FULL-SCREEN (a real TTY): takes over the alternate screen buffer and draws
+ *     a dashboard (header · scrollable transcript viewport · dock) with its own
+ *     in-app scroll (scroll.ts). The alt buffer has no scrollback, so committed
+ *     rows stay in React state and are re-sliced each frame — NOT handed to
+ *     `<Static>`.
+ *   - INLINE (off a TTY: pipes, tests): renders in the terminal's normal screen
+ *     buffer and commits finished turns to the terminal's own scrollback via
+ *     Ink's `<Static>`, so scroll-up works natively like `less`.
+ *
+ * Common to both: a thinking indicator (spinner + elapsed + live token
+ * estimate), a session token/cost status bar, multi-turn history + project
+ * rules + Oxagen context-engine memory, and slash commands (/help, /model,
+ * /clear, /exit) with a prompt queue and Esc / double Ctrl-C cancel.
  *
  * Only the in-progress turn + prompt bar + status/side panels re-render each
- * frame (see "Transcript rendering" below) — the prompt bar is no longer
- * pinned to the terminal's physical bottom edge; it flows at the bottom of the
- * current output like a normal CLI.
+ * frame (see "Transcript rendering" below).
  *
  * Presentational pieces live in ./components; this file is the container.
  */
@@ -36,9 +40,9 @@ import {
 } from "../agent/adapters/index.js";
 import { resolveApiContext } from "../lib/api.js";
 import {
-  prepareOnDeviceCoordinator,
-  type OnDeviceCoordinator,
-} from "../agent/adapters/on-device-agent-ai.js";
+  resolveCoordinatorAi,
+  type ResolvedCoordinator,
+} from "../agent/adapters/coordinator.js";
 import { getCoordinator, setCoordinator } from "../runtime/config.js";
 import { queryCodeGraph, warmCodeGraph } from "../agent/code-graph.js";
 import type { Session } from "../lib/session.js";
@@ -52,7 +56,7 @@ import {
 import { loadProjectContext } from "../agent/project-context.js";
 import { loadAndExpand, parseInvocation } from "../slash/expand.js";
 import { buildSlashCatalog, type SlashCatalogEntry } from "../slash/catalog.js";
-import { buildProgram, describeCliCommands } from "../program.js";
+import { buildProgram, describeCliCommands, type CliCommandMeta } from "../program.js";
 import {
   isExternalOnlyCliCommand,
   isInlineDispatchableCliCommand,
@@ -110,6 +114,8 @@ import { LoginPanel } from "./login-panel.js";
 import type { InteractiveLoginResult } from "../commands/auth.js";
 import type { PasteSubmission } from "./paste.js";
 import { resolveEscapeAction } from "./escape-action.js";
+import { resolveCtrlC, CTRL_C_EXIT_WINDOW_MS } from "./ctrl-c-action.js";
+import { capTranscript, MAX_TRANSCRIPT_MESSAGES } from "./transcript-cap.js";
 import { TerminalPanel, type TerminalRun } from "./terminal-panel.js";
 import { isDebugEnabled } from "../lib/debug-log.js";
 import { Banner, bannerRowCount } from "../tui/banner.js";
@@ -133,8 +139,7 @@ import { enterFullscreen } from "./alt-screen.js";
 import { resolveGitInfo } from "./git-info.js";
 import { useRepoInfo } from "./use-repo-info.js";
 import {
-  makeTurnController,
-  makeStallDetector,
+  createTurnRunner,
   AgentTimeoutError,
   resolveTurnInactivityMs,
 } from "../agent/timeouts.js";
@@ -280,6 +285,13 @@ export function ReplApp({
   const { exit } = useApp();
   const [messages, setMessages] = useState<Message[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
+  // Idle Ctrl-C double-press: armed after the first press, cleared on exit,
+  // on any resolving action, or after CTRL_C_EXIT_WINDOW_MS (see the Ctrl-C
+  // handler + resolveCtrlC). While armed, a dim "press Ctrl-C again to exit"
+  // hint renders above the prompt bar.
+  const [ctrlCArmed, setCtrlCArmed] = useState(false);
+  const lastCtrlCRef = useRef<number | null>(null);
+  const ctrlCHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [model, setModel] = useState<string>(resolveModelId(options.model));
   // Per-function model overrides (undefined ⇒ the engine's own default for that
   // role: advisor tier for judge, local heuristic / OXAGEN_LLM_EVALUATOR for
@@ -427,9 +439,10 @@ export function ReplApp({
   // reads `activeAiRef.current` per turn, so a swap takes effect on the next turn
   // with no workspace re-creation.
   const activeAiRef = useRef<AgentAi>(aiRef.current);
-  // The lazily-built local coordinator (loaded GGUF weights). Null until the
-  // first `/coordinator local`; cached so re-toggling never reloads the weights.
-  const localCoordinatorRef = useRef<OnDeviceCoordinator | null>(null);
+  // The lazily-built local coordinator (loaded GGUF weights), resolved through
+  // the runtime provider factory (see agent/adapters/coordinator.ts). Null until
+  // the first `/coordinator local`; cached so re-toggling never reloads weights.
+  const localCoordinatorRef = useRef<ResolvedCoordinator | null>(null);
   // Where the coordinator runs: "remote" (platform gateway) or "local" (on-device).
   // Persisted coordinator drives the initial label, but the active port always
   // starts remote so REPL boot never blocks on loading local weights.
@@ -466,16 +479,21 @@ export function ReplApp({
   const agentsRef = useRef(loadAgents({ cwd }));
   const planStoreRef = useRef(openPlanStore(cwd));
   // Unified slash-command catalog — built-in REPL commands + every `oxagen --help`
-  // command + custom .md commands — built once. Powers the typeahead menu and the
-  // CLI-command hints in handleSubmit. buildProgram() is pure introspection: no
-  // parse, no I/O, no side effects.
-  const catalogRef = useRef<SlashCatalogEntry[] | null>(null);
-  if (!catalogRef.current) {
-    catalogRef.current = buildSlashCatalog({
-      cwd,
-      cliCommands: describeCliCommands(buildProgram()),
-    });
+  // command + custom .md commands. Powers the typeahead menu and the CLI-command
+  // hints in handleSubmit. CLI introspection (buildProgram() — pure, no I/O) is
+  // cached once; the custom-command tier is re-scanned each time the menu opens
+  // (see handleMenuOpenChange) so a command file added mid-session shows up
+  // without a restart. Held as state (not just a ref) so that re-scan re-renders
+  // the menu; `catalogRef` mirrors it for the synchronous submit handler.
+  const cliCommandsRef = useRef<ReadonlyArray<CliCommandMeta> | null>(null);
+  if (!cliCommandsRef.current) {
+    cliCommandsRef.current = describeCliCommands(buildProgram());
   }
+  const [catalog, setCatalog] = useState<SlashCatalogEntry[]>(() =>
+    buildSlashCatalog({ cwd, cliCommands: cliCommandsRef.current ?? [] }),
+  );
+  const catalogRef = useRef(catalog);
+  catalogRef.current = catalog;
   // Oxagen context-engine memory, opened asynchronously on mount.
   const memoryRef = useRef<SessionMemory | null>(null);
   // Fleet memory (class + enforcement lessons) and the per-turn trace store, both synchronous.
@@ -643,6 +661,7 @@ export function ReplApp({
     return () => {
       reapChildren();
       if (signalHandleRef) signalHandleRef.current = null;
+      if (ctrlCHintTimerRef.current) clearTimeout(ctrlCHintTimerRef.current);
     };
   }, [signalHandleRef, reapChildren]);
   // Live terminal geometry. `fullscreen` is true only on a real TTY: it gates
@@ -651,6 +670,11 @@ export function ReplApp({
   // see the render branch at the bottom of this component. Off a TTY (tests,
   // pipes) the REPL always takes the classic inline path, unchanged.
   const { rows, cols, fullscreen } = useTerminalSize();
+  // Mirror `fullscreen` into a ref so `commit` (a stable useCallback) can decide
+  // whether trimming the transcript is safe without re-creating on every resize.
+  // Only full-screen mode may trim (see transcript-cap.ts / commit below).
+  const fullscreenRef = useRef(fullscreen);
+  fullscreenRef.current = fullscreen;
 
   // ── Full-screen TUI state (used only when `fullscreen` is true) ────────────
   // In-app scroll position over the transcript viewport — the alternate
@@ -802,13 +826,43 @@ export function ReplApp({
     setInject({ text, nonce: injectNonceRef.current });
   }, []);
 
+  // Clear the armed "press Ctrl-C again to exit" hint and its auto-dismiss timer.
+  const clearCtrlCHint = useCallback((): void => {
+    if (ctrlCHintTimerRef.current) {
+      clearTimeout(ctrlCHintTimerRef.current);
+      ctrlCHintTimerRef.current = null;
+    }
+    setCtrlCArmed(false);
+  }, []);
+  // Show the hint and auto-dismiss it once the double-press window lapses, so a
+  // lone idle Ctrl-C leaves no lingering banner.
+  const armCtrlCHint = useCallback((): void => {
+    setCtrlCArmed(true);
+    if (ctrlCHintTimerRef.current) clearTimeout(ctrlCHintTimerRef.current);
+    ctrlCHintTimerRef.current = setTimeout(() => {
+      ctrlCHintTimerRef.current = null;
+      lastCtrlCRef.current = null;
+      setCtrlCArmed(false);
+    }, CTRL_C_EXIT_WINDOW_MS);
+  }, []);
+
   // Whether PromptInput's slash-command menu is open. When it is, Up/Down belong
   // to the menu; when closed, they belong to focus navigation (recall / enter
   // panel). Mirrored into a ref so the synchronous key handler reads it fresh.
   const menuOpenRef = useRef(false);
-  const handleMenuOpenChange = useCallback((open: boolean): void => {
-    menuOpenRef.current = open;
-  }, []);
+  const handleMenuOpenChange = useCallback(
+    (open: boolean): void => {
+      // On the closed→open transition, re-scan user-defined commands so a file
+      // dropped into .oxagen/commands (or ~/.config/oxagen/commands) mid-session
+      // appears immediately. CLI introspection is cached (cliCommandsRef) — only
+      // the cheap custom-command fs scan inside buildSlashCatalog re-runs.
+      if (open && !menuOpenRef.current) {
+        setCatalog(buildSlashCatalog({ cwd, cliCommands: cliCommandsRef.current ?? [] }));
+      }
+      menuOpenRef.current = open;
+    },
+    [cwd],
+  );
   // Mirrors PromptInput's buffer-empty state into inputEmptyRef (declared
   // above with the other full-screen state) so the synchronous key handler
   // can gate Up/Down/Home/End without re-rendering on every keystroke.
@@ -870,8 +924,17 @@ export function ReplApp({
   }, [cwd]);
 
   const commit = useCallback((next: Message[]) => {
-    allRef.current = next;
-    setMessages(next);
+    // Bound transcript memory on very long full-screen sessions. Inline mode
+    // commits finished rows through Ink's append-only `<Static>`, which drops
+    // the newest row if the fed array is trimmed (see transcript-cap.ts), so it
+    // is intentionally left uncapped there; full-screen keeps everything in
+    // React state and re-slices a visible window each frame, so dropping the
+    // oldest rows is safe and also bounds the O(N) row-height pass. Model
+    // history (historyRef) is bounded separately by the engine's token-budget
+    // compaction, so it needs no cap here.
+    const capped = fullscreenRef.current ? capTranscript(next, MAX_TRANSCRIPT_MESSAGES) : next;
+    allRef.current = capped;
+    setMessages(capped);
   }, []);
 
   const pushAssistant = useCallback(
@@ -1270,13 +1333,47 @@ export function ReplApp({
     // `!command` takes priority: Ctrl-C kills it (like a real shell) rather than
     // cancelling the agent turn or quitting.
     if (key.ctrl && input === "c") {
-      if (terminalRunRef.current?.status === "running") {
-        terminalHandleRef.current?.kill();
-      } else if (streamingRef.current && abortRef.current) {
-        cancelTurn();
-      } else {
-        void memoryRef.current?.close();
-        exit();
+      // A single idle Ctrl-C must NEVER exit (it would destroy typed-but-unsent
+      // input); exit requires a double-press within CTRL_C_EXIT_WINDOW_MS. A
+      // live `!command` child is killed first (like a real shell), then a
+      // streaming turn is cancelled, then — if idle — text in the bar is cleared
+      // before arming exit. See resolveCtrlC for the full priority order.
+      const now = Date.now();
+      const action = resolveCtrlC(
+        {
+          terminalRunning: terminalRunRef.current?.status === "running",
+          streaming: streamingRef.current && abortRef.current !== null,
+          inputEmpty: inputEmptyRef.current,
+          lastCtrlCMs: lastCtrlCRef.current,
+        },
+        now,
+      );
+      switch (action) {
+        case "kill-terminal":
+          terminalHandleRef.current?.kill();
+          lastCtrlCRef.current = null;
+          clearCtrlCHint();
+          break;
+        case "cancel-turn":
+          cancelTurn();
+          lastCtrlCRef.current = null;
+          clearCtrlCHint();
+          break;
+        case "clear-input":
+          injectText("");
+          lastCtrlCRef.current = null;
+          clearCtrlCHint();
+          break;
+        case "arm-exit":
+          lastCtrlCRef.current = now;
+          armCtrlCHint();
+          break;
+        case "exit":
+          lastCtrlCRef.current = null;
+          clearCtrlCHint();
+          void memoryRef.current?.close();
+          exit();
+          break;
       }
       return;
     }
@@ -1542,11 +1639,20 @@ export function ReplApp({
       }
 
       // ── Slash commands ──
-      if (text === "/help") {
+      // Match on the leading whitespace-delimited token, never a prefix or a
+      // bare `===`. `text === "/help"` used to reject `/help x` (fell through to
+      // "unknown command"), and `text.startsWith("/model")` used to swallow
+      // `/models`, `/modelx`, etc. Extracting the command token fixes both:
+      // argless commands tolerate-and-ignore trailing args, and arg commands can
+      // never collide with a longer-named sibling. Handler bodies still read
+      // their args via `text.slice("/name".length)`, which stays correct because
+      // an exact token match guarantees `text` is `"/name"` or `"/name …args"`.
+      const cmd = text.split(/\s+/)[0];
+      if (cmd === "/help") {
         pushAssistant(HELP);
         return;
       }
-      if (text === "/init") {
+      if (cmd === "/init") {
         pushAssistant("Initializing…");
         try {
           const { runInit, formatInitSummary } = await import("../commands/init.js");
@@ -1559,18 +1665,18 @@ export function ReplApp({
         }
         return;
       }
-      if (text === "/clear") {
+      if (cmd === "/clear") {
         resetConversation();
         return;
       }
-      if (text === "/hud") {
+      if (cmd === "/hud") {
         // Toggle the heads-up display of every agent running this session.
         const next = !hudVisibleRef.current;
         hudVisibleRef.current = next;
         setHudVisible(next);
         return;
       }
-      if (text === "/config" || text.startsWith("/config ")) {
+      if (cmd === "/config") {
         const arg = text.slice("/config".length).trim().toLowerCase();
         if (arg === "doctor") {
           try {
@@ -1592,7 +1698,7 @@ export function ReplApp({
         setConfigOpen(true);
         return;
       }
-      if (text === "/diff" || text.startsWith("/diff ")) {
+      if (cmd === "/diff") {
         // `/diff` opens the changed-file list; `/diff <path>` opens straight
         // into that file's diff (suffix-matched inside the panel).
         const arg = text.slice("/diff".length).trim();
@@ -1601,7 +1707,7 @@ export function ReplApp({
         setDiffOpen(true);
         return;
       }
-      if (text === "/panel") {
+      if (cmd === "/panel") {
         // Pin/unpin the right-hand Agent Team / Task Progress dock. From "auto"
         // (or "off") the first toggle pins it "on"; toggling again hides it "off".
         const next: PanelMode = panelModeRef.current === "on" ? "off" : "on";
@@ -1614,7 +1720,7 @@ export function ReplApp({
         );
         return;
       }
-      if (text === "/mouse") {
+      if (cmd === "/mouse") {
         const next = !mouseOnRef.current;
         mouseOnRef.current = next;
         setMouseOn(next);
@@ -1625,7 +1731,7 @@ export function ReplApp({
         );
         return;
       }
-      if (text === "/motion" || text.startsWith("/motion ")) {
+      if (cmd === "/motion") {
         const raw = text.slice("/motion".length).trim().toLowerCase();
         // "on" reads naturally as "turn animations on" — accept it as full.
         const arg = raw === "on" ? "full" : raw;
@@ -1680,13 +1786,13 @@ export function ReplApp({
             (saved ? " (saved to .oxagen/settings.local.json)." : "."),
         );
       };
-      if (text.startsWith("/worker-model")) {
+      if (cmd === "/worker-model") {
         const slug = text.slice("/worker-model".length).trim();
         if (slug) applyRoleModel("worker", slug);
         else pushAssistant(`Current worker model: ${modelRef.current}`);
         return;
       }
-      if (text.startsWith("/judge-model")) {
+      if (cmd === "/judge-model") {
         const slug = text.slice("/judge-model".length).trim();
         if (slug) applyRoleModel("judge", slug);
         else
@@ -1695,7 +1801,7 @@ export function ReplApp({
           );
         return;
       }
-      if (text.startsWith("/triage-model")) {
+      if (cmd === "/triage-model") {
         const slug = text.slice("/triage-model".length).trim();
         if (slug) applyRoleModel("triage", slug);
         else
@@ -1704,14 +1810,14 @@ export function ReplApp({
           );
         return;
       }
-      if (text.startsWith("/model")) {
+      if (cmd === "/model") {
         // Alias for /worker-model — sets and persists the executor model.
         const slug = text.slice("/model".length).trim();
         if (slug) applyRoleModel("worker", slug);
         else pushAssistant(`Current model: ${modelRef.current}`);
         return;
       }
-      if (text.startsWith("/coordinator")) {
+      if (cmd === "/coordinator") {
         const arg = text.slice("/coordinator".length).trim().toLowerCase();
 
         if (!arg) {
@@ -1759,7 +1865,12 @@ export function ReplApp({
           );
           try {
             let lastPct = -1;
-            const coord = await prepareOnDeviceCoordinator({
+            // Resolve through the runtime provider factory — the ONE live seam
+            // for coordinator transport selection (a future Ollama/ONNX provider
+            // drops in behind resolveCoordinatorAi with no change here).
+            const coord = await resolveCoordinatorAi({
+              baseAi: aiRef.current,
+              coordinatorId: "on-device",
               onProgress: (received, total) => {
                 if (!total) return;
                 const pct = Math.floor((received / total) * 100);
@@ -1794,7 +1905,7 @@ export function ReplApp({
         pushAssistant(`Unknown coordinator "${arg}". Use /coordinator remote|local.`);
         return;
       }
-      if (text.startsWith("/effort")) {
+      if (cmd === "/effort") {
         const arg = text.slice("/effort".length).trim().toLowerCase();
         if (!arg) {
           pushAssistant(
@@ -1820,7 +1931,7 @@ export function ReplApp({
         }
         return;
       }
-      if (text.startsWith("/budget")) {
+      if (cmd === "/budget") {
         const parsed = parseBudgetCommand(text.slice("/budget".length));
         switch (parsed.kind) {
           case "status": {
@@ -1882,7 +1993,7 @@ export function ReplApp({
         }
         return;
       }
-      if (text.startsWith("/mode")) {
+      if (cmd === "/mode") {
         const arg = text.slice("/mode".length).trim();
         const next = arg ? parseModeArg(arg) : undefined;
         if (!arg) {
@@ -1905,7 +2016,7 @@ export function ReplApp({
         }
         return;
       }
-      if (text.startsWith("/replay")) {
+      if (cmd === "/replay") {
         const arg = text.slice("/replay".length).trim();
         const trace = traceStoreRef.current.resolve(arg);
         if (!trace) {
@@ -1922,7 +2033,7 @@ export function ReplApp({
         }
         return;
       }
-      if (text === "/traces") {
+      if (cmd === "/traces") {
         const traces = traceStoreRef.current.list();
         pushAssistant(
           traces.length === 0
@@ -1932,7 +2043,7 @@ export function ReplApp({
         );
         return;
       }
-      if (text.startsWith("/pipeline")) {
+      if (cmd === "/pipeline") {
         const arg = text.slice("/pipeline".length).trim().toLowerCase();
         if (arg === "off") {
           bareRef.current = true;
@@ -1947,7 +2058,7 @@ export function ReplApp({
         }
         return;
       }
-      if (text.startsWith("/verbose")) {
+      if (cmd === "/verbose") {
         const arg = text.slice("/verbose".length).trim().toLowerCase();
         if (arg === "off") {
           verboseRef.current = false;
@@ -1966,7 +2077,7 @@ export function ReplApp({
         }
         return;
       }
-      if (text === "/login" || text.startsWith("/login ")) {
+      if (cmd === "/login") {
         // Already logged in: just report the session (fast path, no need to
         // open the picker at all). Not logged in: open the Ink-native
         // LoginPanel below — it drives the same browser-based PKCE flow
@@ -1994,7 +2105,7 @@ export function ReplApp({
         }
         return;
       }
-      if (text === "/logout") {
+      if (cmd === "/logout") {
         try {
           const { clearConfig, readConfig } = await import("../lib/config.js");
           const config = readConfig();
@@ -2012,7 +2123,7 @@ export function ReplApp({
         }
         return;
       }
-      if (text === "/remember" || text.startsWith("/remember ")) {
+      if (cmd === "/remember") {
         const body = text.slice("/remember".length).trim();
         if (!body) {
           pushAssistant(
@@ -2031,7 +2142,7 @@ export function ReplApp({
         }
         return;
       }
-      if (text === "/memories" || text.startsWith("/memories ")) {
+      if (cmd === "/memories") {
         const arg = text.slice("/memories".length).trim();
         try {
           const { listMemories, formatMemoryLines, MEMORY_CLASSES } = await import(
@@ -2058,7 +2169,7 @@ export function ReplApp({
         }
         return;
       }
-      if (text === "/forget" || text.startsWith("/forget ")) {
+      if (cmd === "/forget") {
         const id = text.slice("/forget".length).trim();
         if (!id) {
           pushAssistant("Usage: /forget <id> — permanently deletes a memory by id (see /memories).");
@@ -2075,7 +2186,7 @@ export function ReplApp({
         }
         return;
       }
-      if (text === "/exit" || text === "/quit") {
+      if (cmd === "/exit" || cmd === "/quit") {
         void memoryRef.current?.close();
         exit();
         return;
@@ -2166,29 +2277,28 @@ export function ReplApp({
       // and checks are still pending, the wait is legitimate — extend, capped
       // cumulatively at resolveCiWaitCapMs() (2h default). Per-model-call
       // timeouts live in the metered AI port.
-      const turnController = makeTurnController(controller.signal);
       const inactivityMs = resolveTurnInactivityMs();
       let inFlightTools = 0;
       let fleetInFlight = false;
       const ciProbe = createCiWaitProbe(cwd);
-      const stall = makeStallDetector(
-        inactivityMs,
-        () => {
-          if (!turnController.signal.aborted) {
-            const idleMs = Date.now() - (lastProgressRef.current ?? Date.now());
-            void debugLog("timeout", `[timeout] scope=turn reason=inactivity idle_ms=${idleMs}`);
-            turnController.abort(new AgentTimeoutError("turn inactivity", inactivityMs));
-          }
-        },
+      // The REPL tracks tools/fleet in its own closures (the stream sinks below
+      // mutate them), so the fleet-aware shouldDefer REPLACES the runner's
+      // built-in in-flight-tool default — fold both signals in here.
+      const runner = createTurnRunner(
+        { turnInactivityMs: inactivityMs },
         {
-          shouldDefer: () => inFlightTools > 0 || fleetInFlight,
-          probe: () => ciProbe.probe(),
+          callerSignal: controller.signal,
           onLog: (line) => void debugLog("timeout", line),
+          stall: {
+            shouldDefer: () => inFlightTools > 0 || fleetInFlight,
+            probe: () => ciProbe.probe(),
+          },
         },
       );
-      // Record progress: reset the inactivity guard AND advance the idle clock.
+      // Record progress: reset the inactivity guard AND advance the idle clock
+      // (lastProgressRef also feeds the ThinkingIndicator heartbeat).
       const noteProgress = (): void => {
-        stall.reset();
+        runner.noteProgress();
         lastProgressRef.current = Date.now();
       };
 
@@ -2373,7 +2483,7 @@ export function ReplApp({
             codeGraph: codeGraphRef.current,
             memory: turnMemory,
             agents: [...agentsRef.current.values()],
-            signal: turnController.signal,
+            signal: runner.signal,
           });
           noteProgress();
         }
@@ -2414,9 +2524,9 @@ export function ReplApp({
               projectContext: projectContextRef.current,
               agents: agentsRef.current,
               readOnly: modeRef.current === "readonly",
-              signal: turnController.signal,
+              signal: runner.signal,
               onTask: (ev) => {
-                if (turnController.signal.aborted) return;
+                if (runner.signal.aborted) return;
                 noteProgress();
                 // Task Progress checklist mirrors the fleet task lifecycle.
                 taskRegistry.update(ev.taskId, {
@@ -2459,7 +2569,7 @@ export function ReplApp({
                 }
               },
               onUpdate: (snap) => {
-                if (turnController.signal.aborted) return;
+                if (runner.signal.aborted) return;
                 noteProgress();
                 for (const a of snap.agents) {
                   if (a.status === "running") {
@@ -2576,14 +2686,14 @@ export function ReplApp({
           codeGraph: codeGraphRef.current,
           trace: traceStoreRef.current,
           graphSync: graphSyncRef.current,
-          signal: turnController.signal,
+          signal: runner.signal,
           // Always surface the pre-execution snapshot as a scope card in the
           // transcript, so the user ALWAYS sees both their original prompt and
           // the enhanced version the agent will run, plus the routed model and
           // an estimated cost — no setting required (feature 2). Long prompts
           // render truncated; Ctrl-O expands them (see ScopeCard).
           onScopeReview: (info) => {
-            if (turnController.signal.aborted) return;
+            if (runner.signal.aborted) return;
             noteProgress();
             closeStreamingBlocks();
             turn.push({ role: "scope", scope: info, content: "", timestamp: Date.now() });
@@ -2606,7 +2716,7 @@ export function ReplApp({
               }
             : {}),
           onStage: (stage) => {
-            if (turnController.signal.aborted) return;
+            if (runner.signal.aborted) return;
             noteProgress();
             // Heartbeat: name what's happening now so a silent step still tells
             // the user what it's doing (feature 1).
@@ -2629,7 +2739,7 @@ export function ReplApp({
             render();
           },
           onToolCall: (name, input) => {
-            if (turnController.signal.aborted) return;
+            if (runner.signal.aborted) return;
             // The tool is now EXECUTING — silence until it returns is expected,
             // so the inactivity guard defers while the count is non-zero.
             inFlightTools++;
@@ -2666,7 +2776,7 @@ export function ReplApp({
           onToolEvent: (e) => {
             // Tool finished — real progress; the in-flight deferral ends here.
             inFlightTools = Math.max(0, inFlightTools - 1);
-            if (turnController.signal.aborted) return;
+            if (runner.signal.aborted) return;
             noteProgress();
             void debugLog("turn", "turn.tool-done", {
               name: e.name,
@@ -2675,7 +2785,7 @@ export function ReplApp({
             });
           },
           onReasoning: (delta) => {
-            if (turnController.signal.aborted) return;
+            if (runner.signal.aborted) return;
             noteProgress();
             // Reasoning tokens are billed output — feed the live burn estimate
             // (real usage supersedes it when the call settles).
@@ -2697,7 +2807,7 @@ export function ReplApp({
             render();
           },
           onText: (delta) => {
-            if (turnController.signal.aborted) return;
+            if (runner.signal.aborted) return;
             noteProgress();
             streamCharsRef.current += delta.length;
             // Live burn: tick the status line/dock while the worker streams,
@@ -2718,7 +2828,7 @@ export function ReplApp({
             render();
           },
           onFileChange: (diff, changedFiles) => {
-            if (turnController.signal.aborted) return;
+            if (runner.signal.aborted) return;
             noteProgress();
             // Render the code changes as a syntax-highlighted diff message, so
             // the user sees exactly what changed — themed to the terminal
@@ -2763,13 +2873,23 @@ export function ReplApp({
             (t?.commandsRun?.length ?? 0) > 0 ||
             judged;
           if (t && didWork) {
+            // The score must never appear without its justification: surface
+            // the judge's reasoning, falling back to its concrete findings /
+            // remaining work when the verdict carries no prose.
+            const lastJudge = judged ? t.judgeRounds[t.judgeRounds.length - 1] : undefined;
+            const qualityReason = lastJudge
+              ? lastJudge.reasoning?.trim() ||
+                [...(lastJudge.findings ?? []), ...(lastJudge.remainingWork ?? [])].join("; ") ||
+                undefined
+              : undefined;
             turn.push({
               role: "assistant",
               content: "",
               timestamp: Date.now(),
               summary: {
                 complete: t.finalComplete,
-                quality: judged ? t.judgeRounds[t.judgeRounds.length - 1]?.confidence : undefined,
+                quality: lastJudge?.confidence,
+                qualityReason,
                 filesTouched: t.filesTouched ?? [],
                 costUsd: t.usage?.costUsd ?? 0,
                 judged,
@@ -2820,10 +2940,10 @@ export function ReplApp({
         closeStreamingBlocks();
         // Distinguish the three exit paths: an explicit user cancel (Esc/Ctrl-C),
         // a timeout/stall (the turn deadline or stall detector fired on
-        // turnController with a typed AgentTimeoutError reason), or a real error.
+        // turn runner with a typed AgentTimeoutError reason), or a real error.
         const userCancelled = controller.signal.aborted;
-        const timeoutReason: unknown = turnController.signal.aborted
-          ? turnController.signal.reason
+        const timeoutReason: unknown = runner.signal.aborted
+          ? runner.signal.reason
           : undefined;
         const content = userCancelled
           ? "(cancelled)"
@@ -2855,7 +2975,7 @@ export function ReplApp({
         // turn's last committed content should land, not vanish mid-frame.
         renderThrottle.flush(() => [...base, ...turn]);
         if (renderThrottleRef.current === renderThrottle) renderThrottleRef.current = null;
-        stall.stop();
+        runner.stop();
         // This turn is over (success, error, or cancel) — retire its HUD entry.
         // It's this turn's own handle, so retiring it is safe even when an
         // overlapped later turn now owns the shared UI state guarded below.
@@ -2955,6 +3075,9 @@ export function ReplApp({
   // answer the instant the user hits Enter, never touching the queue.
   const handleUserSubmit = useCallback(
     (text: string, paste?: PasteSubmission) => {
+      // Any deliberate submit clears a pending "press Ctrl-C again to exit" hint.
+      lastCtrlCRef.current = null;
+      clearCtrlCHint();
       // A task edit committed (Ctrl-E on a Task Progress row loaded its title):
       // rewrite that task's title instead of enqueuing a prompt, then return the
       // bar to normal. An empty submit simply cancels the edit.
@@ -2989,7 +3112,7 @@ export function ReplApp({
       }
       enqueue(text, paste);
     },
-    [enqueue, resetConversation, pushAssistant, setEditingTaskId],
+    [enqueue, resetConversation, pushAssistant, setEditingTaskId, clearCtrlCHint],
   );
 
   // ── Transcript rendering: Static history + live frame ───────────────────────
@@ -3141,6 +3264,12 @@ export function ReplApp({
           </Box>
         )}
 
+        {ctrlCArmed && (
+          <Box paddingX={1}>
+            <Text dimColor>press Ctrl-C again to exit</Text>
+          </Box>
+        )}
+
         {hudVisible && <HudPanel />}
         {focusedAgentId && <AgentFocusView agentId={focusedAgentId} />}
         {editingTaskId && (
@@ -3202,7 +3331,7 @@ export function ReplApp({
               borderColor={promptBorderColor}
               mouseRow={promptMouseRow}
               mouseEnabled={promptMouseEnabled}
-              catalog={catalogRef.current ?? []}
+              catalog={catalog}
               focused={focus.zone === "input"}
               inject={inject}
               onMenuOpenChange={handleMenuOpenChange}
@@ -3344,6 +3473,14 @@ export function ReplApp({
         </Box>
       )}
 
+      {/* Idle Ctrl-C double-press hint — a lone idle Ctrl-C arms exit rather
+          than quitting outright (so typed-but-unsent input is never lost). */}
+      {ctrlCArmed && (
+        <Box paddingX={1}>
+          <Text dimColor>press Ctrl-C again to exit</Text>
+        </Box>
+      )}
+
       {/* Heads-up display — every agent running this session. Toggled by /hud
           (and closed by Esc); sits just above the input as a live status overlay. */}
       {hudVisible && <HudPanel />}
@@ -3391,7 +3528,7 @@ export function ReplApp({
             borderColor={promptBorderColor}
             mouseRow={promptMouseRow}
             mouseEnabled={promptMouseEnabled}
-            catalog={catalogRef.current ?? []}
+            catalog={catalog}
             focused={focus.zone === "input"}
             inject={inject}
             onMenuOpenChange={handleMenuOpenChange}

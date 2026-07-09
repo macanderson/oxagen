@@ -30,6 +30,24 @@ describe("applyArgs", () => {
   it("leaves the template intact when there are no placeholders", () => {
     expect(applyArgs("no placeholders", "x")).toBe("no placeholders");
   });
+
+  // Regression: args are inserted verbatim, never interpreted as replacement
+  // patterns. A string replacement would treat `$&`, `$'`, `` $` `` and `$1`
+  // in the ARGS as special sequences; the function replacement must not.
+  it("inserts args containing $& verbatim, not as the matched substring", () => {
+    expect(applyArgs("commit: $ARGUMENTS", "fix $& bug")).toBe("commit: fix $& bug");
+  });
+  it("inserts args containing $' and $` verbatim", () => {
+    expect(applyArgs("msg $ARGUMENTS end", "a $' b $` c")).toBe("msg a $' b $` c end");
+  });
+  it("does not let a $1 inside args pull in a positional value", () => {
+    // Args contain the literal text "$1"; it must survive untouched rather than
+    // being expanded to the first positional.
+    expect(applyArgs("run $ARGUMENTS", "echo $1")).toBe("run echo $1");
+  });
+  it("inserts positional args containing $& verbatim", () => {
+    expect(applyArgs("first=$1", "$&only")).toBe("first=$&only");
+  });
 });
 
 describe("expandSlash", () => {

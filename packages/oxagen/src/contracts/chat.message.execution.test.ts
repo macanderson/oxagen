@@ -16,7 +16,7 @@ const validInput = {
 
 describe("chat.message.execution capability", () => {
   it("is registered", () => {
-    expect(getCapability("chat.message.execution")).toBeDefined();
+    expect(getCapability("get_message_execution")).toBeDefined();
   });
 
   it("parses a valid input", () => {
@@ -74,7 +74,7 @@ describe("chat.message.execution capability", () => {
   });
 
   it("is exposed on api and mcp surfaces only", () => {
-    const cap = getCapability("chat.message.execution");
+    const cap = getCapability("get_message_execution");
     expect(cap?.surfaces).toEqual(["api", "mcp"]);
     expect(cap?.surfaces).not.toContain("agent");
   });

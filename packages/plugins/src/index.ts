@@ -15,10 +15,12 @@ export type { ResolvedKms } from "./credentials/kms";
 export {
   setWorkspaceSecret,
   getWorkspaceSecret,
+  listWorkspaceCredentialStatuses,
 } from "./credentials/workspace-credential";
 export type {
   SetWorkspaceSecretInput,
   WorkspaceSecret,
+  WorkspaceCredentialStatus,
 } from "./credentials/workspace-credential";
 export * from "./registry";
 export * from "./oauth";
@@ -64,3 +66,31 @@ export {
   ENVIRONMENT_SLUG_PATTERN,
 } from "./environments/environment-service";
 export type { EnvironmentActor, EnvironmentSummary } from "./environments/environment-service";
+export type { SecretSelection } from "./vault/vault-secret-service";
+
+// Sandbox templates + portable artifacts + agent-environment bindings (Spec §5.2–§5.6).
+export {
+  createTemplate,
+  listTemplates,
+  getTemplate,
+  updateTemplate,
+  deleteTemplate,
+  setDefaultTemplate,
+  setTemplateTools,
+  exportTemplate,
+  importTemplate,
+  bindAgentEnvironment,
+  unbindAgentEnvironment,
+  listAgentBindings,
+  resolveSandboxTemplateForRun,
+  installTemplatesFromPack,
+} from "./environments/sandbox-template-service";
+export type {
+  SandboxTemplateActor,
+  SandboxTemplateSummary,
+  SandboxTemplateToolSummary,
+  AgentEnvironmentBinding,
+  ResolvedSandboxTemplate,
+  PackTemplateInstall,
+  InstallTemplatesFromPackResult,
+} from "./environments/sandbox-template-service";

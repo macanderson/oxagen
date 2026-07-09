@@ -2,7 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const privacyDataErase = registerCapability({
-  name: "privacy.data.erase",
+  name: "erase_data",
   domain: "privacy",
   description:
     "Request erasure of personal or organizational data (GDPR Article 17 — right to erasure). Requires explicit confirmation. Revokes all sessions immediately; hard-delete is scheduled asynchronously. Emits a webhook event for downstream integrations.",

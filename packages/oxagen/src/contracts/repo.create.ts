@@ -2,7 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const repoCreate = registerCapability({
-  name: "repo.create",
+  name: "create_repo",
   domain: "repo",
   description:
     "Create a new GitHub repository. Omit `org` to create it in the connected user's personal account; pass `org` only to create it inside a GitHub organisation the user belongs to.",

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const semanticRelationshipApprove = registerCapability({
-  name: "semantic.relationship.approve",
+  name: "approve_semantic_relationship",
   domain: "semantic",
   description:
     "Approve or reject an inferred semantic relationship candidate. Approved relationships are materialised as permanent Neo4j relationships typed by the inferred relationship kind itself (e.g. :IMPLEMENTS, :DEPENDS_ON), with inferred/origin properties marking provenance; rejected relationships are soft-dismissed with an audit trail.",

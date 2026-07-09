@@ -39,7 +39,7 @@ const workflowTaskSchema = z.object({
 });
 
 export const workflowStatus = registerCapability({
-  name: "workflow.status",
+  name: "get_workflow_status",
   domain: "workflow",
   description: "Read current status and task progress of a workflow run",
   mode: "sync",

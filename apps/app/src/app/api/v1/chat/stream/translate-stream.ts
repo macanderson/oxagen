@@ -218,7 +218,7 @@ export function createTurnTranslator(args: {
       flushText();
       // Reserve a terminal block; tool-result/tool-error fills it in.
       toolBlockIndex[part.toolCallId] = blocks.length;
-      if (capability === "agent.code.execute") {
+      if (capability === "execute_code") {
         const inp = isRecord(part.input) ? part.input : {};
         blocks.push({
           type: "code-execute",
@@ -332,7 +332,7 @@ export function createTurnTranslator(args: {
       if (
         !emittedComponent &&
         capabilityForResult !== undefined &&
-        capabilityForResult !== "agent.code.execute"
+        capabilityForResult !== "execute_code"
       ) {
         const directive = resolveRenderDirective({
           capability: capabilityForResult,
@@ -358,7 +358,7 @@ export function createTurnTranslator(args: {
       // long-running Inngest job via agent.task.background.start, surface a live
       // BackgroundTaskCard and persist a terminal block so the task is visible
       // inline (and linked to the BackgroundTaskTray), not only after a refresh.
-      if (capabilityForResult === "agent.background_task.start") {
+      if (capabilityForResult === "start_background_task") {
         const startOut = isRecord(rawResult) ? rawResult : null;
         const taskId =
           startOut !== null && typeof startOut.taskId === "string" ? startOut.taskId : null;

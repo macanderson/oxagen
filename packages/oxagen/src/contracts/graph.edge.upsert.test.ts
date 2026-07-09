@@ -142,6 +142,6 @@ describe("graph.edge.upsert capability (deprecation alias)", () => {
   // ── registry ──────────────────────────────────────────────────────────────
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("graph.edge.upsert")).toBe(graphEdgeUpsert);
+    expect(getCapability("upsert_edge")).toBe(graphEdgeUpsert);
   });
 });

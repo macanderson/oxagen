@@ -4,7 +4,7 @@ import { registerCapability } from "../registry";
 // Partial update of the workspace general settings. Every field optional:
 //   omit = unchanged, value = set, null = clear (description only).
 export const workspaceSettingsWrite = registerCapability({
-  name: "workspace.settings.write",
+  name: "update_workspace_settings",
   domain: "workspace",
   description:
     "Update the active workspace's general settings (partial): name, slug, and description. Routes the workspace settings edit through the kernel so the same fields are reachable from the agent, MCP, and CLI with metering + audit.",

@@ -199,7 +199,7 @@ describe("installSkill", () => {
     expect(result.ok).toBe(true);
     expect(mockInvoke).toHaveBeenCalledOnce();
     const [capability, payload] = mockInvoke.mock.calls[0] as [string, { skillSlug: string }];
-    expect(capability).toBe("skill.workspace.install");
+    expect(capability).toBe("install_skill");
     expect(payload.skillSlug).toBe("summarizer");
     expect(mockRevalidatePath).toHaveBeenCalledWith("/acme/research/studio/tools/skills");
   });
@@ -264,7 +264,7 @@ describe("editSkill", () => {
       string,
       { skillSlug: string; content: string; commitMessage?: string },
     ];
-    expect(capability).toBe("skill.version.upload");
+    expect(capability).toBe("upload_skill_version");
     expect(payload.skillSlug).toBe("summarizer");
     expect(payload.content).toBe("You are a summarizer.");
     expect(payload.commitMessage).toBe("Added detail");
@@ -315,7 +315,7 @@ describe("activateVersion", () => {
       string,
       { skillSlug: string; versionId: string },
     ];
-    expect(capability).toBe("skill.version.activate");
+    expect(capability).toBe("activate_skill_version");
     expect(payload.skillSlug).toBe("summarizer");
     expect(payload.versionId).toBe("ver_abc123");
     expect(mockRevalidatePath).toHaveBeenCalledWith("/acme/research/studio/tools/skills");
@@ -368,7 +368,7 @@ describe("exportSkill", () => {
       string,
       { skillSlug: string; versionId?: string },
     ];
-    expect(capability).toBe("skill.export");
+    expect(capability).toBe("export_skill");
     expect(payload.skillSlug).toBe("summarizer");
   });
 

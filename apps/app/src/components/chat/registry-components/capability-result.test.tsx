@@ -24,8 +24,8 @@ vi.mock("@/components/ui/badge", () => ({
 afterEach(cleanup);
 
 describe("capability-result helpers", () => {
-  it("humanizeCapability turns a dotted name into a sentence", () => {
-    expect(humanizeCapability("graph.node.get")).toBe("Graph node get");
+  it("humanizeCapability turns a snake_case name into a sentence", () => {
+    expect(humanizeCapability("get_node")).toBe("Get node");
     expect(humanizeCapability("")).toBe("Result");
   });
   it("humanizeKey splits camelCase + underscores", () => {

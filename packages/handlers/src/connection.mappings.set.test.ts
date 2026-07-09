@@ -326,3 +326,114 @@ describe("connectionMappingsSetHandler — GitHub initial-sync event", () => {
     expect(mocks.inngestSend).not.toHaveBeenCalled();
   });
 });
+
+// ── auto-name (connection displayName = repo slug) ────────────────────────────
+
+describe("connectionMappingsSetHandler — auto-name to repo slug", () => {
+  /**
+   * Build a tx that captures every `update(...).set(payload)` call so a test can
+   * assert what the activation UPDATE wrote (e.g. displayName). Mirrors
+   * makeTxReturning's select/insert chain.
+   */
+  function makeTxCapturingSets(rows: unknown[], sets: Array<Record<string, unknown>>) {
+    const whereResult = Object.assign(Promise.resolve(rows), {
+      limit: vi.fn().mockResolvedValue(rows),
+    });
+    return {
+      select: vi.fn().mockReturnValue({
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnValue(whereResult),
+      }),
+      insert: vi.fn().mockReturnValue({ values: vi.fn().mockResolvedValue([{}]) }),
+      update: vi.fn().mockReturnValue({
+        set: vi.fn().mockImplementation((payload: Record<string, unknown>) => {
+          sets.push(payload);
+          return { where: vi.fn().mockResolvedValue([{}]) };
+        }),
+      }),
+    };
+  }
+
+  /** Return the payload of the UPDATE that flipped/kept status, i.e. carried displayName. */
+  function setupCapture(connRow: unknown[]): Array<Record<string, unknown>> {
+    const sets: Array<Record<string, unknown>> = [];
+    let callIdx = 0;
+    mocks.withTenantDb.mockImplementation((fn: DbFn) => {
+      callIdx++;
+      if (callIdx === 1) return fn(makeTxReturning(connRow) as TxLike);
+      return fn(makeTxCapturingSets([], sets) as unknown as TxLike);
+    });
+    return sets;
+  }
+
+  it("names the connection after the single selected repo slug", async () => {
+    const sets = setupCapture([{ ...GITHUB_CONN_ROW, deliveryConfig: null }]);
+
+    await connectionMappingsSetHandler(
+      { ...ONE_MAPPING_INPUT, selectedRepos: ["acme-org/backend-api"] },
+      CTX,
+    );
+
+    const named = sets.find((s) => "displayName" in s);
+    expect(named?.["displayName"]).toBe("acme-org/backend-api");
+  });
+
+  it("names the connection after owner/repo when supplied without selectedRepos", async () => {
+    const sets = setupCapture([{ ...GITHUB_CONN_ROW, deliveryConfig: null }]);
+
+    await connectionMappingsSetHandler(
+      { ...ONE_MAPPING_INPUT, owner: "acme", repo: "widgets" },
+      CTX,
+    );
+
+    const named = sets.find((s) => "displayName" in s);
+    expect(named?.["displayName"]).toBe("acme/widgets");
+  });
+
+  it("shows the primary repo plus a (+N more) count for multi-repo selections", async () => {
+    const sets = setupCapture([{ ...GITHUB_CONN_ROW, deliveryConfig: null }]);
+
+    await connectionMappingsSetHandler(
+      { ...ONE_MAPPING_INPUT, selectedRepos: ["acme/api", "acme/web", "acme/infra"] },
+      CTX,
+    );
+
+    const named = sets.find((s) => "displayName" in s);
+    expect(named?.["displayName"]).toBe("acme/api (+2 more)");
+  });
+
+  it("renames even when the connection is NOT being activated (config-only PUT)", async () => {
+    const sets = setupCapture([{ ...GITHUB_CONN_ROW, status: "connected", deliveryConfig: null }]);
+
+    await connectionMappingsSetHandler(
+      { ...ONE_MAPPING_INPUT, activateConnection: false, selectedRepos: ["acme/renamed"] },
+      CTX,
+    );
+
+    const named = sets.find((s) => "displayName" in s);
+    expect(named?.["displayName"]).toBe("acme/renamed");
+  });
+
+  it("does NOT rename non-GitHub connectors", async () => {
+    const sets = setupCapture([{ ...GITHUB_CONN_ROW, connectorId: "linear", deliveryConfig: null }]);
+
+    await connectionMappingsSetHandler(
+      { ...ONE_MAPPING_INPUT, selectedRepos: ["acme/api"] },
+      CTX,
+    );
+
+    expect(sets.some((s) => "displayName" in s)).toBe(false);
+  });
+
+  it("does NOT blank the name when no repo is resolvable", async () => {
+    const sets = setupCapture([{ ...GITHUB_CONN_ROW, deliveryConfig: null }]);
+
+    // No selectedRepos, no owner/repo, and stored deliveryConfig is null → nothing to name to.
+    await connectionMappingsSetHandler(
+      { connectionId: "con_ABC", mappings: ONE_MAPPING_INPUT.mappings, activateConnection: true },
+      CTX,
+    );
+
+    expect(sets.some((s) => "displayName" in s)).toBe(false);
+  });
+});

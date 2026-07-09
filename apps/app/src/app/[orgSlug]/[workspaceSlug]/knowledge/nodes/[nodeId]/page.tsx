@@ -59,7 +59,7 @@ export default async function KnowledgeNodePage({ params }: PageProps) {
   let node: GraphNodeGetOutput["node"] = null;
   try {
     const result = (await runInTenantScope({ orgId: org.id, workspaceId: ws.id }, () =>
-      invoke("graph.node.get", { nodeId }, ctx, { surface: "agent" }),
+      invoke("get_node", { nodeId }, ctx, { surface: "agent" }),
     )) as GraphNodeGetOutput;
     node = result.node;
   } catch {

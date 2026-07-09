@@ -52,6 +52,10 @@ interface ModalRunRequest {
   org_id: string;
   workspace_id: string;
   image: string;
+  // Optional template resources; the runner clamps/ignores unknown fields, so
+  // sending them is forward-compatible with an older shim.
+  vcpu?: number;
+  disk_mb?: number;
 }
 
 const ModalRunResponseSchema = z.object({
@@ -91,7 +95,13 @@ const ModalStatusResponseSchema = z.object({
 function sessionBody(spec: SandboxSessionSpec) {
   return {
     image: spec.image,
+    // A template's custom image ref (digest-pinned). Additive on the wire: a
+    // runner that predates the field maps `image` (the kind) instead. Null when
+    // the session uses a base-kind image.
+    image_ref: spec.imageRef ?? null,
     memory_mb: spec.memoryMb,
+    vcpu: spec.vcpu ?? null,
+    disk_mb: spec.diskMb ?? null,
     ttl_seconds: spec.ttlSeconds,
     idle_timeout_seconds: spec.idleTimeoutSeconds,
     network: spec.network,
@@ -114,10 +124,13 @@ function toRunnerBody(req: SandboxRequest): ModalRunRequest {
     network: req.network,
     org_id: req.orgId,
     workspace_id: req.workspaceId,
-    // The runner uses this for image selection; we keep the source of
-    // truth in @oxagen/sandbox/images so swapping drivers is a config
-    // change, not an image-pinning migration.
-    image: spec.image,
+    // A template's custom image overrides the language default; otherwise the
+    // source of truth stays in @oxagen/sandbox/images so swapping drivers is a
+    // config change, not an image-pinning migration. The runner's `image` param
+    // is the supported image seam, so imageRef is honored here (no throw).
+    image: req.imageRef ?? spec.image,
+    ...(req.vcpu !== undefined ? { vcpu: req.vcpu } : {}),
+    ...(req.diskMb !== undefined ? { disk_mb: req.diskMb } : {}),
   };
 }
 

@@ -50,6 +50,6 @@ describe("eval.dataset.list capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("eval.dataset.list")).toBe(evalDatasetList);
+    expect(getCapability("list_datasets")).toBe(evalDatasetList);
   });
 });

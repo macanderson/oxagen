@@ -2,7 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const schemaVersionList = registerCapability({
-  name: "schema.version.list",
+  name: "list_schema_versions",
   domain: "schema",
   description: "List versions (number, label, status, published_at, change_summary).",
   mode: "sync",

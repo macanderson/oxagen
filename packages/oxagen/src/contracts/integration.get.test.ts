@@ -146,6 +146,6 @@ describe("integration.get capability", () => {
   // ── registry ──────────────────────────────────────────────────────────────
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("integration.get")).toBe(integrationGet);
+    expect(getCapability("get_integration")).toBe(integrationGet);
   });
 });

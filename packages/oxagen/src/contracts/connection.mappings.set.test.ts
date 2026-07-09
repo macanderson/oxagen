@@ -62,7 +62,7 @@ describe("connection.mappings.set capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("connection.mappings.set")).toBe(connectionMappingsSet);
+    expect(getCapability("set_connection_mappings")).toBe(connectionMappingsSet);
   });
 
   it("requires approval and is write category", () => {

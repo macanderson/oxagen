@@ -4,7 +4,7 @@ import { registerCapability } from "../registry";
 // Disabling is always safe (turning an automation OFF can never cause an
 // autonomous side effect), so unlike automation.enable it needs no approval.
 export const automationDisable = registerCapability({
-  name: "automation.disable",
+  name: "disable_automation",
   domain: "automation",
   description:
     "Disable an automation trigger so it stops firing. Safe to call without confirmation. Returns the new enabled state.",

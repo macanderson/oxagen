@@ -14,7 +14,7 @@
  */
 import { NextResponse, type NextRequest } from "next/server";
 import { auth as mcpAuth } from "@modelcontextprotocol/sdk/client/auth.js";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, ne, sql } from "drizzle-orm";
 import type { FetchLike } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { schema, withSystemDb } from "@oxagen/database";
 import { DbOAuthClientProvider, loadOAuthState, deleteOAuthState } from "@oxagen/plugins";
@@ -49,6 +49,21 @@ const safeFetch: FetchLike = async (input, init) => {
  * otherwise escape uncaught and 502. We catch it and return a clean 500 JSON,
  * re-throwing only genuine Next redirect sentinels.
  */
+/**
+ * Builds the back-to-app redirect. `returnTo` is a validated same-origin path
+ * saved during the authorize step and may already carry a query string, so
+ * flow-result params are appended via URL rather than string concatenation.
+ */
+function redirectBack(
+  origin: string,
+  returnTo: string,
+  params: Record<string, string>,
+): NextResponse {
+  const dest = new URL(returnTo, origin);
+  for (const [k, v] of Object.entries(params)) dest.searchParams.set(k, v);
+  return NextResponse.redirect(dest.toString());
+}
+
 export async function GET(req: NextRequest): Promise<Response> {
   try {
     return await handleCallback(req);
@@ -131,7 +146,10 @@ async function handleCallback(req: NextRequest): Promise<Response> {
       },
       "mcp-oauth: mcpAuth threw during callback",
     );
-    return NextResponse.redirect(`${url.origin}${stateData.returnTo}?mcp=error`);
+    return redirectBack(url.origin, stateData.returnTo, {
+      mcp: "error",
+      listing: stateData.orgListingId,
+    });
   }
 
   // Clean up the ephemeral state regardless of outcome.
@@ -170,16 +188,42 @@ async function handleCallback(req: NextRequest): Promise<Response> {
         });
     });
 
+    // Self-heal the listing's authKind: pre-probe installs (and registry
+    // metadata generally) stored OAuth-protected servers as "none"/"secret".
+    // Completing the flow is definitive proof the server is OAuth — persist it
+    // so the agent runtime takes the token-refreshing OAuth branch and the UI
+    // shows the right status. Never blocks the redirect on failure.
+    try {
+      await withSystemDb(async (tx) => {
+        await tx
+          .update(schema.pluginInstalledPlugins)
+          .set({ authKind: "oauth", updatedAt: new Date() })
+          .where(
+            and(
+              eq(schema.pluginInstalledPlugins.id, stateData.orgListingId),
+              ne(schema.pluginInstalledPlugins.authKind, "oauth"),
+            ),
+          );
+      });
+    } catch (err) {
+      logger.error(
+        { orgListingId: stateData.orgListingId, err: String(err) },
+        "mcp-oauth: authKind self-heal failed (non-fatal)",
+      );
+    }
+
     logger.info({ orgId: stateData.orgId, orgListingId: stateData.orgListingId }, "mcp-oauth: token exchange succeeded, install upserted and marked healthy");
-    return NextResponse.redirect(
-      `${url.origin}${stateData.returnTo}?mcp=connected`,
-    );
+    return redirectBack(url.origin, stateData.returnTo, {
+      mcp: "connected",
+      listing: stateData.orgListingId,
+    });
   }
 
   // Unexpected: mcpAuth returned REDIRECT during a callback (shouldn't happen
   // with a valid code, but handle it gracefully).
   logger.warn({ orgId: stateData.orgId, orgListingId: stateData.orgListingId, result }, "mcp-oauth: unexpected REDIRECT result during callback");
-  return NextResponse.redirect(
-    `${url.origin}${stateData.returnTo}?mcp=error`,
-  );
+  return redirectBack(url.origin, stateData.returnTo, {
+    mcp: "error",
+    listing: stateData.orgListingId,
+  });
 }

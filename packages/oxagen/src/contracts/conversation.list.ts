@@ -16,7 +16,7 @@ export const conversationSummary = z.object({
 });
 
 export const conversationList = registerCapability({
-  name: "conversation.list",
+  name: "list_conversations",
   domain: "conversation",
   description:
     "List a user's conversations in a workspace, filtered by active or archived state, newest first, keyset-paginated",

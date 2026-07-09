@@ -105,6 +105,8 @@ import { budgetPolicyReadRoute } from "./routes/v1/budget.policy.read";
 import { budgetPolicyWriteRoute } from "./routes/v1/budget.policy.write";
 import { workspaceBudgetPolicyReadRoute } from "./routes/v1/workspace.budget_policy.read";
 import { workspaceBudgetPolicyWriteRoute } from "./routes/v1/workspace.budget_policy.write";
+import { userWorkspacePreferencesReadRoute } from "./routes/v1/user.workspace_preferences.read";
+import { userWorkspacePreferencesWriteRoute } from "./routes/v1/user.workspace_preferences.write";
 import { authWhoamiRoute } from "./routes/v1/auth.whoami";
 import { workspaceModelSettingsReadRoute } from "./routes/v1/workspace.model_settings.read";
 import { workspaceModelSettingsWriteRoute } from "./routes/v1/workspace.model_settings.write";
@@ -133,8 +135,7 @@ import { pluginOrgListRoute } from "./routes/v1/plugin.org.list";
 import { pluginOrgInstallRoute } from "./routes/v1/plugin.org.install";
 import { pluginOrgInstallBulkRoute } from "./routes/v1/plugin.org.install_bulk";
 import { pluginOrgUninstallRoute } from "./routes/v1/plugin.org.uninstall";
-import { pluginOrgSetEnabledRoute } from "./routes/v1/plugin.org.set_enabled";
-import { pluginWorkspaceSetEnabledRoute } from "./routes/v1/plugin.workspace.set_enabled";
+import { pluginSetEnabledRoute } from "./routes/v1/plugin.set_enabled";
 import { pluginCredentialSetSecretRoute } from "./routes/v1/plugin.credential.set_secret";
 import { pluginCredentialReauthRoute } from "./routes/v1/plugin.credential.reauth";
 // Environments + credential vault (Spec: 2026-06-24-credential-vault-…).
@@ -144,6 +145,19 @@ import { environmentGetRoute } from "./routes/v1/environment.get";
 import { environmentUpdateRoute } from "./routes/v1/environment.update";
 import { environmentDeleteRoute } from "./routes/v1/environment.delete";
 import { environmentSetDefaultRoute } from "./routes/v1/environment.set_default";
+// Sandbox templates + portable artifacts + agent-environment bindings (Spec §5.2–§5.6).
+import { sandboxTemplateCreateRoute } from "./routes/v1/sandbox.template.create";
+import { sandboxTemplateListRoute } from "./routes/v1/sandbox.template.list";
+import { sandboxTemplateGetRoute } from "./routes/v1/sandbox.template.get";
+import { sandboxTemplateUpdateRoute } from "./routes/v1/sandbox.template.update";
+import { sandboxTemplateDeleteRoute } from "./routes/v1/sandbox.template.delete";
+import { sandboxTemplateSetDefaultRoute } from "./routes/v1/sandbox.template.set_default";
+import { sandboxTemplateSetToolsRoute } from "./routes/v1/sandbox.template.set_tools";
+import { sandboxTemplateExportRoute } from "./routes/v1/sandbox.template.export";
+import { sandboxTemplateImportRoute } from "./routes/v1/sandbox.template.import";
+import { agentEnvironmentBindRoute } from "./routes/v1/agent.environment.bind";
+import { agentEnvironmentUnbindRoute } from "./routes/v1/agent.environment.unbind";
+import { agentEnvironmentListRoute } from "./routes/v1/agent.environment.list";
 import { secretKeyUpsertRoute } from "./routes/v1/secret.key.upsert";
 import { secretKeyListRoute } from "./routes/v1/secret.key.list";
 import { secretKeyDeleteRoute } from "./routes/v1/secret.key.delete";
@@ -496,6 +510,9 @@ orgScoped.route("/org/invitations/accept", orgMemberInviteAcceptRoute);
 orgScoped.route("/org/invitations/decline", orgMemberInviteDeclineRoute);
 orgScoped.route("/workspace/budget-policy", workspaceBudgetPolicyReadRoute);
 orgScoped.route("/workspace/budget-policy", workspaceBudgetPolicyWriteRoute);
+// Per-(user, workspace) coding-agent defaults (org+workspace scoped).
+orgScoped.route("/user/workspace-preferences", userWorkspacePreferencesReadRoute);
+orgScoped.route("/user/workspace-preferences", userWorkspacePreferencesWriteRoute);
 orgScoped.route("/workspace/model-settings", workspaceModelSettingsReadRoute);
 orgScoped.route("/workspace/model-settings", workspaceModelSettingsWriteRoute);
 orgScoped.route("/workspace/prompt-settings", promptSettingsReadRoute);
@@ -515,11 +532,7 @@ orgScoped.route("/plugin/org/list", pluginOrgListRoute);
 orgScoped.route("/plugin/org/install", pluginOrgInstallRoute);
 orgScoped.route("/plugin/org/install-bulk", pluginOrgInstallBulkRoute);
 orgScoped.route("/plugin/org/uninstall", pluginOrgUninstallRoute);
-orgScoped.route("/plugin/org/set-enabled", pluginOrgSetEnabledRoute);
-orgScoped.route(
-  "/plugin/workspace/set-enabled",
-  pluginWorkspaceSetEnabledRoute,
-);
+orgScoped.route("/plugin/set-enabled", pluginSetEnabledRoute);
 orgScoped.route(
   "/plugin/credential/set-secret",
   pluginCredentialSetSecretRoute,
@@ -532,6 +545,19 @@ orgScoped.route("/environment/get", environmentGetRoute);
 orgScoped.route("/environment/update", environmentUpdateRoute);
 orgScoped.route("/environment/delete", environmentDeleteRoute);
 orgScoped.route("/environment/set-default", environmentSetDefaultRoute);
+// Sandbox templates + portable artifacts + agent-environment bindings.
+orgScoped.route("/sandbox/template/create", sandboxTemplateCreateRoute);
+orgScoped.route("/sandbox/template/list", sandboxTemplateListRoute);
+orgScoped.route("/sandbox/template/get", sandboxTemplateGetRoute);
+orgScoped.route("/sandbox/template/update", sandboxTemplateUpdateRoute);
+orgScoped.route("/sandbox/template/delete", sandboxTemplateDeleteRoute);
+orgScoped.route("/sandbox/template/set-default", sandboxTemplateSetDefaultRoute);
+orgScoped.route("/sandbox/template/set-tools", sandboxTemplateSetToolsRoute);
+orgScoped.route("/sandbox/template/export", sandboxTemplateExportRoute);
+orgScoped.route("/sandbox/template/import", sandboxTemplateImportRoute);
+orgScoped.route("/agent/environment/bind", agentEnvironmentBindRoute);
+orgScoped.route("/agent/environment/unbind", agentEnvironmentUnbindRoute);
+orgScoped.route("/agent/environment/list", agentEnvironmentListRoute);
 orgScoped.route("/secret/key/upsert", secretKeyUpsertRoute);
 orgScoped.route("/secret/key/list", secretKeyListRoute);
 orgScoped.route("/secret/key/delete", secretKeyDeleteRoute);

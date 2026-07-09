@@ -104,11 +104,11 @@ describe("conversation.archive route", () => {
     expect(await res.json()).toEqual({ updated: 2 });
   });
 
-  it("calls invoke with 'conversation.archive' and surface 'api'", async () => {
+  it("calls invoke with 'archive_conversation' and surface 'api'", async () => {
     await app.fetch(
       post(PATH, { conversationIds: ["c1"], archived: false }),
     );
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("conversation.archive");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("archive_conversation");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.archived).toBe(false);
@@ -155,9 +155,9 @@ describe("conversation.delete route", () => {
     expect(await res.json()).toEqual({ deleted: 3 });
   });
 
-  it("calls invoke with 'conversation.delete'", async () => {
+  it("calls invoke with 'delete_conversation'", async () => {
     await app.fetch(post(PATH, { conversationIds: ["c1"] }));
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("conversation.delete");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("delete_conversation");
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body).toEqual({ conversationIds: ["c1"] });
   });
@@ -183,9 +183,9 @@ describe("conversation.purge route", () => {
     expect(await res.json()).toEqual({ deleted: 10 });
   });
 
-  it("calls invoke with 'conversation.purge'", async () => {
+  it("calls invoke with 'purge_conversations'", async () => {
     await app.fetch(post(PATH, {}));
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("conversation.purge");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("purge_conversations");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -200,7 +200,7 @@ describe("conversation.purge route", () => {
     );
     expect(res.status).toBe(200);
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("conversation.purge");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("purge_conversations");
   });
 
   it("invoke throws → 500", async () => {
@@ -230,7 +230,7 @@ describe("conversation.rename route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'conversation.rename'", async () => {
+  it("calls invoke with 'rename_conversation'", async () => {
     await app.fetch(
       makeRequest(`${BASE}${PATH}`, {
         method: "PATCH",
@@ -238,7 +238,7 @@ describe("conversation.rename route", () => {
         body: JSON.stringify({ conversationId: "conv-2", title: "Renamed" }),
       }),
     );
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("conversation.rename");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("rename_conversation");
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.conversationId).toBe("conv-2");
     expect(body.title).toBe("Renamed");
@@ -283,9 +283,9 @@ describe("chat.message.send route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'chat.message.send'", async () => {
+  it("calls invoke with 'send_message'", async () => {
     await app.fetch(post(PATH, VALID_BODY));
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("chat.message.send");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("send_message");
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.content).toBe("Hello, world!");
   });

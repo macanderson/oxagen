@@ -26,6 +26,12 @@ export interface CliConfig {
   verbose?: boolean;
   /** Model-runtime settings */
   runtime?: RuntimeConfig;
+  /**
+   * Background-monitor settings (Group 5: ask-before-monitoring, dispatch
+   * triggers, poll cadence). A partial override layered over the defaults;
+   * read through the typed accessors in `monitors/config.ts`.
+   */
+  monitors?: import("../monitors/config.js").MonitorsConfigPatch;
   /** Graph tool settings */
   graph?: import("../agent/context/config.js").GraphConfigPatch;
   /** Anonymous usage-telemetry preferences (apps/cli/src/telemetry/usage.ts). */

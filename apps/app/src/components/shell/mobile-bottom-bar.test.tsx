@@ -57,9 +57,9 @@ afterEach(() => {
 
 describe("MobileBottomBar — primary tabs", () => {
   it("renders the workspace destinations as client-routed tabs with resolved hrefs", () => {
-    // Workspace mode has seven nav items (ask, knowledge, activity, agents,
-    // agent-tools, marketplace, settings); only the first four (MAX_BAR_ITEMS)
-    // fit the bar — the rest overflow into the "More" sheet, covered below.
+    // Workspace mode has six nav items (ask, knowledge, activity, agents,
+    // marketplace, settings); only the first four (MAX_BAR_ITEMS) fit the
+    // bar — the rest overflow into the "More" sheet, covered below.
     render(<MobileBottomBar ctx={wsCtx} user={user} />);
     const nav = screen.getByRole("navigation", { name: /mobile navigation/i });
     expect(within(nav).getByRole("link", { name: "Ask" })).toHaveAttribute("href", "/acme/prod/ask");
@@ -77,11 +77,13 @@ describe("MobileBottomBar — primary tabs", () => {
     expect(screen.getByRole("link", { name: "Knowledge" })).not.toHaveAttribute("aria-current");
   });
 
-  it("overflows Agent Tools, Marketplace, and Settings into the More sheet while the first four destinations stay in the bar", () => {
+  it("overflows Marketplace and Settings into the More sheet while the first four destinations stay in the bar", () => {
     render(<MobileBottomBar ctx={wsCtx} user={user} />);
     const nav = screen.getByRole("navigation", { name: /mobile navigation/i });
     expect(screen.getByRole("button", { name: /more navigation/i })).toBeInTheDocument();
     expect(within(nav).getByRole("link", { name: "Agents" })).toBeInTheDocument();
+    // Agent Tools is no longer a nav destination at all — it lives in the
+    // Studio tabs, so it must not appear in the bar or the More sheet.
     expect(within(nav).queryByRole("link", { name: "Agent Tools" })).toBeNull();
     expect(within(nav).queryByRole("link", { name: "Marketplace" })).toBeNull();
     expect(within(nav).queryByRole("link", { name: "Settings" })).toBeNull();

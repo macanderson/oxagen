@@ -134,7 +134,7 @@ describe("agent.plan.approve schema", () => {
       id: "step-1",
       summary: "Revised step",
       intent: "Do something safer",
-      capability: "conversation.rename",
+      capability: "rename_conversation",
       inputPreview: { title: "New name" },
       dependsOn: [],
     };

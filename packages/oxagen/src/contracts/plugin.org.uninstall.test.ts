@@ -3,7 +3,7 @@ import { pluginOrgUninstall } from "./plugin.org.uninstall";
 
 describe("plugin.org.uninstall contract", () => {
   it("registers with the correct name", () => {
-    expect(pluginOrgUninstall.name).toBe("plugin.org.uninstall");
+    expect(pluginOrgUninstall.name).toBe("uninstall_plugin");
   });
 
   it("includes api and mcp surfaces", () => {

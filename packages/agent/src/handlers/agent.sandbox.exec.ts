@@ -36,13 +36,18 @@ export async function agentSandboxExecHandler(
   }
 
   // Inject the session's bound environment secrets (if any) below the
-  // caller-supplied env. The environmentId was frozen onto the session's
-  // metadata at start time, so every command in the durable session sees the
-  // same trusted secrets without them living in the sandbox filesystem.
+  // caller-supplied env. The environmentId — and, for a template-provisioned
+  // session, its vault secret selection + literal env — were frozen onto the
+  // session's metadata at start time, so every command in the durable session
+  // sees the same trusted config without it living in the sandbox filesystem.
   const { env } = await injectEnvironmentSecrets(
     ctx,
     row.metadata.environmentId,
     input.env,
+    {
+      selection: row.metadata.secretSelection,
+      literalEnv: row.metadata.literalEnv,
+    },
   );
 
   let restored = false;
@@ -69,7 +74,10 @@ export async function agentSandboxExecHandler(
       sandboxId: handle.sandboxId,
       command: input.command,
       timeoutMs: input.timeoutMs,
-      env: input.env,
+      // Reuse the INJECTED env (vault + literal + sanitized caller), not the raw
+      // caller env — a restored session must see the same trusted secrets and
+      // still strip reserved caller keys, exactly like the first attempt.
+      env,
       stdin: input.stdin,
     });
     if (result.gone) {
@@ -112,7 +120,7 @@ async function emitExecTelemetry(
         source_system: `handler:${ctx.surface}`,
         stream_offset: null,
         payload: JSON.stringify({
-          capability: "agent.sandbox.exec",
+          capability: "run_sandbox_command",
           sessionId: input.sessionId,
           image: row.image,
           durationMs: result.durationMs,

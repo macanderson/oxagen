@@ -101,7 +101,7 @@ describe("toolBucket", () => {
 
   it("buckets anything else under 'other'", () => {
     expect(toolBucket("list_dir")).toBe(OTHER_TOOLS_KEY);
-    expect(toolBucket("agent.subagent.dispatch")).toBe(OTHER_TOOLS_KEY);
+    expect(toolBucket("dispatch_subagent")).toBe(OTHER_TOOLS_KEY);
   });
 });
 

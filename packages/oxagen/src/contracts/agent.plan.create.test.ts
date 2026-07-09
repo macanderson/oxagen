@@ -75,6 +75,6 @@ describe("agent.plan.create capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("agent.plan.create")).toBe(agentPlanCreate);
+    expect(getCapability("create_plan")).toBe(agentPlanCreate);
   });
 });

@@ -92,13 +92,13 @@
       "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
     "plugin.org.install": {
-      "route": "/[orgSlug]/[workspaceSlug]/marketplace/agent-tools",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/marketplace/agent-tools/page.tsx",
-      "entry": "\"Install\" on a non-skill marketplace row → installPlugin",
-      "testid": null,
-      "proof": null,
-      "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
+      "route": "/[orgSlug]/[workspaceSlug]/studio/tools/mcp",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/studio/tools/mcp/page.tsx",
+      "entry": "\"Install\" on a catalog search row (McpCatalogSearch → installPlugin); also marketplace agent-tools browse",
+      "testid": "mcp-catalog-install-*",
+      "proof": "apps/app/e2e/mcp-servers-authenticate.spec.ts",
+      "verifiedAt": "2026-07-08",
+      "verifiedBy": "session_012L8WKM81ZqYaiLYsqLvkw6"
     },
     "plugin.org.install_bulk": {
       "route": "/[orgSlug]/[workspaceSlug]/marketplace/agent-tools",

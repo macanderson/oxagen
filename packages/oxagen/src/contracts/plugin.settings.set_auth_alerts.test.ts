@@ -3,7 +3,7 @@ import { pluginSettingsSetAuthAlerts } from "./plugin.settings.set_auth_alerts";
 
 describe("plugin.settings.set_auth_alerts contract", () => {
   it("has correct name and domain", () => {
-    expect(pluginSettingsSetAuthAlerts.name).toBe("plugin.settings.set_auth_alerts");
+    expect(pluginSettingsSetAuthAlerts.name).toBe("set_auth_alerts");
     expect(pluginSettingsSetAuthAlerts.domain).toBe("plugin");
   });
 

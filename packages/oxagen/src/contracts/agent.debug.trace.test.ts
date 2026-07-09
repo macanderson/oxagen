@@ -4,7 +4,7 @@ import { getCapability } from "../registry";
 
 describe("agent.debug.trace capability", () => {
   it("is registered with the expected surfaces and low sensitivity", () => {
-    const cap = getCapability("agent.debug.trace");
+    const cap = getCapability("debug_execution");
     expect(cap).toBeDefined();
     expect(cap?.surfaces).toEqual(["api", "mcp", "agent"]);
     expect(cap?.mode).toBe("sync");

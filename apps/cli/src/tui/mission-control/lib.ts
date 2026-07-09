@@ -11,7 +11,7 @@
 import { theme } from "../theme.js";
 import type { SessionEvent, SessionState, TurnUsage } from "../../sessions/events.js";
 import { emptyTurnUsage } from "../../sessions/events.js";
-import type { SessionMetaView } from "../../sessions/store.js";
+import { isActiveState, type SessionMetaView } from "../../sessions/store.js";
 
 // ── Session color ────────────────────────────────────────────────────────────
 
@@ -115,6 +115,23 @@ export function countByState(sessions: readonly SessionMetaView[]): StateCounts 
   };
   for (const s of sessions) counts[s.derivedState] += 1;
   return counts;
+}
+
+/**
+ * Whether Mission Control has any time display that must keep advancing on its
+ * own — a live elapsed clock on an active session, or the drain readout. True
+ * while any session is queued/running/waiting, or the fleet is draining.
+ *
+ * When this is false, nothing on screen changes second-to-second: the state
+ * glyphs are static, no elapsed clock is live (finished sessions show their
+ * final duration), so the render pump can idle entirely instead of redrawing an
+ * identical frame ten times a second. This is the gate for the animation tick.
+ */
+export function hasLiveTimers(
+  sessions: readonly SessionMetaView[],
+  draining: boolean,
+): boolean {
+  return draining || sessions.some((s) => isActiveState(s.derivedState));
 }
 
 /** Sum usage across the roster — cumulative tokens + cost for the whole fleet. */

@@ -45,6 +45,6 @@ describe("agent.skill.list capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("agent.skill.list")).toBe(agentSkillList);
+    expect(getCapability("list_agent_skills")).toBe(agentSkillList);
   });
 });

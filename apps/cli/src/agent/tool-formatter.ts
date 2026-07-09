@@ -17,27 +17,27 @@ export const TOOL_EMOJIS: Record<string, string> = {
 
   // Knowledge & graph
   MCP: "🔗",
-  "semantic.edge.suggest": "🧠",
-  "semantic.relationship.approve": "✅",
+  "suggest_semantic_edges": "🧠",
+  "approve_semantic_relationship": "✅",
   "knowledge.query": "🔍",
 
   // LLM & inference
-  "agent.code.execute": "⚡",
-  "agent.subagent.dispatch": "🚀",
+  "dispatch_subagent": "🚀",
 
   // Workflow & process
-  "workflow.run": "▶️",
-  "workflow.cancel": "⏹️",
+  "run_workflow": "▶️",
+  "cancel_workflow": "⏹️",
 
-  // Default
-  default: "🔧",
+  // Default — tools without a mapping render with no emoji at all.
+  default: "",
 };
 
 /**
- * Get emoji for a tool name.
+ * Get emoji for a tool name. Unmapped tools get an empty string — callers must
+ * not assume a glyph is always present.
  */
 export function getToolEmoji(toolName: string): string {
-  return TOOL_EMOJIS[toolName] ?? "🔧";
+  return TOOL_EMOJIS[toolName] ?? "";
 }
 
 /**
@@ -57,11 +57,12 @@ export function getToolAccent(toolName: string): string {
 
 /**
  * Human-facing label for a tool chip. Single-word core tools (Read, Edit, Bash)
- * read best Title-cased; dotted capability names (`semantic.edge.suggest`) are
- * precise identifiers a developer recognizes, so they're kept verbatim.
+ * read best Title-cased; capability names (`suggest_semantic_edges`, legacy
+ * `semantic.edge.suggest`) are precise identifiers a developer recognizes, so
+ * they're kept verbatim.
  */
 export function toolDisplayLabel(toolName: string): string {
-  if (!toolName.includes(".")) {
+  if (!toolName.includes(".") && !toolName.includes("_")) {
     return toolName.charAt(0).toUpperCase() + toolName.slice(1);
   }
   return toolName;
@@ -174,7 +175,10 @@ export function formatToolArgs(toolName: string, input: unknown): string {
 export function formatToolCall(toolName: string, input: unknown): string {
   const emoji = getToolEmoji(toolName);
   const name = toolName.toLowerCase().replace(/\./g, "-");
-  return `${emoji} ${name}(${formatToolArgs(toolName, input)})`;
+  // Unmapped tools carry no emoji — omit the separator space too so the line
+  // starts flush at the tool name.
+  const prefix = emoji ? `${emoji} ` : "";
+  return `${prefix}${name}(${formatToolArgs(toolName, input)})`;
 }
 
 /**
