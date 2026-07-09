@@ -52,12 +52,24 @@ export async function agentSandboxFilesListHandler(
   }
   const targetDir = rel ? `${WORKSPACE_ROOT}/${rel}` : WORKSPACE_ROOT;
 
-  // `%y` = entry type (f/d/l/…), `%s` = size in bytes, `%p` = full path,
-  // tab-separated and newline-delimited. `-mindepth 1` excludes the starting
-  // directory itself; `-maxdepth` bounds the recursion (validated 1-5).
-  const command =
+  // Two sections in one exec so a single restore-retry covers both:
+  //
+  //  1. `find` — `%y` = entry type (f/d/l/…), `%s` = size, `%p` = full path,
+  //     tab-separated and newline-delimited. `-mindepth 1` excludes the starting
+  //     directory itself; `-maxdepth` bounds the recursion (validated 1-5).
+  //  2. `git ls-files` — the set of paths git considers ignored, collapsed to
+  //     whole ignored directories (`--directory` → `node_modules/`) so it never
+  //     enumerates a huge ignored tree. Each line is tagged `i\t…` so the parser
+  //     can tell it apart from a `find` line (whose `%y` is always f/d/l, never
+  //     `i`). Empty when the workspace is not a git repo. Paths are relative to
+  //     WORKSPACE_ROOT — the same frame the find paths are normalized into below.
+  const findCmd =
     `find ${shellQuote(targetDir)} -mindepth 1 -maxdepth ${input.depth} ` +
     `\\( -type f -o -type d \\) -printf '%y\\t%s\\t%p\\n' 2>/dev/null`;
+  const ignoreCmd =
+    `git -C ${shellQuote(WORKSPACE_ROOT)} -c core.quotePath=false ls-files ` +
+    `-o -i --exclude-standard --directory 2>/dev/null | sed 's/^/i\\t/'`;
+  const command = `${findCmd}; ${ignoreCmd}`;
 
   let result = await driver.execInSession({
     sandboxId: row.sandboxId,

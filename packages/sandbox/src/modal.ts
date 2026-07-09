@@ -243,6 +243,7 @@ export function createModalSandbox(config: ModalSandboxConfig): SandboxDriver {
           timeout_ms: req.timeoutMs,
           env: req.env ?? null,
           stdin: req.stdin ?? null,
+          cwd: req.cwd ?? null,
         },
         ModalExecResponseSchema,
         req.timeoutMs + 15_000,
@@ -254,6 +255,9 @@ export function createModalSandbox(config: ModalSandboxConfig): SandboxDriver {
         durationMs: data.duration_ms,
         timedOut: data.timed_out,
         gone: data.gone,
+        // null (old runner / uncapturable) collapses to undefined at the type
+        // boundary so callers just see "no update" and keep the prior cwd.
+        cwd: data.cwd ?? undefined,
       };
     },
 
