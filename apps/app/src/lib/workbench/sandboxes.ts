@@ -145,7 +145,7 @@ export async function startSandbox(
 
 export async function runSandboxCommand(
   ctx: WorkbenchCtx,
-  input: { sessionId: string; command: string; timeoutMs?: number },
+  input: { sessionId: string; command: string; cwd?: string; timeoutMs?: number },
 ): Promise<SandboxExecResult> {
   return (await invoke("run_sandbox_command", input, ctx, {
     surface: "agent",
