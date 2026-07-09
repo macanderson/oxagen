@@ -1,87 +1,74 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { userWorkspacePreferencesWrite } from "@oxagen/oxagen/contracts/user.workspace_preferences.write";
+// workspace_user_preferences is org/workspace-scoped (RLS) → withTenantDb.
 import { schema, withTenantDb } from "@oxagen/database";
 import type { NewWorkspaceUserPreferences } from "@oxagen/database";
 import { and, eq } from "drizzle-orm";
 import { logger } from "./logger";
 
-/**
- * Update the calling user's per-workspace coding-agent defaults (partial update:
- * omitted field ⇒ unchanged, null ⇒ cleared, value ⇒ set). Tenant-scoped
- * (org + workspace), keyed to the authenticated user, 1:1 per (user, workspace).
- * `markRepoPrompted` stamps the one-time repo-default prompt as answered.
- */
 export const userWorkspacePreferencesWriteHandler: CapabilityHandler<
   typeof userWorkspacePreferencesWrite
 > = async (input, ctx) => {
   if (!ctx.userId) {
-    logger.warn(
-      { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
-      "user.workspace-preferences.write: rejected — no authenticated user",
-    );
-    throw new Error(
-      "update_workspace_user_preferences requires an authenticated user",
-    );
+    logger.warn({}, "user.workspace-preferences.write: rejected — no authenticated user");
+    throw new Error("user.workspace-preferences.write requires an authenticated user");
   }
   if (!ctx.workspaceId || !ctx.orgId) {
     logger.warn(
-      { orgId: ctx.orgId, userId: ctx.userId },
+      { userId: ctx.userId },
       "user.workspace-preferences.write: rejected — no workspace context",
     );
-    throw new Error(
-      "update_workspace_user_preferences requires a workspace context",
-    );
+    throw new Error("user.workspace-preferences.write requires a workspace context");
   }
 
   const userId = ctx.userId;
   const workspaceId = ctx.workspaceId;
   const orgId = ctx.orgId;
+  const now = new Date();
+  const promptedAt = input.markRepoPrompted ? now : undefined;
 
-  // Only fields explicitly present in the input mutate; "in input" distinguishes
-  // an omitted field (leave unchanged) from an explicit null (clear the value).
-  const patch: Partial<NewWorkspaceUserPreferences> = {};
+  // Insert values for the first-write case — provided fields, else column
+  // defaults (NULL). markRepoPrompted stamps the one-time prompt as answered.
+  const insertValues: NewWorkspaceUserPreferences = {
+    userId,
+    orgId,
+    workspaceId,
+    createdByUserId: userId,
+    updatedByUserId: userId,
+    ...("defaultRepoConnectionId" in input
+      ? { defaultRepoConnectionId: input.defaultRepoConnectionId }
+      : {}),
+    ...("defaultRepoSlug" in input ? { defaultRepoSlug: input.defaultRepoSlug } : {}),
+    ...("defaultEnvironmentId" in input
+      ? { defaultEnvironmentId: input.defaultEnvironmentId }
+      : {}),
+    ...(promptedAt ? { repoDefaultPromptedAt: promptedAt } : {}),
+  };
+
+  // Partial update — only touch fields explicitly provided; leave the rest.
+  const updateSet: Partial<NewWorkspaceUserPreferences> & { updatedByUserId: string } = {
+    updatedByUserId: userId,
+    updatedAt: now,
+  };
   if ("defaultRepoConnectionId" in input)
-    patch.defaultRepoConnectionId = input.defaultRepoConnectionId ?? null;
-  if ("defaultRepoSlug" in input)
-    patch.defaultRepoSlug = input.defaultRepoSlug ?? null;
+    updateSet.defaultRepoConnectionId = input.defaultRepoConnectionId;
+  if ("defaultRepoSlug" in input) updateSet.defaultRepoSlug = input.defaultRepoSlug;
   if ("defaultEnvironmentId" in input)
-    patch.defaultEnvironmentId = input.defaultEnvironmentId ?? null;
-  if (input.markRepoPrompted === true) patch.repoDefaultPromptedAt = new Date();
+    updateSet.defaultEnvironmentId = input.defaultEnvironmentId;
+  if (promptedAt) updateSet.repoDefaultPromptedAt = promptedAt;
 
-  const existing = await withTenantDb((tx) =>
-    tx.query.workspaceUserPreferences.findFirst({
-      where: and(
-        eq(schema.workspaceUserPreferences.userId, userId),
-        eq(schema.workspaceUserPreferences.workspaceId, workspaceId),
-      ),
-      columns: { id: true },
-    }),
-  );
-
-  if (existing) {
-    await withTenantDb((tx) =>
-      tx
-        .update(schema.workspaceUserPreferences)
-        .set({ ...patch, updatedByUserId: userId, updatedAt: new Date() })
-        .where(
-          and(
-            eq(schema.workspaceUserPreferences.userId, userId),
-            eq(schema.workspaceUserPreferences.workspaceId, workspaceId),
-          ),
-        ),
-    );
-  } else {
-    await withTenantDb((tx) =>
-      tx.insert(schema.workspaceUserPreferences).values({
-        orgId,
-        workspaceId,
-        userId,
-        createdByUserId: userId,
-        updatedByUserId: userId,
-        ...patch,
+  await withTenantDb((tx) =>
+    tx
+      .insert(schema.workspaceUserPreferences)
+      .values(insertValues)
+      .onConflictDoUpdate({
+        target: [
+          schema.workspaceUserPreferences.userId,
+          schema.workspaceUserPreferences.workspaceId,
+        ],
+        set: updateSet,
       }),
-    );
-  }
+  );
 
   const row = await withTenantDb((tx) =>
     tx.query.workspaceUserPreferences.findFirst({
@@ -99,9 +86,7 @@ export const userWorkspacePreferencesWriteHandler: CapabilityHandler<
   );
 
   if (!row) {
-    throw new Error(
-      "update_workspace_user_preferences: upserted row not found on re-read",
-    );
+    throw new Error("user.workspace-preferences.write: upserted row not found on re-read");
   }
 
   logger.info(

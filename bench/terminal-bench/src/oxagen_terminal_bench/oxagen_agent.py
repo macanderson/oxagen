@@ -73,16 +73,18 @@ Environment
   turns this on by default.
 - ``OXAGEN_INSTALL_DUCKDB=1`` — also ``npm i`` DuckDB in the container so the
   context engine's persistent memory/trace stores are live, AND so the code
-  graph ``oxagen init`` pre-builds in ``install()`` (see ``_INIT_SCRIPT``
-  below) actually persists to disk for ``run()`` to reuse. Off by default: for
-  a cold single-trial run with no warm memory, the CLI degrades gracefully
+  graph ``oxagen init`` pre-builds (at the head of the run() command, just
+  before the task prompt — see ``_init_prefix_command()``) actually persists to
+  disk for the task's OWN ``oxagen`` process to reuse. Off by default: for a
+  cold single-trial run with no warm memory, the CLI degrades gracefully
   without it (in-memory fallback, no crash — ``init.ts``'s
   ``createCodeGraphStore()`` call is inside its try/catch precisely so a
-  missing duckdb binding never crashes ``oxagen init``). But that in-memory
-  fallback IS thrown away the moment the ``install()`` process exits, so
-  without this flag the ``oxagen init`` pre-build is pure overhead — it builds
-  a graph nothing downstream ever reads. Set automatically by ``run.sh`` when
-  ``OXAGEN_WARM=1`` or ``OXAGEN_DIFFERENTIATED=1``.
+  missing duckdb binding never crashes ``oxagen init``). But init and the task
+  run are separate ``oxagen`` processes, so that in-memory fallback IS thrown
+  away the moment the init process exits; without this flag the ``oxagen init``
+  pre-build is pure overhead — it builds a graph nothing downstream ever reads.
+  Set automatically by ``run.sh`` when ``OXAGEN_WARM=1`` or
+  ``OXAGEN_DIFFERENTIATED=1``.
 - ``OXAGEN_DIFFERENTIATED=1`` — a ``run.sh``-level convenience flag (not read
   by this adapter directly) that turns on the full differentiated config in
   one shot: persisted code graph + embeddings (``OXAGEN_INSTALL_DUCKDB=1``), a
@@ -421,24 +423,58 @@ fi
 node --version
 """
 
-# Shell snippet: run `oxagen init --no-link` in the task working directory to
-# build the code graph (tree-sitter parse + symbol index) and infer domain names
-# before the agent loop starts.  This front-loads the 135s+ cold graph-build
-# that otherwise blocks the first `code_graph` tool call mid-execution, and
-# makes the `code_graph` tool immediately useful from step 1.
-#
-# Domain inference (Haiku-class LLM call) annotates the graph nodes with domain
-# names (e.g. "auth", "models", "views") so the agent's code_graph queries
-# return richer, domain-aware results.
-#
-# Skipped when OXAGEN_SKIP_INIT=1 (e.g. for tasks where the repo is too large
-# or init is known to be slow).  The agent degrades gracefully without it.
-_INIT_SCRIPT = """
-set -eu
-echo "oxagen-adapter: running oxagen init to pre-build code graph and domain index..."
-oxagen init --no-link --json 2>&1 | tail -5 || echo "oxagen-adapter: init failed (non-fatal)"
-echo "oxagen-adapter: init complete"
-"""
+# `oxagen init` builds the code graph (tree-sitter parse + symbol index) and
+# infers domain names in the task working directory. It front-loads the 135s+
+# cold graph-build that otherwise blocks the first `code_graph` tool call
+# mid-execution, and makes `code_graph` useful from step 1. Domain inference (a
+# Haiku-class LLM call) annotates nodes with domain names ("auth", "models", …)
+# so the agent's code_graph queries return richer, domain-aware results. This
+# warm-up is ESSENTIAL for the CLI to perform optimally, so it runs at the head
+# of the run() command — in the SAME sandbox + working directory, immediately
+# before the task prompt — rather than in install(). On a Modal-backed Harbor
+# environment install() can execute in a different sandbox than run(), so an
+# install-time init would not be guaranteed to reach the run sandbox; running it
+# inside the run() command makes "init before the prompt" hold on every backend.
+
+
+def _init_timeout_sec() -> int:
+    """Bounded budget (seconds) for the pre-prompt `oxagen init`, overridable via
+    OXAGEN_INIT_TIMEOUT_SEC (default 600). On large repos (django, astropy) the
+    tree-sitter parse is slow; a timeout degrades to a cold graph built lazily at
+    first use, never aborts the trial."""
+    raw = os.environ.get("OXAGEN_INIT_TIMEOUT_SEC")
+    if raw:
+        try:
+            return max(1, int(raw.strip()))
+        except ValueError:
+            pass
+    return 600
+
+
+def _init_prefix_command() -> str:
+    """Shell snippet that runs `oxagen init` in the CURRENT sandbox + working
+    directory immediately before the task prompt, so the code graph + domain
+    index it builds is exactly what the following `oxagen <task>` process reads.
+
+    Bounded by `timeout` and made NON-FATAL (`|| echo`): a slow or failed
+    pre-build degrades to a cold graph (built lazily at first use), never aborts
+    the trial. Skipped entirely under OXAGEN_SKIP_INIT=1 or OXAGEN_NO_PIPELINE=1.
+
+    Returns a snippet terminated by `; ` so it prepends cleanly onto the run
+    command, or "" when init is disabled. The AI_GATEWAY_API_KEY that init needs
+    (inferDomains) is supplied via the exec `env=` channel by the caller, NEVER
+    inlined here — Harbor logs commands verbatim, so an inline `env KEY=…` would
+    leak the secret into trial.log."""
+    if _is_truthy(os.environ.get("OXAGEN_SKIP_INIT")) or _is_truthy(
+        os.environ.get("OXAGEN_NO_PIPELINE")
+    ):
+        return ""
+    return (
+        'echo "oxagen-adapter: running oxagen init before the task prompt '
+        '(warm code graph + domain index)..."; '
+        f"timeout {_init_timeout_sec()} oxagen init --no-link --json 2>&1 | tail -5 "
+        '|| echo "oxagen-adapter: init failed or timed out (non-fatal; cold graph)"; '
+    )
 
 
 class OxagenAgent(BaseInstalledAgent):
@@ -564,51 +600,11 @@ class OxagenAgent(BaseInstalledAgent):
                 timeout_sec=600,
             )
 
-        # 5) Pre-build code graph + domain index via `oxagen init --no-link`.
-        #    This front-loads the 135s+ cold tree-sitter build that would
-        #    otherwise block the first `code_graph` tool call mid-execution.
-        #    After init the graph is warm in the DuckDB store and domain names
-        #    are indexed, so `code_graph` queries are useful from step 1.
-        #    Skipped when OXAGEN_SKIP_INIT=1 or OXAGEN_NO_PIPELINE=1 (bare mode).
-        if not _is_truthy(os.environ.get("OXAGEN_SKIP_INIT")) and not _is_truthy(
-            os.environ.get("OXAGEN_NO_PIPELINE")
-        ):
-            # init is explicitly NON-FATAL (the script ends `|| echo "init
-            # failed (non-fatal)"`), but a Harbor exec *timeout* raises before
-            # that shell fallback runs — on large repos (django, astropy) the
-            # tree-sitter parse blew the old 300s cap and KILLED the whole
-            # trial in agent_setup, $0 spent, before a single LLM call
-            # (job single-shot-r8, 2026-07-07). Give it a generous budget AND
-            # swallow any failure here so a slow/failed pre-build degrades to
-            # a cold graph (built lazily at first use) instead of aborting the
-            # trial. Timeout overridable via OXAGEN_INIT_TIMEOUT_SEC.
-            init_timeout = 300
-            raw_init_timeout = os.environ.get("OXAGEN_INIT_TIMEOUT_SEC")
-            if raw_init_timeout:
-                try:
-                    init_timeout = max(1, int(raw_init_timeout.strip()))
-                except ValueError:
-                    pass
-            else:
-                init_timeout = 600
-            # Pass env via the exec env= channel (same as the run() call
-            # below), NOT inlined into the command string: Harbor logs every
-            # command verbatim to trial.log, so an inline `env KEY=...` prefix
-            # wrote the AI_GATEWAY_API_KEY secret into the log file.
-            try:
-                await self.exec_as_agent(
-                    environment,
-                    command=_INIT_SCRIPT,
-                    env=self._forwarded_env(),
-                    timeout_sec=init_timeout,
-                )
-            except Exception as exc:  # noqa: BLE001 — init is best-effort by design
-                print(
-                    f"oxagen-adapter: `oxagen init` pre-build did not finish "
-                    f"({type(exc).__name__}: {exc}); continuing with a cold code "
-                    f"graph (built lazily at first use).",
-                    file=sys.stderr,
-                )
+        # 5) Code-graph pre-build (`oxagen init`) is NOT run here. It now runs at
+        #    the head of the run() command instead — in the same sandbox +
+        #    working directory as the task prompt — so "init before the prompt"
+        #    holds even on a Modal-backed environment where install() and run()
+        #    may execute in different sandboxes. See _init_prefix_command().
 
         # 6) Warm mode: upload prior-trial memory into the container so this
         #    trial starts with accumulated state from all preceding trials.
@@ -751,8 +747,14 @@ class OxagenAgent(BaseInstalledAgent):
     ) -> None:
         log_path = f"{EnvironmentPaths.agent_dir}/oxagen.txt"
         subcommand = self._build_best_of_n_flags() if _best_of_n_enabled() else self._build_flags()
+        # `oxagen init` runs FIRST, in this same sandbox + working directory, so
+        # the warm code graph + domain index it builds is what the task run reads
+        # (essential for the CLI to perform optimally). It is bounded + non-fatal;
+        # only the init output (not the task prompt's) is discarded via `tail`.
+        # The task run's stdout/stderr still stream to oxagen.txt via tee.
         command = (
             f"mkdir -p {EnvironmentPaths.agent_dir}; "
+            f"{_init_prefix_command()}"
             f"oxagen {subcommand} {shlex.quote(instruction)} "
             f"2>&1 | stdbuf -oL tee {log_path}"
         )

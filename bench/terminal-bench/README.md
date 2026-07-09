@@ -118,7 +118,7 @@ per task) and compare cost at similar pass rate.
 | `OXAGEN_BEST_OF_N_PIPELINE` | unset | `1` → each `solve` candidate runs the full evaluate/enhance/judge/revise pipeline (`--pipeline`), not just bare. Dedicated gate, independent of `OXAGEN_NO_PIPELINE` (that one only affects the one-shot baseline). Off by default (bare — cheaper, one comparison judge only). See "Best-of-N mode" below. |
 | `OXAGEN_NO_PIPELINE` | unset | `1` → skip prompt-eval / context-injection / completeness-judge in the ONE-SHOT `--mode bypass` path only (leaner, cheaper). Default keeps the full Oxagen scaffold on. No effect under `OXAGEN_BEST_OF_N=1` — use `OXAGEN_BEST_OF_N_PIPELINE` for that mode instead. |
 | `OXAGEN_LLM_FAST` | unset (engine picks) | Gateway slug for the pipeline's fast tier — the model that actually runs the evaluate/route stage in a headless container, in both the one-shot path and `solve --pipeline` candidates. See "Full differentiated config" below. |
-| `OXAGEN_INSTALL_DUCKDB` | unset | `1` → also `npm i` DuckDB so the context engine's persistent memory/trace stores are live, AND so the `oxagen init` code-graph pre-build in `install()` persists to disk for `run()` to reuse (without it, the pre-build is thrown away — see "Is DuckDB important here?" below). |
+| `OXAGEN_INSTALL_DUCKDB` | unset | `1` → also `npm i` DuckDB so the context engine's persistent memory/trace stores are live, AND so the `oxagen init` code-graph pre-build (run at the head of `run()`, just before the task prompt) persists to disk for the task's own `oxagen` process to reuse (without it, the pre-build is thrown away — see "Is DuckDB important here?" below). |
 | `OXAGEN_DIFFERENTIATED` | unset | `1` → one-shot recipe for everything that makes Oxagen unique at once: sets `OXAGEN_INSTALL_DUCKDB=1`, `OXAGEN_BEST_OF_N=1`, `OXAGEN_BEST_OF_N_CANDIDATES=3`, `OXAGEN_BEST_OF_N_PIPELINE=1`, `OXAGEN_LLM_FAST=anthropic/claude-haiku-4-5` (each individually overridable). See "Full differentiated config" below. |
 | `OXAGEN_CLI_BUNDLE` | repo build path | Override the path to `oxagen.mjs`. |
 | `DATASET` | `terminal-bench@2.0` | Any Harbor dataset slug. |
@@ -144,16 +144,20 @@ found while wiring this:
   the native module isn't installed. `init.ts` used to call it OUTSIDE its
   try/catch, so a missing duckdb binding crashed `oxagen init` uncaught in
   every default (non-`OXAGEN_WARM`, non-`OXAGEN_INSTALL_DUCKDB`) run — masked
-  only because `_INIT_SCRIPT`'s shell wrapper treats a non-zero exit as
-  non-fatal and moves on. Fixed: the store is now constructed inside the try,
+  only because `_init_prefix_command()`'s shell wrapper treats a non-zero exit
+  as non-fatal and moves on. Fixed: the store is now constructed inside the try,
   matching the agent's own runtime code-graph loader — a missing binding now
   degrades to an in-memory build instead of crashing.
 - **But that in-memory build is still pure overhead without `OXAGEN_INSTALL_DUCKDB=1`.**
-  `install()`'s `oxagen init` and the task's `run()` are two SEPARATE
-  processes. Without DuckDB, the pre-build has nowhere to persist to — it's an
-  in-memory graph that's discarded the instant the `install()` process exits,
-  so `run()` starts its own cold build regardless of whether `install()` "pre-built"
-  anything. If you actually want the local code graph to be a real
+  The pre-prompt `oxagen init` and the task's own `oxagen <task>` invocation are
+  two SEPARATE processes (init runs at the head of the `run()` command, then the
+  task command runs). Without DuckDB, the pre-build has nowhere to persist to —
+  it's an in-memory graph that's discarded the instant the init process exits,
+  so the task command starts its own cold build regardless of whether init
+  "pre-built" anything. Running init in the same sandbox + working directory as
+  the task (so a *persisted* graph is co-located and reused — important on
+  Modal, where install() may run in a different sandbox than run()) is
+  necessary but not sufficient: to make the local code graph a real
   differentiator (not just a non-crashing no-op), set `OXAGEN_INSTALL_DUCKDB=1`
   — that's why it's part of the `OXAGEN_DIFFERENTIATED=1` recipe below.
 
@@ -165,18 +169,21 @@ measure the full context engine or a persisted code graph.
 1. **install()** — installs Node 22 (NodeSource/apk), `upload_file`s the bundle
    to `/usr/local/lib/oxagen/oxagen.mjs`, drops a `/usr/local/bin/oxagen`
    `node`-wrapper, verifies `oxagen --version`, uploads a static `rg` binary,
-   optionally `npm i`s DuckDB (`OXAGEN_INSTALL_DUCKDB=1`), and — unless
-   `OXAGEN_SKIP_INIT`/`OXAGEN_NO_PIPELINE` — runs `oxagen init --no-link` to
-   pre-build the local tree-sitter code graph + domain index against the task
-   repo before the timed run starts (see "Is DuckDB important here?" for why
-   this pre-build needs `OXAGEN_INSTALL_DUCKDB=1` to actually be worth
-   anything downstream).
-2. **run()** — forwards `AI_GATEWAY_API_KEY` (+ any `OXAGEN_*`), then runs
-   `oxagen <flags> "<instruction>"` in the task's working directory with
+   and optionally `npm i`s DuckDB (`OXAGEN_INSTALL_DUCKDB=1`). It does NOT run
+   `oxagen init` — that now runs at the head of `run()` (see step 2) so it is
+   guaranteed to precede the prompt in the SAME sandbox on every backend,
+   including Modal where install() and run() may be different sandboxes.
+2. **run()** — forwards `AI_GATEWAY_API_KEY` (+ any `OXAGEN_*`), then — unless
+   `OXAGEN_SKIP_INIT`/`OXAGEN_NO_PIPELINE` — runs `oxagen init --no-link`
+   (bounded by `timeout`, non-fatal) to pre-build the local tree-sitter code
+   graph + domain index against the task repo, and IMMEDIATELY AFTER runs
+   `oxagen <flags> "<instruction>"` in the same working directory with
    `--mode bypass --verbose` (or, under `OXAGEN_BEST_OF_N=1`,
    `oxagen solve --candidates <N> [--model X] --json [--pipeline] "<instruction>"`,
    `--pipeline` present only when `OXAGEN_BEST_OF_N_PIPELINE=1` — see
-   "Best-of-N mode" below), teeing output to `/logs/agent/oxagen.txt`.
+   "Best-of-N mode" below), teeing the task output to `/logs/agent/oxagen.txt`.
+   (See "Is DuckDB important here?" for why this pre-build needs
+   `OXAGEN_INSTALL_DUCKDB=1` to actually be worth anything to the task process.)
 3. Harbor runs the task's verifier against the resulting container state and
    records the reward.
 
@@ -279,7 +286,7 @@ reading the code (not assumed from the flag names):
 
 | Pillar | What's true today |
 |---|---|
-| Local code graph + embeddings | `install()` runs `oxagen init --no-link` (front-loads the tree-sitter build) unless `OXAGEN_SKIP_INIT`. Requires `OXAGEN_INSTALL_DUCKDB=1` to actually persist across the `install()`→`run()` process boundary (see above). Embeddings are lazy-on-first-`semantic_search`-call, not eager in `init` — and already capped at 1500 files per pass (`MAX_EMBED_PER_PASS` in `semantic-index.ts`), so there's no repo-size blowup risk to bound further. |
+| Local code graph + embeddings | `run()` runs `oxagen init --no-link` at the head of its command (front-loads the tree-sitter build) immediately before the task prompt, unless `OXAGEN_SKIP_INIT`. Requires `OXAGEN_INSTALL_DUCKDB=1` to actually persist across the init→task process boundary (see above). Embeddings are lazy-on-first-`semantic_search`-call, not eager in `init` — and already capped at 1500 files per pass (`MAX_EMBED_PER_PASS` in `semantic-index.ts`), so there's no repo-size blowup risk to bound further. |
 | Fast coordinator | The interactive-only on-device local coordinator (`runtime.coordinator: "on-device"` / `/coordinator local`) is **not container-viable** — three independent, each-fatal reasons: (1) it's wired only into the REPL, unreachable from `--mode bypass`/`solve`; (2) its native runtime (`node-llama-cpp`) is never installed in the container; (3) even fixed, its weights (4.7–32.5GB GGUF files) would need a cold CPU-only download+load that won't fit a single task's time budget, with real OOM risk from Docker's `os.totalmem()` reporting host RAM rather than any cgroup limit. It is local-dev-only. The actual "fast coordinator" for a headless run is the pipeline's evaluate/route stage — Haiku on a live smoke (`model · Haiku (claude-haiku-4.5)`, routed from a low-complexity evaluation), overridable via `OXAGEN_LLM_FAST`. Applies to `solve` candidates under `OXAGEN_BEST_OF_N_PIPELINE=1` too, not just the one-shot baseline. |
 | Graph-first mandate | Active whenever a `CodeGraphProvider` is wired — true for both the one-shot path and EVERY `solve` candidate (bare or full-pipeline — system prompt in `system-prompt.ts` makes `code_graph` a "non-negotiable" first move for structural questions, and it's wired unconditionally in `best-of-n.ts`). Nothing to configure; just don't skip init in a way that leaves no graph to query. |
 | Semantic enhance fallback | Runs in the FULL pipeline (`enhancePrompt()`, pipeline stage 2) whenever `bare` is false — the one-shot `--mode bypass` path (unless `OXAGEN_NO_PIPELINE`), and `solve` candidates under `OXAGEN_BEST_OF_N_PIPELINE=1` (see below). Fires when literal prompt resolution (file/symbol names) finds little or nothing — embeds the raw prompt and cosine-ranks file nodes from the persisted graph. Now visible in the stage telemetry: the `enhanced · N code refs (+semantic) · …` label (fixed a real bug where a semantic-only hit — nothing resolved literally — used to be silently mislabeled `no extra context found`, even though real context WAS injected into the candidate's prompt). |

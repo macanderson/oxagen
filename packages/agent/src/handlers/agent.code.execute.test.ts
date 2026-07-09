@@ -30,18 +30,55 @@ vi.mock("@oxagen/telemetry", () => ({
   insertEvents: mockInsertEvents,
 }));
 
-const { mockResolveEnvSecrets } = vi.hoisted(() => ({
+const { mockResolveEnvSecrets, mockResolveTemplate, mockListSecretKeys } = vi.hoisted(() => ({
   mockResolveEnvSecrets: vi.fn(async (): Promise<Record<string, string>> => ({})),
+  mockResolveTemplate: vi.fn(),
+  mockListSecretKeys: vi.fn(async (): Promise<
+    Array<{ id: string; key: string; sensitive: boolean; memo: string | null }>
+  > => []),
 }));
 vi.mock("@oxagen/plugins", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/plugins")>();
-  return { ...real, resolveEnvironmentSecrets: mockResolveEnvSecrets };
+  return {
+    ...real,
+    resolveEnvironmentSecrets: mockResolveEnvSecrets,
+    resolveSandboxTemplateForRun: mockResolveTemplate,
+    listSecretKeys: mockListSecretKeys,
+  };
 });
 
 import { agentCodeExecuteHandler } from "./agent.code.execute";
 import { isSandboxAvailable, getSandbox } from "@oxagen/sandbox";
+import type { ResolvedSandboxTemplate, SandboxTemplateSummary } from "@oxagen/plugins";
 
 import { TEST_CTX as CTX } from "../test-utils/fixtures";
+
+function makeTemplate(overrides: Partial<SandboxTemplateSummary> = {}): SandboxTemplateSummary {
+  return {
+    id: "sbx_1",
+    environmentId: "env_tpl",
+    name: "SWE-bench prewarmed",
+    slug: "swe-bench-prewarmed",
+    description: null,
+    isDefault: true,
+    isActive: true,
+    provider: "docker",
+    runtime: null,
+    resources: {},
+    network: { mode: "public" },
+    secretSelection: "all",
+    literalEnv: {},
+    tools: [],
+    ...overrides,
+  } as SandboxTemplateSummary;
+}
+
+function makeResolved(template: SandboxTemplateSummary): ResolvedSandboxTemplate {
+  return {
+    environment: { id: template.environmentId, name: "Env", slug: "env" },
+    template,
+  };
+}
 
 describe("agent.code.execute handler", () => {
   beforeEach(() => {
@@ -49,9 +86,11 @@ describe("agent.code.execute handler", () => {
     mockInsertEvents.mockClear();
     mockInsertEvents.mockResolvedValue(undefined);
     vi.mocked(isSandboxAvailable).mockReturnValue(true);
-    vi.mocked(getSandbox).mockReturnValue(mockDriver);
+    vi.mocked(getSandbox).mockReset().mockReturnValue(mockDriver);
     mockResolveEnvSecrets.mockReset();
     mockResolveEnvSecrets.mockResolvedValue({});
+    mockResolveTemplate.mockReset();
+    mockListSecretKeys.mockReset().mockResolvedValue([]);
   });
 
   it("returns sandbox result mapped to contract output", async () => {
@@ -301,5 +340,139 @@ describe("agent.code.execute handler", () => {
       workspaceId: "ws_1",
       environmentId: "env_1",
     });
+  });
+});
+
+describe("agent.code.execute handler — sandbox template", () => {
+  beforeEach(() => {
+    mockRun.mockClear().mockResolvedValue(mockSandboxResult);
+    mockInsertEvents.mockClear().mockResolvedValue(undefined);
+    vi.mocked(isSandboxAvailable).mockReturnValue(true);
+    vi.mocked(getSandbox).mockReset().mockReturnValue(mockDriver);
+    mockResolveEnvSecrets.mockReset().mockResolvedValue({});
+    mockResolveTemplate.mockReset();
+    mockListSecretKeys.mockReset().mockResolvedValue([]);
+  });
+
+  it("applies the template provider, runtime image, resources, and network mode to the run", async () => {
+    const template = makeTemplate({
+      provider: "docker",
+      runtime: "ghcr.io/acme/swe-bench@sha256:abc",
+      resources: { vcpu: 2, memoryMb: 4096, timeoutMs: 120_000, diskMb: 10_240 },
+      network: { mode: "public" },
+    });
+    mockResolveTemplate.mockResolvedValue(makeResolved(template));
+
+    await agentCodeExecuteHandler(
+      {
+        language: "node",
+        code: "console.log(1)",
+        sandboxTemplateId: "sbx_1",
+        timeoutMs: 30_000,
+        memoryMb: 256,
+        network: "deny",
+      },
+      CTX,
+    );
+
+    // The template's provider selects the driver per run.
+    expect(vi.mocked(getSandbox)).toHaveBeenCalledWith("docker");
+    expect(mockRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        imageRef: "ghcr.io/acme/swe-bench@sha256:abc",
+        memoryMb: 4096,
+        timeoutMs: 120_000,
+        network: "allow", // public → allow (overrides the caller's deny)
+        vcpu: 2,
+        diskMb: 10_240,
+      }),
+    );
+  });
+
+  it("resolves secrets from the template's environment with its selection + literal env", async () => {
+    const template = makeTemplate({
+      secretSelection: { keyPublicIds: ["sk_1"] },
+      literalEnv: { SWEBENCH_SPLIT: "verified" },
+      environmentId: "env_tpl",
+    });
+    mockResolveTemplate.mockResolvedValue(makeResolved(template));
+    mockResolveEnvSecrets.mockResolvedValue({ EVAL_API_KEY: "v" });
+    mockListSecretKeys.mockResolvedValue([
+      { id: "sk_1", key: "EVAL_API_KEY", sensitive: true, memo: null },
+    ]);
+
+    await agentCodeExecuteHandler(
+      {
+        language: "node",
+        code: "x",
+        sandboxTemplateId: "sbx_1",
+        env: { CALLER: "c" },
+        timeoutMs: 30_000,
+        memoryMb: 256,
+        network: "deny",
+      },
+      CTX,
+    );
+
+    expect(mockResolveEnvSecrets).toHaveBeenCalledWith({
+      orgId: "org_1",
+      workspaceId: "ws_1",
+      environmentId: "env_tpl",
+      selection: { keyPublicIds: ["sk_1"] },
+    });
+    // literal (lowest) + vault + caller (highest).
+    expect(mockRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        env: { SWEBENCH_SPLIT: "verified", EVAL_API_KEY: "v", CALLER: "c" },
+      }),
+    );
+  });
+
+  it("fails fast BEFORE provisioning on a not-yet-implemented network mode", async () => {
+    const template = makeTemplate({ network: { mode: "aws_privatelink" } });
+    mockResolveTemplate.mockResolvedValue(makeResolved(template));
+
+    await expect(
+      agentCodeExecuteHandler(
+        {
+          language: "node",
+          code: "x",
+          sandboxTemplateId: "sbx_1",
+          timeoutMs: 30_000,
+          memoryMb: 256,
+          network: "deny",
+        },
+        CTX,
+      ),
+    ).rejects.toThrow(/Phase 2\/3/);
+    expect(mockRun).not.toHaveBeenCalled();
+  });
+
+  it("surfaces a required-but-unset template secret as a run warning (not a fail)", async () => {
+    const template = makeTemplate({
+      secretSelection: { keyPublicIds: ["sk_missing"] },
+    });
+    mockResolveTemplate.mockResolvedValue(makeResolved(template));
+    mockResolveEnvSecrets.mockResolvedValue({}); // EVAL_API_KEY unset
+    mockListSecretKeys.mockResolvedValue([
+      { id: "sk_missing", key: "EVAL_API_KEY", sensitive: true, memo: null },
+    ]);
+
+    const result = await agentCodeExecuteHandler(
+      {
+        language: "node",
+        code: "x",
+        sandboxTemplateId: "sbx_1",
+        timeoutMs: 30_000,
+        memoryMb: 256,
+        network: "deny",
+      },
+      CTX,
+    );
+
+    expect(result.warnings).toContain(
+      "required template secret(s) unset in the vault: EVAL_API_KEY",
+    );
+    expect(mockRun).toHaveBeenCalled(); // still ran
   });
 });

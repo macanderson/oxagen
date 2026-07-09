@@ -106,6 +106,12 @@ export const workspace = {
       `${wsBase(ctx)}/studio/agents/new`,
     agent: (ctx: Required<ScopeContext>, agentId: string): string =>
       `${wsBase(ctx)}/studio/agents/${encodeURIComponent(agentId)}`,
+    // Sandboxes — durable code-agent sandboxes: warm one, drive a terminal,
+    // inspect its files. The detail page is keyed by the sbx_* session id.
+    sandboxes: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/studio/sandboxes`,
+    sandbox: (ctx: Required<ScopeContext>, sessionId: string): string =>
+      `${wsBase(ctx)}/studio/sandboxes/${encodeURIComponent(sessionId)}`,
     // Agent Tools hub — All Tools / Skills / MCP Servers / Capabilities.
     tools: {
       root: (ctx: Required<ScopeContext>): string =>
