@@ -5,10 +5,11 @@
  * Desktop: a persistent, COLLAPSIBLE vertical secondary-nav aside to the left of
  * the chat. Expanded it shows the full history list; collapsed it shrinks to a
  * slim icon rail (the expand affordance stays visible so the panel is always
- * re-openable — never a dead, hidden control). The collapse flag is persisted to
- * localStorage so it survives navigations and reloads, and is read via
- * useSyncExternalStore so the server render (expanded) and first client render
- * agree — no hydration mismatch, no post-mount flash (mirrors the shell sidebar).
+ * re-openable — never a dead, hidden control). Collapse state is an in-memory
+ * flag (so the toggle works even when storage is blocked) that starts expanded —
+ * matching the server render, so there is no hydration mismatch — then restores
+ * the last-used preference from localStorage on mount, so it survives navigations
+ * and reloads. See `useCollapsed` below.
  *
  * Mobile: a slide-in left Sheet opened from a compact trigger bar above the
  * chat, so the conversation history stays a vertical, thumb-navigable list
