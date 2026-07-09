@@ -79,8 +79,8 @@ describe("resolveSidebarMode", () => {
 //   workspace: 7 items (Ask, Knowledge, Activity | Agents, Agent Tools |
 //       Marketplace, Settings)
 //     — Activity is the agent run-trace surface (recent runs + per-run span
-//       tree). The Studio group holds Agents (the builder); Agent Tools is a
-//       tab inside the Studio surface, not a primary nav item.
+//       tree). The Workbench group holds Agents (the builder); Agent Tools is a
+//       tab inside the Workbench surface, not a primary nav item.
 //       Marketplace + Settings are pinned to the footer group. The old
 //       catch-all Automation area stays removed; "Workflows" is gone too
 //       (banned term).
@@ -120,7 +120,7 @@ describe("getSidebarConfig item counts", () => {
     expect(returnItems[0]?.id).toBe("back");
   });
 
-  it("workspace config 'tools' group holds exactly Agents (Agent Tools lives in the Studio tabs, not the nav)", () => {
+  it("workspace config 'tools' group holds exactly Agents (Agent Tools lives in the Workbench tabs, not the nav)", () => {
     const items = getSidebarConfig("workspace").items;
     const toolsItems = items.filter((item) => item.group === "tools");
     expect(toolsItems.map((i) => i.id)).toEqual(["agents"]);
@@ -134,7 +134,7 @@ describe("getSidebarConfig item counts", () => {
     expect(ids).not.toContain("agent-runs");
     expect(ids).not.toContain("workflows");
     expect(ids).not.toContain("automation");
-    // Agent Tools is reachable via the Studio tabs, never as its own nav item.
+    // Agent Tools is reachable via the Workbench tabs, never as its own nav item.
     expect(ids).not.toContain("agent-tools");
     // The clean spec tree, in order. Activity is the run-trace surface.
     expect(ids).toEqual([
@@ -195,8 +195,8 @@ describe("href builders produce correct paths", () => {
       expect(findItem("marketplace").href(wsCtx)).toBe("/acme/production/marketplace");
     });
 
-    it("agents -> /{org}/{ws}/studio/agents", () => {
-      expect(findItem("agents").href(wsCtx)).toBe("/acme/production/studio/agents");
+    it("agents -> /{org}/{ws}/workbench/agents", () => {
+      expect(findItem("agents").href(wsCtx)).toBe("/acme/production/workbench/agents");
     });
 
     it("settings -> /{org}/{ws}/settings", () => {
@@ -420,7 +420,7 @@ describe("ORG_SCOPE_ROUTES", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 8. IA realignment — Automation/Activity removed entirely, no Workflows/Studio
+// 8. IA realignment — Automation/Activity removed entirely, no Workflows/Workbench
 // ---------------------------------------------------------------------------
 
 describe("IA realignment (spec §4/§5/§19)", () => {
@@ -444,12 +444,12 @@ describe("IA realignment (spec §4/§5/§19)", () => {
     expect(targets.find((t) => t.label === "Activity")).toBeUndefined();
   });
 
-  it("enumerateNavTargets has no Workflows or Studio destination", () => {
+  it("enumerateNavTargets has no Workflows or Workbench destination", () => {
     const targets = enumerateNavTargets(ctx);
     expect(targets.find((t) => t.label === "Workflows")).toBeUndefined();
-    expect(targets.find((t) => t.label === "Studio")).toBeUndefined();
+    expect(targets.find((t) => t.label === "Workbench")).toBeUndefined();
     expect(targets.map((t) => t.href)).not.toContain("/acme/prod/workflows");
-    expect(targets.map((t) => t.href)).not.toContain("/acme/prod/studio");
+    expect(targets.map((t) => t.href)).not.toContain("/acme/prod/workbench");
   });
 
   it("all workspace hrefs are unique", () => {

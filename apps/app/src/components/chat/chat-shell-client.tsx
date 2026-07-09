@@ -30,7 +30,6 @@ import type { AgentOption } from "./agent-selector";
 import { deriveComposerPr } from "./composer-pr-status-chip";
 import { SuggestedPromptChips } from "./suggested-prompt-chips";
 import type { ConversationMessageSummary } from "@/lib/page-context/suggested-prompts";
-import { ConversationFiles } from "./conversation-files";
 import { ConversationExportMenu } from "./conversation-export-menu";
 import { CodingTracePanel } from "./coding-trace-panel";
 import { WorkspaceContextPanel } from "./workspace-context-panel";
@@ -1124,19 +1123,16 @@ export function ChatShellClient({
   return (
     <div className="flex h-full w-full gap-4">
       <div className="mx-auto flex h-full min-w-0 max-w-3xl flex-1 flex-col gap-4">
-      {/* Toolbar row: export + files panel triggers (right-aligned). Hidden in
-          the floating in-app panel (showFiles=false) — conversation files live
-          on the full /ask page, reachable via "Open in conversations". */}
-      {showFiles ? (
+      {/* Toolbar row: export trigger (right-aligned). Hidden in the floating
+          in-app panel (showFiles=false) — conversation files live on the full
+          /ask page, in the side-panel's "Files" tab. */}
+      {showFiles && conversationPublicId ? (
         <div className="flex shrink-0 items-center justify-end gap-1">
-          {conversationPublicId ? (
-            <ConversationExportMenu
-              conversationId={conversationPublicId}
-              orgSlug={orgSlug}
-              workspaceSlug={workspaceSlug}
-            />
-          ) : null}
-          <ConversationFiles conversationPublicId={conversationPublicId} />
+          <ConversationExportMenu
+            conversationId={conversationPublicId}
+            orgSlug={orgSlug}
+            workspaceSlug={workspaceSlug}
+          />
         </div>
       ) : null}
 
@@ -1277,8 +1273,8 @@ export function ChatShellClient({
     </div>
       {/* Right rail: turn-trace stage rail + files/workspace tabbed panel.
           Hidden in the floating in-app panel (showFiles=false, same gate the
-          toolbar's ConversationFiles/export triggers use) and on narrow
-          viewports — the rail needs real width to be legible. */}
+          toolbar's export trigger uses) and on narrow viewports — the rail
+          needs real width to be legible. */}
       {showFiles ? (
         <aside className="hidden w-64 shrink-0 flex-col gap-3 overflow-y-auto py-1 lg:flex">
           <CodingTracePanel

@@ -94,7 +94,7 @@ export default async function WorkspaceModelsPage({
           <p className="text-sm font-semibold text-foreground">AI model defaults</p>
           <p className="text-xs text-muted-foreground">
             The default text tier and image/video models applied to every agent run
-            and Studio generation in this workspace. Workspace defaults take
+            and Workbench generation in this workspace. Workspace defaults take
             precedence over personal preferences for all members.
           </p>
         </div>

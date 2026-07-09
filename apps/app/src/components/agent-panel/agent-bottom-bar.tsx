@@ -16,10 +16,29 @@
  */
 
 import * as React from "react";
+import { usePathname } from "next/navigation";
 import { Send, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAgentPanelStore } from "./use-agent-panel-store";
 import type { AgentStatus } from "./use-agent-panel-store";
+
+// ---------------------------------------------------------------------------
+// Route awareness
+// ---------------------------------------------------------------------------
+
+/**
+ * The canonical full-page agent conversation surface is `/{org}/{ws}/ask` (the
+ * legacy `/chat` route now 308-redirects here). On that surface the user is
+ * already inside the agent, so the docked launcher would let them open a second
+ * floating agent panel on top of the first — an "agent on top of another agent".
+ * Match on the trailing path segment so this is exact: an org/workspace literally
+ * named "ask" earlier in the path never triggers a false positive.
+ */
+function isConversationSurface(pathname: string | null): boolean {
+  if (!pathname) return false;
+  const segments = pathname.split("/").filter(Boolean);
+  return segments[segments.length - 1] === "ask";
+}
 
 // ---------------------------------------------------------------------------
 // Status Indicator
@@ -45,9 +64,15 @@ function StatusIndicator({ status }: { status: AgentStatus }) {
 // ---------------------------------------------------------------------------
 
 export function AgentBottomBar() {
+  const pathname = usePathname();
   const { visibility, status, conversationTitle, open } = useAgentPanelStore();
 
-  // The bar is visible on all pages. When the panel is open the bar still
+  // Suppress the docked launcher on the full-page agent surface (`/ask`) — the
+  // page there IS the agent, so launching the floating panel would stack a
+  // second agent on top of it. Every other page keeps the bar.
+  if (isConversationSurface(pathname)) return null;
+
+  // The bar is visible on all other pages. When the panel is open the bar still
   // renders (behind it) but we hide the collapsed conversation indicator
   // since the user is already looking at the full panel.
   const showCollapsedConversation =

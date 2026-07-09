@@ -837,6 +837,11 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./command.menu.suggest"))
         .commandMenuSuggestHandler as CapabilityHandlerFn,
   );
+  registerHandler("search_references",
+    async () =>
+      (await import("./reference.search"))
+        .referenceSearchHandler as CapabilityHandlerFn,
+  );
   // ── Schema Registry ───────────────────────────────────────────────────────────
   registerHandler("get_schema_registry",
     async () =>

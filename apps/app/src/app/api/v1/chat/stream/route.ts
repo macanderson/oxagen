@@ -36,6 +36,7 @@ import {
   isSandboxAvailable,
 } from "@oxagen/agent/adapters";
 import { resolveGitHubToken } from "@oxagen/handlers/lib/github-token";
+import { parseMentions } from "@oxagen/ai/mentions";
 import { runCodingAgent } from "@oxagen/agent-engine";
 import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
@@ -211,7 +212,7 @@ const BodySchema = z.object({
     })
     .nullable()
     .default(null),
-  // Selected/bound agent (OXA app-agent-selector + Studio chat↔agent binding) —
+  // Selected/bound agent (OXA app-agent-selector + Workbench chat↔agent binding) —
   // the publicId (`agt_…`) of the agent chosen in the composer (or threaded
   // from the Ask page's `?agent=<publicId>` URL param), or null/omitted for the
   // default (generic chat) agent. When present, this turn is BOUND to that
@@ -1278,6 +1279,109 @@ export async function POST(request: NextRequest): Promise<Response> {
           pinnedContextMessage = { role: "user", content: lines.join("\n") };
         }
 
+        // ── @-mention references ──────────────────────────────────────────────
+        // The user message may embed [:type|:slug|:location|:label] tokens
+        // inserted by the composer's @-mention picker. Hydrate each unique
+        // mention via search_references' exact-slug resolve mode (best-effort)
+        // and ride the details as a per-turn USER message (ADR-021 §2), same
+        // slot as the pinned/code context above. Mentioned graph nodes count
+        // as citations — identical bookkeeping to automatic memory citations —
+        // recorded fire-and-forget so they can never block the turn.
+        const mentions = parseMentions(content);
+        let referencesContextMessage: ModelMessage | undefined;
+        if (mentions.length > 0) {
+          const seenMentions = new Set<string>();
+          const uniqueMentions = mentions
+            .filter((m) => {
+              const key = `${m.type}:${m.slug}`;
+              if (seenMentions.has(key)) return false;
+              seenMentions.add(key);
+              return true;
+            })
+            .slice(0, 8);
+
+          const hydrated = await runInTenantScope(
+            { orgId: tenant.id, workspaceId: workspace.id },
+            () =>
+              Promise.all(
+                uniqueMentions.map(async (mention) => {
+                  try {
+                    const out = (await invoke(
+                      "search_references",
+                      { slug: mention.slug, types: [mention.type], limit: 1 },
+                      capCtx,
+                      { surface: "agent" },
+                    )) as {
+                      results: Array<{
+                        description: string | null;
+                        properties: Record<string, unknown>;
+                      }>;
+                    };
+                    return { mention, row: out.results[0] ?? null };
+                  } catch {
+                    return { mention, row: null };
+                  }
+                }),
+              ),
+          );
+
+          const lines: string[] = [
+            "## References (@-mentions)",
+            "The user attached these references to this turn. Treat each as authoritative, already-cited context: resolve by id, prefer it over guessing, and never show the raw id as a name.",
+          ];
+          for (const { mention, row } of hydrated) {
+            lines.push(
+              `- [${mention.type}] ${mention.label}` +
+                (mention.location ? ` — ${mention.location}` : "") +
+                ` (id: ${mention.slug})` +
+                (row?.description ? `: ${row.description}` : ""),
+            );
+            if (row && Object.keys(row.properties).length > 0) {
+              const json = JSON.stringify(row.properties);
+              lines.push(`  properties: ${json.length > 600 ? `${json.slice(0, 600)}…` : json}`);
+            }
+            // A repository mention doubles as repo context when nothing is
+            // pinned and code mode is off — same guidance the pinned-context
+            // message gives, sourced from the mention's hydrated coordinates.
+            if (
+              mention.type === "repository" &&
+              !codeMode &&
+              !pinnedContext?.repo &&
+              row &&
+              typeof row.properties["owner"] === "string" &&
+              typeof row.properties["name"] === "string"
+            ) {
+              const branch =
+                typeof row.properties["defaultBranch"] === "string"
+                  ? row.properties["defaultBranch"]
+                  : "the default branch";
+              lines.push(
+                `  Treat ${row.properties["owner"]}/${row.properties["name"]} (default branch ${branch}) as the repository the user means for repository, pull-request, diff, and CI requests this turn.`,
+              );
+            }
+          }
+          referencesContextMessage = { role: "user", content: lines.join("\n") };
+
+          const nodeReferences = uniqueMentions
+            .filter((m) => m.type === "node")
+            .map((m) => ({ nodeId: m.slug }));
+          if (nodeReferences.length > 0) {
+            void runInTenantScope({ orgId: tenant.id, workspaceId: workspace.id }, () =>
+              invoke(
+                "cite_reference",
+                { executionRef: capCtx.messageId ?? requestId, references: nodeReferences },
+                capCtx,
+                { surface: "agent" },
+              ),
+            ).catch((err: unknown) => {
+              logger.warn(
+                { err, orgId: tenant.id, workspaceId: workspace.id },
+                "[chat/stream] cite_reference for @-mentions failed (non-blocking)",
+              );
+            });
+          }
+        }
+
         const result = await runCodingAgent({
           ai,
           instruction: content,
@@ -1294,12 +1398,14 @@ export async function POST(request: NextRequest): Promise<Response> {
           // AI-SDK file parts by the engine.
           ...(videoAttachments.length > 0 ? { videos: videoAttachments } : {}),
           history:
-            codeContextMessage || pinnedContextMessage
+            codeContextMessage || pinnedContextMessage || referencesContextMessage
               ? [
                   ...historyForEngine,
-                  ...([codeContextMessage, pinnedContextMessage].filter(
-                    Boolean,
-                  ) as ModelMessage[]),
+                  ...([
+                    codeContextMessage,
+                    pinnedContextMessage,
+                    referencesContextMessage,
+                  ].filter(Boolean) as ModelMessage[]),
                 ]
               : historyForEngine,
           // Prompt layering: base (chat OR coding) → bound agent instructions →

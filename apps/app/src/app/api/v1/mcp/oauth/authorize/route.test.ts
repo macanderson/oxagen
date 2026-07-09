@@ -221,14 +221,14 @@ describe("GET /api/v1/mcp/oauth/authorize — returnTo validation", () => {
 
     // The hostile value never reaches the provider ctx…
     expect(vi.mocked(DbOAuthClientProvider)).toHaveBeenCalledWith(
-      expect.objectContaining({ returnTo: "/acme/main/studio/tools/mcp" }),
+      expect.objectContaining({ returnTo: "/acme/main/workbench/tools/mcp" }),
     );
 
     // …and the redirect stays on our origin, on the default MCP Servers page.
     expect(res.status).toBe(307);
     const dest = new URL(res.headers.get("location") ?? "");
     expect(dest.origin).toBe("https://app.oxagen.sh");
-    expect(dest.pathname).toBe("/acme/main/studio/tools/mcp");
+    expect(dest.pathname).toBe("/acme/main/workbench/tools/mcp");
     expect(dest.searchParams.get("mcp")).toBe("already-connected");
     expect(dest.searchParams.get("listing")).toBe("listing-1");
   });

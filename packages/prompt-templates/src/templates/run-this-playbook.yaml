@@ -4,7 +4,7 @@ description: Start a new run of this playbook, filling in required parameters.
 category: create
 tags: [playbook, run, execute]
 applicableTo:
-  - routePattern: /{org}/{ws}/studio/playbooks/:playbookId
+  - routePattern: /{org}/{ws}/workbench/playbooks/:playbookId
 capability: playbook.run.create
 autoSubmit: false
 variables:

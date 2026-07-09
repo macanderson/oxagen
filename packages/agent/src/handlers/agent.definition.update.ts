@@ -39,7 +39,7 @@ export async function agentDefinitionUpdateHandler(
     assertAgentMutable(agent);
 
     // A caller may not promote a user agent into a managed/built-in type — that
-    // reserved space is owned by the platform, not the Studio editor. Guard
+    // reserved space is owned by the platform, not the Workbench editor. Guard
     // before any write so no version snapshot is wasted.
     if (input.agentType !== undefined && isManagedAgentType(input.agentType)) {
       throw new Error(

@@ -29,8 +29,8 @@ import type {
 } from "@oxagen/oxagen/contracts/sandbox-template-manifest";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
-import { buildStudioCtx } from "@/lib/studio/scope";
-import { loadEquipSources } from "@/lib/studio/equip-sources";
+import { buildWorkbenchCtx } from "@/lib/workbench/scope";
+import { loadEquipSources } from "@/lib/workbench/equip-sources";
 import { workspace as routes } from "@/lib/routes";
 
 // ── Shared types (mirror the contract outputs) ────────────────────────────────
@@ -152,7 +152,7 @@ export async function readToolSourcesAction(args: {
   const scope = await resolveScope(args.orgSlug, args.workspaceSlug);
   return runInTenantScope({ orgId: scope.orgId, workspaceId: scope.workspaceId }, async () => {
     try {
-      const ctx = buildStudioCtx({
+      const ctx = buildWorkbenchCtx({
         orgId: scope.orgId,
         workspaceId: scope.workspaceId,
         userId: scope.userId,

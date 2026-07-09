@@ -2,7 +2,14 @@
 /**
  * ConversationNav — responsive chrome around ConversationList.
  *
- * Desktop: a persistent vertical secondary-nav aside to the left of the chat.
+ * Desktop: a persistent, COLLAPSIBLE vertical secondary-nav aside to the left of
+ * the chat. Expanded it shows the full history list; collapsed it shrinks to a
+ * slim icon rail (the expand affordance stays visible so the panel is always
+ * re-openable — never a dead, hidden control). The collapse flag is persisted to
+ * localStorage so it survives navigations and reloads, and is read via
+ * useSyncExternalStore so the server render (expanded) and first client render
+ * agree — no hydration mismatch, no post-mount flash (mirrors the shell sidebar).
+ *
  * Mobile: a slide-in left Sheet opened from a compact trigger bar above the
  * chat, so the conversation history stays a vertical, thumb-navigable list
  * without stealing chat space on small screens.
@@ -11,8 +18,8 @@
  * lays them out with `flex flex-col md:flex-row` so the right one shows per
  * breakpoint.
  */
-import { useState } from "react";
-import { MessagesSquare } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { MessagesSquare, PanelLeftClose } from "lucide-react";
 import {
   Sheet,
   SheetTrigger,
@@ -21,8 +28,59 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipTrigger, TooltipPopup } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 import { ConversationList } from "./conversation-list";
 import type { ConversationNavActions, ConversationSummary } from "./types";
+
+// ---------------------------------------------------------------------------
+// Persisted collapse state (desktop aside)
+// ---------------------------------------------------------------------------
+
+const STORAGE_KEY = "oxagen.conversation-nav.collapsed";
+
+/** Read the persisted collapse flag; false if storage is unavailable. */
+function readCollapsed(): boolean {
+  try {
+    return window.localStorage.getItem(STORAGE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+/** Persist the collapse flag; best-effort only (storage may be blocked). */
+function writeCollapsed(next: boolean): void {
+  try {
+    window.localStorage.setItem(STORAGE_KEY, next ? "1" : "0");
+  } catch {
+    // Non-fatal — the in-memory flag still drives the UI for this session.
+  }
+}
+
+/**
+ * Collapse flag for the desktop aside.
+ *
+ * In-memory state is the SOURCE OF TRUTH, so the toggle always works even when
+ * localStorage is blocked (private mode, disabled storage) — persistence is a
+ * best-effort enhancement, never a dependency. Initial state is `false`
+ * (expanded) so the server render and the first client paint agree (no
+ * hydration mismatch); the persisted preference is restored once on mount,
+ * after hydration, so it survives reloads without risking a mismatch.
+ */
+function useCollapsed(): [boolean, (next: boolean) => void] {
+  const [collapsed, setCollapsedState] = useState(false);
+
+  useEffect(() => {
+    if (readCollapsed()) setCollapsedState(true);
+  }, []);
+
+  const setCollapsed = useCallback((next: boolean) => {
+    setCollapsedState(next);
+    writeCollapsed(next);
+  }, []);
+
+  return [collapsed, setCollapsed];
+}
 
 export interface ConversationNavProps {
   currentPublicId: string | null;
@@ -33,6 +91,7 @@ export interface ConversationNavProps {
 
 export function ConversationNav(props: ConversationNavProps) {
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [collapsed, setCollapsed] = useCollapsed();
 
   return (
     <>
@@ -58,14 +117,64 @@ export function ConversationNav(props: ConversationNavProps) {
         </Sheet>
       </div>
 
-      {/* Desktop: persistent vertical secondary nav. */}
-      <aside className="hidden w-64 shrink-0 flex-col overflow-hidden rounded-xl border border-border bg-background md:flex">
-        <header className="shrink-0 px-4 py-3">
-          <h2 className="text-sm font-semibold">Conversations</h2>
-        </header>
-        <div className="min-h-0 flex-1">
-          <ConversationList {...props} />
-        </div>
+      {/* Desktop: persistent, collapsible vertical secondary nav. Width animates
+          between the full list (w-64) and a slim icon rail (w-12). */}
+      <aside
+        aria-label="Conversations"
+        className={cn(
+          "hidden shrink-0 flex-col overflow-hidden rounded-xl border border-border bg-background transition-[width] duration-200 ease-in-out md:flex",
+          collapsed ? "w-12" : "w-64",
+        )}
+      >
+        {collapsed ? (
+          // Collapsed rail: a single expand affordance, kept discoverable with
+          // the same MessagesSquare glyph the mobile trigger uses.
+          <div className="flex flex-col items-center p-2">
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Show conversations"
+                    aria-expanded={false}
+                    onClick={() => setCollapsed(false)}
+                  />
+                }
+              >
+                <MessagesSquare className="size-4" />
+              </TooltipTrigger>
+              <TooltipPopup side="right">Show conversations</TooltipPopup>
+            </Tooltip>
+          </div>
+        ) : (
+          <>
+            <header className="flex shrink-0 items-center justify-between gap-2 px-4 py-3">
+              <h2 className="text-sm font-semibold">Conversations</h2>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="-mr-1 size-7"
+                      aria-label="Collapse conversations"
+                      aria-expanded
+                      aria-controls="conversation-history-panel"
+                      onClick={() => setCollapsed(true)}
+                    />
+                  }
+                >
+                  <PanelLeftClose className="size-4" />
+                </TooltipTrigger>
+                <TooltipPopup side="right">Collapse</TooltipPopup>
+              </Tooltip>
+            </header>
+            <div id="conversation-history-panel" className="min-h-0 flex-1">
+              <ConversationList {...props} />
+            </div>
+          </>
+        )}
       </aside>
     </>
   );

@@ -68,6 +68,9 @@ const LOADERS: Record<string, LoaderEntry> = {
   "promote_memory": () => import("./agent.memory.promote"),
   "list_memory_promotions": () => import("./agent.memory_promotion.list"),
   "cite_memory": () => import("./agent.memory.cite"),
+  // @-mention citations: any :GraphNode a user references in chat gets the
+  // same citation_count bookkeeping as automatic memory citations.
+  "cite_reference": () => import("./reference.cite"),
   "attach_memory_evidence": () => import("./agent.memory_evidence.attach"),
   "list_memory_citations": () => import("./agent.memory_citation.list"),
   "resolve_approval": () => import("./agent.approval.resolve"),
