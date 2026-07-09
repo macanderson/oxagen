@@ -61,7 +61,7 @@ export function OrgPrivacyPanel({ orgSlug }: { orgSlug: string }) {
           (GDPR Article 20)
         </p>
         {exportState.phase === "idle" && (
-          <Button variant="outline" size="sm" className="w-fit" onClick={handleExport}>
+          <Button variant="outline" size="sm" className="w-fit max-md:h-11" onClick={handleExport}>
             Request organization export
           </Button>
         )}
@@ -100,7 +100,7 @@ export function OrgPrivacyPanel({ orgSlug }: { orgSlug: string }) {
           <Button
             variant="destructive"
             size="sm"
-            className="w-fit"
+            className="w-fit max-md:h-11"
             onClick={() => setEraseState({ phase: "confirming" })}
           >
             Delete organization
@@ -112,11 +112,16 @@ export function OrgPrivacyPanel({ orgSlug }: { orgSlug: string }) {
               This will permanently delete the entire organization. All members will be offboarded and
               all data erased. This cannot be undone.
             </p>
-            <div className="flex gap-2">
-              <Button variant="destructive" size="sm" onClick={handleErase}>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="destructive" size="sm" className="max-md:h-11" onClick={handleErase}>
                 Yes, delete organization
               </Button>
-              <Button variant="outline" size="sm" onClick={() => setEraseState({ phase: "idle" })}>
+              <Button
+                variant="outline"
+                size="sm"
+                className="max-md:h-11"
+                onClick={() => setEraseState({ phase: "idle" })}
+              >
                 Cancel
               </Button>
             </div>

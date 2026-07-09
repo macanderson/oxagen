@@ -166,7 +166,13 @@ function EnvironmentsBar({
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-medium">Environments</h3>
         {canManage && (
-          <Button variant="outline" size="sm" disabled={pending} onClick={() => setOpen(true)}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="max-md:h-11"
+            disabled={pending}
+            onClick={() => setOpen(true)}
+          >
             + New environment
           </Button>
         )}
@@ -178,7 +184,7 @@ function EnvironmentsBar({
         {environments.map((env) => (
           <div
             key={env.id}
-            className="flex items-center gap-2 rounded-md border border-border/50 px-3 py-1.5 text-sm"
+            className="flex flex-wrap items-center gap-2 rounded-md border border-border/50 px-3 py-1.5 text-sm"
           >
             <span className="font-medium">{env.name}</span>
             <span className="text-xs text-muted-foreground">{env.slug}</span>
@@ -191,6 +197,7 @@ function EnvironmentsBar({
                 <Button
                   variant="ghost"
                   size="xs"
+                  className="max-md:h-11"
                   disabled={pending}
                   onClick={() =>
                     start(async () => {
@@ -221,6 +228,7 @@ function EnvironmentsBar({
             </label>
             <Input
               id="env-name"
+              className="max-md:h-11"
               value={name}
               placeholder="Production"
               onChange={(e) => setName(e.target.value)}
@@ -232,11 +240,12 @@ function EnvironmentsBar({
             )}
             {error && <p className="text-xs text-destructive">{error}</p>}
           </DialogPanel>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>
+          <DialogFooter className="flex-wrap">
+            <Button variant="outline" className="max-md:h-11" onClick={() => setOpen(false)}>
               Cancel
             </Button>
             <Button
+              className="max-md:h-11"
               disabled={pending || !name.trim()}
               onClick={() =>
                 start(async () => {
@@ -299,14 +308,20 @@ function SecretsSection({
 
   return (
     <section className="flex flex-col gap-3">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-sm font-medium">Secrets</h3>
         {canManage && (
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" disabled={pending} onClick={() => setAddOpen(true)}>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="max-md:h-11"
+              disabled={pending}
+              onClick={() => setAddOpen(true)}
+            >
               + Add key
             </Button>
-            <Button size="sm" disabled={pending} onClick={() => setPasteOpen(true)}>
+            <Button size="sm" className="max-md:h-11" disabled={pending} onClick={() => setPasteOpen(true)}>
               Paste .env
             </Button>
           </div>
@@ -419,6 +434,7 @@ function SecretsSection({
                     <Button
                       variant="ghost"
                       size="xs"
+                      className="max-md:h-11"
                       disabled={pending}
                       onClick={() =>
                         start(async () => {
@@ -489,7 +505,7 @@ function Cell({
   if (editing) {
     return (
       <td className="px-2 py-2">
-        <div className="flex items-center gap-1">
+        <div className="flex flex-wrap items-center gap-1">
           <Input
             size="sm"
             autoFocus
@@ -497,12 +513,12 @@ function Cell({
             value={editValue}
             placeholder="value"
             onChange={(e) => setEditValue(e.target.value)}
-            className="h-7 w-36"
+            className="h-7 w-36 max-md:h-11"
           />
-          <Button variant="ghost" size="xs" onClick={onSave}>
+          <Button variant="ghost" size="xs" className="max-md:h-11" onClick={onSave}>
             Save
           </Button>
-          <Button variant="ghost" size="xs" onClick={onCancel}>
+          <Button variant="ghost" size="xs" className="max-md:h-11" onClick={onCancel}>
             ✕
           </Button>
         </div>
@@ -511,7 +527,7 @@ function Cell({
   }
   return (
     <td className="px-3 py-2">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {present ? (
           <span className="font-mono text-xs">{sensitive ? "••••••" : "set"}</span>
         ) : (
@@ -520,7 +536,7 @@ function Cell({
         {canManage && (
           <button
             type="button"
-            className="text-xs text-muted-foreground underline-offset-2 hover:underline"
+            className="inline-flex items-center text-xs text-muted-foreground underline-offset-2 hover:underline max-md:min-h-11"
             onClick={onEdit}
           >
             {present ? "edit" : "set"}
@@ -529,7 +545,7 @@ function Cell({
         {canManage && present && onClear && (
           <button
             type="button"
-            className="text-xs text-muted-foreground underline-offset-2 hover:underline"
+            className="inline-flex items-center text-xs text-muted-foreground underline-offset-2 hover:underline max-md:min-h-11"
             onClick={onClear}
           >
             clear
@@ -604,10 +620,10 @@ function PasteEnvDialog({
           </DialogDescription>
         </DialogHeader>
         <DialogPanel className="flex flex-col gap-3">
-          <div className="flex items-center gap-2 text-sm">
+          <div className="flex flex-wrap items-center gap-2 text-sm">
             <span className="text-muted-foreground">Target:</span>
             <select
-              className="rounded-md border border-border/50 bg-background px-2 py-1 text-sm"
+              className="max-md:h-11 rounded-md border border-border/50 bg-background px-2 py-1 text-sm"
               value={target}
               onChange={(e) => {
                 setTarget(e.target.value);
@@ -639,43 +655,49 @@ function PasteEnvDialog({
                 {preview.length} parsed · {preview.filter((r) => r.isNewKey).length} new ·{" "}
                 {preview.filter((r) => !r.isNewKey).length} existing
               </div>
-              <table className="w-full text-xs">
-                <tbody>
-                  {preview.map((r) => (
-                    <tr key={r.key} className="border-b border-border/20 last:border-0">
-                      <td className="px-3 py-1 font-mono">
-                        <span className={r.isNewKey ? "text-success" : "text-muted-foreground"}>
-                          {r.isNewKey ? "+ " : "~ "}
-                        </span>
-                        {r.key}
-                      </td>
-                      <td className="px-2 py-1">{r.sensitive ? "●" : "○"}</td>
-                      <td className="px-2 py-1 text-muted-foreground">{r.target}</td>
-                      <td className="px-3 py-1 text-muted-foreground">
-                        {r.isNewKey ? "new" : r.willOverride ? "override" : "set"}
-                      </td>
-                    </tr>
-                  ))}
-                  {preview.length === 0 && (
-                    <tr>
-                      <td className="px-3 py-2 text-muted-foreground">No valid keys parsed.</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <tbody>
+                    {preview.map((r) => (
+                      <tr key={r.key} className="border-b border-border/20 last:border-0">
+                        <td className="px-3 py-1 font-mono">
+                          <span className={r.isNewKey ? "text-success" : "text-muted-foreground"}>
+                            {r.isNewKey ? "+ " : "~ "}
+                          </span>
+                          {r.key}
+                        </td>
+                        <td className="px-2 py-1">{r.sensitive ? "●" : "○"}</td>
+                        <td className="px-2 py-1 text-muted-foreground">{r.target}</td>
+                        <td className="px-3 py-1 text-muted-foreground">
+                          {r.isNewKey ? "new" : r.willOverride ? "override" : "set"}
+                        </td>
+                      </tr>
+                    ))}
+                    {preview.length === 0 && (
+                      <tr>
+                        <td className="px-3 py-2 text-muted-foreground">No valid keys parsed.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </DialogPanel>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => setOpen(false)}>
+        <DialogFooter className="flex-wrap">
+          <Button variant="outline" className="max-md:h-11" onClick={() => setOpen(false)}>
             Cancel
           </Button>
           {!preview ? (
-            <Button disabled={pending || !text.trim()} onClick={() => runImport(false)}>
+            <Button className="max-md:h-11" disabled={pending || !text.trim()} onClick={() => runImport(false)}>
               Preview
             </Button>
           ) : (
-            <Button disabled={pending || preview.length === 0} onClick={() => runImport(true)}>
+            <Button
+              className="max-md:h-11"
+              disabled={pending || preview.length === 0}
+              onClick={() => runImport(true)}
+            >
               Import {preview.length} key{preview.length === 1 ? "" : "s"}
             </Button>
           )}
@@ -732,27 +754,34 @@ function AddKeyDialog({
           <Input
             value={key}
             placeholder="DATABASE_URL"
-            className="font-mono"
+            className="max-md:h-11 font-mono"
             onChange={(e) => setKey(e.target.value)}
           />
           <Input
             type={sensitive ? "password" : "text"}
             value={value}
+            className="max-md:h-11"
             placeholder="default value (optional)"
             onChange={(e) => setValue(e.target.value)}
           />
-          <Input value={memo} placeholder="memo (optional)" onChange={(e) => setMemo(e.target.value)} />
+          <Input
+            value={memo}
+            className="max-md:h-11"
+            placeholder="memo (optional)"
+            onChange={(e) => setMemo(e.target.value)}
+          />
           <label className="flex items-center gap-2 text-sm">
             <Switch checked={sensitive} onCheckedChange={setSensitive} />
             Sensitive (encrypt at rest)
           </label>
           {error && <p className="text-xs text-destructive">{error}</p>}
         </DialogPanel>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => setOpen(false)}>
+        <DialogFooter className="flex-wrap">
+          <Button variant="outline" className="max-md:h-11" onClick={() => setOpen(false)}>
             Cancel
           </Button>
           <Button
+            className="max-md:h-11"
             disabled={pending || !key.trim()}
             onClick={() =>
               startTransition(async () => {

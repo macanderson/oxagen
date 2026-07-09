@@ -230,6 +230,7 @@ export function OrgGeneralForm({
             type="submit"
             variant="gradient"
             size="lg"
+            className="max-md:h-11"
             disabled={isSaving || !canEdit || !name.trim() || !slug.trim()}
             startIcon={<Save className="h-4 w-4" aria-hidden="true" />}
           >
