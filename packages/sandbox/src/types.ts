@@ -17,6 +17,26 @@ export interface SandboxRequest {
   timeoutMs: number;
   memoryMb: number;
   network: "allow" | "deny";
+  /**
+   * Custom container image (a digest-pinned ref) from a sandbox template's
+   * `runtime`. Overrides the language default image in `images.ts`. Only drivers
+   * that can pull an arbitrary image honor it: docker (used as the image string)
+   * and modal (passed to the runner's `image` param). The vercel driver has a
+   * fixed runtime set and throws a clear error when it is set — no silent
+   * fallback to the default image.
+   */
+  imageRef?: string;
+  /**
+   * vCPU count from a template's resources. Docker maps it to NanoCpus and
+   * vercel to `resources.vcpus`; a driver that cannot set it ignores the field.
+   * Unset = the driver's default.
+   */
+  vcpu?: number;
+  /**
+   * Ephemeral workspace disk in MiB from a template's resources. Docker maps it
+   * to the `/work` tmpfs size; drivers without a disk knob ignore it.
+   */
+  diskMb?: number;
   orgId: string;
   workspaceId: string;
 }
@@ -49,7 +69,19 @@ export type SandboxImageKind = "node" | "python" | "shell" | "agent";
 
 export interface SandboxSessionSpec {
   image: SandboxImageKind;
+  /**
+   * Custom container image (digest-pinned ref) from a sandbox template's
+   * `runtime`, overriding the `image` kind's default. Passed to the durable
+   * runner as `image_ref`; a runner that predates the field maps `image`
+   * instead. Only session-capable drivers (Modal) provision durable sessions,
+   * so this is honored only there.
+   */
+  imageRef?: string;
   memoryMb: number;
+  /** vCPU count from a template's resources (driver default when unset). */
+  vcpu?: number;
+  /** Ephemeral workspace disk in MiB from a template's resources. */
+  diskMb?: number;
   /** Hard ceiling on total session lifetime, seconds (Modal caps at 24h). */
   ttlSeconds: number;
   /** Reap after this many seconds of inactivity — the primary cost lever. */
