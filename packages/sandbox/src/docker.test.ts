@@ -611,3 +611,56 @@ describe("createDockerSandbox — warmup()", () => {
     ).toHaveBeenCalledTimes(3);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Template resources — vcpu / diskMb mapping
+// ---------------------------------------------------------------------------
+
+describe("hostConfigFor — template resources", () => {
+  it("maps vcpu to NanoCpus (1 vCPU = 1e9)", () => {
+    const cfg = hostConfigFor(makeReq({ vcpu: 2 }), TEST_SPEC);
+    expect(cfg.NanoCpus).toBe(2 * 1_000_000_000);
+  });
+
+  it("clamps vcpu to the ceiling of 4", () => {
+    const cfg = hostConfigFor(makeReq({ vcpu: 99 }), TEST_SPEC);
+    expect(cfg.NanoCpus).toBe(4 * 1_000_000_000);
+  });
+
+  it("defaults to the 0.5-CPU floor when vcpu is unset", () => {
+    const cfg = hostConfigFor(makeReq(), TEST_SPEC);
+    expect(cfg.NanoCpus).toBe(500_000_000);
+  });
+
+  it("maps diskMb to the /work tmpfs size, leaving /tmp at the image default", () => {
+    const cfg = hostConfigFor(makeReq({ diskMb: 1024 }), TEST_SPEC);
+    const mounts = cfg.Tmpfs as Record<string, string>;
+    expect(mounts["/work"]).toContain(`${1024 * 1024 * 1024}`);
+    expect(mounts["/tmp"]).toContain(`${TEST_SPEC.tmpfsBytes}`);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Custom image (imageRef) — template runtime override
+// ---------------------------------------------------------------------------
+
+describe("createDockerSandbox — custom image (imageRef)", () => {
+  it("uses req.imageRef as the container image and image check, overriding the language default", async () => {
+    const { docker, container, attachEmitter } = makeMockDockerSetup();
+    container.start = vi.fn().mockImplementation(async () => {
+      setImmediate(() => attachEmitter.emit("end"));
+    });
+
+    const ref = "ghcr.io/acme/prewarmed@sha256:deadbeef";
+    const sandbox = createDockerSandbox(() => docker);
+    await sandbox.run(makeReq({ imageRef: ref }));
+
+    const createCall = (
+      docker as unknown as { createContainer: ReturnType<typeof vi.fn> }
+    ).createContainer.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(createCall.Image).toBe(ref);
+    expect(
+      (docker as unknown as { listImages: ReturnType<typeof vi.fn> }).listImages,
+    ).toHaveBeenCalledWith({ filters: { reference: [ref] } });
+  });
+});

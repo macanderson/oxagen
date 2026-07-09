@@ -25,6 +25,7 @@ import { agentSandboxStartRoute } from "./routes/v1/agent.sandbox.start";
 import { agentSandboxExecRoute } from "./routes/v1/agent.sandbox.exec";
 import { agentSandboxSnapshotRoute } from "./routes/v1/agent.sandbox.snapshot";
 import { agentSandboxStopRoute } from "./routes/v1/agent.sandbox.stop";
+import { agentSandboxListRoute } from "./routes/v1/agent.sandbox.list";
 import { agentSandboxFilesListRoute } from "./routes/v1/agent.sandbox_file.list";
 import { agentSandboxFileReadRoute } from "./routes/v1/agent.sandbox_file.read";
 import { agentFeatureVerifyRoute } from "./routes/v1/agent.feature.verify";
@@ -105,6 +106,8 @@ import { budgetPolicyReadRoute } from "./routes/v1/budget.policy.read";
 import { budgetPolicyWriteRoute } from "./routes/v1/budget.policy.write";
 import { workspaceBudgetPolicyReadRoute } from "./routes/v1/workspace.budget_policy.read";
 import { workspaceBudgetPolicyWriteRoute } from "./routes/v1/workspace.budget_policy.write";
+import { userWorkspacePreferencesReadRoute } from "./routes/v1/user.workspace_preferences.read";
+import { userWorkspacePreferencesWriteRoute } from "./routes/v1/user.workspace_preferences.write";
 import { authWhoamiRoute } from "./routes/v1/auth.whoami";
 import { workspaceModelSettingsReadRoute } from "./routes/v1/workspace.model_settings.read";
 import { workspaceModelSettingsWriteRoute } from "./routes/v1/workspace.model_settings.write";
@@ -382,6 +385,8 @@ orgScoped.route("/agent/sandbox/start", agentSandboxStartRoute);
 orgScoped.route("/agent/sandbox/exec", agentSandboxExecRoute);
 orgScoped.route("/agent/sandbox/snapshot", agentSandboxSnapshotRoute);
 orgScoped.route("/agent/sandbox/stop", agentSandboxStopRoute);
+// List durable sessions in the workspace (id, status, timestamps) — read-only.
+orgScoped.route("/agent/sandbox/list", agentSandboxListRoute);
 orgScoped.route("/agent/sandbox/files", agentSandboxFilesListRoute);
 // Single-file read — the viewer counterpart of the /files listing above.
 orgScoped.route("/agent/sandbox/file", agentSandboxFileReadRoute);
@@ -508,6 +513,9 @@ orgScoped.route("/org/invitations/accept", orgMemberInviteAcceptRoute);
 orgScoped.route("/org/invitations/decline", orgMemberInviteDeclineRoute);
 orgScoped.route("/workspace/budget-policy", workspaceBudgetPolicyReadRoute);
 orgScoped.route("/workspace/budget-policy", workspaceBudgetPolicyWriteRoute);
+// Per-(user, workspace) coding-agent defaults (org+workspace scoped).
+orgScoped.route("/user/workspace-preferences", userWorkspacePreferencesReadRoute);
+orgScoped.route("/user/workspace-preferences", userWorkspacePreferencesWriteRoute);
 orgScoped.route("/workspace/model-settings", workspaceModelSettingsReadRoute);
 orgScoped.route("/workspace/model-settings", workspaceModelSettingsWriteRoute);
 orgScoped.route("/workspace/prompt-settings", promptSettingsReadRoute);

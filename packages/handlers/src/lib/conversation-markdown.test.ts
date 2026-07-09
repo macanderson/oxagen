@@ -258,7 +258,7 @@ describe("conversationToMarkdown", () => {
         totalMessageCount: 1,
       }),
     );
-    expect(md).toContain("```\ntool: ontology.query · status: success · duration: 90ms\n```");
+    expect(md).toContain("```\ntool: query_ontology · status: success · duration: 90ms\n```");
     expect(md).toContain("```ts\nconst x = 1;\n```");
   });
 

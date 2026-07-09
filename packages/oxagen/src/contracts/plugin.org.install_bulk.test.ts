@@ -21,21 +21,30 @@ describe("plugin.org.install_bulk contract", () => {
   });
 
   // ── Output shape regression guard ───────────────────────────────────────────
-  // The handler returns `{ pluginId, orgListingId, error }` per item. The output
-  // schema previously named the first field `catalogServerId`, so every real
-  // handler result failed output validation ("expected string, received
+  // The handler returns `{ pluginId, orgListingId, authKind, error }` per item
+  // (installOne resolves { id, authKind }; the error path returns authKind: null).
+  // The output schema previously named the first field `catalogServerId`, so every
+  // real handler result failed output validation ("expected string, received
   // undefined, path catalogServerId"), making bulk install unusable. These tests
-  // assert the schema matches the handler's actual return shape.
-  it("accepts the handler's real installed[] shape (pluginId, nullable)", () => {
+  // assert the schema matches the handler's actual return shape — including the
+  // authKind field the handler surfaces so the app can drive OAuth/secret setup.
+  it("accepts the handler's real installed[] shape (pluginId, authKind, nullable)", () => {
     const parsed = pluginOrgInstallBulk.output.parse({
       installed: [
-        { pluginId: "oxagen/media-image", orgListingId: "listing-1", error: null },
-        { pluginId: null, orgListingId: null, error: "boom" },
+        {
+          pluginId: "oxagen/media-image",
+          orgListingId: "listing-1",
+          authKind: "none",
+          error: null,
+        },
+        { pluginId: null, orgListingId: null, authKind: null, error: "boom" },
       ],
     });
     expect(parsed.installed).toHaveLength(2);
     expect(parsed.installed[0]?.pluginId).toBe("oxagen/media-image");
+    expect(parsed.installed[0]?.authKind).toBe("none");
     expect(parsed.installed[1]?.pluginId).toBeNull();
+    expect(parsed.installed[1]?.authKind).toBeNull();
   });
 
   it("requires pluginId (not catalogServerId) on each installed item", () => {

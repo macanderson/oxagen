@@ -32,6 +32,9 @@ const {
   interface DbState {
     membershipRole: string;
     existingSlugRows: { id: string }[];
+    // Existing workspace namespaces in the org — read by the system tx to
+    // derive a collision-free namespace for the new workspace.
+    existingNamespaces: { namespace: string }[];
     insertReturning: { id: string; slug: string }[];
     insertError: Error | null;
     // Tracks the withTenantDb call index across the full action invocation.
@@ -41,6 +44,7 @@ const {
   const dbState: DbState = {
     membershipRole: "owner",
     existingSlugRows: [],
+    existingNamespaces: [],
     insertReturning: [{ id: "ws-1", slug: "main" }],
     insertError: null,
     tenantCallIdx: 0,
@@ -89,7 +93,10 @@ vi.mock("@oxagen/handlers/skill-workspace-seed", () => ({
 //   call 1 → membership role lookup (returns [{role}])
 //   call 2 → existing slug pre-check (returns existingSlugRows)
 // withSystemDb handles the actual workspace + membership inserts.
-vi.mock("@oxagen/database", () => {
+vi.mock("@oxagen/database", async (importOriginal) => {
+  // deriveNamespace is pure collision-avoidance logic (no DB access) — use the
+  // real implementation rather than hand-duplicating its algorithm here.
+  const actual = await importOriginal<typeof import("@oxagen/database")>();
   const makeTenantTx = () => ({
     select: (_cols: unknown) => ({
       from: (_table: unknown) => ({
@@ -114,6 +121,13 @@ vi.mock("@oxagen/database", () => {
   // not need to simulate the agent inserts.
   let systemInsertCallIdx = 0;
   const makeSystemTx = () => ({
+    // Namespace-collision lookup: `deriveNamespace` reads every existing
+    // namespace in the org before the workspace insert.
+    select: (_cols: unknown) => ({
+      from: (_table: unknown) => ({
+        where: (_w: unknown) => Promise.resolve(dbState.existingNamespaces),
+      }),
+    }),
     insert: (_table: unknown) => ({
       values: (_vals: unknown) => {
         systemInsertCallIdx++;
@@ -153,6 +167,7 @@ vi.mock("@oxagen/database", () => {
         orgId: "ws_orgId",
         slug: "ws_slug",
         name: "ws_name",
+        namespace: "ws_namespace",
       },
       workspaceUsers: { workspaceId: "wsu_wsId", userId: "wsu_user" },
     },
@@ -166,6 +181,7 @@ vi.mock("@oxagen/database", () => {
       }
       return false;
     },
+    deriveNamespace: actual.deriveNamespace,
   };
 });
 
