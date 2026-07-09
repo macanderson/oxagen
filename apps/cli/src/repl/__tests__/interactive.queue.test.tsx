@@ -106,6 +106,9 @@ vi.mock("../../agent/model.js", () => ({
 // avoids loading the tree-sitter builder / DuckDB store.
 vi.mock("../../agent/code-graph.js", () => ({
   queryCodeGraph: async () => "",
+  // Mount-time warm-up (PR #654): a missing export here crashes ReplApp at
+  // mount and every waitFor starves on empty frames — keep in sync.
+  warmCodeGraph: () => {},
 }));
 
 const { ReplApp } = await import("../interactive.js");

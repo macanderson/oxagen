@@ -177,11 +177,14 @@ function RecordGrid({ record, depth }: { record: Record<string, unknown>; depth:
   if (entries.length === 0) {
     return <span className="text-xs text-muted-foreground">No fields</span>;
   }
-  // Scalar pairs flow two-per-row on wide screens to use horizontal space
-  // instead of one tall stack. Container values (nested objects / arrays) span
-  // the full row so their trees never get squeezed into a half-width column.
+  // Scalar pairs flow two-per-row when the FIELD CONTAINER is wide (container
+  // query on the StructuredField wrapper, not a viewport breakpoint: the chat
+  // column and side-by-side Input|Result panes leave fields far narrower than
+  // the viewport, and a viewport-keyed 4-col grid collapsed the minmax(0,1fr)
+  // value columns to zero width — invisible values). Container values (nested
+  // objects / arrays) span the full row so their trees never get squeezed.
   return (
-    <dl className="grid grid-cols-[minmax(5rem,max-content)_minmax(0,1fr)] gap-x-4 gap-y-1.5 md:grid-cols-[minmax(5rem,max-content)_minmax(0,1fr)_minmax(5rem,max-content)_minmax(0,1fr)]">
+    <dl className="grid grid-cols-[minmax(5rem,max-content)_minmax(0,1fr)] gap-x-4 gap-y-1.5 @lg:grid-cols-[minmax(5rem,max-content)_minmax(3rem,1fr)_minmax(5rem,max-content)_minmax(3rem,1fr)]">
       {entries.map(([key, val]) =>
         isScalar(val) ? (
           <React.Fragment key={key}>
@@ -195,7 +198,7 @@ function RecordGrid({ record, depth }: { record: Record<string, unknown>; depth:
         ) : (
           <div
             key={key}
-            className="col-span-2 grid min-w-0 grid-cols-[minmax(5rem,max-content)_minmax(0,1fr)] gap-x-4 md:col-span-4"
+            className="col-span-2 grid min-w-0 grid-cols-[minmax(5rem,max-content)_minmax(0,1fr)] gap-x-4 @lg:col-span-4"
           >
             <dt className="truncate pt-px text-xs text-muted-foreground" title={humanizeKey(key)}>
               {humanizeKey(key)}
@@ -314,7 +317,7 @@ export function StructuredField({ label, value, copyable = true, className }: St
         <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</span>
         {copyable && value !== undefined && value !== null ? <CopyJsonButton value={value} /> : null}
       </div>
-      <div className="overflow-x-auto rounded-lg border border-border/60 bg-muted/30 px-3 py-2.5">
+      <div className="@container overflow-x-auto rounded-lg border border-border/60 bg-muted/30 px-3 py-2.5">
         <StructuredValue value={value} />
       </div>
     </div>

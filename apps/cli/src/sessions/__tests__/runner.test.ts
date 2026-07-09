@@ -255,6 +255,10 @@ describe("runSession — event order and coalescing", () => {
     ]);
 
     // Coalescing: the bus saw 2 RAW text deltas; disk collapsed them to 1.
+    // The raw bus is a side-channel not gated by the disk `waiting` signal, so
+    // under load the 2nd raw delta can still be in flight when `waiting` lands —
+    // poll for both raw deltas first so the count assertion is deterministic.
+    await until(() => bus.filter((e) => e.type === "message.delta").length >= 2);
     const busDeltas = bus.filter((e) => e.type === "message.delta");
     const diskDeltas = disk.filter((e) => e.type === "message.delta");
     expect(busDeltas.length).toBe(2);

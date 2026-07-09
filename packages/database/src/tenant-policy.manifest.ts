@@ -88,6 +88,10 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // user_preferences) are NOT row-scoped (no org_id; user-keyed lookups).
   { table: "auth.credentials", policyClass: "standard" },
   { table: "auth.api_keys", policyClass: "standard" },
+  // Per-(user, workspace) coding-agent defaults — org_id + workspace_id both
+  // NOT NULL (orgScopeMixin). FORCE RLS + tenant_isolation policy created in
+  // 20260713120000_workspace_user_preferences.sql.
+  { table: "auth.workspace_user_preferences", policyClass: "standard" },
 
   // ── billing.* (org_id only; no workspace_id on any billing table) ─────────
   // plans / stripe_events / stripe_event_processing excluded: shared catalogs

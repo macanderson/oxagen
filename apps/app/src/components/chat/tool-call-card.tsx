@@ -146,7 +146,7 @@ export function ToolCallCard(props: ToolCallCardProps) {
         </button>
       )}
       {open ? (
-        <div className={cn("space-y-2 px-3 py-2", !hideHeader && "border-t")}>
+        <div className={cn("@container space-y-2 px-3 py-2", !hideHeader && "border-t")}>
           {/* Raw capability + risk detail belong in the detail body, not the
               collapsed row — the row stays calm and human-readable. */}
           <div className="flex items-center gap-2 font-mono text-[10px] text-muted-foreground">
@@ -162,7 +162,11 @@ export function ToolCallCard(props: ToolCallCardProps) {
               </Section>
             </>
           ) : showInput && showResult ? (
-            <div className="grid gap-2 md:grid-cols-2">
+            // Side-by-side only when the CARD itself is wide (container query,
+            // not viewport): the chat column is often ~350-500px even on a
+            // desktop viewport, and half of that squeezes value columns to
+            // zero width (invisible pills — the chat-tool-io e2e regression).
+            <div className="grid gap-2 @2xl:grid-cols-2">
               <StructuredField label="Input" value={inputPreview} />
               <StructuredField label="Result" value={output} />
             </div>

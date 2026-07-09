@@ -126,8 +126,16 @@ describe("compareModels", () => {
     for (let i = 1; i < rows.length; i++) {
       expect(rows[i]!.totalUsd).toBeGreaterThanOrEqual(rows[i - 1]!.totalUsd);
     }
-    // gpt-4o-mini is the cheapest family in the card; opus the dearest.
-    expect(rows[0]!.label).toBe("GPT-4o mini");
-    expect(rows[rows.length - 1]!.label).toBe("Claude Opus");
+    // Cross-check the endpoints against projectCost over the card itself, so
+    // adding a new cheapest/dearest model to the engine card can't drift this
+    // test (hard-coded labels broke when GPT-5.5 Pro out-priced Opus).
+    const usage = { inputTokens: 1_000_000, outputTokens: 1_000_000 };
+    const totals = listRateCard().map((e) => ({
+      label: e.label,
+      totalUsd: projectCost(e.family, usage).totalUsd,
+    }));
+    totals.sort((a, b) => a.totalUsd - b.totalUsd);
+    expect(rows[0]!.label).toBe(totals[0]!.label);
+    expect(rows[rows.length - 1]!.label).toBe(totals[totals.length - 1]!.label);
   });
 });

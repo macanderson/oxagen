@@ -91,6 +91,13 @@ export function McpServerList({
   uninstallAction,
 }: McpServerListProps) {
   const [servers, setServers] = React.useState(initialServers);
+  // The parent server component re-queries and passes fresh `initialServers`
+  // after a server is connected (or removed) via the form above, which calls
+  // router.refresh(). useState only seeds on mount, so without this resync a
+  // newly-connected server never appears in the list until a full navigation.
+  React.useEffect(() => {
+    setServers(initialServers);
+  }, [initialServers]);
   const [pendingIds, setPendingIds] = React.useState<Set<string>>(new Set());
   const [errors, setErrors] = React.useState<Record<string, string>>({});
 
