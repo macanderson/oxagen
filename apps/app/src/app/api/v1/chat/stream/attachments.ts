@@ -35,6 +35,27 @@ export interface ResolvedAttachmentMedia {
   mediaType: string;
 }
 
+/**
+ * Structured outcome of a current-turn media resolve, so the caller can tell
+ * the THREE distinct failure modes apart instead of collapsing them into a
+ * single "row absent" 422 (the historical P0: an attachment that existed but
+ * whose bytes momentarily failed to fetch was blamed on the user with a
+ * "remove and re-attach" message — see route.ts).
+ *
+ *   - `resolved`  — publicId → bytes+kind, ready to send to the model.
+ *   - `notFound`  — requested publicIds with no matching DB row (unknown,
+ *                   foreign org/workspace, non-media kind, not `ready`, or
+ *                   soft-deleted). A genuine, user-fixable 422.
+ *   - `fetchFailed` — publicIds whose DB row WAS found but whose blob bytes
+ *                   could not be fetched (transient storage error). NOT the
+ *                   user's fault — a retryable 502, never "re-attach".
+ */
+export interface ResolveAttachmentMediaResult {
+  resolved: Map<string, ResolvedAttachmentMedia>;
+  notFound: string[];
+  fetchFailed: string[];
+}
+
 /** Drain a private-blob ReadableStream into a Buffer (same pattern as
  * `packages/agent/src/handlers/agent.feature.verify.ts`'s judge-image fetch —
  * duplicated locally since it's a tiny, dependency-free helper and the two
@@ -65,7 +86,25 @@ export async function resolveAttachmentMedia(
   publicIds: string[],
   scope: { orgId: string; workspaceId: string },
 ): Promise<Map<string, ResolvedAttachmentMedia>> {
-  if (publicIds.length === 0) return new Map();
+  return (await resolveAttachmentMediaDetailed(publicIds, scope)).resolved;
+}
+
+/**
+ * Diagnostic-rich variant of {@link resolveAttachmentMedia}. Returns the
+ * resolved bytes PLUS which requested ids had no DB row (`notFound`) and which
+ * had a row but failed to fetch their bytes (`fetchFailed`). The route uses the
+ * split to return the CORRECT status: a 422 only when a row is genuinely
+ * missing, a retryable 502 when a real asset's bytes momentarily failed. A
+ * per-id fetch error no longer rejects the whole batch (one bad blob used to
+ * turn every attachment on the turn into a 500 or a misleading 422).
+ */
+export async function resolveAttachmentMediaDetailed(
+  publicIds: string[],
+  scope: { orgId: string; workspaceId: string },
+): Promise<ResolveAttachmentMediaResult> {
+  if (publicIds.length === 0) {
+    return { resolved: new Map(), notFound: [], fetchFailed: [] };
+  }
 
   const rows = await runInTenantScope(scope, () =>
     withTenantDb((tx) =>
@@ -90,22 +129,34 @@ export async function resolveAttachmentMedia(
     ),
   );
 
-  const entries = await Promise.all(
+  // Ids the scoped DB query never returned are genuinely not resolvable for
+  // this tenant — unknown, foreign, wrong kind, not ready, or soft-deleted.
+  const foundIds = new Set(rows.map((r) => r.publicId));
+  const notFound = publicIds.filter((id) => !foundIds.has(id));
+
+  const resolved = new Map<string, ResolvedAttachmentMedia>();
+  const fetchFailed: string[] = [];
+
+  // Fetch each row's bytes independently. A single unreadable blob is isolated
+  // to `fetchFailed` (retryable) instead of rejecting the whole Promise.all and
+  // taking every sibling attachment down with it.
+  await Promise.all(
     rows.map(async (row) => {
-      const obj = await storage().get(row.storageKey);
-      const data = await streamToBuffer(obj.body);
-      return [
-        row.publicId,
-        {
+      try {
+        const obj = await storage().get(row.storageKey);
+        const data = await streamToBuffer(obj.body);
+        resolved.set(row.publicId, {
           kind: row.kind === "video" ? "video" : "image",
           data,
           mediaType: row.mimeType,
-        } as ResolvedAttachmentMedia,
-      ] as const;
+        });
+      } catch {
+        fetchFailed.push(row.publicId);
+      }
     }),
   );
 
-  return new Map(entries);
+  return { resolved, notFound, fetchFailed };
 }
 
 /**

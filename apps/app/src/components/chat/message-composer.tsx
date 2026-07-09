@@ -47,8 +47,8 @@ import {
 import type { McpServerSummary } from "./mcp-types";
 import { McpServerPicker } from "./mcp-server-picker";
 import { BudgetControl } from "./budget-control";
-import { ChatAgentToolbar } from "./chat-agent-toolbar";
-import { ChatContextBar } from "./chat-context-bar";
+import { ComposerContextControls } from "./composer-context-controls";
+import type { ComposerPrStatus } from "./composer-pr-status-chip";
 import { SlashCommandMenu } from "./slash-command-menu";
 // Import from the client-safe subpath, NOT the @oxagen/ai barrel: the barrel
 // pulls telemetry/clickhouse/opentelemetry (async_hooks) into the client bundle
@@ -251,6 +251,7 @@ export function MessageComposer({
   orgSlug,
   workspaceSlug,
   boundAgentName,
+  codeSessionPr,
 }: {
   conversationId: string | null;
   parentMessageId: string | null;
@@ -304,6 +305,14 @@ export function MessageComposer({
    * every turn. Null/omitted ⇒ normal unbound chat (no indicator).
    */
   boundAgentName?: string | null;
+  /**
+   * The pull request the coding agent has opened for this conversation, if any.
+   * Rendered as a compact "PR #123 ●" chip in the composer footer whose status
+   * circle reflects live CI for the PR head (hover → per-check timing + tally).
+   * Null/omitted ⇒ no chip. Derived by the parent from the latest
+   * `agent.repo.edit` / `repo.pr.open` tool result in the conversation.
+   */
+  codeSessionPr?: ComposerPrStatus | null;
 }) {
   const [pending, startTransition] = React.useTransition();
   const [error, setError] = React.useState<string | null>(null);
@@ -353,10 +362,6 @@ export function MessageComposer({
   const codeGateBlocked = codeMode && (!selectedRepo || !selectedEnvId);
 
   const formRef = React.useRef<HTMLFormElement>(null);
-
-  // Collapsed state of the CODE-MODE agent toolbar (repo/env pickers) — wired
-  // through to ChatAgentToolbar so the pickers can fold away once selected.
-  const [agentToolbarCollapsed, setAgentToolbarCollapsed] = React.useState(false);
 
   // ── Responsive layout (mobile ≤767px) ──────────────────────────────────────
   const isMobile = useIsMobile();
@@ -1198,10 +1203,10 @@ export function MessageComposer({
   const canAttach = Boolean(orgSlug) && Boolean(workspaceSlug);
   const hasRepos = (availableRepos?.length ?? 0) > 0;
   const hasEnvironments = (availableEnvironments?.length ?? 0) > 0;
-  // The persistent pin context bar shows whenever there's something to pin and
-  // code mode isn't taking over the selectors (the two share selection state
-  // and render mutually exclusively).
-  const showContextBar = !codeMode && (hasRepos || hasEnvironments);
+  // The compact context controls show whenever there's a repo or environment
+  // to choose from — in both pin mode and code mode (they share the selection
+  // state and render as one small footer row).
+  const showContextControls = hasRepos || hasEnvironments;
 
   // Shared between the desktop toolbar row and the mobile overflow sheet —
   // exactly one of the two renders at a time (see `isMobile` branches below).
@@ -1261,35 +1266,6 @@ export function MessageComposer({
           </Badge>
         </div>
       ) : null}
-      {/* Code-mode agent toolbar (sandbox coding turn) OR the persistent pin
-          context bar. Both drive the same selection state and render mutually
-          exclusively so there's never a duplicate repo/env selector. Hidden
-          entirely while the composer is collapsed. */}
-      {!composerCollapsed &&
-        (codeMode ? (
-          <ChatAgentToolbar
-            repositories={availableRepos ?? []}
-            environments={availableEnvironments ?? []}
-            selectedRepoKey={selectedRepoKey}
-            selectedEnvId={selectedEnvId}
-            onSelectRepo={(repo) => handleSelectRepoKey(repo.key)}
-            onSelectEnv={handleSelectEnvId}
-            isCollapsed={agentToolbarCollapsed}
-            onToggleCollapse={setAgentToolbarCollapsed}
-          />
-        ) : showContextBar ? (
-          <ChatContextBar
-            repositories={availableRepos ?? []}
-            environments={availableEnvironments ?? []}
-            selectedRepoKey={selectedRepoKey}
-            selectedEnvId={selectedEnvId}
-            onSelectRepo={(repo) => handleSelectRepoKey(repo.key)}
-            onSelectEnv={handleSelectEnvId}
-            isPinned={isPinned}
-            onTogglePin={togglePin}
-            disabled={pending || disabled}
-          />
-        ) : null)}
       <form
         ref={formRef}
         onSubmit={onSubmit}
@@ -1298,7 +1274,6 @@ export function MessageComposer({
         onDrop={canAttach ? handleDrop : undefined}
         className={cn(
           "flex flex-col gap-2 rounded-2xl border border-border bg-card p-3 text-card-foreground shadow-sm transition-shadow focus-within:ring-2 focus-within:ring-ring",
-          (codeMode || showContextBar) && !composerCollapsed && "rounded-t-none",
           composerCollapsed && "gap-0 py-1.5",
           isDragOver && "ring-2 ring-primary",
         )}
@@ -1374,6 +1349,31 @@ export function MessageComposer({
         <p className="text-xs text-muted-foreground" data-testid="code-mode-gate-hint">
           Select a repository and environment to start coding.
         </p>
+      ) : null}
+
+      {/* Compact context controls — a single small row UNDER the textarea:
+          org/repository on the bottom-left, environment (+ the open-PR chip and
+          pin toggle) on the bottom-right. Replaces the two former heavy bars
+          (code-mode toolbar / pin context bar) that sat ABOVE the composer and
+          each duplicated the repo/env selectors. Code mode drops the pin (both
+          selections are required to send anyway); pin mode keeps it. Hidden
+          while collapsed. */}
+      {!composerCollapsed && (showContextControls || codeSessionPr) ? (
+        <ComposerContextControls
+          repositories={availableRepos ?? []}
+          environments={availableEnvironments ?? []}
+          selectedRepoKey={selectedRepoKey}
+          selectedEnvId={selectedEnvId}
+          onSelectRepo={(repo) => handleSelectRepoKey(repo.key)}
+          onSelectEnv={handleSelectEnvId}
+          mode={codeMode ? "code" : "pin"}
+          isPinned={isPinned}
+          onTogglePin={togglePin}
+          pr={codeSessionPr ?? null}
+          orgSlug={orgSlug}
+          workspaceSlug={workspaceSlug}
+          disabled={pending || disabled}
+        />
       ) : null}
 
       {/* Toolbar. Collapsed: a slim single row (~40px) with a tap-to-expand
@@ -1463,8 +1463,9 @@ export function MessageComposer({
             )}
 
             {/* Code mode toggle — routes the turn to a sandboxed coding agent
-                against the selected repo + environment (see ChatAgentToolbar
-                above). Requires both selections before send unblocks. Hidden
+                against the selected repo + environment (chosen in the compact
+                context controls below). Requires both selections before send
+                unblocks. Hidden
                 when a selected agent governs code mode (its identity — code
                 vs chat — decides, so a manual toggle would contradict it);
                 the manual toggle only owns code mode for the default
