@@ -174,12 +174,12 @@
     --popover-foreground: var(--_ink);
     --primary: var(--ox-rust);         /* tangerine */
     --primary-foreground: var(--ox-ink);
-    --secondary: oklch(0.602 0.208 25.4);   /* rose (deep for white text — hsl 359 75% 55%) */
-    --secondary-foreground: oklch(1 0 0);
+    --secondary: oklch(80.068% 0.07469 63.048);   /* rose (deep for white text — hsl 359 75% 55%) */
+    --secondary-foreground: oklch(22.756% 0.00154 16.344);
     --muted: var(--_stone-100);
     --muted-foreground: var(--_stone-600);
     --accent: oklch(0.930 0.032 62);   /* soft tangerine-tinted hover/selected — brand-aligned, replaces the old pinkish teak */
-    --accent-foreground: oklch(0.400 0.115 52);   /* deep rust ink on the tint */
+    --accent-foreground: oklch(16.204% 0.00658 55.786);   /* deep rust ink on the tint */
     --destructive: var(--_clay);         /* true red */
     --destructive-foreground: oklch(1 0 0);
     --border: oklch(0.884 0.006 264 / 0.9);   /* cool hairline — slightly darker for definition/contrast */
