@@ -270,7 +270,7 @@ export function SkillDetailPanel({
           <div className="rounded-md border overflow-hidden" data-testid="skill-versions-table">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b bg-muted/40">
+                <tr className="border-b">
                   <th className="px-4 py-3 text-left font-medium text-muted-foreground">Version</th>
                   <th className="px-4 py-3 text-left font-medium text-muted-foreground">Message</th>
                   <th className="px-4 py-3 text-left font-medium text-muted-foreground">Created</th>
