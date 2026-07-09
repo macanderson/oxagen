@@ -112,7 +112,51 @@ DURABLE_IMAGES: dict[str, modal.Image] = {
 RUNNER_SECRET = modal.Secret.from_name("oxagen-runner")
 
 app = modal.App("oxagen-sandbox")
-web = FastAPI(title="oxagen-sandbox-runner", version="0.4.0")
+web = FastAPI(title="oxagen-sandbox-runner", version="0.5.0")
+
+
+def _custom_image(image_ref: str) -> modal.Image:
+    """
+    Resolve a sandbox-template custom image ref (digest-pinned registry ref,
+    e.g. ghcr.io/acme/swe-bench@sha256:…) to a Modal Image.
+
+    add_python=None: the customer image ships its own toolchain — a prewarmed
+    eval image must run exactly as published, and the entrypoint commands we
+    exec (sh/node/python or the durable `sleep infinity`) only require the
+    binaries the template author baked in. Bringing tools (git, runtimes) is
+    the template author's responsibility.
+    """
+    return modal.Image.from_registry(image_ref, add_python=None)
+
+
+def _resource_kwargs(vcpu: float | None, disk_mb: int | None) -> dict:
+    """cpu/ephemeral_disk kwargs for Sandbox.create, omitted when unset."""
+    kw: dict = {}
+    if vcpu:
+        kw["cpu"] = float(vcpu)
+    if disk_mb:
+        kw["ephemeral_disk"] = int(disk_mb)
+    return kw
+
+
+async def _create_sandbox(*args, **kwargs):
+    """
+    modal.Sandbox.create with graceful degradation: optional kwargs the
+    installed SDK predates (idle_timeout < 1.4.x, ephemeral_disk, cpu) are
+    dropped one at a time on TypeError and the create retried — generalizes
+    the previous idle_timeout-only try/except so resource params degrade the
+    same way instead of failing the run.
+    """
+    droppable = ("ephemeral_disk", "cpu", "idle_timeout")
+    while True:
+        try:
+            return await modal.Sandbox.create.aio(*args, **kwargs)
+        except TypeError:
+            drop = next((k for k in droppable if k in kwargs), None)
+            if drop is None:
+                raise
+            kwargs.pop(drop)
+            print(f"sandbox create: SDK rejected kwarg {drop!r}; retrying without", file=sys.stderr)
 
 
 class RunRequest(BaseModel):
@@ -125,7 +169,12 @@ class RunRequest(BaseModel):
     network: Literal["allow", "deny"]
     org_id: str
     workspace_id: str
-    image: str | None = None  # accepted for forward-compat, derived from language
+    # Registry image ref (digest-pinned). The driver sends the template's
+    # custom image, or the @oxagen/sandbox/images default for the language;
+    # None falls back to this runner's built-in LANG_IMAGES.
+    image: str | None = None
+    vcpu: float | None = None
+    disk_mb: int | None = None
 
 
 class RunResponse(BaseModel):
@@ -143,7 +192,13 @@ class RunResponse(BaseModel):
 
 class SandboxCreateRequest(BaseModel):
     image: Literal["node", "python", "shell", "agent"]
+    # Sandbox-template custom image (digest-pinned registry ref). When set it
+    # replaces the DURABLE_IMAGES[image] base entirely — the template author
+    # ships their own toolchain (git etc.), e.g. a prewarmed eval image.
+    image_ref: str | None = None
     memory_mb: int
+    vcpu: float | None = None
+    disk_mb: int | None = None
     ttl_seconds: int
     idle_timeout_seconds: int
     network: Literal["allow", "deny"]
@@ -186,6 +241,10 @@ class SandboxSnapshotResponse(BaseModel):
 class SandboxRestoreRequest(BaseModel):
     snapshot_id: str
     memory_mb: int
+    # The restored base image IS the snapshot, so image/image_ref don't apply;
+    # resource params from the session spec are honored on the new sandbox.
+    vcpu: float | None = None
+    disk_mb: int | None = None
     ttl_seconds: int
     idle_timeout_seconds: int
     network: Literal["allow", "deny"]
@@ -242,7 +301,10 @@ async def _run_sandbox(req: RunRequest) -> RunResponse:
     base64 encoding is used so arbitrary user code (with quotes, backslashes,
     newlines) is safe to pipe through stdin without any shell escaping.
     """
-    image = LANG_IMAGES.get(req.language)
+    # A driver-supplied registry ref (template custom image or the pinned
+    # @oxagen/sandbox/images default) wins; LANG_IMAGES is the fallback for
+    # drivers that predate the field.
+    image = _custom_image(req.image) if req.image else LANG_IMAGES.get(req.language)
     if image is None:
         raise HTTPException(status_code=400, detail=f"unsupported language {req.language!r}")
 
@@ -256,13 +318,14 @@ async def _run_sandbox(req: RunRequest) -> RunResponse:
     # Create sandbox — stays alive for both the staging and execution phases.
     # We use a long-running `sleep` as the sandbox entrypoint so it stays up
     # between exec() calls; exec() spawns child processes inside it.
-    sb = await modal.Sandbox.create.aio(
+    sb = await _create_sandbox(
         "sleep", str(sandbox_timeout + 30),
         image=image,
         memory=req.memory_mb,
         timeout=sandbox_timeout + 30,
         block_network=block_network,
         app=app,
+        **_resource_kwargs(req.vcpu, req.disk_mb),
     )
 
     started = time.monotonic()
@@ -380,35 +443,27 @@ async def sandbox_create(
     """
     _check_auth(authorization, os.environ["MODAL_RUNNER_TOKEN"])
 
-    image = DURABLE_IMAGES.get(req.image)
+    # A template custom image replaces the durable base entirely (§ sandbox
+    # templates); the kind-keyed DURABLE_IMAGES remain the default path.
+    if req.image_ref:
+        image = _custom_image(req.image_ref)
+    else:
+        image = DURABLE_IMAGES.get(req.image)
     if image is None:
         raise HTTPException(status_code=400, detail=f"unsupported image kind {req.image!r}")
 
     block_network = req.network == "deny"
 
-    # Attempt create with idle_timeout; fall back gracefully for older SDKs.
-    try:
-        sb = await modal.Sandbox.create.aio(
-            "sleep", "infinity",
-            image=image,
-            memory=req.memory_mb,
-            timeout=req.ttl_seconds,
-            block_network=block_network,
-            idle_timeout=req.idle_timeout_seconds,
-            app=app,
-        )
-        print("sandbox/create: created with idle_timeout", file=sys.stderr)
-    except TypeError:
-        # Older SDK does not accept idle_timeout keyword argument.
-        sb = await modal.Sandbox.create.aio(
-            "sleep", "infinity",
-            image=image,
-            memory=req.memory_mb,
-            timeout=req.ttl_seconds,
-            block_network=block_network,
-            app=app,
-        )
-        print("sandbox/create: created without idle_timeout (SDK too old)", file=sys.stderr)
+    sb = await _create_sandbox(
+        "sleep", "infinity",
+        image=image,
+        memory=req.memory_mb,
+        timeout=req.ttl_seconds,
+        block_network=block_network,
+        idle_timeout=req.idle_timeout_seconds,
+        app=app,
+        **_resource_kwargs(req.vcpu, req.disk_mb),
+    )
 
     # Run setup_cmd once to prepare the image (e.g. install deps, clone repo).
     # If it fails, terminate the sandbox and surface the error.
@@ -596,27 +651,16 @@ async def sandbox_restore(
 
     block_network = req.network == "deny"
 
-    try:
-        sb = await modal.Sandbox.create.aio(
-            "sleep", "infinity",
-            image=img,
-            memory=req.memory_mb,
-            timeout=req.ttl_seconds,
-            block_network=block_network,
-            idle_timeout=req.idle_timeout_seconds,
-            app=app,
-        )
-        print("sandbox/restore: created with idle_timeout", file=sys.stderr)
-    except TypeError:
-        sb = await modal.Sandbox.create.aio(
-            "sleep", "infinity",
-            image=img,
-            memory=req.memory_mb,
-            timeout=req.ttl_seconds,
-            block_network=block_network,
-            app=app,
-        )
-        print("sandbox/restore: created without idle_timeout (SDK too old)", file=sys.stderr)
+    sb = await _create_sandbox(
+        "sleep", "infinity",
+        image=img,
+        memory=req.memory_mb,
+        timeout=req.ttl_seconds,
+        block_network=block_network,
+        idle_timeout=req.idle_timeout_seconds,
+        app=app,
+        **_resource_kwargs(req.vcpu, req.disk_mb),
+    )
 
     return SandboxRestoreResponse(
         sandbox_id=sb.object_id,

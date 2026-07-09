@@ -482,7 +482,7 @@
       "route": "/[orgSlug]/[workspaceSlug]/studio/agents/[agentId]",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/studio/agents/[agentId]/environments-actions.ts",
       "entry": "AgentEnvironmentsCard \"Unbind\" per row → unbindAgentEnvironmentAction",
-      "testid": null,
+      "testid": "agent-binding-unbind-production",
       "proof": "apps/app/e2e/sandbox-templates.spec.ts",
       "verifiedAt": "2026-07-08",
       "verifiedBy": "session_01NwQYbMXBT77CTwujnPHRH7"

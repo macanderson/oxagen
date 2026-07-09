@@ -143,7 +143,7 @@ describe("conversationExportHandler (@oxagen/handlers)", () => {
     expect(result.content).toContain("## You");
     expect(result.content).toContain("## Assistant");
     expect(result.content).toContain("<summary>Reasoning (1.2s)</summary>");
-    expect(result.content).toContain("tool: graph.search · status: success · duration: 300ms");
+    expect(result.content).toContain("tool: search_graph · status: success · duration: 300ms");
     expect(result.content).toContain("```ts\nconst x = 1;\n```");
     expect(mocks.persist).not.toHaveBeenCalled();
   });
