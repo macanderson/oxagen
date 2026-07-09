@@ -132,6 +132,9 @@ const runSchema = z.object({
   ...scopeShape,
   sessionId: z.string().min(1),
   command: z.string().min(1).max(100_000),
+  // Prior working directory, threaded back from the terminal so `cd` persists
+  // across commands. Optional — the first command in a session omits it.
+  cwd: z.string().min(1).max(4_096).optional(),
 });
 
 export async function runSandboxCommandAction(
@@ -141,7 +144,7 @@ export async function runSandboxCommandAction(
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
   }
-  const { orgSlug, workspaceSlug, sessionId, command } = parsed.data;
+  const { orgSlug, workspaceSlug, sessionId, command, cwd } = parsed.data;
   const { ctx, canManage } = await resolveWorkbenchScope(orgSlug, workspaceSlug);
   if (!canManage) {
     return { ok: false, error: "Only workspace owners and admins can run commands." };
@@ -149,7 +152,7 @@ export async function runSandboxCommandAction(
   try {
     const result = await runInTenantScope(
       { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
-      () => runSandboxCommand(ctx, { sessionId, command }),
+      () => runSandboxCommand(ctx, { sessionId, command, cwd }),
     );
     return { ok: true, result };
   } catch (err) {
