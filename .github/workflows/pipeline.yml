@@ -29,7 +29,7 @@ env:
   # ATLAS_VERSION is no longer installed per-job — it is baked into the
   # ghcr.io/oxageninc/oxagen-ci-* images. This pin stays here as the single
   # source ci-image.yml reads when building those images.
-  ATLAS_VERSION: "v0.38.0"
+  ATLAS_VERSION: "v1.2.2"
   # Jobs run inside the toolchain container, so service containers are
   # reached by their service name on the shared docker network, not localhost.
   DATABASE_URL: postgres://oxagen:oxagen@postgres:5432/oxagen?sslmode=disable
