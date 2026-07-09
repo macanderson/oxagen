@@ -87,7 +87,7 @@
     --ox-surface: oklch(0.985 0.003 84.6);   /* warm near-white */
     --ox-ink: var(--_ink);
     --ox-tangerine: oklch(0.775 0.150 56.4);   /* #FD9A4B — tangerine (primary) */
-    --ox-rose: oklch(0.661 0.177 22.5);   /* #EB5C5E — rose (secondary) */
+    --ox-rose:oklch(100% 0.00011 271.152);   /* #FD9A4B — tangerine (primary) */
     --ox-teak: oklch(0.440 0.081 31.1);   /* #794036 — teak (accent, dark) */
     --ox-bronze: oklch(0.452 0.03 78.6);   /* #5f5443 (legacy, unused) */
     --ox-sunset-red: oklch(0.627 0.186 17.6);   /* #e24b5d */

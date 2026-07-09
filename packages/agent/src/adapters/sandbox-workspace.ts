@@ -18,6 +18,7 @@ import type { CapabilityContext } from "../types";
 import { agentSandboxStartHandler } from "../handlers/agent.sandbox.start";
 import { agentSandboxExecHandler } from "../handlers/agent.sandbox.exec";
 import { agentSandboxStopHandler } from "../handlers/agent.sandbox.stop";
+import { releaseSession } from "../handlers/_sandbox-session";
 
 /** Thrown when a sandbox-backed workspace is used with no driver configured. */
 export class SandboxWorkspaceUnavailableError extends Error {
@@ -184,6 +185,26 @@ export class ModalSandboxWorkspace implements Workspace {
       await this.withScope(() => agentSandboxStopHandler({ sessionId }, this.ctx));
     } catch {
       // Best-effort teardown; the registry TTL reaps an orphaned session anyway.
+    }
+  }
+
+  /**
+   * Release the session at turn end WITHOUT tearing the sandbox down: mark it
+   * 'idle' and start its reap grace clock, so the next turn of the same
+   * conversation reconnects to this same warm sandbox (and its working tree,
+   * including uncommitted edits). The sandbox-reaper drops it ~2-3 min later if
+   * no turn resumes — recovering any dirty work to a branch first
+   * (spec: sandbox-session-lifecycle §4). Use this, NOT dispose(), for a
+   * persistent per-conversation coding session. Safe to call multiple times.
+   */
+  async release(): Promise<void> {
+    if (!this.sessionId) return;
+    const sessionId = this.sessionId;
+    try {
+      await this.withScope(() => releaseSession(this.ctx, sessionId));
+    } catch {
+      // Best-effort; a failed release just leaves the session 'running' until the
+      // reaper's stale-running backstop reclaims it. Work is never at risk.
     }
   }
 

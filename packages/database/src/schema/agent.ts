@@ -441,6 +441,29 @@ export const sandboxSessions = agentSchema.table(
     expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }),
     // Arbitrary driver/caller metadata (image labels, resource class, etc.).
     metadata: jsonb("metadata").notNull().default(sql`'{}'::jsonb`),
+    // ── Session lifecycle & work-recovery (spec: sandbox-session-lifecycle) ──
+    // Reap-eligible instant = last_used_at + grace; written when a turn releases
+    // the session to 'idle'. NULL while a turn is active ('running'), so the
+    // idle-grace reaper only ever considers genuinely released sessions.
+    graceDeadlineAt: timestamp("grace_deadline_at", { withTimezone: true, mode: "date" }),
+    // Work-safety state, orthogonal to `status`. The reaper MUST capture
+    // uncommitted work to a recovery branch before it may flush a dirty sandbox;
+    // this column is the audit trail of that guarantee.
+    // none → pending → recovering → recovered | failed.
+    recoveryStatus: text("recovery_status").notNull().default("none"),
+    // Branch/commit the reaper pushed uncommitted work to (file recovery).
+    recoveryBranch: text("recovery_branch"),
+    recoveryCommit: text("recovery_commit"),
+    // Failure reason when recovery_status='failed' — the sandbox is RETAINED
+    // (never flushed) so the work can still be recovered manually or next tick.
+    recoveryError: text("recovery_error"),
+    recoveredAt: timestamp("recovered_at", { withTimezone: true, mode: "date" }),
+    // When the reaper terminated the sandbox (distinct from an explicit stop).
+    flushedAt: timestamp("flushed_at", { withTimezone: true, mode: "date" }),
+    // Last-observed uncommitted-changes state (NULL = never checked). Powers the
+    // inspector's dirty indicator; the reaper always re-checks live before flush.
+    dirty: boolean("dirty"),
+    dirtyCheckedAt: timestamp("dirty_checked_at", { withTimezone: true, mode: "date" }),
   },
   (t) => ({
     orgIdx: index("sandbox_sessions_org_idx").on(t.orgId, t.workspaceId),
@@ -449,9 +472,18 @@ export const sandboxSessions = agentSchema.table(
     sessionKeyUniq: uniqueIndex("sandbox_sessions_session_key_uniq")
       .on(t.workspaceId, t.sessionKey)
       .where(sql`session_key IS NOT NULL AND status IN ('running','idle') AND deleted_at IS NULL`),
+    // Reaper candidate scan: idle sessions past their grace deadline that the
+    // reaper has not yet flushed. Partial to stay tiny (only live-but-idle rows).
+    reapIdx: index("sandbox_sessions_reap_idx")
+      .on(t.graceDeadlineAt)
+      .where(sql`flushed_at IS NULL AND grace_deadline_at IS NOT NULL`),
     statusCheck: check(
       "sandbox_sessions_status_check",
       sql`${t.status} IN ('running','idle','stopped','gone')`,
+    ),
+    recoveryStatusCheck: check(
+      "sandbox_sessions_recovery_status_check",
+      sql`${t.recoveryStatus} IN ('none','pending','recovering','recovered','failed')`,
     ),
     imageCheck: check(
       "sandbox_sessions_image_check",
