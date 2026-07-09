@@ -93,6 +93,7 @@ import { appendVerboseLog } from "../agent/verbose-log.js";
 import { formatVerboseSection } from "../agent/trace-format.js";
 import { readConfig, getMotionMode, setMotionMode, type MotionMode } from "../lib/config.js";
 import { debugLog } from "../lib/debug-log.js";
+import { exitBySignal } from "../lib/exit-by-signal.js";
 import { formatToolArgs } from "../agent/tool-formatter.js";
 import {
   ApprovalPrompt,
@@ -3611,12 +3612,14 @@ export async function launchRepl(options: ReplOptions): Promise<void> {
   // effect cleanup ever runs when the process is torn down by a signal —
   // only `"exit"` listeners (registered above) do, and `"exit"` itself is not
   // emitted for a signal kill. Restore the terminal FIRST (so the signal is
-  // visibly handled even if reaping children is slow), then reap, then exit
-  // with the conventional 128+signal code.
+  // visibly handled even if reaping children is slow), then reap, then die by
+  // re-raising the signal (still 128+n to the shell). NOT `process.exit`:
+  // exit()-time C++ static destructors abort under duckdb/onnxruntime's live
+  // worker threads — see exit-by-signal.ts for the crash anatomy.
   const onSignal = (signal: "SIGTERM" | "SIGINT"): void => {
     fullscreenHandle?.leave();
     signalHandleRef.current?.reapChildren();
-    process.exit(signal === "SIGINT" ? 130 : 143);
+    exitBySignal(signal);
   };
   const onSigterm = (): void => onSignal("SIGTERM");
   const onSigint = (): void => onSignal("SIGINT");
