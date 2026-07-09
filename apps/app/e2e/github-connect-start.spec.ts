@@ -17,7 +17,7 @@
 import { test, expect } from "@playwright/test";
 import { signUpFreshUser } from "./helpers/signup";
 
-test("Settings → GitHub connect reaches the OAuth install redirect (no failed-to-fetch)", async ({
+test("Settings → GitHub connect reaches the OAuth redirect with signed state (no failed-to-fetch)", async ({
   page,
 }) => {
   const user = await signUpFreshUser(page);
@@ -48,12 +48,17 @@ test("Settings → GitHub connect reaches the OAuth install redirect (no failed-
   await page.getByTestId("github-disconnected").waitFor();
   await page.getByTestId("github-connect-btn").click();
 
-  // The connect hands off to the GitHub App *installation* page so a first-time
-  // user installs the App and GitHub round-trips our HMAC-signed state back to
-  // the callback. The state param carries org/workspace attribution.
-  await page.waitForURL(/github\.com\/apps\/[^/]+\/installations\/new/);
-  const installUrl = new URL(page.url());
-  expect(installUrl.searchParams.get("state")).toBeTruthy();
+  // The connect hands off to GitHub's OAuth redirect carrying our HMAC-signed
+  // state (org/workspace attribution). The primary Connect uses the identity leg
+  // (login/oauth/authorize) — which ALWAYS round-trips state even when the App is
+  // already installed on the target org, unblocking a second tenant — and falls
+  // back to the App installation page (installations/new) when no client id is
+  // configured. Either way, our signed state must be present.
+  await page.waitForURL(
+    /github\.com\/(login\/oauth\/authorize|apps\/[^/]+\/installations\/new)/,
+  );
+  const redirectUrl = new URL(page.url());
+  expect(redirectUrl.searchParams.get("state")).toBeTruthy();
 });
 
 test("Sources tab skips the install and points to Settings when GitHub is not connected", async ({
