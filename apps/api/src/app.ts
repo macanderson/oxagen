@@ -105,6 +105,8 @@ import { budgetPolicyReadRoute } from "./routes/v1/budget.policy.read";
 import { budgetPolicyWriteRoute } from "./routes/v1/budget.policy.write";
 import { workspaceBudgetPolicyReadRoute } from "./routes/v1/workspace.budget_policy.read";
 import { workspaceBudgetPolicyWriteRoute } from "./routes/v1/workspace.budget_policy.write";
+import { userWorkspacePreferencesReadRoute } from "./routes/v1/user.workspace_preferences.read";
+import { userWorkspacePreferencesWriteRoute } from "./routes/v1/user.workspace_preferences.write";
 import { authWhoamiRoute } from "./routes/v1/auth.whoami";
 import { workspaceModelSettingsReadRoute } from "./routes/v1/workspace.model_settings.read";
 import { workspaceModelSettingsWriteRoute } from "./routes/v1/workspace.model_settings.write";
@@ -508,6 +510,9 @@ orgScoped.route("/org/invitations/accept", orgMemberInviteAcceptRoute);
 orgScoped.route("/org/invitations/decline", orgMemberInviteDeclineRoute);
 orgScoped.route("/workspace/budget-policy", workspaceBudgetPolicyReadRoute);
 orgScoped.route("/workspace/budget-policy", workspaceBudgetPolicyWriteRoute);
+// Per-(user, workspace) coding-agent defaults (org+workspace scoped).
+orgScoped.route("/user/workspace-preferences", userWorkspacePreferencesReadRoute);
+orgScoped.route("/user/workspace-preferences", userWorkspacePreferencesWriteRoute);
 orgScoped.route("/workspace/model-settings", workspaceModelSettingsReadRoute);
 orgScoped.route("/workspace/model-settings", workspaceModelSettingsWriteRoute);
 orgScoped.route("/workspace/prompt-settings", promptSettingsReadRoute);

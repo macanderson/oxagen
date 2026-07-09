@@ -191,6 +191,16 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./user.preferences.write"))
         .userPreferencesWriteHandler as CapabilityHandlerFn,
   );
+  registerHandler("get_workspace_user_preferences",
+    async () =>
+      (await import("./user.workspace_preferences.read"))
+        .userWorkspacePreferencesReadHandler as CapabilityHandlerFn,
+  );
+  registerHandler("update_workspace_user_preferences",
+    async () =>
+      (await import("./user.workspace_preferences.write"))
+        .userWorkspacePreferencesWriteHandler as CapabilityHandlerFn,
+  );
   registerHandler("get_user_budget",
     async () =>
       (await import("./budget.policy.read"))
@@ -1021,7 +1031,7 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./agent.environment.list")).agentEnvironmentListHandler as CapabilityHandlerFn,
   );
   registerHandler(
-    "secret.key.upsert",
+    "upsert_secret_key",
     async () => (await import("./secret.key.upsert")).secretKeyUpsertHandler as CapabilityHandlerFn,
   );
   registerHandler("list_secret_keys",
