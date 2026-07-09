@@ -70,6 +70,19 @@ vi.mock("@oxagen/database", () => ({
       enabled: "enabled",
     },
     pluginInstalledPlugins: { id: "id", enabled: "enabled", deletedAt: "deletedAt" },
+    // @oxagen/agent's _agent-definition builds its column map at module scope,
+    // so schema.agents must exist even though no test queries it.
+    agents: {
+      id: "id",
+      publicId: "publicId",
+      slug: "slug",
+      name: "name",
+      description: "description",
+      agentType: "agentType",
+      status: "status",
+      deploymentStatus: "deploymentStatus",
+      activeVersionId: "activeVersionId",
+    },
   },
 }));
 
