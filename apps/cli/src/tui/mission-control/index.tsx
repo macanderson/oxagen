@@ -16,6 +16,7 @@
 import { render } from "ink";
 import React from "react";
 import { enterFullscreen } from "../../repl/alt-screen.js";
+import { exitBySignal } from "../../lib/exit-by-signal.js";
 import { MissionControlApp } from "./mission-control-app.js";
 import type { FleetSessionManager } from "../../sessions/manager.js";
 import type { SessionStore } from "../../sessions/store.js";
@@ -45,16 +46,20 @@ export async function launchMissionControl(opts: MissionControlOptions): Promise
     fullscreenHandle?.leave();
     manager.stop();
   };
-  const onSignal = (code: number): void => {
+  const onSignal = (signal: "SIGINT" | "SIGTERM"): void => {
     if (draining) {
       cleanup();
-      process.exit(code);
+      // Die by re-raised signal, not `process.exit` — exit()-time C++ static
+      // destructors abort when duckdb/onnxruntime worker threads are still
+      // live (see exit-by-signal.ts). The shell still sees 128+n.
+      exitBySignal(signal);
+      return;
     }
     draining = true;
     void manager.drain().finally(() => unmount?.());
   };
-  const onSigint = (): void => onSignal(130);
-  const onSigterm = (): void => onSignal(143);
+  const onSigint = (): void => onSignal("SIGINT");
+  const onSigterm = (): void => onSignal("SIGTERM");
   process.on("SIGINT", onSigint);
   process.on("SIGTERM", onSigterm);
 
