@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   listServers: vi.fn(),
   deriveTransportTypes: vi.fn(),
   deriveAuthKind: vi.fn(),
+  detectOAuthProtected: vi.fn(),
 }));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
@@ -32,6 +33,14 @@ vi.mock("@oxagen/plugins/registry", () => ({
   deriveTransportTypes: mocks.deriveTransportTypes,
   deriveAuthKind: mocks.deriveAuthKind,
 }));
+
+// Spread the real module and override ONLY detectOAuthProtected — a full
+// factory replacement would drop the many other @oxagen/plugins exports that
+// the handler's import chain needs transitively.
+vi.mock("@oxagen/plugins", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/plugins")>();
+  return { ...real, detectOAuthProtected: mocks.detectOAuthProtected };
+});
 
 import { installOne } from "./plugin.org.install";
 
@@ -92,13 +101,14 @@ function mockIconLookup() {
 function mockUpsert(returnId = "porg-registry-listing") {
   // First: icon lookup (non-fatal, returns null → no catalog entry).
   mockIconLookup();
-  // Second: the actual upsert.
+  // Second: the actual upsert. returning() echoes the inserted authKind, like
+  // the real DB does for a fresh insert.
   mocks.withTenantDb.mockImplementationOnce(async (fn: (tx: unknown) => Promise<unknown>) =>
     fn({
       insert: () => ({
-        values: () => ({
+        values: (vals: Record<string, unknown>) => ({
           onConflictDoUpdate: () => ({
-            returning: () => Promise.resolve([{ id: returnId }]),
+            returning: () => Promise.resolve([{ id: returnId, authKind: vals.authKind }]),
           }),
         }),
       }),
@@ -114,6 +124,8 @@ describe("installOne — registry install (empty endpointUrl)", () => {
     // Default: deriveTransportTypes and deriveAuthKind return sensible values.
     mocks.deriveTransportTypes.mockReturnValue(["sse"]);
     mocks.deriveAuthKind.mockReturnValue("secret");
+    // Default probe verdict: not OAuth-protected. Individual tests override.
+    mocks.detectOAuthProtected.mockResolvedValue(false);
   });
 
   it("resolves endpoint from registry and stores source='registry' with the resolved URL", async () => {
@@ -131,7 +143,7 @@ describe("installOne — registry install (empty endpointUrl)", () => {
             capturedValues = vals;
             return {
               onConflictDoUpdate: () => ({
-                returning: () => Promise.resolve([{ id: "porg-resolved" }]),
+                returning: () => Promise.resolve([{ id: "porg-resolved", authKind: vals.authKind }]),
               }),
             };
           },
@@ -139,7 +151,7 @@ describe("installOne — registry install (empty endpointUrl)", () => {
       }),
     );
 
-    const id = await installOne(ctx, {
+    const { id } = await installOne(ctx, {
       pluginType: "mcp_server",
       custom: {
         name: "my-mcp-server",
@@ -206,7 +218,7 @@ describe("installOne — registry install (empty endpointUrl)", () => {
       .mockResolvedValueOnce({ servers: [fakeServerResponse] });
     mockUpsert("porg-fallback");
 
-    const id = await installOne(ctx, {
+    const { id } = await installOne(ctx, {
       pluginType: "mcp_server",
       custom: {
         name: "my-mcp-server",
@@ -220,11 +232,53 @@ describe("installOne — registry install (empty endpointUrl)", () => {
     // listServers called for both registries
     expect(mocks.listServers).toHaveBeenCalledTimes(2);
   });
+
+  it("probes the REGISTRY-RESOLVED endpoint and upgrades a derived 'none' to 'oauth'", async () => {
+    // The mcp.stripe.com case: server.json cannot declare OAuth, so
+    // deriveAuthKind yields "none" — only the live probe can catch it.
+    mockRegistryQuery([fakeRegistry]);
+    mocks.listServers.mockResolvedValueOnce({ servers: [fakeServerResponse] });
+    mocks.deriveAuthKind.mockReturnValue("none");
+    mocks.detectOAuthProtected.mockResolvedValue(true);
+
+    mockIconLookup();
+    let capturedValues: Record<string, unknown> | null = null;
+    mocks.withTenantDb.mockImplementationOnce(async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({
+        insert: () => ({
+          values: (vals: Record<string, unknown>) => {
+            capturedValues = vals;
+            return {
+              onConflictDoUpdate: () => ({
+                returning: () => Promise.resolve([{ id: "porg-registry-oauth", authKind: vals.authKind }]),
+              }),
+            };
+          },
+        }),
+      }),
+    );
+
+    const res = await installOne(ctx, {
+      pluginType: "mcp_server",
+      custom: {
+        name: "my-mcp-server",
+        endpointUrl: "",        // empty → resolved from the registry
+        transport: "sse",
+        authKind: "none",
+      },
+    });
+
+    // Probed the endpoint the registry resolved, not the (empty) input URL.
+    expect(mocks.detectOAuthProtected).toHaveBeenCalledWith("https://mcp.example.com/mcp");
+    expect(capturedValues!.authKind).toBe("oauth");
+    expect(res).toEqual({ id: "porg-registry-oauth", authKind: "oauth" });
+  });
 });
 
 describe("installOne — truly-custom install (endpointUrl provided)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.detectOAuthProtected.mockResolvedValue(false);
   });
 
   it("stores the provided endpointUrl as-is with source='custom', no registry lookup", async () => {
@@ -239,7 +293,7 @@ describe("installOne — truly-custom install (endpointUrl provided)", () => {
             capturedValues = vals;
             return {
               onConflictDoUpdate: () => ({
-                returning: () => Promise.resolve([{ id: "porg-custom" }]),
+                returning: () => Promise.resolve([{ id: "porg-custom", authKind: vals.authKind }]),
               }),
             };
           },
@@ -247,7 +301,7 @@ describe("installOne — truly-custom install (endpointUrl provided)", () => {
       }),
     );
 
-    const id = await installOne(ctx, {
+    const { id } = await installOne(ctx, {
       pluginType: "mcp_server",
       custom: {
         name: "hand-entered-server",

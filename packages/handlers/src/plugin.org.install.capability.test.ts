@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   withTenantDb: vi.fn(),
   getOxagenPlugin: vi.fn(),
   emitSecurityEvent: vi.fn(),
+  detectOAuthProtected: vi.fn(),
 }));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
@@ -22,6 +23,14 @@ vi.mock("@oxagen/database/security", () => ({
 vi.mock("@oxagen/oxagen/plugins", () => ({
   getOxagenPlugin: mocks.getOxagenPlugin,
 }));
+
+// Spread the real module and override ONLY detectOAuthProtected — a full
+// factory replacement would drop the many other @oxagen/plugins exports that
+// the handler's import chain needs transitively.
+vi.mock("@oxagen/plugins", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/plugins")>();
+  return { ...real, detectOAuthProtected: mocks.detectOAuthProtected };
+});
 
 import { handler, installOne } from "./plugin.org.install";
 
@@ -83,24 +92,31 @@ function mockIconLookup() {
 
 /**
  * Mock a custom server (mcp_server) withTenantDb upsert. Also mocks the icon
- * lookup call that precedes it in the handler.
+ * lookup call that precedes it in the handler. Captures the inserted values
+ * and — like the real DB returning() on a fresh insert — echoes the inserted
+ * authKind back so installOne reports the persisted kind.
  */
 function mockCustomUpsert(returnId?: string) {
   const id = returnId ?? "porg-custom-listing";
+  const captured: { values: Record<string, unknown> | null } = { values: null };
   // First: icon lookup (non-fatal, returns null → no catalog entry).
   mockIconLookup();
   // Second: the actual upsert.
   mocks.withTenantDb.mockImplementationOnce(async (fn: (tx: unknown) => Promise<unknown>) =>
     fn({
       insert: () => ({
-        values: () => ({
-          onConflictDoUpdate: () => ({
-            returning: () => Promise.resolve([{ id }]),
-          }),
-        }),
+        values: (vals: Record<string, unknown>) => {
+          captured.values = vals;
+          return {
+            onConflictDoUpdate: () => ({
+              returning: () => Promise.resolve([{ id, authKind: vals.authKind }]),
+            }),
+          };
+        },
       }),
     }),
   );
+  return captured;
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -109,12 +125,14 @@ describe("installOne — agent_capability path", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.getOxagenPlugin.mockReturnValue(fakeManifest);
+    // Default probe verdict: not OAuth-protected. Individual tests override.
+    mocks.detectOAuthProtected.mockResolvedValue(false);
   });
 
-  it("happy path: inserts correct row and returns orgListingId", async () => {
+  it("happy path: inserts correct row and returns orgListingId + authKind", async () => {
     mockCapabilityUpsert("porg-abc123");
-    const id = await installOne(ctx, { pluginType: "agent_capability", pluginId: "oxagen/media-video" });
-    expect(id).toBe("porg-abc123");
+    const res = await installOne(ctx, { pluginType: "agent_capability", pluginId: "oxagen/media-video" });
+    expect(res).toEqual({ id: "porg-abc123", authKind: "none" });
     expect(mocks.withTenantDb).toHaveBeenCalledTimes(1);
   });
 
@@ -129,11 +147,11 @@ describe("installOne — agent_capability path", () => {
     // fall back to it so the pack resolves without the caller pre-mapping to
     // pluginId. Regression for "pluginId is required" on every bulk capability.
     mockCapabilityUpsert("porg-from-catalog");
-    const id = await installOne(ctx, {
+    const res = await installOne(ctx, {
       pluginType: "agent_capability",
       catalogServerId: "oxagen/media-video",
     });
-    expect(id).toBe("porg-from-catalog");
+    expect(res.id).toBe("porg-from-catalog");
     expect(mocks.getOxagenPlugin).toHaveBeenCalledWith("oxagen/media-video");
   });
 
@@ -164,8 +182,8 @@ describe("installOne — agent_capability path", () => {
   it("is idempotent — re-install returns the same listing id", async () => {
     // onConflictDoUpdate returns the existing row's id
     mockCapabilityUpsert("porg-existing-id");
-    const id = await installOne(ctx, { pluginType: "agent_capability", pluginId: "oxagen/media-video" });
-    expect(id).toBe("porg-existing-id");
+    const res = await installOne(ctx, { pluginType: "agent_capability", pluginId: "oxagen/media-video" });
+    expect(res.id).toBe("porg-existing-id");
   });
 
   it("does NOT hit the denylist — no denylist lookup is performed", async () => {
@@ -200,6 +218,7 @@ describe("installOne — agent_capability path", () => {
 describe("installOne — custom mcp_server path", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.detectOAuthProtected.mockResolvedValue(false);
   });
 
   it("throws when custom is missing for non-capability types", async () => {
@@ -208,9 +227,9 @@ describe("installOne — custom mcp_server path", () => {
     ).rejects.toThrow("custom is required");
   });
 
-  it("happy path: inserts correct row and returns orgListingId", async () => {
+  it("happy path: inserts correct row and returns orgListingId + authKind", async () => {
     mockCustomUpsert("porg-mcp-new");
-    const id = await installOne(ctx, {
+    const res = await installOne(ctx, {
       pluginType: "mcp_server",
       custom: {
         name: "my-server",
@@ -221,9 +240,132 @@ describe("installOne — custom mcp_server path", () => {
         authKind: "none",
       },
     });
-    expect(id).toBe("porg-mcp-new");
+    expect(res).toEqual({ id: "porg-mcp-new", authKind: "none" });
     // Two withTenantDb calls: (1) icon lookup, (2) the upsert insert.
     expect(mocks.withTenantDb).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("installOne — OAuth detection probe", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.detectOAuthProtected.mockResolvedValue(false);
+  });
+
+  const customNone = {
+    name: "stripe-mcp",
+    endpointUrl: "https://mcp.stripe.com",
+    transport: "streamable-http",
+    authKind: "none" as const,
+  };
+
+  it("upgrades authKind none → oauth when the probe detects protection (mcp_server)", async () => {
+    mocks.detectOAuthProtected.mockResolvedValue(true);
+    const captured = mockCustomUpsert("porg-oauth-upgraded");
+
+    const res = await installOne(ctx, { pluginType: "mcp_server", custom: customNone });
+
+    expect(mocks.detectOAuthProtected).toHaveBeenCalledTimes(1);
+    expect(mocks.detectOAuthProtected).toHaveBeenCalledWith("https://mcp.stripe.com");
+    // The inserted row carries the upgraded kind…
+    expect(captured.values).not.toBeNull();
+    expect(captured.values!.authKind).toBe("oauth");
+    // …and the result reports the persisted kind so the UI can prompt to auth.
+    expect(res).toEqual({ id: "porg-oauth-upgraded", authKind: "oauth" });
+  });
+
+  it("also probes integration installs", async () => {
+    mocks.detectOAuthProtected.mockResolvedValue(true);
+    const captured = mockCustomUpsert("porg-integration-oauth");
+
+    const res = await installOne(ctx, { pluginType: "integration", custom: customNone });
+
+    expect(mocks.detectOAuthProtected).toHaveBeenCalledTimes(1);
+    expect(captured.values!.authKind).toBe("oauth");
+    expect(res.authKind).toBe("oauth");
+  });
+
+  it("does NOT probe when authKind is explicitly oauth", async () => {
+    const captured = mockCustomUpsert("porg-explicit-oauth");
+
+    const res = await installOne(ctx, {
+      pluginType: "mcp_server",
+      custom: { ...customNone, authKind: "oauth" as const },
+    });
+
+    expect(mocks.detectOAuthProtected).not.toHaveBeenCalled();
+    expect(captured.values!.authKind).toBe("oauth");
+    expect(res.authKind).toBe("oauth");
+  });
+
+  it("does NOT probe when authKind is explicitly secret (never downgrades a declared kind)", async () => {
+    const captured = mockCustomUpsert("porg-secret");
+
+    const res = await installOne(ctx, {
+      pluginType: "mcp_server",
+      custom: { ...customNone, authKind: "secret" as const },
+    });
+
+    expect(mocks.detectOAuthProtected).not.toHaveBeenCalled();
+    expect(captured.values!.authKind).toBe("secret");
+    expect(res.authKind).toBe("secret");
+  });
+
+  it("keeps authKind none and still installs when the probe says not protected", async () => {
+    // detectOAuthProtected's contract is "never throws" (network errors,
+    // timeouts, and bad responses all resolve false — covered by its own unit
+    // tests), so the not-protected verdict is the failure mode seen here.
+    mocks.detectOAuthProtected.mockResolvedValue(false);
+    const captured = mockCustomUpsert("porg-still-none");
+
+    const res = await installOne(ctx, { pluginType: "mcp_server", custom: customNone });
+
+    expect(mocks.detectOAuthProtected).toHaveBeenCalledTimes(1);
+    expect(captured.values!.authKind).toBe("none");
+    expect(res).toEqual({ id: "porg-still-none", authKind: "none" });
+  });
+
+  it("does NOT probe a non-http(s) endpoint", async () => {
+    const captured = mockCustomUpsert("porg-stdio");
+
+    await installOne(ctx, {
+      pluginType: "mcp_server",
+      custom: { ...customNone, endpointUrl: "stdio://local-server" },
+    });
+
+    expect(mocks.detectOAuthProtected).not.toHaveBeenCalled();
+    expect(captured.values!.authKind).toBe("none");
+  });
+
+  it("does NOT probe non-server plugin types (agent_skill)", async () => {
+    const captured = mockCustomUpsert("porg-skill");
+
+    await installOne(ctx, { pluginType: "agent_skill", custom: customNone });
+
+    expect(mocks.detectOAuthProtected).not.toHaveBeenCalled();
+    expect(captured.values!.authKind).toBe("none");
+  });
+
+  it("reports the PERSISTED authKind when the conflict clause preserves a prior oauth row", async () => {
+    // Reinstall race: this call's probe missed (false), but the existing row is
+    // already "oauth" — the upgrade-only conflict clause keeps it, and installOne
+    // must report what the DB returned, not what this call computed.
+    mocks.detectOAuthProtected.mockResolvedValue(false);
+    mockIconLookup();
+    mocks.withTenantDb.mockImplementationOnce(async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({
+        insert: () => ({
+          values: () => ({
+            onConflictDoUpdate: () => ({
+              returning: () => Promise.resolve([{ id: "porg-existing", authKind: "oauth" }]),
+            }),
+          }),
+        }),
+      }),
+    );
+
+    const res = await installOne(ctx, { pluginType: "mcp_server", custom: customNone });
+    expect(res).toEqual({ id: "porg-existing", authKind: "oauth" });
   });
 });
 
@@ -231,6 +373,27 @@ describe("plugin.org.install handler — audit event", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.getOxagenPlugin.mockReturnValue(fakeManifest);
+    mocks.detectOAuthProtected.mockResolvedValue(false);
+  });
+
+  it("returns the {orgListingId, authKind} output shape", async () => {
+    mocks.detectOAuthProtected.mockResolvedValue(true);
+    mockCustomUpsert("porg-handler-shape");
+    const out = await handler(
+      {
+        pluginType: "mcp_server",
+        custom: {
+          name: "stripe-mcp",
+          endpointUrl: "https://mcp.stripe.com",
+          transport: "streamable-http",
+          authKind: "none",
+        },
+      },
+      ctx,
+    );
+    // The handler exposes the effective auth kind so the app can immediately
+    // prompt the user to authenticate an OAuth-protected install.
+    expect(out).toEqual({ orgListingId: "porg-handler-shape", authKind: "oauth" });
   });
 
   it("emits plugin.installed on success with workspace scope (SOC2 audit trail)", async () => {
@@ -238,8 +401,9 @@ describe("plugin.org.install handler — audit event", () => {
     const out = (await handler(
       { pluginType: "agent_capability", pluginId: "oxagen/media-video" },
       ctx,
-    )) as { orgListingId: string };
+    )) as { orgListingId: string; authKind: string };
     expect(out.orgListingId).toBe("porg-audited");
+    expect(out.authKind).toBe("none");
     expect(mocks.emitSecurityEvent).toHaveBeenCalledTimes(1);
     expect(mocks.emitSecurityEvent).toHaveBeenCalledWith(
       expect.objectContaining({
