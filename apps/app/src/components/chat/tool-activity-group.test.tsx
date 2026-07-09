@@ -33,7 +33,7 @@ vi.mock("./tool-call-card", async (importOriginal) => {
 function item(over: Partial<ToolActivityItem> = {}): ToolActivityItem {
   return {
     toolCallId: "t1",
-    capability: "web.search",
+    capability: "search_web",
     inputPreview: { query: "submarines" },
     riskLevel: "low",
     status: "completed",
@@ -59,7 +59,7 @@ describe("ToolActivityGroup", () => {
       <ToolActivityGroup
         items={[
           item({ toolCallId: "t1", durationMs: 1500 }),
-          item({ toolCallId: "t2", capability: "web.fetch", inputPreview: { url: "https://x.com" }, durationMs: 1500 }),
+          item({ toolCallId: "t2", capability: "fetch_web_page", inputPreview: { url: "https://x.com" }, durationMs: 1500 }),
         ]}
         live={false}
       />,
@@ -96,7 +96,7 @@ describe("ToolActivityGroup", () => {
       <ToolActivityGroup
         items={[
           item({ toolCallId: "t1", status: "completed" }),
-          item({ toolCallId: "t2", capability: "web.fetch", inputPreview: { url: "https://y.com" }, status: "running" }),
+          item({ toolCallId: "t2", capability: "fetch_web_page", inputPreview: { url: "https://y.com" }, status: "running" }),
         ]}
         live={true}
       />,
@@ -120,7 +120,7 @@ describe("ToolActivityGroup", () => {
   it("expands into one-line rows on click", async () => {
     render(
       <ToolActivityGroup
-        items={[item({ toolCallId: "t1" }), item({ toolCallId: "t2", capability: "web.fetch" })]}
+        items={[item({ toolCallId: "t1" }), item({ toolCallId: "t2", capability: "fetch_web_page" })]}
         live={false}
       />,
     );
