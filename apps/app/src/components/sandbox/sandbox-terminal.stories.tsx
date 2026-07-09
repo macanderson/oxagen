@@ -2,12 +2,49 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { SandboxTerminal, type SandboxExecResult } from "./sandbox-terminal";
 
 /**
+ * Resolve a `cd <target>` against the current directory, mimicking a POSIX
+ * shell closely enough to demo cwd persistence (absolute paths, `..`, `~`).
+ */
+function resolveCd(cwd: string, target: string): string {
+  const base = target.startsWith("/")
+    ? target
+    : target === "~"
+      ? "/workspace"
+      : `${cwd}/${target}`;
+  const parts: string[] = [];
+  for (const seg of base.split("/")) {
+    if (seg === "" || seg === ".") continue;
+    if (seg === "..") parts.pop();
+    else parts.push(seg);
+  }
+  return `/${parts.join("/")}`;
+}
+
+/**
  * A mock runner so the terminal is fully interactive in Storybook without a
- * live sandbox: it canned-responds to a few commands and echoes the rest.
+ * live sandbox: it canned-responds to a few commands and echoes the rest. It
+ * also honours `cd` and reports the resulting `cwd`, so the persistence the
+ * real runner provides is demonstrable here (type `cd src` then `ls`).
  */
 function mockRunner(delayMs = 350) {
-  return async (command: string): Promise<SandboxExecResult> => {
+  return async (
+    command: string,
+    opts?: { cwd?: string },
+  ): Promise<SandboxExecResult> => {
     await new Promise((r) => setTimeout(r, delayMs));
+    const cwd = opts?.cwd ?? "/workspace";
+    if (command.startsWith("cd ")) {
+      const next = resolveCd(cwd, command.slice(3).trim());
+      return {
+        stdout: "",
+        stderr: "",
+        exitCode: 0,
+        executionMs: 6,
+        timedOut: false,
+        restored: false,
+        cwd: next,
+      };
+    }
     if (command.startsWith("ls")) {
       return {
         stdout: "README.md\nsrc\ndocs\n.oxagen\npackage.json",
@@ -16,6 +53,7 @@ function mockRunner(delayMs = 350) {
         executionMs: 42,
         timedOut: false,
         restored: false,
+        cwd,
       };
     }
     if (command.startsWith("git status")) {
@@ -27,6 +65,7 @@ function mockRunner(delayMs = 350) {
         executionMs: 88,
         timedOut: false,
         restored: false,
+        cwd,
       };
     }
     if (command.startsWith("cat missing")) {
@@ -37,6 +76,7 @@ function mockRunner(delayMs = 350) {
         executionMs: 12,
         timedOut: false,
         restored: false,
+        cwd,
       };
     }
     return {
@@ -46,6 +86,7 @@ function mockRunner(delayMs = 350) {
       executionMs: 20,
       timedOut: false,
       restored: false,
+      cwd,
     };
   };
 }
