@@ -61,6 +61,16 @@ export type GenerateFn = (args: {
   usage: { inputTokens?: number; outputTokens?: number };
 }>;
 
+/**
+ * Standalone fallback for a `complete()` call with no injected `generate` — used
+ * only by tests and out-of-engine one-shot inspection. The LIVE path (the
+ * coordinator seam in `agent/adapters/coordinator.ts`) injects a METERED
+ * `generate` built over `createMeteredAi`/the gateway port, so on-path cloud
+ * completions emit metering + honor BYOK, never this raw `ai` call. Keeping the
+ * raw default confined to non-engine use is the "all LLM calls through
+ * @oxagen/ai" rule (this module can't import the metered port without a
+ * runtime→agent cycle, so the caller injects it).
+ */
 const defaultGenerate: GenerateFn = (args) =>
   generateText({
     model: args.model,
@@ -126,6 +136,16 @@ export class GatewayCloudProvider implements ModelProvider {
 
   id(): string {
     return this.registryId;
+  }
+
+  /**
+   * The concrete Vercel AI Gateway slug (`vendor/model`) this provider resolves
+   * to. The coordinator seam hands this to the engine's shared metered port as
+   * the per-call `model`, so a cloud coordinator streams natively (tools +
+   * streaming intact) instead of being funnelled through single-shot `complete`.
+   */
+  slug(): string {
+    return this.entry.slug;
   }
 
   kind(): "cloud" {
