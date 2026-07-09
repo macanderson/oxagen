@@ -22,6 +22,11 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./agent.definition.suggest"))
         .agentDefinitionSuggestHandler as CapabilityHandlerFn,
   );
+  registerHandler("revise_agent_def",
+    async () =>
+      (await import("./agent.definition.revise"))
+        .agentDefinitionReviseHandler as CapabilityHandlerFn,
+  );
   registerHandler("summarize_agent_def",
     async () =>
       (await import("./agent.definition.summarize"))
@@ -518,6 +523,11 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./skill.draft"))
         .skillDraftHandler as CapabilityHandlerFn,
+  );
+  registerHandler("revise_skill",
+    async () =>
+      (await import("./skill.revise"))
+        .skillReviseHandler as CapabilityHandlerFn,
   );
   registerHandler("create_skill",
     async () =>

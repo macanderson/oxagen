@@ -36,6 +36,7 @@ import { codeFormat } from "./code.format";
 import { codeMap } from "./code.map";
 import { agentDefinitionCreate } from "./agent.definition.create";
 import { agentDefinitionSuggest } from "./agent.definition.suggest";
+import { agentDefinitionRevise } from "./agent.definition.revise";
 import { agentDefinitionSummarize } from "./agent.definition.summarize";
 import { agentDefinitionUpdate } from "./agent.definition.update";
 import { agentDefinitionPublish } from "./agent.definition.publish";
@@ -258,6 +259,7 @@ import { referenceSearch } from "./reference.search";
 import { referenceCite } from "./reference.cite";
 import { skillAuthor } from "./skill.author";
 import { skillDraft } from "./skill.draft";
+import { skillRevise } from "./skill.revise";
 import { schemaRegistryGet } from "./schema.registry.get";
 import { schemaRegistryConfig } from "./schema.registry.config";
 import { schemaList } from "./schema.list";
@@ -456,6 +458,7 @@ export {
   codeMap,
   agentDefinitionCreate,
   agentDefinitionSuggest,
+  agentDefinitionRevise,
   agentDefinitionSummarize,
   agentDefinitionUpdate,
   agentDefinitionPublish,
@@ -675,6 +678,7 @@ export {
   referenceCite,
   skillAuthor,
   skillDraft,
+  skillRevise,
   schemaRegistryGet,
   schemaRegistryConfig,
   schemaList,
@@ -778,6 +782,7 @@ export const contracts = [
   codeMap,
   agentDefinitionCreate,
   agentDefinitionSuggest,
+  agentDefinitionRevise,
   agentDefinitionSummarize,
   agentDefinitionUpdate,
   agentDefinitionPublish,
@@ -997,6 +1002,7 @@ export const contracts = [
   referenceCite,
   skillAuthor,
   skillDraft,
+  skillRevise,
   schemaRegistryGet,
   schemaRegistryConfig,
   schemaList,
