@@ -75,6 +75,7 @@ export async function agentSandboxListHandler(
 function toSandbox(row: {
   publicId: string;
   sessionKey: string | null;
+  metadata: unknown;
   image: string;
   status: string;
   driver: string;
