@@ -5,6 +5,7 @@ import { encrypt } from "@oxagen/crypto";
 import { createIngestionCryptoAdapter } from "@oxagen/crypto";
 import { getConnector } from "@oxagen/ingestion/connectors";
 import { logger } from "./logger";
+import { assertGithubInstallationAccessible } from "./lib/github-installation-access";
 
 export const connectionCreateHandler: CapabilityHandler<typeof connectionCreate> = async (
   input,
@@ -17,6 +18,19 @@ export const connectionCreateHandler: CapabilityHandler<typeof connectionCreate>
   // Validate connector exists before touching the DB
   const connector = getConnector(input.connectorId);
   const deliveryMethod = input.deliveryMethod ?? connector.deliveryMethod;
+
+  // AUTHORIZATION GATE (github): a client could smuggle an installationId through
+  // the opaque connectionConfig; binding it lets the server mint an installation
+  // token for that org, so verify the acting user can actually reach it on GitHub
+  // before trusting it. See connection.mappings.set for the full rationale.
+  if (input.connectorId === "github") {
+    const iid = (input.connectionConfig as Record<string, unknown> | null | undefined)?.[
+      "installationId"
+    ];
+    if (typeof iid === "string" || typeof iid === "number") {
+      await assertGithubInstallationAccessible(ctx, iid);
+    }
+  }
 
   // Encrypt auth credentials before storage
   const { adapter, keyId } = createIngestionCryptoAdapter();

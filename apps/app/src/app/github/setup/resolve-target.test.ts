@@ -17,6 +17,7 @@
 
 import { describe, it, expect, vi } from "vitest";
 import {
+  buildSettingsGithubPath,
   buildSourcesPath,
   resolveGithubSetupTarget,
   type GithubSetupQueries,
@@ -40,6 +41,14 @@ describe("buildSourcesPath", () => {
   it("builds the repos connections URL with the github setup marker", () => {
     expect(buildSourcesPath("acme", "research")).toBe(
       "/acme/research/knowledge/repos?setup=github",
+    );
+  });
+});
+
+describe("buildSettingsGithubPath", () => {
+  it("builds the settings/github URL (the connect/attach surface)", () => {
+    expect(buildSettingsGithubPath("acme", "research")).toBe(
+      "/acme/research/settings/github?github_installed=1",
     );
   });
 });
@@ -79,7 +88,9 @@ describe("resolveGithubSetupTarget", () => {
 
     const target = await resolveGithubSetupTarget("user-1", "12345", queries);
 
-    expect(target).toBe("/acme/research/knowledge/repos?setup=github");
+    // No matching connection → land on the connect/attach surface (settings),
+    // not the repo picker (which would assume a token and dead-end).
+    expect(target).toBe("/acme/research/settings/github?github_installed=1");
     expect(mostRecentMembership).toHaveBeenCalledWith("user-1");
   });
 
@@ -90,7 +101,7 @@ describe("resolveGithubSetupTarget", () => {
 
     const target = await resolveGithubSetupTarget("user-1", undefined, queries);
 
-    expect(target).toBe("/acme/research/knowledge/repos?setup=github");
+    expect(target).toBe("/acme/research/settings/github?github_installed=1");
     expect(matchInstallation).not.toHaveBeenCalled();
   });
 
@@ -102,18 +113,18 @@ describe("resolveGithubSetupTarget", () => {
 
     const target = await resolveGithubSetupTarget("user-1", "12345", queries);
 
-    expect(target).toBe("/acme/research/knowledge/repos?setup=github");
+    expect(target).toBe("/acme/research/settings/github?github_installed=1");
     expect(mostRecentMembership).toHaveBeenCalledTimes(1);
   });
 
-  it("(g) uses the fallback workspace sources path", async () => {
+  it("(g) uses the fallback workspace settings/github path", async () => {
     const { queries } = makeQueries({
       membership: [{ orgSlug: "beta", workspaceSlug: "main" }],
     });
 
     const target = await resolveGithubSetupTarget("user-1", undefined, queries);
 
-    expect(target).toBe("/beta/main/knowledge/repos?setup=github");
+    expect(target).toBe("/beta/main/settings/github?github_installed=1");
   });
 
   it("(h) sends the user to the org root when their org has no workspace yet", async () => {

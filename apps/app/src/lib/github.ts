@@ -56,7 +56,18 @@ export interface GithubStatusResponse {
   installations: Installation[];
   /** GitHub URL to add/remove which orgs the App is installed into. */
   manageUrl: string;
-  /** Signed GitHub App install URL — start (or re-run) the connect from here. */
+  /**
+   * Signed GitHub `login/oauth/authorize` (identity) URL — the primary
+   * "Connect GitHub" destination. Always returns to our callback with code+state
+   * even when the App is already installed on the target org, so a SECOND Oxagen
+   * tenant can establish its own token and connect. Prefer this over `installUrl`.
+   */
+  identityUrl: string;
+  /**
+   * Signed GitHub App install URL (`installations/new`) — installs the App on a
+   * NEW org or changes which repos it can access. Secondary affordance only;
+   * use `identityUrl` to establish a connection.
+   */
   installUrl: string;
 }
 
