@@ -127,7 +127,11 @@ jobs:
       - name: Lint and typecheck
         run: |
           set -f  # keep the unquoted ...[origin/main] filter literal (no globbing)
-          pnpm turbo run lint typecheck $TURBO_FILTER
+          # --concurrency=3: turbo's default (10) fans out parallel tsc/eslint
+          # processes far beyond the 2-core runner's memory; repeated exit-137
+          # runner kills ("shutdown signal" mid lint+typecheck) traced to this.
+          # Three concurrent tasks bounds peak RSS while keeping the cores busy.
+          pnpm turbo run lint typecheck --concurrency=3 $TURBO_FILTER
 
       - name: Manifest, contracts, env invariants
         run: pnpm check:manifest && pnpm check:contracts && pnpm env:check && pnpm db:lint-migrations
