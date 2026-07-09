@@ -49,7 +49,7 @@ describe("filterTools", () => {
   });
 
   it("matches by tool name (case-insensitive)", () => {
-    const result = filterTools(tools, "PR.get", "all", "all");
+    const result = filterTools(tools, "GET_pr", "all", "all");
     expect(result.map((t) => t.name)).toEqual(["get_pr"]);
   });
 
