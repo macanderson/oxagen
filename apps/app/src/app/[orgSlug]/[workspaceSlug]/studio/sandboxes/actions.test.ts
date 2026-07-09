@@ -84,7 +84,10 @@ describe("startSandboxAction", () => {
     const res = await startSandboxAction({ ...SCOPE, templateId: "oxagen-agent" });
     expect(res.ok).toBe(true);
     expect(startSandbox).toHaveBeenCalledTimes(1);
-    const [, arg] = startSandbox.mock.calls[0];
+    const [, arg] = startSandbox.mock.calls[0] as [
+      unknown,
+      { image?: string; setupCmd?: string; sessionKey?: string },
+    ];
     expect(arg.image).toBe("agent");
     expect(typeof arg.setupCmd).toBe("string");
     expect(arg.setupCmd).toContain("git init");
@@ -95,7 +98,10 @@ describe("startSandboxAction", () => {
     resolveStudioScope.mockResolvedValue(scope(true));
     startSandbox.mockResolvedValue({ sessionId: "sbx_x", reused: false });
     await startSandboxAction({ ...SCOPE, templateId: "blank" });
-    const [, arg] = startSandbox.mock.calls[0];
+    const [, arg] = startSandbox.mock.calls[0] as [
+      unknown,
+      { image?: string; setupCmd?: string; sessionKey?: string },
+    ];
     expect(arg.setupCmd).toBeUndefined();
   });
 
