@@ -46,7 +46,7 @@ describe("ToolCallCard", () => {
 
   it("derives a label for uncurated capabilities", () => {
     render(<ToolCallCard {...baseProps} capability="suggest_semantic_edges" />);
-    expect(screen.getByText("Suggest semantic edge")).toBeInTheDocument();
+    expect(screen.getByText("Suggest semantic edges")).toBeInTheDocument();
     expect(screen.queryByText("suggest_semantic_edges")).not.toBeInTheDocument();
   });
 
