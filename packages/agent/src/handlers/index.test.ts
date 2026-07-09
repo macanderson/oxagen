@@ -1,9 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 
 // Stub the tool.list handler module so resolveHandler returns a known fn.
-vi.mock("./agent.tool.list", () => ({
-  agentToolListHandler: vi.fn(async () => ({ tools: [] })),
-}));
+// resolveHandler first probes the name derived from the capability
+// ("list_agent_tools" → "list_agent_toolsHandler"); a vitest mock THROWS on
+// undefined exports (unlike a real module), so the mock must define the
+// derived name too, aliased to the module's readable export.
+vi.mock("./agent.tool.list", () => {
+  const agentToolListHandler = vi.fn(async () => ({ tools: [] }));
+  return { agentToolListHandler, list_agent_toolsHandler: agentToolListHandler };
+});
 
 import { resolveHandler, invokeCapability } from "./index";
 
