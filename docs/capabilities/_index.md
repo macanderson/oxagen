@@ -52,6 +52,7 @@ contract-first design, IAM enforcement, and instrumentation.
 - [agent.sandbox.exec](agent.sandbox.exec.md) — Run a shell command inside a durable sandbox session; filesystem/process state persists across calls; returns stdout, stderr, exit code
 - [agent.sandbox.files.list](agent.sandbox.files.list.md) — List files and directories inside a durable sandbox session's workspace
 - [agent.sandbox_file.read](agent.sandbox_file.read.md) — Read one file's contents from a durable sandbox session's workspace (UTF-8 text or base64 for binary, truncated at maxBytes)
+- [list_sandbox_logs](list_sandbox_logs.md) — List captured stdout/stderr/command output for a durable sandbox session, with a normal/debug verbosity filter
 - [agent.sandbox.snapshot](agent.sandbox.snapshot.md) — Capture a filesystem snapshot of a durable sandbox session so it can be restored after an idle reap or the 24h lifetime ceiling
 - [agent.sandbox.start](agent.sandbox.start.md) — Provision or reconnect to a durable code-agent sandbox that persists across turns; pass a stable sessionKey to reuse one warm sandbox
 - [agent.sandbox.stop](agent.sandbox.stop.md) — Terminate a durable sandbox session and release its resources; call when the work is finished

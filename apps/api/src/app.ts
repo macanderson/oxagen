@@ -27,6 +27,7 @@ import { agentSandboxSnapshotRoute } from "./routes/v1/agent.sandbox.snapshot";
 import { agentSandboxStopRoute } from "./routes/v1/agent.sandbox.stop";
 import { agentSandboxListRoute } from "./routes/v1/agent.sandbox.list";
 import { agentSandboxFilesListRoute } from "./routes/v1/agent.sandbox_file.list";
+import { agentSandboxLogsListRoute } from "./routes/v1/agent.sandbox_log.list";
 import { agentSandboxFileReadRoute } from "./routes/v1/agent.sandbox_file.read";
 import { agentFeatureVerifyRoute } from "./routes/v1/agent.feature.verify";
 import { browserNavigateRoute } from "./routes/v1/browser.navigate";
@@ -388,6 +389,8 @@ orgScoped.route("/agent/sandbox/stop", agentSandboxStopRoute);
 // List durable sessions in the workspace (id, status, timestamps) — read-only.
 orgScoped.route("/agent/sandbox/list", agentSandboxListRoute);
 orgScoped.route("/agent/sandbox/files", agentSandboxFilesListRoute);
+// Captured stdout/stderr/command output for a session — the log-console read.
+orgScoped.route("/agent/sandbox/logs", agentSandboxLogsListRoute);
 // Single-file read — the viewer counterpart of the /files listing above.
 orgScoped.route("/agent/sandbox/file", agentSandboxFileReadRoute);
 // Browser automation inside a durable sandbox (proof-of-done), org+workspace scoped.
