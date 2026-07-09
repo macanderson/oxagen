@@ -39,6 +39,21 @@ function parseRepos(fullNames: readonly string[] | undefined): Array<{ owner: st
   return out;
 }
 
+/**
+ * A GitHub connection's display name is always the repo slug it's bound to —
+ * `organization-slug/repo-slug` — never a free-form label. This keeps the
+ * Knowledge → Repos tab honest: one connection reads as exactly the repo it
+ * ingests, so the list can't fill with duplicate-looking generic names.
+ * Multi-repo selections show the primary repo plus a `(+N more)` count.
+ * Returns undefined when no repo is resolvable (nothing to rename to).
+ */
+function repoSlugName(repos: ReadonlyArray<{ owner: string; repo: string }>): string | undefined {
+  const [primary, ...rest] = repos;
+  if (!primary) return undefined;
+  const slug = `${primary.owner}/${primary.repo}`;
+  return rest.length > 0 ? `${slug} (+${rest.length} more)` : slug;
+}
+
 export const connectionMappingsSetHandler: CapabilityHandler<typeof connectionMappingsSet> = async (
   input,
   ctx,
@@ -97,6 +112,25 @@ export const connectionMappingsSetHandler: CapabilityHandler<typeof connectionMa
     Object.keys(dcUpdates).length > 0
       ? { ...((conn.deliveryConfig as Record<string, unknown> | null) ?? {}), ...dcUpdates }
       : undefined;
+
+  // Resolve the repo selection ONCE, up front, so both the auto-rename (below,
+  // in the activation UPDATE) and the initial-sync fan-out (after the tx) share
+  // the same list — the multi-repo wizard selection, else a single stored/
+  // request owner/repo (legacy + OXA-1806).
+  const dcForRepos =
+    ((mergedDeliveryConfig ?? conn.deliveryConfig) as Record<string, unknown> | null) ?? {};
+  let resolvedRepos = parseRepos(input.selectedRepos);
+  if (resolvedRepos.length === 0) {
+    const owner =
+      input.owner ?? (typeof dcForRepos["owner"] === "string" ? (dcForRepos["owner"] as string) : "");
+    const repo =
+      input.repo ?? (typeof dcForRepos["repo"] === "string" ? (dcForRepos["repo"] as string) : "");
+    if (owner && repo) resolvedRepos = [{ owner, repo }];
+  }
+
+  // A GitHub connection is always named after the repo slug it binds to. Only
+  // set it when we actually resolved a repo — never blank out an existing name.
+  const autoName = isGithub ? repoSlugName(resolvedRepos) : undefined;
 
   // Upsert every mapping AND (optionally) the connection status flip inside a
   // single tenant-scoped transaction. This is atomic — a mid-batch failure
@@ -166,13 +200,18 @@ export const connectionMappingsSetHandler: CapabilityHandler<typeof connectionMa
         .set({
           status: "connected",
           ...(mergedDeliveryConfig ? { deliveryConfig: mergedDeliveryConfig } : {}),
+          ...(autoName ? { displayName: autoName } : {}),
           updatedAt: now,
         })
         .where(eq(schema.sourceConnections.id, conn.id));
-    } else if (mergedDeliveryConfig) {
+    } else if (mergedDeliveryConfig || autoName) {
       await tx
         .update(schema.sourceConnections)
-        .set({ deliveryConfig: mergedDeliveryConfig, updatedAt: now })
+        .set({
+          ...(mergedDeliveryConfig ? { deliveryConfig: mergedDeliveryConfig } : {}),
+          ...(autoName ? { displayName: autoName } : {}),
+          updatedAt: now,
+        })
         .where(eq(schema.sourceConnections.id, conn.id));
     }
 
@@ -188,16 +227,10 @@ export const connectionMappingsSetHandler: CapabilityHandler<typeof connectionMa
     // queued per selected repo. defaultBranch is passed as a hint; the sync still
     // resolves the repo's real default branch from the GitHub API.
     if (isGithub) {
-      const dc = ((mergedDeliveryConfig ?? conn.deliveryConfig) as Record<string, unknown> | null) ?? {};
+      const dc = dcForRepos;
 
-      // Repos to sync: the multi-repo wizard selection, else a single
-      // request/stored owner/repo (legacy + OXA-1806).
-      let repos = parseRepos(input.selectedRepos);
-      if (repos.length === 0) {
-        const owner = input.owner ?? (typeof dc["owner"] === "string" ? (dc["owner"] as string) : "");
-        const repo = input.repo ?? (typeof dc["repo"] === "string" ? (dc["repo"] as string) : "");
-        if (owner && repo) repos = [{ owner, repo }];
-      }
+      // Repos to sync were resolved up front (shared with the auto-rename).
+      const repos = resolvedRepos;
 
       const defaultBranch =
         input.defaultBranch ??
