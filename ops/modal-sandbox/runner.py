@@ -718,7 +718,10 @@ async def sandbox_exec(
         else:
             exit_code = wait_task.result()
 
-        stdout_str = decode_output(await p.stdout.read.aio())
+        # Peel the cwd trailer off stdout before returning it to the caller.
+        stdout_str, result_cwd = _split_cwd_trailer(
+            decode_output(await p.stdout.read.aio())
+        )
         stderr_str = decode_output(await p.stderr.read.aio())
 
     except Exception as exc:
@@ -740,6 +743,7 @@ async def sandbox_exec(
         duration_ms=duration_ms,
         timed_out=timed_out,
         gone=False,
+        cwd=result_cwd,
     )
 
 
