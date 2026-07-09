@@ -22,6 +22,7 @@ const LOADERS: Record<string, LoaderEntry> = {
   "run_sandbox_command": () => import("./agent.sandbox.exec"),
   "snapshot_sandbox": () => import("./agent.sandbox.snapshot"),
   "stop_sandbox": () => import("./agent.sandbox.stop"),
+  "list_sandboxes": () => import("./agent.sandbox.list"),
   "list_sandbox_files": () => import("./agent.sandbox_file.list"),
   "read_sandbox_file": () => import("./agent.sandbox_file.read"),
   // Browser automation inside a durable session — all seven thin wrappers live

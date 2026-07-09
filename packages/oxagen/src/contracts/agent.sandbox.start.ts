@@ -95,6 +95,18 @@ export const agentSandboxStart = registerCapability({
           "run BELOW the caller-supplied env (caller values win). Trusted vault secrets " +
           "are NOT subject to the reserved-key denylist.",
       ),
+    sandboxTemplateId: z
+      .string()
+      .min(1)
+      .optional()
+      .describe(
+        "Optional sandbox template id (sbx_…). When set, the template's provider " +
+          "(must be session-capable), runtime image, resources, and network mode " +
+          "provision the session, and its environment + vault secret selection + " +
+          "literal env are frozen onto the session so every agent.sandbox.exec run " +
+          "sees them. Fails fast before provisioning if the template needs a " +
+          "not-yet-implemented network mode or a non-session-capable provider.",
+      ),
   }),
   output: z.object({
     sessionId: z

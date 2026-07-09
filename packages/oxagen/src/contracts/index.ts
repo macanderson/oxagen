@@ -20,6 +20,7 @@ import { agentSandboxSnapshot } from "./agent.sandbox.snapshot";
 import { agentSandboxStop } from "./agent.sandbox.stop";
 import { agentSandboxFilesList } from "./agent.sandbox_file.list";
 import { agentSandboxFileRead } from "./agent.sandbox_file.read";
+import { agentSandboxList } from "./agent.sandbox.list";
 import { browserNavigate } from "./browser.navigate";
 import { browserScreenshot } from "./browser.screenshot";
 import { browserFill } from "./browser.fill";
@@ -435,6 +436,7 @@ export {
   agentSandboxStop,
   agentSandboxFilesList,
   agentSandboxFileRead,
+  agentSandboxList,
   browserNavigate,
   browserScreenshot,
   browserFill,
@@ -752,6 +754,7 @@ export const contracts = [
   agentSandboxStop,
   agentSandboxFilesList,
   agentSandboxFileRead,
+  agentSandboxList,
   browserNavigate,
   browserScreenshot,
   browserFill,

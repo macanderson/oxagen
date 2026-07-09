@@ -62,6 +62,7 @@ const config: StorybookConfig = {
   stories: [
     "../src/components/chat/**/*.stories.@(ts|tsx)",
     "../src/components/knowledge/**/*.stories.@(ts|tsx)",
+    "../src/components/sandbox/**/*.stories.@(ts|tsx)",
   ],
   framework: { name: "@storybook/react-vite", options: {} },
   core: { disableTelemetry: true },

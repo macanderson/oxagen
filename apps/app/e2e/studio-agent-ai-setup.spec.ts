@@ -61,7 +61,10 @@ test("Describe step: skip reaches Identity and manual setup saves a draft", asyn
   await expect(page.getByTestId("agent-name-input")).toHaveValue("");
 
   // ── 3. Manual setup → Save draft (the shared create path) ─────────────────
-  const slug = `e2e-manual-${Date.now().toString(36)}`;
+  // Agent slugs are capped at 18 chars (global agent key ≤32:
+  // org_ns.workspace_ns.slug). Keep the prefix short so the base36 timestamp
+  // suffix stays within the cap.
+  const slug = `e2e-${Date.now().toString(36)}`;
   await page.getByTestId("agent-name-input").fill("E2E Manual Agent");
   // Slug auto-derives from the name; overwrite it with a unique value so the
   // assertion below targets exactly this run's row.

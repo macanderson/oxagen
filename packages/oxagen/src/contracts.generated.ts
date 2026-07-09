@@ -298,6 +298,8 @@ import "./contracts/system.install.instructions";
 import "./contracts/telemetry.error.cluster";
 import "./contracts/user.preferences.read";
 import "./contracts/user.preferences.write";
+import "./contracts/user.workspace_preferences.read";
+import "./contracts/user.workspace_preferences.write";
 import "./contracts/video.generate";
 import "./contracts/web.fetch";
 import "./contracts/web.search";

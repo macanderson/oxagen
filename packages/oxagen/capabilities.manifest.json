@@ -5197,6 +5197,41 @@
       }
     },
     {
+      "name": "get_workspace_user_preferences",
+      "file": "user.workspace_preferences.read.ts",
+      "domain": "user",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "docs": false,
+        "mcp": false,
+        "unit": false,
+        "app": true
+      }
+    },
+    {
+      "name": "update_workspace_user_preferences",
+      "file": "user.workspace_preferences.write.ts",
+      "domain": "user",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "docs": false,
+        "unit": false,
+        "app": true
+      }
+    },
+    {
       "name": "generate_video",
       "file": "video.generate.ts",
       "domain": "video",

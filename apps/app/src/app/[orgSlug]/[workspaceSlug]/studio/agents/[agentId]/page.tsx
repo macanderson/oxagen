@@ -4,6 +4,17 @@ import { getAgent } from "@/lib/studio/agents";
 import { loadEquipSources } from "@/lib/studio/equip-sources";
 import { AgentBuilder } from "../agent-builder";
 import { installPlugin, installBulkPlugin } from "@/lib/agent-tools/install-actions";
+import { AgentEnvironmentsCard } from "./agent-environments-card";
+import {
+  readAgentBindingsAction,
+  readEnvironmentOptionsAction,
+  readTemplateOptionsAction,
+  bindAgentEnvironmentAction,
+  unbindAgentEnvironmentAction,
+  type AgentEnvironmentBinding,
+  type EnvironmentOption,
+  type TemplateOption,
+} from "./environments-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -41,8 +52,27 @@ export default async function EditAgentPage({ params }: PageProps) {
 
   const readOnly = agent.managed || !canManage;
 
+  // Environment bindings + the options that populate the bind form. Each read
+  // degrades to empty so a failure never blocks the builder from rendering.
+  const scope = { orgSlug, workspaceSlug };
+  const [bindings, environments, templates] = await Promise.all([
+    readAgentBindingsAction({ ...scope, agentId: agent.publicId }).then(
+      (d) => d,
+      () => [] as AgentEnvironmentBinding[],
+    ),
+    readEnvironmentOptionsAction(scope).then(
+      (d) => d,
+      () => [] as EnvironmentOption[],
+    ),
+    readTemplateOptionsAction(scope).then(
+      (d) => d,
+      () => [] as TemplateOption[],
+    ),
+  ]);
+
   return (
-    <AgentBuilder
+    <div className="flex flex-col gap-6">
+      <AgentBuilder
       mode="edit"
       orgSlug={orgSlug}
       workspaceSlug={workspaceSlug}
@@ -68,6 +98,17 @@ export default async function EditAgentPage({ params }: PageProps) {
       }}
       installAction={installPlugin}
       installBulkAction={installBulkPlugin}
-    />
+      />
+      <AgentEnvironmentsCard
+        scope={scope}
+        agentId={agent.publicId}
+        canManage={canManage && !agent.managed}
+        bindings={bindings}
+        environments={environments}
+        templates={templates}
+        bindAction={bindAgentEnvironmentAction}
+        unbindAction={unbindAgentEnvironmentAction}
+      />
+    </div>
   );
 }

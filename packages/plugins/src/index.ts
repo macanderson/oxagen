@@ -83,6 +83,7 @@ export {
   unbindAgentEnvironment,
   listAgentBindings,
   resolveSandboxTemplateForRun,
+  installTemplatesFromPack,
 } from "./environments/sandbox-template-service";
 export type {
   SandboxTemplateActor,
@@ -90,4 +91,6 @@ export type {
   SandboxTemplateToolSummary,
   AgentEnvironmentBinding,
   ResolvedSandboxTemplate,
+  PackTemplateInstall,
+  InstallTemplatesFromPackResult,
 } from "./environments/sandbox-template-service";

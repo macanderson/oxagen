@@ -49,7 +49,7 @@ describe("buildLogMarkdown", () => {
     });
     expect(md).toContain("# Swarm log");
     expect(md).toContain("`fan_1`");
-    expect(md).toContain("web.search — completed");
+    expect(md).toContain("search_web — completed");
     expect(md).toContain("**Query:** USS Nautilus crew");
     expect(md).toContain("[Crew roster](https://x/crew)");
     expect(md).toContain("The first crew served under Wilkinson.");
@@ -66,7 +66,7 @@ describe("buildLogMarkdown", () => {
       ],
       timeline: [],
     });
-    expect(md).toContain("graph.node.upsert — failed");
+    expect(md).toContain("upsert_node — failed");
     expect(md).toContain("**Error:** neo4j down");
     expect(md).toContain("```json");
   });

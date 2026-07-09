@@ -597,3 +597,105 @@ describe("createVercelSandbox — warmup()", () => {
     await expect(driver.warmup?.()).resolves.toBeUndefined();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Template runtime/resources — custom image is unsupported; vcpu maps to vcpus
+// ---------------------------------------------------------------------------
+
+describe("createVercelSandbox — template image/resources", () => {
+  it("run() throws a clear error when a custom imageRef is set (fixed runtimes)", async () => {
+    const driver = createVercelSandbox({});
+    await expect(
+      driver.run({ ...makeVercelReq(), imageRef: "ghcr.io/acme/x@sha256:1" }),
+    ).rejects.toThrow(VercelSandboxUnsupportedError);
+  });
+
+  it("stream() throws a clear error when a custom imageRef is set", async () => {
+    const driver = createVercelSandbox({});
+    const iter = driver.stream({ ...makeVercelReq(), imageRef: "ghcr.io/acme/x@sha256:1" });
+    await expect(iter[Symbol.asyncIterator]().next()).rejects.toThrow(
+      VercelSandboxUnsupportedError,
+    );
+  });
+
+  it("maps vcpu to resources.vcpus, clamped to the ceiling of 4", async () => {
+    const finished = makeFinished("", "");
+    const instance: MockSandboxInstance = {
+      fs: { writeFile: vi.fn().mockResolvedValue(undefined) },
+      runCommand: vi.fn().mockResolvedValue(finished),
+      stop: vi.fn().mockResolvedValue(undefined),
+    };
+    const createFn: Mock = vi.fn().mockResolvedValue(instance);
+    const driver = createVercelSandbox({}, { create: createFn as unknown as SandboxFactory["create"] });
+
+    await driver.run({ ...makeVercelReq(), vcpu: 9 });
+
+    const params = createFn.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(params.resources).toEqual({ vcpus: 4 });
+  });
+
+  it("defaults resources.vcpus to 1 when vcpu is unset", async () => {
+    const finished = makeFinished("", "");
+    const instance: MockSandboxInstance = {
+      fs: { writeFile: vi.fn().mockResolvedValue(undefined) },
+      runCommand: vi.fn().mockResolvedValue(finished),
+      stop: vi.fn().mockResolvedValue(undefined),
+    };
+    const createFn: Mock = vi.fn().mockResolvedValue(instance);
+    const driver = createVercelSandbox({}, { create: createFn as unknown as SandboxFactory["create"] });
+
+    await driver.run(makeVercelReq());
+
+    const params = createFn.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(params.resources).toEqual({ vcpus: 1 });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getSandbox(provider) — per-run provider override
+// ---------------------------------------------------------------------------
+
+describe("getSandbox(provider) — per-run provider override", () => {
+  const origDriver = process.env.SANDBOX_DRIVER;
+  const origUrl = process.env.MODAL_RUNNER_URL;
+  const origToken = process.env.MODAL_RUNNER_TOKEN;
+
+  beforeEach(() => setSandboxForTests(null));
+
+  afterEach(() => {
+    if (origDriver === undefined) delete process.env.SANDBOX_DRIVER;
+    else process.env.SANDBOX_DRIVER = origDriver;
+    if (origUrl === undefined) delete process.env.MODAL_RUNNER_URL;
+    else process.env.MODAL_RUNNER_URL = origUrl;
+    if (origToken === undefined) delete process.env.MODAL_RUNNER_TOKEN;
+    else process.env.MODAL_RUNNER_TOKEN = origToken;
+    setSandboxForTests(null);
+  });
+
+  it("selects vercel when provider='vercel' regardless of SANDBOX_DRIVER", () => {
+    process.env.SANDBOX_DRIVER = "docker";
+    expect(getSandbox("vercel").name).toBe("vercel");
+  });
+
+  it("selects docker when provider='docker' even with modal creds present", () => {
+    process.env.SANDBOX_DRIVER = "modal";
+    process.env.MODAL_RUNNER_URL = "https://example.modal.run";
+    process.env.MODAL_RUNNER_TOKEN = "tok_test";
+    expect(getSandbox("docker").name).toBe("docker");
+  });
+
+  it("throws for provider='modal' when runner creds are missing — no silent fallback", () => {
+    delete process.env.MODAL_RUNNER_URL;
+    delete process.env.MODAL_RUNNER_TOKEN;
+    expect(() => getSandbox("modal")).toThrow(/MODAL_RUNNER_URL/);
+  });
+
+  it("throws for an unknown provider name", () => {
+    expect(() => getSandbox("fly")).toThrow(/unknown provider/);
+  });
+
+  it("no-arg getSandbox still honors SANDBOX_DRIVER as the default", () => {
+    process.env.SANDBOX_DRIVER = "docker";
+    expect(getSandbox().name).toBe("docker");
+  });
+});

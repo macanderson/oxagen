@@ -61,7 +61,7 @@ describe("AgentStreamEvent variants", () => {
     ];
     const out = events.map(summarize);
     expect(out).toHaveLength(10);
-    expect(out[0]).toBe("start:c1:agent.code.execute");
+    expect(out[0]).toBe("start:c1:execute_code");
     expect(out[7]).toBe("fan:f1:2");
   });
 

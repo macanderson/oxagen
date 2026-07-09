@@ -61,12 +61,6 @@
       "equivalent": "The \"/\" keyboard-shortcut hint chip is decorative only; the search input beneath it stays fully rendered and focusable by tap on every viewport, so no functionality is hidden, only the keyboard hint."
     },
     {
-      "file": "apps/app/src/components/chat/chat-agent-toolbar.tsx",
-      "match": "hidden sm:flex",
-      "kind": "reflow",
-      "equivalent": "Per this file's own comment, the repo/environment summary line only appears while collapsed on phones; when expanded, the full-width stacked repo and environment pickers already show the identical selection, so the summary text is redundant on mobile, not missing."
-    },
-    {
       "file": "apps/app/src/components/chat/conversation-files.tsx",
       "match": "hidden sm:inline",
       "kind": "reflow",
