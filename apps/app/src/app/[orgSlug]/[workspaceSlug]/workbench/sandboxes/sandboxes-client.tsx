@@ -4,11 +4,14 @@
  * sandboxes-client.tsx — the Workbench → Sandboxes list + "warm a sandbox" panel.
  *
  * Lists a workspace's durable sandbox sessions and lets a manager warm a new one
- * from a template (image + one-time setupCmd). Warming calls startSandboxAction
- * and, on success, routes to the sandbox detail page where the terminal + file
- * browser live. When durable sandboxes aren't configured (SANDBOX_ENABLED off /
- * no Modal driver) the panel still lists any recorded sessions but explains why
- * warming a new one will fail, instead of silently offering a dead button.
+ * from a template. Every warm is NAMED (a required human label) so sessions are
+ * identifiable in the list instead of showing a bare sbx_ id. Picking a template
+ * shows a rich card of exactly what's baked into its image — languages +
+ * versions, package managers, pre-installed system packages — so the choice is
+ * informed. Warming calls startSandboxAction and, on success, routes to the
+ * sandbox detail page where the terminal + file browser live. When durable
+ * sandboxes aren't configured (SANDBOX_ENABLED off / no Modal driver) the panel
+ * still lists any recorded sessions but explains why warming a new one will fail.
  */
 
 import { useMemo, useState, useTransition } from "react";
@@ -17,6 +20,8 @@ import Link from "next/link";
 import { Boxes, Play, Terminal } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Card,
   CardHeader,
@@ -38,6 +43,7 @@ import {
   DEFAULT_TEMPLATE_ID,
   templateById,
 } from "@/components/sandbox/warm-up-templates";
+import { SandboxTemplateCard } from "@/components/sandbox/sandbox-template-card";
 import { startSandboxAction } from "./actions";
 
 const STATUS_TONE: Record<SandboxStatus, "success" | "warning" | "secondary"> = {
@@ -75,16 +81,24 @@ export function SandboxesClient({
 }: SandboxesClientProps) {
   const router = useRouter();
   const [templateId, setTemplateId] = useState(DEFAULT_TEMPLATE_ID);
+  const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   const template = useMemo(() => templateById(templateId), [templateId]);
   const sandboxes = initialSandboxes;
+  const trimmedName = name.trim();
+  const canWarm = canManage && !pending && trimmedName.length > 0;
 
   const onWarm = () => {
     setError(null);
     startTransition(async () => {
-      const res = await startSandboxAction({ orgSlug, workspaceSlug, templateId });
+      const res = await startSandboxAction({
+        orgSlug,
+        workspaceSlug,
+        name: trimmedName,
+        templateId,
+      });
       if (res.ok) {
         router.push(
           workspace.workbench.sandbox({ orgSlug, workspaceSlug }, res.sandbox.sessionId),
@@ -105,8 +119,9 @@ export function SandboxesClient({
             Warm a sandbox
           </CardTitle>
           <CardDescription>
-            Provision a durable sandbox from a template — its one-time setup runs
-            at create time so an agent wakes up to a ready workspace.
+            Name it, pick a template, and provision a durable sandbox — its
+            one-time setup runs at create time so an agent wakes up to a ready
+            workspace.
           </CardDescription>
         </CardHeader>
         <CardPanel className="flex flex-col gap-4">
@@ -122,21 +137,28 @@ export function SandboxesClient({
             </div>
           ) : null}
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
             <div className="flex flex-1 flex-col gap-1.5">
-              <label
-                htmlFor="sandbox-template"
-                className="text-xs font-medium text-muted-foreground"
-              >
-                Template
-              </label>
+              <Label htmlFor="sandbox-name">Name</Label>
+              <Input
+                id="sandbox-name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="e.g. acme-api refactor"
+                maxLength={80}
+                autoComplete="off"
+                aria-describedby="sandbox-name-hint"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="sandbox-template">Template</Label>
               <Select
                 value={templateId}
                 onValueChange={(v) => setTemplateId(v ?? DEFAULT_TEMPLATE_ID)}
               >
                 <SelectTrigger
                   id="sandbox-template"
-                  className="w-full sm:w-72"
+                  className="w-full sm:w-64"
                   aria-label="Sandbox template"
                 >
                   <SelectValue placeholder="Choose a template" />
@@ -153,19 +175,18 @@ export function SandboxesClient({
             <Button
               type="button"
               onClick={onWarm}
-              disabled={!canManage || pending}
+              disabled={!canWarm}
               className="shrink-0"
             >
               {pending ? "Warming…" : "Warm sandbox"}
             </Button>
           </div>
+          <p id="sandbox-name-hint" className="text-xs text-muted-foreground">
+            A name so you can tell your sandboxes apart later — it doesn&apos;t
+            need to be unique.
+          </p>
 
-          <p className="text-sm text-muted-foreground">{template.description}</p>
-          {template.setupCmd ? (
-            <pre className="overflow-x-auto rounded-lg bg-muted p-3 font-mono text-xs text-muted-foreground">
-              {template.setupCmd}
-            </pre>
-          ) : null}
+          <SandboxTemplateCard template={template} />
 
           {!canManage ? (
             <p className="text-xs text-muted-foreground">
@@ -203,16 +224,18 @@ export function SandboxesClient({
                   className="flex flex-col gap-2 rounded-xl border border-border bg-background p-4 transition-colors hover:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="flex items-center gap-2 font-mono text-sm">
+                    <span className="flex items-center gap-2 text-sm font-medium">
                       <Terminal className="h-4 w-4 text-muted-foreground" aria-hidden />
-                      {s.sessionId}
+                      {s.label ?? s.sessionId}
                     </span>
                     <Badge variant={STATUS_TONE[s.status]}>{s.status}</Badge>
                   </div>
                   <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                    {s.label ? (
+                      <span className="font-mono">{s.sessionId}</span>
+                    ) : null}
                     <span>image: {s.image}</span>
                     <span>driver: {s.driver}</span>
-                    {s.sessionKey ? <span>key: {s.sessionKey}</span> : null}
                     <span>last used: {relativeTime(s.lastUsedAt)}</span>
                   </div>
                 </Link>
