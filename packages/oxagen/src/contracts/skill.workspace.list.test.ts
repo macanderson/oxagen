@@ -27,21 +27,31 @@ describe("skill.workspace.list capability", () => {
 
   // ── output shape ──────────────────────────────────────────────────────────
 
-  it("parses a valid output with one skill", () => {
-    const parsed = skillWorkspaceList.output.parse({
-      skills: [
-        {
-          id: "skill-001",
-          name: "web-search",
-          description: "Search the web for information.",
-          enabled: true,
-        },
-      ],
-    });
+  // A fully-populated skill row — the shape the app's list page consumes
+  // (slug/source/activeVersion/updatedAt are required; their prior absence
+  // blanked the workbench Skills table).
+  const validSkill = (overrides: Record<string, unknown> = {}) => ({
+    id: "skill-001",
+    slug: "web-search",
+    name: "web-search",
+    description: "Search the web for information.",
+    source: "tenant",
+    enabled: true,
+    activeVersion: "v1",
+    updatedAt: "2026-07-01T12:00:00.000Z",
+    ...overrides,
+  });
+
+  it("parses a valid output with one fully-populated skill", () => {
+    const parsed = skillWorkspaceList.output.parse({ skills: [validSkill()] });
     expect(parsed.skills).toHaveLength(1);
     expect(parsed.skills[0]?.id).toBe("skill-001");
+    expect(parsed.skills[0]?.slug).toBe("web-search");
     expect(parsed.skills[0]?.name).toBe("web-search");
+    expect(parsed.skills[0]?.source).toBe("tenant");
     expect(parsed.skills[0]?.enabled).toBe(true);
+    expect(parsed.skills[0]?.activeVersion).toBe("v1");
+    expect(parsed.skills[0]?.updatedAt).toBe("2026-07-01T12:00:00.000Z");
   });
 
   it("parses a valid output with no skills (empty array)", () => {
@@ -51,16 +61,22 @@ describe("skill.workspace.list capability", () => {
 
   it("parses a skill with enabled=false", () => {
     const parsed = skillWorkspaceList.output.parse({
-      skills: [
-        {
-          id: "skill-002",
-          name: "code-execute",
-          description: "Execute code in a sandbox.",
-          enabled: false,
-        },
-      ],
+      skills: [validSkill({ id: "skill-002", slug: "code-execute", name: "code-execute", enabled: false })],
     });
     expect(parsed.skills[0]?.enabled).toBe(false);
+  });
+
+  it("accepts null activeVersion and null updatedAt", () => {
+    const parsed = skillWorkspaceList.output.parse({
+      skills: [validSkill({ activeVersion: null, updatedAt: null })],
+    });
+    expect(parsed.skills[0]?.activeVersion).toBeNull();
+    expect(parsed.skills[0]?.updatedAt).toBeNull();
+  });
+
+  it("rejects a skill missing the required slug field", () => {
+    const { slug: _omit, ...noSlug } = validSkill();
+    expect(() => skillWorkspaceList.output.parse({ skills: [noSlug] })).toThrow();
   });
 
   it("rejects a skill missing the name field", () => {

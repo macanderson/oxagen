@@ -45,10 +45,60 @@ describe("SandboxTerminal", () => {
     typeCommand("echo hello world");
 
     await waitFor(() => {
-      expect(runCommand).toHaveBeenCalledWith("echo hello world");
+      // First command in a session has no prior cwd to resume from.
+      expect(runCommand).toHaveBeenCalledWith("echo hello world", {
+        cwd: undefined,
+      });
     });
     expect(await screen.findByText("hello world")).toBeTruthy();
     expect(screen.getByText(/exit 0/)).toBeTruthy();
+  });
+
+  it("persists the working directory across commands and shows it in the prompt", async () => {
+    const runCommand = vi
+      .fn()
+      .mockResolvedValueOnce(ok({ cwd: "/work/repo" }))
+      .mockResolvedValueOnce(ok({ stdout: "file.txt", cwd: "/work/repo" }));
+    render(<SandboxTerminal sessionId="sbx_abc123def456" runCommand={runCommand} />);
+
+    typeCommand("cd /work/repo");
+    await waitFor(() =>
+      expect(runCommand).toHaveBeenNthCalledWith(1, "cd /work/repo", {
+        cwd: undefined,
+      }),
+    );
+
+    // The resulting cwd is now surfaced in the live prompt…
+    const prompt = await screen.findByTestId("sandbox-terminal-cwd");
+    expect(prompt.textContent).toBe("/work/repo");
+
+    // …and threaded into the next command so `cd` persists.
+    typeCommand("ls");
+    await waitFor(() =>
+      expect(runCommand).toHaveBeenNthCalledWith(2, "ls", { cwd: "/work/repo" }),
+    );
+  });
+
+  it("keeps the prior cwd when a command reports no cwd (pre-cwd runner)", async () => {
+    const runCommand = vi
+      .fn()
+      .mockResolvedValueOnce(ok({ cwd: "/work" }))
+      .mockResolvedValueOnce(ok({ stdout: "no cwd here" })); // runner omits cwd
+    render(<SandboxTerminal sessionId="sbx_abc123def456" runCommand={runCommand} />);
+
+    typeCommand("pwd");
+    await waitFor(() => expect(runCommand).toHaveBeenCalledTimes(1));
+
+    typeCommand("some-tool");
+    await waitFor(() =>
+      expect(runCommand).toHaveBeenNthCalledWith(2, "some-tool", { cwd: "/work" }),
+    );
+
+    // A third command still resumes from /work — the undefined result didn't clobber it.
+    typeCommand("again");
+    await waitFor(() =>
+      expect(runCommand).toHaveBeenNthCalledWith(3, "again", { cwd: "/work" }),
+    );
   });
 
   it("renders a non-zero exit and stderr", async () => {

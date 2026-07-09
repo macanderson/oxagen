@@ -22,10 +22,22 @@ export const skillWorkspaceList = registerCapability({
   output: z.object({
     skills: z.array(
       z.object({
+        // Public ID (skl_…). NOT the on-screen identifier — see slug.
         id: z.string(),
+        // Kebab-case workspace-unique identifier. Required by the app: it is
+        // the detail-route segment (…/skills/<slug>), the search key, and the
+        // metrics join key. Its absence is what previously blanked the list.
+        slug: z.string(),
         name: z.string(),
         description: z.string(),
+        // "builtin" | "tenant" (+ future provenance) — drives the source badge.
+        source: z.string(),
         enabled: z.boolean(),
+        // Pinned active version rendered in the list (e.g. "v1"); null when no
+        // version is pinned yet.
+        activeVersion: z.string().nullable(),
+        // ISO-8601 last-modified timestamp; null when unavailable.
+        updatedAt: z.string().nullable(),
       }),
     ),
   }),
