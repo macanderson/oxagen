@@ -192,6 +192,12 @@ function makeFormData(overrides: Record<string, string> = {}): FormData {
 
 function makeSuccessfulDb(orgId = "org-123", orgSlug = "acme-inc", workspaceSlug = "default") {
   return {
+    // Namespace-collision lookup: deriveNamespace reads every existing
+    // organization namespace before the org insert. No org namespaces are
+    // taken in these fixtures, so the first candidate always wins.
+    select: (_cols: unknown) => ({
+      from: (_table: unknown) => Promise.resolve([] as { namespace: string }[]),
+    }),
     insert: (table: unknown) => ({
       values: (_data: unknown) => ({
         returning: () => {
@@ -399,6 +405,9 @@ describe("createOrgAction", () => {
     let billingInsertCalled = false;
     mockWithSystemDb.mockImplementation(async (fn: (tx: unknown) => unknown) => {
       const tx = {
+        select: (_cols: unknown) => ({
+          from: (_table: unknown) => Promise.resolve([] as { namespace: string }[]),
+        }),
         insert: (table: unknown) => ({
           values: (_data: unknown) => {
             const name = getTableName(table as Parameters<typeof getTableName>[0]);
@@ -430,6 +439,9 @@ describe("createOrgAction", () => {
     let billingInsertCalled = false;
     mockWithSystemDb.mockImplementation(async (fn: (tx: unknown) => unknown) => {
       const tx = {
+        select: (_cols: unknown) => ({
+          from: (_table: unknown) => Promise.resolve([] as { namespace: string }[]),
+        }),
         insert: (table: unknown) => ({
           values: (_data: unknown) => {
             const name = getTableName(table as Parameters<typeof getTableName>[0]);
