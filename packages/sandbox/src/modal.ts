@@ -85,6 +85,9 @@ const ModalExecResponseSchema = z.object({
   duration_ms: z.number(),
   timed_out: z.boolean(),
   gone: z.boolean(),
+  // Resulting working directory (durable-terminal cwd persistence). nullish so a
+  // runner deployed before cwd support (omits the field) still parses cleanly.
+  cwd: z.string().nullish(),
 });
 const ModalSnapshotResponseSchema = z.object({ snapshot_id: z.string() });
 const ModalStatusResponseSchema = z.object({
