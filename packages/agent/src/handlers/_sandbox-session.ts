@@ -73,6 +73,13 @@ export interface SessionMeta {
   idleTimeoutSeconds: number;
   network: "allow" | "deny";
   /**
+   * Human-friendly name for the session, shown in the sandbox list so a person
+   * can tell warm sandboxes apart. Display-only — reuse is keyed by sessionKey,
+   * never this. Stored in the metadata JSON blob (no migration); absent for
+   * sessions started without a name.
+   */
+  label?: string;
+  /**
    * Workspace environment id (env_…) bound to this session at start time, if
    * any. `agent.sandbox.exec` resolves this environment's vault secrets and
    * injects them (below the caller-supplied env) into every command, so a
