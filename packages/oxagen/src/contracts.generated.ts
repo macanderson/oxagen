@@ -216,6 +216,8 @@ import "./contracts/privacy.data.erase";
 import "./contracts/privacy.data.export";
 import "./contracts/prompt.settings.read";
 import "./contracts/prompt.settings.write";
+import "./contracts/reference.cite";
+import "./contracts/reference.search";
 import "./contracts/repo.branch.create";
 import "./contracts/repo.ci.status";
 import "./contracts/repo.configure";

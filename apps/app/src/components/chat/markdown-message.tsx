@@ -28,8 +28,8 @@ import { createCodePlugin } from "@streamdown/code";
 import { createMermaidPlugin } from "@streamdown/mermaid";
 import {
   MENTION_PROTOCOL,
-  MENTION_TOKEN_REGEX,
   mentionFromHref,
+  parseMentions,
   textWithMentionLinks,
 } from "@oxagen/ai/mentions";
 import { cn } from "@/lib/utils";
@@ -124,8 +124,10 @@ export function MarkdownMessage({ children, streaming = false, className }: Mark
   // applied when the text actually contains a mention token, so ordinary
   // messages keep Streamdown's stock anchors (incl. the linkSafety modal).
   const { content, hasMentions } = React.useMemo(() => {
-    MENTION_TOKEN_REGEX.lastIndex = 0;
-    if (!MENTION_TOKEN_REGEX.test(children)) {
+    // parseMentions is reentrant-safe (it owns the shared regex's state);
+    // never touch MENTION_TOKEN_REGEX here — mutating module state during
+    // render violates react-hooks/immutability.
+    if (parseMentions(children).length === 0) {
       return { content: children, hasMentions: false };
     }
     return { content: textWithMentionLinks(children), hasMentions: true };
