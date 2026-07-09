@@ -51,15 +51,15 @@ export function MentionChip({
   const Icon = meta.icon;
 
   const [hydration, setHydration] = React.useState<HydrationState>({ status: "idle" });
-  const hydrationRef = React.useRef(hydration.status);
-  hydrationRef.current = hydration.status;
 
   const orgSlug = typeof params?.orgSlug === "string" ? params.orgSlug : null;
   const workspaceSlug = typeof params?.workspaceSlug === "string" ? params.workspaceSlug : null;
   const canHydrate = properties === null && orgSlug !== null && workspaceSlug !== null;
 
+  // Recreated every render, so it closes over the CURRENT hydration state —
+  // no ref needed (and writing a ref during render violates react-hooks/refs).
   const handleOpenChange = (open: boolean) => {
-    if (!open || !canHydrate || hydrationRef.current !== "idle") return;
+    if (!open || !canHydrate || hydration.status !== "idle") return;
     setHydration({ status: "loading" });
     void (async () => {
       try {
