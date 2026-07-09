@@ -2,9 +2,25 @@
 import * as React from "react";
 import { Check, ChevronDown, ChevronRight, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { JsonSnippet } from "./json-snippet";
 import { StructuredField } from "./structured-value";
 import { toolCallMeta } from "./tool-call-meta";
 import type { RiskLevel, ToolCallStatus } from "./stream-event-types";
+
+/**
+ * Graph query results are big machine-shaped documents (node/edge hits with
+ * full property bags) where the structured chip/grid tree becomes an
+ * unreadable wall. These capabilities render their Result as a clipped,
+ * syntax-highlighted JSON snippet with a copy button instead.
+ */
+const JSON_RESULT_CAPS = new Set([
+  "search_graph",
+  "query_ontology",
+  "get_ontology_neighbors",
+  "run_cypher",
+  "search_nodes",
+  "get_graph_stats",
+]);
 
 export interface ToolCallCardProps {
   toolCallId: string;
@@ -91,6 +107,9 @@ export function ToolCallCard(props: ToolCallCardProps) {
   // instead of stacking two full-width definition lists.
   const showResult = output !== undefined && status === "completed";
   const showInput = status !== "pending";
+  // Graph-query results stack full-width as a plain JSON snippet — squeezing a
+  // large document into a half-width column defeats the point.
+  const jsonResult = JSON_RESULT_CAPS.has(capability);
 
   return (
     <div
@@ -135,7 +154,14 @@ export function ToolCallCard(props: ToolCallCardProps) {
             <span aria-hidden="true">·</span>
             <span className="uppercase tracking-wide">{riskLevel} risk</span>
           </div>
-          {showInput && showResult ? (
+          {showInput && showResult && jsonResult ? (
+            <>
+              <StructuredField label="Input" value={inputPreview} />
+              <Section label="Result">
+                <JsonSnippet value={output} />
+              </Section>
+            </>
+          ) : showInput && showResult ? (
             <div className="grid gap-2 md:grid-cols-2">
               <StructuredField label="Input" value={inputPreview} />
               <StructuredField label="Result" value={output} />
@@ -159,7 +185,15 @@ export function ToolCallCard(props: ToolCallCardProps) {
               ) : (
                 <StructuredField label="Input" value={inputPreview} />
               )}
-              {showResult ? <StructuredField label="Result" value={output} /> : null}
+              {showResult ? (
+                jsonResult ? (
+                  <Section label="Result">
+                    <JsonSnippet value={output} />
+                  </Section>
+                ) : (
+                  <StructuredField label="Result" value={output} />
+                )
+              ) : null}
             </>
           )}
           {(stdout || stderr || status === "running") && (

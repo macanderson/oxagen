@@ -146,13 +146,31 @@ test.describe("chat attachments — image upload, send, and persisted render", (
     const composer = page.getByPlaceholder(/send a message/i);
     await expect(composer).toBeVisible({ timeout: 10_000 });
 
-    // Capture the real upload request so we can assert it went up as kind=video
-    // (the composer routes videos to the video kind; keyframe sampling is a
-    // client-only best-effort that a headless synthetic clip won't decode, so
-    // this case verifies the video-asset wiring, not the frame fallback).
-    const uploadReq = page.waitForRequest(
-      (req) =>
-        req.url().includes("/api/v1/upload/attachment") && req.method() === "POST",
+    // Assert the video went up as a VIDEO asset by inspecting the upload
+    // route's RESPONSE, not the request body. Chromium does not reliably
+    // surface a multipart/form-data request body that carries a file part —
+    // `request.postDataBuffer()` returns the bytes on some platforms (local
+    // macOS) but null in CI's containerized Linux Chromium — so sniffing the
+    // request for the "video" substring flakes by environment. The route's
+    // 201 JSON (`{ publicId, kind, mimeType, ... }` — see
+    // apps/app/src/app/api/v1/upload/attachment/route.ts) is a deterministic
+    // signal that is also STRONGER: it proves the server actually persisted a
+    // video asset (kind="video"), which is exactly what this case is named for.
+    // The async predicate matches on the parsed body, so it locks onto the
+    // video upload specifically even if a keyframe (kind="image") upload were
+    // ever to race alongside it (a synthetic clip won't decode, so none do).
+    const uploadRes = page.waitForResponse(
+      async (res) => {
+        if (
+          !res.url().includes("/api/v1/upload/attachment") ||
+          res.request().method() !== "POST" ||
+          res.status() !== 201
+        ) {
+          return false;
+        }
+        const body = (await res.json().catch(() => null)) as { kind?: string } | null;
+        return body?.kind === "video";
+      },
       { timeout: 20_000 },
     );
 
@@ -168,10 +186,9 @@ test.describe("chat attachments — image upload, send, and persisted render", (
       buffer: Buffer.from("fake-mp4-bytes"),
     });
 
-    const postedForm = (await uploadReq).postDataBuffer();
-    // The multipart body carries the kind field; assert the composer set it to
-    // "video" (not "image").
-    expect(postedForm?.toString("latin1")).toContain("video");
+    const uploadedAsset = (await (await uploadRes).json()) as { kind?: string };
+    // The server persisted the upload as a video asset (not an image).
+    expect(uploadedAsset.kind).toBe("video");
 
     // The video chip appears and reaches "uploaded" once the real upload lands.
     // There is exactly one VISIBLE chip (keyframes, if any, are hidden).

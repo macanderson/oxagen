@@ -63,6 +63,11 @@ const ACTIONS = new Set([
   "fill", "click", "navigate",
   // associative verbs — bind/unbind an agent to an environment (Spec §5.6).
   "bind", "unbind",
+  // imperative verbs used by shipped capabilities that predate this list
+  // (draft_skill, save_memory, post_conversation_message, debug_execution) —
+  // renaming a shipped capability requires the seed-then-deploy runbook
+  // (docs/specs/adr025-reland-runbook.md), so the verbs are admitted instead.
+  "draft", "save", "post", "debug",
   // snake_case compound actions
   "set_enabled", "set_default", "set_secret", "set_auth_alerts", "set_tools",
   "import_env", "install_bulk", "from_traces",

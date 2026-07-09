@@ -280,6 +280,7 @@ export function WorkspaceGeneralForm({
             type="submit"
             variant="gradient"
             size="sm"
+            className="max-md:h-11"
             disabled={isSaving || !values.name.trim() || !values.slug.trim()}
             startIcon={<Save className="h-3.5 w-3.5" aria-hidden="true" />}
           >

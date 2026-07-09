@@ -40,6 +40,14 @@ import { interceptFormFillEvents } from "./intercept-form-fill";
 import { ThinkingBubble } from "./thinking-bubble";
 import { MessageFooter } from "./message-footer";
 import { useToast } from "@/components/ui/toast";
+import { PanelRight } from "lucide-react";
+import {
+  Sheet,
+  SheetPopup,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/sheet";
 
 /**
  * Friendly toast title for a turn-level error, keyed off the machine `code`
@@ -351,6 +359,9 @@ export function ChatShellClient({
   // Stream error — set when the SSE fetch returns a non-2xx response or throws
   // a non-abort error. Cleared at the start of each new turn.
   const [streamError, setStreamError] = React.useState<string | null>(null);
+  // Below-lg reflow of the right rail (trace + workspace context): the same
+  // panels open in a bottom sheet — mobile feature parity per ADR-026.
+  const [mobileRailOpen, setMobileRailOpen] = React.useState(false);
   const setStreamErrorRef = useLatestRef(setStreamError);
 
   // Latest conversationId, read inside the send callback (whose deps don't
@@ -1287,6 +1298,64 @@ export function ChatShellClient({
             className="min-h-64 flex-1"
           />
         </aside>
+      ) : null}
+
+      {/* Below lg the rail reflows into a bottom sheet (ADR-026 mobile parity):
+          a floating thumb-reachable trigger above the mobile bottom bar opens
+          the identical trace + workspace panels. */}
+      {showFiles ? (
+        <div className="lg:hidden">
+          <button
+            type="button"
+            data-testid="chat-mobile-rail-trigger"
+            aria-haspopup="dialog"
+            aria-expanded={mobileRailOpen}
+            onClick={() => setMobileRailOpen(true)}
+            className={cn(
+              "fixed right-3 z-20 flex h-11 items-center gap-1.5 rounded-full border border-border/60",
+              "bg-background/95 px-4 text-xs font-medium text-muted-foreground shadow-sm backdrop-blur",
+              "bottom-[calc(var(--bottom-bar-h)+var(--bottom-bar-gap,0px)+env(safe-area-inset-bottom)+0.75rem)] md:bottom-3",
+              "hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            )}
+          >
+            <PanelRight className="size-4" aria-hidden="true" />
+            Activity
+          </button>
+          <Sheet open={mobileRailOpen} onOpenChange={setMobileRailOpen}>
+            <SheetPopup
+              side="bottom"
+              className="flex max-h-[85vh] flex-col gap-0 rounded-t-2xl p-0 pb-[env(safe-area-inset-bottom)]"
+            >
+              <SheetHeader className="border-b px-4 py-3 text-left">
+                <SheetTitle>Activity</SheetTitle>
+                <SheetDescription className="sr-only">
+                  Turn trace and workspace context for this conversation
+                </SheetDescription>
+              </SheetHeader>
+              <div
+                className="flex flex-col gap-3 overflow-y-auto p-3"
+                data-testid="chat-mobile-rail-sheet"
+              >
+                <CodingTracePanel
+                  order={order}
+                  plans={plans}
+                  toolCalls={toolCalls}
+                  activeFanouts={activeFanouts}
+                  turnUsage={turnUsage}
+                  isStreaming={isStreaming}
+                  className="w-full"
+                />
+                <WorkspaceContextPanel
+                  conversationPublicId={conversationPublicId}
+                  orgSlug={orgSlug}
+                  workspaceSlug={workspaceSlug}
+                  toolCalls={toolCalls}
+                  className="min-h-64"
+                />
+              </div>
+            </SheetPopup>
+          </Sheet>
+        </div>
       ) : null}
     </div>
   );

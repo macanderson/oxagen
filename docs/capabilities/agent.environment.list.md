@@ -1,4 +1,4 @@
-# agent.environment.list
+# list_agent_environments
 
 **Domain:** agent
 **Mode:** sync
@@ -12,7 +12,7 @@
 List an agent's environment bindings, with each binding's resolved sandbox
 template name. This is the read path behind the agent's environment/sandbox
 configuration panel and is the introspection counterpart to
-`agent.environment.bind`/`agent.environment.unbind`. Workspace members can
+`bind_agent_environment`/`unbind_agent_environment`. Workspace members can
 read.
 
 ## Input
@@ -45,7 +45,7 @@ Content-Type: application/json
 
 ## MCP
 
-Tool name: `agent.environment.list`
+Tool name: `list_agent_environments`
 
 ## Errors
 

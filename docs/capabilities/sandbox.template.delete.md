@@ -1,4 +1,4 @@
-# sandbox.template.delete
+# delete_sandbox_template
 
 **Domain:** sandbox
 **Mode:** sync
@@ -11,7 +11,7 @@
 
 Soft-delete a sandbox template. A default template cannot be deleted —
 promote another template in the same environment first via
-`sandbox.template.set_default`. Any `agent.environment.bind` rows that
+`set_default_sandbox_template`. Any `bind_agent_environment` rows that
 explicitly pinned this template fall back to resolving the environment's
 default template at run time. Owner/Admin only.
 
@@ -47,7 +47,7 @@ Content-Type: application/json
 
 ## MCP
 
-Tool name: `sandbox.template.delete`
+Tool name: `delete_sandbox_template`
 
 ## Errors
 

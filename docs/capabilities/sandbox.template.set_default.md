@@ -1,4 +1,4 @@
-# sandbox.template.set_default
+# set_default_sandbox_template
 
 **Domain:** sandbox
 **Mode:** sync
@@ -46,7 +46,7 @@ Content-Type: application/json
 
 ## MCP
 
-Tool name: `sandbox.template.set_default`
+Tool name: `set_default_sandbox_template`
 
 ## Errors
 

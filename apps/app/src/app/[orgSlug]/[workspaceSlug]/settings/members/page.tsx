@@ -97,7 +97,7 @@ export default async function WorkspaceSettingsMembersPage({
             return (
               <li
                 key={m.publicId}
-                className="flex items-center justify-between px-4 py-3"
+                className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
               >
                 <div className="flex flex-col">
                   <span className="font-medium text-sm">
@@ -108,7 +108,7 @@ export default async function WorkspaceSettingsMembersPage({
                   </span>
                   <span className="text-xs text-muted-foreground">{m.email}</span>
                 </div>
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                   {orgRole ? (
                     <span className="rounded border border-border/60 px-1.5 py-0.5 text-xs font-medium">
                       org: {orgRole}

@@ -1,4 +1,4 @@
-# sandbox.template.export
+# export_sandbox_template
 
 **Domain:** sandbox
 **Mode:** sync
@@ -12,7 +12,7 @@
 Export a sandbox template as a portable v1 manifest — its config, tools, and
 required secret key **NAMES** (never secret values) — so it can be
 distributed via the plugin/marketplace path and re-created in another
-workspace or org with `sandbox.template.import`. Workspace members can read.
+workspace or org with `import_sandbox_template`. Workspace members can read.
 
 **No audit entry is recorded and no secret values ever leave the vault**: a
 manifest carries no secret material by construction (Spec §19.6) — the
@@ -50,7 +50,7 @@ Content-Type: application/json
 
 ## MCP
 
-Tool name: `sandbox.template.export`
+Tool name: `export_sandbox_template`
 
 ## Errors
 
