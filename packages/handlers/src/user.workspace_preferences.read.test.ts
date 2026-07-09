@@ -30,7 +30,7 @@ describe("userWorkspacePreferencesReadHandler", () => {
   });
 
   it("throws when there is no workspace context", async () => {
-    const noWs: CapabilityContext = { ...CTX, workspaceId: null };
+    const noWs: CapabilityContext = { ...CTX, workspaceId: null as unknown as string };
     await expect(userWorkspacePreferencesReadHandler({}, noWs)).rejects.toThrow(
       /workspace context/,
     );

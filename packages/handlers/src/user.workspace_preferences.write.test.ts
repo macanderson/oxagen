@@ -60,7 +60,7 @@ describe("userWorkspacePreferencesWriteHandler", () => {
   });
 
   it("throws when there is no workspace context", async () => {
-    const noWs: CapabilityContext = { ...CTX, workspaceId: null };
+    const noWs: CapabilityContext = { ...CTX, workspaceId: null as unknown as string };
     await expect(
       userWorkspacePreferencesWriteHandler({ defaultRepoConnectionId: "con_x" }, noWs),
     ).rejects.toThrow(/workspace context/);
