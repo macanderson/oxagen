@@ -24,6 +24,7 @@ const LOADERS: Record<string, LoaderEntry> = {
   "stop_sandbox": () => import("./agent.sandbox.stop"),
   "list_sandboxes": () => import("./agent.sandbox.list"),
   "list_sandbox_files": () => import("./agent.sandbox_file.list"),
+  "list_sandbox_logs": () => import("./agent.sandbox_log.list"),
   "read_sandbox_file": () => import("./agent.sandbox_file.read"),
   // Browser automation inside a durable session — all seven thin wrappers live
   // in one module (browser.ts) that drives `browserctl` via execInSession.

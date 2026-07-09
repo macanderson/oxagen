@@ -43,11 +43,12 @@ describe("CardHeader — render", () => {
     expect(getByText("Header")).toBeInTheDocument();
   });
 
-  it("renders a dark header bar (flex-col + header tokens)", () => {
+  it("renders a flat header (flex-col + header tokens)", () => {
     const { container } = render(<CardHeader>H</CardHeader>);
     const el = container.firstChild as HTMLElement;
     expect(el.className).toContain("flex-col");
-    // Graphite: CardHeader is a dark charcoal bar (px-6 py-4) with light text.
+    // Flat skin: CardHeader blends with the card surface (px-6 py-4); only a
+    // hairline border-b separates it from the body.
     expect(el.className).toContain("bg-card-header-bg");
     expect(el.className).toContain("text-card-header-fg");
     expect(el.className).toContain("px-6");

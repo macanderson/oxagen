@@ -24,7 +24,16 @@ import {
 } from "@/components/sandbox/sandbox-terminal";
 import WorkspaceContextPanel from "@/components/chat/registry-components/workspace-context-panel";
 import type { SandboxSummary, SandboxStatus } from "@/lib/workbench/sandboxes";
-import { runSandboxCommandAction, stopSandboxAction } from "../actions";
+import {
+  listSandboxLogsAction,
+  runSandboxCommandAction,
+  stopSandboxAction,
+} from "../actions";
+import { SandboxStatePanel } from "./sandbox-state-panel";
+import {
+  SandboxLogsConsole,
+  type LoadLogsFn,
+} from "./sandbox-logs-console";
 
 const STATUS_TONE: Record<SandboxStatus, "success" | "warning" | "secondary"> = {
   running: "success",
@@ -62,6 +71,21 @@ export function SandboxDetailClient({
       });
       if (!res.ok) throw new Error(res.error);
       return res.result;
+    },
+    [orgSlug, workspaceSlug, sessionId],
+  );
+
+  const loadLogs: LoadLogsFn = useCallback(
+    async ({ level, limit }) => {
+      const res = await listSandboxLogsAction({
+        orgSlug,
+        workspaceSlug,
+        sessionId,
+        level,
+        limit,
+      });
+      if (!res.ok) throw new Error(res.error);
+      return res.lines;
     },
     [orgSlug, workspaceSlug, sessionId],
   );
@@ -117,6 +141,8 @@ export function SandboxDetailClient({
         </p>
       ) : null}
 
+      <SandboxStatePanel summary={summary} />
+
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <div className="flex flex-col gap-2">
           <h3 className="text-sm font-semibold">Terminal</h3>
@@ -149,6 +175,19 @@ export function SandboxDetailClient({
             title="Sandbox files"
           />
         </div>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <h3 className="text-sm font-semibold">Logs</h3>
+        <p className="text-xs text-muted-foreground">
+          Captured output from this sandbox. Flip Debug to include command
+          echoes, timings, and lifecycle notes.
+        </p>
+        <SandboxLogsConsole
+          sessionId={sessionId}
+          loadLogs={loadLogs}
+          disabled={!canManage}
+        />
       </div>
     </div>
   );

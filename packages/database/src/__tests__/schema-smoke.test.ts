@@ -54,6 +54,8 @@ import { generatedAssets, documents } from "../schema/content";
 
 import { conversations, messages } from "../schema/chat";
 
+import { githubInstallations } from "../schema/ingestion";
+
 import {
   mcpRegistries,
   mcpCredentials,
@@ -719,5 +721,44 @@ describe("agent.agent_plans", () => {
     expect(cfg).toBeDefined();
     const cols = cfg.columns.map((c) => c.name);
     expect(cols).toContain("id");
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ingestion schema (github installations registry)
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe("ingestion.github_installations", () => {
+  const cfg = smokeTable(githubInstallations, [
+    "id",
+    "public_id",
+    "installation_id",
+    "account_login",
+    "account_id",
+    "account_type",
+    "app_slug",
+    "repository_selection",
+    "suspended_at",
+    "deleted_at",
+  ]);
+
+  it("has a unique constraint on installation_id (singleton per GitHub account)", () => {
+    const uc = cfg.uniqueConstraints.find(
+      (u) => u.name === "github_installations_installation_id_uq",
+    );
+    expect(uc).toBeDefined();
+  });
+
+  it("has an account_login index", () => {
+    const idx = cfg.indexes.find(
+      (i) => i.config.name === "github_installations_account_login_idx",
+    );
+    expect(idx).toBeDefined();
+  });
+
+  it("is NOT tenant-scoped — a shared/system catalog (no org_id/workspace_id)", () => {
+    const cols = cfg.columns.map((c) => c.name);
+    expect(cols).not.toContain("org_id");
+    expect(cols).not.toContain("workspace_id");
   });
 });

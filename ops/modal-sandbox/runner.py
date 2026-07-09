@@ -38,7 +38,9 @@ import hmac
 import os
 import sys
 import time
+import traceback
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Literal
 
 import modal
@@ -46,14 +48,59 @@ from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel
 
 # ---------------------------------------------------------------------------
+# Fast search toolchain — every image ships ripgrep (rg), fd, and fzf so agent
+# shell commands never fall back to grep/find, which scan gitignored trees
+# (node_modules etc.) and run 50-100× slower on real repos.  Debian names the
+# fd binary `fdfind`, hence the /usr/local/bin/fd symlink; Alpine names it fd.
+# ---------------------------------------------------------------------------
+
+_FAST_SEARCH_APT: tuple[str, ...] = ("ripgrep", "fd-find", "fzf")
+_FAST_SEARCH_APK = "apk add --no-cache ripgrep fd fzf"
+_FD_SYMLINK = 'ln -sf "$(command -v fdfind)" /usr/local/bin/fd'
+
+# ---------------------------------------------------------------------------
+# Browser asset resolution.
+#
+# The durable "agent" image bakes browserd/browserctl in via add_local_file.
+# Modal resolves those local paths LAZILY — at the first Sandbox.create that
+# uses the image, not at deploy time. Durable images aren't attached to any
+# function, so that first build is triggered from INSIDE the deployed runner
+# container, where the repo's browser/ directory doesn't exist. Without this
+# fallback every  POST /sandbox/create {image: "agent"}  dies with
+# FileNotFoundError → an opaque 500 before any sandbox is created.
+#
+# Fix: the runner's own function image copies browser/ to /assets/browser
+# (built at deploy time, when the files DO exist), and this resolver prefers
+# the source tree (deploy machine, local dev) with /assets as the in-container
+# fallback. Identical content hashes to the same image layer either way, so
+# the cache stays consistent across build origins.
+# ---------------------------------------------------------------------------
+
+_BROWSER_SRC_DIR = Path(__file__).parent / "browser"
+_BROWSER_BAKED_DIR = Path("/assets/browser")
+
+
+def _browser_asset(name: str) -> str:
+    for base in (_BROWSER_SRC_DIR, _BROWSER_BAKED_DIR):
+        candidate = base / name
+        if candidate.is_file():
+            return str(candidate)
+    # Neither location exists (e.g. importing on a machine without the repo);
+    # return the source path so hydration raises a clear FileNotFoundError.
+    return str(_BROWSER_SRC_DIR / name)
+
+# ---------------------------------------------------------------------------
 # Image catalog — keyed by language enum.
 # The Node driver sends the language enum; we map it to a Modal Image.
 # ---------------------------------------------------------------------------
 
 LANG_IMAGES: dict[str, modal.Image] = {
-    "node":   modal.Image.from_registry("node:20-alpine", add_python=None),
-    "python": modal.Image.debian_slim(python_version="3.12"),
-    "shell":  modal.Image.from_registry("alpine:3.20", add_python=None),
+    "node":   modal.Image.from_registry("node:20-alpine", add_python=None)
+              .run_commands(_FAST_SEARCH_APK),
+    "python": modal.Image.debian_slim(python_version="3.12")
+              .apt_install(*_FAST_SEARCH_APT).run_commands(_FD_SYMLINK),
+    "shell":  modal.Image.from_registry("alpine:3.20", add_python=None)
+              .run_commands(_FAST_SEARCH_APK),
 }
 
 # (code filename inside /work, argv for exec)
@@ -82,9 +129,12 @@ LANG_ENTRY: dict[str, tuple[str, list[str]]] = {
 # ---------------------------------------------------------------------------
 
 DURABLE_IMAGES: dict[str, modal.Image] = {
-    "node":   modal.Image.from_registry("node:20").apt_install("git"),
-    "python": modal.Image.debian_slim(python_version="3.12").apt_install("git"),
-    "shell":  modal.Image.debian_slim(python_version="3.12").apt_install("git"),
+    "node":   modal.Image.from_registry("node:20")
+              .apt_install("git", *_FAST_SEARCH_APT).run_commands(_FD_SYMLINK),
+    "python": modal.Image.debian_slim(python_version="3.12")
+              .apt_install("git", *_FAST_SEARCH_APT).run_commands(_FD_SYMLINK),
+    "shell":  modal.Image.debian_slim(python_version="3.12")
+              .apt_install("git", *_FAST_SEARCH_APT).run_commands(_FD_SYMLINK),
     # "agent" = Debian slim + Python 3.12 + git + curl + Playwright/Chromium.
     # add_local_file(local_path, remote_path, copy=True) bakes the file into the
     # image layer at build time (copy=True is required so the subsequent chmod
@@ -92,7 +142,7 @@ DURABLE_IMAGES: dict[str, modal.Image] = {
     # the cwd where `modal deploy runner.py` is invoked (ops/modal-sandbox/).
     "agent": (
         modal.Image.debian_slim(python_version="3.12")
-        .apt_install("git", "curl")
+        .apt_install("git", "curl", *_FAST_SEARCH_APT)
         .pip_install("playwright==1.49.0")
         .run_commands(
             "playwright install-deps chromium",
@@ -103,16 +153,62 @@ DURABLE_IMAGES: dict[str, modal.Image] = {
         # add_local_file signature (modal >= 0.66.40):
         #   add_local_file(local_path, remote_path, *, copy=False)
         # copy=True bakes the file into the image layer so the chmod step below works.
-        .add_local_file("browser/browserd.py", "/usr/local/bin/browserd", copy=True)
-        .add_local_file("browser/browserctl.py", "/usr/local/bin/browserctl", copy=True)
-        .run_commands("chmod +x /usr/local/bin/browserd /usr/local/bin/browserctl")
+        # Paths via _browser_asset so hydration also works from inside the
+        # deployed runner container (see the resolver's comment above).
+        .add_local_file(_browser_asset("browserd.py"), "/usr/local/bin/browserd", copy=True)
+        .add_local_file(_browser_asset("browserctl.py"), "/usr/local/bin/browserctl", copy=True)
+        .run_commands(
+            "chmod +x /usr/local/bin/browserd /usr/local/bin/browserctl",
+            _FD_SYMLINK,
+        )
     ),
 }
+
+# Alias trampoline for /sandbox/exec.  POSIX shells parse the whole `-c`
+# string before running any of it, so aliases defined inside the command
+# string can never apply to that same string; defining them first and
+# `eval`-ing the real command (passed via $OXAGEN_EXEC_CMD) makes the shell
+# re-parse the command AFTER the aliases exist.  Works in dash, busybox ash,
+# and bash (bash additionally needs expand_aliases in non-interactive mode).
+# Scope is deliberately the top-level agent command only — nested scripts
+# (make, repo test suites) spawn their own clean /bin/sh and keep real
+# grep/find semantics.  The command -v guards keep custom template images
+# without the tools behaving byte-identically to before.  Per-call opt-out:
+# set OXAGEN_NO_FAST_ALIASES=1 in the exec env.
+_FAST_ALIAS_TRAMPOLINE = (
+    'if [ -z "$OXAGEN_NO_FAST_ALIASES" ]; then '
+    '[ -n "$BASH_VERSION" ] && shopt -s expand_aliases 2>/dev/null; '
+    "command -v rg >/dev/null 2>&1 && alias grep=rg egrep=rg; "
+    "command -v fd >/dev/null 2>&1 && alias find=fd && alias glob='fd --glob'; "
+    "fi; "
+    'eval "$OXAGEN_EXEC_CMD"'
+)
 
 RUNNER_SECRET = modal.Secret.from_name("oxagen-runner")
 
 app = modal.App("oxagen-sandbox")
-web = FastAPI(title="oxagen-sandbox-runner", version="0.5.0")
+web = FastAPI(title="oxagen-sandbox-runner", version="0.7.0")
+
+
+def _runner_app() -> "modal.App | None":
+    """
+    App handle for Sandbox.create. SDK >= 1.4 raises ValueError when handed an
+    App whose app_id is unset; None makes it fall back to the implicit container
+    app, which is always hydrated inside the deployed runner.
+    """
+    return app if app.app_id is not None else None
+
+
+def _internal_error(op: str, exc: Exception) -> HTTPException:
+    """
+    Convert an unexpected failure into a structured 500. Without this, FastAPI
+    returns a bare text "Internal Server Error" and the TS driver surfaces an
+    unactionable `modal runner 500 <path>: Internal Server Error`. The runner is
+    a token-authed internal service, so echoing the exception is safe and makes
+    the driver-side error self-diagnosing; the traceback goes to Modal app logs.
+    """
+    traceback.print_exc()
+    return HTTPException(status_code=500, detail=f"{op} failed: {type(exc).__name__}: {exc}")
 
 
 def _custom_image(image_ref: str) -> modal.Image:
@@ -324,7 +420,7 @@ async def _run_sandbox(req: RunRequest) -> RunResponse:
         memory=req.memory_mb,
         timeout=sandbox_timeout + 30,
         block_network=block_network,
-        app=app,
+        app=_runner_app(),
         **_resource_kwargs(req.vcpu, req.disk_mb),
     )
 
@@ -398,7 +494,12 @@ async def _run_sandbox(req: RunRequest) -> RunResponse:
 @web.post("/run", response_model=RunResponse)
 async def run(req: RunRequest, authorization: str | None = Header(default=None)) -> RunResponse:
     _check_auth(authorization, os.environ["MODAL_RUNNER_TOKEN"])
-    return await _run_sandbox(req)
+    try:
+        return await _run_sandbox(req)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise _internal_error("run", exc) from exc
 
 
 @web.get("/healthz")
@@ -454,24 +555,36 @@ async def sandbox_create(
 
     block_network = req.network == "deny"
 
-    sb = await _create_sandbox(
-        "sleep", "infinity",
-        image=image,
-        memory=req.memory_mb,
-        timeout=req.ttl_seconds,
-        block_network=block_network,
-        idle_timeout=req.idle_timeout_seconds,
-        app=app,
-        **_resource_kwargs(req.vcpu, req.disk_mb),
-    )
+    try:
+        sb = await _create_sandbox(
+            "sleep", "infinity",
+            image=image,
+            memory=req.memory_mb,
+            timeout=req.ttl_seconds,
+            block_network=block_network,
+            idle_timeout=req.idle_timeout_seconds,
+            app=_runner_app(),
+            **_resource_kwargs(req.vcpu, req.disk_mb),
+        )
+    except Exception as exc:
+        raise _internal_error("sandbox create", exc) from exc
 
     # Run setup_cmd once to prepare the image (e.g. install deps, clone repo).
     # If it fails, terminate the sandbox and surface the error.
     if req.setup_cmd:
-        setup_proc = await modal.Sandbox.exec.aio(sb, "sh", "-c", req.setup_cmd)
-        setup_exit = await setup_proc.wait.aio()
+        try:
+            setup_proc = await modal.Sandbox.exec.aio(sb, "sh", "-c", req.setup_cmd)
+            setup_exit = await setup_proc.wait.aio()
+            setup_stderr = (
+                decode_output(await setup_proc.stderr.read.aio()) if setup_exit != 0 else ""
+            )
+        except Exception as exc:
+            try:
+                await modal.Sandbox.terminate.aio(sb)
+            except Exception:
+                pass
+            raise _internal_error("sandbox setup_cmd", exc) from exc
         if setup_exit != 0:
-            setup_stderr = decode_output(await setup_proc.stderr.read.aio())
             try:
                 await modal.Sandbox.terminate.aio(sb)
             except Exception:
@@ -524,10 +637,15 @@ async def sandbox_exec(
     timed_out = False
 
     try:
+        # Route through the alias trampoline: the agent's command rides in
+        # $OXAGEN_EXEC_CMD (env transport also sidesteps argv quoting issues)
+        # and is eval'd after grep→rg / find→fd / glob aliases are defined.
+        exec_env = dict(req.env or {})
+        exec_env["OXAGEN_EXEC_CMD"] = req.command
         p = await modal.Sandbox.exec.aio(
             sb,
-            "sh", "-c", req.command,
-            env=req.env or None,
+            "sh", "-c", _FAST_ALIAS_TRAMPOLINE,
+            env=exec_env,
         )
 
         if req.stdin:
@@ -651,16 +769,19 @@ async def sandbox_restore(
 
     block_network = req.network == "deny"
 
-    sb = await _create_sandbox(
-        "sleep", "infinity",
-        image=img,
-        memory=req.memory_mb,
-        timeout=req.ttl_seconds,
-        block_network=block_network,
-        idle_timeout=req.idle_timeout_seconds,
-        app=app,
-        **_resource_kwargs(req.vcpu, req.disk_mb),
-    )
+    try:
+        sb = await _create_sandbox(
+            "sleep", "infinity",
+            image=img,
+            memory=req.memory_mb,
+            timeout=req.ttl_seconds,
+            block_network=block_network,
+            idle_timeout=req.idle_timeout_seconds,
+            app=_runner_app(),
+            **_resource_kwargs(req.vcpu, req.disk_mb),
+        )
+    except Exception as exc:
+        raise _internal_error("sandbox restore", exc) from exc
 
     return SandboxRestoreResponse(
         sandbox_id=sb.object_id,
@@ -728,9 +849,14 @@ async def sandbox_status(
     return SandboxStatusResponse(sandbox_id=req.sandbox_id, status=status)
 
 
+# copy=True bakes browser/ into the runner image at deploy time (when the repo
+# files exist) so _browser_asset can hydrate the durable "agent" image from
+# /assets/browser inside the running container.
 @app.function(
     secrets=[RUNNER_SECRET],
-    image=modal.Image.debian_slim(python_version="3.12").pip_install("fastapi", "pydantic"),
+    image=modal.Image.debian_slim(python_version="3.12")
+    .pip_install("fastapi", "pydantic")
+    .add_local_dir(str(_BROWSER_SRC_DIR), remote_path="/assets/browser", copy=True),
 )
 @modal.asgi_app()
 def fastapi_app() -> FastAPI:

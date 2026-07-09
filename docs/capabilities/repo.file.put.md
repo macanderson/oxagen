@@ -17,7 +17,7 @@ Commit a file (create or update) to a GitHub repository. Content is provided as 
 | `path` | string | yes | File path within the repository (e.g. `src/index.ts`) |
 | `content` | string | yes | Raw UTF-8 file content |
 | `message` | string | yes | Commit message |
-| `branch` | string | no | Branch to commit to (defaults to the repository default branch) |
+| `branch` | string | effectively yes | Branch to commit to. Must be a non-default work branch — omitting it, or naming the repository's default branch, is rejected with 403 (see Guardrails) |
 
 ## Output
 | Field | Type | Description |
@@ -50,6 +50,9 @@ Content-Type: application/json
   "htmlUrl": "https://github.com/acme/backend-service/blob/feature/hello/src/hello.ts"
 }
 ```
+
+## Guardrails
+- **Never writes to the default branch (OXA-2117).** Commits targeting the repository's default branch — or omitting `branch`, which would silently target it — are rejected with `403`. Create a work branch with `repo.branch.create`, commit there, and land changes on the default branch via `repo.pr.open`.
 
 ## Notes
 - **Access:** Owner or Admin at org level; Owner or Member at workspace level.

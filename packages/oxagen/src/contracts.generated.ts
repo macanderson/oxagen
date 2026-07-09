@@ -61,6 +61,7 @@ import "./contracts/agent.sandbox.start";
 import "./contracts/agent.sandbox.stop";
 import "./contracts/agent.sandbox_file.list";
 import "./contracts/agent.sandbox_file.read";
+import "./contracts/agent.sandbox_log.list";
 import "./contracts/agent.skill.list";
 import "./contracts/agent.skill.load";
 import "./contracts/agent.subagent.aggregate";

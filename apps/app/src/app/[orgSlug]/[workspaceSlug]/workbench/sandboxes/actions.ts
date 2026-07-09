@@ -24,9 +24,11 @@ import {
   startSandbox,
   runSandboxCommand,
   stopSandbox,
+  listSandboxLogs,
   isSandboxUnavailable,
   type SandboxExecResult,
   type SandboxStartResult,
+  type SandboxLogLine,
 } from "@/lib/workbench/sandboxes";
 import { templateById } from "@/components/sandbox/warm-up-templates";
 
@@ -120,6 +122,43 @@ export async function runSandboxCommandAction(
     return {
       ok: false,
       error: errMessage(err, "Command failed to run."),
+      unavailable: isSandboxUnavailable(err),
+    };
+  }
+}
+
+// ── List output logs ──────────────────────────────────────────────────────────
+
+const listLogsSchema = z.object({
+  ...scopeShape,
+  sessionId: z.string().min(1),
+  /** Omit for the debug view (everything); "normal" for program output only. */
+  level: z.enum(["normal", "debug"]).optional(),
+  limit: z.number().int().positive().max(5_000).optional(),
+});
+
+export async function listSandboxLogsAction(
+  input: z.input<typeof listLogsSchema>,
+): Promise<ActionResult<{ lines: SandboxLogLine[] }>> {
+  const parsed = listLogsSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
+  }
+  const { orgSlug, workspaceSlug, sessionId, level, limit } = parsed.data;
+  const { ctx, canManage } = await resolveWorkbenchScope(orgSlug, workspaceSlug);
+  if (!canManage) {
+    return { ok: false, error: "Only workspace owners and admins can view sandbox logs." };
+  }
+  try {
+    const lines = await runInTenantScope(
+      { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+      () => listSandboxLogs(ctx, { sessionId, level, limit }),
+    );
+    return { ok: true, lines };
+  } catch (err) {
+    return {
+      ok: false,
+      error: errMessage(err, "Failed to load sandbox logs."),
       unavailable: isSandboxUnavailable(err),
     };
   }

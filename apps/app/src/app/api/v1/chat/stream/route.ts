@@ -1480,9 +1480,13 @@ export async function POST(request: NextRequest): Promise<Response> {
           ...(code !== undefined ? { code } : {}),
         });
       } finally {
-        // Tear down the code-mode sandbox session (best-effort; the registry TTL
-        // reaps an orphan anyway). Must run whether the turn succeeded or threw.
-        if (codeWorkspace) await codeWorkspace.dispose();
+        // Release the code-mode sandbox back to 'idle' WITHOUT tearing it down,
+        // so the next turn of this conversation reconnects to the SAME warm
+        // sandbox and its working tree (including uncommitted edits). The
+        // sandbox-reaper drops it ~2-3 min after the last turn — recovering any
+        // uncommitted work to a recovery branch first (spec:
+        // sandbox-session-lifecycle). Must run whether the turn succeeded or threw.
+        if (codeWorkspace) await codeWorkspace.release();
         try {
           controller.enqueue(encoder.encode("event: done\ndata: [DONE]\n\n"));
         } catch {

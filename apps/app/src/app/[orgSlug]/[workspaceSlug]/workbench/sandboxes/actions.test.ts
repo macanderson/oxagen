@@ -7,12 +7,14 @@ const {
   startSandbox,
   runSandboxCommand,
   stopSandbox,
+  listSandboxLogs,
   isSandboxUnavailable,
 } = vi.hoisted(() => ({
   resolveWorkbenchScope: vi.fn(),
   startSandbox: vi.fn(),
   runSandboxCommand: vi.fn(),
   stopSandbox: vi.fn(),
+  listSandboxLogs: vi.fn(),
   isSandboxUnavailable: vi.fn(() => false),
 }));
 
@@ -26,6 +28,7 @@ vi.mock("@/lib/workbench/sandboxes", () => ({
   startSandbox,
   runSandboxCommand,
   stopSandbox,
+  listSandboxLogs,
   isSandboxUnavailable,
 }));
 
@@ -33,6 +36,7 @@ import {
   startSandboxAction,
   runSandboxCommandAction,
   stopSandboxAction,
+  listSandboxLogsAction,
 } from "./actions";
 
 const SCOPE = { orgSlug: "acme", workspaceSlug: "eng" };
@@ -144,6 +148,52 @@ describe("runSandboxCommandAction", () => {
     });
     expect(res.ok).toBe(true);
     if (res.ok) expect(res.result.stdout).toBe("ok");
+  });
+});
+
+describe("listSandboxLogsAction", () => {
+  it("gates non-managers", async () => {
+    resolveWorkbenchScope.mockResolvedValue(scope(false));
+    const res = await listSandboxLogsAction({ ...SCOPE, sessionId: "sbx_1" });
+    expect(res.ok).toBe(false);
+    expect(listSandboxLogs).not.toHaveBeenCalled();
+  });
+
+  it("rejects an invalid level", async () => {
+    const res = await listSandboxLogsAction({
+      ...SCOPE,
+      sessionId: "sbx_1",
+      level: "loud",
+    } as never);
+    expect(res.ok).toBe(false);
+    expect(resolveWorkbenchScope).not.toHaveBeenCalled();
+  });
+
+  it("returns lines and forwards the requested level", async () => {
+    resolveWorkbenchScope.mockResolvedValue(scope(true));
+    listSandboxLogs.mockResolvedValue([{ stream: "stdout", text: "hi" }]);
+    const res = await listSandboxLogsAction({
+      ...SCOPE,
+      sessionId: "sbx_1",
+      level: "normal",
+    });
+    expect(res.ok).toBe(true);
+    if (res.ok) expect(res.lines).toEqual([{ stream: "stdout", text: "hi" }]);
+    const [, arg] = listSandboxLogs.mock.calls[0] as [
+      unknown,
+      { sessionId: string; level?: string },
+    ];
+    expect(arg.sessionId).toBe("sbx_1");
+    expect(arg.level).toBe("normal");
+  });
+
+  it("flags the unavailable-driver case", async () => {
+    resolveWorkbenchScope.mockResolvedValue(scope(true));
+    listSandboxLogs.mockRejectedValue(new Error("Durable sandbox not available"));
+    isSandboxUnavailable.mockReturnValue(true);
+    const res = await listSandboxLogsAction({ ...SCOPE, sessionId: "sbx_1" });
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.unavailable).toBe(true);
   });
 });
 

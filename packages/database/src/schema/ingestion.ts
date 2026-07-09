@@ -270,3 +270,54 @@ export const connectorSchemas = ingestionSchema.table(
     cachedAtIdx: index("connector_schemas_cached_at_idx").on(t.cachedAt),
   }),
 );
+
+// ── ingestion.github_installations ────────────────────────────────────────────
+//
+// Platform-scoped registry of GitHub App installations — ONE row per GitHub
+// account (org or user) the Oxagen App is installed on. A GitHub App
+// installation is a SINGLETON per GitHub account: `installation_id` is globally
+// unique and belongs to the GitHub account, NOT to whichever Oxagen tenant first
+// connected it. Many Oxagen tenants/workspaces legitimately attach to the SAME
+// installation (see source_connections.delivery_config.installationId + the App
+// webhook's cross-tenant fan-out), which is exactly why a second tenant must be
+// able to bind an already-installed org without re-installing.
+//
+// Deliberately NOT tenant-scoped: like ingestion.connector_schemas this is a
+// shared/system catalog (no org_id/workspace_id, no RLS — only oxagen_app
+// grants). It is the single source of truth for installation IDENTITY +
+// LIFECYCLE (suspend/uninstall) that the App webhook keeps live and the
+// connect/attach flow validates against, replacing the fragile
+// `delivery_config ->> 'installationId'` JSONB scans.
+export const githubInstallations = ingestionSchema.table(
+  "github_installations",
+  {
+    ...idMixin("ghi"),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    // GitHub's numeric installation id (globally unique per App). Stored as text
+    // for parity with delivery_config.installationId (JSON stringifies numbers).
+    installationId: text("installation_id").notNull(),
+    // The GitHub account the App is installed on.
+    accountLogin: text("account_login"),
+    accountId: text("account_id"),
+    // GitHub's account/target type: "Organization" | "User".
+    accountType: text("account_type"),
+    // Public slug of the GitHub App (github.com/apps/<slug>).
+    appSlug: text("app_slug"),
+    // "all" | "selected" — which repos the installation grants access to.
+    repositorySelection: text("repository_selection"),
+    // Lifecycle, maintained by the App webhook (installation +
+    // installation_repositories events). A suspended or uninstalled installation
+    // cannot mint tokens, so its connections are paused. deleted_at =
+    // uninstalled (soft-close: keeps history and lets a re-install reactivate
+    // rather than orphan the row).
+    suspendedAt: timestamp("suspended_at", { withTimezone: true, mode: "date" }),
+    deletedAt: timestamp("deleted_at", { withTimezone: true, mode: "date" }),
+  },
+  (t) => ({
+    // One registry row per GitHub installation — the identity uniqueness the
+    // JSONB-in-delivery_config model never had.
+    installationIdUniq: unique("github_installations_installation_id_uq").on(t.installationId),
+    accountLoginIdx: index("github_installations_account_login_idx").on(t.accountLogin),
+  }),
+);
