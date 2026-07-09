@@ -6,7 +6,7 @@ import { sandboxTemplateManifestSchema } from "./sandbox-template-manifest";
 // audit needed: a manifest carries no secret material (Spec §19.6). The manifest
 // zod schema is the single source of truth, defined in sandbox-template-manifest.
 export const sandboxTemplateExport = registerCapability({
-  name: "sandbox.template.export",
+  name: "export_sandbox_template",
   domain: "sandbox",
   description:
     "Export a sandbox template as a portable v1 manifest (config, tools, and required secret key NAMES — never secret values). Distribute it via the plugin/marketplace path.",

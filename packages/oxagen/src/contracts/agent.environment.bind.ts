@@ -15,7 +15,7 @@ export const agentEnvironmentBindingSchema = z.object({
 });
 
 export const agentEnvironmentBind = registerCapability({
-  name: "agent.environment.bind",
+  name: "bind_agent_environment",
   domain: "agent",
   description:
     "Bind an agent to an environment (and optionally a specific sandbox template within it). Upserts the binding; promoting one to primary atomically demotes the agent's previous primary.",

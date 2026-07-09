@@ -43,11 +43,12 @@ const CAP_DIR = join(ROOT, "packages/oxagen/src/contracts");
 const ACTIONS = new Set([
   // read / list
   "list", "get", "read", "query", "search", "preview", "browse", "fetch",
-  "summarize", "recommend", "recall", "trace",
+  "summarize", "recommend", "recall", "trace", "debug",
   // create / write
   "create", "update", "write", "upsert", "add", "put", "record", "author",
   "compose", "generate", "render", "remember", "cite", "attach", "import",
   "ingest", "commit", "publish", "snapshot", "fork", "rename", "edit", "export",
+  "save", "post", "draft",
   // delete / lifecycle
   "delete", "remove", "purge", "erase", "archive", "cancel", "stop", "start",
   "run", "execute", "exec", "deploy", "resume", "pause", "trigger", "dispatch",

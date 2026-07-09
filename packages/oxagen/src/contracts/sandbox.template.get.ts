@@ -3,7 +3,7 @@ import { registerCapability } from "../registry";
 import { sandboxTemplateSummarySchema } from "./sandbox.template.create";
 
 export const sandboxTemplateGet = registerCapability({
-  name: "sandbox.template.get",
+  name: "get_sandbox_template",
   domain: "sandbox",
   description: "Fetch a single sandbox template (with its tools) by its public id.",
   mode: "sync",
