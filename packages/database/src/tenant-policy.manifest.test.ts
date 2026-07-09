@@ -128,7 +128,7 @@ describe("tenant policy manifest", () => {
     expect(unique.size).toBe(tables.length);
   });
 
-  it("covers exactly the 88 policied tables of the v0.4.x schema", () => {
+  it("covers exactly the 89 policied tables of the v0.4.x schema", () => {
     // Intentional ratchet: adding a tenant-owned table means updating BOTH the
     // manifest and this count (and regenerating the Atlas RLS migration).
     // 62 = 63 baseline − plugin.org_denylist (removed 2026-06-17 workspace-scoping rebuild).
@@ -167,7 +167,13 @@ describe("tenant policy manifest", () => {
     //      + agent-env bindings, org_id NOT NULL + tenant_isolation RLS,
     //      20260712120000_sandbox_templates.sql, PR #718 — the manifest was
     //      updated but this ratchet was not: a parallel-merge semantic conflict).
-    expect(POLICY_MANIFEST.length).toBe(88);
+    // 89 = 88 + auth.workspace_user_preferences (per-(user, workspace) coding-agent
+    //      defaults: default repo/environment, org_id + workspace_id both NOT NULL →
+    //      standard tenant_isolation RLS, 20260713120000_workspace_user_preferences.sql).
+    //      The table + RLS + manifest all shipped; this ratchet and the
+    //      manifest-coverage integration test were the missed halves — surfaced once
+    //      main CI stopped dying at pnpm install.
+    expect(POLICY_MANIFEST.length).toBe(89);
   });
 
   it("covers slug-history tables for org + workspace renames (OXA-1779)", () => {

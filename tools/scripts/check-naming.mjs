@@ -43,11 +43,12 @@ const CAP_DIR = join(ROOT, "packages/oxagen/src/contracts");
 const ACTIONS = new Set([
   // read / list
   "list", "get", "read", "query", "search", "preview", "browse", "fetch",
-  "summarize", "recommend", "recall", "trace",
+  "summarize", "recommend", "recall", "trace", "debug",
   // create / write
   "create", "update", "write", "upsert", "add", "put", "record", "author",
   "compose", "generate", "render", "remember", "cite", "attach", "import",
   "ingest", "commit", "publish", "snapshot", "fork", "rename", "edit", "export",
+  "save", "post", "draft",
   // delete / lifecycle
   "delete", "remove", "purge", "erase", "archive", "cancel", "stop", "start",
   "run", "execute", "exec", "deploy", "resume", "pause", "trigger", "dispatch",
@@ -62,6 +63,11 @@ const ACTIONS = new Set([
   "fill", "click", "navigate",
   // associative verbs — bind/unbind an agent to an environment (Spec §5.6).
   "bind", "unbind",
+  // imperative verbs used by shipped capabilities that predate this list
+  // (draft_skill, save_memory, post_conversation_message, debug_execution) —
+  // renaming a shipped capability requires the seed-then-deploy runbook
+  // (docs/specs/adr025-reland-runbook.md), so the verbs are admitted instead.
+  "draft", "save", "post", "debug",
   // snake_case compound actions
   "set_enabled", "set_default", "set_secret", "set_auth_alerts", "set_tools",
   "import_env", "install_bulk", "from_traces",

@@ -1,4 +1,4 @@
-# sandbox.template.set_tools
+# set_sandbox_template_tools
 
 **Domain:** sandbox
 **Mode:** sync
@@ -30,7 +30,7 @@ existing `set_default`/`set_enabled`/`set_secret` precedent.
 
 | Field      | Type                    | Notes                                                              |
 | ---------- | ----------------------- | -------------------------------------------------------------------- |
-| `template` | `SandboxTemplateSummary` | Updated template with its new `tools` array, same shape as `sandbox.template.get` |
+| `template` | `SandboxTemplateSummary` | Updated template with its new `tools` array, same shape as `get_sandbox_template` |
 
 ## Side effects
 
@@ -55,7 +55,12 @@ Content-Type: application/json
 
 ## MCP
 
-Tool name: `sandbox.template.set_tools`
+Tool name: `set_sandbox_template_tools`
+
+
+## CLI
+
+No dedicated CLI verb. A template's preloaded tool set is seeded at create time (`oxagen sandbox template create`) and replaced via the API/MCP or the app; `oxagen sandbox template get <slug-or-id>` lists the current tools.
 
 ## Errors
 

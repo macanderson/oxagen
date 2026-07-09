@@ -1,4 +1,4 @@
-# sandbox.template.create
+# create_sandbox_template
 
 **Domain:** sandbox
 **Mode:** sync
@@ -12,8 +12,8 @@
 Create a portable sandbox template under a workspace environment: provider,
 runtime image, resource caps, network posture, selected vault keys, literal
 (non-secret) config, and a preloaded tool set. A template is the unit that
-`agent.environment.bind` points an agent at, and the unit that
-`sandbox.template.export`/`sandbox.template.import` move between workspaces or
+`bind_agent_environment` points an agent at, and the unit that
+`export_sandbox_template`/`import_sandbox_template` move between workspaces or
 orgs as a portable manifest. Owner/Admin only.
 
 ## Input
@@ -44,7 +44,7 @@ orgs as a portable manifest. Owner/Admin only.
 Inserts a row into `environments.sandbox_templates` (PostgreSQL), plus one row
 per entry in `tools` into `environments.sandbox_template_tools`. If
 `setAsDefault` is set, the same atomic default-swap used by
-`sandbox.template.set_default` runs within the environment. Metering, IAM, and
+`set_default_sandbox_template` runs within the environment. Metering, IAM, and
 audit run through the kernel.
 
 ## API
@@ -68,7 +68,19 @@ Content-Type: application/json
 
 ## MCP
 
-Tool name: `sandbox.template.create`
+Tool name: `create_sandbox_template`
+
+
+## CLI
+
+```
+oxagen sandbox template create --env <slug> --name <name> --slug <slug> \
+  [--provider modal|vercel|docker] [--runtime <ref>] \
+  [--vcpu <n>] [--memory-mb <n>] [--timeout-ms <n>] [--disk-mb <n>] \
+  [--network-mode public|static_egress|…] [--env-var KEY=value]… [--set-default]
+```
+
+`--env-var` is repeatable and non-secret only (real credentials go in the vault). Resource flags are bounded exactly as the `resources` input.
 
 ## Errors
 

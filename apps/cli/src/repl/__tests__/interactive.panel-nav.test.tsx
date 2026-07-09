@@ -33,7 +33,7 @@ vi.mock("../../agent/model.js", () => ({
   isReasoningEffort: (s: string) => ["low", "medium", "high", "xhigh", "max"].includes(s),
   EFFORT_LEVELS: ["low", "medium", "high", "xhigh", "max"] as const,
 }));
-vi.mock("../../agent/code-graph.js", () => ({ queryCodeGraph: async () => "" }));
+vi.mock("../../agent/code-graph.js", () => ({ queryCodeGraph: async () => "", warmCodeGraph: () => {} }));
 
 const { ReplApp } = await import("../interactive.js");
 const { agentRegistry } = await import("../../agent/agent-registry.js");
@@ -68,7 +68,9 @@ afterEach(() => {
 
 describe("REPL side-panel navigation", () => {
   it("Down enters the Agent Team panel and highlights the first row", async () => {
-    agentRegistry.register({ kind: "turn", title: "refactor the parser", id: "agent-1" });
+    // A non-turn agent: in `auto` panel mode the dock is reachable only with
+    // real fleet activity (hasFleetActivity deliberately excludes the turn itself).
+    agentRegistry.register({ kind: "subagent", title: "refactor the parser", id: "agent-1" });
     const { stdin, lastFrame, unmount } = render(<ReplApp options={{ session: TEST_SESSION }} />);
     await tick(120); // let the async session-memory mount settle
 
@@ -79,7 +81,9 @@ describe("REPL side-panel navigation", () => {
     stdin.write(ARROW_DOWN);
     await tick();
     const frame = lastFrame() ?? "";
-    expect(frame).toContain("refactor the parser");
+    // The dock column ellipsizes long titles ("refactor the pars…") — assert a
+    // prefix that survives truncation at any reasonable dock width.
+    expect(frame).toContain("refactor the par");
     // The keybinding legend appears only while a panel row holds focus.
     expect(frame).toContain("Ctrl-E open");
 

@@ -359,3 +359,53 @@ export const userPreferences = authSchema.table(
     userIdIdx: uniqueIndex("user_preferences_user_id_idx").on(t.userId),
   }),
 );
+
+/**
+ * workspace_user_preferences — per-(user, workspace) coding-agent defaults.
+ *
+ * Distinct from `user_preferences` (which is user-GLOBAL / un-scoped): a
+ * default repository and default environment are inherently workspace-scoped —
+ * the same user has a different repo/environment in each workspace they belong
+ * to. This table is org/workspace-scoped (RLS-governed via orgScopeMixin) and
+ * 1:1 per (user, workspace).
+ *
+ * It also records whether we've shown the one-time "set a default repo?" prompt
+ * (`repoDefaultPromptedAt`), so the app surface only asks once — the first time
+ * the user opens the repo selector and has no default yet.
+ */
+export const workspaceUserPreferences = authSchema.table(
+  "workspace_user_preferences",
+  {
+    ...idMixin("wup"),
+    ...auditMixin(),
+    ...orgScopeMixin(),
+    ...softDeleteMixin(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    // The user's preferred default repo for coding tasks in this workspace,
+    // stored as the source_connections.public_id (con_…). NULL = no default.
+    // Not an FK: source_connections lives in the ingestion schema and can be
+    // soft-deleted; the app resolves + validates the connection at read time.
+    defaultRepoConnectionId: text("default_repo_connection_id"),
+    // The repo slug (owner/repo) the default connection resolved to, denormalized
+    // for display so the selector can label the default without a second lookup.
+    defaultRepoSlug: text("default_repo_slug"),
+    // The user's preferred default environment (environments.public_id, env_…).
+    // NULL = fall back to the workspace's isDefault environment.
+    defaultEnvironmentId: text("default_environment_id"),
+    // When the one-time repo-default prompt was shown/answered. NULL = never
+    // prompted → the app should offer the prompt on first repo-selector open.
+    repoDefaultPromptedAt: timestamp("repo_default_prompted_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+  },
+  (t) => ({
+    // One preferences row per (user, workspace).
+    userWorkspaceIdx: uniqueIndex("workspace_user_preferences_user_workspace_idx").on(
+      t.userId,
+      t.workspaceId,
+    ),
+  }),
+);

@@ -124,6 +124,29 @@ describe("oxagenPluginManifestSchema", () => {
     expect(result.success).toBe(false);
   });
 
+  it("accepts an empty contracts array when the pack ships sandbox templates (§6)", () => {
+    // A template-distribution pack claims no capability contract — its payload is
+    // the portable sandbox template(s) it seeds on install.
+    const result = oxagenPluginManifestSchema.safeParse({
+      ...validManifest,
+      contracts: [],
+      sandboxTemplates: [
+        {
+          kind: "oxagen.sandbox-template",
+          version: 1,
+          name: "SWE-bench prewarmed",
+          slug: "swe-bench-prewarmed",
+          provider: "modal",
+          resources: { vcpu: 2, memoryMb: 4096 },
+          network: { mode: "public" },
+          tools: [{ kind: "capability", ref: "execute_code" }],
+          secretKeys: [{ key: "AI_GATEWAY_API_KEY", required: true }],
+        },
+      ],
+    });
+    expect(result.success, result.success ? "" : JSON.stringify(result.error.issues)).toBe(true);
+  });
+
   // ── version ─────────────────────────────────────────────────────────────────
 
   it("rejects a non-semver version string", () => {

@@ -72,7 +72,7 @@ vi.mock("../../agent/adapters/index.js", async (importOriginal) => ({
 }));
 
 // Keep the harness hermetic: no tree-sitter build, no disk stores, no MCP.
-vi.mock("../../agent/code-graph.js", () => ({ queryCodeGraph: async () => "" }));
+vi.mock("../../agent/code-graph.js", () => ({ queryCodeGraph: async () => "", warmCodeGraph: () => {} }));
 vi.mock("../../slash/expand.js", () => ({ loadAndExpand: () => null }));
 vi.mock("../../project/init.js", () => ({
   isProjectInitialized: () => true,

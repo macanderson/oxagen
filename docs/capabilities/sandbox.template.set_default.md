@@ -1,4 +1,4 @@
-# sandbox.template.set_default
+# set_default_sandbox_template
 
 **Domain:** sandbox
 **Mode:** sync
@@ -46,7 +46,16 @@ Content-Type: application/json
 
 ## MCP
 
-Tool name: `sandbox.template.set_default`
+Tool name: `set_default_sandbox_template`
+
+
+## CLI
+
+```
+oxagen sandbox template set-default <slug-or-id> [--env <slug>]
+```
+
+Atomically swaps the environment's default to this template.
 
 ## Errors
 

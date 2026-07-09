@@ -1,4 +1,4 @@
-# agent.environment.unbind
+# unbind_agent_environment
 
 **Domain:** agent
 **Mode:** sync
@@ -49,7 +49,16 @@ Content-Type: application/json
 
 ## MCP
 
-Tool name: `agent.environment.unbind`
+Tool name: `unbind_agent_environment`
+
+
+## CLI
+
+```
+oxagen agent env unbind <agent> --env <slug>
+```
+
+Removing the primary binding falls back to the workspace default environment and its default template.
 
 ## Errors
 

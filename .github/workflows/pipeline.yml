@@ -99,26 +99,39 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Compute affected base
+      - name: Compute turbo filter
         env:
           EVENT_NAME: ${{ github.event_name }}
-          EVENT_BEFORE: ${{ github.event.before }}
         run: |
+          # PRs run only the AFFECTED subset (diffed against origin/main) for
+          # fast feedback. Push-to-main runs the FULL gate: TURBO_FILTER stays
+          # empty so `turbo run` executes every workspace project.
+          #
+          # main is the authoritative complete-suite gate. Affected-filtering on
+          # main (the old `...[$EVENT_BEFORE]` behaviour) let a package's stale
+          # unit/e2e tests stay green whenever an "unrelated" merge did not mark
+          # it affected — e.g. a CLI-only merge skipped app e2e entirely, so app
+          # specs could rot undetected on main until a later shared-package
+          # branch failed a shard that looked unrelated. Running everything on
+          # main closes that drift. See CLAUDE.md operating mode +
+          # e2e-affected-detection-masks-drift.
           if [ "$EVENT_NAME" = "pull_request" ]; then
             git fetch origin main --no-tags
-            echo "TURBO_BASE=origin/main" >> "$GITHUB_ENV"
+            echo "TURBO_FILTER=--filter=...[origin/main]" >> "$GITHUB_ENV"
           else
-            BEFORE="$EVENT_BEFORE"
-            if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
-              BEFORE="$(git rev-parse HEAD~1)"
-            fi
-            echo "TURBO_BASE=$BEFORE" >> "$GITHUB_ENV"
+            echo "TURBO_FILTER=" >> "$GITHUB_ENV"
           fi
 
       - uses: ./.github/actions/pnpm-install
 
-      - name: Lint and typecheck (affected)
-        run: pnpm turbo run lint typecheck --filter="...[${TURBO_BASE}]"
+      - name: Lint and typecheck
+        run: |
+          set -f  # keep the unquoted ...[origin/main] filter literal (no globbing)
+          # --concurrency=3: turbo's default (10) fans out parallel tsc/eslint
+          # processes far beyond the 2-core runner's memory; repeated exit-137
+          # runner kills ("shutdown signal" mid lint+typecheck) traced to this.
+          # Three concurrent tasks bounds peak RSS while keeping the cores busy.
+          pnpm turbo run lint typecheck --concurrency=3 $TURBO_FILTER
 
       - name: Manifest, contracts, env invariants
         run: pnpm check:manifest && pnpm check:contracts && pnpm env:check && pnpm db:lint-migrations
@@ -189,20 +202,27 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Compute affected base
+      - name: Compute turbo filter
         env:
           EVENT_NAME: ${{ github.event_name }}
-          EVENT_BEFORE: ${{ github.event.before }}
         run: |
+          # PRs run only the AFFECTED subset (diffed against origin/main) for
+          # fast feedback. Push-to-main runs the FULL gate: TURBO_FILTER stays
+          # empty so `turbo run` executes every workspace project.
+          #
+          # main is the authoritative complete-suite gate. Affected-filtering on
+          # main (the old `...[$EVENT_BEFORE]` behaviour) let a package's stale
+          # unit/e2e tests stay green whenever an "unrelated" merge did not mark
+          # it affected — e.g. a CLI-only merge skipped app e2e entirely, so app
+          # specs could rot undetected on main until a later shared-package
+          # branch failed a shard that looked unrelated. Running everything on
+          # main closes that drift. See CLAUDE.md operating mode +
+          # e2e-affected-detection-masks-drift.
           if [ "$EVENT_NAME" = "pull_request" ]; then
             git fetch origin main --no-tags
-            echo "TURBO_BASE=origin/main" >> "$GITHUB_ENV"
+            echo "TURBO_FILTER=--filter=...[origin/main]" >> "$GITHUB_ENV"
           else
-            BEFORE="$EVENT_BEFORE"
-            if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
-              BEFORE="$(git rev-parse HEAD~1)"
-            fi
-            echo "TURBO_BASE=$BEFORE" >> "$GITHUB_ENV"
+            echo "TURBO_FILTER=" >> "$GITHUB_ENV"
           fi
 
       - name: Bootstrap Postgres extensions
@@ -229,11 +249,15 @@ jobs:
       - name: Seed platform defaults
         run: npx tsx --env-file-if-exists=.env.local tools/scripts/seed-platform.ts
 
-      - name: Build and unit tests (affected)
-        run: pnpm turbo run build test:unit --filter="...[${TURBO_BASE}]"
+      - name: Build and unit tests
+        run: |
+          set -f  # keep the unquoted ...[origin/main] filter literal (no globbing)
+          pnpm turbo run build test:unit $TURBO_FILTER
 
-      - name: Coverage thresholds (affected)
-        run: pnpm turbo run test:coverage --filter="...[${TURBO_BASE}]"
+      - name: Coverage thresholds
+        run: |
+          set -f
+          pnpm turbo run test:coverage $TURBO_FILTER
 
   e2e:
     if: github.event_name != 'workflow_dispatch'
@@ -307,20 +331,27 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Compute affected base
+      - name: Compute turbo filter
         env:
           EVENT_NAME: ${{ github.event_name }}
-          EVENT_BEFORE: ${{ github.event.before }}
         run: |
+          # PRs run only the AFFECTED subset (diffed against origin/main) for
+          # fast feedback. Push-to-main runs the FULL gate: TURBO_FILTER stays
+          # empty so `turbo run` executes every workspace project.
+          #
+          # main is the authoritative complete-suite gate. Affected-filtering on
+          # main (the old `...[$EVENT_BEFORE]` behaviour) let a package's stale
+          # unit/e2e tests stay green whenever an "unrelated" merge did not mark
+          # it affected — e.g. a CLI-only merge skipped app e2e entirely, so app
+          # specs could rot undetected on main until a later shared-package
+          # branch failed a shard that looked unrelated. Running everything on
+          # main closes that drift. See CLAUDE.md operating mode +
+          # e2e-affected-detection-masks-drift.
           if [ "$EVENT_NAME" = "pull_request" ]; then
             git fetch origin main --no-tags
-            echo "TURBO_BASE=origin/main" >> "$GITHUB_ENV"
+            echo "TURBO_FILTER=--filter=...[origin/main]" >> "$GITHUB_ENV"
           else
-            BEFORE="$EVENT_BEFORE"
-            if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
-              BEFORE="$(git rev-parse HEAD~1)"
-            fi
-            echo "TURBO_BASE=$BEFORE" >> "$GITHUB_ENV"
+            echo "TURBO_FILTER=" >> "$GITHUB_ENV"
           fi
 
       - name: Bootstrap Postgres extensions
@@ -338,8 +369,10 @@ jobs:
       - name: Seed platform defaults
         run: npx tsx --env-file-if-exists=.env.local tools/scripts/seed-platform.ts
 
-      - name: Build (affected)
-        run: pnpm turbo run build --filter="...[${TURBO_BASE}]"
+      - name: Build
+        run: |
+          set -f  # keep the unquoted ...[origin/main] filter literal (no globbing)
+          pnpm turbo run build $TURBO_FILTER
 
       # Chromium + OS deps are baked into oxagen-ci-e2e at apps/app's pinned
       # @playwright/test version; this is a no-op unless the pin drifted ahead
@@ -350,8 +383,10 @@ jobs:
       - name: Install Playwright browser (fast-path)
         run: pnpm --filter @oxagen/app exec playwright install chromium
 
-      - name: E2E tests (affected, shard)
-        run: pnpm turbo run test:e2e --filter="...[${TURBO_BASE}]" -- --shard=${{ matrix.shard }}/4
+      - name: E2E tests (shard)
+        run: |
+          set -f  # keep the unquoted ...[origin/main] filter literal (no globbing)
+          pnpm turbo run test:e2e $TURBO_FILTER -- --shard=${{ matrix.shard }}/4
 
       - name: Upload Playwright traces (on failure)
         if: failure()

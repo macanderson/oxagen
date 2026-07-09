@@ -1,4 +1,4 @@
-# agent.environment.bind
+# bind_agent_environment
 
 **Domain:** agent
 **Mode:** sync
@@ -14,7 +14,7 @@ sandbox template within it. This is an upsert: calling it again for the same
 `(agentId, environmentId)` pair updates the existing binding rather than
 creating a duplicate. Promoting a binding to `isPrimary: true` atomically
 demotes the agent's previous primary binding, mirroring the
-`sandbox.template.set_default` swap pattern. Owner/Admin only.
+`set_default_sandbox_template` swap pattern. Owner/Admin only.
 
 ## Input
 
@@ -54,7 +54,16 @@ Content-Type: application/json
 
 ## MCP
 
-Tool name: `agent.environment.bind`
+Tool name: `bind_agent_environment`
+
+
+## CLI
+
+```
+oxagen agent env bind <agent> --env <slug> [--template <slug>] [--primary]
+```
+
+`<agent>` is a `agt_…` id, slug, or agent-key. Omit `--template` to resolve the environment's default template at run time.
 
 ## Errors
 

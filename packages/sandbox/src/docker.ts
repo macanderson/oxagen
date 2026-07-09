@@ -61,19 +61,32 @@ function envArray(env: Record<string, string> | undefined): string[] {
   return Object.entries(env).map(([k, v]) => `${k}=${v}`);
 }
 
+// Ceiling on vCPU a template may request (mirrors the contract's
+// sandboxResourcesSchema.vcpu max). A malformed larger value is clamped rather
+// than handed straight to the daemon.
+const MAX_VCPU = 4;
+
 export function hostConfigFor(req: SandboxRequest, spec: ImageSpec): Dockerode.HostConfig {
   // Never allow a non-positive memory limit through to Docker (0 == unlimited).
   const memoryBytes = Math.max(req.memoryMb, MIN_MEMORY_MB) * 1024 * 1024;
+  // A template's vcpu maps to NanoCpus (1 vCPU = 1e9); default is the 0.5-CPU
+  // floor. A template's diskMb sizes the /work tmpfs (agent workspace); /tmp
+  // keeps the image default so a large workspace request doesn't also inflate scratch.
+  const nanoCpus =
+    req.vcpu && req.vcpu > 0
+      ? Math.min(req.vcpu, MAX_VCPU) * 1_000_000_000
+      : NANOCPUS;
+  const workBytes = req.diskMb && req.diskMb > 0 ? req.diskMb * 1024 * 1024 : spec.tmpfsBytes;
   return {
     AutoRemove: true,
     Memory: memoryBytes,
     MemorySwap: memoryBytes,
-    NanoCpus: NANOCPUS,
+    NanoCpus: nanoCpus,
     PidsLimit: 128,
     NetworkMode: req.network === "deny" ? "none" : "bridge",
     ReadonlyRootfs: true,
     Tmpfs: {
-      "/work": `rw,size=${spec.tmpfsBytes}`,
+      "/work": `rw,size=${workBytes}`,
       "/tmp": `rw,size=${spec.tmpfsBytes}`,
     },
     CapDrop: ["ALL"],
@@ -196,9 +209,13 @@ async function createAndLoad(
   req: SandboxRequest,
 ): Promise<CreatedContainer> {
   const spec = IMAGES[req.language];
-  await ensureImage(docker, spec.image);
+  // A template's custom image (digest-pinned) overrides the language default;
+  // the entrypoint + codePath stay language-derived (the custom image is a
+  // prewarmed superset of the base — e.g. node with a toolchain baked in).
+  const image = req.imageRef ?? spec.image;
+  await ensureImage(docker, image);
   const container = await docker.createContainer({
-    Image: spec.image,
+    Image: image,
     Cmd: [...spec.entrypoint],
     Env: envArray(req.env),
     WorkingDir: "/work",

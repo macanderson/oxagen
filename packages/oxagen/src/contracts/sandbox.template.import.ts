@@ -9,7 +9,7 @@ import { sandboxTemplateSummarySchema } from "./sandbox.template.create";
 // unless the caller passes a `slug` override. Unknown tool refs not installed in
 // the workspace do NOT fail — they surface in warnings[] (Spec §3).
 export const sandboxTemplateImport = registerCapability({
-  name: "sandbox.template.import",
+  name: "import_sandbox_template",
   domain: "sandbox",
   description:
     "Import a portable sandbox-template manifest into an environment. Creates the template (non-default unless setAsDefault), its tools, and upserts missing secret keys (no values). Returns warnings for uninstalled tool refs and slug collisions.",

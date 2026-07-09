@@ -11,7 +11,7 @@ import {
   listServers,
 } from "@oxagen/plugins/registry";
 import type { AuthKind } from "@oxagen/plugins/registry";
-import { detectOAuthProtected } from "@oxagen/plugins";
+import { detectOAuthProtected, installTemplatesFromPack } from "@oxagen/plugins";
 import { upsertCapabilityInstall } from "./capability-install";
 import { logger } from "./logger";
 
@@ -97,6 +97,34 @@ export async function installOne(
         manifest,
       }),
     );
+
+    // Seed any portable sandbox templates this pack ships (Spec §6) into the
+    // workspace default environment, idempotently. Best-effort: a seeding
+    // failure (e.g. no default environment) must not fail the pack install —
+    // the capability listing is already committed — so it is logged, not thrown.
+    if (manifest.sandboxTemplates && manifest.sandboxTemplates.length > 0) {
+      try {
+        const result = await installTemplatesFromPack(
+          { orgId: ctx.orgId, workspaceId: ctx.workspaceId!, userId: ctx.userId },
+          { packId: pluginId, templates: manifest.sandboxTemplates },
+        );
+        logger.info(
+          {
+            pluginId,
+            orgId: ctx.orgId,
+            workspaceId: ctx.workspaceId,
+            installed: result.installed.map((t) => t.slug),
+          },
+          "plugin.org.install: seeded pack sandbox templates",
+        );
+      } catch (err) {
+        logger.error(
+          { err, pluginId, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+          "plugin.org.install: failed to seed pack sandbox templates (pack listing still installed)",
+        );
+      }
+    }
+
     return { id: installedId, authKind: "none" };
   }
 

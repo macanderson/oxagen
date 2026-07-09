@@ -16,9 +16,9 @@ contract-first design, IAM enforcement, and instrumentation.
 - [agent.definition.suggest](agent.definition.suggest.md) — AI-assisted agent setup — turns a plain-language description into a complete draft agent configuration (identity, instructions, graph access, tools, triggers), grounded in the workspace's real skills, ontologies, MCP servers, and capabilities
 - [agent.definition.update](agent.definition.update.md) — Update an agent definition by snapshotting a new unpublished version with the updated config; the version number is bumped
 - [agent.deploy](agent.deploy.md) — Set an agent's deployment posture; activating requires a published active version, deactivating makes its triggers dormant
-- [agent.environment.bind](agent.environment.bind.md) — Bind an agent to an environment (and optionally a specific sandbox template within it); promoting one to primary atomically demotes the agent's previous primary
-- [agent.environment.list](agent.environment.list.md) — List an agent's environment bindings, with each binding's resolved sandbox template name
-- [agent.environment.unbind](agent.environment.unbind.md) — Remove an agent's binding to an environment; falls back to the workspace default environment and template when the removed binding was primary
+- [bind_agent_environment](bind_agent_environment.md) — Bind an agent to an environment (and optionally a specific sandbox template within it); promoting one to primary atomically demotes the agent's previous primary
+- [list_agent_environments](list_agent_environments.md) — List an agent's environment bindings, with each binding's resolved sandbox template name
+- [unbind_agent_environment](unbind_agent_environment.md) — Remove an agent's binding to an environment; falls back to the workspace default environment and template when the removed binding was primary
 - [agent.execution.record](agent.execution.record.md) — Persist a complete agent execution record including steps, tool calls, and result summary for observability and audit
 - [agent.feature.verify](agent.feature.verify.md) — Independent cross-LLM judge: a DIFFERENT vision model than the builder reads screenshots of a feature and returns a pass/fail verdict against the stated requirement. The proof-of-done gate.
 - [agent.file.lock.acquire](agent.file.lock.acquire.md) — Acquire (or renew) an exclusive, TTL-bounded lock on a file so no two agents edit it concurrently; fails with granted:false when a different agent already holds a live lock
@@ -332,15 +332,15 @@ contract-first design, IAM enforcement, and instrumentation.
 
 ## Sandbox (9)
 
-- [sandbox.template.create](sandbox.template.create.md) — Create a portable sandbox template under an environment: provider, runtime image, resources, network posture, selected vault keys, literal config, and preloaded tools
-- [sandbox.template.list](sandbox.template.list.md) — List sandbox templates in the active workspace, optionally filtered to one environment
-- [sandbox.template.get](sandbox.template.get.md) — Fetch a single sandbox template (with its tools) by its public id
-- [sandbox.template.update](sandbox.template.update.md) — Update a sandbox template's metadata, provider, runtime, resources, network, secret selection, literal config, or active state
-- [sandbox.template.delete](sandbox.template.delete.md) — Soft-delete a sandbox template; a default template cannot be deleted until another is promoted
-- [sandbox.template.set_default](sandbox.template.set_default.md) — Promote a sandbox template to its environment's default via an atomic swap
-- [sandbox.template.set_tools](sandbox.template.set_tools.md) — Replace the full set of preloaded tools on a sandbox template (replace-set semantics)
-- [sandbox.template.export](sandbox.template.export.md) — Export a sandbox template as a portable v1 manifest (config, tools, and required secret key NAMES — never secret values)
-- [sandbox.template.import](sandbox.template.import.md) — Import a portable sandbox-template manifest into an environment; creates the template, its tools, and upserts missing secret keys (no values)
+- [create_sandbox_template](create_sandbox_template.md) — Create a portable sandbox template under an environment: provider, runtime image, resources, network posture, selected vault keys, literal config, and preloaded tools
+- [list_sandbox_templates](list_sandbox_templates.md) — List sandbox templates in the active workspace, optionally filtered to one environment
+- [get_sandbox_template](get_sandbox_template.md) — Fetch a single sandbox template (with its tools) by its public id
+- [update_sandbox_template](update_sandbox_template.md) — Update a sandbox template's metadata, provider, runtime, resources, network, secret selection, literal config, or active state
+- [delete_sandbox_template](delete_sandbox_template.md) — Soft-delete a sandbox template; a default template cannot be deleted until another is promoted
+- [set_default_sandbox_template](set_default_sandbox_template.md) — Promote a sandbox template to its environment's default via an atomic swap
+- [set_sandbox_template_tools](set_sandbox_template_tools.md) — Replace the full set of preloaded tools on a sandbox template (replace-set semantics)
+- [export_sandbox_template](export_sandbox_template.md) — Export a sandbox template as a portable v1 manifest (config, tools, and required secret key NAMES — never secret values)
+- [import_sandbox_template](import_sandbox_template.md) — Import a portable sandbox-template manifest into an environment; creates the template, its tools, and upserts missing secret keys (no values)
 
 ## Schema (23)
 
