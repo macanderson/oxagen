@@ -29,9 +29,9 @@ import { invoke } from "@oxagen/oxagen";
 import "@oxagen/handlers/register";
 import "@oxagen/agent/register";
 import { withTenantDb, schema } from "@oxagen/database";
-import type { MemoryImportDraftInput } from "@oxagen/oxagen/contracts/agent.memory.import.shared";
-import type { AgentMemoryImportParseOutput } from "@oxagen/oxagen/contracts/agent.memory.import.parse";
-import type { AgentMemoryImportCommitOutput } from "@oxagen/oxagen/contracts/agent.memory.import.commit";
+import type { MemoryImportDraftInput } from "@oxagen/oxagen/contracts/agent.memory_import.shared";
+import type { AgentMemoryImportParseOutput } from "@oxagen/oxagen/contracts/agent.memory_import.parse";
+import type { AgentMemoryImportCommitOutput } from "@oxagen/oxagen/contracts/agent.memory_import.commit";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
 
@@ -171,7 +171,7 @@ export async function parseImportAction(input: {
     try {
       const trimmedRef = defaultNodeRef?.trim();
       const out = (await invoke(
-        "agent.memory.import.parse",
+        "parse_memory_import",
         {
           documents: cleaned,
           ...(trimmedRef ? { defaultNodeRef: trimmedRef } : {}),
@@ -246,7 +246,7 @@ export async function commitImportAction(input: {
 
     try {
       const out = (await invoke(
-        "agent.memory.import.commit",
+        "commit_memory_import",
         { drafts },
         ctx,
         { surface: "agent" },

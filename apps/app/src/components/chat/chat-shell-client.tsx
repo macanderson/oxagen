@@ -9,7 +9,7 @@ import type { ChatMessage, MessageBubbleCallbacks } from "./message-bubble";
 import { PlanCard } from "./plan-card";
 import { ApprovalCard } from "./approval-card";
 import { ConsentCard } from "./consent-card";
-import { ToolCallCard } from "./tool-call-card";
+import { ToolActivityGroup, type ToolActivityItem } from "./tool-activity-group";
 import { CodeExecuteCard } from "./code-execute-card";
 import { MemoryCard } from "./memory-card";
 import { BackgroundTaskCard } from "./background-task-card";
@@ -22,16 +22,32 @@ import { useToolStream } from "./use-tool-stream";
 import type { ChatShellProps } from "./chat-shell";
 import type { StreamEvent } from "./stream-event-types";
 import type { ResolvedTierCatalog } from "@oxagen/ai/catalog";
-import type { ComposerModelState } from "./model-picker";
+import type { ComposerModelState, WorkspaceBudgetGovernance } from "./model-picker";
 import type { McpServerSummary } from "./mcp-types";
+import type { RepoOption } from "./repo-selector";
+import type { EnvironmentOption } from "./environment-selector";
+import type { AgentOption } from "./agent-selector";
+import { deriveComposerPr } from "./composer-pr-status-chip";
 import { SuggestedPromptChips } from "./suggested-prompt-chips";
+import type { ConversationMessageSummary } from "@/lib/page-context/suggested-prompts";
 import { ConversationFiles } from "./conversation-files";
+import { ConversationExportMenu } from "./conversation-export-menu";
+import { CodingTracePanel } from "./coding-trace-panel";
+import { WorkspaceContextPanel } from "./workspace-context-panel";
 import { useLatestRef } from "@/lib/use-latest-ref";
 import type { FieldDescriptor } from "@/lib/ask/fill-types";
 import { interceptFormFillEvents } from "./intercept-form-fill";
 import { ThinkingBubble } from "./thinking-bubble";
 import { MessageFooter } from "./message-footer";
 import { useToast } from "@/components/ui/toast";
+import { PanelRight } from "lucide-react";
+import {
+  Sheet,
+  SheetPopup,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/sheet";
 
 /**
  * Friendly toast title for a turn-level error, keyed off the machine `code`
@@ -54,6 +70,29 @@ function errorToastTitle(code: string | undefined): string {
     default:
       return "Request failed";
   }
+}
+
+/**
+ * Read a human-readable error message from a failed stream response.
+ *
+ * The stream route returns `{ error: string }` JSON for the user-fixable
+ * failure modes (e.g. a 422 when an attachment can't be resolved, or no
+ * vision-capable model is configured). Surface THAT message instead of a bare
+ * "HTTP 422", which strands the user with no next step. Returns `null` when the
+ * body is missing, unparseable, or carries no non-empty `error` string, so the
+ * caller can fall back to a status-based message.
+ */
+export async function readErrorMessage(res: Response): Promise<string | null> {
+  try {
+    const data: unknown = await res.clone().json();
+    if (data && typeof data === "object" && "error" in data) {
+      const err = (data as { error?: unknown }).error;
+      if (typeof err === "string" && err.trim().length > 0) return err;
+    }
+  } catch {
+    // Non-JSON or empty body — fall back to the status-line message.
+  }
+  return null;
 }
 
 /**
@@ -101,6 +140,12 @@ export function ChatShellClient({
   pendingPromptBehavior = "queue",
   initialModelState,
   availableMcpServers,
+  availableRepos,
+  availableEnvironments,
+  availableAgents,
+  workspaceBudgetGovernance,
+  agentId,
+  boundAgentName,
   pageContext,
   onFormFillStart,
   onFormFillEnd,
@@ -129,6 +174,21 @@ export function ChatShellClient({
   initialModelState?: ComposerModelState;
   /** Available MCP servers for the per-turn activation picker. */
   availableMcpServers?: McpServerSummary[];
+  /** GitHub repos usable as the code-mode target (see _shared/code-mode-data.ts). */
+  availableRepos?: RepoOption[];
+  /** Workspace environments usable as the code-mode target. */
+  availableEnvironments?: EnvironmentOption[];
+  /** Selectable agents for the composer's agent picker. */
+  availableAgents?: AgentOption[];
+  /** Workspace-level per-turn budget governance (OXA-2081). Null/omitted ⇒
+   * no governance active for this workspace. */
+  workspaceBudgetGovernance?: WorkspaceBudgetGovernance | null;
+  /** Bound published agent's public id (Ask page ?agent=…). Sent as `agentId`
+   * in each stream request so the route applies the agent's config. Null ⇒
+   * unbound. */
+  agentId?: string | null;
+  /** Human name of the bound agent — shown as the composer's bound indicator. */
+  boundAgentName?: string | null;
   /**
    * Page context forwarded from the current page. When a fillable form is
    * registered (e.g. in AskDrawer/WandPanel wrappers), this is passed to the
@@ -184,6 +244,9 @@ export function ChatShellClient({
     order,
     turnUsage,
     turnError,
+    turnWarning,
+    turnBudgetNotice,
+    suggestedPrompts,
     consume,
     reset,
     hasBlockingApproval,
@@ -191,6 +254,21 @@ export function ChatShellClient({
     signalApprovalResolved,
     signalConsentResolved,
   } = useToolStream();
+
+  // Trimmed recent history for the no-LLM suggestion fallback: keeps the chips
+  // conversation-aware on reload / before the first per-turn server suggestions
+  // arrive. Server-generated `suggestedPrompts` take precedence in the chips.
+  const conversationHistory = React.useMemo<ConversationMessageSummary[]>(
+    () =>
+      messages
+        .filter((m) => m.role === "user" || m.role === "assistant")
+        .slice(-6)
+        .map((m) => ({
+          role: m.role as "user" | "assistant",
+          content: m.content.slice(0, 300),
+        })),
+    [messages],
+  );
 
   // Surface a turn-level failure (provider/gateway error, billing block such as
   // insufficient_credits, or an unexpected server throw) as a toast — instead of
@@ -209,7 +287,7 @@ export function ChatShellClient({
       lastToastedErrorRef.current = null;
       return;
     }
-    const key = `${turnError.code ?? ""} ${turnError.message}`;
+    const key = `${turnError.code ?? ""}::${turnError.message}`;
     if (lastToastedErrorRef.current === key) return;
     lastToastedErrorRef.current = key;
     toast.add({
@@ -218,6 +296,58 @@ export function ChatShellClient({
       description: turnError.message,
     });
   }, [turnError, toast]);
+
+  // Non-fatal advisory (e.g. the reply failed to persist to history): toast it
+  // as a warning so the user knows, without marking the turn failed. Same
+  // dedupe-by-content guard as the turnError effect above.
+  const lastToastedWarningRef = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    if (turnWarning === undefined) {
+      lastToastedWarningRef.current = null;
+      return;
+    }
+    const key = `${turnWarning.code ?? ""}::${turnWarning.message}`;
+    if (lastToastedWarningRef.current === key) return;
+    lastToastedWarningRef.current = key;
+    toast.add({
+      type: "warning",
+      title: "Heads up",
+      description: turnWarning.message,
+    });
+  }, [turnWarning, toast]);
+
+  // Per-turn dollar budget (OXA — turn-budget): surface the engine's non-
+  // blocking budget-guard notices as a toast, same dedupe-by-content pattern
+  // as the turnError effect above (a new object identity every render must
+  // not re-toast the same notice). "stopped" ends the turn early (mirrors the
+  // engine's `stopReason: "budget"`); "within_grace" is informational and the
+  // turn keeps streaming. The gated "prompt" mode's pause is NOT here — it
+  // renders as an approval card via pendingApprovals instead.
+  const lastToastedBudgetNoticeRef = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    if (turnBudgetNotice === undefined) {
+      lastToastedBudgetNoticeRef.current = null;
+      return;
+    }
+    const key = `${turnBudgetNotice.state} ${turnBudgetNotice.costUsd} ${turnBudgetNotice.limitUsd}`;
+    if (lastToastedBudgetNoticeRef.current === key) return;
+    lastToastedBudgetNoticeRef.current = key;
+    const cost = turnBudgetNotice.costUsd.toFixed(4);
+    const limit = turnBudgetNotice.limitUsd.toFixed(4);
+    if (turnBudgetNotice.state === "stopped") {
+      toast.add({
+        type: "warning",
+        title: "Turn stopped — per-turn budget reached",
+        description: `This turn cost $${cost} of your $${limit} budget and was stopped.`,
+      });
+    } else {
+      toast.add({
+        type: "info",
+        title: "Over budget — within grace window",
+        description: `This turn is at $${cost}, past your $${limit} budget but still inside the grace cushion.`,
+      });
+    }
+  }, [turnBudgetNotice, toast]);
 
   const router = useRouter();
   const pathname = usePathname();
@@ -229,6 +359,9 @@ export function ChatShellClient({
   // Stream error — set when the SSE fetch returns a non-2xx response or throws
   // a non-abort error. Cleared at the start of each new turn.
   const [streamError, setStreamError] = React.useState<string | null>(null);
+  // Below-lg reflow of the right rail (trace + workspace context): the same
+  // panels open in a bottom sheet — mobile feature parity per ADR-026.
+  const [mobileRailOpen, setMobileRailOpen] = React.useState(false);
   const setStreamErrorRef = useLatestRef(setStreamError);
 
   // Latest conversationId, read inside the send callback (whose deps don't
@@ -258,6 +391,10 @@ export function ChatShellClient({
   const consentSignalRef = useLatestRef(signalConsentResolved);
   const orgSlugRef = useLatestRef(orgSlug);
   const workspaceSlugRef = useLatestRef(workspaceSlug);
+  // Bound-agent id read at send-time (stable ref, like the slug refs) so the
+  // request body carries the CURRENT ?agent binding without re-creating the
+  // send callback on every navigation.
+  const agentIdRef = useLatestRef(agentId ?? null);
   const setIsStreamingRef = useLatestRef(setIsStreaming);
   // Page-form-fill callback refs — stable so wrappedSendAction deps don't change.
   const pageContextRef = useLatestRef(pageContext ?? null);
@@ -393,6 +530,11 @@ export function ChatShellClient({
               newConversation: wasNewConversation,
               orgSlug: orgSlugRef.current,
               workspaceSlug: workspaceSlugRef.current,
+              // Optional agent binding — the route loads this agent's definition
+              // and applies its instructions/skills/servers/code-mode. Omitted
+              // (undefined) when unbound, so the request is byte-identical to
+              // before this feature for a normal chat.
+              ...(agentIdRef.current ? { agentId: agentIdRef.current } : {}),
               tier: (formData.get("tier") as string) || null,
               model: (formData.get("model") as string) || null,
               effort: (formData.get("effort") as string) || null,
@@ -404,14 +546,95 @@ export function ChatShellClient({
                 if (!raw) return [];
                 try { return JSON.parse(raw) as string[]; } catch { return []; }
               })(),
+              // Per-turn dollar budget (OXA — turn-budget). The composer
+              // always sets this (see message-composer.tsx budgetPayload) but
+              // a malformed/missing value degrades to `null`, which the route
+              // treats as "no per-turn override" and falls back to the user's
+              // saved default (budget.policy.read).
+              budget: (() => {
+                const raw = formData.get("budget") as string | null;
+                if (!raw) return null;
+                try { return JSON.parse(raw); } catch { return null; }
+              })(),
+              // Forward attachment IDS ONLY — never the base64 bytes or the
+              // full conversationAssetItem the composer persisted — the stream
+              // route re-resolves each publicId server-side (ownership +
+              // status='ready' + kind allowlist) before building image parts.
+              // Keeps the 32 KiB BodySchema `content` cap meaningful (the
+              // four-store rule: refs-by-publicId through the wire, bytes stay
+              // in blob storage).
+              attachments: (() => {
+                const raw = formData.get("attachments") as string | null;
+                if (!raw) return [];
+                try {
+                  const parsed = JSON.parse(raw) as Array<{
+                    publicId?: unknown;
+                    keyframeForVideo?: unknown;
+                  }>;
+                  return parsed
+                    .filter((a) => typeof a.publicId === "string")
+                    .map((a) => ({
+                      publicId: a.publicId as string,
+                      // Preserve the video↔keyframe link (Phase 2) so the route
+                      // can drop a video's sampled keyframes when it sends the
+                      // real video file part instead.
+                      ...(typeof a.keyframeForVideo === "string"
+                        ? { keyframeForVideo: a.keyframeForVideo }
+                        : {}),
+                    }));
+                } catch {
+                  return [];
+                }
+              })(),
               // Forward page context so the route can inject the page_form_fill tool.
               pageContext: pageContextRef.current ?? null,
+              // Code-mode sandbox target (OXA app-code-mode). The composer only
+              // sets this formData field when Code mode is ON and both a repo
+              // and environment are selected (see message-composer.tsx's send
+              // gate) — otherwise this is `null`, matching the stream route's
+              // BodySchema `code: {...} | null`.
+              code: (() => {
+                const raw = formData.get("code") as string | null;
+                if (!raw) return null;
+                try {
+                  return JSON.parse(raw) as unknown;
+                } catch {
+                  return null;
+                }
+              })(),
+              // Selected agent (OXA app-agent-selector). The composer sets this
+              // to the chosen agent's publicId, or omits it for the default
+              // (generic chat) agent — matching the stream route's BodySchema
+              // `agentId: string | null`. A code agent (agentType==="code")
+              // drives the server's code-mode branch (sandbox + code tools).
+              agentId: (formData.get("agentId") as string) || null,
+              // Pinned chat context (org/repo + environment). The composer only
+              // sets this formData field when the user pinned a target AND is
+              // not in code mode — otherwise null, matching the stream route's
+              // BodySchema `pinnedContext: {...} | null`.
+              pinnedContext: (() => {
+                const raw = formData.get("pinnedContext") as string | null;
+                if (!raw) return null;
+                try {
+                  return JSON.parse(raw) as unknown;
+                } catch {
+                  return null;
+                }
+              })(),
             }),
           });
 
           if (!res.ok || !res.body) {
-            const errMsg = `Stream request failed (HTTP ${res.status})`;
-            console.warn("[chat]", errMsg);
+            // The stream route returns actionable JSON error bodies for the
+            // failure modes a user can fix — notably a 422 when an attachment
+            // can't be resolved ("remove and re-attach…") or no vision-capable
+            // model is configured. Surfacing only "HTTP 422" strands the user
+            // with no idea what to do, so prefer the server's `error` message
+            // when present and fall back to the status line otherwise.
+            const serverError = await readErrorMessage(res);
+            const errMsg =
+              serverError ?? `Stream request failed (HTTP ${res.status}) — please try again.`;
+            console.warn("[chat]", `Stream request failed (HTTP ${res.status})`, serverError ?? "");
             setStreamErrorRef.current(errMsg);
             setIsStreamingRef.current(false);
             return;
@@ -451,7 +674,7 @@ export function ChatShellClient({
             // Non-abort stream failures (network drop, mid-stream server crash,
             // ReadableStream error). Surface to the user so they know to retry
             // instead of silently leaving a blank or truncated assistant turn.
-            const msg = err.message || "Stream connection lost";
+            const msg = `${err.message || "Stream connection lost"} — please try again.`;
             console.warn("[chat] stream fetch failed", err);
             setStreamErrorRef.current(msg);
           }
@@ -601,6 +824,9 @@ export function ChatShellClient({
       case "tool": {
         const tc = toolCalls[id];
         if (!tc) return null;
+        // Only code-execute renders individually here; every other tool call is
+        // merged into a ToolActivityGroup by the timeline builder below.
+        if (tc.capability !== "execute_code") return null;
         const tone: TimelineTone =
           tc.status === "completed"
             ? "done"
@@ -608,50 +834,23 @@ export function ChatShellClient({
               ? "failed"
               : "running";
         const active = tc.status === "pending" || tc.status === "running";
-        if (tc.capability === "agent.code.execute") {
-          const preview = (tc.inputPreview as Record<string, unknown> | null) ?? {};
-          const language = typeof preview.language === "string" ? preview.language : "node";
-          const code = typeof preview.code === "string" ? preview.code : "";
-          const outputRecord = (tc.output as Record<string, unknown> | null) ?? {};
-          const exitCode =
-            typeof outputRecord.exitCode === "number" ? outputRecord.exitCode : undefined;
-          return {
-            node: (
-              <CodeExecuteCard
-                toolCallId={tc.toolCallId}
-                language={language}
-                code={code}
-                status={tc.status}
-                stdout={tc.stdout}
-                stderr={tc.stderr}
-                exitCode={exitCode}
-                durationMs={tc.durationMs}
-              />
-            ),
-            tone,
-            active,
-          };
-        }
+        const preview = (tc.inputPreview as Record<string, unknown> | null) ?? {};
+        const language = typeof preview.language === "string" ? preview.language : "node";
+        const code = typeof preview.code === "string" ? preview.code : "";
+        const outputRecord = (tc.output as Record<string, unknown> | null) ?? {};
+        const exitCode =
+          typeof outputRecord.exitCode === "number" ? outputRecord.exitCode : undefined;
         return {
           node: (
-            <ToolCallCard
+            <CodeExecuteCard
               toolCallId={tc.toolCallId}
-              capability={tc.capability}
-              // While args are still streaming, show the partial JSON; once the
-              // parsed input lands we show the structured preview.
-              inputPreview={
-                tc.status === "pending" ? tc.partialInput ?? "" : tc.inputPreview
-              }
-              riskLevel={tc.riskLevel}
+              language={language}
+              code={code}
               status={tc.status}
-              output={tc.output}
               stdout={tc.stdout}
               stderr={tc.stderr}
-              errorReason={tc.errorReason}
+              exitCode={exitCode}
               durationMs={tc.durationMs}
-              // Auto-expand the in-flight call so the user watches the agent
-              // compose its arguments and stream output live.
-              defaultOpen={active}
             />
           ),
           tone,
@@ -840,20 +1039,103 @@ export function ChatShellClient({
     }
   };
 
-  const timelineEntries = order
-    .map((key) => ({ key, rendered: renderEntry(key) }))
-    .filter(
-      (e): e is { key: string; rendered: NonNullable<ReturnType<typeof renderEntry>> } =>
-        e.rendered !== null,
-    );
+  // A groupable tool entry: a `tool:*` order key whose live tool call exists
+  // and is NOT code-execute (that keeps its rich CodeExecuteCard). Returns the
+  // live tool call, or null when the entry breaks a run.
+  const groupableToolCall = (key: string) => {
+    const sep = key.indexOf(":");
+    if (key.slice(0, sep) !== "tool") return null;
+    const tc = toolCalls[key.slice(sep + 1)];
+    if (!tc || tc.capability === "execute_code") return null;
+    return tc;
+  };
+
+  // Walk the ordered timeline, merging consecutive groupable tool calls into a
+  // single compact ToolActivityGroup. Tool calls fire constantly and carry
+  // little conversational signal, so collapsing a run into one quiet unit keeps
+  // the thread readable. Any non-tool entry (text, reasoning, plan, approval,
+  // code-execute…) breaks the run and renders through renderEntry as before.
+  const timelineEntries: Array<{
+    key: string;
+    rendered: NonNullable<ReturnType<typeof renderEntry>>;
+  }> = [];
+  for (let i = 0; i < order.length; ) {
+    if (groupableToolCall(order[i]!)) {
+      const startKey = order[i]!;
+      const runItems: ToolActivityItem[] = [];
+      while (i < order.length) {
+        const tc = groupableToolCall(order[i]!);
+        if (!tc) break;
+        runItems.push({
+          toolCallId: tc.toolCallId,
+          capability: tc.capability,
+          inputPreview: tc.inputPreview,
+          riskLevel: tc.riskLevel,
+          status: tc.status,
+          output: tc.output,
+          stdout: tc.stdout,
+          stderr: tc.stderr,
+          errorReason: tc.errorReason,
+          durationMs: tc.durationMs,
+        });
+        i++;
+      }
+      const anyActive = runItems.some(
+        (it) => it.status === "pending" || it.status === "running",
+      );
+      timelineEntries.push({
+        key: startKey,
+        rendered: {
+          // Rail stays calm: running while in-flight, else done — never failed.
+          node: <ToolActivityGroup items={runItems} live={isStreaming} />,
+          tone: anyActive ? "running" : "done",
+          active: anyActive,
+        },
+      });
+      continue;
+    }
+    const rendered = renderEntry(order[i]!);
+    if (rendered) timelineEntries.push({ key: order[i]!, rendered });
+    i++;
+  }
+
+  // The open PR for this conversation, derived from the latest completed
+  // `edit_repo_file` / `open_pr` tool call. Feeds the composer's compact
+  // "PR #123 ●" status chip (live CI on hover). Recomputed only when the tool
+  // calls change — the walk is cheap, but memoising keeps the chip's prop
+  // identity stable so its CI fetch effect doesn't re-run every render.
+  const codeSessionPr = React.useMemo(
+    () =>
+      deriveComposerPr(
+        order
+          .filter((k) => k.startsWith("tool:"))
+          .map((k) => toolCalls[k.slice("tool:".length)])
+          .filter((tc): tc is NonNullable<typeof tc> => Boolean(tc))
+          .map((tc) => ({
+            capability: tc.capability,
+            status: tc.status,
+            inputPreview: (tc.inputPreview as Record<string, unknown> | null) ?? null,
+            output: (tc.output as Record<string, unknown> | undefined) ?? null,
+          })),
+      ),
+    [order, toolCalls],
+  );
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-3xl flex-col gap-4">
-      {/* Toolbar row: files panel trigger (right-aligned). Hidden in the
-          floating in-app panel (showFiles=false) — conversation files live on
-          the full /ask page, reachable via "Open in conversations". */}
+    <div className="flex h-full w-full gap-4">
+      <div className="mx-auto flex h-full min-w-0 max-w-3xl flex-1 flex-col gap-4">
+      {/* Toolbar row: export + files panel triggers (right-aligned). Hidden in
+          the floating in-app panel (showFiles=false) — conversation files live
+          on the full /ask page, reachable via "Open in conversations". */}
       {showFiles ? (
-        <div className="flex shrink-0 items-center justify-end">
+        <div className="flex shrink-0 items-center justify-end gap-1">
+          {conversationPublicId ? (
+            <ConversationExportMenu
+              conversationId={conversationPublicId}
+              orgSlug={orgSlug}
+              workspaceSlug={workspaceSlug}
+            />
+          ) : null}
           <ConversationFiles conversationPublicId={conversationPublicId} />
         </div>
       ) : null}
@@ -912,6 +1194,10 @@ export function ChatShellClient({
                   {timelineEntries.map((entry, i) => (
                     <TimelineItem
                       key={entry.key}
+                      // Anchor id for the coding-trace-panel rail's deep links
+                      // (`#turn-entry-<key>`) — see chat-component-registry's
+                      // sibling `coding-trace-panel.tsx`.
+                      id={`turn-entry-${entry.key}`}
                       tone={entry.rendered.tone}
                       // The pulsing ring only animates an in-flight node while the
                       // turn is actually streaming.
@@ -925,14 +1211,16 @@ export function ChatShellClient({
                   ))}
                 </ActivityTimeline>
                 {turnUsage !== undefined ? (
-                  <MessageFooter
-                    text={Object.values(textSegments)
-                      .map((s) => s.text)
-                      .join("")}
-                    usage={turnUsage}
-                    orgSlug={orgSlug}
-                    workspaceSlug={workspaceSlug}
-                  />
+                  <div id="turn-result">
+                    <MessageFooter
+                      text={Object.values(textSegments)
+                        .map((s) => s.text)
+                        .join("")}
+                      usage={turnUsage}
+                      orgSlug={orgSlug}
+                      workspaceSlug={workspaceSlug}
+                    />
+                  </div>
                 ) : null}
               </div>
             ) : null}
@@ -946,6 +1234,8 @@ export function ChatShellClient({
           action={wrappedSendAction}
           conversationId={conversationId}
           parentMessageId={activeLeafMessageId}
+          suggestions={suggestedPrompts}
+          conversationHistory={conversationHistory}
           className="justify-center"
         />
       ) : null}
@@ -959,7 +1249,7 @@ export function ChatShellClient({
           data-testid="stream-error-banner"
           className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive"
         >
-          {streamError} — please try again.
+          {streamError}
         </div>
       ) : null}
 
@@ -975,7 +1265,98 @@ export function ChatShellClient({
         onInterrupt={handleInterrupt}
         initialModelState={initialModelState}
         availableMcpServers={availableMcpServers}
+        availableRepos={availableRepos}
+        availableEnvironments={availableEnvironments}
+        availableAgents={availableAgents}
+        workspaceBudgetGovernance={workspaceBudgetGovernance}
+        orgSlug={orgSlug}
+        workspaceSlug={workspaceSlug}
+        boundAgentName={boundAgentName ?? null}
+        codeSessionPr={codeSessionPr}
       />
+    </div>
+      {/* Right rail: turn-trace stage rail + files/workspace tabbed panel.
+          Hidden in the floating in-app panel (showFiles=false, same gate the
+          toolbar's ConversationFiles/export triggers use) and on narrow
+          viewports — the rail needs real width to be legible. */}
+      {showFiles ? (
+        <aside className="hidden w-64 shrink-0 flex-col gap-3 overflow-y-auto py-1 lg:flex">
+          <CodingTracePanel
+            order={order}
+            plans={plans}
+            toolCalls={toolCalls}
+            activeFanouts={activeFanouts}
+            turnUsage={turnUsage}
+            isStreaming={isStreaming}
+            className="w-full"
+          />
+          <WorkspaceContextPanel
+            conversationPublicId={conversationPublicId}
+            orgSlug={orgSlug}
+            workspaceSlug={workspaceSlug}
+            toolCalls={toolCalls}
+            className="min-h-64 flex-1"
+          />
+        </aside>
+      ) : null}
+
+      {/* Below lg the rail reflows into a bottom sheet (ADR-026 mobile parity):
+          a floating thumb-reachable trigger above the mobile bottom bar opens
+          the identical trace + workspace panels. */}
+      {showFiles ? (
+        <div className="lg:hidden">
+          <button
+            type="button"
+            data-testid="chat-mobile-rail-trigger"
+            aria-haspopup="dialog"
+            aria-expanded={mobileRailOpen}
+            onClick={() => setMobileRailOpen(true)}
+            className={cn(
+              "fixed right-3 z-20 flex h-11 items-center gap-1.5 rounded-full border border-border/60",
+              "bg-background/95 px-4 text-xs font-medium text-muted-foreground shadow-sm backdrop-blur",
+              "bottom-[calc(var(--bottom-bar-h)+var(--bottom-bar-gap,0px)+env(safe-area-inset-bottom)+0.75rem)] md:bottom-3",
+              "hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            )}
+          >
+            <PanelRight className="size-4" aria-hidden="true" />
+            Activity
+          </button>
+          <Sheet open={mobileRailOpen} onOpenChange={setMobileRailOpen}>
+            <SheetPopup
+              side="bottom"
+              className="flex max-h-[85vh] flex-col gap-0 rounded-t-2xl p-0 pb-[env(safe-area-inset-bottom)]"
+            >
+              <SheetHeader className="border-b px-4 py-3 text-left">
+                <SheetTitle>Activity</SheetTitle>
+                <SheetDescription className="sr-only">
+                  Turn trace and workspace context for this conversation
+                </SheetDescription>
+              </SheetHeader>
+              <div
+                className="flex flex-col gap-3 overflow-y-auto p-3"
+                data-testid="chat-mobile-rail-sheet"
+              >
+                <CodingTracePanel
+                  order={order}
+                  plans={plans}
+                  toolCalls={toolCalls}
+                  activeFanouts={activeFanouts}
+                  turnUsage={turnUsage}
+                  isStreaming={isStreaming}
+                  className="w-full"
+                />
+                <WorkspaceContextPanel
+                  conversationPublicId={conversationPublicId}
+                  orgSlug={orgSlug}
+                  workspaceSlug={workspaceSlug}
+                  toolCalls={toolCalls}
+                  className="min-h-64"
+                />
+              </div>
+            </SheetPopup>
+          </Sheet>
+        </div>
+      ) : null}
     </div>
   );
 }

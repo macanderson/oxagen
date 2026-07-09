@@ -1,6 +1,7 @@
 import { homedir } from "os";
 import { join } from "path";
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from "fs";
+import { readFileSync, mkdirSync, existsSync } from "fs";
+import { atomicWriteFileSync } from "./atomic-write.js";
 
 export interface CliConfig {
   token?: string;
@@ -12,11 +13,18 @@ export interface CliConfig {
   model?: string;
   /** Default reasoning effort for models that support it (low|medium|high|xhigh|max). */
   effort?: "low" | "medium" | "high" | "xhigh" | "max";
+  /** TUI animation level (see getMotionMode) — set via /motion in the REPL. */
+  motion?: MotionMode;
   /** Vercel AI Gateway key for the local agent loop (falls back to env / .env.local). */
   gatewayKey?: string;
+  /**
+   * Anthropic API key — BYOK fallback when no gateway key exists anywhere.
+   * Anthropic models only; `gatewayKey` / `AI_GATEWAY_API_KEY` wins when present.
+   */
+  anthropicKey?: string;
   /** Default verbose mode: capture + emit full per-turn telemetry. */
   verbose?: boolean;
-  /** Model-runtime settings (Group 1: on-device runtime + coordinator choice). */
+  /** Model-runtime settings */
   runtime?: RuntimeConfig;
   /**
    * Pipeline / assist-tool settings (Group 4: prompt enhancer, judge, survey).
@@ -30,6 +38,26 @@ export interface CliConfig {
    * read through the typed accessors in `monitors/config.ts`.
    */
   monitors?: import("../monitors/config.js").MonitorsConfigPatch;
+  /** Graph tool settings */
+  graph?: import("../agent/context/config.js").GraphConfigPatch;
+  /** Anonymous usage-telemetry preferences (apps/cli/src/telemetry/usage.ts). */
+  telemetry?: TelemetryConfig;
+}
+
+/**
+ * Anonymous CLI usage-telemetry preferences, persisted alongside the rest of
+ * `CliConfig`. See TELEMETRY.md at the repo root for the full disclosure —
+ * telemetry is ON by default (opt-out), so this section is absent until the
+ * first run (which sets `disclosed` + `installId`) or the user runs
+ * `oxagen telemetry off/on`.
+ */
+export interface TelemetryConfig {
+  /** false = fully disabled (no id generation, no network). Absent/true = enabled. */
+  enabled?: boolean;
+  /** True once the one-time first-run disclosure has been printed. */
+  disclosed?: boolean;
+  /** Random per-install id (crypto.randomUUID()), generated on first enabled run. */
+  installId?: string;
 }
 
 /**
@@ -53,6 +81,22 @@ export interface RuntimeConfig {
     /** Quantization preference, best quality first (e.g. ["q8","q6","q5","q4"]). */
     quantizationPreference?: ("q4" | "q5" | "q6" | "q8")[];
   };
+}
+
+/**
+ * TUI animation level:
+ *   - "full"    — everything animates (default).
+ *   - "reduced" — no decorative animation: the space-invaders duel / init
+ *     easter-egg game and the prompt bar's rainbow border flash are off; the
+ *     thinking indicator (useful progress feedback) stays.
+ *   - "off"     — all animation off, including the thinking indicator.
+ */
+export type MotionMode = "full" | "reduced" | "off";
+
+const MOTION_MODES: readonly string[] = ["full", "reduced", "off"];
+
+function asMotionMode(value: string | undefined): MotionMode | undefined {
+  return value !== undefined && MOTION_MODES.includes(value) ? (value as MotionMode) : undefined;
 }
 
 const CONFIG_DIR = join(homedir(), ".config", "oxagen");
@@ -80,7 +124,11 @@ export function writeConfig(patch: Partial<CliConfig>): void {
   const current = readConfig();
   const next = { ...current, ...patch };
   if (!existsSync(CONFIG_DIR)) mkdirSync(CONFIG_DIR, { recursive: true });
-  writeFileSync(CONFIG_FILE, JSON.stringify(next, null, 2), "utf8");
+  // Atomic (write temp + rename) — a plain writeFileSync truncates the file
+  // before the new bytes land, so a kill mid-write (or a second parallel CLI
+  // session writing the same config.json) can strand a corrupt/empty file
+  // (see item 9, fix/cli-config-truth).
+  atomicWriteFileSync(CONFIG_FILE, JSON.stringify(next, null, 2));
 }
 
 export function clearConfig(): void {
@@ -117,4 +165,24 @@ export function getAppUrl(): string {
     readConfig().appUrl ??
     "https://app.oxagen.sh"
   );
+}
+
+/**
+ * Resolve the animation level. Env beats persisted config (the convention for
+ * every getter here): OXAGEN_CLI_MOTION → the legacy OXAGEN_CLI_FUN=0 opt-out
+ * (which predates /motion and disabled exactly the decorative animations,
+ * i.e. today's "reduced") → the /motion choice in config → "full".
+ */
+export function getMotionMode(): MotionMode {
+  return (
+    asMotionMode(process.env["OXAGEN_CLI_MOTION"]) ??
+    (process.env["OXAGEN_CLI_FUN"] === "0" ? "reduced" : undefined) ??
+    asMotionMode(readConfig().motion) ??
+    "full"
+  );
+}
+
+/** Persist the animation level chosen with /motion. */
+export function setMotionMode(motion: MotionMode): void {
+  writeConfig({ motion });
 }

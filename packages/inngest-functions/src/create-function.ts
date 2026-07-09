@@ -48,14 +48,24 @@ function adaptStep(inngestStep: {
  *    Inngest's native NonRetriableError for runtime instanceof checks.
  */
 function wrapHandler(handler: DurableFunctionHandler) {
-  return async (ctx: { event: { data: unknown; name?: string }; step: Parameters<typeof adaptStep>[0] }) => {
+  return async (ctx: {
+    event: { data: unknown; name?: string };
+    events?: Array<{ data: unknown; name?: string }>;
+    step: Parameters<typeof adaptStep>[0];
+    runId?: string;
+  }) => {
     const step = adaptStep(ctx.step);
-    const event: EventPayload = {
-      name: (ctx.event as { name?: string }).name ?? "",
-      data: (ctx.event.data ?? {}) as Record<string, unknown>,
-    };
+    const toPayload = (e: { data: unknown; name?: string } | undefined): EventPayload => ({
+      name: e?.name ?? "",
+      data: (e?.data ?? {}) as Record<string, unknown>,
+    });
+    const event = toPayload(ctx.event);
+    // Inngest supplies `ctx.events` (the full batch) for batchEvents functions;
+    // for non-batched runs it is absent, so expose a single-element array so
+    // batch-aware handlers can always read `ctx.events`.
+    const events = (ctx.events ?? [ctx.event]).map(toPayload);
     try {
-      return await handler({ event, step });
+      return await handler({ event, events, step, runId: ctx.runId });
     } catch (err: unknown) {
       if (
         err !== null &&
@@ -92,6 +102,10 @@ function buildInngestConfig(config: DurableFunctionConfig, idOverride?: string) 
   }
   if (config.timeouts) {
     inngestConfig.timeouts = config.timeouts;
+  }
+  if (config.batchEvents) {
+    // Inngest-native shape: { maxSize, timeout, key? }.
+    inngestConfig.batchEvents = config.batchEvents;
   }
   return inngestConfig;
 }

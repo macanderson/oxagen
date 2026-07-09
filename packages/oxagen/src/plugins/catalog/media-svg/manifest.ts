@@ -11,6 +11,6 @@ export const mediaSvgManifest: OxagenPluginManifest = {
   category: "media",
   icon: "pen-tool",
   color: "#0ea5e9",
-  contracts: ["svg.generate"],
+  contracts: ["generate_svg"],
   scopes: [],
 };

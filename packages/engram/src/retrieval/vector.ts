@@ -57,18 +57,27 @@ export class VectorRetrievalEngine implements RetrievalEngine {
 
     if (vectorResults.length === 0) return [];
 
-    // 3. Look up full records from the episodic store
+    // 3. Look up full records from the episodic store. getByIds does not
+    //    preserve the id-list order (it's a `WHERE id IN (...)` with no ORDER
+    //    BY), so re-emit in the ANN score order — otherwise fusion, which reads
+    //    array index as the RRF rank, would rank on arbitrary storage order.
     const recordIds = vectorResults.map((r) => r.recordId);
     const records = await this.store.getByIds(recordIds);
+    const recordMap = new Map(records.map((r) => [r.id, r]));
 
-    // Build a score map for fast lookup
     const scoreMap = new Map(vectorResults.map((r) => [r.recordId, r.score]));
 
-    return records.map((record) => ({
-      record,
-      score: Math.min(1, scoreMap.get(record.id) ?? 0),
-      source: "vector" as const,
-      tokenCost: estimateTokens(record.body),
-    }));
+    const candidates: RetrievalCandidate[] = [];
+    for (const id of recordIds) {
+      const record = recordMap.get(id);
+      if (!record) continue; // Drop misses (record evicted/not yet materialized)
+      candidates.push({
+        record,
+        score: Math.min(1, scoreMap.get(id) ?? 0),
+        source: "vector" as const,
+        tokenCost: estimateTokens(record.body),
+      });
+    }
+    return candidates;
   }
 }

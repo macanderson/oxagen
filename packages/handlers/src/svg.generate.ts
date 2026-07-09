@@ -3,13 +3,15 @@ import {
   generateObjectFor,
   resolvePrompt,
   svgGeneratePrompt,
-  loadWorkspacePromptConfig,
+  loadWorkspacePromptConfigSafe,
   enhancePromptIfInsufficient,
-  type PromptConfig,
+  defaultModel,
+  modelIdOf,
 } from "@oxagen/ai";
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { svgGenerate } from "@oxagen/oxagen/contracts/svg.generate";
 import { logger } from "./logger";
+import { persistGeneratedAsset } from "./generated-asset.persist";
 
 // ── SVG sanitisation ──────────────────────────────────────────────────────────
 // Strip <script> blocks and inline event-handler attributes before the markup
@@ -60,9 +62,7 @@ export const svgGenerateHandler: CapabilityHandler<typeof svgGenerate> = async (
   // can override the svg.generate baseline (it's a curated-overridable key) and
   // any workspace's "additional instructions" are appended. Best-effort load —
   // a missing config simply yields the untouched baseline.
-  const promptConfig = await loadWorkspacePromptConfig(ctx.workspaceId).catch(
-    (): PromptConfig => ({}),
-  );
+  const promptConfig = await loadWorkspacePromptConfigSafe(ctx.workspaceId);
 
   // Auto-improve (Beta): when the workspace toggle is on (default), let the LLM
   // judge enhance an insufficient description before generation.
@@ -75,6 +75,7 @@ export const svgGenerateHandler: CapabilityHandler<typeof svgGenerate> = async (
 
   let rawSvg: string;
   let title: string;
+  let generationFailed = false;
 
   try {
     const result = await generateObjectFor({
@@ -108,16 +109,69 @@ export const svgGenerateHandler: CapabilityHandler<typeof svgGenerate> = async (
     );
     rawSvg = `<svg viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg"><rect width="${width}" height="${height}" fill="none" stroke="currentColor" stroke-width="2" rx="8"/><text x="50%" y="50%" text-anchor="middle" dominant-baseline="middle" fill="currentColor" font-size="14">SVG generation failed</text></svg>`;
     title = input.title ?? "Generation failed";
+    generationFailed = true;
   }
 
   const svg = sanitizeSvg(rawSvg);
 
+  // ── Persist as a conversation file ────────────────────────────────────────
+  // Every generated artifact must land in the Conversation Files panel, so the
+  // sanitized SVG is uploaded to blob storage + a generated_assets row via the
+  // shared persistGeneratedAsset seam (conversation linkage resolves from
+  // ctx.messageId inside the seam). Persistence is strictly non-fatal: the
+  // inline render directive below is always returned, and any failure only
+  // surfaces as `persistWarning` in the output. The failure-placeholder SVG is
+  // never persisted — a "generation failed" graphic is not a user file.
+  let assetPublicId: string | undefined;
+  let serveUrl: string | undefined;
+  let persistWarning: string | undefined;
+
+  if (!generationFailed) {
+    if (!ctx.userId) {
+      persistWarning =
+        "SVG was not saved to conversation files: no user identity in the request context.";
+    } else {
+      try {
+        const asset = await persistGeneratedAsset({
+          orgId: ctx.orgId,
+          workspaceId: ctx.workspaceId,
+          userId: ctx.userId,
+          kind: "image",
+          accessPolicy: "org",
+          bytes: new TextEncoder().encode(svg),
+          mimeType: "image/svg+xml",
+          prompt: input.prompt,
+          model: modelIdOf(defaultModel()),
+          displayName: title,
+          messageId: ctx.messageId ?? undefined,
+        });
+        assetPublicId = asset.publicId;
+        serveUrl = asset.serveUrl;
+      } catch (err) {
+        logger.warn(
+          { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId, title },
+          "svg.generate: asset persistence failed (non-fatal) — returning inline result only",
+        );
+        persistWarning =
+          "SVG was generated but could not be saved to conversation files.";
+      }
+    }
+  }
+
   return {
     svg,
     title,
+    ...(assetPublicId !== undefined ? { assetPublicId } : {}),
+    ...(serveUrl !== undefined ? { serveUrl } : {}),
+    ...(persistWarning !== undefined ? { persistWarning } : {}),
     render: {
       componentId: "svg-preview",
-      props: { svg, title },
+      props: {
+        svg,
+        title,
+        ...(serveUrl !== undefined ? { serveUrl } : {}),
+        ...(assetPublicId !== undefined ? { assetPublicId } : {}),
+      },
     },
   };
 };

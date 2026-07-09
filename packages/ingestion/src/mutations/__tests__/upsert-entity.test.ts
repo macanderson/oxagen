@@ -12,9 +12,13 @@ vi.mock("@oxagen/ontology/tenant", () => ({
   scopedSession: mocks.scopedSession,
 }));
 
-vi.mock("@oxagen/telemetry", () => ({
-  chInsert: mocks.chInsert,
-}));
+vi.mock("@oxagen/telemetry", async (importOriginal) => {
+  // Keep the REAL deterministicEventId (pure, no I/O) so idempotency-key
+  // assertions below exercise actual production logic — only chInsert (the
+  // I/O boundary) is mocked.
+  const actual = await importOriginal<typeof import("@oxagen/telemetry")>();
+  return { ...actual, chInsert: mocks.chInsert };
+});
 
 mocks.scopedSession.mockReturnValue({
   run: mocks.sessionRun,
@@ -26,6 +30,7 @@ import {
   upsertEmbedding,
   createAliasEdge,
   upsertInferredEdges,
+  upsertSourceConnectionMeta,
 } from "../upsert-entity";
 import type { EntityMutation } from "../../types";
 
@@ -148,6 +153,25 @@ describe("upsertEntityNode", () => {
       "upsertEntityNode: no record returned",
     );
   });
+
+  // OXA-2062: the MERGE key is `{naturalKey: $naturalKey, orgId: $orgId}` but
+  // the local params object previously omitted `orgId` entirely (the second
+  // constructor arg was named `_orgId` and never threaded through), relying
+  // solely on scopedSession()'s auto-injection. This suite mocks
+  // scopedSession() directly (no auto-injection), so this bug was invisible
+  // until orgId was bound explicitly. This is the same defect class as
+  // OXA-2052 (packages/ingestion/src/dedup/resolve.ts), found here in the
+  // underlying mutation layer resolve.ts itself calls into.
+  it("binds orgId explicitly in the MERGE params (regression: previously relied solely on scopedSession auto-injection)", async () => {
+    mocks.sessionRun.mockResolvedValueOnce({
+      records: [{ get: vi.fn().mockReturnValue("uuid-node-1") }],
+    });
+
+    await upsertEntityNode(makeMutation(), "org-42");
+
+    const [, params] = mocks.sessionRun.mock.calls[0] as [string, Record<string, unknown>];
+    expect(params["orgId"]).toBe("org-42");
+  });
 });
 
 // ── §8 enforcement-mode branches (strict / lenient / off) ────────────────────
@@ -252,6 +276,122 @@ describe("upsertEntityNode — §8 enforcement modes", () => {
     expect(tables).not.toContain("schema_conformance_events");
     expect(tables).toContain("graph_observed_labels");
   });
+
+  // ── OXA-1932: idempotent conformance events under Inngest retries ─────────
+  //
+  // Regression coverage for the double-counting defect: `event_id` used to be
+  // `crypto.randomUUID()`, so a retried Inngest step (which re-executes the
+  // WHOLE step.run body, including this ClickHouse insert) minted a brand new
+  // row for the exact same logical write. These tests fail on the pre-fix code
+  // (every call produces a distinct random event_id) and pass on the fix
+  // (event_id is a deterministic function of stable inputs).
+  describe("conformance-event idempotency (OXA-1932)", () => {
+    function conformanceRows(): Array<Record<string, unknown>> {
+      return mocks.chInsert.mock.calls
+        .filter(([table]) => table === "schema_conformance_events")
+        .flatMap(([, rows]) => rows as Array<Record<string, unknown>>);
+    }
+
+    // floor 0 keeps belowFloor false (score 0 is NOT < 0) so exactly ONE
+    // conformance row is emitted per call — isolates the primary-row identity
+    // tests below from the separate alert-row test further down.
+    const singleRowSchema = () => pinnedSchema("lenient", 0);
+
+    it("re-deriving the SAME Inngest runId for a retried write produces the SAME event_id (dedup on replay)", async () => {
+      const mutation = makeMutation({ properties: { state: "open" } });
+      const opts = { pinnedSchema: singleRowSchema(), runId: "run-abc-123" };
+
+      // First attempt.
+      await upsertEntityNode(mutation, "org-1", opts);
+      // Simulated Inngest retry: SAME mutation, SAME runId, whole function
+      // re-invoked from scratch (exactly what step.run replays on failure).
+      vi.clearAllMocks();
+      mocks.scopedSession.mockReturnValue({ run: mocks.sessionRun, close: mocks.sessionClose });
+      mocks.sessionRun.mockResolvedValue({
+        records: [{ get: vi.fn().mockReturnValue("uuid-node-1") }],
+      });
+      await upsertEntityNode(mutation, "org-1", opts);
+
+      const rows = conformanceRows();
+      expect(rows).toHaveLength(1);
+      expect(typeof rows[0]!["event_id"]).toBe("string");
+      expect(rows[0]!["event_id"]).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+    });
+
+    it("computes the identical event_id across two independent calls given identical inputs (retry simulation without re-clearing mocks)", async () => {
+      const mutation = makeMutation({ properties: { state: "open" } });
+      const opts = { pinnedSchema: singleRowSchema(), runId: "run-retry-1" };
+
+      await upsertEntityNode(mutation, "org-1", opts);
+      const firstEventId = conformanceRows()[0]!["event_id"];
+
+      // Do NOT clear mocks — accumulate a second "retry" call in the same
+      // chInsert history and assert both rows share the identical event_id.
+      await upsertEntityNode(mutation, "org-1", opts);
+      const rows = conformanceRows();
+      expect(rows).toHaveLength(2);
+      expect(rows[0]!["event_id"]).toBe(firstEventId);
+      expect(rows[1]!["event_id"]).toBe(firstEventId);
+    });
+
+    it("mints a DIFFERENT event_id when the Inngest runId differs (genuinely separate ingestion, not a retry)", async () => {
+      const mutation = makeMutation({ properties: { state: "open" } });
+      const pinned = singleRowSchema();
+
+      await upsertEntityNode(mutation, "org-1", { pinnedSchema: pinned, runId: "run-day-1" });
+      await upsertEntityNode(mutation, "org-1", { pinnedSchema: pinned, runId: "run-day-2" });
+
+      const rows = conformanceRows();
+      expect(rows).toHaveLength(2);
+      expect(rows[0]!["event_id"]).not.toBe(rows[1]!["event_id"]);
+    });
+
+    it("gives the low-conformance alert row a DIFFERENT event_id than the primary written_below_floor row", async () => {
+      // conformanceFloor above the actual score forces belowFloor=true, which
+      // triggers BOTH the primary outcome row and the alert marker row for
+      // the SAME (mutation, versionId, outcome) — they must not collide.
+      const mutation = makeMutation({ properties: { state: "open" } });
+      const opts = { pinnedSchema: pinnedSchema("lenient", 0.99), runId: "run-alert-1" };
+
+      await upsertEntityNode(mutation, "org-1", opts);
+
+      const rows = conformanceRows();
+      expect(rows).toHaveLength(2);
+      expect(rows.every((r) => r["outcome"] === "written_below_floor")).toBe(true);
+      expect(rows[0]!["event_id"]).not.toBe(rows[1]!["event_id"]);
+    });
+
+    it("retrying a below-floor write reproduces BOTH the primary row's and the alert row's event_id unchanged", async () => {
+      const mutation = makeMutation({ properties: { state: "open" } });
+      const opts = { pinnedSchema: pinnedSchema("lenient", 0.99), runId: "run-alert-retry" };
+
+      await upsertEntityNode(mutation, "org-1", opts);
+      const [firstPrimary, firstAlert] = conformanceRows().map((r) => r["event_id"]);
+
+      vi.clearAllMocks();
+      mocks.scopedSession.mockReturnValue({ run: mocks.sessionRun, close: mocks.sessionClose });
+      mocks.sessionRun.mockResolvedValue({
+        records: [{ get: vi.fn().mockReturnValue("uuid-node-1") }],
+      });
+      await upsertEntityNode(mutation, "org-1", opts);
+      const [retryPrimary, retryAlert] = conformanceRows().map((r) => r["event_id"]);
+
+      expect(retryPrimary).toBe(firstPrimary);
+      expect(retryAlert).toBe(firstAlert);
+    });
+
+    it("falls back to a fixed sentinel (not a fresh random id) when no runId is supplied, still deterministic across repeats", async () => {
+      const mutation = makeMutation({ properties: { state: "open" } });
+      const opts = { pinnedSchema: singleRowSchema() }; // no runId
+
+      await upsertEntityNode(mutation, "org-1", opts);
+      await upsertEntityNode(mutation, "org-1", opts);
+
+      const rows = conformanceRows();
+      expect(rows).toHaveLength(2);
+      expect(rows[0]!["event_id"]).toBe(rows[1]!["event_id"]);
+    });
+  });
 });
 
 describe("upsertEmbedding", () => {
@@ -280,6 +420,14 @@ describe("upsertEmbedding", () => {
     await upsertEmbedding("node-uuid", [], "model", "org-1");
     expect(mocks.sessionClose).toHaveBeenCalledOnce();
   });
+
+  // OXA-2062: the MATCH references $orgId but the local params object
+  // previously omitted it, relying solely on scopedSession auto-injection.
+  it("binds orgId explicitly in the local params object (regression: previously relied solely on scopedSession auto-injection)", async () => {
+    await upsertEmbedding("node-uuid", [0.1], "model", "org-77");
+    const [, params] = mocks.sessionRun.mock.calls[0] as [string, Record<string, unknown>];
+    expect(params["orgId"]).toBe("org-77");
+  });
 });
 
 describe("createAliasEdge", () => {
@@ -307,6 +455,22 @@ describe("createAliasEdge", () => {
     expect(params["confidence"]).toBe(0.95);
     expect(params["matchReason"]).toBe("email_match");
     expect(params["tentative"]).toBe(false);
+    // Bi-temporal validity stamped on create (validFrom falls back to now).
+    expect(cypher).toContain("r.validFrom = coalesce(datetime($validFrom), datetime())");
+    expect(cypher).toContain("r.recordedAt = datetime()");
+    expect(params["validFrom"]).toBeNull();
+  });
+
+  // OXA-2062: both MATCH clauses reference $orgId but the local params object
+  // previously omitted it, relying solely on scopedSession auto-injection.
+  it("binds orgId explicitly in the local params object (regression: previously relied solely on scopedSession auto-injection)", async () => {
+    await createAliasEdge("alias-id", "principal-id", {
+      confidence: 0.5,
+      matchReason: "x",
+      tentative: true,
+    }, "org-99");
+    const [, params] = mocks.sessionRun.mock.calls[0] as [string, Record<string, unknown>];
+    expect(params["orgId"]).toBe("org-99");
   });
 });
 
@@ -341,6 +505,9 @@ describe("upsertInferredEdges", () => {
     expect(params1["fromNodeId"]).toBe("from-1");
     expect(params1["toNodeId"]).toBe("to-1");
     expect(params1["confidence"]).toBe(0.8);
+    // Bi-temporal validity stamped on the inferred edge create.
+    expect(cypher1).toContain("r.recordedAt = datetime()");
+    expect(params1["validFrom"]).toBeNull();
 
     const [cypher2] = mocks.sessionRun.mock.calls[1] as [string, Record<string, unknown>];
     expect(cypher2).toContain("PART_OF");
@@ -377,6 +544,79 @@ describe("upsertInferredEdges", () => {
   it("closes session on success", async () => {
     await upsertInferredEdges(
       [{ fromNodeId: "f", toNodeId: "t", edgeType: "SIMILAR_TO", confidence: 0.75 }],
+      "org-1",
+    );
+    expect(mocks.sessionClose).toHaveBeenCalledOnce();
+  });
+
+  // OXA-2062: every EDGE_TYPE_QUERIES template MATCHes both endpoints by
+  // $orgId but the local params object previously omitted it, relying solely
+  // on scopedSession auto-injection.
+  it("binds orgId explicitly in the local params object (regression: previously relied solely on scopedSession auto-injection)", async () => {
+    await upsertInferredEdges(
+      [{ fromNodeId: "f", toNodeId: "t", edgeType: "PART_OF", confidence: 0.6 }],
+      "org-55",
+    );
+    const [, params] = mocks.sessionRun.mock.calls[0] as [string, Record<string, unknown>];
+    expect(params["orgId"]).toBe("org-55");
+  });
+});
+
+describe("upsertSourceConnectionMeta", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.scopedSession.mockReturnValue({
+      run: mocks.sessionRun,
+      close: mocks.sessionClose,
+    });
+    mocks.sessionRun.mockResolvedValue({ records: [] });
+  });
+
+  it("runs a MERGE keyed on connectionId + orgId", async () => {
+    await upsertSourceConnectionMeta(
+      {
+        connectionId: "conn-1",
+        workspaceId: "ws-1",
+        connectorType: "github",
+        cursor: "cursor-1",
+        lastSyncAt: "2026-01-01T00:00:00.000Z",
+      },
+      "org-1",
+    );
+    expect(mocks.sessionRun).toHaveBeenCalledOnce();
+    const [cypher, params] = mocks.sessionRun.mock.calls[0] as [string, Record<string, unknown>];
+    expect(cypher).toContain("MERGE (sc:SourceConnection {id: $connectionId, orgId: $orgId})");
+    expect(params["connectionId"]).toBe("conn-1");
+    expect(params["workspaceId"]).toBe("ws-1");
+  });
+
+  // OXA-2062: the MERGE key is `{id: $connectionId, orgId: $orgId}` but the
+  // local params object previously omitted `orgId` entirely, relying solely
+  // on scopedSession()'s auto-injection.
+  it("binds orgId explicitly in the MERGE params (regression: previously relied solely on scopedSession auto-injection)", async () => {
+    await upsertSourceConnectionMeta(
+      {
+        connectionId: "conn-2",
+        workspaceId: "ws-1",
+        connectorType: "github",
+        cursor: null,
+        lastSyncAt: "2026-01-01T00:00:00.000Z",
+      },
+      "org-88",
+    );
+    const [, params] = mocks.sessionRun.mock.calls[0] as [string, Record<string, unknown>];
+    expect(params["orgId"]).toBe("org-88");
+  });
+
+  it("closes session on success", async () => {
+    await upsertSourceConnectionMeta(
+      {
+        connectionId: "conn-3",
+        workspaceId: "ws-1",
+        connectorType: "github",
+        cursor: null,
+        lastSyncAt: "2026-01-01T00:00:00.000Z",
+      },
       "org-1",
     );
     expect(mocks.sessionClose).toHaveBeenCalledOnce();

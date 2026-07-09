@@ -1,5 +1,21 @@
 import { z } from "zod";
 
+/**
+ * True when the process is a PRODUCTION deployment. Reads the raw ambient env
+ * directly (not the parsed schema) because it is consumed inside a field
+ * transform — Zod field transforms cannot see sibling fields, and both
+ * `loadEnv` and `requireEnv` ultimately parse `process.env`. VERCEL_ENV is the
+ * authoritative signal on Vercel (preview deploys keep NODE_ENV=production yet
+ * must NOT be treated as prod for fail-closed gating); NODE_ENV covers non-
+ * Vercel production runtimes (self-hosted server, workers).
+ */
+export function isProductionRuntime(
+  source: NodeJS.ProcessEnv = process.env,
+): boolean {
+  if (source.VERCEL_ENV) return source.VERCEL_ENV === "production";
+  return source.NODE_ENV === "production";
+}
+
 // Apps subset the global schema via `requireEnv` and re-validate at boot.
 // Spec §11: missing required vars fail closed, no silent defaults beyond
 // what's marked optional here.
@@ -19,6 +35,17 @@ export const baseEnvSchema = z.object({
   NEO4J_USERNAME: z.string().min(1),
   NEO4J_PASSWORD: z.string().min(1),
   NEO4J_DATABASE: z.string().default("neo4j"),
+
+  // Circuit breakers for external dependencies (Neo4j / Stripe / ClickHouse).
+  // Global, conservative defaults shared by every per-dependency breaker so a
+  // degraded dependency fails fast instead of being hammered by every request.
+  // See packages/telemetry/src/circuit-breaker.ts and breaker-clients.ts.
+  //  - FAILURE_THRESHOLD: consecutive failures that trip a breaker open.
+  //  - RESET_TIMEOUT_MS:  how long a tripped breaker stays open before a probe.
+  //  - SUCCESS_THRESHOLD: consecutive probe successes that close it again.
+  CIRCUIT_BREAKER_FAILURE_THRESHOLD: z.coerce.number().int().positive().default(5),
+  CIRCUIT_BREAKER_RESET_TIMEOUT_MS: z.coerce.number().int().positive().default(30000),
+  CIRCUIT_BREAKER_SUCCESS_THRESHOLD: z.coerce.number().int().positive().default(1),
 
   BETTER_AUTH_SECRET: z.string().min(32),
   BETTER_AUTH_URL: z.string().url(),
@@ -63,6 +90,9 @@ export const baseEnvSchema = z.object({
   // falls through to the OAuth-connection fallback.
   GITHUB_APP_ID: z.string().optional(),
   GITHUB_APP_PRIVATE_KEY: z.string().optional(),
+  // LOCAL/DEMO-ONLY fallback PAT for GitHub write capabilities; must never be
+  // set in production (bypasses per-workspace scoping — see resolveGitHubToken).
+  GITHUB_PERSONAL_ACCESS_TOKEN: z.string().optional(),
 
   // Per-provider OAuth DATA client credentials for token refresh (ingestion cron).
   // All are optional in the base schema — the ingestion.oauth-refresh function
@@ -103,7 +133,14 @@ export const baseEnvSchema = z.object({
   // deployments are unaffected. Adding a new driver requires: (1) implementing
   // the StorageAdapter interface, (2) extending this enum, (3) adding a case
   // in client.ts resolveAdapter(). See docs/guides/storage-driver-authoring.md.
-  STORAGE_DRIVER: z.enum(["vercel-blob"]).default("vercel-blob").optional(),
+  STORAGE_DRIVER: z.enum(["vercel-blob", "fs"]).default("vercel-blob").optional(),
+
+  // Root directory for the "fs" storage driver. Only read when STORAGE_DRIVER=fs
+  // (the CI e2e container and local dev without a Vercel Blob token). Absolute
+  // paths are used as-is; a relative path is anchored at process.cwd(). When
+  // unset the driver defaults to an OS-tmp-scoped directory. See
+  // docs/guides/storage-driver-authoring.md.
+  STORAGE_FS_ROOT: z.string().min(1).optional(),
 
   // Vercel AI Gateway — the platform's single AI auth boundary. AI_GATEWAY_API_KEY
   // authenticates every model call (text, image, embeddings, video); @oxagen/ai
@@ -114,12 +151,19 @@ export const baseEnvSchema = z.object({
   // without extra configuration.
   AI_GATEWAY_API_KEY: z.string().optional(),
   OXAGEN_LLM_FAST: z.string().default("anthropic/claude-haiku-4.5"),
-  OXAGEN_LLM_BALANCED: z.string().default("anthropic/claude-sonnet-4.6"),
-  OXAGEN_LLM_PRECISE: z.string().default("anthropic/claude-opus-4.8"),
+  OXAGEN_LLM_BALANCED: z.string().default("anthropic/claude-sonnet-5"),
+  OXAGEN_LLM_PRECISE: z.string().default("anthropic/claude-fable-5"),
   // CLI turn-pipeline overrides. Optional: the CLI resolves the fast tier for the
   // evaluator and the precise tier for the advisor when these are unset.
   OXAGEN_LLM_EVALUATOR: z.string().optional(),
   OXAGEN_LLM_ADVISOR: z.string().optional(),
+  // Best-of-N comparative selector override. Optional: defaults to the
+  // flagship Anthropic model (Fable 5) when unset — see select.ts's
+  // DEFAULT_SELECTOR_MODEL.
+  OXAGEN_LLM_SELECTOR: z.string().optional(),
+  // "1" makes buildWorkspaceTools structurally deny edit_file/write_file on
+  // test-shaped paths (SWE-bench-style anti-reward-hacking guard).
+  OXAGEN_FORBID_TEST_EDITS: z.string().optional(),
 
   // Media-generation tiers. Image and video each expose a "basic" (default,
   // cheaper) and "advanced" tier that resolve to concrete gateway model ids,
@@ -166,6 +210,15 @@ export const baseEnvSchema = z.object({
   // Server-side app origin for plugin OAuth authorize/callback URLs
   // (falls back to NEXT_PUBLIC_APP_URL at the call site).
   APP_URL: z.string().url().optional(),
+  // Public marketing website origin (oxagen.sh). Used by the /v1/cms/* lead
+  // routes to build the emailed reader link ({MARKETING_URL}/read?…) and by
+  // CORS to allow the static site's cross-origin lead/redeem fetches. Optional —
+  // resolveMarketingUrl() falls back to a per-environment default.
+  MARKETING_URL: z.string().url().optional(),
+  // Public origin advertised in the A2A Agent Card / well-known URL. Optional —
+  // A2A routes derive the origin from the live request; overrides only apply to
+  // out-of-band card reads. Falls back to the API origin.
+  A2A_PUBLIC_URL: z.string().url().optional(),
   // Browser-exposed docs-site origin override (apps/app docs links). Optional —
   // getDocsBaseUrl() resolves a correct dev/prod default when unset.
   NEXT_PUBLIC_DOCS_URL: z.string().url().optional(),
@@ -181,6 +234,27 @@ export const baseEnvSchema = z.object({
     .optional(),
   KNOWLEDGE_GRAPH_ENABLED: z.enum(["true", "false"]).optional(),
   MCP_PORT: z.string().optional(),
+
+  // ── OpenTelemetry (vendor-neutral OTLP export) ──
+  // The distributed tracer (packages/telemetry/src/tracer.ts) reads these raw
+  // at process start; declared here so `pnpm env:check` validates their shape.
+  // When OTEL_EXPORTER_OTLP_ENDPOINT is unset the SDK never starts and every
+  // span is a no-op — safe for all envs, rollback = leave unset. BYO collector
+  // (any OTLP/HTTP endpoint — Grafana, Honeycomb, Jaeger, an OTel Collector);
+  // no vendor SDK is bundled. OTEL_EXPORTER_OTLP_HEADERS is the standard
+  // W3C-style comma-separated `key=value` list (e.g. auth headers for the
+  // collector), matching the OTEL spec env var; parsed by the tracer.
+  OTEL_EXPORTER_OTLP_ENDPOINT: z.string().url().optional(),
+  OTEL_EXPORTER_OTLP_HEADERS: z.string().optional(),
+  OTEL_SERVICE_NAME: z.string().min(1).optional(),
+
+  // ── Error alerting (vendor-neutral outbound webhook) ──
+  // When set, high-severity/unhandled server errors captured by
+  // @oxagen/telemetry's captureError() are POSTed as a Slack-compatible JSON
+  // payload to this URL (Slack/Mattermost/Discord-compatible incoming webhook,
+  // or any endpoint that accepts `{ text, blocks }`). BYO webhook — no vendor
+  // SDK. Optional: unset = ClickHouse error_events recording only, no webhook.
+  ALERT_WEBHOOK_URL: z.string().url().optional(),
 
   // OXA-1348: when true (default off in prod), agent.code.execute is
   // materialized as an agent tool. Set true on Vercel once the Modal
@@ -222,6 +296,9 @@ export const baseEnvSchema = z.object({
   INGESTION_CRYPTO_PROVIDER: z.enum(["env", "kms"]).default("env").optional(),
   AWS_KMS_INGESTION_KEY_ARN: z.string().min(1).optional(),
   INGESTION_ENCRYPTION_KEY: z.string().min(1).optional(),
+  // "1" routes GitHub feature inference through the Anthropic Message Batches
+  // API (async, half price); unset = synchronous per-file calls.
+  INGESTION_FEATURE_BATCH: z.string().optional(),
 
   // Audit-export download-URL signing (HMAC). Optional dedicated secret; the
   // route falls back to BETTER_AUTH_SECRET. Must be >= 16 bytes when set
@@ -236,17 +313,20 @@ export const baseEnvSchema = z.object({
   // schema; packages/web throws a precise error at call time when it is absent.
   TAVILY_API_KEY: z.string().min(1).optional(),
 
-  // OXA-1515: Row-Level Security enforcement gate. Default OFF during the
-  // seeding window: withTenantDb always sets the scope GUCs, but additionally
-  // sets app.rls_bypass='on' while this is false so the bypass-aware policies
-  // do not yet filter. During seeding, isolation is still enforced by the
-  // manual eq(orgId) predicates kept in every query. Flip to true per env
-  // once db.query.unscoped telemetry reads zero. Reversible via env (no
-  // migration needed).
+  // OXA-1515: Row-Level Security enforcement gate. Fail-CLOSED in production:
+  // when unset, this defaults ON in any production runtime (NODE_ENV or
+  // VERCEL_ENV = "production") and OFF everywhere else (dev/test/preview seeding
+  // window). withTenantDb always sets the scope GUCs; when this resolves false
+  // it additionally sets app.rls_bypass='on' so the bypass-aware policies do not
+  // yet filter (isolation still enforced by the manual eq(orgId) predicates kept
+  // in every query). An operator can still force it OFF in production with an
+  // explicit "false", but the startup guard (assertRlsEnforcedInProduction)
+  // refuses to boot in that state — a production process may not run unscoped.
+  // Reversible via env (no migration needed).
   TENANT_RLS_ENFORCEMENT_ENABLED: z
     .union([z.literal("true"), z.literal("false")])
     .optional()
-    .transform((v) => v === "true"),
+    .transform((v) => (v === undefined ? isProductionRuntime() : v === "true")),
 
   // ── CLI debugging ──
   OXAGEN_CODE_GRAPH_DEBUG: z.string().optional(),
@@ -271,6 +351,30 @@ export const baseEnvSchema = z.object({
   OXAGEN_USAGE_DISCOUNT_PERCENT: z.coerce.number().gte(0).lt(100).default(3),
   OXAGEN_USAGE_DISCOUNT_INCREMENT: z.coerce.number().gt(0).default(50),
   OXAGEN_USAGE_DISCOUNT_CEILING_USD: z.coerce.number().gt(0).default(250),
+
+  // ── SWE-bench optimization: spec-first oracle & adaptive ladder ──
+  // F2 spec-first oracle: at mid-judge, if no failing test reproduction exists,
+  // inject a corrective instruction instead of generic completeness feedback.
+  // Enforces test-before-patch discipline to prevent wrong-spec patches.
+  OXAGEN_SPEC_GATE: z
+    .union([z.literal("1"), z.literal("true"), z.literal("0"), z.literal("false")])
+    .optional()
+    .transform((v) => v === "1" || v === "true"),
+  // Deterministic judge-skip / adaptive compute ladder (ADR-021 §1). ON by
+  // DEFAULT: when executed evidence (oracle flipped + tests green + diff size,
+  // or a read-only turn with no diff) already settles completeness, the frontier
+  // completeness judge is skipped. Set to 0/false to OPT OUT and force the judge
+  // to run every round. Normalized boolean = "judge-skip enabled".
+  OXAGEN_LADDER: z
+    .union([z.literal("1"), z.literal("true"), z.literal("0"), z.literal("false")])
+    .optional()
+    .transform((v) => v !== "0" && v !== "false"),
+  // Diff line count threshold for fast-path submission (default 120).
+  // When oracle flipped + tests green + diff ≤ budget, skip judge.
+  OXAGEN_DIFF_BUDGET: z.coerce.number().positive().default(120),
+  // Hard cap on ladder rung (0–3); prevents escalation beyond specified level.
+  // 0 = fast-path only, 3 = no cap (default).
+  OXAGEN_LADDER_MAX_RUNG: z.coerce.number().int().min(0).max(3).default(3),
 });
 
 // The exact set of keys this schema validates. `normalizeEnv` only ever

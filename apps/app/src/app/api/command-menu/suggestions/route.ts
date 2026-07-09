@@ -102,7 +102,7 @@ function cachedSuggest(
 ): Promise<CommandMenuSuggestOutput> {
   return unstable_cache(
     async () => {
-      return (await invoke("command.menu.suggest", input, {
+      return (await invoke("suggest_commands", input, {
         orgId: capCtx.orgId,
         workspaceId: capCtx.workspaceId,
         userId: capCtx.userId,

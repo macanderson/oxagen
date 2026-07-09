@@ -2,10 +2,11 @@
  * Tests for the context compiler: packer, fusion, temporal retrieval,
  * layout, and the full compile() orchestrator.
  */
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { DuckDBEpisodicStore } from "../store/duckdb-adapter";
 import { createRecord } from "../record";
 import { TemporalRetrievalEngine } from "../retrieval/temporal";
+import { LexicalRetrievalEngine, type LexicalSearchFn } from "../retrieval/lexical";
 import { fuseAndRank, DEFAULT_WEIGHTS } from "../retrieval/fusion";
 import { pack } from "./packer";
 import { buildLayout } from "./layout";
@@ -13,7 +14,7 @@ import { compile, computeBudget } from "./compile";
 import { countTokens } from "./tokenizer";
 import { compressRecord } from "./compress";
 import type { Namespace, Provenance } from "../types";
-import type { RetrievalCandidate } from "../retrieval/types";
+import type { RetrievalCandidate, RetrievalEngine } from "../retrieval/types";
 
 const NS: Namespace = { org: "test-org", workspace: "test-ws" };
 const PROV: Provenance = {
@@ -347,6 +348,9 @@ describe("buildLayout", () => {
         candidatesPacked: 2,
         candidatesCompressed: 1,
         candidatesEvicted: 7,
+        retrievalFailures: 0,
+        pinnedTruncated: 0,
+        contentTruncated: 0,
       },
     });
 
@@ -384,6 +388,9 @@ describe("buildLayout", () => {
         candidatesPacked: 0,
         candidatesCompressed: 0,
         candidatesEvicted: 0,
+        retrievalFailures: 0,
+        pinnedTruncated: 0,
+        contentTruncated: 0,
       },
     });
     const systemSection = window.sections.find((s) => s.type === "system");
@@ -417,6 +424,9 @@ describe("buildLayout", () => {
         candidatesPacked: 0,
         candidatesCompressed: 0,
         candidatesEvicted: 0,
+        retrievalFailures: 0,
+        pinnedTruncated: 0,
+        contentTruncated: 0,
       },
     });
     expect(window.cachePrefix.hitRate).toBeGreaterThan(0);
@@ -520,6 +530,79 @@ describe("compile()", () => {
     }
   });
 
+  it("records a rejecting engine in metadata.retrievalFailures and still returns", async () => {
+    const budget = computeBudget("gpt-4");
+    const failingEngine: RetrievalEngine = {
+      name: "vector",
+      retrieve: () => Promise.reject(new Error("vector store down")),
+    };
+    const window = await compile(
+      {
+        namespace: NS,
+        taskDescription: "test",
+        workingSet: [],
+        recentEventIds: [],
+        modelId: "gpt-4",
+      },
+      budget,
+      {
+        engines: [new TemporalRetrievalEngine(store), failingEngine],
+        store,
+      },
+    );
+    // No throw — degrades gracefully to the surviving engine's candidates.
+    expect(window.sections.length).toBeGreaterThan(0);
+    expect(window.metadata.retrievalFailures).toBe(1);
+  });
+
+  it("invokes onError with engine context when a retrieval engine rejects", async () => {
+    const budget = computeBudget("gpt-4");
+    const onError = vi.fn();
+    const failingEngine: RetrievalEngine = {
+      name: "vector",
+      retrieve: () => Promise.reject(new Error("vector store down")),
+    };
+    await compile(
+      {
+        namespace: NS,
+        taskDescription: "test",
+        workingSet: [],
+        recentEventIds: [],
+        modelId: "gpt-4",
+      },
+      budget,
+      { engines: [failingEngine], store, onError },
+    );
+    expect(onError).toHaveBeenCalledWith(
+      expect.any(Error),
+      expect.objectContaining({ phase: "engine-retrieve", engine: "vector" }),
+    );
+  });
+
+  it("records a rejecting pinned-record query in metadata.retrievalFailures and invokes onError", async () => {
+    const budget = computeBudget("gpt-4");
+    const onError = vi.fn();
+    // Wrap the store so the pinned-record query rejects but retrieval works.
+    const brokenStore = Object.create(store) as typeof store;
+    brokenStore.query = () => Promise.reject(new Error("pinned query down"));
+    const window = await compile(
+      {
+        namespace: NS,
+        taskDescription: "test",
+        workingSet: [],
+        recentEventIds: [],
+        modelId: "gpt-4",
+      },
+      budget,
+      { engines: [new TemporalRetrievalEngine(store)], store: brokenStore, onError },
+    );
+    expect(window.metadata.retrievalFailures).toBe(1);
+    expect(onError).toHaveBeenCalledWith(
+      expect.any(Error),
+      expect.objectContaining({ phase: "pinned-query" }),
+    );
+  });
+
   it("populates metadata timing fields", async () => {
     const budget = computeBudget("gpt-4");
     const window = await compile(
@@ -536,6 +619,100 @@ describe("compile()", () => {
     expect(window.metadata.retrievalMs).toBeGreaterThanOrEqual(0);
     expect(window.metadata.packingMs).toBeGreaterThanOrEqual(0);
     expect(window.metadata.layoutMs).toBeGreaterThanOrEqual(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Multi-engine recall — OXA-2061 regression: temporal-only vs the full engine
+// set. A stale, low-salience record with an exact error-message match proves
+// the gap Vector/Graph/Lexical wiring closes — temporal recency alone can
+// never surface it (it's filtered out below TemporalRetrievalEngine's own
+// minSalience: 0.2 floor before recency scoring even runs), while lexical
+// exact-match recall (real DuckDB `searchLexical`, not mocked) finds it
+// regardless of age or salience. This is the failure mode
+// packages/agent/src/runtime/context-compiler.ts's `compileAgentContext` used
+// to have in production: every turn got temporal-only recall.
+// ---------------------------------------------------------------------------
+
+describe("compile() — multi-engine recall (OXA-2061)", () => {
+  let store: DuckDBEpisodicStore;
+  const STALE_ERROR_MESSAGE = "NullPointerException thrown at auth.ts:42 during token refresh";
+
+  beforeEach(async () => {
+    store = new DuckDBEpisodicStore({ path: ":memory:" });
+    const now = Date.now();
+
+    // Below TemporalRetrievalEngine's minSalience: 0.2 floor AND 45 days
+    // stale, so temporal recency ranking never even considers it a
+    // candidate — but it's an exact, high-value lexical match (a stack
+    // trace) that an agent debugging the same error should recall.
+    await store.append({
+      ...makeEpisodicRecord(
+        "error_observed",
+        0.05,
+        now - 45 * 24 * 60 * 60 * 1000,
+      ),
+      body: { event: "error_observed", payload: { message: STALE_ERROR_MESSAGE } },
+    });
+
+    // A fresh, salient, unrelated record so temporal-only recall isn't
+    // simply returning an empty window in both cases.
+    await store.append({
+      ...makeEpisodicRecord("tool_call", 0.9),
+      createdAt: now - 1000,
+    });
+  });
+
+  afterEach(async () => {
+    await store.close();
+  });
+
+  // Wires LexicalRetrievalEngine to the real DuckDB searchLexical() adapter
+  // method (not a stub), mirroring the production wiring added to
+  // compileAgentContext in context-compiler.ts.
+  const realLexicalSearch: LexicalSearchFn = (query, opts) =>
+    store.searchLexical({ org: opts.orgId, workspace: opts.workspaceId }, query, opts.limit);
+
+  it("temporal-only recall misses a stale, low-salience exact-match memory", async () => {
+    const budget = computeBudget("gpt-4");
+    const window = await compile(
+      {
+        namespace: NS,
+        taskDescription: "auth.ts:42 NullPointerException token refresh",
+        workingSet: [],
+        recentEventIds: [],
+        modelId: "gpt-4",
+      },
+      budget,
+      { engines: [new TemporalRetrievalEngine(store)], store },
+    );
+
+    const joined = window.sections.map((s) => s.content).join("\n");
+    expect(joined).not.toContain(STALE_ERROR_MESSAGE);
+  });
+
+  it("adding the lexical engine surfaces the exact-match memory that temporal recall missed", async () => {
+    const budget = computeBudget("gpt-4");
+    const window = await compile(
+      {
+        namespace: NS,
+        taskDescription: "auth.ts:42 NullPointerException token refresh",
+        workingSet: [],
+        recentEventIds: [],
+        modelId: "gpt-4",
+      },
+      budget,
+      {
+        engines: [
+          new TemporalRetrievalEngine(store),
+          new LexicalRetrievalEngine(store, realLexicalSearch),
+        ],
+        store,
+      },
+    );
+
+    const joined = window.sections.map((s) => s.content).join("\n");
+    expect(joined).toContain(STALE_ERROR_MESSAGE);
   });
 });
 

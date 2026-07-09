@@ -13,6 +13,15 @@
         "model": {
           "type": "string"
         },
+        "workerModel": {
+          "type": "string"
+        },
+        "judgeModel": {
+          "type": "string"
+        },
+        "triageModel": {
+          "type": "string"
+        },
         "effort": {
           "type": "string",
           "enum": [
@@ -478,6 +487,9 @@
             ],
             "additionalProperties": false
           }
+        },
+        "confirmScope": {
+          "type": "boolean"
         }
       },
       "additionalProperties": true

@@ -19,7 +19,7 @@ mocks.streamText.mockImplementation((args: { onFinish: (...a: unknown[]) => unkn
 mocks.insertTokenUsage.mockResolvedValue(undefined);
 mocks.hashPrompt.mockResolvedValue("aabbccdd");
 mocks.providerFromModelId.mockReturnValue("anthropic");
-mocks.defaultModel.mockReturnValue({ modelId: "claude-sonnet-4-6" });
+mocks.defaultModel.mockReturnValue({ modelId: "claude-sonnet-5" });
 // 10 input @ $3/1M + 20 output @ $15/1M = 330 micro-USD for USAGE_EVENT.
 mocks.providerCostUsdMicros.mockReturnValue(330);
 mocks.chargeUsageCredits.mockResolvedValue({
@@ -60,7 +60,7 @@ type StreamResult = ReturnType<typeof streamAgentReply> & {
       inputTokens: number;
       outputTokens: number;
       totalTokens: number;
-      cachedInputTokens?: number;
+      inputTokenDetails?: { cacheReadTokens?: number };
     };
     finishReason: string;
   }) => Promise<void>;
@@ -113,9 +113,26 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
     expect(arg.temperature).toBe(0.7);
   });
 
+  it("forwards abortSignal verbatim to streamText when supplied", () => {
+    const controller = new AbortController();
+    streamAgentReply({ messages: MESSAGES, telemetry: TELEMETRY, abortSignal: controller.signal });
+    const arg = mocks.streamText.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(arg.abortSignal).toBe(controller.signal);
+  });
+
+  it("omits abortSignal when not supplied (SDK default: no cancellation)", () => {
+    streamAgentReply({ messages: MESSAGES, telemetry: TELEMETRY });
+    const arg = mocks.streamText.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect("abortSignal" in arg).toBe(false);
+  });
+
   it("prepends the system prompt as an Anthropic-cacheable system message", () => {
     streamAgentReply({ messages: MESSAGES, system: "You are Oxagen.", telemetry: TELEMETRY });
     const arg = mocks.streamText.mock.calls[0]?.[0] as Record<string, unknown>;
+    // AI SDK v7 rejects system-role entries in `messages` unless this flag is
+    // set — without it every platform-routed turn fails with "Invalid prompt:
+    // System messages are not allowed in the prompt or messages fields".
+    expect(arg.allowSystemInMessages).toBe(true);
     const msgs = arg.messages as Array<Record<string, unknown>>;
     // Leading system message carries the ephemeral cache_control breakpoint;
     // the `system` param is NOT used (only message-level providerOptions can
@@ -136,7 +153,7 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
   });
 
   it("falls back to the openai namespace for a model id without a vendor prefix", () => {
-    // defaultModel() returns { modelId: "claude-sonnet-4-6" } (no "/" prefix)
+    // defaultModel() returns { modelId: "claude-sonnet-5" } (no "/" prefix)
     // which lands in the default/back-compat branch.
     streamAgentReply({ messages: MESSAGES, telemetry: TELEMETRY, effort: "high" });
     const arg = mocks.streamText.mock.calls[0]?.[0] as Record<string, unknown>;
@@ -191,18 +208,23 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
     expect(mocks.chargeUsageCredits).toHaveBeenCalledWith({
       orgId: "00000000-0000-4000-8000-000000000001",
       referenceId: "msg_abc",
-      model: "claude-sonnet-4-6",
+      model: "claude-sonnet-5",
       inputTokens: 10,
       outputTokens: 20,
       cachedTokens: 0,
     });
   });
 
-  it("forwards prompt-cache reads (cachedInputTokens) to telemetry and the meter", async () => {
+  it("forwards prompt-cache reads (inputTokenDetails.cacheReadTokens) to telemetry and the meter", async () => {
     const result = streamAgentReply({ messages: MESSAGES, telemetry: TELEMETRY }) as StreamResult;
     await result._onFinish({
       text: "hi there",
-      totalUsage: { inputTokens: 100, outputTokens: 20, totalTokens: 120, cachedInputTokens: 80 },
+      totalUsage: {
+        inputTokens: 100,
+        outputTokens: 20,
+        totalTokens: 120,
+        inputTokenDetails: { cacheReadTokens: 80 },
+      },
       finishReason: "stop",
     });
     // Telemetry row records the real cached count (not hardcoded 0).
@@ -350,7 +372,7 @@ describe("reasoningRequestConfig (@oxagen/ai)", () => {
 
   describe("anthropic vendor", () => {
     it("sets adaptive thinking + output_config.effort and locks temperature", () => {
-      const result = reasoningRequestConfig("anthropic/claude-sonnet-4.6", "medium");
+      const result = reasoningRequestConfig("anthropic/claude-sonnet-5", "medium");
       expect(result.temperatureLocked).toBe(true);
       expect(result.providerOptions).toEqual({
         anthropic: { thinking: { type: "adaptive" }, outputConfig: { effort: "medium" } },

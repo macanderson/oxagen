@@ -1,11 +1,21 @@
 /**
- * Daemon lifecycle — start, stop, status commands.
+ * Daemon lifecycle — start, stop, status, and the recorded-session commands.
+ *
+ * Output discipline (ADR-023 §4): every handler is writer-parameterized (REPL-
+ * bridge safe) and speaks both modes. `--json` emits ONE single-line JSON value
+ * on stdout — session list/fork/replay keep their legacy response SHAPES
+ * (previously pretty-printed; now one line, byte-compatible for jq consumers) —
+ * while status/start/stop gain machine envelopes. Human confirmations and
+ * progress go to stderr via `info`; the status/list/replay ANSWERS render on
+ * stdout in pretty mode; failures are uniform stderr error lines with exit 1.
  */
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { existsSync, readFileSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { DaemonClient } from "./client.js";
+import { createOutput, type Output } from "../lib/output.js";
+import { stdoutWriter, type CommandWriter } from "../lib/capture-writer.js";
 
 const DAEMON_DIR = join(homedir(), ".config", "oxagen");
 const SOCKET_PATH = join(DAEMON_DIR, "daemon.sock");
@@ -18,17 +28,26 @@ function getClient(): DaemonClient {
   return new DaemonClient(SOCKET_PATH);
 }
 
-export async function startDaemon(opts: { foreground: boolean }): Promise<void> {
+export interface DaemonJsonOptions {
+  json?: boolean;
+}
+
+export async function startDaemon(
+  opts: { foreground: boolean } & DaemonJsonOptions,
+  writer: CommandWriter = stdoutWriter,
+): Promise<void> {
+  const out = createOutput({ json: opts.json }, writer);
   const client = getClient();
   const running = await client.isRunning();
 
   if (running) {
-    console.log("✓ Daemon is already running.");
+    out.data({ running: true, started: false, socket: SOCKET_PATH }, () => "✓ Daemon is already running.");
     return;
   }
 
   if (opts.foreground) {
-    // Run in foreground (blocks)
+    // Run in foreground (blocks). Boot narration is progress → stderr; the
+    // process itself is the "answer", so stdout stays quiet.
     const { ContextDaemon } = await import("./server.js");
     const daemon = new ContextDaemon({
       socketPath: SOCKET_PATH,
@@ -39,11 +58,11 @@ export async function startDaemon(opts: { foreground: boolean }): Promise<void> 
       dbPath: DB_PATH,
       codeGraphDbPath: CODE_GRAPH_DB_PATH,
     });
-    console.log("Starting context daemon (foreground)…");
-    console.log(`  Socket: ${SOCKET_PATH}`);
-    console.log(`  DB:     ${DB_PATH}`);
+    out.info("Starting context daemon (foreground)…");
+    out.info(`  Socket: ${SOCKET_PATH}`);
+    out.info(`  DB:     ${DB_PATH}`);
     await daemon.start();
-    console.log("✓ Daemon running. Press Ctrl+C to stop.");
+    out.info("✓ Daemon running. Press Ctrl+C to stop.");
 
     // Keep alive until signal
     await new Promise<void>((resolve) => {
@@ -78,45 +97,58 @@ export async function startDaemon(opts: { foreground: boolean }): Promise<void> 
       },
     );
     child.unref();
-    console.log(`✓ Daemon started (pid ${child.pid}).`);
-    console.log(`  Socket: ${SOCKET_PATH}`);
+    out.data(
+      { running: true, started: true, pid: child.pid ?? null, socket: SOCKET_PATH },
+      () => `✓ Daemon started (pid ${child.pid}).\n  Socket: ${SOCKET_PATH}`,
+    );
   }
 }
 
-export async function stopDaemon(): Promise<void> {
+export async function stopDaemon(
+  opts: DaemonJsonOptions = {},
+  writer: CommandWriter = stdoutWriter,
+): Promise<void> {
+  const out = createOutput({ json: opts.json }, writer);
   const client = getClient();
   const running = await client.isRunning();
 
   if (!running) {
-    console.log("Daemon is not running.");
+    out.data({ running: false, stopped: false }, () => "Daemon is not running.");
     return;
   }
 
   try {
     await client.shutdown();
-    console.log("✓ Daemon stopped.");
+    out.data({ running: false, stopped: true }, () => "✓ Daemon stopped.");
   } catch {
     // Try SIGTERM via PID file
     if (existsSync(PID_FILE)) {
       const pid = parseInt(readFileSync(PID_FILE, "utf8"), 10);
       try {
         process.kill(pid, "SIGTERM");
-        console.log(`✓ Sent SIGTERM to daemon (pid ${pid}).`);
+        out.data({ running: false, stopped: true, signalled: pid }, () => `✓ Sent SIGTERM to daemon (pid ${pid}).`);
       } catch {
-        console.log("Could not stop daemon. It may have already exited.");
+        out.error("Could not stop daemon. It may have already exited.");
       }
+    } else {
+      out.error("Could not stop daemon (no PID file).");
     }
   }
 }
 
-export async function daemonStatus(): Promise<void> {
+export async function daemonStatus(
+  opts: DaemonJsonOptions = {},
+  writer: CommandWriter = stdoutWriter,
+): Promise<void> {
+  const out = createOutput({ json: opts.json }, writer);
   const client = getClient();
   const running = await client.isRunning();
 
   if (!running) {
-    console.log("● Daemon is not running.");
-    console.log(`  Socket: ${SOCKET_PATH}`);
-    console.log(`  Start with: oxagen daemon start`);
+    out.data(
+      { running: false, socket: SOCKET_PATH },
+      () => `● Daemon is not running.\n  Socket: ${SOCKET_PATH}\n  Start with: oxagen daemon start`,
+    );
     return;
   }
 
@@ -124,14 +156,132 @@ export async function daemonStatus(): Promise<void> {
     const response = await client.send({ id: "status", method: "health", params: {} });
     const result = response.result as { status: string; uptime: number; pid: number } | undefined;
     if (result) {
-      const uptime = formatUptime(result.uptime);
-      console.log(`● Daemon is running (pid ${result.pid})`);
-      console.log(`  Uptime:  ${uptime}`);
-      console.log(`  Socket:  ${SOCKET_PATH}`);
-      console.log(`  DB:      ${DB_PATH}`);
+      out.data(
+        { running: true, pid: result.pid, uptimeSeconds: result.uptime, socket: SOCKET_PATH, db: DB_PATH },
+        () =>
+          `● Daemon is running (pid ${result.pid})\n` +
+          `  Uptime:  ${formatUptime(result.uptime)}\n` +
+          `  Socket:  ${SOCKET_PATH}\n` +
+          `  DB:      ${DB_PATH}`,
+      );
     }
   } catch (err) {
-    console.log(`● Daemon status unknown: ${err instanceof Error ? err.message : String(err)}`);
+    out.error(`Daemon status unknown: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Sessions — fork/replay/list a daemon-recorded compile session
+// ---------------------------------------------------------------------------
+
+interface SessionSummary {
+  sessionId: string;
+  parentId: string | null;
+  forkPoint: number | null;
+  status: string;
+  eventCount: number;
+  createdAt: number;
+}
+
+async function requireRunningDaemon(client: DaemonClient, out: Output): Promise<boolean> {
+  if (await client.isRunning()) return true;
+  out.error("Daemon is not running. Start it with `oxagen daemon start`.", "daemon_down");
+  return false;
+}
+
+/** `oxagen daemon session list` — sessions recorded by the running daemon. */
+export async function sessionList(
+  opts: DaemonJsonOptions = {},
+  writer: CommandWriter = stdoutWriter,
+): Promise<void> {
+  const out = createOutput({ json: opts.json }, writer);
+  const client = getClient();
+  if (!(await requireRunningDaemon(client, out))) return;
+
+  const result = (await client.listSessions()) as { sessions: SessionSummary[] };
+  if (out.isJson) {
+    out.data(result); // legacy shape: the {sessions: […]} envelope
+    return;
+  }
+  if (result.sessions.length === 0) {
+    writer.write(
+      "No sessions recorded yet. Sessions are recorded in-memory whenever `compile` is " +
+        "called with a taskFrame.sessionId, and reset on daemon restart.",
+    );
+    return;
+  }
+  for (const s of result.sessions) {
+    const lineage = s.parentId ? ` (forked from ${s.parentId} @${s.forkPoint})` : "";
+    writer.write(`${s.sessionId}  ${s.status}  ${s.eventCount} event(s)${lineage}`);
+  }
+}
+
+/** `oxagen daemon session fork <sessionId> <forkPoint>` — branch a session's history. */
+export async function sessionFork(
+  sessionId: string,
+  forkPoint: number,
+  opts: DaemonJsonOptions = {},
+  writer: CommandWriter = stdoutWriter,
+): Promise<void> {
+  const out = createOutput({ json: opts.json }, writer);
+  const client = getClient();
+  if (!(await requireRunningDaemon(client, out))) return;
+
+  try {
+    const result = (await client.forkSession(sessionId, forkPoint)) as {
+      sessionId: string;
+      parentId: string | null;
+      forkPoint: number | null;
+    };
+    out.data(
+      result,
+      () =>
+        `✓ Forked session ${result.parentId} at event ${result.forkPoint} -> new session ${result.sessionId}`,
+    );
+  } catch (err) {
+    out.error(`Fork failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+/** `oxagen daemon session replay <sessionId>` — determinism check + per-turn metrics. */
+export async function sessionReplay(
+  sessionId: string,
+  opts: DaemonJsonOptions = {},
+  writer: CommandWriter = stdoutWriter,
+): Promise<void> {
+  const out = createOutput({ json: opts.json }, writer);
+  const client = getClient();
+  if (!(await requireRunningDaemon(client, out))) return;
+
+  try {
+    const result = (await client.replaySession(sessionId)) as {
+      replay: { deterministic: boolean; stepsReplayed: number; divergences: unknown[] };
+      turns: {
+        turnId: string;
+        compileMs: number;
+        tokens: number;
+        cacheHitRate: number;
+        toolCalls: number;
+        outcome: string;
+      }[];
+    };
+    out.data(result, () => {
+      const verdict = result.replay.deterministic
+        ? "deterministic ✓"
+        : `${result.replay.divergences.length} divergence(s) ✗`;
+      const lines = [
+        `Session ${sessionId}: ${verdict} across ${result.replay.stepsReplayed} compiled step(s).`,
+      ];
+      for (const t of result.turns) {
+        lines.push(
+          `  turn ${t.turnId}: ${t.compileMs}ms compile, ${t.tokens} tokens, ` +
+            `${(t.cacheHitRate * 100).toFixed(0)}% cache hit, ${t.toolCalls} tool call(s), outcome=${t.outcome}`,
+        );
+      }
+      return lines.join("\n");
+    });
+  } catch (err) {
+    out.error(`Replay failed: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 

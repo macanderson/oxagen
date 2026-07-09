@@ -57,13 +57,27 @@ for (const name of NATIVE_DEPS) {
   dependencies[name] = v;
 }
 
+// Tree-sitter grammar WASM files scripts/bundle.mjs copies into dist-standalone/
+// next to oxagen.mjs (see that script's WASM_ASSETS list). @oxagen/code-graph's
+// resolveWasm() finds them relative to the running bundle via import.meta.url —
+// but only if they're actually on disk for the installed package. Without them
+// in `files`, `npm publish` silently drops the .wasm binaries and every
+// `npm i -g @oxagen/cli` install gets a "tree-sitter wasm not found" code graph
+// (same broken-code-graph symptom as the bundle __dirname bug, different cause).
+const WASM_FILES = ["tree-sitter.wasm", "tree-sitter-typescript.wasm", "tree-sitter-python.wasm"];
+for (const wasmFile of WASM_FILES) {
+  if (!existsSync(resolve(distDir, wasmFile))) {
+    throw new Error(`${wasmFile} missing from ${distDir}. Run \`pnpm --filter @oxagen/cli bundle\` first.`);
+  }
+}
+
 const manifest = {
   name: src.name,
   version: src.version,
   description: src.description,
   type: "module",
   bin: { oxagen: "./oxagen.mjs" },
-  files: ["oxagen.mjs", "README.md"],
+  files: ["oxagen.mjs", ...WASM_FILES, "README.md"],
   engines: { node: ">=20" },
   dependencies,
   keywords: src.keywords,

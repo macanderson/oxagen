@@ -3,6 +3,7 @@ import { cache } from "react";
 import { notFound, permanentRedirect } from "next/navigation";
 import { eq, and, desc } from "drizzle-orm";
 import { withSystemDb, schema } from "@oxagen/database";
+import { isValidSlug } from "./slug";
 // tenancy: unscoped seam (resolves the active org/workspace from slugs/session
 // before a tenant scope exists — this is the canonical bootstrap step that
 // PRODUCES the orgId/workspaceId used by runInTenantScope in callers;
@@ -32,6 +33,10 @@ export interface ResolvedWorkspace {
 // Per-request memoization keeps slug → row resolution at one query per
 // boundary, even when several RSCs in the same render need the tenant.
 export const resolveOrg = cache(async (slug: string): Promise<ResolvedOrg> => {
+  // Reject anything that could never be a real org slug (static/metadata paths
+  // like favicon.ico, robots.txt that fall through to [orgSlug]) BEFORE the DB
+  // round-trip — a malformed slug is a guaranteed 404, not a lookup. — OXA-1779
+  if (!isValidSlug(slug)) notFound();
   const rows = await withSystemDb((tx) =>
     tx
       .select()
@@ -64,6 +69,11 @@ export const resolveOrg = cache(async (slug: string): Promise<ResolvedOrg> => {
  */
 export const resolveOrgWithRedirect = cache(
   async (slug: string): Promise<ResolvedOrg> => {
+    // Short-circuit slugs that can't be valid (favicon.ico, robots.txt,
+    // sitemap.xml, … all fall through to [orgSlug]) — skip BOTH the org query
+    // and the slug-history fallback: a malformed slug was never a real org, so
+    // it can't be in org_slug_history either. — OXA-1779
+    if (!isValidSlug(slug)) notFound();
     const direct = await withSystemDb((tx) =>
       tx
         .select()
@@ -160,6 +170,10 @@ function rewriteOrgSlug(pathname: string, oldSlug: string, newSlug: string): str
 
 export const resolveWorkspace = cache(
   async (orgId: string, slug: string): Promise<ResolvedWorkspace> => {
+    // Same guard as resolveOrg: reject impossible slugs before the DB round-trip
+    // (static paths like /{org}/favicon.ico reach the nested [workspaceSlug]
+    // route). — OXA-1779
+    if (!isValidSlug(slug)) notFound();
     const rows = await withSystemDb((tx) =>
       tx
         .select()
@@ -201,6 +215,9 @@ function mapWorkspaceRow(
  */
 export const resolveWorkspaceWithRedirect = cache(
   async (orgId: string, slug: string): Promise<ResolvedWorkspace> => {
+    // Skip both the workspace query and the slug-history fallback for slugs that
+    // can't be valid (static/metadata paths under an org). — OXA-1779
+    if (!isValidSlug(slug)) notFound();
     const direct = await withSystemDb((tx) =>
       tx
         .select()
@@ -381,6 +398,32 @@ export const assertBillingManager = cache(
     );
     const role = rows[0]?.role;
     if (!role || !BILLING_MANAGER_ROLES.has(role)) {
+      notFound();
+    }
+  },
+);
+
+/** Roles permitted to perform org-administrative actions (Owner/Admin). */
+const ORG_ADMIN_ROLES = new Set(["owner", "admin"]);
+
+/**
+ * Assert that the user is a member of the org AND holds an administrative role
+ * (owner/admin). Calls `notFound()` otherwise — a non-admin is treated like a
+ * non-member (404), consistent with {@link assertOrgMember}.
+ *
+ * Use for org-administrative actions whose contract declares Owner/Admin-only
+ * authorization but that are NOT specifically billing, plugin (MCP), or
+ * compliance-export scoped (each of which has its own domain-named gate). The
+ * canonical case is developer API-key management (`api.key.create/revoke/rotate`,
+ * `sensitivity: "high"`, `defaultRoles.org = { Owner, Admin }`): minting a key
+ * hands out programmatic org access, so membership alone is not sufficient.
+ * Mirrors the kernel IAM role gate that the API/MCP surfaces get for free but
+ * which invoke() from apps/app skips.
+ */
+export const assertOrgAdmin = cache(
+  async (orgId: string, userId: string): Promise<void> => {
+    const role = await getOrgRole(orgId, userId);
+    if (!role || !ORG_ADMIN_ROLES.has(role)) {
       notFound();
     }
   },

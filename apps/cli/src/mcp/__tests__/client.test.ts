@@ -24,7 +24,7 @@ function fakeClient(calls: Array<{ name: string; args: unknown }> = []): McpClie
 }
 
 type Exec = NonNullable<ToolSet[string]["execute"]>;
-const CALL_OPTS = { toolCallId: "t", messages: [] } as Parameters<Exec>[1];
+const CALL_OPTS = { toolCallId: "t", messages: [] } as unknown as Parameters<Exec>[1];
 
 describe("mcpToolName", () => {
   it("uses the mcp__server__tool convention", () => {

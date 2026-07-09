@@ -6,15 +6,30 @@ import { resolveOrg, resolveWorkspace } from "@/lib/resolve-org";
 import { getSessionOrRedirect } from "@/lib/session";
 import { ChatShell, type ChatMessage } from "@/components/chat/chat-shell";
 import type { AgentCapability } from "@/components/chat/plan-card";
-import { listCapabilities, getSurfaces } from "@oxagen/oxagen";
+import { listCapabilities, getSurfaces, invoke } from "@oxagen/oxagen";
 import type { CapabilityContext } from "@oxagen/oxagen";
 import type { BackgroundTaskSnapshot } from "@/components/chat/background-task-tray";
 import type { PlanStep } from "@/components/chat/stream-event-types";
 import { loadEffectiveModelDefaults } from "@oxagen/ai";
 import { buildSeededModelState } from "@/components/chat/model-state";
+import type { WorkspaceBudgetGovernance } from "@/components/chat/model-state";
 import type { McpServerSummary } from "@/components/chat/mcp-types";
+import { loadCodeModeOptions } from "./code-mode-data";
+import { loadAgentOptions } from "./agent-options-data";
 import { userPreferencesReadHandler } from "@oxagen/handlers/user.preferences.read";
+import { budgetPolicyReadHandler } from "@oxagen/handlers/budget.policy.read";
 import { conversationListHandler } from "@oxagen/handlers/conversation.list";
+import { logger } from "@oxagen/handlers/logger";
+// Side-effect import: bind every foundation handler into the shared kernel so
+// invoke("get_budget_policy", …) below can resolve its handler.
+// Without this the call silently throws "No handler registered" (see CLAUDE.md
+// gotcha) — caught below and treated as fail-open null governance regardless.
+import "@oxagen/handlers/register";
+// Side-effect import: bind the agent handlers so invoke("get_agent_def")
+// below can resolve when the Ask page binds a published agent (?agent=…).
+// Idempotent (registerHandlersOnce); a lookup failure is caught + degrades to
+// showing no bound-agent name.
+import "@oxagen/agent/register";
 import { ConversationNav } from "@/components/conversations/conversation-nav";
 import type { ConversationNavActions } from "@/components/conversations/types";
 import {
@@ -26,6 +41,17 @@ import {
 } from "./conversation-actions";
 import { walkActiveBranch } from "./walk-active-branch";
 export { walkActiveBranch } from "./walk-active-branch";
+
+/**
+ * Logs a server-render degrade and returns the fallback unchanged. Keeps the
+ * non-blocking control flow (the chat page still renders) while making each
+ * failure observable — an RLS/DB error should never silently revert the page to
+ * empty/default state with no trace.
+ */
+function logAndFallback<T>(err: unknown, what: string, fallback: T): T {
+  logger.warn({ err }, `conversation-page: ${what} failed — degraded`);
+  return fallback;
+}
 
 // The unbound action factories — one set per route module because each
 // module hard-codes its own revalidatePath segment (/chat vs /ask).
@@ -69,17 +95,17 @@ export interface ConversationPageActions {
 
 interface ConversationPageProps {
   params: Promise<{ orgSlug: string; workspaceSlug: string }>;
-  searchParams: Promise<{ c?: string; new?: string }>;
+  searchParams: Promise<{ c?: string; new?: string; agent?: string }>;
   actions: ConversationPageActions;
 }
 
 
 export async function ConversationPage({ params, searchParams, actions }: ConversationPageProps) {
   const session = await getSessionOrRedirect();
-  const [{ orgSlug, workspaceSlug }, { c: conversationPublicId, new: forceNew }] = await Promise.all([
-    params,
-    searchParams,
-  ]);
+  const [
+    { orgSlug, workspaceSlug },
+    { c: conversationPublicId, new: forceNew, agent: boundAgentId },
+  ] = await Promise.all([params, searchParams]);
   const tenant = await resolveOrg(orgSlug);
   const workspace = await resolveWorkspace(tenant.id, workspaceSlug);
 
@@ -182,7 +208,17 @@ export async function ConversationPage({ params, searchParams, actions }: Conver
 
   // Agent-surface capabilities feed the plan-card amend UX. Computed
   // once per render here so the client doesn't refetch / refilter.
-  const [agentCapabilities, userPrefs, effectiveModelDefaults, initialConversations, availableMcpServers] =
+  const [
+    agentCapabilities,
+    userPrefs,
+    effectiveModelDefaults,
+    initialConversations,
+    availableMcpServers,
+    budgetDefault,
+    codeModeOptions,
+    workspaceBudgetGovernance,
+    availableAgents,
+  ] =
     await Promise.all([
       Promise.resolve(
         listCapabilities()
@@ -193,14 +229,16 @@ export async function ConversationPage({ params, searchParams, actions }: Conver
             riskLevel: c.agent?.riskLevel ?? "low",
           })),
       ),
-      userPreferencesReadHandler({}, userCtx).catch(() => ({
-        enterToSubmit: false as const,
-        pendingPromptBehavior: "queue" as const,
-      })),
+      userPreferencesReadHandler({}, userCtx).catch((err: unknown) =>
+        logAndFallback(err, "user-preferences read", {
+          enterToSubmit: false as const,
+          pendingPromptBehavior: "queue" as const,
+        }),
+      ),
       loadEffectiveModelDefaults({
         userId: session.user.id,
         workspaceId: workspace.id,
-      }).catch(() => null),
+      }).catch((err: unknown) => logAndFallback(err, "effective-model-defaults load", null)),
       // First page of active conversations for the history nav. Failure is
       // non-fatal — the nav renders empty rather than crashing the chat page.
       // runInTenantScope is required: conversationListHandler calls withTenantDb
@@ -209,7 +247,9 @@ export async function ConversationPage({ params, searchParams, actions }: Conver
       runInTenantScope(
         { orgId: tenant.id, workspaceId: workspace.id },
         () => conversationListHandler({ filter: "active", limit: 50, cursor: null }, userCtx),
-      ).catch(() => ({ conversations: [], nextCursor: null })),
+      ).catch((err: unknown) =>
+        logAndFallback(err, "conversation-list read", { conversations: [], nextCursor: null }),
+      ),
       // Enabled + healthy workspace MCP servers for the per-turn activation picker.
       runInTenantScope(
         { orgId: tenant.id, workspaceId: workspace.id },
@@ -247,7 +287,62 @@ export async function ConversationPage({ params, searchParams, actions }: Conver
             toolCount: Array.isArray(r.discoveredTools) ? (r.discoveredTools as unknown[]).length : 0,
           })),
         )
-        .catch(() => [] as McpServerSummary[]),
+        .catch((err: unknown) => logAndFallback(err, "mcp-servers read", [] as McpServerSummary[])),
+      // Per-turn budget default (OXA — turn-budget): read the user's saved
+      // budget.policy so the composer's BudgetControl opens pre-filled with
+      // their last-saved preference rather than always defaulting to off.
+      // Direct handler call (not invoke()) — same pattern as
+      // userPreferencesReadHandler above; budget.policy is user-scoped
+      // (scoped: false) so it needs no IAM bootstrap.
+      budgetPolicyReadHandler({}, userCtx).catch((err: unknown) =>
+        logAndFallback(err, "budget-policy read", {
+          enabled: false as const,
+          limitUsd: null,
+          mode: "prompt" as const,
+          graceOveragePct: 0.25,
+        }),
+      ),
+      // Repo + environment options for the composer's code-mode pickers.
+      // loadCodeModeOptions never throws (degrades to empty lists internally),
+      // so no .catch needed here.
+      loadCodeModeOptions(tenant.id, workspace.id, userCtx),
+      // Workspace-level budget governance (OXA-2081): resolved via invoke()
+      // (Owner/Admin-managed governance state, not a user preference row) so
+      // the composer can surface an enforced ceiling / seed a soft default.
+      // { surface: "agent" } — the contract's `surfaces` does not include
+      // "app". FAIL-OPEN: any error (unregistered handler, down DB, denied
+      // check) degrades to `null` (no governance) so a broken governance row
+      // never blocks the chat page from rendering.
+      runInTenantScope({ orgId: tenant.id, workspaceId: workspace.id }, () =>
+        invoke("get_budget_policy", {}, userCtx, { surface: "agent" }),
+      )
+        .then(
+          (raw): WorkspaceBudgetGovernance => {
+            const read = raw as {
+              enabled: boolean;
+              limitUsd: number | null;
+              mode: "grace" | "prompt" | "enforce";
+              enforcement: "default" | "ceiling";
+            };
+            return {
+              enabled: read.enabled,
+              limitUsd: read.limitUsd ?? 0,
+              mode: read.mode,
+              enforcement: read.enforcement,
+            };
+          },
+        )
+        .catch((err: unknown) =>
+          logAndFallback(err, "workspace-budget-governance read", {
+            enabled: false as const,
+            limitUsd: 0,
+            mode: "prompt" as const,
+            enforcement: "ceiling" as const,
+          }),
+        ),
+      // Selectable agents for the composer's agent picker. loadAgentOptions
+      // never throws (degrades to an empty list internally), so no .catch here.
+      loadAgentOptions(tenant.id, workspace.id, userCtx),
     ]);
 
   // Bind the workspace scope into the nav's server actions so the client only
@@ -261,12 +356,30 @@ export async function ConversationPage({ params, searchParams, actions }: Conver
     purge: purgeArchivedConversationsAction.bind(null, navCtx),
   };
 
+  // Bound-agent binding (?agent=<publicId>): resolve the agent's human name so
+  // the composer can show a "Session bound to: <name>" indicator. Best-effort +
+  // fail-open — a denied/missing/unregistered lookup degrades to showing the raw
+  // id (so the binding is still visibly active). The actual config application
+  // happens server-side in the chat stream route; here we only fetch the label.
+  let boundAgentName: string | null = null;
+  if (boundAgentId) {
+    boundAgentName = await runInTenantScope(
+      { orgId: tenant.id, workspaceId: workspace.id },
+      () => invoke("get_agent_def", { agentId: boundAgentId }, userCtx, { surface: "agent" }),
+    )
+      .then((def) => (def as { name?: string }).name ?? boundAgentId)
+      .catch((err: unknown) =>
+        logAndFallback(err, "bound-agent name resolve", boundAgentId),
+      );
+  }
+
   const initialModelState = effectiveModelDefaults
     ? buildSeededModelState({
         textModel: effectiveModelDefaults.text.model,
         textTier: effectiveModelDefaults.text.tier,
         imageModel: effectiveModelDefaults.image.model,
         videoModel: effectiveModelDefaults.video.model,
+        budget: budgetDefault,
       })
     : undefined;
 
@@ -298,6 +411,12 @@ export async function ConversationPage({ params, searchParams, actions }: Conver
             pendingPromptBehavior={userPrefs.pendingPromptBehavior}
             initialModelState={initialModelState}
             availableMcpServers={availableMcpServers}
+            availableRepos={codeModeOptions.repos}
+            availableEnvironments={codeModeOptions.environments}
+            availableAgents={availableAgents}
+            workspaceBudgetGovernance={workspaceBudgetGovernance}
+            agentId={boundAgentId ?? null}
+            boundAgentName={boundAgentName}
           />
         </div>
       </div>

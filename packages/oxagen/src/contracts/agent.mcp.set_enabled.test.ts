@@ -34,6 +34,6 @@ describe("agent.mcp.set_enabled capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("agent.mcp.set_enabled")).toBe(agentMcpSetEnabled);
+    expect(getCapability("set_mcp_enabled")).toBe(agentMcpSetEnabled);
   });
 });

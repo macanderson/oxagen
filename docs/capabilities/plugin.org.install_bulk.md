@@ -26,6 +26,7 @@ Install multiple catalog or custom plugin servers to the org allow-list in one r
 | `installed[]` | `InstalledItem[]` | Successfully installed items. |
 | `installed[].catalogServerId` | `string \| null` | Catalog server ID (if from catalog). |
 | `installed[].orgListingId` | `string \| null` | Created org listing public ID. |
+| `installed[].authKind` | `\"oauth\" \| \"secret\" \| \"none\" \| null` | Effective auth kind for the installed listing (null on failure). |
 | `installed[].error` | `string \| null` | Error message if this item failed. |
 
 ## Roles

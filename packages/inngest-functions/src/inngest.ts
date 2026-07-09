@@ -283,6 +283,25 @@ type Events = {
     };
   };
 
+  // Batched variant of infer-features: same per-file payload, but consumed via
+  // Inngest batchEvents and submitted as one Anthropic Message Batch. Emitted by
+  // parse-file instead of infer-features when INGESTION_FEATURE_BATCH=1.
+  "ingestion/github.infer-features-batch": {
+    data: {
+      fileNaturalKey: string;
+      symbols: Array<{
+        name: string;
+        kind: string;
+        startLine: number;
+        endLine: number;
+        docComment?: string;
+      }>;
+      orgId: string;
+      workspaceId: string;
+      connectionId: string;
+    };
+  };
+
   // Infer application domains from the full repo file-path list and stamp
   // `domain` on SourceFile + SourceSymbol nodes in Neo4j. Triggered once
   // per initial sync (and per incremental re-sync) by the initial-sync function.
@@ -332,6 +351,25 @@ type Events = {
       outputTokens?: number | null;
       estimatedCostUsd?: string | null;
       toolCalls?: Array<{ toolName: string; toolType: string }>;
+    };
+  };
+
+  // ── File-lock graph projection (ADR-021 §5) ─────────────────────────────────
+  // Fired fire-and-forget by the Postgres file-lock lease on acquire/release.
+  // agent.project-file-lock-to-graph MERGEs an (:Agent)-[:LOCKED]->(:SourceFile)
+  // lineage edge for hot-file analytics + conflict prediction. NEVER
+  // load-bearing for mutual exclusion — the lock authority is the Postgres lease.
+  "agent/file-lock.projected": {
+    data: {
+      orgId: string;
+      workspaceId: string;
+      resourceKey: string;
+      holder: string;
+      executionId: string;
+      action: string;
+      event: "acquired" | "released";
+      fencingToken?: number;
+      expiresAt?: number;
     };
   };
 

@@ -9,14 +9,24 @@
  * the panel is always fresh (no RSC revalidation lag) and so it doesn't add
  * to the server-component render budget.
  *
- * Each row shows a file-type icon, the full filename (with extension), the
- * file size, the created timestamp, and a clickable affordance that opens the
- * asset in a new tab (images/video) or downloads it (documents/archives) via
- * the access-controlled /api/v1/assets/[id] serving route.
+ * Each row shows a file-type icon (or an inline thumbnail for images), the
+ * full filename (with extension), the file size, the created timestamp, and a
+ * clickable affordance that opens the asset in a new tab (images/video),
+ * opens an in-app preview dialog (SVG), or downloads it (documents/archives)
+ * via the access-controlled /api/v1/assets/[id] serving route.
+ *
+ * SVG handling (security-sensitive): the serving route forces
+ * `Content-Disposition: attachment` for image/svg+xml because inline SVG
+ * served from our own origin is a stored-XSS vector. Mobile browsers bounce
+ * that forced download with "file not supported", so SVGs are previewed
+ * IN-APP via an <img src={serveUrl}> inside a dialog — <img> requests ignore
+ * Content-Disposition and the image decoder never executes scripts, so the
+ * preview is XSS-safe without weakening the serve route. Never render asset
+ * SVG markup with dangerouslySetInnerHTML here.
  *
  * The panel is responsive:
- *   Mobile: full-width Sheet overlay (right side)
- *   Desktop: same Sheet (the list is compact and scrollable)
+ *   Mobile: full-width Sheet overlay (right side), rows ≥44px tall
+ *   Desktop: fixed-width Sheet (the list is compact and scrollable)
  */
 
 import * as React from "react";
@@ -42,7 +52,14 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import {
+  Dialog,
+  DialogPopup,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { useLatestRef } from "@/lib/use-latest-ref";
 import type { ConversationAssetItem } from "@/app/api/v1/conversations/[conversationId]/assets/route";
 
 // ---------------------------------------------------------------------------
@@ -73,17 +90,32 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
 }
 
+/** Normalised media type without parameters ("image/svg+xml"). */
+function baseMime(mimeType: string): string {
+  return mimeType.split(";")[0]?.trim().toLowerCase() ?? "";
+}
+
+/** SVG assets get an in-app <img> preview dialog instead of open/download. */
+function isSvg(mimeType: string): boolean {
+  return baseMime(mimeType) === "image/svg+xml";
+}
+
+/** Any image type — rendered as an inline row thumbnail via <img>. */
+function isImageMime(mimeType: string): boolean {
+  return baseMime(mimeType).startsWith("image/");
+}
+
 /**
  * Whether the browser can DISPLAY this type (so clicking the filename opens it
  * in a new tab to view) versus needing to download it. Mirrors the serving
  * route's `assetDispositionType` (packages/handlers/.../lib/asset-filename.ts):
- * images, video, audio, PDF and text (markdown/plain) view inline; SVG and
- * office/zip binaries download. Keyed off the authoritative mimeType, not the
- * coarse asset kind, so a `document`-kind markdown file opens to view while a
- * `document`-kind .docx downloads.
+ * images, video, audio, PDF and text (markdown/plain) view inline; SVG previews
+ * in-app (see isSvg) and office/zip binaries download. Keyed off the
+ * authoritative mimeType, not the coarse asset kind, so a `document`-kind
+ * markdown file opens to view while a `document`-kind .docx downloads.
  */
 function isViewableInline(mimeType: string): boolean {
-  const type = mimeType.split(";")[0]?.trim().toLowerCase() ?? "";
+  const type = baseMime(mimeType);
   if (type === "image/svg+xml") return false;
   if (type.startsWith("image/")) return true;
   if (type.startsWith("video/") || type.startsWith("audio/")) return true;
@@ -141,44 +173,111 @@ function KindIcon({ kind, className }: KindIconProps) {
 // ---------------------------------------------------------------------------
 
 // Shared action-button styling for the row's open/download affordances.
+// ≥44px (size-11) touch targets on mobile, compact size-7 from sm up.
 const ROW_ACTION_CLS = cn(
-  "mt-0.5 shrink-0 inline-flex size-7 items-center justify-center rounded-md",
+  "shrink-0 inline-flex size-11 sm:size-7 sm:mt-0.5 items-center justify-center rounded-md self-center sm:self-start",
   "text-muted-foreground hover:bg-muted hover:text-foreground",
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
   "transition-colors",
 );
 
-function AssetRow({ item }: { item: ConversationAssetItem }) {
+// Shared row-thumbnail: images (including SVG) render a small inline preview
+// via <img> against the access-controlled serving route. <img> ignores the
+// route's Content-Disposition and never executes SVG scripts, so this is
+// XSS-safe for SVG too.
+function RowThumbnail({ item }: { item: ConversationAssetItem }) {
+  return (
+    // eslint-disable-next-line @next/next/no-img-element -- auth-gated same-origin asset URL; next/image optimization would proxy/re-encode (breaks SVG + auth cookies)
+    <img
+      src={item.url}
+      alt=""
+      aria-hidden="true"
+      loading="lazy"
+      decoding="async"
+      className="size-10 shrink-0 rounded-md border border-border bg-muted/40 object-contain"
+    />
+  );
+}
+
+function AssetRow({
+  item,
+  onPreview,
+}: {
+  item: ConversationAssetItem;
+  onPreview: (item: ConversationAssetItem) => void;
+}) {
   // Viewable types (image/pdf/markdown/…) can be DISPLAYED, so the filename
-  // links open them inline in a new tab. Non-viewable binaries (docx/zip) can
-  // only be downloaded, so their filename link downloads directly.
+  // links open them inline in a new tab. SVGs open an in-app preview dialog
+  // (the serve route forces attachment disposition for them — see header
+  // comment). Non-viewable binaries (docx/zip) can only be downloaded, so
+  // their filename link downloads directly.
+  const svg = isSvg(item.mimeType);
   const viewable = isViewableInline(item.mimeType);
+  const thumbnail = isImageMime(item.mimeType);
+
+  const nameCls = cn(
+    "block break-words text-left text-sm font-medium leading-snug text-foreground",
+    "hover:text-primary hover:underline underline-offset-2",
+    "focus-visible:outline-none focus-visible:text-primary focus-visible:underline",
+  );
 
   return (
-    <div className="group flex items-start gap-3 rounded-lg px-3 py-2.5 hover:bg-muted/60 transition-colors">
-      {/* Kind icon */}
-      <div className="mt-0.5 shrink-0">
-        <KindIcon kind={item.kind} className="size-5" />
-      </div>
+    <div className="group flex min-h-11 items-start gap-3 rounded-lg px-3 py-3 sm:py-2.5 hover:bg-muted/60 transition-colors">
+      {/* Leading visual: inline thumbnail for images (including SVG), kind icon
+          otherwise. The thumbnail duplicates the name link's action, so it is
+          hidden from the a11y tree and skipped in the tab order (decorative
+          duplicate-link pattern) — keyboard/AT users act through the name. */}
+      {thumbnail ? (
+        svg ? (
+          <button
+            type="button"
+            onClick={() => onPreview(item)}
+            className="shrink-0 rounded-md"
+            aria-hidden="true"
+            tabIndex={-1}
+            title={`Preview ${item.name}`}
+          >
+            <RowThumbnail item={item} />
+          </button>
+        ) : (
+          <a
+            href={item.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="shrink-0 rounded-md"
+            aria-hidden="true"
+            tabIndex={-1}
+            title={`Open ${item.name} in a new tab`}
+          >
+            <RowThumbnail item={item} />
+          </a>
+        )
+      ) : (
+        <div className="mt-0.5 shrink-0">
+          <KindIcon kind={item.kind} className="size-5" />
+        </div>
+      )}
 
       {/* Name + meta — the full filename wraps so the extension is always visible */}
       <div className="min-w-0 flex-1">
-        <a
-          href={item.url}
-          target={viewable ? "_blank" : undefined}
-          rel={viewable ? "noopener noreferrer" : undefined}
-          // Non-viewable files download on name-click (with the slug filename);
-          // viewable files open inline to be read.
-          download={viewable ? undefined : item.name}
-          className={cn(
-            "block break-words text-sm font-medium leading-snug text-foreground",
-            "hover:text-primary hover:underline underline-offset-2",
-            "focus-visible:outline-none focus-visible:text-primary focus-visible:underline",
-          )}
-          title={viewable ? `Open ${item.name}` : `Download ${item.name}`}
-        >
-          {item.name}
-        </a>
+        {svg ? (
+          <button type="button" onClick={() => onPreview(item)} className={nameCls} title={`Preview ${item.name}`}>
+            {item.name}
+          </button>
+        ) : (
+          <a
+            href={item.url}
+            target={viewable ? "_blank" : undefined}
+            rel={viewable ? "noopener noreferrer" : undefined}
+            // Non-viewable files download on name-click (with the slug filename);
+            // viewable files open inline to be read.
+            download={viewable ? undefined : item.name}
+            className={nameCls}
+            title={viewable ? `Open ${item.name}` : `Download ${item.name}`}
+          >
+            {item.name}
+          </a>
+        )}
         <p className="mt-0.5 text-xs text-muted-foreground tabular-nums">
           {item.sizeBytes !== null ? `${formatBytes(item.sizeBytes)} · ` : null}
           {formatTimestamp(item.createdAt)}
@@ -186,11 +285,13 @@ function AssetRow({ item }: { item: ConversationAssetItem }) {
       </div>
 
       {/* Affordances (always visible). Viewable files get an "open in new tab"
-          button AND a download button; non-viewable files get a download button.
-          The download anchor carries the HTML `download` attribute set to the
-          slug filename, which forces a same-origin download to SAVE AS that name
-          regardless of how the server's Content-Disposition is set — so the file
-          never lands on disk as the opaque `gen_…` id. */}
+          button AND a download button; SVGs get the in-app preview (name /
+          thumbnail click) AND a download button; other non-viewable files get
+          a download button. The download anchor carries the HTML `download`
+          attribute set to the slug filename, which forces a same-origin
+          download to SAVE AS that name regardless of how the server's
+          Content-Disposition is set — so the file never lands on disk as the
+          opaque `gen_…` id. */}
       {viewable ? (
         <a
           href={item.url}
@@ -217,35 +318,105 @@ function AssetRow({ item }: { item: ConversationAssetItem }) {
 }
 
 // ---------------------------------------------------------------------------
-// Main component
+// SVG preview dialog
 // ---------------------------------------------------------------------------
 
-export interface ConversationFilesProps {
+/**
+ * Full-size in-app preview for an SVG asset. Rendered via <img> against the
+ * serving route (XSS-safe — see file header) with a Download button, so
+ * mobile users are never bounced into a forced download they can't open.
+ */
+function AssetPreviewDialog({
+  item,
+  onClose,
+}: {
+  item: ConversationAssetItem | null;
+  onClose: () => void;
+}) {
+  return (
+    <Dialog open={item !== null} onOpenChange={(open) => !open && onClose()}>
+      <DialogPopup className="w-[calc(100vw-2rem)] max-w-2xl p-4 sm:p-6">
+        {item ? (
+          <>
+            <DialogHeader>
+              <DialogTitle className="break-words pr-8 text-base">{item.name}</DialogTitle>
+            </DialogHeader>
+            <div className="flex items-center justify-center rounded-lg bg-muted/30 p-4">
+              {/* eslint-disable-next-line @next/next/no-img-element -- auth-gated same-origin asset URL; <img> ignores Content-Disposition and never executes SVG scripts */}
+              <img
+                src={item.url}
+                alt={item.name}
+                className="max-h-[60dvh] max-w-full object-contain"
+                decoding="async"
+              />
+            </div>
+            <a
+              href={item.url}
+              download={item.name}
+              className={cn(
+                "inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-4 py-2",
+                "bg-primary text-sm font-medium text-primary-foreground",
+                "hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                "transition-opacity",
+              )}
+              aria-label={`Download ${item.name}`}
+            >
+              <Download className="size-4" aria-hidden="true" />
+              <span>Download</span>
+            </a>
+          </>
+        ) : null}
+      </DialogPopup>
+    </Dialog>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Reusable list body (fetch + loading/error/empty/list states)
+// ---------------------------------------------------------------------------
+
+export interface ConversationFilesListProps {
   /** publicId of the active conversation (from URL ?c= param). Null if no conversation yet. */
   conversationPublicId: string | null;
+  /**
+   * Whether this list should be fetching/showing data right now. The Sheet
+   * variant (`ConversationFiles`) passes its open state so the fetch only
+   * fires while the panel is visible; an always-visible embedding (e.g. a
+   * persistent side-panel tab) passes `true`.
+   */
+  active: boolean;
+  /** Called whenever the loaded asset count changes (undefined while loading/errored). */
+  onCountChange?: (count: number | undefined) => void;
 }
 
 /**
- * Conversation files panel. Renders a trigger button; clicking it fetches the
- * asset list and opens a Sheet overlay with the file list.
+ * The actual conversation-assets list: fetch lifecycle + loading/error/empty/
+ * list rendering, extracted from `ConversationFiles` so both the header Sheet
+ * trigger AND `WorkspaceContextPanel`'s "Files" tab share one fetch/render
+ * implementation instead of two copies drifting apart.
  *
  * Fetch lifecycle:
- *   - Idle: button shown, no fetch in flight.
- *   - On open: fetch starts; spinner shown inside the panel.
+ *   - Idle: no fetch in flight.
+ *   - On `active` becoming true: fetch starts; spinner shown.
  *   - Loaded: file list rendered (or an info Alert when empty).
  *   - Error: an error Alert with Retry (a 404 is treated as "no files", never
  *     surfaced as a scary error).
- *   - Re-open: data is re-fetched so newly generated files appear.
+ *   - Re-activate: data is re-fetched so newly generated files appear.
  */
-export function ConversationFiles({ conversationPublicId }: ConversationFilesProps) {
-  const [open, setOpen] = React.useState(false);
+export function ConversationFilesList({
+  conversationPublicId,
+  active,
+  onCountChange,
+}: ConversationFilesListProps) {
   const [assets, setAssets] = React.useState<ConversationAssetItem[] | null>(null);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [preview, setPreview] = React.useState<ConversationAssetItem | null>(null);
+  const [retryKey, setRetryKey] = React.useState(0);
 
-  // Fetch (or re-fetch) the asset list whenever the panel opens.
+  // Fetch (or re-fetch) the asset list whenever the list becomes active.
   React.useEffect(() => {
-    if (!open || !conversationPublicId) return;
+    if (!active || !conversationPublicId) return;
 
     let cancelled = false;
     setLoading(true);
@@ -278,9 +449,76 @@ export function ConversationFiles({ conversationPublicId }: ConversationFilesPro
     return () => {
       cancelled = true;
     };
-  }, [open, conversationPublicId]);
+  }, [active, conversationPublicId, retryKey]);
 
   const total = assets?.length ?? 0;
+  const onCountChangeRef = useLatestRef(onCountChange);
+  React.useEffect(() => {
+    onCountChangeRef.current?.(assets ? total : undefined);
+  }, [assets, total, onCountChangeRef]);
+
+  return (
+    <>
+      {loading ? (
+        <div className="flex items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
+          <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
+          <span>Loading files…</span>
+        </div>
+      ) : error ? (
+        <div className="p-2">
+          <Alert variant="error">
+            <AlertTitle>Couldn&apos;t load files</AlertTitle>
+            <AlertDescription className="mb-2">{error}</AlertDescription>
+            <button
+              type="button"
+              onClick={() => setRetryKey((k) => k + 1)}
+              className="text-xs font-medium text-foreground underline underline-offset-2 hover:opacity-80"
+            >
+              Retry
+            </button>
+          </Alert>
+        </div>
+      ) : total === 0 ? (
+        <div className="p-2">
+          <Alert variant="info">
+            <Paperclip className="size-4" aria-hidden="true" />
+            <AlertTitle>No files yet</AlertTitle>
+            <AlertDescription>
+              Files the assistant generates in this conversation — images,
+              documents, spreadsheets, and more — will appear here.
+            </AlertDescription>
+          </Alert>
+        </div>
+      ) : (
+        <div className="flex flex-col">
+          {assets!.map((item) => (
+            <AssetRow key={item.publicId} item={item} onPreview={setPreview} />
+          ))}
+        </div>
+      )}
+
+      <AssetPreviewDialog item={preview} onClose={() => setPreview(null)} />
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main component
+// ---------------------------------------------------------------------------
+
+export interface ConversationFilesProps {
+  /** publicId of the active conversation (from URL ?c= param). Null if no conversation yet. */
+  conversationPublicId: string | null;
+}
+
+/**
+ * Conversation files panel. Renders a trigger button; clicking it fetches the
+ * asset list (via `ConversationFilesList`) and opens a Sheet overlay with the
+ * file list.
+ */
+export function ConversationFiles({ conversationPublicId }: ConversationFilesProps) {
+  const [open, setOpen] = React.useState(false);
+  const [count, setCount] = React.useState<number | undefined>(undefined);
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -299,60 +537,25 @@ export function ConversationFiles({ conversationPublicId }: ConversationFilesPro
         <span className="hidden sm:inline">Files</span>
       </SheetTrigger>
 
-      <SheetPopup side="right" className="flex w-80 flex-col p-0 sm:max-w-sm">
+      {/* Full-width on mobile so rows and touch targets have room; fixed width from sm up. */}
+      <SheetPopup side="right" className="flex w-full flex-col p-0 sm:w-80 sm:max-w-sm">
         <SheetHeader className="border-b border-border px-4 py-3">
           <SheetTitle className="text-base">
             Conversation Files
-            {total > 0 ? (
+            {count ? (
               <span className="ml-1.5 text-xs font-normal text-muted-foreground">
-                ({total})
+                ({count})
               </span>
             ) : null}
           </SheetTitle>
         </SheetHeader>
 
         <div className="min-h-0 flex-1 overflow-y-auto p-2">
-          {loading ? (
-            <div className="flex items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
-              <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
-              <span>Loading files…</span>
-            </div>
-          ) : error ? (
-            <div className="p-2">
-              <Alert variant="error">
-                <AlertTitle>Couldn&apos;t load files</AlertTitle>
-                <AlertDescription className="mb-2">{error}</AlertDescription>
-                <button
-                  type="button"
-                  onClick={() => {
-                    // Re-trigger the fetch by toggling the panel closed/open.
-                    setOpen(false);
-                    setTimeout(() => setOpen(true), 50);
-                  }}
-                  className="text-xs font-medium text-foreground underline underline-offset-2 hover:opacity-80"
-                >
-                  Retry
-                </button>
-              </Alert>
-            </div>
-          ) : total === 0 ? (
-            <div className="p-2">
-              <Alert variant="info">
-                <Paperclip className="size-4" aria-hidden="true" />
-                <AlertTitle>No files yet</AlertTitle>
-                <AlertDescription>
-                  Files the assistant generates in this conversation — images,
-                  documents, spreadsheets, and more — will appear here.
-                </AlertDescription>
-              </Alert>
-            </div>
-          ) : (
-            <div className="flex flex-col">
-              {assets!.map((item) => (
-                <AssetRow key={item.publicId} item={item} />
-              ))}
-            </div>
-          )}
+          <ConversationFilesList
+            conversationPublicId={conversationPublicId}
+            active={open}
+            onCountChange={setCount}
+          />
         </div>
       </SheetPopup>
     </Sheet>

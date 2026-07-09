@@ -3,6 +3,7 @@ import {
   resolvePrompt,
   isOverridablePromptKey,
   chatSystemPrompt,
+  codeModeSystemPrompt,
   conversationTitlePrompt,
 } from "./registry";
 
@@ -80,6 +81,29 @@ describe("isOverridablePromptKey", () => {
   });
 });
 
+describe("chatSystemPrompt — knowledge-graph-first context gathering", () => {
+  const CTX = { orgSlug: "acme", workspaceSlug: "main", orgName: "Acme", workspaceName: "Main" };
+
+  it("declares the knowledge graph the PRIMARY source of context", () => {
+    const prompt = chatSystemPrompt(CTX);
+    expect(prompt).toContain("Knowledge Graph FIRST");
+    expect(prompt).toContain("PRIMARY source of context");
+  });
+
+  it("names the graph capabilities to reach for first", () => {
+    const prompt = chatSystemPrompt(CTX);
+    expect(prompt).toContain("search_graph");
+    expect(prompt).toContain("query_ontology");
+    expect(prompt).toContain("get_ontology_neighbors");
+    expect(prompt).toContain("recall_memory");
+  });
+
+  it("frames other tools as a fallback when the graph has nothing", () => {
+    const prompt = chatSystemPrompt(CTX);
+    expect(prompt).toContain("Only fall back to other tools");
+  });
+});
+
 describe("chatSystemPrompt — connection-create-inline intent", () => {
   const CTX = { orgSlug: "acme", workspaceSlug: "main", orgName: "Acme", workspaceName: "Main" };
 
@@ -133,12 +157,12 @@ describe("chatSystemPrompt — tools/skills/MCP/plugins discoverability", () => 
     // #176 replaced list-then-load discovery with an injected skill index plus
     // agent.skill.load (progressive disclosure); the prompt no longer instructs
     // an explicit agent.skill.list call, so only the load contract is asserted.
-    expect(prompt).toContain("agent.skill.load");
+    expect(prompt).toContain("load_skill");
   });
 
   it("tells the agent MCP servers are available and how to list them", () => {
     const prompt = chatSystemPrompt(CTX);
-    expect(prompt).toContain("agent.mcp.list");
+    expect(prompt).toContain("list_mcp_servers");
     expect(prompt).toMatch(/MCP server/i);
     // External MCP tools surface with the mcp. prefix.
     expect(prompt).toContain("`mcp.`");
@@ -147,7 +171,31 @@ describe("chatSystemPrompt — tools/skills/MCP/plugins discoverability", () => 
   it("tells the agent installed plugins add tools and how to enumerate the live toolset", () => {
     const prompt = chatSystemPrompt(CTX);
     expect(prompt).toMatch(/installed capability plugins/i);
-    expect(prompt).toContain("agent.tool.list");
+    expect(prompt).toContain("list_agent_tools");
+  });
+});
+
+describe("chatSystemPrompt — A2A (Agent2Agent) protocol awareness", () => {
+  const CTX = { orgSlug: "acme", workspaceSlug: "main", orgName: "Acme", workspaceName: "Main" };
+
+  it("documents the A2A section header", () => {
+    expect(chatSystemPrompt(CTX)).toContain("## A2A (Agent2Agent) Protocol");
+  });
+
+  it("explains skillId addressing", () => {
+    const prompt = chatSystemPrompt(CTX);
+    expect(prompt).toContain("message.metadata.skillId");
+  });
+
+  it("explains that an unknown/inactive skillId falls back rather than erroring", () => {
+    const prompt = chatSystemPrompt(CTX);
+    expect(prompt.toLowerCase()).toContain("falls back");
+  });
+
+  it("mentions tasks/resubscribe live-attaching to non-terminal tasks", () => {
+    const prompt = chatSystemPrompt(CTX);
+    expect(prompt).toContain("tasks/resubscribe");
+    expect(prompt.toLowerCase()).toContain("live-attach");
   });
 });
 
@@ -167,5 +215,64 @@ describe("chatSystemPrompt — page form fill guidance", () => {
   it("references the 'Current page form' section marker", () => {
     const prompt = chatSystemPrompt(CTX);
     expect(prompt).toContain("Current page form");
+  });
+});
+
+describe("chatSystemPrompt — memory & self-improvement", () => {
+  const CTX = { orgSlug: "acme", workspaceSlug: "main", orgName: "Acme", workspaceName: "Main" };
+
+  it("documents the memory & self-improvement section header", () => {
+    expect(chatSystemPrompt(CTX)).toContain("## Memory & Self-Improvement");
+  });
+
+  it("references the injected recalled-memory block by its exact header", () => {
+    // Must match the header the chat route injects (recall-context.ts) so the
+    // model recognizes the block it is told to treat as authoritative.
+    expect(chatSystemPrompt(CTX)).toContain(
+      "## Recalled workspace memory (prior sessions)",
+    );
+  });
+
+  it("instructs the agent to record new lessons via agent.memory.remember", () => {
+    const prompt = chatSystemPrompt(CTX);
+    expect(prompt).toContain("save_memory");
+    expect(prompt.toLowerCase()).toContain("root cause");
+  });
+
+  it("tells the agent recalled memory is authoritative and RULEs must not be violated", () => {
+    const prompt = chatSystemPrompt(CTX);
+    expect(prompt.toLowerCase()).toContain("authoritative");
+    expect(prompt).toMatch(/never violate a RULE/i);
+  });
+});
+
+describe("codeModeSystemPrompt", () => {
+  const CTX = { orgSlug: "acme", workspaceSlug: "main", orgName: "Acme", workspaceName: "Main" };
+
+  it("extends the chat baseline with a coding-discipline section", () => {
+    const prompt = codeModeSystemPrompt(CTX);
+    // Superset of the chat baseline...
+    expect(prompt.startsWith(chatSystemPrompt(CTX))).toBe(true);
+    // ...plus the code-mode section and its tools-first discipline.
+    expect(prompt).toContain("Code Mode");
+    for (const tool of ["read_file", "write_file", "edit_file", "grep", "bash", "code_graph"]) {
+      expect(prompt).toContain(tool);
+    }
+    expect(prompt).toMatch(/read before you edit/i);
+    expect(prompt).toMatch(/verify/i);
+  });
+
+  it("is STABLE — no per-turn repo/branch/environment interpolation (ADR-021 §2)", () => {
+    // Same session context ⇒ byte-identical string, so the prompt-cache prefix
+    // stays warm. Repo/branch/env context is injected per-turn as a user
+    // message, never into this cached block.
+    expect(codeModeSystemPrompt(CTX)).toBe(codeModeSystemPrompt(CTX));
+    const prompt = codeModeSystemPrompt(CTX);
+    expect(prompt).not.toMatch(/github\.com\//);
+    expect(prompt).not.toMatch(/\benv_[a-z0-9]/i);
+  });
+
+  it("warns against leaking environment secrets", () => {
+    expect(codeModeSystemPrompt(CTX)).toMatch(/never print secret values/i);
   });
 });

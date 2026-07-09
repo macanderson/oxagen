@@ -74,7 +74,11 @@ vi.mock("react", async (importOriginal) => {
   return { ...actual, cache: (fn: unknown) => fn };
 });
 
-import { resolveOrg, resolveWorkspace } from "./resolve-org";
+import {
+  resolveOrg,
+  resolveOrgWithRedirect,
+  resolveWorkspace,
+} from "./resolve-org";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -106,6 +110,44 @@ describe("resolveOrg", () => {
     setMockRows([]);
     await expect(resolveOrg("nonexistent")).rejects.toThrow("NEXT_NOT_FOUND");
     expect(notFoundMock).toHaveBeenCalledOnce();
+  });
+
+  // (f) Malformed slugs (static/metadata paths that fall through to [orgSlug])
+  // short-circuit to notFound() WITHOUT a DB round-trip. Regression guard for
+  // the production incident where /favicon.ico, /robots.txt were run as org
+  // slug lookups (26 failed queries/12h). — OXA-1779
+  it.each(["favicon.ico", "robots.txt", "sitemap.xml", "apple-touch-icon.png"])(
+    "rejects %s with notFound() and never touches the DB",
+    async (badSlug) => {
+      setMockRows([{ id: "x", publicId: "x", name: "x", slug: badSlug }]);
+      await expect(resolveOrg(badSlug)).rejects.toThrow("NEXT_NOT_FOUND");
+      expect(notFoundMock).toHaveBeenCalledOnce();
+      expect(mockWithSystemDb).not.toHaveBeenCalled();
+    },
+  );
+});
+
+// The layout actually resolves via resolveOrgWithRedirect — assert the guard is
+// present on that (history-aware) path too, so a bad slug skips BOTH the org
+// query and the slug_history fallback query. — OXA-1779
+describe("resolveOrgWithRedirect (guard)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("rejects a dotted path before any DB query", async () => {
+    await expect(resolveOrgWithRedirect("favicon.ico")).rejects.toThrow(
+      "NEXT_NOT_FOUND",
+    );
+    expect(notFoundMock).toHaveBeenCalledOnce();
+    expect(mockWithSystemDb).not.toHaveBeenCalled();
+  });
+
+  it("still queries the DB for a well-formed slug", async () => {
+    setMockRows([{ id: "o1", publicId: "p1", name: "Acme", slug: "acme" }]);
+    const org = await resolveOrgWithRedirect("acme");
+    expect(org.slug).toBe("acme");
+    expect(mockWithSystemDb).toHaveBeenCalled();
   });
 });
 
@@ -225,6 +267,51 @@ describe("assertBillingManager", () => {
   it("null role field → notFound()", async () => {
     setMockRows([{ role: null }]);
     await expect(assertBillingManager("org-1", "user-1")).rejects.toThrow("NEXT_NOT_FOUND");
+    expect(notFoundMock).toHaveBeenCalledOnce();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// assertOrgAdmin
+// ---------------------------------------------------------------------------
+
+// Mirrors ORG_ADMIN_ROLES in resolve-org.ts — any drift causes a test failure.
+const ORG_ADMIN_ROLES = new Set(["owner", "admin"]);
+// billing is intentionally NOT an org admin (it can manage billing only).
+const NON_ADMIN_ROLES = ["billing", "member", "viewer", "guest", "unknown"];
+
+import { assertOrgAdmin } from "./resolve-org";
+
+describe("assertOrgAdmin", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  for (const role of ORG_ADMIN_ROLES) {
+    it(`role '${role}' passes without calling notFound()`, async () => {
+      setMockRows([{ role }]);
+      await expect(assertOrgAdmin("org-1", "user-1")).resolves.toBeUndefined();
+      expect(notFoundMock).not.toHaveBeenCalled();
+    });
+  }
+
+  for (const role of NON_ADMIN_ROLES) {
+    it(`role '${role}' → notFound()`, async () => {
+      setMockRows([{ role }]);
+      await expect(assertOrgAdmin("org-1", "user-1")).rejects.toThrow("NEXT_NOT_FOUND");
+      expect(notFoundMock).toHaveBeenCalledOnce();
+    });
+  }
+
+  it("no row (non-member) → notFound()", async () => {
+    setMockRows([]);
+    await expect(assertOrgAdmin("org-1", "user-x")).rejects.toThrow("NEXT_NOT_FOUND");
+    expect(notFoundMock).toHaveBeenCalledOnce();
+  });
+
+  it("null role field → notFound()", async () => {
+    setMockRows([{ role: null }]);
+    await expect(assertOrgAdmin("org-1", "user-1")).rejects.toThrow("NEXT_NOT_FOUND");
     expect(notFoundMock).toHaveBeenCalledOnce();
   });
 });

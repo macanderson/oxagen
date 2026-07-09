@@ -24,11 +24,11 @@ export const apiKeyRevokeHandler: CapabilityHandler<typeof apiKeyRevoke> = async
   // ── Auth + scope guard ─────────────────────────────────────────────────────
   if (!ctx.userId && !ctx.apiKeyId) {
     logger.warn({ orgId: ctx.orgId }, "api.key.revoke: rejected — no authenticated principal");
-    throw new CapabilityError("api.key.revoke", "authz_denied", "Unauthorized: no authenticated principal");
+    throw new CapabilityError("revoke_api_key", "authz_denied", "Unauthorized: no authenticated principal");
   }
   if (!ctx.orgId) {
     logger.warn({}, "api.key.revoke: rejected — missing orgId");
-    throw new CapabilityError("api.key.revoke", "authz_denied", "Forbidden: orgId is required");
+    throw new CapabilityError("revoke_api_key", "authz_denied", "Forbidden: orgId is required");
   }
 
   const actorId = ctx.userId ?? ctx.apiKeyId ?? "system";
@@ -40,7 +40,7 @@ export const apiKeyRevokeHandler: CapabilityHandler<typeof apiKeyRevoke> = async
       { orgId: ctx.orgId, actorId, actorRole },
       "api.key.revoke: rejected — insufficient org role",
     );
-    throw new CapabilityError("api.key.revoke", "authz_denied", "Forbidden: only org Owners and Admins can revoke API keys");
+    throw new CapabilityError("revoke_api_key", "authz_denied", "Forbidden: only org Owners and Admins can revoke API keys");
   }
 
   const revokedAt = new Date();
@@ -85,7 +85,7 @@ export const apiKeyRevokeHandler: CapabilityHandler<typeof apiKeyRevoke> = async
     actorUserId: ctx.userId ?? null,
     orgId: ctx.orgId,
     workspaceId: null,
-    capability: "api.key.revoke",
+    capability: "revoke_api_key",
     outcome: "success",
     ip: null,
     userAgent: null,

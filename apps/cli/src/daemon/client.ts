@@ -111,7 +111,7 @@ export class DaemonClient {
   async searchCodeGraph(pattern: string, limit = 20, root?: string): Promise<unknown> {
     const response = await this.send({
       id: crypto.randomUUID(),
-      method: "graph.search",
+      method: "search_graph",
       params: { pattern, limit, ...(root ? { root } : {}) },
     });
     if (response.error) throw new Error(response.error.message);
@@ -127,6 +127,47 @@ export class DaemonClient {
       id: crypto.randomUUID(),
       method: "graph.query",
       params: { nodeId, ...opts },
+    });
+    if (response.error) throw new Error(response.error.message);
+    return response.result;
+  }
+
+  /**
+   * Fork a recorded session at a given event index. Sessions are populated
+   * in-memory as `compile()` is called with a `taskFrame.sessionId`; forking
+   * creates a new session sharing that prefix, returned as
+   * `{ sessionId, parentId, forkPoint, status }`.
+   */
+  async forkSession(sessionId: string, forkPoint: number): Promise<unknown> {
+    const response = await this.send({
+      id: crypto.randomUUID(),
+      method: "session.fork",
+      params: { sessionId, forkPoint },
+    });
+    if (response.error) throw new Error(response.error.message);
+    return response.result;
+  }
+
+  /**
+   * Analyze a recorded session for determinism and extract its per-turn
+   * metrics (compile time, tokens, cache hit rate, tool calls, outcome).
+   */
+  async replaySession(sessionId: string): Promise<unknown> {
+    const response = await this.send({
+      id: crypto.randomUUID(),
+      method: "session.replay",
+      params: { sessionId },
+    });
+    if (response.error) throw new Error(response.error.message);
+    return response.result;
+  }
+
+  /** List every session (root or forked) recorded by this daemon instance. */
+  async listSessions(): Promise<unknown> {
+    const response = await this.send({
+      id: crypto.randomUUID(),
+      method: "session.list",
+      params: {},
     });
     if (response.error) throw new Error(response.error.message);
     return response.result;

@@ -19,7 +19,7 @@ export const codePatchFileSchema = z.object({
 });
 
 export const codePatch = registerCapability({
-  name: "code.patch",
+  name: "patch_code",
   domain: "code",
   description:
     "Apply a unified diff to an in-memory, path-confined workspace (path → " +

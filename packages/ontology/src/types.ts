@@ -4,8 +4,8 @@
 // IMPORTANT: NodeLabels contains only FIXED SYSTEM nodes — nodes whose
 // existence is guaranteed by the platform regardless of customer configuration.
 // Customer ontology entity types are free-form strings (e.g. "task", "contact")
-// stored in the ingestion.entity_types registry and carried as the `entityType`
-// property on :EntityNode nodes. They must NOT be added here.
+// carried as the `entityType` property on :EntityNode nodes and observed durably
+// in ClickHouse (internal.graph_observed_labels). They must NOT be added here.
 
 export const NodeLabels = {
   Tenant: "Tenant",
@@ -32,6 +32,10 @@ export const NodeLabels = {
   SkillVersion: "SkillVersion",
   BackgroundTask: "BackgroundTask",
   Plan: "Plan",
+  // Subagent fanout (docs/specs/graph-mediated-fanout-phase2 §2): the origin
+  // node terminal fanout children hang off via [:ORIGINATED_FROM], so "what
+  // did this fanout produce?" is one traversal.
+  Fanout: "Fanout",
   // Ingestion pipeline — fixed system nodes (not customer ontology types).
   // SourceConnection: one node per registered data source connection.
   SourceConnection: "SourceConnection",
@@ -80,6 +84,15 @@ export const EdgeTypes = {
   AUTHORED_BY: "AUTHORED_BY", // document/commit → User
   // Agent coding lineage — written by the in-app coding agent on every turn.
   TOUCHED_FILE: "TOUCHED_FILE", // Execution → SourceFile (file was read/written this turn)
+  // @deprecated Authority moved to the Postgres lease (ADR-021 §5) — a graph
+  // lock is unsound (async sync lag hides it from a concurrent agent). Retained
+  // only for the legacy Neo4j adapter; do not enforce locks on this edge.
+  HOLDS_LOCK: "HOLDS_LOCK", // Agent → SourceFile (legacy graph-backed lock)
+  // Async LINEAGE projection of Postgres file leases (ADR-021 §5). Written
+  // fire-and-forget by agent.project-file-lock-to-graph for hot-file analytics
+  // and conflict prediction — never load-bearing for mutual exclusion. Carries
+  // { holder, action, fencingToken, acquiredAt, releasedAt, executionId }.
+  LOCKED: "LOCKED", // Agent → SourceFile (projected: this agent held a lease on the file)
 } as const;
 export type EdgeType = (typeof EdgeTypes)[keyof typeof EdgeTypes];
 

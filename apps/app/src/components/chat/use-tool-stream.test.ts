@@ -139,7 +139,7 @@ describe("tool-call-start", () => {
       type: "tool-call-start",
       toolCallId: "tc-2",
       messageId: MSG_ID,
-      capability: "web.fetch",
+      capability: "fetch_web_page",
       inputPreview: {},
       riskLevel: "medium",
     }));
@@ -366,7 +366,7 @@ describe("plan-proposed", () => {
       type: "plan-proposed",
       planId: "plan-1",
       title: "Research task",
-      steps: [{ id: "s1", summary: "Look it up", intent: "search", capability: "web.search", dependsOn: [] }],
+      steps: [{ id: "s1", summary: "Look it up", intent: "search", capability: "search_web", dependsOn: [] }],
       rationale: "Because",
     }));
     const p = s.plans["plan-1"];
@@ -406,7 +406,7 @@ describe("subagent-dispatched", () => {
       fanoutId: "fan-1",
       parentMessageId: MSG_ID,
       children: [
-        { childMessageId: "child-1", capability: "web.fetch", label: "Fetch" },
+        { childMessageId: "child-1", capability: "fetch_web_page", label: "Fetch" },
       ],
     }));
     const f = s.activeFanouts["fan-1"];
@@ -422,7 +422,7 @@ describe("subagent-completed", () => {
       type: "subagent-dispatched",
       fanoutId: "fan-1",
       parentMessageId: MSG_ID,
-      children: [{ childMessageId: "child-1", capability: "web.fetch" }],
+      children: [{ childMessageId: "child-1", capability: "fetch_web_page" }],
     }));
     s = reducer(s, event({
       type: "subagent-completed",
@@ -548,6 +548,58 @@ describe("usage event", () => {
     let s = reducer(INITIAL_STATE, event({ type: "usage", usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 } }));
     s = reducer(s, event({ type: "usage", usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 } }));
     expect(s.turnUsage?.totalTokens).toBe(15);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// suggested-prompts event (ephemeral per-turn next-step chips)
+// ---------------------------------------------------------------------------
+
+describe("suggested-prompts event", () => {
+  const trio = [
+    { label: "Turn Into An Agent", prompt: "Create an agent that does this." },
+    { label: "Automate This", prompt: "Automate this on a schedule." },
+    { label: "Add To Graph", prompt: "Wire this into the knowledge graph." },
+  ];
+
+  it("initial state has null suggestedPrompts", () => {
+    expect(INITIAL_STATE.suggestedPrompts).toBeNull();
+  });
+
+  it("stores the suggestions from the event", () => {
+    const s = reducer(
+      INITIAL_STATE,
+      event({ type: "suggested-prompts", suggestions: trio }),
+    );
+    expect(s.suggestedPrompts).toEqual(trio);
+  });
+
+  it("replaces the prior turn's suggestions on a second event", () => {
+    let s = reducer(
+      INITIAL_STATE,
+      event({ type: "suggested-prompts", suggestions: trio }),
+    );
+    const next = [{ label: "Publish It", prompt: "Publish to the marketplace." }];
+    s = reducer(s, event({ type: "suggested-prompts", suggestions: next }));
+    expect(s.suggestedPrompts).toEqual(next);
+  });
+
+  it("ignores an empty payload (keeps prior suggestions)", () => {
+    let s = reducer(
+      INITIAL_STATE,
+      event({ type: "suggested-prompts", suggestions: trio }),
+    );
+    s = reducer(s, event({ type: "suggested-prompts", suggestions: [] }));
+    expect(s.suggestedPrompts).toEqual(trio);
+  });
+
+  it("reset clears suggestedPrompts back to null", () => {
+    let s = reducer(
+      INITIAL_STATE,
+      event({ type: "suggested-prompts", suggestions: trio }),
+    );
+    s = reducer(s, { type: "reset" });
+    expect(s.suggestedPrompts).toBeNull();
   });
 });
 
@@ -760,5 +812,35 @@ describe("unknown event type", () => {
     // Cast to any to inject a fake event type that the switch default handles
     const next = reducer(s, { type: "event", event: { type: "unknown-future-event" } as unknown as StreamEvent });
     expect(next).toBe(s);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// warning events (non-fatal advisories, e.g. persist-to-history failed)
+// ---------------------------------------------------------------------------
+
+describe("warning events", () => {
+  it("stashes turnWarning without marking the turn failed", () => {
+    const s = reducer(
+      INITIAL_STATE,
+      event({ type: "warning", message: "reply not saved", code: "assistant_persist_failed" }),
+    );
+    expect(s.turnWarning).toEqual({ message: "reply not saved", code: "assistant_persist_failed" });
+    // A warning is NON-fatal: it must not populate turnError.
+    expect(s.turnError).toBeUndefined();
+  });
+
+  it("does not clear an in-progress text segment (turn still succeeding)", () => {
+    let s = reducer(INITIAL_STATE, event({ type: "text", messageId: MSG_ID, text: "hi" }));
+    const activeBefore = s.activeTextKey;
+    s = reducer(s, event({ type: "warning", message: "heads up" }));
+    // Unlike an error, a warning leaves the active timeline untouched.
+    expect(s.activeTextKey).toBe(activeBefore);
+    expect(s.textSegments[`text:${MSG_ID}:0`]?.text).toBe("hi");
+  });
+
+  it("omits code when the warning has none", () => {
+    const s = reducer(INITIAL_STATE, event({ type: "warning", message: "just so you know" }));
+    expect(s.turnWarning).toEqual({ message: "just so you know" });
   });
 });

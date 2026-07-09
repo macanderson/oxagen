@@ -123,6 +123,31 @@ describe("capability kernel", () => {
     registerHandler("test.echo", async () => async (i) => i);
     expect(hasHandler("test.echo")).toBe(true);
   });
+
+  // ADR-025: every capability's canonical name is verb-first snake_case and the
+  // registration modules bind their loaders under that same snake name (aliases
+  // were removed). invoke() must resolve the handler by the canonical name —
+  // regression for the "render_agent_ui" no-handler bug that took down prod.
+  it("resolves a handler registered under the canonical snake name", async () => {
+    registerCapability({
+      name: "render_agent_ui",
+      domain: "agent",
+      description: "render",
+      mode: "sync" as const,
+      surfaces: ["agent"] as const,
+      layers: ["unit"] as const,
+      sensitivity: "low" as const,
+      defaultEffect: "deny" as const,
+      defaultRoles: { org: {}, workspace: {} },
+      input: z.object({ componentId: z.string() }),
+      output: z.object({ componentId: z.string() }),
+    });
+    registerHandler("render_agent_ui", async () => async (input) => input);
+    const out = await invoke("render_agent_ui", { componentId: "x" }, ctx, {
+      surface: "agent",
+    });
+    expect(out).toEqual({ componentId: "x" });
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -331,15 +356,263 @@ describe("authorizeExternalCapability", () => {
     expect(events[0]).toMatchObject({ outcome: "deny", errorCode: "authz_denied" });
   });
 
-  it("fails open (allow, no event) when the resolver throws AND enforcement is off", async () => {
+  it("fails closed (deny + emit) when the resolver throws AND enforcement is off (OXA-2056)", async () => {
+    // Regression: a checkFn throw is an evaluation failure, not a policy
+    // decision. It must ALWAYS deny, even when IAM_ENFORCEMENT_ENABLED=false —
+    // the enforcement flag is only allowed to soften an actual "deny" outcome,
+    // never an unevaluated (throw) result. The prior implementation fell
+    // through to an unconditional allow here, silently disabling
+    // authorization for every external-tool call while the resolver errored.
     const events: KernelSecurityEvent[] = [];
     setSecurityEventEmitter((e) => events.push(e));
     setKernelIAMRuntime(throwFn, false);
 
     const res = await authorizeExternalCapability("mcp.github.delete", extCtx, "deny");
 
-    expect(res).toEqual({ allowed: true, outcome: "allow", reason: null });
-    // The throw+enforcement-off branch returns before emitting a security event.
-    expect(events).toHaveLength(0);
+    expect(res).toEqual({ allowed: false, outcome: "deny", reason: "iam_check_error" });
+    expect(events[0]).toMatchObject({ outcome: "deny", errorCode: "authz_denied" });
+  });
+});
+
+// ── invoke() — checkFn throw fails closed regardless of enforcement (OXA-2056) ──
+// The kernel's main dispatch path (invoke()) runs its own copy of the same
+// "checkFn threw" handling as authorizeExternalCapability. Both must fail
+// closed on a throw unconditionally — this exercises the invoke() copy.
+describe("invoke() IAM check throw — fail closed regardless of enforcement", () => {
+  afterEach(() => {
+    clearRegistryForTests();
+    clearHandlersForTests();
+    clearKernelIAMRuntime();
+    clearSecurityEventEmitter();
+  });
+
+  const throwFn: KernelIAMCheckFn = async () => {
+    throw new Error("resolver exploded");
+  };
+
+  it("denies (CapabilityError authz_denied) when checkFn throws AND enforcement is ON", async () => {
+    setKernelIAMRuntime(throwFn, true);
+    echoCap();
+    registerHandler("test.echo", async () => async (input) => input);
+
+    await expect(invoke("test.echo", { value: "hi" }, ctx)).rejects.toMatchObject({
+      code: "authz_denied",
+    });
+  });
+
+  it("denies (CapabilityError authz_denied) when checkFn throws AND enforcement is OFF (OXA-2056)", async () => {
+    // Regression: previously `iamCheckThrew && _iamEnforced` gated the deny,
+    // so a checkFn throw with enforcement OFF silently fell through and ran
+    // the handler — granting access despite IAM being unable to evaluate the
+    // request at all (e.g. IAM tables missing, DB down, resolver bug). A
+    // throw must deny unconditionally, independent of the enforcement flag.
+    const events: KernelSecurityEvent[] = [];
+    setSecurityEventEmitter((e) => events.push(e));
+    setKernelIAMRuntime(throwFn, false);
+    echoCap();
+    registerHandler("test.echo", async () => async (input) => input);
+
+    await expect(invoke("test.echo", { value: "hi" }, ctx)).rejects.toMatchObject({
+      code: "authz_denied",
+    });
+    expect(events.some((e) => e.outcome === "deny" && e.errorCode === "authz_denied")).toBe(
+      true,
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Principal-to-data spine (accountability chain, Epic 1)
+// ---------------------------------------------------------------------------
+
+describe("invoke() principal spine", () => {
+  const PRINCIPAL_ID = "00000000-0000-0000-0000-0000000000e5";
+  const USER_ID = "00000000-0000-0000-0000-0000000000f6";
+  const spineCtx: CapabilityContext = { ...ctx, userId: USER_ID };
+
+  const allowWithPrincipal: KernelIAMCheckFn = async () => ({
+    outcome: "allow",
+    principal: {
+      id: PRINCIPAL_ID,
+      kind: "agent",
+      orgId: spineCtx.orgId,
+      workspaceId: spineCtx.workspaceId,
+    },
+  });
+
+  afterEach(() => {
+    clearRegistryForTests();
+    clearHandlersForTests();
+    clearKernelIAMRuntime();
+    clearSecurityEventEmitter();
+  });
+
+  it("hands the handler a CheckedContext carrying the IAM-resolved principal", async () => {
+    setKernelIAMRuntime(allowWithPrincipal, true);
+    echoCap();
+    let seenPrincipal: unknown = "unset";
+    registerHandler("test.echo", async () => async (input, handlerCtx) => {
+      seenPrincipal = handlerCtx.principal ?? null;
+      return input;
+    });
+
+    await invoke("test.echo", { value: "hi" }, spineCtx);
+    expect(seenPrincipal).toEqual({
+      id: PRINCIPAL_ID,
+      kind: "agent",
+      orgId: spineCtx.orgId,
+      workspaceId: spineCtx.workspaceId,
+    });
+  });
+
+  it("enriches the ambient tenant scope so data-layer writes inherit attribution", async () => {
+    const { getPrincipalAttribution } = await import("@oxagen/tenancy");
+    setKernelIAMRuntime(allowWithPrincipal, true);
+    echoCap();
+    let seen: ReturnType<typeof getPrincipalAttribution> | null = null;
+    registerHandler("test.echo", async () => async (input) => {
+      seen = getPrincipalAttribution();
+      return input;
+    });
+
+    await invoke("test.echo", { value: "hi" }, spineCtx);
+    expect(seen).toEqual({
+      principalId: PRINCIPAL_ID,
+      principalKind: "agent",
+      userId: USER_ID,
+      capabilityName: "test.echo",
+    });
+  });
+
+  it("carries userId + capabilityName even when no IAM runtime is registered", async () => {
+    const { getPrincipalAttribution } = await import("@oxagen/tenancy");
+    echoCap();
+    let seen: ReturnType<typeof getPrincipalAttribution> | null = null;
+    registerHandler("test.echo", async () => async (input) => {
+      seen = getPrincipalAttribution();
+      return input;
+    });
+
+    await invoke("test.echo", { value: "hi" }, spineCtx);
+    expect(seen).toEqual({
+      principalId: null,
+      principalKind: null,
+      userId: USER_ID,
+      capabilityName: "test.echo",
+    });
+  });
+
+  it("drops a non-uuid userId instead of failing the scope entry", async () => {
+    const { getPrincipalAttribution } = await import("@oxagen/tenancy");
+    echoCap();
+    let seen: ReturnType<typeof getPrincipalAttribution> | null = null;
+    registerHandler("test.echo", async () => async (input) => {
+      seen = getPrincipalAttribution();
+      return input;
+    });
+
+    // `ctx` (module fixture) carries userId "u" — not a uuid. The kernel must
+    // treat it as unattributable rather than throwing TenantScopeError.
+    const out = await invoke("test.echo", { value: "hi" }, ctx);
+    expect(out).toEqual({ value: "hi" });
+    expect(seen).toMatchObject({ userId: null, capabilityName: "test.echo" });
+  });
+
+  it("derives the audit target from the contract's declarative audit field", async () => {
+    const targets: Array<{ kind: string; id: string } | null | undefined> = [];
+    const recordingCheck: KernelIAMCheckFn = async (args) => {
+      targets.push(args.target);
+      return { outcome: "allow", principal: null };
+    };
+    setKernelIAMRuntime(recordingCheck, true);
+    registerCapability({
+      name: "test.target",
+      domain: "test",
+      description: "audit target exemplar",
+      mode: "sync" as const,
+      surfaces: ["api"] as const,
+      layers: ["unit"] as const,
+      sensitivity: "low" as const,
+      defaultEffect: "deny" as const,
+      defaultRoles: { org: {}, workspace: {} },
+      audit: { targetKind: "graph.node", targetIdField: "nodeId" },
+      input: z.object({ nodeId: z.string() }),
+      output: z.object({ ok: z.boolean() }),
+    });
+    registerHandler("test.target", async () => async () => ({ ok: true }));
+
+    await invoke("test.target", { nodeId: "node-123" }, spineCtx);
+    expect(targets).toEqual([{ kind: "graph.node", id: "node-123" }]);
+  });
+
+  it("passes a null audit target when the declared input field is absent or empty", async () => {
+    const targets: Array<{ kind: string; id: string } | null | undefined> = [];
+    const recordingCheck: KernelIAMCheckFn = async (args) => {
+      targets.push(args.target);
+      return { outcome: "allow", principal: null };
+    };
+    setKernelIAMRuntime(recordingCheck, true);
+    registerCapability({
+      name: "test.target.optional",
+      domain: "test",
+      description: "audit target with optional id field",
+      mode: "sync" as const,
+      surfaces: ["api"] as const,
+      layers: ["unit"] as const,
+      sensitivity: "low" as const,
+      defaultEffect: "deny" as const,
+      defaultRoles: { org: {}, workspace: {} },
+      audit: { targetKind: "graph.node", targetIdField: "nodeId" },
+      input: z.object({ nodeId: z.string().optional() }),
+      output: z.object({ ok: z.boolean() }),
+    });
+    registerHandler("test.target.optional", async () => async () => ({ ok: true }));
+
+    // Field absent → the declared target must degrade to null, not throw or
+    // fabricate a junk id.
+    await invoke("test.target.optional", {}, spineCtx);
+    // Field present but empty → same null-target degradation (length guard).
+    await invoke("test.target.optional", { nodeId: "" }, spineCtx);
+    expect(targets).toEqual([null, null]);
+  });
+
+  it("drops attribution for a principal whose id is not a uuid (fail-safe, not fail-request)", async () => {
+    const { getPrincipalAttribution } = await import("@oxagen/tenancy");
+    const bogusPrincipalCheck: KernelIAMCheckFn = async () => ({
+      outcome: "allow",
+      principal: {
+        id: "not-a-uuid",
+        kind: "agent",
+        orgId: spineCtx.orgId,
+        workspaceId: spineCtx.workspaceId,
+      },
+    });
+    setKernelIAMRuntime(bogusPrincipalCheck, true);
+    echoCap();
+    let seen: ReturnType<typeof getPrincipalAttribution> | null = null;
+    registerHandler("test.echo", async () => async (input) => {
+      seen = getPrincipalAttribution();
+      return input;
+    });
+
+    // The call must SUCCEED (a malformed principal id must not 500 the
+    // request) while the scope stays unattributed rather than carrying garbage.
+    const out = await invoke("test.echo", { value: "hi" }, spineCtx);
+    expect(out).toEqual({ value: "hi" });
+    expect(seen).toMatchObject({ principalId: null, principalKind: null });
+  });
+
+  it("passes a null audit target when the contract declares none", async () => {
+    const targets: Array<{ kind: string; id: string } | null | undefined> = [];
+    const recordingCheck: KernelIAMCheckFn = async (args) => {
+      targets.push(args.target);
+      return { outcome: "allow", principal: null };
+    };
+    setKernelIAMRuntime(recordingCheck, true);
+    echoCap();
+    registerHandler("test.echo", async () => async (input) => input);
+
+    await invoke("test.echo", { value: "hi" }, spineCtx);
+    expect(targets).toEqual([null]);
   });
 });

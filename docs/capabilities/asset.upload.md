@@ -18,35 +18,62 @@ document, or avatar into the workspace's file store.
 
 ## Input
 
-| Field       | Type                                        | Notes                                                                          |
-| ----------- | ------------------------------------------- | ------------------------------------------------------------------------------ |
-| `sourceUrl` | `string` (URL)                              | Publicly routable `http://` or `https://` URL. Private IPs / localhost blocked. |
-| `kind`      | `"avatar" \| "image" \| "document"`         | Determines allowed content types and size limit.                               |
-| `filename`  | `string` (1–200 chars) — optional           | Original filename for display only; never influences the storage path.         |
+| Field            | Type                                            | Notes                                                                          |
+| ---------------- | ----------------------------------------------- | ------------------------------------------------------------------------------ |
+| `sourceUrl`      | `string` (URL)                                  | Publicly routable `http://` or `https://` URL. Private IPs / localhost blocked. |
+| `kind`           | `"avatar" \| "image" \| "document" \| "video"`  | Determines allowed content types and size limit.                               |
+| `filename`       | `string` (1–200 chars) — optional               | Original filename for display only; never influences the storage path.         |
+| `source`         | `"user_upload"` — optional                      | Omit for a pure public-blob ingest (no DB row). Pass `"user_upload"` to record a private `generated_assets` attachment row. See **User-upload mode** below. |
+| `conversationId` | `string` — optional                             | Conversation public ID to link the asset to. Requires `source: "user_upload"`. |
 
 ### Kind limits
 
-| Kind       | Max size | Allowed MIME types                          |
-| ---------- | -------- | ------------------------------------------- |
-| `avatar`   | 5 MiB    | `image/webp`, `image/png`, `image/jpeg`     |
-| `image`    | 5 MiB    | `image/webp`, `image/png`, `image/jpeg`     |
-| `document` | 25 MiB   | `image/webp`, `image/png`, `image/jpeg`, `application/pdf` |
+| Kind       | Max size | Allowed MIME types                                          |
+| ---------- | -------- | ---------------------------------------------------------- |
+| `avatar`   | 5 MiB    | `image/webp`, `image/png`, `image/jpeg`                    |
+| `image`    | 5 MiB    | `image/webp`, `image/png`, `image/jpeg`, `image/gif`       |
+| `document` | 25 MiB   | `image/webp`, `image/png`, `image/jpeg`, `image/gif`, `application/pdf` |
+| `video`    | 100 MiB  | `video/mp4`, `video/webm`, `video/quicktime`               |
 
 ## Output
 
-| Field         | Type                     | Notes                                                     |
-| ------------- | ------------------------ | --------------------------------------------------------- |
-| `url`         | `string` (URL)           | Public CDN URL the stored asset is served from.           |
-| `key`         | `string`                 | Canonical storage key, e.g. `image/org-123/uuid.webp`.   |
-| `contentType` | `string`                 | MIME type of the stored object.                           |
-| `bytes`       | `number` (integer ≥ 0)   | Byte size written — useful for quota accounting.          |
+| Field         | Type                     | Notes                                                                                                 |
+| ------------- | ------------------------ | ----------------------------------------------------------------------------------------------------- |
+| `url`         | `string`                 | Legacy path: public CDN URL. User-upload path: the relative, access-controlled `/api/v1/assets/:publicId` serving path (the underlying blob is private). |
+| `key`         | `string`                 | Canonical storage key, e.g. `image/org-123/uuid.webp`.                                                 |
+| `contentType` | `string`                 | MIME type of the stored object.                                                                       |
+| `bytes`       | `number` (integer ≥ 0)   | Byte size written — useful for quota accounting.                                                       |
+| `publicId`    | `string \| null`         | Public id (`gen_…`) of the recorded `generated_assets` row. Null unless `source: "user_upload"`.      |
+
+## User-upload mode (`source: "user_upload"`)
+
+The default (no `source`) is the legacy pure blob-ingest: a **public** blob and
+no Postgres row — backward compatible with every existing avatar/image/document
+caller (`publicId` comes back `null`).
+
+Passing `source: "user_upload"` additionally records a `generated_assets`
+reference row so the asset behaves like any other conversation asset:
+
+- Blob stored with **private** access (never a publicly-guessable CDN URL);
+  served exclusively through the access-controlled `/api/v1/assets/:publicId`
+  route.
+- Row recorded with `source = 'user_upload'`, `prompt = ''`, `model = ''`,
+  `accessPolicy = 'org'`, via the shared `persistGeneratedAsset` chokepoint.
+- Appears in `conversation.files.list` (when linked via `conversationId`) and
+  can be linked later with `conversation.attachment.add`.
+
+Not supported for `kind: "avatar"`, and requires an authenticated user (an
+API-key-only principal is rejected — the row needs an owning `userId`).
 
 ## Side effects
 
-- Object storage: one write via `storage().put()` (Vercel Blob, `access: "public"`).
-- Postgres: none (the caller is responsible for persisting the `url`/`key` reference row).
+- Object storage: one write via `storage().put()` — `access: "public"` for the
+  legacy path, `access: "private"` for `source: "user_upload"`.
+- Postgres: none for the legacy path; one `generated_assets` insert for
+  `source: "user_upload"` (the reference row per the four-store model).
 - ClickHouse: kernel security event emitted on every invocation (allow/deny).
-- Neo4j: none.
+- Neo4j: async best-effort `:GeneratedFile` sync for user-upload rows (via the
+  shared persistence chokepoint); none for the legacy path.
 
 ## Surfaces
 
@@ -88,6 +115,9 @@ request:
 | HTTP error from source URL         | `asset.upload: source URL responded with HTTP NNN` |
 | Unsupported content type           | `Unsupported <kind> type "…". Permitted types: …`  |
 | Asset too large                    | `Asset exceeds the N byte limit (M MiB) for kind …`|
+| `user_upload` with `kind: avatar`  | `asset.upload: source "user_upload" is not supported for kind "avatar"` |
+| `user_upload` without a user       | `asset.upload: source "user_upload" requires an authenticated user …` |
+| `conversationId` without `source`  | `asset.upload: conversationId requires source "user_upload"` |
 
 ## SPEC references
 

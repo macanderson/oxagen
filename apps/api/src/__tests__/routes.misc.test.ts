@@ -110,9 +110,9 @@ describe("archive.create route", () => {
     expect(res.status).toBe(200);
   });
 
-  it("calls invoke with 'archive.create'", async () => {
+  it("calls invoke with 'create_archive'", async () => {
     await app.fetch(post(PATH, VALID_BODY));
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("archive.create");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("create_archive");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.archiveName).toBe("my-archive");
@@ -137,9 +137,9 @@ describe("asset.upload route", () => {
     expect(res.status).toBe(200);
   });
 
-  it("calls invoke with 'asset.upload'", async () => {
+  it("calls invoke with 'upload_asset'", async () => {
     await app.fetch(post(PATH, VALID_BODY));
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("asset.upload");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("upload_asset");
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.kind).toBe("image");
     expect(body.sourceUrl).toBe("https://example.com/image.png");
@@ -147,7 +147,7 @@ describe("asset.upload route", () => {
 
   it("invalid kind → 400", async () => {
     const res = await app.fetch(
-      post(PATH, { sourceUrl: "https://example.com/f.mp4", kind: "video" }),
+      post(PATH, { sourceUrl: "https://example.com/f.mp4", kind: "audio" }),
     );
     expect(res.status).toBe(400);
     expect(mocks.invoke).not.toHaveBeenCalled();
@@ -172,9 +172,9 @@ describe("form.fill route", () => {
     expect(res.status).toBe(200);
   });
 
-  it("calls invoke with 'form.fill'", async () => {
+  it("calls invoke with 'fill_form'", async () => {
     await app.fetch(post(PATH, VALID_BODY));
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("form.fill");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("fill_form");
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.instruction).toBe("Set name to Acme");
     expect(Array.isArray(body.fields)).toBe(true);
@@ -203,9 +203,9 @@ describe("image.generate route", () => {
     expect(res.status).toBe(200);
   });
 
-  it("calls invoke with 'image.generate'", async () => {
+  it("calls invoke with 'generate_image'", async () => {
     await app.fetch(post(PATH, { prompt: "A cat" }));
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("image.generate");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("generate_image");
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.prompt).toBe("A cat");
   });
@@ -232,9 +232,9 @@ describe("svg.generate route", () => {
     expect(res.status).toBe(200);
   });
 
-  it("calls invoke with 'svg.generate'", async () => {
+  it("calls invoke with 'generate_svg'", async () => {
     await app.fetch(post(PATH, { prompt: "A triangle" }));
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("svg.generate");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("generate_svg");
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.prompt).toBe("A triangle");
   });
@@ -253,9 +253,9 @@ describe("video.generate route", () => {
     expect(res.status).toBe(200);
   });
 
-  it("calls invoke with 'video.generate'", async () => {
+  it("calls invoke with 'generate_video'", async () => {
     await app.fetch(post(PATH, { prompt: "Ocean waves", durationSeconds: 10 }));
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("video.generate");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("generate_video");
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.durationSeconds).toBe(10);
   });
@@ -290,9 +290,9 @@ describe("documents.generate route", () => {
     expect(res.status).toBe(200);
   });
 
-  it("calls invoke with 'documents.generate'", async () => {
+  it("calls invoke with 'generate_document'", async () => {
     await app.fetch(post(PATH, VALID_BODY));
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("documents.generate");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("generate_document");
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.kind).toBe("document");
     expect(body.title).toBe("Q1 Report");
@@ -327,9 +327,9 @@ describe("documents.pdf.create route", () => {
     expect(res.status).toBe(200);
   });
 
-  it("calls invoke with 'documents.pdf.create'", async () => {
+  it("calls invoke with 'create_pdf'", async () => {
     await app.fetch(post(PATH, VALID_BODY));
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("documents.pdf.create");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("create_pdf");
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.title).toBe("My PDF");
   });
@@ -358,9 +358,9 @@ describe("system.install.instructions route", () => {
     expect(res.status).toBe(200);
   });
 
-  it("calls invoke with 'system.install.instructions'", async () => {
+  it("calls invoke with 'get_install_instructions'", async () => {
     await app.fetch(post(PATH, { client: "cursor", workspaceSlug: "my-ws" }));
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("system.install.instructions");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("get_install_instructions");
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.client).toBe("cursor");
     expect(body.workspaceSlug).toBe("my-ws");
@@ -378,9 +378,9 @@ describe("workflow.run route", () => {
     expect(res.status).toBe(200);
   });
 
-  it("calls invoke with 'workflow.run'", async () => {
+  it("calls invoke with 'run_workflow'", async () => {
     await app.fetch(post(PATH, { goal: "Do research", maxParallelism: 5 }));
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("workflow.run");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("run_workflow");
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.goal).toBe("Do research");
     expect(body.maxParallelism).toBe(5);
@@ -403,9 +403,9 @@ describe("workflow.status route", () => {
     expect(res.status).toBe(200);
   });
 
-  it("calls invoke with 'workflow.status' and workflowId", async () => {
+  it("calls invoke with 'get_workflow_status' and workflowId", async () => {
     await app.fetch(get(PATH));
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("workflow.status");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("get_workflow_status");
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.workflowId).toBe(workflowId);
   });
@@ -426,14 +426,14 @@ describe("workflow.cancel route", () => {
     expect(res.status).toBe(200);
   });
 
-  it("calls invoke with 'workflow.cancel' and workflowId", async () => {
+  it("calls invoke with 'cancel_workflow' and workflowId", async () => {
     await app.fetch(
       makeRequest(`${BASE}${PATH}`, {
         method: "DELETE",
         headers: authHeaders(),
       }),
     );
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("workflow.cancel");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("cancel_workflow");
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.workflowId).toBe(workflowId);
   });

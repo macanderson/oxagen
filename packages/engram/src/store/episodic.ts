@@ -1,9 +1,12 @@
 /**
  * Episodic store interface.
  *
- * The store is append-only — records are never updated or deleted through
- * this interface. Eviction is handled by the consolidation pipeline (Phase D)
- * which operates at a higher level.
+ * The hot path is append-only — records are written once and never mutated
+ * during a turn. The ONLY sanctioned mutations are the offline consolidation
+ * pipeline's (Phase D): reconciling salience/confidence from observed outcomes
+ * and evicting TTL-expired records. Those live behind the explicit
+ * `updateSalience` / `updateConfidence` / `evictExpired` methods below; nothing
+ * on the read/write turn path calls them.
  */
 import type { MemoryRecord, Namespace, RecordKind } from "../types";
 
@@ -48,6 +51,46 @@ export interface EpisodicStore {
 
   /** Get the most recent records in a namespace, optionally filtered by salience. */
   recent(namespace: Namespace, limit: number, minSalience?: number): Promise<MemoryRecord[]>;
+
+  /**
+   * Lexical/full-text search over record bodies, scoped to `namespace`.
+   * Scores each record by the fraction of query tokens matched via a
+   * case-insensitive substring test (0.0-1.0) — real term-frequency recall
+   * for exact matches (error messages, function names, file paths, stack
+   * traces) that vector similarity alone misses. Backs
+   * `LexicalRetrievalEngine`'s injected `LexicalSearchFn`. DuckDB implements
+   * this with `contains()` over the JSON body cast to text; ClickHouse with
+   * `positionCaseInsensitive()`.
+   */
+  searchLexical(
+    namespace: Namespace,
+    query: string,
+    limit: number,
+  ): Promise<Array<{ recordId: string; score: number }>>;
+
+  /**
+   * Distinct namespaces (org + workspace) that have records in the store. Used
+   * by the consolidation job to iterate every workspace with activity.
+   */
+  listNamespaces(): Promise<Namespace[]>;
+
+  /**
+   * Consolidation-only: set a record's salience in place. The id is unchanged
+   * (salience is not part of the content hash). No-op if the id is absent.
+   */
+  updateSalience(id: string, salience: number): Promise<void>;
+
+  /**
+   * Consolidation-only: set a record's confidence in place (id unchanged).
+   * No-op if the id is absent.
+   */
+  updateConfidence(id: string, confidence: number): Promise<void>;
+
+  /**
+   * Consolidation-only: evict records in `namespace` whose TTL has passed
+   * (`ttl > 0 && ttl <= now`). Returns the number of records evicted.
+   */
+  evictExpired(namespace: Namespace, now: number): Promise<number>;
 
   /** Close the store connection and release resources. */
   close(): Promise<void>;

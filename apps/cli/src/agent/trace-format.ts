@@ -27,9 +27,13 @@ function shortModel(model: string | undefined): string {
   return model ? model.split("/").pop() ?? model : "—";
 }
 
+// Exported so a test can assert this Record<StageKind, ...> map stays exhaustive
+// as the canonical StageKind union (re-exported from @oxagen/agent-engine via
+// ./trace.js) evolves — see __tests__/stage-kind-exhaustive.test.ts.
 /** Human label for a phase in the verbose breakdown. */
-const PHASE_LABEL: Record<PhaseStat["phase"], string> = {
+export const PHASE_LABEL: Record<PhaseStat["phase"], string> = {
   evaluate: "prompt eval",
+  plan: "task plan",
   enhance: "context gather",
   route: "route",
   execute: "WORK (code)",

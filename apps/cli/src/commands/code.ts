@@ -1,12 +1,24 @@
 /**
- * `oxagen code …` — sandboxed code utilities (diff, patch, format) over the
- * org-scoped /v1 API. Thin shell: each command reads/writes local files and
- * delegates the actual computation to the code.diff / code.patch / code.format
- * capabilities so the CLI stays in parity with the API, MCP, and agent surfaces.
+ * `oxagen code …` — sandboxed code utilities (diff, patch, format) plus
+ * semantic code-map retrieval over the org-scoped /v1 API. Thin shell: each
+ * command reads/writes local files and delegates the actual computation to the
+ * code.diff / code.patch / code.format / code.map capabilities so the CLI stays
+ * in parity with the API, MCP, and agent surfaces.
+ *
+ * Output discipline (ADR-023 §4): stdout carries ONLY the answer — the diff, the
+ * formatted source, the patched-file list, or the code-map (and with `--json`,
+ * one single-line JSON value of the capability response). Progress and summaries
+ * ("no changes", the +/- change count, apply/dry-run notes, the file-write
+ * confirmation, "no files matched") go to stderr via out.info; every failure is
+ * a uniform stderr error line with an exit code (2 usage / 1 runtime) and
+ * nothing on stdout. Each handler takes an optional trailing CommandWriter, so
+ * it runs inline under the REPL's capture seam without touching process.stdout.
  */
 import { readFileSync, writeFileSync, existsSync, mkdirSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { apiPost } from "../lib/api.js";
+import { apiPostOrThrow } from "../lib/api.js";
+import { createOutput } from "../lib/output.js";
+import { stdoutWriter, type CommandWriter } from "../lib/capture-writer.js";
 
 interface DiffResponse {
   diff: string;
@@ -36,63 +48,99 @@ interface PatchResponse {
 export async function handleCodeDiff(
   beforeFile: string,
   afterFile: string,
-  opts: { path?: string; context?: string },
+  opts: { path?: string; context?: string; json?: boolean },
+  writer: CommandWriter = stdoutWriter,
 ): Promise<void> {
+  const out = createOutput({ json: opts.json }, writer);
   const before = readFileSync(beforeFile, "utf8");
   const after = readFileSync(afterFile, "utf8");
   const body: Record<string, unknown> = { before, after };
   if (opts.path) body.path = opts.path;
   if (opts.context !== undefined) body.contextLines = parseInt(opts.context, 10);
 
-  const res = await apiPost<DiffResponse>("code/diff", body);
-  if (!res.changed) {
-    process.stderr.write("(no changes)\n");
+  let res: DiffResponse;
+  try {
+    res = await apiPostOrThrow<DiffResponse>("code/diff", body);
+  } catch (err) {
+    out.error(err, "api");
     return;
   }
-  process.stdout.write(res.diff);
-  process.stderr.write(`\n+${res.additions} -${res.deletions}\n`);
+
+  if (out.isJson) {
+    out.data(res);
+    return;
+  }
+  if (!res.changed) {
+    out.info("(no changes)");
+    return;
+  }
+  writer.write(res.diff); // the unified diff IS the answer → stdout
+  out.info(`+${res.additions} -${res.deletions}`); // change summary → stderr
 }
 
 export async function handleCodeFormat(
   file: string,
-  opts: { language?: string; indent?: string; write?: boolean },
+  opts: { language?: string; indent?: string; write?: boolean; json?: boolean },
+  writer: CommandWriter = stdoutWriter,
 ): Promise<void> {
+  const out = createOutput({ json: opts.json }, writer);
   const source = readFileSync(file, "utf8");
   const language = opts.language ?? inferLanguage(file);
   if (!language) {
-    process.stderr.write(
-      `Could not infer language for ${file}; pass --language json|python.\n`,
+    process.exitCode = 2;
+    out.error(
+      `Could not infer language for ${file}; pass --language json|python.`,
+      "usage",
     );
-    process.exit(1);
+    return;
   }
 
   const body: Record<string, unknown> = { language, source };
   if (opts.indent !== undefined) body.indent = parseInt(opts.indent, 10);
 
-  const res = await apiPost<FormatResponse>("code/format", body);
+  let res: FormatResponse;
+  try {
+    res = await apiPostOrThrow<FormatResponse>("code/format", body);
+  } catch (err) {
+    out.error(err, "api");
+    return;
+  }
+
   if (opts.write) {
     writeFileSync(file, res.formatted);
-    process.stderr.write(
-      `✓ formatted ${file}${res.changed ? "" : " (already formatted)"}\n`,
-    );
-  } else {
-    process.stdout.write(res.formatted);
+    if (out.isJson) {
+      out.data(res);
+      return;
+    }
+    // Formatted source went back to the file; keep stdout machine-pure and
+    // report the write as progress on stderr.
+    out.info(`✓ formatted ${file}${res.changed ? "" : " (already formatted)"}`);
+    return;
   }
+
+  out.data(res, () => res.formatted); // formatted source IS the answer → stdout
 }
 
 export async function handleCodePatch(
   diffFile: string,
-  opts: { dir?: string; write?: boolean },
+  opts: { dir?: string; write?: boolean; json?: boolean },
+  writer: CommandWriter = stdoutWriter,
 ): Promise<void> {
+  const out = createOutput({ json: opts.json }, writer);
   const diff = readFileSync(diffFile, "utf8");
   const dir = opts.dir ?? ".";
   const files = readWorkspaceForDiff(diff, dir);
 
-  const res = await apiPost<PatchResponse>("code/patch", { files, diff });
-  for (const f of res.files) {
-    process.stdout.write(`${f.status.padEnd(8)} ${f.path}\n`);
+  let res: PatchResponse;
+  try {
+    res = await apiPostOrThrow<PatchResponse>("code/patch", { files, diff });
+  } catch (err) {
+    out.error(err, "api");
+    return;
   }
 
+  // Apply the patch to disk when requested — a side-effect independent of the
+  // chosen output format (JSON callers still get the files written).
   if (opts.write) {
     for (const f of res.files) {
       const abs = join(dir, f.path);
@@ -103,10 +151,23 @@ export async function handleCodePatch(
         writeFileSync(abs, f.content);
       }
     }
-    process.stderr.write(`✓ applied ${res.changedCount} file(s) to ${dir}\n`);
+  }
+
+  if (out.isJson) {
+    out.data(res);
+    return;
+  }
+
+  // Pretty: the changed-file list is the answer → stdout…
+  for (const f of res.files) {
+    writer.write(`${f.status.padEnd(8)} ${f.path}`);
+  }
+  // …and the apply/dry-run outcome is progress → stderr.
+  if (opts.write) {
+    out.info(`✓ applied ${res.changedCount} file(s) to ${dir}`);
   } else {
-    process.stderr.write(
-      `(dry run — re-run with --write to apply ${res.changedCount} change(s))\n`,
+    out.info(
+      `(dry run — re-run with --write to apply ${res.changedCount} change(s))`,
     );
   }
 }
@@ -150,60 +211,77 @@ interface CodeMapResponse {
 export async function handleCodeMap(
   query: string,
   opts: { limit?: string; kinds?: string; domain?: string; json?: boolean },
+  writer: CommandWriter = stdoutWriter,
 ): Promise<void> {
+  const out = createOutput({ json: opts.json }, writer);
   const body: Record<string, unknown> = { query };
   if (opts.limit !== undefined) body.limit = parseInt(opts.limit, 10);
   if (opts.domain) body.domain = opts.domain;
   if (opts.kinds) body.kinds = opts.kinds.split(",").map((k) => k.trim());
 
-  const res = await apiPost<CodeMapResponse>("code/map", body);
-
-  if (opts.json) {
-    process.stdout.write(JSON.stringify(res, null, 2) + "\n");
+  let res: CodeMapResponse;
+  try {
+    res = await apiPostOrThrow<CodeMapResponse>("code/map", body);
+  } catch (err) {
+    out.error(err, "api");
     return;
   }
 
-  // Human-readable output
+  if (out.isJson) {
+    out.data(res);
+    return;
+  }
+
   if (res.files.length === 0) {
-    process.stderr.write(`No files matched "${query}"\n`);
+    out.info(`No files matched "${query}"`);
     return;
   }
 
-  process.stdout.write(`\nCode map for: ${query}\n`);
-  process.stdout.write("─".repeat(60) + "\n");
+  writer.write(prettyMap(query, res)); // the human code-map IS the answer → stdout
+}
 
-  process.stdout.write(`\nFiles (${res.files.length}):\n`);
+/** Render a code-map as the human-readable report (pretty-mode answer). */
+function prettyMap(query: string, res: CodeMapResponse): string {
+  const lines: string[] = [];
+  lines.push(`\nCode map for: ${query}`);
+  lines.push("─".repeat(60));
+
+  lines.push(`\nFiles (${res.files.length}):`);
   for (const f of res.files) {
     const domain = f.domain ? ` [${f.domain}]` : "";
     const score = `${(f.score * 100).toFixed(0)}%`;
-    process.stdout.write(`  ${f.path}${domain}  ${score}\n`);
+    lines.push(`  ${f.path}${domain}  ${score}`);
   }
 
   if (res.symbols.length > 0) {
-    process.stdout.write(`\nSymbols (${res.symbols.length}):\n`);
+    lines.push(`\nSymbols (${res.symbols.length}):`);
     for (const s of res.symbols) {
       const line = `${s.startLine}:${s.endLine}`;
-      process.stdout.write(`  ${s.kind.padEnd(10)} ${s.name}  (${s.path}:${line})\n`);
+      lines.push(`  ${s.kind.padEnd(10)} ${s.name}  (${s.path}:${line})`);
       if (s.docComment) {
-        process.stdout.write(`             ${s.docComment.slice(0, 80)}\n`);
+        lines.push(`             ${s.docComment.slice(0, 80)}`);
       }
     }
   }
 
   if (res.calls.length > 0) {
-    process.stdout.write(`\nCall edges (${res.calls.length}):\n`);
+    lines.push(`\nCall edges (${res.calls.length}):`);
     for (const c of res.calls) {
-      process.stdout.write(`  ${c.callerName} → ${c.calleeName}\n`);
+      lines.push(`  ${c.callerName} → ${c.calleeName}`);
     }
   }
 
   if (res.recentChanges.length > 0) {
-    process.stdout.write(`\nRecent changes (${res.recentChanges.length}):\n`);
+    lines.push(`\nRecent changes (${res.recentChanges.length}):`);
     for (const ch of res.recentChanges) {
       const date = ch.committedAt.slice(0, 10);
-      process.stdout.write(`  ${ch.commitSha.slice(0, 8)}  ${date}  ${ch.authorName}  ${ch.message.split("\n")[0]?.slice(0, 60) ?? ""}\n`);
+      lines.push(
+        `  ${ch.commitSha.slice(0, 8)}  ${date}  ${ch.authorName}  ${ch.message.split("\n")[0]?.slice(0, 60) ?? ""}`,
+      );
     }
   }
+
+  return lines.join("\n");
 }
 
 /** json from .json, python from .py; undefined when unknown. */

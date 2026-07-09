@@ -53,6 +53,8 @@ export {
   writeStarterSettings,
   readScopeDoc,
   writeScopeDoc,
+  envVarForSettingsKey,
+  shellShadowsSettingsKey,
   SETTABLE_KEYS,
   type WriteValueOptions,
   type InitOptions,

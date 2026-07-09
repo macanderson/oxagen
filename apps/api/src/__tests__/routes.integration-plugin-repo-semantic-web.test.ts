@@ -116,10 +116,10 @@ describe("integration.install route", () => {
     expect(res.status).toBe(202);
   });
 
-  it("calls invoke with 'integration.install' and { surface: 'api' }", async () => {
+  it("calls invoke with 'install_integration' and { surface: 'api' }", async () => {
     await authPost(PATH, { pluginId: "github", config: { org: "acme" }, displayName: "My GitHub" });
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("integration.install");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("install_integration");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
     const input = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(input.pluginId).toBe("github");
@@ -144,9 +144,9 @@ describe("integration.list route", () => {
     expect(await res.json()).toEqual({ integrations: [], total: 0, hasMore: false });
   });
 
-  it("calls invoke with 'integration.list' and { surface: 'api' }", async () => {
+  it("calls invoke with 'list_integrations' and { surface: 'api' }", async () => {
     await authGet(`${PATH}?pluginId=github&limit=10&offset=0`);
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("integration.list");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("list_integrations");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
     const input = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(input.pluginId).toBe("github");
@@ -169,9 +169,9 @@ describe("integration.get route", () => {
     expect(res.status).toBe(200);
   });
 
-  it("calls invoke with 'integration.get' and integrationId from path", async () => {
+  it("calls invoke with 'get_integration' and integrationId from path", async () => {
     await authGet("/integrations/int-abc");
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("integration.get");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("get_integration");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
     const input = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(input.integrationId).toBe("int-abc");
@@ -187,9 +187,9 @@ describe("integration.configure route", () => {
     expect(res.status).toBe(200);
   });
 
-  it("calls invoke with 'integration.configure' and merges path id", async () => {
+  it("calls invoke with 'configure_integration' and merges path id", async () => {
     await authPatch("/integrations/int-xyz/configure", { inferenceEnabled: false });
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("integration.configure");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("configure_integration");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
     const input = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(input.integrationId).toBe("int-xyz");
@@ -206,9 +206,9 @@ describe("integration.sync route", () => {
     expect(res.status).toBe(202);
   });
 
-  it("calls invoke with 'integration.sync' and integrationId from path", async () => {
+  it("calls invoke with 'sync_integration' and integrationId from path", async () => {
     await authPost("/integrations/int-2/sync", {});
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("integration.sync");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("sync_integration");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
     const input = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(input.integrationId).toBe("int-2");
@@ -224,9 +224,9 @@ describe("integration.metrics route", () => {
     expect(res.status).toBe(200);
   });
 
-  it("calls invoke with 'integration.metrics' and integrationId from path", async () => {
+  it("calls invoke with 'get_integration_metrics' and integrationId from path", async () => {
     await authGet("/integrations/int-abc/metrics");
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("integration.metrics");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("get_integration_metrics");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
     const input = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(input.integrationId).toBe("int-abc");
@@ -242,9 +242,9 @@ describe("integration.delete route", () => {
     expect(res.status).toBe(202);
   });
 
-  it("calls invoke with 'integration.delete' and integrationId from path", async () => {
+  it("calls invoke with 'delete_integration' and integrationId from path", async () => {
     await authDelete("/integrations/int-del");
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("integration.delete");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("delete_integration");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
     const input = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(input.integrationId).toBe("int-del");
@@ -269,9 +269,9 @@ describe("plugin.schema.get route", () => {
     expect(res.status).toBe(200);
   });
 
-  it("calls invoke with 'plugin.schema.get' and pluginId from path", async () => {
+  it("calls invoke with 'get_plugin_schema' and pluginId from path", async () => {
     await authGet("/plugin-schema/google-drive");
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("plugin.schema.get");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("get_plugin_schema");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
     const input = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(input.pluginId).toBe("google-drive");
@@ -289,9 +289,9 @@ describe("plugin.schema.validate route", () => {
     expect(body.valid).toBe(true);
   });
 
-  it("calls invoke with 'plugin.schema.validate' and merges path pluginId", async () => {
+  it("calls invoke with 'validate_plugin_schema' and merges path pluginId", async () => {
     await authPost("/plugin-schema/slack/validate", { config: { token: "xoxb-123" } });
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("plugin.schema.validate");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("validate_plugin_schema");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
     const input = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(input.pluginId).toBe("slack");
@@ -314,9 +314,9 @@ describe("plugin.version.list route", () => {
     expect(res.status).toBe(200);
   });
 
-  it("calls invoke with 'plugin.version.list' and pluginId from path", async () => {
+  it("calls invoke with 'list_plugin_versions' and pluginId from path", async () => {
     await authGet("/plugin-versions/slack?limit=5&includeChangelog=true");
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("plugin.version.list");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("list_plugin_versions");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
     const input = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(input.pluginId).toBe("slack");
@@ -334,9 +334,9 @@ describe("repo.configure route", () => {
     expect(res.status).toBe(200);
   });
 
-  it("calls invoke with 'repo.configure' and repoId from path", async () => {
+  it("calls invoke with 'configure_repo' and repoId from path", async () => {
     await authPatch("/repos/repo-xyz/configure", { inferenceEnabled: false });
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("repo.configure");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("configure_repo");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
     const input = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(input.repoId).toBe("repo-xyz");
@@ -353,9 +353,9 @@ describe("repo.sync route", () => {
     expect(res.status).toBe(202);
   });
 
-  it("calls invoke with 'repo.sync' and repoId from path", async () => {
+  it("calls invoke with 'sync_repo' and repoId from path", async () => {
     await authPost("/repos/repo-abc/sync", { mode: "full" });
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("repo.sync");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("sync_repo");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
     const input = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(input.repoId).toBe("repo-abc");
@@ -371,9 +371,9 @@ describe("repo.pause route", () => {
     expect(res.status).toBe(200);
   });
 
-  it("calls invoke with 'repo.pause' and repoId from path", async () => {
+  it("calls invoke with 'pause_repo' and repoId from path", async () => {
     await authPost("/repos/repo-pause-me/pause", {});
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("repo.pause");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("pause_repo");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
     const input = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(input.repoId).toBe("repo-pause-me");
@@ -389,9 +389,9 @@ describe("repo.resume route", () => {
     expect(res.status).toBe(200);
   });
 
-  it("calls invoke with 'repo.resume' and repoId from path", async () => {
+  it("calls invoke with 'resume_repo' and repoId from path", async () => {
     await authPost("/repos/repo-resume-me/resume", {});
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("repo.resume");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("resume_repo");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
     const input = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(input.repoId).toBe("repo-resume-me");
@@ -407,9 +407,9 @@ describe("repo.metrics route", () => {
     expect(res.status).toBe(200);
   });
 
-  it("calls invoke with 'repo.metrics' and repoId from path", async () => {
+  it("calls invoke with 'get_repo_metrics' and repoId from path", async () => {
     await authGet("/repos/repo-met/metrics");
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("repo.metrics");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("get_repo_metrics");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
     const input = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(input.repoId).toBe("repo-met");
@@ -431,9 +431,9 @@ describe("repo.create route", () => {
     expect(body.defaultBranch).toBe("main");
   });
 
-  it("calls invoke with 'repo.create' and { surface: 'api' }", async () => {
+  it("calls invoke with 'create_repo' and { surface: 'api' }", async () => {
     await authPost("/repos", { org: "acme", name: "new-repo", private: true, autoInit: true });
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("repo.create");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("create_repo");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
     const input = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(input.org).toBe("acme");
@@ -473,9 +473,9 @@ describe("repo.fork route", () => {
     expect(body.fullName).toBe("acme/openai-node");
   });
 
-  it("calls invoke with 'repo.fork' and { surface: 'api' }", async () => {
+  it("calls invoke with 'fork_repo' and { surface: 'api' }", async () => {
     await authPost("/repos/fork", { owner: "openai", repo: "openai-node", intoOrg: "acme" });
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("repo.fork");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("fork_repo");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
     const input = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(input.owner).toBe("openai");
@@ -504,9 +504,9 @@ describe("repo.file.put route", () => {
     expect(body.htmlUrl).toContain("github.com");
   });
 
-  it("calls invoke with 'repo.file.put' and { surface: 'api' }", async () => {
+  it("calls invoke with 'put_repo_file' and { surface: 'api' }", async () => {
     await authPut("/repos/file", { ...validBody, branch: "feature/hello" });
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("repo.file.put");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("put_repo_file");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
     const input = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(input.path).toBe("src/hello.ts");
@@ -534,9 +534,9 @@ describe("repo.branch.create route", () => {
     expect(body.sha).toBe("abc123def456");
   });
 
-  it("calls invoke with 'repo.branch.create' and { surface: 'api' }", async () => {
+  it("calls invoke with 'create_branch' and { surface: 'api' }", async () => {
     await authPost("/repos/branch", { owner: "acme", repo: "backend-service", branch: "feature/x", fromBranch: "main" });
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("repo.branch.create");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("create_branch");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
     const input = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(input.branch).toBe("feature/x");
@@ -564,9 +564,9 @@ describe("repo.pr.open route", () => {
     expect(body.htmlUrl).toContain("/pull/42");
   });
 
-  it("calls invoke with 'repo.pr.open' and { surface: 'api' }", async () => {
+  it("calls invoke with 'open_pr' and { surface: 'api' }", async () => {
     await authPost("/repos/pulls", { ...validBody, body: "PR description", draft: true });
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("repo.pr.open");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("open_pr");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
     const input = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(input.head).toBe("feature/add-hello");
@@ -593,9 +593,9 @@ describe("semantic.edge.infer route", () => {
     expect(res.status).toBe(202);
   });
 
-  it("calls invoke with 'semantic.edge.infer' and { surface: 'api' }", async () => {
+  it("calls invoke with 'infer_semantic_edges' and { surface: 'api' }", async () => {
     await authPost(PATH, validBody);
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("semantic.edge.infer");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("infer_semantic_edges");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
     const input = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(input.semanticEdgePrompt).toBe("Find relationships between customer entities");
@@ -617,9 +617,9 @@ describe("semantic.edge.suggest route", () => {
     expect(res.status).toBe(200);
   });
 
-  it("calls invoke with 'semantic.edge.suggest' and { surface: 'api' }", async () => {
+  it("calls invoke with 'suggest_semantic_edges' and { surface: 'api' }", async () => {
     await authGet("/semantic-edges/suggest?confidenceMin=0.7&limit=20");
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("semantic.edge.suggest");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("suggest_semantic_edges");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
     const input = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(input.confidenceMin).toBe(0.7);
@@ -636,9 +636,9 @@ describe("semantic.edge.approve route", () => {
     expect(res.status).toBe(200);
   });
 
-  it("calls invoke with 'semantic.edge.approve' and edgeId from path", async () => {
+  it("calls invoke with 'approve_semantic_edge' and edgeId from path", async () => {
     await authPost("/semantic-edges/edge-xyz/decide", { decision: "reject" });
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("semantic.edge.approve");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("approve_semantic_edge");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
     const input = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(input.edgeId).toBe("edge-xyz");
@@ -661,9 +661,9 @@ describe("semantic.edge.list route", () => {
     expect(res.status).toBe(200);
   });
 
-  it("calls invoke with 'semantic.edge.list' and { surface: 'api' }", async () => {
+  it("calls invoke with 'list_semantic_edges' and { surface: 'api' }", async () => {
     await authGet("/semantic-edges?type=customer&sourceId=src-1&limit=25&offset=0");
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("semantic.edge.list");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("list_semantic_edges");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
     const input = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(input.type).toBe("customer");
@@ -684,9 +684,9 @@ describe("web.fetch route", () => {
     expect(res.status).toBe(200);
   });
 
-  it("calls invoke with 'web.fetch' and { surface: 'api' }", async () => {
+  it("calls invoke with 'fetch_web_page' and { surface: 'api' }", async () => {
     await authPost(PATH, { url: "https://example.com", extractMarkdown: true, timeout: 5000 });
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("web.fetch");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("fetch_web_page");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
     const input = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(input.url).toBe("https://example.com");
@@ -719,9 +719,9 @@ describe("web.search route", () => {
     expect(res.status).toBe(200);
   });
 
-  it("calls invoke with 'web.search' and { surface: 'api' }", async () => {
+  it("calls invoke with 'search_web' and { surface: 'api' }", async () => {
     await authPost(PATH, { query: "best practices for typescript", maxResults: 3, searchDepth: "advanced" });
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("web.search");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("search_web");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
     const input = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(input.query).toBe("best practices for typescript");

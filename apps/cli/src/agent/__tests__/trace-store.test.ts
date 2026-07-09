@@ -8,11 +8,16 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { rmSync } from "node:fs";
 
 const { TEST_HOME } = vi.hoisted(() => {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  // vi.hoisted is lifted above every ESM import, so this factory cannot see the
+  // file's `import` bindings — and it must create the temp HOME synchronously,
+  // before the node:os mock below closes over it. require is the only way to
+  // reach the node builtins here; an async factory would make TEST_HOME a
+  // Promise and break both the sync homedir mock and the afterAll cleanup.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- see above
   const os = require("node:os") as typeof import("node:os");
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- see above
   const fs = require("node:fs") as typeof import("node:fs");
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- see above
   const path = require("node:path") as typeof import("node:path");
   return { TEST_HOME: fs.mkdtempSync(path.join(os.tmpdir(), "oxagen-trace-")) };
 });
@@ -45,7 +50,7 @@ function trace(id: string, prompt = "do a thing"): TurnTrace {
       usage: { inputTokens: 0, outputTokens: 0, costUsd: 0 },
     },
     enhancement: { prompt, context: "", resolved: [], lessonCount: 0, source: "none" },
-    selectedModel: "anthropic/claude-sonnet-4.6",
+    selectedModel: "anthropic/claude-sonnet-5",
     selectedTier: "balanced",
     selectionRationale: "test",
     response: "ok",

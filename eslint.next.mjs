@@ -30,7 +30,20 @@ const uiIndirectionRestriction = {
 
 /** @type {import("eslint").Linter.Config[]} */
 const config = [
-  { ignores: [".next/**", "node_modules/**", "dist/**", ".turbo/**", "coverage/**"] },
+  // Generated/ephemeral output that is gitignored and must never be linted:
+  // e2e/screenshots/** is deleted and recreated on every Playwright run (it can
+  // hold generated probe .mjs scripts), so linting it produces spurious local
+  // failures that never occur in a clean CI checkout.
+  {
+    ignores: [
+      ".next/**",
+      "node_modules/**",
+      "dist/**",
+      ".turbo/**",
+      "coverage/**",
+      "**/e2e/screenshots/**",
+    ],
+  },
   ...nextPlugin,
   ...nextCoreWebVitals,
   ...nextTypescript,

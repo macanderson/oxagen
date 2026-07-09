@@ -37,22 +37,32 @@ export class GraphRetrievalEngine implements RetrievalEngine {
   async retrieve(query: RetrievalQuery): Promise<RetrievalCandidate[]> {
     if (query.workingSet.length === 0) return [];
 
-    // Traverse :REMEMBERS and :ABOUT edges from working set entities
+    // Traverse :REMEMBERS and :ABOUT edges from working set entities.
+    //
+    // The two matches are UNION'd inside a CALL subquery so the outer
+    // ORDER BY / LIMIT apply to the COMBINED result. Written as a bare
+    // `A UNION B ORDER BY … LIMIT …`, the ORDER BY/LIMIT bind only to the
+    // second branch, so a high-salience memory reachable via :REMEMBERS could
+    // be dropped while a low-salience :ABOUT memory survives.
     const graphResults = await this.queryGraph(
       /* cypher */ `
-        MATCH (entity)-[:REMEMBERS]->(m:EngramMemory)
-        WHERE entity.id IN $workingSet
-          AND m.orgId = $orgId
-          AND m.workspaceId = $workspaceId
-        RETURN m.recordId AS recordId, m.salience AS salience
-        UNION
-        MATCH (m:EngramMemory)-[:ABOUT]->(kn:GraphNode)
-        WHERE kn.publicId IN $workingSet
-          AND m.orgId = $orgId
-          AND m.workspaceId = $workspaceId
-        RETURN m.recordId AS recordId, m.salience AS salience
+        CALL {
+          MATCH (entity)-[:REMEMBERS]->(m:EngramMemory)
+          WHERE entity.id IN $workingSet
+            AND m.orgId = $orgId
+            AND m.workspaceId = $workspaceId
+          RETURN m.recordId AS recordId, m.salience AS salience
+          UNION
+          MATCH (m:EngramMemory)-[:ABOUT]->(kn:GraphNode)
+          WHERE kn.publicId IN $workingSet
+            AND m.orgId = $orgId
+            AND m.workspaceId = $workspaceId
+          RETURN m.recordId AS recordId, m.salience AS salience
+        }
+        WITH recordId, salience
         ORDER BY salience DESC
         LIMIT $limit
+        RETURN recordId, salience
       `,
       {
         workingSet: query.workingSet,
@@ -64,22 +74,35 @@ export class GraphRetrievalEngine implements RetrievalEngine {
 
     if (graphResults.length === 0) return [];
 
-    // Dedup record IDs (same record may appear from both REMEMBERS and ABOUT)
+    // Dedup record IDs (same record may appear from both REMEMBERS and ABOUT),
+    // keeping the max salience, and preserve salience-descending order for the
+    // downstream fuser (which reads array index as the RRF rank).
     const seen = new Map<string, number>();
     for (const row of graphResults) {
-      const existing = seen.get(row.recordId) ?? 0;
-      seen.set(row.recordId, Math.max(existing, row.salience));
+      const existing = seen.get(row.recordId);
+      if (existing === undefined || row.salience > existing) {
+        seen.set(row.recordId, row.salience);
+      }
     }
+    const orderedIds = [...seen.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([id]) => id);
 
-    // Look up full records from the episodic store
-    const recordIds = [...seen.keys()];
-    const records = await this.store.getByIds(recordIds);
+    // Look up full records; getByIds ignores order, so re-emit in orderedIds.
+    const records = await this.store.getByIds(orderedIds);
+    const recordMap = new Map(records.map((r) => [r.id, r]));
 
-    return records.map((record) => ({
-      record,
-      score: Math.min(1, seen.get(record.id) ?? 0.5),
-      source: "graph" as const,
-      tokenCost: estimateTokens(record.body),
-    }));
+    const candidates: RetrievalCandidate[] = [];
+    for (const id of orderedIds) {
+      const record = recordMap.get(id);
+      if (!record) continue; // Drop misses
+      candidates.push({
+        record,
+        score: Math.min(1, seen.get(id) ?? 0.5),
+        source: "graph" as const,
+        tokenCost: estimateTokens(record.body),
+      });
+    }
+    return candidates;
   }
 }

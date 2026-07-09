@@ -46,7 +46,7 @@ import handler_billingCreditsPurchase, {
 describe("billing.credits.purchase handler", () => {
   it("exports schema and metadata", () => {
     expect(billingCreditsPurchaseSchema).toBeDefined();
-    expect(billingCreditsPurchaseMetadata.name).toBe("billing.credits.purchase");
+    expect(billingCreditsPurchaseMetadata.name).toBe("purchase_credits");
   });
 
   it("calls buildContext then invoke with correct args", async () => {
@@ -58,7 +58,7 @@ describe("billing.credits.purchase handler", () => {
 
     expect(mocks.buildContext).toHaveBeenCalledOnce();
     expect(mocks.invoke).toHaveBeenCalledWith(
-      "billing.credits.purchase",
+      "purchase_credits",
       args,
       fakeCtx,
       { surface: "mcp" },
@@ -84,7 +84,7 @@ import handler_billingSubscriptionRead, {
 describe("billing.subscription.read handler", () => {
   it("exports schema and metadata", () => {
     expect(billingSubscriptionReadSchema).toBeDefined();
-    expect(billingSubscriptionReadMetadata.name).toBe("billing.subscription.read");
+    expect(billingSubscriptionReadMetadata.name).toBe("get_subscription");
   });
 
   it("calls invoke with empty args for read", async () => {
@@ -95,7 +95,7 @@ describe("billing.subscription.read handler", () => {
 
     expect(mocks.buildContext).toHaveBeenCalledOnce();
     expect(mocks.invoke).toHaveBeenCalledWith(
-      "billing.subscription.read",
+      "get_subscription",
       {},
       fakeCtx,
       { surface: "mcp" },
@@ -108,12 +108,12 @@ describe("billing.subscription.read handler", () => {
 import handler_billingSubscriptionUpgradeStart, {
   schema as billingSubscriptionUpgradeStartSchema,
   metadata as billingSubscriptionUpgradeStartMetadata,
-} from "./billing.subscription.upgrade.start";
+} from "./billing.subscription_upgrade.start";
 
 describe("billing.subscription.upgrade.start handler", () => {
   it("exports schema and metadata", () => {
     expect(billingSubscriptionUpgradeStartSchema).toBeDefined();
-    expect(billingSubscriptionUpgradeStartMetadata.name).toBe("billing.subscription.upgrade.start");
+    expect(billingSubscriptionUpgradeStartMetadata.name).toBe("start_subscription_upgrade");
   });
 
   it("calls invoke with upgrade args", async () => {
@@ -133,7 +133,7 @@ describe("billing.subscription.upgrade.start handler", () => {
     const result = await handler_billingSubscriptionUpgradeStart(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
-      "billing.subscription.upgrade.start",
+      "start_subscription_upgrade",
       args,
       fakeCtx,
       { surface: "mcp" },
@@ -152,7 +152,7 @@ import handler_apiKeyCreate, {
 describe("api.key.create handler", () => {
   it("exports schema and metadata", () => {
     expect(apiKeyCreateSchema).toBeDefined();
-    expect(apiKeyCreateMetadata.name).toBe("api.key.create");
+    expect(apiKeyCreateMetadata.name).toBe("create_api_key");
   });
 
   it("calls invoke with key creation args", async () => {
@@ -171,7 +171,7 @@ describe("api.key.create handler", () => {
     await handler_apiKeyCreate(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
-      "api.key.create",
+      "create_api_key",
       args,
       fakeCtx,
       { surface: "mcp" },
@@ -189,7 +189,7 @@ import handler_apiKeyRevoke, {
 describe("api.key.revoke handler", () => {
   it("exports schema and metadata", () => {
     expect(apiKeyRevokeSchema).toBeDefined();
-    expect(apiKeyRevokeMetadata.name).toBe("api.key.revoke");
+    expect(apiKeyRevokeMetadata.name).toBe("revoke_api_key");
   });
 
   it("calls invoke with revoke args", async () => {
@@ -200,10 +200,66 @@ describe("api.key.revoke handler", () => {
     await handler_apiKeyRevoke(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
-      "api.key.revoke",
+      "revoke_api_key",
       args,
       fakeCtx,
       { surface: "mcp" },
     );
+  });
+});
+
+// ── billing.usage.breakdown ──────────────────────────────────────────────────
+
+import handler_billingUsageBreakdown, {
+  schema as billingUsageBreakdownSchema,
+  metadata as billingUsageBreakdownMetadata,
+} from "./billing.usage.breakdown";
+
+describe("billing.usage.breakdown handler", () => {
+  it("exports schema and metadata", () => {
+    expect(billingUsageBreakdownSchema).toBeDefined();
+    expect(billingUsageBreakdownMetadata.name).toBe("get_usage_breakdown");
+    expect(billingUsageBreakdownMetadata.annotations?.readOnlyHint).toBe(true);
+  });
+
+  it("calls buildContext then invoke with the window args", async () => {
+    const fakeOutput = {
+      range: { start: "2026-06-01T00:00:00.000Z", end: "2026-07-01T00:00:00.000Z" },
+      totals: { inputTokens: 0, outputTokens: 0, cachedTokens: 0, costMicros: 0, executions: 0 },
+      series: [],
+      byModel: [],
+      bySurface: [],
+      byWorkspace: [],
+      byCapability: [],
+      byPrincipal: [],
+    };
+    mocks.invoke.mockResolvedValue(fakeOutput);
+
+    const args = {
+      start: "2026-06-01T00:00:00.000Z",
+      end: "2026-07-01T00:00:00.000Z",
+      workspaceId: undefined,
+    };
+    const result = await handler_billingUsageBreakdown(args);
+
+    expect(mocks.buildContext).toHaveBeenCalledOnce();
+    expect(mocks.invoke).toHaveBeenCalledWith(
+      "get_usage_breakdown",
+      args,
+      fakeCtx,
+      { surface: "mcp" },
+    );
+    expect(result).toMatchObject({ totals: { executions: 0 } });
+  });
+
+  it("propagates invoke errors", async () => {
+    mocks.invoke.mockRejectedValue(new Error("clickhouse down"));
+    await expect(
+      handler_billingUsageBreakdown({
+        start: "2026-06-01T00:00:00.000Z",
+        end: "2026-07-01T00:00:00.000Z",
+        workspaceId: undefined,
+      }),
+    ).rejects.toThrow("clickhouse down");
   });
 });

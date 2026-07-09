@@ -1,15 +1,19 @@
 import { withTenantDb, schema } from "@oxagen/database";
 import { and, eq, isNull } from "drizzle-orm";
+import pino from "pino";
 import { agentMcpSetEnabled } from "@oxagen/oxagen/contracts/agent.mcp.set_enabled";
 import type { CapabilityContext } from "../types";
 import { healthcheck } from "../dispatch/mcp-client";
 import { captureToolSnapshots, recordServerChange } from "../runtime/mcp-snapshots";
+import { decryptMcpAuthConfig } from "../runtime/mcp-server-auth-crypto";
 import type {
   AgentMcpSetEnabledInput,
   AgentMcpSetEnabledOutput,
 } from "@oxagen/oxagen/contracts/agent.mcp.set_enabled";
 
 export type { AgentMcpSetEnabledInput, AgentMcpSetEnabledOutput };
+
+const logger = pino({ level: process.env.LOG_LEVEL ?? "info", base: { app: "agent.mcp" } });
 
 export async function agentMcpSetEnabledHandler(
   input: AgentMcpSetEnabledInput,
@@ -44,10 +48,13 @@ export async function agentMcpSetEnabledHandler(
   let snapshotCount = 0;
   let healthStatus: "healthy" | "degraded" | "unreachable" = "degraded";
   if (input.enabled && server.transportType === "streamable-http") {
+    // Decrypt (OXA-1982): server.authConfig is the envelope-encrypted (or
+    // legacy plaintext, pre-backfill) jsonb value read from the DB.
+    const decryptedAuthConfig = await decryptMcpAuthConfig(server.authConfig);
     const probe = await healthcheck({
       endpointUrl: server.endpointUrl,
       authStrategy: server.authStrategy as "none" | "bearer" | "header",
-      authConfig: (server.authConfig ?? {}) as Record<string, string>,
+      authConfig: decryptedAuthConfig,
     });
     healthStatus = probe.status;
     if (probe.descriptors.length > 0) {
@@ -57,7 +64,17 @@ export async function agentMcpSetEnabledHandler(
         mcpServerId: server.id,
         descriptors: probe.descriptors,
         createdByUserId: ctx.userId,
-      }).catch(() => 0);
+      }).catch((err: unknown) => {
+        // A dropped tool-snapshot means the server is being enabled with no
+        // recorded baseline — the contract-governance / tool-poisoning-detection
+        // wedge silently loses its reference point. Surface it (best-effort:
+        // enabling still proceeds with a 0 count).
+        logger.warn(
+          { err, mcpServerId: server.id },
+          "agent.mcp.set_enabled: tool snapshot failed — enabling with no baseline",
+        );
+        return 0;
+      });
     }
   }
 

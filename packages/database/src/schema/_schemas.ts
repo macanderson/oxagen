@@ -22,3 +22,10 @@ export const privacySchema = pgSchema("privacy");
 export const graphSchema = pgSchema("graph");
 export const schemaRegistrySchema = pgSchema("schema_registry");
 export const environmentsSchema = pgSchema("environments");
+export const aiSchema = pgSchema("ai");
+export const evalSchema = pgSchema("eval");
+// cms — public marketing/content surface (website lead capture + gated ebook
+// access). Not tenant-scoped: leads are prospects, not org members, so these
+// tables use bypass-only RLS and are written through withSystemDb, never a
+// tenant query. See schema/cms.ts.
+export const cmsSchema = pgSchema("cms");

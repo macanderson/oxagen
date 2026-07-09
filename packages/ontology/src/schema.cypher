@@ -15,6 +15,7 @@ CREATE CONSTRAINT tool_version_public_id IF NOT EXISTS FOR (n:ToolVersion) REQUI
 CREATE CONSTRAINT playbook_public_id IF NOT EXISTS FOR (n:Playbook) REQUIRE n.publicId IS UNIQUE;
 CREATE CONSTRAINT playbook_version_public_id IF NOT EXISTS FOR (n:PlaybookVersion) REQUIRE n.publicId IS UNIQUE;
 CREATE CONSTRAINT execution_public_id IF NOT EXISTS FOR (n:Execution) REQUIRE n.publicId IS UNIQUE;
+CREATE CONSTRAINT fanout_public_id IF NOT EXISTS FOR (n:Fanout) REQUIRE n.publicId IS UNIQUE;
 CREATE CONSTRAINT document_public_id IF NOT EXISTS FOR (n:Document) REQUIRE n.publicId IS UNIQUE;
 CREATE CONSTRAINT generated_file_public_id IF NOT EXISTS FOR (n:GeneratedFile) REQUIRE n.publicId IS UNIQUE;
 CREATE INDEX generated_file_org IF NOT EXISTS FOR (n:GeneratedFile) ON (n.orgId);
@@ -48,6 +49,7 @@ CREATE CONSTRAINT evidence_id IF NOT EXISTS FOR (n:Evidence) REQUIRE n.id IS UNI
 // `tenantId` indexes were dead (no node carries that property) and left orgId
 // lookups unindexed.
 CREATE INDEX execution_org IF NOT EXISTS FOR (n:Execution) ON (n.orgId);
+CREATE INDEX fanout_org IF NOT EXISTS FOR (n:Fanout) ON (n.orgId);
 CREATE INDEX document_org IF NOT EXISTS FOR (n:Document) ON (n.orgId);
 CREATE INDEX message_conversation IF NOT EXISTS FOR (n:Message) ON (n.conversationId);
 CREATE INDEX agent_memory_org IF NOT EXISTS FOR (n:AgentMemory) ON (n.orgId);
@@ -81,8 +83,26 @@ CREATE VECTOR INDEX memory_embedding_index IF NOT EXISTS
 FOR (n:AgentMemory) ON (n.embedding)
 OPTIONS { indexConfig: { `vector.dimensions`: 1536, `vector.similarity_function`: 'cosine' } };
 
+// Engram (packages/engram) memory dual-write projection — mirrors episodic
+// store records as :EngramMemory nodes (packages/inngest-functions
+// engram.sync-memory-to-graph / engram.embed-memory). Backs
+// VectorRetrievalEngine's ANN recall (OXA-2061) — the embed-memory worker
+// writes `m.embedding` expecting this index to exist for ANN queries.
+CREATE INDEX engram_memory_org IF NOT EXISTS FOR (n:EngramMemory) ON (n.orgId);
+CREATE VECTOR INDEX engram_memory_embedding_index IF NOT EXISTS
+FOR (n:EngramMemory) ON (n.embedding)
+OPTIONS { indexConfig: { `vector.dimensions`: 1536, `vector.similarity_function`: 'cosine' } };
+
 CREATE VECTOR INDEX message_embedding_index IF NOT EXISTS
 FOR (n:Message) ON (n.embedding)
+OPTIONS { indexConfig: { `vector.dimensions`: 1536, `vector.similarity_function`: 'cosine' } };
+
+// Semantic peer recall (Phase 2 §3 Tier B): cross-fanout recall of :Execution
+// result summaries. Anchored on the :Execution label so recallPeerResults can
+// vector-search sibling/prior run summaries directly, without the broader
+// graph_node_embedding_index label-filter round-trip.
+CREATE VECTOR INDEX execution_embedding_index IF NOT EXISTS
+FOR (n:Execution) ON (n.embedding)
 OPTIONS { indexConfig: { `vector.dimensions`: 1536, `vector.similarity_function`: 'cosine' } };
 
 // Universal vector index for all ingested entity nodes.
@@ -95,6 +115,17 @@ OPTIONS { indexConfig: { `vector.dimensions`: 1536, `vector.similarity_function`
 
 // --- Source code ingestion — SourceFile, SourceSymbol, Feature ---
 CREATE CONSTRAINT source_file_public_id IF NOT EXISTS FOR (n:SourceFile) REQUIRE n.publicId IS UNIQUE;
+// Composite uniqueness on (naturalKey, orgId) — required for the agent
+// file-locking acquire (docs/specs/agent-file-locking/plan.md §4) to be
+// genuinely atomic: Neo4j only takes a serializing lock during MERGE when a
+// uniqueness constraint backs the merged properties, so two concurrent
+// acquireFileLock() calls for the SAME file would otherwise both pass the
+// MERGE + conflict-check read before either commits (a duplicate-node write
+// race), letting both be granted. Neo4j Community edition (5.x) supports
+// composite (multi-property) uniqueness constraints, verified against the
+// local dev instance.
+CREATE CONSTRAINT source_file_natural_key_org_unique IF NOT EXISTS
+FOR (n:SourceFile) REQUIRE (n.naturalKey, n.orgId) IS UNIQUE;
 CREATE INDEX source_file_natural_key IF NOT EXISTS FOR (n:SourceFile) ON (n.naturalKey);
 CREATE INDEX source_file_org IF NOT EXISTS FOR (n:SourceFile) ON (n.orgId);
 CREATE INDEX source_file_connection IF NOT EXISTS FOR (n:SourceFile) ON (n.connectionId);

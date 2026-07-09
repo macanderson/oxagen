@@ -73,6 +73,7 @@ const DEPLOYED: EnvName[] = ["preview", "production"];
 const APP_PROD_URL = "https://app.oxagen.sh";
 const API_PROD_URL = "https://api.oxagen.sh";
 const MCP_PROD_URL = "https://mcp.oxagen.sh";
+const MARKETING_PROD_URL = "https://oxagen.sh";
 
 /**
  * The registry. Ordered for `.env.example` layout. `services`/`requiredIn`
@@ -200,6 +201,18 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "manual",
     placeholder: "https://otel.example.com/v1/traces",
   },
+  OTEL_EXPORTER_OTLP_HEADERS: {
+    group: "OpenTelemetry",
+    description:
+      "Standard OTEL comma-separated `key=value` header list sent to the collector " +
+      '(e.g. "authorization=Bearer xxx,x-tenant=oxagen"). Optional — for collectors ' +
+      "that require auth headers. Parsed by packages/telemetry/src/tracer.ts.",
+    secret: true,
+    clientExposed: false,
+    services: ["api", "app", "mcp"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
   OTEL_SERVICE_NAME: {
     group: "OpenTelemetry",
     description:
@@ -211,6 +224,60 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
     placeholder: "oxagen",
+  },
+
+  // ── Circuit breaker (shared thresholds for every per-dependency breaker —
+  //    Neo4j scopedSession, Stripe BillingProvider, ClickHouse insertRows) ────
+  CIRCUIT_BREAKER_FAILURE_THRESHOLD: {
+    group: "Circuit breaker",
+    description:
+      "Consecutive failures before a breaker opens for a wrapped dependency call " +
+      "(Neo4j / Stripe / ClickHouse). Optional — defaults to 5 in packages/config/src/env.ts.",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "app", "mcp"],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "5",
+  },
+  CIRCUIT_BREAKER_RESET_TIMEOUT_MS: {
+    group: "Circuit breaker",
+    description:
+      "Milliseconds an open breaker waits before allowing a trial (half-open) request. " +
+      "Optional — defaults to 30000 in packages/config/src/env.ts.",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "app", "mcp"],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "30000",
+  },
+  CIRCUIT_BREAKER_SUCCESS_THRESHOLD: {
+    group: "Circuit breaker",
+    description:
+      "Consecutive successes required in the half-open state before a breaker closes. " +
+      "Optional — defaults to 1 in packages/config/src/env.ts.",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "app", "mcp"],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "1",
+  },
+
+  // ── Error alerting (vendor-neutral outbound webhook) ────────────────────────
+  ALERT_WEBHOOK_URL: {
+    group: "Error alerting",
+    description:
+      "When set, high-severity/unhandled server errors are POSTed as a Slack-compatible " +
+      "`{ text, blocks }` JSON payload here (Slack/Mattermost/Discord incoming webhook, or " +
+      "any compatible endpoint). BYO webhook — no vendor SDK. When unset, errors are still " +
+      "recorded to the ClickHouse error_events table; only the webhook alert is skipped.",
+    secret: true,
+    clientExposed: false,
+    services: ["api", "app", "mcp"],
+    requiredIn: [],
+    valueOrigin: "manual",
   },
 
   // ── Better Auth ─────────────────────────────────────────────────────────────
@@ -443,7 +510,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   GITHUB_PERSONAL_ACCESS_TOKEN: {
     group: "github",
     description:
-      "Personal access token (PAT) used by GitHub write capabilities (repo.create, repo.file.put, repo.fork, repo.branch.create, repo.pr.open) as a local/demo fallback when per-workspace credential resolution is not yet available. MUST NOT be set in production once per-workspace KMS-encrypted credential lookup is implemented (see packages/handlers/src/lib/github-token.ts).",
+      "Personal access token (PAT) used by GitHub write capabilities (repo.create, repo.file.put, repo.fork, repo.branch.create, repo.pr.open) as a LOCAL/DEMO-ONLY fallback. Per-workspace credential resolution is now live (GitHub App installation token + KMS-encrypted per-workspace OAuth — see resolveGitHubToken in packages/handlers/src/lib/github-token.ts), so this MUST NOT be set in production: a shared PAT bypasses per-workspace scoping. resolveGitHubToken logs a loud warning when it is used while NODE_ENV=production.",
     secret: true,
     clientExposed: false,
     services: ["api"],
@@ -712,13 +779,24 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   STORAGE_DRIVER: {
     group: "File storage",
     description:
-      "Selects the @oxagen/storage backend. Currently only 'vercel-blob'; the swap-point for an S3/R2 driver.",
+      "Selects the @oxagen/storage backend: 'vercel-blob' (default, prod) or 'fs' (local/CI filesystem driver, no token needed). The swap-point for an S3/R2 driver.",
     secret: false,
     clientExposed: false,
     services: ["app"],
     requiredIn: [],
     valueOrigin: "manual",
     placeholder: "vercel-blob",
+  },
+  STORAGE_FS_ROOT: {
+    group: "File storage",
+    description:
+      "Root directory for the 'fs' storage driver. Only read when STORAGE_DRIVER=fs. Absolute path used as-is; a relative path is anchored at process.cwd(); unset falls back to an OS-tmp directory.",
+    secret: false,
+    clientExposed: false,
+    services: ["app"],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "",
   },
   AI_GATEWAY_API_KEY: {
     group: "AI providers",
@@ -730,6 +808,20 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     clientExposed: false,
     services: ["api", "app", "mcp"],
     requiredIn: DEPLOYED,
+    valueOrigin: "manual",
+  },
+  ANTHROPIC_API_KEY: {
+    group: "AI providers",
+    description:
+      "CLI-only BYOK fallback: when no AI_GATEWAY_API_KEY exists anywhere, the CLI " +
+      "runs anthropic/* models directly against the Anthropic API with this key " +
+      "(other vendors and embeddings stay unavailable). The gateway key always wins " +
+      "when both are set. Never read by deployed services — platform AI is " +
+      "gateway-only.",
+    secret: true,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
     valueOrigin: "manual",
   },
   OXAGEN_LLM_FAST: {
@@ -752,7 +844,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api", "app", "mcp"],
     requiredIn: [],
     valueOrigin: "static",
-    staticValue: { "*": "anthropic/claude-sonnet-4.6" },
+    staticValue: { "*": "anthropic/claude-sonnet-5" },
   },
   OXAGEN_LLM_PRECISE: {
     group: "AI providers",
@@ -762,7 +854,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api", "app", "mcp"],
     requiredIn: [],
     valueOrigin: "static",
-    staticValue: { "*": "anthropic/claude-opus-4.8" },
+    staticValue: { "*": "anthropic/claude-fable-5" },
   },
   OXAGEN_LLM_IMAGE_BASIC: {
     group: "AI providers",
@@ -916,6 +1008,20 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "static",
     staticValue: { development: "http://localhost:4000", production: API_PROD_URL },
   },
+  A2A_PUBLIC_URL: {
+    group: "Public URLs",
+    description:
+      "Public origin advertised in the A2A (Agent2Agent) protocol Agent Card's " +
+      "service endpoint and the /.well-known/agent-card.json URL. Optional — the " +
+      "A2A routes derive the origin from the live request; this only overrides the " +
+      "default for out-of-band card reads (MCP/CLI). Falls back to the API origin.",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "mcp"],
+    requiredIn: [],
+    valueOrigin: "static",
+    staticValue: { development: "http://localhost:4000", production: API_PROD_URL },
+  },
   APP_URL: {
     group: "Public URLs",
     description:
@@ -927,6 +1033,19 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "static",
     staticValue: { development: "http://localhost:3000", production: APP_PROD_URL },
+  },
+  MARKETING_URL: {
+    group: "Public URLs",
+    description:
+      "Public marketing website origin (oxagen.sh). The /v1/cms/* lead routes " +
+      "use it to build the emailed reader link and CORS allows it as a " +
+      "cross-origin caller. Not browser-exposed.",
+    secret: false,
+    clientExposed: false,
+    services: ["api"],
+    requiredIn: [],
+    valueOrigin: "static",
+    staticValue: { development: "http://localhost:8080", production: MARKETING_PROD_URL },
   },
   MCP_URL: {
     group: "Public URLs",
@@ -957,10 +1076,12 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   TENANT_RLS_ENFORCEMENT_ENABLED: {
     group: "Security",
     description:
-      "When true, Postgres RLS policies filter by org/workspace. Production-safe " +
-      "default — leave true for all deployed environments. Local dev override: set " +
-      "false in .env.local only if seeding/migration scripts need to bypass RLS; " +
-      "revert to true before running app code against the DB.",
+      "When true, Postgres RLS policies filter by org/workspace. Fail-closed: " +
+      "when UNSET it defaults ON in production (NODE_ENV/VERCEL_ENV=production) " +
+      "and OFF in dev/test/preview. A production process refuses to boot if this " +
+      "is forced to false (assertRlsEnforcedInProduction). Local dev override: " +
+      "set false in .env.local only if seeding/migration scripts need to bypass " +
+      "RLS; revert before running app code against the DB.",
     secret: false,
     clientExposed: false,
     services: ["api", "app", "mcp"],
@@ -1247,19 +1368,119 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     group: "CLI",
     description:
       "Vercel AI Gateway model slug used by the CLI's local agent loop (e.g. " +
-      "anthropic/claude-sonnet-4.5). Falls back to the value in ~/.config/oxagen/config.json, then a default.",
+      "anthropic/claude-sonnet-5). Falls back to the value in ~/.config/oxagen/config.json, then a default.",
     secret: false,
     clientExposed: false,
     services: [],
     requiredIn: [],
     valueOrigin: "manual",
   },
+  DO_NOT_TRACK: {
+    group: "CLI",
+    description:
+      "Cross-tool opt-out convention (https://consoledonottrack.com): set to '1' to disable CLI " +
+      "usage telemetry. Checked before OXAGEN_TELEMETRY and the persisted telemetry.enabled config.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "1",
+  },
+  OXAGEN_TELEMETRY: {
+    group: "CLI",
+    description:
+      "Set to '0' to disable CLI usage telemetry for this invocation (equivalent to `oxagen " +
+      "telemetry off`). DO_NOT_TRACK=1 also disables it and takes precedence.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "0",
+  },
   OXAGEN_EFFORT: {
     group: "CLI",
     description:
-      "Default reasoning effort for models that support a thinking mode: low | medium | high. " +
-      "Forwarded as reasoning_effort; models without a reasoning mode ignore it. Falls back to " +
-      "`effort` in ~/.config/oxagen/config.json / .oxagen/settings.json, then the model default.",
+      "Default reasoning effort for models that support a thinking mode: low | medium | high | xhigh | max " +
+      "(xhigh/max are Anthropic-only depth tiers; other vendors clamp to high). Forwarded as reasoning " +
+      "config per vendor; models without a reasoning mode ignore it. Unset = model default (Anthropic " +
+      "adaptive thinking decides depth itself). Falls back to `effort` in ~/.config/oxagen/config.json / " +
+      ".oxagen/settings.json, then the model default.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  OXAGEN_CLI_MOTION: {
+    group: "CLI",
+    description:
+      "Motion mode for the CLI TUI animations: full | reduced | off. Overrides the persisted " +
+      "`motion` config; unset falls back to config, then 'full'. (OXAGEN_CLI_FUN=0 is a legacy " +
+      "alias that maps to 'reduced'.)",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "full",
+  },
+  OXAGEN_PLAN_TIMEOUT_MS: {
+    group: "CLI",
+    description:
+      "Wall-clock bound in ms on the REPL's per-turn planner call (default 60000). Past the " +
+      "bound the turn degrades to a router-derived single-task plan instead of hanging. " +
+      "Set to '0' to disable the bound; a non-finite value is ignored.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "60000",
+  },
+  OXAGEN_CLI_FUN: {
+    group: "CLI",
+    description:
+      "When '0', disables whimsical CLI animations: the REPL status rail's cat-and-mouse " +
+      "chase, and `oxagen init`'s space-invaders/OXAGEN-reveal loading animation (which " +
+      "falls back to plain progress lines instead). Any other value (or unset) keeps them on.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  OXAGEN_CLI_MOUSE: {
+    group: "CLI",
+    description:
+      "When '0', the full-screen REPL starts with mouse-wheel transcript scrolling disabled " +
+      "(terminal-native text selection stays available). Any other value (or unset) enables " +
+      "mouse capture on launch; the /mouse command toggles it at runtime either way.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  OXAGEN_DISABLE_MEMORY: {
+    group: "CLI",
+    description:
+      "When '1', the CLI one-shot runner skips session/fleet memory recall and remember entirely. " +
+      "Benchmark harnesses (SWE-bench) set it so recalled context from one instance can never leak " +
+      "into another when the same repo is reused across instances.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  OXAGEN_GRAPH_DISABLED: {
+    group: "CLI",
+    description:
+      "When '1' or 'true', disables the CLI's code-graph context layer for the whole shell, so " +
+      "the context resolver goes straight to the grep fallback (logged). Unset/other values keep " +
+      "the graph-before-grep default on.",
     secret: false,
     clientExposed: false,
     services: [],
@@ -1358,7 +1579,8 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     group: "CLI",
     description:
       "Gateway model slug the CLI turn pipeline uses to evaluate each prompt (completeness " +
-      "+ complexity scoring, context hints, refined rewrite). Defaults to the fast tier (Haiku).",
+      "+ complexity scoring, context hints, refined rewrite). Defaults to \"local\" — the " +
+      "deterministic cost-router heuristic, no model call.",
     secret: false,
     clientExposed: false,
     services: [],
@@ -1369,8 +1591,21 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     group: "CLI",
     description:
       "Gateway model slug the CLI uses as the completeness-judge advisor — always distinct from " +
-      "the executor so work is never graded by the model that produced it. Defaults to the most " +
-      "powerful OpenAI model (cross-vendor independence from a typically-Claude executor).",
+      "the executor so work is never graded by the model that produced it. Defaults to the " +
+      "flagship Anthropic model (Fable 5); set a cross-vendor slug (e.g. an OpenAI model) for " +
+      "vendor-independent judging when a gateway key is available.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  OXAGEN_LLM_SELECTOR: {
+    group: "CLI",
+    description:
+      "Gateway model slug `oxagen solve` (best-of-N) uses as the comparative selector that " +
+      "picks the winning candidate. Defaults to the flagship Anthropic model (Fable 5); set a " +
+      "cross-vendor slug for vendor-independent selection when a gateway key is available.",
     secret: false,
     clientExposed: false,
     services: [],
@@ -1399,6 +1634,50 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
   },
+  OXAGEN_EMBED_PROVIDER: {
+    group: "CLI",
+    description:
+      "Selects the code-graph embedding backend for `semantic_search`: 'auto' (default — a " +
+      "local Ollama server if reachable, else an in-process ONNX model if installed, else the " +
+      "platform gateway if a key is configured, else no vector ranking), 'ollama', 'onnx' " +
+      "('local' also accepted), 'gateway', or 'off'. Local providers are free, offline, and use " +
+      "no AI SDK, but their vectors are a different, smaller vector space than the platform's " +
+      "1536-d index, so `graph push` never ships them — the server re-embeds those files " +
+      "instead. Overrides the `graph.embedProvider` value in ~/.config/oxagen/config.json; " +
+      "invalid values fall back to 'auto'.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "auto",
+  },
+  OLLAMA_HOST: {
+    group: "CLI",
+    description:
+      "Base URL of the local Ollama server the CLI's 'ollama'/'auto' embedding provider talks " +
+      "to. Same variable name Ollama itself uses, so an existing Ollama setup needs no new " +
+      "config. Defaults to http://localhost:11434 when unset.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "http://localhost:11434",
+  },
+  OXAGEN_EMBED_MODEL: {
+    group: "CLI",
+    description:
+      "Ollama embedding model the 'ollama'/'auto' embedding provider requests (must already be " +
+      "pulled — `ollama pull <model>`). Defaults to 'nomic-embed-text'. Does not affect the ONNX " +
+      "provider, which pins its own bundled model.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "nomic-embed-text",
+  },
   OXAGEN_ALLOW_NO_SESSION: {
     group: "CLI",
     description:
@@ -1406,6 +1685,344 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
       "synthetic benchmark session instead of exiting. Only for headless benchmark " +
       "containers (bench/terminal-bench, bench/swe-bench) that run the agent path with " +
       "no logged-in account — never set this outside a benchmark/CI sandbox.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  OXAGEN_FORBID_TEST_EDITS: {
+    group: "CLI",
+    description:
+      "Set to '1' to make buildWorkspaceTools structurally deny edit_file/write_file on " +
+      "test-shaped paths (tests/, __tests__/, *.test.*, *_spec.rb, *Test.java, …), " +
+      "returning a denial the model sees instead of a silent no-op. For benchmark " +
+      "harnesses (SWE-bench) graded against hidden, fixed tests: an agent that edits the " +
+      "tests it will be scored against 'passes' locally but scores 0, since the edit is " +
+      "discarded before grading — never set this outside a benchmark/CI sandbox.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  OXAGEN_ALLOW_STDIO_MCP: {
+    group: "CLI",
+    description:
+      "Set to '1' or 'true' to allow stdio-transport MCP servers to be SPAWNED as child " +
+      "processes from workspace file-mcp plugin configs (packages/agent file-mcp.ts). " +
+      "Spawning is OFF by default because a workspace-scoped config could otherwise " +
+      "execute arbitrary commands on the API host — enable only for a trusted " +
+      "local/CLI runtime, never on shared server deployments. HTTP MCP transports are " +
+      "unaffected and always processed.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  OXAGEN_BEST_OF_N_PIPELINE: {
+    group: "CLI",
+    description:
+      "Set to '1' to default `oxagen solve` (best-of-N) candidates to the full " +
+      "evaluate→enhance→route→execute→judge→revise pipeline instead of the bare engine " +
+      "loop, when the `--pipeline` flag isn't passed explicitly. Lets a caller (e.g. the " +
+      "bench adapter's differentiated config) opt every `solve` invocation into the " +
+      "pricier, more thorough pipeline mode without passing the flag on every call. " +
+      "Neither the flag nor this var set ⇒ bare mode, the cheaper default.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  OXAGEN_BEST_OF_N_VERIFY: {
+    group: "CLI",
+    description:
+      "Set to '1' to default `oxagen solve` (best-of-N) candidates to auto-verify: union " +
+      "and re-run the test/lint/build commands any candidate ran, across every surviving " +
+      "candidate's worktree, before selection — when the `--verify-auto` flag isn't passed " +
+      "explicitly. Mirrors OXAGEN_BEST_OF_N_PIPELINE's precedence (flag wins, then env, " +
+      "neither ⇒ off) so the bench adapter's differentiated config can turn it on without " +
+      "passing the flag on every call.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  OXAGEN_BEST_OF_N_MODE: {
+    group: "CLI",
+    description:
+      "Set to 'fork' or 'independent' to select best-of-N mode. Fork mode snapshots the " +
+      "trunk conversation at the diagnosis point and runs cache-forked tails per hypothesis, " +
+      "reusing the trunk's investigation at ~10× input discount via prompt caching. " +
+      "Independent mode runs N complete independent pipelines. Default is 'independent'.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "independent",
+  },
+  OXAGEN_LOCAL: {
+    group: "CLI",
+    description:
+      "Set to '1' (or pass `--local`) to force local BYOK mode even when logged in: " +
+      "the CLI runs the coordinator + workers with your own key — AI_GATEWAY_API_KEY " +
+      "(gateway-direct, any vendor; preferred) or ANTHROPIC_API_KEY (Anthropic API " +
+      "direct, Anthropic models only) — instead of routing through your Oxagen " +
+      "account. When not logged in, BYOK is used automatically if either key is " +
+      "present, so this flag is only needed to override an existing login.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  OXAGEN_COMMIT_LEDGER: {
+    group: "CLI",
+    description:
+      "Path to the append-only JSON-lines commit ledger that records every agent commit " +
+      "so work is never lost even if a branch is force-moved or a worktree removed. " +
+      "Defaults to ~/.oxagen/commit-ledger.jsonl.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "~/.oxagen/commit-ledger.jsonl",
+  },
+  OXAGEN_PROMPT_PROFILE: {
+    group: "CLI",
+    description:
+      "Force the agent system-prompt profile: 'interactive' (narrates for a live " +
+      "watcher) or 'headless' (strips narration, adds a verification protocol for " +
+      "autonomous/one-shot/SWE-bench runs). Unset ⇒ auto (headless when stdout is " +
+      "not a TTY, interactive otherwise).",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "headless",
+  },
+  OXAGEN_ENHANCE_TIMEOUT_MS: {
+    group: "CLI",
+    description:
+      "Wall-clock budget (ms) for the ENHANCE stage's code-graph pass. On a cold " +
+      "store the first graph query triggers a full tree-sitter build (minutes on a " +
+      "large repo), so headless one-shot bounds it to 15s by default; whatever " +
+      "resolved in budget is injected and the build keeps warming in the background. " +
+      "Set explicitly to override; 0 disables the bound. Unset ⇒ 15000 headless, " +
+      "unbounded interactive.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "15000",
+  },
+  OXAGEN_TURN_INACTIVITY_MS: {
+    group: "CLI",
+    description:
+      "Turn inactivity guard window (ms, default 300000). NOT a turn time cap: aborts a turn " +
+      "only when no model/tool progress lands within the window; any completed call, stream " +
+      "delta, or executing tool resets/defers it. For long CI waits prefer the built-in " +
+      "pre-abort CI probe (OXAGEN_CI_WAIT_CAP_MS) over raising this — a large window blinds " +
+      "the hang backstop. Non-finite or <=0 values are ignored.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "300000",
+  },
+  OXAGEN_CI_WAIT_CAP_MS: {
+    group: "CLI",
+    description:
+      "Cap (ms, default 7200000 = 2h) on how long the turn inactivity guard may keep extending " +
+      "for a confirmed CI wait: before aborting, a turn that ran a CI-watch tool (gh run watch / " +
+      "gh pr checks…) makes one call-out, and still-pending checks extend the window until this " +
+      "cumulative cap. Green/failed/no-PR/probe-error never extends.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "7200000",
+  },
+  OXAGEN_JUDGE_PANEL: {
+    group: "CLI",
+    description:
+      "Comma-separated gateway model slugs to use as a CROSS-VENDOR completeness " +
+      "judge panel instead of a single judge (majority rules, findings unioned). " +
+      "Higher cost, higher recall on incomplete work. Unset ⇒ single judge.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "openai/gpt-5,google/gemini-2.5-pro",
+  },
+  OXAGEN_MID_JUDGE_STEPS: {
+    group: "CLI",
+    description:
+      "Step count at which the mid-session completeness judge fires during a headless " +
+      "one-shot run. After this many tool-call steps in round 0, the pipeline pauses, " +
+      "runs judgeCompleteness, and injects any findings as a phase-B instruction before " +
+      "continuing — catching incomplete acceptance criteria (e.g. missing test cases) " +
+      "early rather than only at the end. 0 or unset disables the mid-session check. " +
+      "Default in headless mode: 20. Only for headless/benchmark runs.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "20",
+  },
+  OXAGEN_MAX_REVISE_ROUNDS: {
+    group: "CLI",
+    description:
+      "Max judge→revise rounds the turn pipeline runs before giving up on an incomplete " +
+      "verdict. 0 disables auto-revision entirely. Unset ⇒ 1. Only affects the full " +
+      "(non-bare) pipeline — bare execution (best-of-N's default) has no judge/revise loop.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "2",
+  },
+  OXAGEN_REVISE_MIN_CONFIDENCE: {
+    group: "CLI",
+    description:
+      "Perf #10: minimum judge confidence (0-100) an 'incomplete' verdict must carry before " +
+      "the pipeline spends a full execute+judge round revising it. A low-confidence incomplete " +
+      "call is a coin-flip that leans complete, so revising it doubles turn cost for marginal " +
+      "expected gain — confident-incomplete verdicts still revise. Default 40; 0 restores " +
+      "always-revise.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "40",
+  },
+  OXAGEN_JUDGE_FAST_COMPLEXITY_MAX: {
+    group: "CLI",
+    description:
+      "Complexity ceiling (0-100) under which pickTieredAdvisor substitutes a cheap 'fast' " +
+      "tier model as the completeness judge instead of the executor's own model, provided the " +
+      "diff also stays under OXAGEN_DIFF_BUDGET. An explicit OXAGEN_LLM_ADVISOR always wins. A " +
+      "non-positive value opts out entirely. Default 35.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "35",
+  },
+  OXAGEN_SPEC_GATE: {
+    group: "CLI",
+    description:
+      "Enable the spec-first oracle gate (F2): at mid-session judge point, if no failing " +
+      "test repro has been executed, inject a corrective instruction instead of generic " +
+      "completeness judgment. Enforces test-before-patch discipline. 0 or unset disables. " +
+      "Only for headless/benchmark runs.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "1",
+  },
+  OXAGEN_LADDER: {
+    group: "CLI",
+    description:
+      "Deterministic judge-skip / adaptive compute ladder (ADR-021 §1). ON BY DEFAULT: " +
+      "the frontier completeness judge is skipped when executed evidence already settles " +
+      "the outcome (oracle flipped + touched tests green + diff within budget, or a " +
+      "read-only turn with no diff). Set to 0/false to OPT OUT and force the judge to run " +
+      "every round.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "0",
+  },
+  OXAGEN_DIFF_BUDGET: {
+    group: "CLI",
+    description:
+      "Line-count threshold (default 120) for the fast-path terminal condition in the " +
+      "adaptive ladder (F3). When oracle is 'flipped' and touched-file tests pass, " +
+      "if diff lines ≤ budget, skip judge and submit. Only applies while judge-skip is enabled (the default; opt out via OXAGEN_LADDER=0).",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "120",
+  },
+  OXAGEN_LADDER_MAX_RUNG: {
+    group: "CLI",
+    description:
+      "Hard cap on ladder rung (0–3) in the adaptive compute controller (F3). " +
+      "Prevents escalation beyond the specified rung even when signals suggest higher. " +
+      "Default 3 (no cap). 0–3 only; invalid values silently use default. " +
+      "Only applies while judge-skip is enabled (the default; opt out via OXAGEN_LADDER=0).",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "3",
+  },
+  OXAGEN_LOCALIZE: {
+    group: "CLI",
+    description:
+      "Enable F1 deterministic zero-token localization: parse tracebacks and " +
+      "extract symbols from the issue to rank candidate files before the first LLM call. " +
+      "Default on (runs unless explicitly set to '0'). Unset or '1' enables, '0' disables.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  OXAGEN_REPO_PRIORS: {
+    group: "CLI",
+    description:
+      "Enable F8 per-repo procedural priors: inject cached layout, conventions, and accrued pitfalls " +
+      "learned from prior instances. Requires both repo and priorsDir options to be set in the caller. " +
+      "Default off. Unset or '0' disables, '1' enables.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "1",
+  },
+  OXAGEN_RECALL_FILTER: {
+    group: "CLI",
+    description:
+      "Enable F9 memory-recall applicability filter: drop recalled items with zero lexical overlap " +
+      "with the issue and candidate files, then optionally score survivors for semantic relevance. " +
+      "Reduces noise in injected memory. Default off. Unset or '0' disables, '1' enables.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "1",
+  },
+  OXAGEN_FLEET_DIR: {
+    group: "CLI",
+    description:
+      "Overrides the fleet store root (default `~/.oxagen/fleet`) that backs `oxagen fleet` " +
+      "session tracking (ADR-023). Used by tests and sandboxes to isolate the fleet store from " +
+      "a developer's real `~/.oxagen` directory; never set in deployed environments.",
     secret: false,
     clientExposed: false,
     services: [],
@@ -1439,6 +2056,17 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api"],
     requiredIn: [],
     valueOrigin: "manual",
+  },
+  INGESTION_FEATURE_BATCH: {
+    group: "Ingestion",
+    description:
+      "When '1', route GitHub feature inference through the Anthropic Message Batches API (async, half price) instead of per-file synchronous calls. Unset/absent = synchronous per-file (default).",
+    secret: false,
+    clientExposed: false,
+    services: ["api"],
+    requiredIn: [],
+    valueOrigin: "static",
+    staticValue: { development: "", preview: "", production: "" },
   },
   PRIVACY_ERASURE_GRACE_DAYS: {
     group: "Privacy",

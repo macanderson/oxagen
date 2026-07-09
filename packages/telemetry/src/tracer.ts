@@ -116,7 +116,14 @@ export function initTracer(overrideExporter?: SpanExporter): void {
     return;
   }
 
-  const exporter = overrideExporter ?? new OTLPTraceExporter({ url: endpoint });
+  const exporter =
+    overrideExporter ??
+    new OTLPTraceExporter({
+      url: endpoint,
+      // Optional collector auth/routing headers, driven by the standard OTEL
+      // env var. Empty object when unset — no headers attached.
+      headers: parseOtlpHeaders(process.env.OTEL_EXPORTER_OTLP_HEADERS),
+    });
 
   _sdk = new NodeSDK({
     resource: resourceFromAttributes({
@@ -130,6 +137,30 @@ export function initTracer(overrideExporter?: SpanExporter): void {
   });
 
   _sdk.start();
+}
+
+/**
+ * Parse the standard `OTEL_EXPORTER_OTLP_HEADERS` env var — a comma-separated
+ * list of `key=value` pairs (per the OTEL spec) — into a header record for the
+ * OTLP exporter. Values may themselves contain `=` (e.g. base64), so only the
+ * first `=` splits each pair. Malformed pairs (no `=`, empty key) are skipped.
+ * Returns `{}` when unset/empty so the exporter attaches no headers.
+ *
+ * @internal exported for tests.
+ */
+export function parseOtlpHeaders(
+  raw: string | undefined,
+): Record<string, string> {
+  const headers: Record<string, string> = {};
+  if (!raw) return headers;
+  for (const pair of raw.split(",")) {
+    const eq = pair.indexOf("=");
+    if (eq <= 0) continue; // no `=`, or empty key → skip
+    const key = pair.slice(0, eq).trim();
+    const value = pair.slice(eq + 1).trim();
+    if (key) headers[key] = value;
+  }
+  return headers;
 }
 
 /**

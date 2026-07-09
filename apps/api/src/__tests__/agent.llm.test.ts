@@ -92,6 +92,20 @@ vi.mock("@oxagen/database", () => ({
       workspaceId: "workspace_id",
       deletedAt: "deleted_at",
     },
+    // Required by packages/agent's _sandbox-session module-level SESSION_COLUMNS
+    // initializer, transitively reached via runCodingAgent and the agent.sandbox.*
+    // handlers registered through @oxagen/handlers (PR #644 chat→runCodingAgent).
+    sandboxSessions: {
+      id: "id",
+      publicId: "public_id",
+      sandboxId: "sandbox_id",
+      snapshotId: "snapshot_id",
+      image: "image",
+      status: "status",
+      metadata: "metadata",
+      workspaceId: "workspace_id",
+      sessionKey: "session_key",
+    },
   },
 }));
 
@@ -327,13 +341,13 @@ describe("agent.llm: streaming happy path", () => {
   it("passes converted messages, model, and agent surface to streamAgentReply", async () => {
     await app.fetch(
       post({
-        model: "anthropic/claude-sonnet-4.6",
+        model: "anthropic/claude-sonnet-5",
         messages: [{ role: "user", content: "Hi agent" }],
         stream: true,
       }),
     );
     expect(mocks.selectModel).toHaveBeenCalledWith({
-      model: "anthropic/claude-sonnet-4.6",
+      model: "anthropic/claude-sonnet-5",
     });
     const args = mocks.streamAgentReply.mock.calls[0]?.[0] as Record<
       string,

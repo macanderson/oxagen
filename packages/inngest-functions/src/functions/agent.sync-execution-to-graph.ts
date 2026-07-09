@@ -44,6 +44,7 @@ export const [agentSyncExecutionToGraph] = createFunction(
       summary,
       displayName,
       embedding,
+      properties,
     } = event.data as {
       executionId: string;
       orgId: string;
@@ -62,6 +63,9 @@ export const [agentSyncExecutionToGraph] = createFunction(
       summary?: string;
       displayName?: string;
       embedding?: number[] | null;
+      // Extra node-property entries (fanout projection: fanoutId / runId /
+      // capabilityName / attempts — spec Phase 2 §2).
+      properties?: Record<string, unknown> | null;
     };
 
     await step.run("write-neo4j", () =>
@@ -84,6 +88,7 @@ export const [agentSyncExecutionToGraph] = createFunction(
           summary,
           displayName,
           embedding,
+          properties,
         }),
       ),
     );

@@ -4,7 +4,7 @@ import { getCapability } from "../registry";
 
 describe("agent.sandbox.stop capability", () => {
   it("is registered and scoped", () => {
-    const cap = getCapability("agent.sandbox.stop");
+    const cap = getCapability("stop_sandbox");
     expect(cap?.domain).toBe("agent");
     expect(cap?.scoped).toBe(true);
   });

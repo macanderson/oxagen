@@ -2,7 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const connectionGet = registerCapability({
-  name: "connection.get",
+  name: "get_connection",
   domain: "connection",
   description: "Get details of a single data source connection.",
   mode: "sync",
@@ -31,6 +31,12 @@ export const connectionGet = registerCapability({
     entityCount: z.number(),
     lastSyncAt: z.string().nullable(),
     errorMessage: z.string().nullable(),
+    // Poll/sync health rolled up by the connector poll loop.
+    healthStatus: z.enum(["healthy", "degraded", "errored"]),
+    consecutiveFailureCount: z.number(),
+    lastPollAt: z.string().nullable(),
+    nextPollAt: z.string().nullable(),
+    lastErrorAt: z.string().nullable(),
     createdAt: z.string(),
     updatedAt: z.string(),
   }),

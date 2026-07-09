@@ -120,6 +120,28 @@ function makeStep(overrides: Partial<HandlerCtx["step"]> = {}): HandlerCtx["step
   };
 }
 
+/**
+ * A step.run mock that reproduces Inngest's real memoization behavior: once
+ * a given step id has completed, subsequent calls with that same id return
+ * the cached result WITHOUT invoking the callback again. Reusing the same
+ * instance across two `capturedHandler(...)` invocations simulates Inngest
+ * replaying the whole function body from the top — e.g. after a retry, or a
+ * worker restart before the function's return value is acknowledged — which
+ * is exactly the scenario that used to double-insert ClickHouse telemetry
+ * rows emitted outside step.run (or wrapped with a non-deterministic id).
+ */
+function makeMemoizingStep(): HandlerCtx["step"] {
+  const memo = new Map<string, unknown>();
+  return {
+    run: vi.fn(async (name: string, fn: () => unknown) => {
+      if (memo.has(name)) return memo.get(name);
+      const result = await fn();
+      memo.set(name, result);
+      return result;
+    }),
+  };
+}
+
 /** Build a withSystemDb mock that sequences: (1) run, (2) steps, (3) edges */
 function buildSystemDbForExecution(opts: {
   run?: typeof PENDING_RUN | null;
@@ -410,7 +432,7 @@ describe("playbook-run-execute Inngest function", () => {
     const toolStep = {
       id: "st", stepKey: "run_tool", name: "RunTool", stepType: "tool",
       isAsync: false, exitOnError: true,
-      config: { capability: "web.fetch", input: { url: "https://example.com" } },
+      config: { capability: "fetch_web_page", input: { url: "https://example.com" } },
     };
 
     mocks.getCapability.mockReturnValue({ agent: { requiresApproval: false } });
@@ -422,7 +444,7 @@ describe("playbook-run-execute Inngest function", () => {
     const result = await capturedHandler!({ event: { data: BASE_EVENT }, step });
     expect(result).toMatchObject({ status: "completed", stepsExecuted: 1 });
     expect(mocks.kernelInvoke).toHaveBeenCalledWith(
-      "web.fetch",
+      "fetch_web_page",
       { url: "https://example.com" },
       expect.objectContaining({ surface: "runner", orgId: ORG_ID }),
     );
@@ -434,7 +456,7 @@ describe("playbook-run-execute Inngest function", () => {
     const toolStep = {
       id: "st", stepKey: "risky_tool", name: "RiskyTool", stepType: "tool",
       isAsync: false, exitOnError: true,
-      config: { capability: "billing.credits.purchase", input: {} },
+      config: { capability: "purchase_credits", input: {} },
     };
 
     mocks.getCapability.mockReturnValue({ agent: { requiresApproval: true } });
@@ -723,6 +745,46 @@ describe("playbook-run-execute Inngest function", () => {
       expect.objectContaining({ telErr: expect.any(Error) }),
       expect.stringContaining("insertEvents failed"),
     );
+  });
+
+  it("does not double-insert ClickHouse telemetry when the run is replayed with memoized steps (Inngest retry simulation)", async () => {
+    const toolStep = {
+      id: "st", stepKey: "run_tool", name: "RunTool", stepType: "tool",
+      isAsync: false, exitOnError: true,
+      config: { capability: "fetch_web_page", input: { url: "https://example.com" } },
+    };
+
+    mocks.getCapability.mockReturnValue({ agent: { requiresApproval: false } });
+    buildSystemDbForExecution({ run: PENDING_RUN, steps: [toolStep], edges: [] });
+    buildTenantDb();
+    mocks.kernelInvoke.mockResolvedValue({ status: 200, body: "page content" });
+
+    // A single memoizing step shared across two invocations of the handler:
+    // this is what "the same Inngest run replays after this point" looks
+    // like — every step id that already completed on the first pass returns
+    // its cached result on the second pass instead of re-running.
+    const step = makeMemoizingStep();
+
+    const first = await capturedHandler!({ event: { data: BASE_EVENT }, step });
+    expect(first).toMatchObject({ status: "completed", stepsExecuted: 1 });
+
+    const second = await capturedHandler!({ event: { data: BASE_EVENT }, step });
+    expect(second).toMatchObject({ status: "completed", stepsExecuted: 1 });
+
+    // Exactly one playbook_step.executed row + one playbook_run.completed
+    // row for the single logical run — NOT doubled by the replay. Before
+    // the fix these were emitted as plain (un-stepped) code and duplicated
+    // on every replay that reached them.
+    expect(mocks.insertEvents).toHaveBeenCalledTimes(2);
+    // Exactly one tool_invocations row for the single tool step.
+    expect(mocks.insertToolInvocation).toHaveBeenCalledTimes(1);
+
+    // The event_id / invocation_id baked into the (single) inserted rows are
+    // derived deterministically from (runId, stepId) — not crypto.randomUUID().
+    const stepTelRow = (mocks.insertEvents.mock.calls[0]![0] as Array<Record<string, unknown>>)[0]!;
+    expect(stepTelRow.event_id).toEqual(expect.stringMatching(/^[0-9a-f-]{36}$/));
+    const runTelRow = (mocks.insertEvents.mock.calls[1]![0] as Array<Record<string, unknown>>)[0]!;
+    expect(runTelRow.event_id).toEqual(expect.stringMatching(/^[0-9a-f-]{36}$/));
   });
 
   // ── step_run insert failure propagates (bad-fallback fix) ────────────────────

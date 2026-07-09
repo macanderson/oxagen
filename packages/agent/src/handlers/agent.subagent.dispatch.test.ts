@@ -12,6 +12,8 @@ let insertedRuns: Array<Record<string, unknown>> = [];
 // persisted inngest_event_id and the on-emit-failure run cleanup.
 let fanoutUpdates: Array<Record<string, unknown>> = [];
 let runUpdates: Array<Record<string, unknown>> = [];
+// Descendant count returned by the lineage CTE (Phase 2 descendant cap).
+let descendantCountResult = 0;
 // send() resolves to Inngest's real shape ({ ids: [...] }); tests can override.
 const inngestSendSpy = vi.fn(async () => ({ ids: ["evt_abc"] }));
 
@@ -41,6 +43,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
           };
         },
       }),
+      execute: () => Promise.resolve([{ descendant_count: descendantCountResult }]),
       update: (table: unknown) => ({
         set: (vals: Record<string, unknown>) => ({
           where: () => {
@@ -70,9 +73,9 @@ vi.mock("../registry-loader", () => ({
     getCapability: (name: string) =>
       (
         {
-          "agent.tool.list": { name, agent: { riskLevel: "low" as const } },
-          "agent.memory.recall": { name, agent: { riskLevel: "low" as const } },
-          "agent.code.execute": { name, agent: { riskLevel: "high" as const } },
+          "list_agent_tools": { name, agent: { riskLevel: "low" as const } },
+          "recall_memory": { name, agent: { riskLevel: "low" as const } },
+          "execute_code": { name, agent: { riskLevel: "high" as const } },
         } as Record<string, { name: string; agent: { riskLevel: "low" | "medium" | "high" } }>
       )[name],
   }),
@@ -89,6 +92,7 @@ describe("agent.subagent.dispatch handler", () => {
     insertedRuns = [];
     fanoutUpdates = [];
     runUpdates = [];
+    descendantCountResult = 0;
     // Reset insert mock to return fanout row by default
     insertFanoutSpy.mockResolvedValue([{ id: "fanuuid_123", publicId: "fan_123" }]);
     // Reset send mock to the success shape by default.
@@ -100,8 +104,8 @@ describe("agent.subagent.dispatch handler", () => {
       {
         parentMessageId: "msg_1",
         tasks: [
-          { capabilityName: "agent.tool.list", input: {} },
-          { capabilityName: "agent.memory.recall", input: { query: "foo" } },
+          { capabilityName: "list_agent_tools", input: {} },
+          { capabilityName: "recall_memory", input: { query: "foo" } },
         ],
         maxParallel: 5,
       },
@@ -126,8 +130,8 @@ describe("agent.subagent.dispatch handler", () => {
       {
         parentMessageId: "msg_parent",
         tasks: [
-          { capabilityName: "agent.tool.list", input: {} },
-          { capabilityName: "agent.memory.recall", input: { query: "foo" } },
+          { capabilityName: "list_agent_tools", input: {} },
+          { capabilityName: "recall_memory", input: { query: "foo" } },
         ],
         maxParallel: 5,
       },
@@ -153,7 +157,7 @@ describe("agent.subagent.dispatch handler", () => {
       agentSubagentDispatchHandler(
         {
           parentMessageId: "msg_2",
-          tasks: [{ capabilityName: "agent.tool.list", input: {} }],
+          tasks: [{ capabilityName: "list_agent_tools", input: {} }],
           maxParallel: 2,
         },
         CTX,
@@ -166,7 +170,7 @@ describe("agent.subagent.dispatch handler", () => {
     await agentSubagentDispatchHandler(
       {
         parentMessageId: "msg_3",
-        tasks: [{ capabilityName: "agent.tool.list", input: {} }],
+        tasks: [{ capabilityName: "list_agent_tools", input: {} }],
         maxParallel: 10,
       },
       CTX,
@@ -194,7 +198,7 @@ describe("agent.subagent.dispatch handler", () => {
     await agentSubagentDispatchHandler(
       {
         parentMessageId: "msg_to",
-        tasks: [{ capabilityName: "agent.code.execute", input: {} }],
+        tasks: [{ capabilityName: "execute_code", input: {} }],
         maxParallel: 1,
         timeoutSeconds: 3600,
       },
@@ -209,7 +213,7 @@ describe("agent.subagent.dispatch handler", () => {
     await agentSubagentDispatchHandler(
       {
         parentMessageId: "msg_evt",
-        tasks: [{ capabilityName: "agent.tool.list", input: {} }],
+        tasks: [{ capabilityName: "list_agent_tools", input: {} }],
         maxParallel: 1,
       },
       CTX,
@@ -227,8 +231,8 @@ describe("agent.subagent.dispatch handler", () => {
         {
           parentMessageId: "msg_fail",
           tasks: [
-            { capabilityName: "agent.tool.list", input: {} },
-            { capabilityName: "agent.memory.recall", input: { query: "x" } },
+            { capabilityName: "list_agent_tools", input: {} },
+            { capabilityName: "recall_memory", input: { query: "x" } },
           ],
           maxParallel: 5,
         },
@@ -245,5 +249,47 @@ describe("agent.subagent.dispatch handler", () => {
       },
     ]);
     expect(fanoutUpdates).toHaveLength(0);
+  });
+
+  it("rejects a dispatch that would exceed the total-descendant cap (Phase 2 §4)", async () => {
+    descendantCountResult = 249;
+
+    await expect(
+      agentSubagentDispatchHandler(
+        {
+          parentMessageId: "msg_nested",
+          tasks: [
+            { capabilityName: "list_agent_tools", input: {} },
+            { capabilityName: "recall_memory", input: {} },
+          ],
+          maxParallel: 5,
+        },
+        CTX,
+      ),
+    ).rejects.toThrow(/total-descendant cap of 250/);
+
+    // Rejected BEFORE any row is created or event emitted.
+    expect(insertFanoutSpy).not.toHaveBeenCalled();
+    expect(insertedRuns).toHaveLength(0);
+    expect(inngestSendSpy).not.toHaveBeenCalled();
+  });
+
+  it("allows a dispatch that lands exactly at the descendant cap", async () => {
+    descendantCountResult = 248;
+
+    const result = await agentSubagentDispatchHandler(
+      {
+        parentMessageId: "msg_nested",
+        tasks: [
+          { capabilityName: "list_agent_tools", input: {} },
+          { capabilityName: "recall_memory", input: {} },
+        ],
+        maxParallel: 5,
+      },
+      CTX,
+    );
+
+    expect(result.status).toBe("pending");
+    expect(inngestSendSpy).toHaveBeenCalledTimes(1);
   });
 });

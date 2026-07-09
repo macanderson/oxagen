@@ -31,6 +31,8 @@ export { emailVerificationTemplate } from "./notifications/email-verification-te
 export type { EmailVerificationTemplateInput } from "./notifications/email-verification-template";
 export { invitationEmailTemplate } from "./notifications/invitation-email-template";
 export type { InvitationEmailTemplateInput } from "./notifications/invitation-email-template";
+export { bookAccessEmailTemplate } from "./notifications/book-access-email-template";
+export type { BookAccessEmailTemplateInput } from "./notifications/book-access-email-template";
 export { lowBalanceAlertTemplate } from "./notifications/low-balance-alert-template";
 export type { LowBalanceAlertTemplateInput } from "./notifications/low-balance-alert-template";
 export { paymentFailedTemplate } from "./notifications/payment-failed-template";

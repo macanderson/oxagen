@@ -34,8 +34,7 @@ import {
   type DeviceProfile,
 } from "../runtime/index.js";
 import { capabilityTable } from "../runtime/registry.js";
-
-const out = (s = ""): void => void process.stdout.write(s + "\n");
+import { stdoutWriter, type CommandWriter } from "../lib/capture-writer.js";
 
 export interface ModelsOptions {
   json?: boolean;
@@ -43,7 +42,11 @@ export interface ModelsOptions {
 
 // ── models list ──────────────────────────────────────────────────────────────
 
-export async function handleModelsList(opts: ModelsOptions = {}): Promise<void> {
+export async function handleModelsList(
+  opts: ModelsOptions = {},
+  writer: CommandWriter = stdoutWriter,
+): Promise<void> {
+  const out = writer.write;
   const device = detectDevice();
   const quantPref = getQuantizationPreference();
   const table = capabilityTable();
@@ -101,7 +104,11 @@ export async function handleModelsList(opts: ModelsOptions = {}): Promise<void> 
 
 // ── models active ────────────────────────────────────────────────────────────
 
-export async function handleModelsActive(opts: ModelsOptions = {}): Promise<void> {
+export async function handleModelsActive(
+  opts: ModelsOptions = {},
+  writer: CommandWriter = stdoutWriter,
+): Promise<void> {
+  const out = writer.write;
   const coordinator = getCoordinator();
 
   if (coordinator === ON_DEVICE_ID) {
@@ -146,7 +153,16 @@ export async function handleModelsActive(opts: ModelsOptions = {}): Promise<void
 
 // ── models pull ──────────────────────────────────────────────────────────────
 
-export async function handleModelsPull(opts: ModelsOptions = {}): Promise<void> {
+export async function handleModelsPull(
+  opts: ModelsOptions = {},
+  writer: CommandWriter = stdoutWriter,
+): Promise<void> {
+  const out = writer.write;
+  // In capture mode (REPL inline execution) we never emit the incremental
+  // `\r  NN%` progress line — that's a raw terminal redraw trick that only
+  // makes sense against a real TTY, and it would just clutter the assistant
+  // message. Capture mode still gets a start line and the final result.
+  const isCapturing = writer !== stdoutWriter;
   const provider = new OnDeviceProvider();
   if (!provider.resolvedRow || !provider.resolvedQuant) {
     out(`No on-device model fits this device: ${provider.rationale}`);
@@ -166,14 +182,14 @@ export async function handleModelsPull(opts: ModelsOptions = {}): Promise<void> 
   if (human) out(`Pulling ${provider.resolvedRow.modelId} @ ${provider.resolvedQuant} …`);
   let lastPct = -1;
   const result = await provider.pull((received, total) => {
-    if (!total) return;
+    if (!total || isCapturing) return;
     const pct = Math.floor((received / total) * 100);
     if (human && pct !== lastPct && pct % 5 === 0) {
       lastPct = pct;
       process.stderr.write(`\r  ${pct}%  (${fmtBytes(received)} / ${fmtBytes(total)})   `);
     }
   });
-  if (human) process.stderr.write("\n");
+  if (human && !isCapturing) process.stderr.write("\n");
 
   if (opts.json) {
     out(JSON.stringify({ ...result, modelId: provider.resolvedRow.modelId, quant: provider.resolvedQuant }, null, 2));
@@ -184,7 +200,11 @@ export async function handleModelsPull(opts: ModelsOptions = {}): Promise<void> 
 
 // ── models status ────────────────────────────────────────────────────────────
 
-export async function handleModelsStatus(opts: ModelsOptions = {}): Promise<void> {
+export async function handleModelsStatus(
+  opts: ModelsOptions = {},
+  writer: CommandWriter = stdoutWriter,
+): Promise<void> {
+  const out = writer.write;
   const device = detectDevice();
   const dir = getCacheDir();
   const quantPref = getQuantizationPreference();
@@ -238,7 +258,11 @@ export async function handleModelsStatus(opts: ModelsOptions = {}): Promise<void
 
 // ── models use ───────────────────────────────────────────────────────────────
 
-export async function handleModelsUse(id: string): Promise<void> {
+export async function handleModelsUse(
+  id: string,
+  writer: CommandWriter = stdoutWriter,
+): Promise<void> {
+  const out = writer.write;
   const known = [ON_DEVICE_ID, ...cloudModelIds()];
   if (!known.includes(id)) {
     out(`Unknown model id "${id}". Choose one of: ${known.join(", ")}.`);

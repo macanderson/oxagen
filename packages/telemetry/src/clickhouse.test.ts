@@ -51,7 +51,7 @@ describe("hashPrompt", () => {
 
 describe("providerFromModelId", () => {
   it("maps a bare claude model id to 'anthropic'", () => {
-    expect(providerFromModelId("claude-sonnet-4-6")).toBe("anthropic");
+    expect(providerFromModelId("claude-sonnet-5")).toBe("anthropic");
     expect(providerFromModelId("claude-3-haiku-20240307")).toBe("anthropic");
     expect(providerFromModelId("claude-opus-4")).toBe("anthropic");
   });
@@ -74,7 +74,7 @@ describe("providerFromModelId", () => {
 
   it("maps the prefixed form 'anthropic:claude-3' to 'anthropic'", () => {
     expect(providerFromModelId("anthropic:claude-3-haiku-20240307")).toBe("anthropic");
-    expect(providerFromModelId("anthropic:claude-sonnet-4-6")).toBe("anthropic");
+    expect(providerFromModelId("anthropic:claude-sonnet-5")).toBe("anthropic");
   });
 
   it("maps the prefixed form 'openai:gpt-4o' to 'openai'", () => {
@@ -292,7 +292,7 @@ describe("insert helpers — insertRows delegation", () => {
       execution_step_id: "11111111-1111-1111-1111-111111111111",
       org_id: "o1",
       workspace_id: "w1",
-      model: "claude-sonnet-4-6",
+      model: "claude-sonnet-5",
       provider: "anthropic",
       input_tokens: 100,
       output_tokens: 50,
@@ -306,10 +306,21 @@ describe("insert helpers — insertRows delegation", () => {
     await mod.insertTokenUsage([row]);
     // A real UUID is passed straight through unchanged (no coalescing).
     // insertTokenUsage also auto-stamps trace_id/span_id from the active OTEL
-    // context; with no tracer initialised these are empty strings.
+    // context (empty strings with no tracer) and principal attribution from
+    // the ambient tenant scope (sentinels outside any scope — migration 0023).
     expect(insertMock).toHaveBeenCalledWith({
       table: "token_usage",
-      values: [{ ...row, trace_id: "", span_id: "" }],
+      values: [
+        {
+          ...row,
+          trace_id: "",
+          span_id: "",
+          principal_id: mod.NIL_UUID,
+          principal_kind: "",
+          user_id: mod.NIL_UUID,
+          capability_name: "",
+        },
+      ],
       format: "JSONEachRow",
     });
   });
@@ -384,7 +395,7 @@ describe("insert helpers — insertRows delegation", () => {
       invocation_id: "inv1",
       org_id: "o1",
       workspace_id: "w1",
-      capability_name: "chat.message.send",
+      capability_name: "send_message",
       message_id: "m1",
       parent_message_id: null,
       execution_step_id: null,
@@ -403,12 +414,112 @@ describe("insert helpers — insertRows delegation", () => {
     };
     await mod.insertToolInvocation(row);
     // insertToolInvocation auto-stamps trace_id/span_id from the active OTEL
-    // context; with no tracer initialised these are empty strings.
+    // context (empty strings with no tracer) and principal attribution from
+    // the ambient tenant scope (sentinels outside any scope — migration 0023).
     expect(insertMock).toHaveBeenCalledWith({
       table: "tool_invocations",
-      values: [{ ...row, trace_id: "", span_id: "" }],
+      values: [
+        {
+          ...row,
+          trace_id: "",
+          span_id: "",
+          principal_id: mod.NIL_UUID,
+          principal_kind: "",
+          user_id: mod.NIL_UUID,
+        },
+      ],
       format: "JSONEachRow",
     });
+  });
+
+  // ── Principal attribution stamping (migration 0023) ───────────────────────
+
+  it("stamps principal attribution from the ambient tenant scope onto token_usage rows", async () => {
+    const ORG = "00000000-0000-0000-0000-0000000000a1";
+    const WS = "00000000-0000-0000-0000-0000000000b2";
+    const PRINCIPAL = "00000000-0000-0000-0000-0000000000e5";
+    const USER = "00000000-0000-0000-0000-0000000000f6";
+    const row: TokenUsageRow = {
+      execution_step_id: null,
+      org_id: ORG,
+      workspace_id: WS,
+      model: "claude-sonnet-5",
+      provider: "anthropic",
+      input_tokens: 10,
+      output_tokens: 5,
+      cached_tokens: 0,
+      cost_usd_micros: 100,
+      duration_ms: 50,
+      surface: "api",
+      prompt_hash: "abc123def456abc1",
+      created_at: new Date().toISOString(),
+    };
+    // Import tenancy from the SAME (reset) module registry as `mod` — the
+    // beforeEach vi.resetModules() gives clickhouse.ts a fresh @oxagen/tenancy
+    // instance, so a top-level import here would write to a different ALS.
+    const { runInTenantScope } = await import("@oxagen/tenancy");
+    await runInTenantScope(
+      {
+        orgId: ORG,
+        workspaceId: WS,
+        principalId: PRINCIPAL,
+        principalKind: "agent",
+        userId: USER,
+        capabilityName: "query_ontology",
+      },
+      () => mod.insertTokenUsage([row]),
+    );
+    const values = (insertMock.mock.calls[0]![0] as { values: TokenUsageRow[] })
+      .values;
+    expect(values[0]!.principal_id).toBe(PRINCIPAL);
+    expect(values[0]!.principal_kind).toBe("agent");
+    expect(values[0]!.user_id).toBe(USER);
+    expect(values[0]!.capability_name).toBe("query_ontology");
+  });
+
+  it("explicit caller attribution wins over the ambient scope (no spoof-by-scope)", async () => {
+    const ORG = "00000000-0000-0000-0000-0000000000a1";
+    const WS = "00000000-0000-0000-0000-0000000000b2";
+    const EXPLICIT = "33333333-3333-3333-3333-333333333333";
+    const row: ToolInvocationRow = {
+      invocation_id: "inv2",
+      org_id: ORG,
+      workspace_id: WS,
+      capability_name: "send_message",
+      message_id: "m1",
+      parent_message_id: null,
+      execution_step_id: null,
+      status: "completed",
+      input_size_bytes: 1,
+      output_size_bytes: 1,
+      latency_ms: 1,
+      error_class: null,
+      external_provider: "",
+      external_server_id: null,
+      risk_level: "low",
+      required_approval: 0,
+      surface: "api",
+      provider: "anthropic",
+      created_at: new Date().toISOString(),
+      principal_id: EXPLICIT,
+    };
+    // Same-registry import — see the token_usage stamping test above.
+    const { runInTenantScope } = await import("@oxagen/tenancy");
+    await runInTenantScope(
+      {
+        orgId: ORG,
+        workspaceId: WS,
+        principalId: "00000000-0000-0000-0000-0000000000e5",
+        principalKind: "human",
+      },
+      () => mod.insertToolInvocation(row),
+    );
+    const values = (
+      insertMock.mock.calls[0]![0] as { values: ToolInvocationRow[] }
+    ).values;
+    expect(values[0]!.principal_id).toBe(EXPLICIT);
+    // Unset fields still stamp from the ambient scope.
+    expect(values[0]!.principal_kind).toBe("human");
   });
 
   it("insertAuditEvent delegates to audit_events table", async () => {
@@ -417,7 +528,7 @@ describe("insert helpers — insertRows delegation", () => {
       event_id: "ae1",
       org_id: "o1",
       workspace_id: "w1",
-      capability: "chat.message.send",
+      capability: "send_message",
       scope_kind: "org",
       scope_id: "o1",
       acting_principal_id: "u1",
@@ -448,7 +559,7 @@ describe("insert helpers — insertRows delegation", () => {
       run_id: "run-1",
       agent_name: "oxagen",
       agent_version: "0.6.2",
-      model: "claude-sonnet-4.5",
+      model: "claude-sonnet-5",
       harness: "terminal-bench",
       suite: "terminal-bench-2.0",
       graph_code: 1,
@@ -671,7 +782,7 @@ describe("latestAuditChainHash", () => {
       json: vi.fn().mockResolvedValue([{ chain_hash: "abc123def456" }]),
     });
 
-    const hash = await mod.latestAuditChainHash({ orgId: "o1", capability: "chat.message.send" });
+    const hash = await mod.latestAuditChainHash({ orgId: "o1", capability: "send_message" });
     expect(hash).toBe("abc123def456");
   });
 
@@ -680,7 +791,7 @@ describe("latestAuditChainHash", () => {
       json: vi.fn().mockResolvedValue([]),
     });
 
-    const hash = await mod.latestAuditChainHash({ orgId: "o1", capability: "chat.message.send" });
+    const hash = await mod.latestAuditChainHash({ orgId: "o1", capability: "send_message" });
     expect(hash).toBe("");
   });
 

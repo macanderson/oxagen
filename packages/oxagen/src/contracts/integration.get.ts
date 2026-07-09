@@ -2,7 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const integrationGet = registerCapability({
-  name: "integration.get",
+  name: "get_integration",
   domain: "integration",
   description: "Get full details of a single plugin instance including schema and configuration.",
   mode: "sync",

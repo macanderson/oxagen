@@ -1,8 +1,14 @@
-// emit-audit.test.ts — unit tests for emitAudit() (OXA-1524).
+// emit-audit.test.ts — unit tests for emitAudit() (OXA-1524, OXA-2058).
 //
 // Tests:
 //   - sha256 chain hash is correctly computed
-//   - prevHash failure is non-fatal (error swallowed, empty prevHash used)
+//   - prevHash READ failure is non-fatal (chain re-anchors from empty prevHash,
+//     but chain_hash itself is still computed and non-empty)
+//   - sha256 COMPUTATION failure (payload OR chain) is FATAL: emitAudit rejects
+//     and insertAuditEvent is never called — an audit row with an empty
+//     chain_hash must never be persisted (OXA-2058)
+//   - the durable insert is retried with backoff before a write failure
+//     propagates to the caller
 //   - insertAuditEvent is called with correctly shaped row
 
 import { describe, expect, it, vi, beforeEach } from "vitest";
@@ -23,6 +29,18 @@ vi.mock("@oxagen/telemetry", async (importOriginal) => {
     latestAuditChainHash: mocks.latestAuditChainHash,
   };
 });
+
+// Spy on the package logger so we can assert the sha256-failure path logs an
+// error (audit-chain integrity is a SOC-2 concern — a silent empty hash must
+// never pass unobserved).
+const loggerMocks = vi.hoisted(() => ({
+  error: vi.fn(),
+  warn: vi.fn(),
+  info: vi.fn(),
+  debug: vi.fn(),
+}));
+
+vi.mock("./logger", () => ({ logger: loggerMocks }));
 
 import { emitAudit } from "./emit-audit";
 import type { CapabilityContext } from "@oxagen/oxagen";
@@ -57,7 +75,7 @@ describe("emitAudit()", () => {
 
   it("calls insertAuditEvent exactly once with the correct capability and outcome", async () => {
     await emitAudit({
-      capability: "chat.message.send",
+      capability: "send_message",
       ctx: CTX,
       principal: null,
       result: ALLOW_RESULT,
@@ -67,14 +85,14 @@ describe("emitAudit()", () => {
 
     expect(mocks.insertAuditEvent).toHaveBeenCalledTimes(1);
     const row = mocks.insertAuditEvent.mock.calls[0]?.[0] as AuditEventRow;
-    expect(row.capability).toBe("chat.message.send");
+    expect(row.capability).toBe("send_message");
     expect(row.outcome).toBe("allow");
     expect(row.org_id).toBe("org_emit_test");
   });
 
   it("computes a chain_hash string of length 64 (SHA-256 hex)", async () => {
     await emitAudit({
-      capability: "chat.message.send",
+      capability: "send_message",
       ctx: CTX,
       principal: null,
       result: ALLOW_RESULT,
@@ -91,7 +109,7 @@ describe("emitAudit()", () => {
   it("chain_hash changes when prevHash changes (hash chains over prevHash)", async () => {
     mocks.latestAuditChainHash.mockResolvedValueOnce("hash_a");
     await emitAudit({
-      capability: "chat.message.send",
+      capability: "send_message",
       ctx: CTX,
       principal: null,
       result: ALLOW_RESULT,
@@ -104,7 +122,7 @@ describe("emitAudit()", () => {
     mocks.insertAuditEvent.mockResolvedValue(undefined);
     mocks.latestAuditChainHash.mockResolvedValueOnce("hash_b");
     await emitAudit({
-      capability: "chat.message.send",
+      capability: "send_message",
       ctx: CTX,
       principal: null,
       result: ALLOW_RESULT,
@@ -124,7 +142,7 @@ describe("emitAudit()", () => {
     mocks.latestAuditChainHash.mockRejectedValue(new Error("clickhouse read failed"));
 
     await emitAudit({
-      capability: "chat.message.send",
+      capability: "send_message",
       ctx: CTX,
       principal: null,
       result: ALLOW_RESULT,
@@ -141,7 +159,7 @@ describe("emitAudit()", () => {
 
   it("sets scope_kind to 'workspace' when workspaceId is present in ctx", async () => {
     await emitAudit({
-      capability: "chat.message.send",
+      capability: "send_message",
       ctx: { ...CTX, workspaceId: "ws_scope_test" },
       principal: null,
       result: ALLOW_RESULT,
@@ -156,7 +174,7 @@ describe("emitAudit()", () => {
 
   it("sets scope_kind to 'org' and scope_id to orgId when workspaceId is absent", async () => {
     await emitAudit({
-      capability: "chat.message.send",
+      capability: "send_message",
       ctx: { ...CTX, workspaceId: "" },
       principal: null,
       result: ALLOW_RESULT,
@@ -176,7 +194,7 @@ describe("emitAudit()", () => {
     };
 
     await emitAudit({
-      capability: "chat.message.send",
+      capability: "send_message",
       ctx: CTX,
       principal: null,
       result: { outcome: "deny", reason: "org_enforced_deny", trace: DENY_TRACE },
@@ -225,7 +243,7 @@ describe("emitAudit()", () => {
 
   it("null principal → acting_principal_id is nil UUID, kind service, human_principal_id null", async () => {
     await emitAudit({
-      capability: "chat.message.send",
+      capability: "send_message",
       ctx: CTX,
       principal: null,
       result: ALLOW_RESULT,
@@ -250,7 +268,7 @@ describe("emitAudit()", () => {
     };
 
     await emitAudit({
-      capability: "chat.message.send",
+      capability: "send_message",
       ctx: CTX,
       principal: humanPrincipal,
       result: ALLOW_RESULT,
@@ -294,7 +312,7 @@ describe("emitAudit()", () => {
     const rawInputJson = '{"content":"hello world"}';
 
     await emitAudit({
-      capability: "chat.message.send",
+      capability: "send_message",
       ctx: CTX,
       principal: null,
       result: ALLOW_RESULT,
@@ -309,7 +327,7 @@ describe("emitAudit()", () => {
 
   it("payload_hash differs for different rawInputJson values", async () => {
     await emitAudit({
-      capability: "chat.message.send",
+      capability: "send_message",
       ctx: CTX,
       principal: null,
       result: ALLOW_RESULT,
@@ -323,7 +341,7 @@ describe("emitAudit()", () => {
     mocks.latestAuditChainHash.mockResolvedValue("prev_hash_abc");
 
     await emitAudit({
-      capability: "chat.message.send",
+      capability: "send_message",
       ctx: CTX,
       principal: null,
       result: ALLOW_RESULT,
@@ -341,7 +359,7 @@ describe("emitAudit()", () => {
     mocks.latestAuditChainHash.mockResolvedValue("specific_prev_hash");
 
     await emitAudit({
-      capability: "chat.message.send",
+      capability: "send_message",
       ctx: CTX,
       principal: null,
       result: ALLOW_RESULT,
@@ -363,7 +381,7 @@ describe("emitAudit()", () => {
     mocks.latestAuditChainHash.mockRejectedValue(new Error("read timeout"));
 
     await emitAudit({
-      capability: "chat.message.send",
+      capability: "send_message",
       ctx: CTX,
       principal: null,
       result: ALLOW_RESULT,
@@ -377,6 +395,119 @@ describe("emitAudit()", () => {
     // chain_hash is still a valid 64-char hex (computed with empty prevHash)
     expect(row.chain_hash).toHaveLength(64);
     expect(row.chain_hash).toMatch(/^[a-f0-9]+$/);
+  });
+
+  // ── sha256 (subtle.digest) failure is FATAL — never persist an empty chain_hash (OXA-2058) ──
+
+  it("OXA-2058: logs an error and REJECTS when sha256 fails — insertAuditEvent is never called, no empty chain_hash is ever persisted", async () => {
+    const digestSpy = vi
+      .spyOn(globalThis.crypto.subtle, "digest")
+      .mockRejectedValue(new Error("subtle.digest boom"));
+
+    try {
+      // Both payloadHash and chainHash flow through sha256Hex — a failure on
+      // EITHER must reject the whole call. Persisting a row with an empty
+      // chain_hash breaks tamper-evidence for every subsequent row chained on
+      // top of it, so the correct behavior is to refuse the write entirely
+      // (a missing, alerted-on audit row is safer than a silently corrupted
+      // tamper chain).
+      await expect(
+        emitAudit({
+          capability: "send_message",
+          ctx: CTX,
+          principal: null,
+          result: ALLOW_RESULT,
+          trace: ALLOW_TRACE,
+          rawInputJson: "{}",
+        }),
+      ).rejects.toThrow("subtle.digest boom");
+
+      expect(loggerMocks.error).toHaveBeenCalled();
+      const [, message] = loggerMocks.error.mock.calls[0] as [unknown, string];
+      expect(message).toContain("sha256(payload) failed");
+      expect(message).toContain("OXA-2058");
+
+      // No row — not even a degraded one — is ever written.
+      expect(mocks.insertAuditEvent).not.toHaveBeenCalled();
+    } finally {
+      digestSpy.mockRestore();
+    }
+  });
+
+  it("OXA-2058: chain-hash computation failure (payload hash succeeds, chain hash fails) also rejects and writes nothing", async () => {
+    // Payload hash uses the real digest; the SECOND call (chain hash) fails.
+    const realDigest = globalThis.crypto.subtle.digest.bind(globalThis.crypto.subtle);
+    let callCount = 0;
+    const digestSpy = vi
+      .spyOn(globalThis.crypto.subtle, "digest")
+      .mockImplementation(async (...args: Parameters<typeof realDigest>) => {
+        callCount += 1;
+        if (callCount === 1) return realDigest(...args);
+        throw new Error("chain digest boom");
+      });
+
+    try {
+      await expect(
+        emitAudit({
+          capability: "send_message",
+          ctx: CTX,
+          principal: null,
+          result: ALLOW_RESULT,
+          trace: ALLOW_TRACE,
+          rawInputJson: '{"a":1}',
+        }),
+      ).rejects.toThrow("chain digest boom");
+
+      const chainLogCall = loggerMocks.error.mock.calls.find(([, msg]) =>
+        typeof msg === "string" ? msg.includes("sha256(chain) failed") : false,
+      );
+      expect(chainLogCall).toBeDefined();
+      expect(mocks.insertAuditEvent).not.toHaveBeenCalled();
+    } finally {
+      digestSpy.mockRestore();
+    }
+  });
+
+  // ── Durable insert: retried with backoff before propagating a failure ────
+
+  it("retries insertAuditEvent with backoff and succeeds on the 2nd attempt (no rejection)", async () => {
+    let attempts = 0;
+    mocks.insertAuditEvent.mockImplementation(() => {
+      attempts += 1;
+      return attempts === 1 ? Promise.reject(new Error("transient CH blip")) : Promise.resolve();
+    });
+
+    await expect(
+      emitAudit({
+        capability: "send_message",
+        ctx: CTX,
+        principal: null,
+        result: ALLOW_RESULT,
+        trace: ALLOW_TRACE,
+        rawInputJson: "{}",
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(attempts).toBe(2);
+  });
+
+  it("propagates insertAuditEvent failure to the caller once retries are exhausted (no silent drop, OXA-2058)", async () => {
+    const insertErr = new Error("clickhouse permanently down");
+    mocks.insertAuditEvent.mockRejectedValue(insertErr);
+
+    await expect(
+      emitAudit({
+        capability: "send_message",
+        ctx: CTX,
+        principal: null,
+        result: ALLOW_RESULT,
+        trace: ALLOW_TRACE,
+        rawInputJson: "{}",
+      }),
+    ).rejects.toThrow("clickhouse permanently down");
+
+    // Retried, not given up on after a single failure.
+    expect(mocks.insertAuditEvent).toHaveBeenCalledTimes(3);
   });
 
   // ── Concurrency: two parallel calls both insert exactly once ─────────────
@@ -399,5 +530,74 @@ describe("emitAudit()", () => {
 
     // Each call must have called insertAuditEvent exactly once (total = 2).
     expect(mocks.insertAuditEvent).toHaveBeenCalledTimes(2);
+  });
+});
+
+// ── Accountability chain: audit target + client IP (principal spine) ─────────
+
+describe("emitAudit() — audit target and client IP", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.insertAuditEvent.mockResolvedValue(undefined);
+    mocks.latestAuditChainHash.mockResolvedValue("prev_hash_abc");
+  });
+
+  it("records target_kind/target_id from the declarative audit target", async () => {
+    await emitAudit({
+      capability: "get_ontology_neighbors",
+      ctx: CTX,
+      principal: null,
+      result: ALLOW_RESULT,
+      trace: ALLOW_TRACE,
+      rawInputJson: '{"nodeId":"node-123"}',
+      target: { kind: "graph.node", id: "node-123" },
+    });
+
+    const row = mocks.insertAuditEvent.mock.calls[0]?.[0] as AuditEventRow;
+    expect(row.target_kind).toBe("graph.node");
+    expect(row.target_id).toBe("node-123");
+  });
+
+  it("keeps target columns null when no target is supplied", async () => {
+    await emitAudit({
+      capability: "send_message",
+      ctx: CTX,
+      principal: null,
+      result: ALLOW_RESULT,
+      trace: ALLOW_TRACE,
+      rawInputJson: "{}",
+    });
+
+    const row = mocks.insertAuditEvent.mock.calls[0]?.[0] as AuditEventRow;
+    expect(row.target_kind).toBeNull();
+    expect(row.target_id).toBeNull();
+  });
+
+  it("records the surface-extracted client IP from ctx.clientIp", async () => {
+    await emitAudit({
+      capability: "send_message",
+      ctx: { ...CTX, clientIp: "203.0.113.7" },
+      principal: null,
+      result: ALLOW_RESULT,
+      trace: ALLOW_TRACE,
+      rawInputJson: "{}",
+    });
+
+    const row = mocks.insertAuditEvent.mock.calls[0]?.[0] as AuditEventRow;
+    expect(row.ip).toBe("203.0.113.7");
+  });
+
+  it("keeps ip null when the surface extracted no client IP", async () => {
+    await emitAudit({
+      capability: "send_message",
+      ctx: CTX,
+      principal: null,
+      result: ALLOW_RESULT,
+      trace: ALLOW_TRACE,
+      rawInputJson: "{}",
+    });
+
+    const row = mocks.insertAuditEvent.mock.calls[0]?.[0] as AuditEventRow;
+    expect(row.ip).toBeNull();
   });
 });

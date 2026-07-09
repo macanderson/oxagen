@@ -2,13 +2,13 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const agentRepoEdit = registerCapability({
-  name: "agent.repo.edit",
+  name: "edit_repo_file",
   domain: "agent",
   description:
     "Use the coding agent to edit files in a connected GitHub repository and open a pull request with the changes.",
   mode: "sync",
-  surfaces: ["api", "agent"],
-  layers: ["api", "unit", "docs"],
+  surfaces: ["api", "agent", "mcp"],
+  layers: ["api", "mcp", "unit", "docs"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "high", category: "vcs" },
   sensitivity: "high",
@@ -44,6 +44,15 @@ export const agentRepoEdit = registerCapability({
       .optional()
       .default(12)
       .describe("Maximum coding-loop steps the agent may execute (1–40, default 12)"),
+    environmentId: z
+      .string()
+      .min(1)
+      .optional()
+      .describe(
+        "Optional workspace environment id (env_…). When set and a sandbox driver " +
+          "is configured, the agent runs in a durable sandbox with the repo cloned " +
+          "and this environment's vault secrets injected, so it can run builds/tests.",
+      ),
   }),
   output: z.object({
     prNumber: z.number().describe("Pull request number opened by the agent"),
@@ -53,6 +62,34 @@ export const agentRepoEdit = registerCapability({
       .array(z.string())
       .describe("Relative paths of every file changed by the agent"),
     summary: z.string().describe("Final response text from the coding agent"),
+    execBackend: z
+      .enum(["sandbox", "github-api"])
+      .describe(
+        "Which workspace backed the run: 'sandbox' (real exec, builds/tests ran) " +
+          "or 'github-api' (no execution — files edited via the GitHub Contents API).",
+      ),
+    warnings: z
+      .array(z.string())
+      .optional()
+      .describe("Non-fatal advisories, e.g. that shell execution was unavailable."),
+    diffs: z
+      .array(
+        z.object({
+          path: z.string().describe("Repo-relative file path (matches an entry in changedFiles)"),
+          patch: z.string().describe("Unified-diff patch body for this file"),
+          additions: z.number().int().describe("Added-line count for this file"),
+          deletions: z.number().int().describe("Removed-line count for this file"),
+        }),
+      )
+      .optional()
+      .describe(
+        "Per-file unified-diff patches for the agent's changes, when computable. " +
+          "On the sandbox backend these come from the real `git diff` working tree; " +
+          "on the GitHub-API-only backend they're reconstructed from each file's " +
+          "before/after content. Powers the code-diff chat card's full hunk view " +
+          "(packages/oxagen/src/capability-meta.ts maps this onto the card's " +
+          "`{ files }` prop) — absent when diff computation itself failed.",
+      ),
   }),
 });
 

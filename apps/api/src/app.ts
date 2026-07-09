@@ -9,12 +9,13 @@ import { workspaceMiddleware } from "./middleware/workspace";
 import { health } from "./routes/health";
 import { stripeWebhook } from "./routes/stripe";
 import { inngestRoute } from "./routes/inngest";
-import { organizationCreateRoute } from "./routes/v1/organization.create";
+import { organizationCreateRoute } from "./routes/v1/org.create";
 import { workspaceCreateRoute } from "./routes/v1/workspace.create";
 import { orgListRoute } from "./routes/v1/org.list";
 import { workspaceListRoute } from "./routes/v1/workspace.list";
 import { billingSubscriptionReadRoute } from "./routes/v1/billing.subscription.read";
-import { billingSubscriptionUpgradeStartRoute } from "./routes/v1/billing.subscription.upgrade.start";
+import { billingUsageBreakdownRoute } from "./routes/v1/billing.usage.breakdown";
+import { billingSubscriptionUpgradeStartRoute } from "./routes/v1/billing.subscription_upgrade.start";
 import { billingCreditsPurchaseRoute } from "./routes/v1/billing.credits.purchase";
 import { chatMessageSendRoute } from "./routes/v1/chat.message.send";
 import { chatMessageExecutionRoute } from "./routes/v1/chat.message.execution";
@@ -24,6 +25,8 @@ import { agentSandboxStartRoute } from "./routes/v1/agent.sandbox.start";
 import { agentSandboxExecRoute } from "./routes/v1/agent.sandbox.exec";
 import { agentSandboxSnapshotRoute } from "./routes/v1/agent.sandbox.snapshot";
 import { agentSandboxStopRoute } from "./routes/v1/agent.sandbox.stop";
+import { agentSandboxFilesListRoute } from "./routes/v1/agent.sandbox_file.list";
+import { agentSandboxFileReadRoute } from "./routes/v1/agent.sandbox_file.read";
 import { agentFeatureVerifyRoute } from "./routes/v1/agent.feature.verify";
 import { browserNavigateRoute } from "./routes/v1/browser.navigate";
 import { browserScreenshotRoute } from "./routes/v1/browser.screenshot";
@@ -41,43 +44,50 @@ import { agentMcpRegisterRoute } from "./routes/v1/agent.mcp.register";
 import { agentMcpListRoute } from "./routes/v1/agent.mcp.list";
 import { agentMcpSetEnabledRoute } from "./routes/v1/agent.mcp.set_enabled";
 import { agentMcpDeleteRoute } from "./routes/v1/agent.mcp.delete";
-import { agentMcpConsentResolveRoute } from "./routes/v1/agent.mcp.consent.resolve";
-import { agentMcpConsentListRoute } from "./routes/v1/agent.mcp.consent.list";
+import { agentMcpConsentResolveRoute } from "./routes/v1/agent.mcp_consent.resolve";
+import { agentMcpConsentListRoute } from "./routes/v1/agent.mcp_consent.list";
 import { agentSkillListRoute } from "./routes/v1/agent.skill.list";
 import { agentSkillLoadRoute } from "./routes/v1/agent.skill.load";
 import { agentPlanApproveRoute } from "./routes/v1/agent.plan.approve";
 import { agentPlanCreateRoute } from "./routes/v1/agent.plan.create";
 import { agentComposeRoute } from "./routes/v1/agent.compose";
 import { agentSubagentLogsRoute } from "./routes/v1/agent.subagent.logs";
-import { agentTaskBackgroundStartRoute } from "./routes/v1/agent.task.background.start";
-import { agentTaskBackgroundReadRoute } from "./routes/v1/agent.task.background.read";
-import { agentTaskBackgroundCancelRoute } from "./routes/v1/agent.task.background.cancel";
+import { agentTaskBackgroundStartRoute } from "./routes/v1/agent.background_task.start";
+import { agentTaskBackgroundReadRoute } from "./routes/v1/agent.background_task.read";
+import { agentTaskBackgroundCancelRoute } from "./routes/v1/agent.background_task.cancel";
 import { agentMemoryRecallRoute } from "./routes/v1/agent.memory.recall";
 import { agentMemoryWriteRoute } from "./routes/v1/agent.memory.write";
 import { agentMemoryListRoute } from "./routes/v1/agent.memory.list";
 import { agentMemoryUpdateRoute } from "./routes/v1/agent.memory.update";
 import { agentMemoryDeleteRoute } from "./routes/v1/agent.memory.delete";
 import { agentMemoryRememberRoute } from "./routes/v1/agent.memory.remember";
-import { agentMemoryPolicyReadRoute } from "./routes/v1/agent.memory.policy.read";
-import { agentMemoryPolicyWriteRoute } from "./routes/v1/agent.memory.policy.write";
-import { agentMemoryImportParseRoute } from "./routes/v1/agent.memory.import.parse";
-import { agentMemoryImportCommitRoute } from "./routes/v1/agent.memory.import.commit";
+import { agentMemoryPolicyReadRoute } from "./routes/v1/agent.memory_policy.read";
+import { agentMemoryPolicyWriteRoute } from "./routes/v1/agent.memory_policy.write";
+import { agentMemoryImportParseRoute } from "./routes/v1/agent.memory_import.parse";
+import { agentMemoryImportCommitRoute } from "./routes/v1/agent.memory_import.commit";
 import { agentMemoryPromoteRoute } from "./routes/v1/agent.memory.promote";
-import { agentMemoryPromotionCandidatesRoute } from "./routes/v1/agent.memory.promotion.candidates";
+import { agentMemoryPromotionCandidatesRoute } from "./routes/v1/agent.memory_promotion.list";
 import { agentMemoryCiteRoute } from "./routes/v1/agent.memory.cite";
-import { agentMemoryEvidenceAttachRoute } from "./routes/v1/agent.memory.evidence.attach";
-import { agentMemoryCitationsListRoute } from "./routes/v1/agent.memory.citations.list";
+import { agentMemoryEvidenceAttachRoute } from "./routes/v1/agent.memory_evidence.attach";
+import { agentMemoryCitationsListRoute } from "./routes/v1/agent.memory_citation.list";
 import { agentApprovalResolveRoute } from "./routes/v1/agent.approval.resolve";
 import { agentExecutionRecordRoute } from "./routes/v1/agent.execution.record";
 import { agentSubagentAggregateRoute } from "./routes/v1/agent.subagent.aggregate";
-import { agentSubagentFanoutListRoute } from "./routes/v1/agent.subagent.fanout.list";
-import { agentSubagentFanoutGetRoute } from "./routes/v1/agent.subagent.fanout.get";
+import { agentSubagentResultGetRoute } from "./routes/v1/agent.subagent_result.get";
+import { agentSubagentSiblingsRoute } from "./routes/v1/agent.subagent.siblings";
+import { agentSubagentFanoutListRoute } from "./routes/v1/agent.subagent_fanout.list";
+import { agentSubagentFanoutGetRoute } from "./routes/v1/agent.subagent_fanout.get";
+import { agentTraceGetRoute } from "./routes/v1/agent.trace.get";
+import { agentDebugTraceRoute } from "./routes/v1/agent.debug.trace";
+import { telemetryErrorClusterRoute } from "./routes/v1/telemetry.error.cluster";
+import { agentExecutionLineageRoute } from "./routes/v1/agent.execution.lineage";
+import { agentExecutionListRoute } from "./routes/v1/agent.execution.list";
 import { formFillRoute } from "./routes/v1/form.fill";
 import { commandMenuSearchRoute } from "./routes/v1/command.menu.search";
 import { commandMenuSuggestRoute } from "./routes/v1/command.menu.suggest";
 import { archiveCreateRoute } from "./routes/v1/archive.create";
-import { documentsGenerateRoute } from "./routes/v1/documents.generate";
-import { documentsPdfCreateRoute } from "./routes/v1/documents.pdf.create";
+import { documentsGenerateRoute } from "./routes/v1/document.generate";
+import { documentsPdfCreateRoute } from "./routes/v1/document.pdf.create";
 import { markdownGenerateRoute } from "./routes/v1/markdown.generate";
 import { mermaidGenerateRoute } from "./routes/v1/mermaid.generate";
 import { videoGenerateRoute } from "./routes/v1/video.generate";
@@ -85,15 +95,19 @@ import { svgGenerateRoute } from "./routes/v1/svg.generate";
 import { imageGenerateRoute } from "./routes/v1/image.generate";
 import { systemInstallInstructionsRoute } from "./routes/v1/system.install.instructions";
 import { orgMemberAddRoute } from "./routes/v1/org.member.add";
-import { orgMemberInviteAcceptRoute } from "./routes/v1/org.member.invite.accept";
-import { orgMemberInviteDeclineRoute } from "./routes/v1/org.member.invite.decline";
+import { orgMemberInviteAcceptRoute } from "./routes/v1/org.member_invite.accept";
+import { orgMemberInviteDeclineRoute } from "./routes/v1/org.member_invite.decline";
 import { orgMemberRemoveRoute } from "./routes/v1/org.member.remove";
-import { orgMemberRoleChangeRoute } from "./routes/v1/org.member.role.change";
+import { orgMemberRoleChangeRoute } from "./routes/v1/org.member_role.change";
 import { userPreferencesReadRoute } from "./routes/v1/user.preferences.read";
 import { userPreferencesWriteRoute } from "./routes/v1/user.preferences.write";
+import { budgetPolicyReadRoute } from "./routes/v1/budget.policy.read";
+import { budgetPolicyWriteRoute } from "./routes/v1/budget.policy.write";
+import { workspaceBudgetPolicyReadRoute } from "./routes/v1/workspace.budget_policy.read";
+import { workspaceBudgetPolicyWriteRoute } from "./routes/v1/workspace.budget_policy.write";
 import { authWhoamiRoute } from "./routes/v1/auth.whoami";
-import { workspaceModelSettingsReadRoute } from "./routes/v1/workspace.model.settings.read";
-import { workspaceModelSettingsWriteRoute } from "./routes/v1/workspace.model.settings.write";
+import { workspaceModelSettingsReadRoute } from "./routes/v1/workspace.model_settings.read";
+import { workspaceModelSettingsWriteRoute } from "./routes/v1/workspace.model_settings.write";
 import { promptSettingsReadRoute } from "./routes/v1/prompt.settings.read";
 import { promptSettingsWriteRoute } from "./routes/v1/prompt.settings.write";
 import { orgSettingsReadRoute } from "./routes/v1/org.settings.read";
@@ -106,6 +120,8 @@ import { conversationArchiveRoute } from "./routes/v1/conversation.archive";
 import { conversationDeleteRoute } from "./routes/v1/conversation.delete";
 import { conversationPurgeRoute } from "./routes/v1/conversation.purge";
 import { conversationFilesListRoute } from "./routes/v1/conversation.files.list";
+import { conversationExportRoute } from "./routes/v1/conversation.export";
+import { conversationAttachmentAddRoute } from "./routes/v1/conversation.attachment.add";
 import { assetUploadRoute } from "./routes/v1/asset.upload";
 import { pluginRegistryListRoute } from "./routes/v1/plugin.registry.list";
 import { pluginRegistryAddRoute } from "./routes/v1/plugin.registry.add";
@@ -117,8 +133,7 @@ import { pluginOrgListRoute } from "./routes/v1/plugin.org.list";
 import { pluginOrgInstallRoute } from "./routes/v1/plugin.org.install";
 import { pluginOrgInstallBulkRoute } from "./routes/v1/plugin.org.install_bulk";
 import { pluginOrgUninstallRoute } from "./routes/v1/plugin.org.uninstall";
-import { pluginOrgSetEnabledRoute } from "./routes/v1/plugin.org.set_enabled";
-import { pluginWorkspaceSetEnabledRoute } from "./routes/v1/plugin.workspace.set_enabled";
+import { pluginSetEnabledRoute } from "./routes/v1/plugin.set_enabled";
 import { pluginCredentialSetSecretRoute } from "./routes/v1/plugin.credential.set_secret";
 import { pluginCredentialReauthRoute } from "./routes/v1/plugin.credential.reauth";
 // Environments + credential vault (Spec: 2026-06-24-credential-vault-…).
@@ -128,6 +143,19 @@ import { environmentGetRoute } from "./routes/v1/environment.get";
 import { environmentUpdateRoute } from "./routes/v1/environment.update";
 import { environmentDeleteRoute } from "./routes/v1/environment.delete";
 import { environmentSetDefaultRoute } from "./routes/v1/environment.set_default";
+// Sandbox templates + portable artifacts + agent-environment bindings (Spec §5.2–§5.6).
+import { sandboxTemplateCreateRoute } from "./routes/v1/sandbox.template.create";
+import { sandboxTemplateListRoute } from "./routes/v1/sandbox.template.list";
+import { sandboxTemplateGetRoute } from "./routes/v1/sandbox.template.get";
+import { sandboxTemplateUpdateRoute } from "./routes/v1/sandbox.template.update";
+import { sandboxTemplateDeleteRoute } from "./routes/v1/sandbox.template.delete";
+import { sandboxTemplateSetDefaultRoute } from "./routes/v1/sandbox.template.set_default";
+import { sandboxTemplateSetToolsRoute } from "./routes/v1/sandbox.template.set_tools";
+import { sandboxTemplateExportRoute } from "./routes/v1/sandbox.template.export";
+import { sandboxTemplateImportRoute } from "./routes/v1/sandbox.template.import";
+import { agentEnvironmentBindRoute } from "./routes/v1/agent.environment.bind";
+import { agentEnvironmentUnbindRoute } from "./routes/v1/agent.environment.unbind";
+import { agentEnvironmentListRoute } from "./routes/v1/agent.environment.list";
 import { secretKeyUpsertRoute } from "./routes/v1/secret.key.upsert";
 import { secretKeyListRoute } from "./routes/v1/secret.key.list";
 import { secretKeyDeleteRoute } from "./routes/v1/secret.key.delete";
@@ -136,8 +164,8 @@ import { secretValueUnsetRoute } from "./routes/v1/secret.value.unset";
 import { secretImportEnvRoute } from "./routes/v1/secret.import_env";
 import { secretRevealRoute } from "./routes/v1/secret.reveal";
 import { secretExportRoute } from "./routes/v1/secret.export";
-import { notificationsListRoute } from "./routes/v1/notifications.list";
-import { notificationsMarkRoute } from "./routes/v1/notifications.mark";
+import { notificationsListRoute } from "./routes/v1/notification.list";
+import { notificationsMarkRoute } from "./routes/v1/notification.mark";
 import { pluginSettingsSetAuthAlertsRoute } from "./routes/v1/plugin.settings.set_auth_alerts";
 import { apiKeyCreateRoute } from "./routes/v1/api.key.create";
 import { apiKeyRevokeRoute } from "./routes/v1/api.key.revoke";
@@ -168,8 +196,12 @@ import { skillEditRoute } from "./routes/v1/skill.edit";
 import { skillExportRoute } from "./routes/v1/skill.export";
 import { skillMetricsReadRoute } from "./routes/v1/skill.metrics.read";
 import { skillAuthorRoute } from "./routes/v1/skill.author";
+import { skillDraftRoute } from "./routes/v1/skill.draft";
 import { skillCreateRoute } from "./routes/v1/skill.create";
 import { skillEnableRoute } from "./routes/v1/skill.enable";
+import { agentFileLockAcquireRoute } from "./routes/v1/agent.file_lock.acquire";
+import { agentFileLockReleaseRoute } from "./routes/v1/agent.file_lock.release";
+import { agentFileLockListRoute } from "./routes/v1/agent.file_lock.list";
 import { agentSubagentCancelRoute } from "./routes/v1/agent.subagent.cancel";
 import { agentSubagentDispatchRoute } from "./routes/v1/agent.subagent.dispatch";
 import { agentDefinitionCreateRoute } from "./routes/v1/agent.definition.create";
@@ -177,6 +209,15 @@ import { agentDefinitionUpdateRoute } from "./routes/v1/agent.definition.update"
 import { agentDefinitionPublishRoute } from "./routes/v1/agent.definition.publish";
 import { agentDefinitionGetRoute } from "./routes/v1/agent.definition.get";
 import { agentDefinitionListRoute } from "./routes/v1/agent.definition.list";
+import { agentDefinitionSuggestRoute } from "./routes/v1/agent.definition.suggest";
+import { evalDatasetCreateRoute } from "./routes/v1/eval.dataset.create";
+import { evalDatasetListRoute } from "./routes/v1/eval.dataset.list";
+import { evalDatasetGetRoute } from "./routes/v1/eval.dataset.get";
+import { evalDatasetItemAddRoute } from "./routes/v1/eval.dataset_item.add";
+import { evalDatasetFromTracesRoute } from "./routes/v1/eval.dataset.from_traces";
+import { evalRunStartRoute } from "./routes/v1/eval.run.start";
+import { evalRunStatusRoute } from "./routes/v1/eval.run.status";
+import { evalRunGetRoute } from "./routes/v1/eval.run.get";
 import { agentDeployRoute } from "./routes/v1/agent.deploy";
 import { agentTriggerCreateRoute } from "./routes/v1/agent.trigger.create";
 import { agentTriggerUpdateRoute } from "./routes/v1/agent.trigger.update";
@@ -223,6 +264,11 @@ import { ontologyNeighborsRoute } from "./routes/v1/ontology.neighbors";
 import { auditLogQueryRoute } from "./routes/v1/audit.log.query";
 import { agentLlmRoute } from "./routes/v1/agent.llm";
 import { authCliTokenRoute } from "./routes/v1/auth.cli.token";
+import { telemetryUsageRoute } from "./routes/v1/telemetry.usage";
+import { cmsRoute } from "./routes/v1/cms";
+import { a2aWellKnownRoute } from "./routes/a2a/well-known";
+import { a2aRpcRoute } from "./routes/a2a/rpc";
+import { a2aCardGetRoute } from "./routes/v1/a2a.card.get";
 
 export type AppEnv = {
   Variables: {
@@ -257,10 +303,28 @@ app.route("/webhooks", webhookRoute);
 // verification is enforced inside the inngest/hono serve handler.
 app.route("/api/inngest", inngestRoute);
 
+// A2A (Agent2Agent) protocol discovery document — public, optional auth. A
+// valid workspace API key yields the full workspace card; anonymous callers get
+// a base card. Mounted BEFORE the auth-gated groups so discovery never 401s.
+app.route("/.well-known", a2aWellKnownRoute);
+
 // Public CLI token exchange — no auth middleware (the code + PKCE verifier are
 // the security boundary; RFC 8252 + RFC 7636 S256). Must be mounted BEFORE the
 // auth-gated /v1 groups so authMiddleware never sees this path.
 app.route("/v1/auth/cli", authCliTokenRoute);
+
+// Public, anonymous CLI usage telemetry (OSS trust surface — TELEMETRY.md).
+// No auth is possible (OSS/BYOK users may have no session) or wanted (the
+// payload is anonymous by design) — strict schema validation + a per-IP rate
+// limit inside the route are the security boundary. Mounted BEFORE the
+// auth-gated /v1 groups for the same reason as /v1/auth/cli above.
+app.route("/v1/telemetry", telemetryUsageRoute);
+
+// Public, anonymous ebook lead gate for the marketing site (oxagen.sh). Same
+// security model as /v1/telemetry: no auth (callers are website visitors),
+// strict schema validation + per-IP rate limit inside the route. Mounted BEFORE
+// the auth-gated /v1 groups so a lead POST never hits authMiddleware.
+app.route("/v1/cms", cmsRoute);
 
 // /v1 user-level routes (org + workspace CRUD) require auth but no
 // org scope: a freshly-authenticated user can create their first
@@ -278,6 +342,9 @@ userScoped.route("/user/organizations", orgListRoute);
 userScoped.route("/user/workspaces", workspaceListRoute);
 userScoped.route("/user/preferences/read", userPreferencesReadRoute);
 userScoped.route("/user/preferences/write", userPreferencesWriteRoute);
+// Per-turn dollar budget (user-scoped default).
+userScoped.route("/user/budget/read", budgetPolicyReadRoute);
+userScoped.route("/user/budget/write", budgetPolicyWriteRoute);
 app.route("/v1", userScoped);
 
 // /v1/:org_slug/:workspace_slug/* — org + workspace scoped routes.
@@ -290,6 +357,7 @@ orgScoped.route(
   billingSubscriptionUpgradeStartRoute,
 );
 orgScoped.route("/billing/credits/purchase", billingCreditsPurchaseRoute);
+orgScoped.route("/billing/usage/breakdown", billingUsageBreakdownRoute);
 orgScoped.route("/chat/messages", chatMessageSendRoute);
 orgScoped.route("/chat/messages/execution", chatMessageExecutionRoute);
 orgScoped.route("/chat/stream", chatStreamRoute);
@@ -298,10 +366,14 @@ orgScoped.route("/conversations", conversationListRoute);
 // list route; Hono dispatches by method+full path so it does not clash with the
 // bare GET /conversations list or the /conversations/{rename,archive,…} sub-paths.
 orgScoped.route("/conversations", conversationFilesListRoute);
+// GET /conversations/:conversationId/export — same prefix trick as /files above.
+orgScoped.route("/conversations", conversationExportRoute);
 orgScoped.route("/conversations/rename", conversationRenameRoute);
 orgScoped.route("/conversations/archive", conversationArchiveRoute);
 orgScoped.route("/conversations/delete", conversationDeleteRoute);
 orgScoped.route("/conversations/purge", conversationPurgeRoute);
+// POST /conversations/attachments — link an already-uploaded asset to a conversation.
+orgScoped.route("/conversations/attachments", conversationAttachmentAddRoute);
 // Agent-runtime routes live under the org + workspace scope so the runner
 // inherits the same auth, isolation, and audit envelope as every other v1 call.
 orgScoped.route("/agent/code/execute", agentCodeExecuteRoute);
@@ -310,6 +382,9 @@ orgScoped.route("/agent/sandbox/start", agentSandboxStartRoute);
 orgScoped.route("/agent/sandbox/exec", agentSandboxExecRoute);
 orgScoped.route("/agent/sandbox/snapshot", agentSandboxSnapshotRoute);
 orgScoped.route("/agent/sandbox/stop", agentSandboxStopRoute);
+orgScoped.route("/agent/sandbox/files", agentSandboxFilesListRoute);
+// Single-file read — the viewer counterpart of the /files listing above.
+orgScoped.route("/agent/sandbox/file", agentSandboxFileReadRoute);
 // Browser automation inside a durable sandbox (proof-of-done), org+workspace scoped.
 orgScoped.route("/browser/navigate", browserNavigateRoute);
 orgScoped.route("/browser/screenshot", browserScreenshotRoute);
@@ -364,16 +439,38 @@ orgScoped.route("/agent/memory", agentMemoryWriteRoute);
 orgScoped.route("/agent/approvals/resolve", agentApprovalResolveRoute);
 orgScoped.route("/agent/execution/record", agentExecutionRecordRoute);
 orgScoped.route("/agent/subagent/aggregate", agentSubagentAggregateRoute);
+orgScoped.route("/agent/subagent/result", agentSubagentResultGetRoute);
+orgScoped.route("/agent/subagent/siblings", agentSubagentSiblingsRoute);
 orgScoped.route("/agent/subagent/cancel", agentSubagentCancelRoute);
 orgScoped.route("/agent/subagent/dispatch", agentSubagentDispatchRoute);
+// Agent file locking (docs/specs/agent-file-locking/plan.md §7): manual
+// acquire/force-release/introspection over the HOLDS_LOCK edge write_file/
+// edit_file acquire automatically inside every coding-agent turn.
+orgScoped.route("/agent/file/lock/acquire", agentFileLockAcquireRoute);
+orgScoped.route("/agent/file/lock/release", agentFileLockReleaseRoute);
+orgScoped.route("/agent/file/lock/list", agentFileLockListRoute);
 // Read side of the fan-out feature: list fan-outs, then get one with child runs.
 orgScoped.route("/agent/subagent/fanouts", agentSubagentFanoutListRoute);
 orgScoped.route("/agent/subagent/fanout", agentSubagentFanoutGetRoute);
+// Agent run-trace span tree: one execution + its steps, tool calls, and child
+// executions (subagent/A2A lineage). The list route backs the Activity index.
+orgScoped.route("/agent/executions", agentExecutionListRoute);
+orgScoped.route("/agent/trace", agentTraceGetRoute);
+orgScoped.route("/agent/debug/trace", agentDebugTraceRoute);
+// Fleet-wide error triage overview — clusters ClickHouse error_events by
+// fingerprint. Pure SQL (ADR-021 §1), the counterpart to agent/debug/trace's
+// single-execution failure frame above.
+orgScoped.route("/telemetry/error/cluster", telemetryErrorClusterRoute);
+// File-level lineage of one execution — the :Execution node plus every
+// :SourceFile it touched via TOUCHED_FILE edges, resolved to citable
+// KnowledgeNodeRefs (CLAUDE.md "Citing nodes & edges").
+orgScoped.route("/agent/executions/lineage", agentExecutionLineageRoute);
 // Agent lifecycle: definitions, deployment, triggers. The /update and /publish
 // sub-paths are mounted before the get route so they are not swallowed by its
 // GET /:agentId param match.
 orgScoped.route("/agent/definitions/update", agentDefinitionUpdateRoute);
 orgScoped.route("/agent/definitions/publish", agentDefinitionPublishRoute);
+orgScoped.route("/agent/definitions/suggest", agentDefinitionSuggestRoute);
 orgScoped.route("/agent/definitions", agentDefinitionCreateRoute);
 orgScoped.route("/agent/definitions", agentDefinitionListRoute);
 orgScoped.route("/agent/definitions", agentDefinitionGetRoute);
@@ -382,6 +479,16 @@ orgScoped.route("/agent/triggers/update", agentTriggerUpdateRoute);
 orgScoped.route("/agent/triggers/delete", agentTriggerDeleteRoute);
 orgScoped.route("/agent/triggers", agentTriggerCreateRoute);
 orgScoped.route("/agent/triggers", agentTriggerListRoute);
+// Eval datasets/runs: from-traces/get/items sub-paths mounted before the base
+// path so they aren't swallowed by the create/list routes' GET/POST on "/".
+orgScoped.route("/eval/datasets/from-traces", evalDatasetFromTracesRoute);
+orgScoped.route("/eval/datasets/get", evalDatasetGetRoute);
+orgScoped.route("/eval/datasets/items", evalDatasetItemAddRoute);
+orgScoped.route("/eval/datasets", evalDatasetCreateRoute);
+orgScoped.route("/eval/datasets", evalDatasetListRoute);
+orgScoped.route("/eval/runs/status", evalRunStatusRoute);
+orgScoped.route("/eval/runs/get", evalRunGetRoute);
+orgScoped.route("/eval/runs", evalRunStartRoute);
 orgScoped.route("/forms/fill", formFillRoute);
 orgScoped.route("/command/menu/search", commandMenuSearchRoute);
 orgScoped.route("/command/menu/suggest", commandMenuSuggestRoute);
@@ -399,6 +506,8 @@ orgScoped.route("/org/members/remove", orgMemberRemoveRoute);
 orgScoped.route("/org/members/role", orgMemberRoleChangeRoute);
 orgScoped.route("/org/invitations/accept", orgMemberInviteAcceptRoute);
 orgScoped.route("/org/invitations/decline", orgMemberInviteDeclineRoute);
+orgScoped.route("/workspace/budget-policy", workspaceBudgetPolicyReadRoute);
+orgScoped.route("/workspace/budget-policy", workspaceBudgetPolicyWriteRoute);
 orgScoped.route("/workspace/model-settings", workspaceModelSettingsReadRoute);
 orgScoped.route("/workspace/model-settings", workspaceModelSettingsWriteRoute);
 orgScoped.route("/workspace/prompt-settings", promptSettingsReadRoute);
@@ -418,11 +527,7 @@ orgScoped.route("/plugin/org/list", pluginOrgListRoute);
 orgScoped.route("/plugin/org/install", pluginOrgInstallRoute);
 orgScoped.route("/plugin/org/install-bulk", pluginOrgInstallBulkRoute);
 orgScoped.route("/plugin/org/uninstall", pluginOrgUninstallRoute);
-orgScoped.route("/plugin/org/set-enabled", pluginOrgSetEnabledRoute);
-orgScoped.route(
-  "/plugin/workspace/set-enabled",
-  pluginWorkspaceSetEnabledRoute,
-);
+orgScoped.route("/plugin/set-enabled", pluginSetEnabledRoute);
 orgScoped.route(
   "/plugin/credential/set-secret",
   pluginCredentialSetSecretRoute,
@@ -435,6 +540,19 @@ orgScoped.route("/environment/get", environmentGetRoute);
 orgScoped.route("/environment/update", environmentUpdateRoute);
 orgScoped.route("/environment/delete", environmentDeleteRoute);
 orgScoped.route("/environment/set-default", environmentSetDefaultRoute);
+// Sandbox templates + portable artifacts + agent-environment bindings.
+orgScoped.route("/sandbox/template/create", sandboxTemplateCreateRoute);
+orgScoped.route("/sandbox/template/list", sandboxTemplateListRoute);
+orgScoped.route("/sandbox/template/get", sandboxTemplateGetRoute);
+orgScoped.route("/sandbox/template/update", sandboxTemplateUpdateRoute);
+orgScoped.route("/sandbox/template/delete", sandboxTemplateDeleteRoute);
+orgScoped.route("/sandbox/template/set-default", sandboxTemplateSetDefaultRoute);
+orgScoped.route("/sandbox/template/set-tools", sandboxTemplateSetToolsRoute);
+orgScoped.route("/sandbox/template/export", sandboxTemplateExportRoute);
+orgScoped.route("/sandbox/template/import", sandboxTemplateImportRoute);
+orgScoped.route("/agent/environment/bind", agentEnvironmentBindRoute);
+orgScoped.route("/agent/environment/unbind", agentEnvironmentUnbindRoute);
+orgScoped.route("/agent/environment/list", agentEnvironmentListRoute);
 orgScoped.route("/secret/key/upsert", secretKeyUpsertRoute);
 orgScoped.route("/secret/key/list", secretKeyListRoute);
 orgScoped.route("/secret/key/delete", secretKeyDeleteRoute);
@@ -478,6 +596,7 @@ orgScoped.route("/skill/edit", skillEditRoute);
 orgScoped.route("/skill/export", skillExportRoute);
 orgScoped.route("/skill/metrics/read", skillMetricsReadRoute);
 orgScoped.route("/skill/author", skillAuthorRoute);
+orgScoped.route("/skill/draft", skillDraftRoute);
 orgScoped.route("/skill/create", skillCreateRoute);
 orgScoped.route("/skill/enable", skillEnableRoute);
 orgScoped.route("/privacy/export", privacyDataExportRoute);
@@ -516,6 +635,9 @@ orgScoped.route("/graph/stats", graphStatsRoute);
 orgScoped.route("/ontology/query", ontologyQueryRoute);
 orgScoped.route("/ontology/neighbors", ontologyNeighborsRoute);
 orgScoped.route("/audit/log/query", auditLogQueryRoute);
+// A2A Agent Card management read (metered, IAM-gated) — the governed parity
+// surface for the card; the transport itself lives at /a2a + /.well-known.
+orgScoped.route("/a2a/card", a2aCardGetRoute);
 app.route("/v1/:org_slug/:workspace_slug", orgScoped);
 
 // OpenAI-compatible agent LLM proxy (ADR-019 B4): the CLI routes ALL model
@@ -528,6 +650,15 @@ const agentLlmScoped = new Hono<AppEnv>();
 agentLlmScoped.use("*", authMiddleware);
 agentLlmScoped.route("/", agentLlmRoute);
 app.route("/v1/agent/llm", agentLlmScoped);
+
+// A2A (Agent2Agent) protocol JSON-RPC transport. Like /mcp, it is a transport,
+// not a per-capability surface: the workspace API key (Bearer) carries org+
+// workspace scope, so it sits OUTSIDE the /:org/:workspace path group and is
+// gated by authMiddleware only. Full endpoint: POST /a2a.
+const a2aScoped = new Hono<AppEnv>();
+a2aScoped.use("*", authMiddleware);
+a2aScoped.route("/", a2aRpcRoute);
+app.route("/a2a", a2aScoped);
 
 // Public OAuth callback — HMAC-verified state param is the security boundary.
 // Must NOT be inside the workspace-scoped group (user has no session when GitHub redirects).

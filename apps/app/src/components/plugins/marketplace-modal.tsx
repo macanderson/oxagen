@@ -77,12 +77,13 @@ interface MarketplaceModalProps {
   }) => Promise<{ ok: boolean; error?: string }>;
 }
 
+// Agent-tool types only: skills, MCP servers, capabilities. Integrations
+// (data connectors) are discovered on the Marketplace → Integrations side,
+// not in this modal.
 const PLUGIN_TABS = [
+  { value: "agent_skill" as PluginTypeValue, label: "Skills" },
   { value: "mcp_server" as PluginTypeValue, label: "MCP Servers" },
-  { value: "integration" as PluginTypeValue, label: "Integrations" },
-  { value: "agent_capability" as PluginTypeValue, label: "Agent Capabilities" },
-  { value: "agent_skill" as PluginTypeValue, label: "Agent Skills" },
-  { value: "knowledge_source" as PluginTypeValue, label: "Knowledge Sources" },
+  { value: "agent_capability" as PluginTypeValue, label: "Capabilities" },
 ] as const satisfies ReadonlyArray<{ value: PluginTypeValue; label: string }>;
 
 // ── ServerIcon — picks between <Image>, <CapabilityIcon>, or per-type default ─
@@ -136,7 +137,7 @@ export function MarketplaceModal({
   const toast = useToast();
   const { orgSlug, workspaceId } = useTenant();
   const [activeTab, setActiveTab] =
-    React.useState<PluginTypeValue>("mcp_server");
+    React.useState<PluginTypeValue>("agent_skill");
   const [search, setSearch] = React.useState("");
   const [authFilter, setAuthFilter] = React.useState<
     "" | "oauth" | "secret" | "none"
@@ -286,11 +287,11 @@ export function MarketplaceModal({
               className="h-5 w-5 text-muted-foreground"
               aria-hidden="true"
             />
-            Plugin Marketplace
+            Agent Tools Marketplace
           </DialogTitle>
           <DialogDescription>
-            Browse and install MCP servers, integrations, agent capabilities,
-            agent skills, and knowledge sources for your workspace.
+            Browse and install skills, MCP servers, and capabilities for your
+            workspace.
           </DialogDescription>
         </DialogHeader>
 
@@ -331,6 +332,10 @@ export function MarketplaceModal({
                   role="tab"
                   aria-selected={isActive}
                   onClick={() => {
+                    // Re-clicking the active tab is a no-op: clearing the list
+                    // without a tab change would blank results with no refetch
+                    // (the fetch effect keys off activeTab).
+                    if (value === activeTab) return;
                     setActiveTab(value);
                     setSelected(new Set());
                     setServers([]);

@@ -85,6 +85,9 @@ function contractNameToPathSegment(name: string): string {
     organization: "organizations",
     workspace: "workspaces",
     "user.preferences": "user/preferences",
+    // Per-turn dollar budget is a user-scoped default, mounted alongside
+    // /user/preferences at /user/budget/{read,write} (not /budget/policy/*).
+    "budget.policy": "user/budget",
     "workspace.model": "workspace/model-settings",
     "prompt.settings": "workspace/prompt-settings",
     // org.settings.read/write collapse onto REST GET/POST at /org/settings.
@@ -100,7 +103,7 @@ function contractNameToPathSegment(name: string): string {
     "agent.approval": "agent/approvals",
     "agent.execution": "agent/execution",
     "agent.definition": "agent/definitions",
-    "agent.deploy": "agent/deploy",
+    "deploy_agent": "agent/deploy",
     "agent.trigger": "agent/triggers",
     "org.member": "org/members",
     "chat.message": "chat/messages",
@@ -144,14 +147,34 @@ function contractNameToPathSegment(name: string): string {
     "agent.repo": "repos/agent",
     integration: "integrations",
     // graph.node.list maps to /graph/nodes (browse endpoint)
-    "graph.node.list": "graph/nodes",
+    "list_nodes": "graph/nodes",
     // Subagent fan-out read side: list is mounted at the plural collection,
     // get at the singular resource with an :fanoutId param.
-    "agent.subagent.fanout.list": "agent/subagent/fanouts",
-    "agent.subagent.fanout.get": "agent/subagent/fanout",
+    "list_subagent_fanouts": "agent/subagent/fanouts",
+    "get_subagent_fanout": "agent/subagent/fanout",
+    // Subagent result read side: mounted at the singular resource with a
+    // :runId param (GET /agent/subagent/result/:runId).
+    "get_subagent_result": "agent/subagent/result",
     // Vault routes use kebab-case for underscore-containing action names.
-    "environment.set_default": "environment/set-default",
-    "secret.import_env": "secret/import-env",
+    "set_default_environment": "environment/set-default",
+    "import_env_secrets": "secret/import-env",
+    // agent.trace.get is mounted at the resource path (GET /agent/trace),
+    // not /agent/trace/get.
+    "agent.trace": "agent/trace",
+    // agent.sandbox.files.list is mounted at the plural collection
+    // (GET /agent/sandbox/files), not /agent/sandbox/files/list.
+    "list_sandbox_files": "agent/sandbox/files",
+    // eval.dataset.* — create/list share the plural collection path
+    // (differentiated by HTTP method); get/item.add/from_traces are
+    // sub-resources of that same collection, so the shared prefix covers
+    // all five via substring containment.
+    "eval.dataset": "eval/datasets",
+    // eval.run.* — start is the plural collection (POST); status/get are
+    // sub-resources of it, covered the same way.
+    "eval.run": "eval/runs",
+    // A2A card read is mounted at the resource path (GET /a2a/card), not
+    // /a2a/card/get — the transport itself lives at /a2a + /.well-known.
+    "get_a2a_card": "a2a/card",
   };
 
   // Try progressively shorter prefixes

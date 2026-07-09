@@ -5,7 +5,16 @@ import { TEST_ORG, TEST_WS, TEST_SCOPE, withTestScope } from "./testing";
 describe("test helpers", () => {
   it("runs a callback inside a deterministic test scope", () => {
     const seen = withTestScope(() => requireScope());
-    expect(seen).toEqual({ orgId: TEST_ORG, workspaceId: TEST_WS });
+    // The active scope normalizes principal attribution to explicit nulls
+    // (principal spine); the exported TEST_SCOPE constant remains tenant-only.
+    expect(seen).toEqual({
+      orgId: TEST_ORG,
+      workspaceId: TEST_WS,
+      principalId: null,
+      principalKind: null,
+      userId: null,
+      capabilityName: null,
+    });
     expect(TEST_SCOPE).toEqual({ orgId: TEST_ORG, workspaceId: TEST_WS });
   });
 

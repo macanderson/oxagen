@@ -60,7 +60,7 @@ export default async function WorkspacePromptsPage({ params }: PageProps) {
       async () => {
         // Read current settings via capability.
         const promptSettings = (await invoke(
-          "prompt.settings.read",
+          "get_prompt_settings",
           {},
           ctx,
           { surface: "agent" },

@@ -111,6 +111,33 @@ vi.mock("@oxagen/database", () => ({
       workspaceId: "workspace_id",
       deletedAt: "deleted_at",
     },
+    // Required by packages/agent's _agent-definition module-level agentColumns
+    // initializer, transitively reached via the file-locking (OXA-2070) wiring.
+    agents: {
+      id: "id",
+      publicId: "public_id",
+      slug: "slug",
+      name: "name",
+      description: "description",
+      agentType: "agent_type",
+      status: "status",
+      deploymentStatus: "deployment_status",
+      activeVersionId: "active_version_id",
+    },
+    // Required by packages/agent's _sandbox-session module-level SESSION_COLUMNS
+    // initializer, transitively reached via the agent.sandbox.* handlers
+    // registered through @oxagen/handlers (PR #637 sandbox workspace wiring).
+    sandboxSessions: {
+      id: "id",
+      publicId: "public_id",
+      sandboxId: "sandbox_id",
+      snapshotId: "snapshot_id",
+      image: "image",
+      status: "status",
+      metadata: "metadata",
+      workspaceId: "workspace_id",
+      sessionKey: "session_key",
+    },
   },
 }));
 
@@ -510,7 +537,7 @@ describe("PATCH /connections/:id", () => {
     expect(res.status).toBe(200);
     expect(mocks.invoke).toHaveBeenCalledTimes(1);
     const [name, input] = mocks.invoke.mock.calls[0] as [string, Record<string, unknown>];
-    expect(name).toBe("connection.update");
+    expect(name).toBe("update_connection");
     expect(input.connectionId).toBe("con_ABC");
     expect(input.displayName).toBe("Renamed");
   });
@@ -524,7 +551,7 @@ describe("POST /connections/:id/pause", () => {
     const res = await post(`${BASE}/con_ABC/pause`, { paused: true });
     expect(res.status).toBe(200);
     const [name, input] = mocks.invoke.mock.calls[0] as [string, Record<string, unknown>];
-    expect(name).toBe("connection.pause");
+    expect(name).toBe("pause_connection");
     expect(input.connectionId).toBe("con_ABC");
     expect(input.paused).toBe(true);
   });

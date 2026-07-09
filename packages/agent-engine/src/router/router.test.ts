@@ -34,6 +34,18 @@ describe("rate card", () => {
     expect(opus.outputPer1M).toBe(75.0);
   });
 
+  it("rateFor prices Claude Fable at the Opus tier (not the Sonnet fallback)", () => {
+    const fable = rateFor("anthropic/claude-fable-5");
+    expect(fable.inputPer1M).toBe(15.0);
+    expect(fable.outputPer1M).toBe(75.0);
+  });
+
+  it("rateFor prices Claude Sonnet 5 at the Sonnet tier via family prefix", () => {
+    const sonnet5 = rateFor("anthropic/claude-sonnet-5");
+    expect(sonnet5.inputPer1M).toBe(3.0);
+    expect(sonnet5.outputPer1M).toBe(15.0);
+  });
+
   it("rateFor uses fallback for unknown model", () => {
     const unknown = rateFor("some/unknown-model-xyz");
     expect(unknown).toEqual(FALLBACK_RATE);
@@ -140,8 +152,13 @@ describe("tierForSlug", () => {
     expect(tierForSlug("anthropic/claude-opus-4.8")).toBe("precise");
   });
 
+  it("fable / mythos → precise", () => {
+    expect(tierForSlug("anthropic/claude-fable-5")).toBe("precise");
+    expect(tierForSlug("anthropic/claude-mythos-5")).toBe("precise");
+  });
+
   it("sonnet → balanced", () => {
-    expect(tierForSlug("anthropic/claude-sonnet-4.6")).toBe("balanced");
+    expect(tierForSlug("anthropic/claude-sonnet-5")).toBe("balanced");
   });
 
   it("gpt-5 → precise", () => {
@@ -165,7 +182,7 @@ describe("tierLabel", () => {
   it("maps tiers to human labels", () => {
     expect(tierLabel("fast")).toBe("Haiku");
     expect(tierLabel("balanced")).toBe("Sonnet");
-    expect(tierLabel("precise")).toBe("Opus");
+    expect(tierLabel("precise")).toBe("Fable");
   });
 });
 
@@ -185,6 +202,21 @@ describe("accumulateUsage", () => {
     const result = accumulateUsage(emptyUsage(), "anthropic/claude-opus-4.8", {});
     expect(result.inputTokens).toBe(0);
     expect(result.outputTokens).toBe(0);
+  });
+
+  it("prices a cache hit at the discounted rate — the SAME usage costs less with cachedInputTokens set", () => {
+    const usage = { inputTokens: 1_000_000, outputTokens: 0, cachedInputTokens: 1_000_000 };
+    const withCache = accumulateUsage(emptyUsage(), "anthropic/claude-sonnet-4.6", usage);
+    const withoutCache = accumulateUsage(
+      emptyUsage(),
+      "anthropic/claude-sonnet-4.6",
+      { inputTokens: 1_000_000, outputTokens: 0 },
+    );
+    expect(withCache.costUsd).toBeLessThan(withoutCache.costUsd);
+    expect(withCache.costUsd).toBeCloseTo(0.3); // 1M cached @ $0.3/1M
+    expect(withoutCache.costUsd).toBeCloseTo(3.0); // 1M fresh @ $3/1M
+    // Token totals are unaffected by the cache split — only cost is.
+    expect(withCache.inputTokens).toBe(withoutCache.inputTokens);
   });
 });
 

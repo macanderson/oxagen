@@ -2,22 +2,43 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { and, desc, eq } from "drizzle-orm";
 import {
-  streamAgentReply,
   selectModel,
   supportsReasoning,
   modelIdOf,
   loadEffectiveModelDefaults,
   resolvePrompt,
   chatSystemPrompt,
-  loadWorkspacePromptConfig,
+  loadWorkspacePromptConfigSafe,
 } from "@oxagen/ai";
-import { materializeTools } from "@oxagen/agent";
+import { materializeTools, createApprovalRequest, waitForApproval } from "@oxagen/agent";
+import { createPlatformAgentAi } from "@oxagen/agent/adapters";
+import { runCodingAgent } from "@oxagen/agent-engine";
 import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { invoke } from "@oxagen/oxagen/kernel";
+import type { CapabilityContext } from "@oxagen/oxagen";
+// Per-turn dollar budget (OXA — turn-budget). The gate itself (policy shape,
+// modes, the pure evaluator, createTurnBudgetGuard) lives in @oxagen/billing —
+// this route only resolves the effective policy and wires the hooks to its own
+// SSE/approval machinery.
+import {
+  createTurnBudgetGuard,
+  formatBudgetUsd,
+  TURN_BUDGET_OFF,
+  type TurnBudgetPolicy,
+} from "@oxagen/billing";
+import { budgetPolicyReadHandler } from "@oxagen/handlers/budget.policy.read";
 import type { ModelMessage } from "ai";
 import { capabilityContext } from "../../lib/context";
 import type { AppEnv } from "../../app";
+import {
+  createApiStreamTranslator,
+  type ApiStreamEvent,
+} from "./chat-stream-translator";
+import {
+  recallWorkspaceMemoryMessage,
+  createRecalledMemoryProvider,
+} from "./chat-memory";
 
 const BodySchema = z.object({
   content: z.string().min(1),
@@ -34,292 +55,24 @@ const BodySchema = z.object({
 const HISTORY_LIMIT = 50;
 const VALID_ROLES = new Set(["user", "assistant", "system"]);
 
-// Inline stream-part helpers (same logic as apps/app/.../stream-parts.ts).
-function partType(p: unknown): string | undefined {
-  return typeof p === "object" && p !== null && "type" in p
-    ? String((p as { type: unknown }).type)
-    : undefined;
-}
+// Runaway backstop for the agentic tool loop, NOT a functional limit. A turn
+// ends naturally the moment the model returns a step with no tool call (its
+// final answer); this cap only fires if the model loops on tools without ever
+// settling. Matches the app chat route + agent-engine defaults.
+const MAX_AGENT_STEPS = 256;
 
-function errorMessageOf(error: unknown): string {
-  return error instanceof Error
-    ? error.message
-    : typeof error === "string"
-      ? error
-      : "Tool execution failed";
-}
-
-// Minimal typed stream events emitted over SSE.
-type ApiStreamEvent =
-  | { type: "text"; text: string }
-  | { type: "reasoning-start"; reasoningId: string }
-  | { type: "reasoning-delta"; reasoningId: string; text: string }
-  | { type: "reasoning-end"; reasoningId: string; durationMs: number }
-  | { type: "step-start"; stepIndex: number }
-  | { type: "step-finish"; stepIndex: number }
-  | { type: "tool-input-start"; toolCallId: string; capability: string }
-  | { type: "tool-input-delta"; toolCallId: string; delta: string }
-  | {
-      type: "tool-call-start";
-      toolCallId: string;
-      capability: string;
-      inputPreview: unknown;
-      riskLevel: string;
-    }
-  | {
-      type: "tool-call-end";
-      toolCallId: string;
-      status: "completed" | "failed";
-      output?: unknown;
-      errorReason?: string;
-      durationMs: number;
-    }
-  | {
-      type: "approval-required";
-      approvalId: string;
-      capability: string;
-      inputPreview: unknown;
-      riskLevel: string;
-      expiresAt: string;
-    }
-  | {
-      type: "usage";
-      usage: {
-        promptTokens: number;
-        completionTokens: number;
-        totalTokens: number;
-      };
-    }
-  | { type: "error"; message: string };
-
-// Collected token + step data returned by consumeStream for execution recording.
-type CollectedExecutionToolCall = {
-  toolCallId: string;
-  toolName: string;
-  inputPreview: unknown;
-  output?: unknown;
-  status: "completed" | "failed";
-  durationMs: number;
-};
-
-type CollectedExecutionStep = {
-  stepNumber: number;
-  stepType: string;
-  status: "completed";
-  inputPayload: unknown;
-  toolCalls: CollectedExecutionToolCall[];
-  latencyMs: number;
-};
-
-type CollectedExecution = {
-  inputTokens: number;
-  outputTokens: number;
-  steps: CollectedExecutionStep[];
-};
-
-type ConsumeStreamResult = {
-  assistantText: string;
-  execution: CollectedExecution;
-  // True when the model surfaced an `error` part mid-stream. The accumulated
-  // assistantText is then partial/untrustworthy and must not be persisted as a
-  // successful assistant turn.
-  streamErrored: boolean;
-};
-
-// Consume the agent fullStream, emit SSE events, and return the accumulated
-// assistant text plus collected execution metadata for persistence. Mirrors
-// translateAgentStream in the app route but without component/render-directive
-// handling (no React registry in the API).
-async function consumeStream(
-  fullStream: AsyncIterable<unknown>,
-  toolNameMap: Record<string, string>,
-  emit: (event: ApiStreamEvent) => void,
-): Promise<ConsumeStreamResult> {
-  let assistantText = "";
-  let streamErrored = false;
-  const toolStartedAt: Record<string, number> = {};
-  const reasoningStartedAt: Record<string, number> = {};
-  let stepIndex = -1;
-
-  // Execution collection state.
-  const collectedSteps: CollectedExecutionStep[] = [];
-  const stepStartedAt: Record<number, number> = {};
-  // Per-step tool call accumulation (keyed by toolCallId → stepNumber).
-  const toolCallToStep: Record<string, number> = {};
-  const collectedToolCalls: Record<string, CollectedExecutionToolCall> = {};
-  let collectedInputTokens = 0;
-  let collectedOutputTokens = 0;
-
-  for await (const raw of fullStream) {
-    const pType = partType(raw);
-    if (pType === "text-delta") {
-      const text = (raw as { text: string }).text;
-      assistantText += text;
-      emit({ type: "text", text });
-    } else if (pType === "reasoning-start") {
-      const { id } = raw as { id: string };
-      reasoningStartedAt[id] = Date.now();
-      emit({ type: "reasoning-start", reasoningId: id });
-    } else if (pType === "reasoning-delta") {
-      const { id, text } = raw as { id: string; text: string };
-      emit({ type: "reasoning-delta", reasoningId: id, text });
-    } else if (pType === "reasoning-end") {
-      const { id } = raw as { id: string };
-      const durationMs =
-        reasoningStartedAt[id] !== undefined
-          ? Date.now() - (reasoningStartedAt[id] as number)
-          : 0;
-      emit({ type: "reasoning-end", reasoningId: id, durationMs });
-    } else if (pType === "start-step") {
-      stepIndex += 1;
-      stepStartedAt[stepIndex] = Date.now();
-      emit({ type: "step-start", stepIndex });
-    } else if (pType === "finish-step") {
-      if (stepIndex >= 0) {
-        const latencyMs =
-          stepStartedAt[stepIndex] !== undefined
-            ? Date.now() - (stepStartedAt[stepIndex] as number)
-            : 0;
-        // Collect all tool calls that were emitted for this step.
-        const stepToolCalls = Object.values(collectedToolCalls).filter(
-          (tc) => toolCallToStep[tc.toolCallId] === stepIndex,
-        );
-        collectedSteps.push({
-          stepNumber: stepIndex,
-          stepType: "llm_turn",
-          status: "completed",
-          inputPayload: null,
-          toolCalls: stepToolCalls,
-          latencyMs,
-        });
-        emit({ type: "step-finish", stepIndex });
-      }
-    } else if (pType === "tool-input-start") {
-      const { id, toolName } = raw as { id: string; toolName: string };
-      emit({
-        type: "tool-input-start",
-        toolCallId: id,
-        capability: toolNameMap[toolName] ?? toolName,
-      });
-    } else if (pType === "tool-input-delta") {
-      const { id, delta } = raw as { id: string; delta: string };
-      emit({ type: "tool-input-delta", toolCallId: id, delta });
-    } else if (pType === "tool-call") {
-      const { toolCallId, toolName, input } = raw as {
-        toolCallId: string;
-        toolName: string;
-        input: unknown;
-      };
-      toolStartedAt[toolCallId] = Date.now();
-      // Associate this tool call with the current step.
-      toolCallToStep[toolCallId] = stepIndex;
-      collectedToolCalls[toolCallId] = {
-        toolCallId,
-        toolName,
-        inputPreview: input,
-        status: "completed",
-        durationMs: 0,
-      };
-      emit({
-        type: "tool-call-start",
-        toolCallId,
-        capability: toolNameMap[toolName] ?? toolName,
-        inputPreview: input,
-        riskLevel: "low",
-      });
-    } else if (pType === "tool-result") {
-      const { toolCallId, output } = raw as {
-        toolCallId: string;
-        output: unknown;
-      };
-      const durationMs =
-        toolStartedAt[toolCallId] !== undefined
-          ? Date.now() - (toolStartedAt[toolCallId] as number)
-          : 0;
-      if (collectedToolCalls[toolCallId]) {
-        collectedToolCalls[toolCallId] = {
-          ...(collectedToolCalls[toolCallId] as CollectedExecutionToolCall),
-          output,
-          status: "completed",
-          durationMs,
-        };
-      }
-      emit({
-        type: "tool-call-end",
-        toolCallId,
-        status: "completed",
-        output,
-        durationMs,
-      });
-    } else if (pType === "tool-error") {
-      const { toolCallId, error } = raw as {
-        toolCallId: string;
-        error: unknown;
-      };
-      const durationMs =
-        toolStartedAt[toolCallId] !== undefined
-          ? Date.now() - (toolStartedAt[toolCallId] as number)
-          : 0;
-      if (collectedToolCalls[toolCallId]) {
-        collectedToolCalls[toolCallId] = {
-          ...(collectedToolCalls[toolCallId] as CollectedExecutionToolCall),
-          status: "failed",
-          durationMs,
-        };
-      }
-      emit({
-        type: "tool-call-end",
-        toolCallId,
-        status: "failed",
-        errorReason: errorMessageOf(error),
-        durationMs,
-      });
-    } else if (pType === "finish") {
-      const { totalUsage } = raw as {
-        totalUsage: {
-          inputTokens?: number;
-          outputTokens?: number;
-          totalTokens?: number;
-        };
-      };
-      collectedInputTokens = totalUsage.inputTokens ?? 0;
-      collectedOutputTokens = totalUsage.outputTokens ?? 0;
-      emit({
-        type: "usage",
-        usage: {
-          promptTokens: collectedInputTokens,
-          completionTokens: collectedOutputTokens,
-          totalTokens: totalUsage.totalTokens ?? 0,
-        },
-      });
-    } else if (pType === "error") {
-      // AI SDK surfaces model-layer failures (rate limits, context overflow,
-      // model unavailability) as yielded `error` parts — NOT thrown exceptions,
-      // so the outer try/catch never sees them. Propagate as a typed `error`
-      // SSE event (so clients can distinguish failure from a complete reply) and
-      // log it so model-layer failures are visible to monitoring. Do not inject
-      // the error into assistantText: that would corrupt the persisted turn.
-      const errVal = (raw as { error?: unknown }).error;
-      const message =
-        errVal instanceof Error
-          ? errVal.message
-          : typeof errVal === "string"
-            ? errVal
-            : "Stream error";
-      streamErrored = true;
-      console.error("[chat.stream] LLM stream error part:", message);
-      emit({ type: "error", message });
-    }
-  }
-
+/** Convert the budget.policy.read output to the engine's TurnBudgetPolicy shape. */
+function turnBudgetPolicyFromSaved(saved: {
+  enabled: boolean;
+  limitUsd: number | null;
+  mode: TurnBudgetPolicy["mode"];
+  graceOveragePct: number;
+}): TurnBudgetPolicy {
   return {
-    assistantText,
-    streamErrored,
-    execution: {
-      inputTokens: collectedInputTokens,
-      outputTokens: collectedOutputTokens,
-      steps: collectedSteps,
-    },
+    enabled: saved.enabled,
+    limitUsd: saved.limitUsd ?? 0,
+    mode: saved.mode,
+    graceOveragePct: saved.graceOveragePct,
   };
 }
 
@@ -331,6 +84,13 @@ export const chatStreamRoute = new Hono<AppEnv>();
 // conversationId?, activeServerIds?, tier?, model?, effort? }.
 // Each SSE line: `data: <JSON ApiStreamEvent>\n\n`
 // Terminal: `event: done\ndata: [DONE]\n\n`
+//
+// Runs the SAME coding engine the CLI and in-app chat use (runCodingAgent),
+// workspace-optional conversational mode — one step-driver with the multi-step
+// tool loop (`stopWhen`), invoke()-gated tools, per-turn memory recall, and the
+// USD budget guard. Raw AI-SDK parts are forwarded to a stateful SSE translator
+// via `onStreamPart` so the client wire protocol is byte-identical to the
+// pre-engine single-`streamAgentReply` transport.
 chatStreamRoute.post("/", async (c) => {
   let rawBody: unknown;
   try {
@@ -350,6 +110,10 @@ chatStreamRoute.post("/", async (c) => {
   const { content, conversationId, activeServerIds, tier, model, effort } =
     parsed.data;
   const ctx = capabilityContext(c);
+  // A stable per-turn UUID: execution_step_id / reference_id in the metered AI
+  // port, executionRef for memory recall, and messageId in telemetry.
+  const messageId = ctx.requestId;
+  const capCtx: CapabilityContext = { ...ctx, messageId };
 
   // Resolve language model: explicit > tier > workspace/user defaults > system default.
   let resolvedModel = model;
@@ -373,8 +137,9 @@ chatStreamRoute.post("/", async (c) => {
         ? { tier: resolvedTier }
         : {}),
   });
+  const modelId = modelIdOf(turnModel);
   const turnEffort =
-    effort && supportsReasoning(modelIdOf(turnModel)) ? effort : undefined;
+    effort && supportsReasoning(modelId) ? effort : undefined;
 
   // Load conversation history for multi-turn context.
   let historyMessages: ModelMessage[] = [];
@@ -409,17 +174,18 @@ chatStreamRoute.post("/", async (c) => {
       .reverse();
   }
 
-  // Append current user message (guard against duplicate if already trailing).
+  // The engine appends the current user message (`instruction`) itself, so the
+  // history it receives must EXCLUDE it. Drop a trailing row that duplicates the
+  // current turn (e.g. a concurrent persist wrote it) so the model never sees the
+  // current turn twice.
   const lastHistory = historyMessages[historyMessages.length - 1];
   const alreadyInHistory =
     lastHistory !== undefined &&
     lastHistory.role === "user" &&
     lastHistory.content === content;
-  const messagesWithCurrent: ModelMessage[] = alreadyInHistory
-    ? historyMessages
-    : [...historyMessages, { role: "user", content }];
-
-  const coreMessages: ModelMessage[] = messagesWithCurrent;
+  const historyForEngine: ModelMessage[] = alreadyInHistory
+    ? historyMessages.slice(0, -1)
+    : historyMessages;
 
   // Look up the qa-chat agent for execution recording (SOC 2 audit trail).
   // Graceful degradation: if not found, the stream still proceeds.
@@ -468,10 +234,19 @@ chatStreamRoute.post("/", async (c) => {
 
   const responseStream = new ReadableStream<Uint8Array>({
     async start(controller) {
+      let closed = false;
       function emit(event: ApiStreamEvent): void {
-        controller.enqueue(
-          encoder.encode(`data: ${JSON.stringify(event)}\n\n`),
-        );
+        if (closed) return;
+        try {
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify(event)}\n\n`),
+          );
+        } catch {
+          // Client disconnected — the controller is closed. Latch it so the
+          // engine's synchronous onStreamPart taps become no-ops (a throw there
+          // would be misclassified as a stream error and trigger a retry).
+          closed = true;
+        }
       }
 
       // Track turn start time for latency measurement.
@@ -482,47 +257,141 @@ chatStreamRoute.post("/", async (c) => {
       let assistantMsgId: string | null = null;
 
       try {
-        const [{ tools: agentTools, nameMap: toolNameMap }, promptConfig] =
-          await runInTenantScope(
-            { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
-            () =>
-              Promise.all([
-                materializeTools(
-                  {
-                    orgId: ctx.orgId,
-                    workspaceId: ctx.workspaceId,
-                    userId: ctx.userId ?? "",
-                    apiKeyId: ctx.apiKeyId,
-                    requestId: ctx.requestId,
-                    surface: "api",
-                    messageId: ctx.requestId,
-                    clientIp: ctx.clientIp,
+        // Materialize tools + prompt config, AND kick off deterministic memory
+        // recall — all inside ONE tenant scope so recall runs CONCURRENTLY with
+        // tool materialization (no serial latency before the first token). The
+        // recalled block is injected per-turn by the engine AFTER the cached
+        // system prefix (ADR-021 §2/§8), never into the system block.
+        const [
+          { tools: agentTools, nameMap: toolNameMap },
+          promptConfig,
+          recalledMemory,
+        ] = await runInTenantScope(
+          { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+          () =>
+            Promise.all([
+              materializeTools(
+                {
+                  orgId: ctx.orgId,
+                  workspaceId: ctx.workspaceId,
+                  userId: ctx.userId ?? "",
+                  apiKeyId: ctx.apiKeyId,
+                  requestId: ctx.requestId,
+                  surface: "api",
+                  messageId,
+                  clientIp: ctx.clientIp,
+                },
+                {
+                  serverAllowlist:
+                    activeServerIds.length > 0
+                      ? new Set(activeServerIds)
+                      : undefined,
+                  onApprovalRequired: (approvalEvent) => {
+                    emit({
+                      type: "approval-required",
+                      approvalId: approvalEvent.approvalId,
+                      capability: approvalEvent.capability,
+                      inputPreview: approvalEvent.inputPreview,
+                      riskLevel: approvalEvent.riskLevel,
+                      expiresAt: approvalEvent.expiresAt,
+                    });
                   },
-                  {
-                    serverAllowlist:
-                      activeServerIds.length > 0
-                        ? new Set(activeServerIds)
-                        : undefined,
-                    onApprovalRequired: (approvalEvent) => {
-                      emit({
-                        type: "approval-required",
-                        approvalId: approvalEvent.approvalId,
-                        capability: approvalEvent.capability,
-                        inputPreview: approvalEvent.inputPreview,
-                        riskLevel: approvalEvent.riskLevel,
-                        expiresAt: approvalEvent.expiresAt,
-                      });
-                    },
-                  },
-                ),
-                loadWorkspacePromptConfig(ctx.workspaceId).catch(() => ({})),
-              ]),
-          );
+                },
+              ),
+              loadWorkspacePromptConfigSafe(ctx.workspaceId),
+              recallWorkspaceMemoryMessage({
+                query: content,
+                executionRef: messageId,
+                ctx: capCtx,
+              }),
+            ]),
+        );
 
-        const result = streamAgentReply({
-          messages: coreMessages,
-          model: turnModel,
-          tools: agentTools,
+        // Per-turn dollar budget (OXA — turn-budget). Resolve the caller's saved
+        // default via budget.policy.read (user-scoped; direct handler call, no
+        // kernel). A missing user (API-key-only auth) or a failed read degrades
+        // to TURN_BUDGET_OFF so a broken preferences row never blocks a turn.
+        const turnBudgetPolicy: TurnBudgetPolicy = ctx.userId
+          ? await budgetPolicyReadHandler({}, capCtx)
+              .then(turnBudgetPolicyFromSaved)
+              .catch(() => TURN_BUDGET_OFF)
+          : TURN_BUDGET_OFF;
+
+        // createTurnBudgetGuard returns undefined when the policy is off, so an
+        // unbudgeted turn passes no guard at all (unbounded, byte-identical to
+        // before this feature). The hooks are the ONLY surface-specific part of
+        // enforcement — the policy shape, the mode ladder, and the pure evaluator
+        // all live in @oxagen/billing.
+        const budgetGuard = createTurnBudgetGuard(turnBudgetPolicy, modelId, {
+          onWithinGrace: (verdict) => {
+            emit({
+              type: "budget-notice",
+              state: "within_grace",
+              costUsd: verdict.costUsd,
+              limitUsd: verdict.limitUsd,
+              mode: verdict.mode,
+            });
+          },
+          onStop: (verdict) => {
+            emit({
+              type: "budget-notice",
+              state: "stopped",
+              costUsd: verdict.costUsd,
+              limitUsd: verdict.limitUsd,
+              mode: verdict.mode,
+            });
+          },
+          // prompt mode: reuse the EXISTING tool-approval machinery (the same
+          // approval-required SSE event materializeTools uses) rather than a
+          // second pause protocol. createApprovalRequest/waitForApproval read/
+          // write via withTenantDb, so re-enter the tenant scope here.
+          onPause: async (verdict) => {
+            const costLabel = formatBudgetUsd(verdict.costUsd);
+            const limitLabel = formatBudgetUsd(verdict.limitUsd);
+            const inputPreview = {
+              costUsd: verdict.costUsd,
+              limitUsd: verdict.limitUsd,
+              message: `Per-turn budget reached: ${costLabel} of ${limitLabel}. Approve to continue for another ${limitLabel}.`,
+            };
+            const { approvalId } = await runInTenantScope(
+              { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+              () =>
+                createApprovalRequest({
+                  orgId: ctx.orgId,
+                  workspaceId: ctx.workspaceId,
+                  messageId,
+                  capabilityName: "budget.turn.continue",
+                  inputPreview,
+                  riskLevel: "low",
+                }),
+            );
+            const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+            emit({
+              type: "approval-required",
+              approvalId,
+              capability: "budget.turn.continue",
+              inputPreview,
+              riskLevel: "low",
+              expiresAt,
+            });
+            const resolution = await waitForApproval(approvalId);
+            return resolution.resolution === "approved";
+          },
+        });
+
+        // Stateful SSE translator — the single source of truth for the part→SSE
+        // mapping (byte-identical to the pre-engine transport) + per-step
+        // execution collection.
+        const translator = createApiStreamTranslator({ toolNameMap, emit });
+
+        // Metered AI port (@oxagen/ai). Surface "api" so token usage/credits
+        // attribute to the API surface, matching the prior telemetry.
+        const ai = createPlatformAgentAi(capCtx, messageId, "api");
+
+        const result = await runCodingAgent({
+          ai,
+          instruction: content,
+          history: historyForEngine,
           system: resolvePrompt({
             key: "chat.system",
             baseline: chatSystemPrompt({
@@ -533,28 +402,52 @@ chatStreamRoute.post("/", async (c) => {
             }),
             config: promptConfig,
           }),
+          model: modelId,
           ...(turnEffort ? { effort: turnEffort } : {}),
-          telemetry: {
-            orgId: ctx.orgId,
-            workspaceId: ctx.workspaceId,
-            surface: "api",
-            messageId: ctx.requestId,
-          },
+          maxSteps: MAX_AGENT_STEPS,
+          // Byte-identical client behaviour: no step retries (a retry would
+          // re-forward a step's already-streamed parts) and no context-overflow
+          // re-run — an overflow surfaces via the catch as a single `error` event,
+          // as it did before the engine unification.
+          maxRetries: 0,
+          maxOverflowRetries: 0,
+          // No `workspace` ⇒ conversational mode: no filesystem tools; the
+          // materialized invoke()-gated capability ToolSet is injected here.
+          extraTools: agentTools,
+          // Recall ran CONCURRENTLY in the setup Promise.all above; the provider
+          // just reads its already-resolved value (no serial latency).
+          memory: createRecalledMemoryProvider({
+            recalledPromise: Promise.resolve(recalledMemory),
+          }),
+          // Client-disconnect abort stops the loop.
+          signal: c.req.raw.signal,
+          onStreamPart: (part) => translator.onPart(part),
+          budgetGuard,
         });
 
         const {
           assistantText,
           execution: collectedExecution,
           streamErrored,
-        } = await consumeStream(
-          result.fullStream as AsyncIterable<unknown>,
-          toolNameMap,
-          emit,
-        );
+        } = translator.finish();
+
+        // ONE aggregated usage event from the engine's summed per-step usage —
+        // same single event, same position (last before `[DONE]`), byte-identical
+        // shape to the pre-engine single-`finish` usage. Credits are charged per
+        // step inside the metered AI port; this is display-only.
+        emit({
+          type: "usage",
+          usage: {
+            promptTokens: result.usage.inputTokens ?? 0,
+            completionTokens: result.usage.outputTokens ?? 0,
+            totalTokens: result.usage.totalTokens ?? 0,
+          },
+        });
 
         // Persist user message + assistant reply for conversation threading.
-        // Skip persistence on a mid-stream model error: the assistantText is
-        // partial/untrustworthy and must not be written as a successful turn.
+        // Skip on a defensive mid-stream error part: the assistantText is
+        // partial/untrustworthy and must not be written as a successful turn
+        // (the engine normally THROWS such errors to the catch below instead).
         if (
           !streamErrored &&
           conversationId &&
@@ -610,8 +503,8 @@ chatStreamRoute.post("/", async (c) => {
             );
           } catch (persistErr) {
             // Persistence failure must not corrupt the already-sent SSE response,
-            // but it is silent data loss (conversation history dropped) unless we
-            // log it. Surface to monitoring; do not rethrow into the SSE stream.
+            // but it is silent data loss unless we log it. Surface to monitoring;
+            // do not rethrow into the SSE stream.
             const message =
               persistErr instanceof Error
                 ? persistErr.message
@@ -624,12 +517,10 @@ chatStreamRoute.post("/", async (c) => {
         }
 
         // Record agent execution for SOC 2 audit trail.
-        // Only fires when: the qa-chat agent was found, a conversationId was used,
-        // and the assistant message was persisted.
         if (qaAgent && conversationId && assistantMsgId) {
           try {
             await invoke(
-              "chat.message.execution",
+              "get_message_execution",
               {
                 messageId: assistantMsgId,
                 agentId: qaAgent.id,
@@ -667,7 +558,7 @@ chatStreamRoute.post("/", async (c) => {
                   })),
                 })),
               },
-              { ...ctx, surface: "api" as const },
+              { ...capCtx, surface: "api" as const },
               { surface: "api" },
             );
           } catch (execErr) {
@@ -684,6 +575,9 @@ chatStreamRoute.post("/", async (c) => {
           }
         }
       } catch (err) {
+        // The engine THROWS on a provider/stream error, a context overflow (with
+        // maxOverflowRetries: 0), or a client-disconnect abort. Skip persistence
+        // (the assistantText is partial/untrustworthy) and surface a typed error.
         const message = err instanceof Error ? err.message : "Stream error";
         emit({ type: "error", message });
       } finally {
@@ -692,6 +586,7 @@ chatStreamRoute.post("/", async (c) => {
         } catch {
           // Controller may already be closed.
         }
+        closed = true;
         controller.close();
       }
     },

@@ -4,7 +4,15 @@
  * argument object at the user.
  */
 import { describe, it, expect } from "vitest";
-import { formatToolArgs, formatToolCall, getToolEmoji } from "../tool-formatter.js";
+import {
+  formatToolArgs,
+  formatToolCall,
+  getToolEmoji,
+  getToolAccent,
+  toolDisplayLabel,
+  isSubagentDispatch,
+  subagentInfo,
+} from "../tool-formatter.js";
 
 describe("formatToolArgs", () => {
   it("shows the file path for file operations (not the whole object)", () => {
@@ -59,9 +67,89 @@ describe("formatToolCall", () => {
     );
   });
 
-  it("renders dotted capability names with dashes and no raw JSON", () => {
-    const line = formatToolCall("semantic.edge.suggest", { nodeId: "n1", limit: 3 });
-    expect(line).toContain("semantic-edge-suggest(");
+  it("renders snake capability names verbatim and no raw JSON", () => {
+    const line = formatToolCall("suggest_semantic_edges", { nodeId: "n1", limit: 3 });
+    expect(line).toContain("suggest_semantic_edges(");
     expect(line).not.toContain("{");
+  });
+
+  it("renders unmapped tools flush at the name — no wrench, no leading space", () => {
+    const line = formatToolCall("mcp__x__do", { query: "billing" });
+    expect(line).toBe("mcp__x__do(billing)");
+    expect(line).not.toContain("🔧");
+    expect(line.startsWith(" ")).toBe(false);
+  });
+
+  it("never emits the removed bolt/wrench glyphs for any tool", () => {
+    for (const tool of ["agent.code.execute", "Read", "Bash", "totally.unknown"]) {
+      const line = formatToolCall(tool, { query: "q" });
+      expect(line).not.toContain("⚡");
+      expect(line).not.toContain("🔧");
+    }
+  });
+});
+
+describe("getToolEmoji", () => {
+  it("returns an empty string for unmapped tools (wrench default removed)", () => {
+    expect(getToolEmoji("totally.unknown")).toBe("");
+    expect(getToolEmoji("agent.code.execute")).toBe("");
+  });
+
+  it("keeps the mapped glyphs for core tools", () => {
+    expect(getToolEmoji("Read")).toBe("📖");
+    expect(getToolEmoji("Bash")).toBe("💻");
+  });
+});
+
+describe("toolDisplayLabel", () => {
+  it("Title-cases single-word core tools", () => {
+    expect(toolDisplayLabel("bash")).toBe("Bash");
+    expect(toolDisplayLabel("Read")).toBe("Read");
+    expect(toolDisplayLabel("edit")).toBe("Edit");
+  });
+
+  it("keeps dotted capability names verbatim (precise identifiers)", () => {
+    expect(toolDisplayLabel("suggest_semantic_edges")).toBe("suggest_semantic_edges");
+    expect(toolDisplayLabel("knowledge.query")).toBe("knowledge.query");
+  });
+});
+
+describe("getToolAccent", () => {
+  it("colors by what the tool does", () => {
+    expect(getToolAccent("Write")).toBe("#34D399"); // green — mutation
+    expect(getToolAccent("Edit")).toBe("#34D399");
+    expect(getToolAccent("Delete")).toBe("#FB7185"); // red — destruction
+    expect(getToolAccent("Bash")).toBe("#FBBF24"); // amber — command
+    expect(getToolAccent("Read")).toBe("#7CE8F4"); // cyan — read
+    expect(getToolAccent("dispatch_subagent")).toBe("#A78BFA"); // violet — delegation
+  });
+});
+
+describe("isSubagentDispatch / subagentInfo", () => {
+  it("detects delegation tools", () => {
+    expect(isSubagentDispatch("dispatch_subagent")).toBe(true);
+    expect(isSubagentDispatch("spawnAgent")).toBe(true);
+    expect(isSubagentDispatch("Read")).toBe(false);
+  });
+
+  it("extracts slug + task across the field names the engine uses", () => {
+    expect(subagentInfo({ agent: "break-fix", task: "fix the bug" })).toEqual({
+      slug: "break-fix",
+      task: "fix the bug",
+    });
+    expect(subagentInfo({ subagent: "judge", prompt: "review it" })).toEqual({
+      slug: "judge",
+      task: "review it",
+    });
+    expect(subagentInfo("nope")).toEqual({});
+  });
+
+  it("formats a dispatch call as `slug → task`", () => {
+    expect(
+      formatToolArgs("dispatch_subagent", { agent: "show-agent", task: "wire the indicator" }),
+    ).toBe("show-agent → wire the indicator");
+    // Slug-only and task-only inputs still degrade gracefully.
+    expect(formatToolArgs("dispatch_subagent", { agent: "solo" })).toBe("solo");
+    expect(formatToolArgs("dispatch_subagent", { task: "just do it" })).toBe("just do it");
   });
 });

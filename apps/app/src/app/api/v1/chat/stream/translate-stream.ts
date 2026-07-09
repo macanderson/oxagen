@@ -18,7 +18,6 @@ import {
   type ToolCallPart,
   type ToolResultPart,
   type ToolErrorPart,
-  type FinishPart,
 } from "./stream-parts";
 
 export interface TranslatedTurn {
@@ -28,31 +27,93 @@ export interface TranslatedTurn {
   persistedBlocks: AssistantContentBlock[];
 }
 
+/** Token usage for the single aggregated `usage` event. */
+export interface TurnUsage {
+  inputTokens?: number;
+  outputTokens?: number;
+  totalTokens?: number;
+  /** Prompt-cache read tokens — a subset of `inputTokens` served from cache.
+   * Surfaced to the client so the chat UX can show the turn's cache-hit rate. */
+  cachedInputTokens?: number;
+}
+
 /**
- * Consume an agent reply's `fullStream`, emit the matching SSE `StreamEvent`s
- * via `emit`, and accumulate the ordered assistant content blocks so a page
- * refresh re-renders the exact chain of thought/action — not just final prose.
+ * Emit the single `usage` StreamEvent for a turn, computing credits charged via
+ * the billing meter (best-effort: a pricing-lookup failure omits `creditsCharged`
+ * rather than crashing the turn).
  *
- * We iterate as `AsyncIterable<unknown>` and narrow with `partType()` because
- * the SDK's `TextStreamPart<ToolSet>` generic does not produce a concrete
- * discriminated union when TOOLS is the wide `ToolSet` alias (the `tool-result`
- * arm becomes an unresolvable intersection).
- *
- * Iterating `fullStream` never rejects: provider/gateway failures arrive as an
- * `error` PART, which we forward as a visible text event rather than letting the
- * turn produce silent zero output.
+ * With the agent-engine step loop this fires ONCE after the loop, from the
+ * engine's aggregated `RunCodingAgentResult.usage` — NOT per model step (each
+ * step's own `finish` part carries only that step's usage; summing them in the
+ * client would show wrong, growing credit numbers). It sits in the same position
+ * as before — the last event before persistence and the `[DONE]` sentinel.
  */
-export async function translateAgentStream(args: {
-  fullStream: AsyncIterable<unknown>;
+export function emitUsageEvent(
+  emit: (event: StreamEvent) => void,
+  usage: TurnUsage,
+  modelId: string,
+): void {
+  const inputTokens = usage.inputTokens ?? 0;
+  const outputTokens = usage.outputTokens ?? 0;
+  const totalTokens = usage.totalTokens ?? 0;
+  // Clamp cache reads to [0, inputTokens] — cached tokens are a subset of the
+  // prompt, so they can never exceed it (guards against noisy provider counts).
+  const cachedTokens = Math.max(0, Math.min(usage.cachedInputTokens ?? 0, inputTokens));
+  let creditsCharged: number | undefined;
+  try {
+    const credits = meterCreditsForUsage({ model: modelId, inputTokens, outputTokens });
+    creditsCharged = Number(credits);
+  } catch {
+    // Pricing lookup failed (e.g. unknown model id) — omit creditsCharged.
+  }
+  emit({
+    type: "usage",
+    usage: {
+      promptTokens: inputTokens,
+      completionTokens: outputTokens,
+      totalTokens,
+      ...(cachedTokens > 0 ? { cachedTokens } : {}),
+      ...(creditsCharged !== undefined ? { creditsCharged } : {}),
+    },
+  });
+}
+
+/** The stateful translator: consumes one raw part at a time, emits SSE events. */
+export interface TurnTranslator {
+  /**
+   * Feed one raw AI-SDK `fullStream` part. Emits the matching SSE `StreamEvent`s
+   * and accumulates ordered content blocks. Safe to call across the engine's
+   * per-step `streamText` calls — all accumulator state lives in the closure.
+   *
+   * Does NOT handle `finish` (usage) or `error` parts — in the engine step loop
+   * each step emits its own `finish`, and stream errors are thrown, not streamed;
+   * the caller emits ONE aggregated `usage` (via `emitUsageEvent`) after the loop
+   * and the single `error` event from its catch. `translateAgentStream` (the
+   * single-pass wrapper) re-adds both for its callers.
+   */
+  onPart(raw: unknown): void;
+  /** Finalize: flush trailing prose, drop orphan reasoning blocks, return the turn. */
+  finish(): TranslatedTurn;
+}
+
+/**
+ * Build a stateful translator over an agent reply's `fullStream`. It emits the
+ * matching SSE `StreamEvent`s via `emit` and accumulates the ordered assistant
+ * content blocks so a page refresh re-renders the exact chain of thought/action
+ * — not just final prose.
+ *
+ * We narrow each part via `partType()` because the SDK's `TextStreamPart<ToolSet>`
+ * generic does not produce a concrete discriminated union when TOOLS is the wide
+ * `ToolSet` alias (the `tool-result` arm becomes an unresolvable intersection).
+ */
+export function createTurnTranslator(args: {
   requestId: string;
   toolNameMap: Record<string, string>;
   orgSlug: string;
   workspaceSlug: string;
-  /** Gateway model id (from modelIdOf(turnModel)) used to compute credits charged. */
-  modelId: string;
   emit: (event: StreamEvent) => void;
-}): Promise<TranslatedTurn> {
-  const { fullStream, requestId, toolNameMap, orgSlug, workspaceSlug, modelId, emit } = args;
+}): TurnTranslator {
+  const { requestId, toolNameMap, orgSlug, workspaceSlug, emit } = args;
 
   const toolStartedAt: Record<string, number> = {};
   // Accumulate the assistant's text so we can persist the full reply.
@@ -69,7 +130,9 @@ export async function translateAgentStream(args: {
       currentText = "";
     }
   };
-  // Index maps so terminal events can update the block pushed earlier.
+  // Index maps so terminal events can update the block pushed earlier. Keyed by
+  // the STEP-NAMESPACED reasoning id (see `reasoningKey`) so ids that collide
+  // across the engine's per-step `streamText` calls don't clobber each other.
   const reasoningBlockIndex: Record<string, number> = {};
   const reasoningStartedAt: Record<string, number> = {};
   const toolBlockIndex: Record<string, number> = {};
@@ -79,7 +142,16 @@ export async function translateAgentStream(args: {
   // Multi-step boundary counter (start-step/finish-step).
   let stepIndex = -1;
 
-  for await (const raw of fullStream) {
+  // Reasoning ids are generated per `streamText` call, so with the engine's
+  // per-step loop `part.id` can REPEAT across steps (a single stream produced
+  // unique ids). The client reducer keys reasoning cards by id and resets the
+  // card text on `reasoning-start`, so a repeated id would clobber an earlier
+  // card. Namespace every reasoning id by the current step so it stays unique
+  // across the whole turn (server-side only; the event/block shapes are
+  // unchanged — the id is an opaque correlation key the client never parses).
+  const reasoningKey = (id: string): string => `s${stepIndex < 0 ? 0 : stepIndex}:${id}`;
+
+  const onPart = (raw: unknown): void => {
     const pType = partType(raw);
     if (pType === "text-delta") {
       const part = raw as TextDeltaPart;
@@ -88,32 +160,35 @@ export async function translateAgentStream(args: {
       emit({ type: "text", messageId: requestId, text: part.text });
     } else if (pType === "reasoning-start") {
       const part = raw as ReasoningBoundaryPart;
+      const rid = reasoningKey(part.id);
       flushText();
-      reasoningStartedAt[part.id] = Date.now();
+      reasoningStartedAt[rid] = Date.now();
       // Reserve the block slot now so reasoning keeps its place in order.
-      reasoningBlockIndex[part.id] = blocks.length;
-      blocks.push({ type: "reasoning", reasoningId: part.id, text: "" });
-      emit({ type: "reasoning-start", messageId: requestId, reasoningId: part.id });
+      reasoningBlockIndex[rid] = blocks.length;
+      blocks.push({ type: "reasoning", reasoningId: rid, text: "" });
+      emit({ type: "reasoning-start", messageId: requestId, reasoningId: rid });
     } else if (pType === "reasoning-delta") {
       const part = raw as ReasoningDeltaPart;
-      const idx = reasoningBlockIndex[part.id];
+      const rid = reasoningKey(part.id);
+      const idx = reasoningBlockIndex[rid];
       if (idx !== undefined) {
         const blk = blocks[idx];
         if (blk && blk.type === "reasoning") blk.text += part.text;
       }
-      emit({ type: "reasoning-delta", reasoningId: part.id, text: part.text });
+      emit({ type: "reasoning-delta", reasoningId: rid, text: part.text });
     } else if (pType === "reasoning-end") {
       const part = raw as ReasoningBoundaryPart;
+      const rid = reasoningKey(part.id);
       const durationMs =
-        reasoningStartedAt[part.id] !== undefined
-          ? Date.now() - (reasoningStartedAt[part.id] as number)
+        reasoningStartedAt[rid] !== undefined
+          ? Date.now() - (reasoningStartedAt[rid] as number)
           : 0;
-      const idx = reasoningBlockIndex[part.id];
+      const idx = reasoningBlockIndex[rid];
       if (idx !== undefined) {
         const blk = blocks[idx];
         if (blk && blk.type === "reasoning") blk.durationMs = durationMs;
       }
-      emit({ type: "reasoning-end", reasoningId: part.id, durationMs });
+      emit({ type: "reasoning-end", reasoningId: rid, durationMs });
     } else if (pType === "start-step") {
       stepIndex += 1;
       flushText();
@@ -143,7 +218,7 @@ export async function translateAgentStream(args: {
       flushText();
       // Reserve a terminal block; tool-result/tool-error fills it in.
       toolBlockIndex[part.toolCallId] = blocks.length;
-      if (capability === "agent.code.execute") {
+      if (capability === "execute_code") {
         const inp = isRecord(part.input) ? part.input : {};
         blocks.push({
           type: "code-execute",
@@ -173,6 +248,11 @@ export async function translateAgentStream(args: {
       });
     } else if (pType === "tool-result") {
       const part = raw as ToolResultPart;
+      // `preliminary` results (streamed partial output) are progress, not
+      // completion — the final result for the same call follows. Skip them so a
+      // capability that streams partial output never double-emits tool-call-end
+      // / component. (The engine's own CodingEvent chain skips these too.)
+      if ((raw as { preliminary?: boolean }).preliminary === true) return;
       const durationMs =
         toolStartedAt[part.toolCallId] !== undefined
           ? Date.now() - (toolStartedAt[part.toolCallId] as number)
@@ -252,7 +332,7 @@ export async function translateAgentStream(args: {
       if (
         !emittedComponent &&
         capabilityForResult !== undefined &&
-        capabilityForResult !== "agent.code.execute"
+        capabilityForResult !== "execute_code"
       ) {
         const directive = resolveRenderDirective({
           capability: capabilityForResult,
@@ -278,7 +358,7 @@ export async function translateAgentStream(args: {
       // long-running Inngest job via agent.task.background.start, surface a live
       // BackgroundTaskCard and persist a terminal block so the task is visible
       // inline (and linked to the BackgroundTaskTray), not only after a refresh.
-      if (capabilityForResult === "agent.task.background.start") {
+      if (capabilityForResult === "start_background_task") {
         const startOut = isRecord(rawResult) ? rawResult : null;
         const taskId =
           startOut !== null && typeof startOut.taskId === "string" ? startOut.taskId : null;
@@ -342,40 +422,69 @@ export async function translateAgentStream(args: {
         errorReason,
         durationMs,
       });
-    } else if (pType === "finish") {
-      const part = raw as FinishPart;
-      const inputTokens = part.totalUsage.inputTokens ?? 0;
-      const outputTokens = part.totalUsage.outputTokens ?? 0;
-      const totalTokens = part.totalUsage.totalTokens ?? 0;
-      // Compute credits charged using the billing meter (best-effort: a pricing
-      // lookup failure should never crash the turn — fall back to undefined so
-      // the UI skips the credit display rather than showing a wrong number).
-      let creditsCharged: number | undefined;
-      try {
-        const credits = meterCreditsForUsage({ model: modelId, inputTokens, outputTokens });
-        creditsCharged = Number(credits);
-      } catch {
-        // Pricing lookup failed (e.g. unknown model id) — omit creditsCharged.
-      }
-      // Emit usage so the client can show credits consumed this turn.
-      emit({
-        type: "usage",
-        usage: {
-          promptTokens: inputTokens,
-          completionTokens: outputTokens,
-          totalTokens,
-          ...(creditsCharged !== undefined ? { creditsCharged } : {}),
-        },
-      });
+    }
+    // finish, error, tool-input-end, start, source, raw, abort — intentionally
+    // not handled here (see the interface doc). tool-input-end/source/raw/abort
+    // were never forwarded; finish/error are the caller's responsibility.
+  };
+
+  const finish = (): TranslatedTurn => {
+    // Commit any trailing prose as the final text block.
+    flushText();
+    // Keep reasoning blocks that actually happened — either they carry summary
+    // text (OpenAI/Google) or they completed with a duration (Anthropic adaptive
+    // thinking redacts the content but still reports the time spent, which the
+    // ReasoningCard renders as a "Thought for Xs" pill). Drop only orphan
+    // reasoning-start blocks that never ended.
+    const persistedBlocks = blocks.filter(
+      (b) => b.type !== "reasoning" || b.text.length > 0 || b.durationMs !== undefined,
+    );
+    return { assistantText, persistedBlocks };
+  };
+
+  return { onPart, finish };
+}
+
+/**
+ * Single-pass wrapper: consume a whole `fullStream` into a `createTurnTranslator`
+ * and return the accumulated turn. Unlike the engine path (which drives
+ * `onPart` step-by-step and emits usage/error itself), this wrapper also handles
+ * the `finish` part (→ one `usage` event) and `error` part (→ structured `error`
+ * event), preserving the exact behaviour callers relied on before the engine
+ * unification. Iterating `fullStream` never rejects: provider/gateway failures
+ * arrive as an `error` PART, forwarded here as a structured error event rather
+ * than letting the turn produce silent zero output.
+ */
+export async function translateAgentStream(args: {
+  fullStream: AsyncIterable<unknown>;
+  requestId: string;
+  toolNameMap: Record<string, string>;
+  orgSlug: string;
+  workspaceSlug: string;
+  /** Gateway model id (from modelIdOf(turnModel)) used to compute credits charged. */
+  modelId: string;
+  emit: (event: StreamEvent) => void;
+}): Promise<TranslatedTurn> {
+  const { fullStream, requestId, toolNameMap, orgSlug, workspaceSlug, modelId, emit } = args;
+  const translator = createTurnTranslator({
+    requestId,
+    toolNameMap,
+    orgSlug,
+    workspaceSlug,
+    emit,
+  });
+
+  for await (const raw of fullStream) {
+    const pType = partType(raw);
+    if (pType === "finish") {
+      const part = raw as {
+        totalUsage: { inputTokens?: number; outputTokens?: number; totalTokens?: number };
+      };
+      emitUsageEvent(emit, part.totalUsage, modelId);
     } else if (pType === "error") {
-      // streamText surfaces provider/gateway failures (e.g. a 400 from a bad
-      // request, auth, rate limit, or an insufficient-credits envelope) as an
-      // `error` PART rather than throwing. If we don't forward it the turn
-      // produces zero output and the user sees nothing. Emit a structured
-      // `error` event (NOT a text event) so the client shows a readable toast
-      // instead of rendering the raw JSON envelope inline. We never fold it into
-      // assistantText either — persisting it would feed the error back into the
-      // next turn's history context.
+      // Forward a structured `error` event (NOT text) so the client shows a
+      // readable toast instead of raw JSON. Never folded into assistantText —
+      // persisting it would feed the error into the next turn's history.
       const { code, message } = formatStreamError((raw as { error?: unknown }).error);
       emit({
         type: "error",
@@ -383,20 +492,10 @@ export async function translateAgentStream(args: {
         message,
         ...(code !== undefined ? { code } : {}),
       });
+    } else {
+      translator.onPart(raw);
     }
-    // tool-input-end, source, raw, abort — intentionally not forwarded.
   }
 
-  // Commit any trailing prose as the final text block.
-  flushText();
-  // Keep reasoning blocks that actually happened — either they carry summary
-  // text (OpenAI/Google) or they completed with a duration (Anthropic adaptive
-  // thinking redacts the content but still reports the time spent, which the
-  // ReasoningCard renders as a "Thought for Xs" pill). Drop only orphan
-  // reasoning-start blocks that never ended.
-  const persistedBlocks = blocks.filter(
-    (b) => b.type !== "reasoning" || b.text.length > 0 || b.durationMs !== undefined,
-  );
-
-  return { assistantText, persistedBlocks };
+  return translator.finish();
 }

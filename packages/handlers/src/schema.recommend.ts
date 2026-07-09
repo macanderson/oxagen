@@ -72,7 +72,7 @@ export const schemaRecommendHandler: CapabilityHandler<typeof schemaRecommend> =
   // tenant scope rides on `ctx`, independent of this surface gate.
   let graphStats: Record<string, unknown> = {};
   try {
-    graphStats = (await invoke("graph.stats", { includeByType: true }, ctx, {
+    graphStats = (await invoke("get_graph_stats", { includeByType: true }, ctx, {
       surface: "api",
     })) as Record<string, unknown>;
   } catch (err) {

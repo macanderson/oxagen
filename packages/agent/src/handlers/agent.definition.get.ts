@@ -6,7 +6,12 @@ import type {
   AgentDefinitionGetOutput,
 } from "@oxagen/oxagen/contracts/agent.definition.get";
 import type { CapabilityContext } from "../types";
-import { resolveAgent, isManagedAgentType } from "./_agent-definition";
+import {
+  resolveAgent,
+  isManagedAgentType,
+  resolveNamespacePrefix,
+  composeAgentKey,
+} from "./_agent-definition";
 
 export type { AgentDefinitionGetInput, AgentDefinitionGetOutput };
 
@@ -66,10 +71,20 @@ export async function agentDefinitionGetHandler(
     }
     const config = parseAgentDefinitionConfig(versionRow.config);
 
+    // Compose the immutable global key org_ns.workspace_ns.agent_slug. Resolved
+    // once from the tenant scope's namespaces (both immutable), inside the same
+    // tenant transaction.
+    const { orgNamespace, workspaceNamespace } = await resolveNamespacePrefix(
+      tx,
+      ctx.orgId,
+      ctx.workspaceId,
+    );
+
     return {
       agentId: agent.publicId,
       publicId: agent.publicId,
       slug: agent.slug,
+      agentKey: composeAgentKey(orgNamespace, workspaceNamespace, agent.slug),
       name: agent.name,
       description: agent.description,
       agentType: agent.agentType,

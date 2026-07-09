@@ -14,6 +14,7 @@ vi.mock("@oxagen/ai", () => ({
   // Prompt-registry wiring (the analysis instruction now resolves through the
   // registry so workspace overrides/append apply). Passthrough in tests.
   loadWorkspacePromptConfig: vi.fn(async () => ({})),
+  loadWorkspacePromptConfigSafe: vi.fn(async () => ({})),
   resolvePrompt: (a: { baseline: string }) => a.baseline,
   imageAnalyzePrompt: () => "analyze baseline",
 }));
@@ -44,7 +45,7 @@ import { imageAnalyzeHandler } from "./image.analyze";
 
 import { TEST_CTX as CTX } from "./test-utils/fixtures";
 
-const FAKE_MODEL = { modelId: "anthropic/claude-sonnet-4.6" };
+const FAKE_MODEL = { modelId: "anthropic/claude-sonnet-5" };
 
 const FAKE_ASSET = {
   storageUrl: "https://blob.store/gen_abc.png",

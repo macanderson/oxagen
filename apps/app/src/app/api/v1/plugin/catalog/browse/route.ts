@@ -80,7 +80,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const result = await invoke(
-      "plugin.catalog.browse",
+      "browse_plugin_catalog",
       { search, authKind, pluginType, installed, limit, offset },
       ctx,
       { surface: "agent" },

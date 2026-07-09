@@ -1,4 +1,4 @@
-<!-- Generated: 2025-07-10 | Files scanned: 49 (database pkg) | Token estimate: ~850 -->
+<!-- Generated: 2026-07-06 | Files scanned: 37 (database pkg), 46 migrations | Token estimate: ~900 -->
 
 # Data Architecture
 
@@ -17,6 +17,7 @@ sessions            id, userId, token, expiresAt
 accounts            userId, provider, providerAccountId
 verifications       identifier, value, expiresAt
 rateLimitTable      key, count, lastRequest
+twoFactorTable      userId, secret, backupCodes
 userPreferences     userId, theme, locale, notifications, ...
 ```
 
@@ -30,10 +31,11 @@ invitations         id, orgId, email, role, token, expiresAt
 
 ### Schema: workspace.ts
 ```
-workspaces          id, orgId, slug, name, settings (JSON), createdAt
+workspaces            id, orgId, slug, name, settings (JSON), createdAt
 workspaceSlugHistory
-workspaceUsers      workspaceId, userId, role
+workspaceUsers        workspaceId, userId, role
 workspaceMemoryPolicy workspaceId, policy (JSON)
+workspaceBudgetPolicy workspaceId, limits (JSON) — per-workspace cost governance
 ```
 
 ### Schema: chat.ts
@@ -58,6 +60,13 @@ agentExecutionSteps executionId, stepIndex, type, input, output, durationMs
 agentToolCalls      executionId, stepId, tool, input, output, durationMs
 sandboxSessions     id, orgId, workspaceId, agentId, sandboxId, status
 agentPlans          id, agentId, taskId, steps (JSON), status
+a2aTasks            id, orgId, workspaceId, publicId, skillId, status — A2A
+                    JSON-RPC task state; `public_id` backs the SSE
+                    tasks/resubscribe live-attach in apps/api/src/routes/a2a/
+                    stream-registry.ts
+fileLocks           id, orgId, workspaceId, path, agentId, acquiredAt — cross-agent
+                    file lock for parallel fleet work
+fileLockFences      lockId, fenceToken, expiresAt — lease/fencing tokens
 ```
 
 ### Schema: billing.ts
@@ -78,6 +87,23 @@ billingDisputes     orgId, stripeDisputeId, status
 stripeEventProcessing id, eventId, status, attempts
 ```
 
+### Schema: ai.ts
+```
+aiResponseCache     id, orgId, cacheKey, promptHash, model, surface, responseKind,
+                    response (JSON), usage (JSON), embedding (JSON, semantic layer) —
+                    layered deterministic-call cache; OPT-IN per call site, NEVER
+                    engaged for chat/agent-loop calls (see @oxagen/ai `cache` option)
+aiBatchJobs         id, orgId, provider batch job id, status — AI Gateway batch
+                    reconciliation state (ai.batch-reconcile Inngest fn)
+```
+
+### Schema: eval.ts (Evals v1 — LLM-as-judge, scoped to metered run traces)
+```
+evalDatasets        id, orgId, workspaceId, name, description
+evalDatasetItems    datasetId, input, expected (JSON)
+evalRuns            id, datasetId, orgId, workspaceId, status, judgeModel, results (JSON)
+```
+
 ### Schema: ingestion.ts
 ```
 sourceConnections   id, orgId, workspaceId, connectorId, config (JSON), status
@@ -85,7 +111,6 @@ authCredentials     connectionId, type, encryptedData
 oauthTokens         connectionId, accessToken (encrypted), refreshToken, expiresAt
 webhookSubscriptions connectionId, webhookId, secret, events
 oauthAccounts       connectionId, accountId, accountName
-entityTypes         id, connectionId, name, config (JSON)
 entityTypeMappings  entityTypeId, targetSchema
 setupSuggestions    connectionId, suggestions (JSON)
 deletionJobs        id, connectionId, status
@@ -99,7 +124,8 @@ mcpCredentials      registryId, type, encryptedData
 mcpServers          id, registryId, name, toolCount, enabled
 mcpConsents         id, orgId, workspaceId, userId, tool, granted, expiresAt
 mcpCatalogServers   id, name, url, description, tags
-mcpToolSnapshots    id, mcpServerId, tools (JSON), capturedAt
+mcpToolSnapshots    id, mcpServerId, tools (JSON), capturedAt — retained per
+                    mcp.tool-snapshot-retention Inngest fn
 ```
 
 ### Schema: iam.ts
@@ -171,7 +197,8 @@ URI:      NEO4J_URI (env)
 Database: NEO4J_DATABASE
 Usage:
   - Knowledge graph nodes + relationships
-  - Agent execution lineage
+  - Agent execution lineage (subagent fan-out AND A2A-originated runs —
+    both show up in agent.trace.get / `oxagen trace` the same way)
   - Memory nodes (synced from Engram)
   - Semantic edges / ontology
   - Code graph (packages/code-graph/)
@@ -180,7 +207,7 @@ Packages: packages/engram/src/store/graph-store.ts
           packages/agent/src/adapters/graph-sync.ts
 ```
 
-## Memory Store — Engram (packages/engram/)
+## Memory Store — Engram (packages/engram/, 63 files)
 ```
 Backends:
   - DuckDB (local episodic store)         engram/src/store/duckdb-adapter.ts
@@ -194,9 +221,18 @@ Subsystems:
   blackboard/   → multi-agent shared working memory
   consolidation → dedup, distill, promote
   compiler/     → context window packing
-  session/      → session event log, fork, replay
+  session/      → session event log, fork, replay (analyzeReplay)
   sync/         → CRDT merge, Merkle sync, protocol
   api/          → remember, recall, pin, relate, assert
+```
+
+## Telemetry Store — ClickHouse
+```
+Purpose: usage/cost metering events, token_usage, error clustering — the
+         ClickHouse→Stripe loop that turns observed usage into billing.
+Package: packages/telemetry/src/ (migrate.ts runs schema.sql then every
+         numbered migrations/*.sql file on each startup — comment-only .sql
+         files are valid no-op migrations used to record decisions)
 ```
 
 ## Storage — Vercel Blob
@@ -208,9 +244,11 @@ Usage: avatar uploads, generated assets, skill exports, archives
 
 ## Migrations
 ```
-Location: packages/database/migrations/
-Tool:     Drizzle Kit (pnpm migrate in database package)
-Count:    0 SQL files tracked (migrations generated on demand)
+Location: packages/database/atlas/migrations/
+Tool:     Atlas (pnpm migrate in database package)
+Count:    46 SQL files tracked (latest: 20260708130000_agent_file_locks.sql)
+Checksum: atlas.sum — regenerate via `atlas migrate hash --dir "file://atlas/migrations"`
+          from packages/database after adding/renaming a migration; never hand-edit.
 ```
 
 ## Encryption

@@ -17,7 +17,8 @@
 
 import { scopedSession } from "@oxagen/ontology/tenant";
 import { sanitizeLabel } from "@oxagen/ontology/labels";
-import { chInsert } from "@oxagen/telemetry";
+import { edgeValidityOnCreateSet, edgeValidityParams } from "@oxagen/ontology/temporal";
+import { chInsert, deterministicEventId } from "@oxagen/telemetry";
 import { randomUUID } from "node:crypto";
 import type { EntityMutation } from "../types";
 import {
@@ -37,6 +38,18 @@ export interface UpsertEntityOptions {
   connectionId?: string;
   /** Connector record type for telemetry rationale. */
   sourceRecordType?: string;
+  /**
+   * OXA-1932: the enclosing Inngest run id (`ctx.runId`), threaded through so
+   * `schema_conformance_events` rows get a per-attempt idempotency key. Inngest
+   * keeps the SAME runId across every retry of one execution but mints a FRESH
+   * runId for the next genuinely separate trigger (e.g. tomorrow's re-sync of
+   * the same entity) — so a retried insert collapses into the original row
+   * (see emitConformanceEvent) while legitimate repeat observations over time
+   * still get their own row. Absent for non-Inngest callers (tests, direct
+   * invocations) — falls back to a fixed sentinel, same as before this fix
+   * (best-effort telemetry; never blocks the write).
+   */
+  runId?: string;
 }
 
 /** Outcome of an entity-node write, carrying the §8 conformance result. */
@@ -69,7 +82,7 @@ export function resolveNodeLabel(entityType: string): string {
 
 export async function upsertEntityNode(
   mutation: EntityMutation,
-  _orgId: string,
+  orgId: string,
   opts: UpsertEntityOptions = {},
 ): Promise<UpsertEntityResult> {
   const pinnedSchema = opts.pinnedSchema ?? null;
@@ -132,6 +145,7 @@ export async function upsertEntityNode(
        RETURN n.publicId AS nodeId`,
       {
         naturalKey: mutation.naturalKey,
+        orgId,
         entityType: mutation.entityType,
         sourceRecordType: mutation.sourceRecordType,
         // `label` is the PascalCase type chip the explorer groups/filters/colours
@@ -218,6 +232,22 @@ async function emitObservedLabel(
  *
  * NOTE: description/error text originates from the registry + payload and is
  * stored as DATA only — never interpreted as instructions (§11 posture).
+ *
+ * OXA-1932: `event_id` is derived deterministically (NOT `crypto.randomUUID()`)
+ * from stable inputs — the enclosing Inngest run id, the mutation's natural
+ * key, the schema version, the outcome, and a `role` discriminator. This
+ * function is called from inside `upsertEntityNode`, itself invoked from a
+ * single `step.run("upsert-node", ...)` in the ingestion pipeline; when
+ * Inngest retries that step the whole body re-executes, including this insert.
+ * A deterministic id means a retry re-derives the SAME row identity instead of
+ * minting a fresh one, and — paired with the table's ReplacingMergeTree
+ * engine (0021 migration) keyed on `event_id` — a retried insert collapses
+ * into the original row on merge (query with FINAL) rather than double-
+ * counting the conformance signal. `runId` is what makes this safe to do
+ * WITHOUT collapsing genuinely separate observations: Inngest keeps the same
+ * runId across retries of one execution but mints a fresh one for the next
+ * trigger (e.g. tomorrow's re-sync of the same entity), so that later,
+ * legitimate re-observation still gets its own row.
  */
 async function emitConformanceEvent(
   mutation: EntityMutation,
@@ -226,11 +256,18 @@ async function emitConformanceEvent(
   outcome: "accepted" | "rejected" | "written_below_floor" | "pruned",
   nodeId: string | null,
   opts: UpsertEntityOptions,
+  role: "result" | "low_alert" = "result",
 ): Promise<void> {
   try {
     await chInsert("schema_conformance_events", [
       {
-        event_id: randomUUID(),
+        event_id: deterministicEventId(
+          opts.runId ?? "no-inngest-run-id",
+          mutation.naturalKey,
+          pinnedSchema.versionId,
+          outcome,
+          role,
+        ),
         version_id: pinnedSchema.versionId,
         target_kind: "node",
         node_id: nodeId,
@@ -265,8 +302,9 @@ async function emitConformanceLowEvent(
   nodeId: string,
   opts: UpsertEntityOptions,
 ): Promise<void> {
-  // Distinct event_id keeps the alert row separate from the primary outcome row.
-  await emitConformanceEvent(mutation, pinnedSchema, validation, "written_below_floor", nodeId, opts);
+  // Distinct `role` keeps the alert row's deterministic event_id separate from
+  // the primary outcome row's, even though both share outcome="written_below_floor".
+  await emitConformanceEvent(mutation, pinnedSchema, validation, "written_below_floor", nodeId, opts, "low_alert");
 }
 
 export interface AliasEdgeProps {
@@ -279,7 +317,7 @@ export async function createAliasEdge(
   aliasNodeId: string,
   principalNodeId: string,
   props: AliasEdgeProps,
-  _orgId: string,
+  orgId: string,
 ): Promise<void> {
   const session = scopedSession();
   try {
@@ -292,16 +330,19 @@ export async function createAliasEdge(
          r.matchReason = $matchReason,
          r.tentative   = $tentative,
          r.is_system   = true,
-         r.createdAt   = datetime()
+         r.createdAt   = datetime(),
+         ${edgeValidityOnCreateSet("r")}
        ON MATCH SET
          r.confidence  = $confidence,
          r.updatedAt   = datetime()`,
       {
         aliasNodeId,
         principalNodeId,
+        orgId,
         confidence: props.confidence,
         matchReason: props.matchReason,
         tentative: props.tentative,
+        ...edgeValidityParams(),
       },
     );
   } finally {
@@ -313,7 +354,7 @@ export async function upsertEmbedding(
   nodeId: string,
   vector: number[],
   model: string,
-  _orgId: string,
+  orgId: string,
 ): Promise<void> {
   const session = scopedSession();
   try {
@@ -322,7 +363,7 @@ export async function upsertEmbedding(
        SET n.embedding          = $vector,
            n.embeddingModel     = $model,
            n.embeddingUpdatedAt = datetime()`,
-      { nodeId, vector, model },
+      { nodeId, orgId, vector, model },
     );
   } finally {
     await session.close();
@@ -341,7 +382,7 @@ export interface SourceConnectionMeta {
 
 export async function upsertSourceConnectionMeta(
   meta: SourceConnectionMeta,
-  _orgId: string,
+  orgId: string,
 ): Promise<void> {
   const session = scopedSession();
   try {
@@ -363,6 +404,7 @@ export async function upsertSourceConnectionMeta(
          sc.updatedAt     = datetime()`,
       {
         connectionId: meta.connectionId,
+        orgId,
         workspaceId: meta.workspaceId,
         connectorType: meta.connectorType,
         cursor: meta.cursor ?? null,
@@ -385,31 +427,26 @@ export interface InferredEdge {
 }
 
 // Allowed dynamic edge types mapped to their Cypher MERGE templates.
-// The edge type selector pattern avoids APOC and keeps zero dynamic Cypher strings.
+// The edge type selector pattern avoids APOC and keeps zero dynamic Cypher strings:
+// the relationship type comes ONLY from this fixed allow-list, never from input.
+// Every create is bi-temporal (validFrom→now, recordedAt=now, open upper bounds).
+function inferredEdgeQuery(edgeType: string): string {
+  return `MATCH (from:EntityNode {publicId: $fromNodeId, orgId: $orgId})
+          MATCH (to:EntityNode {publicId: $toNodeId, orgId: $orgId})
+          MERGE (from)-[r:${edgeType}]->(to)
+          ON CREATE SET r.confidence = $confidence, r.inferred = true, r.is_system = true, r.createdAt = datetime(),
+                        ${edgeValidityOnCreateSet("r")}
+          ON MATCH SET  r.confidence = $confidence, r.updatedAt = datetime()`;
+}
+
 const EDGE_TYPE_QUERIES: Record<string, string> = {
-  INFERRED_FROM: `MATCH (from:EntityNode {publicId: $fromNodeId, orgId: $orgId})
-                  MATCH (to:EntityNode {publicId: $toNodeId, orgId: $orgId})
-                  MERGE (from)-[r:INFERRED_FROM]->(to)
-                  ON CREATE SET r.confidence = $confidence, r.inferred = true, r.is_system = true, r.createdAt = datetime()
-                  ON MATCH SET  r.confidence = $confidence, r.updatedAt = datetime()`,
-  REFERENCES:    `MATCH (from:EntityNode {publicId: $fromNodeId, orgId: $orgId})
-                  MATCH (to:EntityNode {publicId: $toNodeId, orgId: $orgId})
-                  MERGE (from)-[r:REFERENCES]->(to)
-                  ON CREATE SET r.confidence = $confidence, r.inferred = true, r.is_system = true, r.createdAt = datetime()
-                  ON MATCH SET  r.confidence = $confidence, r.updatedAt = datetime()`,
-  SIMILAR_TO:    `MATCH (from:EntityNode {publicId: $fromNodeId, orgId: $orgId})
-                  MATCH (to:EntityNode {publicId: $toNodeId, orgId: $orgId})
-                  MERGE (from)-[r:SIMILAR_TO]->(to)
-                  ON CREATE SET r.confidence = $confidence, r.inferred = true, r.is_system = true, r.createdAt = datetime()
-                  ON MATCH SET  r.confidence = $confidence, r.updatedAt = datetime()`,
-  PART_OF:       `MATCH (from:EntityNode {publicId: $fromNodeId, orgId: $orgId})
-                  MATCH (to:EntityNode {publicId: $toNodeId, orgId: $orgId})
-                  MERGE (from)-[r:PART_OF]->(to)
-                  ON CREATE SET r.confidence = $confidence, r.inferred = true, r.is_system = true, r.createdAt = datetime()
-                  ON MATCH SET  r.confidence = $confidence, r.updatedAt = datetime()`,
+  INFERRED_FROM: inferredEdgeQuery("INFERRED_FROM"),
+  REFERENCES: inferredEdgeQuery("REFERENCES"),
+  SIMILAR_TO: inferredEdgeQuery("SIMILAR_TO"),
+  PART_OF: inferredEdgeQuery("PART_OF"),
 };
 
-export async function upsertInferredEdges(edges: InferredEdge[], _orgId: string): Promise<void> {
+export async function upsertInferredEdges(edges: InferredEdge[], orgId: string): Promise<void> {
   if (edges.length === 0) return;
   const session = scopedSession();
   try {
@@ -421,7 +458,9 @@ export async function upsertInferredEdges(edges: InferredEdge[], _orgId: string)
       await session.run(query, {
         fromNodeId: edge.fromNodeId,
         toNodeId: edge.toNodeId,
+        orgId,
         confidence: edge.confidence,
+        ...edgeValidityParams(),
       });
     }
   } finally {

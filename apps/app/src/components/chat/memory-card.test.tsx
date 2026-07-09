@@ -11,7 +11,49 @@
 
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
+import { TenantProvider, type ActiveTenant } from "@/lib/tenant/tenant-context";
 import { MemoryCard } from "./memory-card";
+
+// Stub NodeRef (it has its own tests) so these assertions target MemoryCard's
+// wiring — that it cites the grounding node and links into the graph explorer.
+vi.mock("@/components/knowledge/graph/node-ref", () => ({
+  NodeRef: ({ node }: { node: { displayName: string } }) => (
+    <span data-testid="node-ref">{node.displayName}</span>
+  ),
+}));
+
+// next/link needs no app-router context in these render tests — render a plain
+// anchor so href assertions are deterministic.
+vi.mock("next/link", () => ({
+  default: ({
+    children,
+    href,
+    ...rest
+  }: {
+    children: React.ReactNode;
+    href: string;
+  }) => (
+    <a href={String(href)} {...rest}>
+      {children}
+    </a>
+  ),
+}));
+
+const TENANT: ActiveTenant = {
+  orgId: "o1",
+  orgSlug: "acme",
+  orgName: "Acme",
+  workspaceId: "w1",
+  workspaceSlug: "core",
+  workspaceName: "Core",
+};
+
+const withNode = {
+  id: "node-42",
+  label: "Feature",
+  displayName: "Metered Billing",
+  properties: { owner: "platform" },
+};
 
 // TruncatedText (the lesson body renderer) measures scroll overflow via
 // ResizeObserver, which isn't implemented in JSDOM.
@@ -191,5 +233,65 @@ describe("MemoryCard", () => {
     // directly; TruncatedText replaces it with a clamped <span> preview.
     expect(container.querySelector("p.whitespace-pre-wrap")).toBeNull();
     expect(screen.getByText("A recalled lesson.")).toBeInTheDocument();
+  });
+});
+
+describe("MemoryCard — grounding-node citations", () => {
+  it("cites the grounding node via NodeRef when the memory resolves a graph node", () => {
+    const memories = [
+      { ...makeMemory("m1", "Usage rolls up to Stripe", "FACT", 0.9), node: withNode },
+    ];
+    render(
+      <TenantProvider value={TENANT}>
+        <MemoryCard queryId="q1" memories={memories} />
+      </TenantProvider>,
+    );
+    expect(screen.getByTestId("node-ref")).toHaveTextContent("Metered Billing");
+    // The raw-id fallback anchor must NOT render when a node is resolved.
+    expect(screen.queryByText("node-42")).not.toBeInTheDocument();
+  });
+
+  it("renders a 'View in graph' deep-link to the explorer focused on the node", () => {
+    const memories = [
+      { ...makeMemory("m1", "Grounded fact", "FACT", 0.9), node: withNode },
+    ];
+    render(
+      <TenantProvider value={TENANT}>
+        <MemoryCard queryId="q1" memories={memories} />
+      </TenantProvider>,
+    );
+    const link = screen.getByRole("link", {
+      name: /view metered billing in the knowledge graph/i,
+    });
+    expect(link).toHaveAttribute(
+      "href",
+      "/acme/core/knowledge/explore?focus=node-42",
+    );
+  });
+
+  it("omits the 'View in graph' link when rendered outside a workspace route (no tenant)", () => {
+    const memories = [
+      { ...makeMemory("m1", "Grounded fact", "FACT", 0.9), node: withNode },
+    ];
+    render(<MemoryCard queryId="q1" memories={memories} />);
+    // NodeRef still cites the fact, but there is no graph deep-link without slugs.
+    expect(screen.getByTestId("node-ref")).toBeInTheDocument();
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+  });
+
+  it("omits the 'View in graph' link when the node is not materialised (id null)", () => {
+    const memories = [
+      {
+        ...makeMemory("m1", "Pending fact", "OBSERVATION", 0.4),
+        node: { ...withNode, id: null },
+      },
+    ];
+    render(
+      <TenantProvider value={TENANT}>
+        <MemoryCard queryId="q1" memories={memories} />
+      </TenantProvider>,
+    );
+    expect(screen.getByTestId("node-ref")).toBeInTheDocument();
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
   });
 });

@@ -125,10 +125,10 @@ describe("automation.list route", () => {
     expect(res.status).toBe(200);
   });
 
-  it("calls invoke with 'automation.list' and surface 'api'", async () => {
+  it("calls invoke with 'list_automations' and surface 'api'", async () => {
     await app.fetch(get(PATH));
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("automation.list");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("list_automations");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -147,7 +147,7 @@ describe("automation.create route", () => {
     name: "Daily Report",
     triggerType: "schedule",
     triggerConfig: { schedule: "0 9 * * 1-5" },
-    capabilities: [{ name: "graph.stats", input: {} }],
+    capabilities: [{ name: "get_graph_stats", input: {} }],
   };
 
   it("happy path POST: returns 200", async () => {
@@ -159,10 +159,10 @@ describe("automation.create route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'automation.create' and surface 'api'", async () => {
+  it("calls invoke with 'create_automation' and surface 'api'", async () => {
     await app.fetch(post(PATH, VALID_BODY));
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("automation.create");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("create_automation");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -192,10 +192,10 @@ describe("automation.enable route", () => {
     expect(res.status).toBe(200);
   });
 
-  it("calls invoke with 'automation.enable' and surface 'api'", async () => {
+  it("calls invoke with 'enable_automation' and surface 'api'", async () => {
     await app.fetch(post(PATH, { automation_id: "plt-1" }));
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("automation.enable");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("enable_automation");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -218,10 +218,10 @@ describe("automation.disable route", () => {
     expect(res.status).toBe(200);
   });
 
-  it("calls invoke with 'automation.disable' and surface 'api'", async () => {
+  it("calls invoke with 'disable_automation' and surface 'api'", async () => {
     await app.fetch(post(PATH, { automation_id: "plt-2" }));
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("automation.disable");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("disable_automation");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -244,10 +244,10 @@ describe("automation.trigger route", () => {
     expect(res.status).toBe(200);
   });
 
-  it("calls invoke with 'automation.trigger' and surface 'api'", async () => {
+  it("calls invoke with 'trigger_automation' and surface 'api'", async () => {
     await app.fetch(post(PATH, { automation_id: "plt-1", payload: { key: "value" } }));
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("automation.trigger");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("trigger_automation");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -278,10 +278,10 @@ describe("automation.update route", () => {
     expect(res.status).toBe(200);
   });
 
-  it("calls invoke with 'automation.update' and surface 'api'", async () => {
+  it("calls invoke with 'update_automation' and surface 'api'", async () => {
     await app.fetch(patch(PATH, { automation_id: "plt-1" }));
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("automation.update");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("update_automation");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -307,10 +307,10 @@ describe("skill.author route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'skill.author' and surface 'api'", async () => {
+  it("calls invoke with 'author_skill' and surface 'api'", async () => {
     await app.fetch(post(PATH, VALID_BODY));
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("skill.author");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("author_skill");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -347,10 +347,10 @@ describe("skill.create route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'skill.create' and surface 'api'", async () => {
+  it("calls invoke with 'create_skill' and surface 'api'", async () => {
     await app.fetch(post(PATH, VALID_BODY));
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("skill.create");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("create_skill");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -380,10 +380,10 @@ describe("skill.enable route", () => {
     expect(res.status).toBe(200);
   });
 
-  it("calls invoke with 'skill.enable' and surface 'api'", async () => {
+  it("calls invoke with 'set_skill_enabled' and surface 'api'", async () => {
     await app.fetch(post(PATH, { skill_id: "skl-1", enabled: false }));
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("skill.enable");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("set_skill_enabled");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -413,10 +413,10 @@ describe("skill.metrics.read route", () => {
     expect(res.status).toBe(200);
   });
 
-  it("calls invoke with 'skill.metrics.read' and surface 'api'", async () => {
+  it("calls invoke with 'get_skill_metrics' and surface 'api'", async () => {
     await app.fetch(get(PATH));
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("skill.metrics.read");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("get_skill_metrics");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -445,10 +445,10 @@ describe("skill.version.activate route", () => {
     expect(res.status).toBe(200);
   });
 
-  it("calls invoke with 'skill.version.activate' and surface 'api'", async () => {
+  it("calls invoke with 'activate_skill_version' and surface 'api'", async () => {
     await app.fetch(post(PATH, { skillId: "skl-1", versionNumber: 1 }));
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("skill.version.activate");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("activate_skill_version");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -471,10 +471,10 @@ describe("skill.version.get route", () => {
     expect(res.status).toBe(200);
   });
 
-  it("calls invoke with 'skill.version.get' and surface 'api'", async () => {
+  it("calls invoke with 'get_skill_version' and surface 'api'", async () => {
     await app.fetch(get(`${PATH}?skill_id=skl-1&version_id=slv-1`));
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("skill.version.get");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("get_skill_version");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -498,10 +498,10 @@ describe("skill.version.list route", () => {
     expect(res.status).toBe(200);
   });
 
-  it("calls invoke with 'skill.version.list' and surface 'api'", async () => {
+  it("calls invoke with 'list_skill_versions' and surface 'api'", async () => {
     await app.fetch(get(`${PATH}?skill_id=skl-1`));
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("skill.version.list");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("list_skill_versions");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -530,10 +530,10 @@ describe("skill.version.upload route", () => {
     expect(res.status).toBe(200);
   });
 
-  it("calls invoke with 'skill.version.upload' and surface 'api'", async () => {
+  it("calls invoke with 'upload_skill_version' and surface 'api'", async () => {
     await app.fetch(post(PATH, VALID_BODY));
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("skill.version.upload");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("upload_skill_version");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -563,10 +563,10 @@ describe("workspace.member.list route", () => {
     expect(res.status).toBe(200);
   });
 
-  it("calls invoke with 'workspace.member.list' and surface 'api'", async () => {
+  it("calls invoke with 'list_workspace_members' and surface 'api'", async () => {
     await app.fetch(get(PATH));
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("workspace.member.list");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("list_workspace_members");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -595,10 +595,10 @@ describe("workspace.invite.send route", () => {
     expect(res.status).toBe(200);
   });
 
-  it("calls invoke with 'workspace.invite.send' and surface 'api'", async () => {
+  it("calls invoke with 'send_workspace_invite' and surface 'api'", async () => {
     await app.fetch(post(PATH, { email: "carol@test.com", role: "admin" }));
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("workspace.invite.send");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("send_workspace_invite");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -629,10 +629,10 @@ describe("workspace.model.settings.read route", () => {
     expect(res.status).toBe(200);
   });
 
-  it("calls invoke with 'workspace.model.settings.read' and surface 'api'", async () => {
+  it("calls invoke with 'get_model_settings' and surface 'api'", async () => {
     await app.fetch(get(PATH));
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("workspace.model.settings.read");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("get_model_settings");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -654,10 +654,10 @@ describe("workspace.model.settings.write route", () => {
     expect(res.status).toBe(200);
   });
 
-  it("calls invoke with 'workspace.model.settings.write' and surface 'api'", async () => {
+  it("calls invoke with 'update_model_settings' and surface 'api'", async () => {
     await app.fetch(patch(PATH, { defaultTextModel: "claude-3-5-haiku" }));
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("workspace.model.settings.write");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("update_model_settings");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -688,10 +688,10 @@ describe("privacy.data.erase route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'privacy.data.erase' and surface 'api'", async () => {
+  it("calls invoke with 'erase_data' and surface 'api'", async () => {
     await app.fetch(post(PATH, VALID_BODY));
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("privacy.data.erase");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("erase_data");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -732,10 +732,10 @@ describe("privacy.data.export route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'privacy.data.export' and surface 'api'", async () => {
+  it("calls invoke with 'export_data' and surface 'api'", async () => {
     await app.fetch(post(PATH, { scope: "user" }));
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("privacy.data.export");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("export_data");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -769,10 +769,10 @@ describe("code.diff route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'code.diff' and surface 'api'", async () => {
+  it("calls invoke with 'diff_code' and surface 'api'", async () => {
     await app.fetch(post(PATH, VALID_BODY));
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("code.diff");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("diff_code");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -804,10 +804,10 @@ describe("code.format route", () => {
     expect(res.status).toBe(200);
   });
 
-  it("calls invoke with 'code.format' and surface 'api'", async () => {
+  it("calls invoke with 'format_code' and surface 'api'", async () => {
     await app.fetch(post(PATH, VALID_BODY));
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("code.format");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("format_code");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -847,10 +847,10 @@ describe("code.patch route", () => {
     expect(res.status).toBe(200);
   });
 
-  it("calls invoke with 'code.patch' and surface 'api'", async () => {
+  it("calls invoke with 'patch_code' and surface 'api'", async () => {
     await app.fetch(post(PATH, VALID_BODY));
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("code.patch");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("patch_code");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -882,10 +882,10 @@ describe("api.key.rotate route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'api.key.rotate' and surface 'api'", async () => {
+  it("calls invoke with 'rotate_api_key' and surface 'api'", async () => {
     await app.fetch(post(PATH, { keyPublicId: "aky-old" }));
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("api.key.rotate");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("rotate_api_key");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -922,10 +922,10 @@ describe("research.swarm.start route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'research.swarm.start' and surface 'api'", async () => {
+  it("calls invoke with 'start_research_swarm' and surface 'api'", async () => {
     await app.fetch(post(PATH, { topic: "LLM pricing models" }));
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("research.swarm.start");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("start_research_swarm");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 

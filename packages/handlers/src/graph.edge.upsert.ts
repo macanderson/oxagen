@@ -2,6 +2,14 @@ import type { CapabilityHandler } from "@oxagen/oxagen";
 import { graphEdgeUpsert } from "@oxagen/oxagen/contracts/graph.edge.upsert";
 import { RELATIONSHIP_TYPE_PATTERN } from "@oxagen/oxagen/contracts/graph.relationship.upsert";
 import { scopedSession } from "@oxagen/ontology/tenant";
+import {
+  edgeCloseOnSupersedeSet,
+  edgeCloseParams,
+  edgeOpenPredicate,
+  edgeValidityOnCreateSet,
+  edgeValidityOnMatchSet,
+  edgeValidityParams,
+} from "@oxagen/ontology/temporal";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { logger } from "./logger";
 
@@ -16,18 +24,41 @@ import { logger } from "./logger";
 // type that passes the guard is therefore safe to interpolate into the relationship
 // pattern (defense-in-depth: the contract already rejects non-conforming types).
 // Both endpoints are scoped by BOTH orgId AND workspaceId (tenant isolation §0).
-function buildUpsertQuery(relationshipType: string): string {
+//
+// Every write is bi-temporal: ON CREATE stamps validFrom (observedAt→now) +
+// recordedAt=now with open upper bounds; ON MATCH re-asserts the fact (reopening a
+// previously-superseded edge). See @oxagen/ontology/temporal.
+function assertRelType(relationshipType: string): void {
   if (!RELATIONSHIP_TYPE_PATTERN.test(relationshipType)) {
     throw new Error(
       `graph.edge.upsert: relationship type "${relationshipType}" fails the lexical guard`,
     );
   }
+}
+
+function buildUpsertQuery(relationshipType: string): string {
+  assertRelType(relationshipType);
   return `MATCH (from:GraphNode {publicId: $fromNodeId, orgId: $orgId, workspaceId: $workspaceId})
           MATCH (to:GraphNode {publicId: $toNodeId, orgId: $orgId, workspaceId: $workspaceId})
           MERGE (from)-[r:${relationshipType}]->(to)
-          ON CREATE SET r.properties = $properties, r.is_system = false, r.createdAt = datetime(), r._created = true
-          ON MATCH SET  r.properties = $properties, r.updatedAt = datetime(), r._created = false
+          ON CREATE SET r.properties = $properties, r.is_system = false, r.createdAt = datetime(), r._created = true,
+                        ${edgeValidityOnCreateSet("r")}
+          ON MATCH SET  r.properties = $properties, r.updatedAt = datetime(), r._created = false,
+                        ${edgeValidityOnMatchSet("r")}
           RETURN r._created AS wasCreated`;
+}
+
+// Supersession (opt-in): a single-valued fact means the source may point at only
+// one target via this relationship type. Close (never delete) any OTHER currently
+// open edge of the same type from the source before/after the new fact lands, so
+// history is preserved and only the new fact reads as currently valid.
+function buildSupersedeQuery(relationshipType: string): string {
+  assertRelType(relationshipType);
+  return `MATCH (from:GraphNode {publicId: $fromNodeId, orgId: $orgId, workspaceId: $workspaceId})
+          MATCH (from)-[old:${relationshipType}]->(other:GraphNode)
+          WHERE other.publicId <> $toNodeId AND ${edgeOpenPredicate("old")}
+          SET ${edgeCloseOnSupersedeSet("old")}
+          RETURN count(old) AS closed`;
 }
 
 export const graphEdgeUpsertHandler: CapabilityHandler<typeof graphEdgeUpsert> = async (
@@ -38,16 +69,33 @@ export const graphEdgeUpsertHandler: CapabilityHandler<typeof graphEdgeUpsert> =
   const query = buildUpsertQuery(input.relationshipType);
 
   const propertiesJson = input.properties ? JSON.stringify(input.properties) : null;
+  const validity = edgeValidityParams(input.observedAt);
 
   let created = false;
+  let superseded = 0;
 
   await runInTenantScope({ orgId, workspaceId }, async () => {
     const session = scopedSession();
     try {
+      // Close conflicting facts first so the new assertion is the sole open edge.
+      if (input.supersede) {
+        const closeResult = await session.run(buildSupersedeQuery(input.relationshipType), {
+          fromNodeId: input.fromNodeId,
+          toNodeId: input.toNodeId,
+          orgId,
+          workspaceId,
+          ...edgeCloseParams(input.observedAt),
+        });
+        superseded = Number(closeResult.records[0]?.get("closed") ?? 0);
+      }
+
       const result = await session.run(query, {
         fromNodeId: input.fromNodeId,
         toNodeId: input.toNodeId,
+        orgId,
+        workspaceId,
         properties: propertiesJson,
+        ...validity,
       });
 
       const record = result.records[0];
@@ -66,9 +114,9 @@ export const graphEdgeUpsertHandler: CapabilityHandler<typeof graphEdgeUpsert> =
   const edgeId = `${input.fromNodeId}:${input.relationshipType}:${input.toNodeId}`;
 
   logger.info(
-    { edgeId, created, relationshipType: input.relationshipType, orgId, workspaceId },
+    { edgeId, created, superseded, relationshipType: input.relationshipType, orgId, workspaceId },
     "graph.edge.upsert: relationship upserted",
   );
 
-  return { edgeId, created };
+  return { edgeId, created, superseded };
 };

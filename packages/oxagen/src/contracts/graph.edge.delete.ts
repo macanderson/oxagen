@@ -3,7 +3,7 @@ import { registerCapability } from "../registry";
 import { RELATIONSHIP_TYPE_PATTERN } from "../lib/relationship-type-pattern";
 
 export const graphEdgeDelete = registerCapability({
-  name: "graph.edge.delete",
+  name: "delete_edge",
   domain: "graph",
   description: "Delete a specific typed relationship between two KnowledgeNodes.",
   mode: "sync",

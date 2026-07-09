@@ -11,21 +11,24 @@
  * but a task the router flags as high-stakes (auth/billing/security/migration) is
  * always escalated, never under-spent.
  */
-import { generateObject } from "ai";
 import { z } from "zod";
+import type { AgentAi } from "@oxagen/agent-engine";
 import { enhancePrompt } from "./prompt-enhancer.js";
 import { classifyTier, modelForTier } from "./model-router.js";
-import { ensureGatewayKey, MissingGatewayKeyError } from "./env.js";
-import { AgentTimeoutError, makeTurnController, withTimeout } from "./timeouts.js";
+import { resolveAiCredential, MissingAiKeyError } from "./env.js";
+import { createGatewayAgentAi } from "./adapters/index.js";
+import { createMeteredAi } from "./metered-ai.js";
+import { debugLog } from "../lib/debug-log.js";
+import {
+  AgentTimeoutError,
+  DEFAULT_TIMEOUTS,
+  callModelWithTimeout,
+  createTurnRunner,
+  withTimeout,
+} from "./timeouts.js";
 import { emptyUsage, type ModelTier, type Plan, type Task } from "./fleet/types.js";
 import type { FleetMemory } from "./fleet/memory.js";
 import type { AgentDefinition } from "../agents/types.js";
-
-/**
- * Timeout budget for the planning phase (ms).
- * Prompt enhancement + one structured-output LLM call must fit inside this.
- */
-const PLANNER_TIMEOUT_MS = 120_000; // 2 min; ample for a generateObject call
 
 /**
  * Timeout for prompt enhancement alone. This involves code-graph queries (fast,
@@ -87,6 +90,16 @@ export interface PlanOptions {
   memory?: FleetMemory | null;
   /** Roster of named agents the planner may assign tasks to. */
   agents?: AgentDefinition[];
+  /**
+   * AI port the planner's structured-output call goes through — the engine's
+   * {@link AgentAi} seam, NOT `generateObject` from `ai` directly (the
+   * all-LLM-calls-through-a-metered-seam law: raw `ai` calls skip metering,
+   * duration tracking, and prompt hashing). When omitted, a BYOK gateway-direct
+   * port is built from `cwd` — the historical unmetered CLI default. An
+   * authenticated caller (e.g. a REPL session) passes its own platform-metered
+   * port so planning usage lands in the session's metrics.
+   */
+  ai?: AgentAi;
   signal?: AbortSignal;
 }
 
@@ -113,16 +126,20 @@ const PLANNER_SYSTEM = [
 
 /**
  * Produce an executable {@link Plan} from a goal. Throws
- * {@link MissingGatewayKeyError} if no gateway key is configured.
+ * {@link MissingAiKeyError} if no AI credential (gateway or Anthropic) is
+ * configured.
  */
 export async function planTasks(opts: PlanOptions): Promise<Plan> {
   const cwd = opts.cwd;
-  if (!ensureGatewayKey(cwd)) throw new MissingGatewayKeyError();
+  if (!resolveAiCredential(cwd)) throw new MissingAiKeyError();
 
-  // Merge the caller's abort signal with a planning-phase deadline. If either
-  // fires, every sub-operation (enhancement + LLM call) is cancelled.
-  const planController = makeTurnController(opts.signal, PLANNER_TIMEOUT_MS);
-  const planSignal = planController.signal;
+  // Wire the caller's abort signal (Esc/Ctrl-C) into a controller-only turn
+  // runner (no inactivity guard: planning is a single enhance + one model call,
+  // both individually bounded). There is NO planning-phase wall-clock cap:
+  // timeouts live on the individual calls below (enhancement via withTimeout;
+  // the LLM call via callModelWithTimeout).
+  const planRunner = createTurnRunner({}, { callerSignal: opts.signal });
+  const planSignal = planRunner.signal;
 
   // Enhance the goal so the planner sees the real code involved. Bound
   // separately so a slow code-graph build doesn't eat the whole planning budget.
@@ -142,6 +159,7 @@ export async function planTasks(opts: PlanOptions): Promise<Plan> {
         prompt: opts.goal,
         context: "",
         resolved: [],
+        usedSemanticFallback: false,
         lessons: [],
         startedAt: Date.now(),
         finishedAt: Date.now(),
@@ -161,15 +179,32 @@ export async function planTasks(opts: PlanOptions): Promise<Plan> {
       : "";
 
   const model = opts.model ?? modelForTier("balanced");
-  const { object } = await generateObject({
-    model,
-    schema: planSchema,
-    system: PLANNER_SYSTEM,
-    prompt: `Goal:\n${enhanced.prompt}${rosterBlock}`,
-    // Pass the planner-scoped signal so the LLM call aborts with the planning
-    // deadline rather than hanging indefinitely.
-    abortSignal: planSignal,
-  });
+  // Route the structured-output call through the engine AI port (metered on the
+  // platform, BYOK/unmetered in the CLI) rather than `generateObject` from `ai`.
+  // Default to the gateway-direct BYOK port built from cwd — same construction
+  // the fleet's engine runner uses — when the caller didn't inject one.
+  const ai =
+    opts.ai ??
+    createMeteredAi(createGatewayAgentAi({ cwd }), {
+      onLog: (line) => void debugLog("timeout", line),
+    });
+  // The planner's model call is bounded per-call (perModelCallMs) and retried on
+  // timeout — the timeout lives on the call, not on a turn/phase clock. The
+  // per-attempt signal aborts the in-flight request; the outer planSignal
+  // (user cancel) propagates without a retry.
+  const { object } = await callModelWithTimeout(
+    (signal) =>
+      ai.generateObject({
+        model,
+        schema: planSchema,
+        system: PLANNER_SYSTEM,
+        prompt: `Goal:\n${enhanced.prompt}${rosterBlock}`,
+        abortSignal: signal,
+      }),
+    DEFAULT_TIMEOUTS,
+    { callId: "planner", model },
+    planSignal,
+  );
 
   const now = Date.now();
   const seen = new Set<string>();

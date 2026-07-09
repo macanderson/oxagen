@@ -67,7 +67,7 @@ import { insertEvalRun, insertEvalResults } from "@oxagen/telemetry/clickhouse";
 // 1. header at run start (open state)
 await insertEvalRun({
   run_id, run_group: "tb2-warm-curve",
-  agent_name: "oxagen", agent_version: "0.6.2", model: "claude-sonnet-4.5",
+  agent_name: "oxagen", agent_version: "0.6.2", model: "claude-sonnet-5",
   harness: "terminal-bench", suite: "terminal-bench-2.0", suite_version: "2.0",
   git_sha, git_branch: "main", environment: "ci",
   graph_code: 1, graph_exec: 1, graph_mem: 1, warm: 1, history_depth: 5, seed: 1,
@@ -76,7 +76,7 @@ await insertEvalRun({
 // 2. per-task results as they finish
 await insertEvalResults(tasks.map((t) => ({
   run_id, task_id: t.id, harness: "terminal-bench", suite: "terminal-bench-2.0",
-  agent_name: "oxagen", agent_version: "0.6.2", model: "claude-sonnet-4.5",
+  agent_name: "oxagen", agent_version: "0.6.2", model: "claude-sonnet-5",
   graph_code: 1, graph_exec: 1, graph_mem: 1, warm: 1, history_depth: 5,
   passed: t.resolved ? 1 : 0, reward: t.reward,
   metrics: { cost_usd: t.cost, tokens: t.tokens, turns: t.turns },
@@ -85,7 +85,7 @@ await insertEvalResults(tasks.map((t) => ({
 
 // 3. finalize the header (re-insert same run_id → replaces under FINAL)
 await insertEvalRun({
-  run_id, agent_name: "oxagen", agent_version: "0.6.2", model: "claude-sonnet-4.5",
+  run_id, agent_name: "oxagen", agent_version: "0.6.2", model: "claude-sonnet-5",
   harness: "terminal-bench", suite: "terminal-bench-2.0",
   n_tasks, n_passed, resolved_rate: n_passed / n_tasks,
   metrics: { cost_usd_total, p50_latency_ms },

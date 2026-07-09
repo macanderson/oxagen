@@ -2,12 +2,12 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const skillExport = registerCapability({
-  name: "skill.export",
+  name: "export_skill",
   domain: "skill",
   description: "Export the active (or a specified) version of a skill as a downloadable .skill.md string that round-trips through parseSkill",
   mode: "sync",
   surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "docs", "mcp"],
+  layers: ["schema", "api", "docs", "mcp", "app"],
   scoped: true,
   noBillingGate: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "skill" },

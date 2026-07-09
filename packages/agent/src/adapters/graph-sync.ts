@@ -10,8 +10,11 @@
  * Tenant scope is injected by the kernel's `runInTenantScope` ALS — every
  * method must be called from within a live capability invocation.
  */
+import pino from "pino";
 import { scopedSession, recordExecutionInGraph } from "@oxagen/ontology";
 import type { GraphSyncProvider } from "@oxagen/agent-engine";
+
+const logger = pino({ level: process.env.LOG_LEVEL ?? "info", base: { app: "agent.graph-sync" } });
 
 /**
  * Construction args: supply the GitHub repo coordinates so naturalKeys
@@ -30,8 +33,12 @@ export interface GraphSyncAdapterArgs {
  * Build the SourceFile naturalKey.  Format mirrors graph.sync.push:
  *   `github:{owner}/{repo}:{path}` when coordinates are provided,
  *   otherwise the raw `path`.
+ *
+ * Exported so `file-lock.ts`'s `FileLockProvider` adapter derives the SAME
+ * node identity as this module's lineage writes — a locked file and a
+ * touched file are the same `:SourceFile` node (docs/specs/agent-file-locking/plan.md §3).
  */
-function toNaturalKey(path: string, owner: string | undefined, repo: string | undefined): string {
+export function toNaturalKey(path: string, owner: string | undefined, repo: string | undefined): string {
   if (owner && repo) {
     // Normalise leading slash
     const normalPath = path.startsWith("/") ? path.slice(1) : path;
@@ -51,20 +58,29 @@ export function createGraphSyncAdapter(args: GraphSyncAdapterArgs = {}): GraphSy
     async ensureGraph(touchedFiles: string[]): Promise<void> {
       if (touchedFiles.length === 0) return;
       const naturalKeys = touchedFiles.map((p) => toNaturalKey(p, owner, repo));
-      const sess = scopedSession();
+      // MUST NOT throw — a Neo4j error here must never affect the agent turn.
+      // Surface it (previously fully silent) but still swallow.
       try {
-        await sess.run(
-          `UNWIND $naturalKeys AS naturalKey
-           MERGE (f:SourceFile {naturalKey: naturalKey, orgId: $orgId})
-           ON CREATE SET
-             f.path        = naturalKey,
-             f.displayName = naturalKey,
-             f.is_system   = true,
-             f.createdAt   = datetime()`,
-          { naturalKeys },
+        const sess = scopedSession();
+        try {
+          await sess.run(
+            `UNWIND $naturalKeys AS naturalKey
+             MERGE (f:SourceFile {naturalKey: naturalKey, orgId: $orgId})
+             ON CREATE SET
+               f.path        = naturalKey,
+               f.displayName = naturalKey,
+               f.is_system   = true,
+               f.createdAt   = datetime()`,
+            { naturalKeys },
+          );
+        } finally {
+          await sess.close();
+        }
+      } catch (err) {
+        logger.warn(
+          { err, fileCount: touchedFiles.length },
+          "graph-sync: ensureGraph failed — lineage write dropped",
         );
-      } finally {
-        await sess.close();
       }
     },
 
@@ -81,18 +97,27 @@ export function createGraphSyncAdapter(args: GraphSyncAdapterArgs = {}): GraphSy
     }): Promise<void> {
       if (touchedFiles.length === 0) return;
       const naturalKeys = touchedFiles.map((p) => toNaturalKey(p, owner, repo));
-      await recordExecutionInGraph({
-        executionId,
-        // orgId + workspaceId are injected by scopedSession inside
-        // recordExecutionInGraph — supply placeholders to satisfy the type;
-        // scopedSession overwrites them with the ALS values.
-        orgId: "",
-        workspaceId: "",
-        status: "completed",
-        originType: "agent_coding_turn",
-        originId: executionId,
-        touchedFilePaths: naturalKeys,
-      });
+      // MUST NOT throw — a Neo4j error here must never affect the agent turn.
+      // Surface it (previously fully silent) but still swallow.
+      try {
+        await recordExecutionInGraph({
+          executionId,
+          // orgId + workspaceId are injected by scopedSession inside
+          // recordExecutionInGraph — supply placeholders to satisfy the type;
+          // scopedSession overwrites them with the ALS values.
+          orgId: "",
+          workspaceId: "",
+          status: "completed",
+          originType: "agent_coding_turn",
+          originId: executionId,
+          touchedFilePaths: naturalKeys,
+        });
+      } catch (err) {
+        logger.warn(
+          { err, executionId, fileCount: touchedFiles.length },
+          "graph-sync: recordLineage failed — lineage write dropped",
+        );
+      }
     },
   };
 }

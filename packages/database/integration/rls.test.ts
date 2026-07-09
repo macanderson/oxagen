@@ -74,23 +74,27 @@ beforeAll(async () => {
   await sql.begin(async (tx) => {
     await tx`SELECT set_config('app.rls_bypass', 'on', true)`;
 
-    // org.organizations — NOT NULL: id, public_id, name, slug, plan_type, status, type
+    // org.organizations — NOT NULL: id, public_id, name, slug, namespace,
+    // plan_type, status, type. namespace is citext, globally unique, and must
+    // match ^[a-z0-9]{2,6}$ (organizations_namespace_check).
     await tx`
       INSERT INTO org.organizations
-        (id, public_id, name, slug, plan_type, status, type)
+        (id, public_id, name, slug, namespace, plan_type, status, type)
       VALUES
-        (${ORG_A}, 'rls_test_org_a', 'RLS Org A', 'rls-org-a', 'free', 'active', 'business'),
-        (${ORG_B}, 'rls_test_org_b', 'RLS Org B', 'rls-org-b', 'free', 'active', 'business')
+        (${ORG_A}, 'rls_test_org_a', 'RLS Org A', 'rls-org-a', 'rlsa', 'free', 'active', 'business'),
+        (${ORG_B}, 'rls_test_org_b', 'RLS Org B', 'rls-org-b', 'rlsb', 'free', 'active', 'business')
       ON CONFLICT (id) DO NOTHING
     `;
 
-    // workspace.workspaces — NOT NULL: id, public_id, org_id, name, slug
+    // workspace.workspaces — NOT NULL: id, public_id, org_id, name, slug,
+    // namespace. namespace is citext, unique per org, and must match
+    // ^[a-z0-9]{2,6}$ (workspaces_namespace_check).
     await tx`
       INSERT INTO workspace.workspaces
-        (id, public_id, org_id, name, slug)
+        (id, public_id, org_id, name, slug, namespace)
       VALUES
-        (${WS_A}, 'rls_test_ws_a', ${ORG_A}, 'RLS WS A', 'rls-ws-a'),
-        (${WS_B}, 'rls_test_ws_b', ${ORG_B}, 'RLS WS B', 'rls-ws-b')
+        (${WS_A}, 'rls_test_ws_a', ${ORG_A}, 'RLS WS A', 'rls-ws-a', 'wsa'),
+        (${WS_B}, 'rls_test_ws_b', ${ORG_B}, 'RLS WS B', 'rls-ws-b', 'wsb')
       ON CONFLICT (id) DO NOTHING
     `;
 

@@ -98,6 +98,6 @@ describe("image.list capability", () => {
   // ── registry ──────────────────────────────────────────────────────────────
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("image.list")).toBe(imageList);
+    expect(getCapability("list_images")).toBe(imageList);
   });
 });

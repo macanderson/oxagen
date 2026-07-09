@@ -9,7 +9,7 @@ import { randomUUID } from "node:crypto";
 
 // ── Asset kind ────────────────────────────────────────────────────────────────
 
-export type AssetKind = "avatar" | "image" | "document";
+export type AssetKind = "avatar" | "image" | "document" | "video";
 
 // ── Size limits (bytes) ───────────────────────────────────────────────────────
 
@@ -17,11 +17,13 @@ export type AssetKind = "avatar" | "image" | "document";
  * Maximum byte size for each asset kind.
  * - avatar / image: 5 MiB — generous for browser-cropped images.
  * - document: 25 MiB — covers typical PDFs and office files.
+ * - video: 100 MiB — short chat/agent attachment clips (not long-form media).
  */
 export const ASSET_LIMITS: Record<AssetKind, number> = {
   avatar: 5 * 1024 * 1024,
   image: 5 * 1024 * 1024,
   document: 25 * 1024 * 1024,
+  video: 100 * 1024 * 1024,
 };
 
 // ── Allowed MIME types ────────────────────────────────────────────────────────
@@ -29,8 +31,10 @@ export const ASSET_LIMITS: Record<AssetKind, number> = {
 /**
  * Allowed content-type → extension mapping per asset kind.
  *
- * avatar and image: raster formats only (webp / png / jpeg).
- * document: those three plus PDF.
+ * avatar: raster formats only (webp / png / jpeg).
+ * image: those plus gif (agent screenshots/recordings are commonly gif).
+ * document: image formats plus PDF.
+ * video: mp4 / webm / quicktime — short chat attachment clips.
  */
 export const ASSET_ALLOWED_TYPES: Record<AssetKind, Record<string, string>> = {
   avatar: {
@@ -42,12 +46,19 @@ export const ASSET_ALLOWED_TYPES: Record<AssetKind, Record<string, string>> = {
     "image/webp": "webp",
     "image/png": "png",
     "image/jpeg": "jpg",
+    "image/gif": "gif",
   },
   document: {
     "image/webp": "webp",
     "image/png": "png",
     "image/jpeg": "jpg",
+    "image/gif": "gif",
     "application/pdf": "pdf",
+  },
+  video: {
+    "video/mp4": "mp4",
+    "video/webm": "webm",
+    "video/quicktime": "mov",
   },
 };
 

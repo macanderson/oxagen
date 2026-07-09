@@ -27,7 +27,7 @@ const output = {
   steps: [
     {
       id: "step1",
-      capability: "web.search",
+      capability: "search_web",
       rationale: "Find sources",
       status: "success",
       input: { query: "USS Nautilus" },
@@ -36,7 +36,7 @@ const output = {
     },
     {
       id: "step2",
-      capability: "graph.node.upsert",
+      capability: "upsert_node",
       rationale: "Create the vessel node",
       status: "error",
       input: { label: "Vessel" },
@@ -45,7 +45,7 @@ const output = {
     },
     {
       id: "step3",
-      capability: "billing.credits.purchase",
+      capability: "purchase_credits",
       rationale: "Would buy credits",
       status: "skipped",
       input: null,
@@ -61,8 +61,8 @@ describe("CapabilityChainCard", () => {
     expect(screen.getByText("Searched the web and created 2 graph nodes.")).toBeTruthy();
     expect(screen.getByText(/Research USS Nautilus/)).toBeTruthy();
     expect(screen.getByText("1/3 ran")).toBeTruthy();
-    expect(screen.getByText("web.search")).toBeTruthy();
-    expect(screen.getByText("graph.node.upsert")).toBeTruthy();
+    expect(screen.getByText("search_web")).toBeTruthy();
+    expect(screen.getByText("upsert_node")).toBeTruthy();
     expect(screen.getByText("Find sources")).toBeTruthy();
   });
 
@@ -70,7 +70,7 @@ describe("CapabilityChainCard", () => {
     const user = userEvent.setup();
     render(<CapabilityChainCard output={output} />);
     // The web.search step button (first expandable) reveals Input/Output panes.
-    const stepButton = screen.getByText("web.search").closest("button") as HTMLButtonElement;
+    const stepButton = screen.getByText("search_web").closest("button") as HTMLButtonElement;
     await user.click(stepButton);
     expect(screen.getByText("Input")).toBeTruthy();
     expect(screen.getByText("Output")).toBeTruthy();

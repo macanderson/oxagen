@@ -3,13 +3,13 @@ import { registerCapability } from "../registry";
 import { memoryClassEnum, memoryKindSchema } from "./agent.memory.model";
 
 export const agentMemoryWrite = registerCapability({
-  name: "agent.memory.write",
+  name: "write_memory",
   domain: "agent",
   description:
     "Persist a two-axis memory (class + kind) tied to a graph node per the oxagen-feature skill memory contract",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "e2e", "docs", "app"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "memory" },
   sensitivity: "medium",

@@ -142,7 +142,7 @@ describe("agent.execution.record capability", () => {
   it("rejects an originType outside the CHECK constraint set", () => {
     // "workflow.run" (dot) and "user" are NOT valid — the DB CHECK only permits
     // the underscore tokens, so the contract must reject them at the boundary.
-    for (const bad of ["user", "workflow.run", "api", ""]) {
+    for (const bad of ["user", "run_workflow", "api", ""]) {
       expect(() =>
         agentExecutionRecord.input.parse({
           agentId: BASE_UUID_A,
@@ -382,6 +382,10 @@ describe("agent.execution.record capability", () => {
     expect(parsed.originType).toBe(originType);
   });
 
+  it("includes the fanout originType (Phase 2 graph projection ritual)", () => {
+    expect(AGENT_EXECUTION_ORIGIN_TYPES).toContain("fanout");
+  });
+
   it("rejects an unknown originType", () => {
     expect(() =>
       agentExecutionRecord.input.parse({
@@ -398,6 +402,6 @@ describe("agent.execution.record capability", () => {
   // ── registry ──────────────────────────────────────────────────────────────
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("agent.execution.record")).toBe(agentExecutionRecord);
+    expect(getCapability("record_execution")).toBe(agentExecutionRecord);
   });
 });

@@ -1,30 +1,48 @@
 /**
  * slash-menu.tsx — The typeahead dropdown for slash commands.
  *
- * Rendered above the prompt while the user is typing a `/command` token. Each
- * row shows:
- *   - a package glyph (📦) for productized / pre-installed commands; nothing for
- *     user-authored custom commands
- *   - the `/name` and its argument hint
- *   - the full description, wrapped across lines so a long description never gets
- *     truncated into ambiguity (the user must be able to tell commands apart
- *     before selecting one)
+ * Rendered above the prompt while the user is typing a `/command` token. Every
+ * command is a fixed two-line cell — a command line (`<pointer><lock> /name
+ * <args>`) followed by a description line — with exactly one blank line
+ * between cells and no rule. Height never varies: the description is
+ * truncated to a single line with an ellipsis instead of wrapping, and
+ * selecting a row only swaps the pointer glyph in place, so navigating and
+ * scrolling never reflow the list.
  *
- * The highlighted row is marked with a pointer and brightened so it's
- * unmistakable which command Enter/Tab will act on. Long catalogs scroll within a
- * fixed window around the selection.
+ * `/name` always renders bold amber; an argument hint renders green; the
+ * description is plain, default-color text (no dim). All argument hints and
+ * descriptions line up on one fixed column (`argCol`), sized to the widest
+ * `/name` currently on screen. A productized (first-party) command carries a
+ * monochrome lock marker — `\u{1F512}︎`, the *text*-presentation glyph,
+ * not a color emoji — in a reserved column so custom commands' `/name` still
+ * lines up with it.
+ *
+ * Long catalogs scroll within a fixed window around the selection.
  */
 import { Box, Text } from "ink";
 import React from "react";
 import { theme } from "../tui/theme.js";
 import type { SlashCatalogEntry } from "../slash/catalog.js";
 
-/** The package glyph marking a productized (pre-installed) command. */
-export const PRODUCTIZED_GLYPH = "📦";
-/** Width the custom-command marker reserves so names stay column-aligned. */
-const CUSTOM_MARKER = "   ";
 /** Max rows shown at once; the window scrolls to keep the selection visible. */
 export const MAX_VISIBLE_SUGGESTIONS = 6;
+
+/** Width the `❯ ` pointer column reserves so names stay aligned when absent. */
+const POINTER_WIDTH = 2;
+/**
+ * Monochrome productized marker: the lock glyph plus U+FE0E (VARIATION
+ * SELECTOR-15), which forces the single-color *text* presentation instead of
+ * the full-color emoji glyph.
+ */
+const LOCK = "\u{1F512}︎";
+/** Width the lock column reserves — measured against how Ink itself sizes
+ *  `LOCK` (2 columns), so a blank placeholder of the same width keeps a
+ *  custom command's `/name` aligned with a productized one either way. */
+const LOCK_COL_WIDTH = 2;
+/** Columns before `/name` starts: the pointer column plus the lock column. */
+const PREFIX_WIDTH = POINTER_WIDTH + LOCK_COL_WIDTH;
+/** Gap between the (padded) command name column and its argument hint / description column. */
+const GAP_WIDTH = 2;
 
 /** Compute the [start, end) slice of a list that keeps `selected` in view. */
 export function visibleWindow(
@@ -45,13 +63,21 @@ export function SlashMenu({
 }: {
   entries: ReadonlyArray<SlashCatalogEntry>;
   selectedIndex: number;
-  /** Outer width in columns; descriptions wrap within it. */
+  /** Outer width in columns; rows and separators fit within it. */
   width?: number;
 }): React.ReactElement | null {
   if (entries.length === 0) return null;
 
   const { start, end } = visibleWindow(entries.length, selectedIndex, MAX_VISIBLE_SUGGESTIONS);
   const visible = entries.slice(start, end);
+  const innerWidth = Math.max(width - 4, 10); // border (2) + paddingX*2 (2)
+
+  // Fixed column every visible row's args + description align to, sized to
+  // the widest `/name` currently on screen (recomputed as the window
+  // scrolls, so it never depends on off-screen entries).
+  const maxNameWidth = Math.max(...visible.map((entry) => entry.name.length + 1)); // +1 for "/"
+  const argCol = PREFIX_WIDTH + maxNameWidth + GAP_WIDTH;
+  const descWidth = Math.max(innerWidth - argCol, 0);
 
   return (
     <Box
@@ -64,25 +90,42 @@ export function SlashMenu({
       {visible.map((entry, i) => {
         const idx = start + i;
         const selected = idx === selectedIndex;
-        const marker = entry.productized ? `${PRODUCTIZED_GLYPH} ` : CUSTOM_MARKER;
+        const isLast = i === visible.length - 1;
+        const namePad = maxNameWidth - (entry.name.length + 1);
         return (
-          <Box key={entry.name} flexDirection="column">
-            <Box>
-              <Text color={selected ? theme.cyan : undefined} bold={selected}>
-                {selected ? "❯ " : "  "}
-              </Text>
-              <Text>{marker}</Text>
-              <Text bold color={selected ? theme.cyan : theme.violet}>
-                /{entry.name}
-              </Text>
-              {entry.argumentHint ? <Text dimColor> {entry.argumentHint}</Text> : null}
+          // Two fixed-height lines per cell (command + description) plus a
+          // single blank separator — never a rule, never conditional on
+          // `selected`, so every cell occupies the same number of rows.
+          <React.Fragment key={entry.name}>
+            <Box flexDirection="column">
+              <Box width={innerWidth}>
+                <Text color={selected ? theme.cyan : undefined} bold={selected}>
+                  {selected ? "❯ " : "  "}
+                </Text>
+                <Box width={LOCK_COL_WIDTH}>
+                  <Text dimColor>{entry.productized ? LOCK : ""}</Text>
+                </Box>
+                <Text color={theme.amber} bold>
+                  /{entry.name}
+                </Text>
+                {entry.argumentHint ? (
+                  <>
+                    <Text>{" ".repeat(namePad + GAP_WIDTH)}</Text>
+                    <Text color={theme.green}>{entry.argumentHint}</Text>
+                  </>
+                ) : null}
+              </Box>
+              <Box width={innerWidth}>
+                <Text>{" ".repeat(argCol)}</Text>
+                {descWidth > 0 ? (
+                  <Box width={descWidth}>
+                    <Text wrap="truncate-end">{entry.description}</Text>
+                  </Box>
+                ) : null}
+              </Box>
             </Box>
-            <Box paddingLeft={4} width={width - 2}>
-              <Text dimColor={!selected} wrap="wrap">
-                {entry.description}
-              </Text>
-            </Box>
-          </Box>
+            {isLast ? null : <Text> </Text>}
+          </React.Fragment>
         );
       })}
       <Box marginTop={1}>

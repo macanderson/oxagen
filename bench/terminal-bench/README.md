@@ -4,7 +4,7 @@ Benchmark the **Oxagen coding CLI** on [Terminal-Bench](https://www.tbench.ai/)
 via the [Harbor](https://www.harborframework.com/) harness, head-to-head with
 Claude Code, Codex CLI, OpenHands, and friends.
 
-This is a Harbor **external agent** ([`--agent-import-path`](https://www.harborframework.com/docs/agents#external-agents))
+This is a Harbor **external agent** ([`--agent <module.path:ClassName>`](https://www.harborframework.com/docs/agents#external-agents))
 that implements `BaseInstalledAgent`. It installs Oxagen into each task container
 and runs it headlessly, fully autonomous (`--mode bypass`: file edits + shell, no
 human in the loop).
@@ -51,10 +51,16 @@ cd bench/terminal-bench
 export AI_GATEWAY_API_KEY=...           # from repo .env.local
 
 # Smoke-test a single task first (fast, ~1 container):
-HARBOR_EXTRA="--task-id hello-world" N_CONCURRENT=1 ./run.sh
+HARBOR_EXTRA="--include-task-name *hello-world" N_CONCURRENT=1 ./run.sh
 
 # Full Terminal-Bench, pinned model, 4 in parallel:
 OXAGEN_MODEL_SLUG=anthropic/claude-opus-4.8 ./run.sh
+
+# Best-of-N differentiator (3 candidates/task, judge picks the winner) — see "Best-of-N mode":
+OXAGEN_BEST_OF_N=1 OXAGEN_BEST_OF_N_CANDIDATES=3 ./run.sh
+
+# Everything at once — see "Full differentiated config":
+OXAGEN_DIFFERENTIATED=1 ./run.sh
 ```
 
 `run.sh` builds the bundle, creates a venv, installs Harbor + this adapter
@@ -63,8 +69,8 @@ OXAGEN_MODEL_SLUG=anthropic/claude-opus-4.8 ./run.sh
 ```bash
 uv run harbor run \
   -d terminal-bench@2.0 \
-  --agent-import-path oxagen_terminal_bench:OxagenAgent \
-  -m anthropic/claude-sonnet-4.5 \
+  --agent oxagen_terminal_bench:OxagenAgent \
+  -m anthropic/claude-sonnet-5 \
   --n-concurrent 4 --n-attempts 1 \
   --jobs-dir ./oxagen-tbench-results
 ```
@@ -80,8 +86,8 @@ uv pip install -e ".[dev]"
 export AI_GATEWAY_API_KEY=...
 export OXAGEN_CLI_BUNDLE="$(cd ../.. && pwd)/apps/cli/dist-standalone/oxagen.mjs"
 uv run harbor run -d terminal-bench@2.0 \
-  --agent-import-path oxagen_terminal_bench:OxagenAgent \
-  -m anthropic/claude-sonnet-4.5 -n 4
+  --agent oxagen_terminal_bench:OxagenAgent \
+  -m anthropic/claude-sonnet-5 -n 4
 ```
 
 ## Apples-to-apples vs Claude Code
@@ -91,7 +97,7 @@ rate (and cost/latency):
 
 ```bash
 # Oxagen
-uv run harbor run -d terminal-bench@2.0 --agent-import-path oxagen_terminal_bench:OxagenAgent -m anthropic/claude-opus-4.8 -n 4
+uv run harbor run -d terminal-bench@2.0 --agent oxagen_terminal_bench:OxagenAgent -m anthropic/claude-opus-4.8 -n 4
 # Claude Code (built into Harbor)
 uv run harbor run -d terminal-bench@2.0 --agent claude-code -m anthropic/claude-opus-4.8 -n 4
 ```
@@ -105,39 +111,203 @@ per task) and compare cost at similar pass rate.
 | Var | Default | Effect |
 |---|---|---|
 | `AI_GATEWAY_API_KEY` | — (required) | Forwarded into the container for all LLM calls. |
-| `OXAGEN_MODEL_SLUG` | `anthropic/claude-sonnet-4.5` | Model passed to Harbor `-m` (an AI-Gateway slug). |
-| `OXAGEN_ROUTE` | unset | `1` → drop `--model`; Oxagen's cost-aware router chooses per task. |
-| `OXAGEN_NO_PIPELINE` | unset | `1` → skip prompt-eval / context-injection / completeness-judge (leaner, cheaper). Default keeps the full Oxagen scaffold on. |
-| `OXAGEN_INSTALL_DUCKDB` | unset | `1` → also `npm i` DuckDB so the context engine's persistent memory/trace stores are live. |
+| `OXAGEN_MODEL_SLUG` | `anthropic/claude-sonnet-5` | Model passed to Harbor `-m` (an AI-Gateway slug). |
+| `OXAGEN_ROUTE` | unset | `1` → drop `--model`; Oxagen's cost-aware router chooses per task (or per candidate, under best-of-N). |
+| `OXAGEN_BEST_OF_N` | unset | `1` → run `oxagen solve --candidates <N> [--model X] [--pipeline] "<task>"` instead of a single one-shot turn: N independent candidates, a comparative judge picks the winner, its diff is applied to the container's working directory. See "Best-of-N mode" below. |
+| `OXAGEN_BEST_OF_N_CANDIDATES` | `3` | Candidates per task under `OXAGEN_BEST_OF_N=1`. |
+| `OXAGEN_BEST_OF_N_PIPELINE` | unset | `1` → each `solve` candidate runs the full evaluate/enhance/judge/revise pipeline (`--pipeline`), not just bare. Dedicated gate, independent of `OXAGEN_NO_PIPELINE` (that one only affects the one-shot baseline). Off by default (bare — cheaper, one comparison judge only). See "Best-of-N mode" below. |
+| `OXAGEN_NO_PIPELINE` | unset | `1` → skip prompt-eval / context-injection / completeness-judge in the ONE-SHOT `--mode bypass` path only (leaner, cheaper). Default keeps the full Oxagen scaffold on. No effect under `OXAGEN_BEST_OF_N=1` — use `OXAGEN_BEST_OF_N_PIPELINE` for that mode instead. |
+| `OXAGEN_LLM_FAST` | unset (engine picks) | Gateway slug for the pipeline's fast tier — the model that actually runs the evaluate/route stage in a headless container, in both the one-shot path and `solve --pipeline` candidates. See "Full differentiated config" below. |
+| `OXAGEN_INSTALL_DUCKDB` | unset | `1` → also `npm i` DuckDB so the context engine's persistent memory/trace stores are live, AND so the `oxagen init` code-graph pre-build in `install()` persists to disk for `run()` to reuse (without it, the pre-build is thrown away — see "Is DuckDB important here?" below). |
+| `OXAGEN_DIFFERENTIATED` | unset | `1` → one-shot recipe for everything that makes Oxagen unique at once: sets `OXAGEN_INSTALL_DUCKDB=1`, `OXAGEN_BEST_OF_N=1`, `OXAGEN_BEST_OF_N_CANDIDATES=3`, `OXAGEN_BEST_OF_N_PIPELINE=1`, `OXAGEN_LLM_FAST=anthropic/claude-haiku-4-5` (each individually overridable). See "Full differentiated config" below. |
 | `OXAGEN_CLI_BUNDLE` | repo build path | Override the path to `oxagen.mjs`. |
 | `DATASET` | `terminal-bench@2.0` | Any Harbor dataset slug. |
 | `N_CONCURRENT` / `N_ATTEMPTS` | `4` / `1` | Parallelism and attempts per task. |
-| `HARBOR_EXTRA` | — | Extra raw flags (e.g. `--task-id <id>`, `--env daytona`). |
+| `HARBOR_EXTRA` | — | Extra raw flags (e.g. `--include-task-name *<id>`, `--env daytona`). |
 
 ### Is DuckDB important here?
 
 DuckDB powers Oxagen's **context engine** (the local knowledge-graph replica from
 `oxagen graph pull`, episodic/session + fleet memory, the trace store, and the
 daemon's persistent state). In a **cold benchmark trial** none of that is
-load-bearing: the task container is a fresh, unknown repo with no pre-pulled
-graph snapshot and no prior sessions to recall, and a trial is a single one-shot
-run. The agent's actual work — read/edit/grep/bash plus the pipeline's
-prompt-eval, context-injection and completeness-judge — runs fully without it;
-the DuckDB-backed stores degrade gracefully when the module is absent (verified:
-the full loop completes a file-editing task with zero DuckDB errors). DuckDB is
-therefore left **external** in the bundle. Set `OXAGEN_INSTALL_DUCKDB=1` to make
-it live in-container if you want to measure the full context engine.
+load-bearing FOR CORRECTNESS: the task container is a fresh, unknown repo with
+no pre-pulled graph snapshot and no prior sessions to recall, and the agent's
+actual work — read/edit/grep/bash plus the pipeline's prompt-eval,
+context-injection and completeness-judge — runs fully without it. DuckDB is
+therefore left **external** in the bundle by default.
+
+Two more precise claims, since "degrades gracefully" undersells one real gap
+found while wiring this:
+
+- **`oxagen init`'s pre-build no longer crashes without it.** Its DuckDB store
+  constructor does a bare `require("duckdb")`, which throws synchronously when
+  the native module isn't installed. `init.ts` used to call it OUTSIDE its
+  try/catch, so a missing duckdb binding crashed `oxagen init` uncaught in
+  every default (non-`OXAGEN_WARM`, non-`OXAGEN_INSTALL_DUCKDB`) run — masked
+  only because `_INIT_SCRIPT`'s shell wrapper treats a non-zero exit as
+  non-fatal and moves on. Fixed: the store is now constructed inside the try,
+  matching the agent's own runtime code-graph loader — a missing binding now
+  degrades to an in-memory build instead of crashing.
+- **But that in-memory build is still pure overhead without `OXAGEN_INSTALL_DUCKDB=1`.**
+  `install()`'s `oxagen init` and the task's `run()` are two SEPARATE
+  processes. Without DuckDB, the pre-build has nowhere to persist to — it's an
+  in-memory graph that's discarded the instant the `install()` process exits,
+  so `run()` starts its own cold build regardless of whether `install()` "pre-built"
+  anything. If you actually want the local code graph to be a real
+  differentiator (not just a non-crashing no-op), set `OXAGEN_INSTALL_DUCKDB=1`
+  — that's why it's part of the `OXAGEN_DIFFERENTIATED=1` recipe below.
+
+Set `OXAGEN_INSTALL_DUCKDB=1` to make DuckDB live in-container if you want to
+measure the full context engine or a persisted code graph.
 
 ## How it works (per task)
 
 1. **install()** — installs Node 22 (NodeSource/apk), `upload_file`s the bundle
    to `/usr/local/lib/oxagen/oxagen.mjs`, drops a `/usr/local/bin/oxagen`
-   `node`-wrapper, and verifies `oxagen --version`.
+   `node`-wrapper, verifies `oxagen --version`, uploads a static `rg` binary,
+   optionally `npm i`s DuckDB (`OXAGEN_INSTALL_DUCKDB=1`), and — unless
+   `OXAGEN_SKIP_INIT`/`OXAGEN_NO_PIPELINE` — runs `oxagen init --no-link` to
+   pre-build the local tree-sitter code graph + domain index against the task
+   repo before the timed run starts (see "Is DuckDB important here?" for why
+   this pre-build needs `OXAGEN_INSTALL_DUCKDB=1` to actually be worth
+   anything downstream).
 2. **run()** — forwards `AI_GATEWAY_API_KEY` (+ any `OXAGEN_*`), then runs
    `oxagen <flags> "<instruction>"` in the task's working directory with
-   `--mode bypass --verbose`, teeing output to `/logs/agent/oxagen.txt`.
+   `--mode bypass --verbose` (or, under `OXAGEN_BEST_OF_N=1`,
+   `oxagen solve --candidates <N> [--model X] --json [--pipeline] "<instruction>"`,
+   `--pipeline` present only when `OXAGEN_BEST_OF_N_PIPELINE=1` — see
+   "Best-of-N mode" below), teeing output to `/logs/agent/oxagen.txt`.
 3. Harbor runs the task's verifier against the resulting container state and
    records the reward.
+
+## Best-of-N mode
+
+`OXAGEN_BEST_OF_N=1` benchmarks Oxagen's best-of-N differentiator (`oxagen
+solve`) instead of a single one-shot turn: N independent candidates each run
+the full coding-agent loop in their own isolated git worktree, a comparative
+judge scores them on their diff + test output, and the winner's diff is
+applied to the container's real working directory — so the container's
+resulting `git diff` (what Harbor's verifier grades) is exactly the winning
+candidate's patch. Selection is entirely the comparative judge's call; the
+adapter never passes a `--verify` command (Harbor's own verifier is external
+and hidden from the agent — see `OXAGEN_FORBID_TEST_EDITS` above).
+
+```bash
+OXAGEN_BEST_OF_N=1 OXAGEN_BEST_OF_N_CANDIDATES=3 ./run.sh
+# ...combine with routing to benchmark best-of-N + the cost-aware router together:
+OXAGEN_BEST_OF_N=1 OXAGEN_ROUTE=1 ./run.sh
+# ...each candidate self-improves (evaluate/enhance/judge/revise) before comparison:
+OXAGEN_BEST_OF_N=1 OXAGEN_BEST_OF_N_PIPELINE=1 ./run.sh
+```
+
+Notes:
+- **Runs headless automatically.** `oxagen solve` renders a live multi-lane
+  view on a real TTY, but this adapter's command always pipes `oxagen`'s
+  stdout into `tee` (`... | stdbuf -oL tee /logs/agent/oxagen.txt`), so
+  `process.stdout.isTTY` is `false` regardless of how Harbor itself execs the
+  command — `solve` detects this and streams JSONL events instead of trying to
+  mount an Ink UI. The adapter also passes `--json` explicitly, so this never
+  silently depends on that auto-detection alone.
+- **Cost is not yet tracked.** The single-turn path's `--verbose` flag prints a
+  final efficiency roll-up (`815.53s total · 83086 tok · $0.2714`) that
+  `populate_context_post_run()` parses into `context.cost_usd`. `solve` has no
+  `--verbose` equivalent, and `best-of-n.ts` doesn't thread per-candidate token
+  usage onto its `Candidate` type yet — so best-of-N trials leave
+  `context.cost_usd` unset rather than reporting a fabricated number. The
+  adapter still recovers `oxagen_bestofn_candidates`, `oxagen_bestofn_winner_id`,
+  `oxagen_bestofn_winner_files`, `oxagen_bestofn_winner_steps`, and
+  `oxagen_bestofn_failed_candidates` into `context.metadata` from the JSONL
+  stream's trailing `type: "result"` line.
+- **Model pinning applies to every candidate.** Harbor's `-m` becomes `solve
+  --model <slug>` — all N candidates use the same benchmarked model (true
+  best-of-N sampling), not a diversity mix across different models.
+- **Candidates now reuse the pre-built local code graph.** Each candidate runs
+  in its own isolated git worktree (a different filesystem path than the task
+  repo `oxagen init` pre-built the graph against). The persistent DuckDB store
+  keys rows by exact root path, so a candidate's `code_graph` tool calls used
+  to query its OWN worktree path — which the store had never seen — silently
+  forcing a full from-scratch tree-sitter rebuild in EVERY candidate, N times
+  over, even when `install()` had already pre-built the graph. Fixed in
+  `best-of-n.ts`: candidates now query the code graph against the shared repo
+  root instead (same pattern `one-shot.ts` already used), reusing whatever
+  `oxagen init` pre-built. Trade-off: `code_graph` reflects the pristine
+  pre-worktree state, not a candidate's own in-progress edits — acceptable
+  since it's a navigation aid for orientation (the graph-first mandate fires
+  *before* edits) and the agent still has `read_file`/`grep` as ground truth
+  for files it has already changed. Still requires `OXAGEN_INSTALL_DUCKDB=1`
+  to have anything to reuse — see "Is DuckDB important here?" above.
+- **`OXAGEN_BEST_OF_N_PIPELINE=1` — each candidate self-improves BEFORE
+  comparison.** `solve` candidates default to bare (the ONE engine loop, no
+  evaluate/enhance/judge — just the comparative selector across all N at the
+  end). This flag opts every candidate into the full evaluate→enhance→route→
+  execute→judge→revise pipeline too, mirroring `one-shot.ts`'s headless-mode
+  defaults (a bounded 15s ENHANCE pass, a mid-session judge after 20 steps)
+  and warming the shared code graph once before the race starts (see
+  `best-of-n.ts`'s `fullPipeline` option). **The double-judge — each
+  candidate self-judges/revises, THEN the comparative selector picks among
+  the already-self-improved candidates — is intentional, not accidental
+  redundancy**: money no object, strongest-candidate-first, then compare.
+  Dedicated gate, independent of `OXAGEN_NO_PIPELINE` (that one only affects
+  the one-shot baseline — see "Full differentiated config" below for the
+  cost this adds).
+
+## Full differentiated config
+
+`OXAGEN_DIFFERENTIATED=1` engages, at once, everything meant to make Oxagen's
+approach distinct from a bare one-shot agent loop: a persisted local code
+graph + embeddings, a fast coordinator for the pipeline, graph-first/semantic
+retrieval, the full pipeline PER CANDIDATE, and best-of-N.
+
+```bash
+OXAGEN_DIFFERENTIATED=1 ./run.sh
+```
+
+Expands to (each independently overridable):
+
+```bash
+OXAGEN_INSTALL_DUCKDB=1              # persist the oxagen init pre-build; see "Is DuckDB important here?"
+OXAGEN_BEST_OF_N=1                   # oxagen solve --candidates <N>, not a single one-shot turn
+OXAGEN_BEST_OF_N_CANDIDATES=3
+OXAGEN_BEST_OF_N_PIPELINE=1          # --pipeline: full evaluate/enhance/judge/revise PER candidate
+OXAGEN_LLM_FAST=anthropic/claude-haiku-4-5   # fast-tier coordinator (see below)
+# OXAGEN_SKIP_INIT is deliberately left UNSET — init (local code graph) is
+# already on by default.
+```
+
+What each pillar actually means once you trace it through the CLI, verified by
+reading the code (not assumed from the flag names):
+
+| Pillar | What's true today |
+|---|---|
+| Local code graph + embeddings | `install()` runs `oxagen init --no-link` (front-loads the tree-sitter build) unless `OXAGEN_SKIP_INIT`. Requires `OXAGEN_INSTALL_DUCKDB=1` to actually persist across the `install()`→`run()` process boundary (see above). Embeddings are lazy-on-first-`semantic_search`-call, not eager in `init` — and already capped at 1500 files per pass (`MAX_EMBED_PER_PASS` in `semantic-index.ts`), so there's no repo-size blowup risk to bound further. |
+| Fast coordinator | The interactive-only on-device local coordinator (`runtime.coordinator: "on-device"` / `/coordinator local`) is **not container-viable** — three independent, each-fatal reasons: (1) it's wired only into the REPL, unreachable from `--mode bypass`/`solve`; (2) its native runtime (`node-llama-cpp`) is never installed in the container; (3) even fixed, its weights (4.7–32.5GB GGUF files) would need a cold CPU-only download+load that won't fit a single task's time budget, with real OOM risk from Docker's `os.totalmem()` reporting host RAM rather than any cgroup limit. It is local-dev-only. The actual "fast coordinator" for a headless run is the pipeline's evaluate/route stage — Haiku on a live smoke (`model · Haiku (claude-haiku-4.5)`, routed from a low-complexity evaluation), overridable via `OXAGEN_LLM_FAST`. Applies to `solve` candidates under `OXAGEN_BEST_OF_N_PIPELINE=1` too, not just the one-shot baseline. |
+| Graph-first mandate | Active whenever a `CodeGraphProvider` is wired — true for both the one-shot path and EVERY `solve` candidate (bare or full-pipeline — system prompt in `system-prompt.ts` makes `code_graph` a "non-negotiable" first move for structural questions, and it's wired unconditionally in `best-of-n.ts`). Nothing to configure; just don't skip init in a way that leaves no graph to query. |
+| Semantic enhance fallback | Runs in the FULL pipeline (`enhancePrompt()`, pipeline stage 2) whenever `bare` is false — the one-shot `--mode bypass` path (unless `OXAGEN_NO_PIPELINE`), and `solve` candidates under `OXAGEN_BEST_OF_N_PIPELINE=1` (see below). Fires when literal prompt resolution (file/symbol names) finds little or nothing — embeds the raw prompt and cosine-ranks file nodes from the persisted graph. Now visible in the stage telemetry: the `enhanced · N code refs (+semantic) · …` label (fixed a real bug where a semantic-only hit — nothing resolved literally — used to be silently mislabeled `no extra context found`, even though real context WAS injected into the candidate's prompt). |
+| Best-of-N | `OXAGEN_BEST_OF_N=1` → `oxagen solve --candidates <N>`. See "Best-of-N mode" above. |
+
+Verified live (`bench/terminal-bench`'s smoke, no Docker): a two-candidate
+`--pipeline` run showed each candidate progress through
+`evaluated · completeness 65/100 · complexity 20/100` →
+`enhanced · 1 code refs · no memory` → `model · Haiku (claude-haiku-4.5)` →
+`executing`, before hitting the external AI-Gateway billing gate at the actual
+coding step — real, non-mocked confirmation that evaluate/enhance/route fire
+per candidate, not just in the one-shot comparison baseline. (That particular
+smoke's prompt named a literal file path, so its "1 code refs" resolved
+literally, not via the semantic fallback specifically — the fallback path
+itself, and the label fix above, are covered by a real unit test:
+`pipeline.full.test.ts`'s "surfaces the semantic fallback in the enhance
+stage label" — mocking literal resolution to miss and `semantic_search` to
+hit, asserting the label says so.)
+
+**Cost, now by design, not by tolerance:** `OXAGEN_BEST_OF_N_PIPELINE=1` adds
+roughly N extra judge-class model calls (one per candidate, on top of the one
+the comparative selector always makes) plus N evaluate + N enhance calls. For
+N=3 that's meaningfully more expensive and slower than bare. This is the
+user's explicit choice — money no object, each candidate self-improves before
+the field is compared — not a default forced on every `solve` caller: bare
+stays the default when `OXAGEN_BEST_OF_N_PIPELINE` is unset, so a plain
+`oxagen solve` (outside this bench, or without `OXAGEN_DIFFERENTIATED=1`)
+keeps the cheaper behavior it always had.
 
 ## Warm / self-improvement mode
 

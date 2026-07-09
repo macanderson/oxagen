@@ -10,6 +10,8 @@ import {
   graphBudgetSchema,
   parseAgentDefinition,
   parseAgentDefinitionConfig,
+  isCodeAgentType,
+  CODE_AGENT_TYPE,
 } from "./agent-schema";
 
 const graph = {
@@ -200,5 +202,19 @@ describe("agentLogSchema", () => {
         startedAt: "2026-06-15T00:00:00.000Z",
       }),
     ).toThrow();
+  });
+
+  describe("isCodeAgentType", () => {
+    it("is true only for the canonical code agentType", () => {
+      expect(isCodeAgentType(CODE_AGENT_TYPE)).toBe(true);
+      expect(isCodeAgentType("code")).toBe(true);
+    });
+    it("is false for chat / custom / empty / nullish types", () => {
+      expect(isCodeAgentType("custom")).toBe(false);
+      expect(isCodeAgentType("interactive_chat")).toBe(false);
+      expect(isCodeAgentType("")).toBe(false);
+      expect(isCodeAgentType(null)).toBe(false);
+      expect(isCodeAgentType(undefined)).toBe(false);
+    });
   });
 });

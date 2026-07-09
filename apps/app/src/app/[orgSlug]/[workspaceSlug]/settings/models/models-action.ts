@@ -13,7 +13,7 @@ import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { invoke } from "@oxagen/oxagen";
 // Side-effect import: bind every foundation handler into the shared kernel so
-// invoke("workspace.model.settings.write", …) can resolve its handler. Without
+// invoke("update_model_settings", …) can resolve its handler. Without
 // this, invoke() throws "No handler registered" at runtime (the type system
 // can't catch a missing side-effect import). Mirrors the chat stream route.
 import "@oxagen/handlers/register";
@@ -119,7 +119,7 @@ export async function updateWorkspaceModelsAction(
       // runInTenantScope — the outer scope here is belt-and-suspenders
       // for any direct withTenantDb calls in this action.
       await invoke(
-        "workspace.model.settings.write",
+        "update_model_settings",
         {
           defaultTextTier,
           defaultTextModel,

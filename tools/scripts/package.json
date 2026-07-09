@@ -1,9 +1,11 @@
 {
   "name": "@oxagen/scripts",
-  "version": "0.6.4",
+  "version": "1.1.1",
   "private": true,
   "type": "module",
   "dependencies": {
+    "@oxagen/agent": "workspace:*",
+    "@oxagen/bench": "workspace:*",
     "@oxagen/billing": "workspace:*",
     "@oxagen/config": "workspace:*",
     "@oxagen/database": "workspace:*",

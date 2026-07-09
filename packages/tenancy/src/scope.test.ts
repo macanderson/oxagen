@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   runInTenantScope,
+  runWithPrincipal,
   getScope,
   requireScope,
+  getPrincipalAttribution,
   TenantScopeError,
 } from "./index";
 
@@ -10,11 +12,21 @@ const ORG = "00000000-0000-0000-0000-0000000000a1";
 const WS = "00000000-0000-0000-0000-0000000000b2";
 const ORG_B = "00000000-0000-0000-0000-0000000000c3";
 const WS_B = "00000000-0000-0000-0000-0000000000d4";
+const PRINCIPAL = "00000000-0000-0000-0000-0000000000e5";
+const USER = "00000000-0000-0000-0000-0000000000f6";
+
+/** All-null attribution — the shape every unattributed scope carries. */
+const NO_ATTRIBUTION = {
+  principalId: null,
+  principalKind: null,
+  userId: null,
+  capabilityName: null,
+} as const;
 
 describe("tenant scope", () => {
   it("exposes the active scope inside runInTenantScope", () => {
     const seen = runInTenantScope({ orgId: ORG, workspaceId: WS }, () => getScope());
-    expect(seen).toEqual({ orgId: ORG, workspaceId: WS });
+    expect(seen).toEqual({ orgId: ORG, workspaceId: WS, ...NO_ATTRIBUTION });
   });
 
   it("returns null outside any scope", () => {
@@ -80,8 +92,8 @@ describe("tenant scope", () => {
     });
 
     expect(seenScopes).toHaveLength(2);
-    expect(seenScopes[0]).toEqual({ orgId: ORG, workspaceId: WS });
-    expect(seenScopes[1]).toEqual({ orgId: ORG, workspaceId: WS });
+    expect(seenScopes[0]).toEqual({ orgId: ORG, workspaceId: WS, ...NO_ATTRIBUTION });
+    expect(seenScopes[1]).toEqual({ orgId: ORG, workspaceId: WS, ...NO_ATTRIBUTION });
   });
 
   // ── CONCURRENCY: parallel calls must not cross-leak ──────────────────────
@@ -124,5 +136,128 @@ describe("tenant scope", () => {
     for (const seen of observedB) {
       expect(seen).toBe(ORG_B);
     }
+  });
+
+  // ── Principal attribution (accountability-chain spine) ────────────────────
+
+  describe("principal attribution", () => {
+    it("carries attribution fields through the scope", () => {
+      const attribution = runInTenantScope(
+        {
+          orgId: ORG,
+          workspaceId: WS,
+          principalId: PRINCIPAL,
+          principalKind: "agent",
+          userId: USER,
+          capabilityName: "query_ontology",
+        },
+        () => getPrincipalAttribution(),
+      );
+      expect(attribution).toEqual({
+        principalId: PRINCIPAL,
+        principalKind: "agent",
+        userId: USER,
+        capabilityName: "query_ontology",
+      });
+    });
+
+    it("getPrincipalAttribution never throws — all-null outside a scope", () => {
+      expect(getPrincipalAttribution()).toEqual(NO_ATTRIBUTION);
+    });
+
+    it("getPrincipalAttribution is all-null inside an unattributed scope", () => {
+      const attribution = runInTenantScope({ orgId: ORG, workspaceId: WS }, () =>
+        getPrincipalAttribution(),
+      );
+      expect(attribution).toEqual(NO_ATTRIBUTION);
+    });
+
+    it("rejects a non-uuid principalId (fail-closed on garbage attribution)", () => {
+      expect(() =>
+        runInTenantScope(
+          { orgId: ORG, workspaceId: WS, principalId: "agent-1" },
+          () => 1,
+        ),
+      ).toThrowError(/principalId/);
+    });
+
+    it("rejects a non-uuid userId", () => {
+      expect(() =>
+        runInTenantScope({ orgId: ORG, workspaceId: WS, userId: "mac" }, () => 1),
+      ).toThrowError(/userId/);
+    });
+
+    it("rejects an unknown principalKind", () => {
+      expect(() =>
+        runInTenantScope(
+          {
+            orgId: ORG,
+            workspaceId: WS,
+            principalKind: "robot" as unknown as "agent",
+          },
+          () => 1,
+        ),
+      ).toThrowError(/principalKind/);
+    });
+
+    it("runWithPrincipal enriches the active scope without changing tenant ids", () => {
+      runInTenantScope(
+        { orgId: ORG, workspaceId: WS, userId: USER, capabilityName: "x.y" },
+        () => {
+          runWithPrincipal({ principalId: PRINCIPAL, principalKind: "human" }, () => {
+            expect(requireScope()).toEqual({
+              orgId: ORG,
+              workspaceId: WS,
+              principalId: PRINCIPAL,
+              principalKind: "human",
+              userId: USER,
+              capabilityName: "x.y",
+            });
+          });
+          // Enrichment is a nested snapshot — the outer scope is untouched.
+          expect(requireScope().principalId).toBeNull();
+        },
+      );
+    });
+
+    it("runWithPrincipal is a passthrough when no scope is active", () => {
+      const out = runWithPrincipal({ principalId: PRINCIPAL }, () => {
+        expect(getScope()).toBeNull();
+        return 42;
+      });
+      expect(out).toBe(42);
+    });
+
+    it("runWithPrincipal validates the enriched attribution fail-closed", () => {
+      runInTenantScope({ orgId: ORG, workspaceId: WS }, () => {
+        expect(() =>
+          runWithPrincipal({ principalId: "not-a-uuid" }, () => 1),
+        ).toThrowError(/principalId/);
+      });
+    });
+
+    it("async attribution does not cross-leak between parallel scopes", async () => {
+      const seenA: Array<string | null> = [];
+      const seenB: Array<string | null> = [];
+      const runA = runInTenantScope(
+        { orgId: ORG, workspaceId: WS, principalId: PRINCIPAL },
+        async () => {
+          seenA.push(getPrincipalAttribution().principalId);
+          await Promise.resolve();
+          seenA.push(getPrincipalAttribution().principalId);
+        },
+      );
+      const runB = runInTenantScope(
+        { orgId: ORG_B, workspaceId: WS_B },
+        async () => {
+          seenB.push(getPrincipalAttribution().principalId);
+          await Promise.resolve();
+          seenB.push(getPrincipalAttribution().principalId);
+        },
+      );
+      await Promise.all([runA, runB]);
+      expect(seenA).toEqual([PRINCIPAL, PRINCIPAL]);
+      expect(seenB).toEqual([null, null]);
+    });
   });
 });

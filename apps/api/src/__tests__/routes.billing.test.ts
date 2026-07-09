@@ -107,10 +107,10 @@ describe("billing.subscription.read route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'billing.subscription.read' and empty input", async () => {
+  it("calls invoke with 'get_subscription' and empty input", async () => {
     await app.fetch(get(PATH));
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("billing.subscription.read");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("get_subscription");
     expect(mocks.invoke.mock.calls[0]?.[1]).toEqual({});
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
@@ -140,9 +140,9 @@ describe("billing.subscription.upgrade.start route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'billing.subscription.upgrade.start'", async () => {
+  it("calls invoke with 'start_subscription_upgrade'", async () => {
     await app.fetch(post(PATH, VALID_BODY));
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("billing.subscription.upgrade.start");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("start_subscription_upgrade");
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.planSlug).toBe("build");
     expect(body.interval).toBe("month");
@@ -178,9 +178,9 @@ describe("billing.credits.purchase route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'billing.credits.purchase' and amountUsd", async () => {
+  it("calls invoke with 'purchase_credits' and amountUsd", async () => {
     await app.fetch(post(PATH, { amountUsd: 20 }));
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("billing.credits.purchase");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("purchase_credits");
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.amountUsd).toBe(20);
   });
@@ -217,9 +217,9 @@ describe("api.key.create route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'api.key.create'", async () => {
+  it("calls invoke with 'create_api_key'", async () => {
     await app.fetch(post(PATH, { name: "My Key" }));
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("api.key.create");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("create_api_key");
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.name).toBe("My Key");
   });
@@ -255,7 +255,7 @@ describe("api.key.revoke route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'api.key.revoke'", async () => {
+  it("calls invoke with 'revoke_api_key'", async () => {
     await app.fetch(
       makeRequest(`${BASE}${PATH}`, {
         method: "DELETE",
@@ -263,7 +263,7 @@ describe("api.key.revoke route", () => {
         body: JSON.stringify({ keyPublicId: "aky_xyz" }),
       }),
     );
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("api.key.revoke");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("revoke_api_key");
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.keyPublicId).toBe("aky_xyz");
   });

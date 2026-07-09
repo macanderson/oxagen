@@ -17,7 +17,7 @@ dispatchId the caller can poll via agent.subagent.aggregate.
 | Field | Type | Notes |
 | --- | --- | --- |
 | parentMessageId | string | Message ID that triggered the fanout |
-| tasks | array of objects | Subtasks with capability name and input (1-100 items) |
+| tasks | array of objects | Subtasks with capability name and input (1-100 items). Budgets (Phase 2 §4): nesting depth ≤ 3, and ≤ 250 total descendant tasks per root fanout tree — a dispatch that would exceed the descendant cap is rejected before any row is created. |
 | maxParallel | number | Maximum concurrent tasks (default 5, max 50) |
 | timeoutSeconds | number? | Per-task timeout in seconds (optional, 1-3600) |
 

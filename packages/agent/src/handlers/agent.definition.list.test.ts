@@ -46,6 +46,27 @@ describe("agent.definition.list handler", () => {
     expect(out.agents).toHaveLength(2);
     expect(out.agents[0]!.agentId).toBe("agt_1");
     expect(out.agents[1]!.latestVersion).toBeNull();
+    // agentType is surfaced so the selector can classify code vs chat agents.
+    expect(out.agents[0]!.agentType).toBe("interactive_chat");
+    expect(out.agents[1]!.agentType).toBe("custom");
+  });
+
+  it("surfaces agentType 'code' so callers can flag a code agent", async () => {
+    fake.enqueue([
+      {
+        id: "uuid-3",
+        publicId: "agt_3",
+        slug: "repo-fixer",
+        name: "Repo Fixer",
+        description: null,
+        agentType: "code",
+        status: "active",
+        deploymentStatus: "active",
+        latestVersion: 1,
+      },
+    ]);
+    const out = await agentDefinitionListHandler({}, CTX);
+    expect(out.agents[0]!.agentType).toBe("code");
   });
 
   it("sets managed=true for an interactive_chat agent", async () => {
@@ -88,5 +109,59 @@ describe("agent.definition.list handler", () => {
     fake.enqueue([]);
     const out = await agentDefinitionListHandler({ status: "active" }, CTX);
     expect(out.agents).toEqual([]);
+  });
+
+  it("composes agentKey per row from the one shared namespace lookup", async () => {
+    fake.enqueue(
+      [
+        {
+          id: "uuid-1",
+          publicId: "agt_1",
+          slug: "qa-chat",
+          name: "QA",
+          description: null,
+          agentType: "interactive_chat",
+          status: "active",
+          deploymentStatus: "active",
+          latestVersion: 1,
+        },
+        {
+          id: "uuid-2",
+          publicId: "agt_2",
+          slug: "repo-fixer",
+          name: "Repo Fixer",
+          description: null,
+          agentType: "code",
+          status: "active",
+          deploymentStatus: "active",
+          latestVersion: 2,
+        },
+      ],
+      [{ orgNamespace: "acme", workspaceNamespace: "core" }], // resolveNamespacePrefix
+    );
+    const out = await agentDefinitionListHandler({}, CTX);
+    expect(out.agents[0]!.agentKey).toBe("acme.core.qa-chat");
+    expect(out.agents[1]!.agentKey).toBe("acme.core.repo-fixer");
+  });
+
+  it("returns null agentKey for every row when a namespace is missing", async () => {
+    fake.enqueue(
+      [
+        {
+          id: "uuid-1",
+          publicId: "agt_1",
+          slug: "qa-chat",
+          name: "QA",
+          description: null,
+          agentType: "interactive_chat",
+          status: "active",
+          deploymentStatus: "active",
+          latestVersion: 1,
+        },
+      ],
+      [{ orgNamespace: null, workspaceNamespace: null }],
+    );
+    const out = await agentDefinitionListHandler({}, CTX);
+    expect(out.agents[0]!.agentKey).toBeNull();
   });
 });

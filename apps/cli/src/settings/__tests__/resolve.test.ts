@@ -43,6 +43,18 @@ describe("loadSettings precedence", () => {
     expect(s.apiUrl).toBe("https://u.example.com");
   });
 
+  it("resolves confirmScope as a plain scalar — local overrides project overrides user", () => {
+    write("user", { confirmScope: false });
+    write("project", { confirmScope: false });
+    write("local", { confirmScope: true });
+    expect(resolve().confirmScope).toBe(true);
+  });
+
+  it("confirmScope is absent (not false) when no scope sets it", () => {
+    write("project", { model: "p/model" });
+    expect(resolve().confirmScope).toBeUndefined();
+  });
+
   it("merges env keys across scopes, higher scope winning per key", () => {
     write("user", { env: { A: "1", B: "1" } });
     write("project", { env: { B: "2", C: "2" } });

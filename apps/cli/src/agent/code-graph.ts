@@ -10,6 +10,16 @@
  * process. If the store can't be opened — e.g. the daemon holds the write lock —
  * it falls back to a pure in-memory build, so the capability works with or
  * without the daemon and `oxagen` can dogfood itself from a cold start.
+ *
+ * `semantic_search` answers *conceptual* questions the other operations can't —
+ * "where are the project-level configs" names no symbol or path, so substring
+ * search returns nothing. It embeds the query and cosine-ranks file nodes
+ * against vectors from the Group 3 semantic index (`context/embedding.ts` +
+ * `context/semantic-index.ts`), reusing that infra rather than standing up a
+ * second embedding path: same gateway model, same DuckDB columns, same
+ * lazy/incremental embed-on-first-use. When no gateway key is configured it
+ * degrades to a plain miss string, same shape as every other operation's
+ * "not found" case.
  */
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
@@ -22,12 +32,32 @@ import {
 import { createCodeGraphStore, defaultCodeGraphDbPath } from "../daemon/code-graph/store.js";
 import type { CodeGraphStore } from "../daemon/code-graph/store.js";
 import type { CodeGraph, CodeNode } from "../daemon/code-graph/types.js";
+import { resolveEmbeddingClient, type EmbeddingClient } from "./context/embedding.js";
+import { ensureFileEmbeddings, rankFilesBySimilarity } from "./context/semantic-index.js";
+import type { CodeGraphProvider } from "@oxagen/agent-engine";
 
-export type CodeGraphOperation =
-  | "search"
-  | "file_symbols"
-  | "dependents"
-  | "imports";
+/**
+ * Derived from — not duplicated from — CodeGraphProvider.query's own operation
+ * parameter. @oxagen/agent-engine's types.ts is the single source of truth for
+ * this union; adding a new operation there flows here automatically instead of
+ * needing a hand-kept copy to stay in sync.
+ */
+export type CodeGraphOperation = Parameters<CodeGraphProvider["query"]>[0];
+
+/**
+ * Test-only override seam for the `semantic_search` operation; every other
+ * operation ignores it. Production callers never pass this: `client` defaults
+ * to {@link resolveEmbeddingClient} and `store` to a fresh, self-managed
+ * {@link CodeGraphStore} connection so newly-computed vectors are persisted
+ * (opened and closed around the single call, same pattern as
+ * {@link loadOrBuildCodeGraph}). Tests inject a deterministic fake client (and
+ * `store: null` to skip DuckDB I/O) to exercise the ranking path without the
+ * gateway.
+ */
+export interface SemanticSearchDeps {
+  client?: EmbeddingClient | null;
+  store?: CodeGraphStore | null;
+}
 
 const cache = new Map<string, Promise<CodeGraph>>();
 
@@ -39,6 +69,18 @@ export function getCodeGraph(cwd: string): Promise<CodeGraph> {
     cache.set(cwd, graph);
   }
   return graph;
+}
+
+/**
+ * Prime the per-cwd code-graph cache in the background so the first turn's
+ * enhance stage hits a WARM graph instead of paying a cold tree-sitter build
+ * (135s+ on a large repo) on the critical path. Fire-and-forget: it kicks off
+ * (and memoizes) the same build `getCodeGraph` would, and swallows any error —
+ * a failed warm-up just means the first real query builds it, exactly as before.
+ * Call once at REPL/session startup.
+ */
+export function warmCodeGraph(cwd: string): void {
+  void getCodeGraph(cwd).catch(() => {});
 }
 
 /**
@@ -101,13 +143,15 @@ function formatSymbol(node: CodeNode): string {
 
 /**
  * Run one code-graph operation and return a compact, model-readable string.
- * `query` is a symbol name for `search`, or a file path for the others.
+ * `query` is a symbol name for `search`, a natural-language concept for
+ * `semantic_search`, or a file path for the rest.
  */
 export async function queryCodeGraph(
   cwd: string,
   operation: CodeGraphOperation,
   query: string,
   limit = 25,
+  deps: SemanticSearchDeps = {},
 ): Promise<string> {
   const graph = await getCodeGraph(cwd);
 
@@ -147,6 +191,50 @@ export async function queryCodeGraph(
         .sort()
         .slice(0, limit);
       return `${file.path} imports (${imps.length}):\n${paths.join("\n")}`;
+    }
+    case "semantic_search": {
+      const client = deps.client !== undefined ? deps.client : await resolveEmbeddingClient(cwd);
+      if (!client) {
+        return `No file matching semantic query "${query}" (embeddings unavailable — no gateway key).`;
+      }
+
+      // Own our store connection unless a test injected one: open, embed, close —
+      // same open/work/close shape as loadOrBuildCodeGraph. A store that fails to
+      // open (e.g. the daemon holds the write lock) degrades to an unpersisted,
+      // in-memory-only ranking rather than failing the whole query.
+      let store: CodeGraphStore | null = null;
+      let ownsStore = false;
+      if (deps.store !== undefined) {
+        store = deps.store;
+      } else {
+        try {
+          store = createCodeGraphStore({ duckdbPath: defaultCodeGraphDbPath() });
+          await store.whenReady();
+          ownsStore = true;
+        } catch {
+          store = null;
+        }
+      }
+
+      try {
+        const { vectors } = await ensureFileEmbeddings({ graph, root: cwd, client, store });
+        if (vectors.size === 0) return `No file matching semantic query "${query}".`;
+        const queryVector = await client.embed(query);
+        const ranked = rankFilesBySimilarity(graph, queryVector, vectors, limit);
+        if (ranked.length === 0) return `No file matching semantic query "${query}".`;
+        return ranked.map((r) => `${r.path} (${r.score.toFixed(2)})`).join("\n");
+      } catch {
+        // Network/gateway failure mid-embed — degrade like a miss, never throw.
+        return `No file matching semantic query "${query}" (embeddings unavailable).`;
+      } finally {
+        if (ownsStore && store) {
+          try {
+            await store.close();
+          } catch {
+            /* ignore */
+          }
+        }
+      }
     }
   }
 }

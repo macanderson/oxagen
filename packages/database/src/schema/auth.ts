@@ -3,6 +3,7 @@ import {
   boolean,
   index,
   integer,
+  real,
   text,
   timestamp,
   uniqueIndex,
@@ -80,6 +81,11 @@ export const users = authSchema.table(
       withTimezone: true,
       mode: "date",
     }),
+    // Better Auth twoFactor plugin flag. Flipped to true only after the user
+    // completes first TOTP verification (see twoFactorTable below). Enforcement
+    // for privileged (owner/admin) roles reads this column. input:false on the
+    // BA side — never set directly by the client.
+    twoFactorEnabled: boolean("two_factor_enabled").notNull().default(false),
   },
   (t) => ({
     emailIdx: uniqueIndex("users_email_idx").on(t.email),
@@ -260,6 +266,34 @@ export const rateLimitTable = authSchema.table(
   }),
 );
 
+// ── Better Auth two-factor (TOTP) store ──────────────────────────────────────
+// Written by the Better Auth twoFactor plugin. Because the Drizzle adapter is
+// configured with usePlural:true, the plugin's model name "twoFactor" is
+// pluralized to "twoFactors" for schema-key lookup — the schema map in auth.ts
+// therefore wires the key "twoFactors" → this export. The PHYSICAL table name
+// (two_factor) is independent of that key, exactly like rate_limit above.
+//
+// Columns match what the Better Auth twoFactor plugin creates/reads. The JS
+// property names MUST equal the plugin's field names (id, userId, secret,
+// backupCodes, verified) — the Drizzle adapter resolves columns by JS-property
+// lookup and translates camelCase → snake_case when emitting SQL. Like the
+// other Better-Auth-managed tables (sessions/accounts), id is text (BA
+// generates it) while userId is uuid to match users.id. secret and backupCodes
+// are encrypted at rest by Better Auth before they reach the DB.
+export const twoFactorTable = authSchema.table(
+  "two_factor",
+  {
+    id: text("id").primaryKey(),
+    userId: uuid("user_id").notNull(),
+    secret: text("secret").notNull(),
+    backupCodes: text("backup_codes").notNull(),
+    verified: boolean("verified").notNull().default(true),
+  },
+  (t) => ({
+    userIdIdx: index("two_factor_user_id_idx").on(t.userId),
+  }),
+);
+
 // ── User preferences ─────────────────────────────────────────────────────────
 // 1:1 with auth.users; cross-org (not org-scoped) since UI preferences belong
 // to the person, not to a specific workspace. ON DELETE CASCADE so the row is
@@ -302,6 +336,23 @@ export const userPreferences = authSchema.table(
     notificationSettings: jsonb("notification_settings")
       .notNull()
       .default(sql`'{}'::jsonb`),
+    // Per-turn dollar budget (the user's default; a turn may override it at
+    // submit time). OFF by default — enabled=false means turns run with no
+    // dollar ceiling. When enabled, `perTurnBudgetUsd` is the ceiling and
+    // `perTurnBudgetMode` decides what happens at it (grace/prompt/enforce).
+    perTurnBudgetEnabled: boolean("per_turn_budget_enabled")
+      .notNull()
+      .default(false),
+    // Ceiling in USD; NULL when no limit is set. Nullable so "enabled but no
+    // amount yet" is representable (the UI then prompts for a figure).
+    perTurnBudgetUsd: real("per_turn_budget_usd"),
+    // Enforcement mode: "grace" | "prompt" | "enforce" (validated by the
+    // budget.policy contracts). Text-with-default mirrors theme/language above.
+    perTurnBudgetMode: text("per_turn_budget_mode").notNull().default("prompt"),
+    // grace mode: fraction ABOVE the limit allowed before a hard stop (0.25 = 25%).
+    perTurnBudgetGracePct: real("per_turn_budget_grace_pct")
+      .notNull()
+      .default(0.25),
   },
   (t) => ({
     // Enforces the 1:1 relationship — one preferences row per user.

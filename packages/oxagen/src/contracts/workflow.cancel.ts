@@ -2,7 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const workflowCancel = registerCapability({
-  name: "workflow.cancel",
+  name: "cancel_workflow",
   domain: "workflow",
   description: "Cancel a running or planning workflow, stopping all in-flight sub-tasks",
   mode: "sync",

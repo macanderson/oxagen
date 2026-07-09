@@ -20,6 +20,7 @@ export type { ModelTier, UsageTotals };
 /** A stage of the turn pipeline, in execution order. */
 export type StageKind =
   | "evaluate" // the cheap model scored the prompt
+  | "plan" // the goal was decomposed into an executable task plan
   | "enhance" // code-graph + memory context was injected
   | "route" // the executor model was selected
   | "execute" // the coding agent ran
@@ -38,6 +39,37 @@ export interface StageEvent {
   /** Optional extra detail (a model slug, a score, a verdict). */
   detail?: string;
 }
+
+/**
+ * A pre-execution snapshot of the work about to run — surfaced after ROUTE and
+ * before EXECUTE so a caller can show the user the enhanced prompt + estimated
+ * cost, and optionally gate execution behind a confirmation.
+ */
+export interface ScopeReviewInfo {
+  /** The user's original prompt, verbatim. */
+  originalPrompt: string;
+  /** The evaluator's noise-removed rewrite (equals originalPrompt when no refine happened). */
+  refinedPrompt: string;
+  /** The final prompt handed to the executor (refined + injected context). */
+  enhancedPrompt: string;
+  /** The injected context block alone (empty when nothing was retrieved). */
+  context: string;
+  /** The routed executor model slug. */
+  model: string;
+  /** The routed model tier. */
+  tier: ModelTier;
+  /** Rough pre-flight input-token estimate (heuristic). */
+  estimatedInputTokens: number;
+  /** Rough pre-flight output-token estimate (heuristic). */
+  estimatedOutputTokens: number;
+  /** Rough pre-flight dollar estimate from the rate card (heuristic). */
+  estimatedCostUsd: number;
+}
+
+/** A caller's decision at the scope-review gate. */
+export type ScopeReviewDecision =
+  | { proceed: true; prompt?: string } // run; optional edited prompt replaces the enhanced prompt
+  | { proceed: false }; // cancel before any execution
 
 /**
  * The cheap model's read of the user's prompt: how complete and how complex it
@@ -193,6 +225,14 @@ export interface TurnTrace {
   phases?: PhaseStat[];
   /** Every tool call + result with timing (verbose turns). */
   toolEvents?: ToolEvent[];
+  /**
+   * The model's reasoning / chain-of-thought, captured per execution round.
+   * Previously these deltas were streamed dim to the terminal and DISCARDED;
+   * persisting them makes the agent's thinking inspectable in `/replay`, and is
+   * the substrate for mining durable lessons (a wrong assumption the model
+   * voiced) into memory candidates. Each round's text is truncated for storage.
+   */
+  thinkingLog?: Array<{ round: number; text: string }>;
   /** True when this turn was captured in verbose mode. */
   verbose?: boolean;
 }

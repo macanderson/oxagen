@@ -29,6 +29,12 @@ import { render, cleanup } from "@testing-library/react";
 
 afterEach(cleanup);
 
+// Observe the degrade log emitted by conversation-page's logAndFallback helper.
+const mockLoggerWarn = vi.hoisted(() => vi.fn());
+vi.mock("@oxagen/handlers/logger", () => ({
+  logger: { warn: mockLoggerWarn, error: vi.fn(), info: vi.fn() },
+}));
+
 // ── Heavy server-only dependency stubs ──────────────────────────────────────
 // ConversationPage is an async RSC; we mock its DB / tenancy / handler / AI
 // imports so we can await it and render its returned tree in jsdom, then assert
@@ -101,6 +107,14 @@ vi.mock("@/components/conversations/conversation-nav", () => ({
 vi.mock("@oxagen/oxagen", () => ({
   listCapabilities: vi.fn(() => []),
   getSurfaces: vi.fn(() => []),
+  // Workspace budget governance is resolved via invoke("workspace.budget.policy.read")
+  // (OXA-2081). Return a benign no-governance row; the page maps limitUsd → 0.
+  invoke: vi.fn(async () => ({
+    enabled: false,
+    limitUsd: null,
+    mode: "prompt",
+    enforcement: "ceiling",
+  })),
 }));
 
 vi.mock("@oxagen/ai", () => ({
@@ -134,8 +148,33 @@ vi.mock("./walk-active-branch", () => ({
   walkActiveBranch: vi.fn(() => []),
 }));
 
+// conversation-page side-effect-imports "@oxagen/handlers/register" to make the
+// invoke() handlers resolvable. Stub it out — the real module eagerly loads
+// @oxagen/plugins (vault-secret-service dereferences schema.secretKeys at
+// module init), which this test's partial @oxagen/database schema mock does not
+// provide. The invoke() path itself is mocked on @oxagen/oxagen above.
+vi.mock("@oxagen/handlers/register", () => ({}));
+
+// Per-turn budget default (OXA — turn-budget). budgetPolicyReadHandler is a
+// direct handler call in the page; stub it to the off state.
+vi.mock("@oxagen/handlers/budget.policy.read", () => ({
+  budgetPolicyReadHandler: vi.fn(async () => ({
+    enabled: false,
+    limitUsd: null,
+    mode: "prompt",
+    graceOveragePct: 0.25,
+  })),
+}));
+
+// Code-mode picker options (repos + environments, #648). loadCodeModeOptions
+// never throws in the real page (degrades to empty lists); stub it to empty.
+vi.mock("./code-mode-data", () => ({
+  loadCodeModeOptions: vi.fn(async () => ({ repos: [], environments: [] })),
+}));
+
 // ── Import after mocks ───────────────────────────────────────────────────────
 import { ConversationPage } from "./conversation-page";
+import { userPreferencesReadHandler } from "@oxagen/handlers/user.preferences.read";
 
 const actions = {
   sendMessageAction: vi.fn(),
@@ -183,5 +222,33 @@ describe("ConversationPage — mobile composer clearance layout contract", () =>
     expect(root!.className).toContain("h-full");
     expect(root!.className).toContain("flex-col");
     expect(root!.className).toContain("md:flex-row");
+  });
+});
+
+describe("ConversationPage — non-fatal degrade logging", () => {
+  afterEach(() => {
+    mockLoggerWarn.mockClear();
+  });
+
+  it("logs a degrade warning and still renders the page when a parallel read rejects", async () => {
+    // user-preferences read fails — the page must degrade to defaults, log the
+    // failure, and still render the chat shell (never crash).
+    vi.mocked(userPreferencesReadHandler).mockRejectedValueOnce(
+      new Error("RLS: permission denied"),
+    );
+
+    const { container } = await renderPage();
+
+    // Page still rendered.
+    expect(container.querySelector('[data-testid="chat-shell"]')).not.toBeNull();
+
+    // Failure was logged with the degrade context.
+    expect(mockLoggerWarn).toHaveBeenCalled();
+    const call = mockLoggerWarn.mock.calls.find(
+      ([, msg]) => typeof msg === "string" && /user-preferences read/.test(msg),
+    ) as [Record<string, unknown>, string] | undefined;
+    expect(call).toBeDefined();
+    expect(call![0].err).toBeInstanceOf(Error);
+    expect(call![1]).toMatch(/degraded/i);
   });
 });

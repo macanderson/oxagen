@@ -3,7 +3,9 @@ import { graphSyncPush } from "@oxagen/oxagen/contracts/graph.sync.push";
 import { RELATIONSHIP_TYPE_PATTERN } from "@oxagen/oxagen/contracts/graph.relationship.upsert";
 import { scopedSession } from "@oxagen/ontology/tenant";
 import { sanitizeLabel } from "@oxagen/ontology/labels";
+import { edgeValidityOnCreateSet, edgeValidityParams } from "@oxagen/ontology/temporal";
 import { runInTenantScope } from "@oxagen/tenancy";
+import { isValidCodeEmbedding } from "@oxagen/code-graph/embed";
 import { logger } from "./logger";
 
 /**
@@ -50,6 +52,12 @@ export const graphSyncPushHandler: CapabilityHandler<typeof graphSyncPush> = asy
           displayName: n.displayName,
           // Serialise properties as JSON string — same pattern as graph.node.upsert
           properties: n.properties ? JSON.stringify(n.properties) : null,
+          // Best-effort semantic vector. Only a correctly-dimensioned (1536-d)
+          // text-embedding-3-small vector is accepted — any other shape is
+          // dropped to null so a wrong-dimension push never corrupts the
+          // universal graph_node_embedding_index. Absent/invalid → coalesced to
+          // the node's existing vector below (non-fatal, same as node.upsert).
+          embedding: isValidCodeEmbedding(n.embedding) ? n.embedding : null,
         }));
 
         const nodeResult = await session.run(
@@ -74,8 +82,11 @@ export const graphSyncPushHandler: CapabilityHandler<typeof graphSyncPush> = asy
              node.is_system   = true,
              node.updatedAt   = datetime(),
              node._created    = false
+           SET
+             node.embedding = coalesce(n.embedding, node.embedding),
+             node.embeddingUpdatedAt = CASE WHEN n.embedding IS NULL THEN node.embeddingUpdatedAt ELSE datetime() END
            RETURN count(node) AS total`,
-          { nodes: nodeParams },
+          { nodes: nodeParams, orgId, workspaceId },
         );
 
         nodesUpserted = toNumber(nodeResult.records[0]?.get("total"));
@@ -106,7 +117,7 @@ export const graphSyncPushHandler: CapabilityHandler<typeof graphSyncPush> = asy
                AND n.workspaceId = $workspaceId
                AND NOT n:${domainLabel}
              SET n:${domainLabel}`,
-            { keys },
+            { keys, orgId, workspaceId },
           );
         }
       }
@@ -147,13 +158,14 @@ export const graphSyncPushHandler: CapabilityHandler<typeof graphSyncPush> = asy
                r.properties = e.props,
                r.is_system  = true,
                r.inferred   = e.inferred,
-               r.createdAt  = datetime()
+               r.createdAt  = datetime(),
+               ${edgeValidityOnCreateSet("r")}
              ON MATCH SET
                r.properties = e.props,
                r.inferred   = e.inferred,
                r.updatedAt  = datetime()
              RETURN count(r) AS total`,
-            { edges },
+            { edges, orgId, workspaceId, ...edgeValidityParams() },
           );
           edgesUpserted += toNumber(edgeResult.records[0]?.get("total"));
         }
@@ -174,7 +186,7 @@ export const graphSyncPushHandler: CapabilityHandler<typeof graphSyncPush> = asy
            WITH collect(n) AS nodes, count(n) AS tombstoned
            FOREACH (n IN nodes | DETACH DELETE n)
            RETURN tombstoned`,
-          { keys: tombstoneKeys },
+          { keys: tombstoneKeys, orgId, workspaceId },
         );
         tombstoned = toNumber(tombResult.records[0]?.get("tombstoned"));
       }

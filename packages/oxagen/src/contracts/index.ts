@@ -18,6 +18,8 @@ import { agentSandboxStart } from "./agent.sandbox.start";
 import { agentSandboxExec } from "./agent.sandbox.exec";
 import { agentSandboxSnapshot } from "./agent.sandbox.snapshot";
 import { agentSandboxStop } from "./agent.sandbox.stop";
+import { agentSandboxFilesList } from "./agent.sandbox_file.list";
+import { agentSandboxFileRead } from "./agent.sandbox_file.read";
 import { browserNavigate } from "./browser.navigate";
 import { browserScreenshot } from "./browser.screenshot";
 import { browserFill } from "./browser.fill";
@@ -31,27 +33,34 @@ import { codePatch } from "./code.patch";
 import { codeFormat } from "./code.format";
 import { codeMap } from "./code.map";
 import { agentDefinitionCreate } from "./agent.definition.create";
+import { agentDefinitionSuggest } from "./agent.definition.suggest";
 import { agentDefinitionUpdate } from "./agent.definition.update";
 import { agentDefinitionPublish } from "./agent.definition.publish";
 import { agentDefinitionGet } from "./agent.definition.get";
 import { agentDefinitionList } from "./agent.definition.list";
+import { a2aCardGet } from "./a2a.card.get";
 import { agentDeploy } from "./agent.deploy";
 import { agentTriggerCreate } from "./agent.trigger.create";
 import { agentTriggerUpdate } from "./agent.trigger.update";
 import { agentTriggerDelete } from "./agent.trigger.delete";
 import { agentTriggerList } from "./agent.trigger.list";
+import { agentExecutionList } from "./agent.execution.list";
 import { agentExecutionRecord } from "./agent.execution.record";
+import { agentExecutionLineage } from "./agent.execution.lineage";
+import { agentTraceGet } from "./agent.trace.get";
+import { agentDebugTrace } from "./agent.debug.trace";
+import { telemetryErrorCluster } from "./telemetry.error.cluster";
 import { agentUiRender } from "./agent.ui.render";
-import { documentsGenerate } from "./documents.generate";
-import { documentsPdfCreate } from "./documents.pdf.create";
+import { documentsGenerate } from "./document.generate";
+import { documentsPdfCreate } from "./document.pdf.create";
 import { markdownGenerate } from "./markdown.generate";
 import { mermaidGenerate } from "./mermaid.generate";
 import { agentMcpList } from "./agent.mcp.list";
 import { agentMcpRegister } from "./agent.mcp.register";
 import { agentMcpSetEnabled } from "./agent.mcp.set_enabled";
 import { agentMcpDelete } from "./agent.mcp.delete";
-import { agentMcpConsentResolve } from "./agent.mcp.consent.resolve";
-import { agentMcpConsentList } from "./agent.mcp.consent.list";
+import { agentMcpConsentResolve } from "./agent.mcp_consent.resolve";
+import { agentMcpConsentList } from "./agent.mcp_consent.list";
 import { agentMemoryRecall } from "./agent.memory.recall";
 import { agentMemoryWrite } from "./agent.memory.write";
 import { agentMemoryList } from "./agent.memory.list";
@@ -59,27 +68,33 @@ import { agentMemoryUpdate } from "./agent.memory.update";
 import { agentMemoryDelete } from "./agent.memory.delete";
 import { agentMemoryRemember } from "./agent.memory.remember";
 // Bulk memory import (parse → editable review grid → commit).
-import { agentMemoryImportParse } from "./agent.memory.import.parse";
-import { agentMemoryImportCommit } from "./agent.memory.import.commit";
+import { agentMemoryImportParse } from "./agent.memory_import.parse";
+import { agentMemoryImportCommit } from "./agent.memory_import.commit";
 // Two-axis memory: promotion (confidence ladder), citation/evidence mechanism.
 import { agentMemoryPromote } from "./agent.memory.promote";
-import { agentMemoryPromotionCandidates } from "./agent.memory.promotion.candidates";
+import { agentMemoryPromotionCandidates } from "./agent.memory_promotion.list";
 import { agentMemoryCite } from "./agent.memory.cite";
-import { agentMemoryEvidenceAttach } from "./agent.memory.evidence.attach";
-import { agentMemoryCitationsList } from "./agent.memory.citations.list";
+import { agentMemoryEvidenceAttach } from "./agent.memory_evidence.attach";
+import { agentMemoryCitationsList } from "./agent.memory_citation.list";
 import { agentPlanApprove } from "./agent.plan.approve";
 import { agentPlanCreate } from "./agent.plan.create";
+import { agentFileLockAcquire } from "./agent.file_lock.acquire";
+import { agentFileLockRelease } from "./agent.file_lock.release";
+import { agentFileLockList } from "./agent.file_lock.list";
 import { agentSkillList } from "./agent.skill.list";
 import { agentSkillLoad } from "./agent.skill.load";
-import { agentSubagentFanoutGet } from "./agent.subagent.fanout.get";
-import { agentSubagentFanoutList } from "./agent.subagent.fanout.list";
-import { agentTaskBackgroundCancel } from "./agent.task.background.cancel";
-import { agentTaskBackgroundRead } from "./agent.task.background.read";
-import { agentTaskBackgroundStart } from "./agent.task.background.start";
+import { agentSubagentFanoutGet } from "./agent.subagent_fanout.get";
+import { agentSubagentResultGet } from "./agent.subagent_result.get";
+import { agentSubagentSiblings } from "./agent.subagent.siblings";
+import { agentSubagentFanoutList } from "./agent.subagent_fanout.list";
+import { agentTaskBackgroundCancel } from "./agent.background_task.cancel";
+import { agentTaskBackgroundRead } from "./agent.background_task.read";
+import { agentTaskBackgroundStart } from "./agent.background_task.start";
 import { agentToolList } from "./agent.tool.list";
 import { billingCreditsPurchase } from "./billing.credits.purchase";
 import { billingSubscriptionRead } from "./billing.subscription.read";
-import { billingSubscriptionUpgradeStart } from "./billing.subscription.upgrade.start";
+import { billingSubscriptionUpgradeStart } from "./billing.subscription_upgrade.start";
+import { billingUsageBreakdown } from "./billing.usage.breakdown";
 import { chatMessageExecution } from "./chat.message.execution";
 import { chatMessageSend } from "./chat.message.send";
 import { conversationArchive } from "./conversation.archive";
@@ -88,13 +103,15 @@ import { conversationList } from "./conversation.list";
 import { conversationPurge } from "./conversation.purge";
 import { conversationRename } from "./conversation.rename";
 import { conversationFilesList } from "./conversation.files.list";
+import { conversationExport } from "./conversation.export";
+import { conversationAttachmentAdd } from "./conversation.attachment.add";
 import { formFill } from "./form.fill";
-import { organizationCreate } from "./organization.create";
+import { organizationCreate } from "./org.create";
 import { orgMemberAdd } from "./org.member.add";
-import { orgMemberInviteAccept } from "./org.member.invite.accept";
-import { orgMemberInviteDecline } from "./org.member.invite.decline";
+import { orgMemberInviteAccept } from "./org.member_invite.accept";
+import { orgMemberInviteDecline } from "./org.member_invite.decline";
 import { orgMemberRemove } from "./org.member.remove";
-import { orgMemberRoleChange } from "./org.member.role.change";
+import { orgMemberRoleChange } from "./org.member_role.change";
 import { orgList } from "./org.list";
 import { workspaceCreate } from "./workspace.create";
 import { workspaceList } from "./workspace.list";
@@ -104,12 +121,16 @@ import { svgGenerate } from "./svg.generate";
 import { systemInstallInstructions } from "./system.install.instructions";
 import { userPreferencesRead } from "./user.preferences.read";
 import { userPreferencesWrite } from "./user.preferences.write";
-import { workspaceModelSettingsRead } from "./workspace.model.settings.read";
-import { workspaceModelSettingsWrite } from "./workspace.model.settings.write";
+import { budgetPolicyRead } from "./budget.policy.read";
+import { budgetPolicyWrite } from "./budget.policy.write";
+import { workspaceBudgetPolicyRead } from "./workspace.budget_policy.read";
+import { workspaceBudgetPolicyWrite } from "./workspace.budget_policy.write";
+import { workspaceModelSettingsRead } from "./workspace.model_settings.read";
+import { workspaceModelSettingsWrite } from "./workspace.model_settings.write";
 import { promptSettingsRead } from "./prompt.settings.read";
 import { promptSettingsWrite } from "./prompt.settings.write";
-import { notificationsList } from "./notifications.list";
-import { notificationsMark } from "./notifications.mark";
+import { notificationsList } from "./notification.list";
+import { notificationsMark } from "./notification.mark";
 import { pluginCatalogBrowse } from "./plugin.catalog.browse";
 import { pluginCatalogGet } from "./plugin.catalog.get";
 import { pluginCatalogSync } from "./plugin.catalog.sync";
@@ -118,13 +139,12 @@ import { pluginCredentialSetSecret } from "./plugin.credential.set_secret";
 import { pluginOrgInstall } from "./plugin.org.install";
 import { pluginOrgInstallBulk } from "./plugin.org.install_bulk";
 import { pluginOrgList } from "./plugin.org.list";
-import { pluginOrgSetEnabled } from "./plugin.org.set_enabled";
+import { pluginSetEnabled } from "./plugin.set_enabled";
 import { pluginOrgUninstall } from "./plugin.org.uninstall";
 import { pluginRegistryAdd } from "./plugin.registry.add";
 import { pluginRegistryList } from "./plugin.registry.list";
 import { pluginRegistryRemove } from "./plugin.registry.remove";
 import { pluginSettingsSetAuthAlerts } from "./plugin.settings.set_auth_alerts";
-import { pluginWorkspaceSetEnabled } from "./plugin.workspace.set_enabled";
 import { workflowRun } from "./workflow.run";
 import { workflowStatus } from "./workflow.status";
 import { workflowCancel } from "./workflow.cancel";
@@ -168,9 +188,9 @@ import { privacyDataErase } from "./privacy.data.erase";
 import { researchSwarmStart } from "./research.swarm.start";
 import { researchSwarmStatus } from "./research.swarm.status";
 import { graphNodeUpsert } from "./graph.node.upsert";
-import { graphNodeLabelAdd } from "./graph.node.label.add";
-import { graphNodeLabelRemove } from "./graph.node.label.remove";
-import { graphNodeLabelsGet } from "./graph.node.labels.get";
+import { graphNodeLabelAdd } from "./graph.node_label.add";
+import { graphNodeLabelRemove } from "./graph.node_label.remove";
+import { graphNodeLabelsGet } from "./graph.node_label.get";
 import { graphNodeGet } from "./graph.node.get";
 import { graphNodeDelete } from "./graph.node.delete";
 import { graphNodeSearch } from "./graph.node.search";
@@ -194,6 +214,9 @@ import { repoCreate } from "./repo.create";
 import { repoFilePut } from "./repo.file.put";
 import { repoFork } from "./repo.fork";
 import { repoPrOpen } from "./repo.pr.open";
+import { repoPrGet } from "./repo.pr.get";
+import { repoPrDiff } from "./repo.pr.diff";
+import { repoCiStatus } from "./repo.ci.status";
 import { repoSync } from "./repo.sync";
 import { repoPause } from "./repo.pause";
 import { repoResume } from "./repo.resume";
@@ -227,6 +250,7 @@ import { workspaceSettingsWrite } from "./workspace.settings.write";
 import { commandMenuSearch } from "./command.menu.search";
 import { commandMenuSuggest } from "./command.menu.suggest";
 import { skillAuthor } from "./skill.author";
+import { skillDraft } from "./skill.draft";
 import { schemaRegistryGet } from "./schema.registry.get";
 import { schemaRegistryConfig } from "./schema.registry.config";
 import { schemaList } from "./schema.list";
@@ -262,6 +286,18 @@ import { environmentGet } from "./environment.get";
 import { environmentUpdate } from "./environment.update";
 import { environmentDelete } from "./environment.delete";
 import { environmentSetDefault } from "./environment.set_default";
+import { sandboxTemplateCreate } from "./sandbox.template.create";
+import { sandboxTemplateList } from "./sandbox.template.list";
+import { sandboxTemplateGet } from "./sandbox.template.get";
+import { sandboxTemplateUpdate } from "./sandbox.template.update";
+import { sandboxTemplateDelete } from "./sandbox.template.delete";
+import { sandboxTemplateSetDefault } from "./sandbox.template.set_default";
+import { sandboxTemplateSetTools } from "./sandbox.template.set_tools";
+import { sandboxTemplateExport } from "./sandbox.template.export";
+import { sandboxTemplateImport } from "./sandbox.template.import";
+import { agentEnvironmentBind } from "./agent.environment.bind";
+import { agentEnvironmentUnbind } from "./agent.environment.unbind";
+import { agentEnvironmentList } from "./agent.environment.list";
 import { secretKeyUpsert } from "./secret.key.upsert";
 import { secretKeyList } from "./secret.key.list";
 import { secretKeyDelete } from "./secret.key.delete";
@@ -271,8 +307,31 @@ import { secretImportEnv } from "./secret.import_env";
 import { secretReveal } from "./secret.reveal";
 import { secretExport } from "./secret.export";
 // Memory decay policies (OXA-1374).
-import { agentMemoryPolicyRead } from "./agent.memory.policy.read";
-import { agentMemoryPolicyWrite } from "./agent.memory.policy.write";
+import { agentMemoryPolicyRead } from "./agent.memory_policy.read";
+import { agentMemoryPolicyWrite } from "./agent.memory_policy.write";
+import { evalDatasetCreate } from "./eval.dataset.create";
+import { evalDatasetList } from "./eval.dataset.list";
+import { evalDatasetGet } from "./eval.dataset.get";
+import { evalDatasetItemAdd } from "./eval.dataset_item.add";
+import { evalDatasetFromTraces } from "./eval.dataset.from_traces";
+import { evalRunStart } from "./eval.run.start";
+import { evalRunStatus } from "./eval.run.status";
+import { evalRunGet } from "./eval.run.get";
+
+// Shared eval.* schemas (not capabilities themselves) — re-exported so the
+// contracts array guard sees eval-schema.ts referenced, mirroring agent-schema.
+export {
+  evalDatasetItemSchema,
+  evalTargetSchema,
+  evalJudgeScoreSchema,
+  evalRunStatusSchema,
+} from "./eval-schema";
+export type {
+  EvalDatasetItem,
+  EvalTarget,
+  EvalJudgeScore,
+  EvalRunStatus,
+} from "./eval-schema";
 // Re-export shared Zod helpers used across schema.* contracts.
 // These are not capability contracts themselves but must appear here to satisfy
 // the check-contracts file-coverage guard (tools/scripts/check-contracts.mjs).
@@ -283,16 +342,16 @@ export type {
 export type { FieldError, DataType, PropertyInput } from "./schema.types";
 // Memory policy schema + types (OXA-1374). Capability objects are exported in
 // the named block below; here we expose the shared schema and TS types.
-export { memoryPolicySchema } from "./agent.memory.policy.read";
-export type { AgentMemoryPolicyReadOutput } from "./agent.memory.policy.read";
-export type { AgentMemoryPolicyWriteInput, AgentMemoryPolicyWriteOutput } from "./agent.memory.policy.write";
+export { memoryPolicySchema } from "./agent.memory_policy.read";
+export type { AgentMemoryPolicyReadOutput } from "./agent.memory_policy.read";
+export type { AgentMemoryPolicyWriteInput, AgentMemoryPolicyWriteOutput } from "./agent.memory_policy.write";
 // Bulk memory import: shared draft schema/types + per-contract IO types. The
 // shared file is not a capability, so it is exported here to satisfy the
 // check-contracts file-coverage guard (same reason as schema.shared above).
-export { memoryImportDraftSchema } from "./agent.memory.import.shared";
-export type { MemoryImportDraft, MemoryImportDraftInput } from "./agent.memory.import.shared";
-export type { AgentMemoryImportParseInput, AgentMemoryImportParseOutput } from "./agent.memory.import.parse";
-export type { AgentMemoryImportCommitInput, AgentMemoryImportCommitOutput } from "./agent.memory.import.commit";
+export { memoryImportDraftSchema } from "./agent.memory_import.shared";
+export type { MemoryImportDraft, MemoryImportDraftInput } from "./agent.memory_import.shared";
+export type { AgentMemoryImportParseInput, AgentMemoryImportParseOutput } from "./agent.memory_import.parse";
+export type { AgentMemoryImportCommitInput, AgentMemoryImportCommitOutput } from "./agent.memory_import.commit";
 // Two-axis memory model — shared enums, record schema, and invariant helpers.
 // Not a capability, so exported here to satisfy the file-coverage guard.
 export {
@@ -321,16 +380,45 @@ export type { AgentMemoryPromoteInput, AgentMemoryPromoteOutput } from "./agent.
 export type {
   AgentMemoryPromotionCandidatesInput,
   AgentMemoryPromotionCandidatesOutput,
-} from "./agent.memory.promotion.candidates";
+} from "./agent.memory_promotion.list";
 export type { AgentMemoryCiteInput, AgentMemoryCiteOutput } from "./agent.memory.cite";
 export type {
   AgentMemoryEvidenceAttachInput,
   AgentMemoryEvidenceAttachOutput,
-} from "./agent.memory.evidence.attach";
+} from "./agent.memory_evidence.attach";
 export type {
   AgentMemoryCitationsListInput,
   AgentMemoryCitationsListOutput,
-} from "./agent.memory.citations.list";
+} from "./agent.memory_citation.list";
+
+// Sandbox-template value objects + portable manifest v1 (shared schema module).
+export {
+  sandboxProviderSchema,
+  sandboxResourcesSchema,
+  sandboxNetworkModeSchema,
+  sandboxNetworkSchema,
+  sandboxSecretSelectionSchema,
+  sandboxLiteralEnvSchema,
+  sandboxToolKindSchema,
+  sandboxTemplateToolSchema,
+  manifestSecretKeySchema,
+  sandboxTemplateManifestSchema,
+  SANDBOX_TEMPLATE_MANIFEST_KIND,
+  SECRET_KEY_NAME_PATTERN,
+} from "./sandbox-template-manifest";
+export type {
+  SandboxProvider,
+  SandboxResources,
+  SandboxNetworkMode,
+  SandboxNetwork,
+  SandboxSecretSelection,
+  SandboxLiteralEnv,
+  SandboxToolKind,
+  SandboxTemplateTool,
+  ManifestSecretKey,
+  SandboxTemplateManifest,
+  SandboxTemplateManifestInput,
+} from "./sandbox-template-manifest";
 
 export {
   apiKeyCreate,
@@ -343,6 +431,8 @@ export {
   agentSandboxExec,
   agentSandboxSnapshot,
   agentSandboxStop,
+  agentSandboxFilesList,
+  agentSandboxFileRead,
   browserNavigate,
   browserScreenshot,
   browserFill,
@@ -356,6 +446,7 @@ export {
   codeFormat,
   codeMap,
   agentDefinitionCreate,
+  agentDefinitionSuggest,
   agentDefinitionUpdate,
   agentDefinitionPublish,
   agentDefinitionGet,
@@ -365,6 +456,7 @@ export {
   agentTriggerUpdate,
   agentTriggerDelete,
   agentTriggerList,
+  agentExecutionList,
   agentExecutionRecord,
   agentUiRender,
   documentsGenerate,
@@ -392,10 +484,19 @@ export {
   agentMemoryCitationsList,
   agentPlanApprove,
   agentPlanCreate,
+  agentFileLockAcquire,
+  agentFileLockRelease,
+  agentFileLockList,
   agentSkillList,
   agentSkillLoad,
   agentSubagentFanoutGet,
   agentSubagentFanoutList,
+  agentSubagentResultGet,
+  agentSubagentSiblings,
+  agentTraceGet,
+  agentDebugTrace,
+  telemetryErrorCluster,
+  agentExecutionLineage,
   agentTaskBackgroundCancel,
   agentTaskBackgroundRead,
   agentTaskBackgroundStart,
@@ -403,6 +504,7 @@ export {
   billingCreditsPurchase,
   billingSubscriptionRead,
   billingSubscriptionUpgradeStart,
+  billingUsageBreakdown,
   chatMessageExecution,
   chatMessageSend,
   conversationArchive,
@@ -411,6 +513,8 @@ export {
   conversationPurge,
   conversationRename,
   conversationFilesList,
+  conversationExport,
+  conversationAttachmentAdd,
   formFill,
   organizationCreate,
   orgList,
@@ -427,6 +531,10 @@ export {
   systemInstallInstructions,
   userPreferencesRead,
   userPreferencesWrite,
+  budgetPolicyRead,
+  budgetPolicyWrite,
+  workspaceBudgetPolicyRead,
+  workspaceBudgetPolicyWrite,
   workspaceModelSettingsRead,
   workspaceModelSettingsWrite,
   promptSettingsRead,
@@ -441,13 +549,12 @@ export {
   pluginOrgInstall,
   pluginOrgInstallBulk,
   pluginOrgList,
-  pluginOrgSetEnabled,
+  pluginSetEnabled,
   pluginOrgUninstall,
   pluginRegistryAdd,
   pluginRegistryList,
   pluginRegistryRemove,
   pluginSettingsSetAuthAlerts,
-  pluginWorkspaceSetEnabled,
   workflowRun,
   workflowStatus,
   workflowCancel,
@@ -517,6 +624,9 @@ export {
   repoFilePut,
   repoFork,
   repoPrOpen,
+  repoPrGet,
+  repoPrDiff,
+  repoCiStatus,
   repoSync,
   repoPause,
   repoResume,
@@ -550,6 +660,7 @@ export {
   commandMenuSearch,
   commandMenuSuggest,
   skillAuthor,
+  skillDraft,
   schemaRegistryGet,
   schemaRegistryConfig,
   schemaList,
@@ -584,6 +695,18 @@ export {
   environmentUpdate,
   environmentDelete,
   environmentSetDefault,
+  sandboxTemplateCreate,
+  sandboxTemplateList,
+  sandboxTemplateGet,
+  sandboxTemplateUpdate,
+  sandboxTemplateDelete,
+  sandboxTemplateSetDefault,
+  sandboxTemplateSetTools,
+  sandboxTemplateExport,
+  sandboxTemplateImport,
+  agentEnvironmentBind,
+  agentEnvironmentUnbind,
+  agentEnvironmentList,
   secretKeyUpsert,
   secretKeyList,
   secretKeyDelete,
@@ -594,6 +717,14 @@ export {
   secretExport,
   agentMemoryPolicyRead,
   agentMemoryPolicyWrite,
+  evalDatasetCreate,
+  evalDatasetList,
+  evalDatasetGet,
+  evalDatasetItemAdd,
+  evalDatasetFromTraces,
+  evalRunStart,
+  evalRunStatus,
+  evalRunGet,
 };
 
 /**
@@ -615,6 +746,8 @@ export const contracts = [
   agentSandboxExec,
   agentSandboxSnapshot,
   agentSandboxStop,
+  agentSandboxFilesList,
+  agentSandboxFileRead,
   browserNavigate,
   browserScreenshot,
   browserFill,
@@ -628,6 +761,7 @@ export const contracts = [
   codeFormat,
   codeMap,
   agentDefinitionCreate,
+  agentDefinitionSuggest,
   agentDefinitionUpdate,
   agentDefinitionPublish,
   agentDefinitionGet,
@@ -663,10 +797,19 @@ export const contracts = [
   agentMemoryCitationsList,
   agentPlanApprove,
   agentPlanCreate,
+  agentFileLockAcquire,
+  agentFileLockRelease,
+  agentFileLockList,
   agentSkillList,
   agentSkillLoad,
   agentSubagentFanoutGet,
   agentSubagentFanoutList,
+  agentSubagentResultGet,
+  agentSubagentSiblings,
+  agentTraceGet,
+  agentDebugTrace,
+  telemetryErrorCluster,
+  agentExecutionLineage,
   agentTaskBackgroundCancel,
   agentTaskBackgroundRead,
   agentTaskBackgroundStart,
@@ -674,6 +817,7 @@ export const contracts = [
   billingCreditsPurchase,
   billingSubscriptionRead,
   billingSubscriptionUpgradeStart,
+  billingUsageBreakdown,
   chatMessageExecution,
   chatMessageSend,
   conversationArchive,
@@ -682,6 +826,8 @@ export const contracts = [
   conversationPurge,
   conversationRename,
   conversationFilesList,
+  conversationExport,
+  conversationAttachmentAdd,
   formFill,
   organizationCreate,
   orgList,
@@ -698,6 +844,10 @@ export const contracts = [
   systemInstallInstructions,
   userPreferencesRead,
   userPreferencesWrite,
+  budgetPolicyRead,
+  budgetPolicyWrite,
+  workspaceBudgetPolicyRead,
+  workspaceBudgetPolicyWrite,
   workspaceModelSettingsRead,
   workspaceModelSettingsWrite,
   promptSettingsRead,
@@ -712,13 +862,12 @@ export const contracts = [
   pluginOrgInstall,
   pluginOrgInstallBulk,
   pluginOrgList,
-  pluginOrgSetEnabled,
+  pluginSetEnabled,
   pluginOrgUninstall,
   pluginRegistryAdd,
   pluginRegistryList,
   pluginRegistryRemove,
   pluginSettingsSetAuthAlerts,
-  pluginWorkspaceSetEnabled,
   workflowRun,
   workflowStatus,
   workflowCancel,
@@ -747,6 +896,7 @@ export const contracts = [
   skillMetricsRead,
   skillCreate,
   skillEnable,
+  agentExecutionList,
   agentExecutionRecord,
   agentSubagentAggregate,
   agentSubagentDispatch,
@@ -789,6 +939,9 @@ export const contracts = [
   repoFilePut,
   repoFork,
   repoPrOpen,
+  repoPrGet,
+  repoPrDiff,
+  repoCiStatus,
   repoSync,
   repoPause,
   repoResume,
@@ -822,6 +975,7 @@ export const contracts = [
   commandMenuSearch,
   commandMenuSuggest,
   skillAuthor,
+  skillDraft,
   schemaRegistryGet,
   schemaRegistryConfig,
   schemaList,
@@ -856,6 +1010,18 @@ export const contracts = [
   environmentUpdate,
   environmentDelete,
   environmentSetDefault,
+  sandboxTemplateCreate,
+  sandboxTemplateList,
+  sandboxTemplateGet,
+  sandboxTemplateUpdate,
+  sandboxTemplateDelete,
+  sandboxTemplateSetDefault,
+  sandboxTemplateSetTools,
+  sandboxTemplateExport,
+  sandboxTemplateImport,
+  agentEnvironmentBind,
+  agentEnvironmentUnbind,
+  agentEnvironmentList,
   secretKeyUpsert,
   secretKeyList,
   secretKeyDelete,
@@ -866,4 +1032,13 @@ export const contracts = [
   secretExport,
   agentMemoryPolicyRead,
   agentMemoryPolicyWrite,
+  a2aCardGet,
+  evalDatasetCreate,
+  evalDatasetList,
+  evalDatasetGet,
+  evalDatasetItemAdd,
+  evalDatasetFromTraces,
+  evalRunStart,
+  evalRunStatus,
+  evalRunGet,
 ] as const;

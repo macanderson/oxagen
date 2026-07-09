@@ -15,12 +15,20 @@ import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import type { Workspace, CommandResult } from "@oxagen/agent-engine";
+import { describeEditFailure } from "@oxagen/agent-engine";
 import { toRequest, type PermissionBroker } from "../permissions.js";
+import { runShellCommandBuffered } from "../../lib/shell-runner.js";
+import { hasRipgrep, runRipgrep, parseRipgrepOutput } from "./ripgrep.js";
 
 const execFileAsync = promisify(execFile);
 
-/** Directories never walked by `list` / `glob` / `grep` — noise and huge trees. */
+/**
+ * Directories never walked by `list` / `glob` / `grep` — build noise and huge
+ * trees. Covers JS (node_modules, dist, …) and Python (.venv, __pycache__, …)
+ * ecosystems so SWE-bench task repos don't drown grep/glob in generated files.
+ */
 const IGNORE_DIRS = [
+  // JS / tooling
   "node_modules",
   ".git",
   ".next",
@@ -29,8 +37,25 @@ const IGNORE_DIRS = [
   "coverage",
   ".turbo",
   ".vercel",
+  // Python
+  ".venv",
+  "venv",
+  "__pycache__",
+  ".tox",
+  ".mypy_cache",
+  ".pytest_cache",
+  ".eggs",
+  ".ruff_cache",
+  "__pypackages__",
 ];
 const IGNORE_SET = new Set(IGNORE_DIRS);
+
+/** Whether a directory name should be skipped when walking the tree. */
+function isIgnoredDir(name: string): boolean {
+  // `*.egg-info` dirs are per-package build metadata (name varies), so match by
+  // suffix rather than listing them all.
+  return IGNORE_SET.has(name) || name.endsWith(".egg-info");
+}
 
 /** Minimal glob → RegExp: `**` spans directories, `*` a segment, `?` one char. */
 function globToRegExp(pattern: string): RegExp {
@@ -64,7 +89,7 @@ async function* walk(
   const dirents = await fs.readdir(dir, { withFileTypes: true }).catch(() => null);
   if (!dirents) return; // unreadable directory — skip
   for (const entry of dirents) {
-    if (entry.isDirectory() && IGNORE_SET.has(entry.name)) continue;
+    if (entry.isDirectory() && isIgnoredDir(entry.name)) continue;
     const abs = path.join(dir, entry.name);
     if (entry.isDirectory()) {
       yield* walk(abs, cwd);
@@ -97,20 +122,28 @@ export function createCwdWorkspace(cwd: string): Workspace {
       await fs.writeFile(target, content, "utf-8");
     },
 
-    async editFile(filePath, oldString, newString) {
+    async editFile(filePath, oldString, newString, opts) {
       const target = abs(filePath);
       const content = await fs.readFile(target, "utf-8");
-      const count = content.split(oldString).length - 1;
-      if (count === 0) throw new Error(`String not found in ${filePath}`);
-      if (count > 1)
-        throw new Error(`String matches ${count} times in ${filePath} — must be unique`);
+      const count = oldString === "" ? 0 : content.split(oldString).length - 1;
+      if (opts?.replaceAll) {
+        if (count === 0)
+          throw new Error(describeEditFailure(content, oldString) ?? `String not found in ${filePath}`);
+        await fs.writeFile(target, content.split(oldString).join(newString), "utf-8");
+        return count;
+      }
+      // Structured feedback on a miss (closest line / ambiguous matches) so the
+      // model can self-correct instead of blindly retrying the same string.
+      if (count !== 1)
+        throw new Error(describeEditFailure(content, oldString) ?? `String not found in ${filePath}`);
       await fs.writeFile(target, content.replace(oldString, newString), "utf-8");
+      return 1;
     },
 
     async list(dirPath) {
       const dirents = await fs.readdir(abs(dirPath ?? "."), { withFileTypes: true });
       return dirents
-        .filter((e) => !IGNORE_SET.has(e.name))
+        .filter((e) => !isIgnoredDir(e.name))
         .map((e) => e.name + (e.isDirectory() ? "/" : ""))
         .sort();
     },
@@ -126,6 +159,25 @@ export function createCwdWorkspace(cwd: string): Workspace {
     },
 
     async grep(pattern, opts) {
+      // Prefer ripgrep when available: far faster on large trees, .gitignore-aware,
+      // and it skips binaries. Any real rg error (unsupported regex, spawn failure)
+      // falls through to the in-process JS walk below, which also validates the
+      // regex and enforces the Python-aware ignore set.
+      if (await hasRipgrep()) {
+        const args = [
+          "--line-number",
+          "--no-heading",
+          "--color=never",
+          ...(opts?.glob ? ["--glob", opts.glob] : []),
+          "--",
+          pattern,
+          opts?.path ?? ".",
+        ];
+        const { ok, stdout } = await runRipgrep(args, cwd);
+        if (ok) return parseRipgrepOutput(stdout, 500);
+        // else fall through to the JS walk
+      }
+
       let re: RegExp;
       try {
         re = new RegExp(pattern);
@@ -160,42 +212,82 @@ export function createCwdWorkspace(cwd: string): Workspace {
 
     async exec(command, opts): Promise<CommandResult> {
       const timeoutMs = Math.min(opts?.timeoutMs ?? 120_000, 600_000);
-      try {
-        const { stdout, stderr } = await execFileAsync("bash", ["-c", command], {
-          cwd,
-          timeout: timeoutMs,
-          maxBuffer: 10 * 1024 * 1024,
-          killSignal: "SIGTERM",
-        });
-        return { exitCode: 0, stdout, stderr, timedOut: false };
-      } catch (e: unknown) {
-        const err = e as {
-          code?: number;
-          stdout?: string;
-          stderr?: string;
-          killed?: boolean;
-          signal?: string;
-        };
-        const timedOut = err.killed === true || err.signal === "SIGTERM";
-        return {
-          exitCode: typeof err.code === "number" ? err.code : 1,
-          stdout: err.stdout ?? "",
-          stderr: err.stderr ?? "",
-          timedOut,
-        };
-      }
+      // Runs in its own process group so the timeout kills the whole subtree.
+      // Node's `execFile({ timeout })` only signals the top-level `bash`, so a
+      // grandchild that keeps the stdout pipe open (e.g. `npm run test | tail`)
+      // would leave the streams open and hang this promise forever. The turn
+      // signal is threaded through so an aborted turn kills the subtree too.
+      return runShellCommandBuffered({ command, cwd, timeoutMs, signal: opts?.signal });
     },
 
     async diff() {
+      // 1. Tracked changes vs HEAD (the original behavior). A rejection here
+      //    means we're not in a git repo (or git is missing) — return "" exactly
+      //    as before so callers keep their "no diff available" contract.
+      let tracked: string;
       try {
         const { stdout } = await execFileAsync("git", ["diff", "HEAD"], {
           cwd,
           maxBuffer: 50 * 1024 * 1024,
         });
-        return stdout;
+        tracked = stdout;
       } catch {
         return ""; // not a git repo, or git missing — no diff available
       }
+
+      // 2. Untracked files never appear in `git diff HEAD`, yet a fix that
+      //    CREATES a file must show up in the final patch (SWE-bench scores the
+      //    whole diff, so an added file that's missing reads as an incomplete
+      //    patch). Enumerate untracked paths without ever touching the index
+      //    (no `git add`), then synthesize a create-file diff for each.
+      let untracked: string[];
+      try {
+        const { stdout } = await execFileAsync(
+          "git",
+          ["ls-files", "--others", "--exclude-standard"],
+          { cwd, maxBuffer: 50 * 1024 * 1024 },
+        );
+        untracked = stdout
+          .split("\n")
+          .map((line) => line.trim())
+          .filter(Boolean);
+      } catch {
+        return tracked; // couldn't enumerate untracked files — return what we have
+      }
+
+      let synthetic = "";
+      for (const rel of untracked) {
+        // Stat first: skip anything that isn't a regular file, and silently skip
+        // files over 1 MiB (binary blobs / huge artifacts aren't patch content).
+        let size: number;
+        try {
+          const info = await fs.stat(path.resolve(cwd, rel));
+          if (!info.isFile()) continue;
+          size = info.size;
+        } catch {
+          continue; // vanished between listing and stat — skip
+        }
+        if (size > 1024 * 1024) continue;
+
+        // `git diff --no-index /dev/null <file>` emits a "new file" hunk. It
+        // exits 1 whenever the two inputs differ (always true vs /dev/null),
+        // which execFile surfaces as a rejection whose `stdout` holds the diff —
+        // that is the SUCCESS path here, not an error. A real failure (code 2)
+        // leaves stdout empty, so appending it is a harmless no-op.
+        try {
+          const { stdout } = await execFileAsync(
+            "git",
+            ["diff", "--no-index", "--binary", "/dev/null", rel],
+            { cwd, maxBuffer: 50 * 1024 * 1024 },
+          );
+          synthetic += stdout;
+        } catch (err) {
+          const out = (err as { stdout?: string }).stdout;
+          if (typeof out === "string") synthetic += out;
+        }
+      }
+
+      return tracked + synthetic;
     },
   };
 }
@@ -240,10 +332,10 @@ export function createGatedWorkspace(
       return workspace.writeFile(filePath, content);
     },
 
-    async editFile(filePath, oldString, newString) {
+    async editFile(filePath, oldString, newString, opts) {
       const { allowed, reason } = await decide("edit_file", { path: filePath });
       if (!allowed) throw new Error(`Permission denied: ${reason || "edit_file blocked"}`);
-      return workspace.editFile(filePath, oldString, newString);
+      return workspace.editFile(filePath, oldString, newString, opts);
     },
 
     async exec(command, opts): Promise<CommandResult> {

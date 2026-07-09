@@ -63,6 +63,25 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // Durable code-agent sandbox session registry (orgScopeMixin + tenant_isolation
   // RLS in 20260628120000_agent_sandbox_sessions.sql).
   { table: "agent.sandbox_sessions", policyClass: "standard" },
+  // Durable A2A task store (orgScopeMixin + tenant_isolation RLS in
+  // 20260704230000_a2a_tasks.sql).
+  { table: "agent.a2a_tasks", policyClass: "standard" },
+  // File-lock lease authority + fencing-token counter (ADR-021 §5;
+  // orgScopeMixin + tenant_isolation RLS in
+  // 20260708130000_agent_file_locks.sql).
+  { table: "agent.file_locks", policyClass: "standard" },
+  { table: "agent.file_lock_fences", policyClass: "standard" },
+
+  // ── ai.* — response cache + batch jobs use orgScopeMixin (tenant_isolation
+  // RLS created in 20260704200000_ai_cache_and_batch_jobs.sql) ─────────────
+  { table: "ai.response_cache", policyClass: "standard" },
+  { table: "ai.batch_jobs", policyClass: "standard" },
+
+  // ── eval.* — datasets/items/runs use orgScopeMixin (tenant_isolation RLS
+  // created in 20260704220000_evals_v1.sql) ────────────────────────────────
+  { table: "eval.eval_datasets", policyClass: "standard" },
+  { table: "eval.eval_dataset_items", policyClass: "standard" },
+  { table: "eval.eval_runs", policyClass: "standard" },
 
   // ── auth.* — credentials + api_keys use orgScopeMixin ────────────────────
   // Better Auth tables (users/sessions/accounts/verifications/rate_limit/
@@ -113,7 +132,6 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   //   transitive through source_connections. oauth_accounts is org-level
   //   (encrypted OAuth tokens + PII, shared across workspaces).
   { table: "ingestion.source_connections", policyClass: "standard" },
-  { table: "ingestion.entity_types", policyClass: "standard" },
   { table: "ingestion.entity_type_mappings", policyClass: "standard" },
   { table: "ingestion.setup_suggestions", policyClass: "standard" },
   { table: "ingestion.deletion_jobs", policyClass: "standard" },
@@ -194,6 +212,9 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // Agent-memory decay policy (OXA-1374). org_id + workspace_id both NOT NULL
   // → standard tenant_isolation RLS.
   { table: "workspace.workspace_memory_policy", policyClass: "standard" },
+  // Per-turn budget governance (OXA-2081). org_id + workspace_id both NOT NULL
+  // → standard tenant_isolation RLS.
+  { table: "workspace.workspace_budget_policy", policyClass: "standard" },
 
   // ── environments.* — Agent Environments & Credential Vault (Phase 0, Spec §5).
   //   All four carry org_id + workspace_id NOT NULL → standard tenant_isolation.
@@ -201,4 +222,9 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "environments.secret_keys", policyClass: "standard" },
   { table: "environments.secret_values", policyClass: "standard" },
   { table: "environments.secret_access_log", policyClass: "standard" },
+  // Sandbox templates + portable artifacts (Phase 1, Spec §5.2–§5.3, §5.6).
+  //   All three carry org_id + workspace_id NOT NULL → standard tenant_isolation.
+  { table: "environments.sandbox_templates", policyClass: "standard" },
+  { table: "environments.sandbox_template_tools", policyClass: "standard" },
+  { table: "environments.agent_environment_bindings", policyClass: "standard" },
 ];

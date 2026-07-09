@@ -17,7 +17,7 @@ const definitionConfigInput = z.object({
 });
 
 export const agentDefinitionCreate = registerCapability({
-  name: "agent.definition.create",
+  name: "create_agent_def",
   domain: "agent",
   description:
     "Create a new agent definition — inserts the agent identity row (draft, inactive) and an immutable v1 version snapshot with the supplied, schema-validated config (graph access, tools, triggers, instructions)",
@@ -35,6 +35,10 @@ export const agentDefinitionCreate = registerCapability({
   input: z.object({
     slug: z
       .string()
+      .max(
+        18,
+        "agent slugs are capped at 18 chars so the global agent key (org_ns.workspace_ns.slug, ≤6+6 namespaces) never exceeds 32",
+      )
       .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, "slug must be lowercase kebab-case"),
     name: z.string().min(1),
     description: z.string().optional(),

@@ -9,6 +9,7 @@ import {
 } from "@oxagen/ai";
 import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
+import { logger } from "@oxagen/handlers/logger";
 
 /**
  * Generates a short title for a newly created conversation (fire-and-forget).
@@ -48,6 +49,11 @@ export async function autoTitleConversation(opts: {
         surface: "app",
         messageId: opts.requestId,
       },
+      // Title generation is deterministic infrastructure: the same opening
+      // message yields the same title. Cache it (exact-match, 24h TTL) so a
+      // repeated first turn costs a cheap cache hit instead of a model call.
+      // Never semantic here — an exact opener is the only safe reuse.
+      cache: { ttlSeconds: 86_400 },
     });
 
     const title = object.title?.trim();
@@ -68,7 +74,13 @@ export async function autoTitleConversation(opts: {
             ),
         ),
     );
-  } catch {
-    // Best-effort — title generation failure must never affect the chat turn.
+  } catch (err) {
+    // Best-effort — title generation failure must never affect the chat turn,
+    // but don't swallow it silently: a persistent failure (model/DB error) is
+    // otherwise invisible.
+    logger.warn(
+      { err, conversationId: opts.conversationId },
+      "[auto-title] title generation failed — skipping",
+    );
   }
 }

@@ -20,9 +20,27 @@ export const sourceConnections = ingestionSchema.table(
     deliveryConfig: jsonb("delivery_config"),
     status: text("status").notNull().default("pending_setup"),
     entityCount: integer("entity_count").notNull().default(0),
+    // Per-source-record-type incremental cursor map: { [sourceRecordType]: cursorValue }.
+    // The poll/sync loop reads each record type's cursor before polling and
+    // advances it from the batch just fetched (see @oxagen/ingestion/sync).
     cursor: jsonb("cursor"),
     lastSyncAt: timestamp("last_sync_at", { withTimezone: true, mode: "date" }),
     errorMessage: text("error_message"),
+    // ── Poll/sync loop health + scheduling (source of truth; §Connector Dual-Write) ──
+    // Rolls up the last poll outcome for the UI and self-healing scheduler.
+    // healthy = last poll ok; degraded = 1..3 consecutive failures (still
+    // polling, data may be stale); errored = 4+ failures (needs attention).
+    healthStatus: text("health_status").notNull().default("healthy"),
+    // Consecutive poll failures — drives exponential backoff and the health
+    // transition. Reset to 0 on any successful poll.
+    consecutiveFailureCount: integer("consecutive_failure_count").notNull().default(0),
+    // When the connection was last polled (success OR failure).
+    lastPollAt: timestamp("last_poll_at", { withTimezone: true, mode: "date" }),
+    // When the connection is next due to be polled. The scheduler cron claims
+    // connections whose next_poll_at <= now() (or is null). Null = never polled.
+    nextPollAt: timestamp("next_poll_at", { withTimezone: true, mode: "date" }),
+    // Timestamp of the most recent poll failure (paired with error_message).
+    lastErrorAt: timestamp("last_error_at", { withTimezone: true, mode: "date" }),
     deletedAt: timestamp("deleted_at", { withTimezone: true, mode: "date" }),
     deletedByUserId: uuid("deleted_by_user_id"),
     oauthAccountId: uuid("oauth_account_id"),
@@ -34,10 +52,16 @@ export const sourceConnections = ingestionSchema.table(
     connectorIdx: index("source_connections_connector_idx").on(t.connectorId),
     statusIdx: index("source_connections_status_idx").on(t.status),
     oauthAccountIdx: index("source_connections_oauth_account_idx").on(t.oauthAccountId),
+    // Poll-scheduler due-work scan: order live connections by next_poll_at.
+    nextPollDueIdx: index("source_connections_next_poll_due_idx").on(t.nextPollAt),
     // 'deleting' is set synchronously by connection.delete; 'deleted' is the
     // terminal state written by the async purge job (ingestion.delete). Both
     // were missing here, so any delete violated this CHECK → 500 (OXA-1751).
     statusCheck: check("source_connections_status_check", sql`${t.status} IN ('pending_setup', 'connected', 'paused', 'error', 'deleting', 'deleted')`),
+    healthStatusCheck: check(
+      "source_connections_health_status_check",
+      sql`${t.healthStatus} IN ('healthy', 'degraded', 'errored')`,
+    ),
   }),
 );
 
@@ -128,33 +152,6 @@ export const oauthAccounts = ingestionSchema.table(
       t.provider,
       t.providerUserId,
     ),
-  }),
-);
-
-// ── ingestion.entity_types ────────────────────────────────────────────────────
-
-export const entityTypes = ingestionSchema.table(
-  "entity_types",
-  {
-    id: uuid("id").primaryKey().default(uuidv7Default),
-    publicId: citext("public_id").notNull().unique(),
-    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
-    workspaceId: uuid("workspace_id").notNull(),
-    orgId: uuid("org_id").notNull(),
-    name: text("name").notNull(),
-    displayName: text("display_name").notNull(),
-    description: text("description"),
-    commonPropertyKeys: text("common_property_keys").array().notNull().default(sql`'{}'`),
-    expectedEdges: jsonb("expected_edges").notNull().default(sql`'[]'::jsonb`),
-    rowCount: integer("row_count").notNull().default(0),
-    lastSeenAt: timestamp("last_seen_at", { withTimezone: true, mode: "date" }),
-    isCustom: boolean("is_custom").notNull().default(false),
-  },
-  (t) => ({
-    workspaceOrgIdx: index("entity_types_workspace_org_idx").on(t.workspaceId, t.orgId),
-    lastSeenIdx: index("entity_types_last_seen_idx").on(t.lastSeenAt),
-    workspaceNameUniq: unique("entity_types_workspace_name_uniq").on(t.workspaceId, t.name),
   }),
 );
 

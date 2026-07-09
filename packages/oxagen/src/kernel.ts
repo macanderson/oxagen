@@ -1,8 +1,14 @@
-import type { CapabilityContext, CapabilitySurface, CapabilityEffect, ResolvedPrincipal } from "./types";
+import type {
+  CapabilityContext,
+  CapabilitySurface,
+  CapabilityEffect,
+  CheckedContext,
+  ResolvedPrincipal,
+} from "./types";
 import { getSurfaces } from "./types";
 import { getCapability, listCapabilities } from "./registry";
 import { pluginForContract } from "./plugins/registry";
-import { runInTenantScope } from "@oxagen/tenancy";
+import { runInTenantScope, runWithPrincipal } from "@oxagen/tenancy";
 import { trace, SpanStatusCode, SpanKind } from "@opentelemetry/api";
 
 // Matches runInTenantScope's own uuid guard: we only enter a tenant scope when
@@ -122,6 +128,13 @@ export type KernelIAMCheckFn = (args: {
   ctx: CapabilityContext;
   defaultEffect: CapabilityEffect;
   rawInputJson: string;
+  /**
+   * The object this invocation acts on, derived from the contract's
+   * declarative `audit` field (accountability chain). Threads into the IAM
+   * audit row's target_kind/target_id. Null when the contract declares no
+   * audit target or the input field is absent/non-string.
+   */
+  target?: { kind: string; id: string } | null;
 }) => Promise<KernelIAMCheckResult>;
 
 export type KernelAuditEmitFn = (args: {
@@ -170,7 +183,7 @@ export function clearKernelIAMRuntime(): void {
 
 export type CapabilityHandlerFn = (
   input: unknown,
-  ctx: CapabilityContext,
+  ctx: CheckedContext,
 ) => Promise<unknown>;
 
 export type HandlerLoader = () => Promise<CapabilityHandlerFn>;
@@ -385,6 +398,10 @@ export function registerHandlersOnce(token: string, register: () => void): void 
 async function resolveHandler(name: string): Promise<CapabilityHandlerFn> {
   const cached = cache.get(name);
   if (cached) return cached;
+  // ADR-025: `name` is the canonical verb-first snake_case name (callers resolve
+  // through getCapability first) and the handler-registration modules bind their
+  // loaders under that same snake name — so an exact lookup is all that's needed.
+  // Aliases were removed entirely; there is no dotted fallback.
   const loader = loaders.get(name);
   if (!loader) {
     throw new CapabilityError(
@@ -420,6 +437,14 @@ export interface InvokeOptions {
  *         throws CapabilityError(code='authz_denied') on deny or pending_approval.
  *       When enforcement=false (default):
  *         logs would-deny decisions and proceeds — zero lockout risk.
+ *       When checkFn THROWS (resolver error — DB down, migration missing,
+ *         resolver bug): ALWAYS fails closed (throws CapabilityError,
+ *         code='authz_denied')), regardless of the enforcement flag (OXA-2056).
+ *         A throw means the check could not be evaluated at all —
+ *         categorically different from a policy "deny" decision, which is the
+ *         only case the enforcement flag is allowed to soften. Silently
+ *         granting access because the resolver happened to error is a
+ *         fail-open bug, not graceful degradation.
  *   - When no IAM check function is registered: proceeds as before (no IAM).
  *
  * Emits a `KernelSecurityEvent` after every invocation attempt — allow,
@@ -485,9 +510,15 @@ async function _invokeCore(
 ): Promise<unknown> {
   const startMs = Date.now();
   const cap = getCapability(name);
+  // The canonical identity for this invocation (ADR-022). getCapability resolves
+  // a legacy alias to its live contract, so a call made under an old name is
+  // dispatched, gated, and metered under the canonical name. For an unknown
+  // name (cap === undefined) canonical falls back to the raw name so the
+  // "unknown capability" telemetry still records what was actually called.
+  const canonical = cap?.name ?? name;
   if (!cap) {
     emitSecurityEvent({
-      capability: name,
+      capability: canonical,
       outcome: "deny",
       surface: ctx.surface,
       orgId: ctx.orgId,
@@ -502,7 +533,7 @@ async function _invokeCore(
 
   if (opts.surface && !getSurfaces(cap).includes(opts.surface)) {
     emitSecurityEvent({
-      capability: name,
+      capability: canonical,
       outcome: "deny",
       surface: opts.surface,
       orgId: ctx.orgId,
@@ -522,7 +553,7 @@ async function _invokeCore(
   const inputResult = cap.input.safeParse(rawInput);
   if (!inputResult.success) {
     emitSecurityEvent({
-      capability: name,
+      capability: canonical,
       outcome: "error",
       surface: ctx.surface,
       orgId: ctx.orgId,
@@ -533,7 +564,7 @@ async function _invokeCore(
       durationMs: Date.now() - startMs,
     });
     emitTraceEvent({
-      capability: name,
+      capability: canonical,
       status: "error",
       surface: opts.surface ?? ctx.surface,
       orgId: ctx.orgId,
@@ -576,11 +607,47 @@ async function _invokeCore(
   const withScope =
     isScoped || hasTenantIds
       ? <T>(fn: () => Promise<T>): Promise<T> =>
-          runInTenantScope({ orgId: ctx.orgId, workspaceId: ctx.workspaceId }, fn)
+          runInTenantScope(
+            {
+              orgId: ctx.orgId,
+              workspaceId: ctx.workspaceId,
+              // Principal spine (accountability chain): the originating user
+              // and the capability are known at scope entry; the IAM-resolved
+              // principal is layered on after the check via runWithPrincipal.
+              // Guarded by isUuid — runInTenantScope fail-closes on garbage,
+              // and userId can legitimately be null (machine-to-machine).
+              userId: ctx.userId !== null && isUuid(ctx.userId) ? ctx.userId : null,
+              capabilityName: canonical,
+            },
+            fn,
+          )
       : <T>(fn: () => Promise<T>): Promise<T> => fn();
+
+  // ── Audit target (accountability chain) ──────────────────────────────────
+  // Derived from the contract's declarative `audit` field: the input field
+  // that carries the acted-on object's id. String values only — anything
+  // else means the field is absent or the contract mis-declared it, and a
+  // null target is safer than a junk one.
+  const auditDecl = (
+    cap as { audit?: { targetKind: string; targetIdField: string } }
+  ).audit;
+  let auditTarget: { kind: string; id: string } | null = null;
+  if (auditDecl) {
+    const targetValue = (inputResult.data as Record<string, unknown>)[
+      auditDecl.targetIdField
+    ];
+    if (typeof targetValue === "string" && targetValue.length > 0) {
+      auditTarget = { kind: auditDecl.targetKind, id: targetValue };
+    }
+  }
 
   // ── IAM + billing + handler (all inside scope for scoped caps) ───────────
   let output: unknown;
+  // The IAM-resolved acting principal — threaded to the handler (CheckedContext)
+  // and into the ambient scope (runWithPrincipal) so telemetry writes carry
+  // attribution. Null when no IAM runtime is registered or the resolver did
+  // not resolve one (non-enterprise tier fast-path).
+  let resolvedPrincipal: ResolvedPrincipal | null = null;
   try {
     output = await withScope(async () => {
       // ── IAM check (OXA-1498) ───────────────────────────────────────────────
@@ -603,25 +670,32 @@ async function _invokeCore(
         // Fire-and-forget: checkFn internally emits the ClickHouse audit event.
         let iamCheckThrew = false;
         const iamResult = await checkFn({
-          capability: name,
+          capability: canonical,
           ctx,
           defaultEffect,
           rawInputJson,
+          target: auditTarget,
         }).catch((err: unknown) => {
-          // IAM check failure is a critical incident. When enforcement is OFF we
-          // must never crash an invocation (log loudly and fall through), but when
-          // enforcement is ON we MUST fail closed — a transient resolver error
-          // (DB timeout, network blip, misconfig) must not silently grant access.
-          // Flag the throw and decide based on _iamEnforced below.
+          // IAM check failure is a critical incident — the check could not be
+          // evaluated at all (DB down, migration missing, resolver bug). This
+          // is categorically different from a policy "deny" decision: a deny
+          // decision legitimately still respects _iamEnforced (would-deny +
+          // log during the rollout window), but an UNEVALUATED check must
+          // never silently grant access. Flag the throw; the unconditional
+          // fail-closed below does NOT consult _iamEnforced (OXA-2056 — the
+          // prior `iamCheckThrew && _iamEnforced` gate fell through to
+          // fail-open whenever enforcement was off, which defeats the entire
+          // point of failing closed on an evaluation failure).
           iamCheckThrew = true;
           console.error(`[kernel] IAM check threw for "${name}":`, err);
           return null;
         });
 
-        // Fail closed on resolver error when enforcement is enabled.
-        if (iamCheckThrew && _iamEnforced) {
+        // Fail closed on resolver error UNCONDITIONALLY — never gated on
+        // _iamEnforced. See OXA-2056.
+        if (iamCheckThrew) {
           emitSecurityEvent({
-            capability: name,
+            capability: canonical,
             outcome: "deny",
             surface: ctx.surface,
             orgId: ctx.orgId,
@@ -634,15 +708,17 @@ async function _invokeCore(
           throw new CapabilityError(
             name,
             "authz_denied",
-            `IAM check errored for "${name}" and IAM_ENFORCEMENT_ENABLED=true — failing closed.`,
+            `IAM check errored for "${name}" — failing closed (unconditional; independent of IAM_ENFORCEMENT_ENABLED, OXA-2056).`,
           );
         }
+
+        resolvedPrincipal = iamResult?.principal ?? null;
 
         if (iamResult !== null && iamResult.outcome !== "allow") {
           if (_iamEnforced) {
             // Enforcement on: block the call.
             emitSecurityEvent({
-              capability: name,
+              capability: canonical,
               outcome: "deny",
               surface: ctx.surface,
               orgId: ctx.orgId,
@@ -702,7 +778,7 @@ async function _invokeCore(
       //      avoid locking out platform-internal work).
       // The gate throws CapabilityError(code="capability_not_installed") to
       // refuse. Use capabilityNotInstalledError() for the canonical shape.
-      const claimingPlugin = pluginForContract(name);
+      const claimingPlugin = pluginForContract(canonical);
       if (
         claimingPlugin !== undefined &&
         _entitlementGate !== null &&
@@ -711,12 +787,28 @@ async function _invokeCore(
       ) {
         // Entitlement is workspace-scoped: a capability pack installed in one
         // workspace does not entitle sibling workspaces in the same org.
-        await _entitlementGate(name, ctx.orgId, ctx.workspaceId);
+        await _entitlementGate(canonical, ctx.orgId, ctx.workspaceId);
       }
       // ── End capability entitlement gate ─────────────────────────────────────
 
-      const handler = await resolveHandler(name);
-      return handler(inputResult.data, ctx);
+      const handler = await resolveHandler(canonical);
+      // Principal spine: hand the handler the resolved principal
+      // (CheckedContext) and enrich the ambient tenant scope so every
+      // data-layer write inside the handler — token_usage, tool_invocations,
+      // graph mutations — carries "who acted" without per-callsite threading.
+      // runWithPrincipal is a passthrough when no scope is active (unscoped
+      // capabilities). isUuid guards the fail-closed scope validation.
+      const checkedCtx: CheckedContext = { ...ctx, principal: resolvedPrincipal };
+      const attribution =
+        resolvedPrincipal !== null && isUuid(resolvedPrincipal.id)
+          ? {
+              principalId: resolvedPrincipal.id,
+              principalKind: resolvedPrincipal.kind,
+            }
+          : { principalId: null, principalKind: null };
+      return runWithPrincipal(attribution, () =>
+        handler(inputResult.data, checkedCtx),
+      );
     });
   } catch (err) {
     // Distinguish CapabilityError (handler not found → deny) from a
@@ -729,7 +821,7 @@ async function _invokeCore(
         ? "no_tenant_scope"
         : null;
     emitSecurityEvent({
-      capability: name,
+      capability: canonical,
       outcome:
         (isCapErr && err.code === "no_handler") || scopeCode ? "deny" : "error",
       surface: ctx.surface,
@@ -741,7 +833,7 @@ async function _invokeCore(
       durationMs: Date.now() - startMs,
     });
     emitTraceEvent({
-      capability: name,
+      capability: canonical,
       status: "error",
       surface: opts.surface ?? ctx.surface,
       orgId: ctx.orgId,
@@ -759,7 +851,7 @@ async function _invokeCore(
   const outputResult = cap.output.safeParse(output);
   if (!outputResult.success) {
     emitSecurityEvent({
-      capability: name,
+      capability: canonical,
       outcome: "error",
       surface: ctx.surface,
       orgId: ctx.orgId,
@@ -770,7 +862,7 @@ async function _invokeCore(
       durationMs: Date.now() - startMs,
     });
     emitTraceEvent({
-      capability: name,
+      capability: canonical,
       status: "error",
       surface: opts.surface ?? ctx.surface,
       orgId: ctx.orgId,
@@ -792,7 +884,7 @@ async function _invokeCore(
 
   // Successful invocation.
   emitSecurityEvent({
-    capability: name,
+    capability: canonical,
     outcome: "allow",
     surface: ctx.surface,
     orgId: ctx.orgId,
@@ -803,7 +895,7 @@ async function _invokeCore(
     durationMs: Date.now() - startMs,
   });
   emitTraceEvent({
-    capability: name,
+    capability: canonical,
     status: "ok",
     surface: opts.surface ?? ctx.surface,
     orgId: ctx.orgId,
@@ -856,9 +948,11 @@ export interface AuthorizeExternalCapabilityResult {
  * kernel.invoke() uses:
  *
  *   1. Calls _iamCheckFn (if registered) with the synthetic capability name.
- *   2. Applies _iamEnforced semantics:
+ *   2. Applies _iamEnforced semantics to a resolved policy DECISION:
  *        - enforced=true  → allowed=false when outcome !== "allow"
  *        - enforced=false → allowed=true (but outcome/reason reflect would-deny)
+ *      A checkFn THROW (evaluation failure, not a decision) always fails
+ *      closed regardless of _iamEnforced — see OXA-2056.
  *   3. Emits a KernelSecurityEvent for the audit trail (fire-and-forget).
  *
  * When no IAM runtime is registered (tests / local dev without bootstrap),
@@ -876,6 +970,11 @@ export async function authorizeExternalCapability(
 ): Promise<AuthorizeExternalCapabilityResult> {
   const startMs = Date.now();
   const checkFn = _iamCheckFn;
+  // Synthetic external ids (mcp.<server>.<tool>) are never registered, so there
+  // is no canonical form to resolve — the raw name IS the identity. Aliasing
+  // `canonical` to `name` keeps this function's telemetry blocks identical in
+  // shape to kernel.invoke()'s (ADR-022).
+  const canonical = name;
 
   if (checkFn === null) {
     // No IAM runtime registered — unconditionally allow (mirrors kernel.invoke()).
@@ -884,20 +983,27 @@ export async function authorizeExternalCapability(
 
   let iamCheckThrew = false;
   const iamResult = await checkFn({
-    capability: name,
+    capability: canonical,
     ctx,
     defaultEffect,
     rawInputJson: "null",
   }).catch((err: unknown) => {
+    // A throw is an evaluation failure, not a policy decision — it must
+    // always fail closed, independent of _iamEnforced. See kernel.invoke()'s
+    // matching comment above; the same OXA-2056 rationale applies here.
     iamCheckThrew = true;
     console.error(`[kernel:external] IAM check threw for "${name}":`, err);
     return null;
   });
 
-  // Fail closed on resolver error when enforcement is enabled.
-  if (iamCheckThrew && _iamEnforced) {
+  // Fail closed on resolver error UNCONDITIONALLY — never gated on
+  // _iamEnforced. See OXA-2056 (a prior `iamCheckThrew && _iamEnforced` gate
+  // here fell through to an unconditional allow whenever enforcement was
+  // off, silently disabling authorization for every external-tool call while
+  // the resolver was erroring).
+  if (iamCheckThrew) {
     emitSecurityEvent({
-      capability: name,
+      capability: canonical,
       outcome: "deny",
       surface: ctx.surface,
       orgId: ctx.orgId,
@@ -910,20 +1016,12 @@ export async function authorizeExternalCapability(
     return { allowed: false, outcome: "deny", reason: "iam_check_error" };
   }
 
-  // IAM check errored but enforcement is off — allow with a warning.
-  if (iamCheckThrew) {
-    console.warn(
-      `[kernel:external] IAM check errored for "${name}" (enforcement=off) — allowing.`,
-    );
-    return { allowed: true, outcome: "allow", reason: null };
-  }
-
   const outcome = iamResult?.outcome ?? "deny";
   const reason = iamResult && "reason" in iamResult ? (iamResult.reason ?? null) : null;
   const isDenied = outcome !== "allow";
 
   emitSecurityEvent({
-    capability: name,
+    capability: canonical,
     outcome: isDenied ? "deny" : "allow",
     surface: ctx.surface,
     orgId: ctx.orgId,

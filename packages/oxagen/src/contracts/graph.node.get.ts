@@ -2,12 +2,12 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const graphNodeGet = registerCapability({
-  name: "graph.node.get",
+  name: "get_node",
   domain: "graph",
   description: "Retrieve a KnowledgeNode by its publicId.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent", "cli"] as const,
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "graph" },
   sensitivity: "low",

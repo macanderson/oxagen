@@ -220,6 +220,86 @@ describe("PermissionBroker — rules", () => {
   });
 });
 
+describe("PermissionBroker — settings.json allow/deny", () => {
+  it("Bash(*) in allow auto-approves every command without prompting", async () => {
+    const approver = fixedApprover({ decision: "deny" });
+    const broker = new PermissionBroker({
+      mode: "ask",
+      cwd: CWD,
+      approver,
+      permissions: { allow: ["Bash(*)"] },
+    });
+    // Full-string wildcard: matches commands with spaces AND slashes.
+    expect((await broker.check(bashReq("git status"))).decision).toBe("allow");
+    expect((await broker.check(bashReq("cat src/deep/a.ts"))).decision).toBe("allow");
+    expect(approver.calls).toHaveLength(0); // never prompted
+  });
+
+  it("deny wins over a Bash(*) allow regardless of list order (rm -rf blocked)", async () => {
+    const approver = fixedApprover({ decision: "allow" });
+    const broker = new PermissionBroker({
+      mode: "ask",
+      cwd: CWD,
+      approver,
+      // allow listed BEFORE deny — deny must still win.
+      permissions: { allow: ["Bash(*)"], deny: ["Bash(rm -rf*)"] },
+    });
+    expect((await broker.check(bashReq("rm -rf /tmp/x"))).decision).toBe("deny");
+    expect((await broker.check(bashReq("ls -la"))).decision).toBe("allow");
+    expect(approver.calls).toHaveLength(0); // neither prompted
+  });
+
+  it("a settings deny is honored even under bypass mode", async () => {
+    const broker = new PermissionBroker({
+      mode: "bypass",
+      cwd: CWD,
+      permissions: { deny: ["Bash(rm -rf*)"] },
+    });
+    expect((await broker.check(bashReq("rm -rf /tmp/x"))).decision).toBe("deny");
+    // Anything not denied still passes under bypass.
+    expect((await broker.check(bashReq("ls"))).decision).toBe("allow");
+  });
+
+  it("ignores a defaultMode fallthrough — an unlisted command still asks", async () => {
+    const approver = fixedApprover({ decision: "deny" });
+    const broker = new PermissionBroker({
+      mode: "ask",
+      cwd: CWD,
+      approver,
+      // No rule matches "ls"; defaultMode: default must NOT auto-allow it.
+      permissions: { defaultMode: "default", allow: ["Bash(git*)"] },
+    });
+    expect((await broker.check(bashReq("ls"))).decision).toBe("deny"); // asked → denied
+    expect(approver.calls).toHaveLength(1);
+    expect((await broker.check(bashReq("git status"))).decision).toBe("allow");
+  });
+
+  it("still escalates a dangerous command to a prompt under a Bash(*) allow", async () => {
+    const approver = fixedApprover({ decision: "deny" });
+    const broker = new PermissionBroker({
+      mode: "ask",
+      cwd: CWD,
+      approver,
+      permissions: { allow: ["Bash(*)"] },
+    });
+    const decision = await broker.check(bashReq("rm -rf /"));
+    expect(decision.decision).toBe("deny"); // approver denied the escalated prompt
+    expect(approver.calls[0]?.reason).toMatch(/dangerous/);
+  });
+
+  it("auto-approves an allow-listed write path without prompting", async () => {
+    const approver = fixedApprover({ decision: "deny" });
+    const broker = new PermissionBroker({
+      mode: "ask",
+      cwd: CWD,
+      approver,
+      permissions: { allow: ["Write(*)"] },
+    });
+    expect((await broker.check(writeReq("src/a.ts"))).decision).toBe("allow");
+    expect(approver.calls).toHaveLength(0);
+  });
+});
+
 describe("PermissionBroker — remember", () => {
   beforeEach(() => {
     fsMocks.readFile.clear();

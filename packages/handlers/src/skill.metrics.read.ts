@@ -7,19 +7,27 @@
  *   2. ClickHouse skill_loads table — per-version load counts + last-used via
  *      readSkillMetrics from @oxagen/telemetry.
  *
- * approxTokenCost note: a full token_usage join keyed on execution_step_id would
- * attribute total cost to this skill. However multi-skill agent runs load several
- * skills per step, so cost is attributed to all loaded skills. The current
- * implementation returns approxTokenCost=null (OXA-1750 phase 2 will wire the
- * ClickHouse join). Document this caveat in the contract description.
+ * approxTokenCost (OXA-1750 phase 2, now wired): each skill's cost is the sum of
+ * token_usage.cost_usd_micros over every execution step that loaded the skill,
+ * joined on execution_step_id (see readSkillTokenCosts). Because a multi-skill
+ * agent step loads several skills, that step's full cost is attributed to ALL of
+ * them, so cross-skill sums may exceed actual spend — the contract description
+ * documents this partial-attribution caveat. The value is reported in USD cents.
+ * A skill with no matching token rows reports null (genuinely no cost data); a
+ * ClickHouse cost-query FAILURE also reports null but is logged distinctly so the
+ * two are never confused.
  */
 
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { skillMetricsRead } from "@oxagen/oxagen/contracts/skill.metrics.read";
 import { schema, withTenantDb } from "@oxagen/database";
 import { and, eq, isNull, inArray } from "drizzle-orm";
-import { readSkillMetrics } from "@oxagen/telemetry";
+import { readSkillMetrics, readSkillTokenCosts } from "@oxagen/telemetry";
 import { logger } from "./logger";
+
+// token_usage.cost_usd_micros is USD × 1e6; the contract reports USD cents.
+// 1 cent = 10_000 micros.
+const MICROS_PER_CENT = 10_000;
 
 export const skillMetricsReadHandler: CapabilityHandler<typeof skillMetricsRead> = async (
   input,
@@ -93,6 +101,32 @@ export const skillMetricsReadHandler: CapabilityHandler<typeof skillMetricsRead>
     }
   }
 
+  // ── 3b. ClickHouse: approximate token cost per skill (USD micros) ─────────────
+  //
+  // Separate best-effort call from the load metrics above so a cost-query
+  // failure degrades ONLY approxTokenCost (→ null) without dropping perVersion
+  // loads. `costBySkillId === null` means the query failed (logged as an error);
+  // a present-but-missing skill means genuinely no attributable token data.
+
+  let costBySkillId: Map<string, number> | null = null;
+  try {
+    const costRows = await readSkillTokenCosts({
+      orgId: ctx.orgId,
+      workspaceId: ctx.workspaceId,
+      skillId: input.skillId,
+    });
+    costBySkillId = new Map(costRows.map((r) => [r.skill_id, r.cost_usd_micros]));
+  } catch (err) {
+    // Distinct from the "ClickHouse unavailable" load-metrics warning above:
+    // this is specifically the token-cost join failing. Report null cost, not a
+    // fabricated zero, and never fail the read.
+    logger.error(
+      { err, skillId: input.skillId, workspaceId: ctx.workspaceId },
+      "skill.metrics.read: token-cost query failed — approxTokenCost reported as null",
+    );
+    costBySkillId = null;
+  }
+
   // ── 4. Assemble output ───────────────────────────────────────────────────────
 
   const skills = pgRows.map((r) => {
@@ -100,8 +134,11 @@ export const skillMetricsReadHandler: CapabilityHandler<typeof skillMetricsRead>
       r.activeVersionId !== null ? (versionNumberById.get(r.activeVersionId) ?? null) : null;
     const perVersionLoads = versionLoadsBySkillId.get(r.publicId) ?? [];
 
-    // approxTokenCost: OXA-1750 phase 2 — token_usage join not yet wired.
-    const approxTokenCost: number | null = null;
+    // approxTokenCost in USD cents. null when the cost query failed
+    // (costBySkillId === null) OR the skill has no attributable token rows.
+    const costMicros = costBySkillId?.get(r.publicId);
+    const approxTokenCost: number | null =
+      costBySkillId === null || costMicros === undefined ? null : costMicros / MICROS_PER_CENT;
 
     return {
       skillId: r.publicId,
@@ -120,6 +157,7 @@ export const skillMetricsReadHandler: CapabilityHandler<typeof skillMetricsRead>
       skillId: input.skillId,
       count: skills.length,
       chAvailable: chMetrics !== null,
+      costAvailable: costBySkillId !== null,
       surface: ctx.surface,
     },
     "skill.metrics.read: returned metrics",

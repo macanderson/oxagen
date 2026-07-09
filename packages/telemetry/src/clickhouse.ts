@@ -1,6 +1,31 @@
 import { createClient, type ClickHouseClient } from "@clickhouse/client";
 import { requireEnv } from "@oxagen/config/env";
+import { getPrincipalAttribution } from "@oxagen/tenancy";
 import { currentTraceIds } from "./tracer";
+import { getBreaker, type BreakerTransition, type CircuitBreaker } from "./circuit-breaker";
+import { breakerEnvConfig } from "./breaker-config";
+
+/**
+ * Circuit breaker for the shared ClickHouse client. A degraded ClickHouse must
+ * fail fast instead of every append/query piling onto a down store.
+ *
+ * Unlike the Neo4j/Stripe breakers (breaker-clients.ts), this one CANNOT record
+ * its own transitions in ClickHouse — that is the very dependency that is down —
+ * so it logs trips to stderr only. Writes here are overwhelmingly fire-and-forget
+ * telemetry, so a `CircuitOpenError` just means "drop this row while ClickHouse
+ * recovers", which callers already tolerate.
+ */
+function clickhouseBreaker(): CircuitBreaker {
+  return getBreaker("clickhouse", {
+    ...breakerEnvConfig(),
+    onTransition: (t: BreakerTransition) =>
+      process.stderr.write(
+        `[circuit-breaker] ${t.key} ${t.from}->${t.to} (failures=${t.failureCount})` +
+          (t.error ? ` err=${t.error}` : "") +
+          "\n",
+      ),
+  });
+}
 
 // Singleton client per process. ClickHouse Cloud handles concurrency
 // upstream; we just reuse a single keepalive connection pool.
@@ -60,8 +85,10 @@ export async function sumTokenUsage(args: {
 }): Promise<TokenUsageRollup[]> {
   const ch = clickhouse();
   // Aggregating in ClickHouse rather than pulling raw rows keeps the
-  // payload bounded regardless of usage volume.
-  const result = await ch.query({
+  // payload bounded regardless of usage volume. Breaker-guarded so a degraded
+  // store fails fast rather than stalling the billing rollup.
+  const result = await clickhouseBreaker().exec(() =>
+    ch.query({
     query: `
       SELECT
         sum(input_tokens)  AS input_tokens,
@@ -80,7 +107,8 @@ export async function sumTokenUsage(args: {
       periodEnd: args.periodEnd.toISOString().replace("Z", ""),
     },
     format: "JSONEachRow",
-  });
+    }),
+  );
   type Row = {
     input_tokens: string;
     output_tokens: string;
@@ -213,13 +241,29 @@ export interface TokenUsageRow {
   trace_id?: string;
   /** OTEL span id (16-char lowercase hex) of the enclosing span. */
   span_id?: string;
+  /**
+   * Acting IAM principal uuid (migration 0023). Stamped automatically by
+   * insertTokenUsage() from the ambient tenant scope
+   * (@oxagen/tenancy getPrincipalAttribution) — same pattern as trace_id.
+   * Nil UUID when no principal was resolved. Explicit caller values win.
+   */
+  principal_id?: string;
+  /** "human" | "agent" | "service", or '' when no principal was resolved. */
+  principal_kind?: string;
+  /** Originating human user uuid, or the nil UUID. */
+  user_id?: string;
+  /** Canonical capability the spend occurred inside, or ''. */
+  capability_name?: string;
 }
 
 async function insertRows<T>(table: string, rows: readonly T[]): Promise<void> {
   if (rows.length === 0) return;
   // Batched JSONEachRow keeps a single round-trip per insert call;
-  // callers should accumulate rows before invoking.
-  await clickhouse().insert({ table, values: rows, format: "JSONEachRow" });
+  // callers should accumulate rows before invoking. Guarded by the ClickHouse
+  // breaker so a down store fails fast instead of being hammered.
+  await clickhouseBreaker().exec(() =>
+    clickhouse().insert({ table, values: rows, format: "JSONEachRow" }),
+  );
 }
 
 /**
@@ -243,6 +287,28 @@ async function insertRows<T>(table: string, rows: readonly T[]): Promise<void> {
  * `"unknown"`, which the UUID text parser over-read on and aborted the whole row.
  */
 export const NIL_UUID = "00000000-0000-0000-0000-000000000000";
+
+/**
+ * Principal attribution columns (migration 0023) for the current async
+ * context, coalesced to their ClickHouse sentinels (nil UUID / '') so the
+ * non-nullable columns always receive parseable values. Reads the ambient
+ * tenant scope stamped by the kernel (runInTenantScope + runWithPrincipal);
+ * never throws — a write outside any scope simply carries the sentinels.
+ */
+function currentPrincipalStamp(): {
+  principal_id: string;
+  principal_kind: string;
+  user_id: string;
+  capability_name: string;
+} {
+  const a = getPrincipalAttribution();
+  return {
+    principal_id: a.principalId ?? NIL_UUID,
+    principal_kind: a.principalKind ?? "",
+    user_id: a.userId ?? NIL_UUID,
+    capability_name: a.capabilityName ?? "",
+  };
+}
 
 export const insertExecutionLogs = (rows: readonly ExecutionLogRow[]) =>
   insertRows("execution_logs", rows);
@@ -284,15 +350,22 @@ export const insertEvents = (rows: readonly EventRow[]) => {
 };
 export const insertTokenUsage = (rows: readonly TokenUsageRow[]) => {
   const { trace_id, span_id } = currentTraceIds();
+  const attribution = currentPrincipalStamp();
   return insertRows(
     "token_usage",
     // Coalesce the "no execution step" sentinel (null/undefined) to the nil UUID
     // so the non-nullable UUID key column always receives a parseable value.
-    // Also stamp trace_id/span_id from the active OTEL context for log↔trace join.
+    // Also stamp trace_id/span_id from the active OTEL context for log↔trace
+    // join, and principal attribution from the ambient tenant scope
+    // (migration 0023) — explicit caller values win over ambient ones.
     rows.map((r) => ({
       ...(r.execution_step_id == null ? { ...r, execution_step_id: NIL_UUID } : r),
       trace_id: r.trace_id ?? trace_id,
       span_id: r.span_id ?? span_id,
+      principal_id: r.principal_id ?? attribution.principal_id,
+      principal_kind: r.principal_kind ?? attribution.principal_kind,
+      user_id: r.user_id ?? attribution.user_id,
+      capability_name: r.capability_name ?? attribution.capability_name,
     })),
   );
 };
@@ -328,17 +401,92 @@ export interface ToolInvocationRow {
   trace_id?: string;
   /** OTEL span id (16-char lowercase hex). */
   span_id?: string;
+  /**
+   * Acting IAM principal uuid (migration 0023). Stamped automatically from
+   * the ambient tenant scope — same pattern as trace_id. Nil UUID when no
+   * principal was resolved. Explicit caller values win.
+   */
+  principal_id?: string;
+  /** "human" | "agent" | "service", or '' when no principal was resolved. */
+  principal_kind?: string;
+  /** Originating human user uuid, or the nil UUID. */
+  user_id?: string;
 }
 
 export const insertToolInvocation = (row: ToolInvocationRow) => {
   const { trace_id, span_id } = currentTraceIds();
+  const attribution = currentPrincipalStamp();
   return insertRows("tool_invocations", [
     {
       ...row,
       trace_id: row.trace_id ?? trace_id,
       span_id: row.span_id ?? span_id,
+      principal_id: row.principal_id ?? attribution.principal_id,
+      principal_kind: row.principal_kind ?? attribution.principal_kind,
+      user_id: row.user_id ?? attribution.user_id,
     },
   ]);
+};
+
+// ── Runtime error stream (0020_error_events.sql) ──────────────────────────────
+//
+// One row per high-severity/unhandled server error captured by captureError()
+// (see error-reporting.ts). ClickHouse is the correct store for append-only
+// runtime events. Distinct from the Postgres security_events audit trail.
+export interface ErrorEventRow {
+  error_id: string;
+  /** Nil UUID when the error occurred before a tenant scope was resolved. */
+  org_id: string | null;
+  /** Nil UUID when org-level or pre-scope. */
+  workspace_id: string | null;
+  severity: "fatal" | "error" | "warn";
+  /** Which runtime captured it. */
+  source: "api" | "app" | "mcp" | "inngest" | "runner";
+  /** Error constructor name, e.g. "TypeError". */
+  error_class: string;
+  /** Truncated error message (bounded by the caller). */
+  message: string;
+  /** Truncated stack trace (bounded by the caller). */
+  stack: string;
+  /** Capability name for kernel-invocation errors, else "". */
+  capability: string;
+  /** Request/correlation id, else "". */
+  request_id: string;
+  /** SHA-256(class + normalized message) prefix — stable grouping key. */
+  fingerprint: string;
+  created_at: string;
+  /**
+   * Agent execution id this error belongs to. Nil UUID when the error occurred
+   * outside any execution (the join key `agent.debug.trace` reads by). Coalesced
+   * to the nil UUID at the insert boundary, mirroring org_id/workspace_id.
+   */
+  execution_id?: string | null;
+  /** Execution step id when the error is tied to a specific step, else null. */
+  step_id?: string | null;
+  /** OTEL trace id; stamped automatically from the active span when omitted. */
+  trace_id?: string;
+  /** OTEL span id; stamped automatically from the active span when omitted. */
+  span_id?: string;
+}
+
+export const insertErrorEvents = (rows: readonly ErrorEventRow[]) => {
+  const { trace_id, span_id } = currentTraceIds();
+  return insertRows(
+    "error_events",
+    // Coalesce "no tenant scope" (null/undefined) to the nil UUID so the
+    // UUID columns always receive a parseable value, and stamp trace context.
+    rows.map((r) => ({
+      ...r,
+      org_id: r.org_id ?? NIL_UUID,
+      workspace_id: r.workspace_id ?? NIL_UUID,
+      // "no execution" → nil UUID (a non-UUID string over-reads the UUID parser
+      // and aborts the whole row); "no step" → null (Nullable(UUID) column).
+      execution_id: r.execution_id ?? NIL_UUID,
+      step_id: r.step_id ?? null,
+      trace_id: r.trace_id ?? trace_id,
+      span_id: r.span_id ?? span_id,
+    })),
+  );
 };
 
 /**
@@ -357,7 +505,7 @@ export async function hashPrompt(text: string): Promise<string> {
  * Map an AI SDK model id to its provider. Handles three shapes:
  *   - prefixed       `anthropic:claude-…`          (legacy colon form)
  *   - gateway        `bfl/flux-2-max`, `google/veo-3.0-…`  (creator/model)
- *   - bare           `claude-sonnet-4-6`, `gpt-4o`, `gpt-image-1`
+ *   - bare           `claude-sonnet-5`, `gpt-4o`, `gpt-image-1`
  * The leading `creator` segment (split on `:` or `/`) is authoritative when it
  * names a known vendor; otherwise we fall back to recognising the model family
  * by id prefix. Covers every vendor @oxagen/ai routes to (text + image + video)
@@ -600,8 +748,9 @@ export async function latestAuditChainHash(args: {
   capability: string;
 }): Promise<string> {
   const ch = clickhouse();
-  const result = await ch.query({
-    query: `
+  const result = await clickhouseBreaker().exec(() =>
+    ch.query({
+      query: `
       SELECT chain_hash
       FROM audit_events FINAL
       WHERE org_id = {orgId:UUID}
@@ -609,10 +758,46 @@ export async function latestAuditChainHash(args: {
       ORDER BY occurred_at DESC
       LIMIT 1
     `,
-    query_params: { orgId: args.orgId, capability: args.capability },
-    format: "JSONEachRow",
-  });
+      query_params: { orgId: args.orgId, capability: args.capability },
+      format: "JSONEachRow",
+    }),
+  );
   type Row = { chain_hash: string };
   const rows = (await result.json()) as Row[];
   return rows[0]?.chain_hash ?? "";
 }
+
+// ── Anonymous CLI usage telemetry (usage_events, migration 0019) ─────────────
+//
+// One row per `oxagen` CLI invocation, written by POST /v1/telemetry/usage
+// (apps/api/src/routes/v1/telemetry.usage.ts) AFTER the request body has
+// already passed UsageEventPayloadSchema.strict() (usage-events.ts) — this
+// row type mirrors that schema exactly, plus the server-stamped `timestamp`
+// (never client-supplied; see usage-events.ts for why). Anonymous/aggregate
+// only: no org/workspace scope, no user identity — see TELEMETRY.md.
+export interface UsageEventRow {
+  /** ISO-8601, stamped by the route handler at insert time. */
+  timestamp: string;
+  install_id: string;
+  session_id: string;
+  oxagen_version: string;
+  os: string;
+  arch: string;
+  command: string;
+  model_tier: "fast" | "balanced" | "precise" | "mixed" | "";
+  best_of_n: number;
+  graph_used: 0 | 1;
+  pipeline_used: 0 | 1;
+  tui: 0 | 1;
+  headless: 0 | 1;
+  byok: 0 | 1;
+  tool_calls_json: string;
+  step_count: number;
+  duration_ms: number;
+  error_type: string;
+  exit_status: string;
+}
+
+/** Insert anonymous CLI usage events. No-ops on an empty array. */
+export const insertUsageEvents = (rows: readonly UsageEventRow[]) =>
+  insertRows("usage_events", rows);

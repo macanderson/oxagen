@@ -101,7 +101,7 @@ export type ResolveResult =
 export interface ResolveInput {
   /** The principal whose access is being evaluated. */
   principal: ResolvedPrincipal;
-  /** The capability identifier string, e.g. "organization.create". */
+  /** The capability identifier string, e.g. "org.create". */
   capability: string;
   /** The scope of the invocation — org or workspace. */
   scope: ResolveScope;
@@ -177,6 +177,10 @@ export function resolve(input: ResolveInput): ResolveResult {
     clientIp: input.clientIp ?? null,
   };
 
+  // Capability matching is exact: a grant, policy, or role-grant row is relevant
+  // only when it is keyed by this capability's canonical name.
+  const matchesCapability = (id: string): boolean => id === capability;
+
   const steps: TraceStep[] = [];
 
   // Filter grants to those relevant to this (principal, capability, scope).
@@ -191,7 +195,7 @@ export function resolve(input: ResolveInput): ResolveResult {
   const relevantGrants = grants.filter(
     (g) =>
       g.principalId === principal.id &&
-      g.capabilityId === capability &&
+      matchesCapability(g.capabilityId) &&
       ((g.scopeKind === "workspace" &&
         scope.kind === "workspace" &&
         g.scopeId === scope.workspaceId) ||
@@ -212,7 +216,7 @@ export function resolve(input: ResolveInput): ResolveResult {
   // OXA-1390 where org policies had no condition evaluation at all.
   const orgEnforcedDenyPolicies = policies.filter(
     (p) =>
-      p.capabilityId === capability &&
+      matchesCapability(p.capabilityId) &&
       p.enforced &&
       p.effect === "deny" &&
       p.scopeKind === "org" &&
@@ -221,7 +225,7 @@ export function resolve(input: ResolveInput): ResolveResult {
   );
   const orgEnforcedAllowPolicies = policies.filter(
     (p) =>
-      p.capabilityId === capability &&
+      matchesCapability(p.capabilityId) &&
       p.enforced &&
       p.effect === "allow" &&
       p.scopeKind === "org" &&
@@ -432,7 +436,7 @@ export function resolve(input: ResolveInput): ResolveResult {
 
   // Find role grants for this capability from the principal's roles.
   const matchingRoleGrants = roleGrants.filter(
-    (rg) => principalRoleIds.includes(rg.roleId) && rg.capabilityId === capability,
+    (rg) => principalRoleIds.includes(rg.roleId) && matchesCapability(rg.capabilityId),
   );
 
   const roleAllowGrant = matchingRoleGrants.find((rg) => rg.effect === "allow");

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const connectionDelete = registerCapability({
-  name: "connection.delete",
+  name: "delete_connection",
   domain: "connection",
   description:
     "Delete a data source connection. Supports three modes: connection_only (revoke auth, keep data), data_only (delete Neo4j data, keep config), or full (delete everything).",

@@ -14,6 +14,10 @@ export const AGENT_EXECUTION_ORIGIN_TYPES = [
   "scheduled_job",
   "mcp_request",
   "workflow_run",
+  // Terminal subagent fanout children projected as :Execution graph nodes
+  // (docs/specs/graph-mediated-fanout-phase2 §2). Migration
+  // 20260703150000_phase2_claim_lease widened the CHECK in lockstep.
+  "fanout",
 ] as const;
 
 const executionStepSchema = z.object({
@@ -43,7 +47,7 @@ const executionStepSchema = z.object({
 });
 
 export const agentExecutionRecord = registerCapability({
-  name: "agent.execution.record",
+  name: "record_execution",
   domain: "agent",
   description:
     "Persist a complete agent execution record including steps and tool calls for observability, billing, and audit",

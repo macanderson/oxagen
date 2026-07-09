@@ -3,7 +3,7 @@ import { pluginOrgInstall } from "./plugin.org.install";
 
 describe("plugin.org.install contract", () => {
   it("registers with the correct name", () => {
-    expect(pluginOrgInstall.name).toBe("plugin.org.install");
+    expect(pluginOrgInstall.name).toBe("install_plugin");
   });
 
   it("includes api and mcp surfaces", () => {

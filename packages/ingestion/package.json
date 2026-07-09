@@ -1,6 +1,6 @@
 {
   "name": "@oxagen/ingestion",
-  "version": "0.6.4",
+  "version": "1.1.1",
   "private": true,
   "type": "module",
   "main": "./src/index.ts",
@@ -15,6 +15,7 @@
     "./embed": "./src/embed/index.ts",
     "./mutations": "./src/mutations/upsert-entity.ts",
     "./dedup": "./src/dedup/resolve.ts",
+    "./sync": "./src/sync/index.ts",
     "./parsers": "./src/parsers/index.ts",
     "./validate": "./src/validate/schema.ts"
   },
@@ -27,16 +28,15 @@
   "dependencies": {
     "@oxagen/ai": "workspace:*",
     "@oxagen/code-graph": "workspace:*",
-    "@oxagen/config": "workspace:*",
-    "@oxagen/crypto": "workspace:*",
     "@oxagen/ontology": "workspace:*",
     "@oxagen/telemetry": "workspace:*",
     "yaml": "2.9.0",
     "zod": "3.25.76"
   },
   "devDependencies": {
+    "@oxagen/tenancy": "workspace:*",
+    "@vitest/coverage-v8": "2.1.9",
     "typescript": "6.0.3",
-    "vitest": "2.1.9",
-    "@vitest/coverage-v8": "2.1.9"
+    "vitest": "2.1.9"
   }
 }

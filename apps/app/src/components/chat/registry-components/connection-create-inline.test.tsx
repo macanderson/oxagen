@@ -18,7 +18,7 @@ afterEach(cleanup);
 
 // Mock the wizard — we just want to verify it receives open=true when button
 // is clicked; we don't want to boot the full wizard in unit tests.
-vi.mock("@/components/knowledge/sources/github-connection-wizard", () => ({
+vi.mock("@/components/knowledge/connections/github-connection-wizard", () => ({
   GitHubConnectionWizard: ({
     open,
     orgSlug,
@@ -158,7 +158,7 @@ describe("ConnectionCreateInline — non-github fallback", () => {
     const { default: ConnectionCreateInline } = await import("./connection-create-inline");
     render(<ConnectionCreateInline connectorId="salesforce" orgSlug="acme" workspaceSlug="main" />);
     const link = screen.getByTestId("connection-create-inline-sources-link");
-    expect(link).toHaveAttribute("href", "/acme/main/knowledge/sources");
+    expect(link).toHaveAttribute("href", "/acme/main/knowledge/repos");
     expect(link).toHaveTextContent("Open Sources");
   });
 

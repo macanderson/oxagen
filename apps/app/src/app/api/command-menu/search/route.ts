@@ -64,7 +64,7 @@ export async function POST(request: NextRequest): Promise<Response> {
 
   try {
     const result = (await invoke(
-      "command.menu.search",
+      "search_command_menu",
       {
         kind: body.kind,
         query: body.query,

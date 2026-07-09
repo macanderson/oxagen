@@ -1,12 +1,18 @@
+import pino from "pino";
 import { getSandbox, isSandboxAvailable } from "@oxagen/sandbox";
 import { validateWorkspaceFiles } from "@oxagen/sandbox/workspace";
 import { insertEvents } from "@oxagen/telemetry";
 import type { CapabilityContext } from "../types";
-import {
-  sanitizeSandboxEnv,
-  type AgentCodeExecuteInput,
-  type AgentCodeExecuteOutput,
+
+const logger = pino({
+  level: process.env.LOG_LEVEL ?? "info",
+  base: { app: "execute_code" },
+});
+import type {
+  AgentCodeExecuteInput,
+  AgentCodeExecuteOutput,
 } from "@oxagen/oxagen/contracts/agent.code.execute";
+import { injectEnvironmentSecrets } from "./_environment-env";
 
 export type { AgentCodeExecuteInput, AgentCodeExecuteOutput };
 
@@ -20,12 +26,24 @@ export async function agentCodeExecuteHandler(
     );
   }
 
-  // Defense in depth: the contract already allowlists env and confines file
-  // paths, but a direct handler caller (internal code, tests) bypasses the zod
-  // transform — re-sanitize the env and re-validate the workspace files at the
-  // sandbox boundary so reserved env keys and path-traversal escapes can never
-  // reach the sandbox process.
-  const env = sanitizeSandboxEnv(input.env);
+  // Sanitize the untrusted caller env and merge the environment's trusted vault
+  // secrets below it (caller wins). The contract no longer transforms env at
+  // parse time so this handler owns the whole boundary — see _environment-env.ts
+  // for the trust rationale. Reserved keys the caller tried to set are reported
+  // back as warnings rather than silently dropped.
+  const { env, strippedKeys, injectedKeys } = await injectEnvironmentSecrets(
+    ctx,
+    input.environmentId,
+    input.env,
+  );
+  // Log injected vault KEY NAMES only — never values (the whole point of the
+  // vault is that values never leave it in plaintext logs).
+  if (injectedKeys.length > 0) {
+    logger.info(
+      { orgId: ctx.orgId, workspaceId: ctx.workspaceId, environmentId: input.environmentId, injectedKeys },
+      "agent.code.execute: injected environment secrets",
+    );
+  }
   const files = input.files ? validateWorkspaceFiles(input.files) : undefined;
 
   const sandbox = getSandbox();
@@ -50,6 +68,11 @@ export async function agentCodeExecuteHandler(
   // must never fail a code run.
   await emitRunTelemetry(ctx, input, result);
 
+  const warnings =
+    strippedKeys.length > 0
+      ? [`reserved env key stripped: ${strippedKeys.join(", ")}`]
+      : undefined;
+
   return {
     exitCode: result.exitCode,
     stdout: result.stdout,
@@ -57,6 +80,7 @@ export async function agentCodeExecuteHandler(
     executionMs: result.durationMs,
     timedOut: result.timedOut,
     oomKilled: result.oomKilled,
+    ...(warnings ? { warnings } : {}),
   };
 }
 
@@ -75,7 +99,7 @@ async function emitRunTelemetry(
         source_system: `handler:${ctx.surface}`,
         stream_offset: null,
         payload: JSON.stringify({
-          capability: "agent.code.execute",
+          capability: "execute_code",
           language: input.language,
           network: input.network,
           durationMs: result.durationMs,

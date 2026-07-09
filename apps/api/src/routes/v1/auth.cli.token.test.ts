@@ -151,7 +151,7 @@ describe("POST /token — happy path", () => {
         actorUserId: VALID_CODE_DATA.userId,
         orgId: VALID_CODE_DATA.orgId,
         workspaceId: null,
-        capability: "api.key.create",
+        capability: "create_api_key",
         outcome: "success",
         ip: null,
         userAgent: null,

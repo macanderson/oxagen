@@ -223,6 +223,7 @@ export function MemoryPolicyForm({
             type="submit"
             variant="gradient"
             size="sm"
+            className="max-md:h-11"
             disabled={isPending}
             startIcon={<Save className="h-3.5 w-3.5" aria-hidden="true" />}
           >

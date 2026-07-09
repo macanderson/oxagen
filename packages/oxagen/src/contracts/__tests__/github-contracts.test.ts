@@ -62,9 +62,9 @@ describe("GitHub write contracts — shared metadata", () => {
 
 // ── 8a: repo.create input schema ─────────────────────────────────────────────
 
-describe("repo.create", () => {
+describe("create_repo", () => {
   it("name is repo.create", () => {
-    expect(repoCreate.name).toBe("repo.create");
+    expect(repoCreate.name).toBe("create_repo");
   });
 
   it("parses a minimal valid input (only name required)", () => {
@@ -113,9 +113,9 @@ describe("repo.create", () => {
 
 // ── repo.file.put ─────────────────────────────────────────────────────────────
 
-describe("repo.file.put", () => {
+describe("put_repo_file", () => {
   it("name is repo.file.put", () => {
-    expect(repoFilePut.name).toBe("repo.file.put");
+    expect(repoFilePut.name).toBe("put_repo_file");
   });
 
   it("parses a valid input (owner, repo, path, content, message required)", () => {
@@ -136,13 +136,48 @@ describe("repo.file.put", () => {
       repoFilePut.input.parse({ owner: "x", repo: "y", path: "z", message: "m" }),
     ).toThrow();
   });
+
+  it("output schema parses without diffs (backward compatible)", () => {
+    const parsed = repoFilePut.output.parse({
+      commitSha: "abc123",
+      htmlUrl: "https://github.com/myorg/myrepo/blob/main/src/index.ts",
+    });
+    expect(parsed.diffs).toBeUndefined();
+  });
+
+  it("output schema parses the optional diffs field with real patch text", () => {
+    const parsed = repoFilePut.output.parse({
+      commitSha: "abc123",
+      htmlUrl: "https://github.com/myorg/myrepo/blob/main/src/index.ts",
+      diffs: [
+        {
+          path: "src/index.ts",
+          patch: "--- a/src/index.ts\n+++ b/src/index.ts\n@@ -1 +1 @@\n-old\n+new\n",
+          additions: 1,
+          deletions: 1,
+        },
+      ],
+    });
+    expect(parsed.diffs).toHaveLength(1);
+    expect(parsed.diffs?.[0]).toMatchObject({ path: "src/index.ts", additions: 1, deletions: 1 });
+  });
+
+  it("output schema rejects a diffs entry missing required fields", () => {
+    expect(() =>
+      repoFilePut.output.parse({
+        commitSha: "abc123",
+        htmlUrl: "https://github.com/myorg/myrepo/blob/main/src/index.ts",
+        diffs: [{ path: "src/index.ts" }],
+      }),
+    ).toThrow();
+  });
 });
 
 // ── repo.fork ─────────────────────────────────────────────────────────────────
 
-describe("repo.fork", () => {
+describe("fork_repo", () => {
   it("name is repo.fork", () => {
-    expect(repoFork.name).toBe("repo.fork");
+    expect(repoFork.name).toBe("fork_repo");
   });
 
   it("parses input with owner and repo (intoOrg optional)", () => {
@@ -163,9 +198,9 @@ describe("repo.fork", () => {
 
 // ── repo.branch.create ────────────────────────────────────────────────────────
 
-describe("repo.branch.create", () => {
+describe("create_branch", () => {
   it("name is repo.branch.create", () => {
-    expect(repoBranchCreate.name).toBe("repo.branch.create");
+    expect(repoBranchCreate.name).toBe("create_branch");
   });
 
   it("parses a minimal valid input (owner, repo, branch required)", () => {
@@ -190,9 +225,9 @@ describe("repo.branch.create", () => {
 
 // ── 8b: repo.pr.open input schema ────────────────────────────────────────────
 
-describe("repo.pr.open", () => {
+describe("open_pr", () => {
   it("name is repo.pr.open", () => {
-    expect(repoPrOpen.name).toBe("repo.pr.open");
+    expect(repoPrOpen.name).toBe("open_pr");
   });
 
   it("parses a minimal valid input (owner, repo, title, head, base required)", () => {

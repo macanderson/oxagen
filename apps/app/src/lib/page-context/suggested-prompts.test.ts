@@ -18,7 +18,14 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { deriveSuggestions, classifyRoute, type SuggestionCtx } from "./suggested-prompts";
+import {
+  deriveSuggestions,
+  deriveConversationSuggestions,
+  classifyRoute,
+  hashString,
+  type ConversationMessageSummary,
+  type SuggestionCtx,
+} from "./suggested-prompts";
 import type { PageEntity, RegisteredFillableForm } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -194,7 +201,7 @@ describe("E: account route with user entity + form", () => {
 // ---------------------------------------------------------------------------
 
 describe("F: knowledge route", () => {
-  const prompts = deriveSuggestions(ctx("/acme/prod/knowledge/sources"));
+  const prompts = deriveSuggestions(ctx("/acme/prod/knowledge/repos"));
 
   it("prompts are knowledge-specific", () => {
     const texts = prompts.map((p) => p.prompt.toLowerCase()).join(" ");
@@ -212,7 +219,7 @@ describe("classifyRoute", () => {
     ["/acme/prod/settings/general", "settings"],
     ["/acme/prod/ask", "conversation"],
     ["/acme/prod/chat", "conversation"],
-    ["/acme/prod/knowledge/sources", "knowledge"],
+    ["/acme/prod/knowledge/repos", "knowledge"],
     ["/acme/prod/agents", "default"],
     ["/acme/prod/agents/repo-review", "default"],
     ["/acme/prod/automation/agents", "default"],
@@ -252,4 +259,124 @@ describe("no duplicate prompts across slots", () => {
       expect(new Set(texts).size).toBe(texts.length);
     });
   }
+});
+
+// ---------------------------------------------------------------------------
+// I. hashString — deterministic, stable
+// ---------------------------------------------------------------------------
+
+describe("hashString", () => {
+  it("is deterministic for the same input", () => {
+    expect(hashString("build an agent")).toBe(hashString("build an agent"));
+  });
+
+  it("varies across different inputs", () => {
+    expect(hashString("a")).not.toBe(hashString("b"));
+  });
+
+  it("returns a non-negative 32-bit integer", () => {
+    const h = hashString("some long-ish assistant reply text");
+    expect(Number.isInteger(h)).toBe(true);
+    expect(h).toBeGreaterThanOrEqual(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// J. deriveConversationSuggestions — build-oriented + rotating
+// ---------------------------------------------------------------------------
+
+describe("deriveConversationSuggestions — build-oriented fallback", () => {
+  const turn = (
+    role: "user" | "assistant",
+    content: string,
+  ): ConversationMessageSummary => ({ role, content });
+
+  const history: ConversationMessageSummary[] = [
+    turn("user", "how do I summarize incidents?"),
+    turn("assistant", "You can pull incidents from your source and cluster them."),
+  ];
+
+  it("returns exactly 3 suggestions", () => {
+    expect(deriveConversationSuggestions(history)).toHaveLength(3);
+  });
+
+  it("returns an empty array for empty history (deriveSuggestions handles that case)", () => {
+    expect(deriveConversationSuggestions([])).toEqual([]);
+  });
+
+  it("is build-oriented — never the old passive filler", () => {
+    const labels = deriveConversationSuggestions(history).map((s) => s.label);
+    expect(labels).not.toContain("Summarize So Far");
+    expect(labels).not.toContain("Tell Me More");
+    expect(labels).not.toContain("Explain This Code");
+  });
+
+  it("every prompt pushes toward building/creating in Oxagen", () => {
+    // Sample several distinct turn states so we cover a wide window of the bank.
+    const seen = new Set<string>();
+    for (let n = 0; n < 12; n++) {
+      const h: ConversationMessageSummary[] = [
+        ...Array.from({ length: n }, (_, i) => turn("user", `msg ${i}`)),
+        turn("assistant", `reply variant ${n}`),
+      ];
+      for (const s of deriveConversationSuggestions(h)) {
+        seen.add(s.label);
+        expect(s.prompt.toLowerCase()).toMatch(
+          /agent|automat|graph|mcp|eval|meter|bill|connect|skill|marketplace|api|fleet|workflow/,
+        );
+      }
+    }
+    // Rotation surfaces a variety of labels across turns, not the same trio.
+    expect(seen.size).toBeGreaterThan(3);
+  });
+
+  it("is deterministic — same history yields the same trio", () => {
+    const a = deriveConversationSuggestions(history);
+    const b = deriveConversationSuggestions(history);
+    expect(a).toEqual(b);
+  });
+
+  it("rotates — a longer history produces a different trio", () => {
+    const shorter = deriveConversationSuggestions(history);
+    const longer = deriveConversationSuggestions([
+      ...history,
+      turn("user", "follow up question"),
+      turn("assistant", "a different reply entirely"),
+    ]);
+    expect(longer).not.toEqual(shorter);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// K. deriveSuggestions in conversation-history mode
+// ---------------------------------------------------------------------------
+
+describe("deriveSuggestions — conversation-history mode", () => {
+  const conversationHistory: ConversationMessageSummary[] = [
+    { role: "user", content: "help me analyze churn" },
+    { role: "assistant", content: "Here's how churn breaks down..." },
+  ];
+
+  it("uses the build-oriented conversation bank when history is present", () => {
+    const prompts = deriveSuggestions({
+      pathname: "/acme/prod/ask",
+      entity: null,
+      fillableForm: null,
+      conversationHistory,
+    });
+    expect(prompts).toHaveLength(3);
+    const labels = prompts.map((p) => p.label);
+    expect(labels).not.toContain("Summarize So Far");
+  });
+
+  it("prepends the form-fill chip but keeps 3 when a form is registered", () => {
+    const prompts = deriveSuggestions({
+      pathname: "/acme/prod/ask",
+      entity: null,
+      fillableForm: mockForm,
+      conversationHistory,
+    });
+    expect(prompts).toHaveLength(3);
+    expect(prompts[0]!.label.startsWith("Fill ")).toBe(true);
+  });
 });

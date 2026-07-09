@@ -99,6 +99,6 @@ describe("skill.workspace.list capability", () => {
   // ── registry ──────────────────────────────────────────────────────────────
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("skill.workspace.list")).toBe(skillWorkspaceList);
+    expect(getCapability("list_workspace_skills")).toBe(skillWorkspaceList);
   });
 });

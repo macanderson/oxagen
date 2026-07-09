@@ -68,4 +68,11 @@ describe("capability registry", () => {
   it("returns undefined for an unknown capability", () => {
     expect(getCapability("missing")).toBeUndefined();
   });
+
+  it("resolves getCapability by canonical name only (no alias fallback)", () => {
+    const cap = registerCapability(makeCap("test.canonical"));
+    expect(getCapability("test.canonical")).toBe(cap);
+    // A name that is not the canonical registered name never resolves.
+    expect(getCapability("test.legacy_name")).toBeUndefined();
+  });
 });

@@ -117,6 +117,6 @@ describe("conversation.list capability", () => {
   // ── registry ──────────────────────────────────────────────────────────────
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("conversation.list")).toBe(conversationList);
+    expect(getCapability("list_conversations")).toBe(conversationList);
   });
 });

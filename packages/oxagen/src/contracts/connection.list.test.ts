@@ -36,6 +36,9 @@ describe("connection.list capability", () => {
           status: "active",
           entityCount: 42,
           lastSyncAt: "2026-01-01T00:00:00Z",
+          healthStatus: "healthy",
+          lastPollAt: "2026-01-01T00:00:00Z",
+          nextPollAt: "2026-01-01T00:15:00Z",
           createdAt: "2026-01-01T00:00:00Z",
         },
       ],
@@ -45,6 +48,6 @@ describe("connection.list capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("connection.list")).toBe(connectionList);
+    expect(getCapability("list_connections")).toBe(connectionList);
   });
 });

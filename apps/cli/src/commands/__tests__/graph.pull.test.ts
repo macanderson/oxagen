@@ -2,12 +2,18 @@
  * `oxagen graph pull` handler unit tests.
  *
  * Strategy:
- *   - Mock `../../lib/api.js` so apiPost returns controlled paged responses
- *     without touching the network.
+ *   - Mock `../../lib/api.js` so apiPostOrThrow returns controlled paged
+ *     responses without touching the network. (The handler pulls via
+ *     apiPostOrThrow so a mid-pull failure throws into the handler's catch and
+ *     store.close() still runs in finally — it no longer hard-exits.)
  *   - Mock `../../lib/config.js` so getOrgId/getWorkspaceId return fixed values
  *     without reading ~/.config/oxagen/config.json.
  *   - Pass `_duckdbPath: ":memory:"` to handleGraphPull so no filesystem path
  *     is created — uses the real in-memory DuckDB store for full fidelity.
+ *
+ * Output discipline (ADR-023 §4): `--json` is asserted to be one single-line
+ * JSON value round-tripping the SAME summary shape; pretty summary lands on
+ * stdout; progress on stderr; failures are uniform on stderr + process.exitCode.
  */
 import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from "vitest";
 
@@ -17,6 +23,7 @@ import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from "vite
 
 vi.mock("../../lib/api.js", () => ({
   apiPost: vi.fn(),
+  apiPostOrThrow: vi.fn(),
 }));
 
 vi.mock("../../lib/config.js", () => ({
@@ -30,10 +37,10 @@ vi.mock("../../lib/config.js", () => ({
 }));
 
 import { handleGraphPull } from "../graph.pull.js";
-import { apiPost } from "../../lib/api.js";
+import { apiPostOrThrow } from "../../lib/api.js";
 import { createGraphStore } from "@oxagen/engram";
 
-const mockApiPost = apiPost as unknown as Mock;
+const mockApiPost = apiPostOrThrow as unknown as Mock;
 
 // ---------------------------------------------------------------------------
 // Stdout / stderr capture
@@ -284,6 +291,73 @@ describe("handleGraphPull", () => {
     };
     expect(result.total.nodes).toBe(3);
     expect(result.total.edges).toBe(2);
+  });
+
+  it("emits --json as ONE single-line value round-tripping the full summary shape", async () => {
+    mockApiPost.mockResolvedValueOnce({
+      nodes: [makeNode("s1"), makeNode("s2")],
+      edges: [makeEdge("se1", "s1", "s2")],
+      hasMore: false,
+      cursor: "single-line-cursor",
+    });
+
+    await handleGraphPull({ _duckdbPath: ":memory:", json: true });
+
+    // Exactly one JSON line on stdout — the discipline is single-line, not the
+    // old 2-space `JSON.stringify(summary, null, 2)` pretty-print.
+    const lines = out.split("\n").filter((l) => l.trim().length > 0);
+    expect(lines).toHaveLength(1);
+    const parsed = JSON.parse(lines[0]!) as Record<string, unknown>;
+    // Same fields as before the conversion.
+    expect(parsed).toEqual({
+      pulled: { nodes: 2, edges: 1 },
+      total: { nodes: 2, edges: 1 },
+      cursor: "single-line-cursor",
+      path: ":memory:",
+    });
+  });
+
+  it("writes the pagination `\\r` progress redraw to stderr, never stdout", async () => {
+    mockApiPost.mockResolvedValueOnce({
+      nodes: [makeNode("p1")],
+      edges: [],
+      hasMore: false,
+      cursor: "c",
+    });
+
+    await handleGraphPull({ _duckdbPath: ":memory:" });
+
+    // In-place redraw lives on stderr and keeps its raw carriage return.
+    expect(err).toContain("Pulled 1 nodes");
+    expect(err).toContain("\r");
+    // stdout carries the summary ("node(s)"), never the raw progress ("nodes").
+    expect(out).not.toContain("Pulled 1 nodes");
+    expect(out).toContain("Pulled 1 node(s)");
+  });
+
+  it("routes a mid-pull API failure to a uniform pretty stderr error + exit 1 (store still closes)", async () => {
+    mockApiPost.mockRejectedValueOnce(new Error("boom: export failed"));
+
+    await handleGraphPull({ _duckdbPath: ":memory:" });
+
+    expect(process.exitCode).toBe(1);
+    expect(err).toContain("✗");
+    expect(err).toContain("boom: export failed");
+    // No partial summary leaked to stdout.
+    expect(out).toBe("");
+  });
+
+  it("routes a mid-pull API failure to a single machine error line on stderr in --json mode", async () => {
+    mockApiPost.mockRejectedValueOnce(new Error("json export boom"));
+
+    await handleGraphPull({ _duckdbPath: ":memory:", json: true });
+
+    expect(process.exitCode).toBe(1);
+    const errObj = JSON.parse(err.trim()) as { type: string; code: string; message: string };
+    expect(errObj.type).toBe("error");
+    expect(errObj.code).toBe("api");
+    expect(errObj.message).toContain("json export boom");
+    expect(out).toBe("");
   });
 
   it("sets exitCode=1 and writes to stderr when org is missing", async () => {

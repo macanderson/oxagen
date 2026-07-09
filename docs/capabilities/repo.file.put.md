@@ -24,6 +24,7 @@ Commit a file (create or update) to a GitHub repository. Content is provided as 
 |-------|------|-------------|
 | `commitSha` | string | SHA of the commit that created or updated the file |
 | `htmlUrl` | string | HTML URL of the committed file |
+| `diffs?` | `{ path, patch, additions, deletions }[]` | Single-element array with the committed file's unified diff (before content on the target branch, or `""` for a new file, vs. the newly committed `content`). Powers the chat `code-diff` card's full hunk view. |
 
 ## Example
 

@@ -71,7 +71,7 @@ const suggestion = z.object({
 });
 
 export const commandMenuSuggest = registerCapability({
-  name: "command.menu.suggest",
+  name: "suggest_commands",
   domain: "command",
   description:
     "Generate 3–5 context-aware 'Suggested for this page' prompts for the Command Menu " +
@@ -80,7 +80,7 @@ export const commandMenuSuggest = registerCapability({
     "LLM suggestions. Privacy: only entity.summary is sent to the model.",
   mode: "sync",
   surfaces: ["api", "agent"] as const,
-  layers: ["schema", "api", "unit"],
+  layers: ["schema", "api", "unit", "docs", "app"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "read" },
   sensitivity: "low",

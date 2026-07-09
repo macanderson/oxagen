@@ -34,9 +34,10 @@ import type { ChatMessage } from "@/components/chat/chat-shell";
 import { walkActiveBranch } from "./[workspaceSlug]/_shared/walk-active-branch";
 import { chatMessageSend } from "@oxagen/oxagen/contracts/chat.message.send";
 import { agentApprovalResolve } from "@oxagen/oxagen/contracts/agent.approval.resolve";
-import { agentMcpConsentResolve } from "@oxagen/oxagen/contracts/agent.mcp.consent.resolve";
+import { agentMcpConsentResolve } from "@oxagen/oxagen/contracts/agent.mcp_consent.resolve";
 import { agentPlanApprove } from "@oxagen/oxagen/contracts/agent.plan.approve";
 import { invoke } from "@oxagen/oxagen";
+import { logger } from "@oxagen/handlers/logger";
 
 // ---------------------------------------------------------------------------
 // Validation schemas
@@ -79,7 +80,17 @@ async function assertWorkspaceMember(
     // Membership is proven by the row count — a zero-row result means the user
     // is NOT a workspace member. The previous `.then(() => true)` discarded the
     // rows and granted access to any caller whenever the DB query succeeded.
-  ).then((rows) => rows.length > 0).catch(() => false); // catch RLS / tenancy errors
+  )
+    .then((rows) => rows.length > 0)
+    .catch((err) => {
+      // Fail closed on RLS / tenancy errors — but log first so a systemic
+      // membership-check outage is observable instead of silently denying.
+      logger.warn(
+        { err, workspaceId, userId },
+        "shell: workspace membership check errored — treating as non-member",
+      );
+      return false;
+    });
 }
 
 /** Resolve org + workspace from slugs, returning null on any lookup failure. */
@@ -387,12 +398,19 @@ export async function wandResolveApprovalAction(
   if (!resolved) return { ok: false, error: "No active workspace." };
   const { orgId, workspaceId } = resolved;
 
+  // Assert user is a member of the workspace (explicit IAM gate in apps/app —
+  // invoke() from apps/app skips IAM role checks, so without this any
+  // authenticated user who knows/guesses an orgSlug + workspaceSlug +
+  // approvalId could resolve approvals in a workspace they don't belong to).
+  const isMember = await assertWorkspaceMember(orgId, workspaceId, session.user.id);
+  if (!isMember) return { ok: false, error: "You don't have access to this workspace." };
+
   const parsed = agentApprovalResolve.input.safeParse({ approvalId, decision });
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid" };
 
   try {
     await invoke(
-      "agent.approval.resolve",
+      "resolve_approval",
       parsed.data,
       buildCapabilityContext({ orgId, workspaceId, userId: session.user.id }),
       { surface: "agent" },
@@ -425,12 +443,18 @@ export async function wandResolveConsentAction(
   if (!resolved) return { ok: false, error: "No active workspace." };
   const { orgId, workspaceId } = resolved;
 
+  // Assert user is a member of the workspace (explicit IAM gate in apps/app —
+  // see wandResolveApprovalAction above for why this cannot rely on invoke()'s
+  // kernel IAM check from this surface).
+  const isMember = await assertWorkspaceMember(orgId, workspaceId, session.user.id);
+  if (!isMember) return { ok: false, error: "You don't have access to this workspace." };
+
   const parsed = agentMcpConsentResolve.input.safeParse({ approvalId, decision, grantAllTools });
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid" };
 
   try {
     await invoke(
-      "agent.mcp.consent.resolve",
+      "resolve_mcp_consent",
       parsed.data,
       buildCapabilityContext({ orgId, workspaceId, userId: session.user.id }),
       { surface: "agent" },
@@ -459,6 +483,12 @@ export async function wandResolvePlanAction(
   if (!resolved) return { ok: false, error: "No active workspace." };
   const { orgId, workspaceId } = resolved;
 
+  // Assert user is a member of the workspace (explicit IAM gate in apps/app —
+  // see wandResolveApprovalAction above for why this cannot rely on invoke()'s
+  // kernel IAM check from this surface).
+  const isMember = await assertWorkspaceMember(orgId, workspaceId, session.user.id);
+  if (!isMember) return { ok: false, error: "You don't have access to this workspace." };
+
   const verbMap: Record<typeof decision, "approve" | "deny" | "amend"> = {
     approved: "approve",
     denied: "deny",
@@ -480,7 +510,7 @@ export async function wandResolvePlanAction(
 
   try {
     await invoke(
-      "agent.plan.approve",
+      "approve_plan",
       parsed.data,
       buildCapabilityContext({ orgId, workspaceId, userId: session.user.id }),
       { surface: "agent" },

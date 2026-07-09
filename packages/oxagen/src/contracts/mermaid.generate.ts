@@ -11,13 +11,16 @@ const renderDirectiveSchema = z.object({
 // ── Contract registration ─────────────────────────────────────────────────────
 
 export const mermaidGenerate = registerCapability({
-  name: "mermaid.generate",
+  name: "generate_mermaid",
   domain: "mermaid",
   description:
     "Produce a Mermaid diagram from validated diagram source text. " +
     "The source is validated (non-empty, within length cap) and returned with a " +
     "render directive so the chat UI renders it inline as an SVG via the " +
     "'mermaid-diagram' client component — no server-side rendering involved. " +
+    "The diagram source is also persisted as a .mmd conversation file " +
+    "(generated_assets row + blob storage) so it appears in the Conversation Files " +
+    "panel; persistence failures never fail the generation. " +
     "Supports flowcharts, sequence diagrams, class diagrams, Gantt charts, and all " +
     "other diagram types supported by Mermaid v11.",
   mode: "sync",
@@ -55,6 +58,23 @@ export const mermaidGenerate = registerCapability({
     title: z.string().min(1),
     /** Validated Mermaid diagram source text ready for client rendering. */
     source: z.string().min(1),
+    /**
+     * Public id ("gen_…") of the persisted generated_assets row holding the
+     * .mmd source file. Absent when persistence was skipped (no user identity)
+     * or failed.
+     */
+    assetPublicId: z.string().optional(),
+    /**
+     * Access-controlled serving URL (/api/v1/assets/{publicId}) for the
+     * persisted .mmd source file. Absent when persistence was skipped or failed.
+     */
+    serveUrl: z.string().optional(),
+    /**
+     * Present when the diagram source could not be persisted as a conversation
+     * file. The inline render is still fully usable — this only means the file
+     * will not appear in the Conversation Files panel.
+     */
+    persistWarning: z.string().optional(),
     /** Render directive instructing the chat UI to show the mermaid-diagram component. */
     render: renderDirectiveSchema,
   }),

@@ -8,6 +8,8 @@
 import type { Database, Connection } from "duckdb";
 import type { MemoryRecord, Namespace, RecordKind } from "../types";
 import type { EpisodicQuery, EpisodicStore } from "./episodic";
+import { tokenizeLexicalQuery } from "./lexical-tokenize";
+import { NativeModuleUnavailableError } from "./errors";
 
 /**
  * Serialize a MemoryRecord into column values for DuckDB insert.
@@ -22,7 +24,14 @@ function recordToRow(record: MemoryRecord): unknown[] {
     record.namespace.agent ?? null,
     JSON.stringify(record.body),
     record.embedding
-      ? Buffer.from(record.embedding.buffer).toString("base64")
+      ? // Honor the view's byteOffset/byteLength — an Int8Array can be a window
+        // over a larger ArrayBuffer (e.g. a subarray), and Buffer.from(buf)
+        // alone would serialize the whole backing buffer, corrupting the value.
+        Buffer.from(
+          record.embedding.buffer,
+          record.embedding.byteOffset,
+          record.embedding.byteLength,
+        ).toString("base64")
       : null,
     record.salience,
     record.confidence,
@@ -103,10 +112,17 @@ export class DuckDBEpisodicStore implements EpisodicStore {
   private ready: Promise<void>;
 
   constructor(opts: DuckDBAdapterOpts) {
-    // Dynamic import pattern — duckdb is a native module and we lazy-load
-    // to avoid hard dependency issues in environments where it's not needed.
-    // eslint-disable-next-line @typescript-eslint/no-require-imports -- duckdb uses CJS
-    const duckdb = require("duckdb") as typeof import("duckdb");
+    // duckdb is an optional native (CJS) module. Guard the synchronous require
+    // so a missing binary degrades to a clear, typed error at construction
+    // (createStore) time instead of an opaque MODULE_NOT_FOUND that takes down
+    // the caller with no hint that the fix is installing the optional dep.
+    let duckdb: typeof import("duckdb");
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports -- duckdb uses CJS
+      duckdb = require("duckdb") as typeof import("duckdb");
+    } catch (err) {
+      throw new NativeModuleUnavailableError("duckdb", err);
+    }
     this.db = new duckdb.Database(opts.path);
     this.conn = this.db.connect();
     this.ready = this.initialize();
@@ -267,6 +283,86 @@ export class DuckDBEpisodicStore implements EpisodicStore {
       limit,
       minSalience,
     });
+  }
+
+  async searchLexical(
+    namespace: Namespace,
+    query: string,
+    limit: number,
+  ): Promise<Array<{ recordId: string; score: number }>> {
+    await this.ready;
+    const tokens = tokenizeLexicalQuery(query);
+    if (tokens.length === 0 || limit <= 0) return [];
+
+    // Term-frequency score: each matched token contributes 1/tokens.length,
+    // so a record matching every query token scores 1.0. `contains()` is a
+    // case-sensitive substring test — both the body and the tokens are
+    // lowercased first to make this case-insensitive lexical matching.
+    const matchExprs = tokens.map(() => "CASE WHEN contains(lower_body, ?) THEN 1 ELSE 0 END");
+    const scoreSql = `(${matchExprs.join(" + ")}) / ${tokens.length}.0`;
+    const whereOr = tokens.map(() => "contains(lower_body, ?)").join(" OR ");
+
+    const sql = `
+      SELECT id, ${scoreSql} AS lexical_score
+      FROM (
+        SELECT id, lower(CAST(body AS VARCHAR)) AS lower_body
+        FROM episodic_records
+        WHERE namespace_org = ? AND namespace_workspace = ?
+      ) t
+      WHERE ${whereOr}
+      ORDER BY lexical_score DESC
+      LIMIT ?
+    `;
+    const params = [...tokens, namespace.org, namespace.workspace, ...tokens, limit];
+
+    const rows = await this.querySql(sql, params);
+    return rows.map((r) => ({
+      recordId: r["id"] as string,
+      score: Number(r["lexical_score"] ?? 0),
+    }));
+  }
+
+  async listNamespaces(): Promise<Namespace[]> {
+    await this.ready;
+    const rows = await this.querySql(
+      `SELECT DISTINCT namespace_org, namespace_workspace FROM episodic_records`,
+    );
+    return rows.map((r) => ({
+      org: r["namespace_org"] as string,
+      workspace: r["namespace_workspace"] as string,
+    }));
+  }
+
+  async updateSalience(id: string, salience: number): Promise<void> {
+    await this.ready;
+    await this.runSql(`UPDATE episodic_records SET salience = ? WHERE id = ?`, [
+      salience,
+      id,
+    ]);
+  }
+
+  async updateConfidence(id: string, confidence: number): Promise<void> {
+    await this.ready;
+    await this.runSql(`UPDATE episodic_records SET confidence = ? WHERE id = ?`, [
+      confidence,
+      id,
+    ]);
+  }
+
+  async evictExpired(namespace: Namespace, now: number): Promise<number> {
+    await this.ready;
+    const where = `namespace_org = ? AND namespace_workspace = ? AND ttl IS NOT NULL AND ttl > 0 AND ttl <= ?`;
+    const params = [namespace.org, namespace.workspace, now];
+    // Count first (DuckDB's run() doesn't return an affected-row count).
+    const rows = await this.querySql(
+      `SELECT count(*) AS n FROM episodic_records WHERE ${where}`,
+      params,
+    );
+    const n = Number(rows[0]?.["n"] ?? 0);
+    if (n > 0) {
+      await this.runSql(`DELETE FROM episodic_records WHERE ${where}`, params);
+    }
+    return n;
   }
 
   async close(): Promise<void> {

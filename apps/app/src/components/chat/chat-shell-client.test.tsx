@@ -16,6 +16,11 @@ import type { McpServerSummary } from "./mcp-types";
 
 afterEach(cleanup);
 
+// The first `await import("./chat-shell-client")` pulls a heavy module graph;
+// under coverage instrumentation on a loaded CI runner it can blow past the
+// 5s default, and the timed-out test's stray render then breaks the next one.
+vi.setConfig({ testTimeout: 20_000 });
+
 // ── Next.js navigation stubs ────────────────────────────────────────────────
 const mockReplace = vi.fn();
 const mockRefresh = vi.fn();
@@ -67,10 +72,21 @@ vi.mock("./message-tree", () => ({ MessageTree: () => null }));
 vi.mock("./suggested-prompt-chips", () => ({ SuggestedPromptChips: () => null }));
 vi.mock("./conversation-files", () => ({
   ConversationFiles: () => <div data-testid="conversation-files" />,
+  ConversationFilesList: () => <div data-testid="conversation-files-list" />,
+}));
+vi.mock("./coding-trace-panel", () => ({
+  CodingTracePanel: () => <div data-testid="coding-trace-panel" />,
+}));
+vi.mock("./workspace-context-panel", () => ({
+  WorkspaceContextPanel: () => <div data-testid="workspace-context-panel" />,
 }));
 vi.mock("./activity-timeline", () => ({
   ActivityTimeline: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  TimelineItem: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  // Forward `id` so tests can assert the `#turn-entry-<key>` deep-link anchor
+  // the coding-trace-panel rail relies on actually lands on the DOM node.
+  TimelineItem: ({ children, id }: { children: React.ReactNode; id?: string }) => (
+    <div id={id}>{children}</div>
+  ),
 }));
 vi.mock("./chat-component-registry", () => ({
   CHAT_COMPONENTS: {},
@@ -114,7 +130,7 @@ vi.mock("@/components/ui/toast", () => ({
 
 // ── Minimal modelConfig stub ─────────────────────────────────────────────────
 const modelConfig = {
-  text: { fast: "claude-haiku-4-5", smart: "claude-sonnet-4-6" },
+  text: { fast: "claude-haiku-4-5", smart: "claude-sonnet-5" },
   image: { basic: "gpt-image-1" },
   video: { basic: "veo-3.0" },
 } as unknown as import("@oxagen/ai/catalog").ResolvedTierCatalog;
@@ -345,6 +361,34 @@ describe("ChatShellClient — stream error banner on non-2xx SSE response", () =
     expect(screen.getByTestId("stream-error-banner")).toBeInTheDocument();
   });
 
+  it("surfaces the server's JSON error message on a 422 (attachment resolve failure)", async () => {
+    const serverMessage =
+      "One or more attachments could not be found, belong to another workspace, or are not ready yet. Please remove and re-attach the file, then try again.";
+    await renderAndSubmit(async () =>
+      new Response(JSON.stringify({ error: serverMessage }), {
+        status: 422,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    const banner = screen.getByTestId("stream-error-banner");
+    expect(banner).toBeInTheDocument();
+    // The actionable server message is shown verbatim — NOT a bare "HTTP 422".
+    expect(banner).toHaveTextContent(serverMessage);
+    expect(banner).not.toHaveTextContent("HTTP 422");
+  });
+
+  it("falls back to the status message when a non-2xx body carries no error field", async () => {
+    await renderAndSubmit(async () =>
+      new Response(JSON.stringify({ notError: "x" }), {
+        status: 422,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    const banner = screen.getByTestId("stream-error-banner");
+    expect(banner).toHaveTextContent("422");
+    expect(banner).toHaveTextContent("please try again");
+  });
+
   it("renders stream-error-banner when fetch throws a non-abort network error", async () => {
     await renderAndSubmit(async () => {
       throw new Error("ERR_CONNECTION_RESET");
@@ -482,6 +526,82 @@ describe("ChatShellClient — embedded mode (in-app panel)", () => {
       />,
     );
     expect(screen.queryByTestId("conversation-files")).not.toBeInTheDocument();
+  });
+
+  it("mounts the coding-trace-panel + workspace-context-panel rail by default, hides it when showFiles={false}", async () => {
+    cleanup();
+    await renderClient();
+    // Default (showFiles undefined → true) mounts the right rail.
+    expect(screen.getByTestId("coding-trace-panel")).toBeInTheDocument();
+    expect(screen.getByTestId("workspace-context-panel")).toBeInTheDocument();
+
+    cleanup();
+    const { ChatShellClient } = await import("./chat-shell-client");
+    render(
+      <ChatShellClient
+        conversationId={null}
+        conversationPublicId={null}
+        activeLeafMessageId={null}
+        messages={[]}
+        sendAction={noop}
+        resolveApprovalAction={async () => ({ ok: true })}
+        resolveConsentAction={async () => ({ ok: true })}
+        resolvePlanAction={async () => ({ ok: true })}
+        orgSlug="test-org"
+        workspaceSlug="test-ws"
+        modelConfig={modelConfig}
+        showFiles={false}
+      />,
+    );
+    expect(screen.queryByTestId("coding-trace-panel")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("workspace-context-panel")).not.toBeInTheDocument();
+  });
+});
+
+describe("ChatShellClient — turn-entry deep-link anchors", () => {
+  afterEach(() => {
+    mockStream.overrides = {};
+  });
+
+  it("stamps `#turn-entry-<key>` on each live timeline node for the coding-trace-panel rail to link to", async () => {
+    mockStream.overrides = {
+      toolCalls: {
+        tc1: {
+          toolCallId: "tc1",
+          messageId: "m1",
+          capability: "graph.query",
+          inputPreview: {},
+          riskLevel: "low",
+          status: "completed",
+          stdout: "",
+          stderr: "",
+          startedAt: Date.now(),
+        },
+      },
+      order: ["tool:tc1"],
+    };
+    await renderClient();
+    expect(document.querySelector("#turn-entry-tool\\:tc1")).toBeInTheDocument();
+  });
+
+  it("wraps the turn-result footer in a `#turn-result` anchor once turnUsage lands", async () => {
+    mockStream.overrides = {
+      order: ["text:m1:0"],
+      textSegments: { "text:m1:0": { key: "text:m1:0", messageId: "m1", text: "Done." } },
+      turnUsage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
+    };
+    await renderClient();
+    expect(document.querySelector("#turn-result")).toBeInTheDocument();
+  });
+
+  it("does not render the `#turn-result` anchor while the turn is still in flight", async () => {
+    mockStream.overrides = {
+      order: ["text:m1:0"],
+      textSegments: { "text:m1:0": { key: "text:m1:0", messageId: "m1", text: "Working…" } },
+      turnUsage: undefined,
+    };
+    await renderClient();
+    expect(document.querySelector("#turn-result")).not.toBeInTheDocument();
   });
 });
 

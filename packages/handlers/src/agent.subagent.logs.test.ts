@@ -23,14 +23,16 @@ const ctx: CapabilityContext = {
 
 const webChild = {
   runId: "run_1",
-  capabilityName: "web.search",
+  capabilityName: "search_web",
   status: "completed",
+  summary: "1 result",
   input: { query: "USS Nautilus crew" },
   output: {
     results: [
       { title: "Crew roster", url: "https://x/crew", content: "The first crew served under Wilkinson." },
     ],
   },
+  outputBytes: 94,
   errorReason: null,
 };
 
@@ -42,7 +44,7 @@ describe("buildLogMarkdown", () => {
       status: "completed",
       children: [webChild],
       timeline: [
-        { runId: "run_1", capabilityName: "web.search", status: "completed", startedAt: "2026-06-18T00:00:00Z", completedAt: "2026-06-18T00:00:02Z", errorReason: null },
+        { runId: "run_1", capabilityName: "search_web", status: "completed", startedAt: "2026-06-18T00:00:00Z", completedAt: "2026-06-18T00:00:02Z", errorReason: null },
       ],
     });
     expect(md).toContain("# Swarm log");
@@ -60,7 +62,7 @@ describe("buildLogMarkdown", () => {
       fanoutId: "f",
       status: "partial",
       children: [
-        { runId: "r2", capabilityName: "graph.node.upsert", status: "failed", input: { label: "X" }, output: null, errorReason: "neo4j down" },
+        { runId: "r2", capabilityName: "upsert_node", status: "failed", summary: "failed", input: { label: "X" }, output: null, outputBytes: 0, errorReason: "neo4j down" },
       ],
       timeline: [],
     });

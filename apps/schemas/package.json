@@ -1,6 +1,6 @@
 {
   "name": "@oxagen/schemas",
-  "version": "0.1.0",
+  "version": "1.1.1",
   "private": true,
   "type": "module",
   "description": "Static hosting for Oxagen JSON Schemas (schemas.oxagen.sh) — generated from the canonical Zod schemas so editors get $schema autocompletion with zero drift.",
@@ -13,7 +13,6 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@oxagen/mcp-config": "workspace:*",
     "zod": "3.25.76"
   },
   "devDependencies": {

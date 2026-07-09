@@ -148,7 +148,7 @@ export const schemaExportHandler: CapabilityHandler<typeof schemaExport> = async
 
   // Invoke archive.create
   const archiveResult = (await invoke(
-    "archive.create",
+    "create_archive",
     {
       archiveName: `schema-export-v${versionNumber}`,
       entries,

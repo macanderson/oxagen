@@ -32,7 +32,7 @@ describe("org.member.remove capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("org.member.remove")).toBe(orgMemberRemove);
+    expect(getCapability("remove_org_member")).toBe(orgMemberRemove);
   });
 
   it("is high-sensitivity and default-deny (last-owner guard lives in the handler)", () => {

@@ -8,7 +8,7 @@ import {
 } from "../decay";
 import { ReinforcementTracker } from "../reinforcement";
 import { distill, clusterEvents, DEFAULT_DISTILLATION_CONFIG } from "./distill";
-import { deduplicateSemanticRecords } from "./dedup";
+import { deduplicateSemanticRecords } from "./dedupe";
 import { detectContradiction, resolveConflict } from "./resolve";
 import {
   detectPatterns,
@@ -151,25 +151,25 @@ describe("ReinforcementTracker", () => {
 // ---------------------------------------------------------------------------
 
 describe("distill", () => {
-  it("clusters events and produces facts", () => {
+  it("clusters events and produces facts", async () => {
     const events = [
       makeEpisodic("tool_call", "success", "grep"),
       makeEpisodic("tool_call", "success", "grep"),
       makeEpisodic("tool_call", "failure", "grep"),
     ];
-    const result = distill(events, []);
+    const result = await distill(events, []);
     expect(result.newFacts.length).toBeGreaterThan(0);
     expect(result.processedEventIds).toHaveLength(3);
   });
 
-  it("boosts existing facts instead of creating duplicates", () => {
+  it("boosts existing facts instead of creating duplicates", async () => {
     const events = [
       makeEpisodic("tool_call", "success", "grep"),
       makeEpisodic("tool_call", "success", "grep"),
       makeEpisodic("tool_call", "success", "grep"),
     ];
     // First run: creates a fact
-    const result1 = distill(events, []);
+    const result1 = await distill(events, []);
     expect(result1.newFacts.length).toBeGreaterThan(0);
 
     // Second run with existing facts: should boost not duplicate
@@ -183,7 +183,7 @@ describe("distill", () => {
         provenance: PROV,
       }),
     );
-    const result2 = distill(events, existingFacts);
+    const result2 = await distill(events, existingFacts);
     // May boost or create depending on matching heuristic
     expect(result2.processedEventIds).toHaveLength(3);
   });

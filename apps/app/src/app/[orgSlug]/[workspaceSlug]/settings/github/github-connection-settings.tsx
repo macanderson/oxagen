@@ -97,7 +97,7 @@ export function GithubConnectionSettings({
     window.location.href = state.status.installUrl;
   }, [state]);
 
-  const sourcesHref = workspace.knowledge.sources({ orgSlug, workspaceSlug });
+  const sourcesHref = workspace.knowledge.repos({ orgSlug, workspaceSlug });
 
   return (
     <div className="flex max-w-2xl flex-col gap-5" data-testid="github-settings">
@@ -149,7 +149,7 @@ export function GithubConnectionSettings({
           </p>
           <button
             type="button"
-            className="rounded-md border border-border/60 bg-card px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
+            className="max-md:min-h-11 rounded-md border border-border/60 bg-card px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
             onClick={() => void load("refresh")}
           >
             Retry
@@ -197,7 +197,7 @@ function DisconnectedView({
       {canManage ? (
         <button
           type="button"
-          className="flex items-center gap-2 rounded-md bg-foreground px-4 py-2.5 text-sm font-semibold text-background transition-colors hover:bg-foreground/90"
+          className="flex max-md:min-h-11 items-center gap-2 rounded-md bg-foreground px-4 py-2.5 text-sm font-semibold text-background transition-colors hover:bg-foreground/90"
           onClick={onConnect}
           data-testid="github-connect-btn"
         >
@@ -237,7 +237,7 @@ function ConnectedView({
         </span>
         <button
           type="button"
-          className="flex items-center gap-1 text-[11px] text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+          className="flex max-md:min-h-11 items-center gap-1 text-[11px] text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
           onClick={onRefresh}
           disabled={refreshing}
           data-testid="github-refresh-btn"
@@ -297,7 +297,7 @@ function ConnectedView({
         {canManage && (
           <button
             type="button"
-            className="text-[11px] text-muted-foreground hover:text-foreground hover:underline"
+            className="inline-flex max-md:min-h-11 items-center text-[11px] text-muted-foreground hover:text-foreground hover:underline"
             onClick={onReconnect}
             data-testid="github-reconnect-btn"
           >

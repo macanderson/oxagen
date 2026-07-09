@@ -1,0 +1,15 @@
+/**
+ * diff-token — dark-mode colour swap for Shiki-highlighted diff tokens.
+ *
+ * `highlightLine` (diff-syntax.ts) renders every token with an inline style of
+ * the form `color:<light>;--shiki-dark:<dark>` produced by Shiki's dual-theme
+ * output. In light mode the inline `color` wins. Under `.dark` (the app toggles
+ * this class via ThemeProvider; see `@custom-variant dark (&:is(.dark *))`) we
+ * override `color` to the `--shiki-dark` CSS variable each token carries, so
+ * the whole diff re-themes with zero JS and no re-highlight/flash.
+ *
+ * `!important` is required to beat the token's own inline `color`.
+ */
+.dark .diff-token {
+  color: var(--shiki-dark) !important;
+}

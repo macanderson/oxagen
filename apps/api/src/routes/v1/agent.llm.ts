@@ -159,17 +159,17 @@ function toOpenAiUsage(u: {
   inputTokens?: number;
   outputTokens?: number;
   totalTokens?: number;
-  cachedInputTokens?: number;
+  // AI SDK v7 usage shape: cache reads live under `inputTokenDetails`.
+  inputTokenDetails?: { cacheReadTokens?: number };
 }): OpenAiUsage {
   const prompt_tokens = u.inputTokens ?? 0;
   const completion_tokens = u.outputTokens ?? 0;
+  const cacheReadTokens = u.inputTokenDetails?.cacheReadTokens;
   return {
     prompt_tokens,
     completion_tokens,
     total_tokens: u.totalTokens ?? prompt_tokens + completion_tokens,
-    ...(u.cachedInputTokens
-      ? { prompt_tokens_details: { cached_tokens: u.cachedInputTokens } }
-      : {}),
+    ...(cacheReadTokens ? { prompt_tokens_details: { cached_tokens: cacheReadTokens } } : {}),
   };
 }
 
@@ -612,7 +612,7 @@ agentLlmRoute.post("/chat/completions", async (c) => {
                   inputTokens?: number;
                   outputTokens?: number;
                   totalTokens?: number;
-                  cachedInputTokens?: number;
+                  inputTokenDetails?: { cacheReadTokens?: number };
                 };
               };
               finishReason = fr;

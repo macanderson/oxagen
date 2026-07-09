@@ -2,12 +2,12 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const skillWorkspaceList = registerCapability({
-  name: "skill.workspace.list",
+  name: "list_workspace_skills",
   domain: "skill",
   description: "List skills available in the workspace",
   mode: "sync",
   surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "docs", "mcp"],
+  layers: ["schema", "api", "docs", "mcp", "app"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "skill" },
   sensitivity: "low",

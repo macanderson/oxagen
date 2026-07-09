@@ -118,6 +118,6 @@ describe("conversation.chat capability", () => {
   // ── registry ──────────────────────────────────────────────────────────────
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("conversation.chat")).toBe(conversationChat);
+    expect(getCapability("post_conversation_message")).toBe(conversationChat);
   });
 });

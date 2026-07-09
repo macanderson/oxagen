@@ -78,6 +78,15 @@ describe("codeMapHandler", () => {
     expect(typeof params.limit).toBe("bigint");
   });
 
+  it("over-fetches the file index by 3x but limits the result to the requested limit", async () => {
+    await codeMapHandler({ query: "auth", limit: 7 }, CTX);
+    const params = mocks.run.mock.calls[0]![1] as Record<string, unknown>;
+    // k over-samples so the tenant + SourceFile + domain filters don't starve
+    // the file set; the Cypher LIMIT still trims back to the requested limit.
+    expect(params.k).toBe(BigInt(21)); // 7 x 3
+    expect(params.limit).toBe(BigInt(7));
+  });
+
   it("returns empty bundle when no files match", async () => {
     const result = await codeMapHandler({ query: "nope", limit: 10 }, CTX);
     expect(result.files).toEqual([]);

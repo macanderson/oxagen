@@ -1,5 +1,9 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import {
+  StdioClientTransport,
+  getDefaultEnvironment,
+} from "@modelcontextprotocol/sdk/client/stdio.js";
 import type { OAuthClientProvider } from "@modelcontextprotocol/sdk/client/auth.js";
 import { tool, type Tool } from "@oxagen/ai";
 import { z } from "zod";
@@ -37,6 +41,84 @@ export async function connectMcp(args: McpConnectArgs): Promise<Client> {
   );
   await client.connect(transport);
   return client;
+}
+
+// ── stdio transport ─────────────────────────────────────────────────────────
+// stdio-transport MCP servers spawn a local child process and speak MCP over its
+// stdin/stdout. Unlike the HTTP transport (a stateless keep-alive connection),
+// the child MUST be reaped or it leaks a live OS process. There is no per-turn
+// dispose seam in the plugin-type contributor pipeline (materialize-tools.ts
+// never closes the HTTP client either), and the materialized tools keep the
+// connection open so they remain callable across the turn — so we can't close
+// right after listing tools. Instead we tie each spawned child's lifecycle to
+// the runtime process: track every live transport and kill them on process exit,
+// and expose closeStdioMcpTransports() for explicit shutdown/disposal wiring.
+
+export interface McpStdioConnectArgs {
+  command: string;
+  args?: string[];
+  /** Extra env for the child. Merged over getDefaultEnvironment() so PATH etc. survive. */
+  env?: Record<string, string>;
+  cwd?: string;
+}
+
+const activeStdioTransports = new Set<StdioClientTransport>();
+let stdioExitHandlerInstalled = false;
+
+// Kill every tracked child synchronously. StdioClientTransport.close() calls
+// child.kill() synchronously, so this delivers the signal even inside the
+// 'exit' handler (where async work cannot complete). We deliberately do NOT
+// install SIGINT/SIGTERM handlers: hijacking those would override the host
+// process's (apps/api) own graceful-shutdown handling. On an abrupt signal the
+// child is still reaped by the OS when its inherited stdin pipe breaks.
+function installStdioExitHandler(): void {
+  if (stdioExitHandlerInstalled) return;
+  stdioExitHandlerInstalled = true;
+  process.once("exit", () => {
+    for (const t of activeStdioTransports) {
+      void t.close().catch(() => {});
+    }
+    activeStdioTransports.clear();
+  });
+}
+
+export async function connectMcpStdio(args: McpStdioConnectArgs): Promise<Client> {
+  const transport = new StdioClientTransport({
+    command: args.command,
+    args: args.args ?? [],
+    // Merge over the SDK's safe default environment so the child inherits a sane
+    // baseline (PATH, HOME, …) plus the server-specific vars. Passing only
+    // args.env would strip PATH and break `npx`/`node`/`python` resolution.
+    env: { ...getDefaultEnvironment(), ...(args.env ?? {}) },
+    cwd: args.cwd,
+    // Surface the child's stderr on the parent so spawn failures are diagnosable.
+    stderr: "inherit",
+  });
+  const client = new Client(
+    { name: "oxagen-runner", version: "0.1.0" },
+    { capabilities: {} },
+  );
+  await client.connect(transport);
+  activeStdioTransports.add(transport);
+  installStdioExitHandler();
+  // Drop the transport from the tracking set if it closes on its own (child
+  // exit / broken pipe) so the set never accumulates dead references.
+  const priorOnClose = transport.onclose;
+  transport.onclose = () => {
+    activeStdioTransports.delete(transport);
+    priorOnClose?.();
+  };
+  return client;
+}
+
+/**
+ * Close and reap every live stdio MCP child process. Idempotent. Wire this into
+ * a runtime's shutdown/dispose path; also called by the process 'exit' handler.
+ */
+export async function closeStdioMcpTransports(): Promise<void> {
+  const transports = [...activeStdioTransports];
+  activeStdioTransports.clear();
+  await Promise.all(transports.map((t) => t.close().catch(() => {})));
 }
 
 export async function listMcpTools(client: Client): Promise<string[]> {

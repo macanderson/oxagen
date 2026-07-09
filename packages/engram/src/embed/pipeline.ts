@@ -12,6 +12,12 @@ export interface EmbedResult {
   embedding: number[];
   /** Int8 quantized vector for local storage. */
   quantized: Int8Array;
+  /**
+   * Reconstruction scale for {@link quantized} (`float ≈ int8 / scale`). Must
+   * be persisted alongside the bytes — without it the quantized vector cannot
+   * be dequantized correctly for local cosine similarity.
+   */
+  quantizationScale: number;
 }
 
 export interface EmbedOpts {
@@ -58,6 +64,6 @@ export async function embedRecord(
 ): Promise<EmbedResult> {
   const text = extractEmbeddingText(kind, body);
   const embedding = await embedTextFn(text);
-  const quantized = quantizeToInt8(embedding);
-  return { recordId, embedding, quantized };
+  const { quantized, scale } = quantizeToInt8(embedding);
+  return { recordId, embedding, quantized, quantizationScale: scale };
 }

@@ -15,7 +15,7 @@ import {
   hashContent,
   type CodeGraphStore,
 } from "./store";
-import { buildAndPersistCodeGraph } from "./builder";
+import { buildAndPersistCodeGraph, buildCodeGraph } from "./builder";
 
 let repo: string;
 let dbPath: string;
@@ -102,6 +102,24 @@ describe("buildAndPersistCodeGraph", () => {
     expect((await store.indexedFiles(repo)).sort()).toEqual(["b.ts"]);
   });
 
+  it("indexes .md files as file nodes (docs carry an embedding + domain too)", async () => {
+    write("README.md", "# Title\n\nSome docs content.\n");
+
+    const delta = await buildAndPersistCodeGraph(repo, store);
+    expect(delta).toEqual({ indexed: 1, skipped: 0, removed: 0 });
+
+    const graph = await store.loadGraph(repo);
+    const node = [...graph.nodes.values()].find((n) => n.path === "README.md");
+    expect(node?.kind).toBe("file");
+    expect(node?.language).toBe("markdown");
+
+    // Headings are parsed (see @oxagen/code-graph markdown.ts) but intentionally
+    // not turned into symbol nodes — only the file node is indexed.
+    const stats = await store.stats(repo);
+    expect(stats.files).toBe(1);
+    expect(stats.symbols).toBe(0);
+  });
+
   it("survives a cold reopen — graph reloads from disk", async () => {
     write("a.ts", "export function foo() {}\n");
     await buildAndPersistCodeGraph(repo, store);
@@ -114,6 +132,53 @@ describe("buildAndPersistCodeGraph", () => {
     expect(names).toEqual(["a.ts", "foo"]);
     // The previously-indexed file is skipped on the next incremental build.
     expect((await buildAndPersistCodeGraph(repo, store)).skipped).toBe(1);
+  });
+
+  it("reports real per-file progress via onProgress — used by oxagen init's animation", async () => {
+    write("a.ts", "export function foo() {}\n");
+    write("b.ts", "export function bar() {}\n");
+    write("c.ts", "export function baz() {}\n");
+
+    const ticks: Array<{ done: number; total: number }> = [];
+    await buildAndPersistCodeGraph(repo, store, (done, total) => {
+      ticks.push({ done, total });
+    });
+
+    expect(ticks).toHaveLength(3);
+    expect(ticks.every((t) => t.total === 3)).toBe(true);
+    expect(ticks.map((t) => t.done)).toEqual([1, 2, 3]); // monotonic, one per file
+  });
+
+  it("still reports 0 total files gracefully with an empty repo", async () => {
+    const ticks: Array<{ done: number; total: number }> = [];
+    await buildAndPersistCodeGraph(repo, store, (done, total) => {
+      ticks.push({ done, total });
+    });
+    expect(ticks).toEqual([]);
+  });
+});
+
+describe("buildCodeGraph (in-memory fallback) onProgress", () => {
+  it("reports real per-file progress for the in-memory build path too", async () => {
+    write("a.ts", "export function foo() {}\n");
+    write("b.ts", "export function bar() {}\n");
+
+    const ticks: Array<{ done: number; total: number }> = [];
+    const graph = await buildCodeGraph(repo, (done, total) => {
+      ticks.push({ done, total });
+    });
+
+    expect(graph.nodes.size).toBeGreaterThan(0);
+    expect(ticks).toEqual([
+      { done: 1, total: 2 },
+      { done: 2, total: 2 },
+    ]);
+  });
+
+  it("behaves identically when onProgress is omitted", async () => {
+    write("a.ts", "export function foo() {}\n");
+    const graph = await buildCodeGraph(repo);
+    expect(graph.nodes.size).toBeGreaterThan(0);
   });
 });
 

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const agentSkillLoad = registerCapability({
-  name: "agent.skill.load",
+  name: "load_skill",
   domain: "agent",
   description:
     "Load and register a workspace skill at runtime — resolves the requested version, validates dependencies, and returns the skill body and available capabilities",

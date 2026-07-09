@@ -17,8 +17,8 @@ const fileRenderDirective = z.object({
 });
 
 export const markdownGenerate = registerCapability({
-  name: "markdown.generate",
-  domain: "documents",
+  name: "generate_markdown",
+  domain: "document",
   description:
     "Persist a Markdown document as a first-class generated asset. " +
     "Raw Markdown source is encoded to UTF-8 bytes, uploaded to blob storage, " +

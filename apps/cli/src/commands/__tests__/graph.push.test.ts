@@ -2,10 +2,16 @@
  * `oxagen graph push` handler unit tests.
  *
  * Strategy:
- *   - Mock `../../lib/api.js` so `apiPost` returns a controlled response.
+ *   - Mock `../../lib/api.js` so `apiPostOrThrow` returns a controlled response.
+ *     (The handler always pushes via apiPostOrThrow; the throwOnError seam is
+ *     honoured in the handler's catch, not by picking apiPost vs apiPostOrThrow.)
  *   - Mock `../../lib/config.js` for org/workspace config.
  *   - Mock `node:child_process` so `execFileSync` returns canned git output.
  *   - Mock `../daemon/code-graph/builder.js` to return a minimal code graph.
+ *   - Mock `../../agent/env.js` so `resolveAiCredential` returns null — these
+ *     tests aren't about domain inference, and without this mock a shell with a
+ *     real AI_GATEWAY_API_KEY / ANTHROPIC_API_KEY exported makes every test fire
+ *     a real network call (slow, flaky, and an unwanted external side effect).
  *   - Pass `_duckdbPath: ":memory:"` and `_gitRoot: "/fake/repo"` as test seams.
  *
  * Verified:
@@ -16,6 +22,11 @@
  *   - JSON output contains expected fields.
  *   - Missing org/workspace → exitCode=1, no API call.
  *   - Not-a-git-repo → exitCode=1.
+ *   - Output discipline (ADR-023 §4): --json is one single-line value with the
+ *     SAME summary shape; the "Pushing N node(s)…" status line is on stderr; a
+ *     push failure is a uniform stderr error + process.exitCode=1.
+ *   - throwOnError seam (oxagen init): missing org, not-a-git-repo, and a push
+ *     failure all THROW instead of writing stderr / setting the exit code.
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from "vitest";
@@ -26,6 +37,7 @@ import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from "vite
 
 vi.mock("../../lib/api.js", () => ({
   apiPost: vi.fn(),
+  apiPostOrThrow: vi.fn(),
 }));
 
 vi.mock("../../lib/config.js", () => ({
@@ -48,12 +60,24 @@ vi.mock("../../daemon/code-graph/builder.js", () => ({
   buildCodeGraph: vi.fn(),
 }));
 
+// No AI credential — domain inference is a no-op, keeping these tests hermetic
+// (real key exported in the environment must never leak into a real network
+// call here; see the module doc comment).
+vi.mock("../../agent/env.js", () => ({
+  resolveAiCredential: () => null,
+  credentialSupportsModel: () => false,
+}));
+
 import { handleGraphPush } from "../graph.push.js";
-import { apiPost } from "../../lib/api.js";
+import { apiPostOrThrow } from "../../lib/api.js";
 import { execFileSync } from "node:child_process";
 import { buildCodeGraph } from "../../daemon/code-graph/builder.js";
+import {
+  CODE_EMBED_GATEWAY_MODEL,
+  CODE_EMBED_DIM,
+} from "@oxagen/code-graph/embed";
 
-const mockApiPost = apiPost as unknown as Mock;
+const mockApiPost = apiPostOrThrow as unknown as Mock;
 const mockExecFileSync = execFileSync as unknown as Mock;
 const mockBuildCodeGraph = buildCodeGraph as unknown as Mock;
 
@@ -290,6 +314,122 @@ describe("handleGraphPush — envelope structure", () => {
     }
   });
 
+  it("attaches a valid 1536-d local embedding produced by the gateway model", async () => {
+    // A node the CLI embedded locally with the shared gateway model ships its
+    // vector so the graph is searchable in apps/app without re-embedding.
+    const vec = Array.from({ length: CODE_EMBED_DIM }, () => 0.01);
+    setupGit({ lsFiles: "src/foo.ts" });
+    const nodes = new Map();
+    nodes.set("id-1", {
+      id: "id-1",
+      kind: "file",
+      name: "foo.ts",
+      path: "src/foo.ts",
+      range: { start: 0, end: 0 },
+      language: "typescript",
+      embedding: vec,
+      embeddingProvider: CODE_EMBED_GATEWAY_MODEL,
+    });
+    mockBuildCodeGraph.mockResolvedValue({ nodes, edges: [] });
+    mockApiPost.mockResolvedValueOnce(PUSH_RESULT);
+
+    await handleGraphPush({ _duckdbPath: ":memory:", _gitRoot: GIT_ROOT, full: true });
+
+    const body = mockApiPost.mock.calls[0]![1] as {
+      nodes: Array<{ key: string; embedding?: number[] }>;
+    };
+    const fileNode = body.nodes.find((n) => n.key.endsWith("src/foo.ts"));
+    expect(fileNode).toBeDefined();
+    expect(fileNode!.embedding).toHaveLength(CODE_EMBED_DIM);
+    expect(fileNode!.embedding![0]).toBe(0.01);
+  });
+
+  it("omits the embedding when the provider is not the shared gateway model", async () => {
+    const vec = Array.from({ length: CODE_EMBED_DIM }, () => 0.01);
+    setupGit({ lsFiles: "src/foo.ts" });
+    const nodes = new Map();
+    nodes.set("id-1", {
+      id: "id-1",
+      kind: "file",
+      name: "foo.ts",
+      path: "src/foo.ts",
+      range: { start: 0, end: 0 },
+      language: "typescript",
+      embedding: vec,
+      embeddingProvider: "local-hash-v1",
+    });
+    mockBuildCodeGraph.mockResolvedValue({ nodes, edges: [] });
+    mockApiPost.mockResolvedValueOnce(PUSH_RESULT);
+
+    await handleGraphPush({ _duckdbPath: ":memory:", _gitRoot: GIT_ROOT, full: true });
+
+    const body = mockApiPost.mock.calls[0]![1] as {
+      nodes: Array<{ key: string; embedding?: number[] }>;
+    };
+    const fileNode = body.nodes.find((n) => n.key.endsWith("src/foo.ts"));
+    expect(fileNode).toBeDefined();
+    expect(fileNode!.embedding).toBeUndefined();
+  });
+
+  it.each([
+    ["ollama:nomic-embed-text", 768],
+    ["local-onnx:bge-small-en-v1.5", 384],
+  ])(
+    "omits a local-provider embedding (%s, %i-d — a different vector space than the gateway's)",
+    async (provider, dim) => {
+      const vec = Array.from({ length: dim }, () => 0.02);
+      setupGit({ lsFiles: "src/foo.ts" });
+      const nodes = new Map();
+      nodes.set("id-1", {
+        id: "id-1",
+        kind: "file",
+        name: "foo.ts",
+        path: "src/foo.ts",
+        range: { start: 0, end: 0 },
+        language: "typescript",
+        embedding: vec,
+        embeddingProvider: provider,
+      });
+      mockBuildCodeGraph.mockResolvedValue({ nodes, edges: [] });
+      mockApiPost.mockResolvedValueOnce(PUSH_RESULT);
+
+      await handleGraphPush({ _duckdbPath: ":memory:", _gitRoot: GIT_ROOT, full: true });
+
+      const body = mockApiPost.mock.calls[0]![1] as {
+        nodes: Array<{ key: string; embedding?: number[] }>;
+      };
+      const fileNode = body.nodes.find((n) => n.key.endsWith("src/foo.ts"));
+      expect(fileNode).toBeDefined();
+      expect(fileNode!.embedding).toBeUndefined();
+    },
+  );
+
+  it("omits the embedding when the vector has the wrong dimension", async () => {
+    setupGit({ lsFiles: "src/foo.ts" });
+    const nodes = new Map();
+    nodes.set("id-1", {
+      id: "id-1",
+      kind: "file",
+      name: "foo.ts",
+      path: "src/foo.ts",
+      range: { start: 0, end: 0 },
+      language: "typescript",
+      embedding: [0.1, 0.2, 0.3],
+      embeddingProvider: CODE_EMBED_GATEWAY_MODEL,
+    });
+    mockBuildCodeGraph.mockResolvedValue({ nodes, edges: [] });
+    mockApiPost.mockResolvedValueOnce(PUSH_RESULT);
+
+    await handleGraphPush({ _duckdbPath: ":memory:", _gitRoot: GIT_ROOT, full: true });
+
+    const body = mockApiPost.mock.calls[0]![1] as {
+      nodes: Array<{ key: string; embedding?: number[] }>;
+    };
+    const fileNode = body.nodes.find((n) => n.key.endsWith("src/foo.ts"));
+    expect(fileNode).toBeDefined();
+    expect(fileNode!.embedding).toBeUndefined();
+  });
+
   it("symbol nodes carry the :SourceSymbol label (not :Symbol) so the reader resolves them", async () => {
     // Regression: a bare :Symbol label made every CLI-pushed symbol invisible to
     // createNeo4jCodeGraphProvider + the GitHub-ingestion tree-sitter writer, which
@@ -324,5 +464,119 @@ describe("handleGraphPush — envelope structure", () => {
     expect(symbolNode).toBeDefined();
     expect(symbolNode!.labels).toContain("SourceSymbol");
     expect(symbolNode!.labels).not.toContain("Symbol");
+  });
+});
+
+describe("handleGraphPush — output discipline (ADR-023 §4)", () => {
+  it("emits --json as ONE single-line value with the full summary shape", async () => {
+    setupGit({ lsFiles: "src/foo.ts" });
+    mockBuildCodeGraph.mockResolvedValue(minimalGraph());
+    mockApiPost.mockResolvedValueOnce(PUSH_RESULT);
+
+    await handleGraphPush({ _duckdbPath: ":memory:", _gitRoot: GIT_ROOT, full: true, json: true });
+
+    // Single line, not the old 2-space `JSON.stringify(summary, null, 2)`.
+    const lines = out.split("\n").filter((l) => l.trim().length > 0);
+    expect(lines).toHaveLength(1);
+    const parsed = JSON.parse(lines[0]!) as Record<string, unknown>;
+    // Same fields as before the conversion.
+    expect(Object.keys(parsed).sort()).toEqual([
+      "edgesUpserted",
+      "fromSha",
+      "nodesUpserted",
+      "repo",
+      "sha",
+      "tombstoned",
+    ]);
+    expect(parsed["nodesUpserted"]).toBe(1);
+    expect(parsed["fromSha"]).toBe("(full)");
+  });
+
+  it("routes the 'Pushing N node(s)…' status line to stderr, summary to stdout", async () => {
+    setupGit({ lsFiles: "src/foo.ts" });
+    mockBuildCodeGraph.mockResolvedValue(minimalGraph());
+    mockApiPost.mockResolvedValueOnce(PUSH_RESULT);
+
+    await handleGraphPush({ _duckdbPath: ":memory:", _gitRoot: GIT_ROOT, full: true });
+
+    expect(err).toContain("Pushing 1 node(s)");
+    expect(out).not.toContain("Pushing 1 node(s)");
+    expect(out).toContain("Pushed to workspace graph");
+  });
+
+  it("no-changes --json preserves the { pushed:false, reason } shape as one line", async () => {
+    setupGit({ lsFiles: "" });
+    mockBuildCodeGraph.mockResolvedValue({ nodes: new Map(), edges: [] });
+
+    await handleGraphPush({ _duckdbPath: ":memory:", _gitRoot: GIT_ROOT, full: true, json: true });
+
+    const lines = out.split("\n").filter((l) => l.trim().length > 0);
+    expect(lines).toHaveLength(1);
+    const parsed = JSON.parse(lines[0]!) as Record<string, unknown>;
+    expect(parsed["pushed"]).toBe(false);
+    expect(parsed["reason"]).toBe("no changes");
+    expect(parsed).toHaveProperty("sha");
+    expect(parsed).toHaveProperty("repo");
+    expect(mockApiPost).not.toHaveBeenCalled();
+  });
+
+  it("routes a push failure to a uniform pretty stderr error + exit 1 (throwOnError=false)", async () => {
+    setupGit({ lsFiles: "src/foo.ts" });
+    mockBuildCodeGraph.mockResolvedValue(minimalGraph());
+    mockApiPost.mockRejectedValueOnce(new Error("push blew up"));
+
+    await handleGraphPush({ _duckdbPath: ":memory:", _gitRoot: GIT_ROOT, full: true });
+
+    expect(process.exitCode).toBe(1);
+    expect(err).toContain("✗");
+    expect(err).toContain("push blew up");
+    // No partial summary leaked to stdout.
+    expect(out).not.toContain("Pushed to workspace graph");
+  });
+});
+
+describe("handleGraphPush — throwOnError seam (oxagen init graceful degrade)", () => {
+  it("THROWS instead of setting the exit code when org is missing", async () => {
+    const { getOrgId } = await import("../../lib/config.js");
+    (getOrgId as unknown as Mock).mockReturnValueOnce(undefined);
+
+    await expect(
+      handleGraphPush({ _duckdbPath: ":memory:", _gitRoot: GIT_ROOT, throwOnError: true }),
+    ).rejects.toThrow("Missing org or workspace");
+
+    // Graceful seam never poisons the process exit code.
+    expect(process.exitCode).toBeUndefined();
+    expect(mockApiPost).not.toHaveBeenCalled();
+  });
+
+  it("THROWS instead of setting the exit code when not in a git repo", async () => {
+    mockExecFileSync.mockImplementation(() => {
+      throw new Error("not a git repo");
+    });
+
+    await expect(
+      handleGraphPush({ _duckdbPath: ":memory:", throwOnError: true }),
+    ).rejects.toThrow("Not inside a git repository");
+
+    expect(process.exitCode).toBeUndefined();
+  });
+
+  it("THROWS the API error (never hard-exits) when the push fails", async () => {
+    setupGit({ lsFiles: "src/foo.ts" });
+    mockBuildCodeGraph.mockResolvedValue(minimalGraph());
+    mockApiPost.mockRejectedValueOnce(new Error("network down"));
+
+    await expect(
+      handleGraphPush({
+        _duckdbPath: ":memory:",
+        _gitRoot: GIT_ROOT,
+        full: true,
+        throwOnError: true,
+      }),
+    ).rejects.toThrow("network down");
+
+    // The whole point of the seam: init catches this and continues, so the exit
+    // code must stay clean.
+    expect(process.exitCode).toBeUndefined();
   });
 });

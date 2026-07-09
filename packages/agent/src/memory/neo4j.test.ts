@@ -6,10 +6,18 @@ const sessionClose = vi.fn(async () => undefined);
 
 vi.mock("@oxagen/ontology", () => ({
   scopedSession: () => ({ run: sessionRun, close: sessionClose }),
+  // Real over-sampling math so the emitted $k reflects production behaviour.
+  oversampledLimit: (limit: number, factor = 3, cap = 500) => {
+    const base = Math.trunc(limit);
+    if (!Number.isFinite(base) || base <= 0) return 0;
+    const f = Number.isFinite(factor) && factor >= 1 ? Math.trunc(factor) : 1;
+    return Math.min(base * f, Math.max(base, Math.trunc(cap)));
+  },
 }));
 
 import {
   recallMemories,
+  recallPeerResults,
   writeMemory,
   reinforceMemory,
   applyDecayToMemory,
@@ -135,6 +143,223 @@ describe("recallMemories — recallThreshold filtering", () => {
     );
     const params = sessionRun.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(params.recallThreshold).toBe(0);
+  });
+});
+
+describe("recallPeerResults", () => {
+  beforeEach(() => {
+    sessionRun.mockReset();
+    sessionClose.mockClear();
+  });
+
+  it("queries the execution vector index with tenant + summary + threshold gates", async () => {
+    sessionRun.mockResolvedValueOnce({
+      records: [
+        fakeRecord({ runId: "run-1", summary: "migrated auth", score: 0.91 }),
+        fakeRecord({ runId: "run-2", summary: "added caching", score: 0.82 }),
+      ],
+    });
+    const rows = await withTestScope(() =>
+      recallPeerResults({
+        embedding: new Array<number>(1536).fill(0.1),
+        limit: 4,
+        recallThreshold: 0.7,
+      }),
+    );
+    expect(sessionRun).toHaveBeenCalledTimes(1);
+    const cypher = String(sessionRun.mock.calls[0]?.[0] ?? "");
+    expect(cypher).toContain("execution_embedding_index");
+    expect(cypher).toContain("e.orgId = $orgId");
+    expect(cypher).toContain("e.workspaceId = $workspaceId");
+    expect(cypher).toContain("e.summary IS NOT NULL");
+    expect(cypher).toContain("score >= $recallThreshold");
+    const params = sessionRun.mock.calls[0]?.[1] as Record<string, unknown>;
+    // orgId/workspaceId are injected by scopedSession (real impl), not threaded.
+    expect(params.orgId).toBeUndefined();
+    expect(params.workspaceId).toBeUndefined();
+    expect(params.recallThreshold).toBe(0.7);
+    // limit is passed as BigInt (mirrors recallMemories).
+    expect(params.limit).toBe(BigInt(4));
+    expect(rows).toEqual([
+      { runId: "run-1", summary: "migrated auth", score: 0.91 },
+      { runId: "run-2", summary: "added caching", score: 0.82 },
+    ]);
+  });
+
+  it("defaults recallThreshold to 0 when not supplied", async () => {
+    sessionRun.mockResolvedValueOnce({ records: [] });
+    await withTestScope(() =>
+      recallPeerResults({ embedding: new Array<number>(1536).fill(0.1), limit: 4 }),
+    );
+    const params = sessionRun.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(params.recallThreshold).toBe(0);
+    expect(sessionClose).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("ANN tenant-filter over-sampling", () => {
+  beforeEach(() => {
+    sessionRun.mockReset();
+    sessionClose.mockClear();
+  });
+
+  it("recallMemories over-fetches the index by 3x but trims to the requested limit", async () => {
+    sessionRun.mockResolvedValueOnce({ records: [] });
+    await withTestScope(() =>
+      recallMemories({ embedding: new Array<number>(1536).fill(0.1), limit: 10 }),
+    );
+    const cypher = String(sessionRun.mock.calls[0]?.[0] ?? "");
+    // The index is queried with the over-sampled $k, not the raw limit.
+    expect(cypher).toContain("db.index.vector.queryNodes('memory_embedding_index', $k");
+    // The final result set is trimmed back to the requested limit after filtering.
+    expect(cypher).toContain("LIMIT $limit");
+    const params = sessionRun.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(params.k).toBe(BigInt(30)); // 10 x 3
+    expect(params.limit).toBe(BigInt(10));
+  });
+
+  it("recallPeerResults over-fetches the index by 3x but trims to the requested limit", async () => {
+    sessionRun.mockResolvedValueOnce({ records: [] });
+    await withTestScope(() =>
+      recallPeerResults({ embedding: new Array<number>(1536).fill(0.1), limit: 4 }),
+    );
+    const cypher = String(sessionRun.mock.calls[0]?.[0] ?? "");
+    expect(cypher).toContain("db.index.vector.queryNodes('execution_embedding_index', $k");
+    expect(cypher).toContain("LIMIT $limit");
+    const params = sessionRun.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(params.k).toBe(BigInt(12)); // 4 x 3
+    expect(params.limit).toBe(BigInt(4));
+  });
+});
+
+// Linear OXA-1929 — ANN tenant-filter oversampling (silent recall degradation).
+//
+// `db.index.vector.queryNodes` returns the GLOBAL top-k by similarity; the
+// tenant predicate (m.orgId = $orgId) is applied AFTER that call in the WHERE
+// clause. As other tenants accumulate more/higher-scoring graph volume, a
+// naive query (k === limit) can be entirely crowded out for the active
+// tenant — recall silently shrinks to zero with no error. These tests seed a
+// synthetic global ranking that reproduces exactly that crowd-out and assert
+// the shipped implementation (oversampledLimit under the hood) still
+// recovers the full requested K for the target tenant. The mock's
+// `sessionRun` implementation below mirrors what Neo4j actually executes:
+// slice the global pool to the emitted `$k`, THEN filter to the target
+// tenant, THEN trim to `$limit` — so this test fails if `recallMemories` /
+// `recallPeerResults` ever regress to requesting `k = limit` again.
+describe("multi-tenant recall regression (OXA-1929)", () => {
+  beforeEach(() => {
+    sessionRun.mockReset();
+    sessionClose.mockClear();
+  });
+
+  function seedMemoryRow(orgId: string, score: number, i: number) {
+    return {
+      orgId,
+      score,
+      record: fakeRecord({
+        id: `m_${orgId}_${i}`,
+        publicId: `pub_${orgId}_${i}`,
+        nodeRef: "",
+        memoryClass: "OBSERVATION",
+        memoryKind: "constraint",
+        lesson: `lesson ${i}`,
+        source: "test",
+        confidenceScore: 100,
+        enforcementScore: null,
+        status: "ACTIVE",
+        subjectHint: "",
+        halfLifeDays: 30,
+        decayFloor: 5,
+        lastEvidenceAt: null,
+        citationCount: 0,
+        influenceCount: 0,
+        violationCount: 0,
+        createdByKind: "AGENT",
+        createdById: null,
+        confirmedByKind: null,
+        confirmedById: null,
+        createdAt: "2026-01-01T00:00:00Z",
+        lastReinforcedAt: null,
+        score,
+      }),
+    };
+  }
+
+  it("recallMemories returns the full requested K for the target tenant even though other tenants dominate the global top-K", async () => {
+    const limit = 10;
+    // Global ANN ranking (already sorted DESC by score, as Neo4j returns it):
+    //   ranks 0-19  → 20 higher-scoring memories from a noisy OTHER tenant
+    //   ranks 20-49 → 30 lower-scoring memories from the TARGET tenant
+    // A naive k=limit=10 query never reaches past rank 9, so the target
+    // tenant would get zero results. oversampledLimit(10) = 30, which reaches
+    // rank 29 and surfaces the first 10 target-tenant rows.
+    const globalPool = [
+      ...Array.from({ length: 20 }, (_, i) => seedMemoryRow("org-noise", 1 - i * 0.001, i)),
+      ...Array.from({ length: 30 }, (_, i) => seedMemoryRow("org-target", 0.5 - i * 0.001, i)),
+    ];
+
+    // Sanity check the scenario is a genuine regression case: an unfixed
+    // k === limit query against this exact pool starves the target tenant.
+    expect(
+      globalPool.slice(0, limit).filter((r) => r.orgId === "org-target"),
+    ).toHaveLength(0);
+
+    sessionRun.mockImplementation(async (_cypher: unknown, params: unknown) => {
+      const k = Number((params as Record<string, unknown>).k as bigint);
+      const topK = globalPool.slice(0, k);
+      const tenantFiltered = topK.filter((r) => r.orgId === "org-target");
+      const trimmed = tenantFiltered.slice(0, limit);
+      return { records: trimmed.map((r) => r.record) };
+    });
+
+    const rows = await withTestScope(() =>
+      recallMemories({ embedding: new Array<number>(1536).fill(0.1), limit }),
+    );
+
+    expect(rows).toHaveLength(limit);
+  });
+
+  it("recallPeerResults returns the full requested K for the target tenant even though other tenants dominate the global top-K", async () => {
+    const limit = 4;
+    // oversampledLimit(4) = 12, so 8 noise ranks + 8 target ranks (only the
+    // first 4 needed) reproduces the same crowd-out/recovery shape at a
+    // smaller K.
+    const globalPool = [
+      ...Array.from({ length: 8 }, (_, i) => ({
+        runId: `noise-${i}`,
+        summary: "noise",
+        score: 1 - i * 0.001,
+        orgId: "org-noise",
+      })),
+      ...Array.from({ length: 8 }, (_, i) => ({
+        runId: `target-${i}`,
+        summary: `peer result ${i}`,
+        score: 0.5 - i * 0.001,
+        orgId: "org-target",
+      })),
+    ];
+
+    expect(
+      globalPool.slice(0, limit).filter((r) => r.orgId === "org-target"),
+    ).toHaveLength(0);
+
+    sessionRun.mockImplementation(async (_cypher: unknown, params: unknown) => {
+      const k = Number((params as Record<string, unknown>).k as bigint);
+      const topK = globalPool.slice(0, k);
+      const tenantFiltered = topK.filter((r) => r.orgId === "org-target");
+      const trimmed = tenantFiltered.slice(0, limit);
+      return {
+        records: trimmed.map((r) =>
+          fakeRecord({ runId: r.runId, summary: r.summary, score: r.score }),
+        ),
+      };
+    });
+
+    const rows = await withTestScope(() =>
+      recallPeerResults({ embedding: new Array<number>(1536).fill(0.1), limit }),
+    );
+
+    expect(rows).toHaveLength(limit);
   });
 });
 
@@ -395,6 +620,7 @@ describe("listMemories", () => {
     expect(pageParams.memoryClass).toBeNull();
     expect(pageParams.memoryKind).toBeNull();
     expect(pageParams.minEnforcement).toBeNull();
+    expect(pageParams.minCitations).toBeNull();
   });
 
   it("forwards memoryClass/memoryKind/minEnforcement/nodeRef filters", async () => {
@@ -417,6 +643,55 @@ describe("listMemories", () => {
     const countCypher = String(sessionRun.mock.calls[0]?.[0] ?? "");
     expect(countCypher).toContain("$memoryClass IS NULL OR");
     expect(countCypher).toContain("$minEnforcement IS NULL OR");
+  });
+
+  it("applies the minCitations floor as a WHERE predicate on both queries", async () => {
+    mockCountThenPage(0, []);
+    await withTestScope(() =>
+      listMemories({ limit: 100, offset: 0, minCitations: 3 }),
+    );
+    const countCypher = String(sessionRun.mock.calls[0]?.[0] ?? "");
+    const pageCypher = String(sessionRun.mock.calls[1]?.[0] ?? "");
+    expect(countCypher).toContain(
+      "$minCitations IS NULL OR coalesce(m.citation_count, 0) >= $minCitations",
+    );
+    expect(pageCypher).toContain("$minCitations IS NULL OR");
+    const countParams = sessionRun.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(countParams.minCitations).toBe(3);
+  });
+
+  it("orders by citation count (desc, recency tie-break) when sort=citationCount", async () => {
+    mockCountThenPage(0, []);
+    await withTestScope(() =>
+      listMemories({ limit: 100, offset: 0, sort: "citationCount" }),
+    );
+    const pageCypher = String(sessionRun.mock.calls[1]?.[0] ?? "");
+    expect(pageCypher).toContain(
+      "ORDER BY coalesce(m.citation_count, 0) DESC, m.createdAt DESC",
+    );
+  });
+
+  it("orders by citation count ascending when sortDir=asc", async () => {
+    mockCountThenPage(0, []);
+    await withTestScope(() =>
+      listMemories({
+        limit: 100,
+        offset: 0,
+        sort: "citationCount",
+        sortDir: "asc",
+      }),
+    );
+    const pageCypher = String(sessionRun.mock.calls[1]?.[0] ?? "");
+    expect(pageCypher).toContain(
+      "ORDER BY coalesce(m.citation_count, 0) ASC, m.createdAt DESC",
+    );
+  });
+
+  it("defaults to newest-first ordering when no sort is supplied", async () => {
+    mockCountThenPage(0, []);
+    await withTestScope(() => listMemories({ limit: 100, offset: 0 }));
+    const pageCypher = String(sessionRun.mock.calls[1]?.[0] ?? "");
+    expect(pageCypher).toContain("ORDER BY m.createdAt DESC");
   });
 
   it("returns an empty page and total 0 when the tenant has no memories", async () => {

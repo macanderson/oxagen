@@ -33,7 +33,9 @@ const BASE_AGG = {
   conflicts: [],
   timeline: [],
   children: [],
-  firstError: null,
+  aggregatedDataTruncated: false,
+      recheckAfterMs: null,
+      firstError: null,
 };
 
 // The inngest function handler is exposed as `.fn` on the created function.
@@ -61,7 +63,7 @@ describe("agent.aggregate-fanout", () => {
     );
     // Reads the snapshot via the kernel and emits the aggregated event.
     expect(mocks.invoke).toHaveBeenCalledWith(
-      "agent.subagent.aggregate",
+      "aggregate_subagents",
       expect.objectContaining({ fanoutId: "fan_1" }),
       expect.objectContaining({ orgId: "org_1", workspaceId: "ws_1", surface: "runner" }),
     );

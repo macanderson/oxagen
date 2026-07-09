@@ -1,15 +1,23 @@
 import { Suspense } from "react";
 import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { eq, and } from "drizzle-orm";
 import { withTenantDb, withSystemDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { getSessionOrRedirect } from "@/lib/session";
-import { assertOrgMember, resolveOrgOrRedirect } from "@/lib/resolve-org";
+import {
+  assertOrgMember,
+  getOrgRole,
+  resolveOrgOrRedirect,
+} from "@/lib/resolve-org";
+import { loadMfaPolicy } from "@/app/[orgSlug]/security/mfa/actions";
+import { evaluateMfaGate } from "@/lib/mfa-enforcement";
 
 // Sentinel workspaceId for org-only routes (no workspace context). — OXA-1515
 const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
 import { planLabelFrom } from "@/lib/plan-label";
 import { isLowBalance } from "@oxagen/billing";
+import { logger } from "@oxagen/handlers/logger";
 import { AppShell } from "@/components/shell/app-shell";
 import type { ShellNavData } from "@/components/shell/shell-nav-slots";
 import { PageContextProvider } from "@/lib/page-context";
@@ -90,6 +98,35 @@ export default async function OrgLayout({
   // unknown org. This is the single enforcement point for all [orgSlug] routes.
   await assertOrgMember(org.id, session.user.id);
 
+  // MFA enforcement gate — privileged (owner/admin) users in an org that
+  // requires MFA must enroll TOTP once the grace window lapses, or they are
+  // redirected to their account security page to set it up. Short-circuit on
+  // the common path: only orgs that opted into mfa_required pay for the extra
+  // role + enrollment reads. /account/security lives OUTSIDE [orgSlug], so this
+  // redirect never loops. — security-hardening
+  const mfaPolicy = await loadMfaPolicy(org.id);
+  if (mfaPolicy?.mfaRequired) {
+    const [role, twoFactorRows] = await Promise.all([
+      getOrgRole(org.id, session.user.id),
+      withSystemDb((tx) =>
+        tx
+          .select({ enabled: schema.users.twoFactorEnabled })
+          .from(schema.users)
+          .where(eq(schema.users.id, session.user.id))
+          .limit(1),
+      ),
+    ]);
+    const decision = evaluateMfaGate({
+      role,
+      twoFactorEnabled: twoFactorRows[0]?.enabled ?? false,
+      policy: mfaPolicy,
+      now: new Date(),
+    });
+    if (decision.action === "redirect-enroll") {
+      redirect("/account/security?enroll=required");
+    }
+  }
+
   // planTier gates which nav items the (immediately-rendered) sidebar shows, so
   // it CANNOT be deferred — fetch just the current org's active-subscription
   // tier with one small indexed query. The heavier org-list join, workspace
@@ -165,7 +202,10 @@ export default async function OrgLayout({
       // billing read never blocks the whole app shell from rendering. — OXA-1515
       runInTenantScope({ orgId: org.id, workspaceId: ORG_ONLY_WS }, () =>
         isLowBalance(org.id),
-      ).catch(() => null),
+      ).catch((err) => {
+        logger.warn({ err, orgId: org.id }, "shell: isLowBalance failed — hiding credit pill");
+        return null;
+      }),
     ]);
 
     return {

@@ -367,7 +367,7 @@ Every contract call passes through `contract.invoke(rawCtx, input)`. No alternat
 ```ts
 // packages/oxagen/src/contracts/organization.create.ts
 export const organizationCreate = defineContract({
-  id: "organization.create",
+  id: "org.create",
   domain: "organization",
   sensitivity: "high",
   defaultEffect: "deny",

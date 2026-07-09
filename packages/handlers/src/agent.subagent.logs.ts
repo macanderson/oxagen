@@ -116,8 +116,10 @@ export const agentSubagentLogsHandler: CapabilityHandler<typeof agentSubagentLog
   const userId = ctx.userId;
 
   const aggregate = (await invoke(
-    "agent.subagent.aggregate",
-    { fanoutId: input.fanoutId },
+    "aggregate_subagents",
+    // Full payloads on purpose: the logfile is a downloadable artifact built
+    // server-side, not an LLM tool result (docs/specs/graph-mediated-fanout).
+    { fanoutId: input.fanoutId, includeOutputs: true },
     ctx,
   )) as AgentSubagentAggregateOutput;
 

@@ -155,7 +155,7 @@ describe("skill.author capability", () => {
   // ── capability registry ───────────────────────────────────────────────────
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("skill.author")).toBe(skillAuthor);
+    expect(getCapability("author_skill")).toBe(skillAuthor);
   });
 
   it("has mode sync", () => {

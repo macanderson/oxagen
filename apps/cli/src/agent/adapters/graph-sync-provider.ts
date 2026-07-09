@@ -38,7 +38,13 @@ export function createGraphSyncProvider(opts: GraphSyncOptions): GraphSyncProvid
     const lineage = pendingLineage;
     pendingLineage = [];
     for (const entry of lineage) {
-      void pushLineage(opts, entry).catch(() => {});
+      void pushLineage(opts, entry).catch((err: unknown) => {
+        // Non-blocking: a dropped lineage push must never fail a turn, but it is
+        // no longer silent — record it on the CLI debug channel.
+        void debugLog("error", "graph.lineage-push-failed", {
+          message: err instanceof Error ? err.message : String(err),
+        });
+      });
     }
   }
 

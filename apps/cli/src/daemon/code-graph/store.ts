@@ -82,6 +82,8 @@ const CREATE_NODES_SQL = `
     signature   VARCHAR,
     docstring   VARCHAR,
     domain      VARCHAR,
+    embedding   VARCHAR,
+    embedding_provider VARCHAR,
     PRIMARY KEY (root, id)
   )
 `;
@@ -91,6 +93,16 @@ const CREATE_NODES_SQL = `
 const MIGRATE_ADD_DOMAIN_SQL =
   "ALTER TABLE code_nodes ADD COLUMN IF NOT EXISTS domain VARCHAR";
 
+// Migration: add the Group 3 semantic-index columns. `embedding` holds the
+// JSON-encoded float vector (a VARCHAR, not a native array, so the raw duckdb
+// callback driver needs no array binding), `embedding_provider` the id of the
+// provider that produced it so a provider swap re-embeds instead of comparing
+// incompatible vectors.
+const MIGRATE_ADD_EMBEDDING_SQL =
+  "ALTER TABLE code_nodes ADD COLUMN IF NOT EXISTS embedding VARCHAR";
+const MIGRATE_ADD_EMBEDDING_PROVIDER_SQL =
+  "ALTER TABLE code_nodes ADD COLUMN IF NOT EXISTS embedding_provider VARCHAR";
+
 const CREATE_EDGES_SQL = `
   CREATE TABLE IF NOT EXISTS code_edges (
     root      VARCHAR NOT NULL,
@@ -99,9 +111,14 @@ const CREATE_EDGES_SQL = `
     source    VARCHAR NOT NULL,
     target    VARCHAR NOT NULL,
     type      VARCHAR NOT NULL,
+    domain    VARCHAR,
     PRIMARY KEY (root, id)
   )
 `;
+
+// Migration: add domain column to existing DBs that pre-date this schema change.
+const MIGRATE_ADD_EDGE_DOMAIN_SQL =
+  "ALTER TABLE code_edges ADD COLUMN IF NOT EXISTS domain VARCHAR";
 
 const CREATE_FILES_SQL = `
   CREATE TABLE IF NOT EXISTS code_files (
@@ -153,7 +170,18 @@ export class CodeGraphStore {
             // Migrate existing DBs: add domain column if it does not exist.
             this.conn.run(MIGRATE_ADD_DOMAIN_SQL, (e4: Error | null) => {
               if (e4) return reject(e4);
-              resolve();
+              // Group 3: add the semantic-index columns (embedding + provider).
+              this.conn.run(MIGRATE_ADD_EMBEDDING_SQL, (e5: Error | null) => {
+                if (e5) return reject(e5);
+                this.conn.run(MIGRATE_ADD_EMBEDDING_PROVIDER_SQL, (e6: Error | null) => {
+                  if (e6) return reject(e6);
+                  // Edge domain tagging: mirrors the node-level migration above.
+                  this.conn.run(MIGRATE_ADD_EDGE_DOMAIN_SQL, (e7: Error | null) => {
+                    if (e7) return reject(e7);
+                    resolve();
+                  });
+                });
+              });
             });
           });
         });
@@ -220,29 +248,31 @@ export class CodeGraphStore {
       for (const n of fileGraph.nodes) {
         await this.runSql(
           `INSERT INTO code_nodes
-             (root, id, kind, name, path, range_start, range_end, language, signature, docstring, domain)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             (root, id, kind, name, path, range_start, range_end, language, signature, docstring, domain, embedding, embedding_provider)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT (root, id) DO UPDATE SET
              kind = excluded.kind, name = excluded.name, path = excluded.path,
              range_start = excluded.range_start, range_end = excluded.range_end,
              language = excluded.language, signature = excluded.signature,
-             docstring = excluded.docstring, domain = excluded.domain`,
+             docstring = excluded.docstring, domain = excluded.domain,
+             embedding = excluded.embedding, embedding_provider = excluded.embedding_provider`,
           [
             root, n.id, n.kind, n.name, n.path,
             n.range.start, n.range.end, n.language,
             n.signature ?? null, n.docstring ?? null, n.domain ?? null,
+            n.embedding ? JSON.stringify(n.embedding) : null, n.embeddingProvider ?? null,
           ],
         );
       }
       for (const e of fileGraph.edges) {
         const id = computeEdgeId(e.source, e.target, e.type);
         await this.runSql(
-          `INSERT INTO code_edges (root, id, file_path, source, target, type)
-           VALUES (?, ?, ?, ?, ?, ?)
+          `INSERT INTO code_edges (root, id, file_path, source, target, type, domain)
+           VALUES (?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT (root, id) DO UPDATE SET
              file_path = excluded.file_path, source = excluded.source,
-             target = excluded.target, type = excluded.type`,
-          [root, id, relPath, e.source, e.target, e.type],
+             target = excluded.target, type = excluded.type, domain = excluded.domain`,
+          [root, id, relPath, e.source, e.target, e.type, e.domain ?? null],
         );
       }
       await this.runSql(
@@ -306,6 +336,71 @@ export class CodeGraphStore {
     }
   }
 
+  /**
+   * Bulk-stamp the `domain` property on every code_edge declared by a file
+   * (`file_path`) whose relative path matches a key in `domainMap` — the same
+   * "declaring file owns it" rule `code_edges.file_path` already uses (see the
+   * module doc comment). An edge whose declaring file has no confident domain
+   * is left untouched (null), matching `updateNodeDomains` — never fabricated.
+   *
+   * Called alongside `updateNodeDomains` so a domain slices the whole subgraph
+   * a file contributes, not just its nodes.
+   *
+   * Idempotent: re-running with the same map is a no-op.
+   */
+  async updateEdgeDomains(root: string, domainMap: Map<string, string>): Promise<void> {
+    await this.ready;
+    if (domainMap.size === 0) return;
+
+    await this.runSql("BEGIN TRANSACTION");
+    try {
+      for (const [relPath, domain] of domainMap) {
+        await this.runSql(
+          "UPDATE code_edges SET domain = ? WHERE root = ? AND file_path = ?",
+          [domain, root, relPath],
+        );
+      }
+      await this.runSql("COMMIT");
+    } catch (err) {
+      await this.runSql("ROLLBACK");
+      throw err;
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Embedding updates (Group 3 semantic index)
+  // -------------------------------------------------------------------------
+
+  /**
+   * Bulk-persist semantic embeddings on individual nodes, keyed by node id.
+   * Called by the semantic index after it embeds file nodes lazily at query
+   * time, so a cold start reuses the vectors instead of re-embedding.
+   *
+   * Idempotent: re-running with the same vectors is a no-op. Rows whose id is
+   * absent for this root are simply not updated.
+   */
+  async updateNodeEmbeddings(
+    root: string,
+    embeddings: Map<string, { vector: number[]; provider: string }>,
+  ): Promise<void> {
+    await this.ready;
+    if (embeddings.size === 0) return;
+
+    await this.runSql("BEGIN TRANSACTION");
+    try {
+      for (const [id, { vector, provider }] of embeddings) {
+        await this.runSql(
+          "UPDATE code_nodes SET embedding = ?, embedding_provider = ? WHERE root = ? AND id = ?",
+          [JSON.stringify(vector), provider, root, id],
+        );
+      }
+      await this.runSql("COMMIT");
+    } catch (err) {
+      await this.runSql("ROLLBACK");
+      throw err;
+    }
+  }
+
   // -------------------------------------------------------------------------
   // Read
   // -------------------------------------------------------------------------
@@ -314,12 +409,12 @@ export class CodeGraphStore {
   async loadGraph(root: string): Promise<CodeGraph> {
     await this.ready;
     const nodeRows = await this.querySql(
-      `SELECT id, kind, name, path, range_start, range_end, language, signature, docstring, domain
+      `SELECT id, kind, name, path, range_start, range_end, language, signature, docstring, domain, embedding, embedding_provider
        FROM code_nodes WHERE root = ?`,
       [root],
     );
     const edgeRows = await this.querySql(
-      "SELECT source, target, type FROM code_edges WHERE root = ?",
+      "SELECT source, target, type, domain FROM code_edges WHERE root = ?",
       [root],
     );
     const nodes = new Map<string, CodeNode>();
@@ -328,6 +423,7 @@ export class CodeGraphStore {
       source: r["source"] as string,
       target: r["target"] as string,
       type: r["type"] as CodeEdgeType,
+      domain: (r["domain"] as string | null) ?? undefined,
     }));
     return { nodes, edges };
   }
@@ -382,7 +478,23 @@ function rowToNode(row: Record<string, unknown>): CodeNode {
     signature: (row["signature"] as string | null) ?? undefined,
     docstring: (row["docstring"] as string | null) ?? undefined,
     domain: (row["domain"] as string | null) ?? undefined,
+    embedding: parseEmbedding(row["embedding"]),
+    embeddingProvider: (row["embedding_provider"] as string | null) ?? undefined,
   };
+}
+
+/** Parse a stored embedding cell (JSON-encoded float array) back to numbers. */
+function parseEmbedding(cell: unknown): number[] | undefined {
+  if (typeof cell !== "string" || cell.length === 0) return undefined;
+  try {
+    const parsed = JSON.parse(cell) as unknown;
+    if (Array.isArray(parsed) && parsed.every((n) => typeof n === "number")) {
+      return parsed as number[];
+    }
+  } catch {
+    /* corrupt cell — treat as no embedding rather than failing the whole load */
+  }
+  return undefined;
 }
 
 /** Create a CodeGraphStore. `:memory:` for tests, a file path otherwise. */

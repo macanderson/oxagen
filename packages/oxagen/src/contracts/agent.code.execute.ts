@@ -74,7 +74,7 @@ export function sanitizeSandboxEnv(
 }
 
 export const agentCodeExecute = registerCapability({
-  name: "agent.code.execute",
+  name: "execute_code",
   domain: "agent",
   description:
     "Execute a code snippet in an isolated sandbox and return stdout, stderr, and exit code. Supports node, python, and shell. Requires SANDBOX_ENABLED=true.",
@@ -101,13 +101,28 @@ export const agentCodeExecute = registerCapability({
           "(no absolute paths or `..`); capped at 64 files / 5 MiB total.",
       ),
     stdin: z.string().optional().describe("Optional stdin input"),
+    // NOTE: env is intentionally NOT transformed at parse time. The handler
+    // applies `sanitizeSandboxEnv` to the caller-supplied portion so it can
+    // report which reserved keys were stripped (see `output.warnings`) and merge
+    // trusted vault secrets (resolved from `environmentId`) BELOW the caller env
+    // without the denylist stripping them. `invoke()` always routes through the
+    // handler, so the sanitize boundary is never skipped.
     env: z
       .record(z.string(), z.string())
       .optional()
-      .transform(sanitizeSandboxEnv)
       .describe(
         "Environment variables to inject. Reserved sandbox/host names and prefixes " +
           "(PATH, LD_*, MODAL_*, DATABASE_*, …) are stripped; capped at 32 keys / 8KB.",
+      ),
+    environmentId: z
+      .string()
+      .min(1)
+      .optional()
+      .describe(
+        "Optional workspace environment id (env_…). When set, that environment's " +
+          "vault secrets are resolved server-side and injected into the sandbox " +
+          "BELOW the caller-supplied env (caller values win). Trusted vault secrets " +
+          "are NOT subject to the reserved-key denylist.",
       ),
     timeoutMs: z
       .number()
@@ -135,6 +150,13 @@ export const agentCodeExecute = registerCapability({
     executionMs: z.number().int(),
     timedOut: z.boolean(),
     oomKilled: z.boolean(),
+    warnings: z
+      .array(z.string())
+      .optional()
+      .describe(
+        "Non-fatal advisories about the run, e.g. reserved env keys that were " +
+          "stripped from the caller-supplied env before execution.",
+      ),
   }),
 });
 

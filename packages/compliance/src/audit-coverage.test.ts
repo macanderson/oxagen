@@ -84,7 +84,7 @@ const REQUIRED_EMIT_PREFIXES: readonly string[] = [
   "workspace.create", // workspace creation (privileged bootstrap)
   "workspace.invite", // workspace member invitation
   "workspace.settings.write", // workspace-profile mutation
-  "organization.create", // org creation (privileged bootstrap)
+  "org.create", // org creation (privileged bootstrap)
   "iam-provision", // IAM bootstrap helper (roles / principals / grants)
   "prompt.settings.write", // system-prompt customization mutation
 ] as const;
@@ -101,7 +101,7 @@ function isAllowlisted(basename: string): boolean {
   const name = basename.replace(/\.ts$/, "");
   return REQUIRED_EMIT_PREFIXES.some(
     (prefix) =>
-      // Either the file IS the prefix (e.g. "organization.create") or it begins
+      // Either the file IS the prefix (e.g. "org.create") or it begins
       // with the dotted prefix (e.g. "api.key." → "api.key.revoke").
       name === prefix || name.startsWith(prefix),
   );

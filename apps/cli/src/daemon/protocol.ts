@@ -21,7 +21,7 @@ export type DaemonRequest =
   | { id: string; method: "session.list"; params: Record<string, never> }
   | { id: string; method: "graph.build"; params: { root?: string } }
   | { id: string; method: "graph.query"; params: { nodeId: string; hops?: number; edgeTypes?: string[]; root?: string } }
-  | { id: string; method: "graph.search"; params: { pattern: string; limit?: number; root?: string } }
+  | { id: string; method: "search_graph"; params: { pattern: string; limit?: number; root?: string } }
   | { id: string; method: "health"; params: Record<string, never> }
   | { id: string; method: "shutdown"; params: Record<string, never> };
 
@@ -69,6 +69,13 @@ export interface DaemonConfig {
   /** DuckDB path for the persistent code graph (separate file to avoid lock
    *  contention with the context store). Default: ~/.config/oxagen/code-graph.duckdb */
   codeGraphDbPath: string;
+  /**
+   * RSS ceiling in bytes for the daemon process (0 disables). Defaults to
+   * OXAGEN_DAEMON_MAX_RSS_MB (megabytes) or 2 GB — the daemon is the CLI's
+   * one always-on process, so it carries its own memory watchdog: warn at
+   * 80%, graceful shutdown at the ceiling.
+   */
+  maxRssBytes?: number;
 }
 
 export const DEFAULT_DAEMON_CONFIG: Partial<DaemonConfig> = {

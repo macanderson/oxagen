@@ -27,13 +27,13 @@ const installItemSchema = z.object({
 });
 
 export const pluginOrgInstallBulk = registerCapability({
-  name: "plugin.org.install_bulk",
+  name: "install_plugins_bulk",
   domain: "plugin",
   description: "Bulk install catalog or custom plugin servers to the org allow-list. Per-item errors are captured — not all-or-nothing.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   agent: { requiresApproval: true, riskLevel: "medium", category: "plugin" },
-  layers: ["api", "docs", "mcp", "unit"],
+  layers: ["api", "docs", "mcp", "unit", "app"],
   scoped: false,
   sensitivity: "medium",
   defaultEffect: "deny",
@@ -49,6 +49,7 @@ export const pluginOrgInstallBulk = registerCapability({
         // the app's installBulkPlugin action consumes — must stay in sync.
         pluginId: z.string().nullable(),
         orgListingId: z.string().nullable(),
+        authKind: z.enum(["oauth", "secret", "none"]).nullable(),
         error: z.string().nullable(),
       }),
     ),

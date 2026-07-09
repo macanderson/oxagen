@@ -3,12 +3,13 @@
  */
 import { writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { join, dirname } from "node:path";
+import { DEFAULT_CODING_MODEL } from "../agent/model-catalog.js";
 
 const TEMPLATE = (name: string) => `---
 name: ${name}
 description: Describe when this agent should be used (the planner reads this).
 tools: Read, Grep, Glob, Bash
-model: anthropic/claude-sonnet-4.6
+model: ${DEFAULT_CODING_MODEL}
 ---
 
 You are the ${name} agent.

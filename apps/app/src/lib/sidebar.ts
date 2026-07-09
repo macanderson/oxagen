@@ -10,8 +10,10 @@
 
 import type { PlanTier } from "@oxagen/oxagen/types";
 import {
+  Activity,
   ArrowLeft,
   BookOpen,
+  Bot,
   Building2,
   CreditCard,
   KeyRound,
@@ -73,6 +75,7 @@ export type SidebarConfig = {
 const workspaceConfig: SidebarConfig = {
   mode: "workspace",
   groupLabel: "Workspace",
+  toolsLabel: "Studio",
   items: [
     {
       id: "ask",
@@ -98,15 +101,39 @@ const workspaceConfig: SidebarConfig = {
       group: "primary",
     },
     {
+      id: "activity",
+      label: "Activity",
+      icon: Activity,
+      // Recent agent runs + per-run span-tree trace viewer.
+      href: (ctx) =>
+        ctx.workspaceSlug
+          ? workspace.activity.root(ctx as Required<ScopeContext>)
+          : `/${ctx.orgSlug}`,
+      group: "primary",
+    },
+    // Studio group — build interactive agents. The Agent Builder is the
+    // centerpiece. Agent Tools is NOT a primary nav item: it is the second
+    // tab of the Studio surface (studio/layout.tsx), always one click away
+    // from Agents, so promoting it here duplicated the destination.
+    {
+      id: "agents",
+      label: "Agents",
+      icon: Bot,
+      href: (ctx) =>
+        ctx.workspaceSlug
+          ? workspace.studio.agents(ctx as Required<ScopeContext>)
+          : `/${ctx.orgSlug}`,
+      group: "tools",
+    },
+    {
       id: "marketplace",
       label: "Marketplace",
       icon: ShoppingBag,
-      // The plugin marketplace now lives at the workspace settings → plugins route.
-      // When workspaceSlug is available we link to the workspace-scoped page;
-      // otherwise fall back to the org root (shouldn't happen in ws-mode).
+      // Discovery + install surface, two sides: Agent Tools and Integrations.
+      // Managing what is installed lives in Studio → Agent Tools.
       href: (ctx) =>
         ctx.workspaceSlug
-          ? workspace.settings.plugins(ctx as Required<ScopeContext>)
+          ? workspace.marketplace.root(ctx as Required<ScopeContext>)
           : org.settings.plugins(ctx),
       group: "footer",
     },
@@ -380,7 +407,7 @@ export function activeHrefFor(
  * routes.ts into a single searchable list.
  *
  * Each entry has:
- *   label  — display string (e.g. "Knowledge · Sources")
+ *   label  — display string (e.g. "Knowledge · Repos")
  *   href   — resolved path for the given ctx
  *   parent — the parent sidebar item id when applicable
  *
@@ -410,13 +437,13 @@ export function enumerateNavTargets(
 
     // Knowledge tabs
     targets.push({
-      label: "Knowledge · Sources",
-      href: workspace.knowledge.sources(wsCtx),
+      label: "Knowledge · Repos",
+      href: workspace.knowledge.repos(wsCtx),
       parent: "knowledge",
     });
     targets.push({
-      label: "Knowledge · Graph",
-      href: workspace.knowledge.graph(wsCtx),
+      label: "Knowledge · Inference",
+      href: workspace.knowledge.inference(wsCtx),
       parent: "knowledge",
     });
     targets.push({

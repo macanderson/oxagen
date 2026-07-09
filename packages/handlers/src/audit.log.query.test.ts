@@ -64,7 +64,7 @@ describe("auditLogQueryHandler", () => {
         occurredAt: new Date("2024-01-03T00:00:00Z"),
         actorUserId: "u1",
         workspaceId: "ws_1",
-        capability: "billing.subscription.upgrade.start",
+        capability: "start_subscription_upgrade",
         outcome: "success",
         requestId: "req1",
       },
@@ -90,7 +90,7 @@ describe("auditLogQueryHandler", () => {
     expect(result.events[0]?.source).toBe("playbook");
     expect(result.events[0]?.playbookRunId).toBe("run_1");
     expect(result.events[1]?.source).toBe("security");
-    expect(result.events[1]?.capability).toBe("billing.subscription.upgrade.start");
+    expect(result.events[1]?.capability).toBe("start_subscription_upgrade");
     expect(result.hasMore).toBe(false);
     expect(result.total).toBe(2);
   });

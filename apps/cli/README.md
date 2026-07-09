@@ -249,6 +249,24 @@ oxagen plugin org list
 oxagen plugin org uninstall --listing listing_linear
 ```
 
+### Run a fleet of local agent sessions (Mission Control)
+
+Every session is an append-only NDJSON event log on disk; the TUI, `--json`
+pipes, and a second terminal all render the same stream (ADR-023).
+
+```bash
+oxagen fleet                          # Mission Control TUI: rail, merged timeline, live composer
+oxagen fleet dispatch "fix the auth bug"   # detached session; prints its sid and returns immediately
+oxagen fleet ls --json | jq '.[].sid'      # roster as machine JSON
+oxagen fleet watch --json                  # every agent's events, one NDJSON stream (pipe it anywhere)
+oxagen fleet send 7f2q "also add tests"    # follow-up turn into a running session
+oxagen fleet attach 7f2q                   # focus one session (TTY) or stream it (--json)
+oxagen fleet cancel --all && oxagen fleet clean
+```
+
+In the REPL, end any prompt with ` &` to background it into the fleet and keep
+typing. Full reference: the Fleet and Scripting pages in the docs.
+
 ### Run background agent tasks
 
 ```bash
@@ -365,6 +383,28 @@ oxagen automation list --workspace ws_different456
 
 # Authenticate and save defaults to config (opens browser)
 oxagen login
+```
+
+---
+
+## Telemetry
+
+The CLI collects anonymous usage telemetry (command names, durations, coarse
+success/error categories, OS/arch) to improve the product. It **never**
+collects code, prompts, file contents, file paths, model slugs, API keys, or
+any other personal or identifying data — see [TELEMETRY.md](../../TELEMETRY.md)
+for the exact field list.
+
+Telemetry is **on by default**. Opt out any time:
+
+```bash
+oxagen telemetry off       # persists the choice to ~/.config/oxagen/config.json
+oxagen telemetry status    # show enabled/disabled, install id, ingest endpoint
+oxagen telemetry on        # re-enable
+
+# or, without touching config:
+export OXAGEN_TELEMETRY=0
+export DO_NOT_TRACK=1      # https://consoledonottrack.com/
 ```
 
 ---

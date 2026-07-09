@@ -18,6 +18,16 @@
 export interface ModelRate {
   inputPer1M: number;
   outputPer1M: number;
+  /**
+   * USD per 1,000,000 CACHED-read input tokens (a provider prompt-cache hit).
+   * Always cheaper than `inputPer1M` — a turn that re-sends the same system
+   * prompt/code-graph context across many steps bills the repeat reads at
+   * this rate, not the fresh-input rate. Mirrors
+   * `packages/billing/src/pricing.ts`'s `cachedInputPer1M`; kept in sync by
+   * hand since this card is intentionally vendored, not imported (same as
+   * apps/cli/src/agent/rate-card.ts's identical copy — keep both in sync).
+   */
+  cachedInputPer1M: number;
 }
 
 /** One priced model family. Matched by longest `family` prefix on the slug. */
@@ -34,19 +44,41 @@ export interface RateCardEntry {
 /**
  * The rate card. Order matters: longest/most-specific prefixes first so
  * "gpt-4o-mini" wins over "gpt-4o". Add a row to price a new family.
+ *
+ * `cachedInputPer1M` follows each vendor's published cache-read discount:
+ * Anthropic prices a cache read at 10% of fresh input (matches
+ * `packages/billing/src/pricing.ts`'s anthropic rows exactly); OpenAI prices
+ * a cache read at 50% of fresh input (ditto — gpt-4o/gpt-4o-mini match
+ * pricing.ts exactly; gpt-5 has no pricing.ts row yet, so it follows the same
+ * 50% OpenAI ratio). Gemini isn't in pricing.ts at all yet; its cache reads
+ * are estimated at 25% of fresh input per Google's published context-caching
+ * discount — least authoritative row in this card, update when it lands in
+ * pricing.ts.
  */
 export const RATE_CARD: RateCardEntry[] = [
-  { family: "claude-opus", label: "Claude Opus", vendor: "anthropic", rate: { inputPer1M: 15.0, outputPer1M: 75.0 } },
-  { family: "claude-sonnet", label: "Claude Sonnet", vendor: "anthropic", rate: { inputPer1M: 3.0, outputPer1M: 15.0 } },
-  { family: "claude-haiku", label: "Claude Haiku", vendor: "anthropic", rate: { inputPer1M: 1.0, outputPer1M: 5.0 } },
-  { family: "gpt-5", label: "GPT-5", vendor: "openai", rate: { inputPer1M: 1.25, outputPer1M: 10.0 } },
-  { family: "gpt-4o-mini", label: "GPT-4o mini", vendor: "openai", rate: { inputPer1M: 0.15, outputPer1M: 0.6 } },
-  { family: "gpt-4o", label: "GPT-4o", vendor: "openai", rate: { inputPer1M: 2.5, outputPer1M: 10.0 } },
-  { family: "gemini", label: "Gemini", vendor: "google", rate: { inputPer1M: 1.25, outputPer1M: 5.0 } },
+  { family: "claude-fable", label: "Claude Fable", vendor: "anthropic", rate: { inputPer1M: 15.0, outputPer1M: 75.0, cachedInputPer1M: 1.5 } },
+  { family: "claude-opus", label: "Claude Opus", vendor: "anthropic", rate: { inputPer1M: 15.0, outputPer1M: 75.0, cachedInputPer1M: 1.5 } },
+  { family: "claude-sonnet", label: "Claude Sonnet", vendor: "anthropic", rate: { inputPer1M: 3.0, outputPer1M: 15.0, cachedInputPer1M: 0.3 } },
+  { family: "claude-haiku", label: "Claude Haiku", vendor: "anthropic", rate: { inputPer1M: 1.0, outputPer1M: 5.0, cachedInputPer1M: 0.1 } },
+  // gpt-5.5-pro/gpt-5.5 rows are from the AI Gateway's /v1/models pricing
+  // (2026-07-07, base tier ≤272k context). They MUST sort before the generic
+  // "gpt-5" prefix row: without them every gpt-5.5-pro token was priced at
+  // the generic $1.25/$10 — an 18–24× under-report that made pro-judge
+  // configs look affordable on the cost dashboards while draining the real
+  // gateway balance. gpt-5.5-pro publishes no cache-read rate; 50% of fresh
+  // input follows the same OpenAI ratio as the other rows.
+  { family: "gpt-5.5-pro", label: "GPT-5.5 Pro", vendor: "openai", rate: { inputPer1M: 30.0, outputPer1M: 180.0, cachedInputPer1M: 15.0 } },
+  { family: "gpt-5.5", label: "GPT-5.5", vendor: "openai", rate: { inputPer1M: 5.0, outputPer1M: 30.0, cachedInputPer1M: 0.5 } },
+  { family: "gpt-5", label: "GPT-5", vendor: "openai", rate: { inputPer1M: 1.25, outputPer1M: 10.0, cachedInputPer1M: 0.625 } },
+  { family: "gpt-4o-mini", label: "GPT-4o mini", vendor: "openai", rate: { inputPer1M: 0.15, outputPer1M: 0.6, cachedInputPer1M: 0.075 } },
+  { family: "gpt-4o", label: "GPT-4o", vendor: "openai", rate: { inputPer1M: 2.5, outputPer1M: 10.0, cachedInputPer1M: 1.25 } },
+  // Gateway /v1/models 2026-07-07 (base tier ≤200k): gemini-3-pro* $2/$12.
+  { family: "gemini-3-pro", label: "Gemini 3 Pro", vendor: "google", rate: { inputPer1M: 2.0, outputPer1M: 12.0, cachedInputPer1M: 0.2 } },
+  { family: "gemini", label: "Gemini", vendor: "google", rate: { inputPer1M: 1.25, outputPer1M: 5.0, cachedInputPer1M: 0.3125 } },
 ];
 
 /** Sonnet — used when a slug matches no family, so a run is never zero-charged. */
-export const FALLBACK_RATE: ModelRate = { inputPer1M: 3.0, outputPer1M: 15.0 };
+export const FALLBACK_RATE: ModelRate = { inputPer1M: 3.0, outputPer1M: 15.0, cachedInputPer1M: 0.3 };
 
 /** Strip "vendor/" and match the bare family. Exported for display/grouping. */
 export function familyOf(model: string): string {
@@ -72,14 +104,32 @@ export function entryFor(model: string): RateCardEntry | undefined {
 export interface TokenUsage {
   inputTokens?: number;
   outputTokens?: number;
+  /**
+   * Prompt tokens served from the provider's cache — a SUBSET of
+   * `inputTokens`, not additional to it. Billed at `cachedInputPer1M`
+   * instead of the fresh `inputPer1M` rate; omitted/0 prices every input
+   * token as fresh (the old, pre-cache-aware behavior).
+   */
+  cachedTokens?: number;
 }
 
-/** Estimated provider cost in USD for a token usage on a given model. */
+/**
+ * Estimated provider cost in USD for a token usage on a given model. Splits
+ * `inputTokens` into billable-fresh and cached-read so a turn that hammers
+ * the same cached system prompt/code-graph context across many steps isn't
+ * priced as if every one of those tokens were billed fresh — see
+ * `packages/billing/src/pricing.ts`'s `providerCostUsd`, which this mirrors.
+ */
 export function estimateCostUsd(model: string, usage: TokenUsage): number {
   const rate = rateFor(model);
-  const inCost = ((usage.inputTokens ?? 0) / 1_000_000) * rate.inputPer1M;
+  const cached = Math.max(0, usage.cachedTokens ?? 0);
+  // cachedTokens is a subset of inputTokens, not additional to it — split
+  // them apart and never let the billable-fresh remainder go negative.
+  const billableInput = Math.max(0, (usage.inputTokens ?? 0) - cached);
+  const inCost = (billableInput / 1_000_000) * rate.inputPer1M;
+  const cachedCost = (cached / 1_000_000) * rate.cachedInputPer1M;
   const outCost = ((usage.outputTokens ?? 0) / 1_000_000) * rate.outputPer1M;
-  return inCost + outCost;
+  return inCost + cachedCost + outCost;
 }
 
 /** Format a USD amount compactly ("$0.0042", "$1.20", "<$0.0001", "$0"). */
@@ -98,6 +148,17 @@ export interface CostProjection {
   vendor: string;
   inputTokens: number;
   outputTokens: number;
+  /**
+   * Prompt tokens served from the provider cache — a SUBSET of `inputTokens`,
+   * priced at the cache-read rate inside `inputCostUsd`. Echoed for display.
+   */
+  cachedTokens: number;
+  /**
+   * Total input-side cost: the fresh remainder at `inputPer1M` PLUS the cached
+   * subset at `cachedInputPer1M`. Honoring the cache split here is what keeps
+   * `projectCost(...).totalUsd` equal to `estimateCostUsd(model, usage)` — see
+   * ADR-021 §6, projections must match metered actuals.
+   */
   inputCostUsd: number;
   outputCostUsd: number;
   totalUsd: number;
@@ -105,13 +166,26 @@ export interface CostProjection {
   fallback: boolean;
 }
 
-/** Project the dollar cost of a token usage on a specific model. */
+/**
+ * Project the dollar cost of a token usage on a specific model. Splits
+ * `inputTokens` into billable-fresh and cached-read exactly as
+ * {@link estimateCostUsd} does, so a cache-heavy turn is not overstated — the
+ * two functions are guaranteed to agree on `totalUsd`. `cachedTokens` defaults
+ * to 0 (every input token priced fresh — the old, pre-cache-aware behavior), so
+ * existing callers that omit it are unaffected.
+ */
 export function projectCost(model: string, usage: TokenUsage): CostProjection {
   const entry = entryFor(model);
   const rate = entry?.rate ?? FALLBACK_RATE;
   const input = usage.inputTokens ?? 0;
   const output = usage.outputTokens ?? 0;
-  const inputCostUsd = (input / 1_000_000) * rate.inputPer1M;
+  const cached = Math.max(0, usage.cachedTokens ?? 0);
+  // cachedTokens is a subset of inputTokens, never additional to it — split
+  // them apart and never let the billable-fresh remainder go negative.
+  const billableInput = Math.max(0, input - cached);
+  const inputCostUsd =
+    (billableInput / 1_000_000) * rate.inputPer1M +
+    (cached / 1_000_000) * rate.cachedInputPer1M;
   const outputCostUsd = (output / 1_000_000) * rate.outputPer1M;
   return {
     model,
@@ -120,6 +194,7 @@ export function projectCost(model: string, usage: TokenUsage): CostProjection {
     vendor: entry?.vendor ?? "unknown",
     inputTokens: input,
     outputTokens: output,
+    cachedTokens: cached,
     inputCostUsd,
     outputCostUsd,
     totalUsd: inputCostUsd + outputCostUsd,

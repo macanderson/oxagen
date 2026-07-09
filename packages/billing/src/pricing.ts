@@ -56,12 +56,21 @@ export type RateCard = Record<string, ProviderModelRate>;
 /**
  * Public list prices as of 2026-05. Update to match your provider invoices —
  * the gate reads these directly. Keys match the AI SDK model ids used by
- * @oxagen/ai; a versioned/date-stamped id (e.g. `claude-sonnet-4-6-2026…`)
+ * @oxagen/ai; a versioned/date-stamped id (e.g. `claude-sonnet-5-2026…`)
  * resolves to the longest matching prefix via {@link resolveRate}.
  */
 export const PROVIDER_RATE_CARD: RateCard = {
+  // Claude Fable 5 is Anthropic's most capable model — priced at (and above) the
+  // Opus tier. The bare `claude-fable-5` / gateway `anthropic/claude-fable-5`
+  // keys never prefix-match any `claude-opus`/`claude-sonnet` row, so without an
+  // explicit entry Fable would fall back to the Sonnet rate and silently
+  // UNDER-charge. Matches the CLI/agent-engine fable rows ($15/$75).
+  "claude-fable-5": { provider: "anthropic", inputPer1M: 15.0, outputPer1M: 75.0, cachedInputPer1M: 1.5 },
   "claude-opus-4-8": { provider: "anthropic", inputPer1M: 15.0, outputPer1M: 75.0, cachedInputPer1M: 1.5 },
   "claude-opus-4": { provider: "anthropic", inputPer1M: 15.0, outputPer1M: 75.0, cachedInputPer1M: 1.5 },
+  // Claude Sonnet 5 — same $3/$15 Sonnet-tier rate. An explicit key keeps it off
+  // the fallback path (the `claude-sonnet-4` prefix does not match `-5`).
+  "claude-sonnet-5": { provider: "anthropic", inputPer1M: 3.0, outputPer1M: 15.0, cachedInputPer1M: 0.3 },
   "claude-sonnet-4-6": { provider: "anthropic", inputPer1M: 3.0, outputPer1M: 15.0, cachedInputPer1M: 0.3 },
   "claude-sonnet-4": { provider: "anthropic", inputPer1M: 3.0, outputPer1M: 15.0, cachedInputPer1M: 0.3 },
   "claude-haiku-4-5": { provider: "anthropic", inputPer1M: 1.0, outputPer1M: 5.0, cachedInputPer1M: 0.1 },
@@ -76,7 +85,9 @@ export const PROVIDER_RATE_CARD: RateCard = {
   // the Sonnet rate (over-charging Opus, under-charging Haiku). The `…-4` keys
   // are deliberate PREFIXES so a future dotted minor (e.g. "…-4.7") still
   // resolves to the right family via {@link resolveRate}.
+  "anthropic/claude-fable-5": { provider: "anthropic", inputPer1M: 15.0, outputPer1M: 75.0, cachedInputPer1M: 1.5 },
   "anthropic/claude-opus-4": { provider: "anthropic", inputPer1M: 15.0, outputPer1M: 75.0, cachedInputPer1M: 1.5 },
+  "anthropic/claude-sonnet-5": { provider: "anthropic", inputPer1M: 3.0, outputPer1M: 15.0, cachedInputPer1M: 0.3 },
   "anthropic/claude-sonnet-4": { provider: "anthropic", inputPer1M: 3.0, outputPer1M: 15.0, cachedInputPer1M: 0.3 },
   "anthropic/claude-haiku-4": { provider: "anthropic", inputPer1M: 1.0, outputPer1M: 5.0, cachedInputPer1M: 0.1 },
   "openai/gpt-4o-mini": { provider: "openai", inputPer1M: 0.15, outputPer1M: 0.6, cachedInputPer1M: 0.075 },
@@ -94,7 +105,7 @@ export const PROVIDER_RATE_CARD: RateCard = {
  * bias to the platform default (Sonnet) so an unknown model never silently
  * under-charges — over-charging a missing model is safer than zero-charging it.
  */
-export const FALLBACK_RATE_MODEL = "claude-sonnet-4-6";
+export const FALLBACK_RATE_MODEL = "claude-sonnet-5";
 
 /** Resolve a model id to its rate, matching the longest rate-card key prefix. */
 export function resolveRate(modelId: string, rateCard: RateCard = PROVIDER_RATE_CARD): ProviderModelRate {
@@ -200,6 +211,9 @@ export const VIDEO_RATE_CARD: Record<string, VideoModelRate> = {
   "google/veo-3.1-fast": { vendor: "google", usdPerSecond: 0.4, defaultSeconds: 5 },
   "google/veo-3.1": { vendor: "google", usdPerSecond: 0.8, defaultSeconds: 5 },
   "google/veo": { vendor: "google", usdPerSecond: 0.75, defaultSeconds: 5 },
+  // OpenAI Sora 2 — ~$0.10/sec, pro ~$0.30–0.50/sec (list, 2026-05; bias high).
+  "openai/sora-2-pro": { vendor: "openai", usdPerSecond: 0.5, defaultSeconds: 4 },
+  "openai/sora-2": { vendor: "openai", usdPerSecond: 0.1, defaultSeconds: 4 },
 };
 
 /**
@@ -518,10 +532,4 @@ export function resolveMeterMarkup(): number {
   const { OXAGEN_METER_MARKUP } = requireEnv(["OXAGEN_METER_MARKUP"]);
   _resolvedMarkup = OXAGEN_METER_MARKUP ?? derivePricing(resolveTargetMargin()).meterMarkup;
   return _resolvedMarkup;
-}
-
-/** Test-only: clear the memoised env-derived margin + markup. */
-export function __resetPricingCacheForTests(): void {
-  _resolvedMargin = null;
-  _resolvedMarkup = null;
 }

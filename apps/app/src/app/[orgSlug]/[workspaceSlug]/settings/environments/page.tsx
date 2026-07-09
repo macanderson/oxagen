@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
+import { logger } from "@oxagen/handlers/logger";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
 import { EnvironmentsPanel } from "./environments-panel";
@@ -49,14 +50,38 @@ export default async function EnvironmentsSettingsPage({
   const canManage = wsRole === "owner" || wsRole === "admin";
 
   // Masked reads — values never cross to the client (the grid shows ••••).
-  const environments: EnvironmentSummary[] = await readEnvironmentsAction({
+  // A read failure must not render as an empty grid with no trace: it looks to
+  // the user like their environments/secrets were deleted. Log each failure and
+  // surface a load-error flag so the panel can show a notice instead.
+  const environmentsRead = await readEnvironmentsAction({
     orgSlug,
     workspaceSlug,
-  }).catch(() => []);
-  const secretKeys: SecretKeySummary[] = await readSecretKeysAction({
+  }).then(
+    (data) => ({ data, failed: false as const }),
+    (err) => {
+      logger.error(
+        { err, orgSlug, workspaceSlug },
+        "environments: readEnvironmentsAction failed — rendering empty grid with load-error notice",
+      );
+      return { data: [] as EnvironmentSummary[], failed: true as const };
+    },
+  );
+  const secretKeysRead = await readSecretKeysAction({
     orgSlug,
     workspaceSlug,
-  }).catch(() => []);
+  }).then(
+    (data) => ({ data, failed: false as const }),
+    (err) => {
+      logger.error(
+        { err, orgSlug, workspaceSlug },
+        "environments: readSecretKeysAction failed — rendering empty grid with load-error notice",
+      );
+      return { data: [] as SecretKeySummary[], failed: true as const };
+    },
+  );
+  const environments = environmentsRead.data;
+  const secretKeys = secretKeysRead.data;
+  const loadError = environmentsRead.failed || secretKeysRead.failed;
 
   return (
     <EnvironmentsPanel
@@ -65,6 +90,7 @@ export default async function EnvironmentsSettingsPage({
       canManage={canManage}
       environments={environments}
       secretKeys={secretKeys}
+      loadError={loadError}
       importEnvAction={importEnvAction}
       upsertKeyAction={upsertKeyAction}
       setValueAction={setValueAction}

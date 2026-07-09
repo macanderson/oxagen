@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { registerConnector, type ConnectorDefinition, type NormalizedRecord, type RecordTypeSample } from "../types";
+import { constantTimeStringEqual } from "../safe-compare";
 
 const connectionConfigSchema = z.object({
   tenantId: z.string(),
@@ -168,10 +169,12 @@ const microsoft: ConnectorDefinition<Config> = {
     const notifications = (body as Record<string, unknown>)["value"] as unknown[];
     if (notifications.length === 0) return false;
 
+    // OXA-2051: constant-time compare — a plain `===` here leaks the secret
+    // via response-time analysis on this unauthenticated route.
     return notifications.every((n) => {
       if (n === null || typeof n !== "object") return false;
       const clientState = (n as Record<string, unknown>)["clientState"];
-      return typeof clientState === "string" && clientState === secret;
+      return typeof clientState === "string" && constantTimeStringEqual(clientState, secret);
     });
   },
 };

@@ -2,7 +2,7 @@
  * `oxagen memory` + `oxagen remember` — manage the workspace's agent memories
  * from the shell.
  *
- *   oxagen memory list [--class OBSERVATION|RULE|FACT] [--kind k] [--min-enforcement n] [--json]
+ *   oxagen memory list [--class OBSERVATION|RULE|FACT] [--kind k] [--min-enforcement n] [--min-citations n] [--sort createdAt|citations] [--json]
  *   oxagen memory show <id> [--json]
  *   oxagen memory edit <id> [--lesson t] [--kind k] [--source s]
  *   oxagen memory salience <id> [--confidence n] [--enforcement n] [--status s]
@@ -39,11 +39,20 @@ import {
   type MemoryClass,
   type MemoryStatus,
 } from "../lib/memory-client.js";
+import { stdoutWriter, type CommandWriter } from "../lib/capture-writer.js";
 
-/** Print an error and exit(1) — the one-shot CLI failure contract. */
-function fail(message: string): never {
-  process.stderr.write(`${message}\n`);
-  process.exit(1);
+/**
+ * Print an error and diverge — exit(1) for the one-shot `oxagen memory …` CLI
+ * contract, or throw for the REPL's inline capture-execution seam (any
+ * `writer` other than the real stdout means we're running inside the
+ * Ink-mounted REPL, where `process.exit` would tear down the whole session).
+ * The message is already written to `writer` before either path is taken, so
+ * the REPL bridge's catch-all can just use the accumulated captured output.
+ */
+function fail(message: string, writer: CommandWriter = stdoutWriter): never {
+  writer.writeErr(message);
+  if (writer === stdoutWriter) process.exit(1);
+  throw new Error(message);
 }
 
 // memoryKind is an open string per the two-axis model — accept anything, but
@@ -52,70 +61,89 @@ function normalizeKind(v: string | undefined): string | undefined {
   return v === undefined ? undefined : v;
 }
 
-function parseClass(v: string | undefined): MemoryClass | undefined {
+function parseClass(v: string | undefined, writer: CommandWriter): MemoryClass | undefined {
   if (v === undefined) return undefined;
   const upper = v.toUpperCase();
   if (!MEMORY_CLASSES.includes(upper as MemoryClass)) {
-    fail(`Invalid class "${v}". Use one of: ${MEMORY_CLASSES.join(", ")}.`);
+    fail(`Invalid class "${v}". Use one of: ${MEMORY_CLASSES.join(", ")}.`, writer);
   }
   return upper as MemoryClass;
 }
 
-function parseStatus(v: string | undefined): MemoryStatus | undefined {
+function parseStatus(v: string | undefined, writer: CommandWriter): MemoryStatus | undefined {
   if (v === undefined) return undefined;
   const upper = v.toUpperCase();
   const STATUSES = ["ACTIVE", "SUPERSEDED", "RETRACTED", "ARCHIVED"];
   if (!STATUSES.includes(upper)) {
-    fail(`Invalid status "${v}". Use one of: ${STATUSES.join(", ")}.`);
+    fail(`Invalid status "${v}". Use one of: ${STATUSES.join(", ")}.`, writer);
   }
   return upper as MemoryStatus;
 }
 
-function parseIntOpt(v: string | undefined, label: string): number | undefined {
+function parseIntOpt(v: string | undefined, label: string, writer: CommandWriter): number | undefined {
   if (v === undefined) return undefined;
   const n = parseInt(v, 10);
-  if (Number.isNaN(n)) fail(`Invalid ${label} "${v}". Use an integer.`);
+  if (Number.isNaN(n)) fail(`Invalid ${label} "${v}". Use an integer.`, writer);
   return n;
 }
 
-function handleApiError(err: unknown): never {
-  if (err instanceof ApiError) fail(err.message);
-  fail(err instanceof Error ? err.message : String(err));
+function handleApiError(err: unknown, writer: CommandWriter): never {
+  if (err instanceof ApiError) fail(err.message, writer);
+  fail(err instanceof Error ? err.message : String(err), writer);
+}
+
+function parseSort(
+  v: string | undefined,
+  writer: CommandWriter,
+): "createdAt" | "citationCount" | undefined {
+  if (v === undefined) return undefined;
+  if (v === "createdAt" || v === "citations" || v === "citationCount") {
+    return v === "citations" ? "citationCount" : v;
+  }
+  fail(`Invalid --sort "${v}". Use "createdAt" or "citations".`, writer);
 }
 
 export interface MemoryListCliOptions {
   class?: string;
   kind?: string;
   minEnforcement?: string;
+  minCitations?: string;
+  sort?: string;
   node?: string;
   limit?: string;
   offset?: string;
   json?: boolean;
 }
 
-export async function handleMemoryList(opts: MemoryListCliOptions): Promise<void> {
+export async function handleMemoryList(
+  opts: MemoryListCliOptions,
+  writer: CommandWriter = stdoutWriter,
+): Promise<void> {
   try {
     const result = await listMemories({
-      memoryClass: parseClass(opts.class),
+      memoryClass: parseClass(opts.class, writer),
       memoryKind: normalizeKind(opts.kind),
-      minEnforcement: parseIntOpt(opts.minEnforcement, "--min-enforcement"),
+      minEnforcement: parseIntOpt(opts.minEnforcement, "--min-enforcement", writer),
+      minCitations: parseIntOpt(opts.minCitations, "--min-citations", writer),
+      sort: parseSort(opts.sort, writer),
       nodeRef: opts.node,
       limit: opts.limit ? parseInt(opts.limit, 10) : undefined,
       offset: opts.offset ? parseInt(opts.offset, 10) : undefined,
     });
     if (opts.json) {
-      process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+      writer.write(JSON.stringify(result, null, 2));
       return;
     }
-    process.stdout.write(formatMemoryLines(result) + "\n");
+    writer.write(formatMemoryLines(result));
   } catch (err) {
-    handleApiError(err);
+    handleApiError(err, writer);
   }
 }
 
 export async function handleMemoryShow(
   idOrPublicId: string,
   opts: { json?: boolean },
+  writer: CommandWriter = stdoutWriter,
 ): Promise<void> {
   try {
     // No get-by-id capability exists; fetch a page and resolve client-side by
@@ -125,15 +153,15 @@ export async function handleMemoryShow(
       memories.find((m) => m.id === idOrPublicId || m.publicId === idOrPublicId) ??
       memories.find((m) => m.id.startsWith(idOrPublicId));
     if (!match) {
-      fail(`No memory matching "${idOrPublicId}" in this workspace (searched the latest 200).`);
+      fail(`No memory matching "${idOrPublicId}" in this workspace (searched the latest 200).`, writer);
     }
     if (opts.json) {
-      process.stdout.write(JSON.stringify(match, null, 2) + "\n");
+      writer.write(JSON.stringify(match, null, 2));
       return;
     }
-    process.stdout.write(formatMemoryDetail(match) + "\n");
+    writer.write(formatMemoryDetail(match));
   } catch (err) {
-    handleApiError(err);
+    handleApiError(err, writer);
   }
 }
 
@@ -147,9 +175,10 @@ export interface MemoryEditCliOptions {
 export async function handleMemoryEdit(
   id: string,
   opts: MemoryEditCliOptions,
+  writer: CommandWriter = stdoutWriter,
 ): Promise<void> {
   if (!opts.lesson && !opts.kind && !opts.source) {
-    fail("Nothing to edit. Pass at least one of --lesson, --kind, or --source.");
+    fail("Nothing to edit. Pass at least one of --lesson, --kind, or --source.", writer);
   }
   try {
     const updated = await updateMemory({
@@ -159,12 +188,12 @@ export async function handleMemoryEdit(
       source: opts.source,
     });
     if (opts.json) {
-      process.stdout.write(JSON.stringify(updated, null, 2) + "\n");
+      writer.write(JSON.stringify(updated, null, 2));
       return;
     }
-    process.stdout.write(`✓ Updated memory ${updated.id}.\n${formatMemoryDetail(updated)}\n`);
+    writer.write(`✓ Updated memory ${updated.id}.\n${formatMemoryDetail(updated)}`);
   } catch (err) {
-    handleApiError(err);
+    handleApiError(err, writer);
   }
 }
 
@@ -183,15 +212,16 @@ export interface MemorySalienceCliOptions {
 export async function handleMemorySalience(
   id: string,
   opts: MemorySalienceCliOptions,
+  writer: CommandWriter = stdoutWriter,
 ): Promise<void> {
   if (!opts.confidence && !opts.enforcement && !opts.status) {
-    fail("Nothing to update. Pass at least one of --confidence, --enforcement, or --status.");
+    fail("Nothing to update. Pass at least one of --confidence, --enforcement, or --status.", writer);
   }
   let confidenceScore: number | undefined;
   if (opts.confidence !== undefined) {
     confidenceScore = Number(opts.confidence);
     if (Number.isNaN(confidenceScore) || confidenceScore < 0 || confidenceScore > 100) {
-      fail(`Invalid --confidence "${opts.confidence}". Use a number between 0 and 100.`);
+      fail(`Invalid --confidence "${opts.confidence}". Use a number between 0 and 100.`, writer);
     }
   }
   let enforcementScore: number | undefined;
@@ -202,21 +232,21 @@ export async function handleMemorySalience(
       enforcementScore < 1 ||
       enforcementScore > 100
     ) {
-      fail(`Invalid --enforcement "${opts.enforcement}". Use an integer between 1 and 100.`);
+      fail(`Invalid --enforcement "${opts.enforcement}". Use an integer between 1 and 100.`, writer);
     }
   }
-  const status = parseStatus(opts.status);
+  const status = parseStatus(opts.status, writer);
   try {
     const updated = await updateMemory({ memoryId: id, confidenceScore, enforcementScore, status });
     if (opts.json) {
-      process.stdout.write(JSON.stringify(updated, null, 2) + "\n");
+      writer.write(JSON.stringify(updated, null, 2));
       return;
     }
-    process.stdout.write(
-      `✓ Salience updated — class ${updated.memoryClass}, confidence ${updated.confidenceScore.toFixed(1)}, enforcement ${updated.enforcementScore ?? "—"} (${updated.id}).\n`,
+    writer.write(
+      `✓ Salience updated — class ${updated.memoryClass}, confidence ${updated.confidenceScore.toFixed(1)}, enforcement ${updated.enforcementScore ?? "—"} (${updated.id}).`,
     );
   } catch (err) {
-    handleApiError(err);
+    handleApiError(err, writer);
   }
 }
 
@@ -235,13 +265,14 @@ export interface MemoryPromoteCliOptions {
 export async function handleMemoryPromote(
   id: string,
   opts: MemoryPromoteCliOptions,
+  writer: CommandWriter = stdoutWriter,
 ): Promise<void> {
-  if (!opts.to) fail("Missing --to. Use `--to rule` or `--to fact`.");
+  if (!opts.to) fail("Missing --to. Use `--to rule` or `--to fact`.", writer);
   const toClass = opts.to.toUpperCase();
   if (toClass !== "RULE" && toClass !== "FACT") {
-    fail(`Invalid --to "${opts.to}". Use "rule" or "fact".`);
+    fail(`Invalid --to "${opts.to}". Use "rule" or "fact".`, writer);
   }
-  if (!opts.rationale) fail("Missing --rationale. Explain why this memory is being promoted.");
+  if (!opts.rationale) fail("Missing --rationale. Explain why this memory is being promoted.", writer);
   let enforcementScore: number | undefined;
   if (opts.enforcement !== undefined) {
     enforcementScore = Number(opts.enforcement);
@@ -250,7 +281,7 @@ export async function handleMemoryPromote(
       enforcementScore < 1 ||
       enforcementScore > 100
     ) {
-      fail(`Invalid --enforcement "${opts.enforcement}". Use an integer between 1 and 100.`);
+      fail(`Invalid --enforcement "${opts.enforcement}". Use an integer between 1 and 100.`, writer);
     }
   }
   try {
@@ -261,12 +292,12 @@ export async function handleMemoryPromote(
       rationale: opts.rationale,
     });
     if (opts.json) {
-      process.stdout.write(JSON.stringify(updated, null, 2) + "\n");
+      writer.write(JSON.stringify(updated, null, 2));
       return;
     }
-    process.stdout.write(formatPromoteResult(updated) + "\n");
+    writer.write(formatPromoteResult(updated));
   } catch (err) {
-    handleApiError(err);
+    handleApiError(err, writer);
   }
 }
 
@@ -278,31 +309,35 @@ export interface MemoryCandidatesCliOptions {
 /** `oxagen memory candidates` — the OBSERVATIONs most ready to promote. */
 export async function handleMemoryCandidates(
   opts: MemoryCandidatesCliOptions,
+  writer: CommandWriter = stdoutWriter,
 ): Promise<void> {
   try {
     const result = await promotionCandidates({
-      limit: parseIntOpt(opts.limit, "--limit"),
+      limit: parseIntOpt(opts.limit, "--limit", writer),
     });
     if (opts.json) {
-      process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+      writer.write(JSON.stringify(result, null, 2));
       return;
     }
-    process.stdout.write(formatPromotionCandidates(result) + "\n");
+    writer.write(formatPromotionCandidates(result));
   } catch (err) {
-    handleApiError(err);
+    handleApiError(err, writer);
   }
 }
 
-export async function handleMemoryRemove(id: string): Promise<void> {
+export async function handleMemoryRemove(
+  id: string,
+  writer: CommandWriter = stdoutWriter,
+): Promise<void> {
   try {
     const { deleted } = await deleteMemory(id);
     if (deleted) {
-      process.stdout.write(`✓ Deleted memory ${id}.\n`);
+      writer.write(`✓ Deleted memory ${id}.`);
     } else {
-      fail(`No memory ${id} found in this workspace.`);
+      fail(`No memory ${id} found in this workspace.`, writer);
     }
   } catch (err) {
-    handleApiError(err);
+    handleApiError(err, writer);
   }
 }
 
@@ -326,9 +361,10 @@ export interface MemoryImportCliOptions {
 export async function handleMemoryImport(
   files: string[],
   opts: MemoryImportCliOptions,
+  writer: CommandWriter = stdoutWriter,
 ): Promise<void> {
   if (files.length === 0) {
-    fail("Nothing to import. Pass one or more markdown files, e.g. `oxagen memory import rules.md`.");
+    fail("Nothing to import. Pass one or more markdown files, e.g. `oxagen memory import rules.md`.", writer);
   }
 
   // Read every file; collect read failures rather than aborting the batch.
@@ -347,10 +383,10 @@ export async function handleMemoryImport(
     }
   }
   if (unreadable.length > 0) {
-    process.stderr.write(`⚠ Skipped unreadable/empty files:\n  ${unreadable.join("\n  ")}\n`);
+    writer.writeErr(`⚠ Skipped unreadable/empty files:\n  ${unreadable.join("\n  ")}`);
   }
   if (documents.length === 0) {
-    fail("No readable, non-empty documents to import.");
+    fail("No readable, non-empty documents to import.", writer);
   }
 
   try {
@@ -359,31 +395,31 @@ export async function handleMemoryImport(
     // Preview-only (no --yes): print drafts (or JSON) and stop without writing.
     if (!opts.yes) {
       if (opts.json) {
-        process.stdout.write(JSON.stringify(parsed, null, 2) + "\n");
+        writer.write(JSON.stringify(parsed, null, 2));
         return;
       }
-      process.stdout.write(formatImportDrafts(parsed.drafts) + "\n");
+      writer.write(formatImportDrafts(parsed.drafts));
       for (const s of parsed.skipped) {
-        process.stderr.write(`  · skipped ${s.filename}: ${s.reason}\n`);
+        writer.writeErr(`  · skipped ${s.filename}: ${s.reason}`);
       }
       if (parsed.drafts.length > 0) {
-        process.stdout.write("\nRe-run with --yes to import these memories.\n");
+        writer.write("\nRe-run with --yes to import these memories.");
       }
       return;
     }
 
     if (parsed.drafts.length === 0) {
-      fail("No memories could be extracted from the supplied documents.");
+      fail("No memories could be extracted from the supplied documents.", writer);
     }
 
     const result = await commitImportMemories(parsed.drafts);
     if (opts.json) {
-      process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+      writer.write(JSON.stringify(result, null, 2));
       return;
     }
-    process.stdout.write(formatImportResults(result) + "\n");
+    writer.write(formatImportResults(result));
   } catch (err) {
-    handleApiError(err);
+    handleApiError(err, writer);
   }
 }
 
@@ -398,9 +434,10 @@ export interface RememberCliOptions {
 export async function handleRemember(
   text: string,
   opts: RememberCliOptions,
+  writer: CommandWriter = stdoutWriter,
 ): Promise<void> {
   const trimmed = text.trim();
-  if (!trimmed) fail('Nothing to remember. Pass the memory text, e.g. `oxagen remember "…"`.');
+  if (!trimmed) fail('Nothing to remember. Pass the memory text, e.g. `oxagen remember "…"`.', writer);
   let enforcementScore: number | undefined;
   if (opts.enforcement !== undefined) {
     enforcementScore = Number(opts.enforcement);
@@ -409,25 +446,25 @@ export async function handleRemember(
       enforcementScore < 1 ||
       enforcementScore > 100
     ) {
-      fail(`Invalid --enforcement "${opts.enforcement}". Use an integer between 1 and 100.`);
+      fail(`Invalid --enforcement "${opts.enforcement}". Use an integer between 1 and 100.`, writer);
     }
   }
   try {
     // source is omitted so the server defaults it to "user" for a human capture.
     const result = await rememberMemory({
       text: trimmed,
-      memoryClass: parseClass(opts.class),
+      memoryClass: parseClass(opts.class, writer),
       memoryKind: normalizeKind(opts.kind),
       enforcementScore,
       nodeRef: opts.node,
     });
     if (opts.json) {
-      process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+      writer.write(JSON.stringify(result, null, 2));
       return;
     }
-    process.stdout.write(formatRememberResult(result) + "\n");
+    writer.write(formatRememberResult(result));
   } catch (err) {
-    handleApiError(err);
+    handleApiError(err, writer);
   }
 }
 

@@ -2,13 +2,13 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const userPreferencesWrite = registerCapability({
-  name: "user.preferences.write",
+  name: "update_user_preferences",
   domain: "user",
   description:
     "Update the calling user's UI and model preferences (partial update — only provided fields are changed)",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "docs", "mcp", "unit"],
+  layers: ["schema", "api", "docs", "mcp", "unit", "app"],
   scoped: false,
   agent: { requiresApproval: false, riskLevel: "low", category: "user" },
   sensitivity: "low",

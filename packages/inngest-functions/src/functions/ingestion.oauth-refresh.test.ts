@@ -17,7 +17,9 @@
  *   - Salesforce: happy path (no refresh token rotation)
  *   - Microsoft: happy path (rotated refresh token)
  *   - Linear: skips without calling fetch (no-refresh provider)
- *   - Unknown provider: skips without calling fetch
+ *   - Google family slugs (google-drive/google-gmail): normalize to the shared
+ *     google strategy, refresh, and persist the new token
+ *   - Unknown provider: skips without calling fetch, WARNs (visible silent-break)
  */
 
 import { describe, expect, it, vi, beforeEach } from "vitest";
@@ -179,11 +181,71 @@ describe("ingestionOauthRefresh — no-op cases", () => {
     const result = await capturedHandler!({ step: makeStep() });
     expect(result).toEqual({ checked: 1 });
     expect(mocks.fetchMock).not.toHaveBeenCalled();
-    expect(mocks.loggerInfo).toHaveBeenCalledWith(
+    // A provider with expiring tokens and no strategy is surfaced at WARN so the
+    // silent-break (token lapses, connection dies) is visible in logs.
+    expect(mocks.loggerWarn).toHaveBeenCalledWith(
       expect.objectContaining({ provider: "dropbox" }),
-      expect.stringContaining("not yet implemented"),
+      expect.stringContaining("no refresh strategy for provider"),
     );
   });
+});
+
+// ── Google Workspace family slugs (normalize to the shared google strategy) ────
+//
+// Every Google connector (google-drive, google-gmail, google-calendar, …) is
+// backed by one Google OAuth grant. The stored oauth_accounts.provider may be
+// the connector slug, so the cron must normalize `google-*` onto the `google`
+// strategy — otherwise those tokens expire unrefreshed and the connection breaks.
+
+describe("ingestionOauthRefresh — Google family slug normalization", () => {
+  for (const slug of ["google-drive", "google-gmail"] as const) {
+    it(`refreshes a ${slug} account via the shared Google strategy and persists the new token`, async () => {
+      const account = {
+        id: `acct-${slug}`,
+        provider: slug,
+        access_token_enc: fakeEnvelope("old-access"),
+        refresh_token_enc: fakeEnvelope("old-refresh"),
+        org_id: "org-1",
+      };
+      const updateExec = vi.fn().mockResolvedValue([]);
+      setupSingleAccountDb(account, updateExec);
+      mocks.requireEnv.mockReturnValue({
+        GOOGLE_DATA_CLIENT_ID: "g-client-id",
+        GOOGLE_DATA_CLIENT_SECRET: "g-client-secret",
+      });
+      mocks.fetchMock.mockResolvedValue({
+        json: vi.fn().mockResolvedValue({
+          access_token: `new-${slug}-access`,
+          expires_in: 3599,
+        }),
+      });
+
+      const result = await capturedHandler!({ step: makeStep() });
+      expect(result).toEqual({ checked: 1 });
+
+      // Hits the Google token endpoint with grant_type=refresh_token.
+      expect(mocks.fetchMock).toHaveBeenCalledWith(
+        "https://oauth2.googleapis.com/token",
+        expect.objectContaining({ method: "POST" }),
+      );
+      const [, opts] = mocks.fetchMock.mock.calls[0] as [string, RequestInit];
+      const body = new URLSearchParams(opts.body as string);
+      expect(body.get("grant_type")).toBe("refresh_token");
+      expect(body.get("client_id")).toBe("g-client-id");
+
+      // New access token is re-encrypted and persisted (DB update ran).
+      expect(mocks.encrypt).toHaveBeenCalledWith(
+        `new-${slug}-access`,
+        "test-key-id",
+        expect.anything(),
+      );
+      expect(updateExec).toHaveBeenCalled();
+      expect(mocks.loggerInfo).toHaveBeenCalledWith(
+        expect.objectContaining({ provider: slug }),
+        expect.stringContaining("refreshed successfully"),
+      );
+    });
+  }
 });
 
 // ── Linear (no-refresh provider) ────────────────────────────────────────────

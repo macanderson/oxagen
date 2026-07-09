@@ -12,6 +12,9 @@ const mocks = vi.hoisted(() => ({
   generateObjectFor: vi.fn(),
   insertToolInvocation: vi.fn(),
   inngestCreateFunction: vi.fn(),
+  claimExecutionStep: vi.fn(),
+  renewExecutionStepLease: vi.fn(),
+  startLeaseRenewal: vi.fn(),
 }));
 
 const MOCK_OUTPUT = { summary: "Tim Cook is the CEO of Apple", data: { ceo: "Tim Cook" } };
@@ -70,6 +73,12 @@ vi.mock("../inngest", () => ({
   },
 }));
 
+vi.mock("../lease", () => ({
+  claimExecutionStep: mocks.claimExecutionStep,
+  renewExecutionStepLease: mocks.renewExecutionStepLease,
+  startLeaseRenewal: mocks.startLeaseRenewal,
+}));
+
 vi.mock("../logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
@@ -95,6 +104,26 @@ function makeStep() {
   };
 }
 
+/**
+ * A step.run mock that reproduces Inngest's real memoization: once a step id
+ * has completed, later calls with that id return the cached result WITHOUT
+ * re-invoking the callback. Reusing one instance across two handler
+ * invocations simulates Inngest replaying the whole function body — the
+ * scenario that used to double-insert the tool_invocations telemetry row
+ * because it was emitted as plain code, not inside a memoized step.run.
+ */
+function makeMemoizingStep() {
+  const memo = new Map<string, unknown>();
+  return {
+    run: async (name: string, fn: () => Promise<unknown>) => {
+      if (memo.has(name)) return memo.get(name);
+      const result = await fn();
+      memo.set(name, result);
+      return result;
+    },
+  };
+}
+
 const BASE_EVENT = {
   data: {
     orgId: "org-1",
@@ -117,9 +146,49 @@ describe("agentWorkflowTaskExecute Inngest handler", () => {
     mocks.dbUpdate.mockReturnValue({ set: mocks.dbUpdateSet });
     mocks.generateObjectFor.mockResolvedValue({ object: MOCK_OUTPUT });
     mocks.insertToolInvocation.mockResolvedValue(undefined);
+    mocks.claimExecutionStep.mockResolvedValue({ id: "step-uuid-1", attempts: 1 });
+    mocks.renewExecutionStepLease.mockResolvedValue(undefined);
+    mocks.startLeaseRenewal.mockReturnValue(() => {});
   });
 
-  it("marks step running, calls generateObjectFor, marks step completed", async () => {
+  it("skips without executing when the step is not claimable", async () => {
+    mocks.claimExecutionStep.mockResolvedValue(null);
+
+    const result = (await capturedHandler!({
+      event: BASE_EVENT,
+      step: makeStep(),
+    })) as Record<string, unknown>;
+
+    expect(result.status).toBe("skipped");
+    expect(mocks.generateObjectFor).not.toHaveBeenCalled();
+  });
+
+  it("claims the step (attempts + lease) instead of a blind mark-running", async () => {
+    await capturedHandler!({ event: BASE_EVENT, step: makeStep() });
+    expect(mocks.claimExecutionStep).toHaveBeenCalledWith(
+      expect.objectContaining({ stepId: "step-uuid-1", orgId: "org-1" }),
+    );
+  });
+
+  it("renews the lease around the LLM call and stops the renewal after", async () => {
+    const stopRenewal = vi.fn();
+    mocks.startLeaseRenewal.mockReturnValue(stopRenewal);
+
+    await capturedHandler!({ event: BASE_EVENT, step: makeStep() });
+
+    expect(mocks.startLeaseRenewal).toHaveBeenCalledTimes(1);
+    expect(stopRenewal).toHaveBeenCalledTimes(1);
+  });
+
+  it("clears the lease on the terminal completed write", async () => {
+    await capturedHandler!({ event: BASE_EVENT, step: makeStep() });
+    const setCalls = mocks.dbUpdateSet.mock.calls as Array<[Record<string, unknown>]>;
+    const completedCall = setCalls.find(([arg]) => arg.status === "completed" && "outputPayload" in arg);
+    expect(completedCall).toBeTruthy();
+    expect(completedCall![0]).toHaveProperty("leaseExpiresAt", null);
+  });
+
+  it("marks step running via claim, calls generateObjectFor, marks step completed", async () => {
     const result = (await capturedHandler!({
       event: BASE_EVENT,
       step: makeStep(),
@@ -176,6 +245,35 @@ describe("agentWorkflowTaskExecute Inngest handler", () => {
     ).rejects.toThrow();
     const telArgs = mocks.insertToolInvocation.mock.calls[0]![0] as Record<string, unknown>;
     expect(telArgs.status).toBe("failed");
+  });
+
+  it("does not double-insert the tool_invocations telemetry row when the run is replayed with memoized steps (Inngest retry simulation)", async () => {
+    const step = makeMemoizingStep();
+
+    const first = (await capturedHandler!({
+      event: BASE_EVENT,
+      step,
+    })) as Record<string, unknown>;
+    expect(first.status).toBe("completed");
+
+    // Simulate Inngest replaying the whole function body (e.g. after a
+    // retry, or a worker restart before the function's return value was
+    // acknowledged) by invoking the handler again with the SAME memoized
+    // step state — every step id already completed on the first pass short-
+    // circuits to its cached result instead of re-running.
+    const second = (await capturedHandler!({
+      event: BASE_EVENT,
+      step,
+    })) as Record<string, unknown>;
+    expect(second.status).toBe("completed");
+
+    // Exactly one completed tool_invocations row for the single logical
+    // task execution — not doubled by the replay.
+    expect(mocks.insertToolInvocation).toHaveBeenCalledTimes(1);
+    const telArgs = mocks.insertToolInvocation.mock.calls[0]![0] as Record<string, unknown>;
+    expect(telArgs.status).toBe("completed");
+    // Deterministic invocation_id — not a fresh crypto.randomUUID() per replay.
+    expect(telArgs.invocation_id).toEqual(expect.stringMatching(/^[0-9a-f-]{36}$/));
   });
 
   it("finalizes execution when all steps are terminal (completed + failed >= total)", async () => {

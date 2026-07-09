@@ -3,6 +3,7 @@ import { semanticEdgeList } from "@oxagen/oxagen/contracts/semantic.edge.list";
 import type { SemanticEdge } from "@oxagen/oxagen/contracts/semantic.edge.list";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { scopedSession } from "@oxagen/ontology/tenant";
+import { edgeValidityReturn, readEdgeValidity, type EdgeValidity } from "@oxagen/ontology/temporal";
 import { logger } from "./logger";
 import { parseNodeProperties, buildRelationshipProperties } from "./lib/semantic-edge-refs";
 
@@ -24,6 +25,8 @@ export const semanticEdgeListHandler: CapabilityHandler<typeof semanticEdgeList>
     try {
       // Parallelize page and count queries (independent, same filter parameters)
       const params = {
+        orgId: ctx.orgId,
+        workspaceId: ctx.workspaceId,
         type: type ?? null,
         sourceId: sourceId ?? null,
         confidenceMin: confidenceMin ?? null,
@@ -45,6 +48,7 @@ export const semanticEdgeListHandler: CapabilityHandler<typeof semanticEdgeList>
              AND ($confidenceMin IS NULL OR ie.confidence >= $confidenceMin)
              AND ($confidenceMax IS NULL OR ie.confidence <= $confidenceMax)
            OPTIONAL MATCH (src:GraphNode {publicId: ie.sourceNodeId, orgId: $orgId, workspaceId: $workspaceId})
+           OPTIONAL MATCH (src)-[matEdge {inferredEdgeId: ie.id}]->(:GraphNode)
            RETURN
              ie.id               AS id,
              ie.sourceNodeId     AS sourceNodeId,
@@ -61,7 +65,8 @@ export const semanticEdgeListHandler: CapabilityHandler<typeof semanticEdgeList>
              ie.approvalStatus   AS approvalStatus,
              toString(ie.approvedAt)  AS approvedAt,
              ie.approvedBy       AS approvedBy,
-             toString(ie.inferredAt)  AS inferredAt
+             toString(ie.inferredAt)  AS inferredAt,
+             ${edgeValidityReturn("matEdge", "edge")}
            ORDER BY ie.confidence DESC
            SKIP $offset
            LIMIT $limit`,
@@ -90,6 +95,15 @@ export const semanticEdgeListHandler: CapabilityHandler<typeof semanticEdgeList>
         const llmModel = (r.get("llmModel") as string | null) ?? null;
         const sourceDisplayName = (r.get("sourceDisplayName") as string | null) ?? sourceNodeId;
         const sourceLabel = (r.get("sourceLabel") as string | null) ?? "Node";
+
+        // Bi-temporal validity of the materialised relationship (all-null for a
+        // pending candidate that hasn't been materialised into a real edge).
+        const validity: EdgeValidity = readEdgeValidity((k) => r.get(k), "edge");
+        const materialised =
+          validity.validFrom !== null ||
+          validity.recordedAt !== null ||
+          validity.validTo !== null ||
+          validity.invalidatedAt !== null;
 
         return {
           id: r.get("id") as string,
@@ -124,7 +138,9 @@ export const semanticEdgeListHandler: CapabilityHandler<typeof semanticEdgeList>
             connector: connectorId,
             inferredAt,
             approvalStatus,
+            validity: materialised ? validity : null,
           }),
+          validity: materialised ? validity : null,
         };
       });
 

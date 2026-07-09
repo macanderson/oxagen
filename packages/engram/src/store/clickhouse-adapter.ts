@@ -8,6 +8,7 @@
 import { createClient, type ClickHouseClient } from "@clickhouse/client";
 import type { MemoryRecord, Namespace, RecordKind } from "../types";
 import type { EpisodicQuery, EpisodicStore } from "./episodic";
+import { tokenizeLexicalQuery } from "./lexical-tokenize";
 
 export interface ClickHouseAdapterOpts {
   url: string;
@@ -29,7 +30,13 @@ function recordToRow(record: MemoryRecord): Record<string, unknown> {
     namespace_agent: record.namespace.agent ?? "",
     body: JSON.stringify(record.body),
     embedding: record.embedding
-      ? Buffer.from(record.embedding.buffer).toString("base64")
+      ? // Respect byteOffset/byteLength so a subarray view over a larger buffer
+        // serializes only its own window, not the whole backing ArrayBuffer.
+        Buffer.from(
+          record.embedding.buffer,
+          record.embedding.byteOffset,
+          record.embedding.byteLength,
+        ).toString("base64")
       : "",
     salience: record.salience,
     confidence: record.confidence,
@@ -90,7 +97,14 @@ const CREATE_TABLE_SQL = `
     provenance      String,
     causality       String,
     ttl             UInt64 DEFAULT 0,
-    created_at      UInt64
+    created_at      UInt64,
+    -- Skip index for lexical search. searchLexical() matches lowercased
+    -- substrings via position(lower(body), token); an ngram bloom filter over
+    -- lower(body) lets ClickHouse prune granules that can't contain the token
+    -- instead of full-scanning the partition. ngram (not token) because the
+    -- search is substring-based and keeps path/identifier tokens glued
+    -- (e.g. "auth.ts:42").
+    INDEX idx_body_ngram lower(body) TYPE ngrambf_v1(3, 65536, 3, 0) GRANULARITY 4
   )
   ENGINE = ReplacingMergeTree()
   PARTITION BY (namespace_org, toYYYYMM(fromUnixTimestamp64Milli(created_at)))
@@ -186,6 +200,10 @@ export class ClickHouseEpisodicStore implements EpisodicStore {
       params["minSalience"] = opts.minSalience;
     }
 
+    // FINAL retained: query() feeds the pinned-rule lookup and temporal engine,
+    // where an un-merged duplicate row would list the same rule/record twice and
+    // return a stale salience (reinforcement re-inserts the same key). These are
+    // bounded (LIMIT + salience filter) reads, so merge-on-read is affordable.
     const sql = `
       SELECT * FROM engram_episodic_records FINAL
       WHERE ${conditions.join(" AND ")}
@@ -208,6 +226,9 @@ export class ClickHouseEpisodicStore implements EpisodicStore {
 
   async getById(id: string): Promise<MemoryRecord | null> {
     await this.ready;
+    // FINAL retained: a single-row point lookup must return the merged/latest
+    // version. Without it, LIMIT 1 could pick a stale duplicate (e.g. pre-
+    // reinforcement salience). Cheap — it's one key.
     const result = await this.client.query({
       query:
         "SELECT * FROM engram_episodic_records FINAL WHERE id = {id:String} LIMIT 1",
@@ -222,9 +243,13 @@ export class ClickHouseEpisodicStore implements EpisodicStore {
   async getByIds(ids: string[]): Promise<MemoryRecord[]> {
     await this.ready;
     if (ids.length === 0) return [];
+    // No FINAL: this is a hot fan-in read. Un-merged duplicate rows are harmless
+    // here — every caller (the retrieval engines) builds a Map keyed by record
+    // id from the result, so a duplicate collapses. Skipping the merge-on-read
+    // avoids a large cost on the batch lookup path.
     const result = await this.client.query({
       query:
-        "SELECT * FROM engram_episodic_records FINAL WHERE id IN ({ids:Array(String)})",
+        "SELECT * FROM engram_episodic_records WHERE id IN ({ids:Array(String)})",
       query_params: { ids },
       format: "JSONEachRow",
     });
@@ -238,6 +263,128 @@ export class ClickHouseEpisodicStore implements EpisodicStore {
     minSalience?: number,
   ): Promise<MemoryRecord[]> {
     return this.query({ namespace, limit, minSalience });
+  }
+
+  async searchLexical(
+    namespace: Namespace,
+    query: string,
+    limit: number,
+  ): Promise<Array<{ recordId: string; score: number }>> {
+    await this.ready;
+    const tokens = tokenizeLexicalQuery(query);
+    if (tokens.length === 0 || limit <= 0) return [];
+
+    // Same term-frequency scoring as the DuckDB adapter (see
+    // lexical-tokenize.ts): each matched token contributes 1/tokens.length.
+    // positionCaseInsensitive() returns the 1-based match position or 0 —
+    // ClickHouse's tokenbf_v1-friendly equivalent of DuckDB's contains().
+    const tokenParams: Record<string, string> = {};
+    tokens.forEach((t, i) => {
+      tokenParams[`tok${i}`] = t;
+    });
+    // Match against lower(body) with already-lowercased tokens (equivalent to
+    // positionCaseInsensitive) so the predicate lines up with the
+    // `lower(body)` ngram skip index and ClickHouse can prune granules instead
+    // of full-scanning.
+    const matchExprs = tokens.map(
+      (_, i) => `if(position(lower(body), {tok${i}:String}) > 0, 1, 0)`,
+    );
+    const scoreSql = `(${matchExprs.join(" + ")}) / ${tokens.length}.0`;
+    const whereOr = tokens
+      .map((_, i) => `position(lower(body), {tok${i}:String}) > 0`)
+      .join(" OR ");
+
+    // No FINAL: search returns (id, score); duplicate rows would just repeat an
+    // id, and callers dedupe by id when fetching full records via getByIds.
+    // Skipping merge-on-read is the whole point of adding the skip index.
+    const sql = `
+      SELECT id, ${scoreSql} AS lexical_score
+      FROM engram_episodic_records
+      WHERE namespace_org = {org:String} AND namespace_workspace = {workspace:String}
+        AND (${whereOr})
+      ORDER BY lexical_score DESC
+      LIMIT {limit:UInt32}
+    `;
+
+    const result = await this.client.query({
+      query: sql,
+      query_params: {
+        ...tokenParams,
+        org: namespace.org,
+        workspace: namespace.workspace,
+        limit,
+      },
+      format: "JSONEachRow",
+    });
+    const rows = (await result.json()) as Record<string, unknown>[];
+    return rows.map((r) => ({
+      recordId: r["id"] as string,
+      score: Number(r["lexical_score"] ?? 0),
+    }));
+  }
+
+  async listNamespaces(): Promise<Namespace[]> {
+    await this.ready;
+    const result = await this.client.query({
+      query:
+        "SELECT DISTINCT namespace_org, namespace_workspace FROM engram_episodic_records",
+      format: "JSONEachRow",
+    });
+    const rows = (await result.json()) as Record<string, unknown>[];
+    return rows.map((r) => ({
+      org: r["namespace_org"] as string,
+      workspace: r["namespace_workspace"] as string,
+    }));
+  }
+
+  async updateSalience(id: string, salience: number): Promise<void> {
+    await this.reinsertWith(id, (row) => ({ ...row, salience }));
+  }
+
+  async updateConfidence(id: string, confidence: number): Promise<void> {
+    await this.reinsertWith(id, (row) => ({ ...row, confidence }));
+  }
+
+  /**
+   * ReplacingMergeTree "update": re-insert the full row (same sort key) with a
+   * mutated field. A later `SELECT ... FINAL` returns the newest version, so an
+   * in-place UPDATE isn't needed — and a full-row re-insert is far cheaper than
+   * an `ALTER TABLE ... UPDATE` mutation for a per-record nightly job.
+   */
+  private async reinsertWith(
+    id: string,
+    mutate: (row: Record<string, unknown>) => Record<string, unknown>,
+  ): Promise<void> {
+    await this.ready;
+    const record = await this.getById(id);
+    if (!record) return;
+    await this.client.insert({
+      table: "engram_episodic_records",
+      values: [mutate(recordToRow(record))],
+      format: "JSONEachRow",
+    });
+  }
+
+  async evictExpired(namespace: Namespace, now: number): Promise<number> {
+    await this.ready;
+    const where =
+      "namespace_org = {org:String} AND namespace_workspace = {workspace:String} AND ttl > 0 AND ttl <= {now:UInt64}";
+    const params = { org: namespace.org, workspace: namespace.workspace, now };
+    const countRes = await this.client.query({
+      query: `SELECT count() AS n FROM engram_episodic_records FINAL WHERE ${where}`,
+      query_params: params,
+      format: "JSONEachRow",
+    });
+    const rows = (await countRes.json()) as Array<{ n: string | number }>;
+    const n = Number(rows[0]?.n ?? 0);
+    if (n > 0) {
+      // Lightweight DELETE (ClickHouse ≥ 22.8) — a nightly TTL sweep, not a hot path.
+      await this.client.command({
+        query: `DELETE FROM engram_episodic_records WHERE ${where}`,
+        query_params: params,
+      });
+    }
+    return n;
   }
 
   async close(): Promise<void> {

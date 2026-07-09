@@ -12,13 +12,13 @@ import { registerCapability } from "../registry";
 //
 // Last-owner guard: removing the final owner is blocked to prevent org lockout.
 export const orgMemberRemove = registerCapability({
-  name: "org.member.remove",
-  domain: "organization",
+  name: "remove_org_member",
+  domain: "org",
   description:
     "Remove a member from the org. Revokes their role assignments and deactivates their principal. Blocked if the target is the last org owner. Audited as org.member_removed.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["api", "docs", "mcp", "unit"],
+  layers: ["api", "docs", "mcp", "unit", "app"],
   scoped: true,
   agent: { requiresApproval: true, riskLevel: "high", category: "organization" },
   sensitivity: "high",

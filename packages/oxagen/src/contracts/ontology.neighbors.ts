@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
 import { RELATIONSHIP_TYPE_PATTERN } from "../lib/relationship-type-pattern";
+import { asOfField, asKnownAtField, edgeValiditySchema } from "../lib/temporal-query";
 
 /**
  * ontology.neighbors — the one-hop neighborhood of a node. A focused, cheap
@@ -28,10 +29,12 @@ const neighborEntry = z.object({
   direction: z
     .enum(["out", "in"])
     .describe("'out' if the edge points from the node to this neighbor; 'in' if from the neighbor to the node"),
-});
+})
+  // Bi-temporal validity of the connecting edge, so the citation can show "true as of X".
+  .merge(edgeValiditySchema);
 
 export const ontologyNeighbors = registerCapability({
-  name: "ontology.neighbors",
+  name: "get_ontology_neighbors",
   domain: "ontology",
   description:
     "Return the one-hop neighborhood of a node — directly connected nodes, optionally filtered by " +
@@ -47,6 +50,9 @@ export const ontologyNeighbors = registerCapability({
     org: { Owner: "allow", Admin: "allow" },
     workspace: { Owner: "allow", Member: "allow", Viewer: "allow" },
   },
+  // Accountability chain: a graph read acts on a specific node — record it on
+  // the audit row so "who has read node N" is queryable (target_kind/target_id).
+  audit: { targetKind: "graph.node", targetIdField: "nodeId" },
   input: z.object({
     nodeId: z.string().describe("publicId of the node whose neighbors to fetch"),
     edgeTypes: z
@@ -64,6 +70,8 @@ export const ontologyNeighbors = registerCapability({
       .max(500)
       .default(100)
       .describe("Maximum number of neighbors to return (1–500, default 100)"),
+    asOf: asOfField,
+    asKnownAt: asKnownAtField,
   }),
   output: z.object({
     nodeId: z.string().describe("publicId echoed back from the request"),

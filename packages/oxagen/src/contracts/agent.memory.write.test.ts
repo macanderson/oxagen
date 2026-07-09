@@ -91,6 +91,6 @@ describe("agent.memory.write capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("agent.memory.write")).toBe(agentMemoryWrite);
+    expect(getCapability("write_memory")).toBe(agentMemoryWrite);
   });
 });

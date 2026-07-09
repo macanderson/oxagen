@@ -23,7 +23,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 COMPETITORS="${COMPETITORS:-claude-code codex aider}"
-MODEL_SLUG="${OXAGEN_MODEL_SLUG:-anthropic/claude-sonnet-4.5}"
+MODEL_SLUG="${OXAGEN_MODEL_SLUG:-anthropic/claude-sonnet-5}"
 DATASET="${DATASET:-swe-bench/swe-bench-verified}"
 RESULTS_DIR="./results"
 mkdir -p "$RESULTS_DIR"

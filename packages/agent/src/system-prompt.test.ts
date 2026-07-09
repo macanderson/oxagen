@@ -81,12 +81,12 @@ describe("buildChatSystemPrompt", () => {
 
     it("references agent.ui.render as the tool to call", () => {
       const prompt = buildChatSystemPrompt(BASE_CTX);
-      expect(prompt).toContain("agent.ui.render");
+      expect(prompt).toContain("render_agent_ui");
     });
 
     it("explains that api.key.create handles its own render directive", () => {
       const prompt = buildChatSystemPrompt(BASE_CTX);
-      expect(prompt).toContain("api.key.create");
+      expect(prompt).toContain("create_api_key");
       expect(prompt).toContain("render directive automatically");
     });
   });
@@ -94,12 +94,12 @@ describe("buildChatSystemPrompt", () => {
   describe("direct-action guidance section", () => {
     it("mentions workspace.create as a direct-call capability", () => {
       const prompt = buildChatSystemPrompt(BASE_CTX);
-      expect(prompt).toContain("workspace.create");
+      expect(prompt).toContain("create_workspace");
     });
 
     it("mentions api.key.create as a direct-call capability", () => {
       const prompt = buildChatSystemPrompt(BASE_CTX);
-      expect(prompt).toContain("api.key.create");
+      expect(prompt).toContain("create_api_key");
     });
 
     it("instructs to invoke directly when all params are known", () => {
@@ -111,7 +111,7 @@ describe("buildChatSystemPrompt", () => {
   describe("workflow guidance section", () => {
     it("references workflow.run for large parallel tasks", () => {
       const prompt = buildChatSystemPrompt(BASE_CTX);
-      expect(prompt).toContain("workflow.run");
+      expect(prompt).toContain("run_workflow");
     });
 
     it("specifies threshold of 10+ tasks for workflow.run", () => {
@@ -121,7 +121,7 @@ describe("buildChatSystemPrompt", () => {
 
     it("instructs agent.plan.create for N > 20 tasks before dispatching", () => {
       const prompt = buildChatSystemPrompt(BASE_CTX);
-      expect(prompt).toContain("agent.plan.create");
+      expect(prompt).toContain("create_plan");
       expect(prompt).toContain("N > 20");
     });
 
@@ -139,7 +139,7 @@ describe("buildChatSystemPrompt", () => {
   describe("subagent guidance section", () => {
     it("references agent.subagent.dispatch for 2-9 parallel tasks", () => {
       const prompt = buildChatSystemPrompt(BASE_CTX);
-      expect(prompt).toContain("agent.subagent.dispatch");
+      expect(prompt).toContain("dispatch_subagent");
     });
 
     it("specifies the 2-9 task range for subagent dispatch", () => {

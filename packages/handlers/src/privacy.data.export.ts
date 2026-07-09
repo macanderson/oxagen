@@ -76,7 +76,7 @@ export const privacyDataExportHandler: CapabilityHandler<
     actorUserId: ctx.userId,
     orgId,
     workspaceId: ctx.workspaceId ?? null,
-    capability: "privacy.data.export",
+    capability: "export_data",
     outcome: "success",
     ip: null,
     userAgent: null,

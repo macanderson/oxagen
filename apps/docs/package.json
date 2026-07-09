@@ -1,11 +1,11 @@
 {
   "name": "@oxagen/docs",
-  "version": "0.6.4",
+  "version": "1.1.1",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "next dev --port 3300",
-    "build": "next build",
+    "build": "NODE_ENV=production next build",
     "start": "next start --port 3300",
     "postinstall": "fumadocs-mdx",
     "lint": "eslint .",
@@ -16,23 +16,22 @@
     "fumadocs-core": "16.9.3",
     "fumadocs-mdx": "15.0.10",
     "fumadocs-ui": "16.9.3",
-    "next": "16.2.7",
+    "next": "16.2.10",
     "react": "19.2.6",
     "react-dom": "19.2.6"
   },
   "devDependencies": {
+    "@eslint/js": "9.39.4",
+    "@tailwindcss/postcss": "4.3.0",
     "@types/mdx": "2.0.13",
     "@types/node": "25.9.1",
     "@types/react": "19.2.15",
     "@types/react-dom": "19.2.3",
-    "@tailwindcss/postcss": "4.3.0",
     "autoprefixer": "10.5.0",
+    "globals": "17.6.0",
     "postcss": "8.5.15",
     "tailwindcss": "4.3.0",
     "typescript": "6.0.3",
-    "@eslint/eslintrc": "3.3.5",
-    "@eslint/js": "9.39.4",
-    "globals": "17.6.0",
     "typescript-eslint": "8.60.0"
   }
 }

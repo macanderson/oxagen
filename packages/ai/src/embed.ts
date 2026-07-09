@@ -3,6 +3,7 @@ import { embed } from "ai";
 import { gateway } from "@ai-sdk/gateway";
 import { insertTokenUsage, providerFromModelId, hashPrompt, type Surface } from "@oxagen/telemetry";
 import { chargeUsageCredits, providerCostUsdMicros } from "@oxagen/billing";
+import { getScope, runInTenantScope, type TenantScope } from "@oxagen/tenancy";
 
 const logger = pino({ level: process.env.LOG_LEVEL ?? "info", base: { app: "ai.embed" } });
 
@@ -94,17 +95,28 @@ export async function embedText(text: string, opts: EmbedTextOpts): Promise<numb
   // Debit the org's credits for what this embedding call cost. Best-effort and
   // post-call — a metering failure must not fail the caller (mirrors stream.ts
   // and generate-object.ts). OXA-1351 / OXA-1425.
+  //
+  // chargeUsageCredits → consumeCredits → withTenantDb → requireScope, which
+  // needs an active tenant scope. Request-path callers have one; Inngest workers
+  // (and fire-and-forget ingestion embeddings) keep tenant scope tight around
+  // their own DB ops and do NOT wrap the embed step, so this charge would
+  // otherwise run scopeless and throw TenantScopeError (silently swallowed →
+  // unbilled embeddings, a revenue leak). Prefer the active ALS scope, else
+  // rebuild it from the trusted telemetry org/workspace. Mirrors stream.ts.
+  const capturedScope: TenantScope = getScope() ?? { orgId, workspaceId };
   try {
-    await chargeUsageCredits({
-      orgId,
-      // referenceId is the credit_ledger.reference_id Postgres `uuid` column;
-      // pass undefined (→ NULL) when there is no execution step rather than a
-      // non-UUID string, which would throw and silently leave the call unbilled.
-      referenceId: executionStepId ?? undefined,
-      model: MODEL,
-      inputTokens,
-      outputTokens: 0,
-      cachedTokens: 0,
+    await runInTenantScope(capturedScope, async () => {
+      await chargeUsageCredits({
+        orgId,
+        // referenceId is the credit_ledger.reference_id Postgres `uuid` column;
+        // pass undefined (→ NULL) when there is no execution step rather than a
+        // non-UUID string, which would throw and silently leave the call unbilled.
+        referenceId: executionStepId ?? undefined,
+        model: MODEL,
+        inputTokens,
+        outputTokens: 0,
+        cachedTokens: 0,
+      });
     });
   } catch (err) {
     // Swallow — credit metering must never fail a capability call.

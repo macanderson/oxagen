@@ -2,7 +2,7 @@
 
 import { invoke } from "@oxagen/oxagen";
 import "@oxagen/handlers/register";
-import { workspaceModelSettingsWrite } from "@oxagen/oxagen/contracts/workspace.model.settings.write";
+import { workspaceModelSettingsWrite } from "@oxagen/oxagen/contracts/workspace.model_settings.write";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
 
@@ -58,7 +58,7 @@ export async function updateModelSettingsAction(
   };
 
   try {
-    await invoke("workspace.model.settings.write", parsed.data, ctx, { surface: "agent" });
+    await invoke("update_model_settings", parsed.data, ctx, { surface: "agent" });
     return { ok: true };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Failed to update settings." };

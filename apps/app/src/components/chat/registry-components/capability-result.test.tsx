@@ -25,7 +25,7 @@ afterEach(cleanup);
 
 describe("capability-result helpers", () => {
   it("humanizeCapability turns a dotted name into a sentence", () => {
-    expect(humanizeCapability("graph.node.get")).toBe("Graph node get");
+    expect(humanizeCapability("get_node")).toBe("Graph node get");
     expect(humanizeCapability("")).toBe("Result");
   });
   it("humanizeKey splits camelCase + underscores", () => {

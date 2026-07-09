@@ -208,6 +208,25 @@ describe("semanticEdgeApproveHandler", () => {
     expect(params.approvedBy).toBe("user-1");
   });
 
+  // OXA-2062: both the "find the edge" and "update approvalStatus" queries
+  // reference $orgId (and the find query also $workspaceId) but the local
+  // params objects previously omitted them, relying entirely on
+  // scopedSession()'s auto-injection. This suite mocks scopedSession()
+  // directly (no auto-injection), so this bug was invisible until
+  // orgId/workspaceId were bound explicitly.
+  it("binds orgId/workspaceId explicitly on the find query and orgId on the update query (regression: previously relied solely on scopedSession auto-injection)", async () => {
+    setupNeo4j(PENDING_EDGE_ROW);
+
+    await semanticEdgeApproveHandler({ edgeId: "edge-uuid-1", decision: "reject" }, CTX);
+
+    const findParams = mocks.runFn.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(findParams.orgId).toBe(CTX.orgId);
+    expect(findParams.workspaceId).toBe(CTX.workspaceId);
+
+    const updateParams = mocks.runFn.mock.calls[1]?.[1] as Record<string, unknown>;
+    expect(updateParams.orgId).toBe(CTX.orgId);
+  });
+
   it("closes the session even when neo4j throws on the update step", async () => {
     // find OK, then SET throws
     mocks.runFn
@@ -219,5 +238,83 @@ describe("semanticEdgeApproveHandler", () => {
     ).rejects.toThrow("write failed");
 
     expect(mocks.closeFn).toHaveBeenCalledOnce();
+  });
+});
+
+// ── bi-temporal validity + supersession ───────────────────────────────────────
+
+describe("semanticEdgeApproveHandler — bi-temporal validity", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.scopedSession.mockReturnValue(sessionObj);
+    mocks.runInTenantScope.mockImplementation(
+      (_scope: unknown, fn: () => unknown) => Promise.resolve(fn()),
+    );
+    mocks.closeFn.mockResolvedValue(undefined);
+  });
+
+  function setupApprove(tgtId = "tgt-1", closed = 0) {
+    let call = 0;
+    mocks.runFn.mockImplementation(async () => {
+      call++;
+      if (call === 1) return { records: [PENDING_EDGE_ROW] };
+      if (call === 2) return { records: [] };
+      if (call === 3) return { records: [makeRecord({ relId: "rel-1", tgtId })] };
+      return { records: [makeRecord({ closed })] }; // supersede close
+    });
+  }
+
+  it("stamps validity on the materialised edge and threads observedAt", async () => {
+    setupApprove();
+    await semanticEdgeApproveHandler(
+      { edgeId: "edge-uuid-1", decision: "approve", observedAt: "2019-03-03T00:00:00.000Z" },
+      CTX,
+    );
+    const materializeCypher = (mocks.runFn.mock.calls[2] as [string])[0];
+    expect(materializeCypher).toContain("r.validFrom = coalesce(datetime($validFrom), datetime())");
+    expect(materializeCypher).toContain("r.recordedAt = datetime()");
+    const materializeParams = (mocks.runFn.mock.calls[2] as [string, Record<string, unknown>])[1];
+    expect(materializeParams.validFrom).toBe("2019-03-03T00:00:00.000Z");
+  });
+
+  it("does not supersede by default (superseded=0, no close query)", async () => {
+    setupApprove();
+    const result = await semanticEdgeApproveHandler(
+      { edgeId: "edge-uuid-1", decision: "approve" },
+      CTX,
+    );
+    expect(result.superseded).toBe(0);
+    // find + SET + materialise = 3 calls, no 4th close query.
+    expect(mocks.runFn).toHaveBeenCalledTimes(3);
+  });
+
+  it("closes other open edges of the same type from the source when supersede=true", async () => {
+    setupApprove("tgt-1", 3);
+    const result = await semanticEdgeApproveHandler(
+      { edgeId: "edge-uuid-1", decision: "approve", supersede: true },
+      CTX,
+    );
+    expect(mocks.runFn).toHaveBeenCalledTimes(4);
+    const closeCypher = (mocks.runFn.mock.calls[3] as [string])[0];
+    expect(closeCypher).toContain("other.publicId <> $materializedTargetId");
+    expect(closeCypher).toContain("old.validTo IS NULL AND old.invalidatedAt IS NULL");
+    expect(closeCypher).not.toMatch(/DELETE/i);
+    expect(result.superseded).toBe(3);
+  });
+
+  it("reject path reports superseded=0 and never materialises", async () => {
+    let call = 0;
+    mocks.runFn.mockImplementation(async () => {
+      call++;
+      if (call === 1) return { records: [PENDING_EDGE_ROW] };
+      return { records: [] };
+    });
+    const result = await semanticEdgeApproveHandler(
+      { edgeId: "edge-uuid-1", decision: "reject" },
+      CTX,
+    );
+    expect(result.decision).toBe("reject");
+    expect(result.superseded).toBe(0);
+    expect(result.permanentEdgeId).toBeUndefined();
   });
 });

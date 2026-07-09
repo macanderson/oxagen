@@ -44,8 +44,10 @@ export const graphNodeUpsertHandler: CapabilityHandler<typeof graphNodeUpsert> =
       const result = await session.run(
         // MERGE key includes orgId AND workspaceId so a node is uniquely scoped
         // to its workspace; this prevents a same-org sibling workspace from
-        // matching (and overwriting) another workspace's node. $orgId and
-        // $workspaceId are injected automatically by scopedSession().
+        // matching (and overwriting) another workspace's node. scopedSession()
+        // also auto-injects $orgId/$workspaceId as a safety net, but they are
+        // bound explicitly below too (OXA-2062) so this resolver never depends
+        // solely on that auto-injection.
         `MERGE (n:GraphNode {naturalKey: $naturalKey, orgId: $orgId, workspaceId: $workspaceId})
          ON CREATE SET
            n.publicId     = randomUUID(),
@@ -69,6 +71,8 @@ export const graphNodeUpsertHandler: CapabilityHandler<typeof graphNodeUpsert> =
          RETURN n.publicId AS nodeId, n._created AS wasCreated`,
         {
           naturalKey,
+          orgId,
+          workspaceId,
           label: displayLabel,
           displayName: input.displayName,
           description: input.description ?? null,
@@ -122,7 +126,7 @@ export const graphNodeUpsertHandler: CapabilityHandler<typeof graphNodeUpsert> =
         await session.run(
           `MATCH (n:GraphNode {publicId: $nodeId, orgId: $orgId})
            SET n.embedding = $embedding, n.embeddingUpdatedAt = datetime()`,
-          { nodeId, embedding },
+          { nodeId, orgId, embedding },
         );
       } finally {
         await session.close();

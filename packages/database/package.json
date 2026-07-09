@@ -1,6 +1,6 @@
 {
   "name": "@oxagen/database",
-  "version": "0.6.4",
+  "version": "1.1.1",
   "private": true,
   "type": "module",
   "main": "./src/index.ts",
@@ -24,6 +24,7 @@
     "atlas:status": "atlas migrate status --env local",
     "atlas:validate": "atlas migrate validate --dir \"file://atlas/migrations\"",
     "studio": "drizzle-kit studio",
+    "db:seed-books": "tsx --env-file-if-exists=.env.local src/seed-book-editions.ts",
     "test:unit": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:integration": "vitest run --config vitest.integration.config.ts"
@@ -35,14 +36,13 @@
     "@oxagen/tenancy": "workspace:*",
     "drizzle-orm": "0.45.2",
     "pino": "9.14.0",
-    "postgres": "3.4.9",
-    "zod": "3.25.76"
+    "postgres": "3.4.9"
   },
   "devDependencies": {
     "@types/pg": "8.20.0",
+    "@vitest/coverage-v8": "2.1.9",
     "drizzle-kit": "0.31.10",
     "typescript": "6.0.3",
-    "vitest": "2.1.9",
-    "@vitest/coverage-v8": "2.1.9"
+    "vitest": "2.1.9"
   }
 }

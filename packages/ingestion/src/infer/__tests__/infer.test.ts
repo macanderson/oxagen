@@ -239,6 +239,45 @@ describe("inferSemanticEdges", () => {
     expect(mocks.upsertInferredEdges).not.toHaveBeenCalled();
   });
 
+  // OXA-2062: both the node-lookup query and the naturalKey→publicId resolve
+  // query MATCH by $orgId, but the local params objects previously omitted
+  // it, relying entirely on scopedSession()'s auto-injection. This suite
+  // mocks scopedSession() directly (no auto-injection), so this bug was
+  // invisible until orgId was bound explicitly on both calls.
+  it("binds orgId explicitly on both the node-lookup and resolve queries (regression: previously relied solely on scopedSession auto-injection)", async () => {
+    const nodeSession = makeSession({
+      records: [
+        { get: (k: string) => ({ naturalKey: "github:conn-1:42", displayName: "Task A" })[k] },
+      ],
+    });
+    mocks.generateObjectFor.mockResolvedValue({
+      object: {
+        inferredEdges: [
+          { targetNaturalKey: "github:conn-1:55", edgeType: "PART_OF", confidence: 0.9, rationale: "x" },
+        ],
+      },
+    });
+    const resolveSession = makeSession({
+      records: [
+        { get: (k: string) => ({ naturalKey: "github:conn-1:55", nodeId: "target-node-id" })[k] },
+      ],
+    });
+
+    let callCount = 0;
+    mocks.scopedSession.mockImplementation(() => {
+      callCount++;
+      return callCount === 1 ? nodeSession : resolveSession;
+    });
+
+    await inferSemanticEdges(makeJob({ orgId: "org-oxa-2062" }));
+
+    const nodeParams = nodeSession.run.mock.calls[0]![1] as Record<string, unknown>;
+    expect(nodeParams.orgId).toBe("org-oxa-2062");
+
+    const resolveParams = resolveSession.run.mock.calls[0]![1] as Record<string, unknown>;
+    expect(resolveParams.orgId).toBe("org-oxa-2062");
+  });
+
   it("closes all sessions (no session leak)", async () => {
     const nodeSession = makeSession({
       records: [

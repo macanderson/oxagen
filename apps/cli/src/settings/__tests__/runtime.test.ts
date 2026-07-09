@@ -8,7 +8,14 @@ import type { OxagenSettings } from "../schema.js";
 
 let dir: string;
 let userPath: string;
-const TOUCHED = ["OXAGEN_MODEL", "OXAGEN_API_URL", "OXAGEN_RT_TEST_A", "OXAGEN_RT_TEST_B"];
+const TOUCHED = [
+  "OXAGEN_MODEL",
+  "OXAGEN_LLM_ADVISOR",
+  "OXAGEN_LLM_EVALUATOR",
+  "OXAGEN_API_URL",
+  "OXAGEN_RT_TEST_A",
+  "OXAGEN_RT_TEST_B",
+];
 const saved: Record<string, string | undefined> = {};
 
 function writeProject(body: OxagenSettings): void {
@@ -72,8 +79,46 @@ describe("applySettingsToEnv", () => {
     expect(applied.model).toBe(false);
   });
 
+  it("projects the per-role models into their engine env vars", () => {
+    writeProject({
+      judgeModel: "vendor/judge",
+      triageModel: "vendor/triage",
+    });
+    const applied = apply();
+    expect(process.env["OXAGEN_LLM_ADVISOR"]).toBe("vendor/judge");
+    expect(process.env["OXAGEN_LLM_EVALUATOR"]).toBe("vendor/triage");
+    expect(applied.judgeModel).toBe(true);
+    expect(applied.triageModel).toBe(true);
+  });
+
+  it("workerModel wins over the generic model for OXAGEN_MODEL", () => {
+    writeProject({ model: "vendor/base", workerModel: "vendor/worker" });
+    apply();
+    expect(process.env["OXAGEN_MODEL"]).toBe("vendor/worker");
+  });
+
+  it("falls back to model for the worker when workerModel is unset", () => {
+    writeProject({ model: "vendor/base" });
+    apply();
+    expect(process.env["OXAGEN_MODEL"]).toBe("vendor/base");
+  });
+
+  it("leaves shell-set role env vars untouched", () => {
+    process.env["OXAGEN_LLM_ADVISOR"] = "shell/judge";
+    writeProject({ judgeModel: "settings/judge" });
+    const applied = apply();
+    expect(process.env["OXAGEN_LLM_ADVISOR"]).toBe("shell/judge");
+    expect(applied.judgeModel).toBe(false);
+  });
+
   it("is a no-op when there are no settings", () => {
     const applied = apply();
-    expect(applied).toEqual({ envKeys: [], apiUrl: false, model: false });
+    expect(applied).toEqual({
+      envKeys: [],
+      apiUrl: false,
+      model: false,
+      judgeModel: false,
+      triageModel: false,
+    });
   });
 });

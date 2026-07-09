@@ -1,6 +1,6 @@
 {
   "name": "@oxagen/mcp",
-  "version": "0.6.4",
+  "version": "1.1.1",
   "private": true,
   "scripts": {
     "dev": "xmcp dev",
@@ -15,21 +15,18 @@
     "@oxagen/agent": "workspace:*",
     "@oxagen/auth": "workspace:*",
     "@oxagen/billing": "workspace:*",
-    "@oxagen/config": "workspace:*",
-    "@oxagen/plugins": "workspace:*",
     "@oxagen/database": "workspace:*",
     "@oxagen/handlers": "workspace:*",
     "@oxagen/iam": "workspace:*",
     "@oxagen/oxagen": "workspace:*",
+    "@oxagen/plugins": "workspace:*",
     "@oxagen/telemetry": "workspace:*",
-    "@oxagen/tenancy": "workspace:*",
     "xmcp": "0.6.10",
     "zod": "3.25.76"
   },
   "devDependencies": {
     "@types/node": "25.9.1",
     "@vitest/coverage-v8": "2.1.9",
-    "swc-loader": "0.2.6",
     "typescript": "6.0.3",
     "vitest": "2.1.9"
   }

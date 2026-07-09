@@ -418,6 +418,94 @@ describe("MemoriesClient — confidence filter", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Citation filter + sort
+// ---------------------------------------------------------------------------
+
+describe("MemoriesClient — citation filter and sort", () => {
+  // Two records with distinct citation counts. lowCite is newer (so it sorts
+  // first by the default recency order); highCite is older but more cited.
+  const lowCite = {
+    ...routineRecord,
+    id: "ffff6666-0000-0000-0000-000000000006",
+    publicId: "pub-ffff6666-0000-0000-0000-000000000006",
+    lesson: "Barely-cited lesson.",
+    citationCount: 1,
+    createdAt: new Date(Date.now() - 1_000).toISOString(),
+  };
+  const highCite = {
+    ...constraintRecord,
+    id: "aaaa7777-0000-0000-0000-000000000007",
+    publicId: "pub-aaaa7777-0000-0000-0000-000000000007",
+    lesson: "Heavily-cited lesson.",
+    citationCount: 9,
+    createdAt: new Date(Date.now() - 500_000).toISOString(),
+  };
+
+  it("hides records below the min citations threshold", () => {
+    render(
+      <MemoriesClient {...baseProps} initialRecords={[lowCite, highCite]} />,
+    );
+    const minCitations = screen.getByLabelText("Minimum number of citations");
+    fireEvent.change(minCitations, { target: { value: "5" } });
+
+    expect(screen.getByText("Heavily-cited lesson.")).toBeInTheDocument();
+    expect(screen.queryByText("Barely-cited lesson.")).not.toBeInTheDocument();
+  });
+
+  it("clamps a negative min citations input to zero (shows all)", () => {
+    render(
+      <MemoriesClient {...baseProps} initialRecords={[lowCite, highCite]} />,
+    );
+    const minCitations = screen.getByLabelText("Minimum number of citations");
+    fireEvent.change(minCitations, { target: { value: "-3" } });
+
+    expect(screen.getByText("Heavily-cited lesson.")).toBeInTheDocument();
+    expect(screen.getByText("Barely-cited lesson.")).toBeInTheDocument();
+  });
+
+  it("reorders most-cited first when the citation sort axis is selected", () => {
+    render(
+      <MemoriesClient {...baseProps} initialRecords={[lowCite, highCite]} />,
+    );
+    // Default (recency) order: the newer lowCite renders before highCite.
+    const before = screen.getByText("Barely-cited lesson.");
+    const beforeHigh = screen.getByText("Heavily-cited lesson.");
+    expect(
+      before.compareDocumentPosition(beforeHigh) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText("Sort memories"), {
+      target: { value: "citationCount" },
+    });
+
+    // Now the most-cited record sorts first.
+    const high = screen.getByText("Heavily-cited lesson.");
+    const low = screen.getByText("Barely-cited lesson.");
+    expect(
+      high.compareDocumentPosition(low) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it("labels the list header with the active sort axis", () => {
+    render(
+      <MemoriesClient {...baseProps} initialRecords={[lowCite, highCite]} />,
+    );
+    // The label text appears both as the header <span> and as a <select>
+    // <option>; assert specifically on the header span.
+    const isSpan = (el: HTMLElement) => el.tagName === "SPAN";
+    expect(
+      screen.getAllByText("Newest first").find(isSpan),
+    ).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Sort memories"), {
+      target: { value: "citationCount" },
+    });
+    expect(screen.getAllByText("Most cited").find(isSpan)).toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Text search filter
 // ---------------------------------------------------------------------------
 
@@ -906,10 +994,10 @@ describe("MemoriesClient — row accessibility and detail sheet", () => {
     );
   });
 
-  it("edits the kind, weight, confidence and source fields and saves the changes", async () => {
+  it("edits the kind, confidence, enforcement and source fields and saves the changes", async () => {
     const mockUpdate = vi.fn().mockResolvedValue({
       ok: true,
-      memory: { ...routineRecord, kind: "gotcha", weight: "low" },
+      memory: { ...routineRecord, memoryKind: "gotcha", enforcementScore: 30 },
     });
     render(
       <MemoriesClient
@@ -928,11 +1016,12 @@ describe("MemoriesClient — row accessibility and detail sheet", () => {
     fireEvent.change(screen.getByLabelText("Memory kind"), {
       target: { value: "gotcha" },
     });
-    fireEvent.change(screen.getByLabelText("Memory weight"), {
-      target: { value: "low" },
-    });
     fireEvent.change(screen.getByLabelText("Confidence level"), {
       target: { value: "42" },
+    });
+    // routineRecord is a RULE, so the Enforcement slider is rendered.
+    fireEvent.change(screen.getByLabelText("Enforcement level"), {
+      target: { value: "30" },
     });
     fireEvent.change(screen.getByLabelText("Source"), {
       target: { value: "manual-review" },
@@ -944,8 +1033,9 @@ describe("MemoriesClient — row accessibility and detail sheet", () => {
     expect(mockUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
         memoryId: routineRecord.id,
-        kind: "gotcha",
-        weight: "low",
+        memoryKind: "gotcha",
+        confidenceScore: 42,
+        enforcementScore: 30,
         source: "manual-review",
       }),
     );

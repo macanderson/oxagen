@@ -15,6 +15,11 @@
  */
 import type { ModelTier, UsageTotals } from "../types";
 import { estimateCostUsd, rateFor, formatUsd } from "./rate-card";
+import type {
+  EffortLevel,
+  EffortValidation,
+  ModelCache,
+} from "../model-cache";
 
 // Re-exported so call sites that import pricing from the router keep working.
 // The authoritative definitions live in ./rate-card.ts.
@@ -29,9 +34,9 @@ function tierSlug(tier: ModelTier): string {
     case "fast":
       return process.env["OXAGEN_LLM_FAST"] ?? "anthropic/claude-haiku-4.5";
     case "balanced":
-      return process.env["OXAGEN_LLM_BALANCED"] ?? "anthropic/claude-sonnet-4.6";
+      return process.env["OXAGEN_LLM_BALANCED"] ?? "anthropic/claude-sonnet-5";
     case "precise":
-      return process.env["OXAGEN_LLM_PRECISE"] ?? "anthropic/claude-opus-4.8";
+      return process.env["OXAGEN_LLM_PRECISE"] ?? "anthropic/claude-fable-5";
   }
 }
 
@@ -39,7 +44,7 @@ export const TIERS: ModelTier[] = ["fast", "balanced", "precise"];
 
 /** Human label for a tier, for the agents screen and `--explain` output. */
 export function tierLabel(tier: ModelTier): string {
-  return tier === "fast" ? "Haiku" : tier === "balanced" ? "Sonnet" : "Opus";
+  return tier === "fast" ? "Haiku" : tier === "balanced" ? "Sonnet" : "Fable";
 }
 
 // ── Usage accumulation ───────────────────────────────────────────────────────
@@ -50,12 +55,16 @@ export function tierLabel(tier: ModelTier): string {
 export function accumulateUsage(
   total: UsageTotals,
   model: string,
-  usage: { inputTokens?: number; outputTokens?: number },
+  usage: { inputTokens?: number; outputTokens?: number; cachedInputTokens?: number },
 ): UsageTotals {
   return {
     inputTokens: total.inputTokens + (usage.inputTokens ?? 0),
     outputTokens: total.outputTokens + (usage.outputTokens ?? 0),
-    costUsd: total.costUsd + estimateCostUsd(model, usage),
+    // rate-card's TokenUsage names this `cachedTokens`; callers here (engine
+    // step-loop / evaluator / judge results) name it `cachedInputTokens` —
+    // map field names at this one seam so the cache discount actually
+    // applies instead of silently being dropped by a key mismatch.
+    costUsd: total.costUsd + estimateCostUsd(model, { ...usage, cachedTokens: usage.cachedInputTokens }),
   };
 }
 
@@ -180,8 +189,17 @@ export function tierForSlug(model: string): ModelTier {
   const family = (model.split("/").pop() ?? model).toLowerCase();
   // Cheap/small variants win first — every vendor marks them the same way.
   if (family.startsWith("claude-haiku") || SMALL_MARKER.test(family)) return "fast";
-  // Frontier / high-capability families across vendors → precise.
-  if (family.startsWith("claude-opus") || family.startsWith("gpt-5") || PRECISE_MARKER.test(family))
+  // Frontier / high-capability families across vendors → precise. claude-fable
+  // / claude-mythos (the Mythos-class tier above Opus) match none of the
+  // legacy markers, so without their own prefixes a pinned fable-5 was
+  // mislabelled "Sonnet" in route stage events.
+  if (
+    family.startsWith("claude-opus") ||
+    family.startsWith("claude-fable") ||
+    family.startsWith("claude-mythos") ||
+    family.startsWith("gpt-5") ||
+    PRECISE_MARKER.test(family)
+  )
     return "precise";
   return "balanced";
 }
@@ -190,3 +208,6 @@ export function tierForSlug(model: string): ModelTier {
 export function modelForTier(tier: ModelTier): string {
   return tierSlug(tier);
 }
+
+// Re-export effort types so consumers import once from this module
+export type { EffortLevel, EffortValidation, ModelCache };

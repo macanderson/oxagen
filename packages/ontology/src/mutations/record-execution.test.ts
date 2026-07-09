@@ -27,7 +27,7 @@ const BASE_INPUT: RecordExecutionInput = {
   inputTokens: 800,
   outputTokens: 200,
   estimatedCostUsd: "0.003200",
-  toolCalls: [{ toolName: "web.search", toolType: "builtin" }],
+  toolCalls: [{ toolName: "search_web", toolType: "builtin" }],
 };
 
 const FAKE_EMBEDDING = new Array(1536).fill(0.1);
@@ -108,7 +108,7 @@ describe("recordExecutionInGraph", () => {
 
     const params = mockNeoRun.mock.calls[0]![1] as Record<string, unknown>;
     const parsed = JSON.parse(params.properties as string) as Record<string, unknown>;
-    expect(parsed.toolNames).toEqual(["web.search"]);
+    expect(parsed.toolNames).toEqual(["search_web"]);
   });
 
   it("sets summary when provided", async () => {
@@ -240,6 +240,37 @@ describe("recordExecutionInGraph", () => {
     expect(originCall![0]).toContain(":WorkflowRun");
   });
 
+  it("creates ORIGINATED_FROM edge to Fanout for fanout origin (Phase 2 §2)", async () => {
+    await recordExecutionInGraph({ ...BASE_INPUT, originType: "fanout", originId: "fan-001" });
+
+    const originCall = mockNeoRun.mock.calls.find(([cypher]) =>
+      (cypher as string).includes("ORIGINATED_FROM"),
+    );
+    expect(originCall).toBeDefined();
+    expect(originCall![0]).toContain(":Fanout");
+    expect(originCall![1]).toMatchObject({ originId: "fan-001" });
+  });
+
+  it("merges caller-supplied properties into the node's properties bag", async () => {
+    await recordExecutionInGraph({
+      ...BASE_INPUT,
+      originType: "fanout",
+      properties: { fanoutId: "fan-001", runId: "sar-001", capabilityName: "search_web", attempts: 2, dropped: null },
+    });
+
+    const mergeCall = mockNeoRun.mock.calls[0]!;
+    const params = mergeCall[1] as Record<string, unknown>;
+    const parsed = JSON.parse(params.properties as string) as Record<string, unknown>;
+    expect(parsed).toMatchObject({
+      fanoutId: "fan-001",
+      runId: "sar-001",
+      capabilityName: "search_web",
+      attempts: 2,
+      originType: "fanout",
+    });
+    expect(parsed).not.toHaveProperty("dropped");
+  });
+
   it("skips ORIGINATED_FROM edge for unknown originType", async () => {
     await recordExecutionInGraph({ ...BASE_INPUT, originType: "scheduled_job" });
 
@@ -251,8 +282,8 @@ describe("recordExecutionInGraph", () => {
 
   it("creates CALLED_TOOL edges for all toolCalls in a single UNWIND query", async () => {
     const toolCalls = [
-      { toolName: "web.search", toolType: "builtin" },
-      { toolName: "document.create", toolType: "capability" },
+      { toolName: "search_web", toolType: "builtin" },
+      { toolName: "create_document", toolType: "capability" },
     ];
     await recordExecutionInGraph({ ...BASE_INPUT, toolCalls });
 
@@ -369,5 +400,27 @@ describe("recordExecutionInGraph", () => {
       (cypher as string).includes("TOUCHED_FILE"),
     );
     expect(touchedCall).toBeUndefined();
+  });
+
+  // ── OXA-2062: orgId bound explicitly on every session.run() call ─────────
+  //
+  // Every MERGE/MATCH in this module keys on `orgId: $orgId` (the Execution
+  // MERGE uses it as part of the idempotency key), but the local params
+  // objects previously omitted `orgId` on all five session.run() calls,
+  // relying entirely on scopedSession()'s auto-injection. This suite mocks
+  // scopedSession() directly (no auto-injection — see the module-level
+  // vi.mock above), so this bug was invisible until orgId was bound
+  // explicitly on every call.
+  it("binds orgId explicitly on every session.run call (regression: previously relied solely on scopedSession auto-injection)", async () => {
+    await recordExecutionInGraph({
+      ...BASE_INPUT,
+      touchedFilePaths: ["github:owner/repo:src/a.ts"],
+    });
+
+    expect(mockNeoRun.mock.calls.length).toBeGreaterThanOrEqual(4);
+    for (const call of mockNeoRun.mock.calls) {
+      const params = call[1] as Record<string, unknown>;
+      expect(params.orgId).toBe(BASE_INPUT.orgId);
+    }
   });
 });

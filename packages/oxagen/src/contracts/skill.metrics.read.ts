@@ -2,13 +2,13 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const skillMetricsRead = registerCapability({
-  name: "skill.metrics.read",
+  name: "get_skill_metrics",
   domain: "skill",
   description:
     "Read aggregated skill usage and cost metrics for the workspace. Returns load counts, last-used timestamps, approximate token cost (best-effort via join to token_usage on execution_step_id — multi-skill attribution is partial), and per-version load breakdown. Omit skillId for workspace-wide aggregation.",
   mode: "sync",
   surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "docs", "mcp"],
+  layers: ["schema", "api", "docs", "mcp", "app"],
   scoped: true,
   noBillingGate: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "skill" },

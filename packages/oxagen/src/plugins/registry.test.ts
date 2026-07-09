@@ -56,19 +56,19 @@ describe("getOxagenPlugin", () => {
   it("returns the full media-image manifest with correct contracts", () => {
     const plugin = getOxagenPlugin("oxagen/media-image");
     expect(plugin).toBeDefined();
-    expect(plugin?.contracts).toContain("image.generate");
-    expect(plugin?.contracts).toContain("image.create");
-    expect(plugin?.contracts).toContain("image.analyze");
-    expect(plugin?.contracts).toContain("image.list");
+    expect(plugin?.contracts).toContain("generate_image");
+    expect(plugin?.contracts).toContain("create_image");
+    expect(plugin?.contracts).toContain("analyze_image");
+    expect(plugin?.contracts).toContain("list_images");
   });
 
   it("returns the documents manifest with correct contracts", () => {
     const plugin = getOxagenPlugin("oxagen/documents");
     expect(plugin).toBeDefined();
-    expect(plugin?.contracts).toContain("documents.generate");
-    expect(plugin?.contracts).toContain("documents.pdf.create");
-    expect(plugin?.contracts).toContain("markdown.generate");
-    expect(plugin?.contracts).toContain("mermaid.generate");
+    expect(plugin?.contracts).toContain("generate_document");
+    expect(plugin?.contracts).toContain("create_pdf");
+    expect(plugin?.contracts).toContain("generate_markdown");
+    expect(plugin?.contracts).toContain("generate_mermaid");
     expect(plugin?.category).toBe("documents");
   });
 });
@@ -80,16 +80,16 @@ describe("pluginForContract", () => {
 
   it("returns the correct plugin for each claimed contract", () => {
     const contractCases: Array<[string, string]> = [
-      ["video.generate", "oxagen/media-video"],
-      ["image.generate", "oxagen/media-image"],
-      ["image.create", "oxagen/media-image"],
-      ["image.analyze", "oxagen/media-image"],
-      ["image.list", "oxagen/media-image"],
-      ["svg.generate", "oxagen/media-svg"],
-      ["documents.generate", "oxagen/documents"],
-      ["documents.pdf.create", "oxagen/documents"],
-      ["markdown.generate", "oxagen/documents"],
-      ["mermaid.generate", "oxagen/documents"],
+      ["generate_video", "oxagen/media-video"],
+      ["generate_image", "oxagen/media-image"],
+      ["create_image", "oxagen/media-image"],
+      ["analyze_image", "oxagen/media-image"],
+      ["list_images", "oxagen/media-image"],
+      ["generate_svg", "oxagen/media-svg"],
+      ["generate_document", "oxagen/documents"],
+      ["create_pdf", "oxagen/documents"],
+      ["generate_markdown", "oxagen/documents"],
+      ["generate_mermaid", "oxagen/documents"],
     ];
     for (const [contract, expectedId] of contractCases) {
       const plugin = pluginForContract(contract);
@@ -100,9 +100,9 @@ describe("pluginForContract", () => {
 
   it("returns undefined for a builtin contract not claimed by any plugin", () => {
     // document.create/list/read are builtin — NOT in any plugin's contracts list.
-    expect(pluginForContract("document.create")).toBeUndefined();
-    expect(pluginForContract("document.list")).toBeUndefined();
-    expect(pluginForContract("document.read")).toBeUndefined();
+    expect(pluginForContract("create_document")).toBeUndefined();
+    expect(pluginForContract("list_documents")).toBeUndefined();
+    expect(pluginForContract("read_document")).toBeUndefined();
   });
 
   it("returns undefined for a completely unknown contract name", () => {
@@ -110,8 +110,8 @@ describe("pluginForContract", () => {
   });
 
   it("returns undefined for chat and agent contracts (always builtin)", () => {
-    expect(pluginForContract("chat.message.send")).toBeUndefined();
-    expect(pluginForContract("agent.code.execute")).toBeUndefined();
+    expect(pluginForContract("send_message")).toBeUndefined();
+    expect(pluginForContract("execute_code")).toBeUndefined();
   });
 });
 

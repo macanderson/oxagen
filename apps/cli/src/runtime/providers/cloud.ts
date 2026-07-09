@@ -2,8 +2,10 @@
  * Cloud model providers (anthropic, openai) over the Vercel AI Gateway.
  *
  * Both talk to the same gateway the rest of the CLI uses — models are plain
- * gateway slugs (`vendor/model`) resolved with `AI_GATEWAY_API_KEY` (see
- * `agent/env.ts`). The two vendor classes are thin: they exist so the registry
+ * gateway slugs (`vendor/model`) resolved with `AI_GATEWAY_API_KEY`, or, when
+ * only `ANTHROPIC_API_KEY` is present, anthropic/* slugs resolve directly
+ * against the Anthropic API (see `agent/env.ts` + `agent/anthropic-direct.ts`).
+ * The two vendor classes are thin: they exist so the registry
  * exposes concrete `anthropic` and `openai` providers (deliverable 2) that
  * differ in vendor labelling and cost grouping, while sharing one code path.
  *
@@ -12,7 +14,7 @@
  * errors into {@link OfflineError}; the on-device coordinator keeps running.
  */
 import { generateText } from "ai";
-import { ensureGatewayKey } from "../../agent/env.js";
+import { credentialSupportsModel, resolveAiCredential } from "../../agent/env.js";
 import { estimateCostUsd } from "../../agent/rate-card.js";
 import { estimateInputTokens, estimateTokens } from "../tokens.js";
 import type {
@@ -35,12 +37,13 @@ export class OfflineError extends Error {
   }
 }
 
-/** Thrown when no gateway credential can be resolved for a cloud call. */
+/** Thrown when no usable credential can be resolved for a cloud call. */
 export class MissingCredentialError extends Error {
   constructor(model: string) {
     super(
-      `No AI gateway credential for "${model}". Set AI_GATEWAY_API_KEY, run ` +
-        `\`oxagen config\`, or add it to a nearby .env.local.`,
+      `No AI credential for "${model}". Set AI_GATEWAY_API_KEY (any vendor) or ` +
+        `ANTHROPIC_API_KEY (Anthropic models only), run \`oxagen config\`, or add ` +
+        `one to a nearby .env.local.`,
     );
     this.name = "MissingCredentialError";
   }
@@ -58,10 +61,23 @@ export type GenerateFn = (args: {
   usage: { inputTokens?: number; outputTokens?: number };
 }>;
 
+/**
+ * Standalone fallback for a `complete()` call with no injected `generate` — used
+ * only by tests and out-of-engine one-shot inspection. The LIVE path (the
+ * coordinator seam in `agent/adapters/coordinator.ts`) injects a METERED
+ * `generate` built over `createMeteredAi`/the gateway port, so on-path cloud
+ * completions emit metering + honor BYOK, never this raw `ai` call. Keeping the
+ * raw default confined to non-engine use is the "all LLM calls through
+ * @oxagen/ai" rule (this module can't import the metered port without a
+ * runtime→agent cycle, so the caller injects it).
+ */
 const defaultGenerate: GenerateFn = (args) =>
   generateText({
     model: args.model,
     messages: args.messages,
+    // Coordinator/judge requests carry their system prompt as a system-role
+    // message; AI SDK v7 rejects that in `messages` unless explicitly allowed.
+    allowSystemInMessages: true,
     ...(args.maxOutputTokens !== undefined ? { maxOutputTokens: args.maxOutputTokens } : {}),
     ...(args.temperature !== undefined ? { temperature: args.temperature } : {}),
     ...(args.abortSignal ? { abortSignal: args.abortSignal } : {}),
@@ -69,7 +85,11 @@ const defaultGenerate: GenerateFn = (args) =>
 
 export interface CloudProviderDeps {
   generate?: GenerateFn;
-  /** Resolve/ensure the gateway key. Returns null when none is available. */
+  /**
+   * Resolve/ensure a credential usable for this provider's model. Returns null
+   * when none is available (missing keys, or the model's vendor is unreachable
+   * with the resolved credential).
+   */
   resolveKey?: () => string | null;
 }
 
@@ -100,11 +120,32 @@ export class GatewayCloudProvider implements ModelProvider {
     deps: CloudProviderDeps = {},
   ) {
     this.generate = deps.generate ?? defaultGenerate;
-    this.resolveKey = deps.resolveKey ?? (() => ensureGatewayKey());
+    // Default credential check is model-aware: a gateway key runs any vendor,
+    // an ANTHROPIC_API_KEY-only setup runs only anthropic/* slugs — so e.g.
+    // the OpenAI judge reports unavailable instead of failing mid-call.
+    this.resolveKey =
+      deps.resolveKey ??
+      (() => {
+        const credential = resolveAiCredential();
+        if (!credential) return null;
+        return credentialSupportsModel(credential, this.entry.slug)
+          ? credential.key
+          : null;
+      });
   }
 
   id(): string {
     return this.registryId;
+  }
+
+  /**
+   * The concrete Vercel AI Gateway slug (`vendor/model`) this provider resolves
+   * to. The coordinator seam hands this to the engine's shared metered port as
+   * the per-call `model`, so a cloud coordinator streams natively (tools +
+   * streaming intact) instead of being funnelled through single-shot `complete`.
+   */
+  slug(): string {
+    return this.entry.slug;
   }
 
   kind(): "cloud" {

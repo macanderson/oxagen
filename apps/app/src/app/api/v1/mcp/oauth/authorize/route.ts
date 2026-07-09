@@ -16,6 +16,7 @@ import { and, eq } from 'drizzle-orm';
 import { schema, withSystemDb } from '@oxagen/database';
 import { DbOAuthClientProvider } from '@oxagen/plugins';
 import { getSession } from '@/lib/session';
+import { resolveReturnTo } from '@/lib/mcp-oauth/return-to';
 import { resolveOrg, assertMcpManager } from '@/lib/resolve-org';
 import { authDenialStatus, isNextRedirectError } from '@/lib/auth-denial';
 import { logger } from '@oxagen/handlers/logger';
@@ -160,7 +161,13 @@ async function handleAuthorize(req: NextRequest): Promise<Response> {
 
   const state = randomUUID();
   const redirectUrl = `${url.origin}/api/v1/mcp/oauth/callback`;
-  const returnTo = `/${orgSlug}/${workspaceSlug}/settings/plugins`;
+  // Land back on whichever surface launched the flow (validated: same-origin
+  // path inside this org only); default = Studio → Agent Tools → MCP Servers.
+  const returnTo = resolveReturnTo(
+    url.searchParams.get('returnTo'),
+    orgSlug,
+    workspaceSlug,
+  );
 
   const provider = new DbOAuthClientProvider({
     orgId: tenant.id,
@@ -206,9 +213,10 @@ async function handleAuthorize(req: NextRequest): Promise<Response> {
       { orgId: tenant.id, orgListingId },
       'mcp-oauth: already authorized, skipping flow',
     );
-    return NextResponse.redirect(
-      `${url.origin}${returnTo}?mcp=already-connected`,
-    );
+    const dest = new URL(returnTo, url.origin);
+    dest.searchParams.set('mcp', 'already-connected');
+    dest.searchParams.set('listing', orgListingId);
+    return NextResponse.redirect(dest.toString());
   }
 
   if (!provider.pendingRedirect) {

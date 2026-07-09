@@ -145,8 +145,31 @@ export const oxagenSettingsSchema = z
   .object({
     /** Optional JSON-Schema reference for editor autocompletion. */
     $schema: z.string().optional(),
-    /** Default gateway model slug for the agent loop (e.g. "anthropic/claude-sonnet-4.6"). */
+    /**
+     * Default gateway model slug for the agent loop (e.g. "anthropic/claude-sonnet-5").
+     * Acts as the universal fallback for every pipeline role: any role whose own
+     * key below is unset inherits this value (which itself falls back to the
+     * built-in tier default). Set the per-role keys to run each stage on a
+     * different model without touching the others.
+     */
     model: z.string().optional(),
+    /**
+     * Model for the WORKER role — the executor that runs the tool loop and edits
+     * code (`runCodingAgent`). Falls back to `model`. Set via `/worker-model`.
+     */
+    workerModel: z.string().optional(),
+    /**
+     * Model for the JUDGE role — the completeness advisor / judge panel that
+     * grades a turn's output. Falls back to a distinct advisor tier derived from
+     * the worker. Set via `/judge-model`.
+     */
+    judgeModel: z.string().optional(),
+    /**
+     * Model for the TRIAGE / coordinator role — the planner that decomposes the
+     * goal AND the pre-execution evaluator/classifier. Falls back to `model`
+     * (planner) and the local heuristic (evaluator). Set via `/triage-model`.
+     */
+    triageModel: z.string().optional(),
     /**
      * Reasoning effort for models that support it. Forwarded to the model as
      * `reasoning_effort`; ignored by models without a reasoning mode. Higher
@@ -167,6 +190,12 @@ export const oxagenSettingsSchema = z
     toolVisibility: z.record(toolVisibilitySchema).optional(),
     /** Inline named agent definitions, keyed by agent name. */
     agents: z.record(inlineAgentSchema).optional(),
+    /**
+     * When true, the interactive REPL pauses before executing each turn to show
+     * the enhanced prompt and an estimated cost, letting you edit the prompt or
+     * cancel before any work runs. Default false (turns run immediately).
+     */
+    confirmScope: z.boolean().optional(),
   })
   // Forward-compatible: sections that land in later PRs (agents, commands,
   // skills) may already be present in a user's file; pass them through rather

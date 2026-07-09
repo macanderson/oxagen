@@ -4,7 +4,7 @@ import { oxagenSettingsSchema, permissionsSchema, hooksSchema } from "../schema.
 describe("oxagenSettingsSchema", () => {
   it("parses a full settings document", () => {
     const parsed = oxagenSettingsSchema.parse({
-      model: "anthropic/claude-sonnet-4.6",
+      model: "anthropic/claude-sonnet-5",
       apiUrl: "https://api.oxagen.sh",
       env: { FOO: "bar" },
       permissions: { defaultMode: "default", deny: ["Bash(rm -rf*)"], allow: ["Bash(git*)"] },
@@ -14,7 +14,7 @@ describe("oxagenSettingsSchema", () => {
       },
       toolVisibility: { github: { include: ["create_*"] } },
     });
-    expect(parsed.model).toBe("anthropic/claude-sonnet-4.6");
+    expect(parsed.model).toBe("anthropic/claude-sonnet-5");
     expect(parsed.permissions?.deny).toContain("Bash(rm -rf*)");
     expect(parsed.mcpServers?.github?.transport).toBe("stdio");
   });
@@ -58,5 +58,32 @@ describe("oxagenSettingsSchema", () => {
 
   it("accepts an empty document", () => {
     expect(oxagenSettingsSchema.parse({})).toEqual({});
+  });
+
+  it("parses the per-function model keys", () => {
+    const parsed = oxagenSettingsSchema.parse({
+      model: "anthropic/claude-sonnet-5",
+      workerModel: "anthropic/claude-fable-5",
+      judgeModel: "openai/gpt-5.5-pro",
+      triageModel: "anthropic/claude-haiku-4.5",
+    });
+    expect(parsed.workerModel).toBe("anthropic/claude-fable-5");
+    expect(parsed.judgeModel).toBe("openai/gpt-5.5-pro");
+    expect(parsed.triageModel).toBe("anthropic/claude-haiku-4.5");
+  });
+
+  it("parses confirmScope as an optional boolean", () => {
+    const result = oxagenSettingsSchema.safeParse({ confirmScope: true });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.confirmScope).toBe(true);
+
+    // Absent entirely still parses fine — the field is optional.
+    const withoutIt = oxagenSettingsSchema.safeParse({});
+    expect(withoutIt.success).toBe(true);
+    if (withoutIt.success) expect(withoutIt.data.confirmScope).toBeUndefined();
+  });
+
+  it("rejects a non-boolean confirmScope", () => {
+    expect(oxagenSettingsSchema.safeParse({ confirmScope: "true" }).success).toBe(false);
   });
 });

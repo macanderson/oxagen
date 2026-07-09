@@ -3,13 +3,13 @@ import { registerCapability } from "../registry";
 import { environmentSummarySchema } from "./environment.create";
 
 export const environmentList = registerCapability({
-  name: "environment.list",
+  name: "list_environments",
   domain: "environment",
   description: "List the environments configured in the active workspace.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   agent: { requiresApproval: false, riskLevel: "low", category: "introspection" },
-  layers: ["api", "mcp", "unit", "docs"],
+  layers: ["api", "mcp", "unit", "docs", "app"],
   scoped: true,
   sensitivity: "low",
   defaultEffect: "deny",

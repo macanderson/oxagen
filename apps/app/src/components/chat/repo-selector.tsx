@@ -1,71 +1,94 @@
 "use client";
 
 import * as React from "react";
-import { GitBranch, Plus } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { GitBranch } from "lucide-react";
 import {
   Select,
-  SelectContent,
+  SelectPopup,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { cn } from "@/lib/utils";
 
-export interface Repository {
-  id: string;
-  name: string;
+/**
+ * A single repo a code-mode turn can target, derived from a `connectorId ===
+ * "github"` `connection.list` row plus its `connection.get` deliveryConfig
+ * (`{ owner, repo, defaultBranch }` or `{ selectedRepos: ["owner/repo", …] }`
+ * — see `_shared/code-mode-data.ts`). `key` is unique per repo (not per
+ * connection) because a single GitHub connection can sync multiple repos.
+ */
+export interface RepoOption {
+  key: string;
+  connectionId: string;
   owner: string;
-  url: string;
-  branch: string;
+  name: string;
+  defaultBranch: string | null;
 }
 
 interface RepoSelectorProps {
-  repositories: Repository[];
-  selectedRepoId: string | null;
-  onSelectRepo: (repoId: string) => void;
-  onAddRepo?: () => void;
+  repositories: RepoOption[];
+  selectedKey: string | null;
+  onSelectRepo: (repo: RepoOption) => void;
   isLoading?: boolean;
+  /**
+   * Extra classes for the select trigger. Defaults to a mobile-first width
+   * (`w-full` below `sm`, fixed `sm:w-48` on desktop) with a ≥44px touch
+   * target on phones — pass a class to override from the parent layout.
+   */
+  className?: string;
+  /**
+   * Accessible label for the trigger. Defaults to "Select repository". The
+   * pin context bar overrides it ("Pinned repository") so the always-visible
+   * pin selector doesn't collide with the code-mode toolbar's selector in
+   * tests / a11y trees when both can appear.
+   */
+  ariaLabel?: string;
+  placeholder?: string;
 }
 
 export function RepoSelector({
   repositories,
-  selectedRepoId,
+  selectedKey,
   onSelectRepo,
-  onAddRepo,
   isLoading = false,
+  className,
+  ariaLabel = "Select repository",
+  placeholder = "Select repository",
 }: RepoSelectorProps) {
   return (
-    <div className="flex items-center gap-2">
-      <GitBranch className="size-4 text-muted-foreground" />
+    <div className="flex w-full min-w-0 items-center gap-2 sm:w-auto">
+      <GitBranch className="size-4 shrink-0 text-muted-foreground" />
       <Select
-        value={selectedRepoId || ""}
+        value={selectedKey ?? ""}
         onValueChange={(value) => {
-          if (value) onSelectRepo(value);
+          const repo = repositories.find((r) => r.key === value);
+          if (repo) onSelectRepo(repo);
         }}
-        disabled={isLoading}
+        disabled={isLoading || repositories.length === 0}
       >
-        <SelectTrigger className="w-48">
-          <SelectValue placeholder="Select repository" />
+        <SelectTrigger
+          className={cn("min-h-11 w-full sm:min-h-0 sm:w-48", className)}
+          aria-label={ariaLabel}
+        >
+          {/* Resolve the label with a function child so a programmatically-set
+              value (e.g. a rehydrated pin) shows owner/name, not the raw repo
+              key — the SelectItems aren't mounted until the popup first opens. */}
+          <SelectValue placeholder={placeholder}>
+            {(value: string | null) => {
+              const repo = value ? repositories.find((r) => r.key === value) : null;
+              return repo ? `${repo.owner}/${repo.name}` : placeholder;
+            }}
+          </SelectValue>
         </SelectTrigger>
-        <SelectContent>
+        <SelectPopup>
           {repositories.map((repo) => (
-            <SelectItem key={repo.id} value={repo.id}>
+            <SelectItem key={repo.key} value={repo.key}>
               {repo.owner}/{repo.name}
             </SelectItem>
           ))}
-        </SelectContent>
+        </SelectPopup>
       </Select>
-      {onAddRepo && (
-        <Button
-          size="icon"
-          variant="ghost"
-          onClick={onAddRepo}
-          disabled={isLoading}
-          title="Add repository"
-        >
-          <Plus className="size-4" />
-        </Button>
-      )}
     </div>
   );
 }

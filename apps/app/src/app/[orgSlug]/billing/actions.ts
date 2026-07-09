@@ -345,7 +345,7 @@ export async function buyCreditsAction(
       actorUserId: managed.actorUserId,
       orgId: managed.orgId,
       workspaceId: null,
-      capability: "billing.credits.purchase",
+      capability: "purchase_credits",
       outcome: "success",
       ip: null,
       userAgent: null,

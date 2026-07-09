@@ -1,5 +1,5 @@
 import { withTenantDb, schema } from "@oxagen/database";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { getInngestClient } from "../dispatch/inngest-client";
 import { getOxagenRegistry } from "../registry-loader";
@@ -20,6 +20,67 @@ const TIMEOUT_CEILING_BY_RISK: Record<"low" | "medium" | "high", number> = {
   medium: 600,
   high: 300,
 };
+
+/**
+ * Total-descendant cap for a root fanout tree (Phase 2 §4). Depth (3) and
+ * width (100/dispatch) are enforced elsewhere, but per-level caps alone allow
+ * a 3-deep × 100-wide ≈ 10⁶ explosion; this bounds the whole tree. Exported
+ * for unit tests.
+ */
+export const MAX_TOTAL_DESCENDANTS = 250;
+
+/**
+ * Count every subagent run already in this dispatch's root fanout tree: walk
+ * UP the parent_message_id ↔ child_message_id lineage to the root message,
+ * then count the whole subtree below it. One recursive CTE, org-scoped on
+ * every join; lvl guards bound the walk far beyond MAX_FANOUT_DEPTH so a
+ * corrupt lineage cycle can never hang the dispatch.
+ */
+async function countRootTreeDescendants(orgId: string, parentMessageId: string): Promise<number> {
+  const rows = await withTenantDb((tx) =>
+    tx.execute<{ descendant_count: number }>(sql`
+      WITH RECURSIVE up AS (
+        SELECT ${parentMessageId}::uuid AS message_id, 0 AS lvl
+        UNION ALL
+        SELECT f.parent_message_id, up.lvl + 1
+        FROM up
+        JOIN agent.subagent_runs r
+          ON r.child_message_id = up.message_id AND r.org_id = ${orgId}::uuid
+        JOIN agent.subagent_fanouts f
+          ON f.id = r.fanout_id AND f.org_id = ${orgId}::uuid
+        WHERE up.lvl < 10
+      ),
+      root AS (
+        SELECT u.message_id FROM up u
+        WHERE NOT EXISTS (
+          SELECT 1 FROM agent.subagent_runs r2
+          WHERE r2.child_message_id = u.message_id AND r2.org_id = ${orgId}::uuid
+        )
+        ORDER BY u.lvl DESC
+        LIMIT 1
+      ),
+      down AS (
+        SELECT r.id, r.child_message_id, 0 AS lvl
+        FROM root
+        JOIN agent.subagent_fanouts f
+          ON f.parent_message_id = root.message_id AND f.org_id = ${orgId}::uuid
+        JOIN agent.subagent_runs r
+          ON r.fanout_id = f.id AND r.org_id = ${orgId}::uuid
+        UNION ALL
+        SELECT r2.id, r2.child_message_id, down.lvl + 1
+        FROM down
+        JOIN agent.subagent_fanouts f2
+          ON f2.parent_message_id = down.child_message_id AND f2.org_id = ${orgId}::uuid
+        JOIN agent.subagent_runs r2
+          ON r2.fanout_id = f2.id AND r2.org_id = ${orgId}::uuid
+        WHERE down.lvl < 10
+      )
+      SELECT count(*)::int AS descendant_count FROM down
+    `),
+  );
+  const row = (rows as unknown as { descendant_count: number }[])[0];
+  return Number(row?.descendant_count ?? 0);
+}
 
 export async function agentSubagentDispatchHandler(
   input: AgentSubagentDispatchInput,
@@ -54,6 +115,18 @@ export async function agentSubagentDispatchHandler(
     input.timeoutSeconds === undefined
       ? undefined
       : Math.min(input.timeoutSeconds, ceiling);
+
+  // Total-descendant budget (Phase 2 §4): a nested dispatch that would push
+  // its ROOT fanout tree past the cap is rejected before any row is created.
+  // The worker should decompose less aggressively or summarize what it has.
+  const existingDescendants = await countRootTreeDescendants(ctx.orgId, parentMessageId);
+  if (existingDescendants + tasks.length > MAX_TOTAL_DESCENDANTS) {
+    throw new Error(
+      `Dispatch rejected: root fanout tree already has ${existingDescendants} descendant task(s); ` +
+        `adding ${tasks.length} would exceed the total-descendant cap of ${MAX_TOTAL_DESCENDANTS}. ` +
+        `Reduce the batch or return a summary instead of decomposing further.`,
+    );
+  }
 
   // Capture BOTH ids: the internal uuid `id` is the foreign key stored on
   // subagent_runs.fanout_id (a uuid column) and the key the Inngest executor

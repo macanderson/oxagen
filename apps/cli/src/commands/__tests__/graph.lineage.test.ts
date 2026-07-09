@@ -2,7 +2,9 @@
  * `oxagen graph lineage` handler unit tests.
  *
  * Strategy:
- *   - Mock `../../lib/api.js` so apiPost returns a controlled result.
+ *   - Mock `../../lib/api.js` so apiPostOrThrow returns a controlled result.
+ *     (The handler pushes via apiPostOrThrow so a failure throws into its catch
+ *     and store.close() still runs in finally — it no longer hard-exits.)
  *   - Mock `../../lib/config.js` for org/workspace.
  *   - Inject `_traceStore` to avoid filesystem access.
  *   - Pass `_duckdbPath: ":memory:"` to avoid filesystem access.
@@ -16,6 +18,9 @@
  *   - JSON output contains expected fields.
  *   - Missing org/workspace → exitCode=1, no API call.
  *   - API payload uses source='lineage' and has correct structure.
+ *   - Output discipline (ADR-023 §4): --json is one single-line value with the
+ *     SAME summary shape; the "Syncing N turn(s)…" status line is on stderr; a
+ *     push failure is a uniform stderr error + process.exitCode=1.
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from "vitest";
@@ -26,6 +31,7 @@ import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from "vite
 
 vi.mock("../../lib/api.js", () => ({
   apiPost: vi.fn(),
+  apiPostOrThrow: vi.fn(),
 }));
 
 vi.mock("../../lib/config.js", () => ({
@@ -41,12 +47,12 @@ vi.mock("node:child_process", () => ({
 }));
 
 import { handleGraphLineage } from "../graph.lineage.js";
-import { apiPost } from "../../lib/api.js";
+import { apiPostOrThrow } from "../../lib/api.js";
 import { execFileSync } from "node:child_process";
 import type { TurnTrace } from "../../agent/trace.js";
 import type { TraceStore } from "../../agent/trace-store.js";
 
-const mockApiPost = apiPost as unknown as Mock;
+const mockApiPost = apiPostOrThrow as unknown as Mock;
 const mockExecFileSync = execFileSync as unknown as Mock;
 
 // ---------------------------------------------------------------------------
@@ -110,7 +116,7 @@ function makeTrace(overrides: Partial<TurnTrace> = {}): TurnTrace {
       lessonCount: 0,
       source: "none",
     },
-    selectedModel: "claude-sonnet-4-5",
+    selectedModel: "claude-sonnet-5",
     selectedTier: "balanced",
     selectionRationale: "default",
     response: "Done.",
@@ -279,6 +285,102 @@ describe("handleGraphLineage — JSON output", () => {
     expect(parsed).toHaveProperty("tombstoned", 0);
     expect(parsed).toHaveProperty("turnsSynced", 1);
     expect(parsed).toHaveProperty("lastSyncedAt");
+  });
+});
+
+describe("handleGraphLineage — output discipline (ADR-023 §4)", () => {
+  it("emits --json as ONE single-line value round-tripping the full summary shape", async () => {
+    setupGit();
+    mockApiPost.mockResolvedValueOnce(PUSH_RESULT);
+    const trace = makeTrace({ createdAt: 1_700_000_000_000 });
+
+    await handleGraphLineage({
+      _duckdbPath: ":memory:",
+      _traceStore: makeTraceStore([trace]),
+      json: true,
+      _gitRoot: "/fake/repo",
+    });
+
+    const lines = out.split("\n").filter((l) => l.trim().length > 0);
+    expect(lines).toHaveLength(1);
+    const parsed = JSON.parse(lines[0]!) as Record<string, unknown>;
+    // Same fields as before the conversion (single line, not 2-space pretty).
+    expect(parsed).toEqual({
+      nodesUpserted: 3,
+      edgesUpserted: 2,
+      tombstoned: 0,
+      turnsSynced: 1,
+      lastSyncedAt: 1_700_000_000_000,
+    });
+  });
+
+  it("routes the 'Syncing N turn(s)…' status line to stderr, summary to stdout", async () => {
+    setupGit();
+    mockApiPost.mockResolvedValueOnce(PUSH_RESULT);
+
+    await handleGraphLineage({
+      _duckdbPath: ":memory:",
+      _traceStore: makeTraceStore([makeTrace()]),
+      _gitRoot: "/fake/repo",
+    });
+
+    expect(err).toContain("Syncing 1 turn(s)");
+    expect(out).not.toContain("Syncing 1 turn(s)");
+    expect(out).toContain("Lineage synced to workspace graph");
+  });
+
+  it("upToDate --json is one single-line {\"upToDate\":true} value", async () => {
+    setupGit();
+
+    await handleGraphLineage({
+      _duckdbPath: ":memory:",
+      _traceStore: makeTraceStore([]),
+      json: true,
+      _gitRoot: "/fake/repo",
+    });
+
+    const lines = out.split("\n").filter((l) => l.trim().length > 0);
+    expect(lines).toHaveLength(1);
+    expect(JSON.parse(lines[0]!)).toEqual({ upToDate: true });
+    expect(mockApiPost).not.toHaveBeenCalled();
+  });
+
+  it("routes a push failure to a uniform pretty stderr error + exit 1 (store still closes)", async () => {
+    setupGit();
+    mockApiPost.mockRejectedValueOnce(new Error("push exploded"));
+
+    await handleGraphLineage({
+      _duckdbPath: ":memory:",
+      _traceStore: makeTraceStore([makeTrace()]),
+      _gitRoot: "/fake/repo",
+    });
+
+    expect(process.exitCode).toBe(1);
+    expect(err).toContain("✗");
+    expect(err).toContain("push exploded");
+    // No partial summary leaked to stdout.
+    expect(out).not.toContain("Lineage synced");
+  });
+
+  it("routes a push failure to a single machine error line on stderr in --json mode", async () => {
+    setupGit();
+    mockApiPost.mockRejectedValueOnce(new Error("json push exploded"));
+
+    await handleGraphLineage({
+      _duckdbPath: ":memory:",
+      _traceStore: makeTraceStore([makeTrace()]),
+      json: true,
+      _gitRoot: "/fake/repo",
+    });
+
+    expect(process.exitCode).toBe(1);
+    // stderr also carries the earlier "Syncing…" status line; the machine error
+    // is the LAST stderr line.
+    const errLines = err.split("\n").filter((l) => l.trim().length > 0);
+    const errObj = JSON.parse(errLines.at(-1)!) as { type: string; code: string; message: string };
+    expect(errObj.type).toBe("error");
+    expect(errObj.code).toBe("api");
+    expect(errObj.message).toContain("json push exploded");
   });
 });
 

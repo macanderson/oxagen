@@ -1,7 +1,9 @@
-// fetch-authz.test.ts — unit tests for fetchAuthz() (OXA-1524).
+// fetch-authz.test.ts — unit tests for fetchAuthz() (OXA-1524, OXA-2056).
 //
 // Tests:
-//   - 42P01 graceful fallback to EMPTY_AUTHZ
+//   - 42P01 fails closed (deny) for BOTH human sessions and API keys, with a
+//     loud logger.error alert — never a silent EMPTY_AUTHZ/defaultEffect
+//     degradation (OXA-2056)
 //   - !userId early return
 //   - !principal early return when no matching principal row
 //   - PRA workspace-scope + expiry filter (roles array has empty principalIds for expired/out-of-scope)
@@ -21,6 +23,9 @@ const mocks = vi.hoisted(() => ({
   praSelect: vi.fn(),
   // db() factory
   dbFn: vi.fn(),
+  // logger spy — asserts the OXA-2056 loud alert on 42P01.
+  loggerError: vi.fn(),
+  loggerWarn: vi.fn(),
 }));
 
 // We mock @oxagen/database entirely. Each .select().from().where().limit()
@@ -36,6 +41,12 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 
   };
 });
+
+// Spy on the module logger so we can assert the 42P01 alert is logged loudly
+// (error, not warn) — OXA-2056.
+vi.mock("./logger", () => ({
+  logger: { error: mocks.loggerError, warn: mocks.loggerWarn },
+}));
 
 import { fetchAuthz } from "./fetch-authz";
 
@@ -156,9 +167,14 @@ describe("fetchAuthz()", () => {
     vi.clearAllMocks();
   });
 
-  // ── 42P01 graceful fallback ──────────────────────────────────────────────
+  // ── 42P01 fails closed (OXA-2056) ─────────────────────────────────────────
+  // Previously a human-session caller degraded to EMPTY_AUTHZ (→ resolver
+  // falls through to each contract's defaultEffect) when the IAM tables were
+  // missing — a silent "IAM enforcement is off" bypass. It must now fail
+  // closed (a synthetic org-enforced deny policy) exactly like the API-key
+  // path always did, and the incident must be logged loudly (error, not warn).
 
-  it("returns EMPTY_AUTHZ when Postgres throws 42P01 (table missing)", async () => {
+  it("fails closed (deny policy, not EMPTY_AUTHZ) for a HUMAN SESSION when Postgres throws 42P01", async () => {
     mocks.dbFn.mockReturnValue({
       select: () => {
         const err = Object.assign(new Error("relation does not exist"), { code: "42P01" });
@@ -171,12 +187,43 @@ describe("fetchAuthz()", () => {
       apiKeyId: null,
       orgId: "org_1",
       workspaceId: "ws_1",
-      capability: "chat.message.send",
+      capability: "send_message",
     });
 
-    expect(result.principal).toBeNull();
-    expect(result.grants).toHaveLength(0);
-    expect(result.roles).toHaveLength(0);
+    // Must NOT degrade to EMPTY_AUTHZ/defaultEffect — a synthetic deny policy
+    // that resolve()'s rule 2 (org enforced deny) treats as a hard stop.
+    expect(result.policies).toHaveLength(1);
+    expect(result.policies[0]).toMatchObject({
+      capabilityId: "send_message",
+      scopeKind: "org",
+      scopeId: "org_1",
+      effect: "deny",
+      enforced: true,
+    });
+    expect(result.principal?.kind).toBe("service");
+  });
+
+  it("logs the 42P01 fallback at ERROR level (loud alert), not warn", async () => {
+    mocks.dbFn.mockReturnValue({
+      select: () => {
+        const err = Object.assign(new Error("relation does not exist"), { code: "42P01" });
+        throw err;
+      },
+    });
+
+    await fetchAuthz({
+      userId: "usr_1",
+      apiKeyId: null,
+      orgId: "org_1",
+      workspaceId: "ws_1",
+      capability: "send_message",
+    });
+
+    expect(mocks.loggerError).toHaveBeenCalledOnce();
+    const [, message] = mocks.loggerError.mock.calls[0] as [unknown, string];
+    expect(message).toMatch(/SECURITY ALERT/i);
+    expect(message).toMatch(/42P01/);
+    expect(mocks.loggerWarn).not.toHaveBeenCalled();
   });
 
   it("rethrows non-42P01 errors", async () => {
@@ -193,7 +240,7 @@ describe("fetchAuthz()", () => {
         apiKeyId: null,
         orgId: "org_1",
         workspaceId: "ws_1",
-        capability: "chat.message.send",
+        capability: "send_message",
       }),
     ).rejects.toThrow("connection refused");
   });
@@ -208,7 +255,7 @@ describe("fetchAuthz()", () => {
       apiKeyId: null,
       orgId: "org_1",
       workspaceId: "ws_1",
-      capability: "chat.message.send",
+      capability: "send_message",
     });
 
     // No selects should have fired — the function returns before any DB queries.
@@ -229,7 +276,7 @@ describe("fetchAuthz()", () => {
         principals: [{ ...PRINCIPAL_ROW, parentUserId: "usr_creator" }],
         roles: [roleRow],
         pra: [{ roleId: "role_admin" }],
-        roleGrants: [{ roleId: "role_admin", capabilityId: "markdown.generate", effect: "allow" }],
+        roleGrants: [{ roleId: "role_admin", capabilityId: "generate_markdown", effect: "allow" }],
       }),
     );
 
@@ -238,7 +285,7 @@ describe("fetchAuthz()", () => {
       apiKeyId: "aky_1",
       orgId: "org_1",
       workspaceId: "ws_1",
-      capability: "markdown.generate",
+      capability: "generate_markdown",
     });
 
     // The key acts as its creator — a real principal, with the creator's grants.
@@ -258,13 +305,13 @@ describe("fetchAuthz()", () => {
       apiKeyId: "aky_gone",
       orgId: "org_1",
       workspaceId: "ws_1",
-      capability: "markdown.generate",
+      capability: "generate_markdown",
     });
 
     expect(result.principal?.kind).toBe("service");
     expect(result.policies).toHaveLength(1);
     expect(result.policies[0]).toMatchObject({
-      capabilityId: "markdown.generate",
+      capabilityId: "generate_markdown",
       scopeKind: "org",
       scopeId: "org_1",
       effect: "deny",
@@ -280,7 +327,7 @@ describe("fetchAuthz()", () => {
       apiKeyId: "aky_nocreator",
       orgId: "org_1",
       workspaceId: "ws_1",
-      capability: "markdown.generate",
+      capability: "generate_markdown",
     });
 
     expect(result.policies).toHaveLength(1);
@@ -297,7 +344,7 @@ describe("fetchAuthz()", () => {
       apiKeyId: "aky_1",
       orgId: "org_1",
       workspaceId: "ws_1",
-      capability: "markdown.generate",
+      capability: "generate_markdown",
     });
 
     expect(result.principal?.kind).toBe("service");
@@ -318,7 +365,7 @@ describe("fetchAuthz()", () => {
       apiKeyId: "aky_1",
       orgId: "org_1",
       workspaceId: "ws_1",
-      capability: "markdown.generate",
+      capability: "generate_markdown",
     });
 
     // Must NOT degrade to EMPTY_AUTHZ (defaultEffect) on the m2m surface.
@@ -336,7 +383,7 @@ describe("fetchAuthz()", () => {
       apiKeyId: null,
       orgId: "org_1",
       workspaceId: "ws_1",
-      capability: "chat.message.send",
+      capability: "send_message",
     });
 
     expect(result.principal).toBeNull();
@@ -353,7 +400,7 @@ describe("fetchAuthz()", () => {
       buildDbMock({
         roles: [roleRow],
         pra: [praRow],
-        roleGrants: [{ roleId: "role_owner", capabilityId: "chat.message.send", effect: "allow" }],
+        roleGrants: [{ roleId: "role_owner", capabilityId: "send_message", effect: "allow" }],
       }),
     );
 
@@ -362,7 +409,7 @@ describe("fetchAuthz()", () => {
       apiKeyId: null,
       orgId: "org_1",
       workspaceId: "ws_1",
-      capability: "chat.message.send",
+      capability: "send_message",
     });
 
     expect(result.principal?.id).toBe("prn_internal");
@@ -381,7 +428,7 @@ describe("fetchAuthz()", () => {
       apiKeyId: null,
       orgId: "org_1",
       workspaceId: "ws_1",
-      capability: "chat.message.send",
+      capability: "send_message",
     });
 
     const memberRole = result.roles.find((r) => r.id === "role_member");
@@ -396,7 +443,7 @@ describe("fetchAuthz()", () => {
     const praRow = { roleId: "role_admin" };
     const roleGrantRow = {
       roleId: "role_admin",
-      capabilityId: "chat.message.send",
+      capabilityId: "send_message",
       effect: "allow",
     };
     // grants/policies tables were dropped in migration 0027 (replaced by
@@ -414,7 +461,7 @@ describe("fetchAuthz()", () => {
       apiKeyId: null,
       orgId: "org_1",
       workspaceId: "ws_1",
-      capability: "chat.message.send",
+      capability: "send_message",
     });
 
     expect(result.principal?.id).toBe("prn_internal");

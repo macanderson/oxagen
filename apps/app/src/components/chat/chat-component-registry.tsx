@@ -30,6 +30,13 @@ type AnyLazy = LazyExoticComponent<(props: Record<string, unknown>) => React.Rea
  *   "file-attachment"          — renders a generated document/spreadsheet/pdf/archive asset card
  *   "html-artifact"            — renders model-generated HTML in a sandboxed iframe
  *   "connection-create-inline" — renders an inline GitHub (or fallback) connection wizard card
+ *   "code-diff"                — renders a unified-diff patch set (agent.repo.edit, repo.file.put)
+ *   "terminal-trace"           — long-form shell scrollback for large agent.sandbox.exec output
+ *   "file-tree"                — collapsible workspace/repo file tree, changed files link to their diff
+ *   "coding-trace-panel"       — collapsible run-overview timeline composing terminal-trace/code-diff steps
+ *   "workspace-context-panel"  — active sandbox session's file tree (client-fetched agent.sandbox.files.list)
+ *   "pr-stats"                 — PR summary + stats + expandable comments + CI status (repo.pr.get)
+ *   "ci-status"                — generic GitHub CI / check-run status for a ref (repo.ci.status)
  */
 /**
  * Emit a structured warning when a componentId arrives with no registered
@@ -157,6 +164,13 @@ export const CHAT_COMPONENTS = {
   "conversation-list-card": lazy(
     () => import("@/components/chat/registry-components/conversation-list-card"),
   ),
+  // Compact, borderless roster of workspace agents (agent.definition.list) —
+  // name + muted slug, latest version, and a live/deployed status dot per row,
+  // each deep-linked to the Studio agent page. Replaces the generic key/value
+  // dump for this capability.
+  "agent-definition-list-card": lazy(
+    () => import("@/components/chat/registry-components/agent-definition-list-card"),
+  ),
   "web-search-card": lazy(
     () => import("@/components/chat/registry-components/web-search-card"),
   ),
@@ -177,5 +191,42 @@ export const CHAT_COMPONENTS = {
   // Schema label approval — lets the user accept/dismiss an AI-proposed label in chat.
   "schema-label-approval": lazy(
     () => import("@/components/knowledge/schema-builder/registry-components/schema-label-approval"),
+  ),
+  // Unified-diff renderer backing agent.repo.edit / repo.file.put (via
+  // capability-meta's structural render transform) and direct agent.ui.render
+  // calls with componentId "code-diff".
+  "code-diff": lazy(
+    () => import("@/components/chat/registry-components/code-diff-card"),
+  ),
+  // Long-form shell scrollback — the companion to the inline code-execute-card
+  // for large agent.sandbox.exec output (chosen by output size, see
+  // capability-meta's resolveRenderDirective).
+  "terminal-trace": lazy(
+    () => import("@/components/chat/registry-components/terminal-trace-card"),
+  ),
+  // Collapsible workspace/repo file tree; changed entries deep-link to their
+  // section in a "code-diff" card via the shared diffAnchorId convention.
+  "file-tree": lazy(
+    () => import("@/components/chat/registry-components/file-tree-card"),
+  ),
+  // Collapsible run-overview panel composing per-step terminal-trace/code-diff
+  // cards into one timeline for a full coding-agent turn.
+  "coding-trace-panel": lazy(
+    () => import("@/components/chat/registry-components/coding-trace-panel"),
+  ),
+  // Client-fetched active sandbox session file tree (agent.sandbox.files.list),
+  // rendered via the shared FileTreeCard.
+  "workspace-context-panel": lazy(
+    () => import("@/components/chat/registry-components/workspace-context-panel"),
+  ),
+  // Pull-request summary + stats + comments (expandable) + CI status, backing
+  // repo.pr.get (via capability-meta's structural render transform).
+  "pr-stats": lazy(
+    () => import("@/components/chat/registry-components/pr-stats-card"),
+  ),
+  // Generic GitHub CI / check-run status for a branch, commit, or PR head,
+  // backing repo.ci.status.
+  "ci-status": lazy(
+    () => import("@/components/chat/registry-components/ci-status-card"),
   ),
 } as unknown as Record<string, AnyLazy>;

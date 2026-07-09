@@ -1,6 +1,6 @@
 {
   "name": "@oxagen/cli",
-  "version": "0.6.4",
+  "version": "1.1.1",
   "description": "Oxagen CLI — agentic coding powered by Oxagen's knowledge-graph context engine",
   "type": "module",
   "main": "./dist/index.js",
@@ -38,23 +38,31 @@
     "test:unit": "vitest run"
   },
   "dependencies": {
-    "@ai-sdk/openai-compatible": "2.0.54",
-    "@inkjs/ui": "2.0.0",
+    "@ai-sdk/anthropic": "4.0.7",
+    "@ai-sdk/gateway": "4.0.11",
+    "@ai-sdk/openai-compatible": "3.0.5",
+    "@ai-sdk/provider": "4.0.2",
     "@modelcontextprotocol/sdk": "1.29.0",
     "@oxagen/agent-engine": "workspace:*",
+    "@oxagen/billing": "workspace:*",
     "@oxagen/code-graph": "workspace:*",
     "@oxagen/engram": "workspace:*",
     "@oxagen/mcp-config": "workspace:*",
-    "ai": "6.0.197",
+    "ai": "7.0.14",
+    "cli-highlight": "2.1.11",
     "commander": "12.1.0",
     "ink": "7.1.0",
+    "marked": "15.0.12",
+    "marked-terminal": "7.3.0",
     "react": "19.2.6",
     "zod": "3.25.76"
   },
   "optionalDependencies": {
+    "fastembed": "2.1.0",
     "node-llama-cpp": "3.19.0"
   },
   "devDependencies": {
+    "@oxagen/telemetry": "workspace:*",
     "@types/node": "25.9.1",
     "@types/react": "19.2.15",
     "@vitest/coverage-v8": "2.1.9",

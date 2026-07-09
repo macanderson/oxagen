@@ -25,6 +25,8 @@ type HandlerCtx = {
     run: (name: string, fn: () => unknown) => Promise<unknown>;
     sendEvent: (name: string, payload: unknown) => Promise<void>;
   };
+  /** Inngest's run id (OXA-1932) — threaded to upsertEntityNode for conformance-event idempotency. */
+  runId?: string;
 };
 let capturedHandler: ((ctx: HandlerCtx) => unknown) | null = null;
 
@@ -285,6 +287,18 @@ describe("ingestion.pipeline Inngest function", () => {
           workspaceId: "ws-xyz",
         }),
         "org-123",
+        expect.objectContaining({ runId: undefined }),
+      );
+    });
+
+    it("threads the Inngest runId to upsertEntityNode so retried steps re-derive the same conformance-event id (OXA-1932)", async () => {
+      const step = makeStep();
+      await capturedHandler!({ event: { data: BASE_EVENT }, step, runId: "01HXYZ-run-abc" });
+
+      expect(mocks.upsertEntityNode).toHaveBeenCalledWith(
+        expect.objectContaining({ naturalKey: "github:conn-abc:42" }),
+        "org-123",
+        expect.objectContaining({ runId: "01HXYZ-run-abc" }),
       );
     });
 

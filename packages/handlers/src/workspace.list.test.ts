@@ -30,9 +30,9 @@ import { makeCTX } from "./test-utils/fixtures";
 // ── shared fixtures ────────────────────────────────────────────────────────────
 
 const LIST_RESULT = {
-  organization: { id: "org_1", publicId: "pub_1", slug: "acme", name: "Acme Corp" },
+  organization: { id: "org_1", publicId: "pub_1", slug: "acme", namespace: "acme", name: "Acme Corp" },
   workspaces: [
-    { id: "ws_1", publicId: "wpub_1", slug: "core", name: "Core", role: "admin" },
+    { id: "ws_1", publicId: "wpub_1", slug: "core", namespace: "core", name: "Core", role: "admin" },
   ],
 };
 

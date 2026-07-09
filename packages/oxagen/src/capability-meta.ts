@@ -63,6 +63,12 @@ export type KnownDataTag = (typeof CAPABILITY_DATA_TAGS)[number];
 export const RECORD_LINK_ROUTES: Readonly<Record<string, string>> = {
   "graph.node": "/{orgSlug}/{workspaceSlug}/knowledge/nodes/{id}",
   conversation: "/{orgSlug}/{workspaceSlug}/chat/{id}",
+  // Agent detail lives at Studio → Agents → [agentId] (segment is the agent
+  // publicId, `agt_…`). Only opt-in callers that KNOW a value is an agent id
+  // (e.g. the agents-list card) resolve this — `inferRecordTypeForField` still
+  // never maps a bare `publicId` to "agent", so the generic fallback can't emit
+  // an agent link from an ambiguous id.
+  agent: "/{orgSlug}/{workspaceSlug}/studio/agents/{id}",
   asset: "/api/v1/assets/{id}",
 };
 
@@ -199,30 +205,198 @@ export function resolveRecordLinks(
   return links;
 }
 
+// ── Structural render transforms (coding-agent artifact cards) ──────────────
+// Every OTHER curated hint below hands its component the uniform envelope
+// (`{ capability, output, links, title? }`) verbatim — the bespoke component
+// (e.g. graph-node-card) parses `output` itself. `code-diff` and
+// `terminal-trace` instead take FLAT, component-specific props (`{ files }` /
+// `{ stdout, stderr, exitCode, … }`) — the same "embedded render directive"
+// pattern archive.create/graph.stats/media use, except the reshaping happens
+// HERE instead of in the contract's output. `agent.repo.edit` and
+// `repo.file.put` now carry an optional `diffs` output field (per-file
+// `{ path, patch, additions, deletions }`, populated by
+// packages/handlers/src/agent.repo.edit.ts / repo.file.put.ts via
+// packages/handlers/src/lib/unified-diff.ts) — when present, that's mapped
+// straight onto the card's `files` prop so it renders full hunks; when
+// absent (diff computation failed, or an older execution predates the
+// field) the transforms fall back to a path-only row, same as before. See
+// packages/oxagen/src/contracts/agent.repo.edit.ts and repo.file.put.ts.
+// A transform returns `null` when the capability's output doesn't have
+// enough shape to render (falls through to the standard hint/generic path
+// below); `agent.sandbox.exec` only maps to "terminal-trace" when its
+// combined stdout+stderr exceeds TERMINAL_TRACE_LINE_THRESHOLD lines —
+// smaller output stays on whatever the standard path already resolves
+// (today: the generic capability-result card).
+const TERMINAL_TRACE_LINE_THRESHOLD = 40;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function countLines(text: string): number {
+  return text.length === 0 ? 0 : text.split("\n").length;
+}
+
+/**
+ * Best-effort file path from a GitHub blob/commit htmlUrl — repo.file.put's
+ * output carries no `path` field (it's an INPUT-only field), so this is the
+ * only way to recover a human-readable label from the output alone.
+ */
+function derivePathFromHtmlUrl(htmlUrl: string | undefined): string {
+  if (!htmlUrl) return "file";
+  try {
+    const decoded = decodeURIComponent(htmlUrl);
+    const afterBlob = decoded.split(/\/blob\/[^/]+\//).pop();
+    if (afterBlob && afterBlob.length > 0 && afterBlob !== decoded) return afterBlob;
+    return decoded.split("/").pop() || "file";
+  } catch {
+    return "file";
+  }
+}
+
+const STRUCTURAL_RENDER_TRANSFORMS: Readonly<
+  Record<string, (output: unknown) => ResolvedRenderDirective | null>
+> = {
+  "edit_repo_file": (output) => {
+    if (!isRecord(output)) return null;
+    const changedFiles = Array.isArray(output.changedFiles)
+      ? output.changedFiles.filter((f): f is string => typeof f === "string")
+      : [];
+    if (changedFiles.length === 0) return null;
+    const prUrl = typeof output.prUrl === "string" ? output.prUrl : undefined;
+    const prNumber = typeof output.prNumber === "number" ? output.prNumber : undefined;
+    // Per-file patch/stats, when the handler was able to compute them (see
+    // the module comment above `STRUCTURAL_RENDER_TRANSFORMS`). Keyed by path
+    // so each changedFiles entry can look up its own diff.
+    const diffsByPath = new Map<string, Record<string, unknown>>();
+    if (Array.isArray(output.diffs)) {
+      for (const d of output.diffs) {
+        if (isRecord(d) && typeof d.path === "string") diffsByPath.set(d.path, d);
+      }
+    }
+    return {
+      componentId: "code-diff",
+      props: {
+        files: changedFiles.map((path) => {
+          const d = diffsByPath.get(path);
+          return {
+            path,
+            patch: d && typeof d.patch === "string" ? d.patch : null,
+            additions: d && typeof d.additions === "number" ? d.additions : null,
+            deletions: d && typeof d.deletions === "number" ? d.deletions : null,
+          };
+        }),
+        summary: typeof output.summary === "string" ? output.summary : undefined,
+        externalUrl: prUrl,
+        externalLabel: prUrl && prNumber !== undefined ? `PR #${prNumber}` : undefined,
+      },
+    };
+  },
+  "put_repo_file": (output) => {
+    if (!isRecord(output)) return null;
+    const htmlUrl = typeof output.htmlUrl === "string" ? output.htmlUrl : undefined;
+    const commitSha = typeof output.commitSha === "string" ? output.commitSha : undefined;
+    if (!htmlUrl && !commitSha) return null;
+    const diffs = Array.isArray(output.diffs) ? output.diffs.filter(isRecord) : [];
+    const firstDiff = diffs[0];
+    const path =
+      firstDiff && typeof firstDiff.path === "string"
+        ? firstDiff.path
+        : derivePathFromHtmlUrl(htmlUrl);
+    return {
+      componentId: "code-diff",
+      props: {
+        files: [
+          {
+            path,
+            patch: firstDiff && typeof firstDiff.patch === "string" ? firstDiff.patch : null,
+            additions:
+              firstDiff && typeof firstDiff.additions === "number" ? firstDiff.additions : null,
+            deletions:
+              firstDiff && typeof firstDiff.deletions === "number" ? firstDiff.deletions : null,
+          },
+        ],
+        externalUrl: htmlUrl,
+        externalLabel: commitSha ? `commit ${commitSha.slice(0, 7)}` : undefined,
+      },
+    };
+  },
+  "run_sandbox_command": (output) => {
+    if (!isRecord(output)) return null;
+    const stdout = typeof output.stdout === "string" ? output.stdout : "";
+    const stderr = typeof output.stderr === "string" ? output.stderr : "";
+    if (countLines(stdout) + countLines(stderr) <= TERMINAL_TRACE_LINE_THRESHOLD) return null;
+    return {
+      componentId: "terminal-trace",
+      props: {
+        stdout,
+        stderr,
+        exitCode: typeof output.exitCode === "number" ? output.exitCode : null,
+        durationMs: typeof output.executionMs === "number" ? output.executionMs : undefined,
+        timedOut: typeof output.timedOut === "boolean" ? output.timedOut : false,
+      },
+    };
+  },
+  // repo.pr.get output IS the pr-stats card's props (the card interface mirrors
+  // the contract output field-for-field), so this is a guarded pass-through.
+  "get_pr": (output) => {
+    if (!isRecord(output) || typeof output.number !== "number") return null;
+    return { componentId: "pr-stats", props: output };
+  },
+  // repo.ci.status output IS the ci-status card's props.
+  "get_ci_status": (output) => {
+    if (!isRecord(output) || !Array.isArray(output.runs)) return null;
+    return { componentId: "ci-status", props: output };
+  },
+  // repo.pr.diff → the existing code-diff card. Map the PR file list onto the
+  // card's flat {path, patch, additions, deletions} shape; parseUnifiedDiff
+  // renders full hunks from the real `patch` text.
+  "get_pr_diff": (output) => {
+    if (!isRecord(output) || !Array.isArray(output.files)) return null;
+    const files = output.files
+      .filter(isRecord)
+      .map((f) => ({
+        path: typeof f.path === "string" ? f.path : "file",
+        patch: typeof f.patch === "string" ? f.patch : null,
+        additions: typeof f.additions === "number" ? f.additions : null,
+        deletions: typeof f.deletions === "number" ? f.deletions : null,
+      }));
+    if (files.length === 0) return null;
+    return {
+      componentId: "code-diff",
+      props: {
+        files,
+        summary: typeof output.summary === "string" ? output.summary : undefined,
+      },
+    };
+  },
+};
+
 // ── Curated render hints (prioritized capabilities) ──────────────────────────
 // Each componentId is a bespoke chat component (apps/app) that reads the uniform
 // envelope. Capabilities that embed their own `render` directive in the output
 // (archive.create, documents.generate, graph.stats, image/video) are NOT listed
 // here — the embedded directive wins upstream.
 export const CURATED_RENDER_HINTS: Readonly<Record<string, CapabilityRenderHint>> = {
-  "graph.node.get": {
+  "get_node": {
     componentId: "graph-node-card",
     recordLinks: [
       { field: "node.nodeId", recordType: "graph.node", labelField: "node.displayName" },
     ],
     titleField: "node.displayName",
   },
-  "graph.node.upsert": {
+  "upsert_node": {
     componentId: "graph-node-card",
     recordLinks: [{ field: "nodeId", recordType: "graph.node" }],
   },
-  "graph.node.list": { componentId: "graph-node-list-card" },
-  "graph.node.search": { componentId: "graph-node-list-card" },
-  "graph.edge.upsert": { componentId: "graph-edge-card" },
-  "research.swarm.status": { componentId: "research-swarm-card" },
-  "research.swarm.start": { componentId: "research-swarm-card" },
-  "conversation.list": { componentId: "conversation-list-card" },
-  "web.search": { componentId: "web-search-card" },
+  "list_nodes": { componentId: "graph-node-list-card" },
+  "search_nodes": { componentId: "graph-node-list-card" },
+  "upsert_edge": { componentId: "graph-edge-card" },
+  "get_research_status": { componentId: "research-swarm-card" },
+  "start_research_swarm": { componentId: "research-swarm-card" },
+  "list_conversations": { componentId: "conversation-list-card" },
+  "list_agent_defs": { componentId: "agent-definition-list-card" },
+  "search_web": { componentId: "web-search-card" },
 };
 
 // ── Curated chain metadata (prioritized capabilities) ────────────────────────
@@ -240,67 +414,67 @@ const EMPTY_CHAIN: CapabilityChainMeta = Object.freeze({
 export const CURATED_CHAIN_META: Readonly<
   Record<string, Partial<CapabilityChainMeta>>
 > = {
-  "web.search": {
+  "search_web": {
     produces: ["search.results"],
     consumes: ["query", "topic"],
-    chainHints: ["graph.node.upsert", "documents.generate"],
+    chainHints: ["upsert_node", "generate_document"],
   },
-  "web.fetch": {
+  "fetch_web_page": {
     produces: ["document.text"],
     consumes: ["url"],
-    chainHints: ["graph.node.upsert"],
+    chainHints: ["upsert_node"],
   },
-  "research.swarm.start": {
+  "start_research_swarm": {
     produces: ["swarm.id"],
     consumes: ["topic"],
-    chainHints: ["research.swarm.status"],
+    chainHints: ["get_research_status"],
   },
-  "research.swarm.status": {
+  "get_research_status": {
     produces: ["search.results", "swarm.id"],
     consumes: ["swarm.id"],
-    chainHints: ["graph.node.upsert", "graph.edge.upsert", "documents.generate"],
+    chainHints: ["upsert_node", "upsert_edge", "generate_document"],
   },
-  "graph.node.upsert": {
+  "upsert_node": {
     produces: ["graph.nodeId"],
     consumes: ["entity", "graph.label", "document.text"],
-    chainHints: ["graph.edge.upsert"],
+    chainHints: ["upsert_edge"],
   },
-  "graph.edge.upsert": {
+  "upsert_edge": {
     produces: ["graph.edgeId"],
     consumes: ["graph.nodeId", "relationship"],
     chainHints: [],
   },
-  "graph.node.get": {
+  "get_node": {
     produces: ["graph.node"],
     consumes: ["graph.nodeId"],
-    chainHints: ["graph.node.list"],
+    chainHints: ["list_nodes"],
   },
-  "graph.node.search": {
+  "search_nodes": {
     produces: ["graph.nodeId"],
     consumes: ["query"],
-    chainHints: ["graph.node.get"],
+    chainHints: ["get_node"],
   },
-  "graph.node.list": {
+  "list_nodes": {
     produces: ["graph.nodeId"],
     consumes: [],
-    chainHints: ["graph.node.get"],
+    chainHints: ["get_node"],
   },
-  "documents.generate": {
+  "generate_document": {
     produces: ["asset.id"],
     consumes: ["document.text"],
-    chainHints: ["archive.create"],
+    chainHints: ["create_archive"],
   },
-  "documents.pdf.create": {
+  "create_pdf": {
     produces: ["asset.id"],
     consumes: ["document.text"],
     chainHints: [],
   },
-  "archive.create": {
+  "create_archive": {
     produces: ["asset.id"],
     consumes: ["asset.id", "document.text"],
     chainHints: [],
   },
-  "conversation.list": {
+  "list_conversations": {
     produces: ["conversation.id"],
     consumes: [],
     chainHints: [],
@@ -374,6 +548,15 @@ export function resolveRenderDirective(args: {
   slugs?: SlugContext;
 }): ResolvedRenderDirective | null {
   const { capability, output } = args;
+
+  // Structural transforms (code-diff / terminal-trace) reshape the raw output
+  // into flat, component-specific props and return early — they bypass the
+  // uniform envelope entirely, so slugs/links/title don't apply. A `null`
+  // (output doesn't have enough shape, or sandbox output is small) falls
+  // through to the standard hint/generic path below.
+  const structural = STRUCTURAL_RENDER_TRANSFORMS[capability]?.(output) ?? null;
+  if (structural) return structural;
+
   const slugs = args.slugs ?? {};
   const hint = getRenderHint(capability);
   const links = resolveRecordLinks(output, hint?.recordLinks, slugs);

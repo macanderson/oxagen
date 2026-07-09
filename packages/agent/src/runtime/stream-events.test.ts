@@ -31,19 +31,19 @@ function summarize(e: AgentStreamEvent): string {
 describe("AgentStreamEvent variants", () => {
   it("narrows every variant through the discriminated union", () => {
     const events: AgentStreamEvent[] = [
-      { type: "tool-call-start", callId: "c1", capability: "agent.code.execute", input: {} },
+      { type: "tool-call-start", callId: "c1", capability: "execute_code", input: {} },
       { type: "tool-call-output", callId: "c1", chunk: "hello" },
       {
         type: "tool-call-end",
         callId: "c1",
-        capability: "agent.code.execute",
+        capability: "execute_code",
         status: "completed",
         output: { ok: true },
       },
       {
         type: "approval-required",
         approvalId: "a1",
-        capability: "agent.code.execute",
+        capability: "execute_code",
         riskLevel: "high",
         inputPreview: {},
       },

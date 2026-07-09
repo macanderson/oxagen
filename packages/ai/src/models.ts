@@ -1,7 +1,7 @@
 import { gateway } from "@ai-sdk/gateway";
 import { wrapLanguageModel } from "ai";
 import type { ImageModel, LanguageModel } from "ai";
-import type { Experimental_VideoModelV3, LanguageModelV3 } from "@ai-sdk/provider";
+import type { Experimental_VideoModelV4, LanguageModelV4 } from "@ai-sdk/provider";
 import { requireEnv } from "@oxagen/config/env";
 import type { MediaTier, ResolvedTierCatalog } from "./catalog";
 
@@ -18,24 +18,24 @@ import type { MediaTier, ResolvedTierCatalog } from "./catalog";
  * the catch swallows the error and returns the unwrapped model so the app
  * continues to work.
  */
-let _devToolsMiddleware: (() => import("@ai-sdk/provider").LanguageModelV3Middleware) | null = null;
+let _devToolsMiddleware: (() => import("@ai-sdk/provider").LanguageModelV4Middleware) | null = null;
 if (process.env.NODE_ENV === "development") {
   // Eager synchronous-style load: Next.js dev mode processes this at module
   // evaluation time. We store the factory so selectModel() stays synchronous.
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    _devToolsMiddleware = (require("@ai-sdk/devtools") as { devToolsMiddleware: () => import("@ai-sdk/provider").LanguageModelV3Middleware }).devToolsMiddleware;
+    _devToolsMiddleware = (require("@ai-sdk/devtools") as { devToolsMiddleware: () => import("@ai-sdk/provider").LanguageModelV4Middleware }).devToolsMiddleware;
   } catch {
     // devtools not available — silent no-op
   }
 }
 
 /**
- * Wrap a concrete LanguageModelV3 with devtools middleware in development.
- * `gateway.languageModel()` always returns a LanguageModelV3 object (never the
+ * Wrap a concrete LanguageModelV4 with devtools middleware in development.
+ * `gateway.languageModel()` always returns a LanguageModelV4 object (never the
  * bare string arm of the LanguageModel union), so this receives the narrowed type.
  */
-function applyDevtools(model: LanguageModelV3): LanguageModelV3 {
+function applyDevtools(model: LanguageModelV4): LanguageModelV4 {
   if (!_devToolsMiddleware) return model;
   return wrapLanguageModel({ model, middleware: _devToolsMiddleware() });
 }
@@ -46,7 +46,7 @@ function applyDevtools(model: LanguageModelV3): LanguageModelV3 {
  * names ("Oxagen Mini/Plus/Max") stay decoupled from the underlying vendor
  * model. The env defaults (see packages/config/src/env.ts) are:
  *   fast     → OXAGEN_LLM_FAST     (anthropic/claude-haiku-4.5)
- *   balanced → OXAGEN_LLM_BALANCED (anthropic/claude-sonnet-4.6)
+ *   balanced → OXAGEN_LLM_BALANCED (anthropic/claude-sonnet-5)
  *   precise  → OXAGEN_LLM_PRECISE  (anthropic/claude-opus-4.8)
  */
 export type OxagenTier = "fast" | "balanced" | "precise";
@@ -91,7 +91,7 @@ type TierEnv = Record<(typeof TIER_ENV_KEY)[OxagenTier], string | undefined>;
 function tierFromEnv(env: TierEnv, tier: OxagenTier): string {
   // env values carry schema defaults (env.ts), so this is always a string in
   // a validated environment; coalesce defensively for mocked test envs.
-  return env[TIER_ENV_KEY[tier]] ?? "anthropic/claude-sonnet-4.6";
+  return env[TIER_ENV_KEY[tier]] ?? "anthropic/claude-sonnet-5";
 }
 
 /**
@@ -225,7 +225,7 @@ export function selectImageModel(selector: ImageModelSelector = {}): ImageModel 
 //
 // Single chokepoint for all video model construction. Uses `@ai-sdk/gateway`
 // directly (not the OpenAI-compat shim) because the gateway SDK exposes a
-// `.video(modelId)` factory that returns an `Experimental_VideoModelV3`, which
+// `.video(modelId)` factory that returns an `Experimental_VideoModelV4`, which
 // is what `experimental_generateVideo` expects. There is no direct-provider
 // fallback for video: if AI_GATEWAY_API_KEY is absent the factory still builds
 // a gateway client (it will surface an auth error at call time, not here).
@@ -248,9 +248,9 @@ export interface VideoModelSelector {
 }
 
 /**
- * Build and return an `Experimental_VideoModelV3` for the requested model tier.
+ * Build and return an `Experimental_VideoModelV4` for the requested model tier.
  * Always routes through the Vercel AI Gateway via `@ai-sdk/gateway`; the gateway
- * SDK is the only official way to get a typed VideoModelV3 for Veo and other
+ * SDK is the only official way to get a typed VideoModelV4 for Veo and other
  * hosted video providers. `AI_GATEWAY_API_KEY` is read from env at call time and
  * forwarded automatically by the gateway client.
  *
@@ -259,7 +259,7 @@ export interface VideoModelSelector {
  */
 export function selectVideoModel(
   selector: VideoModelSelector = {},
-): Experimental_VideoModelV3 {
+): Experimental_VideoModelV4 {
   // Resolve the concrete model id: explicit model > tier env var > hardcoded default.
   let modelId: string;
   if (selector.model) {
@@ -277,7 +277,7 @@ export function selectVideoModel(
     }
   }
 
-  // `gateway.video(modelId)` constructs an Experimental_VideoModelV3 that reads
+  // `gateway.video(modelId)` constructs an Experimental_VideoModelV4 that reads
   // AI_GATEWAY_API_KEY from the environment. The key is not injected here so the
   // call site (which already checks env) stays the authority.
   return gateway.video(modelId);

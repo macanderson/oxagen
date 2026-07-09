@@ -107,10 +107,63 @@ const PLANNER_SYSTEM = [
 ].join("\n");
 
 /**
+ * Does this goal trivially map to a SINGLE task? A deterministic, conservative
+ * heuristic (ADR-021 §1): true only when the goal has no conjunctions, list
+ * markers, multiple sentences, or multiplicity words — i.e. it is obviously one
+ * unit of work. It ERRS TOWARD PLANNING (returns false) whenever there is any
+ * doubt, so the model planner still runs for anything genuinely multi-part.
+ * Exported for tests.
+ */
+export function isSingleTaskGoal(goal: string): boolean {
+  const g = goal.trim();
+  if (g.length === 0) return false;
+  // Too long to confidently call one task.
+  if (g.length > 120) return false;
+  // Multi-line, or a numbered / bulleted list ⇒ multiple items.
+  if (/\n/.test(g)) return false;
+  if (/(^|\s)(\d+[.)]|[-*•])\s/.test(g)) return false;
+  // A second sentence usually carries a second imperative.
+  if (/[.!?]\s+\S/.test(g)) return false;
+  // Enumeration / clause separators.
+  if (/[,;&]/.test(g)) return false;
+  // Coordinating conjunctions and sequencing words join multiple actions.
+  if (/\b(and|then|also|plus|next|afterwards?|finally|as well as|followed by)\b/i.test(g)) return false;
+  // Explicit multiplicity.
+  if (/\b(both|each|every|all of|multiple|several|various)\b/i.test(g)) return false;
+  return true;
+}
+
+/**
  * Produce an executable {@link Plan} from a goal. Uses the injected AI port for
- * the planning model call.
+ * the planning model call — EXCEPT when the goal trivially maps to a single task
+ * (see {@link isSingleTaskGoal}), in which case the plan is synthesized
+ * deterministically with no planner model call (ADR-021 §1).
  */
 export async function planTasks(opts: PlanOptions): Promise<Plan> {
+  // Deterministic single-task fast-path: a goal with no conjunctions, list
+  // markers, or multi-part signals is one task. Skip the planner model call (and
+  // the enhancement round-trip) and synthesize the plan directly. The executing
+  // agent still gathers its own context, so a bare description loses nothing.
+  if (isSingleTaskGoal(opts.goal)) {
+    const now = Date.now();
+    const goal = opts.goal.trim();
+    const tier = classifyTier({ text: goal }).tier;
+    const task: Task = {
+      id: "task-1",
+      title: goal,
+      description: goal,
+      status: "queued",
+      dependsOn: [],
+      files: [],
+      tier,
+      model: modelForTier(tier),
+      agent: undefined,
+      createdAt: now,
+      usage: emptyUsage(),
+    };
+    return { id: newPlanId(), goal: opts.goal, createdAt: now, tasks: [task], status: "draft" };
+  }
+
   // Enhance the goal so the planner sees the real code involved.
   const enhanced = await enhancePrompt({
     prompt: opts.goal,
@@ -125,7 +178,15 @@ export async function planTasks(opts: PlanOptions): Promise<Plan> {
         opts.agents.map((a) => `- ${a.name}: ${a.description}`).join("\n")
       : "";
 
-  const model = opts.model ?? modelForTier("balanced");
+  // Perf #9: decomposing a goal into a handful of tasks is a bounded structured-
+  // output job the fast tier handles well — default to it, escalating only when
+  // the goal itself hits a high-stakes domain (auth/billing/security/migration/
+  // architecture) where a mis-decomposition is costly. An explicit triage model
+  // (`opts.model`, the `/triage-model` slug) always wins over this default. Note
+  // per-task tiers are still reconciled up by `classifyTier` below, so a fast
+  // planner never under-tiers the WORKERS — only its own decomposition call.
+  const plannerTier = classifyTier({ text: opts.goal }).tier;
+  const model = opts.model ?? modelForTier(plannerTier === "precise" ? "precise" : "fast");
   const { object } = await opts.ai.generateObject({
     model,
     schema: planSchema,

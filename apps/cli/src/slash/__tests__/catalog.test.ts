@@ -7,10 +7,12 @@ import {
   BUILTIN_SLASH_NAMES,
   buildSlashCatalog,
   filterSlashCatalog,
+  matchScore,
   slashQuery,
   type SlashCatalogEntry,
 } from "../catalog.js";
 import type { CliCommandMeta } from "../../program.js";
+import { theme } from "../../tui/theme.js";
 
 const CLI: CliCommandMeta[] = [
   { name: "cost", description: "Project model cost", argumentHint: undefined },
@@ -84,6 +86,21 @@ describe("buildSlashCatalog", () => {
     expect(shipit?.description).toBe("Ship the branch");
   });
 
+  it("keeps built-ins in grouped BUILTIN_SLASH_COMMANDS order (not alphabetical) with no per-command color", () => {
+    const catalog = build();
+    const builtinEntries = catalog.filter((c) => c.source === "builtin");
+    expect(builtinEntries.length).toBe(BUILTIN_SLASH_COMMANDS.length);
+    // Order matches the source array's grouped order — no alphabetical reshuffle.
+    expect(builtinEntries.map((c) => c.name)).toEqual(
+      BUILTIN_SLASH_COMMANDS.map((c) => c.name),
+    );
+    expect(builtinEntries[0]?.name).toBe("help");
+    // Per-command color is gone — the menu colors uniformly now.
+    for (const entry of builtinEntries) {
+      expect(entry.color).toBeUndefined();
+    }
+  });
+
   it("dedupes on name with precedence builtin > cli > custom", () => {
     // A custom command that shadows a built-in name must not displace the built-in.
     writeFileSync(join(userDir, "mode.md"), "---\ndescription: custom mode\n---\nbody\n", "utf8");
@@ -117,14 +134,74 @@ describe("filterSlashCatalog", () => {
     expect(filterSlashCatalog(catalog, "")).toHaveLength(catalog.length);
   });
 
-  it("prefix-matches case-insensitively", () => {
-    const m = filterSlashCatalog(catalog, "mo");
-    expect(m.map((c) => c.name)).toContain("mode");
-    expect(m.map((c) => c.name)).toContain("model");
-    expect(m.every((c) => c.name.startsWith("mo"))).toBe(true);
+  it("prefix-matches case-insensitively and ranks prefix hits first", () => {
+    const names = filterSlashCatalog(catalog, "mo").map((c) => c.name);
+    expect(names).toContain("mode");
+    expect(names).toContain("model");
+    // Every prefix match must sort ahead of any non-prefix (substring/subsequence)
+    // match — a bare `.every(startsWith)` no longer holds now that fuzzy matches
+    // are included, but the prefix hits still lead.
+    const firstNonPrefix = names.findIndex((n) => !n.startsWith("mo"));
+    const prefixHits = names.filter((n) => n.startsWith("mo"));
+    if (firstNonPrefix !== -1) {
+      expect(firstNonPrefix).toBe(prefixHits.length);
+    }
   });
 
-  it("returns nothing when the prefix matches no command", () => {
-    expect(filterSlashCatalog(catalog, "zzzznope")).toHaveLength(0);
+  it("includes substring matches after prefix matches", () => {
+    // "ram" is not a prefix of any command but is a substring of "diagram"-like
+    // names; "remember" contains no such run, so use a known substring: "emor"
+    // sits inside "memories" but is not a prefix.
+    const names = filterSlashCatalog(catalog, "emor").map((c) => c.name);
+    expect(names).toContain("memories");
+    expect(names.every((n) => !n.startsWith("emor"))).toBe(true);
+  });
+
+  it("includes scattered subsequence matches, ranked below prefix/substring", () => {
+    // "mds" is neither a prefix nor a substring of "model" but is a subsequence
+    // (m…d…l… no s) — use "mdl" which is a subsequence of "model".
+    const names = filterSlashCatalog(catalog, "mdl").map((c) => c.name);
+    expect(names).toContain("model");
+  });
+
+  it("keeps the catalog's own order among equally-tiered prefix matches", () => {
+    // Both /model and /mode are prefix matches for "mo"; the catalog lists
+    // /model before /mode, and the ranking must preserve that stable order
+    // rather than reshuffle by length.
+    const names = filterSlashCatalog(catalog, "mo").map((c) => c.name);
+    expect(names.indexOf("model")).toBeLessThan(names.indexOf("mode"));
+  });
+
+  it("is deterministic — same query yields the same order twice", () => {
+    const a = filterSlashCatalog(catalog, "co").map((c) => c.name);
+    const b = filterSlashCatalog(catalog, "co").map((c) => c.name);
+    expect(a).toEqual(b);
+  });
+
+  it("returns nothing when nothing matches even as a subsequence", () => {
+    expect(filterSlashCatalog(catalog, "zqxjk")).toHaveLength(0);
+  });
+});
+
+describe("matchScore", () => {
+  it("ranks prefix > substring > subsequence > no-match", () => {
+    const prefix = matchScore("model", "mo");
+    const substring = matchScore("atomos", "mo");
+    const subseq = matchScore("mango", "mo"); // m…o scattered? m-a-n-g-o → m then o: subsequence
+    const none = matchScore("xyz", "mo");
+    expect(prefix).toBeGreaterThan(substring);
+    expect(substring).toBeGreaterThan(subseq);
+    expect(subseq).toBeGreaterThan(0);
+    expect(none).toBe(0);
+  });
+
+  it("returns a positive score for an empty query (matches everything)", () => {
+    expect(matchScore("anything", "")).toBeGreaterThan(0);
+  });
+
+  it("gives equal-tier matches the same flat score (order is a tie-break, not the score)", () => {
+    // Two prefix matches of differing length score identically — intra-tier
+    // order is decided by the catalog, not by matchScore.
+    expect(matchScore("mode", "mo")).toBe(matchScore("moderation", "mo"));
   });
 });

@@ -27,6 +27,8 @@ export {
   supportsReasoning,
   supportsImage,
   supportsVideo,
+  supportsVision,
+  supportsVideoInput,
   supportsText,
   supportsMedia,
   capabilityLabel,
@@ -48,6 +50,36 @@ export { streamAgentReply } from "./stream";
 export type { StreamAgentReplyArgs } from "./stream";
 export { embedText } from "./embed";
 export type { EmbedTextOpts } from "./embed";
+
+// Response cache — opt-in layered (exact + semantic) cache for deterministic
+// background inference. See ./cache; wired into generateObjectFor via `cache`.
+export {
+  readCache,
+  writeCache,
+  buildCacheKey,
+  cosineSimilarity,
+  sha256Hex,
+} from "./cache";
+export type {
+  CacheOptions,
+  CacheContext,
+  CacheReadResult,
+  CachedUsage,
+  CachedResponseKind,
+} from "./cache";
+
+// Message Batches — background inference at half price (direct Anthropic).
+export { submitBatch, pollBatch } from "./batch";
+export type {
+  BatchRequestInput,
+  BatchTelemetry,
+  SubmitBatchArgs,
+  SubmitBatchResult,
+  PollBatchArgs,
+  PollBatchResult,
+  BatchResultItem,
+} from "./batch";
+
 export { generateObjectFor } from "./generate-object";
 export type {
   GenerateObjectArgs,
@@ -59,11 +91,18 @@ export type {
   GenerateImageForArgs,
   GenerateImageForResult,
 } from "./generate-image";
-export { generateVideoFor } from "./generate-video";
+export {
+  generateVideoFor,
+  supportedVideoDurations,
+  resolveVideoDurationSeconds,
+  videoDurationAlternatives,
+} from "./generate-video";
 export type {
   GenerateVideoForArgs,
   GenerateVideoForResult,
   VideoModel,
+  ResolvedVideoDuration,
+  VideoDurationAlternative,
 } from "./generate-video";
 
 // Model-default resolver (client-safe, also re-exported from @oxagen/ai/catalog).
@@ -84,12 +123,17 @@ export {
   isOverridablePromptKey,
   OVERRIDABLE_PROMPT_KEYS,
   chatSystemPrompt,
+  codeModeSystemPrompt,
   conversationTitlePrompt,
   svgGeneratePrompt,
   imageAnalyzePrompt,
   loadWorkspacePromptConfig,
+  loadWorkspacePromptConfigSafe,
   normalizePromptConfig,
   enhancePromptIfInsufficient,
+  SLASH_COMMANDS,
+  matchSlashCommands,
+  slashCommandsPromptSection,
 } from "./prompts";
 export type {
   PromptKey,
@@ -99,6 +143,7 @@ export type {
   SkillIndexEntry,
   EnhancePromptArgs,
   EnhancePromptResult,
+  SlashCommand,
 } from "./prompts";
 
 // Tool descriptor builder, JSON-Schema tool input helper, and core message
@@ -106,6 +151,10 @@ export type {
 // "ai", keeping @oxagen/ai as the single AI SDK chokepoint. `jsonSchema` builds
 // a tool input schema from a raw JSON Schema (used by the OpenAI-compatible CLI
 // proxy, where tool params arrive as JSON Schema rather than Zod).
-export { tool, jsonSchema } from "ai";
+// `stepCountIs` builds the `stopWhen` predicate that bounds a multi-step
+// agentic tool loop. Callers with tools MUST pass one — the AI SDK default is
+// `stepCountIs(1)`, which halts the turn after the first step, so a tool call
+// executes but the model never gets a second step to read the result and reply.
+export { tool, jsonSchema, stepCountIs } from "ai";
 export type { Tool, ToolSet, ModelMessage } from "ai";
 export type { JSONSchema7 } from "@ai-sdk/provider";

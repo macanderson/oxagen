@@ -13,7 +13,7 @@ describe("tenant policy manifest", () => {
     ];
     for (const entry of POLICY_MANIFEST) {
       expect(classes).toContain(entry.policyClass);
-      expect(entry.table).toMatch(/^[a-z_]+\.[a-z_]+$/); // schema.table
+      expect(entry.table).toMatch(/^[a-z_]+\.[a-z][a-z0-9_]*$/); // schema.table (digits ok after first char, e.g. a2a_tasks)
     }
   });
 
@@ -128,7 +128,7 @@ describe("tenant policy manifest", () => {
     expect(unique.size).toBe(tables.length);
   });
 
-  it("covers exactly the 76 policied tables of the v0.4.x schema", () => {
+  it("covers exactly the 88 policied tables of the v0.4.x schema", () => {
     // Intentional ratchet: adding a tenant-owned table means updating BOTH the
     // manifest and this count (and regenerating the Atlas RLS migration).
     // 62 = 63 baseline − plugin.org_denylist (removed 2026-06-17 workspace-scoping rebuild).
@@ -148,7 +148,26 @@ describe("tenant policy manifest", () => {
     //      orgScopeMixin + tenant_isolation RLS, 20260628120000).
     // 77 = 76 + workspace.workspace_memory_policy (agent-memory decay policy,
     //      org_id + workspace_id both NOT NULL → standard, OXA-1374).
-    expect(POLICY_MANIFEST.length).toBe(77);
+    // 76 = 77 - ingestion.entity_types (dropped as verified-dead zombie table,
+    //      20260704210000_drop_zombie_schema).
+    // 81 = 76 + ai.response_cache + ai.batch_jobs (semantic cache + batch jobs,
+    //      20260704200000) + eval.eval_datasets + eval.eval_dataset_items +
+    //      eval.eval_runs (Evals v1, 20260704220000) — all orgScopeMixin → standard.
+    // 82 = 81 + agent.a2a_tasks (A2A durable task store, orgScopeMixin →
+    //      standard, 20260704230000, PR #572).
+    // 83 = 82 + workspace.workspace_budget_policy (per-turn budget governance,
+    //      org_id + workspace_id both NOT NULL → standard, OXA-2081,
+    //      20260708120000_workspace_budget_policy.sql, PR #630).
+    // 85 = 83 + agent.file_locks + agent.file_lock_fences (file-lock lease
+    //      authority + fencing-token counter, ADR-021 §5, orgScopeMixin +
+    //      forced tenant_isolation RLS, 20260708130000_agent_file_locks.sql —
+    //      bumped past the budget-policy prefix collision, PR #647).
+    // 88 = 85 + environments.sandbox_templates + environments.sandbox_template_tools
+    //      + environments.agent_environment_bindings (portable sandbox templates
+    //      + agent-env bindings, org_id NOT NULL + tenant_isolation RLS,
+    //      20260712120000_sandbox_templates.sql, PR #718 — the manifest was
+    //      updated but this ratchet was not: a parallel-merge semantic conflict).
+    expect(POLICY_MANIFEST.length).toBe(88);
   });
 
   it("covers slug-history tables for org + workspace renames (OXA-1779)", () => {

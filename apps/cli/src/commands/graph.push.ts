@@ -14,6 +14,15 @@
  * Storage boundary (ADR-018):
  *   - Code subgraph → Neo4j (is_system=true) via `graph.sync.push`.
  *   - Local cursor (last synced SHA) → DuckDB (GraphStore.code_push_cursor).
+ *
+ * Output discipline (ADR-023 §4): `--json` emits one single-line JSON value on
+ * stdout (the success summary and the `{ upToDate }` / `{ pushed: false }`
+ * shapes are all preserved); pretty mode prints the human summary on stdout; the
+ * "Pushing N node(s)…" status line is progress → stderr via `out.info`. The
+ * push always uses `apiPostOrThrow`; the surrounding catch honours the
+ * `throwOnError` seam (used by `oxagen init` to degrade gracefully): when set it
+ * re-throws, otherwise it routes to out.error (exit 1, never a hard-exit) — and
+ * either way `store.close()` runs in `finally`.
  */
 import { execFileSync } from "node:child_process";
 import { mkdirSync } from "node:fs";
@@ -23,13 +32,21 @@ import { createHash } from "node:crypto";
 import { generateObject } from "ai";
 import { buildCodeGraph } from "../daemon/code-graph/builder.js";
 import { createCodeGraphStore, defaultCodeGraphDbPath } from "../daemon/code-graph/store.js";
-import { apiPost } from "../lib/api.js";
+import { apiPostOrThrow } from "../lib/api.js";
 import { getOrgId, getWorkspaceId } from "../lib/config.js";
+import { createOutput } from "../lib/output.js";
+import { stdoutWriter, type CommandWriter } from "../lib/capture-writer.js";
 import { createGraphStore } from "@oxagen/engram";
 import { graphStorePath } from "./graph.pull.js";
 import { inferDomains } from "@oxagen/code-graph";
 import type { DomainAI, DomainMap } from "@oxagen/code-graph";
-import { ensureGatewayKey } from "../agent/env.js";
+import {
+  CODE_EMBED_GATEWAY_MODEL,
+  CODE_EMBED_DIM,
+  isValidCodeEmbedding,
+} from "@oxagen/code-graph/embed";
+import type { CodeNode } from "../daemon/code-graph/types.js";
+import { credentialSupportsModel, resolveAiCredential } from "../agent/env.js";
 import { modelForTier } from "../agent/model-router.js";
 
 // ---------------------------------------------------------------------------
@@ -40,6 +57,14 @@ export interface GraphPushOptions {
   full?: boolean;
   repo?: string;
   json?: boolean;
+  /**
+   * Throw on any failure (missing scope, not-a-git-repo, API error) instead of
+   * writing to stderr + setting `process.exitCode`. Used by non-command callers
+   * like `oxagen init` that must degrade GRACEFULLY (catch + continue) rather
+   * than poison the process exit code or hard-exit via `apiPost`. Defaults to
+   * false so the `oxagen graph push` command keeps its exit-1-on-error contract.
+   */
+  throwOnError?: boolean;
   /** @internal test seam: override the DuckDB path. */
   _duckdbPath?: string;
   /** @internal test seam: override the git root (workspace root). */
@@ -60,6 +85,13 @@ interface PushNode {
   displayName: string;
   properties: Record<string, unknown>;
   isSystem: true;
+  /**
+   * Optional local semantic embedding. Attached only when the CLI embedded this
+   * node locally (with a gateway key) using the shared code-graph model — a
+   * 1536-d `text-embedding-3-small` vector. Omitted otherwise; the server drops
+   * any wrong-dimension vector rather than corrupting the index.
+   */
+  embedding?: number[];
 }
 
 interface PushEdge {
@@ -168,6 +200,30 @@ function allTrackedFiles(root: string): string[] {
 // ---------------------------------------------------------------------------
 
 /**
+ * Return the code node's local embedding IFF it was produced by the shared
+ * code-graph gateway model (`openai/text-embedding-3-small`) and is a valid
+ * 1536-d vector — otherwise undefined so the field is omitted from the push.
+ * Only gateway-embedded nodes ship a vector; nodes embedded by a LOCAL
+ * provider (Ollama, ONNX — see agent/context/embedding.ts) have an
+ * `embeddingProvider` other than the gateway model id, so they fall through
+ * this check the same as an unembedded node and sync without a vector. Their
+ * vectors live in a different, smaller vector space (384/768-d) than the
+ * server's 1536-d index and would corrupt it if attached; the server
+ * re-embeds those files on ingest instead — the accepted, opt-in cost of
+ * running local embeddings.
+ */
+function localEmbeddingFor(n: CodeNode): number[] | undefined {
+  if (
+    n.embeddingProvider === CODE_EMBED_GATEWAY_MODEL &&
+    n.embedding?.length === CODE_EMBED_DIM &&
+    isValidCodeEmbedding(n.embedding)
+  ) {
+    return n.embedding;
+  }
+  return undefined;
+}
+
+/**
  * Build nodes and edges for a set of files by running them through the
  * code-graph builder and mapping to the `graph.sync.push` envelope shape.
  *
@@ -196,6 +252,7 @@ async function buildEnvelopeForFiles(
       // File node key is simpler
       const fileKey = `code:${repo}:${n.path}`;
       const fileDomain = domainMap?.get(n.path);
+      const fileEmbedding = localEmbeddingFor(n);
       const pushNode: PushNode = {
         key: fileKey,
         labels: ["SourceFile"],
@@ -206,6 +263,7 @@ async function buildEnvelopeForFiles(
           ...(fileDomain ? { domain: fileDomain } : {}),
         },
         isSystem: true,
+        ...(fileEmbedding ? { embedding: fileEmbedding } : {}),
       };
       nodeMap.set(fileKey, pushNode);
       const existing = nodesByPath.get(n.path) ?? [];
@@ -225,6 +283,7 @@ async function buildEnvelopeForFiles(
       };
       if (n.signature) props["signature"] = n.signature;
       if (n.docstring) props["docstring"] = n.docstring;
+      const symbolEmbedding = localEmbeddingFor(n);
       const pushNode: PushNode = {
         key: symbolKey,
         // Must be "SourceSymbol" (not "Symbol") to match the GitHub-ingestion
@@ -235,6 +294,7 @@ async function buildEnvelopeForFiles(
         displayName: n.name,
         properties: props,
         isSystem: true,
+        ...(symbolEmbedding ? { embedding: symbolEmbedding } : {}),
       };
       nodeMap.set(symbolKey, pushNode);
       // Also track symbol under its file path for edge lookup
@@ -299,16 +359,21 @@ async function buildEnvelopeForFiles(
 // Handler
 // ---------------------------------------------------------------------------
 
-export async function handleGraphPush(opts: GraphPushOptions): Promise<void> {
+export async function handleGraphPush(
+  opts: GraphPushOptions,
+  writer: CommandWriter = stdoutWriter,
+): Promise<void> {
+  const out = createOutput({ json: opts.json }, writer);
   const org = getOrgId();
   const workspace = getWorkspaceId();
 
   if (!org || !workspace) {
-    process.stderr.write(
+    const msg =
       "Missing org or workspace. Run `oxagen config` or set " +
-        "OXAGEN_ORG_ID / OXAGEN_WORKSPACE_ID.\n",
-    );
-    process.exitCode = 1;
+      "OXAGEN_ORG_ID / OXAGEN_WORKSPACE_ID.";
+    // throwOnError (oxagen init) degrades gracefully by catching — keep throwing.
+    if (opts.throwOnError) throw new Error(msg);
+    out.error(msg, "config");
     return;
   }
 
@@ -317,10 +382,10 @@ export async function handleGraphPush(opts: GraphPushOptions): Promise<void> {
   try {
     root = opts._gitRoot ?? gitRoot(process.cwd());
   } catch {
-    process.stderr.write(
-      "Not inside a git repository. `oxagen graph push` requires a git repo.\n",
-    );
-    process.exitCode = 1;
+    const msg =
+      "Not inside a git repository. `oxagen graph push` requires a git repo.";
+    if (opts.throwOnError) throw new Error(msg);
+    out.error(msg, "git");
     return;
   }
 
@@ -345,16 +410,11 @@ export async function handleGraphPush(opts: GraphPushOptions): Promise<void> {
       addedFiles = allTrackedFiles(root);
       deletedFiles = [];
     } else if (lastSha === currentSha) {
-      // Already up to date — idempotent no-op.
-      if (opts.json) {
-        process.stdout.write(
-          JSON.stringify({ upToDate: true, sha: currentSha, repo }) + "\n",
-        );
-      } else {
-        process.stdout.write(
-          `Already up to date (HEAD: ${currentSha.slice(0, 8)}).\n`,
-        );
-      }
+      // Already up to date — idempotent no-op. JSON shape preserved.
+      out.data(
+        { upToDate: true, sha: currentSha, repo },
+        () => `Already up to date (HEAD: ${currentSha.slice(0, 8)}).`,
+      );
       return;
     } else {
       const changed = changedFiles(lastSha, currentSha, root);
@@ -365,10 +425,10 @@ export async function handleGraphPush(opts: GraphPushOptions): Promise<void> {
     // ── Domain inference ───────────────────────────────────────────────────────
     // Run once per push over ALL tracked files (not just the delta) so the
     // model sees the full repo structure for accurate domain classification.
-    // Gracefully no-ops when the AI Gateway key is unavailable.
+    // Gracefully no-ops when no AI key can run the classification model.
     let domainMap: DomainMap = new Map();
-    const gatewayKey = ensureGatewayKey();
-    if (gatewayKey) {
+    const credential = resolveAiCredential();
+    if (credential && credentialSupportsModel(credential, modelForTier("fast"))) {
       try {
         const allFiles = !lastSha ? addedFiles : allTrackedFiles(root);
         const domainModel = modelForTier("fast"); // Haiku-class — cheap classification
@@ -390,6 +450,7 @@ export async function handleGraphPush(opts: GraphPushOptions): Promise<void> {
           try {
             await cgStore.whenReady();
             await cgStore.updateNodeDomains(root, domainMap);
+            await cgStore.updateEdgeDomains(root, domainMap);
           } catch {
             // Non-fatal: DuckDB may be locked by the daemon. Neo4j gets domain
             // properties regardless; DuckDB will be updated on the next full build.
@@ -425,24 +486,27 @@ export async function handleGraphPush(opts: GraphPushOptions): Promise<void> {
     };
 
     if (nodes.length === 0 && edges.length === 0 && tombstones.length === 0) {
-      if (opts.json) {
-        process.stdout.write(
-          JSON.stringify({ pushed: false, reason: "no changes", sha: currentSha, repo }) + "\n",
-        );
-      } else {
-        process.stdout.write(`No source file changes since ${lastSha?.slice(0, 8) ?? "start"}.\n`);
-      }
+      // JSON shape preserved: { pushed: false, reason, sha, repo }.
+      out.data(
+        { pushed: false, reason: "no changes", sha: currentSha, repo },
+        () => `No source file changes since ${lastSha?.slice(0, 8) ?? "start"}.`,
+      );
       // Still update the cursor so next run doesn't re-scan
       await store.setCodeCursor(org, workspace, repo, currentSha);
       return;
     }
 
-    process.stderr.write(
+    // Single status line → progress on stderr (no `\r`, so out.info is fine).
+    out.info(
       `Pushing ${nodes.length} node(s), ${edges.length} edge(s), ` +
-        `${tombstones.length} tombstone(s)...\n`,
+        `${tombstones.length} tombstone(s)...`,
     );
 
-    const result = await apiPost<PushResult>("graph/sync/push", envelope);
+    // Always apiPostOrThrow: the catch below decides the failure contract — a
+    // throw when throwOnError is set (graceful `oxagen init` caller), otherwise
+    // a uniform out.error (exit 1, never a hard-exit). Either way finally closes
+    // the store.
+    const result = await apiPostOrThrow<PushResult>("graph/sync/push", envelope);
 
     // Persist the cursor on success.
     await store.setCodeCursor(org, workspace, repo, currentSha);
@@ -456,19 +520,23 @@ export async function handleGraphPush(opts: GraphPushOptions): Promise<void> {
       fromSha: lastSha ?? "(full)",
     };
 
-    if (opts.json) {
-      process.stdout.write(JSON.stringify(summary, null, 2) + "\n");
-    } else {
-      process.stdout.write(
+    out.data(
+      summary,
+      () =>
         `Pushed to workspace graph:\n` +
-          `  Nodes upserted:  ${result.nodesUpserted}\n` +
-          `  Edges upserted:  ${result.edgesUpserted}\n` +
-          `  Tombstoned:      ${result.tombstoned}\n` +
-          `  From SHA:        ${(lastSha ?? "(full)").toString().slice(0, 8)}\n` +
-          `  To SHA (HEAD):   ${currentSha.slice(0, 8)}\n` +
-          `  Repo:            ${repo}\n`,
-      );
-    }
+        `  Nodes upserted:  ${result.nodesUpserted}\n` +
+        `  Edges upserted:  ${result.edgesUpserted}\n` +
+        `  Tombstoned:      ${result.tombstoned}\n` +
+        `  From SHA:        ${(lastSha ?? "(full)").toString().slice(0, 8)}\n` +
+        `  To SHA (HEAD):   ${currentSha.slice(0, 8)}\n` +
+        `  Repo:            ${repo}`,
+    );
+  } catch (err) {
+    // throwOnError (oxagen init) needs a catchable throw to degrade gracefully;
+    // the normal command routes the failure to a uniform stderr error + exit 1.
+    if (opts.throwOnError) throw err;
+    out.error(err, "api");
+    return;
   } finally {
     await store.close();
   }

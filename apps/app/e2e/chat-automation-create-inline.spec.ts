@@ -36,7 +36,7 @@ function automationFormEvents(toolCallId: string, orgSlug: string): StreamEvent[
       type: "tool-call-start",
       messageId: "e2e-auto-msg-01",
       toolCallId,
-      capability: "agent.ui.render",
+      capability: "render_agent_ui",
       inputPreview: { componentId: "automation-create-inline" },
       riskLevel: "low",
     },

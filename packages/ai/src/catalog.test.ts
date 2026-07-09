@@ -5,6 +5,8 @@ import {
   supportsReasoning,
   supportsImage,
   supportsVideo,
+  supportsVision,
+  supportsVideoInput,
   supportsText,
   supportsMedia,
   capabilityLabel,
@@ -20,6 +22,22 @@ describe("model catalog (@oxagen/ai/catalog)", () => {
     expect(getModel("does/not-exist")).toBeUndefined();
   });
 
+  it("surfaces the latest Anthropic models (Fable 5, Sonnet 5) in the picker", () => {
+    // Both are reasoning + vision + tools capable, 1M context, and text-selectable
+    // so they appear in every gatewayModels-derived selector (chat picker, model
+    // defaults settings). Guards against accidental removal when the catalog drifts.
+    const fable = getModel("anthropic/claude-fable-5");
+    const sonnet5 = getModel("anthropic/claude-sonnet-5");
+    expect(fable?.name).toBe("Claude Fable 5");
+    expect(sonnet5?.name).toBe("Claude Sonnet 5");
+    for (const m of [fable, sonnet5]) {
+      expect(m?.vendor).toBe("anthropic");
+      expect(m?.context).toBe("1M");
+      expect(supportsReasoning(m)).toBe(true);
+      expect(supportsText(m)).toBe(true);
+    }
+  });
+
   it("reports reasoning support from the capability array", () => {
     // Opus is reasoning-capable; Haiku is not (per the catalog).
     expect(supportsReasoning("anthropic/claude-opus-4.8")).toBe(true);
@@ -27,6 +45,29 @@ describe("model catalog (@oxagen/ai/catalog)", () => {
     // Unknown ids are conservatively false — the caller can't describe them.
     expect(supportsReasoning("unknown/model")).toBe(false);
     expect(supportsReasoning(undefined)).toBe(false);
+  });
+
+  it("distinguishes vision (image input) from image generation", () => {
+    // Claude/GPT chat models take image INPUT (vision) but do not GENERATE images.
+    expect(supportsVision("anthropic/claude-opus-4.8")).toBe(true);
+    expect(supportsImage("anthropic/claude-opus-4.8")).toBe(false);
+    // A pure image-generation model is not a vision (input) model.
+    expect(supportsVision("openai/gpt-image-1")).toBe(false);
+    // Unknown / undefined are conservatively false.
+    expect(supportsVision("unknown/model")).toBe(false);
+    expect(supportsVision(undefined)).toBe(false);
+  });
+
+  it("distinguishes video INPUT (Gemini) from video generation (Veo)", () => {
+    // Gemini accepts video file parts as input; it does not generate video.
+    expect(supportsVideoInput("google/gemini-3-pro")).toBe(true);
+    expect(supportsVideoInput("google/gemini-3-flash")).toBe(true);
+    expect(supportsVideo("google/gemini-3-pro")).toBe(false);
+    // Veo generates video but does not accept video input in chat.
+    expect(supportsVideoInput("google/veo-3.0-generate-001")).toBe(false);
+    // Non-Gemini vision models take images but not video input.
+    expect(supportsVideoInput("anthropic/claude-opus-4.8")).toBe(false);
+    expect(supportsVideoInput(undefined)).toBe(false);
   });
 
   it("classifies image vs video vs text capability", () => {

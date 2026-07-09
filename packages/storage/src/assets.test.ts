@@ -23,6 +23,10 @@ describe("ASSET_LIMITS", () => {
   it("document limit is 25 MiB", () => {
     expect(ASSET_LIMITS.document).toBe(25 * 1024 * 1024);
   });
+
+  it("video limit is 100 MiB", () => {
+    expect(ASSET_LIMITS.video).toBe(100 * 1024 * 1024);
+  });
 });
 
 // ── ASSET_ALLOWED_TYPES ───────────────────────────────────────────────────────
@@ -78,6 +82,23 @@ describe("ASSET_ALLOWED_TYPES", () => {
 
   it("document allows application/pdf → pdf", () => {
     expect(documentTypes["application/pdf"]).toBe("pdf");
+  });
+
+  it("image and document allow image/gif → gif", () => {
+    expect(imageTypes["image/gif"]).toBe("gif");
+    expect(documentTypes["image/gif"]).toBe("gif");
+  });
+
+  it("avatar does not allow image/gif", () => {
+    expect(avatarTypes["image/gif"]).toBeUndefined();
+  });
+
+  it("video allows mp4 / webm / quicktime and rejects images", () => {
+    const videoTypes = ASSET_ALLOWED_TYPES.video;
+    expect(videoTypes["video/mp4"]).toBe("mp4");
+    expect(videoTypes["video/webm"]).toBe("webm");
+    expect(videoTypes["video/quicktime"]).toBe("mov");
+    expect(videoTypes["image/png"]).toBeUndefined();
   });
 });
 

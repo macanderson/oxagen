@@ -21,7 +21,7 @@ import { RELATIONSHIP_TYPE_PATTERN } from "../lib/relationship-type-pattern";
  * so no cross-workspace collision or leak is possible.
  */
 export const graphSyncPush = registerCapability({
-  name: "graph.sync.push",
+  name: "push_graph",
   domain: "graph",
   description:
     "Batch-upsert a content-addressed code or lineage subgraph into the workspace " +
@@ -74,6 +74,17 @@ export const graphSyncPush = registerCapability({
         isSystem: z
           .literal(true)
           .describe("Always true — sync'd nodes are product-owned (code graph / lineage)."),
+        embedding: z
+          .array(z.number())
+          .optional()
+          .describe(
+            "Optional precomputed semantic embedding for this node. Must be a " +
+              "1536-d `text-embedding-3-small` vector (the universal " +
+              "`graph_node_embedding_index` dimension) or it is ignored — a wrong-" +
+              "dimension vector is dropped rather than corrupting the index. Only " +
+              "nodes the CLI embedded locally (with a gateway key) ship a vector; " +
+              "the rest sync without one.",
+          ),
       }),
     ).describe("Nodes to upsert. Empty array → only edges/tombstones are processed."),
     edges: z.array(

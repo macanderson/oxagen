@@ -36,6 +36,15 @@ vi.mock("./message-footer-actions", () => ({
   saveAsMemoryAction: (...args: unknown[]) => mockSaveAsMemory(...args),
 }));
 
+// Stub the prompt-cache meter to a marker so we assert only on whether the
+// footer decided to render it (its own render logic is tested in
+// prompt-cache-bar.test.tsx).
+vi.mock("./prompt-cache-bar", () => ({
+  PromptCacheBar: (props: { cachedTokens: number }) => (
+    <div data-testid="prompt-cache-bar" data-cached={props.cachedTokens} />
+  ),
+}));
+
 // Stub lucide icons to simple text labels so snapshot assertions are stable.
 vi.mock("lucide-react", () => ({
   Copy: () => <span data-testid="icon-copy">copy</span>,
@@ -98,6 +107,20 @@ describe("MessageFooter", () => {
   it("(c) omits credit text when creditsCharged is absent", () => {
     renderFooter({ usage: makeUsage({ creditsCharged: undefined }) });
     expect(screen.queryByText(/credit/i)).toBeNull();
+  });
+
+  it("(c1) renders the prompt-cache meter when cachedTokens > 0", () => {
+    renderFooter({ usage: makeUsage({ cachedTokens: 40 }) });
+    const bar = screen.getByTestId("prompt-cache-bar");
+    expect(bar.getAttribute("data-cached")).toBe("40");
+  });
+
+  it("(c2) omits the prompt-cache meter when cachedTokens is absent or zero", () => {
+    renderFooter({ usage: makeUsage({ cachedTokens: 0 }) });
+    expect(screen.queryByTestId("prompt-cache-bar")).toBeNull();
+    cleanup();
+    renderFooter({ usage: makeUsage() });
+    expect(screen.queryByTestId("prompt-cache-bar")).toBeNull();
   });
 
   it("(d) Copy button writes text to clipboard", async () => {

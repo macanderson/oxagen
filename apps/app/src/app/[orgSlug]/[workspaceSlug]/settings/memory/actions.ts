@@ -10,7 +10,7 @@ import { invoke } from "@oxagen/oxagen";
 import "@oxagen/handlers/register";
 // agent.* capabilities (e.g. agent.memory.policy.write) bind via the agent register.
 import "@oxagen/agent/register";
-import type { AgentMemoryPolicyWriteOutput } from "@oxagen/oxagen/contracts/agent.memory.policy.write";
+import type { AgentMemoryPolicyWriteOutput } from "@oxagen/oxagen/contracts/agent.memory_policy.write";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
 
@@ -112,7 +112,7 @@ export async function saveMemoryPolicyAction(
       // ["api","mcp","agent"] and does NOT include "app"; passing "app" throws
       // surface_denied. (Same as the workspace.settings.write precedent.)
       await invoke(
-        "agent.memory.policy.write",
+        "update_memory_policy",
         {
           halfLifeLowDays,
           halfLifeHighDays,
@@ -151,21 +151,27 @@ export async function readMemoryPolicyAction(args: {
   complianceThreshold: number;
   defaultDecayFloor: number;
 }> {
+  // invoke() from apps/app skips kernel IAM and the org/workspace come from
+  // client-supplied slugs — authenticate and assert org membership (mirrors
+  // saveMemoryPolicyAction) so a session scoped to org A can't read org B's
+  // memory policy by passing its slugs. notFound() on non-member.
+  const session = await getSessionOrRedirect();
   const org = await resolveOrg(args.orgSlug);
   const ws = await resolveWorkspace(org.id, args.workspaceSlug);
+  await assertOrgMember(org.id, session.user.id);
 
   return await runInTenantScope({ orgId: org.id, workspaceId: ws.id }, async () => {
     const ctx = {
       orgId: org.id,
       workspaceId: ws.id,
-      userId: "",
+      userId: session.user.id,
       apiKeyId: null as string | null,
       requestId: crypto.randomUUID(),
       surface: "app" as const,
       messageId: null as string | null,
     };
     const result = await invoke(
-      "agent.memory.policy.read",
+      "get_memory_policy",
       {},
       ctx,
       { surface: "agent" },

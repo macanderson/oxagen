@@ -1,6 +1,14 @@
 /** `oxagen graph search …` — unified natural-language (vector) search across the
- *  entire knowledge graph, via the org-scoped `/graph/search` API. */
+ *  entire knowledge graph, via the org-scoped `/graph/search` API.
+ *
+ *  Output follows the universal discipline (ADR-023 §4): `--json` or a piped
+ *  stdout emits ONE machine line; a TTY without the flag keeps the historical
+ *  2-space-indented JSON view (same shape either way, so `| jq` consumers see
+ *  no change — this command previously ignored its context and always printed
+ *  the indented form). */
 import { apiPost } from "../lib/api.js";
+import { stdoutWriter, type CommandWriter } from "../lib/capture-writer.js";
+import { createOutput } from "../lib/output.js";
 
 export interface GraphSearchOptions {
   query: string;
@@ -9,6 +17,8 @@ export interface GraphSearchOptions {
   limit?: string;
   /** commander: `--system` => true, `--no-system` => false, omitted => undefined. */
   system?: boolean;
+  json?: boolean;
+  quiet?: boolean;
 }
 
 function splitCsv(value: string | undefined): string[] | undefined {
@@ -20,7 +30,11 @@ function splitCsv(value: string | undefined): string[] | undefined {
   return parts.length > 0 ? parts : undefined;
 }
 
-export async function handleGraphSearch(opts: GraphSearchOptions): Promise<void> {
+export async function handleGraphSearch(
+  opts: GraphSearchOptions,
+  writer: CommandWriter = stdoutWriter,
+): Promise<void> {
+  const out = createOutput({ json: opts.json, quiet: opts.quiet, autoJson: true }, writer);
   // --system => isSystem=true, --no-system => false, neither => undefined (both).
   const isSystem = opts.system === true ? true : opts.system === false ? false : undefined;
 
@@ -32,5 +46,5 @@ export async function handleGraphSearch(opts: GraphSearchOptions): Promise<void>
     isSystem,
   });
 
-  process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+  out.data(result);
 }

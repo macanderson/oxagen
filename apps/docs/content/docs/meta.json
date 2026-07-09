@@ -11,7 +11,9 @@
     "enterprise",
     "api",
     "mcp",
+    "a2a",
     "agent",
-    "plugins"
+    "plugins",
+    "specs-and-plans"
   ]
 }

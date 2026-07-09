@@ -14,77 +14,96 @@ type LoaderEntry = () => Promise<{ default?: CapabilityHandlerFn } & Record<stri
 
 // Single source of truth mapping capability name → handler module.
 const LOADERS: Record<string, LoaderEntry> = {
-  "agent.code.execute": () => import("./agent.code.execute"),
+  "execute_code": () => import("./agent.code.execute"),
   // Durable sandbox sessions — long-lived, reconnectable sandboxes that persist
   // across agent turns (clone → build → snapshot → PR). The one-shot
   // agent.code.execute and these durable peers share the @oxagen/sandbox driver.
-  "agent.sandbox.start": () => import("./agent.sandbox.start"),
-  "agent.sandbox.exec": () => import("./agent.sandbox.exec"),
-  "agent.sandbox.snapshot": () => import("./agent.sandbox.snapshot"),
-  "agent.sandbox.stop": () => import("./agent.sandbox.stop"),
+  "start_sandbox": () => import("./agent.sandbox.start"),
+  "run_sandbox_command": () => import("./agent.sandbox.exec"),
+  "snapshot_sandbox": () => import("./agent.sandbox.snapshot"),
+  "stop_sandbox": () => import("./agent.sandbox.stop"),
+  "list_sandbox_files": () => import("./agent.sandbox_file.list"),
+  "read_sandbox_file": () => import("./agent.sandbox_file.read"),
   // Browser automation inside a durable session — all seven thin wrappers live
   // in one module (browser.ts) that drives `browserctl` via execInSession.
-  "browser.navigate": () => import("./browser"),
-  "browser.screenshot": () => import("./browser"),
-  "browser.fill": () => import("./browser"),
-  "browser.submit": () => import("./browser"),
-  "browser.click": () => import("./browser"),
-  "browser.refresh": () => import("./browser"),
-  "browser.read": () => import("./browser"),
+  "navigate_page": () => import("./browser"),
+  "screenshot_page": () => import("./browser"),
+  "fill_page": () => import("./browser"),
+  "submit_page": () => import("./browser"),
+  "click_page": () => import("./browser"),
+  "refresh_page": () => import("./browser"),
+  "read_page": () => import("./browser"),
   // Cross-LLM proof-of-done: an independent vision model judges the screenshots.
-  "agent.feature.verify": () => import("./agent.feature.verify"),
+  "verify_feature": () => import("./agent.feature.verify"),
   // Code-execution surface peers of agent.code.execute (OXA-1352). Co-located
   // here so the whole sandboxed code surface registers through one path.
-  "code.diff": () => import("./code.diff"),
-  "code.patch": () => import("./code.patch"),
-  "code.format": () => import("./code.format"),
-  "agent.tool.list": () => import("./agent.tool.list"),
-  "agent.mcp.register": () => import("./agent.mcp.register"),
-  "agent.mcp.list": () => import("./agent.mcp.list"),
-  "agent.mcp.set_enabled": () => import("./agent.mcp.set_enabled"),
-  "agent.mcp.delete": () => import("./agent.mcp.delete"),
-  "agent.mcp.consent.resolve": () => import("./agent.mcp.consent.resolve"),
-  "agent.mcp.consent.list": () => import("./agent.mcp.consent.list"),
-  "agent.plan.approve": () => import("./agent.plan.approve"),
-  "agent.plan.create": () => import("./agent.plan.create"),
-  "agent.task.background.start": () => import("./agent.task.background.start"),
-  "agent.task.background.read": () => import("./agent.task.background.read"),
-  "agent.task.background.cancel": () => import("./agent.task.background.cancel"),
-  "agent.memory.recall": () => import("./agent.memory.recall"),
-  "agent.memory.write": () => import("./agent.memory.write"),
-  "agent.memory.list": () => import("./agent.memory.list"),
-  "agent.memory.update": () => import("./agent.memory.update"),
-  "agent.memory.delete": () => import("./agent.memory.delete"),
-  "agent.memory.remember": () => import("./agent.memory.remember"),
+  "diff_code": () => import("./code.diff"),
+  "patch_code": () => import("./code.patch"),
+  "format_code": () => import("./code.format"),
+  "list_agent_tools": () => import("./agent.tool.list"),
+  "register_mcp_server": () => import("./agent.mcp.register"),
+  "list_mcp_servers": () => import("./agent.mcp.list"),
+  "set_mcp_enabled": () => import("./agent.mcp.set_enabled"),
+  "delete_mcp_server": () => import("./agent.mcp.delete"),
+  "resolve_mcp_consent": () => import("./agent.mcp_consent.resolve"),
+  "list_mcp_consents": () => import("./agent.mcp_consent.list"),
+  "approve_plan": () => import("./agent.plan.approve"),
+  "create_plan": () => import("./agent.plan.create"),
+  "start_background_task": () => import("./agent.background_task.start"),
+  "get_background_task": () => import("./agent.background_task.read"),
+  "cancel_background_task": () => import("./agent.background_task.cancel"),
+  "recall_memory": () => import("./agent.memory.recall"),
+  "write_memory": () => import("./agent.memory.write"),
+  "list_memories": () => import("./agent.memory.list"),
+  "update_memory": () => import("./agent.memory.update"),
+  "delete_memory": () => import("./agent.memory.delete"),
+  "save_memory": () => import("./agent.memory.remember"),
   // Bulk memory import: parse uploaded docs → drafts, then commit the edited set.
-  "agent.memory.import.parse": () => import("./agent.memory.import.parse"),
-  "agent.memory.import.commit": () => import("./agent.memory.import.commit"),
+  "parse_memory_import": () => import("./agent.memory_import.parse"),
+  "commit_memory_import": () => import("./agent.memory_import.commit"),
   // Two-axis memory: confidence ladder promotion + the citation/evidence
   // mechanism that drives it (docs/specs/two-axis-memory).
-  "agent.memory.promote": () => import("./agent.memory.promote"),
-  "agent.memory.promotion.candidates": () => import("./agent.memory.promotion.candidates"),
-  "agent.memory.cite": () => import("./agent.memory.cite"),
-  "agent.memory.evidence.attach": () => import("./agent.memory.evidence.attach"),
-  "agent.memory.citations.list": () => import("./agent.memory.citations.list"),
-  "agent.approval.resolve": () => import("./agent.approval.resolve"),
-  "agent.skill.list": () => import("./agent.skill.list"),
-  "agent.skill.load": () => import("./agent.skill.load"),
-  "agent.subagent.aggregate": () => import("./agent.subagent.aggregate"),
-  "agent.subagent.cancel": () => import("./agent.subagent.cancel"),
-  "agent.subagent.dispatch": () => import("./agent.subagent.dispatch"),
-  "agent.subagent.fanout.get": () => import("./agent.subagent.fanout.get"),
-  "agent.subagent.fanout.list": () => import("./agent.subagent.fanout.list"),
-  "agent.ui.render": () => import("./agent.ui.render"),
-  "agent.definition.create": () => import("./agent.definition.create"),
-  "agent.definition.update": () => import("./agent.definition.update"),
-  "agent.definition.publish": () => import("./agent.definition.publish"),
-  "agent.definition.get": () => import("./agent.definition.get"),
-  "agent.definition.list": () => import("./agent.definition.list"),
-  "agent.deploy": () => import("./agent.deploy"),
-  "agent.trigger.create": () => import("./agent.trigger.create"),
-  "agent.trigger.update": () => import("./agent.trigger.update"),
-  "agent.trigger.delete": () => import("./agent.trigger.delete"),
-  "agent.trigger.list": () => import("./agent.trigger.list"),
+  "promote_memory": () => import("./agent.memory.promote"),
+  "list_memory_promotions": () => import("./agent.memory_promotion.list"),
+  "cite_memory": () => import("./agent.memory.cite"),
+  "attach_memory_evidence": () => import("./agent.memory_evidence.attach"),
+  "list_memory_citations": () => import("./agent.memory_citation.list"),
+  "resolve_approval": () => import("./agent.approval.resolve"),
+  "list_agent_skills": () => import("./agent.skill.list"),
+  "load_skill": () => import("./agent.skill.load"),
+  "aggregate_subagents": () => import("./agent.subagent.aggregate"),
+  "cancel_subagent": () => import("./agent.subagent.cancel"),
+  "dispatch_subagent": () => import("./agent.subagent.dispatch"),
+  // Agent file locking (docs/specs/agent-file-locking/plan.md §7) — manual
+  // acquire/force-release/introspection over the same HOLDS_LOCK edge
+  // write_file/edit_file in @oxagen/agent-engine's tools.ts acquire automatically.
+  "acquire_file_lock": () => import("./agent.file_lock.acquire"),
+  "release_file_lock": () => import("./agent.file_lock.release"),
+  "list_file_locks": () => import("./agent.file_lock.list"),
+  "get_subagent_fanout": () => import("./agent.subagent_fanout.get"),
+  "get_subagent_result": () => import("./agent.subagent_result.get"),
+  "list_subagent_siblings": () => import("./agent.subagent.siblings"),
+  "list_subagent_fanouts": () => import("./agent.subagent_fanout.list"),
+  "list_executions": () => import("./agent.execution.list"),
+  "get_execution_trace": () => import("./agent.trace.get"),
+  "debug_execution": () => import("./agent.debug.trace"),
+  // Fleet-wide error triage overview — clusters ClickHouse error_events by
+  // fingerprint. Pure SQL (ADR-021 §1), the counterpart to the single-execution
+  // failure frame above.
+  "list_error_clusters": () => import("./telemetry.error.cluster"),
+  "get_execution_lineage": () => import("./agent.execution.lineage"),
+  "render_agent_ui": () => import("./agent.ui.render"),
+  "create_agent_def": () => import("./agent.definition.create"),
+  "update_agent_def": () => import("./agent.definition.update"),
+  "publish_agent_def": () => import("./agent.definition.publish"),
+  "get_agent_def": () => import("./agent.definition.get"),
+  "list_agent_defs": () => import("./agent.definition.list"),
+  "get_a2a_card": () => import("./a2a.card.get"),
+  "deploy_agent": () => import("./agent.deploy"),
+  "create_trigger": () => import("./agent.trigger.create"),
+  "update_trigger": () => import("./agent.trigger.update"),
+  "delete_trigger": () => import("./agent.trigger.delete"),
+  "list_triggers": () => import("./agent.trigger.list"),
 };
 
 /** Capability names this package supplies handlers for. Consumed by
@@ -110,9 +129,28 @@ export async function resolveHandler(capName: string): Promise<CapabilityHandler
   if (!loader) throw new Error(`No handler registered for capability ${capName}`);
   const mod = await loader();
   const exportName = toHandlerExportName(capName);
-  const handler = (mod[exportName] ?? mod.default) as CapabilityHandlerFn | undefined;
+  let handler = (mod[exportName] ?? mod.default) as CapabilityHandlerFn | undefined;
   if (typeof handler !== "function") {
-    throw new Error(`Handler module for ${capName} did not export ${exportName} or default`);
+    // ADR-022 snake_case capability names ("agent.sandbox_file.list",
+    // "agent.background_task.start", …) don't camelize to their module's
+    // readable export name via the dot-segment derivation above — e.g.
+    // "agent.sandbox_file.list" derives "agentSandbox_fileListHandler" while
+    // the module exports "agentSandboxFilesListHandler". Those modules were
+    // unresolvable at invoke time (the set_enabled module documents the gap
+    // and worked around it with a default export; the other snake_case
+    // modules had no workaround). Fall back to the module's single `*Handler`
+    // function export — every handler module exports exactly one, so this is
+    // unambiguous; if a module ever exports several, we still fail loudly.
+    const named = Object.entries(mod).filter(
+      (entry): entry is [string, CapabilityHandlerFn] =>
+        entry[0].endsWith("Handler") && typeof entry[1] === "function",
+    );
+    if (named.length === 1) handler = named[0]![1];
+  }
+  if (typeof handler !== "function") {
+    throw new Error(
+      `Handler module for ${capName} did not export ${exportName}, a unique *Handler function, or default`,
+    );
   }
   cache.set(capName, handler);
   return handler;

@@ -20,11 +20,20 @@ export interface LowBalanceResult {
 /**
  * Returns whether the org's current effective balance is below the configured
  * low-balance threshold.
+ *
+ * `opts.system` runs the underlying billing reads through withSystemDb (no
+ * active tenant scope required) — for trusted cross-tenant crons like
+ * billing.dunning-sweep that sweep every org. Request-path callers (e.g.
+ * auto-reload during a metered turn) omit it so the reads stay RLS-enforced
+ * under the active scope.
  */
-export async function isLowBalance(orgId: string): Promise<LowBalanceResult> {
+export async function isLowBalance(
+  orgId: string,
+  opts?: { system?: boolean },
+): Promise<LowBalanceResult> {
   const [settings, balance] = await Promise.all([
-    getOrgBillingSettings(orgId),
-    effectiveBalance(orgId),
+    getOrgBillingSettings(orgId, opts),
+    effectiveBalance(orgId, opts),
   ]);
 
   const balanceCents = Number(balance);

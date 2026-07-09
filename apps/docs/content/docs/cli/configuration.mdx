@@ -32,12 +32,29 @@ oxagen settings path                   # the three files and their status
 oxagen settings validate               # check every scope against the schema
 ```
 
+`oxagen settings show` tags every resolved key with the scope it came from, so you can see at a glance whether a value is a personal default, a team-committed setting, or the built-in default:
+
+<TuiSettingsShow />
+
 ### What goes in settings.json
 
 ```jsonc
 {
   // Default model (Vercel AI Gateway slug). --model and OXAGEN_MODEL override it.
-  "model": "anthropic/claude-sonnet-4.5",
+  // This is the universal fallback for the worker role.
+  "model": "anthropic/claude-sonnet-5",
+
+  // Per-role models for the pipeline. Each is optional; omit to accept engine
+  // defaults. See /docs/cli/models#per-role-models-worker-judge-triage.
+  "workerModel": "anthropic/claude-sonnet-5",   // executor — edits code
+  "judgeModel":  "openai/gpt-5.5-pro",          // completeness advisor (distinct from worker)
+  "triageModel": "anthropic/claude-haiku-4-5",  // planner + evaluator
+
+  // Reasoning effort for thinking-capable models: low|medium|high|xhigh|max.
+  "effort": "medium",
+
+  // Pause before each turn to confirm the enhanced prompt, model, and cost.
+  "confirmScope": false,
 
   // Oxagen platform API base URL (defaults to https://api.oxagen.sh).
   "apiUrl": "https://api.oxagen.sh",
@@ -72,37 +89,44 @@ oxagen settings set model anthropic/claude-opus-4.1 --scope project
 oxagen settings set env.AI_GATEWAY_API_KEY "vck_…"  --scope user
 ```
 
-## Custom agents
+## Model runtime
 
-Define reusable agents — each with its own system prompt, model, and tool allowlist — as Markdown files with YAML frontmatter:
+The **coordinator** model — the agent that gathers context, plans, dispatches workers, and judges results — is configured separately from `settings.json`, under the `runtime` block of `~/.config/oxagen/config.json`. It defaults to an [on-device open-source model](/docs/cli/models); managed with [`oxagen models`](/docs/cli/commands#oxagen-models-model-runtime).
+
+```jsonc
+{
+  "runtime": {
+    "coordinator": "on-device",          // or a cloud id: "haiku", "sonnet-5", "opus", …
+    "onDevice": {
+      "autoDownload": true,               // provision the model on first use
+      "modelId": "auto",                  // "auto" resolves best-fit for the device; or pin a modelId
+      "cacheDir": "~/.oxagen/models",     // where weights are cached
+      "verifyChecksum": true,             // checksum-verify downloads (trust-on-first-use)
+      "quantizationPreference": ["q8", "q6", "q5", "q4"]  // best quality first
+    }
+  }
+}
+```
+
+On-device is always an allowed coordinator — the CLI never silently swaps it for a cloud model. Running on-device weights needs the optional `node-llama-cpp` runtime (`npm install node-llama-cpp`); cloud coordinators need `AI_GATEWAY_API_KEY`.
+
+## Custom agents, commands & rules
+
+Three things live in `.oxagen/` as Markdown files with YAML frontmatter, committed alongside your code:
+
+- **Agents** (`.oxagen/agents/*.md`) — reusable personas with their own prompt, model, and tools.
+- **Slash commands** (`.oxagen/commands/*.md`) — `/name` prompt templates with `$ARGUMENTS` substitution.
+- **Rules** (`.oxagen/rules/*.md`) — guardrails the agent is told about **and hard-blocked from violating**.
 
 ```bash
 oxagen agent new reviewer        # scaffolds .oxagen/agents/reviewer.md
-oxagen agent list
-oxagen agent show reviewer
-oxagen --agent reviewer "review the changes on this branch for security issues"
-```
-
-## Slash commands
-
-Parameterized prompt templates you invoke as `/name` in the REPL (or run headless):
-
-```bash
 oxagen command new triage        # scaffolds .oxagen/commands/triage.md
-oxagen command run triage OXA-1234
+oxagen rules new no-force-push   # scaffolds .oxagen/rules/no-force-push.md
 ```
 
-## Rules
+The file format, frontmatter keys, and argument templating are documented in **[Custom commands, agents & rules](/docs/cli/custom-commands)**.
 
-Guardrails the agent is told about **and hard-blocked from violating** — useful for "never touch production config" or "no force-push":
-
-```bash
-oxagen rules new no-force-push          # scaffolds .oxagen/rules/no-force-push.md
-oxagen rules list
-oxagen rules check bash "git push --force origin main"   # dry-run against the guards
-```
-
-## Where definitions are discovered
+### Where definitions are discovered
 
 Agents, slash commands, and rules are each loaded from three locations and merged — project definitions override user ones, and the `.claude/` paths are read for drop-in compatibility with Claude Code:
 
@@ -121,9 +145,17 @@ Every persisted value has an environment-variable equivalent, which takes preced
 | Variable | Overrides |
 |---|---|
 | `AI_GATEWAY_API_KEY` | Gateway key for the agent loop. |
+| `ANTHROPIC_API_KEY` | Fallback when no gateway key exists: Anthropic models run directly against the Anthropic API. |
 | `OXAGEN_API_TOKEN` | Platform `token`. |
 | `OXAGEN_ORG_ID` | `org`. |
 | `OXAGEN_WORKSPACE_ID` | `workspace`. |
 | `OXAGEN_API_URL` | `api-url`. |
-| `OXAGEN_MODEL` | Default `model`. |
+| `OXAGEN_MODEL` | Worker model (`workerModel` ?? `model`). |
+| `OXAGEN_LLM_ADVISOR` | Judge model (`judgeModel`). |
+| `OXAGEN_LLM_EVALUATOR` | Triage/evaluator model (`triageModel`). |
+| `OXAGEN_JUDGE_PANEL` | Grade with a cross-vendor judge panel instead of a single advisor. |
+| `OXAGEN_EFFORT` | Reasoning `effort`. |
+| `OXAGEN_COORDINATOR` | `runtime.coordinator` (on-device / cloud coordinator). |
+| `OXAGEN_ONDEVICE_MODEL` | `runtime.onDevice.modelId`. |
+| `OXAGEN_MODELS_CACHE_DIR` | `runtime.onDevice.cacheDir`. |
 | `OXAGEN_NO_TUI=1` | Disable the interactive TUI menu (print help instead). |

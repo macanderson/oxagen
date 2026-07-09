@@ -1,4 +1,4 @@
-import { scopedSession } from "@oxagen/ontology";
+import { oversampledLimit, scopedSession } from "@oxagen/ontology";
 
 /**
  * Two-axis memory repository (docs/specs/two-axis-memory). All Cypher that reads
@@ -142,8 +142,11 @@ export async function recallMemories(args: {
   try {
     const recallThreshold = args.recallThreshold ?? 0;
     const result = await s.run(
+      // Over-fetch from the index ($k) so the tenant + status + class/enforcement
+      // predicates below don't crowd this tenant's memories out of the global
+      // top-K, then trim back to $limit after filtering.
       /* cypher */ `
-        CALL db.index.vector.queryNodes('memory_embedding_index', $limit, $embedding)
+        CALL db.index.vector.queryNodes('memory_embedding_index', $k, $embedding)
         YIELD node AS m, score
         WHERE m.orgId = $orgId
           AND m.workspaceId = $workspaceId
@@ -162,12 +165,72 @@ export async function recallMemories(args: {
         nodeRef: args.nodeRef ?? null,
         memoryClass: args.memoryClass ?? null,
         minEnforcement: args.minEnforcement ?? null,
+        k: BigInt(oversampledLimit(args.limit)),
         limit: BigInt(args.limit),
         recallThreshold,
       },
     );
     return result.records.map((r) => ({
       ...rowFromRecord(r),
+      score: Number(r.get("score")),
+    }));
+  } finally {
+    await s.close();
+  }
+}
+
+/** A cross-fanout peer result recalled from an :Execution node (Phase 2 §3 Tier B). */
+export interface PeerResultRow {
+  runId: string;
+  summary: string;
+  score: number;
+}
+
+/**
+ * Semantic peer recall over :Execution result summaries (docs/specs/
+ * graph-mediated-fanout-phase2 §3 Tier B). Vector-searches the
+ * `execution_embedding_index`, gated on the same tenant + a similarity
+ * threshold, and returns the top matches' publicId (runId) + summary. Mirrors
+ * `recallMemories`: orgId/workspaceId are injected by scopedSession(), the
+ * limit is passed as BigInt, and results are ordered by score. Only executions
+ * carrying a non-empty summary are eligible — a null/blank summary yields no
+ * useful peer line.
+ */
+export async function recallPeerResults(args: {
+  embedding: number[];
+  limit: number;
+  recallThreshold?: number;
+}): Promise<PeerResultRow[]> {
+  const s = scopedSession();
+  try {
+    const recallThreshold = args.recallThreshold ?? 0;
+    const result = await s.run(
+      // Over-fetch from the index ($k) so the tenant + non-empty-summary
+      // predicates below don't crowd this tenant's executions out of the global
+      // top-K, then trim back to $limit after filtering.
+      /* cypher */ `
+        CALL db.index.vector.queryNodes('execution_embedding_index', $k, $embedding)
+        YIELD node AS e, score
+        WHERE e.orgId = $orgId
+          AND e.workspaceId = $workspaceId
+          AND e.summary IS NOT NULL
+          AND e.summary <> ''
+          AND score >= $recallThreshold
+        WITH e, score
+        ORDER BY score DESC
+        LIMIT $limit
+        RETURN coalesce(e.publicId, e.id) AS runId, e.summary AS summary, score AS score
+      `,
+      {
+        embedding: args.embedding,
+        k: BigInt(oversampledLimit(args.limit)),
+        limit: BigInt(args.limit),
+        recallThreshold,
+      },
+    );
+    return result.records.map((r) => ({
+      runId: r.get("runId") as string,
+      summary: r.get("summary") as string,
       score: Number(r.get("score")),
     }));
   } finally {
@@ -187,6 +250,9 @@ export async function listMemories(args: {
   memoryClass?: MemoryClass;
   memoryKind?: string;
   minEnforcement?: number;
+  minCitations?: number;
+  sort?: "createdAt" | "citationCount";
+  sortDir?: "asc" | "desc";
 }): Promise<{ memories: MemoryListRow[]; total: number }> {
   const s = scopedSession();
   const where = /* cypher */ `
@@ -195,12 +261,22 @@ export async function listMemories(args: {
       AND ($memoryClass IS NULL OR coalesce(m.memory_class, 'OBSERVATION') = $memoryClass)
       AND ($memoryKind IS NULL OR coalesce(m.memory_kind, m.kind) = $memoryKind)
       AND ($minEnforcement IS NULL OR coalesce(m.enforcement_score, 0) >= $minEnforcement)
+      AND ($minCitations IS NULL OR coalesce(m.citation_count, 0) >= $minCitations)
   `;
+  // ORDER BY cannot be parameterised in Cypher, so build it from a fixed
+  // whitelist of (axis, direction) pairs — never interpolate caller strings.
+  const dir = args.sortDir === "asc" ? "ASC" : "DESC";
+  const orderBy =
+    args.sort === "citationCount"
+      ? // Tie-break by recency so equal citation counts stay deterministic.
+        `coalesce(m.citation_count, 0) ${dir}, m.createdAt DESC`
+      : `m.createdAt ${dir}`;
   const params = {
     nodeRef: args.nodeRef ?? null,
     memoryClass: args.memoryClass ?? null,
     memoryKind: args.memoryKind ?? null,
     minEnforcement: args.minEnforcement ?? null,
+    minCitations: args.minCitations ?? null,
   };
   try {
     const countResult = await s.run(
@@ -217,7 +293,7 @@ export async function listMemories(args: {
       /* cypher */ `
         MATCH (m:AgentMemory {orgId: $orgId, workspaceId: $workspaceId})
         ${where}
-        WITH m ORDER BY m.createdAt DESC SKIP $offset LIMIT $limit
+        WITH m ORDER BY ${orderBy} SKIP $offset LIMIT $limit
         ${MEMORY_RETURN}
       `,
       { ...params, offset: BigInt(args.offset), limit: BigInt(args.limit) },
@@ -938,6 +1014,98 @@ export async function attachEvidence(
       evidenceId: rec.get("evidenceId") as string,
       confidenceScore: Number(rec.get("confidenceScore") ?? 100),
     };
+  } finally {
+    await s.close();
+  }
+}
+
+// ── Execution lineage (agent.execution.lineage) ──────────────────────────────
+
+/** Raw `:Execution` node projection, before the handler resolves it to a KnowledgeNodeRef. */
+export interface ExecutionLineageExecutionRow {
+  id: string;
+  publicId: string | null;
+  label: string | null;
+  displayName: string | null;
+  /** JSON-string properties bag written by recordExecutionInGraph — the handler safe-parses it. */
+  properties: string | null;
+  status: string | null;
+  originType: string | null;
+  summary: string | null;
+}
+
+/** Raw `:SourceFile` node + `[:TOUCHED_FILE]` edge projection for one touched file. */
+export interface ExecutionLineageFileRow {
+  naturalKey: string;
+  path: string | null;
+  displayName: string | null;
+  publicId: string | null;
+  edgeType: string;
+}
+
+export interface ExecutionLineageResult {
+  execution: ExecutionLineageExecutionRow | null;
+  files: ExecutionLineageFileRow[];
+}
+
+/**
+ * Load one `:Execution` node plus every `:SourceFile` it touched via
+ * `[:TOUCHED_FILE]` (written by `recordExecutionInGraph`), scoped to the
+ * active tenant. Two queries in one session: the execution first (matched by
+ * `id` OR `publicId`), then — only when it was found — its touched files. The
+ * `:SourceFile` neighbours are org-scoped (not workspace-scoped), reached only
+ * via the tenant-scoped execution's edges, per docs/specs on file lineage.
+ */
+export async function getExecutionLineage(executionId: string): Promise<ExecutionLineageResult> {
+  const s = scopedSession();
+  try {
+    const execResult = await s.run(
+      /* cypher */ `
+        MATCH (e:Execution {orgId: $orgId, workspaceId: $workspaceId})
+        WHERE e.id = $executionId OR e.publicId = $executionId
+        RETURN e.id AS id, e.publicId AS publicId, e.label AS label,
+               e.displayName AS displayName, e.properties AS properties,
+               e.status AS status, e.originType AS originType, e.summary AS summary
+        LIMIT 1
+      `,
+      { executionId },
+    );
+    const execRec = execResult.records[0];
+    if (!execRec) {
+      return { execution: null, files: [] };
+    }
+    const execution: ExecutionLineageExecutionRow = {
+      id: execRec.get("id") as string,
+      publicId: (execRec.get("publicId") as string | null) ?? null,
+      label: (execRec.get("label") as string | null) ?? null,
+      displayName: (execRec.get("displayName") as string | null) ?? null,
+      properties: (execRec.get("properties") as string | null) ?? null,
+      status: (execRec.get("status") as string | null) ?? null,
+      originType: (execRec.get("originType") as string | null) ?? null,
+      summary: (execRec.get("summary") as string | null) ?? null,
+    };
+
+    const filesResult = await s.run(
+      /* cypher */ `
+        MATCH (e:Execution {orgId: $orgId, workspaceId: $workspaceId})
+        WHERE e.id = $executionId OR e.publicId = $executionId
+        MATCH (e)-[r:TOUCHED_FILE]->(f:SourceFile)
+        RETURN f.naturalKey AS naturalKey, f.path AS path,
+               f.displayName AS displayName, f.publicId AS publicId, type(r) AS edgeType
+        ORDER BY coalesce(f.displayName, f.path, f.naturalKey) ASC
+        LIMIT 500
+      `,
+      { executionId },
+    );
+    const files: ExecutionLineageFileRow[] = filesResult.records.map((r) => ({
+      naturalKey: r.get("naturalKey") as string,
+      path: (r.get("path") as string | null) ?? null,
+      displayName: (r.get("displayName") as string | null) ?? null,
+      publicId: (r.get("publicId") as string | null) ?? null,
+      edgeType: r.get("edgeType") as string,
+    }));
+
+    return { execution, files };
   } finally {
     await s.close();
   }

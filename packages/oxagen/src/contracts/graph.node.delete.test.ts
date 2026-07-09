@@ -45,6 +45,6 @@ describe("graph.node.delete capability", () => {
   // ── registry ──────────────────────────────────────────────────────────────
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("graph.node.delete")).toBe(graphNodeDelete);
+    expect(getCapability("delete_node")).toBe(graphNodeDelete);
   });
 });

@@ -176,7 +176,7 @@ describe("user.preferences.write schema", () => {
 
 // ── workspace.model.settings.write ───────────────────────────────────────────
 
-import { schema as workspaceModelSettingsWriteSchema } from "./workspace.model.settings.write";
+import { schema as workspaceModelSettingsWriteSchema } from "./workspace.model_settings.write";
 
 describe("workspace.model.settings.write schema", () => {
   const Schema = obj(workspaceModelSettingsWriteSchema);
@@ -235,7 +235,7 @@ describe("workspace.model.settings.write schema", () => {
   it("accepts a fully-specified valid payload", () => {
     const result = Schema.parse({
       defaultTextTier: "balanced",
-      defaultTextModel: "anthropic/claude-sonnet-4-6",
+      defaultTextModel: "anthropic/claude-sonnet-5",
       defaultImageModel: "bfl/flux-2-max",
       defaultVideoModel: "google/veo-3.0-generate-001",
     });

@@ -4,13 +4,16 @@ import { NonRetriableError } from "inngest";
 // ── hoisted stubs ─────────────────────────────────────────────────────────────
 const mocks = vi.hoisted(() => ({
   updateSet: vi.fn(),
+  deleteFrom: vi.fn(),
   inngestCreateFunction: vi.fn(),
   loggerInfo: vi.fn(),
   loggerWarn: vi.fn(),
   loggerError: vi.fn(),
 }));
 
-// Drizzle tx mock: tx.update(table).set(payload).where(cond) — records every set().
+// Drizzle tx mock:
+//   tx.update(table).set(payload).where(cond) — records every set().
+//   tx.delete(table).where(cond)              — records every delete target.
 function makeTx() {
   return {
     update: (table: unknown) => ({
@@ -19,15 +22,22 @@ function makeTx() {
         return { where: () => Promise.resolve(undefined) };
       },
     }),
+    delete: (table: unknown) => {
+      mocks.deleteFrom({ table });
+      return { where: () => Promise.resolve(undefined) };
+    },
   };
 }
 const fakeTx = makeTx();
 
+// Table sentinels so assertions can identify which table each op targeted.
 vi.mock("@oxagen/database", () => ({
   withSystemDb: async (fn: (tx: typeof fakeTx) => unknown) => fn(fakeTx),
   schema: {
     privacyErasureRequests: { id: "erasure.id" },
     users: { id: "users.id" },
+    accounts: { userId: "accounts.userId" },
+    userPreferences: { userId: "userPreferences.userId" },
   },
 }));
 
@@ -73,11 +83,15 @@ function makeStep() {
   };
 }
 
+type UpdateCall = { table: { id?: string }; payload: Record<string, unknown> };
+type DeleteCall = { table: { userId?: string } };
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe("privacyErasureExecute Inngest handler", () => {
   beforeEach(() => {
     mocks.updateSet.mockClear();
+    mocks.deleteFrom.mockClear();
     mocks.loggerInfo.mockClear();
     mocks.loggerWarn.mockClear();
     mocks.loggerError.mockClear();
@@ -91,7 +105,7 @@ describe("privacyErasureExecute Inngest handler", () => {
     scheduledAt: new Date(Date.now() - 1000).toISOString(),
   };
 
-  it("anonymises the user PII row then fails loud (never marks completed)", async () => {
+  it("purges owned auth PII (users/accounts/preferences) then fails loud, never marking completed", async () => {
     const handler = getHandler("privacy.erasure-execute");
     expect(handler).toBeDefined();
 
@@ -99,18 +113,61 @@ describe("privacyErasureExecute Inngest handler", () => {
       handler({ event: { data: baseEvent }, step: makeStep() }),
     ).rejects.toBeInstanceOf(NonRetriableError);
 
-    const calls = mocks.updateSet.mock.calls.map((c) => c[0] as { table: unknown; payload: { status?: string; email?: string } });
+    const updates = mocks.updateSet.mock.calls.map((c) => c[0] as UpdateCall);
+    const deletes = mocks.deleteFrom.mock.calls.map((c) => c[0] as DeleteCall);
+
     // processing transition happened
-    expect(calls.some((c) => c.payload.status === "processing")).toBe(true);
-    // user record was anonymised
-    expect(
-      calls.some((c) => c.payload.email === "user-1@deleted.invalid"),
-    ).toBe(true);
-    // CRITICAL: never marked completed
-    expect(calls.some((c) => c.payload.status === "completed")).toBe(false);
+    expect(updates.some((c) => c.payload.status === "processing")).toBe(true);
+
+    // user identity row anonymised: email + display name replaced, username and
+    // avatar nulled (username is a PII handle).
+    const userUpdate = updates.find((c) => c.table.id === "users.id");
+    expect(userUpdate).toBeDefined();
+    expect(userUpdate?.payload.email).toBe("user-1@deleted.invalid");
+    expect(userUpdate?.payload.displayName).toBe("Deleted User");
+    expect(userUpdate?.payload.username).toBeNull();
+    expect(userUpdate?.payload.avatarUrl).toBeNull();
+
+    // OAuth tokens + password hash purged, personal preferences removed.
+    expect(deletes.some((c) => c.table.userId === "accounts.userId")).toBe(true);
+    expect(deletes.some((c) => c.table.userId === "userPreferences.userId")).toBe(true);
+
+    // CRITICAL: never marked completed.
+    expect(updates.some((c) => c.payload.status === "completed")).toBe(false);
   });
 
-  it("fails loud for org scope without touching the users table", async () => {
+  it("mid-cascade: the request is never transitioned to completed even though PII was touched", async () => {
+    const handler = getHandler("privacy.erasure-execute");
+
+    await expect(
+      handler({ event: { data: baseEvent }, step: makeStep() }),
+    ).rejects.toBeInstanceOf(NonRetriableError);
+
+    // The only status transition the main handler performs is "processing".
+    // Marking "failed" is the on-failure handler's job; "completed" must never
+    // appear on the main path while stores remain un-erased.
+    const statuses = mocks.updateSet.mock.calls
+      .map((c) => (c[0] as UpdateCall).payload.status)
+      .filter(Boolean);
+    expect(statuses).toEqual(["processing"]);
+  });
+
+  it("fail-loud message enumerates every residual store blocking completion", async () => {
+    const handler = getHandler("privacy.erasure-execute");
+    try {
+      await handler({ event: { data: baseEvent }, step: makeStep() });
+      throw new Error("expected the handler to throw");
+    } catch (err) {
+      const message = (err as Error).message;
+      expect(message).toContain("OXA-1721");
+      expect(message).toContain("ClickHouse");
+      expect(message).toContain("Neo4j");
+      expect(message).toContain("blob");
+      expect(message).toContain("org-scope");
+    }
+  });
+
+  it("fails loud for org scope without touching users/accounts/preferences", async () => {
     const handler = getHandler("privacy.erasure-execute");
     await expect(
       handler({
@@ -119,9 +176,12 @@ describe("privacyErasureExecute Inngest handler", () => {
       }),
     ).rejects.toThrow(/OXA-1721/);
 
-    const calls = mocks.updateSet.mock.calls.map((c) => c[0] as { table: unknown });
-    expect(calls.some((c) => c.table === "users-table-sentinel")).toBe(false);
-    expect(calls.some((c) => (c as { table: { id?: string } }).table.id === "users.id")).toBe(false);
+    const updates = mocks.updateSet.mock.calls.map((c) => c[0] as UpdateCall);
+    const deletes = mocks.deleteFrom.mock.calls.map((c) => c[0] as DeleteCall);
+    // org scope only marks processing — it never anonymises the user or purges
+    // owned rows, because org-scope semantics are undefined.
+    expect(updates.some((c) => c.table.id === "users.id")).toBe(false);
+    expect(deletes.length).toBe(0);
   });
 
   it("on-failure handler marks the request failed with the error message", async () => {
@@ -138,13 +198,18 @@ describe("privacyErasureExecute Inngest handler", () => {
       step: makeStep(),
     });
 
-    const calls = mocks.updateSet.mock.calls.map((c) => c[0] as { payload: { status?: string; errorMessage?: string } });
-    expect(calls.some((c) => c.payload.status === "failed" && c.payload.errorMessage === "boom")).toBe(true);
+    const updates = mocks.updateSet.mock.calls.map((c) => c[0] as UpdateCall);
+    expect(
+      updates.some(
+        (c) => c.payload.status === "failed" && c.payload.errorMessage === "boom",
+      ),
+    ).toBe(true);
   });
 
   it("on-failure handler is a no-op when requestId is missing", async () => {
     const handler = getHandler("privacy.erasure-execute.on-failure");
     await handler({ event: { data: { event: { data: {} }, error: "x" } }, step: makeStep() });
     expect(mocks.updateSet).not.toHaveBeenCalled();
+    expect(mocks.deleteFrom).not.toHaveBeenCalled();
   });
 });

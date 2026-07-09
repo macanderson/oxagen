@@ -24,6 +24,7 @@ import {
 } from "@opentelemetry/sdk-trace-base";
 import { AsyncLocalStorageContextManager } from "@opentelemetry/context-async-hooks";
 import { context, trace } from "@opentelemetry/api";
+import { InMemorySpanExporter as InMemorySpanExporterForInit } from "@opentelemetry/sdk-trace-base";
 import {
   currentTraceIds,
   withSpan,
@@ -31,6 +32,8 @@ import {
   getTracer,
   ALLOWED_SPAN_ATTRIBUTES,
   initTracer,
+  shutdownTracer,
+  parseOtlpHeaders,
   __resetTracerForTesting,
 } from "./tracer";
 
@@ -70,6 +73,35 @@ function teardownProvider(): void {
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
+describe("parseOtlpHeaders", () => {
+  it("returns an empty object when unset", () => {
+    expect(parseOtlpHeaders(undefined)).toEqual({});
+    expect(parseOtlpHeaders("")).toEqual({});
+  });
+
+  it("parses a single key=value pair", () => {
+    expect(parseOtlpHeaders("authorization=Bearer abc")).toEqual({
+      authorization: "Bearer abc",
+    });
+  });
+
+  it("parses multiple comma-separated pairs and trims whitespace", () => {
+    expect(parseOtlpHeaders("a=1, b=2 , c=3")).toEqual({
+      a: "1",
+      b: "2",
+      c: "3",
+    });
+  });
+
+  it("keeps '=' inside a value (only the first '=' splits)", () => {
+    expect(parseOtlpHeaders("token=a=b=c")).toEqual({ token: "a=b=c" });
+  });
+
+  it("skips malformed pairs (no '=' or empty key)", () => {
+    expect(parseOtlpHeaders("novalue,=orphan,ok=1")).toEqual({ ok: "1" });
+  });
+});
+
 describe("initTracer", () => {
   beforeEach(() => {
     __resetTracerForTesting();
@@ -101,6 +133,47 @@ describe("initTracer", () => {
     } finally {
       if (saved !== undefined) process.env.OTEL_EXPORTER_OTLP_ENDPOINT = saved;
     }
+  });
+
+  it("builds a real NodeSDK with an injected exporter when an endpoint is set (OXA-2059)", async () => {
+    // Exercises the `overrideExporter ?? new OTLPTraceExporter(...)` branch
+    // (line 119-126) by supplying a test exporter so the real OTLP HTTP
+    // exporter is never constructed, while still driving initTracer() down
+    // its "endpoint configured" path (NodeSDK + BatchSpanProcessor wiring).
+    const saved = process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
+    process.env.OTEL_EXPORTER_OTLP_ENDPOINT = "http://collector.example.com:4318";
+    const testExporter = new InMemorySpanExporterForInit();
+    try {
+      expect(() => initTracer(testExporter)).not.toThrow();
+      // Second call with an endpoint present must still be a no-op (idempotent).
+      expect(() => initTracer(testExporter)).not.toThrow();
+    } finally {
+      await shutdownTracer();
+      if (saved !== undefined) process.env.OTEL_EXPORTER_OTLP_ENDPOINT = saved;
+      else delete process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
+    }
+  });
+
+  it("constructs a real OTLPTraceExporter when no override is supplied (OXA-2059)", async () => {
+    // Exercises the `new OTLPTraceExporter(...)` arm of the ternary (line
+    // 119-126) — no test exporter is passed, so initTracer must build the real
+    // HTTP exporter itself. `.start()` only registers processors; it does not
+    // make a network call, so this is safe to run without a live collector.
+    const saved = process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
+    process.env.OTEL_EXPORTER_OTLP_ENDPOINT = "http://collector.example.com:4318";
+    try {
+      expect(() => initTracer()).not.toThrow();
+    } finally {
+      await shutdownTracer();
+      if (saved !== undefined) process.env.OTEL_EXPORTER_OTLP_ENDPOINT = saved;
+      else delete process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
+    }
+  });
+
+  it("shutdownTracer() is a no-op when the SDK was never initialised", async () => {
+    // _sdk is null after __resetTracerForTesting() in beforeEach — exercises
+    // the `if (_sdk)` false branch (guards line 171-175) without throwing.
+    await expect(shutdownTracer()).resolves.toBeUndefined();
   });
 });
 
@@ -189,6 +262,20 @@ describe("withSpan", () => {
     // SpanStatusCode.ERROR === 2 in @opentelemetry/api
     expect(failedSpan?.status.code).toBe(2);
     expect(failedSpan?.status.message).toBe("boom");
+  });
+
+  it("stringifies a non-Error rejection in the span status message (OXA-2059)", async () => {
+    await expect(
+      withSpan("failing.non-error", {}, async () => {
+        // Intentionally a non-Error throw — exercises the `String(err)` fallback arm.
+        throw "plain string failure";
+      }),
+    ).rejects.toBe("plain string failure");
+
+    const spans = exporter.getFinishedSpans();
+    const failedSpan = spans.find((s) => s.name === "failing.non-error");
+    expect(failedSpan?.status.code).toBe(2);
+    expect(failedSpan?.status.message).toBe("plain string failure");
   });
 
   it("filters out disallowed attributes from span (PII safety)", async () => {

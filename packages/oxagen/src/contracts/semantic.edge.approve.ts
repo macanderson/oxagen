@@ -1,8 +1,9 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
+import { observedAtField, supersedeField } from "../lib/temporal-query";
 
 export const semanticEdgeApprove = registerCapability({
-  name: "semantic.edge.approve",
+  name: "approve_semantic_edge",
   domain: "semantic",
   description:
     "Approve or reject an inferred semantic edge candidate. Approved edges are materialised as permanent Neo4j relationships typed by the inferred relationship kind itself (e.g. :IMPLEMENTS, :DEPENDS_ON), with inferred/origin properties marking provenance; rejected edges are soft-dismissed with an audit trail.",
@@ -30,6 +31,8 @@ export const semanticEdgeApprove = registerCapability({
       .max(1000)
       .optional()
       .describe("Optional reviewer note attached to the edge for audit purposes"),
+    observedAt: observedAtField,
+    supersede: supersedeField,
   }),
   output: z.object({
     edgeId: z.string().describe("The InferredEdge id that was acted on"),
@@ -39,6 +42,10 @@ export const semanticEdgeApprove = registerCapability({
       .string()
       .optional()
       .describe("Neo4j element-id of the permanent relationship created on approval"),
+    superseded: z
+      .number()
+      .default(0)
+      .describe("Count of prior open edges of the same type from the source closed by supersession"),
   }),
 });
 

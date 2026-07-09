@@ -13,21 +13,35 @@ import { runInTenantScope } from "@oxagen/tenancy";
 import type { DbMessageRow, ConversationRow } from "@oxagen/database";
 import { chatMessageSend } from "@oxagen/oxagen/contracts/chat.message.send";
 import { agentApprovalResolve } from "@oxagen/oxagen/contracts/agent.approval.resolve";
-import { agentMcpConsentResolve } from "@oxagen/oxagen/contracts/agent.mcp.consent.resolve";
+import { agentMcpConsentResolve } from "@oxagen/oxagen/contracts/agent.mcp_consent.resolve";
 import { agentPlanApprove } from "@oxagen/oxagen/contracts/agent.plan.approve";
-import { agentTaskBackgroundCancel } from "@oxagen/oxagen/contracts/agent.task.background.cancel";
-import { agentTaskBackgroundRead } from "@oxagen/oxagen/contracts/agent.task.background.read";
+import { agentTaskBackgroundCancel } from "@oxagen/oxagen/contracts/agent.background_task.cancel";
+import { agentTaskBackgroundRead } from "@oxagen/oxagen/contracts/agent.background_task.read";
 import { invoke } from "@oxagen/oxagen";
 import type { PlanStep } from "@/components/chat/stream-event-types";
 import type { BackgroundTaskSnapshot } from "@/components/chat/background-task-tray";
 import { getSessionOrRedirect } from "@/lib/session";
+import { assertWorkspaceMember } from "@/lib/resolve-org";
 import { logger } from "@oxagen/handlers/logger";
+import { parseAttachmentsField } from "./parse-attachments";
+
+// A composer-serialized attachment ref — mirrors MessageAttachment
+// (apps/app/src/components/chat/message-bubble.tsx). Bounded to 8 to match
+// the chat stream route's `attachments` cap; refs only, never bytes.
+const attachmentSchema = z.object({
+  publicId: z.string().min(1),
+  kind: z.string().min(1),
+  name: z.string().min(1),
+  mimeType: z.string().min(1),
+  url: z.string().min(1),
+});
 
 const FormSchema = z.object({
   content: z.string().min(1),
   conversationId: z.string().nullable().default(null),
   parentMessageId: z.string().nullable().default(null),
   branchReason: z.enum(["edit", "regenerate", "tool_retry", "manual_fork"]).nullable().default(null),
+  attachments: z.array(attachmentSchema).max(8).default([]),
 });
 
 // Implements the spec §6.9 DAG: persist the user message under the active
@@ -49,12 +63,18 @@ export async function sendMessageAction(
   | { ok: false; error: string }
 > {
   const session = await getSessionOrRedirect();
+  // invoke() from apps/app skips kernel IAM, and ctx.orgId/workspaceId arrive
+  // from the (client-controlled) action arguments — assert the caller actually
+  // belongs to this workspace or a session scoped to workspace A could send
+  // messages into (and bill) workspace B by passing its ids. notFound() on miss.
+  await assertWorkspaceMember(ctx.workspaceId, session.user.id);
   const raw = Object.fromEntries(formData);
   const parsed = FormSchema.safeParse({
     content: raw.content,
     conversationId: raw.conversationId ? String(raw.conversationId) : null,
     parentMessageId: raw.parentMessageId ? String(raw.parentMessageId) : null,
     branchReason: raw.branchReason ? String(raw.branchReason) : null,
+    attachments: parseAttachmentsField(formData.get("attachments") ?? undefined),
   });
   if (!parsed.success) return { ok: false, error: "Invalid message" };
 
@@ -140,7 +160,15 @@ export async function sendMessageAction(
             contentBlocks: capabilityInput.data.contentBlocks,
             branchReason: capabilityInput.data.branchReason ?? undefined,
             isActiveInBranch: true,
-            metadata: {},
+            // Attachment refs (publicId + display fields) so message-bubble
+            // can render thumbnails on refresh without a second round-trip —
+            // the stream route separately re-resolves each publicId
+            // server-side (ownership + status='ready') before building image
+            // parts for the model; this metadata is display-only.
+            metadata:
+              parsed.data.attachments.length > 0
+                ? { attachments: parsed.data.attachments }
+                : {},
             createdByUserId: session.user.id,
             updatedByUserId: session.user.id,
           })
@@ -198,11 +226,12 @@ export async function resolveApprovalAction(
   decision: "approved" | "denied",
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const session = await getSessionOrRedirect();
+  await assertWorkspaceMember(ctx.workspaceId, session.user.id);
   const parsed = agentApprovalResolve.input.safeParse({ approvalId, decision });
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid" };
   try {
     await invoke(
-      "agent.approval.resolve",
+      "resolve_approval",
       parsed.data,
       capabilityContext({ orgId: ctx.orgId, workspaceId: ctx.workspaceId, userId: session.user.id }),
       { surface: "agent" },
@@ -221,11 +250,12 @@ export async function resolveConsentAction(
   grantAllTools: boolean,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const session = await getSessionOrRedirect();
+  await assertWorkspaceMember(ctx.workspaceId, session.user.id);
   const parsed = agentMcpConsentResolve.input.safeParse({ approvalId, decision, grantAllTools });
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid" };
   try {
     await invoke(
-      "agent.mcp.consent.resolve",
+      "resolve_mcp_consent",
       parsed.data,
       capabilityContext({ orgId: ctx.orgId, workspaceId: ctx.workspaceId, userId: session.user.id }),
       { surface: "agent" },
@@ -244,6 +274,7 @@ export async function resolvePlanAction(
   amendedSteps?: PlanStep[],
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const session = await getSessionOrRedirect();
+  await assertWorkspaceMember(ctx.workspaceId, session.user.id);
   // The capability speaks `approve | deny | amend` (verb), the UI speaks
   // `approved | denied | amended` (past tense). Map between them.
   const verbMap: Record<typeof decision, "approve" | "deny" | "amend"> = {
@@ -266,7 +297,7 @@ export async function resolvePlanAction(
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid" };
   try {
     await invoke(
-      "agent.plan.approve",
+      "approve_plan",
       parsed.data,
       capabilityContext({ orgId: ctx.orgId, workspaceId: ctx.workspaceId, userId: session.user.id }),
       { surface: "agent" },
@@ -284,11 +315,12 @@ export async function cancelBackgroundTaskAction(
   reason?: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const session = await getSessionOrRedirect();
+  await assertWorkspaceMember(ctx.workspaceId, session.user.id);
   const parsed = agentTaskBackgroundCancel.input.safeParse({ taskId, reason });
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid" };
   try {
     await invoke(
-      "agent.task.background.cancel",
+      "cancel_background_task",
       parsed.data,
       capabilityContext({ orgId: ctx.orgId, workspaceId: ctx.workspaceId, userId: session.user.id }),
       { surface: "agent" },
@@ -305,17 +337,18 @@ export async function readBackgroundTaskAction(
   taskId: string,
 ): Promise<BackgroundTaskSnapshot> {
   const session = await getSessionOrRedirect();
+  await assertWorkspaceMember(ctx.workspaceId, session.user.id);
   try {
     const parsed = agentTaskBackgroundRead.input.safeParse({ taskId });
     if (!parsed.success) {
       throw new Error(parsed.error.issues[0]?.message ?? "Invalid task id");
     }
     const out = await invoke(
-      "agent.task.background.read",
+      "get_background_task",
       parsed.data,
       capabilityContext({ orgId: ctx.orgId, workspaceId: ctx.workspaceId, userId: session.user.id }),
       { surface: "agent" },
-    ) as import("@oxagen/oxagen/contracts/agent.task.background.read").AgentTaskBackgroundReadOutput;
+    ) as import("@oxagen/oxagen/contracts/agent.background_task.read").AgentTaskBackgroundReadOutput;
     return {
       taskId: out.taskId,
       kind: out.kind,

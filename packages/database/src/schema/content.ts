@@ -41,6 +41,12 @@ export const generatedAssets = contentSchema.table(
     // policy). Distinct from auditMixin.createdByUserId (nullable audit field).
     userId: uuid("user_id").notNull(),
     kind: text("kind").notNull(),
+    // Provenance discriminator. 'generated' = produced by the in-app agent
+    // (has a real `prompt` + `model`); 'user_upload' = a chat/agent attachment
+    // the user supplied (no prompt — `prompt` defaults to ''). Reusing this
+    // table keeps conversation.files.list, the serve route, access policy, and
+    // graph sync working for uploads without a second table.
+    source: text("source").notNull().default("generated"),
     accessPolicy: text("access_policy").notNull().default("user"),
     status: text("status").notNull().default("ready"),
     // Blob reference. storageUrl/sizeBytes are null until an async render lands.
@@ -49,8 +55,9 @@ export const generatedAssets = contentSchema.table(
     storageUrl: text("storage_url"),
     mimeType: text("mime_type").notNull(),
     sizeBytes: bigint("size_bytes", { mode: "bigint" }),
-    // Generation provenance.
-    prompt: text("prompt").notNull(),
+    // Generation provenance. `prompt` defaults to '' for user uploads (which
+    // have no generation prompt); `model` is '' for uploads too.
+    prompt: text("prompt").notNull().default(""),
     model: text("model").notNull(),
     // Optional linkage to the chat turn that produced the asset.
     conversationId: uuid("conversation_id"),
@@ -77,6 +84,10 @@ export const generatedAssets = contentSchema.table(
     kindCheck: check(
       "generated_assets_kind_check",
       sql`${t.kind} IN ('image', 'video', 'document', 'spreadsheet', 'presentation', 'pdf', 'archive')`,
+    ),
+    sourceCheck: check(
+      "generated_assets_source_check",
+      sql`${t.source} IN ('generated', 'user_upload')`,
     ),
     accessPolicyCheck: check(
       "generated_assets_access_policy_check",

@@ -217,10 +217,10 @@ export const BUILT_IN_TEMPLATES: PromptTemplateInput[] = [
     ],
     "applicableTo": [
       {
-        "routePattern": "/{org}/{ws}/activity/runs/:runId"
+        "routePattern": "/{org}/{ws}/agents/runs/:runId"
       }
     ],
-    "capability": "activity.run.read",
+    "capability": "debug_execution",
     "autoSubmit": true,
     "variables": [
       {
@@ -230,7 +230,7 @@ export const BUILT_IN_TEMPLATES: PromptTemplateInput[] = [
         "required": true
       }
     ],
-    "body": "Summarize the failure of run {{run_id}}. Include the failing step,\nthe error message, and the most likely root cause based on the run's trace\nand related recent runs. Format as: Problem → Root Cause → Recommended Fix.\n"
+    "body": "Diagnose the failure of run {{run_id}} using debug_execution with\nsummarize:true. Report the failing step, the error class and message, the\nranked suspect files, and the root-cause diagnosis. Format as:\nProblem → Root Cause → Recommended Fix.\n"
   },
   {
     "id": "summarize-workspace-activity",

@@ -1,0 +1,1655 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Engineering Deterministic AI Coding Agents — Interactive Book</title>
+<meta name="author" content="Mac Anderson">
+<meta name="description" content="Deterministic systems optimizations for AI agents. A 14-part field manual by Mac Anderson, founder &amp; CEO of Oxagen — read it as a book, with page turns, typography controls, and chapter-level PDF export.">
+<meta property="og:title" content="Engineering Deterministic AI Coding Agents — Mac Anderson">
+<meta property="og:description" content="The future of AI coding agents is better systems, not bigger models. An interactive book with evidence from Agentless, Anthropic, Cognition, Chroma, Microsoft GraphRAG, Princeton, and Berkeley.">
+<meta property="og:type" content="book">
+<meta name="theme-color" content="#101319">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<style>
+/* ============================ fonts ============================ */
+@font-face{
+  font-family:'Literata';
+  src:url('/fonts/Literata-Latin-VF.woff2') format('woff2');
+  font-weight:400 700;font-style:normal;font-display:swap;
+}
+@font-face{
+  font-family:'Literata';
+  src:url('/fonts/Literata-Latin-Italic-VF.woff2') format('woff2');
+  font-weight:400 700;font-style:italic;font-display:swap;
+}
+@font-face{
+  font-family:'Aeonik';
+  src:url('/fonts/Aeonik-VF.woff2') format('woff2');
+  font-weight:100 900;font-style:normal;font-display:swap;
+}
+@font-face{
+  font-family:'Aeonik Mono';
+  src:url('/fonts/AeonikMono-VF.woff2') format('woff2');
+  font-weight:100 900;font-style:normal;font-display:swap;
+}
+
+/* ============================ tokens ============================ */
+:root{
+  color-scheme:light;
+  --desk:#101319;
+  --desk-2:#181c25;
+  --paper:#FBFAF7;
+  --paper-edge:#EFECE5;
+  --ink:#191C22;
+  --ink-soft:#33383F;
+  --muted:#5B6068;
+  --faint:#8A8F98;
+  --line:#E2DFD7;
+  --card:#FFFFFF;
+  --det:#C24E12;
+  --det-soft:#F7EDE3;
+  --prob:#4A4F86;
+  --prob-soft:#EDEEF7;
+  --link:#4A4F86;
+  --ember-g:#FD9A4C;--ember-f:#F07650;--ember-c:#EB5C5E;
+  --grad:linear-gradient(135deg,#FD9A4C 0%,#F07650 50%,#EB5C5E 100%);
+  --sans:'Aeonik',ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;
+  --mono:'Aeonik Mono',ui-monospace,'Cascadia Code',Menlo,Consolas,monospace;
+  --serif:'Literata',Charter,'Iowan Old Style',Georgia,serif;
+  /* set by JS */
+  --pw:480px;--ph:621px;--padx:42px;--padt:44px;--padb:56px;--colw:396px;--gap:96px;--fs:16px;
+  --reading-font:var(--serif);
+  /* code-block syntax palette (restrained; harmonizes with ember + indigo) */
+  --code-bg:#F6F2EB;--code-edge:#E7E1D6;--code-fg:#33383F;
+  --code-c:#9A968C;   /* comment  — warm gray, italic */
+  --code-s:#2F7D52;   /* string   — green            */
+  --code-n:#B45309;   /* number   — amber            */
+  --code-f:#C24E12;   /* function — ember (brand)    */
+  --code-p:#4A4F86;   /* param    — indigo (brand)   */
+}
+html.ink{
+  --paper:#FFFFFF;--paper-edge:#F0F0F0;--ink:#111111;--ink-soft:#222222;
+  --muted:#444444;--faint:#777777;--line:#DDDDDD;--card:#FFFFFF;
+  --det:#111111;--det-soft:#F3F3F3;--prob:#333333;--prob-soft:#F3F3F3;
+  --link:#111111;--ember-g:#666;--ember-f:#555;--ember-c:#444;
+  --grad:linear-gradient(135deg,#777 0%,#555 100%);
+  --desk:#1a1a1a;--desk-2:#222;
+  /* ink mode is deliberately monochrome — desaturate the code palette to grays */
+  --code-bg:#F4F4F4;--code-edge:#E0E0E0;--code-fg:#1F1F1F;
+  --code-c:#787878;--code-s:#3A3A3A;--code-n:#3A3A3A;--code-f:#111111;--code-p:#454545;
+}
+html.ink .paper img{filter:grayscale(1)}
+
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  background:radial-gradient(120% 90% at 50% 0%,var(--desk-2),var(--desk) 70%);
+  font-family:var(--sans);
+  color:#E9E6E0;
+  overflow:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+
+/* ============================ toolbar ============================ */
+#bar{
+  position:fixed;top:0;left:0;right:0;height:56px;z-index:40;
+  display:flex;align-items:center;gap:10px;padding:0 18px;
+  background:linear-gradient(#101319ee,#10131900);
+}
+#bar .brand{display:flex;align-items:center;gap:9px;font-weight:600;letter-spacing:.01em;font-size:14px;color:#E9E6E0;text-decoration:none;min-width:0}
+#bar .brand svg{width:22px;height:22px;flex:none}
+#bar .brand .sep{color:#5c6270;font-weight:400}
+#bar .brand .bt{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#aab0bb;font-weight:450}
+#bar .spacer{flex:1}
+.tbtn{
+  appearance:none;border:1px solid #ffffff22;background:#ffffff0d;color:#E9E6E0;
+  font-family:var(--sans);font-size:12.5px;font-weight:550;letter-spacing:.02em;
+  padding:7px 13px;border-radius:99px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;
+  transition:background .15s,border-color .15s;
+}
+.tbtn:hover{background:#ffffff1c;border-color:#ffffff38}
+.tbtn svg{width:14px;height:14px}
+.tbtn .k{font-family:var(--mono);font-size:10px;color:#9aa0ab;border:1px solid #ffffff26;border-radius:4px;padding:1px 4px}
+
+/* ============================ stage & book ============================ */
+#stage{position:fixed;inset:0;display:grid;place-items:center;padding:64px 56px 46px}
+#book{
+  position:relative;width:calc(var(--pw)*2);height:var(--ph);
+  perspective:2600px;perspective-origin:50% 50%;
+}
+#book.single{width:var(--pw)}
+#book::before{ /* drop shadow on the desk */
+  content:"";position:absolute;left:1%;right:1%;bottom:-3.2%;height:8%;
+  background:radial-gradient(50% 100% at 50% 0%,#00000073,transparent 75%);
+  filter:blur(6px);z-index:0;
+}
+
+.page{
+  position:absolute;top:0;width:var(--pw);height:var(--ph);z-index:1;
+  border-radius:3px;
+}
+#pageL{left:0}
+#pageR{right:0}
+#book.single #pageL{display:none}
+
+.paper{
+  position:absolute;inset:0;background:var(--paper);overflow:hidden;
+  border-radius:inherit;
+  box-shadow:0 1px 3px #0006,0 8px 30px #0004;
+}
+/* stacked page edges */
+.page .paper::after{
+  content:"";position:absolute;top:2px;bottom:2px;width:7px;pointer-events:none;
+  background:repeating-linear-gradient(to right,transparent 0 1px,#00000010 1px 2px,#ffffff00 2px 3px);
+}
+#pageL .paper::after{left:0}
+#pageR .paper::after{right:0}
+/* spine curvature */
+.page .spine{content:"";position:absolute;top:0;bottom:0;width:9%;pointer-events:none;z-index:3}
+#pageL .spine{right:0;background:linear-gradient(to left,#00000014,#00000005 45%,transparent)}
+#pageR .spine{left:0;background:linear-gradient(to right,#00000014,#00000005 45%,transparent)}
+#book.single .spine{display:none}
+
+.sheet{position:absolute;left:var(--padx);right:var(--padx);top:var(--padt);bottom:var(--padb);overflow:hidden}
+.flow{
+  width:var(--colw);height:100%;
+  column-width:var(--colw);column-gap:var(--gap);column-fill:auto;
+  font-family:var(--reading-font);font-size:var(--fs);line-height:1.62;color:var(--ink);
+  font-optical-sizing:auto;
+}
+.blank .flow,.blank .rh,.blank .folio{visibility:hidden}
+
+/* running head + folio */
+.rh{
+  position:absolute;top:calc(var(--padt)*.42);left:var(--padx);right:var(--padx);
+  font-family:var(--mono);font-size:calc(var(--fs)*.56);letter-spacing:.16em;
+  text-transform:uppercase;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+#pageL .rh{text-align:left}
+#pageR .rh{text-align:right}
+.folio{
+  position:absolute;bottom:calc(var(--padb)*.38);left:0;right:0;text-align:center;
+  font-family:var(--mono);font-size:calc(var(--fs)*.6);color:var(--faint);letter-spacing:.08em;
+}
+
+/* ============================ flip leaf ============================ */
+#leaf{
+  position:absolute;top:0;right:0;width:var(--pw);height:var(--ph);z-index:10;
+  transform-style:preserve-3d;transform-origin:left center;display:none;
+}
+#leaf.on{display:block}
+.face{
+  position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;
+  border-radius:3px;overflow:hidden;
+}
+.face .paper{box-shadow:0 0 0 .5px #00000022}
+#faceB{transform:rotateY(180deg)}
+.face .shade{position:absolute;inset:0;pointer-events:none;opacity:0;z-index:5}
+#faceA .shade{background:linear-gradient(to left,#00000000,#00000030 85%,#00000045)}
+#faceB .shade{background:linear-gradient(to right,#00000000,#00000030 85%,#00000045)}
+#leafShadow{
+  position:absolute;top:0;bottom:0;width:var(--pw);z-index:9;pointer-events:none;opacity:0;
+  background:radial-gradient(80% 100% at 0% 50%,#00000038,transparent 70%);
+}
+
+/* nav arrows */
+.edge{
+  position:fixed;top:56px;bottom:0;width:12%;min-width:70px;z-index:30;border:0;background:transparent;
+  cursor:pointer;display:grid;place-items:center;color:#ffffff00;transition:color .2s;
+}
+.edge:hover{color:#ffffff70}
+.edge svg{width:34px;height:34px}
+#edgeL{left:0}#edgeR{right:0}
+
+/* progress */
+#prog{position:fixed;left:0;right:0;bottom:0;height:3px;background:#ffffff14;z-index:35}
+#prog b{display:block;height:100%;width:0;background:var(--grad);transition:width .3s}
+#pginfo{
+  position:fixed;bottom:10px;left:50%;transform:translateX(-50%);z-index:35;
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;color:#7d838e;text-transform:uppercase;
+}
+
+/* ============================ overlays ============================ */
+.ovl{position:fixed;inset:0;z-index:60;display:none;background:#0a0c11b8;backdrop-filter:blur(6px)}
+.ovl.on{display:grid;place-items:center}
+.panel{
+  width:min(560px,92vw);max-height:82vh;overflow:auto;border-radius:14px;
+  background:#161a23;border:1px solid #ffffff1a;box-shadow:0 30px 80px #000a;
+  padding:22px 24px 24px;color:#E9E6E0;
+}
+.panel h2{font-family:var(--sans);font-size:15px;font-weight:650;letter-spacing:.02em;margin-bottom:4px}
+.panel .sub{font-size:12px;color:#9aa0ab;margin-bottom:16px}
+.panel .close{position:absolute;top:14px;right:16px;background:none;border:0;color:#9aa0ab;font-size:20px;cursor:pointer;line-height:1}
+.ovl .panel{position:relative}
+
+/* toc */
+#tocList{list-style:none}
+#tocList li{margin:0}
+#tocList button{
+  width:100%;display:flex;align-items:baseline;gap:12px;background:none;border:0;cursor:pointer;
+  padding:9px 10px;border-radius:8px;color:#d7d4ce;font-family:var(--sans);font-size:13.5px;text-align:left;
+}
+#tocList button:hover{background:#ffffff10}
+#tocList .n{font-family:var(--mono);font-size:10px;letter-spacing:.12em;color:#8a8f98;flex:none;width:64px}
+#tocList .t{flex:1}
+#tocList .pg{font-family:var(--mono);font-size:10.5px;color:#8a8f98}
+#tocList li.cur button{background:#ffffff14}
+
+/* settings */
+.set-row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 0;border-top:1px solid #ffffff12}
+.set-row:first-of-type{border-top:0}
+.set-row label{font-size:13px;font-weight:550}
+.set-row .hint{display:block;font-size:11px;color:#9aa0ab;font-weight:400;margin-top:2px}
+.fontopts{display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;margin-top:10px}
+.fontopts button{
+  border:1px solid #ffffff22;background:#ffffff08;color:#E9E6E0;border-radius:9px;cursor:pointer;
+  padding:10px 12px;text-align:left;transition:border-color .15s,background .15s;
+}
+.fontopts button .fname{font-size:15px;display:block}
+.fontopts button .fdesc{font-family:var(--sans);font-size:10.5px;color:#9aa0ab;letter-spacing:.03em}
+.fontopts button.cur{border-color:var(--ember-f);background:#f0765014}
+.sizer{display:flex;align-items:center;gap:12px}
+.sizer input[type=range]{width:180px;accent-color:var(--ember-f)}
+.sizer .sval{font-family:var(--mono);font-size:11px;color:#9aa0ab;width:40px;text-align:right}
+.switch{position:relative;width:40px;height:22px;flex:none}
+.switch input{position:absolute;inset:0;opacity:0;cursor:pointer;z-index:2}
+.switch i{position:absolute;inset:0;border-radius:99px;background:#ffffff20;transition:background .15s}
+.switch i::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#cfd3da;transition:transform .18s}
+.switch input:checked + i{background:var(--ember-f)}
+.switch input:checked + i::after{transform:translateX(18px);background:#fff}
+
+/* export */
+#expList{list-style:none;margin:6px 0 4px;max-height:38vh;overflow:auto;border:1px solid #ffffff14;border-radius:10px;padding:6px}
+#expList li{display:flex;align-items:center;gap:10px;padding:7px 9px;border-radius:7px}
+#expList li:hover{background:#ffffff0a}
+#expList input{accent-color:var(--ember-f);width:15px;height:15px;flex:none;cursor:pointer}
+#expList label{font-size:13px;color:#d7d4ce;cursor:pointer;flex:1;display:flex;gap:10px;align-items:baseline}
+#expList .n{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;color:#8a8f98;width:58px;flex:none}
+.exp-quick{display:flex;gap:8px;margin-bottom:8px}
+.exp-quick button{background:none;border:1px solid #ffffff22;color:#b9bec7;font-size:11px;padding:4px 10px;border-radius:99px;cursor:pointer}
+.exp-quick button:hover{border-color:#ffffff44;color:#fff}
+.exp-note{font-size:11px;line-height:1.5;color:#9aa0ab;margin-top:12px}
+.exp-note b{color:#c7cbd3}
+.primary{
+  margin-top:14px;width:100%;border:0;border-radius:10px;padding:12px;cursor:pointer;
+  background:var(--grad);color:#1c0f08;font-family:var(--sans);font-weight:650;font-size:13.5px;letter-spacing:.02em;
+}
+.primary:disabled{opacity:.45;cursor:default}
+
+/* hidden measurement pane */
+#measure{position:absolute;left:-200vw;top:0;visibility:hidden;pointer-events:none}
+
+/* announce */
+#live{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+
+/* ======================================================================
+   BOOK TYPOGRAPHY (shared by screen flows and print)
+   ====================================================================== */
+.bk{text-rendering:optimizeLegibility}
+.bk section{break-before:column}
+.bk section:first-child{break-before:auto}
+.bk p{text-align:justify;hyphens:auto;-webkit-hyphens:auto;overflow-wrap:break-word;margin:0 0 .55em}
+.bk a{color:var(--link);text-decoration:none;border-bottom:1px solid color-mix(in srgb,var(--link) 35%,transparent)}
+.bk em{font-style:italic}
+.bk strong,.bk b{font-weight:620}
+.bk code{font-family:var(--mono);font-size:.82em;background:color-mix(in srgb,var(--ink) 7%,transparent);padding:.08em .35em;border-radius:4px;overflow-wrap:break-word}
+/* code blocks — one unified panel, not per-line pills */
+.bk pre{
+  break-inside:avoid;margin:1.15em 0;padding:.8em .95em;
+  background:var(--code-bg);border:1px solid var(--code-edge);border-left:2px solid var(--det);
+  border-radius:0 6px 6px 0;overflow-x:auto;
+  font-family:var(--mono);font-size:.7em;line-height:1.6;color:var(--code-fg);
+  white-space:pre;tab-size:2;-webkit-hyphens:none;hyphens:none;
+  -webkit-overflow-scrolling:touch;
+}
+/* neutralize the inline-code pill so the block reads as one surface */
+.bk pre code{font-family:inherit;font-size:inherit;background:none;padding:0;border-radius:0;color:inherit;overflow-wrap:normal;white-space:inherit}
+/* syntax tokens */
+.bk pre .c{color:var(--code-c);font-style:italic}
+.bk pre .a{color:var(--code-s)}
+.bk pre .k{color:var(--code-n)}
+.bk pre .f{color:var(--code-f)}
+.bk pre .p{color:var(--code-p)}
+.bk sup.cite{font-size:.62em;line-height:0;vertical-align:super;font-family:var(--mono)}
+.bk sup.cite a{color:var(--det);border-bottom:0;font-weight:600}
+.bk h3{font-size:1.16em;font-weight:640;line-height:1.3;letter-spacing:-.008em;margin:1.5em 0 .5em;break-after:avoid}
+.bk h4{font-size:1em;font-weight:640;margin:1.2em 0 .4em;break-after:avoid}
+.bk ul,.bk ol{margin:.2em 0 .8em;padding-left:1.35em}
+.bk li{margin:0 0 .42em}
+.bk ul.plain{list-style:none;padding-left:0}
+.bk ul.plain li{padding-left:1.15em;position:relative}
+.bk ul.plain li::before{content:"—";position:absolute;left:0;color:var(--det)}
+.bk img{max-width:100%;height:auto}
+.bk svg{max-width:100%;height:auto}
+/* in the paginated flow, photos are background spans — Chromium mispositions
+   replaced elements in multicol fragments (they land in the first column) */
+.bk .pic{display:inline-block;background-size:cover;background-position:center;flex:none}
+.bk .byline .pic{width:3.2em;height:3.2em;border-radius:50%}
+.bk .card .pic{width:5.2em;height:5.2em;border-radius:8px}
+
+/* chapter opening */
+.bk .ch-kicker{display:flex;align-items:center;gap:.75em;margin:.2em 0 1.1em;break-after:avoid}
+.bk .ch-kicker .num{font-family:var(--mono);font-size:.62em;letter-spacing:.2em;color:var(--det);font-weight:600}
+.bk .ch-kicker .rule{flex:0 0 2.6em;height:1px;background:var(--line)}
+.bk .ch-kicker span:last-child{font-family:var(--mono);font-size:.62em;letter-spacing:.2em;color:var(--faint)}
+.bk .ch-title{font-size:1.78em;line-height:1.16;font-weight:680;letter-spacing:-.015em;margin:0 0 .45em;break-after:avoid}
+.bk .ch-thesis{font-style:italic;font-size:1.04em;color:var(--muted);margin:0 0 1.5em;text-align:left;hyphens:none}
+.bk .lede{text-align:justify}
+@supports (initial-letter:3){
+  .bk .lede::first-letter{initial-letter:3;font-weight:640;color:var(--det);margin-right:.14em}
+}
+.bk p + p{text-indent:1.45em}
+.bk .ch-thesis + p{text-indent:0}
+
+/* callout blocks */
+.bk .evidence,.bk .takeaway,.bk .counter{
+  break-inside:avoid;border-left:2px solid var(--det);background:var(--det-soft);
+  padding:.75em .95em .65em;margin:1em 0 1.1em;border-radius:0 6px 6px 0;
+}
+.bk .counter{border-left-color:var(--prob);background:var(--prob-soft)}
+.bk .evidence p,.bk .takeaway p,.bk .counter p{text-align:left;font-size:.93em;line-height:1.58;text-indent:0;margin-bottom:.45em}
+.bk .evidence p:last-child,.bk .takeaway p:last-child,.bk .counter p:last-child{margin-bottom:0}
+.bk .tag{display:block;font-family:var(--mono);font-size:.6em;letter-spacing:.17em;text-transform:uppercase;color:var(--det);font-weight:620;margin-bottom:.6em}
+.bk .counter .tag{color:var(--prob)}
+.bk .src{font-family:var(--mono);font-size:.64em;color:var(--faint);letter-spacing:.02em;margin-top:.5em}
+.bk .takeaway{border-left-width:3px}
+
+/* stats grid */
+.bk .stats{display:grid;grid-template-columns:1fr 1fr;gap:.6em;margin:1em 0 1.1em}
+.bk .stats > div{break-inside:avoid;border:1px solid var(--line);border-radius:6px;padding:.65em .7em;background:var(--card)}
+.bk .stats .v{font-family:var(--mono);font-weight:650;font-size:.98em;color:var(--det);margin-bottom:.25em}
+.bk .stats .l{font-size:.72em;line-height:1.45;color:var(--muted)}
+
+/* vs comparison */
+.bk .vs{margin:1em 0 1.1em}
+.bk .vs .a,.bk .vs .b{break-inside:avoid;border:1px solid var(--line);border-radius:6px;padding:.7em .85em;margin-bottom:.6em;background:var(--card)}
+.bk .vs .a{border-left:2px solid var(--prob)}
+.bk .vs .b{border-left:2px solid var(--det)}
+.bk .vs h4{margin:0 0 .45em;font-size:.88em;font-family:var(--sans);letter-spacing:.01em}
+.bk .vs .a h4{color:var(--prob)}
+.bk .vs .b h4{color:var(--det)}
+.bk .vs ul{margin:0;padding-left:1.1em}
+.bk .vs li{font-size:.85em;line-height:1.5;margin-bottom:.3em}
+
+/* metric cards */
+.bk .mgrid{margin:1em 0 1.1em}
+.bk .mcard{break-inside:avoid;border:1px solid var(--line);border-left:2px solid var(--det);border-radius:6px;padding:.6em .8em;margin-bottom:.55em;background:var(--card)}
+.bk .mcard h5{font-family:var(--mono);font-size:.72em;letter-spacing:.04em;color:var(--det);margin-bottom:.3em}
+.bk .mcard p{font-size:.85em;line-height:1.52;text-align:left;text-indent:0;margin:0}
+
+/* cover */
+.bk #cover .eyebrow{font-family:var(--mono);font-size:.62em;letter-spacing:.24em;text-transform:uppercase;color:var(--det);margin:.6em 0 1.4em}
+.bk #cover h1{font-size:2.3em;line-height:1.12;font-weight:700;letter-spacing:-.02em;margin-bottom:.5em}
+.bk #cover h1 .det{color:var(--det)}
+.bk #cover .cover-sub{font-size:.98em;line-height:1.6;color:var(--ink-soft);text-align:left;margin:0 0 1.6em}
+.bk .byline{display:flex;align-items:center;gap:.8em;margin:0 0 1.4em}
+.bk .byline img{width:3.2em;height:3.2em;border-radius:50%;object-fit:cover}
+.bk .byline .who{display:flex;flex-direction:column;gap:.15em}
+.bk .byline b{font-weight:650;font-size:.95em}
+.bk .byline span{font-family:var(--sans);font-size:.72em;color:var(--muted);letter-spacing:.02em}
+.bk .cover-meta{display:grid;grid-template-columns:1fr 1fr;gap:.5em .9em;border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:.9em 0;margin:0 0 1.4em;font-family:var(--sans);font-size:.76em;color:var(--muted)}
+.bk .cover-meta b{color:var(--ink);font-weight:650}
+.bk .legend{display:flex;flex-direction:column;gap:.45em;font-family:var(--sans);font-size:.72em;color:var(--muted);margin-bottom:1.3em}
+.bk .legend > span{display:flex;align-items:center;gap:.6em}
+.bk .sw{display:inline-block;width:1.7em;height:0;border-top:2px dashed var(--prob);flex:none}
+.bk .sw.det{border-top:3px solid var(--det)}
+.bk .hero-svg{width:100%;margin-top:.4em}
+
+/* closing + author + refs */
+.bk .big{text-align:left;hyphens:none}
+.bk .card{break-inside:avoid;border:1px solid var(--line);border-radius:8px;padding:1em;background:var(--card);margin:1em 0;display:flex;gap:1em;align-items:flex-start}
+/* no floats inside the paginated flow — Chromium misplaces floats across column fragments */
+.bk .card img.face{width:5.2em;height:5.2em;border-radius:8px;object-fit:cover;flex:none}
+.bk .card .bio{min-width:0}
+.bk .card .bio h3{margin:.1em 0 .2em}
+.bk .card .role{font-family:var(--sans);font-size:.76em;color:var(--muted);margin-bottom:.8em}
+.bk .card .bio p{text-align:left;font-size:.9em;text-indent:0}
+.bk .co{display:flex;align-items:center;gap:.5em;margin-top:.9em;font-family:var(--sans);font-size:.8em}
+.bk .co svg{width:1.5em;height:1.5em}
+.bk .co .wm{font-weight:650;letter-spacing:.02em}
+.bk .co a{font-family:var(--mono);font-size:.85em;color:var(--muted);border-bottom:0}
+.bk #refs ol{padding-left:1.5em}
+.bk #refs li{font-size:.82em;line-height:1.55;margin-bottom:.7em;break-inside:avoid}
+.bk #refs .m{display:block;font-family:var(--mono);font-size:.85em;color:var(--muted);margin-top:.15em}
+.bk #refs .m a{color:var(--muted)}
+.bk .colophon{border-top:1px solid var(--line);margin-top:1.6em;padding-top:1em}
+.bk .colophon p{font-size:.78em;color:var(--muted);text-align:left;text-indent:0}
+
+/* ======================================================================
+   PRINT — 8.5in × 11in, prose only, fragmentation-safe
+   ====================================================================== */
+#printRoot{display:none}
+@media print{
+  @page{size:8.5in 11in;margin:1in 0.95in}
+  html,body{background:#fff !important;overflow:visible !important;height:auto}
+  #bar,#stage,#prog,#pginfo,.edge,.ovl,#measure,#live{display:none !important}
+  #printRoot{
+    display:block;color:#111;
+    font-family:var(--reading-font);font-size:var(--print-fs,11.5pt);line-height:1.6;
+  }
+  #printRoot{--ink:#111;--ink-soft:#222;--muted:#444;--faint:#666;--line:#cfcfcf;--card:#fff;
+    --det:#8a3a0e;--det-soft:#f6f1ea;--prob:#3d4270;--prob-soft:#f0f1f7;--link:#111}
+  html.ink #printRoot{--det:#111;--det-soft:#f3f3f3;--prob:#333;--prob-soft:#f3f3f3}
+  #printRoot *{box-shadow:none !important}
+  #printRoot .psec{break-before:page}
+  #printRoot .psec:first-child{break-before:auto}
+  #printRoot p,#printRoot li{orphans:3;widows:3}
+  #printRoot h3,#printRoot h4,#printRoot .ch-kicker,#printRoot .ch-title{break-after:avoid}
+  #printRoot .evidence,#printRoot .takeaway,#printRoot .counter,#printRoot .mcard,
+  #printRoot .stats > div,#printRoot .vs .a,#printRoot .vs .b,#printRoot .card,
+  #printRoot table,#printRoot figure,#printRoot .byline,#printRoot .cover-meta{break-inside:avoid}
+  #printRoot table{width:100%;border-collapse:collapse}
+  #printRoot a{color:inherit;border-bottom:0;text-decoration:none}
+  #printRoot sup.cite a{color:var(--det)}
+  #printRoot .bk section{break-before:auto}
+  /* print title page */
+  .ptitle{display:flex;flex-direction:column;justify-content:center;min-height:8.2in;text-align:center}
+  .ptitle .pt-eyebrow{font-family:var(--mono);font-size:8pt;letter-spacing:.3em;text-transform:uppercase;color:#666;margin-bottom:.9in}
+  .ptitle h1{font-size:30pt;line-height:1.15;font-weight:700;letter-spacing:-.02em;margin-bottom:.35in}
+  .ptitle .pt-sub{font-size:11.5pt;font-style:italic;color:#333;max-width:4.9in;margin:0 auto .7in;line-height:1.55}
+  .ptitle .pt-rule{width:.9in;height:1px;background:#999;margin:0 auto .55in}
+  .ptitle .pt-author{font-size:12.5pt;font-weight:600}
+  .ptitle .pt-role{font-family:var(--sans);font-size:9pt;color:#555;margin-top:.08in;letter-spacing:.04em}
+  .ptitle .pt-pub{font-family:var(--mono);font-size:8pt;color:#777;margin-top:1in;letter-spacing:.14em}
+  /* keep screen-only flourishes out of the PDF */
+  #printRoot .hero-svg,#printRoot .legend,#printRoot .byline img{display:none}
+}
+
+/* reduced motion */
+@media (prefers-reduced-motion:reduce){
+  #leaf{transition:none}
+}
+
+/* narrow screens */
+@media (max-width:720px){
+  #bar{padding:0 10px}
+  #bar .brand .bt{display:none}
+  .tbtn .lbl{display:none}
+  .tbtn{padding:7px 10px}
+  .edge{min-width:44px;width:9%}
+  #stage{padding:60px 8px 34px}
+}
+</style>
+</head>
+<body>
+
+<div id="bar">
+  <a class="brand" href="https://oxagen.sh" aria-label="Oxagen">
+    <svg viewBox="7.775 4.325 36.343 37.216" fill="none" aria-hidden="true"><g fill="none" stroke="#E9E6E0" stroke-width="1.4"><path d="M16.1893 6.32478L21.9857 9.3639L21.9857 15.4418L16.1893 18.4806L10.3929 15.4418L10.3929 9.3639L16.1893 6.32478Z"/><path d="M29.2662 6.32478L35.0626 9.3639L35.0626 15.4418L29.2662 18.4806L23.4698 15.4418L23.4698 9.3639L29.2662 6.32478Z"/><path d="M22.6376 16.5647L28.4341 19.6038L28.4341 25.6814L22.6376 28.7205L16.8412 25.6814L16.8412 19.6038L22.6376 16.5647Z"/><path d="M29.2662 26.8043L35.0626 29.8431L35.0626 35.921L29.2662 38.9601L23.4698 35.921L23.4698 29.8431L29.2662 26.8043Z"/></g><path d="M35.8698 16.2903L42.1182 19.4993L42.1182 25.9165L35.8698 29.1255L29.6214 25.9165L29.6214 19.4993L35.8698 16.2903Z" fill="#F07650"/><path d="M16.0697 26.3399L22.3647 29.6401L22.3647 36.2408L16.0697 39.5413L9.77471 36.2408L9.77471 29.6401L16.0697 26.3399Z" fill="#F07650" opacity=".55"/></svg>
+    <span>oxagen</span><span class="sep">/</span><span class="bt">Engineering Deterministic AI Coding Agents</span>
+  </a>
+  <div class="spacer"></div>
+  <button class="tbtn" id="btnToc" aria-haspopup="dialog"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg><span class="lbl">Contents</span></button>
+  <button class="tbtn" id="btnSet" aria-haspopup="dialog"><span style="font-family:var(--serif);font-weight:600">Aa</span><span class="lbl">Reading</span></button>
+  <button class="tbtn" id="btnExp" aria-haspopup="dialog"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg><span class="lbl">Export PDF</span></button>
+</div>
+
+<div id="stage">
+  <div id="book" aria-label="Book">
+    <div class="page" id="pageL"><div class="paper"><div class="rh"></div><div class="sheet"><div class="flow bk"></div></div><div class="folio"></div><div class="spine"></div></div></div>
+    <div class="page" id="pageR"><div class="paper"><div class="rh"></div><div class="sheet"><div class="flow bk"></div></div><div class="folio"></div><div class="spine"></div></div></div>
+    <div id="leafShadow"></div>
+    <div id="leaf" aria-hidden="true">
+      <div class="face" id="faceA"><div class="paper"><div class="rh"></div><div class="sheet"><div class="flow bk"></div></div><div class="folio"></div></div><div class="shade"></div></div>
+      <div class="face" id="faceB"><div class="paper"><div class="rh"></div><div class="sheet"><div class="flow bk"></div></div><div class="folio"></div></div><div class="shade"></div></div>
+    </div>
+  </div>
+</div>
+
+<button class="edge" id="edgeL" aria-label="Previous page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+<button class="edge" id="edgeR" aria-label="Next page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></button>
+
+<div id="prog"><b></b></div>
+<div id="pginfo"></div>
+<div id="live" aria-live="polite"></div>
+
+<!-- measurement pane: same geometry, never displayed -->
+<div id="measure" aria-hidden="true"><div class="sheet" style="position:relative;width:var(--colw);height:calc(var(--ph) - var(--padt) - var(--padb))"><div class="flow bk"></div></div></div>
+
+<!-- ============================ overlays ============================ -->
+<div class="ovl" id="ovlToc" role="dialog" aria-modal="true" aria-label="Table of contents">
+  <div class="panel">
+    <button class="close" data-close aria-label="Close">×</button>
+    <h2>Contents</h2>
+    <p class="sub">Engineering Deterministic AI Coding Agents · Mac Anderson</p>
+    <ul id="tocList"></ul>
+  </div>
+</div>
+
+<div class="ovl" id="ovlSet" role="dialog" aria-modal="true" aria-label="Reading settings">
+  <div class="panel">
+    <button class="close" data-close aria-label="Close">×</button>
+    <h2>Reading</h2>
+    <p class="sub">Typography &amp; comfort — changes re-typeset the book instantly.</p>
+    <div class="set-row" style="flex-direction:column;align-items:flex-start">
+      <label>Typeface<span class="hint">Serif faces are set for long-form reading; Literata is the most legible on screens.</span></label>
+      <div class="fontopts" id="fontOpts"></div>
+    </div>
+    <div class="set-row">
+      <label for="sizeRange">Text size</label>
+      <div class="sizer">
+        <span style="font-family:var(--serif);font-size:11px">A</span>
+        <input type="range" id="sizeRange" min="80" max="135" step="5" value="100" aria-label="Text size percent">
+        <span style="font-family:var(--serif);font-size:19px">A</span>
+        <span class="sval" id="sizeVal">100%</span>
+      </div>
+    </div>
+    <div class="set-row">
+      <label for="inkChk">Ink mode<span class="hint">Pure black-and-white reading — no color anywhere.</span></label>
+      <span class="switch"><input type="checkbox" id="inkChk"><i></i></span>
+    </div>
+  </div>
+</div>
+
+<div class="ovl" id="ovlExp" role="dialog" aria-modal="true" aria-label="Export to PDF">
+  <div class="panel">
+    <button class="close" data-close aria-label="Close">×</button>
+    <h2>Export to PDF</h2>
+    <p class="sub">Pick a chapter, any subset, or the whole book. Formatted for US Letter (8.5″ × 11″).</p>
+    <div class="exp-quick">
+      <button id="expAll">Whole book</button>
+      <button id="expNone">None</button>
+      <button id="expParts">Parts 1–14 only</button>
+    </div>
+    <ul id="expList"></ul>
+    <p class="exp-note">In the print dialog choose <b>Save as PDF</b>. Paper size is preset to Letter with 1″ margins; for the cleanest export turn <b>off</b> “Headers and footers”. Uses your current typeface<span id="expInkNote"></span>.</p>
+    <button class="primary" id="expGo">Export selection as PDF</button>
+  </div>
+</div>
+
+<!-- book source (parsed once, cloned into panes and print) -->
+<template id="src"><section id="cover">
+  <div class="eyebrow">An interactive field manual</div>
+  <h1>Engineering <span class="det">Deterministic</span> AI Coding Agents</h1>
+  <p class="cover-sub">The industry is optimizing models when it should be optimizing systems. LLMs are probabilistic inference engines — but everything around them (retrieval, orchestration, tooling, context construction, execution, validation, memory) can be engineered to be far more deterministic. This manual explores how, with published evidence at every step.</p>
+  <div class="byline">
+    <img src="/research/deterministic-systems-optimizations-for-ai-agents/author.jpg" alt="Mac Anderson">
+    <div class="who"><b>Mac Anderson</b><span>Founder &amp; CEO, Oxagen Inc. · Los Angeles, CA</span></div>
+  </div>
+  <div class="cover-meta">
+    <div><b>14</b> parts</div>
+    <div><b>~55 min</b> total read</div>
+    <div><b>21</b> cited sources</div>
+    <div><b>1</b> thesis: reduce uncertainty before you invoke intelligence</div>
+  </div>
+  <div class="legend">
+    <span><span class="sw prob"></span> Probabilistic path — pay per token, variance included</span>
+    <span><span class="sw det"></span> Deterministic path — pay once in engineering, runs for free</span>
+  </div>
+  <svg class="hero-svg" viewBox="0 0 760 200" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Schematic: noisy probabilistic inputs pass through a deterministic system layer and emerge as a single solid signal into the model">
+    <path d="M10 40 C 90 40, 110 90, 190 90" stroke="var(--prob)" stroke-width="2" stroke-dasharray="2 6" stroke-linecap="round"/>
+    <path d="M10 100 C 90 100, 110 100, 190 100" stroke="var(--prob)" stroke-width="2" stroke-dasharray="2 6" stroke-linecap="round"/>
+    <path d="M10 160 C 90 160, 110 110, 190 110" stroke="var(--prob)" stroke-width="2" stroke-dasharray="2 6" stroke-linecap="round"/>
+    <text x="10" y="26" font-family="Aeonik Mono, monospace" font-size="10" fill="var(--faint)" letter-spacing="1">RAW LOGS</text>
+    <text x="10" y="88" font-family="Aeonik Mono, monospace" font-size="10" fill="var(--faint)" letter-spacing="1">RAW REPO</text>
+    <text x="10" y="148" font-family="Aeonik Mono, monospace" font-size="10" fill="var(--faint)" letter-spacing="1">RAW PROMPT</text>
+    <rect x="192" y="55" width="216" height="90" rx="8" fill="var(--card)" stroke="var(--ink)" stroke-width="1.5"/>
+    <text x="300" y="92" text-anchor="middle" font-family="Aeonik, sans-serif" font-weight="600" font-size="14" fill="var(--ink)">DETERMINISTIC LAYER</text>
+    <text x="300" y="112" text-anchor="middle" font-family="Aeonik Mono, monospace" font-size="9" fill="var(--faint)" letter-spacing="1">parse · index · slice · graph · cache</text>
+    <path d="M408 100 H 560" stroke="var(--det)" stroke-width="3" stroke-linecap="round"/>
+    <text x="418" y="88" font-family="Aeonik Mono, monospace" font-size="10" fill="var(--det)" letter-spacing="1">MINIMAL CONTEXT</text>
+    <rect x="562" y="62" width="188" height="76" rx="38" fill="var(--det-soft)" stroke="var(--det)" stroke-width="1.5"/>
+    <text x="656" y="96" text-anchor="middle" font-family="Aeonik, sans-serif" font-weight="600" font-size="14" fill="var(--det)">LLM</text>
+    <text x="656" y="114" text-anchor="middle" font-family="Aeonik Mono, monospace" font-size="9" fill="var(--faint)" letter-spacing="1">SPEND LAST</text>
+  </svg>
+</section>
+
+<section class="ch" id="p1">
+  <div class="ch-kicker"><span class="num">PART 01</span><span class="rule"></span><span>THE ECONOMICS</span></div>
+  <h2 class="ch-title">AI Agents Are Not Expensive. Bad Architecture Is.</h2>
+  <p class="ch-thesis">The majority of token spend isn't caused by the model. It's caused by poor system design.</p>
+
+  <p class="lede">When teams complain that AI coding agents are too expensive to run in production, they almost always blame the model. The per-token price. The reasoning overhead. The context window. But when you actually instrument an agent and trace where tokens go, a different picture emerges: the model is doing exactly what it was asked to do. The system asked it to do far too much.</p>
+
+  <h3>Measure where tokens actually go</h3>
+  <p>Run any popular agent framework against a real repository and log every request. You'll typically find that the dominant cost is not <em>reasoning about the problem</em> — it's <em>reconstructing context the system already had</em>. Re-reading files it read two turns ago. Dumping 400-line stack traces when 6 frames mattered. Carrying full conversation history into every tool call. Exploring the filesystem with <code>ls</code> and <code>cat</code> because nothing indexed the repo up front.</p>
+  <p>This is not a hypothesis. It's what the published numbers show. Anthropic's engineering team, describing their production multi-agent research system, reported that agents consume roughly <strong>4× the tokens of a chat interaction</strong>, and multi-agent systems roughly <strong>15×</strong> — and that on their internal evals, <strong>token usage alone explained about 80% of performance variance</strong>.<sup class="cite"><a href="#r3">3</a></sup> Read that carefully: the single biggest lever in agent performance was not model choice or clever prompting. It was how many tokens the architecture decided to spend.</p>
+
+  <div class="evidence">
+    <span class="tag">Evidence · Simplicity wins the leaderboard</span>
+    <p>The strongest single data point in this entire series: <strong>Agentless</strong> (Xia et al., UIUC). Instead of an autonomous agent choosing its own actions with tools, Agentless runs a fixed three-phase pipeline — hierarchical localization, patch generation, validation. On SWE-bench Lite it became the top open-source approach of its time at <strong>27.3% solved for $0.34 per issue</strong> (later 32.0% at $0.70), while contemporary agent-based systems spent roughly 10× more per issue for comparable or worse results.<sup class="cite"><a href="#r1">1</a></sup> The LLM never decided what to do next. The <em>system</em> decided; the model only filled in the intelligent parts.</p>
+    <p class="src">Xia et al., "Agentless: Demystifying LLM-based Software Engineering Agents," FSE 2025</p>
+  </div>
+
+  <h3>Context construction vs. reasoning cost</h3>
+  <p>Split your agent's token bill into two buckets. <strong>Reasoning tokens</strong>: the model thinking about the actual problem — the diff, the root cause, the design decision. <strong>Context-construction tokens</strong>: everything spent getting the model to the point where reasoning can begin — file dumps, search results, log spew, retries after the model got lost. In naive architectures, the second bucket dominates, often by an order of magnitude. And here's the punchline: almost everything in the second bucket is <em>computable without a model</em>. Parsing, indexing, slicing, and graph traversal are deterministic operations. They cost microseconds of CPU, run identically every time, and never hallucinate.</p>
+
+  <div class="evidence">
+    <span class="tag">Evidence · Cost must be a first-class metric</span>
+    <p>Princeton's "AI Agents That Matter" (Kapoor, Stroebl, Siegel, Nadgir, Narayanan) showed that agent research systematically ignored cost — and that when you evaluate on a joint <strong>cost–accuracy Pareto frontier</strong>, trivially simple baselines (like retrying a model call) matched or beat elaborate agent architectures on HumanEval at a fraction of the price. Their conclusion: accuracy alone cannot identify progress, and "SOTA" agents are frequently needlessly complex and costly.<sup class="cite"><a href="#r2">2</a></sup></p>
+    <p class="src">Kapoor et al., "AI Agents That Matter," TMLR 2025</p>
+  </div>
+
+  <h3>"Thinking harder" vs. "needing less thinking"</h3>
+  <p>The industry's default answer to agent failure is to think harder: bigger models, longer reasoning chains, more retries, more sub-agents. Each of these multiplies token spend and adds a new probabilistic step — a new place for variance to enter. The engineering answer is the opposite: <strong>shrink the problem before the model sees it</strong>. Every ambiguity you resolve deterministically is reasoning the model no longer has to do, tokens you no longer pay for, and variance you no longer ship to production. Determinism isn't a philosophical preference. It's a cost model.</p>
+
+  
+
+  <div class="takeaway">
+    <span class="tag">Takeaway</span>
+    <p>Reduce uncertainty before you invoke intelligence. Every token of context your system constructs deterministically is a token the model doesn't have to burn discovering it probabilistically.</p>
+  </div>
+  
+</section>
+
+<section class="ch" id="p2">
+  <div class="ch-kicker"><span class="num">PART 02</span><span class="rule"></span><span>DETERMINISTIC RETRIEVAL</span></div>
+  <h2 class="ch-title">Stop Making Agents Read Your Entire Logs</h2>
+  <p class="ch-thesis">Logs are databases. Treating them like prompts is fundamentally inefficient.</p>
+
+  <p class="lede">Watch a coding agent debug a failing test and you'll see the same ritual everywhere: <code>cat</code> the log file. <code>grep</code> for "error". <code>tail -n 200</code>. Paste the whole thing into context. Then ask a probabilistic model to do what a parser could have done for free — find the relevant frames. We've turned the most expensive component in the stack into a log-reading intern.</p>
+
+  <h3>Signal-to-noise is a system property</h3>
+  <p>A production stack trace of a Python web request can run hundreds of frames, most of them framework internals — WSGI plumbing, middleware, ORM dispatch. The frames that matter for the bug are usually the handful that touch <em>your</em> code. Every irrelevant frame you send isn't neutral padding; it's an active liability. Chroma's "Context Rot" study evaluated 18 frontier models and found performance degrades as input length grows even on simple tasks — and degrades <em>faster</em> when the context contains distractors that are related-but-irrelevant to the target.<sup class="cite"><a href="#r7">7</a></sup> A raw log is, almost by definition, a distractor-maximizing document: hundreds of lines that look exactly like the one line you need.</p>
+  <p>The same result shows up in retrieval research. Cuconasu et al. ("The Power of Noise," SIGIR 2024) demonstrated that adding semantically related but non-answer-bearing documents to an LLM's context sharply degrades accuracy — related noise is worse than irrelevant noise, because the model can't cheaply dismiss it.<sup class="cite"><a href="#r9">9</a></sup> Framework frames in a stack trace are precisely this kind of high-similarity distractor.</p>
+
+  <h3>Execution slicing: preprocess, don't prompt</h3>
+  <p>The deterministic alternative is to treat program output as structured data and slice it before inference:</p>
+  <ul class="plain">
+    <li><strong>Stack trace reduction</strong> — parse the trace, keep frames inside your package roots, collapse framework frames to one-line markers, keep the exception type, message, and the innermost user frame's local variables.</li>
+    <li><strong>Dynamic trace extraction</strong> — run the failing test under a tracer (<code>sys.settrace</code>, <code>coverage.py</code>, eBPF, OpenTelemetry) and extract only the execution path that actually ran, with the values that flowed through it.</li>
+    <li><strong>Log windowing</strong> — anchor on the failure timestamp/request ID and take a bounded, correlated window, not the file.</li>
+  </ul>
+
+  <pre><code><span class="c"># Instead of handing the model a shell and hoping:</span>
+<span class="c">#   grep -rn "error" logs/ | tail -500   ← probabilistic archaeology</span>
+
+result = <span class="f">run_code_with_trace</span>(          <span class="c"># deterministic, runs in ms</span>
+    <span class="p">cmd</span>=<span class="a">"pytest tests/test_billing.py::test_refund -x"</span>,
+    <span class="p">package_roots</span>=[<span class="a">"app/"</span>],           <span class="c"># slice to code you own</span>
+    <span class="p">capture</span>=[<span class="a">"exception"</span>, <span class="a">"locals"</span>, <span class="a">"executed_lines"</span>, <span class="a">"sql"</span>],
+    <span class="p">max_tokens</span>=<span class="k">1200</span>,                   <span class="c"># hard budget, enforced by code</span>
+)
+context = result.<span class="f">to_prompt_block</span>()     <span class="c"># 1.2k tokens of pure signal</span></code></pre>
+
+  <p>The difference is architectural, not cosmetic. <code>grep | cat | tail</code> makes the <em>model</em> the filter — you pay tokens for every candidate line, and the filtering itself is probabilistic. <code>run_code_with_trace()</code> makes <em>code</em> the filter — filtering costs zero tokens, is identical on every run, and is testable like any other software. Bash is a fine escape hatch. It is a terrible primary retrieval engine, because every bash round-trip is another model call carrying the full conversation history with it.</p>
+
+  <div class="evidence">
+    <span class="tag">Evidence · The interface is the bottleneck</span>
+    <p>SWE-agent (Yang et al., Princeton) showed that agent performance depends heavily on the <strong>agent–computer interface</strong>: replacing raw shell interaction with purpose-built commands that return compact, structured views of files and search results significantly improved resolution rates on SWE-bench. The model didn't get smarter — the interface got more deterministic about what reached the context window.<sup class="cite"><a href="#r14">14</a></sup> Anthropic's guidance on tool design for agents makes the same point: tools should return concise, high-signal representations and enforce token-efficient defaults, because agents inherit every inefficiency of their tools.<sup class="cite"><a href="#r20">20</a></sup></p>
+    <p class="src">Yang et al., "SWE-agent," NeurIPS 2024 · Anthropic engineering, 2025</p>
+  </div>
+
+  <div class="takeaway">
+    <span class="tag">Takeaway</span>
+    <p>Every line of log your system filters in code is a line the model never pays to read, never gets distracted by, and never misinterprets. Deterministic preprocessing eliminates model work.</p>
+  </div>
+  
+</section>
+
+<section class="ch" id="p3">
+  <div class="ch-kicker"><span class="num">PART 03</span><span class="rule"></span><span>DETERMINISTIC RETRIEVAL</span></div>
+  <h2 class="ch-title">Parse the User Prompt Before the Model Ever Sees It</h2>
+  <p class="ch-thesis">Your prompt already contains structured information. Extract it.</p>
+
+  <p class="lede">A user prompt to a coding agent is not free text. It's a semi-structured document that happens to be written in English. "The <code>POST /api/v2/refunds</code> endpoint throws <code>DecimalConversionError</code> in <code>billing/processors.py</code> after #4821 merged" contains an API route, an exception class, a file path, and an issue reference — four precise retrieval keys, sitting in plain sight, that most agent stacks throw away by handing the raw string to the model and letting it decide what to search for.</p>
+
+  <h3>Deterministic extraction is a solved problem</h3>
+  <p>Long before you need a language model, thirty lines of parsing gets you:</p>
+  <ul class="plain">
+    <li><strong>File paths</strong> — anything matching path grammar; validate against the actual file tree, fuzzy-match near-misses.</li>
+    <li><strong>Symbols &amp; signatures</strong> — CamelCase / snake_case identifiers, <code>module.func()</code> call syntax, function signatures; validate against your symbol index (Part 4).</li>
+    <li><strong>Stack traces</strong> — pasted tracebacks have a rigid grammar in every language; parse them fully, don't summarize them.</li>
+    <li><strong>Issue/PR references</strong> — <code>#4821</code>, <code>JIRA-123</code>; resolve via API into titles, diffs, linked commits.</li>
+    <li><strong>URLs and API endpoints</strong> — route patterns map directly to router definitions in the codebase.</li>
+    <li><strong>Version/config literals</strong> — package names, versions, env var names, feature flags.</li>
+  </ul>
+  <p>Every extracted entity is a <em>verified anchor</em>: it either resolves against your index or it doesn't. That binary check — impossible with a purely generative approach — is where hallucinated file paths and invented function names go to die.</p>
+
+  <h3>From entities to a retrieval plan</h3>
+  <p>The output of parsing isn't decoration; it's an execution plan that runs <em>before inference begins</em>:</p>
+  <pre><code>plan = <span class="f">build_retrieval_plan</span>(prompt)
+<span class="c"># {</span>
+<span class="c">#   anchors:   [File("billing/processors.py"), Symbol("DecimalConversionError"),</span>
+<span class="c">#               Route("POST /api/v2/refunds"), Issue(4821)]</span>
+<span class="c">#   expand:    graph_neighbors(anchors, hops=1)      ← Part 4</span>
+<span class="c">#   tests:     tests_covering(anchors)               ← Part 10</span>
+<span class="c">#   schema:    tables_touched(anchors)               ← Part 8</span>
+<span class="c">#   budget:    8_000 tokens, ranked by relevance</span>
+<span class="c"># }</span></code></pre>
+  <p>Now the model's first call already contains the right file, its direct dependencies, the covering tests, and the issue diff — assembled by code, ranked by graph centrality, cut to budget. Compare this to the standard pattern, where the model spends its first five calls (each carrying growing history) rediscovering what a regex knew at millisecond zero.</p>
+
+  <div class="evidence">
+    <span class="tag">Evidence · Structured localization beats free exploration</span>
+    <p>This is exactly the design that let Agentless outperform autonomous agents: its first phase is <strong>hierarchical localization</strong> — a fixed, structured funnel from repository → files → classes/functions → edit locations — rather than letting the model wander with tools. The paper's ablations show this staged narrowing keeps ground-truth edit locations in the candidate set while shrinking the code the model must read, and it's a major reason the pipeline hit top open-source results at ~1/10th the cost of agent baselines.<sup class="cite"><a href="#r1">1</a></sup> Constrained input, focused attention, fewer irrelevant tokens: the localization step is deterministic scaffolding doing the model's foraging for it.</p>
+    <p class="src">Xia et al., "Agentless," FSE 2025</p>
+  </div>
+
+  <div class="vs">
+    <div class="a">
+      <h4>◌ Prompt as opaque string</h4>
+      <ul>
+        <li>Model infers what to look for — probabilistically, per session</li>
+        <li>Search terms may be hallucinated; paths unverified</li>
+        <li>3–8 exploratory tool calls before real work starts</li>
+        <li>Cost scales with model curiosity</li>
+      </ul>
+    </div>
+    <div class="b">
+      <h4>● Prompt as structured input</h4>
+      <ul>
+        <li>Entities extracted by parser — identically, every time</li>
+        <li>Every anchor validated against real indexes</li>
+        <li>Retrieval plan executes before the first model call</li>
+        <li>Cost scales with actual task complexity</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="takeaway">
+    <span class="tag">Takeaway</span>
+    <p>Treat the prompt as the first document your system parses, not the first thing your model reads. Extraction is free, verifiable, and identical on every run — inference is none of those things.</p>
+  </div>
+  
+</section>
+
+<section class="ch" id="p4">
+  <div class="ch-kicker"><span class="num">PART 04</span><span class="rule"></span><span>DETERMINISTIC RETRIEVAL</span></div>
+  <h2 class="ch-title">Why Grep Is the Wrong Retrieval Engine</h2>
+  <p class="ch-thesis">Searching isn't understanding. Code has structure — use it.</p>
+
+  <p class="lede">Grep answers one question: "which lines contain this string?" But the questions a coding agent actually needs answered are structural: <em>Who calls this function? What implements this interface? What breaks if I change this signature? Where does this value originate?</em> Text search can only approximate those answers through many noisy round-trips. A code graph answers them exactly, in one query.</p>
+
+  <h3>Code is already a graph. Stop flattening it.</h3>
+  <p>Compilers have modeled code as structure for seventy years: ASTs, symbol tables, call graphs, dependency graphs, cross-reference indexes. Your IDE resolves "go to definition" in milliseconds using exactly this machinery — no LLM involved. Yet the default agent loop discards all of it and hands the model a shell, forcing it to reconstruct structural knowledge through string matching:</p>
+
+  <pre><code><span class="c"># The grep loop (typical agent trace, abbreviated):</span>
+<span class="f">grep</span> -rn <span class="a">"process_refund"</span> .        <span class="c"># 47 matches, 31 are tests/comments</span>
+<span class="f">cat</span> billing/processors.py           <span class="c"># 800 lines into context</span>
+<span class="f">grep</span> -rn <span class="a">"RefundProcessor"</span> .        <span class="c"># which of these are real call sites?</span>
+<span class="f">cat</span> api/handlers/refunds.py         <span class="c"># another 600 lines</span>
+<span class="c"># ... 6 more calls, ~30k tokens, and it still can't SEE the call graph</span>
+
+<span class="c"># The graph query:</span>
+g.<span class="f">callers</span>(<span class="a">"process_refund"</span>, <span class="p">depth</span>=<span class="k">2</span>)         <span class="c"># exact, ranked, 0 tokens</span>
+g.<span class="f">slice</span>(<span class="p">symbol</span>=<span class="a">"process_refund"</span>, <span class="p">budget</span>=<span class="k">6000</span>) <span class="c"># minimal closed subgraph</span></code></pre>
+
+  <p>One hundred greps approximate what one graph traversal computes. And the grep version isn't just slower — each round-trip is a model call that re-sends conversation history, injects 80–95% irrelevant lines (each one a distractor, per Part 2's evidence), and gives the model another opportunity to take a wrong turn. The graph version is deterministic: same query, same answer, forever.</p>
+
+  <h3>The index stack</h3>
+  <ul class="plain">
+    <li><strong>AST layer</strong> (tree-sitter) — language-aware parsing; definitions, references, signatures for ~every mainstream language.</li>
+    <li><strong>Symbol index</strong> — every definition and every reference site, bidirectionally linked (what LSP/SCIP already standardize).</li>
+    <li><strong>Dependency graph</strong> — imports, package boundaries, build targets.</li>
+    <li><strong>Call graph</strong> — who invokes whom, with edge weights from reference counts or runtime traces.</li>
+    <li><strong>Centrality ranking</strong> — PageRank over the reference graph tells you which symbols matter most for understanding any region of the code.</li>
+  </ul>
+
+  <div class="evidence">
+    <span class="tag">Evidence · Graph-ranked context in production tools</span>
+    <p><strong>Aider's repo map</strong> is the canonical proof this works at tool scale: it parses the whole repository with tree-sitter into definitions and references, builds a graph where files are nodes and symbol references are edges, then runs a <strong>PageRank-style algorithm</strong> to select the most-referenced identifiers that fit a fixed token budget (default ~1k tokens for an entire repo). The result: the model receives a compressed structural map of the codebase — key signatures, most-referenced symbols — instead of raw file dumps, which Aider's own benchmarking found materially improves code-editing performance on large repos.<sup class="cite"><a href="#r12">12</a></sup></p>
+    <p><strong>AutoCodeRover</strong> (Zhang et al., NUS) took the same bet in research: it replaced plain text retrieval with AST-based search APIs (search-class, search-method, search-code-in-file), letting the LLM query program structure instead of strings — and reported substantially improved issue-resolution efficacy on SWE-bench versus text-based navigation.<sup class="cite"><a href="#r13">13</a></sup></p>
+    <p class="src">Aider, "Building a better repository map with tree-sitter" · Zhang et al., ISSTA 2024</p>
+  </div>
+
+  <h3>Filesystem traversal vs. graph traversal</h3>
+  <p>The deep reason graphs win is precision-per-token. A filesystem is organized for humans and build tools — by directory, not by meaning. Relevant code for one change is scattered across handlers, models, migrations, and tests. Filesystem traversal forces the agent to page through that scatter linearly. Graph traversal follows <em>edges of actual relationship</em>: a 2-hop neighborhood around a symbol is very close to the minimal sufficient context for editing it. You're not searching a haystack; you're following a wire.</p>
+
+  <div class="takeaway">
+    <span class="tag">Takeaway</span>
+    <p>Grep ×100 approximates what graph query ×1 computes exactly. Build the graph once, deterministically, and let the model spend its tokens on the change — not on reconstructing the compiler's knowledge by string matching.</p>
+  </div>
+  
+</section>
+
+<section class="ch" id="p5">
+  <div class="ch-kicker"><span class="num">PART 05</span><span class="rule"></span><span>DETERMINISTIC RETRIEVAL</span></div>
+  <h2 class="ch-title">Build Semantic Memory Once</h2>
+  <p class="ch-thesis">Every session shouldn't rediscover your repository.</p>
+
+  <p class="lede">Here's an absurdity we've normalized: an agent spends 40,000 tokens on Monday learning that your payments code lives in <code>billing/</code>, that <code>LedgerEntry</code> is the money-movement primitive, and that notifications go through an outbox pattern. On Tuesday, a new session spends 40,000 tokens learning it again. Your organization is paying inference prices, daily, for knowledge that changes monthly.</p>
+
+  <h3>Repositories have natural semantic structure</h3>
+  <p>Any codebase that has survived contact with production organizes into domains — <strong>Payments, Authentication, Billing, Notifications, Infrastructure</strong> — whether or not the directory tree admits it. These domains are recoverable automatically: embed every file/module summary, cluster the embeddings, and cross-check clusters against the dependency graph from Part 4. Community-detection algorithms (Louvain, Leiden) over the import graph find the same boundaries from pure structure. Where embedding clusters and graph communities agree, you've found a real architectural boundary. Where they disagree, you've often found the tech debt.</p>
+  <p>This mirrors Conway's law in reverse: the code's semantic clusters recover the team and domain boundaries that produced it. Once inferred, each domain gets a compact, versioned dossier — entry points, core types, invariants ("money is integer cents everywhere"), owned tables, covering test suites — generated once, refreshed incrementally on merge, and retrieved deterministically at session start.</p>
+
+  <div class="evidence">
+    <span class="tag">Evidence · Index once, query cheaply forever</span>
+    <p>Microsoft Research's <strong>GraphRAG</strong> demonstrates the economics of amortized semantic indexing: an LLM pass extracts an entity graph from the corpus once, the Leiden algorithm detects semantic communities, and community summaries are pre-generated at index time. At query time, answering corpus-level questions from those summaries won 70–80% of head-to-head comparisons against naive RAG on comprehensiveness and diversity — while using roughly <strong>2–3% of the tokens per query</strong> that hierarchical source-text summarization would require, because the expensive understanding was paid for once, up front.<sup class="cite"><a href="#r10">10</a>,<a href="#r11">11</a></sup> The same trade applies to code: indexing is a fixed cost; per-session rediscovery is a tax you pay forever.</p>
+    <p class="src">Edge et al., arXiv:2404.16130 · Microsoft Research, 2024</p>
+  </div>
+
+  <h3>What goes in the memory layer</h3>
+  <ul class="plain">
+    <li><strong>Embeddings</strong> — file, symbol, and doc-chunk vectors for fuzzy entry ("where do we throttle webhooks?") when the prompt has no hard anchors.</li>
+    <li><strong>Domain dossiers</strong> — the 300-token expert briefing per domain a senior engineer would give a new hire.</li>
+    <li><strong>Architectural boundary map</strong> — which domains may call which; violations flagged deterministically before the model proposes one.</li>
+    <li><strong>Convention registry</strong> — error-handling idioms, naming schemes, "we use repository pattern here" — extracted once, injected only when relevant.</li>
+  </ul>
+  <p>Crucially, this memory is <em>infrastructure with a freshness contract</em>, not a cache of vibes: it rebuilds incrementally from the merge queue, carries the commit SHA it was derived from, and is invalidated by the same CI that validates your code. That is what separates semantic memory from a stale wiki.</p>
+
+  <div class="takeaway">
+    <span class="tag">Takeaway</span>
+    <p>Understanding your repository is a build artifact, not a conversation. Compute it once, version it, refresh it incrementally — and let every session start from knowledge instead of archaeology.</p>
+  </div>
+  
+</section>
+
+<section class="ch" id="p6">
+  <div class="ch-kicker"><span class="num">PART 06</span><span class="rule"></span><span>CONTEXT ENGINEERING</span></div>
+  <h2 class="ch-title">Your Markdown Files Are Becoming Technical Debt</h2>
+  <p class="ch-thesis">Prompt engineering doesn't scale. Structured data does.</p>
+
+  <p class="lede">It starts innocently. A <code>rules.md</code> to stop the agent doing something dumb. Then <code>architecture.md</code>. Then <code>vision.md</code>, <code>conventions.md</code>, and — I've seen it in the wild — <code>soul.md</code>. Six months later you have 30,000 tokens of prose loaded into every session, nobody knows which rules are still true, and the agent has started ignoring half of them. You didn't build a knowledge base. You built a second codebase, in a language with no compiler, no tests, and no dead-code detection.</p>
+
+  <h3>Prompt bloat is measurable harm, not just cost</h3>
+  <p>The instinct says instructions are free: worst case, the model skims the irrelevant ones. The research says otherwise. Performance degrades as input grows even when the added material is task-relevant in spirit — Liu et al. showed models reliably lose information positioned in the middle of long contexts,<sup class="cite"><a href="#r6">6</a></sup> and Chroma's 18-model study showed degradation with input length is universal and non-uniform across every frontier model tested.<sup class="cite"><a href="#r7">7</a></sup> Anthropic's own context-engineering guidance is blunt about the mechanism: attention is a finite budget, and every token in context depletes it — so the goal is the <em>smallest set of high-signal tokens</em> that achieves the outcome.<sup class="cite"><a href="#r19">19</a></sup> Your 30k tokens of markdown aren't a safety net. They're attention debt, billed per request.</p>
+
+  <h3>The caching economics make it worse</h3>
+  <p>Prompt caching looks like it rescues the giant-prompt strategy: cache reads cost ~10% of base input price on Anthropic's API (with a 25% premium on writes), cutting cost up to 90% and latency up to 85% for long stable prefixes.<sup class="cite"><a href="#r16">16</a></sup> But caching is <em>prefix-exact</em>: edit one character of an early block and everything after it recomputes at full price (plus the write premium). A pile of frequently-tweaked markdown files concatenated into the prompt is the worst possible shape for this — every doc edit is a cache invalidation event across your whole fleet. Caching rewards exactly what markdown sprawl destroys: small, stable, rigorously ordered context. Cache economics are an argument <em>for</em> structure, not for stuffing.</p>
+
+  <div class="vs">
+    <div class="a">
+      <h4>◌ vision.md · rules.md · soul.md</h4>
+      <ul>
+        <li>Loaded whole, every session, relevant or not</li>
+        <li>No validation — rules silently rot as code evolves</li>
+        <li>Conflicting rules resolved probabilistically by the model</li>
+        <li>Every edit invalidates the prompt cache prefix</li>
+        <li>Grows monotonically; nobody dares delete</li>
+      </ul>
+    </div>
+    <div class="b">
+      <h4>● Schemas · metadata · capability registry</h4>
+      <ul>
+        <li>Retrieved selectively — only rules matching the touched domain</li>
+        <li>Machine-checkable: rules reference real symbols, validated in CI</li>
+        <li>Conflicts detected deterministically at build time</li>
+        <li>Stable structured core caches cleanly; variable tail stays small</li>
+        <li>Dead rules detected like dead code</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>What replaces the prose</h3>
+  <ul class="plain">
+    <li><strong>JSON Schema / typed config</strong> for anything that is actually a constraint: allowed dependencies, naming patterns, review requirements. Constraints in schema form can be <em>enforced by validators</em>, not merely suggested to a model.</li>
+    <li><strong>Tool metadata</strong> — capabilities, costs, preconditions declared on tools themselves (the direction MCP standardizes), so capability discovery is a lookup, not a paragraph.</li>
+    <li><strong>Rule objects with scopes</strong> — <code>{rule, applies_to: "billing/**", verified_by: "lint:no-float-money", since: "a1b2c3"}</code>. The retrieval layer injects the three rules relevant to this diff, not the three hundred that exist.</li>
+    <li><strong>Generated, not hand-written, docs</strong> — the Part 5 dossiers, derived from code, carrying their source SHA.</li>
+  </ul>
+  <p>Keep markdown for what prose is good at: intent, history, taste. Everything that functions as a <em>rule</em> belongs in a representation that can be validated, scoped, versioned, and selectively retrieved. If a rule can't fail CI, it isn't a rule — it's a hope.</p>
+
+  <div class="takeaway">
+    <span class="tag">Takeaway</span>
+    <p>Natural-language configuration is configuration without a type system. Move constraints into structured, validated, selectively-retrieved data — and let prose go back to being prose.</p>
+  </div>
+  
+</section>
+
+<section class="ch" id="p7">
+  <div class="ch-kicker"><span class="num">PART 07</span><span class="rule"></span><span>CONTEXT ENGINEERING</span></div>
+  <h2 class="ch-title">Context Compression Is More Valuable Than Bigger Models</h2>
+  <p class="ch-thesis">Removing irrelevant information beats buying a larger model.</p>
+
+  <p class="lede">When an agent underperforms, the industry reflex is to upgrade: bigger model, longer window, more reasoning budget. But the evidence keeps pointing at a cheaper lever. The question that predicts success isn't "how much can the model hold?" — it's "what fraction of what it holds is signal?" That's an information-theory question, and information theory is on the side of the systems engineer.</p>
+
+  <h3>The Shannon view of a context window</h3>
+  <p>Shannon's framework<sup class="cite"><a href="#r18">18</a></sup> gives us the right vocabulary. The task has some intrinsic information requirement — the minimal facts needed to produce the correct patch. Everything else in the window is noise relative to that task, and attention is the finite channel through which signal must pass. Two consequences follow directly. First, <strong>mutual information, not volume, is what matters</strong>: a 4k-token context whose every line bears on the task carries more usable information than 100k tokens where the answer is diluted 25:1. Second, <strong>compression is only safe when it's lossless with respect to the task</strong> — which is precisely what deterministic slicing (Parts 2–4) achieves and what generic truncation ("keep the first N lines") does not. A stack-trace parser that keeps your frames and drops framework frames is a task-aware compressor with a provable retention property. <code>head -c</code> is a coin flip.</p>
+
+  <h3>The empirical record is unambiguous</h3>
+  <div class="stats">
+    <div><div class="v amber">U-curve</div><div class="l">Liu et al.: accuracy collapses for facts mid-context; long-context models included<sup class="cite"><a href="#r6">6</a></sup></div></div>
+    <div><div class="v amber">18 / 18</div><div class="l">Chroma: every frontier model tested degrades as input grows, even on trivial tasks<sup class="cite"><a href="#r7">7</a></sup></div></div>
+    <div><div class="v amber">−dozens of pts</div><div class="l">NoLiMa: when matches are semantic, not literal, most models fall far below short-context accuracy by 32k<sup class="cite"><a href="#r8">8</a></sup></div></div>
+    <div><div class="v amber">Related &gt; random</div><div class="l">Power of Noise: semantically related distractors hurt accuracy most<sup class="cite"><a href="#r9">9</a></sup></div></div>
+  </div>
+  <p>Note what these four results jointly imply for coding agents specifically. A repository dump is long (triggering length degradation), full of near-duplicate distractors (the most harmful noise type), and requires semantic rather than lexical matching to use (the NoLiMa condition, where degradation is steepest). Raw-context agent design sits at the intersection of every known failure mode.</p>
+
+  <div class="counter">
+    <span class="tag">Counterweight — long-context is improving</span>
+    <p>Be honest about the trend: newer models post near-perfect scores on simple needle-in-a-haystack retrieval at extreme lengths, and vendors are attacking positional bias directly. But the improvements are strongest on <em>literal retrieval</em> — the easiest case — while semantic reasoning over long, distractor-dense context remains the weak point, which is exactly the regime coding agents live in. And even a model immune to context rot still bills you for every irrelevant token. Compression wins on cost even where it someday stops winning on accuracy.</p>
+  </div>
+
+  <h3>Compression as an engineering discipline</h3>
+  <ul class="plain">
+    <li><strong>Retrieval precision over recall-by-default</strong> — start from verified anchors (Part 3) and expand along graph edges (Part 4) instead of dumping candidates.</li>
+    <li><strong>Representation changes</strong> — signatures instead of bodies (a repo map is a ~100:1 compressor<sup class="cite"><a href="#r12">12</a></sup>), schemas instead of migrations, sliced traces instead of logs.</li>
+    <li><strong>Budgets enforced in code</strong> — every context assembler takes a token budget and ranks content to fit it; over-budget is a build failure, not a vibe.</li>
+    <li><strong>Measure context utilization</strong> — what fraction of provided tokens does the final patch actually depend on? Sub-10% is common in naive stacks; it is the clearest single indicator of wasted spend (Part 13).</li>
+  </ul>
+
+  <div class="takeaway">
+    <span class="tag">Takeaway</span>
+    <p>A bigger model reads your noise more expensively. A better system removes the noise. Between the two, only one compounds: every point of retrieval precision you engineer benefits every model you will ever run.</p>
+  </div>
+  
+</section>
+
+<section class="ch" id="p8">
+  <div class="ch-kicker"><span class="num">PART 08</span><span class="rule"></span><span>CONTEXT ENGINEERING</span></div>
+  <h2 class="ch-title">Schema Rot Is the Silent Killer of AI Coding Agents</h2>
+  <p class="ch-thesis">Models don't invent duplicate database columns because they're bad. They invent them because they never saw the existing ones.</p>
+
+  <p class="lede">Every team running coding agents against a real product eventually meets the same bug report: the agent added a <code>user_email</code> column to a table that already had <code>email</code>. Or wrote a migration duplicating an index. Or built a query against a column renamed two quarters ago. The postmortem instinct is "the model hallucinated." The engineering truth is harsher: <em>the model was never shown the schema</em>. It did exactly what any engineer would do with zero visibility into the database — it guessed.</p>
+
+  <h3>Why schema is the worst-served context type</h3>
+  <p>Schema knowledge is uniquely hostile to text retrieval. The live truth isn't in any one file — it's the <em>fold</em> of an ordered migration history: 400 migration files where the current shape of <code>orders</code> is the sum of 23 of them, interleaved with everything else. Grep for the table name and you get all 23 plus every query that touches it — maximum-similarity distractors, the exact noise profile Part 7 showed is most damaging. ORM models drift from the database. Column semantics ("<code>amount</code> is integer cents, never float") live in tribal memory. No amount of "read the migrations folder" fixes this, because the information the model needs is a <em>computed state</em>, not a document.</p>
+
+  <h3>Schema becomes another graph node</h3>
+  <p>The deterministic fix is to treat the schema like Part 4 treats code — as structure to be indexed, not text to be searched:</p>
+  <ul class="plain">
+    <li><strong>Schema index</strong> — introspect the live database (or replay migrations) into a canonical, versioned snapshot: tables, columns, types, constraints, indexes, foreign keys. This is a solved problem; every ORM ships the machinery.</li>
+    <li><strong>Migration graph</strong> — each column carries its lineage: created in <code>0042</code>, renamed in <code>0187</code>, backfilled in <code>0201</code>. "Why is this nullable?" becomes a graph query with commit-linked answers.</li>
+    <li><strong>Code↔schema edges</strong> — static analysis of ORM models and query sites links <code>LedgerEntry</code> ↔ <code>ledger_entries</code> ↔ the 14 call sites that write it. Now "what breaks if I drop this column?" is a traversal, not a prayer.</li>
+    <li><strong>Domain mapping</strong> — tables attach to the Part 5 domains, so a billing task automatically retrieves billing tables and only billing tables.</li>
+  </ul>
+
+  <pre><code>ctx = schema.<span class="f">slice_for</span>(<span class="p">anchors</span>=[<span class="a">"RefundProcessor"</span>])
+<span class="c"># orders(id, user_id→users.id, amount_cents INT NOT NULL, status ENUM,...)</span>
+<span class="c"># refunds(id, order_id→orders.id, amount_cents INT, reason TEXT,...)</span>
+<span class="c"># lineage: refunds.amount_cents renamed from amount in 0187 (PR #3122)</span>
+<span class="c"># invariant: money columns are integer cents (lint: no-float-money)</span>
+<span class="c"># ~600 tokens. Verified against production at SHA 9f31c2.</span></code></pre>
+
+  <p>Six hundred tokens of verified schema beats sixty thousand tokens of migration files. And because the slice is generated from the live database, the duplicate-column failure becomes <em>structurally impossible</em> to miss: the deterministic layer can literally diff the model's proposed migration against the index and reject collisions before a human ever reviews them. That's the pattern of this whole series in miniature — don't ask the model to remember reality; show it reality, then validate its output against reality.</p>
+
+  <div class="evidence">
+    <span class="tag">Evidence · Grounding beats recall</span>
+    <p>The general principle is well-established even where the schema-specific study doesn't exist yet: retrieval-grounding measurably reduces fabrication versus parametric recall, precision of what's retrieved dominates volume (Parts 2 &amp; 7's distractor results<sup class="cite"><a href="#r7">7</a>,<a href="#r9">9</a></sup>), and structured representations of a system outperform prose descriptions of it for machine consumption (Parts 4–6<sup class="cite"><a href="#r12">12</a>,<a href="#r13">13</a></sup>). Schema is simply the highest-stakes instance: it's the context type where a hallucination becomes a <em>migration</em>, and a migration becomes an outage.</p>
+    <p class="src">Synthesis; see refs 7, 9, 12, 13</p>
+  </div>
+
+  <div class="takeaway">
+    <span class="tag">Takeaway</span>
+    <p>Your database's current shape is computable, versionable, and sliceable. If the agent ever guesses about schema, that's not a model failure — it's a missing index in your system.</p>
+  </div>
+  
+</section>
+
+<section class="ch" id="p9">
+  <div class="ch-kicker"><span class="num">PART 09</span><span class="rule"></span><span>ORCHESTRATION &amp; MEMORY</span></div>
+  <h2 class="ch-title">Why Coordinator Agents Don't Scale</h2>
+  <p class="ch-thesis">Most multi-agent systems are paying a coordination tax and calling it architecture.</p>
+
+  <p class="lede">The multi-agent pitch is seductive: a "manager" agent decomposes the task, "specialist" agents execute, everyone collaborates like a little software team. In practice, most of these systems rediscover — at inference prices — every distributed-systems problem we spent decades solving with deterministic tools. The org chart is not an architecture.</p>
+
+  <h3>The tax, itemized</h3>
+  <ul class="plain">
+    <li><strong>Token duplication</strong> — each sub-agent needs enough context to act, so shared background is re-sent (and re-billed) per agent, and results are re-serialized back through the coordinator's window.</li>
+    <li><strong>Latency amplification</strong> — coordinator→worker→coordinator turns serialize model calls; every hand-off is seconds, not microseconds.</li>
+    <li><strong>The telephone game</strong> — each hand-off is a lossy natural-language compression of intent. Errors compound multiplicatively across hops.</li>
+    <li><strong>Synchronization by vibes</strong> — parallel agents can't see each other's decisions; conflicts are discovered at merge time, adjudicated by another model call.</li>
+    <li><strong>Fan-out without circuit breakers</strong> — a misbehaving branch can recursively multiply cost with no deterministic budget enforcement.</li>
+  </ul>
+
+  <div class="evidence">
+    <span class="tag">Evidence · Three independent sources, one conclusion</span>
+    <p><strong>Anthropic</strong> (running multi-agent successfully in production, so hardly biased against it): multi-agent systems consume ~<strong>15× the tokens</strong> of chat, are economical only where task value justifies it, and are explicitly "not a good fit" for domains with tight dependencies between agents — <em>their example of a poor fit is coding</em>.<sup class="cite"><a href="#r3">3</a></sup></p>
+    <p><strong>Cognition</strong> (Devin): "Don't Build Multi-Agents." Their production experience: parallel sub-agents with fragmented context make conflicting assumptions, and reliability comes from a single agent with continuous, fully-shared context — context engineering, not agent proliferation.<sup class="cite"><a href="#r4">4</a></sup></p>
+    <p><strong>Berkeley</strong> (Cemri et al., NeurIPS 2025): across 1,600+ annotated traces from 7 popular multi-agent frameworks, performance gains over single agents were often minimal; the team catalogued <strong>14 recurring failure modes</strong> in 3 classes — specification failures, inter-agent misalignment, and verification failures — and found most stem from <em>system design</em>, not model capability, and won't be fixed by better models.<sup class="cite"><a href="#r5">5</a></sup></p>
+    <p class="src">Anthropic engineering, 2025 · Cognition, 2025 · Cemri et al., MAST, NeurIPS 2025</p>
+  </div>
+
+  <h3>Deterministic orchestration: the boring alternative</h3>
+  <p>Notice what the coordinator agent is actually doing: routing, sequencing, retrying, aggregating. None of that requires intelligence. All of it has mature, deterministic machinery:</p>
+  <div class="vs">
+    <div class="a">
+      <h4>◌ Coordinator agent</h4>
+      <ul>
+        <li>Control flow decided per-run by inference — different every time</li>
+        <li>State lives in a context window; crash = amnesia</li>
+        <li>Retries, timeouts, budgets: improvised in prose</li>
+        <li>Debugging = reading transcripts of a committee</li>
+      </ul>
+    </div>
+    <div class="b">
+      <h4>● State machine / workflow engine</h4>
+      <ul>
+        <li>Control flow is code: explicit states, typed transitions, reviewable in a PR</li>
+        <li>State is durable and replayable (Temporal-class engines; LangGraph-style graphs)</li>
+        <li>Retries, timeouts, budgets, circuit breakers: first-class primitives</li>
+        <li>Debugging = inspecting a state machine's history</li>
+      </ul>
+    </div>
+  </div>
+  <p>The pattern that works is <em>deterministic skeleton, probabilistic muscles</em>: a workflow engine owns the graph — localize → retrieve → patch → test → review — and invokes the model only inside nodes where judgment is genuinely required. Event-driven orchestration handles fan-out where sub-tasks are truly independent (the one regime where even Anthropic's data says parallelism pays<sup class="cite"><a href="#r3">3</a></sup>). Even where sub-agents earn their keep, the honest framing — Cognition's — is that reliable ones are mostly <em>read-only context gatherers</em>: closer to expensive tool calls than to collaborating colleagues.<sup class="cite"><a href="#r4">4</a></sup></p>
+
+  <div class="takeaway">
+    <span class="tag">Takeaway</span>
+    <p>Coordination is a solved, deterministic problem — state machines, workflow engines, queues. Spend inference on judgment inside the nodes, never on the edges between them.</p>
+  </div>
+  
+</section>
+
+<section class="ch" id="p10">
+  <div class="ch-kicker"><span class="num">PART 10</span><span class="rule"></span><span>ORCHESTRATION &amp; MEMORY</span></div>
+  <h2 class="ch-title">Tests Should Be First-Class Retrieval Objects</h2>
+  <p class="ch-thesis">Tests define behavior better than documentation — and they never lie about being out of date.</p>
+
+  <p class="lede">Documentation describes what someone once believed the code did. Tests describe what the code verifiably does, today, in executable form — with setup, inputs, expected outputs, and edge cases spelled out. Yet most agent stacks treat tests as a thing you run <em>after</em> generating a patch, not a thing you retrieve <em>before</em>. That's backwards. The test suite is the best-maintained behavioral specification your repository has.</p>
+
+  <h3>Behavioral indexing</h3>
+  <p>Make tests queryable along the axes that matter:</p>
+  <ul class="plain">
+    <li><strong>Coverage mapping</strong> — run the suite under coverage once per merge and invert the result: for every function, the exact tests that execute it. <code>tests_covering("process_refund")</code> becomes a deterministic lookup.</li>
+    <li><strong>Contract extraction</strong> — parse assertions into behavior statements: "refund of a settled order returns <code>RefundResult(status=PENDING)</code>; refund exceeding order total raises <code>InvalidRefund</code>." Signatures told the model the shape (Part 4); assertions tell it the <em>meaning</em>.</li>
+    <li><strong>Fixture graph</strong> — fixtures encode how valid domain objects are constructed; linking them into the code graph gives the model canonical object-construction knowledge for free.</li>
+  </ul>
+  <p>Now the retrieval plan from Part 3 gains a behavioral layer: touching <code>process_refund</code> automatically pulls its three covering tests — a precise, executable spec of current behavior, usually far smaller than the docs that would attempt to describe it.</p>
+
+  <div class="evidence">
+    <span class="tag">Evidence · Tests as selection machinery</span>
+    <p>Agentless doesn't just run tests at the end — tests are load-bearing in its pipeline. It generates <em>reproduction tests</em> from the issue, uses existing <em>regression tests</em> to filter candidate patches, and re-ranks the survivors — a fully deterministic selection stage that the paper's ablations credit for a substantial share of final accuracy.<sup class="cite"><a href="#r1">1</a></sup> More broadly, SWE-bench itself is the proof that tests are the ground truth of behavior: the entire benchmark — the industry's shared yardstick for agent capability — defines "solved" as nothing more or less than "the fail-to-pass tests now pass."<sup class="cite"><a href="#r15">15</a></sup> If tests are how we <em>judge</em> agents, they should be how agents <em>see</em>.</p>
+    <p class="src">Xia et al., FSE 2025 · Jimenez et al., ICLR 2024</p>
+  </div>
+
+  <h3>Execution-driven, contract-first loops</h3>
+  <p>Tests also give the workflow skeleton (Part 9) its cheapest, most reliable validators. A contract-first loop looks like: retrieve covering tests → model writes/extends the failing test first (making intent executable) → model patches → deterministic runner executes → structured failure (sliced per Part 2) feeds the next attempt. Every iteration is graded by a compiler and a test runner — verifiers with zero hallucination rate — instead of by another model reading the diff and emitting an opinion. The loop converges on green, and "green" is not a matter of interpretation.</p>
+
+  <div class="takeaway">
+    <span class="tag">Takeaway</span>
+    <p>Index your tests like you index your code. They are the only documentation in the repository that is executable, self-verifying, and guaranteed current — which makes them the highest-signal retrieval objects you own.</p>
+  </div>
+  
+</section>
+
+<section class="ch" id="p11">
+  <div class="ch-kicker"><span class="num">PART 11</span><span class="rule"></span><span>ORCHESTRATION &amp; MEMORY</span></div>
+  <h2 class="ch-title">Agents Need Working Memory, Not Bigger Context Windows</h2>
+  <p class="ch-thesis">Humans don't reread every book they've ever read before solving a problem. Neither should AI.</p>
+
+  <p class="lede">The context window is being asked to be four different things at once: attention, notebook, library, and diary. Human cognition separates these — a tiny working memory over vast, indexed long-term stores, with aggressive forgetting as a feature. The append-only transcript that most agents run on is the opposite design: everything ever seen stays maximally "in mind" forever, degrading attention (Part 7's evidence) while billing you for the privilege.</p>
+
+  <h3>A memory hierarchy for agents</h3>
+  <ul class="plain">
+    <li><strong>Working memory</strong> (the window) — only what the current step needs: the task frame, the active files, the last failure. Small by policy, not by accident.</li>
+    <li><strong>Task memory</strong> — durable structured state for this job: the plan, decisions made ("chose option B because migration risk"), files touched, budget consumed. Lives in the workflow engine's state (Part 9), survives crashes, and is <em>selectively</em> paged in.</li>
+    <li><strong>Episodic memory</strong> — records of past sessions: "we fixed a similar DecimalConversionError in March; the fix was in serializer config." Indexed by embeddings + entities, retrieved when relevant, absent otherwise.</li>
+    <li><strong>Semantic memory</strong> — the durable knowledge layer: code graph (Part 4), domain dossiers (Part 5), schema index (Part 8), test contracts (Part 10).</li>
+  </ul>
+
+  <div class="evidence">
+    <span class="tag">Evidence · The OS analogy is a working architecture</span>
+    <p><strong>MemGPT</strong> (Packer et al., Berkeley) made this concrete: treat the context window as RAM and give the system OS-style virtual memory — paging information between the window and external storage with explicit memory-management operations. The approach let bounded-context models sustain coherent long-horizon behavior — document analysis and multi-session conversation beyond the raw window — by managing what's "resident" rather than growing it.<sup class="cite"><a href="#r17">17</a></sup> The same conclusion arrives from the failure side: Chroma's results imply that <em>even within</em> a large window, keeping stale content resident actively harms performance,<sup class="cite"><a href="#r7">7</a></sup> and Anthropic's context-engineering guidance formalizes the remedies — compaction, structured note-taking outside the window, and just-in-time retrieval — as the standard toolkit for long-horizon agents.<sup class="cite"><a href="#r19">19</a></sup></p>
+    <p class="src">Packer et al., arXiv:2310.08560 · Chroma, 2025 · Anthropic engineering, 2025</p>
+  </div>
+
+  <h3>Context aging, eviction, retrieval scheduling</h3>
+  <p>Once memory is tiered, management becomes ordinary systems engineering with ordinary policies. <strong>Aging:</strong> a file read 30 turns ago decays to its signature; a resolved sub-task collapses to its one-line decision record. <strong>Eviction:</strong> superseded attempts and dead-end explorations leave working memory entirely — recoverable from task memory if needed, but no longer taxing attention. <strong>Retrieval scheduling:</strong> each workflow node declares its context contract — the patch node gets code + contracts; the migration node gets schema + lineage; the review node gets diff + invariants. Nothing rides along "just in case," because "just in case" is precisely the distractor mass the research says is most harmful.</p>
+  <p>Notice the punchline: every one of these policies is deterministic. What pages in, what decays, what evicts — all decidable by code against declared contracts. The window stops being a junk drawer and becomes what it was always supposed to be: the small, hot set of exactly what this step needs. And a structured memory of entities, relations, and decisions is already most of the way to a knowledge graph — which is where this series goes next.</p>
+
+  <div class="takeaway">
+    <span class="tag">Takeaway</span>
+    <p>Scale memory, not context. The window is RAM — precious, small, and fast. Everything else belongs in indexed storage with deterministic paging policies.</p>
+  </div>
+  
+</section>
+
+<section class="ch" id="p12">
+  <div class="ch-kicker"><span class="num">PART 12</span><span class="rule"></span><span>ORCHESTRATION &amp; MEMORY</span></div>
+  <h2 class="ch-title">Knowledge Graphs Beat Prompt Engineering</h2>
+  <p class="ch-thesis">Knowledge should be connected — not concatenated.</p>
+
+  <p class="lede">Prompt engineering is the art of concatenation: stack descriptions of your system into a window and hope attention finds the relationships. But relationships are exactly what concatenated text destroys. "<code>RefundProcessor</code> writes <code>ledger_entries</code>, which <code>ReconciliationJob</code> reads nightly, which the finance dashboard queries" — in prose, that chain is three sentences the model must re-derive by attention. In a graph, it's three edges the system can traverse for free.</p>
+
+  <h3>One ontology, many sources</h3>
+  <p>The previous eleven parts each built a specialized index. The knowledge graph is where they federate — a single ontology over your entire engineering reality: <strong>code graphs</strong> (symbols, calls, imports — Part 4), <strong>schema graphs</strong> (tables, lineage — Part 8), <strong>documentation graphs</strong> (ADRs and dossiers linked to the entities they govern — Parts 5–6), <strong>test/contract graphs</strong> (behaviors linked to covered symbols — Part 10), and <strong>runtime graphs</strong> (services, traces, incidents from observability). Entity relationships cross the boundaries: this function ↔ writes this table ↔ governed by this ADR ↔ covered by these tests ↔ implicated in that incident. No single tool holds those edges today. That's why every incident review starts with an hour of archaeology — and why every agent session used to.</p>
+
+  <h3>Why graph retrieval reduces reasoning complexity</h3>
+  <p>When the answer requires multi-hop connection, flat retrieval makes the <em>model</em> do the hops: retrieve chunks, hold them in attention, infer the links — probabilistic work, paid in tokens, degraded by every distractor (Part 7). Graph retrieval does the hops in the <em>system</em> — deterministic traversal, then hands the model a pre-connected subgraph. You've converted reasoning (expensive, variable) into lookup (cheap, exact). That is the whole thesis of this series applied to knowledge itself.</p>
+
+  <div class="evidence">
+    <span class="tag">Evidence · Structure wins where connection matters</span>
+    <p>Microsoft's <strong>GraphRAG</strong> is the flagship result: LLM-extracted entity graph + Leiden community detection + pre-computed community summaries. On global sensemaking questions over ~1M-token corpora, it beat vector RAG with <strong>~70–80% win rates on comprehensiveness and diversity</strong>, and matched full hierarchical source-text summarization while using roughly <strong>2–3% of the tokens per query</strong> — because connection-finding moved from query time to index time.<sup class="cite"><a href="#r10">10</a>,<a href="#r11">11</a></sup> Vector search finds things that <em>sound like</em> the question; graph traversal finds things that are <em>related to</em> the answer.</p>
+    <p class="src">Edge et al., arXiv:2404.16130 · Microsoft Research, 2024</p>
+  </div>
+
+  <div class="counter">
+    <span class="tag">Counterweight — graphs are not free</span>
+    <p>Honest engineering requires the caveat: naive graph-RAG can <em>inflate</em> prompts instead of shrinking them. Comparative studies measured some graph-RAG variants stuffing 40k–100k tokens per query — orders of magnitude above vector baselines — and found that piling on more retrieved subgraph stopped improving answers while adding noise.<sup class="cite"><a href="#r21">21</a></sup> Indexing also costs real money up front and must be maintained. The lesson isn't "graphs always win"; it's that a graph is an <em>index for precise traversal</em>, not a license to dump neighborhoods. Budgets and slicing (Part 7) apply to subgraphs exactly as they apply to logs. For code specifically, you're also in the luckiest possible domain: unlike prose corpora, the graph doesn't need LLM extraction — compilers, parsers, and migrations give you most edges deterministically and nearly free.</p>
+  </div>
+
+  <h3>Ontology over vibes</h3>
+  <p>The practical migration path: define a small ontology (Entity types: Function, Table, Service, ADR, Test, Incident, Domain; Edge types: calls, writes, covered_by, governed_by, caused). Populate it from the deterministic sources you already built in Parts 4, 5, 8, and 10. Add embedding-based entry points for fuzzy queries, but make edges — not similarity — the backbone of expansion. Retrieval becomes: anchor (parsed, Part 3) → traverse (typed edges, bounded hops) → rank (centrality + task relevance) → slice to budget. Every step deterministic except the final generation.</p>
+
+  <div class="takeaway">
+    <span class="tag">Takeaway</span>
+    <p>Concatenation forces the model to rediscover relationships you already know. Store knowledge as a graph and retrieval becomes traversal — connection-finding moves out of the token bill and into the index.</p>
+  </div>
+  
+</section>
+
+<section class="ch" id="p13">
+  <div class="ch-kicker"><span class="num">PART 13</span><span class="rule"></span><span>THE ENDGAME</span></div>
+  <h2 class="ch-title">Measuring Agent Intelligence</h2>
+  <p class="ch-thesis">Benchmarking on coding challenges misses what matters in production.</p>
+
+  <p class="lede">"Our agent scores X% on SWE-bench" tells you one number about one distribution of tasks under lab conditions — and nothing about what it costs, how long it takes, how much collateral change it makes, or whether it will do the same thing twice. Benchmarks measure capability ceilings. Production needs efficiency, precision, and repeatability — and those require different instruments.</p>
+
+  <div class="evidence">
+    <span class="tag">Evidence · Accuracy-only evaluation misleads</span>
+    <p>The Princeton team showed this formally: without cost as a co-equal axis, leaderboards reward scientifically meaningless spend — retry loops and complexity that buy accuracy at any price — and the community drew wrong conclusions about <em>why</em> agents improved. Their prescription, jointly optimizing on a <strong>cost–accuracy Pareto frontier</strong>, revealed simple designs matching complex ones at a fraction of the cost.<sup class="cite"><a href="#r2">2</a></sup> Agentless made the same point empirically by reporting <em>% resolved, average cost, and average tokens together</em> — and separately audited SWE-bench Lite itself, finding problem-quality issues (like issues whose text leaks the solution) that inflate naive readings of benchmark scores.<sup class="cite"><a href="#r1">1</a></sup> Anthropic's variance analysis completes the picture: if token usage explains ~80% of performance variance,<sup class="cite"><a href="#r3">3</a></sup> then a score reported without token counts is mostly measuring budget, not intelligence.</p>
+    <p class="src">Kapoor et al., TMLR 2025 · Xia et al., FSE 2025 · Anthropic, 2025</p>
+  </div>
+
+  <h3>The production scorecard</h3>
+  <div class="mgrid">
+    <div class="mcard"><h5>files_touched / lines_changed</h5><p>Surgical vs. shotgun. Two agents both "solve" the ticket; one edits 2 files, the other rewrites 14. Blast radius is review cost, merge risk, and regression surface.</p></div>
+    <div class="mcard"><h5>tokens_consumed / task</h5><p>The direct cost of thinking. Tracked per phase (retrieval vs. generation vs. repair), it tells you exactly which part of the architecture is wasteful.</p></div>
+    <div class="mcard"><h5>tool_calls &amp; graph_queries</h5><p>The exploration ratio. High tool-call counts with low graph-query counts means the agent is foraging probabilistically for what an index should provide deterministically.</p></div>
+    <div class="mcard"><h5>time_to_green</h5><p>Wall-clock from task start to passing CI. The metric users actually feel, and the one latency-amplifying architectures (Part 9) quietly destroy.</p></div>
+    <div class="mcard"><h5>test_pass_rate &amp; first-attempt rate</h5><p>Not just "eventually green" but "green in how many attempts" — each repair loop multiplies cost and is a proxy for context quality.</p></div>
+    <div class="mcard"><h5>cost_per_completed_task</h5><p>The only number finance cares about — inclusive of retries, abandoned runs, and human rework. Report it like COGS, because it is.</p></div>
+    <div class="mcard"><h5>retrieval_precision</h5><p>Of the context supplied, how much did the final patch depend on? Directly measurable: intersect provided spans with edited/read spans. The single best health metric for your deterministic layer.</p></div>
+    <div class="mcard"><h5>context_utilization</h5><p>The inverse view: tokens supplied vs. tokens that mattered. Sub-10% utilization means you're paying attention-degradation costs (Part 7) for nothing.</p></div>
+    <div class="mcard"><h5>variance / repeatability</h5><p>Run the same task 10×. Determinism-heavy systems cluster tightly on cost and outcome; agent-heavy systems scatter. Variance is risk, and risk is cost.</p></div>
+  </div>
+
+  <p>These aren't replacements for benchmarks — they're the instrument panel benchmarks can't be. Capability scores tell you which model to buy. This scorecard tells you whether your <em>system</em> is improving: whether this quarter's retrieval work moved precision from 8% to 40%, whether graph queries are displacing exploratory tool calls, whether cost-per-task is falling while pass rates hold. A team optimizing these numbers is doing engineering. A team optimizing only a leaderboard score is doing marketing.</p>
+
+  <div class="takeaway">
+    <span class="tag">Takeaway</span>
+    <p>Benchmark scores measure the model's ceiling. Tokens, tool calls, blast radius, time-to-green, and retrieval precision measure your architecture. Only one of those is under your control — instrument it.</p>
+  </div>
+  
+</section>
+
+<section class="ch" id="p14">
+  <div class="ch-kicker"><span class="num">PART 14</span><span class="rule"></span><span>THE ENDGAME</span></div>
+  <h2 class="ch-title">The Future Isn't Better Models. It's Better Systems.</h2>
+  <p class="ch-thesis">LLMs are becoming commodities. The moat is the architecture around them.</p>
+
+  <p class="lede">Every capability gap between frontier models closes in months. Prices per token keep falling; open-weight models keep climbing the benchmarks; whatever advantage "we use the smartest model" confers, your competitor rents the same advantage tomorrow with one config change. Model choice is becoming procurement. Architecture is becoming strategy.</p>
+
+  <h3>Where the compounding advantage moved</h3>
+  <ul class="plain">
+    <li><strong>Better retrieval</strong> — parsed prompts, code graphs, schema indexes, test contracts (Parts 3, 4, 8, 10). Every point of precision benefits every model, current and future.</li>
+    <li><strong>Better orchestration</strong> — deterministic skeletons with probabilistic muscles (Part 9); budgets and circuit breakers as primitives, not prompts.</li>
+    <li><strong>Better memory</strong> — tiered, indexed, deterministically paged (Parts 5, 11); institutional knowledge that accumulates instead of evaporating per session.</li>
+    <li><strong>Better tooling</strong> — interfaces that return sliced signal, not raw exhaust (Part 2); the ACI lesson, generalized.</li>
+    <li><strong>Better observability</strong> — the Part 13 scorecard wired into every run, so the system's economics are as visible as its outputs.</li>
+    <li><strong>Better evaluation</strong> — cost–accuracy frontiers and repeatability, not leaderboard theater.</li>
+    <li><strong>Better economics</strong> — cache-friendly context layouts, amortized indexes, inference reserved for judgment.</li>
+  </ul>
+  <p>Notice the asymmetry that makes this a durable strategy. Model improvements arrive for everyone simultaneously — including your competitors. System improvements are <em>yours</em>: they encode your repository, your schema lineage, your test contracts, your incident history. They compound with every merge. And they're model-portable — the day a better or cheaper model ships, a well-architected system swaps it in and inherits the gain on top of everything already built, while the prompt-and-pray stack starts re-tuning from scratch.</p>
+  <p>There's a precedent for this moment. Databases stopped competing on raw storage and started competing on query planners. Networks stopped competing on bandwidth and started competing on protocols. Compute stopped competing on clock speed and started competing on orchestration. In every case, the commodity layer kept improving — and the value migrated to the systems that used it most efficiently. Inference is following the same curve, and the evidence has been visible all along this series: a $0.34 pipeline out-solving $3+ agents,<sup class="cite"><a href="#r1">1</a></sup> token budgets explaining more variance than model choice,<sup class="cite"><a href="#r3">3</a></sup> simple baselines matching complex architectures at a tenth the cost.<sup class="cite"><a href="#r2">2</a></sup></p>
+  <p>The companies that win won't necessarily have the smartest model. They'll have the architecture that asks the model to think the least — and therefore gets the most out of whatever model exists.</p>
+
+  <div class="takeaway">
+    <span class="tag">Takeaway</span>
+    <p>Models are rented. Systems are owned. Build the layer that makes any model cheaper, faster, and more precise — that's the asset that compounds.</p>
+  </div>
+  
+</section>
+
+<section class="ch" id="closing">
+  <div class="ch-kicker"><span class="num">∎</span><span class="rule"></span><span>SERIES CLOSING THOUGHT</span></div>
+  <p class="big" style="font-family:var(--sans);font-weight:700;letter-spacing:-.015em;font-size:clamp(1.5rem,3vw,2.1rem);line-height:1.3;margin:1.4rem 0">
+    <span class="prob" style="color:var(--prob)">Intelligence is expensive.</span><br>
+    <span class="det" style="color:var(--det)">Determinism is cheap.</span><br>
+    Great AI systems maximize the latter so they can spend the former only where it creates real value.
+  </p>
+  <p>Fourteen parts, one discipline: parse before you prompt, index before you search, traverse before you reason, validate before you trust, and measure everything. The model is the most powerful component in the stack — which is exactly why a serious engineering organization treats its invocations the way it treats any scarce, expensive resource: scheduled deliberately, fed precisely, and audited relentlessly.</p>
+  <p>If this series changes one thing about how your team builds, let it be this habit: before every model call your system makes, ask — <em>what part of this could code have done?</em> The answer, far more often than the industry admits, is: most of it.</p>
+  
+</section>
+
+<section class="ch" id="author">
+  <div class="ch-kicker"><span class="num">BIO</span><span class="rule"></span><span>ABOUT THE AUTHOR</span></div>
+  <div class="card">
+    <img class="face" src="/research/deterministic-systems-optimizations-for-ai-agents/author.jpg" alt="Mac Anderson, founder and CEO of Oxagen Inc.">
+    <div class="bio">
+      <h3>Mac Anderson</h3>
+      <div class="role">Founder &amp; CEO, Oxagen Inc. · Los Angeles, California</div>
+      <p><strong>Oxagen</strong> enables enterprise businesses and software companies to build, deploy, run, and meter AI agent usage — governed context infrastructure for enterprise agents, the deterministic layer this book argues every serious agent system needs.</p>
+      <p>Mac has been building code agents since the first rollout of OpenAI's Codex. The fourteen parts of this field manual distill what that experience — and the published research — consistently shows: the durable advantage in AI systems belongs to the architecture around the model, not the model itself.</p>
+      <div class="co"><svg xmlns="http://www.w3.org/2000/svg" viewBox="7.775 4.325 36.343 37.216" fill="none" role="img" aria-label="Oxagen logomark"><defs><linearGradient id="oxEB" gradientUnits="userSpaceOnUse" gradientTransform="matrix(27.9194 19.5129 -21.9367 24.8347 12.2858 18.2731)" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#FD9A4B"/><stop offset=".5" stop-color="#F07650"/><stop offset="1" stop-color="#EB5C5E"/></linearGradient><linearGradient id="oxE2B" gradientUnits="userSpaceOnUse" gradientTransform="matrix(12.59 0 0 12.59 9.77471 32.9406)" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#FD9A4B"/><stop offset=".5" stop-color="#F07650"/><stop offset="1" stop-color="#EB5C5E"/></linearGradient></defs><g fill="none" stroke="currentColor" stroke-width="1" stroke-linejoin="miter"><path d="M16.1893 6.32478L21.9857 9.3639L21.9857 15.4418L16.1893 18.4806L10.3929 15.4418L10.3929 9.3639L16.1893 6.32478Z"/><path d="M29.2662 6.32478L35.0626 9.3639L35.0626 15.4418L29.2662 18.4806L23.4698 15.4418L23.4698 9.3639L29.2662 6.32478Z"/><path d="M22.6376 16.5647L28.4341 19.6038L28.4341 25.6814L22.6376 28.7205L16.8412 25.6814L16.8412 19.6038L22.6376 16.5647Z"/><path d="M29.2662 26.8043L35.0626 29.8431L35.0626 35.921L29.2662 38.9601L23.4698 35.921L23.4698 29.8431L29.2662 26.8043Z"/></g><path d="M35.8698 16.2903L42.1182 19.4993L42.1182 25.9165L35.8698 29.1255L29.6214 25.9165L29.6214 19.4993L35.8698 16.2903Z" fill="url(#oxEB)"/><path d="M16.0697 26.3399L22.3647 29.6401L22.3647 36.2408L16.0697 39.5413L9.77471 36.2408L9.77471 29.6401L16.0697 26.3399Z" fill="url(#oxE2B)" opacity=".55"/></svg><span class="wm">oxagen</span><a href="https://oxagen.sh">oxagen.sh</a></div>
+    </div>
+  </div>
+  
+</section>
+
+<section class="ch" id="refs">
+  <div class="ch-kicker"><span class="num">※</span><span class="rule"></span><span>REFERENCES &amp; FURTHER READING</span></div>
+  <h2 class="ch-title">Sources</h2>
+  <p>Every empirical claim in this manual traces to one of the sources below. Read the primary literature — it's better than any summary of it, including this one.</p>
+  <ol>
+    <li id="r1"><b>Xia, Deng, Dunn &amp; Zhang</b> — "Agentless: Demystifying LLM-based Software Engineering Agents." FSE 2025. <span class="m"><a href="https://arxiv.org/abs/2407.01489">arXiv:2407.01489</a> · <a href="https://github.com/OpenAutoCoder/Agentless">github.com/OpenAutoCoder/Agentless</a></span></li>
+    <li id="r2"><b>Kapoor, Stroebl, Siegel, Nadgir &amp; Narayanan</b> (Princeton) — "AI Agents That Matter." TMLR 2025. <span class="m"><a href="https://arxiv.org/abs/2407.01502">arXiv:2407.01502</a></span></li>
+    <li id="r3"><b>Anthropic Engineering</b> — "How we built our multi-agent research system." June 2025. <span class="m"><a href="https://www.anthropic.com/engineering/multi-agent-research-system">anthropic.com/engineering/multi-agent-research-system</a></span></li>
+    <li id="r4"><b>Cognition (Walden Yan)</b> — "Don't Build Multi-Agents." June 2025. <span class="m"><a href="https://cognition.ai/blog/dont-build-multi-agents">cognition.ai/blog/dont-build-multi-agents</a></span></li>
+    <li id="r5"><b>Cemri et al.</b> (UC Berkeley) — "Why Do Multi-Agent LLM Systems Fail?" (MAST). NeurIPS 2025 Datasets &amp; Benchmarks. <span class="m"><a href="https://arxiv.org/abs/2503.13657">arXiv:2503.13657</a></span></li>
+    <li id="r6"><b>Liu, Lin, Hewitt, Paranjape, Bevilacqua, Petroni &amp; Liang</b> — "Lost in the Middle: How Language Models Use Long Contexts." TACL 2024. <span class="m"><a href="https://arxiv.org/abs/2307.03172">arXiv:2307.03172</a></span></li>
+    <li id="r7"><b>Hong, Troynikov &amp; Huber</b> (Chroma) — "Context Rot: How Increasing Input Tokens Impacts LLM Performance." July 2025. <span class="m"><a href="https://research.trychroma.com/context-rot">research.trychroma.com/context-rot</a></span></li>
+    <li id="r8"><b>Modarressi et al.</b> (LMU Munich &amp; Adobe) — "NoLiMa: Long-Context Evaluation Beyond Literal Matching." 2025. <span class="m"><a href="https://arxiv.org/abs/2502.05167">arXiv:2502.05167</a></span></li>
+    <li id="r9"><b>Cuconasu et al.</b> — "The Power of Noise: Redefining Retrieval for RAG Systems." SIGIR 2024. <span class="m"><a href="https://arxiv.org/abs/2401.14887">arXiv:2401.14887</a></span></li>
+    <li id="r10"><b>Edge et al.</b> (Microsoft Research) — "From Local to Global: A Graph RAG Approach to Query-Focused Summarization." 2024. <span class="m"><a href="https://arxiv.org/abs/2404.16130">arXiv:2404.16130</a></span></li>
+    <li id="r11"><b>Microsoft Research</b> — "GraphRAG: New tool for complex data discovery." July 2024. <span class="m"><a href="https://www.microsoft.com/en-us/research/blog/graphrag-new-tool-for-complex-data-discovery-now-on-github/">microsoft.com/research blog</a></span></li>
+    <li id="r12"><b>Aider (Paul Gauthier)</b> — "Building a better repository map with tree-sitter" &amp; repo-map docs. 2023–. <span class="m"><a href="https://aider.chat/2023/10/22/repomap.html">aider.chat/2023/10/22/repomap.html</a> · <a href="https://aider.chat/docs/repomap.html">aider.chat/docs/repomap.html</a></span></li>
+    <li id="r13"><b>Zhang, Ruan, Fan &amp; Roychoudhury</b> (NUS) — "AutoCodeRover: Autonomous Program Improvement." ISSTA 2024. <span class="m"><a href="https://arxiv.org/abs/2404.05427">arXiv:2404.05427</a></span></li>
+    <li id="r14"><b>Yang, Jimenez et al.</b> (Princeton) — "SWE-agent: Agent-Computer Interfaces Enable Automated Software Engineering." NeurIPS 2024. <span class="m"><a href="https://arxiv.org/abs/2405.15793">arXiv:2405.15793</a></span></li>
+    <li id="r15"><b>Jimenez et al.</b> — "SWE-bench: Can Language Models Resolve Real-World GitHub Issues?" ICLR 2024. <span class="m"><a href="https://arxiv.org/abs/2310.06770">arXiv:2310.06770</a></span></li>
+    <li id="r16"><b>Anthropic</b> — "Prompt caching with Claude" (up to 90% cost / 85% latency reduction; cache-read ≈ 0.1× input price). 2024. <span class="m"><a href="https://www.anthropic.com/news/prompt-caching">anthropic.com/news/prompt-caching</a></span></li>
+    <li id="r17"><b>Packer et al.</b> (UC Berkeley) — "MemGPT: Towards LLMs as Operating Systems." 2023. <span class="m"><a href="https://arxiv.org/abs/2310.08560">arXiv:2310.08560</a></span></li>
+    <li id="r18"><b>Shannon, C.E.</b> — "A Mathematical Theory of Communication." Bell System Technical Journal, 1948. <span class="m">The original signal-vs-noise framework</span></li>
+    <li id="r19"><b>Anthropic Engineering</b> — "Effective context engineering for AI agents." 2025. <span class="m"><a href="https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents">anthropic.com/engineering</a></span></li>
+    <li id="r20"><b>Anthropic Engineering</b> — "Writing effective tools for agents." 2025. <span class="m"><a href="https://www.anthropic.com/engineering/writing-tools-for-agents">anthropic.com/engineering</a></span></li>
+    <li id="r21"><b>Zhu et al.</b> — "When to use Graphs in RAG: A Comprehensive Analysis for Graph Retrieval-Augmented Generation." 2025. <span class="m"><a href="https://arxiv.org/abs/2506.05690">arXiv:2506.05690</a></span></li>
+  </ol>
+  <footer class="colophon">
+    <p><strong>How to use this manual.</strong> Each part stands alone as a LinkedIn post or article; the whole reads as a book. Share the file, or excerpt any part with its evidence block and takeaway intact. Numbers cited reflect the referenced publications; verify against primaries before quoting in your own work — sources evolve.</p>
+    <p style="margin-top:.6rem">© 2026 Mac Anderson · Published with Oxagen Inc., Los Angeles. Built as a single self-contained HTML file. No tracking, no dependencies beyond web fonts. Works offline (system fonts apply), prints cleanly.</p>
+  </footer>
+</section></template>
+
+<div id="printRoot" class="bk"></div>
+
+<script>
+"use strict";
+/* ============================ manifest ============================ */
+const MANIFEST = [{"id":"cover","num":"","kicker":"","title":"Cover"},{"id":"p1","num":"PART 01","kicker":"THE ECONOMICS","title":"AI Agents Are Not Expensive. Bad Architecture Is."},{"id":"p2","num":"PART 02","kicker":"DETERMINISTIC RETRIEVAL","title":"Stop Making Agents Read Your Entire Logs"},{"id":"p3","num":"PART 03","kicker":"DETERMINISTIC RETRIEVAL","title":"Parse the User Prompt Before the Model Ever Sees It"},{"id":"p4","num":"PART 04","kicker":"DETERMINISTIC RETRIEVAL","title":"Why Grep Is the Wrong Retrieval Engine"},{"id":"p5","num":"PART 05","kicker":"DETERMINISTIC RETRIEVAL","title":"Build Semantic Memory Once"},{"id":"p6","num":"PART 06","kicker":"CONTEXT ENGINEERING","title":"Your Markdown Files Are Becoming Technical Debt"},{"id":"p7","num":"PART 07","kicker":"CONTEXT ENGINEERING","title":"Context Compression Is More Valuable Than Bigger Models"},{"id":"p8","num":"PART 08","kicker":"CONTEXT ENGINEERING","title":"Schema Rot Is the Silent Killer of AI Coding Agents"},{"id":"p9","num":"PART 09","kicker":"ORCHESTRATION &amp; MEMORY","title":"Why Coordinator Agents Don't Scale"},{"id":"p10","num":"PART 10","kicker":"ORCHESTRATION &amp; MEMORY","title":"Tests Should Be First-Class Retrieval Objects"},{"id":"p11","num":"PART 11","kicker":"ORCHESTRATION &amp; MEMORY","title":"Agents Need Working Memory, Not Bigger Context Windows"},{"id":"p12","num":"PART 12","kicker":"ORCHESTRATION &amp; MEMORY","title":"Knowledge Graphs Beat Prompt Engineering"},{"id":"p13","num":"PART 13","kicker":"THE ENDGAME","title":"Measuring Agent Intelligence"},{"id":"p14","num":"PART 14","kicker":"THE ENDGAME","title":"The Future Isn't Better Models. It's Better Systems."},{"id":"closing","num":"∎","kicker":"SERIES CLOSING THOUGHT","title":"Closing Thought"},{"id":"author","num":"BIO","kicker":"ABOUT THE AUTHOR","title":"About the Author"},{"id":"refs","num":"※","kicker":"REFERENCES &amp; FURTHER READING","title":"Sources"}];
+
+const ASPECT = 8.5 / 11;               // page proportion mirrors US Letter
+const LS_KEY = "ox-reader-v1";
+const FONTS = [
+  { id:"literata", name:"Literata",  desc:"Serif · designed for e-reading", css:"'Literata',Charter,'Iowan Old Style',Georgia,serif" },
+  { id:"georgia",  name:"Georgia",   desc:"Serif · classic screen face",    css:"Georgia,'Times New Roman',serif" },
+  { id:"palatino", name:"Palatino",  desc:"Serif · calligraphic book face", css:"'Palatino Linotype',Palatino,'Book Antiqua','URW Palladio L',Georgia,serif" },
+  { id:"charter",  name:"Charter",   desc:"Serif · crisp newspaper face",   css:"Charter,'Bitstream Charter','Iowan Old Style','Sitka Text',Cambria,Georgia,serif" },
+  { id:"aeonik",   name:"Aeonik",    desc:"Sans · the Oxagen house face",   css:"'Aeonik',ui-sans-serif,system-ui,'Segoe UI',Roboto,Arial,sans-serif" },
+];
+
+const $ = (s, r) => (r || document).querySelector(s);
+const root = document.documentElement;
+const book = $("#book"), leaf = $("#leaf"), leafShadow = $("#leafShadow");
+const panes = {
+  L: $("#pageL"), R: $("#pageR"),
+  A: $("#faceA"), B: $("#faceB"),
+};
+const flows = {
+  M: $("#measure .flow"),
+  L: $("#pageL .flow"), R: $("#pageR .flow"),
+  A: $("#faceA .flow"), B: $("#faceB .flow"),
+};
+
+/* ============================ state ============================ */
+let settings = { font:"literata", size:100, ink:false };
+try { Object.assign(settings, JSON.parse(localStorage.getItem(LS_KEY) || "{}")); } catch {}
+
+let stride = 0, colW = 0, totalPages = 1, spread = 0, maxSpread = 0;
+let single = false, flipping = false, pendingDir = 0;
+let anchors = [];         // [{id, page, title, num}]  chapter starts
+let anchorPages = {};     // id -> page (all ids incl. refs)
+let chStarts = new Set(); // pages where a chapter opens (no running head)
+let activeAnim = null;
+const tpl = $("#src");
+const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const initialHash = location.hash.slice(1); // captured before replaceState can clear it
+
+/* ============================ geometry & pagination ============================ */
+function layout() {
+  const availW = innerWidth - (innerWidth < 720 ? 20 : 116);
+  const availH = innerHeight - 106;
+  single = innerWidth < 720 || availW / availH < ASPECT * 1.15;
+  book.classList.toggle("single", single);
+
+  let ph = availH, pw = ph * ASPECT;
+  const maxW = single ? availW : availW / 2;
+  if (pw > maxW) { pw = maxW; ph = pw / ASPECT; }
+  pw = Math.floor(pw); ph = Math.floor(ph);
+
+  const padx = Math.round(pw * 0.10), padt = Math.round(ph * 0.075), padb = Math.round(ph * 0.095);
+  colW = pw - padx * 2;
+  const fs = clamp(ph * 0.0205 * (settings.size / 100), 11, 30);
+  const gap = padx * 2;
+  stride = colW + gap;
+
+  setVars({ "--pw": pw+"px", "--ph": ph+"px", "--padx": padx+"px", "--padt": padt+"px",
+            "--padb": padb+"px", "--colw": colW+"px", "--gap": gap+"px", "--fs": fs.toFixed(2)+"px" });
+
+  repaginate();
+}
+
+function repaginate() {
+  const keepId = nearestAnchorId();
+  // force layout of the measurement flow, then count columns
+  const m = flows.M;
+  m.style.transform = "none";
+  const w = m.scrollWidth;
+  totalPages = Math.max(1, Math.round((w + parseFloat(getVar("--gap"))) / stride));
+  maxSpread = single ? totalPages - 1 : Math.ceil((totalPages - 1) / 2);
+
+  // map anchors -> pages
+  anchorPages = {};
+  const mRect = m.getBoundingClientRect();
+  m.querySelectorAll("[id]").forEach(el => {
+    const p = Math.max(0, Math.round((el.getBoundingClientRect().left - mRect.left) / stride - 0.02));
+    anchorPages[el.id] = Math.min(p, totalPages - 1);
+  });
+  anchors = MANIFEST.map(mf => ({ ...mf, page: anchorPages[mf.id] ?? 0 }));
+  chStarts = new Set(anchors.map(a => a.page));
+
+  buildToc();
+  if (keepId && keepId in anchorPages) {
+    spread = spreadOfPage(anchorPages[keepId]);
+  }
+  spread = clamp(spread, 0, maxSpread);
+  renderSpread();
+}
+
+function nearestAnchorId() {
+  if (!anchors.length) return null;
+  const page = single ? spread : spread * 2;
+  let best = anchors[0];
+  for (const a of anchors) if (a.page <= page) best = a;
+  return best.id;
+}
+
+function spreadOfPage(p) { return single ? p : Math.ceil(p / 2); }
+function leftPage(s)  { return single ? s : s * 2 - 1; }
+function rightPage(s) { return single ? s : s * 2; }
+
+/* ============================ rendering ============================ */
+function showPage(key, p) {
+  const pane = panes[key], flow = flows[key];
+  const blank = p < 0 || p >= totalPages;
+  pane.classList.toggle("blank", blank);
+  if (!blank) flow.style.transform = `translateX(${-p * stride}px)`;
+  const folio = pane.querySelector(".folio"), rh = pane.querySelector(".rh");
+  const quiet = blank || p === 0 || chStarts.has(p);
+  if (folio) folio.textContent = blank || p === 0 ? "" : p + 1;
+  if (rh) rh.textContent = quiet ? "" : runningHead(p, key === "L" || key === "B" ? "verso" : "recto");
+}
+function runningHead(p, side) {
+  if (side === "verso" && !single) return "Engineering Deterministic AI Coding Agents";
+  let cur = anchors[0];
+  for (const a of anchors) if (a.page <= p) cur = a;
+  return cur ? (cur.num ? cur.num + " · " : "") + cur.title : "";
+}
+
+function renderSpread() {
+  showPage("L", leftPage(spread));
+  showPage("R", rightPage(spread));
+  updateChrome();
+}
+
+function updateChrome() {
+  const p = rightPage(spread);
+  const shown = Math.min(p + 1, totalPages);
+  $("#prog b").style.width = (totalPages > 1 ? (shown - 1) / (totalPages - 1) * 100 : 0) + "%";
+  $("#pginfo").textContent = `Page ${shown} of ${totalPages}`;
+  $("#live").textContent = `Page ${shown} of ${totalPages}`;
+  // reflect chapter in URL for shareable position
+  const id = nearestAnchorId();
+  if (id) history.replaceState(null, "", id === "cover" ? location.pathname : "#" + id);
+  $("#edgeL").style.visibility = spread > 0 ? "visible" : "hidden";
+  $("#edgeR").style.visibility = spread < maxSpread ? "visible" : "hidden";
+  // highlight toc
+  document.querySelectorAll("#tocList li").forEach(li => li.classList.toggle("cur", li.dataset.id === id));
+}
+
+/* ============================ page turning ============================ */
+function goToPage(p, animate = true) {
+  const s = clamp(spreadOfPage(clamp(p, 0, totalPages - 1)), 0, maxSpread);
+  goToSpread(s, animate);
+}
+function goToSpread(s, animate = true) {
+  s = clamp(s, 0, maxSpread);
+  if (s === spread && !flipping) return;
+  if (!animate || reduced || flipping) { jumpTo(s); return; }
+  flip(s > spread ? 1 : -1, s);
+}
+function jumpTo(s) {
+  if (activeAnim) { activeAnim.cancel(); activeAnim = null; }
+  leaf.classList.remove("on");
+  leaf.style.transform = "";
+  flipping = false; pendingDir = 0;
+  spread = clamp(s, 0, maxSpread);
+  renderSpread();
+}
+
+function next() { if (spread < maxSpread) queueFlip(1); }
+function prev() { if (spread > 0) queueFlip(-1); }
+function queueFlip(dir) {
+  if (flipping) { pendingDir = dir; return; }
+  flip(dir, spread + dir);
+}
+
+function flip(dir, targetSpread) {
+  if (reduced) { jumpTo(targetSpread); return; }
+  flipping = true;
+  const s = spread;
+  const from = dir > 0 ? 0 : -180, to = dir > 0 ? -180 : 0;
+  leaf.style.transform = `rotateY(${from}deg)`;
+  leaf.classList.add("on");
+
+  if (single) {
+    if (dir > 0) {
+      // current page turns away to the left, revealing the next beneath
+      showPage("A", s); showPage("B", -1); showPage("R", targetSpread);
+    } else {
+      // previous page sweeps in from the left and lands on top
+      showPage("A", targetSpread); showPage("B", -1); // base keeps current page
+    }
+  } else if (dir > 0) {
+    // leaf lifts from the right; its front is our current right page,
+    // its back is the incoming left page; beneath it the incoming right page.
+    showPage("A", rightPage(s));
+    showPage("B", leftPage(targetSpread));
+    showPage("R", rightPage(targetSpread));
+  } else {
+    // leaf starts lying on the left (rotated 180°); its back face is our
+    // current left page, its front the incoming right page.
+    showPage("B", leftPage(s));
+    showPage("A", rightPage(targetSpread));
+    showPage("L", leftPage(targetSpread));
+  }
+
+  const dur = 620;
+  const ease = "cubic-bezier(.25,.55,.3,1)";
+  activeAnim = leaf.animate(
+    [{ transform: `rotateY(${from}deg)` }, { transform: `rotateY(${to}deg)` }],
+    { duration: dur, easing: ease, fill: "forwards" }
+  );
+  // moving shadow on the static pages + shading across the leaf faces
+  leafShadow.style.left = dir > 0 ? "0" : "auto";
+  leafShadow.style.right = dir > 0 ? "auto" : "0";
+  leafShadow.animate([{ opacity: 0 }, { opacity: .8, offset: .5 }, { opacity: 0 }], { duration: dur, easing: "linear" });
+  $("#faceA .shade").animate([{ opacity: dir > 0 ? 0 : .9 }, { opacity: dir > 0 ? .9 : 0 }], { duration: dur, easing: ease });
+  $("#faceB .shade").animate([{ opacity: dir > 0 ? .9 : 0 }, { opacity: dir > 0 ? 0 : .9 }], { duration: dur, easing: ease });
+
+  activeAnim.onfinish = () => {
+    if (!flipping) return; // a jumpTo() already resolved this turn
+    activeAnim = null;
+    spread = targetSpread;
+    leaf.classList.remove("on");
+    leaf.style.transform = "";
+    flipping = false;
+    renderSpread();
+    if (pendingDir) { const d = pendingDir; pendingDir = 0; queueFlip(d); }
+  };
+}
+
+/* ============================ input ============================ */
+addEventListener("keydown", (e) => {
+  if (document.querySelector(".ovl.on")) {
+    if (e.key === "Escape") closeOvls();
+    return;
+  }
+  switch (e.key) {
+    case "ArrowRight": case "PageDown": case " ": e.preventDefault(); next(); break;
+    case "ArrowLeft": case "PageUp": e.preventDefault(); prev(); break;
+    case "Home": goToSpread(0); break;
+    case "End": goToSpread(maxSpread); break;
+  }
+});
+$("#edgeR").addEventListener("click", next);
+$("#edgeL").addEventListener("click", prev);
+
+let tx = null, ty = null;
+addEventListener("touchstart", (e) => { tx = e.touches[0].clientX; ty = e.touches[0].clientY; }, { passive: true });
+addEventListener("touchend", (e) => {
+  if (tx == null) return;
+  const dx = e.changedTouches[0].clientX - tx, dy = e.changedTouches[0].clientY - ty;
+  if (Math.abs(dx) > 48 && Math.abs(dx) > Math.abs(dy) * 1.5) (dx < 0 ? next : prev)();
+  tx = ty = null;
+}, { passive: true });
+
+/* citation & internal links inside the visible panes */
+book.addEventListener("click", (e) => {
+  const a = e.target.closest("a[href]");
+  if (!a) return;
+  const href = a.getAttribute("href");
+  if (href.startsWith("#")) {
+    e.preventDefault();
+    const id = href.slice(1);
+    if (id in anchorPages) goToPage(anchorPages[id]);
+  } else {
+    e.preventDefault();
+    window.open(href, "_blank", "noopener");
+  }
+});
+
+/* ============================ overlays ============================ */
+function openOvl(id) { closeOvls(); $(id).classList.add("on"); }
+function closeOvls() { document.querySelectorAll(".ovl.on").forEach(o => o.classList.remove("on")); }
+document.querySelectorAll(".ovl").forEach(o => {
+  o.addEventListener("click", (e) => { if (e.target === o || e.target.closest("[data-close]")) closeOvls(); });
+});
+$("#btnToc").addEventListener("click", () => openOvl("#ovlToc"));
+$("#btnSet").addEventListener("click", () => openOvl("#ovlSet"));
+$("#btnExp").addEventListener("click", () => openOvl("#ovlExp"));
+
+function buildToc() {
+  const ul = $("#tocList");
+  ul.innerHTML = "";
+  for (const a of anchors) {
+    const li = document.createElement("li");
+    li.dataset.id = a.id;
+    li.innerHTML = `<button><span class="n">${a.num || ""}</span><span class="t">${esc(a.title)}</span><span class="pg">${a.page + 1}</span></button>`;
+    li.querySelector("button").addEventListener("click", () => { closeOvls(); goToPage(a.page); });
+    ul.appendChild(li);
+  }
+}
+
+/* ============================ settings ============================ */
+function applySettings(relayout = true) {
+  const font = FONTS.find(f => f.id === settings.font) || FONTS[0];
+  root.style.setProperty("--reading-font", font.css);
+  root.classList.toggle("ink", !!settings.ink);
+  $("#sizeRange").value = settings.size;
+  $("#sizeVal").textContent = settings.size + "%";
+  $("#inkChk").checked = !!settings.ink;
+  $("#expInkNote").textContent = settings.ink ? " and ink mode (pure black-and-white)" : "";
+  const wrap = $("#fontOpts");
+  wrap.innerHTML = "";
+  for (const f of FONTS) {
+    const b = document.createElement("button");
+    b.className = f.id === settings.font ? "cur" : "";
+    b.innerHTML = `<span class="fname" style="font-family:${f.css}">${f.name}</span><span class="fdesc">${f.desc}</span>`;
+    b.addEventListener("click", () => { settings.font = f.id; save(); applySettings(); });
+    wrap.appendChild(b);
+  }
+  root.style.setProperty("--print-fs", (11.5 * clamp(settings.size / 100, .85, 1.2)).toFixed(2) + "pt");
+  if (relayout) layout();
+}
+$("#sizeRange").addEventListener("input", (e) => {
+  settings.size = +e.target.value; $("#sizeVal").textContent = settings.size + "%";
+});
+$("#sizeRange").addEventListener("change", () => { save(); layout(); });
+$("#inkChk").addEventListener("change", (e) => { settings.ink = e.target.checked; save(); applySettings(false); });
+function save() { try { localStorage.setItem(LS_KEY, JSON.stringify(settings)); } catch {} }
+
+/* ============================ PDF export ============================ */
+function buildExpList() {
+  const ul = $("#expList");
+  ul.innerHTML = "";
+  for (const m of MANIFEST) {
+    const li = document.createElement("li");
+    li.innerHTML = `<input type="checkbox" id="x_${m.id}" checked data-sec="${m.id}"><label for="x_${m.id}"><span class="n">${m.num || "—"}</span>${esc(m.title)}</label>`;
+    ul.appendChild(li);
+  }
+}
+buildExpList();
+const boxes = () => [...document.querySelectorAll("#expList input")];
+$("#expAll").addEventListener("click", () => boxes().forEach(b => b.checked = true));
+$("#expNone").addEventListener("click", () => boxes().forEach(b => b.checked = false));
+$("#expParts").addEventListener("click", () => boxes().forEach(b => b.checked = /^p\d+$/.test(b.dataset.sec)));
+
+$("#expGo").addEventListener("click", () => {
+  const ids = boxes().filter(b => b.checked).map(b => b.dataset.sec);
+  if (!ids.length) return;
+  populatePrint(ids);
+  closeOvls();
+  requestAnimationFrame(() => setTimeout(() => window.print(), 60));
+});
+
+function populatePrint(ids) {
+  const rootEl = $("#printRoot");
+  rootEl.innerHTML = "";
+  for (const id of ids) {
+    const sec = tpl.content.querySelector(`#${CSS.escape(id)}`);
+    if (!sec) continue;
+    const wrap = document.createElement("div");
+    wrap.className = "psec";
+    if (id === "cover") {
+      wrap.innerHTML = `<div class="ptitle">
+        <div class="pt-eyebrow">A Field Manual</div>
+        <h1>Engineering Deterministic AI Coding Agents</h1>
+        <p class="pt-sub">The industry is optimizing models when it should be optimizing systems — how to engineer the deterministic layer around a probabilistic core, with published evidence at every step.</p>
+        <div class="pt-rule"></div>
+        <div class="pt-author">Mac Anderson</div>
+        <div class="pt-role">Founder &amp; CEO, Oxagen Inc. · Los Angeles, California</div>
+        <div class="pt-pub">OXAGEN · MMXXVI</div>
+      </div>`;
+    } else {
+      const clone = sec.cloneNode(true);
+      clone.removeAttribute("id");
+      clone.querySelectorAll("[id]").forEach(el => el.removeAttribute("id"));
+      wrap.appendChild(clone);
+    }
+    rootEl.appendChild(wrap);
+  }
+}
+/* organic Cmd+P → print the whole book */
+addEventListener("beforeprint", () => {
+  if (!$("#printRoot").children.length) populatePrint(MANIFEST.map(m => m.id));
+});
+addEventListener("afterprint", () => { $("#printRoot").innerHTML = ""; });
+
+/* ============================ utils ============================ */
+function clamp(v, a, b) { return Math.min(b, Math.max(a, v)); }
+function setVars(obj) { for (const k in obj) root.style.setProperty(k, obj[k]); }
+function getVar(k) { return getComputedStyle(root).getPropertyValue(k); }
+function esc(s) { return s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
+
+/* ============================ boot ============================ */
+for (const k of ["M","L","R","A","B"]) {
+  const clone = tpl.content.cloneNode(true);
+  if (k !== "M") clone.querySelectorAll("[id]").forEach(el => el.removeAttribute("id"));
+  clone.querySelectorAll("img").forEach(img => {
+    const span = document.createElement("span");
+    span.className = "pic";
+    span.style.backgroundImage = `url("${img.getAttribute("src")}")`;
+    span.setAttribute("role", "img");
+    span.setAttribute("aria-label", img.getAttribute("alt") || "");
+    img.replaceWith(span);
+  });
+  flows[k].appendChild(clone);
+}
+applySettings(false);
+layout();
+addEventListener("resize", debounce(layout, 150));
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => layout());
+
+/* deep link (#p3 etc.) — on load and on later fragment navigation */
+if (initialHash) {
+  requestAnimationFrame(() => { if (initialHash in anchorPages) goToPage(anchorPages[initialHash], false); });
+}
+addEventListener("hashchange", () => {
+  const id = location.hash.slice(1);
+  if (id in anchorPages) goToPage(anchorPages[id]);
+});
+</script>
+<noscript>
+<style>#stage,#bar,#prog,#pginfo,.edge{display:none}body{overflow:auto;background:#fff;color:#111}</style>
+<div style="max-width:44rem;margin:3rem auto;padding:0 1.2rem;font-family:Georgia,serif;font-size:17px;line-height:1.6">
+  <p><b>Engineering Deterministic AI Coding Agents</b> — the interactive book needs JavaScript for its page-turn reader.
+  A scroll-friendly edition of the same manual lives at <a href="/field-manual">oxagen.sh/field-manual</a>.</p>
+</div>
+</noscript>
+</body>
+</html>

@@ -32,9 +32,13 @@ export const agents = agentSchema.table(
     deploymentStatus: text("deployment_status").notNull().default("inactive"),
   },
   (t) => ({
+    // NON-partial on purpose: covers soft-deleted rows too, so a slug a
+    // workspace has ever used is PERMANENTLY reserved (never recycled), like an
+    // npm package name. Immutability of the live slug is enforced by the
+    // agents_slug_immutable trigger; this index reserves it past deletion.
+    // (ADR-024, migration 20260709130000_agent_slug_no_recycle.)
     workspaceSlugUniq: uniqueIndex("agents_workspace_slug_uniq")
-      .on(t.workspaceId, t.slug)
-      .where(sql`deleted_at IS NULL`),
+      .on(t.workspaceId, t.slug),
     orgIdx: index("agents_org_idx").on(t.orgId, t.workspaceId),
     deploymentStatusIdx: index("agents_deployment_status_idx").on(
       t.orgId,
@@ -260,15 +264,32 @@ export const subagentRuns = agentSchema.table(
     capabilityName: text("capability_name").notNull(),
     inputPayload: jsonb("input_payload").notNull(),
     outputPayload: jsonb("output_payload"),
+    // Structural ≤280-char digest of the output, written by the executor at
+    // completion so agent.subagent.aggregate can return summaries instead of
+    // relaying full payloads into the parent LLM context
+    // (docs/specs/graph-mediated-fanout).
+    summary: text("summary"),
     status: text("status").notNull(),
     errorReason: text("error_reason"),
     startedAt: timestamp("started_at", { withTimezone: true, mode: "date" }),
     completedAt: timestamp("completed_at", { withTimezone: true, mode: "date" }),
+    // Durable claim/lease (docs/specs/graph-mediated-fanout-phase2 §1).
+    // claimedBy = Inngest run id of the owning worker; leaseExpiresAt null means
+    // unclaimed or terminal. The lease sweeper requeues expired-lease rows until
+    // the attempt cap, so a dead worker's task is reclaimed without a coordinator.
+    claimedBy: text("claimed_by"),
+    leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true, mode: "date" }),
+    attempts: integer("attempts").notNull().default(0),
   },
   (t) => ({
     fanoutIdx: index("subagent_runs_fanout_idx").on(t.fanoutId),
     statusIdx: index("subagent_runs_status_idx").on(t.status),
     orgIdx: index("subagent_runs_org_idx").on(t.orgId, t.workspaceId),
+    // Partial index for the claim UPDATE and the lease sweeper — only
+    // non-terminal rows are ever scanned by either.
+    claimIdx: index("subagent_runs_claim_idx")
+      .on(t.orgId, t.status)
+      .where(sql`${t.status} IN ('pending', 'running')`),
     statusCheck: check("subagent_runs_status_check", sql`${t.status} IN ('pending', 'running', 'completed', 'failed')`),
   }),
 );
@@ -320,7 +341,7 @@ export const agentExecutions = agentSchema.table(
     // packages/oxagen/src/contracts/agent.execution.record.ts.
     originTypeCheck: check(
       "agent_executions_origin_type_check",
-      sql`${t.originType} IN ('chat', 'event_trigger', 'scheduled_job', 'mcp_request', 'workflow_run')`,
+      sql`${t.originType} IN ('chat', 'event_trigger', 'scheduled_job', 'mcp_request', 'workflow_run', 'fanout', 'a2a')`,
     ),
   }),
 );
@@ -345,10 +366,18 @@ export const agentExecutionSteps = agentSchema.table(
     outputTokens: integer("output_tokens"),
     startedAt: timestamp("started_at", { withTimezone: true, mode: "date" }),
     completedAt: timestamp("completed_at", { withTimezone: true, mode: "date" }),
+    // Durable claim/lease — same semantics as subagent_runs (spec §1): a lost
+    // worker's step becomes resweepable instead of stranding the execution.
+    claimedBy: text("claimed_by"),
+    leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true, mode: "date" }),
+    attempts: integer("attempts").notNull().default(0),
   },
   (t) => ({
     executionIdx: index("agent_execution_steps_execution_idx").on(t.executionId),
     orgIdx: index("agent_execution_steps_org_idx").on(t.orgId, t.workspaceId),
+    claimIdx: index("agent_execution_steps_claim_idx")
+      .on(t.orgId, t.status)
+      .where(sql`${t.status} IN ('pending', 'running')`),
     statusCheck: check("agent_execution_steps_status_check", sql`${t.status} IN ('pending', 'running', 'completed', 'failed', 'cancelled')`),
   }),
 );
@@ -455,5 +484,134 @@ export const agentPlans = agentSchema.table(
     orgIdx: index("agent_plans_org_idx").on(t.orgId, t.workspaceId),
     messageIdx: index("agent_plans_message_idx").on(t.messageId),
     statusCheck: check("agent_plans_status_check", sql`${t.status} IN ('draft', 'awaiting_approval', 'approved', 'denied', 'amended', 'executing', 'completed')`),
+  }),
+);
+
+// A2A (Agent2Agent) protocol tasks — durable state for the A2A transport
+// surface (POST /a2a JSON-RPC, alongside /mcp). One row per A2A task. The
+// external `public_id` (a2a_...) is the opaque `taskId` A2A clients see; the
+// caller-supplied A2A `contextId` groups tasks in one multi-turn conversation.
+// State uses the A2A lowercase wire strings (submitted/working/…); the CHECK
+// mirrors the A2A_TASK_STATES list. message_history and artifacts are stored as
+// the exact A2A wire JSON so tasks/get can round-trip them without translation.
+export const a2aTasks = agentSchema.table(
+  "a2a_tasks",
+  {
+    ...idMixin("a2a"),
+    ...auditMixin(),
+    ...orgScopeMixin(),
+    ...softDeleteMixin(),
+    // A2A conversation-grouping id (opaque; caller-supplied or server-minted).
+    contextId: text("context_id").notNull(),
+    // A2A task lifecycle state (lowercase wire string). DEFAULT 'submitted'.
+    state: text("state").notNull().default("submitted"),
+    // The A2A Message[] history (user turn + agent reply) as wire JSON.
+    messageHistory: jsonb("message_history").notNull().default(sql`'[]'::jsonb`),
+    // The A2A Artifact[] produced by the agent as wire JSON.
+    artifacts: jsonb("artifacts").notNull().default(sql`'[]'::jsonb`),
+    // The current TaskStatus.message (agent-facing status text), if any.
+    statusMessage: jsonb("status_message"),
+    // Terminal error detail for failed/rejected tasks (null otherwise).
+    errorMessage: text("error_message"),
+    // Arbitrary caller/agent metadata carried on the task.
+    metadata: jsonb("metadata").notNull().default(sql`'{}'::jsonb`),
+    // Which agent this task is/was addressed to (routing input — the
+    // resolved skillId target). App-enforced ref to agent.agents.id; null
+    // when the task ran the generic chat baseline (no skillId, or an
+    // unknown/inactive one, which falls back rather than 500ing).
+    agentId: uuid("agent_id"),
+    // Set only when this task was opened from inside a leased subagent run
+    // (agent.subagent_runs.id), so a fanout child and the A2A task it opened
+    // can be joined. App-enforced ref, no cross-table FK (spec §3.3).
+    fanoutRunId: uuid("fanout_run_id"),
+  },
+  (t) => ({
+    orgIdx: index("a2a_tasks_org_idx").on(t.orgId, t.workspaceId),
+    contextIdx: index("a2a_tasks_context_idx").on(t.workspaceId, t.contextId),
+    stateIdx: index("a2a_tasks_state_idx").on(t.orgId, t.workspaceId, t.state),
+    // "List this agent's A2A tasks" — paginated per performance conventions.
+    agentIdx: index("a2a_tasks_agent_idx").on(t.orgId, t.workspaceId, t.agentId),
+    stateCheck: check(
+      "a2a_tasks_state_check",
+      sql`${t.state} IN ('submitted','working','input-required','auth-required','completed','canceled','failed','rejected','unknown')`,
+    ),
+  }),
+);
+
+// ── File locks — the transactional lock authority (ADR-021 §5) ──────────────
+//
+// File locks are mutual-exclusion state, so Postgres is the source of truth,
+// NOT Neo4j: the graph sync path is asynchronous (ADR-018), so a lock "written
+// to the graph" is invisible to a concurrent agent for the duration of sync
+// lag — fatal for mutual exclusion. Neo4j only carries an async LINEAGE
+// projection of these rows (packages/inngest-functions/agent.project-file-lock-to-graph).
+//
+// This extends the Inngest claim/lease mechanism (subagent_runs / execution
+// steps above) to file-path granularity rather than inventing a second lock
+// system: atomic acquire (advisory-lock + conditional upsert), TTL expiry, and
+// a monotonic fencing token per resource so a stale lease-holder's late write
+// is rejected at write time (verifyFileLease). One live lock per
+// (workspace, resource_key) is enforced by the partial unique index.
+export const fileLocks = agentSchema.table(
+  "file_locks",
+  {
+    ...idMixin("flk"),
+    ...auditMixin(),
+    ...orgScopeMixin(),
+    // Normalized resource identity — a repo-relative path (local CLI) or the
+    // SourceFile naturalKey toNaturalKey(path, owner, repo) produces (platform),
+    // so a locked file and its lineage projection key off the identical node.
+    resourceKey: text("resource_key").notNull(),
+    // Identity of the lock holder — an agent/session/mission/fleet-task id. Two
+    // concurrent holders MUST pass different values to see each other as
+    // conflicting; re-acquiring under the SAME holder renews instead of racing.
+    holder: text("holder").notNull(),
+    // Correlates every lock a turn/execution holds, for batch release-by-execution.
+    executionId: text("execution_id").notNull(),
+    // Monotonic per (workspace_id, resource_key), sourced from file_lock_fences
+    // (below). A takeover after expiry always issues a strictly higher token, so
+    // the previous holder's late write fails verifyFileLease.
+    fencingToken: bigint("fencing_token", { mode: "number" }).notNull(),
+    action: text("action").notNull().default("write"),
+    leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true, mode: "date" }).notNull(),
+    // Soft-release marker (NOT a soft delete): the partial unique index below
+    // keys off it, so releasing frees the resource while keeping the row for a
+    // final projection. Expired-but-unreleased rows are treated as free by
+    // acquire (takeover) and reaped by sweepExpiredFileLeases.
+    releasedAt: timestamp("released_at", { withTimezone: true, mode: "date" }),
+  },
+  (t) => ({
+    // At most ONE live lock per resource per workspace — the core invariant.
+    activeUniq: uniqueIndex("file_locks_active_uniq")
+      .on(t.workspaceId, t.resourceKey)
+      .where(sql`released_at IS NULL`),
+    orgIdx: index("file_locks_org_idx").on(t.orgId, t.workspaceId),
+    // Batch release-by-execution (turn-end backstop) scans by execution_id.
+    executionIdx: index("file_locks_execution_idx")
+      .on(t.orgId, t.executionId)
+      .where(sql`released_at IS NULL`),
+    actionCheck: check("file_locks_action_check", sql`${t.action} IN ('read', 'write')`),
+  }),
+);
+
+// Durable, monotonic fencing-token counter per resource. Lives in its own table
+// (not derived from file_locks) precisely so the counter SURVIVES release: a
+// lock row can be released/reaped, but the next acquirer of the same resource
+// must still receive a strictly higher token than any prior holder ever held.
+// Bumped only on a SUCCESSFUL acquire (INSERT ... ON CONFLICT DO UPDATE
+// current_token + 1); a denied acquire never advances it.
+export const fileLockFences = agentSchema.table(
+  "file_lock_fences",
+  {
+    id: uuid("id").primaryKey().default(uuidv7Default),
+    ...orgScopeMixin(),
+    resourceKey: text("resource_key").notNull(),
+    currentToken: bigint("current_token", { mode: "number" }).notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => ({
+    resourceUniq: uniqueIndex("file_lock_fences_resource_uniq").on(t.workspaceId, t.resourceKey),
+    orgIdx: index("file_lock_fences_org_idx").on(t.orgId, t.workspaceId),
   }),
 );

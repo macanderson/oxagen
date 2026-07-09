@@ -33,7 +33,7 @@ Model IDs are maintained in `src/catalog.ts`. The catalog is the single source o
 | Tier | Env var | Default |
 |---|---|---|
 | `fast` | `OXAGEN_LLM_FAST` | `anthropic/claude-haiku-4.5` |
-| `balanced` | `OXAGEN_LLM_BALANCED` | `anthropic/claude-sonnet-4.6` |
+| `balanced` | `OXAGEN_LLM_BALANCED` | `anthropic/claude-sonnet-5` |
 | `precise` | `OXAGEN_LLM_PRECISE` | `anthropic/claude-opus-4.8` |
 | `image.basic` | `OXAGEN_LLM_IMAGE_BASIC` | `openai/gpt-image-1` |
 | `image.advanced` | `OXAGEN_LLM_IMAGE_ADVANCED` | `bfl/flux-2-max` |

@@ -71,6 +71,6 @@ describe("conversation.rename capability", () => {
   // ── registry ──────────────────────────────────────────────────────────────
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("conversation.rename")).toBe(conversationRename);
+    expect(getCapability("rename_conversation")).toBe(conversationRename);
   });
 });

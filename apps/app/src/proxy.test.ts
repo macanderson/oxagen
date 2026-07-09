@@ -55,7 +55,7 @@ describe("proxy — IA realignment redirects (§16)", () => {
 
 describe("proxy — no redirect loop", () => {
   it("leaves unrelated workspace and org routes untouched", () => {
-    expect(location("/acme/prod/knowledge/sources")).toBeNull();
+    expect(location("/acme/prod/knowledge/repos")).toBeNull();
     expect(location("/acme/settings/general")).toBeNull();
     expect(location("/acme/developer/mcp")).toBeNull();
   });
@@ -69,6 +69,13 @@ describe("proxy — auth boundary", () => {
   it("allows public auth pages without a session", () => {
     expect(location("/login", { authed: false })).toBeNull();
     expect(location("/signup", { authed: false })).toBeNull();
+  });
+
+  it("allows /two-factor without a full session (sign-in second factor)", () => {
+    // After password auth the user holds only the short-lived 2FA cookie, not a
+    // session_token — the gate must NOT bounce them to /login or the flow wedges.
+    expect(location("/two-factor", { authed: false })).toBeNull();
+    expect(location("/two-factor/verify", { authed: false })).toBeNull();
   });
 
   it("308s the pre-rename onboarding entrypoint", () => {

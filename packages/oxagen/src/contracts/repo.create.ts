@@ -2,13 +2,13 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const repoCreate = registerCapability({
-  name: "repo.create",
+  name: "create_repo",
   domain: "repo",
   description:
     "Create a new GitHub repository. Omit `org` to create it in the connected user's personal account; pass `org` only to create it inside a GitHub organisation the user belongs to.",
   mode: "sync",
-  surfaces: ["agent", "api"],
-  layers: ["api", "unit", "docs"],
+  surfaces: ["agent", "api", "mcp"],
+  layers: ["api", "mcp", "unit", "docs"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "high", category: "vcs" },
   sensitivity: "high",

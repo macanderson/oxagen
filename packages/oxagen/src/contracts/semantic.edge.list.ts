@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
+import { edgeValiditySchema } from "../lib/temporal-query";
 
 /**
  * A user-facing citation of a knowledge-graph node.
@@ -63,10 +64,16 @@ export const semanticEdgeSchema = z.object({
     .default({})
     .optional()
     .describe("Full property bag for the inferred relationship itself (model, connector, inferredAt, status)"),
+  // Bi-temporal validity of the materialised relationship. Null while the edge is
+  // still a pending candidate (not yet materialised into a permanent relationship).
+  validity: edgeValiditySchema
+    .nullable()
+    .optional()
+    .describe("Bi-temporal validity (valid time + transaction time) once the edge is materialised; null for pending candidates"),
 });
 
 export const semanticEdgeList = registerCapability({
-  name: "semantic.edge.list",
+  name: "list_semantic_edges",
   domain: "semantic",
   description:
     "Paginated browse of inferred semantic edges for a workspace. Supports filtering by relationship type, connector source, and confidence band.",

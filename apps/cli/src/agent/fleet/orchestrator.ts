@@ -1,10 +1,11 @@
 /**
  * The fleet orchestrator — an army of coding subagents working one tree at once.
  *
- * Each task is run by a subagent: the local coding loop ({@link runAgent}) on the
- * cheapest sufficient model, against the same working directory. The orchestrator
- * keeps as many running as the concurrency cap allows while respecting two safety
- * rules so parallel agents never corrupt the tree or each other:
+ * Each task is run by a subagent: the ONE engine loop ({@link runTurn} via the
+ * injected {@link AgentRunner}) on the cheapest sufficient model, against the same
+ * working directory. The orchestrator keeps as many running as the concurrency cap
+ * allows while respecting two safety rules so parallel agents never corrupt the
+ * tree or each other:
  *
  *   1. Dependencies — a task waits until every task it `dependsOn` is `done`; if a
  *      dependency fails, the task (and its dependents) are marked `blocked`.
@@ -13,11 +14,17 @@
  *
  * It records a two-axis memory for every task it finishes (success or failure),
  * accumulates token/cost totals, and emits a snapshot on every change for the
- * agents screen to render. `runAgent` is injected so the engine is unit-testable
+ * agents screen to render. The runner is injected so the engine is unit-testable
  * without touching the gateway.
  */
 import { EventEmitter } from "node:events";
-import { runAgent } from "../loop.js";
+import type { MemoryProvider, FileLockProvider } from "@oxagen/agent-engine";
+import { createEngineRunner } from "../engine-runner.js";
+import { createLocalFileLockProvider } from "./local-file-lock.js";
+import {
+  createCombinedMemory,
+  type ServerMemory,
+} from "../adapters/memory-provider.js";
 import { enhancePrompt } from "../prompt-enhancer.js";
 import { accumulateUsage, routeModel } from "../model-router.js";
 import type { ProjectContext } from "../project-context.js";
@@ -29,11 +36,14 @@ import {
   emptyUsage,
   type AgentSnapshot,
   type FleetSnapshot,
+  type ModelTier,
   type Plan,
   type Task,
+  type TaskStatus,
+  type UsageTotals,
 } from "./types.js";
 
-/** The subset of {@link runAgent} the fleet depends on (injectable for tests). */
+/** The runner interface the fleet depends on — backed by {@link runTurn} via {@link createEngineRunner} (injectable for tests). */
 export type AgentRunner = (opts: {
   prompt: string;
   cwd: string;
@@ -42,6 +52,14 @@ export type AgentRunner = (opts: {
   agent?: AgentDefinition;
   readOnly?: boolean;
   signal?: AbortSignal;
+  memory?: MemoryProvider | null;
+  /**
+   * File-lock port injected per task (ADR-021 §5). When present, the engine's
+   * write-path tools acquire on first write to a path so two tasks never
+   * clobber the same file. `runTurn` mints its own per-turn holder identity, so
+   * no lock context is threaded here. Omitted → unlocked (as before).
+   */
+  fileLock?: FileLockProvider | null;
   onText?: (delta: string) => void;
   onToolCall?: (name: string, input: unknown) => void;
 }) => Promise<{
@@ -50,16 +68,44 @@ export type AgentRunner = (opts: {
   usage: { inputTokens?: number; outputTokens?: number };
 }>;
 
+/**
+ * A discrete lifecycle transition for one task — emitted (as the "task" event)
+ * every time a task's status changes, alongside the existing whole-fleet
+ * "update" snapshot. Consumers that want per-task events instead of diffing
+ * consecutive snapshots (e.g. the headless JSONL runner) listen to this
+ * instead; the TUI still drives off "update".
+ */
+export interface FleetTaskEvent {
+  taskId: string;
+  status: TaskStatus;
+  title: string;
+  tier: ModelTier;
+  model: string;
+  agent?: string;
+  startedAt?: number;
+  finishedAt?: number;
+  summary?: string;
+  error?: string;
+  usage: UsageTotals;
+}
+
 export interface FleetOptions {
   cwd: string;
   /** Max subagents running at once (default 4). */
   concurrency?: number;
   memory?: FleetMemory | null;
+  /**
+   * Platform memory handle shared across all tasks. When present (CLI is
+   * authenticated), each subagent recalls the workspace's prior-session lessons
+   * before it acts, and every finished task's lesson is mirrored back. Null
+   * degrades the fleet to local-only exactly as before.
+   */
+  serverMemory?: ServerMemory | null;
   store?: PlanStore | null;
   projectContext?: ProjectContext;
   /** Named agent registry; a task's `agent` is looked up here at dispatch. */
   agents?: Map<string, AgentDefinition>;
-  /** Inject a fake runner in tests; defaults to the real {@link runAgent}. */
+  /** Inject a fake runner in tests; defaults to the real {@link createEngineRunner} result. */
   runner?: AgentRunner;
   /** Read-only subagents (explain, don't edit). */
   readOnly?: boolean;
@@ -70,6 +116,16 @@ export interface FleetOptions {
    * agents share `cwd` and overlapping-file tasks are serialized instead.
    */
   isolation?: Isolation | null;
+  /**
+   * File-lock provider shared across tasks (ADR-021 §5). When omitted, a
+   * {@link createLocalFileLockProvider} rooted at `cwd` is used for shared-tree
+   * fleets so every task dynamically locks the files it actually writes —
+   * fixing ad-hoc tasks (which declare no predicted `files`) racing on the same
+   * file. With `isolation` on, locking is skipped: each agent has its own
+   * worktree, so collisions surface as merge conflicts, not corruption. Pass
+   * `null` to force-disable.
+   */
+  fileLock?: FileLockProvider | null;
 }
 
 const TERMINAL = new Set(["done", "failed", "cancelled", "blocked"]);
@@ -78,18 +134,22 @@ export class Fleet extends EventEmitter {
   private readonly cwd: string;
   private readonly concurrency: number;
   private readonly memory: FleetMemory | null;
+  private readonly serverMemory: ServerMemory | null;
   private readonly store: PlanStore | null;
   private readonly projectContext: ProjectContext | undefined;
   private readonly agents: Map<string, AgentDefinition>;
   private readonly runner: AgentRunner;
   private readonly readOnly: boolean;
   private readonly isolation: Isolation | null;
+  private readonly fileLock: FileLockProvider | null;
 
   private readonly tasks = new Map<string, Task>();
   private readonly snapshots = new Map<string, AgentSnapshot>();
   private readonly controllers = new Map<string, AbortController>();
   private readonly running = new Set<string>();
   private planId: string | null = null;
+  /** Set by {@link drain}: stop dispatching new tasks, let in-flight ones finish. */
+  private draining = false;
 
   private settle: (() => void) | null = null;
   private donePromise: Promise<void> | null = null;
@@ -100,12 +160,22 @@ export class Fleet extends EventEmitter {
     this.cwd = opts.cwd;
     this.concurrency = Math.max(1, opts.concurrency ?? 4);
     this.memory = opts.memory ?? null;
+    this.serverMemory = opts.serverMemory ?? null;
     this.store = opts.store ?? null;
     this.projectContext = opts.projectContext;
     this.agents = opts.agents ?? new Map<string, AgentDefinition>();
-    this.runner = opts.runner ?? runAgent;
+    this.runner = opts.runner ?? createEngineRunner();
     this.readOnly = opts.readOnly ?? false;
     this.isolation = opts.isolation ?? null;
+    // Shared-tree fleets get a local file lock so undeclared-overlap tasks
+    // (esp. ad-hoc prompts with no predicted `files`) can't clobber the same
+    // file. Isolation makes it unnecessary — each agent has its own worktree.
+    this.fileLock =
+      opts.fileLock !== undefined
+        ? opts.fileLock
+        : this.isolation
+          ? null
+          : createLocalFileLockProvider({ root: this.cwd });
   }
 
   /** Register every task in a plan (does not start it). */
@@ -114,6 +184,7 @@ export class Fleet extends EventEmitter {
     for (const task of plan.tasks) {
       this.tasks.set(task.id, task);
       this.snapshots.set(task.id, this.toSnapshot(task, ""));
+      this.emitTask(task);
     }
     this.store?.setStatus(plan.id, "executing");
     this.emitUpdate();
@@ -137,6 +208,7 @@ export class Fleet extends EventEmitter {
     };
     this.tasks.set(id, task);
     this.snapshots.set(id, this.toSnapshot(task, ""));
+    this.emitTask(task);
     this.emitUpdate();
     this.pump();
     return id;
@@ -174,6 +246,31 @@ export class Fleet extends EventEmitter {
     }
   }
 
+  /**
+   * Cancel-drain: stop dispatching new tasks, but let every already-running
+   * task finish on its own — its worktree is then checkpointed, integrated,
+   * and disposed through the normal completion path in {@link run}'s
+   * `finally`, instead of being torn down mid-edit. Unlike {@link cancelAll},
+   * running agents' controllers are never aborted, so no worktree is ever
+   * orphaned. Tasks that never started have no worktree to lose, so they're
+   * cancelled immediately. Resolves once every task has reached a terminal
+   * state — the same contract as {@link start}.
+   */
+  drain(): Promise<void> {
+    this.draining = true;
+    for (const task of this.tasks.values()) {
+      if (task.status === "queued") this.update(task.id, { status: "cancelled", finishedAt: Date.now() });
+    }
+    if (this.tasks.size === 0) return Promise.resolve(); // nothing was ever loaded
+    if (!this.donePromise) {
+      this.donePromise = new Promise<void>((resolve) => {
+        this.settle = resolve;
+      });
+    }
+    this.checkDone();
+    return this.donePromise;
+  }
+
   snapshot(): FleetSnapshot {
     const agents = [...this.snapshots.values()];
     const totals = agents.reduce(
@@ -199,14 +296,27 @@ export class Fleet extends EventEmitter {
 
   /** Fill open slots with ready tasks, honouring deps and file-ownership locks. */
   private pump(): void {
-    // First, mark tasks whose dependencies can never succeed as blocked.
-    for (const task of this.tasks.values()) {
-      if (task.status !== "queued") continue;
-      const deps = task.dependsOn.map((d) => this.tasks.get(d));
-      if (deps.some((d) => d && (d.status === "failed" || d.status === "blocked" || d.status === "cancelled"))) {
-        this.update(task.id, { status: "blocked" });
+    // First, mark tasks whose dependencies can never succeed as blocked —
+    // iterate to a fixed point so a multi-level cascade (A fails → B blocked
+    // → C, which depends on B, is also blocked) fully resolves in this one
+    // pump(), regardless of task insertion order. Bounded and terminating:
+    // each round either blocks at least one more task or nothing changes.
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const task of this.tasks.values()) {
+        if (task.status !== "queued") continue;
+        const deps = task.dependsOn.map((d) => this.tasks.get(d));
+        if (deps.some((d) => d && (d.status === "failed" || d.status === "blocked" || d.status === "cancelled"))) {
+          this.update(task.id, { status: "blocked" });
+          changed = true;
+        }
       }
     }
+
+    // Cancel-drain: dispatching stops, but tasks already running are left
+    // alone so they finish naturally (see drain()).
+    if (this.draining) return;
 
     while (this.running.size < this.concurrency) {
       const next = this.pickReady();
@@ -262,6 +372,18 @@ export class Fleet extends EventEmitter {
         memory: this.memory,
       });
 
+      // Per-task recall of the workspace's prior-session lessons (best-effort,
+      // timeout-guarded inside the combined provider). The server handle is
+      // shared across tasks; the recall query is this task's description. No
+      // local session/fleet store is threaded here — the fleet records its own
+      // two-axis lesson after the task in recordSuccess/recordFailure.
+      const taskMemory: MemoryProvider | null = this.serverMemory
+        ? createCombinedMemory(null, null, {
+            server: this.serverMemory,
+            recallQuery: task.description,
+          })
+        : null;
+
       const result = await this.runner({
         prompt: enhanced.prompt,
         cwd: workdir,
@@ -270,6 +392,12 @@ export class Fleet extends EventEmitter {
         agent: task.agent ? this.agents.get(task.agent) : undefined,
         readOnly: this.readOnly,
         signal: controller.signal,
+        memory: taskMemory,
+        // File lock (ADR-021 §5): runTurn mints a unique per-turn holder, so
+        // two tasks writing the same file see each other as conflicting holders
+        // and the engine serializes their writes (or surfaces a "Blocked" tool
+        // result) instead of clobbering.
+        fileLock: this.fileLock,
         onText: (delta) => {
           appendLog(delta);
           this.update(task.id, { logTail: log });
@@ -333,27 +461,34 @@ export class Fleet extends EventEmitter {
 
   private recordSuccess(task: Task, summary: string): void {
     const isFix = /\b(fix|bug|broken|regression|repair|error)\b/i.test(task.title + " " + task.description);
+    const kind = isFix ? "bug-root-cause" : "routine-change";
+    const lesson = summary || task.title;
     this.memory?.record({
-      memoryKind: isFix ? "bug-root-cause" : "routine-change",
+      memoryKind: kind,
       memoryClass: task.tier === "precise" ? "RULE" : "OBSERVATION",
       enforcementScore: task.tier === "precise" ? 70 : null,
-      lesson: summary || task.title,
+      lesson,
       files: task.files,
       taskId: task.id,
       outcome: "success",
     });
+    // Mirror the lesson to the platform so other sessions recall it (fire-and-
+    // forget; the handle swallows its own errors).
+    this.serverMemory?.remember(kind, { lesson, files: task.files });
   }
 
   private recordFailure(task: Task, error: string): void {
+    const lesson = `Task "${task.title}" failed: ${error}`;
     this.memory?.record({
       memoryKind: "gotcha",
       memoryClass: "RULE",
       enforcementScore: 70,
-      lesson: `Task "${task.title}" failed: ${error}`,
+      lesson,
       files: task.files,
       taskId: task.id,
       outcome: "failure",
     });
+    this.serverMemory?.remember("gotcha", { lesson, files: task.files });
   }
 
   // ── State plumbing ────────────────────────────────────────────────────────────
@@ -377,6 +512,7 @@ export class Fleet extends EventEmitter {
   private update(id: string, patch: Partial<Task> & Partial<AgentSnapshot>): void {
     const task = this.tasks.get(id);
     if (!task) return;
+    const statusChanged = patch.status !== undefined && patch.status !== task.status;
     // Apply task-level fields.
     if (patch.status !== undefined) task.status = patch.status;
     if (patch.startedAt !== undefined) task.startedAt = patch.startedAt;
@@ -399,11 +535,30 @@ export class Fleet extends EventEmitter {
     if (patch.lastTool !== undefined) snap.lastTool = patch.lastTool;
     if (patch.logTail !== undefined) snap.logTail = patch.logTail;
     this.snapshots.set(id, snap);
+    if (statusChanged) this.emitTask(task);
     this.emitUpdate();
   }
 
   private emitUpdate(): void {
     this.emit("update", this.snapshot());
+  }
+
+  /** Emit a discrete {@link FleetTaskEvent} for `task`'s current status. */
+  private emitTask(task: Task): void {
+    const event: FleetTaskEvent = {
+      taskId: task.id,
+      status: task.status,
+      title: task.title,
+      tier: task.tier,
+      model: task.model,
+      agent: task.agent,
+      startedAt: task.startedAt,
+      finishedAt: task.finishedAt,
+      summary: task.summary,
+      error: task.error,
+      usage: task.usage,
+    };
+    this.emit("task", event);
   }
 
   private checkDone(): void {

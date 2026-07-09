@@ -10,7 +10,13 @@ export const schema = {
     "Publicly reachable https:// URL of the asset to ingest (SSRF-protected: private IP ranges and localhost are rejected). Must return a supported content type for the given kind.",
   ),
   kind: assetUpload.input.shape.kind.describe(
-    'Asset category: "avatar" or "image" (webp/png/jpeg, max 5 MiB) or "document" (image or PDF, max 25 MiB).',
+    'Asset category: "avatar"/"image" (webp/png/jpeg, max 5 MiB), "document" (image or PDF, max 25 MiB), or "video" (mp4/webm/quicktime, max 100 MiB).',
+  ),
+  source: assetUpload.input.shape.source.describe(
+    'Omit for a pure public-blob ingest (no DB row). Pass "user_upload" to record a private generated_assets attachment row (accessPolicy=org) servable via /api/v1/assets/:publicId and listable via conversation.files.list. Requires an authenticated user; not valid for kind "avatar".',
+  ),
+  conversationId: assetUpload.input.shape.conversationId.describe(
+    'Conversation public ID to link the uploaded asset to. Requires source="user_upload".',
   ),
 };
 

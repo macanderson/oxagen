@@ -1,6 +1,7 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { codeMap } from "@oxagen/oxagen/contracts/code.map";
 import { scopedSession } from "@oxagen/ontology/tenant";
+import { oversampledLimit } from "@oxagen/ontology/ann";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { embedText } from "@oxagen/ai";
 import { logger } from "./logger";
@@ -81,8 +82,9 @@ export const codeMapHandler: CapabilityHandler<typeof codeMap> = async (input, c
   const wantSymbols = !input.kinds || input.kinds.includes("symbol");
   const wantCommits = !input.kinds || input.kinds.includes("commit");
 
-  // Over-fetch files so domain-filtering doesn't starve the result set.
-  const fileFetchLimit = input.limit * 3;
+  // Over-fetch files so the tenant + label + domain filters don't starve the
+  // result set (capped so a large limit can't explode the index scan).
+  const fileFetchLimit = oversampledLimit(input.limit);
 
   const domainClause = input.domain
     ? "AND (n.domain IS NULL OR coalesce(n.domain, '') = $domain)"

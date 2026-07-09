@@ -84,6 +84,12 @@ function layerSatisfied(layer, capName, capSurfaces) {
     const toolFile = join(ROOT, `apps/mcp/src/tools/${capName}.ts`);
     return existsSync(toolFile);
   }
+  // The "app" layer (human-operable UI in apps/app) is not a file-existence
+  // check — it is a route-binding + runtime-proof promise owned by a dedicated
+  // gate, tools/scripts/check_ui_parity.mjs. Treat it as satisfied here so the
+  // manifest doesn't report false "app missing" gaps; check:ui-parity is the
+  // authority for app-surface completeness.
+  if (layer === "app") return true;
   const candidates = {
     schema: [join(ROOT, "packages/database/src/schema")],
     api: [join(ROOT, `apps/api/src/routes/v1/${capName}.ts`)],
@@ -131,12 +137,21 @@ function readCapabilities() {
             .map((s) => s.trim().replace(/["'`]/g, ""))
             .filter(Boolean)
         : ["api", "mcp"];
-      return { file, name, domain, mode, surfaces, layers };
+      // A file is only a CAPABILITY if it actually registers one. Shared schema
+      // modules co-located in ./contracts (e.g. eval-schema.ts,
+      // agent.memory_import.shared.ts) export zod fragments but never call
+      // registerCapability — without this guard the `name:` regex falls back to
+      // the filename stem and mints a phantom capability in the manifest.
+      const hasRegister = /registerCapability\s*\(/.test(src);
+      return { file, name, domain, mode, surfaces, layers, hasRegister };
     });
 }
 
 function main() {
-  const caps = readCapabilities();
+  const allEntries = readCapabilities();
+  // The barrel imports EVERY contract file (including shared schema modules) so
+  // their exports resolve; only registering files count as capabilities.
+  const caps = allEntries.filter((c) => c.hasRegister);
 
   // Genuine duplicate-name collision gate. The runtime registry is now resilient
   // to bundler/HMR re-registration (it keeps the first registration and warns
@@ -161,8 +176,8 @@ function main() {
 
   // Auto-discovery: rewrite the contract barrel so adding a contract file is
   // the only step needed to register it.
-  writeContractBarrel(caps.map((c) => c.file));
-  info(`Wrote ${BARREL} with ${caps.length} contract imports.`);
+  writeContractBarrel(allEntries.map((c) => c.file));
+  info(`Wrote ${BARREL} with ${allEntries.length} contract imports.`);
 
   // No timestamp: this file is committed, so a `generatedAt` would make it
   // nondeterministic and churn git on every regeneration. The content is a

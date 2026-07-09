@@ -2,13 +2,13 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const pluginRegistryList = registerCapability({
-  name: "plugin.registry.list",
+  name: "list_plugin_registries",
   domain: "plugin",
   description: "List MCP registries for the workspace.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   agent: { requiresApproval: false, riskLevel: "low", category: "plugin" },
-  layers: ["api", "docs", "mcp", "unit"],
+  layers: ["api", "docs", "mcp", "unit", "app"],
   scoped: true,
   sensitivity: "low",
   defaultEffect: "deny",

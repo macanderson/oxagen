@@ -7,6 +7,10 @@ The knowledge graph is what distinguishes `oxagen` from a generic coding agent. 
 
 These commands call the platform, so you need an [authenticated CLI](/docs/cli/account-setup) (platform token + org + workspace).
 
+<Callout type="info">
+**Two graphs, one store.** `oxagen init` builds a **local code graph** — a tree-sitter parse of your repo into files, symbols, and call/import edges — that the agent queries for structural context even before you authenticate. The commands below sync that up to, and pull the wider **workspace knowledge graph** down from, the platform (entities, documents, memories, lineage). The graph is *structural* context — what your system **is**. It's distinct from [agent memory](/docs/cli/memory), which is *experiential* — what the agent **learned**.
+</Callout>
+
 ## Pull a local replica
 
 `oxagen graph pull` downloads an **incremental** snapshot of your workspace graph into a fast local replica (DuckDB). It remembers a cursor, so subsequent pulls only fetch what changed:
@@ -59,6 +63,10 @@ oxagen graph search -q "rate limiting per org" -k file,symbol -n 5
 oxagen graph search -q "who owns the billing service?" -l Person --no-system
 ```
 
+Each result is tagged with its node kind and a similarity score:
+
+<TuiGraphSearch />
+
 ## Push code changes
 
 `oxagen graph push` computes a git code delta and up-syncs it to the workspace knowledge graph. It is the write-path counterpart to `graph pull`:
@@ -96,5 +104,7 @@ Re-run `oxagen graph pull` whenever you want the freshest context; it's incremen
 
 ## Related
 
+- [Agent memory](/docs/cli/memory) — the experiential context that sits alongside the graph.
+- [The agent engine](/docs/cli/agent-engine) — how the enhance stage injects graph context into a turn.
 - [Quickstart](/docs/cli/quickstart#ground-the-agent-in-your-knowledge-graph) — grounding the agent in the graph.
 - [Command reference](/docs/cli/commands#oxagen-graph-knowledge-graph) — the `graph` command group.

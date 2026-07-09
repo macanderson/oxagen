@@ -16,13 +16,13 @@ export const conversationSummary = z.object({
 });
 
 export const conversationList = registerCapability({
-  name: "conversation.list",
+  name: "list_conversations",
   domain: "conversation",
   description:
     "List a user's conversations in a workspace, filtered by active or archived state, newest first, keyset-paginated",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "e2e", "docs", "app"],
   scoped: true,
   // Conversation listing does not consume AI tokens — billing gate must not
   // block this for orgs with zero credit balance.

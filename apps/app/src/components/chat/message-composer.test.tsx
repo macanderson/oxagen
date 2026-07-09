@@ -35,6 +35,68 @@ vi.mock("@/lib/utils", () => ({
   cn: (...args: unknown[]) => args.filter(Boolean).join(" "),
 }));
 
+// Controllable viewport: false = desktop (jsdom default), true = phone width.
+const { mockViewport } = vi.hoisted(() => ({ mockViewport: { isMobile: false } }));
+vi.mock("@/hooks/use-media-query", () => ({
+  useIsMobile: () => mockViewport.isMobile,
+  useMediaQuery: () => mockViewport.isMobile,
+}));
+
+// Sheet shim — renders children inline when open (the real component portals
+// a Base UI dialog; these tests assert the composer's own composition).
+vi.mock("@/components/ui/sheet", () => ({
+  Sheet: ({ children, open }: { children: React.ReactNode; open?: boolean }) =>
+    open ? <div data-testid="sheet-root">{children}</div> : null,
+  SheetPopup: ({
+    children,
+    "data-testid": testId,
+  }: {
+    children: React.ReactNode;
+    side?: string;
+    "data-testid"?: string;
+  }) => <div data-testid={testId ?? "sheet-popup"}>{children}</div>,
+  SheetHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  SheetPanel: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  SheetTitle: ({ children }: { children: React.ReactNode }) => <h2>{children}</h2>,
+  SheetDescription: ({ children }: { children: React.ReactNode }) => <p>{children}</p>,
+}));
+
+// AgentSelector stub — renders null when there are no agents (matching the real
+// component) and, otherwise, one button per agent (+ a default) so a test can
+// drive the selection deterministically without opening a real menu portal.
+vi.mock("./agent-selector", () => ({
+  AgentSelector: ({
+    agents,
+    onChange,
+  }: {
+    agents: Array<{ agentId: string; isCode: boolean }>;
+    value: string | null;
+    onChange: (id: string | null) => void;
+  }) =>
+    agents.length === 0 ? null : (
+      <div data-testid="agent-selector" data-count={agents.length}>
+        {agents.map((a) => (
+          <button
+            key={a.agentId}
+            type="button"
+            data-testid={`pick-${a.agentId}`}
+            onClick={() => onChange(a.agentId)}
+          >
+            pick {a.agentId}
+          </button>
+        ))}
+        <button type="button" data-testid="pick-default" onClick={() => onChange(null)}>
+          pick default
+        </button>
+      </div>
+    ),
+}));
+
+afterEach(() => {
+  mockViewport.isMobile = false;
+  window.localStorage.clear();
+});
+
 const mockSupportsReasoning = vi.fn((_model: unknown) => false);
 const mockGetModel = vi.fn((_id: unknown) => undefined);
 
@@ -43,21 +105,23 @@ vi.mock("@oxagen/ai/catalog", () => ({
   getModel: (id: unknown) => mockGetModel(id),
 }));
 
-vi.mock("./model-picker", () => ({
-  ModelPicker: ({ onChange }: { onChange: (v: unknown) => void }) => (
-    <div data-testid="model-picker" onClick={() => onChange({ tier: "fast", generate: null, model: null, effort: null, mediaTier: null, mediaModel: null, seededImageModel: null, seededVideoModel: null })} />
-  ),
-  defaultModelState: {
-    tier: "fast",
-    generate: null,
-    model: null,
-    effort: null,
-    mediaTier: null,
-    mediaModel: null,
-    seededImageModel: null,
-    seededVideoModel: null,
-  },
-}));
+// model-picker re-exports its pure state helpers (defaultModelState,
+// buildSeededModelState, applyWorkspaceBudgetGovernance) from model-state.ts,
+// which has no UI imports. Pull the REAL implementations from there so the
+// composer's budget-governance path runs faithfully — only the interactive
+// ModelPicker component itself is stubbed. Listing helpers by hand here is how
+// this mock silently dropped applyWorkspaceBudgetGovernance when PR #630 added
+// it (→ undefined at call time); spreading the real module keeps it in sync.
+// Clamp/strip behaviour is covered by model-state.test.ts.
+vi.mock("./model-picker", async () => {
+  const state = await vi.importActual<typeof import("./model-state")>("./model-state");
+  return {
+    ...state,
+    ModelPicker: ({ onChange }: { onChange: (v: unknown) => void }) => (
+      <div data-testid="model-picker" onClick={() => onChange({ tier: "fast", generate: null, model: null, effort: null, mediaTier: null, mediaModel: null, seededImageModel: null, seededVideoModel: null })} />
+    ),
+  };
+});
 
 // McpServerPicker stub that exposes a button to change active server IDs
 vi.mock("./mcp-server-picker", () => ({
@@ -84,6 +148,14 @@ vi.mock("./mcp-server-picker", () => ({
       </button>
     </div>
   ),
+}));
+
+// BudgetControl stub — the real component pulls in Base UI Popover/Switch,
+// which aren't otherwise exercised in this file (mirrors the McpServerPicker
+// stub above: these tests isolate MessageComposer's own submit/queue/dispatch
+// logic, not the toolbar controls' internal rendering).
+vi.mock("./budget-control", () => ({
+  BudgetControl: () => <div data-testid="budget-control" />,
 }));
 
 vi.mock("@/components/ui/button", () => ({
@@ -143,7 +215,7 @@ vi.mock("@/components/ui/select", () => ({
   SelectTrigger: ({ children, "aria-label": ariaLabel }: { children: React.ReactNode; "aria-label"?: string; size?: string; className?: string }) => (
     <div data-testid="select-trigger" aria-label={ariaLabel}>{children}</div>
   ),
-  SelectValue: () => <span />,
+  SelectValue: ({ placeholder }: { placeholder?: string }) => <span>{placeholder}</span>,
   SelectPopup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   SelectItem: ({ children, value }: { children: React.ReactNode; value: string }) => (
     <div data-value={value}>{children}</div>
@@ -159,15 +231,34 @@ vi.mock("lucide-react", async (importOriginal) => {
     Send: () => <span data-testid="icon-send" />,
     Video: () => <span data-testid="icon-video" />,
     X: () => <span data-testid="icon-x" />,
+    Paperclip: () => <span data-testid="icon-paperclip" />,
   };
 });
+
+// AttachmentChip renders next/image for image previews — stub it the same way
+// the registry's own image-preview.test.tsx does (jsdom has no image loader).
+vi.mock("next/image", () => ({
+  default: ({ alt, src }: { alt: string; src: string }) => (
+    // eslint-disable-next-line @next/next/no-img-element -- jsdom test shim
+    <img alt={alt} src={src} data-testid="attachment-thumbnail" />
+  ),
+}));
+
+// Client-side keyframe extraction needs a real <video>/<canvas> (absent in
+// jsdom) — mock it so a video test can control how many frames come back.
+const { mockExtractVideoFrames } = vi.hoisted(() => ({
+  mockExtractVideoFrames: vi.fn<() => Promise<Array<{ blob: Blob; atSeconds: number }>>>(),
+}));
+vi.mock("./extract-video-frames", () => ({
+  extractVideoFrames: mockExtractVideoFrames,
+}));
 
 // ── helpers ────────────────────────────────────────────────────────────────────
 
 const DEFAULT_MODEL_CONFIG: ResolvedTierCatalog = {
   text: {
     fast: "claude-haiku-4-5",
-    balanced: "claude-sonnet-4-5",
+    balanced: "claude-sonnet-5",
     precise: "claude-opus-4-5",
   },
   image: {
@@ -1022,6 +1113,10 @@ describe("MessageComposer — queue drain with generate mode", () => {
           mediaModel: null,
           seededImageModel: null,
           seededVideoModel: null,
+          budgetEnabled: false,
+          budgetUsd: null,
+          budgetMode: "prompt",
+          budgetGracePct: 0.25,
         }}
       />,
     );
@@ -1045,6 +1140,10 @@ describe("MessageComposer — queue drain with generate mode", () => {
           mediaModel: null,
           seededImageModel: null,
           seededVideoModel: null,
+          budgetEnabled: false,
+          budgetUsd: null,
+          budgetMode: "prompt",
+          budgetGracePct: 0.25,
         }}
       />,
     );
@@ -1119,6 +1218,10 @@ describe("MessageComposer — effort control", () => {
           mediaModel: null,
           seededImageModel: null,
           seededVideoModel: null,
+          budgetEnabled: false,
+          budgetUsd: null,
+          budgetMode: "prompt",
+          budgetGracePct: 0.25,
         }}
       />,
     );
@@ -1152,6 +1255,10 @@ describe("MessageComposer — model branch (explicit model.model)", () => {
           mediaModel: null,
           seededImageModel: null,
           seededVideoModel: null,
+          budgetEnabled: false,
+          budgetUsd: null,
+          budgetMode: "prompt",
+          budgetGracePct: 0.25,
         }}
       />,
     );
@@ -1183,6 +1290,10 @@ describe("MessageComposer — seeded media model branch", () => {
           mediaModel: null,
           seededImageModel: "flux-2-max",
           seededVideoModel: null,
+          budgetEnabled: false,
+          budgetUsd: null,
+          budgetMode: "prompt",
+          budgetGracePct: 0.25,
         }}
       />,
     );
@@ -1215,6 +1326,10 @@ describe("MessageComposer — explicit mediaModel in FormData", () => {
           mediaModel: "gpt-image-1",
           seededImageModel: null,
           seededVideoModel: null,
+          budgetEnabled: false,
+          budgetUsd: null,
+          budgetMode: "prompt",
+          budgetGracePct: 0.25,
         }}
       />,
     );
@@ -1275,6 +1390,10 @@ describe("MessageComposer — null tier in initialModelState", () => {
           mediaModel: null,
           seededImageModel: null,
           seededVideoModel: null,
+          budgetEnabled: false,
+          budgetUsd: null,
+          budgetMode: "prompt",
+          budgetGracePct: 0.25,
         }}
       />,
     );
@@ -1306,6 +1425,10 @@ describe("MessageComposer — null mediaTier fallback in buildFormData", () => {
           mediaModel: null,
           seededImageModel: null,
           seededVideoModel: null,
+          budgetEnabled: false,
+          budgetUsd: null,
+          budgetMode: "prompt",
+          budgetGracePct: 0.25,
         }}
       />,
     );
@@ -1375,6 +1498,10 @@ describe("MessageComposer — queue drain: null tier fallback", () => {
       mediaModel: null as null,
       seededImageModel: null as null,
       seededVideoModel: null as null,
+      budgetEnabled: false as const,
+      budgetUsd: null as null,
+      budgetMode: "prompt" as const,
+      budgetGracePct: 0.25 as const,
     };
     const { rerender } = render(
       <MessageComposer
@@ -1421,6 +1548,10 @@ describe("MessageComposer — queue drain: mediaModel set", () => {
       mediaModel: "flux-2-max",
       seededImageModel: null as null,
       seededVideoModel: null as null,
+      budgetEnabled: false as const,
+      budgetUsd: null as null,
+      budgetMode: "prompt" as const,
+      budgetGracePct: 0.25 as const,
     };
     const { rerender } = render(
       <MessageComposer
@@ -1468,6 +1599,10 @@ describe("MessageComposer — queue drain: null mediaTier fallback", () => {
       mediaModel: null as null,
       seededImageModel: null as null,
       seededVideoModel: null as null,
+      budgetEnabled: false as const,
+      budgetUsd: null as null,
+      budgetMode: "prompt" as const,
+      budgetGracePct: 0.25 as const,
     };
     const { rerender } = render(
       <MessageComposer
@@ -1516,6 +1651,10 @@ describe("MessageComposer — queue drain: effort in drained message", () => {
       mediaModel: null as null,
       seededImageModel: null as null,
       seededVideoModel: null as null,
+      budgetEnabled: false as const,
+      budgetUsd: null as null,
+      budgetMode: "prompt" as const,
+      budgetGracePct: 0.25 as const,
     };
     const { rerender } = render(
       <MessageComposer
@@ -1712,5 +1851,1095 @@ describe("MessageComposer — queue management", () => {
     );
     expect(screen.queryByRole("listitem")).not.toBeInTheDocument();
     expect(screen.queryByText(/messages? queued/)).not.toBeInTheDocument();
+  });
+});
+
+// ── attachments ──────────────────────────────────────────────────────────────
+
+/**
+ * Minimal fake XMLHttpRequest — message-composer.tsx uses XHR (not fetch) so
+ * it can report upload progress. Each `send()` call is captured in
+ * `FakeXHR.instances` so a test can manually resolve it with `respond()`.
+ */
+class FakeXHR {
+  static instances: FakeXHR[] = [];
+  upload: { onprogress: ((e: { lengthComputable: boolean; loaded: number; total: number }) => void) | null } = {
+    onprogress: null,
+  };
+  onload: (() => void) | null = null;
+  onerror: (() => void) | null = null;
+  onabort: (() => void) | null = null;
+  status = 0;
+  responseText = "";
+  aborted = false;
+  method = "";
+  url = "";
+  body: FormData | null = null;
+
+  open(method: string, url: string): void {
+    this.method = method;
+    this.url = url;
+  }
+  send(body: FormData): void {
+    this.body = body;
+    FakeXHR.instances.push(this);
+  }
+  abort(): void {
+    this.aborted = true;
+    this.onabort?.();
+  }
+  /** Test helper: resolve this request as if the server responded. */
+  respond(status: number, json: unknown): void {
+    this.status = status;
+    this.responseText = JSON.stringify(json);
+    this.onload?.();
+  }
+}
+
+const UPLOADED_ITEM = {
+  publicId: "gen_abc123",
+  kind: "image",
+  name: "photo.png",
+  mimeType: "image/png",
+  url: "/api/v1/assets/gen_abc123",
+};
+
+describe("MessageComposer — attachments", () => {
+  beforeEach(() => {
+    FakeXHR.instances = [];
+    vi.stubGlobal("XMLHttpRequest", FakeXHR);
+    URL.createObjectURL = vi.fn(() => "blob:mock-preview");
+    URL.revokeObjectURL = vi.fn();
+    // Default: no keyframes (image-only tests never attach a video).
+    mockExtractVideoFrames.mockResolvedValue([]);
+  });
+
+  it("hides the attach button when orgSlug/workspaceSlug are not provided", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+      />,
+    );
+    expect(
+      screen.queryByRole("button", { name: "Attach image or video" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows the attach button when orgSlug/workspaceSlug are provided", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        orgSlug="acme"
+        workspaceSlug="main"
+      />,
+    );
+    expect(
+      screen.getByRole("button", { name: "Attach image or video" }),
+    ).toBeInTheDocument();
+  });
+
+  it("uploads a picked file, shows progress, then renders the sent chip", async () => {
+    const user = userEvent.setup();
+    const { MessageComposer } = await import("./message-composer");
+    const { container } = render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        orgSlug="acme"
+        workspaceSlug="main"
+      />,
+    );
+
+    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File(["bytes"], "photo.png", { type: "image/png" });
+    await user.upload(fileInput, file);
+
+    const chip = await screen.findByTestId("attachment-chip");
+    expect(chip).toHaveAttribute("data-status", "uploading");
+    expect(FakeXHR.instances).toHaveLength(1);
+    expect(FakeXHR.instances[0]!.url).toBe("/api/v1/upload/attachment");
+    expect(FakeXHR.instances[0]!.body?.get("kind")).toBe("image");
+    expect(FakeXHR.instances[0]!.body?.get("orgSlug")).toBe("acme");
+    expect(FakeXHR.instances[0]!.body?.get("workspaceSlug")).toBe("main");
+
+    // Server responds with the persisted asset.
+    act(() => {
+      FakeXHR.instances[0]!.respond(201, UPLOADED_ITEM);
+    });
+
+    await waitFor(() =>
+      expect(screen.getByTestId("attachment-chip")).toHaveAttribute("data-status", "uploaded"),
+    );
+  });
+
+  it("disables the send button while an upload is in flight", async () => {
+    const user = userEvent.setup();
+    const { MessageComposer } = await import("./message-composer");
+    const { container } = render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        orgSlug="acme"
+        workspaceSlug="main"
+      />,
+    );
+
+    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
+    await user.upload(fileInput, new File(["bytes"], "photo.png", { type: "image/png" }));
+
+    expect(screen.getByRole("button", { name: "Send message" })).toBeDisabled();
+
+    act(() => {
+      FakeXHR.instances[0]!.respond(201, UPLOADED_ITEM);
+    });
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Send message" })).not.toBeDisabled());
+  });
+
+  it("includes the uploaded attachment in the submitted FormData", async () => {
+    const user = userEvent.setup();
+    const action = makeAction();
+    const { MessageComposer } = await import("./message-composer");
+    const { container } = render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={action}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        orgSlug="acme"
+        workspaceSlug="main"
+      />,
+    );
+
+    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
+    await user.upload(fileInput, new File(["bytes"], "photo.png", { type: "image/png" }));
+    act(() => {
+      FakeXHR.instances[0]!.respond(201, UPLOADED_ITEM);
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId("attachment-chip")).toHaveAttribute("data-status", "uploaded"),
+    );
+
+    await user.type(screen.getByRole("textbox"), "check this out");
+    await user.click(screen.getByRole("button", { name: "Send message" }));
+
+    await waitFor(() => expect(action).toHaveBeenCalledTimes(1));
+    const fd = action.mock.calls[0][0] as FormData;
+    const attachmentsRaw = fd.get("attachments") as string;
+    expect(JSON.parse(attachmentsRaw)).toEqual([UPLOADED_ITEM]);
+
+    // The pending strip clears after a successful send.
+    expect(screen.queryByTestId("attachment-chip")).not.toBeInTheDocument();
+  });
+
+  it("removing a chip mid-upload aborts the XHR and drops the attachment", async () => {
+    const user = userEvent.setup();
+    const { MessageComposer } = await import("./message-composer");
+    const { container } = render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        orgSlug="acme"
+        workspaceSlug="main"
+      />,
+    );
+
+    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
+    await user.upload(fileInput, new File(["bytes"], "photo.png", { type: "image/png" }));
+    await screen.findByTestId("attachment-chip");
+
+    await user.click(screen.getByRole("button", { name: /remove photo\.png/i }));
+
+    expect(FakeXHR.instances[0]!.aborted).toBe(true);
+    expect(screen.queryByTestId("attachment-chip")).not.toBeInTheDocument();
+  });
+
+  it("shows an error chip when the upload fails", async () => {
+    const user = userEvent.setup();
+    const { MessageComposer } = await import("./message-composer");
+    const { container } = render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        orgSlug="acme"
+        workspaceSlug="main"
+      />,
+    );
+
+    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
+    await user.upload(fileInput, new File(["bytes"], "photo.png", { type: "image/png" }));
+    act(() => {
+      FakeXHR.instances[0]!.respond(415, { error: "Unsupported image type" });
+    });
+
+    await waitFor(() =>
+      expect(screen.getByTestId("attachment-chip")).toHaveAttribute("data-status", "error"),
+    );
+  });
+
+  it("attaches a video as one visible chip and uploads its sampled keyframes hidden", async () => {
+    const user = userEvent.setup();
+    mockExtractVideoFrames.mockResolvedValue([
+      { blob: new Blob(["f1"], { type: "image/webp" }), atSeconds: 1 },
+      { blob: new Blob(["f2"], { type: "image/webp" }), atSeconds: 2 },
+    ]);
+    const { MessageComposer } = await import("./message-composer");
+    const { container } = render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        orgSlug="acme"
+        workspaceSlug="main"
+      />,
+    );
+
+    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
+    await user.upload(fileInput, new File(["v"], "clip.mp4", { type: "video/mp4" }));
+
+    // The video uploads as kind=video and its keyframes upload as kind=image.
+    await waitFor(() => expect(FakeXHR.instances).toHaveLength(3));
+    expect(FakeXHR.instances[0]!.body?.get("kind")).toBe("video");
+    expect(FakeXHR.instances[1]!.body?.get("kind")).toBe("image");
+    expect(FakeXHR.instances[2]!.body?.get("kind")).toBe("image");
+
+    // Only the video shows a chip; the keyframes are hidden derived attachments.
+    expect(screen.getAllByTestId("attachment-chip")).toHaveLength(1);
+  });
+
+  it("links keyframes to their video via keyframeForVideo in the submitted FormData", async () => {
+    const user = userEvent.setup();
+    const action = makeAction();
+    mockExtractVideoFrames.mockResolvedValue([
+      { blob: new Blob(["f1"], { type: "image/webp" }), atSeconds: 1 },
+      { blob: new Blob(["f2"], { type: "image/webp" }), atSeconds: 2 },
+    ]);
+    const { MessageComposer } = await import("./message-composer");
+    const { container } = render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={action}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        orgSlug="acme"
+        workspaceSlug="main"
+      />,
+    );
+
+    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
+    await user.upload(fileInput, new File(["v"], "clip.mp4", { type: "video/mp4" }));
+    await waitFor(() => expect(FakeXHR.instances).toHaveLength(3));
+
+    act(() => {
+      FakeXHR.instances[0]!.respond(201, {
+        publicId: "gen_vid",
+        kind: "video",
+        name: "clip.mp4",
+        mimeType: "video/mp4",
+        url: "/api/v1/assets/gen_vid",
+      });
+      FakeXHR.instances[1]!.respond(201, {
+        publicId: "gen_kf1",
+        kind: "image",
+        name: "clip-frame-1.webp",
+        mimeType: "image/webp",
+        url: "/api/v1/assets/gen_kf1",
+      });
+      FakeXHR.instances[2]!.respond(201, {
+        publicId: "gen_kf2",
+        kind: "image",
+        name: "clip-frame-2.webp",
+        mimeType: "image/webp",
+        url: "/api/v1/assets/gen_kf2",
+      });
+    });
+
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Send message" })).not.toBeDisabled(),
+    );
+
+    await user.type(screen.getByRole("textbox"), "what happens in this clip?");
+    await user.click(screen.getByRole("button", { name: "Send message" }));
+
+    await waitFor(() => expect(action).toHaveBeenCalledTimes(1));
+    const fd = action.mock.calls[0][0] as FormData;
+    const parsed = JSON.parse(fd.get("attachments") as string) as Array<{
+      publicId: string;
+      kind: string;
+      keyframeForVideo?: string;
+    }>;
+    expect(parsed).toEqual([
+      expect.objectContaining({ publicId: "gen_vid", kind: "video" }),
+      expect.objectContaining({ publicId: "gen_kf1", kind: "image", keyframeForVideo: "gen_vid" }),
+      expect.objectContaining({ publicId: "gen_kf2", kind: "image", keyframeForVideo: "gen_vid" }),
+    ]);
+    // The video carries no keyframeForVideo of its own.
+    expect(parsed[0]!.keyframeForVideo).toBeUndefined();
+  });
+});
+
+// ── code mode ──────────────────────────────────────────────────────────────────
+//
+// ComposerContextControls/RepoSelector/EnvironmentSelector are NOT mocked here
+// — they render for real on top of the shared `@/components/ui/select` mock above,
+// whose onValueChange always fires with "high" (see the reasoning-effort
+// tests). A single-repo fixture with key "high" lets a click on the repo
+// Select resolve deterministically through that shared mock.
+const CODE_REPO = { key: "high", connectionId: "con_1", owner: "acme", name: "widgets", defaultBranch: "main" };
+const CODE_ENV_DEFAULT = { id: "env_default", name: "Default", isDefault: true };
+
+describe("MessageComposer — code mode", () => {
+  it("does not render the agent toolbar until code mode is toggled on", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    const { container } = render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        availableRepos={[CODE_REPO]}
+        availableEnvironments={[CODE_ENV_DEFAULT]}
+      />,
+    );
+    expect(container.querySelector('[aria-label="Select repository"]')).toBeNull();
+    expect(container.querySelector('[aria-label="Select environment"]')).toBeNull();
+  });
+
+  it("toggling code mode on reveals the repo + environment pickers", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    const { container } = render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        availableRepos={[CODE_REPO]}
+        availableEnvironments={[CODE_ENV_DEFAULT]}
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Toggle code mode" }));
+    expect(container.querySelector('[aria-label="Select repository"]')).not.toBeNull();
+    expect(container.querySelector('[aria-label="Select environment"]')).not.toBeNull();
+  });
+
+  it("the code toggle is disabled when there are no available repos", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Toggle code mode" })).toBeDisabled();
+  });
+
+  it("blocks send with a hint until both a repo and environment are selected", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        availableRepos={[CODE_REPO]}
+        availableEnvironments={[]}
+      />,
+    );
+    await userEvent.type(screen.getByRole("textbox"), "fix the bug");
+    await userEvent.click(screen.getByRole("button", { name: "Toggle code mode" }));
+    // No environments supplied, so isDefault auto-select has nothing to pick —
+    // the gate stays blocked with neither repo nor environment chosen.
+    expect(screen.getByRole("button", { name: "Send message" })).toBeDisabled();
+    expect(screen.getByTestId("code-mode-gate-hint")).toHaveTextContent(
+      "Select a repository and environment to start coding.",
+    );
+  });
+
+  it("auto-selects the workspace default environment when code mode turns on", async () => {
+    const action = makeAction();
+    const { MessageComposer } = await import("./message-composer");
+    const { container } = render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={action}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        availableRepos={[CODE_REPO]}
+        availableEnvironments={[CODE_ENV_DEFAULT]}
+      />,
+    );
+    await userEvent.type(screen.getByRole("textbox"), "fix the bug");
+    await userEvent.click(screen.getByRole("button", { name: "Toggle code mode" }));
+    // Environment auto-defaults, but the repo still isn't picked — gate stays shut.
+    expect(screen.getByRole("button", { name: "Send message" })).toBeDisabled();
+
+    // Selecting the repo (via the shared Select mock's fixed "high" value,
+    // matching CODE_REPO.key) opens the gate.
+    const repoSelect = container.querySelector('[data-testid="select"]');
+    expect(repoSelect).not.toBeNull();
+    fireEvent.click(repoSelect!);
+
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Send message" })).not.toBeDisabled(),
+    );
+    expect(screen.queryByTestId("code-mode-gate-hint")).toBeNull();
+
+    await userEvent.click(screen.getByRole("button", { name: "Send message" }));
+    await waitFor(() => expect(action).toHaveBeenCalledTimes(1));
+    const fd = action.mock.calls[0][0] as FormData;
+    const code = JSON.parse(fd.get("code") as string) as {
+      connectionId: string;
+      owner: string;
+      name: string;
+      defaultBranch: string | null;
+      environmentId: string;
+      environmentName: string | null;
+      sandboxSessionId: string | null;
+    };
+    expect(code).toEqual({
+      connectionId: "con_1",
+      owner: "acme",
+      name: "widgets",
+      defaultBranch: "main",
+      environmentId: "env_default",
+      environmentName: "Default",
+      sandboxSessionId: null,
+    });
+  });
+
+  it("does NOT encode a code field when code mode is off", async () => {
+    const action = makeAction();
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={action}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        availableRepos={[CODE_REPO]}
+        availableEnvironments={[CODE_ENV_DEFAULT]}
+      />,
+    );
+    await userEvent.type(screen.getByRole("textbox"), "hello");
+    await userEvent.click(screen.getByRole("button", { name: "Send message" }));
+    await waitFor(() => expect(action).toHaveBeenCalled());
+    const fd = action.mock.calls[0][0] as FormData;
+    expect(fd.get("code")).toBeNull();
+  });
+});
+
+// ── collapsible composer (OXA mobile-agent-ux) ─────────────────────────────────
+
+const COLLAPSED_KEY = "oxagen.chat.composerCollapsed";
+
+describe("MessageComposer — collapsible composer", () => {
+  it("starts expanded and collapses via the toggle, persisting the preference", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+      />,
+    );
+    const ta = screen.getByRole("textbox");
+    expect(ta.className).not.toContain("hidden");
+    expect(screen.queryByTestId("composer-expand-affordance")).toBeNull();
+
+    await userEvent.click(screen.getByTestId("composer-collapse-toggle"));
+
+    expect(ta.className).toContain("hidden");
+    expect(screen.getByTestId("composer-expand-affordance")).toBeInTheDocument();
+    expect(window.localStorage.getItem(COLLAPSED_KEY)).toBe("1");
+    // Send stays reachable in the slim row.
+    expect(screen.getByRole("button", { name: "Send message" })).toBeInTheDocument();
+  });
+
+  it("expands via the affordance, restores the textarea, and focuses it", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+      />,
+    );
+    await userEvent.click(screen.getByTestId("composer-collapse-toggle"));
+    await userEvent.click(screen.getByTestId("composer-expand-affordance"));
+
+    const ta = screen.getByRole("textbox");
+    expect(ta.className).not.toContain("hidden");
+    expect(window.localStorage.getItem(COLLAPSED_KEY)).toBe("0");
+    // Focus lands on the frame after the expanded layout commits (rAF).
+    await waitFor(() => expect(ta).toHaveFocus());
+  });
+
+  it("restores the persisted collapsed state on mount (hydration-safe)", async () => {
+    window.localStorage.setItem(COLLAPSED_KEY, "1");
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+      />,
+    );
+    expect(screen.getByTestId("composer-expand-affordance")).toBeInTheDocument();
+    expect(screen.getByRole("textbox").className).toContain("hidden");
+  });
+
+  it("exports the storage key used for persistence", async () => {
+    const { COMPOSER_COLLAPSED_STORAGE_KEY } = await import("./message-composer");
+    expect(COMPOSER_COLLAPSED_STORAGE_KEY).toBe(COLLAPSED_KEY);
+  });
+
+  it("keeps the draft and submits it while collapsed", async () => {
+    const action = makeAction();
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={action}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+      />,
+    );
+    await userEvent.type(screen.getByRole("textbox"), "draft survives collapse");
+    await userEvent.click(screen.getByTestId("composer-collapse-toggle"));
+    await userEvent.click(screen.getByRole("button", { name: "Send message" }));
+    await waitFor(() => expect(action).toHaveBeenCalledTimes(1));
+    const fd = action.mock.calls[0][0] as FormData;
+    expect(fd.get("content")).toBe("draft survives collapse");
+  });
+
+  it("auto-expands when a printable key is pressed outside editable controls", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+      />,
+    );
+    await userEvent.click(screen.getByTestId("composer-collapse-toggle"));
+    expect(screen.getByTestId("composer-expand-affordance")).toBeInTheDocument();
+
+    fireEvent.keyDown(document.body, { key: "a" });
+
+    await waitFor(() =>
+      expect(screen.queryByTestId("composer-expand-affordance")).toBeNull(),
+    );
+    expect(window.localStorage.getItem(COLLAPSED_KEY)).toBe("0");
+  });
+
+  it("does NOT auto-expand on modifier combos or non-printable keys", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+      />,
+    );
+    await userEvent.click(screen.getByTestId("composer-collapse-toggle"));
+
+    fireEvent.keyDown(document.body, { key: "Escape" });
+    fireEvent.keyDown(document.body, { key: "a", ctrlKey: true });
+    fireEvent.keyDown(document.body, { key: "c", metaKey: true });
+
+    expect(screen.getByTestId("composer-expand-affordance")).toBeInTheDocument();
+  });
+
+  it("hides the code-mode agent toolbar and gate hint while collapsed", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    const { container } = render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        availableRepos={[CODE_REPO]}
+        availableEnvironments={[]}
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Toggle code mode" }));
+    expect(container.querySelector('[aria-label="Select repository"]')).not.toBeNull();
+    expect(screen.getByTestId("code-mode-gate-hint")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByTestId("composer-collapse-toggle"));
+    expect(container.querySelector('[aria-label="Select repository"]')).toBeNull();
+    expect(screen.queryByTestId("code-mode-gate-hint")).toBeNull();
+  });
+});
+
+describe("MessageComposer — compact context controls in code mode", () => {
+  it("shows the compact context controls in code mode with 'Select …' labels and no pin toggle", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    const { container } = render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        availableRepos={[CODE_REPO]}
+        availableEnvironments={[CODE_ENV_DEFAULT]}
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Toggle code mode" }));
+    const controls = screen.getByTestId("composer-context-controls");
+    expect(controls).toHaveAttribute("data-mode", "code");
+    // Code mode uses the default "Select …" labels for the compact selectors.
+    expect(container.querySelector('[aria-label="Select repository"]')).not.toBeNull();
+    expect(container.querySelector('[aria-label="Select environment"]')).not.toBeNull();
+    // Both selections are required to send in code mode, so no pin affordance.
+    expect(screen.queryByTestId("pin-to-chat")).toBeNull();
+  });
+});
+
+// ── mobile toolbar (OXA mobile-agent-ux) ───────────────────────────────────────
+
+describe("MessageComposer — mobile toolbar", () => {
+  beforeEach(() => {
+    mockViewport.isMobile = true;
+  });
+  afterEach(() => {
+    mockViewport.isMobile = false;
+  });
+
+  it("keeps only the essentials inline and moves the rest behind the overflow button", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        availableMcpServers={[makeMcpServer()]}
+        orgSlug="acme"
+        workspaceSlug="main"
+      />,
+    );
+    // Essentials inline:
+    expect(screen.getByRole("button", { name: "Attach image or video" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Toggle code mode" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Send message" })).toBeInTheDocument();
+    expect(screen.getByTestId("composer-overflow-btn")).toBeInTheDocument();
+    // Overflow controls NOT inline (sheet is closed):
+    expect(screen.queryByTestId("model-picker")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Generate image" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Generate video" })).toBeNull();
+    expect(screen.queryByTestId("mcp-server-picker")).toBeNull();
+    expect(screen.queryByTestId("budget-control")).toBeNull();
+  });
+
+  it("opens the bottom sheet with the overflow controls", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        availableMcpServers={[makeMcpServer()]}
+      />,
+    );
+    expect(screen.queryByTestId("composer-overflow-sheet")).toBeNull();
+    await userEvent.click(screen.getByTestId("composer-overflow-btn"));
+    expect(screen.getByTestId("composer-overflow-sheet")).toBeInTheDocument();
+    expect(screen.getByTestId("model-picker")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Generate image" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Generate video" })).toBeInTheDocument();
+    expect(screen.getByTestId("mcp-server-picker")).toBeInTheDocument();
+    expect(screen.getByTestId("budget-control")).toBeInTheDocument();
+  });
+
+  it("toggling image generation from the sheet switches the composer to image mode", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+      />,
+    );
+    await userEvent.click(screen.getByTestId("composer-overflow-btn"));
+    await userEvent.click(screen.getByRole("button", { name: "Generate image" }));
+    expect(screen.getByPlaceholderText("Describe the image you want…")).toBeInTheDocument();
+  });
+
+  it("uses a 2-row textarea and 44px inline touch targets on mobile", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        orgSlug="acme"
+        workspaceSlug="main"
+      />,
+    );
+    expect(screen.getByRole("textbox")).toHaveAttribute("rows", "2");
+    expect(
+      screen.getByRole("button", { name: "Attach image or video" }).className,
+    ).toContain("h-11");
+    expect(screen.getByRole("button", { name: "Toggle code mode" }).className).toContain(
+      "h-11",
+    );
+  });
+
+  it("keeps a 3-row textarea and the full inline control row on desktop", async () => {
+    mockViewport.isMobile = false;
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        availableMcpServers={[makeMcpServer()]}
+      />,
+    );
+    expect(screen.getByRole("textbox")).toHaveAttribute("rows", "3");
+    expect(screen.getByTestId("model-picker")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Generate image" })).toBeInTheDocument();
+    expect(screen.getByTestId("mcp-server-picker")).toBeInTheDocument();
+    expect(screen.getByTestId("budget-control")).toBeInTheDocument();
+    expect(screen.queryByTestId("composer-overflow-btn")).toBeNull();
+  });
+});
+
+describe("MessageComposer — pin context & slash commands", () => {
+  // Pin persistence writes to localStorage keyed by a workspace-scoped draft
+  // key. Clear it between tests so a pin written by one test can't rehydrate
+  // (and auto-select/auto-pin) in the next.
+  beforeEach(() => {
+    try {
+      window.localStorage.clear();
+    } catch {
+      // jsdom without a real localStorage — pinning degrades to in-memory,
+      // which is exactly what these single-render assertions exercise.
+    }
+  });
+
+  it("renders the compact context controls in PIN mode when NOT in code mode and repos are available", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    const { container } = render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        availableRepos={[CODE_REPO]}
+        availableEnvironments={[CODE_ENV_DEFAULT]}
+      />,
+    );
+    const controls = screen.getByTestId("composer-context-controls");
+    expect(controls).toHaveAttribute("data-mode", "pin");
+    // Pin mode's selectors use the "Pinned …" labels and expose the pin toggle;
+    // the code-mode "Select repository" label must NOT be present yet.
+    expect(container.querySelector('[aria-label="Pinned repository"]')).not.toBeNull();
+    expect(container.querySelector('[aria-label="Select repository"]')).toBeNull();
+    expect(screen.getByTestId("pin-to-chat")).toBeInTheDocument();
+  });
+
+  it("switches the controls from pin mode to code mode once code mode is on", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    const { container } = render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        availableRepos={[CODE_REPO]}
+        availableEnvironments={[CODE_ENV_DEFAULT]}
+      />,
+    );
+    expect(screen.getByTestId("composer-context-controls")).toHaveAttribute("data-mode", "pin");
+
+    await userEvent.click(screen.getByRole("button", { name: "Toggle code mode" }));
+
+    // Same single control row, now in code mode (default "Select …" labels, no pin).
+    expect(screen.getByTestId("composer-context-controls")).toHaveAttribute("data-mode", "code");
+    expect(container.querySelector('[aria-label="Select repository"]')).not.toBeNull();
+    expect(screen.queryByTestId("pin-to-chat")).toBeNull();
+  });
+
+  it("opens the slash-command menu when the input is a lone slash token", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+      />,
+    );
+    await userEvent.type(screen.getByRole("textbox"), "/");
+    expect(await screen.findByTestId("slash-command-menu")).toBeInTheDocument();
+  });
+
+  it("filters the slash menu to the matching command as the query narrows", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+      />,
+    );
+    await userEvent.type(screen.getByRole("textbox"), "/ci");
+    const options = await screen.findAllByRole("option");
+    expect(options).toHaveLength(1);
+    expect(options[0]).toHaveTextContent("/ci");
+  });
+
+  it("closes the slash menu when the input is no longer a lone slash token", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+      />,
+    );
+    const textbox = screen.getByRole("textbox");
+    await userEvent.type(textbox, "/");
+    expect(screen.getByTestId("slash-command-menu")).toBeInTheDocument();
+    // Typing normal text after the slash (a space breaks the lone-slash token).
+    await userEvent.type(textbox, " deploy the app");
+    await waitFor(() =>
+      expect(screen.queryByTestId("slash-command-menu")).not.toBeInTheDocument(),
+    );
+  });
+
+  it("closes the slash menu when Escape is pressed", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+      />,
+    );
+    const textbox = screen.getByRole("textbox");
+    await userEvent.type(textbox, "/");
+    expect(screen.getByTestId("slash-command-menu")).toBeInTheDocument();
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() =>
+      expect(screen.queryByTestId("slash-command-menu")).not.toBeInTheDocument(),
+    );
+  });
+
+  it("encodes pinnedContext in FormData when a repo is pinned (not code mode)", async () => {
+    const action = makeAction();
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={action}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        availableRepos={[CODE_REPO]}
+        availableEnvironments={[CODE_ENV_DEFAULT]}
+      />,
+    );
+    // Select the repo via the context bar's repo selector (the first Select;
+    // the shared Select mock fires onValueChange("high") === CODE_REPO.key).
+    const repoSelect = screen.getAllByTestId("select")[0];
+    expect(repoSelect).toBeDefined();
+    await userEvent.click(repoSelect!);
+
+    // Pin the selection — enabled now that a repo is chosen.
+    const pinButton = screen.getByTestId("pin-to-chat");
+    await waitFor(() => expect(pinButton).not.toBeDisabled());
+    await userEvent.click(pinButton);
+
+    await userEvent.type(screen.getByRole("textbox"), "look at this repo");
+    await userEvent.click(screen.getByRole("button", { name: "Send message" }));
+
+    await waitFor(() => expect(action).toHaveBeenCalledTimes(1));
+    const fd = action.mock.calls[0][0] as FormData;
+    const pinned = JSON.parse(fd.get("pinnedContext") as string) as {
+      repo: { connectionId: string; owner: string; name: string; defaultBranch: string | null } | null;
+      environment: { id: string; name: string } | null;
+    };
+    expect(pinned.repo).toEqual({
+      connectionId: "con_1",
+      owner: "acme",
+      name: "widgets",
+      defaultBranch: "main",
+    });
+  });
+
+  it("does NOT encode pinnedContext when nothing is pinned", async () => {
+    const action = makeAction();
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={action}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        availableRepos={[CODE_REPO]}
+        availableEnvironments={[CODE_ENV_DEFAULT]}
+      />,
+    );
+    // Select a repo but leave it unpinned — pinnedContext only rides along when
+    // the selection is explicitly pinned.
+    const repoSelect = screen.getAllByTestId("select")[0];
+    expect(repoSelect).toBeDefined();
+    await userEvent.click(repoSelect!);
+
+    await userEvent.type(screen.getByRole("textbox"), "hello");
+    await userEvent.click(screen.getByRole("button", { name: "Send message" }));
+
+    await waitFor(() => expect(action).toHaveBeenCalledTimes(1));
+    const fd = action.mock.calls[0][0] as FormData;
+    expect(fd.get("pinnedContext")).toBeNull();
+  });
+});
+
+describe("MessageComposer — agent selection gating", () => {
+  const CODE_AGENT = {
+    agentId: "agt_code",
+    slug: "coder",
+    name: "Coder",
+    description: null,
+    agentType: "code",
+    isCode: true,
+  };
+  const CHAT_AGENT = {
+    agentId: "agt_chat",
+    slug: "chatter",
+    name: "Chatter",
+    description: null,
+    agentType: "custom",
+    isCode: false,
+  };
+
+  it("shows the manual code toggle and no agent selector when no agents exist", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        availableAgents={[]}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Toggle code mode" })).toBeInTheDocument();
+    expect(screen.queryByTestId("agent-selector")).not.toBeInTheDocument();
+  });
+
+  it("renders the agent selector and keeps the manual toggle at the default (no agent governs)", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        availableAgents={[CODE_AGENT, CHAT_AGENT]}
+      />,
+    );
+    expect(screen.getByTestId("agent-selector")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Toggle code mode" })).toBeInTheDocument();
+  });
+
+  it("hides the manual toggle once a code agent governs code mode", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        availableAgents={[CODE_AGENT, CHAT_AGENT]}
+      />,
+    );
+    fireEvent.click(screen.getByTestId("pick-agt_code"));
+    expect(screen.queryByRole("button", { name: "Toggle code mode" })).not.toBeInTheDocument();
+  });
+
+  it("also hides the manual toggle for a chat agent (its identity governs)", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        availableAgents={[CODE_AGENT, CHAT_AGENT]}
+      />,
+    );
+    fireEvent.click(screen.getByTestId("pick-agt_chat"));
+    expect(screen.queryByRole("button", { name: "Toggle code mode" })).not.toBeInTheDocument();
+  });
+
+  it("restores the manual toggle when the default (no agent) is re-selected", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        availableAgents={[CODE_AGENT, CHAT_AGENT]}
+      />,
+    );
+    fireEvent.click(screen.getByTestId("pick-agt_code"));
+    fireEvent.click(screen.getByTestId("pick-default"));
+    expect(screen.getByRole("button", { name: "Toggle code mode" })).toBeInTheDocument();
+  });
+
+  it("forwards the selected agentId in the submit payload", async () => {
+    const action = makeAction();
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={action}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        availableAgents={[CODE_AGENT, CHAT_AGENT]}
+      />,
+    );
+    // A chat agent keeps code mode off, so send isn't gated on a repo/env.
+    fireEvent.click(screen.getByTestId("pick-agt_chat"));
+    await userEvent.type(screen.getByRole("textbox"), "hi");
+    await userEvent.click(screen.getByRole("button", { name: "Send message" }));
+    await waitFor(() => expect(action).toHaveBeenCalled());
+    const fd = action.mock.calls[0][0] as FormData;
+    expect(fd.get("agentId")).toBe("agt_chat");
   });
 });

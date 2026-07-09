@@ -29,8 +29,26 @@ vi.mock("./client", () => ({
     updateSubscription: vi.fn().mockResolvedValue(undefined),
     cancelSubscription: vi.fn().mockResolvedValue(undefined),
     upgradeSubscription: vi.fn().mockResolvedValue(undefined),
+    // previewPlanChange's card lookup (resolveDefaultCard) hits these when a
+    // customer id resolves cleanly. Default to "no card on file".
+    getDefaultPaymentMethodId: vi.fn().mockResolvedValue(null),
+    listPaymentMethods: vi.fn().mockResolvedValue([]),
   }),
 }));
+
+// ---------------------------------------------------------------------------
+// Logger mock — assert the plan-change preview card-lookup failure is logged
+// (an over-broad silent catch previously hid Stripe outages behind "no card").
+// ---------------------------------------------------------------------------
+
+const loggerMock = vi.hoisted(() => ({
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
+  debug: vi.fn(),
+}));
+
+vi.mock("./logger", () => ({ logger: loggerMock }));
 
 // ---------------------------------------------------------------------------
 // DB mock
@@ -403,5 +421,72 @@ describe("previewPlanChange — annual price misconfiguration", () => {
     // No throw because interval !== "year".
     expect(result.requiresCheckout).toBe(true);
     expect(result.amountCents).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// previewPlanChange — card-lookup error visibility (silent-catch fix)
+//
+// The no-active-subscription branch previously swallowed every error from the
+// customer/card lookup behind `card = null`, so a Stripe auth/outage/rate-limit
+// failure was indistinguishable from "no card on file". These tests pin that
+// the failure is now logged while the happy no-card path stays silent.
+// ---------------------------------------------------------------------------
+
+describe("previewPlanChange — card lookup error visibility", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("logs a warning when the customer/card lookup throws, still returns the no-card checkout preview", async () => {
+    dbMocks.query.plans.findFirst.mockResolvedValue({
+      id: "plan-build-1",
+      tier: "build",
+      stripePriceIdMonthly: "price_build_month",
+      stripePriceIdAnnual: "price_build_year",
+      monthlyCents: 2000,
+      annualCents: 24000,
+    });
+    // activeSub lookup → no active sub → checkout branch. resolveCustomerId's
+    // own subscription lookup also returns undefined → ensureStripeCustomer
+    // (mocked to reject) throws → the preview's card-lookup catch fires.
+    dbMocks.query.subscriptions.findFirst.mockResolvedValue(undefined);
+
+    const result = await previewPlanChange("org-abc-123", "build", "year");
+
+    // Fallback preserved: preview still renders with no card.
+    expect(result.requiresCheckout).toBe(true);
+    expect(result.card).toBeNull();
+    // But the failure is now observable.
+    expect(loggerMock.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ orgId: "org-abc-123" }),
+      expect.stringContaining("plan-change preview card lookup failed"),
+    );
+  });
+
+  it("stays silent (no card-lookup warning) when the card resolves cleanly for a customer on file", async () => {
+    dbMocks.query.plans.findFirst.mockResolvedValue({
+      id: "plan-build-1",
+      tier: "build",
+      stripePriceIdMonthly: "price_build_month",
+      stripePriceIdAnnual: "price_build_year",
+      monthlyCents: 2000,
+      annualCents: 24000,
+    });
+    // 1st findFirst (activeSub) → no active sub → checkout branch.
+    // 2nd findFirst (inside resolveCustomerId) → a customer id on file, so
+    // resolveCustomerId succeeds and resolveDefaultCard returns null cleanly.
+    dbMocks.query.subscriptions.findFirst
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce({ stripeCustomerId: "cus_on_file" });
+
+    const result = await previewPlanChange("org-abc-123", "build", "year");
+
+    expect(result.requiresCheckout).toBe(true);
+    expect(result.card).toBeNull();
+    const cardWarn = loggerMock.warn.mock.calls.find(
+      (c) => typeof c[1] === "string" && c[1].includes("plan-change preview card lookup failed"),
+    );
+    expect(cardWarn).toBeUndefined();
   });
 });

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
 import { RELATIONSHIP_TYPE_PATTERN } from "../lib/relationship-type-pattern";
+import { asOfField, asKnownAtField, edgeValiditySchema } from "../lib/temporal-query";
 
 /**
  * ontology.query — first-class, typed multi-hop traversal over the knowledge
@@ -25,21 +26,27 @@ const traversedNode = z.object({
   depth: z.number().int().describe("Hop distance from the start node (0 = start node)"),
 });
 
-const traversedEdge = z.object({
-  fromNodeId: z.string().describe("publicId of the source node"),
-  toNodeId: z.string().describe("publicId of the target node"),
-  edgeType: z
-    .string()
-    .regex(RELATIONSHIP_TYPE_PATTERN)
-    .describe("Relationship type of this edge"),
-});
+const traversedEdge = z
+  .object({
+    fromNodeId: z.string().describe("publicId of the source node"),
+    toNodeId: z.string().describe("publicId of the target node"),
+    edgeType: z
+      .string()
+      .regex(RELATIONSHIP_TYPE_PATTERN)
+      .describe("Relationship type of this edge"),
+  })
+  // Bi-temporal validity of the edge, so a grounded answer can cite "true as of X".
+  .merge(edgeValiditySchema);
 
 export const ontologyQuery = registerCapability({
-  name: "ontology.query",
+  name: "query_ontology",
   domain: "ontology",
   description:
-    "Typed multi-hop traversal from a start node over named relationship type(s) to a given depth. " +
-    "Returns the reachable subgraph (nodes + edges), org + workspace scoped. Read-only; no Cypher required.",
+    "Multi-hop traversal FROM a known start node over named relationship type(s) to a given depth (1–5); " +
+    "returns the reachable subgraph (nodes + edges), org + workspace scoped, read-only, no Cypher required. " +
+    "Prefer over ontology.neighbors when you need MORE than one hop. This tool discovers CONNECTIONS, not " +
+    "nodes: it requires a startNodeId you already have — do NOT use it to find a node by name, topic, or " +
+    "keyword (use graph.search for semantic lookup or graph.node.search for name/label lookup first).",
   mode: "sync",
   surfaces: ["api", "mcp", "agent", "cli"] as const,
   layers: ["schema", "api", "mcp", "unit", "docs"],
@@ -75,6 +82,8 @@ export const ontologyQuery = registerCapability({
       .max(500)
       .default(100)
       .describe("Maximum number of reachable nodes to return (1–500, default 100)"),
+    asOf: asOfField,
+    asKnownAt: asKnownAtField,
   }),
   output: z.object({
     startNode: traversedNode

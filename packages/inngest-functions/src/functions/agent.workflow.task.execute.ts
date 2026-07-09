@@ -3,7 +3,8 @@ import { schema, withTenantDb } from "@oxagen/database";
 import { and, count, eq, sql } from "drizzle-orm";
 import { generateObjectFor } from "@oxagen/ai";
 import { runInTenantScope } from "@oxagen/tenancy";
-import { insertToolInvocation } from "@oxagen/telemetry";
+import { insertToolInvocation, deterministicEventId } from "@oxagen/telemetry";
+import { claimExecutionStep, renewExecutionStepLease, startLeaseRenewal } from "../lease";
 import { logger } from "../logger";
 import { z } from "zod";
 
@@ -26,7 +27,7 @@ export const [agentWorkflowTaskExecute] = createFunction(
     ],
   },
   { event: "agent/workflow.task.execute" },
-  async ({ event, step }) => {
+  async ({ event, step, runId }) => {
     const { orgId, workspaceId, executionId, stepId, taskIndex, goal, outputFormat } =
       event.data as {
         orgId: string;
@@ -38,42 +39,58 @@ export const [agentWorkflowTaskExecute] = createFunction(
         outputFormat: string;
       };
 
-    const invocationId = crypto.randomUUID();
+    // Deterministic — not crypto.randomUUID() — so a replayed/retried
+    // invocation of this function derives the same tool_invocations row id
+    // rather than minting a fresh random one on every re-execution. The
+    // actual double-insert guard is the step.run wrapper around each
+    // insertToolInvocation call below (see OXA reliability fix: retried
+    // Inngest steps double-counting ClickHouse telemetry).
+    const invocationId = deterministicEventId("agent.workflow.task.execute", stepId);
     const startedAt = Date.now();
+    const workerId = typeof runId === "string" && runId.length > 0 ? runId : `worker:${stepId}`;
 
-    // Mark step running.
-    await step.run("mark-running", () =>
-      runInTenantScope({ orgId, workspaceId }, () =>
-        withTenantDb((tx) =>
-          tx
-            .update(schema.agentExecutionSteps)
-            .set({ status: "running", startedAt: new Date(), updatedAt: new Date() })
-            .where(
-              and(
-                eq(schema.agentExecutionSteps.id, stepId),
-                eq(schema.agentExecutionSteps.orgId, orgId),
-              ),
-            ),
-        ),
-      ),
+    // Claim the step (mark-running as a claim — spec §1): atomic UPDATE that
+    // takes ownership + a lease and bumps attempts. Null means the step is
+    // terminal, at the attempt cap, or owned by a live worker — skipping makes
+    // duplicate deliveries and sweeper re-dispatches safe instead of
+    // double-running the task.
+    const claimed = await step.run("claim-step", () =>
+      claimExecutionStep({ orgId, workspaceId, stepId, workerId }),
     );
+    if (!claimed) {
+      logger.info(
+        { stepId, executionId, orgId },
+        "agent.workflow.task.execute: step not claimable (terminal, capped, or live-owned) — skipping",
+      );
+      return { stepId, taskIndex, status: "skipped" };
+    }
 
     let output: z.output<typeof taskOutputSchema>;
     try {
-      const result = await step.run("execute", () =>
-        generateObjectFor({
-          schema: taskOutputSchema,
-          system: `You are a research agent. Given a specific research goal, produce a concise structured result.
+      const result = await step.run("execute", async () => {
+        // Keep the lease alive across the LLM call so a slow generation never
+        // triggers a false reclaim (spec §Risks).
+        const stopRenewal = startLeaseRenewal(
+          () => renewExecutionStepLease({ orgId, workspaceId, stepId, workerId }),
+          { onError: (err) => logger.warn({ err, stepId }, "lease renewal failed — sweeper may reclaim") },
+        );
+        try {
+          return await generateObjectFor({
+            schema: taskOutputSchema,
+            system: `You are a research agent. Given a specific research goal, produce a concise structured result.
 Provide a summary, any relevant structured data, and source references if applicable.`,
-          prompt: `Research goal: ${goal}\n\nProvide your findings as structured output. Output format: ${outputFormat}.`,
-          telemetry: {
-            orgId,
-            workspaceId,
-            surface: "runner" as const,
-            messageId: stepId,
-          },
-        }),
-      );
+            prompt: `Research goal: ${goal}\n\nProvide your findings as structured output. Output format: ${outputFormat}.`,
+            telemetry: {
+              orgId,
+              workspaceId,
+              surface: "runner" as const,
+              messageId: stepId,
+            },
+          });
+        } finally {
+          stopRenewal();
+        }
+      });
       output = result.object;
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
@@ -89,6 +106,7 @@ Provide a summary, any relevant structured data, and source references if applic
                 failureReason: errMsg,
                 completedAt: new Date(),
                 updatedAt: new Date(),
+                leaseExpiresAt: null,
               })
               .where(
                 and(
@@ -100,31 +118,36 @@ Provide a summary, any relevant structured data, and source references if applic
         ),
       );
 
-      try {
-        await insertToolInvocation({
-          invocation_id: invocationId,
-          org_id: orgId,
-          workspace_id: workspaceId,
-          capability_name: "workflow.task.execute",
-          message_id: stepId,
-          parent_message_id: executionId,
-          execution_step_id: null,
-          status: "failed",
-          input_size_bytes: 0,
-          output_size_bytes: 0,
-          latency_ms: Date.now() - startedAt,
-          error_class: err instanceof Error ? err.name : "UnknownError",
-          external_provider: "",
-          external_server_id: null,
-          risk_level: "low",
-          required_approval: 0,
-          surface: "runner",
-          provider: "",
-          created_at: new Date().toISOString(),
-        });
-      } catch (telErr) {
-        logger.warn({ err: telErr }, "insertToolInvocation failed — telemetry loss");
-      }
+      // Wrapped in its own memoized step so a retry/replay of this function
+      // after this point never re-inserts the row (tool_invocations is a
+      // plain append-only MergeTree — no dedup on re-insert).
+      await step.run("emit-tool-invocation-failed", async () => {
+        try {
+          await insertToolInvocation({
+            invocation_id: invocationId,
+            org_id: orgId,
+            workspace_id: workspaceId,
+            capability_name: "workflow.task.execute",
+            message_id: stepId,
+            parent_message_id: executionId,
+            execution_step_id: null,
+            status: "failed",
+            input_size_bytes: 0,
+            output_size_bytes: 0,
+            latency_ms: Date.now() - startedAt,
+            error_class: err instanceof Error ? err.name : "UnknownError",
+            external_provider: "",
+            external_server_id: null,
+            risk_level: "low",
+            required_approval: 0,
+            surface: "runner",
+            provider: "",
+            created_at: new Date().toISOString(),
+          });
+        } catch (telErr) {
+          logger.warn({ err: telErr }, "insertToolInvocation failed — telemetry loss");
+        }
+      });
 
       throw err;
     }
@@ -140,6 +163,7 @@ Provide a summary, any relevant structured data, and source references if applic
               outputPayload: output as object,
               completedAt: new Date(),
               updatedAt: new Date(),
+              leaseExpiresAt: null,
             })
             .where(
               and(
@@ -204,31 +228,35 @@ Provide a summary, any relevant structured data, and source references if applic
       );
     }
 
-    try {
-      await insertToolInvocation({
-        invocation_id: invocationId,
-        org_id: orgId,
-        workspace_id: workspaceId,
-        capability_name: "workflow.task.execute",
-        message_id: stepId,
-        parent_message_id: executionId,
-        execution_step_id: null,
-        status: "completed",
-        input_size_bytes: 0,
-        output_size_bytes: 0,
-        latency_ms: Date.now() - startedAt,
-        error_class: null,
-        external_provider: "",
-        external_server_id: null,
-        risk_level: "low",
-        required_approval: 0,
-        surface: "runner",
-        provider: "",
-        created_at: new Date().toISOString(),
-      });
-    } catch (telErr) {
-      logger.warn({ err: telErr }, "insertToolInvocation failed — telemetry loss");
-    }
+    // Wrapped in its own memoized step — see the failure-path comment above
+    // for why.
+    await step.run("emit-tool-invocation-completed", async () => {
+      try {
+        await insertToolInvocation({
+          invocation_id: invocationId,
+          org_id: orgId,
+          workspace_id: workspaceId,
+          capability_name: "workflow.task.execute",
+          message_id: stepId,
+          parent_message_id: executionId,
+          execution_step_id: null,
+          status: "completed",
+          input_size_bytes: 0,
+          output_size_bytes: 0,
+          latency_ms: Date.now() - startedAt,
+          error_class: null,
+          external_provider: "",
+          external_server_id: null,
+          risk_level: "low",
+          required_approval: 0,
+          surface: "runner",
+          provider: "",
+          created_at: new Date().toISOString(),
+        });
+      } catch (telErr) {
+        logger.warn({ err: telErr }, "insertToolInvocation failed — telemetry loss");
+      }
+    });
 
     logger.info({ stepId, taskIndex, executionId, orgId }, "agent.workflow.task.execute: completed");
     return { stepId, taskIndex, status: "completed" };

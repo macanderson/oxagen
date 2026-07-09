@@ -35,8 +35,12 @@ function globToRegExp(pattern: string): RegExp {
 // ---------------------------------------------------------------------------
 
 const EXEC_UNSUPPORTED =
-  "Command execution is not available in this API-backed GitHub workspace. " +
-  "Use read_file/write_file/edit_file/grep/glob to make changes; do not run shell commands.";
+  "Command execution is not available in this API-backed GitHub workspace: it " +
+  "edits files through the GitHub API with no real checkout, so builds, tests, " +
+  "and git commands cannot run. Set SANDBOX_ENABLED=true (with a Modal driver) " +
+  "so the platform coding agent runs in a durable sandbox with a cloned repo. " +
+  "Until then, use read_file/write_file/edit_file/grep/glob to make changes; do " +
+  "not run shell commands.";
 
 const MAX_GREP_FILES = 200;
 const MAX_GREP_HITS = 200;
@@ -233,19 +237,29 @@ export class GitHubWorkspace implements Workspace {
     this.files.set(p, content);
   }
 
-  async editFile(p: string, oldString: string, newString: string): Promise<void> {
+  async editFile(
+    p: string,
+    oldString: string,
+    newString: string,
+    opts?: { replaceAll?: boolean },
+  ): Promise<number> {
     const text = await this.currentContent(p);
     if (text === null) throw new Error(`ENOENT: ${p}`);
-    const count = text.split(oldString).length - 1;
+    const count = oldString === "" ? 0 : text.split(oldString).length - 1;
     if (count === 0) throw new Error(`old_string not found in ${p}`);
+    // Ensure initial is recorded before staging (currentContent may have set it
+    // via fetchFromGitHub; if content came from files map initial was set by
+    // the earlier writeFile call that put it there).
+    if (opts?.replaceAll) {
+      this.files.set(p, text.split(oldString).join(newString));
+      return count;
+    }
     if (count > 1)
       throw new Error(
         `old_string appears ${count} times in ${p}; must be unique`,
       );
-    // Ensure initial is recorded before staging (currentContent may have set it
-    // via fetchFromGitHub; if content came from files map initial was set by
-    // the earlier writeFile call that put it there).
     this.files.set(p, text.replace(oldString, newString));
+    return 1;
   }
 
   // ---------------------------------------------------------------------------

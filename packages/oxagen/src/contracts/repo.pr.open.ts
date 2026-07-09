@@ -2,12 +2,12 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const repoPrOpen = registerCapability({
-  name: "repo.pr.open",
+  name: "open_pr",
   domain: "repo",
   description: "Open a pull request in a GitHub repository.",
   mode: "sync",
-  surfaces: ["agent", "api"],
-  layers: ["api", "unit", "docs"],
+  surfaces: ["agent", "api", "mcp"],
+  layers: ["api", "mcp", "unit", "docs"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "high", category: "vcs" },
   sensitivity: "high",

@@ -60,10 +60,20 @@ CREATE TABLE IF NOT EXISTS token_usage (
   duration_ms UInt32 DEFAULT 0,
   surface LowCardinality(String) DEFAULT '',
   prompt_hash String DEFAULT '',
+  -- Principal attribution (migration 0023): who drove the spend. Stamped
+  -- from the ambient tenant scope at the insert boundary; nil UUID / ''
+  -- sentinels mean "not resolved" (non-enterprise IAM fast-path, or a write
+  -- outside any capability invocation).
+  principal_id UUID DEFAULT toUUID('00000000-0000-0000-0000-000000000000'),
+  principal_kind LowCardinality(String) DEFAULT '',
+  user_id UUID DEFAULT toUUID('00000000-0000-0000-0000-000000000000'),
+  capability_name LowCardinality(String) DEFAULT '',
   created_at DateTime64(3) CODEC(DoubleDelta, ZSTD(1)),
   -- model is LowCardinality and not in the ORDER BY key; a set skip index
   -- prunes granules for per-model cost/usage rollups (migration 0009).
-  INDEX idx_token_model model TYPE set(0) GRANULARITY 4
+  INDEX idx_token_model model TYPE set(0) GRANULARITY 4,
+  INDEX idx_token_capability capability_name TYPE set(0) GRANULARITY 4,
+  INDEX idx_token_principal principal_id TYPE bloom_filter(0.01) GRANULARITY 4
 ) ENGINE = MergeTree()
 PARTITION BY toYYYYMM(created_at)
 ORDER BY (org_id, created_at, execution_step_id)
@@ -93,11 +103,16 @@ CREATE TABLE IF NOT EXISTS tool_invocations (
   required_approval UInt8,
   surface LowCardinality(String) DEFAULT '',
   provider LowCardinality(String) DEFAULT '',
+  -- Principal attribution (migration 0023) — see token_usage above.
+  principal_id UUID DEFAULT toUUID('00000000-0000-0000-0000-000000000000'),
+  principal_kind LowCardinality(String) DEFAULT '',
+  user_id UUID DEFAULT toUUID('00000000-0000-0000-0000-000000000000'),
   created_at DateTime64(3) CODEC(DoubleDelta, ZSTD(1)),
   -- Secondary filters not led by the key (capability_name leads): status for
   -- failed-call dashboards, message_id for per-message trace expansion (0009).
   INDEX idx_tool_status status TYPE set(0) GRANULARITY 4,
-  INDEX idx_tool_message_id message_id TYPE bloom_filter(0.01) GRANULARITY 4
+  INDEX idx_tool_message_id message_id TYPE bloom_filter(0.01) GRANULARITY 4,
+  INDEX idx_tool_principal principal_id TYPE bloom_filter(0.01) GRANULARITY 4
 ) ENGINE = MergeTree()
 PARTITION BY toYYYYMM(created_at)
 ORDER BY (org_id, capability_name, created_at)
@@ -213,6 +228,38 @@ CREATE TABLE IF NOT EXISTS eval_results (
 ) ENGINE = MergeTree()
 PARTITION BY toYYYYMM(created_at)
 ORDER BY (harness, suite, task_id, agent_version, created_at)
+TTL toDateTime(created_at) + INTERVAL 365 DAY;
+
+-- Per-item results for customer-facing Evals v1 (eval.run.start). DISTINCT from
+-- the private bench-harness eval_runs/eval_results above (those have no tenant
+-- columns): this is tenant-scoped (org_id/workspace_id), written via chInsert
+-- and read via chSelect so customer eval detail stays isolated per workspace.
+-- Run-level summary lives in Postgres eval.eval_runs; this is the drill-down.
+CREATE TABLE IF NOT EXISTS eval_item_results (
+  org_id UUID,
+  workspace_id UUID,
+  run_id String,
+  dataset_id String,
+  item_id String,
+  target_kind LowCardinality(String) DEFAULT '',
+  model LowCardinality(String) DEFAULT '',
+  judge_model LowCardinality(String) DEFAULT '',
+  score Float64 DEFAULT 0,
+  correctness Float64 DEFAULT 0,
+  faithfulness Float64 DEFAULT 0,
+  passed UInt8 DEFAULT 0,
+  latency_ms UInt32 DEFAULT 0,
+  input_tokens UInt32 DEFAULT 0,
+  output_tokens UInt32 DEFAULT 0,
+  cost_usd_micros Int64 DEFAULT 0,
+  status LowCardinality(String) DEFAULT 'completed',
+  error_class LowCardinality(String) DEFAULT '',
+  output String CODEC(ZSTD(3)),
+  rationale String CODEC(ZSTD(3)),
+  created_at DateTime DEFAULT now() CODEC(DoubleDelta, ZSTD(1))
+) ENGINE = MergeTree()
+PARTITION BY toYYYYMM(created_at)
+ORDER BY (org_id, workspace_id, run_id, item_id, created_at)
 TTL toDateTime(created_at) + INTERVAL 365 DAY;
 
 -- Local dev console capture. `pnpm dev` tees turbo's combined output stream to

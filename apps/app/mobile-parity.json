@@ -1,0 +1,130 @@
+{
+  "entries": [
+    {
+      "file": "apps/app/src/components/activity/activity-list.tsx",
+      "match": "hidden items-center gap-3 border-b px-4 py-2 text-xs uppercase tracking-wide text-muted-foreground md:flex",
+      "kind": "reflow",
+      "equivalent": "The labeled column-header row (Status/Run/Duration/Tokens/Cost/When) is desktop-only; each run row below still renders the same status badge, run id, duration, token count, cost, and relative time inline via flex-wrap, so mobile shows identical data without the header strip."
+    },
+    {
+      "file": "apps/app/src/components/activity/span-tree.tsx",
+      "match": "hidden w-40 shrink-0",
+      "kind": "reflow",
+      "equivalent": "The graphical duration bar and the tokens/cost meta column are desktop-only decoration; the plain-text duration value is never hidden, and tapping a row surfaces the full duration/tokens/cost detail in the DetailPanel that stacks beneath the tree (grid-cols-1 below lg) instead of beside it."
+    },
+    {
+      "file": "apps/app/src/components/conversations/conversation-nav.tsx",
+      "match": "hidden w-64 shrink-0 flex-col overflow-hidden rounded-xl border border-border bg-background md:flex",
+      "kind": "reflow",
+      "equivalent": "Desktop persistent conversation sidebar; the same ConversationList renders instead behind the md:hidden trigger button + slide-in Sheet defined earlier in this file, giving identical conversation switching from a thumb-reachable trigger."
+    },
+    {
+      "file": "apps/app/src/components/shell/sidebar.tsx",
+      "match": "relative hidden h-full shrink-0 flex-col overflow-hidden border-sidebar-border bg-sidebar-bg text-sidebar-fg md:flex",
+      "kind": "reflow",
+      "equivalent": "Desktop floating primary navigation rail; MobileBottomBar (components/shell/mobile-bottom-bar.tsx) is the mobile primary navigation below md, sharing the same getSidebarConfig items so the destinations are identical."
+    },
+    {
+      "file": "apps/app/src/components/shell/shell-frame.tsx",
+      "match": "hidden md:inline-flex",
+      "kind": "reflow",
+      "equivalent": "The header's sidebar-collapse toggle is desktop-only chrome; mobile has no floating sidebar to collapse since navigation is provided entirely by the fixed MobileBottomBar, per this file's own header comment."
+    },
+    {
+      "file": "apps/app/src/components/shell/shell-frame.tsx",
+      "match": "hidden md:block",
+      "kind": "reflow",
+      "equivalent": "The persistent AgentBottomBar quick-launcher is desktop chrome; on mobile the bottom edge is owned by MobileBottomBar, whose primary \"Ask\" tab routes to the identical agent conversation surface, and in-flight conversation state lives in that surface itself."
+    },
+    {
+      "file": "apps/app/src/components/chat/chat-shell-client.tsx",
+      "match": "hidden w-64 shrink-0 flex-col gap-3 overflow-y-auto py-1 lg:flex",
+      "kind": "reflow",
+      "equivalent": "The right rail (CodingTracePanel + WorkspaceContextPanel) is desktop-only layout; below lg the identical panels open in a bottom Sheet via the floating chat-mobile-rail-trigger button rendered in the same file (mobileRailOpen state)."
+    },
+    {
+      "file": "apps/app/src/components/shell/shell-frame.tsx",
+      "match": "hidden min-w-0 flex-1 sm:block",
+      "kind": "reflow",
+      "equivalent": "The persistent header AskBar is desktop-only; the same ask capability is reachable on mobile via the \"Ask\" primary tab shared by MobileBottomBar's getSidebarConfig, which routes to the identical /ask page."
+    },
+    {
+      "file": "apps/app/src/components/shell/ask/command-menu.tsx",
+      "match": "hidden rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground sm:block",
+      "kind": "reflow",
+      "equivalent": "Only the keyboard-shortcut hint badge on a quick-action row is hidden below sm; the row itself remains fully visible and tappable, and keyboard shortcuts are inherently a desktop-only input model with no mobile equivalent to display."
+    },
+    {
+      "file": "apps/app/src/components/shell/ask/ask-bar.tsx",
+      "match": "hidden sm:inline-flex items-center gap-0.5 rounded-md",
+      "kind": "reflow",
+      "equivalent": "The \"/\" keyboard-shortcut hint chip is decorative only; the search input beneath it stays fully rendered and focusable by tap on every viewport, so no functionality is hidden, only the keyboard hint."
+    },
+    {
+      "file": "apps/app/src/components/chat/chat-agent-toolbar.tsx",
+      "match": "hidden sm:flex",
+      "kind": "reflow",
+      "equivalent": "Per this file's own comment, the repo/environment summary line only appears while collapsed on phones; when expanded, the full-width stacked repo and environment pickers already show the identical selection, so the summary text is redundant on mobile, not missing."
+    },
+    {
+      "file": "apps/app/src/components/chat/conversation-files.tsx",
+      "match": "hidden sm:inline",
+      "kind": "reflow",
+      "equivalent": "Only the \"Files\" text label beside the icon is hidden below sm; the trigger button keeps its aria-label and onClick, so tapping it still opens the identical conversation-files Sheet on mobile."
+    },
+    {
+      "file": "apps/app/src/components/knowledge/graph-explorer/graph-toolbar.tsx",
+      "match": "hidden sm:inline",
+      "kind": "reflow",
+      "equivalent": "Pause/Resume, Add node, and Add edge text labels hide below sm, but each icon button stays visible, clickable, and titled, and all four actions are also reachable as full-text items in the toolbar's compact overflow Menu (CompactActions) at any width."
+    },
+    {
+      "file": "apps/app/src/components/knowledge/graph-explorer/graph-explorer.tsx",
+      "match": "hidden w-60 shrink-0 border-r border-border lg:block",
+      "kind": "reflow",
+      "equivalent": "The inline node/edge type-visibility filter panel is desktop-only; on mobile the identical filterPanel content opens in a bottom Sheet (mobileFiltersOpen state, rendered later in this file) triggered by the same FilterToggle control."
+    },
+    {
+      "file": "apps/app/src/components/chat/registry-components/workspace-context-panel.tsx",
+      "match": "hidden font-mono text-[11px] sm:inline",
+      "kind": "reflow",
+      "equivalent": "Only the short session-id preview text is hidden below sm; the CopyButton icon stays visible with the full session id in its title attribute, so the copy action remains fully available on mobile."
+    },
+    {
+      "file": "apps/app/src/components/chat/registry-components/svg-preview.tsx",
+      "match": "hidden sm:inline",
+      "kind": "reflow",
+      "equivalent": "The \"Download\"/\"Copy SVG\" text labels hide below sm; both buttons keep their 44px touch target and aria-label, so download and copy remain fully functional icon-only actions on mobile."
+    },
+    {
+      "file": "apps/app/src/app/[orgSlug]/access/sessions/page.tsx",
+      "match": "hidden px-4 sm:grid",
+      "kind": "reflow",
+      "equivalent": "The labeled column-header row is desktop-only; each session row below re-presents the same device, IP, started/last-active, and revoke fields stacked in a single column (grid-cols-1) with icons and inline context standing in for the header labels."
+    },
+    {
+      "file": "apps/app/src/app/[orgSlug]/access/reviews/page.tsx",
+      "match": "hidden px-4 sm:grid",
+      "kind": "reflow",
+      "equivalent": "The labeled column-header row is desktop-only; each member row below re-presents the same member, role, joined, and last-active fields stacked in a single column (grid-cols-1), with the role Badge and dates still fully legible without the header labels."
+    },
+    {
+      "file": "apps/app/src/app/account/security/page.tsx",
+      "match": "hidden px-4 sm:grid",
+      "kind": "reflow",
+      "equivalent": "The labeled column-header row is desktop-only; each active-session row below re-presents the same device, IP, started/last-active, and revoke fields stacked in a single column (grid-cols-1) with icons and inline context standing in for the header labels."
+    },
+    {
+      "file": "apps/app/src/app/[orgSlug]/settings/layout.tsx",
+      "match": "hidden w-48 shrink-0 md:block",
+      "kind": "reflow",
+      "equivalent": "Settings section nav re-presented on mobile as MobileSettingsNav — a sticky bottom-sheet section switcher above the app bottom bar with 44px targets and the identical item list."
+    },
+    {
+      "file": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/layout.tsx",
+      "match": "hidden w-48 shrink-0 md:block",
+      "kind": "reflow",
+      "equivalent": "Settings section nav re-presented on mobile as MobileSettingsNav — a sticky bottom-sheet section switcher above the app bottom bar with 44px targets and the identical item list."
+    }
+  ]
+}

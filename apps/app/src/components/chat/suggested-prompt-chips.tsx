@@ -15,6 +15,7 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 import { useSuggestedPrompts } from "@/lib/page-context/suggested-prompts";
+import type { ConversationMessageSummary } from "@/lib/page-context/suggested-prompts";
 import type { ComposerAction } from "./message-composer";
 
 export interface SuggestedPromptChipsProps {
@@ -36,6 +37,28 @@ export interface SuggestedPromptChipsProps {
    * correct DB node.
    */
   parentMessageId: string | null;
+
+  /**
+   * When true, the chips are hidden because the user is actively typing in
+   * the composer input. Chips reappear when the input is cleared (false).
+   * Defaults to false (chips visible).
+   */
+  inputHasContent?: boolean;
+
+  /**
+   * Recent conversation messages forwarded to `useSuggestedPrompts` so
+   * suggestions stay contextually relevant across multi-turn conversations.
+   */
+  conversationHistory?: ConversationMessageSummary[];
+
+  /**
+   * Per-turn, LLM-generated suggestions from the stream's "suggested-prompts"
+   * event. When provided and non-empty these REPLACE the static
+   * `useSuggestedPrompts()` heuristics — they are conversation-aware and change
+   * every turn. Null/empty (generation failed, timed out, or empty state) falls
+   * back to the static heuristics so chips are always present.
+   */
+  suggestions?: ReadonlyArray<{ label: string; prompt: string }> | null;
 
   /**
    * Additional className applied to the outer <div> container.
@@ -64,9 +87,20 @@ export function SuggestedPromptChips({
   action,
   conversationId,
   parentMessageId,
+  inputHasContent = false,
+  conversationHistory,
+  suggestions,
   className,
 }: SuggestedPromptChipsProps) {
-  const prompts = useSuggestedPrompts();
+  // Always call the hook (Rules of Hooks) — it's the fallback source. When the
+  // per-turn LLM suggestions are present they take precedence.
+  const fallbackPrompts = useSuggestedPrompts(conversationHistory);
+  const prompts =
+    suggestions && suggestions.length > 0 ? suggestions : fallbackPrompts;
+
+  // Re-trigger the entrance animation whenever the trio changes (each new turn
+  // emits a fresh set), so the chips gently fade/slide in rather than snapping.
+  const animationKey = prompts.map((p) => p.label).join("|");
   const [pending, startTransition] = React.useTransition();
   const [activatingIndex, setActivatingIndex] = React.useState<number | null>(null);
   const [chipError, setChipError] = React.useState<string | null>(null);
@@ -101,6 +135,11 @@ export function SuggestedPromptChips({
     [handleActivate],
   );
 
+  // Hide the entire chip group while the user is typing. We use CSS visibility
+  // (not conditional render) so the layout space is preserved and there's no
+  // layout shift when the chips reappear on clear.
+  if (inputHasContent) return null;
+
   return (
     <div className={cn("flex flex-col gap-1.5", className)}>
       {chipError ? (
@@ -113,7 +152,8 @@ export function SuggestedPromptChips({
         </p>
       ) : null}
     <div
-      className="flex flex-wrap items-center justify-center gap-2"
+      key={animationKey}
+      className="flex flex-wrap items-center justify-center gap-2 animate-in fade-in slide-in-from-bottom-1 duration-300"
       role="group"
       aria-label="Suggested prompts"
     >

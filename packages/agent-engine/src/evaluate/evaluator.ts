@@ -1,8 +1,8 @@
 /**
- * Prompt evaluator — the cheap front-of-pipeline model call.
+ * Prompt evaluator — the front-of-pipeline coordinator.
  *
- * Before the expensive coding model ever sees a prompt, a small, fast model
- * (Haiku by default) reads it and reports back:
+ * Before the expensive coding model ever sees a prompt, the evaluator reads it
+ * and reports back:
  *   - completeness: is this actionable on its own, or is it missing what/where/done?
  *   - complexity:   how much work / risk / blast-radius does it imply?
  *   - a recommended tier for the executor,
@@ -10,27 +10,36 @@
  *   - a refined prompt with filler removed and intent sharpened (meaning intact),
  *   - and its chain of thought.
  *
- * This is what lets the engine spend Haiku money to decide how to spend Opus money,
- * and to enrich a vague prompt before acting on it. It NEVER blocks a turn: if
- * the model call fails, a transparent heuristic fallback (the deterministic cost
- * router) keeps the pipeline moving.
+ * The default evaluator is `"local"` — the deterministic cost-router heuristic,
+ * no model call at all — so coordination costs nothing and works with zero
+ * cloud dependencies (including the CLI's Anthropic-only BYOK mode). Set
+ * `OXAGEN_LLM_EVALUATOR` to a model slug (e.g. a Haiku tier) to re-enable
+ * LLM-based evaluation. It NEVER blocks a turn: if a model call fails, the
+ * same heuristic keeps the pipeline moving.
  *
  * Unlike the CLI version this does NOT call `generateObject` from `ai` directly —
  * it takes an {@link AgentAi} port so the platform can wire in its metered
  * implementation and the CLI wires in a BYOK implementation.
  */
 import { z } from "zod";
-import { classifyTier, modelForTier, accumulateUsage } from "../router/model-router";
+import { classifyTier, accumulateUsage } from "../router/model-router";
 import { emptyUsage } from "../types";
+import { isFatalAuthOrBillingError } from "../loop-driver";
 import type { AgentAi } from "../ports";
 import type { PromptEvaluation } from "../trace/types";
 
-/** A tier's evaluator-model slug, overridable to track gateway drift. */
+/**
+ * The sentinel evaluator "model": run the deterministic local heuristic instead
+ * of an LLM call. The default coordinator.
+ */
+export const LOCAL_EVALUATOR = "local";
+
+/** The evaluator model slug, or `"local"` for the heuristic coordinator. */
 function evaluatorModel(override?: string): string {
   return (
     override ??
     process.env["OXAGEN_LLM_EVALUATOR"] ??
-    modelForTier("fast")
+    LOCAL_EVALUATOR
   );
 }
 
@@ -85,7 +94,7 @@ const evalSchema = z.object({
 
 export interface EvaluatePromptOptions {
   prompt: string;
-  /** Override the evaluator model slug (otherwise the fast tier). */
+  /** Override the evaluator model slug (otherwise the local heuristic). */
   model?: string;
   signal?: AbortSignal;
 }
@@ -111,11 +120,16 @@ const EVALUATOR_SYSTEM = [
 ].join("\n");
 
 /**
- * Build the deterministic heuristic evaluation used when the model is unavailable
- * or the call fails. Uses the cost router so the tier is still sensible, and never
- * mutates the prompt (a safe fallback must not risk dropping intent).
+ * Build the deterministic heuristic evaluation — used as the `"local"`
+ * coordinator (the default) and as the fallback when an LLM evaluator call
+ * fails. Uses the cost router so the tier is still sensible, and never mutates
+ * the prompt (a deterministic path must not risk dropping intent).
  */
-function heuristicEvaluation(prompt: string, model: string): PromptEvaluation {
+function heuristicEvaluation(
+  prompt: string,
+  model: string,
+  fallback: boolean,
+): PromptEvaluation {
   const route = classifyTier({ text: prompt });
   const complexity =
     route.tier === "precise" ? 85 : route.tier === "balanced" ? 55 : 20;
@@ -130,8 +144,10 @@ function heuristicEvaluation(prompt: string, model: string): PromptEvaluation {
     contextQueries: [],
     refinedPrompt: prompt,
     removed: [],
-    reasoning: `Heuristic evaluation (model unavailable): ${route.rationale}.`,
-    fallback: true,
+    reasoning: fallback
+      ? `Heuristic evaluation (model unavailable): ${route.rationale}.`
+      : `Local heuristic evaluation: ${route.rationale}.`,
+    fallback,
     model,
     usage: emptyUsage(),
   };
@@ -139,7 +155,13 @@ function heuristicEvaluation(prompt: string, model: string): PromptEvaluation {
 
 /**
  * Evaluate a prompt with the cheap model. Returns the model's structured read, or
- * a heuristic fallback that never throws — the pipeline must always make progress.
+ * a heuristic fallback for a transient failure — the pipeline should make
+ * progress rather than dying on a hiccup. A FATAL auth/billing error is the
+ * exception: it re-throws instead of falling back, because every later model
+ * call (route, execute, judge) would fail identically — falling back here would
+ * just waste a doomed evaluate→enhance→route detour before the same error
+ * surfaces at execute. Failing fast here gets the real message to the user
+ * immediately instead of after a delay.
  *
  * @param opts  - Evaluation options (prompt, optional model override, abort signal).
  * @param ai    - Injected AI port. The platform wires in a metered implementation;
@@ -150,6 +172,11 @@ export async function evaluatePrompt(
   ai: AgentAi,
 ): Promise<PromptEvaluation> {
   const model = evaluatorModel(opts.model);
+  // The local coordinator: deterministic heuristic, no model call. Not a
+  // fallback — it's the chosen (default) evaluation path.
+  if (model === LOCAL_EVALUATOR) {
+    return heuristicEvaluation(opts.prompt, model, false);
+  }
   try {
     const { object, usage } = await ai.generateObject({
       model,
@@ -174,8 +201,9 @@ export async function evaluatePrompt(
       model,
       usage: accumulateUsage(emptyUsage(), model, usage),
     };
-  } catch {
-    return heuristicEvaluation(opts.prompt, model);
+  } catch (err) {
+    if (isFatalAuthOrBillingError(err)) throw err;
+    return heuristicEvaluation(opts.prompt, model, true);
   }
 }
 

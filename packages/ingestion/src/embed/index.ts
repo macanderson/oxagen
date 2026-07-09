@@ -6,7 +6,7 @@ import type { EmbedRequest } from "../types";
 // backward compat so callers of "@oxagen/ingestion/embed" still find them.
 export { chunkText } from "@oxagen/code-graph/chunk";
 export type { TextChunk, ChunkOptions, ChunkResult } from "@oxagen/code-graph/chunk";
-export { renderFileText, renderSymbolText } from "@oxagen/code-graph/renderers";
+export { renderFileText, renderSymbolText, renderMarkdownFileText } from "@oxagen/code-graph/renderers";
 
 // 1536 dims = text-embedding-3-small, matches all EntityNode vector indexes.
 const EMBED_MODEL = "openai/text-embedding-3-small";

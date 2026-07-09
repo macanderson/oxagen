@@ -5,12 +5,12 @@ import { registerCapability } from "../registry";
 // long-press / double-click action menu in the history nav offers it so a
 // user can name an otherwise "New conversation" row.
 export const conversationRename = registerCapability({
-  name: "conversation.rename",
+  name: "rename_conversation",
   domain: "conversation",
   description: "Rename a conversation (set its title)",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "docs", "mcp", "unit"],
+  layers: ["schema", "api", "docs", "mcp", "unit", "app"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "conversation" },
   sensitivity: "low",

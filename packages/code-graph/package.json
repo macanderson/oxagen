@@ -1,6 +1,6 @@
 {
   "name": "@oxagen/code-graph",
-  "version": "0.6.4",
+  "version": "1.1.1",
   "private": true,
   "type": "module",
   "main": "./src/index.ts",
@@ -11,7 +11,8 @@
     "./loader": "./src/loader.ts",
     "./markdown": "./src/markdown.ts",
     "./chunk": "./src/chunk.ts",
-    "./renderers": "./src/renderers.ts"
+    "./renderers": "./src/renderers.ts",
+    "./embed": "./src/embed.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

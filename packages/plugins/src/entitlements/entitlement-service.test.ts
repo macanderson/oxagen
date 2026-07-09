@@ -63,13 +63,13 @@ function makeTx() {
 // Mock the @oxagen/oxagen/plugins barrel to return controlled manifests.
 vi.mock("@oxagen/oxagen/plugins", () => ({
   pluginForContract: (name: string) => {
-    if (name === "svg.generate")
-      return { id: "oxagen/media-svg", name: "SVG Generation", contracts: ["svg.generate"] };
-    if (name === "documents.generate")
+    if (name === "generate_svg")
+      return { id: "oxagen/media-svg", name: "SVG Generation", contracts: ["generate_svg"] };
+    if (name === "generate_document")
       return {
         id: "oxagen/documents",
         name: "Documents",
-        contracts: ["documents.generate"],
+        contracts: ["generate_document"],
       };
     return undefined; // builtin (unclaimed)
   },
@@ -222,7 +222,7 @@ describe("capabilityEntitlementGate", () => {
     clearEntitlementCacheForTests();
     mockListingRows = [listing("oxagen/media-svg")];
     await expect(
-      capabilityEntitlementGate("svg.generate", "org-entitled", WS),
+      capabilityEntitlementGate("generate_svg", "org-entitled", WS),
     ).resolves.toBeUndefined();
   });
 
@@ -233,11 +233,11 @@ describe("capabilityEntitlementGate", () => {
     clearEntitlementCacheForTests();
     mockListingRows = [];
     await expect(
-      capabilityEntitlementGate("svg.generate", "org-unentitled", WS),
+      capabilityEntitlementGate("generate_svg", "org-unentitled", WS),
     ).rejects.toMatchObject({
       name: "CapabilityError",
       code: "capability_not_installed",
-      capability: "svg.generate",
+      capability: "generate_svg",
     });
   });
 });

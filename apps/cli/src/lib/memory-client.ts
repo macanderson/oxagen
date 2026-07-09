@@ -95,12 +95,18 @@ export interface ListMemoriesOptions {
   memoryClass?: MemoryClass;
   memoryKind?: MemoryKind;
   minEnforcement?: number;
+  minCitations?: number;
+  sort?: "createdAt" | "citationCount";
+  sortDir?: "asc" | "desc";
   nodeRef?: string;
   limit?: number;
   offset?: number;
 }
 
-/** List the workspace's memories, newest first, with optional filters. */
+/**
+ * List the workspace's memories with optional filters, sorted by recency
+ * (default) or citation count.
+ */
 export async function listMemories(
   opts: ListMemoriesOptions = {},
 ): Promise<MemoryListResult> {
@@ -108,6 +114,9 @@ export async function listMemories(
     memoryClass: opts.memoryClass,
     memoryKind: opts.memoryKind,
     minEnforcement: opts.minEnforcement,
+    minCitations: opts.minCitations,
+    sort: opts.sort,
+    sortDir: opts.sortDir,
     nodeRef: opts.nodeRef,
     limit: opts.limit ?? 100,
     offset: opts.offset ?? 0,
@@ -127,6 +136,60 @@ export interface RememberOptions {
 /** Capture a free-text memory; the server infers class+kind unless pinned. */
 export async function rememberMemory(opts: RememberOptions): Promise<RememberResult> {
   return apiPostOrThrow<RememberResult>("agent/memory/remember", opts);
+}
+
+/** One recalled memory row — mirrors the `agent.memory.recall` output rows. */
+export interface RecalledMemory {
+  id: string;
+  nodeRef: string;
+  memoryClass: MemoryClass;
+  memoryKind: string;
+  lesson: string;
+  source: string;
+  confidenceScore: number;
+  enforcementScore: number | null;
+  /** Semantic similarity score for the query (0-1). */
+  score: number;
+  createdAt: string;
+}
+
+export interface RecallMemoriesResult {
+  memories: RecalledMemory[];
+}
+
+export interface RecallMemoriesOptions {
+  query: string;
+  limit?: number;
+  memoryClass?: MemoryClass;
+  minEnforcement?: number;
+  nodeRef?: string;
+  /**
+   * When set, the server auto-records an :Execution and CONSIDERED citations for
+   * every recalled memory — the citation pressure that surfaces promotion
+   * candidates (the self-improvement flywheel). Omit for a pure read.
+   */
+  executionRef?: string;
+  /** Agent id stamped on the auto-recorded execution (paired with executionRef). */
+  agentId?: string;
+}
+
+/**
+ * Recall workspace memories by semantic similarity to `query`, scoped to the
+ * caller's workspace. Backs the coding agent's pre-task recall so it doesn't
+ * re-discover known issues; pass an `executionRef` to auto-cite the results.
+ */
+export async function recallMemories(
+  opts: RecallMemoriesOptions,
+): Promise<RecallMemoriesResult> {
+  return apiPostOrThrow<RecallMemoriesResult>("agent/memory/recall", {
+    query: opts.query,
+    limit: opts.limit ?? 6,
+    memoryClass: opts.memoryClass,
+    minEnforcement: opts.minEnforcement,
+    nodeRef: opts.nodeRef,
+    executionRef: opts.executionRef,
+    agentId: opts.agentId,
+  });
 }
 
 export interface UpdateMemoryOptions {

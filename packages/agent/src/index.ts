@@ -14,6 +14,14 @@ export type { CapabilityHandlerFn } from "./handlers/index";
 export {
   FanoutNotFoundError,
   isFanoutNotFoundError,
+  SubagentRunNotFoundError,
+  isSubagentRunNotFoundError,
+  ExecutionNotFoundError,
+  isExecutionNotFoundError,
 } from "./handlers/subagent-errors";
 export { buildChatSystemPrompt } from "./system-prompt";
 export type { SystemPromptContext } from "./system-prompt";
+// A2A skill-addressed routing (apps/api's A2A bridge resolves message.metadata.skillId
+// against this before composing the per-task system prompt).
+export { resolveAgentForA2A } from "./handlers/_agent-definition";
+export type { AgentForA2A } from "./handlers/_agent-definition";

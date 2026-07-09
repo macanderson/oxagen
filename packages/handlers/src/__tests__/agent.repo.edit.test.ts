@@ -7,7 +7,9 @@
  *    predetermined data.
  *  - Mock @oxagen/agent-engine so runTurn (the full 6-stage pipeline) returns
  *    a fixed RunTurnResult without touching any LLM endpoint.
- *  - Mock ../lib/platform-agent-ai to avoid selectModel/AI Gateway env deps.
+ *  - Partial-mock @oxagen/agent/adapters to override createPlatformAgentAi
+ *    (avoids selectModel/AI Gateway env deps) while keeping the real
+ *    code-graph/memory/trace/graph-sync adapters.
  *  - Mock ../lib/github-token to inject a test token.
  *  - Assert the handler orchestrates these collaborators correctly and that it
  *    invokes the full pipeline (runTurn) rather than the bare loop
@@ -123,9 +125,27 @@ vi.mock("@oxagen/agent-engine", () => ({
   runTurn: mocks.runTurnFn,
 }));
 
-vi.mock("../lib/platform-agent-ai", () => ({
-  createPlatformAgentAi: mocks.createPlatformAgentAiFn,
-}));
+// PR #637 (modal-sandbox-workspace) rerouted the handler through a durable
+// ModalSandboxWorkspace whenever a sandbox driver is configured — and in the
+// test/CI environment isSandboxAvailable() reports true, so the handler took the
+// sandbox path and its getChangedFiles() entered a real tenant scope with the
+// (non-UUID) fixture orgId, throwing TenantScopeError before any assertion ran.
+// These tests exercise the GitHub-API fallback (they mock GitHubWorkspace's
+// changedFiles), so pin the driver OFF to force that deterministic path. The
+// sandbox path is a distinct concern with its own collaborators to mock.
+vi.mock("@oxagen/sandbox", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@oxagen/sandbox")>();
+  return { ...actual, isSandboxAvailable: vi.fn().mockReturnValue(false) };
+});
+
+// createPlatformAgentAi moved into @oxagen/agent/adapters (shared with the
+// in-app chat route). Partial-mock the module so the other adapters resolve to
+// their real (construction-only, no-network) implementations while the AI port
+// stays a fake to avoid selectModel/AI Gateway env deps.
+vi.mock("@oxagen/agent/adapters", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@oxagen/agent/adapters")>();
+  return { ...actual, createPlatformAgentAi: mocks.createPlatformAgentAiFn };
+});
 
 vi.mock("../lib/github-token", () => ({
   resolveGitHubToken: vi.fn().mockResolvedValue("ghp_test_token"),
@@ -136,6 +156,7 @@ vi.mock("../lib/github-token", () => ({
 import type { CapabilityContext } from "@oxagen/oxagen";
 import { agentRepoEdit } from "@oxagen/oxagen/contracts/agent.repo.edit";
 import { agentRepoEditHandler } from "../agent.repo.edit";
+import { diffFileContents } from "../lib/unified-diff";
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -197,6 +218,53 @@ describe("agent.repo.edit contract validation", () => {
       instruction: "Add unit tests to all files",
     });
     expect(parsed.maxSteps).toBe(12);
+  });
+
+  it("output schema parses without diffs (backward compatible)", () => {
+    const parsed = agentRepoEdit.output.parse({
+      prNumber: 42,
+      prUrl: "https://github.com/myorg/myrepo/pull/42",
+      branch: "agent/fix",
+      changedFiles: ["src/a.ts"],
+      summary: "Fixed it.",
+      execBackend: "github-api",
+    });
+    expect(parsed.diffs).toBeUndefined();
+  });
+
+  it("output schema parses the optional diffs field with real patch text", () => {
+    const parsed = agentRepoEdit.output.parse({
+      prNumber: 42,
+      prUrl: "https://github.com/myorg/myrepo/pull/42",
+      branch: "agent/fix",
+      changedFiles: ["src/a.ts"],
+      summary: "Fixed it.",
+      execBackend: "sandbox",
+      diffs: [
+        {
+          path: "src/a.ts",
+          patch: "--- a/src/a.ts\n+++ b/src/a.ts\n@@ -1 +1 @@\n-old\n+new\n",
+          additions: 1,
+          deletions: 1,
+        },
+      ],
+    });
+    expect(parsed.diffs).toHaveLength(1);
+    expect(parsed.diffs?.[0]).toMatchObject({ path: "src/a.ts", additions: 1, deletions: 1 });
+  });
+
+  it("output schema rejects a diffs entry missing required fields", () => {
+    expect(() =>
+      agentRepoEdit.output.parse({
+        prNumber: 42,
+        prUrl: "https://github.com/myorg/myrepo/pull/42",
+        branch: "agent/fix",
+        changedFiles: ["src/a.ts"],
+        summary: "Fixed it.",
+        execBackend: "sandbox",
+        diffs: [{ path: "src/a.ts" }],
+      }),
+    ).toThrow();
   });
 });
 
@@ -265,6 +333,24 @@ describe("agentRepoEditHandler — pipeline (runTurn)", () => {
       }),
     );
   });
+
+  // OXA-2070 (docs/specs/agent-file-locking/plan.md): agent.repo.edit is the
+  // real fleet path (dispatched directly and as a subagent-fanout child), so
+  // it must inject the graph-backed FileLockProvider — the same wiring point
+  // write_file/edit_file in tools.ts acquire/release through.
+  it("passes a fileLock adapter (FileLockProvider) to runTurn", async () => {
+    await agentRepoEditHandler(BASE_INPUT, ctx);
+
+    expect(mocks.runTurnFn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        fileLock: expect.objectContaining({
+          acquire: expect.any(Function),
+          release: expect.any(Function),
+          releaseAll: expect.any(Function),
+        }),
+      }),
+    );
+  });
 });
 
 // ── Handler — happy path ──────────────────────────────────────────────────────
@@ -280,6 +366,9 @@ describe("agentRepoEditHandler — happy path", () => {
     mocks.changedFilesFn.mockReturnValue([
       { path: "src/a.ts", content: "export const a = 1;" },
     ]);
+    // GitHub-API-fallback diff path: no prior content on the base branch —
+    // agent.repo.edit reconstructs the patch as a whole-file addition.
+    mocks.ghClient.getFileContent.mockResolvedValue(null);
   });
 
   it("creates the branch on GitHub with an auto-generated name", async () => {
@@ -331,15 +420,76 @@ describe("agentRepoEditHandler — happy path", () => {
     });
   });
 
-  it("returns { prNumber, prUrl, branch, changedFiles, summary }", async () => {
+  it("returns { prNumber, prUrl, branch, changedFiles, summary, execBackend, diffs, warnings }", async () => {
     const result = await agentRepoEditHandler(BASE_INPUT, ctx);
 
+    // On the GitHub-API fallback path (no sandbox driver) PR #637 adds
+    // execBackend: "github-api" plus a warning that shell execution was
+    // unavailable — the sandbox path returns execBackend: "sandbox" and no warning.
+    const expectedDiff = diffFileContents("src/a.ts", "", "export const a = 1;");
     expect(result).toEqual({
       prNumber: 42,
       prUrl: "https://github.com/myorg/myrepo/pull/42",
       branch: "oxagen-agent-12345678",
       changedFiles: ["src/a.ts"],
       summary: "Refactored src/a.ts as requested.",
+      execBackend: "github-api",
+      diffs: [expectedDiff],
+      warnings: [
+        expect.stringContaining("Shell execution was unavailable"),
+      ],
+    });
+  });
+
+  // PR feat/repo-diff-emission: agent.repo.edit now emits real unified-diff
+  // patch text (not just paths) so the code-diff chat card can render full
+  // hunks. On the GitHub-API-only backend this is reconstructed from the
+  // file's content on the base branch (fetched via getFileContent) vs. the
+  // agent's final content.
+  describe("diffs output", () => {
+    it("fetches prior content from the base branch and computes real patch text + counts", async () => {
+      mocks.ghClient.getFileContent.mockResolvedValueOnce("export const a = 0;");
+
+      const result = await agentRepoEditHandler(BASE_INPUT, ctx);
+
+      expect(mocks.ghClient.getFileContent).toHaveBeenCalledWith({
+        owner: "myorg",
+        repo: "myrepo",
+        path: "src/a.ts",
+        ref: "main",
+      });
+      expect(result.diffs).toHaveLength(1);
+      expect(result.diffs?.[0]).toMatchObject({
+        path: "src/a.ts",
+        additions: 1,
+        deletions: 1,
+      });
+      expect(result.diffs?.[0]?.patch).toContain("-export const a = 0;");
+      expect(result.diffs?.[0]?.patch).toContain("+export const a = 1;");
+    });
+
+    it("computes one diff per changed file", async () => {
+      mocks.changedFilesFn.mockReturnValue([
+        { path: "src/a.ts", content: "// a" },
+        { path: "src/b.ts", content: "// b" },
+      ]);
+      mocks.ghClient.getFileContent.mockResolvedValue(null);
+
+      const result = await agentRepoEditHandler(BASE_INPUT, ctx);
+
+      expect(result.diffs).toHaveLength(2);
+      expect(result.diffs?.map((d) => d.path).sort()).toEqual(["src/a.ts", "src/b.ts"]);
+    });
+
+    it("omits diffs (falls back to path-only) when diff computation throws", async () => {
+      mocks.ghClient.getFileContent.mockRejectedValueOnce(new Error("network blip"));
+
+      const result = await agentRepoEditHandler(BASE_INPUT, ctx);
+
+      expect(result.changedFiles).toEqual(["src/a.ts"]);
+      expect(result.diffs).toBeUndefined();
+      // The run itself must still succeed — diff enrichment is non-critical.
+      expect(result.prNumber).toBe(42);
     });
   });
 

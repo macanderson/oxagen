@@ -35,6 +35,13 @@ export interface RecordExecutionInput {
    * properties without overwriting the lineage edge.
    */
   touchedFilePaths?: string[] | null;
+  /**
+   * Extra caller-supplied entries merged into the node's properties bag (the
+   * PropertyList popover payload). Fanout projection uses this for
+   * fanoutId / runId / capabilityName / attempts (spec Phase 2 §2). Null and
+   * undefined values are dropped like the built-in fields.
+   */
+  properties?: Record<string, unknown> | null;
 }
 
 /**
@@ -69,6 +76,9 @@ export async function recordExecutionInGraph(input: RecordExecutionInput): Promi
   // explorer surfaces in the PropertyList popover. Null/undefined values are
   // omitted so the bag stays lean.
   const toolNames = toolCalls?.map((tc) => tc.toolName) ?? [];
+  const extraProperties = Object.fromEntries(
+    Object.entries(input.properties ?? {}).filter(([, v]) => v !== null && v !== undefined),
+  );
   const propertiesBag: Record<string, unknown> = {
     status,
     originType,
@@ -78,6 +88,7 @@ export async function recordExecutionInGraph(input: RecordExecutionInput): Promi
     ...(outputTokens != null && { outputTokens }),
     ...(estimatedCostUsd != null && { estimatedCostUsd }),
     ...(toolNames.length > 0 && { toolNames }),
+    ...extraProperties,
   };
   const properties = JSON.stringify(propertiesBag);
 
@@ -124,6 +135,7 @@ export async function recordExecutionInGraph(input: RecordExecutionInput): Promi
        )`,
       {
         executionId,
+        orgId: input.orgId,
         workspaceId: input.workspaceId,
         status,
         originType,
@@ -148,7 +160,7 @@ export async function recordExecutionInGraph(input: RecordExecutionInput): Promi
          MERGE (a:${NodeLabels.Agent} {id: $agentId, orgId: $orgId})
          MERGE (e)-[r:${EdgeTypes.INVOKED}]->(a)
          SET r.is_system = true`,
-        { executionId, agentId },
+        { executionId, orgId: input.orgId, agentId },
       );
     }
 
@@ -160,7 +172,7 @@ export async function recordExecutionInGraph(input: RecordExecutionInput): Promi
          MERGE (o:${originLabel} {id: $originId, orgId: $orgId})
          MERGE (e)-[r:${EdgeTypes.ORIGINATED_FROM}]->(o)
          SET r.is_system = true`,
-        { executionId, originId },
+        { executionId, orgId: input.orgId, originId },
       );
     }
 
@@ -174,7 +186,7 @@ export async function recordExecutionInGraph(input: RecordExecutionInput): Promi
          MERGE (t:${NodeLabels.Tool} {name: tc.toolName, type: tc.toolType, orgId: $orgId})
          MERGE (e)-[r:${EdgeTypes.CALLED_TOOL}]->(t)
          SET r.is_system = true`,
-        { executionId, toolCalls },
+        { executionId, orgId: input.orgId, toolCalls },
       );
     }
 
@@ -194,7 +206,7 @@ export async function recordExecutionInGraph(input: RecordExecutionInput): Promi
            f.createdAt    = datetime()
          MERGE (e)-[r:${EdgeTypes.TOUCHED_FILE}]->(f)
          SET r.is_system = true`,
-        { executionId, touchedFilePaths },
+        { executionId, orgId: input.orgId, touchedFilePaths },
       );
     }
   } finally {
@@ -208,6 +220,8 @@ function originLabelFor(originType: string): string | null {
       return NodeLabels.Conversation;
     case "workflow_run":
       return NodeLabels.WorkflowRun;
+    case "fanout":
+      return NodeLabels.Fanout;
     default:
       return null;
   }

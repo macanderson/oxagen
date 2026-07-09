@@ -92,6 +92,17 @@ describe("graphNodeSearchHandler", () => {
     expect(params.limit).toBe(BigInt(5));
   });
 
+  // OXA-2062: the Cypher referenced $orgId/$workspaceId but the local params
+  // object omitted both, relying entirely on scopedSession()'s auto-injection.
+  // A mocked scopedSession (as used here) does NOT auto-inject, so this bug
+  // was invisible to this suite until orgId/workspaceId were bound explicitly.
+  it("binds orgId and workspaceId explicitly in the local params object (regression: previously relied solely on scopedSession auto-injection)", async () => {
+    await graphNodeSearchHandler({ query: "x", limit: 5 }, CTX);
+    const params = mocks.run.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(params.orgId).toBe(CTX.orgId);
+    expect(params.workspaceId).toBe(CTX.workspaceId);
+  });
+
   it("closes the session even when run throws", async () => {
     mocks.run.mockRejectedValueOnce(new Error("Neo4j down"));
     await expect(graphNodeSearchHandler({ query: "x", limit: 5 }, CTX)).rejects.toThrow(

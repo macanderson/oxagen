@@ -6,13 +6,38 @@
  * unified schema before it touches disk, so a `set` can never produce an invalid
  * settings file.
  */
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
+import { readFileSync, existsSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { oxagenSettingsSchema, type OxagenSettings } from "./schema.js";
 import { getScopePaths, clearSettingsCache, type SettingsScope } from "./resolve.js";
+import { atomicWriteFileSync } from "../lib/atomic-write.js";
 
 /** Keys `oxagen settings set` accepts. Complex sections are edited in the file. */
-export const SETTABLE_KEYS = ["model", "apiUrl"] as const;
+export const SETTABLE_KEYS = [
+  "model",
+  "workerModel",
+  "judgeModel",
+  "triageModel",
+  "apiUrl",
+  "confirmScope"
+] as const;
+
+/**
+ * Keys whose settings.json value is a JSON boolean rather than a string.
+ * `writeSettingsValue`'s `value` parameter is always a string (it comes from
+ * a CLI arg / panel text buffer) — for these keys it's parsed to `true`/
+ * `false` before being written, so the file holds a real boolean and not the
+ * string `"true"`, which would fail `oxagenSettingsSchema`'s `z.boolean()`.
+ */
+const BOOLEAN_SETTABLE_KEYS = new Set<string>(["confirmScope"]);
+
+/** `"true"`/`"false"` (case-insensitive, trimmed) → boolean. Throws otherwise. */
+function parseBooleanSettingValue(raw: string): boolean {
+  const v = raw.trim().toLowerCase();
+  if (v === "true") return true;
+  if (v === "false") return false;
+  throw new Error(`invalid boolean value "${raw}" — expected "true" or "false"`);
+}
 
 export interface WriteValueOptions {
   scope: SettingsScope;
@@ -38,7 +63,7 @@ export function readScopeDoc(path: string): Record<string, unknown> {
 export function writeScopeDoc(path: string, doc: OxagenSettings): void {
   const validated = oxagenSettingsSchema.parse(doc);
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, JSON.stringify(validated, null, 2) + "\n", "utf8");
+  atomicWriteFileSync(path, JSON.stringify(validated, null, 2) + "\n");
   clearSettingsCache();
 }
 
@@ -58,7 +83,9 @@ export function writeSettingsValue(opts: WriteValueOptions): string {
     env[name] = opts.value;
     doc["env"] = env;
   } else if ((SETTABLE_KEYS as readonly string[]).includes(opts.key)) {
-    doc[opts.key] = opts.value;
+    doc[opts.key] = BOOLEAN_SETTABLE_KEYS.has(opts.key)
+      ? parseBooleanSettingValue(opts.value)
+      : opts.value;
   } else {
     throw new Error(
       `cannot set "${opts.key}". Settable: ${SETTABLE_KEYS.join(", ")}, env.<NAME>. ` +
@@ -70,9 +97,50 @@ export function writeSettingsValue(opts: WriteValueOptions): string {
   return path;
 }
 
+/**
+ * The env var name `applySettingsToEnv` (runtime.ts) would project a
+ * `writeSettingsValue` key into, or `undefined` for a key that isn't
+ * projected at all (e.g. unsupported keys, which `writeSettingsValue` already
+ * rejects before this would matter).
+ */
+export function envVarForSettingsKey(key: string): string | undefined {
+  if (key.startsWith("env.")) return key.slice("env.".length) || undefined;
+  if (key === "model" || key === "workerModel") return "OXAGEN_MODEL";
+  if (key === "judgeModel") return "OXAGEN_LLM_ADVISOR";
+  if (key === "triageModel") return "OXAGEN_LLM_EVALUATOR";
+  if (key === "apiUrl") return "OXAGEN_API_URL";
+  return undefined;
+}
+
+/**
+ * True when the shell already exports the env var a `writeSettingsValue` key
+ * projects to — meaning `applySettingsToEnv`'s `isUnset` gate (runtime.ts)
+ * will skip the value just written, and it stays a silent no-op until the
+ * shell var is unset. Callers (the `settings set` command handler) use this
+ * to warn at SET time, right when the confusing "✓" is printed, instead of
+ * leaving the user to discover it only at the next `config doctor` run.
+ */
+export function shellShadowsSettingsKey(key: string, env: NodeJS.ProcessEnv = process.env): boolean {
+  const name = envVarForSettingsKey(key);
+  if (!name) return false;
+  const v = env[name];
+  return v !== undefined && v !== "";
+}
+
+/**
+ * Deliberately does NOT seed `model` (see item 6 of the config-truth audit,
+ * PR fix/cli-config-truth): a starter file used to plant `DEFAULT_CODING_MODEL`
+ * here, which meant every fresh `oxagen settings init` silently masked
+ * `oxagen config model <x>` (store #2, `~/.config/oxagen/config.json`) forever
+ * — `applySettingsToEnv` (runtime.ts) projects `settings.model` into
+ * `OXAGEN_MODEL` whenever the shell hasn't set it, and `resolveModelId`
+ * (agent/model.ts) checks `OXAGEN_MODEL` before ever consulting store #2. An
+ * absent `model` key here means the user's actual model choice (store #2, or
+ * the built-in default) governs until they deliberately pin one with
+ * `oxagen settings set model <x>`.
+ */
 const STARTER: OxagenSettings = {
   $schema: "https://schemas.oxagen.sh/oxagen-cli-settings-schema.json",
-  model: "anthropic/claude-sonnet-4.6",
   env: {},
   permissions: {
     defaultMode: "default",

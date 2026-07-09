@@ -95,13 +95,66 @@ export const workspace = {
   // Ask — the front door (full-page ask/chat surface).
   ask: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/ask`,
 
+  // Studio — build interactive agents. Two surfaces: Agents (the builder)
+  // and Agent Tools — the single home for everything an agent can be
+  // equipped with (skills, MCP servers, capabilities).
+  studio: {
+    root: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/studio`,
+    agents: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/studio/agents`,
+    agentNew: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/studio/agents/new`,
+    agent: (ctx: Required<ScopeContext>, agentId: string): string =>
+      `${wsBase(ctx)}/studio/agents/${encodeURIComponent(agentId)}`,
+    // Agent Tools hub — All Tools / Skills / MCP Servers / Capabilities.
+    tools: {
+      root: (ctx: Required<ScopeContext>): string =>
+        `${wsBase(ctx)}/studio/tools`,
+      skills: (ctx: Required<ScopeContext>): string =>
+        `${wsBase(ctx)}/studio/tools/skills`,
+      skill: (ctx: Required<ScopeContext>, skillSlug: string): string =>
+        `${wsBase(ctx)}/studio/tools/skills/${encodeURIComponent(skillSlug)}`,
+      mcp: (ctx: Required<ScopeContext>): string =>
+        `${wsBase(ctx)}/studio/tools/mcp`,
+      capabilities: (ctx: Required<ScopeContext>): string =>
+        `${wsBase(ctx)}/studio/tools/capabilities`,
+    },
+  },
+
+  // Marketplace — discover + install, two sides: Agent Tools (skills, MCP
+  // servers, capabilities) and Integrations (data connectors). Managing what
+  // is already installed lives in Studio → Agent Tools, not here.
+  marketplace: {
+    root: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/marketplace`,
+    agentTools: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/marketplace/agent-tools`,
+    integrations: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/marketplace/integrations`,
+    // Legacy tabs — browse became the Agent Tools side; installed/mcp moved
+    // into Studio → Agent Tools. Builders retarget so old callers keep working.
+    browse: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/marketplace/agent-tools`,
+    installed: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/studio/tools/capabilities`,
+    mcp: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/studio/tools/mcp`,
+  },
+
+  // Activity — recent agent runs + per-run span-tree trace viewer.
+  activity: {
+    root: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/activity`,
+    // Per-run span tree. executionId is the aex_* public id.
+    run: (ctx: Required<ScopeContext>, executionId: string): string =>
+      `${wsBase(ctx)}/activity/${encodeURIComponent(executionId)}`,
+  },
+
   // Knowledge
   knowledge: {
     root: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/knowledge`,
-    sources: (ctx: Required<ScopeContext>): string =>
-      `${wsBase(ctx)}/knowledge/sources`,
-    graph: (ctx: Required<ScopeContext>): string =>
-      `${wsBase(ctx)}/knowledge/graph`,
+    repos: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/knowledge/repos`,
+    inference: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/knowledge/inference`,
     explore: (ctx: Required<ScopeContext>): string =>
       `${wsBase(ctx)}/knowledge/explore`,
     memories: (ctx: Required<ScopeContext>): string =>
@@ -136,6 +189,15 @@ export const workspace = {
       `${wsBase(ctx)}/settings/memory`,
     environments: (ctx: Required<ScopeContext>): string =>
       `${wsBase(ctx)}/settings/environments`,
+    budget: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/settings/budget`,
+  },
+
+  // Evals — score what actually ran and got billed (eval.* capability family).
+  evals: {
+    root: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/evals`,
+    run: (ctx: Required<ScopeContext>, runId: string): string =>
+      `${wsBase(ctx)}/evals/runs/${encodeURIComponent(runId)}`,
   },
 } as const;
 
@@ -151,8 +213,10 @@ export const workspace = {
 
 export const defaultTab: Record<string, string> = {
   // Workspace-scope parents
-  knowledge: "sources",
+  knowledge: "repos",
   settings: "general",
+  studio: "agents",
+  marketplace: "agent-tools",
 
   // Org-scope parents
   access: "sessions",

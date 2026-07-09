@@ -83,7 +83,7 @@ export async function removeMemberAction(
   const ctx = buildCtx({ orgId: org.id, userId: session.user.id });
 
   try {
-    await invoke("org.member.remove", { targetUserId }, ctx, { surface: "agent" });
+    await invoke("remove_org_member", { targetUserId }, ctx, { surface: "agent" });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to remove member";
     return { ok: false, error: message };
@@ -113,7 +113,7 @@ export async function changeMemberRoleAction(
   const ctx = buildCtx({ orgId: org.id, userId: session.user.id });
 
   try {
-    await invoke("org.member.role.change", { targetUserId, newRole }, ctx, { surface: "agent" });
+    await invoke("change_member_role", { targetUserId, newRole }, ctx, { surface: "agent" });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to change role";
     return { ok: false, error: message };

@@ -185,6 +185,13 @@ export interface StreamAgentReplyArgs {
    */
   toolChoice?: Parameters<typeof streamText>[0]["toolChoice"];
   /**
+   * Forwarded verbatim to `streamText`. The agent-engine step loop passes the
+   * turn's `AbortSignal` so a client disconnect (a closed SSE connection) or a
+   * user cancel aborts the in-flight model call instead of streaming to nobody.
+   * Omit when the caller has no cancellation source.
+   */
+  abortSignal?: AbortSignal;
+  /**
    * Required for OXA-1351 instrumentation. The caller's CapabilityContext
    * carries `orgId`, `workspaceId`, and `surface`; pass them through so
    * every LLM call lands in `token_usage` with provider, duration_ms,
@@ -204,7 +211,9 @@ export interface StreamAgentReplyArgs {
   }) => Promise<void> | void;
 }
 
-export function streamAgentReply(args: StreamAgentReplyArgs): StreamTextResult<ToolSet, never> {
+// RUNTIME_CONTEXT (v7 middle generic) is the SDK's `Context` alias for
+// `Record<string, unknown>` — spelled inline because `ai` does not re-export it.
+export function streamAgentReply(args: StreamAgentReplyArgs): StreamTextResult<ToolSet, Record<string, unknown>, never> {
   const model = args.model ?? defaultModel();
   const modelId = modelIdOf(model);
   const provider = providerFromModelId(modelId);
@@ -276,6 +285,11 @@ export function streamAgentReply(args: StreamAgentReplyArgs): StreamTextResult<T
   return streamText({
     model,
     messages: [...cachedSystem, ...args.messages],
+    // AI SDK v7 rejects system-role entries inside `messages` by default. We
+    // deliberately carry the system prompt as a leading system message (only
+    // message-level providerOptions can hold the cache_control marker above),
+    // and proxy callers (agent.llm) forward client system messages verbatim.
+    allowSystemInMessages: true,
     tools: args.tools,
     // When the provider locks temperature (Anthropic extended thinking,
     // OpenAI reasoning models) we must omit the field entirely — sending
@@ -290,6 +304,7 @@ export function streamAgentReply(args: StreamAgentReplyArgs): StreamTextResult<T
       ? { maxOutputTokens: args.maxOutputTokens }
       : {}),
     ...(args.toolChoice !== undefined ? { toolChoice: args.toolChoice } : {}),
+    ...(args.abortSignal !== undefined ? { abortSignal: args.abortSignal } : {}),
     onFinish: async (event) => {
       const durationMs = Date.now() - startedAt;
       // AI SDK v6: usage fields are inputTokens/outputTokens (was
@@ -302,7 +317,7 @@ export function streamAgentReply(args: StreamAgentReplyArgs): StreamTextResult<T
       // Forward it so the rate card prices those tokens at the cheaper cached
       // rate — otherwise the customer is over-charged on the cached portion.
       // Zero when caching didn't engage (small prefix / non-Anthropic / cold).
-      const cachedTokens = event.totalUsage.cachedInputTokens ?? 0;
+      const cachedTokens = event.totalUsage.inputTokenDetails?.cacheReadTokens ?? 0;
       // The cost meter (provider rate card) turns tokens-in/out-by-model into
       // the USD a provider invoices us. This is the input to both the telemetry
       // cost column and the credit charge below.

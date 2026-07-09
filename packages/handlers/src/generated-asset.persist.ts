@@ -24,6 +24,10 @@ export type AssetKind =
   | "pdf"
   | "archive";
 export type AssetAccessPolicy = "user" | "org" | "public";
+// Provenance discriminator mirroring generated_assets_source_check.
+// 'generated' (default) = produced by the in-app agent; 'user_upload' = a
+// chat/agent attachment the user supplied via asset.upload.
+export type AssetSource = "generated" | "user_upload";
 
 export interface PersistGeneratedAssetArgs {
   orgId: string;
@@ -55,6 +59,13 @@ export interface PersistGeneratedAssetArgs {
   /** Optional linkage to the chat turn that produced the asset. */
   conversationId?: string | null;
   messageId?: string | null;
+  /**
+   * Provenance discriminator. Defaults to `"generated"` (every existing
+   * caller — image/video generation, the chat composer) so this is fully
+   * backward compatible. `asset.upload` passes `"user_upload"` for
+   * chat/agent attachments the user supplied rather than the model.
+   */
+  source?: AssetSource;
 }
 
 export interface PersistedGeneratedAsset {
@@ -65,6 +76,8 @@ export interface PersistedGeneratedAsset {
   kind: AssetKind;
   mimeType: string;
   sizeBytes: number;
+  /** Canonical storage key the object was written under (e.g. `generated/images/org-1/uuid.png`). */
+  key: string;
   /**
    * The storage URL (Vercel Blob URL or private access URL) as returned by the
    * adapter. For private assets this is NOT a publicly-guessable CDN URL.
@@ -82,6 +95,7 @@ const EXT_BY_MIME: Record<string, string> = {
   "image/jpeg": "jpg",
   "image/webp": "webp",
   "image/gif": "gif",
+  "image/svg+xml": "svg",
   "video/mp4": "mp4",
   "video/webm": "webm",
   // document kinds
@@ -94,6 +108,9 @@ const EXT_BY_MIME: Record<string, string> = {
   "application/zip": "zip",
   "text/markdown": "md",
   "text/plain": "txt",
+  // Mermaid diagram source (mermaid.generate persists the .mmd source — the
+  // rendered SVG only ever exists client-side).
+  "text/vnd.mermaid": "mmd",
 };
 
 function extFor(mimeType: string): string {
@@ -216,6 +233,7 @@ export async function persistGeneratedAsset(
         createdByUserId: args.userId,
         updatedByUserId: args.userId,
         kind: args.kind,
+        source: args.source ?? "generated",
         accessPolicy: args.accessPolicy ?? "user",
         status: "ready",
         storageProvider: store.driver,
@@ -270,6 +288,7 @@ export async function persistGeneratedAsset(
     kind: args.kind,
     mimeType: args.mimeType,
     sizeBytes: bytes,
+    key: storageKey,
     url,
     serveUrl: `/api/v1/assets/${row.publicId}`,
   };

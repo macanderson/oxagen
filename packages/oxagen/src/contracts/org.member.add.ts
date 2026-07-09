@@ -5,8 +5,8 @@ import { registerCapability } from "../registry";
 // before the invitation is persisted — if the org has no available license the
 // call fails with a typed SeatLimitError.
 export const orgMemberAdd = registerCapability({
-  name: "org.member.add",
-  domain: "organization",
+  name: "add_org_member",
+  domain: "org",
   description: "Invite a user to join the org by email. Enforces seat/license limits; fails with a typed error when no seat is available.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],

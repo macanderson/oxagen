@@ -2,12 +2,12 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const connectionList = registerCapability({
-  name: "connection.list",
+  name: "list_connections",
   domain: "connection",
   description: "List all data source connections for a workspace.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "read" },
   sensitivity: "medium",
@@ -35,6 +35,10 @@ export const connectionList = registerCapability({
         status: z.string(),
         entityCount: z.number(),
         lastSyncAt: z.string().nullable(),
+        // Poll/sync health rolled up by the connector poll loop.
+        healthStatus: z.enum(["healthy", "degraded", "errored"]),
+        lastPollAt: z.string().nullable(),
+        nextPollAt: z.string().nullable(),
         createdAt: z.string(),
       }),
     ),

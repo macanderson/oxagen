@@ -3,7 +3,7 @@ import { ontologyNeighbors } from "./ontology.neighbors";
 
 describe("ontology.neighbors contract", () => {
   it("is a read-only traversal primitive on api/mcp/agent/cli", () => {
-    expect(ontologyNeighbors.name).toBe("ontology.neighbors");
+    expect(ontologyNeighbors.name).toBe("get_ontology_neighbors");
     for (const s of ["api", "mcp", "agent", "cli"]) {
       expect(ontologyNeighbors.surfaces).toContain(s);
     }
@@ -33,6 +33,10 @@ describe("ontology.neighbors contract", () => {
           description: null,
           edgeType: "RELATES_TO",
           direction: "out",
+          validFrom: "2026-01-01T00:00:00Z",
+          validTo: null,
+          recordedAt: "2026-01-01T00:00:00Z",
+          invalidatedAt: null,
         },
       ],
       truncated: false,

@@ -107,10 +107,10 @@ describe("graph.cypher route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke once with contract name 'graph.cypher' and surface 'api'", async () => {
+  it("calls invoke once with contract name 'run_cypher' and surface 'api'", async () => {
     await authPost(PATH, { query: "MATCH (n) RETURN n" });
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("graph.cypher");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("run_cypher");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -153,10 +153,10 @@ describe("graph.stats route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke once with contract name 'graph.stats' and surface 'api'", async () => {
+  it("calls invoke once with contract name 'get_graph_stats' and surface 'api'", async () => {
     await authGet(PATH);
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("graph.stats");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("get_graph_stats");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -187,10 +187,10 @@ describe("graph.node.list route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke once with contract name 'graph.node.list' and surface 'api'", async () => {
+  it("calls invoke once with contract name 'list_nodes' and surface 'api'", async () => {
     await authGet(PATH);
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("graph.node.list");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("list_nodes");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -246,10 +246,10 @@ describe("graph.node.get route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke once with contract name 'graph.node.get' and surface 'api'", async () => {
+  it("calls invoke once with contract name 'get_node' and surface 'api'", async () => {
     await authGet(PATH);
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("graph.node.get");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("get_node");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -275,10 +275,10 @@ describe("graph.node.delete route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke once with contract name 'graph.node.delete' and surface 'api'", async () => {
+  it("calls invoke once with contract name 'delete_node' and surface 'api'", async () => {
     await authDelete(PATH);
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("graph.node.delete");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("delete_node");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -303,10 +303,10 @@ describe("graph.node.search route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke once with contract name 'graph.node.search' and surface 'api'", async () => {
+  it("calls invoke once with contract name 'search_nodes' and surface 'api'", async () => {
     await authPost(PATH, { query: "search term" });
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("graph.node.search");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("search_nodes");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -351,10 +351,10 @@ describe("graph.node.upsert route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke once with contract name 'graph.node.upsert' and surface 'api'", async () => {
+  it("calls invoke once with contract name 'upsert_node' and surface 'api'", async () => {
     await authPost(PATH, VALID_BODY);
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("graph.node.upsert");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("upsert_node");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -405,10 +405,10 @@ describe("graph.edge.delete route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke once with contract name 'graph.edge.delete' and surface 'api'", async () => {
+  it("calls invoke once with contract name 'delete_edge' and surface 'api'", async () => {
     await authDelete(PATH, VALID_BODY);
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("graph.edge.delete");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("delete_edge");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -480,10 +480,10 @@ describe("graph.edge.upsert route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke once with contract name 'graph.edge.upsert' and surface 'api'", async () => {
+  it("calls invoke once with contract name 'upsert_edge' and surface 'api'", async () => {
     await authPost(PATH, VALID_BODY);
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("graph.edge.upsert");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("upsert_edge");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 

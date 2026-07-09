@@ -43,7 +43,7 @@ function turn(over: Partial<TurnTrace> = {}): TurnTrace {
       model: "anthropic/claude-haiku-4.5", usage: { inputTokens: 0, outputTokens: 0, costUsd: 0 },
     },
     enhancement: { prompt: "x", context: "", resolved: [], lessonCount: 0, source: "none" },
-    selectedModel: "anthropic/claude-sonnet-4.6",
+    selectedModel: "anthropic/claude-sonnet-5",
     selectedTier: "balanced",
     selectionRationale: "r",
     response: "ok",
@@ -101,7 +101,7 @@ describe("cost --session", () => {
       id: "t1",
       phases: [
         { phase: "evaluate", round: 0, startedAt: 0, finishedAt: 10, durationMs: 10, model: "anthropic/claude-haiku-4.5", usage: { inputTokens: 20, outputTokens: 5, costUsd: 0.001 } },
-        { phase: "execute", round: 0, startedAt: 10, finishedAt: 1000, durationMs: 990, model: "anthropic/claude-sonnet-4.6", usage: { inputTokens: 80, outputTokens: 45, costUsd: 0.049 } },
+        { phase: "execute", round: 0, startedAt: 10, finishedAt: 1000, durationMs: 990, model: "anthropic/claude-sonnet-5", usage: { inputTokens: 80, outputTokens: 45, costUsd: 0.049 } },
       ],
       verbose: true,
     });
@@ -110,7 +110,7 @@ describe("cost --session", () => {
     await handleCost({ session: true });
     expect(out).toContain("Session cost rollup");
     expect(out).toContain("claude-haiku-4.5");
-    expect(out).toContain("claude-sonnet-4.6");
+    expect(out).toContain("claude-sonnet-5");
     expect(out).toContain("total:");
   });
 
@@ -132,7 +132,7 @@ describe("cost --session", () => {
     expect(r.turns).toBe(1);
     expect(r.totalCostUsd).toBeCloseTo(0.05);
     expect(r.byModel).toHaveLength(1);
-    expect(r.byModel[0]?.model).toBe("anthropic/claude-sonnet-4.6");
+    expect(r.byModel[0]?.model).toBe("anthropic/claude-sonnet-5");
     expect(r.byModel[0]?.costUsd).toBeCloseTo(0.05);
     expect(r.byModel[0]?.inputTokens).toBe(100);
     expect(r.byModel[0]?.turns).toBe(1);
@@ -143,7 +143,7 @@ describe("cost --session", () => {
       id: "t1",
       phases: [
         { phase: "evaluate", round: 0, startedAt: 0, finishedAt: 10, durationMs: 10, model: "anthropic/claude-haiku-4.5", usage: { inputTokens: 20, outputTokens: 5, costUsd: 0.001 } },
-        { phase: "execute", round: 0, startedAt: 10, finishedAt: 1000, durationMs: 990, model: "anthropic/claude-sonnet-4.6", usage: { inputTokens: 80, outputTokens: 45, costUsd: 0.049 } },
+        { phase: "execute", round: 0, startedAt: 10, finishedAt: 1000, durationMs: 990, model: "anthropic/claude-sonnet-5", usage: { inputTokens: 80, outputTokens: 45, costUsd: 0.049 } },
       ],
     });
     mockStore.mockReturnValue({ list: () => [phased] });

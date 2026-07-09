@@ -44,6 +44,7 @@ const ORG_ROWS = [
     id: "org_1",
     publicId: "pub_1",
     slug: "acme",
+    namespace: "acme",
     name: "Acme Corp",
     avatarUrl: null,
     role: "owner",
@@ -70,6 +71,8 @@ describe("orgListHandler", () => {
 
     expect(result.organizations).toHaveLength(1);
     expect(result.organizations[0]?.slug).toBe("acme");
+    // The immutable namespace is surfaced alongside the renameable slug.
+    expect(result.organizations[0]?.namespace).toBe("acme");
     // Only one DB call (membership query; no API-key resolution needed).
     expect(mocks.withSystemDb).toHaveBeenCalledTimes(1);
   });

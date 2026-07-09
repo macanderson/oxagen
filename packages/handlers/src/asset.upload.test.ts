@@ -15,8 +15,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // ── Hoisted stubs ─────────────────────────────────────────────────────────────
 
-const { mockPut } = vi.hoisted(() => ({
+const { mockPut, mockPersistGeneratedAsset } = vi.hoisted(() => ({
   mockPut: vi.fn(),
+  mockPersistGeneratedAsset: vi.fn(),
 }));
 
 // ── Module mocks ──────────────────────────────────────────────────────────────
@@ -31,6 +32,13 @@ vi.mock("@oxagen/storage", async (importOriginal) => {
     storage: () => ({ put: mockPut }),
   };
 });
+
+// persistGeneratedAsset has its own dedicated unit tests
+// (generated-asset.persist.test.ts) covering the blob-write + DB-insert
+// internals; here we only assert asset.upload calls it correctly.
+vi.mock("./generated-asset.persist", () => ({
+  persistGeneratedAsset: mockPersistGeneratedAsset,
+}));
 
 // ── Imports after mocks ───────────────────────────────────────────────────────
 
@@ -214,13 +222,16 @@ describe("assetUploadHandler — oversize rejection", () => {
 
 describe("assetUploadHandler — disallowed content-type rejection", () => {
   it("rejects when the server returns an unsupported content type", async () => {
+    // gif is allowed for "image" (agent screenshots/recordings are commonly
+    // gif) — use svg, which isn't in any kind's allowlist, to stay genuinely
+    // unsupported regardless of future allowlist changes.
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
-      makeResponse(pngBuffer(), "image/gif"), // gif is not allowed
+      makeResponse(pngBuffer(), "image/svg+xml"),
     );
 
     await expect(
       assetUploadHandler(
-        { sourceUrl: "https://example.com/anim.gif", kind: "image" },
+        { sourceUrl: "https://example.com/icon.svg", kind: "image" },
         validCtx,
       ),
     ).rejects.toThrow(/Unsupported/i);
@@ -318,5 +329,165 @@ describe("assetUploadHandler — happy path", () => {
 
     expect(result.contentType).toBe("image/webp");
     expect(mockPut).toHaveBeenCalledOnce();
+    expect(result.publicId).toBeNull();
+  });
+
+  it("returns publicId: null for the legacy path (no source given)", async () => {
+    mockPut.mockResolvedValueOnce({
+      url: "https://cdn.example.com/document/org-1/uuid.pdf",
+      key: "document/org-1/uuid.pdf",
+      bytes: 10,
+      access: "public" as const,
+    });
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      makeResponse(new ArrayBuffer(10), "application/pdf"),
+    );
+
+    const result = await assetUploadHandler(
+      { sourceUrl: "https://example.com/report.pdf", kind: "document" },
+      validCtx,
+    );
+
+    expect(result.publicId).toBeNull();
+    expect(mockPersistGeneratedAsset).not.toHaveBeenCalled();
+  });
+});
+
+// ── source: "user_upload" (conversation-attachment ingest) ──────────────────
+
+describe("assetUploadHandler — source: user_upload guards", () => {
+  it("rejects kind: avatar with source: user_upload", async () => {
+    await expect(
+      assetUploadHandler(
+        {
+          sourceUrl: "https://example.com/logo.webp",
+          kind: "avatar",
+          source: "user_upload",
+        },
+        validCtx,
+      ),
+    ).rejects.toThrow(/not supported for kind "avatar"/);
+    expect(mockPut).not.toHaveBeenCalled();
+    expect(mockPersistGeneratedAsset).not.toHaveBeenCalled();
+  });
+
+  it("rejects an API-key-only principal (no userId) with source: user_upload", async () => {
+    const apiKeyCtx: CapabilityContext = { ...validCtx, userId: null, apiKeyId: "aky_abc" };
+    await expect(
+      assetUploadHandler(
+        {
+          sourceUrl: "https://example.com/photo.png",
+          kind: "image",
+          source: "user_upload",
+        },
+        apiKeyCtx,
+      ),
+    ).rejects.toThrow(/requires an authenticated user/);
+    expect(mockPersistGeneratedAsset).not.toHaveBeenCalled();
+  });
+
+  it("rejects conversationId without source: user_upload", async () => {
+    await expect(
+      assetUploadHandler(
+        {
+          sourceUrl: "https://example.com/photo.png",
+          kind: "image",
+          conversationId: "conv_1",
+        },
+        validCtx,
+      ),
+    ).rejects.toThrow(/conversationId requires source/);
+    expect(mockPersistGeneratedAsset).not.toHaveBeenCalled();
+  });
+
+  it("rejects a workspace-less context with source: user_upload", async () => {
+    // CapabilityContext.workspaceId is typed as a non-nullable string; the
+    // handler's runtime guard (`if (!ctx.workspaceId)`) is what actually
+    // catches a missing scope, so exercise it via the falsy empty string
+    // rather than `null` (a type violation the compiler would reject).
+    const noWsCtx: CapabilityContext = { ...validCtx, workspaceId: "" };
+    await expect(
+      assetUploadHandler(
+        {
+          sourceUrl: "https://example.com/photo.png",
+          kind: "image",
+          source: "user_upload",
+        },
+        noWsCtx,
+      ),
+    ).rejects.toThrow(/requires a workspace scope/);
+    expect(mockPersistGeneratedAsset).not.toHaveBeenCalled();
+  });
+});
+
+describe("assetUploadHandler — source: user_upload happy path", () => {
+  it("calls persistGeneratedAsset with org accessPolicy, empty prompt/model, and the conversation link", async () => {
+    mockPersistGeneratedAsset.mockResolvedValueOnce({
+      id: "asset-uuid",
+      publicId: "gen_xyz",
+      kind: "image",
+      mimeType: "image/png",
+      sizeBytes: 100,
+      key: "generated/images/org-1/uuid.png",
+      url: "https://private.blob.vercel-storage.com/x.png?token=x",
+      serveUrl: "/api/v1/assets/gen_xyz",
+    });
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      makeResponse(pngBuffer(100), "image/png"),
+    );
+
+    const result = await assetUploadHandler(
+      {
+        sourceUrl: "https://example.com/photo.png",
+        kind: "image",
+        source: "user_upload",
+        conversationId: "conv_1",
+      },
+      validCtx,
+    );
+
+    expect(mockPut).not.toHaveBeenCalled();
+    expect(mockPersistGeneratedAsset).toHaveBeenCalledOnce();
+    const arg = mockPersistGeneratedAsset.mock.calls[0]![0] as Record<string, unknown>;
+    expect(arg.orgId).toBe("org-1");
+    expect(arg.workspaceId).toBe("ws-1");
+    expect(arg.userId).toBe("u-1");
+    expect(arg.kind).toBe("image");
+    expect(arg.accessPolicy).toBe("org");
+    expect(arg.prompt).toBe("");
+    expect(arg.model).toBe("");
+    expect(arg.source).toBe("user_upload");
+    expect(arg.conversationId).toBe("conv_1");
+
+    // Returns the private serve path + the DB row's publicId — never the raw
+    // private blob URL.
+    expect(result.url).toBe("/api/v1/assets/gen_xyz");
+    expect(result.key).toBe("generated/images/org-1/uuid.png");
+    expect(result.publicId).toBe("gen_xyz");
+    expect(result.bytes).toBe(100);
+  });
+
+  it("passes conversationId: null when omitted", async () => {
+    mockPersistGeneratedAsset.mockResolvedValueOnce({
+      id: "asset-uuid",
+      publicId: "gen_xyz",
+      kind: "video",
+      mimeType: "video/mp4",
+      sizeBytes: 50,
+      key: "generated/videos/org-1/uuid.mp4",
+      url: "https://private.blob.vercel-storage.com/x.mp4?token=x",
+      serveUrl: "/api/v1/assets/gen_xyz",
+    });
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      makeResponse(new ArrayBuffer(50), "video/mp4"),
+    );
+
+    await assetUploadHandler(
+      { sourceUrl: "https://example.com/clip.mp4", kind: "video", source: "user_upload" },
+      validCtx,
+    );
+
+    const arg = mockPersistGeneratedAsset.mock.calls[0]![0] as Record<string, unknown>;
+    expect(arg.conversationId).toBeNull();
   });
 });

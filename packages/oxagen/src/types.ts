@@ -61,7 +61,15 @@ export type CapabilityLayer =
   | "mcp"
   | "unit"
   | "e2e"
-  | "docs";
+  | "docs"
+  // "app" — the capability is meant to be operable by a human in the Next.js
+  // app (apps/app). Declaring it is a BINDING PROMISE that a real, working UI
+  // invokes this capability. It is satisfied only when the capability has an
+  // entry in apps/app/capability-ui-map.json pointing at a page file that
+  // exists AND renders without an error page (proven by screenshot/e2e). See
+  // the "UI Capability Parity" law: tools/scripts/check_ui_parity.mjs enforces
+  // both directions (declared-app must be wired; app-invoked must declare app).
+  | "app";
 
 // Where a capability is exposed. A capability with `surfaces: ['agent']`
 // is invoked only by the in-app agent mid-stream and skips the /v1
@@ -188,6 +196,21 @@ export interface CapabilityDeclaration<
     workspace: Partial<Record<SystemWorkspaceRole, GrantEffect>>;
   };
   /**
+   * Declarative audit-target extraction (accountability chain). When set,
+   * the kernel reads `input[targetIdField]` (string values only) from the
+   * validated input and threads `{ kind: targetKind, id: value }` into the
+   * IAM audit row's `target_kind`/`target_id` — making "who touched object X"
+   * a queryable fact instead of a null column. Opt-in per contract because
+   * only the contract author knows which input field is the acted-on object
+   * (a heuristic would mislabel ids). Serializable — no functions.
+   */
+  audit?: {
+    /** What the target is, e.g. "graph.node", "skill", "repo". */
+    targetKind: string;
+    /** Input field carrying the target's id, e.g. "nodeId". */
+    targetIdField: string;
+  };
+  /**
    * Optional chat-render hint for this capability's OUTPUT. Absent → the chat
    * layer falls back to the generic `capability-result` component. Resolution
    * precedence lives in capability-meta.ts (resolveRenderDirective).
@@ -218,9 +241,15 @@ export function getSurfaces(
   return cap.surfaces ?? DEFAULT_SURFACES;
 }
 
+/**
+ * Handlers receive CheckedContext — CapabilityContext plus the IAM-resolved
+ * principal (null when the resolver did not run, e.g. the non-enterprise
+ * tier fast-path). Implementations that only need CapabilityContext remain
+ * assignable (param contravariance) — the principal is opt-in to read.
+ */
 export type CapabilityHandler<C extends CapabilityDeclaration> = (
   input: z.infer<C["input"]>,
-  ctx: CapabilityContext,
+  ctx: CheckedContext,
 ) => Promise<z.infer<C["output"]>>;
 
 /**
@@ -285,10 +314,14 @@ export interface ResolvedPrincipal {
  */
 export interface CheckedContext extends CapabilityContext {
   /**
-   * Resolved IAM principal for this invocation. Null when the IAM tables
-   * have not been applied yet (graceful degradation to defaultEffect).
+   * Resolved IAM principal for this invocation. Null when the resolver ran
+   * but found no principal (non-enterprise tier fast-path, IAM tables not
+   * applied — graceful degradation to defaultEffect). Optional so that a
+   * plain CapabilityContext remains assignable (absent ≡ null): the kernel
+   * ALWAYS supplies the field on the real invocation path; handlers read it
+   * as `ctx.principal ?? null` and must treat null/absent identically.
    */
-  principal: ResolvedPrincipal | null;
+  principal?: ResolvedPrincipal | null;
 }
 
 export interface CapabilityManifestEntry {

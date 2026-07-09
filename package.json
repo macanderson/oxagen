@@ -1,6 +1,6 @@
 {
   "name": "oxagen-monorepo",
-  "version": "0.6.4",
+  "version": "1.1.1",
   "private": true,
   "packageManager": "pnpm@11.7.0",
   "engines": {
@@ -20,6 +20,7 @@
     "kill": "tsx tools/scripts/kill.ts",
     "clean:cache": "rm -rf apps/*/.next/dev/cache",
     "env:pull": "tsx tools/scripts/env-pull.ts",
+    "vercel:rotate-ai-key": "tsx tools/scripts/rotate-ai-gateway-key.ts",
     "env:manager": "pnpm --filter @oxagen/env-manager dev",
     "env:secrets:pull": "pnpm --filter @oxagen/env-manager pull",
     "build": "turbo run build",
@@ -42,15 +43,19 @@
     "db:reset": "tsx --env-file-if-exists=.env.local tools/scripts/db-reset.ts",
     "db:seed-iam": "tsx --env-file-if-exists=.env.local tools/scripts/seed-iam-defaults.ts",
     "check:manifest": "node tools/scripts/check_manifest.mjs",
+    "check:ui-parity": "node tools/scripts/check_ui_parity.mjs",
+    "check:mobile-parity": "node tools/scripts/check_mobile_parity.mjs",
+    "check:vision": "node --env-file-if-exists=.env.local tools/scripts/vision-gate.mjs",
     "check:manifest:tickets": "tsx --env-file-if-exists=.env.local tools/scripts/ensure-manifest-tickets.ts",
     "e2e:failure-ticket": "tsx --env-file-if-exists=.env.local tools/scripts/ensure-e2e-failure-ticket.ts",
-    "check:contracts": "node tools/scripts/check-contracts.mjs",
+    "check:contracts": "node tools/scripts/check-contracts.mjs && node tools/scripts/check-naming.mjs",
+    "check:naming": "node tools/scripts/check-naming.mjs",
     "check:connector-schemas": "tsx tools/scripts/check-connector-schemas.ts",
     "docs:schemas": "tsx tools/scripts/gen-capability-schemas.ts",
     "env:check": "tsx tools/scripts/env-check.ts",
     "eval": "tsx --env-file-if-exists=.env.local tools/scripts/run-evals.ts",
     "eval:ingest": "tsx --env-file-if-exists=.env.local tools/scripts/eval-ingest.ts",
-    "gate": "turbo run lint typecheck test:unit test:coverage build --filter=...[origin/main] && pnpm check:manifest && pnpm check:contracts && pnpm check:connector-schemas && pnpm env:check && pnpm db:lint-migrations && pnpm db:atlas-validate",
+    "gate": "turbo run lint typecheck test:unit test:coverage build --filter=...[origin/main] && pnpm check:manifest && pnpm check:ui-parity && pnpm check:mobile-parity && pnpm check:contracts && pnpm check:connector-schemas && pnpm env:check && pnpm db:lint-migrations && pnpm db:atlas-validate",
     "release": "tsx --env-file-if-exists=.env.local tools/scripts/release.ts",
     "release:patch": "tsx --env-file-if-exists=.env.local tools/scripts/release.ts patch",
     "release:minor": "tsx --env-file-if-exists=.env.local tools/scripts/release.ts minor",
@@ -60,7 +65,9 @@
     "db:seed-interactive-agent": "tsx --env-file-if-exists=.env.local tools/scripts/seed-interactive-agent.ts",
     "db:backfill-iam": "tsx --env-file-if-exists=.env.local tools/scripts/backfill-org-iam.ts",
     "db:backfill-capabilities": "tsx --env-file-if-exists=.env.local tools/scripts/backfill-workspace-capabilities.ts",
-    "db:backfill-workspace-seeds": "tsx --env-file-if-exists=.env.local tools/scripts/backfill-workspace-seeds.ts"
+    "db:backfill-workspace-seeds": "tsx --env-file-if-exists=.env.local tools/scripts/backfill-workspace-seeds.ts",
+    "db:backfill-mcp-server-auth-config": "tsx --env-file-if-exists=.env.local tools/scripts/backfill-mcp-server-auth-config.ts",
+    "metrics:fanout": "tsx --env-file-if-exists=.env.local tools/scripts/fanout-token-metrics.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "2.2.0",

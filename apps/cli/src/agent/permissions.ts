@@ -27,7 +27,8 @@
 import { isAbsolute, relative, resolve } from "node:path";
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import { canonicalToolName } from "../settings/permissions-gate.js";
+import { canonicalToolName, evaluateLocalPermission } from "../settings/permissions-gate.js";
+import type { Permissions } from "../settings/schema.js";
 
 /** The tools that can change the host. Read/search tools are never gated. */
 export const MUTATING_TOOLS = ["write_file", "edit_file", "bash"] as const;
@@ -97,6 +98,15 @@ export interface BrokerOptions {
   cwd: string;
   /** Project/user rules, evaluated before mode defaults. */
   rules?: PermissionRule[];
+  /**
+   * The resolved `settings.json` `permissions` block (allow/deny in Claude Code
+   * rule syntax, e.g. `Bash(*)`, `Bash(rm -rf*)`). Consulted before the session
+   * mode: a `deny` match is absolute (honored first, no matter what) and an
+   * `allow` match auto-approves without a prompt — the whole point of putting
+   * `Bash(*)` in settings. Evaluated with the SAME matcher the non-interactive
+   * gate uses (`evaluateLocalPermission`), so the two layers never disagree.
+   */
+  permissions?: Permissions;
   /** Interactive prompt. Absent ⇒ non-interactive (every `ask` becomes `deny`). */
   approver?: Approver;
 }
@@ -196,12 +206,14 @@ export class PermissionBroker {
   private readonly approver?: Approver;
   private readonly baseRules: PermissionRule[];
   private readonly sessionRules: PermissionRule[] = [];
+  private readonly permissions?: Permissions;
 
   constructor(opts: BrokerOptions) {
     this.mode = opts.mode;
     this.cwd = resolve(opts.cwd);
     this.approver = opts.approver;
     this.baseRules = opts.rules ?? [];
+    this.permissions = opts.permissions;
   }
 
   get currentMode(): PermissionMode {
@@ -273,19 +285,56 @@ export class PermissionBroker {
   }
 
   /**
+   * Consult the `settings.json` `permissions` allow/deny lists for this request,
+   * reusing the exact matcher the non-interactive gate uses so the two layers
+   * never disagree. Returns `"deny"`/`"allow"` ONLY for an explicit rule match;
+   * `"none"` when nothing matched (or no permissions are configured), so the
+   * caller falls back to the session mode. Within `evaluateLocalPermission`,
+   * deny is evaluated before allow — a deny always wins.
+   */
+  private settingsMatch(req: PermissionRequest): "allow" | "deny" | "none" {
+    if (!this.permissions) return "none";
+    const input =
+      req.tool === "bash" ? { command: req.command ?? "" } : { path: req.path ?? "" };
+    const result = evaluateLocalPermission(req.tool, input, this.permissions);
+    // A decision with no `rule` came from `defaultMode`, not an explicit
+    // allow/deny entry — leave that to the session mode below.
+    if (!result.rule) return "none";
+    return result.decision;
+  }
+
+  /**
    * Decide whether a mutating call may proceed. Never throws; an absent approver
    * on an `ask` resolves to `deny` (fail closed). Returns the decision plus a
    * human-readable reason (surfaced in the trace / tool result).
    */
   async check(req: PermissionRequest): Promise<PermissionDecision> {
-    // 1. Explicit opt-out — the user has accepted full responsibility.
+    // 1. settings.json allow/deny (Claude Code rule syntax) — evaluated FIRST,
+    //    ahead of the session mode and even ahead of `bypass`, so a `deny` entry
+    //    is truly honored "no matter what": `Bash(*)` in `allow` plus
+    //    `Bash(rm -rf*)` in `deny` still blocks `rm -rf`. An explicit `allow`
+    //    match auto-approves without a prompt. `evaluateLocalPermission` already
+    //    checks deny before allow, so deny wins within the settings block too.
+    //    Only an EXPLICIT rule match steers the broker — a `defaultMode`
+    //    fallthrough (no matching rule) is ignored so it never shadows the mode.
+    const settings = this.settingsMatch(req);
+    if (settings === "deny") {
+      return { decision: "deny", reason: "denied by a settings.json deny rule" };
+    }
+
+    // 2. Explicit opt-out — the user has accepted full responsibility. (A
+    //    settings deny above still wins; a settings allow is redundant here.)
     if (this.mode === "bypass") return { decision: "allow", reason: "bypass mode" };
 
-    // 2. Base decision: first matching rule, else the mode default.
+    // 3. Base decision: a settings allow, else the first matching rule, else the
+    //    mode default.
     let decision: RuleDecision;
     let reason: string;
     const rule = this.rules().find((r) => ruleMatches(r, req, this.cwd));
-    if (rule) {
+    if (settings === "allow") {
+      decision = "allow";
+      reason = "allowed by a settings.json allow rule";
+    } else if (rule) {
       decision = rule.decision;
       reason = `matched ${rule.decision} rule`;
     } else if (this.mode === "acceptEdits" && req.tool !== "bash") {

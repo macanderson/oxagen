@@ -1,5 +1,786 @@
 # Changelog
 
+## v1.1.1
+
+This release delivers a major MCP authentication overhaul (OAuth detection + self-healing install flow), AI-assisted setup wizards for agents and skills, a new sandbox-templates system for portable agent environments, a from-scratch CLI Mission Control / fleet management surface for running multiple agent sessions, and a platform-wide standardization of capability naming (ADR-024/025) that touches nearly every contract, handler, and route. It also includes a large batch of infra, CI, and marketing-site fixes, plus numerous CLI stability and UX improvements.
+
+### Features
+- **MCP Servers install→authenticate UX**: detects OAuth-protected MCP servers at install time, self-heals on OAuth callback, and surfaces credential/auth status in the UI (963739c2, 2f02968c, d3a00e00, fd89dd2a, d4df88bb)
+- **AI-assisted setup wizards**: new `agent.definition.suggest` capability powers an AI-assisted agent builder flow, and a new `skill.draft` capability powers a 3-step AI-assisted skill wizard in Studio → Skills (5bb94881, 7f8beed6, c9c79416, 6e26b2e7, 55727caa, e6fbfce5)
+- **Sandbox templates & agent-environment bindings**: new database schema, 12 contracts, handlers, and a sandbox-template service for portable, reusable agent execution environments (4ef9399f, 5a113296, d89b6d99, dc5ede55)
+- **CLI Mission Control & fleet management**: new `oxagen fleet` command tree (dispatch/ls/watch/attach/send/cancel/logs/clean/worker) with a full session-fleet runtime, plus a Mission Control TUI for multi-agent oversight (49cdc094, 322e096b, e7dc31f7, f360bd2d)
+- **CLI `/diff` panel**: keyboard-navigable changed-files list with syntax-highlighted, line-numbered diffs (32fb14ba)
+- **CLI usage/budget metering**: per-turn streaming usage/cache capture with a per-task budget cap, plus a machine-readable solve-path cost/token/step summary (9d415ace, 33b729af, 5b47b76a)
+- **CLI per-function model config**: `/triage-model`, `/judge-model`, `/worker-model` (fc7f0afa)
+- **Marketplace consolidation**: agent equipping folded into Studio → Agent Tools; marketplace becomes two-sided, with inline agent equipping and a thumb-first mobile wizard (5765ebb1, a5699b37)
+- **Chat improvements**: per-turn conversation-aware suggested prompt chips, a coding-trace-panel + workspace-context-panel rail, a compact Agents card, a prompt-cache token-layer meter, and syntax-highlighted light/dark code diffs (78733efd, a48e0317, 2297f09e, e8f3900d, a14e6111, 4dd80a26)
+- **One-thumb mobile settings nav**: bottom-sheet section switcher with responsive layouts (3da6e201)
+- **Unified-diff patches**: `repo.edit`/`file.put` now emit a proper unified diff (90c8c030)
+- **Ebook lead-gate & interactive reader**: new CMS schema, lead-gate API/email, and an interactive page-flip book reader on the marketing site (ee242a28, 72d91229, e28303ad, 9a042804, 1aa5a274)
+- **Immutable agent/tenant identity (ADR-024)**: namespaced, immutable `org_ns.workspace_ns.slug` agent identity; agent slugs are now permanently reserved (no recycling); immutable namespace exposed on org/workspace reads (d12de961, 97f28d0a, 3e41ed47, 94e98611, e0931a5c)
+- **IAM principal attribution**: IAM principal threaded through handlers/scope/audit, with usage breakdown by capability and acting principal (e174b313, 70b3398a, 2b2c25b4, a845b083)
+- **UI Capability Parity enforcement**: `check:ui-parity` gate ensures every human-operable capability has real, working UI, backfilled for 45 app-surfaced capabilities (09fb1984, fc5b3449)
+- Animated adaptive terminal SVG for the landing page, and new investor/roadmap decks (12cf6455, 74ee1230)
+
+### Fixes
+- Founder headshot broken image link on decks (be986d0b)
+- `vercel-migrate`: direct binary download with an exact pending-count guard; production migrations now auto-apply in the Vercel build (0ca3a787, f11a56bb)
+- Marketing site: fixed CORS for apex/www, rewired the demo form to CMS leads (a998f329)
+- CI: Postgres/ClickHouse/Neo4j migrations now run unconditionally in the test job instead of being gated behind a (broken) diff check (88470820)
+- Removed the non-functional first-party GitHub MCP integration and its dangling imports (8ea38530, 713f6663)
+- Skills: builtin skills are now embedded as bundle-safe module data so `create-agent` never bricks (699bb8d6, 267d088d)
+- Chat stream now surfaces the real error body on attachment failures instead of a generic 422 (0a1be81c)
+- Marketplace: re-clicking the active tab no longer blanks results; connector delivery methods (`rest_polling`/`sql_query`) show human-readable labels (7c1f3e29, c173b926)
+- Agent Builder equip-source fetches are now timeout-guarded so the wizard always renders (d7256c01)
+- Reject impossible org/workspace slugs before hitting the database (b3425074)
+- Correct pricing for `gpt-5.5-pro`/`gpt-5.5`/`gemini-3-pro` from gateway truth (6813cbe5)
+- Restored the bench/web importer accidentally dropped by a sparse lockfile regen (a2494913)
+- CLI: hardened slash-arg expansion and fuzzy-ranked slash menu (a2ad55d6); idle Mission Control's render timer when the fleet is quiet (893634a6); removed fabricated "live" telemetry from `oxagen view` (191a126d); fixed fullscreen transcript scrolling and height estimates (71712f3f, 731cde23); fixed Mission Control composer misrouting fast-typed input (972e9cc6); memoized `MessageView` and deduped spinner frames (515d81e4)
+- CLI: bounded detached worker sessions by max-lifetime/RSS ceiling and plugged lifecycle leak seams (9b0e9cc4, ef926f64)
+
+### Internal
+- **ADR-024 / ADR-025**: standardized all 294 capabilities to verb-first `snake_case` naming, removed the legacy alias mechanism, and reconciled the resulting handler/route/UI/telemetry/test surfaces platform-wide (4d25360a, 08bc5ce0, 21057706, 986d72f6, 70e6fd4d, a161c7b3, b566e106, and numerous `reland`/reconciliation commits)
+- CLI commands migrated onto a "universal output discipline" (consistent JSON envelopes) across settings, telemetry, agent, command, rules, config, graph pull/lineage/push, replay, recover, asset upload, a2a card, conversation export, file-lock, and the daemon lifecycle (87abc83a, fd105cfe, 063c7426, 6e23e962, 834787d5, 863129f1, edcb2b34, d4cc1342, e841b849, b64652ed, 843c58b4, 9df0a595)
+- Removed dead code paths: the cloud `ModelProvider` runtime half and `createTurnRunner` (7c8214fd, 10c35a44)
+- New reusable manual DB-migration GitHub Actions workflow for applying Atlas migrations to prod on demand (62f9a9a1)
+- Batched IAM role-grant seeding in 500-row chunks; capped CLI/bench cache TTL at 1h with a per-task max-steps cap (7ad4bdf7, 5b47b76a)
+- Expanded test coverage across CLI (fleet, mission control, session runner/manager, diff panel), MCP OAuth flows, contracts, and kernel dispatch probes
+- Docs: ADR-024/ADR-025 write-ups, sandbox-templates implementation plan, RBAC design specs, prod IAM re-seed runbook, and refreshed CLI reference docs (custom commands, REPL slash commands, agent engine, memory, models)
+
+## v1.1.0
+
+This release lands three major architectural efforts: the ADR-021 deterministic-first inference doctrine (judge tiering, fast-path planning, structured tools), the ADR-022 capability naming standard (a repo-wide rename of `domain.subject.action` contracts with alias-shim backward compatibility), and the ADR-023 CLI fleet/session-event-log redesign (detached session dispatch, a universal output layer, and a filesystem-backed event store). On top of that foundation, the app gains a new Studio (Agent Builder, Tools, Skills), a Marketplace surface, per-turn dollar budget governance across CLI/app/API, Postgres-backed file locking for concurrent agent edits, conversation export, and a round of mobile-usability and chat-context work. A large number of merge-repair and CI-stability fixes round out the release.
+
+### Features
+
+- **CLI fleet & session redesign (ADR-023):** session event envelope/ids/paths + filesystem store (`d09ce467`), universal output layer + aggregate timeline formatter (`401c3fb6`), detached session dispatch unifying fleet dispatch and REPL `&` (`bccaea8a`), REPL trailing-ampersand backgrounds a prompt into the fleet (`ec31e77e`), scope-review gate + always-on scope card + Ctrl-O verbose + heartbeat (`cab79f82`), per-function model config via `/triage-model`, `/judge-model`, `/worker-model` (`83eaf114`).
+- **Inference doctrine (ADR-021):** deterministic single-task planner fast-path (`0e0db957`), judge-skip on by default (`92961a36`), triage-model plumbing + judge tiering (`976b1aa3`), fast-tier planner default + best-of-N short-circuit (`320f93e8`), structured tools wired and renamed to `domain.subject.action` (`56540d91`), shared coding-core system prompt (`92ba4b5b`), optional pre-execution scope-review hook (`37860f80`).
+- **Capability naming standard (ADR-022):** collapsed 4-segment capability names with domain dedupe and alias shims (`0e974d94`), naming lint + `check:contracts` (`704278d0`), capability alias resolution infrastructure (`b876c336`).
+- **Per-turn budget governance (OXA-2081):** contracts/engine gate/schema foundation (`c3e94fb7`), turn budget guard threaded through the run pipeline (`9506a516`, `b8c68aa2`), API routes/MCP tools/docs for `budget.policy.*` (`84ffe160`), CLI `--budget`/`--budget-mode` flags + `/budget` slash command (`70e917ce`), app composer control + stream-route enforcement with 3 modes (`dde1f1c3`).
+- **File locking (ADR-021 §5):** Postgres file-lock lease with fencing tokens (`6a83f1d8`); mandatory per-session file locks for the CLI (`2d5a2f87`).
+- **Studio & Marketplace (app, Phase 1):** Studio foundation with nav/routes/invoke wrappers (`e1130ed1`), Agent Builder — list + 7-step builder (`af870fcd`), Studio Tools + Skills + chat↔agent binding (`11b9f9ab`), Marketplace — Browse/Installed/MCP servers (`584dd0a6`), agent selector in new-session flow + code-agent-gated UI (`bf84d362`), code-agent identity infrastructure (`fe9e2499`).
+- **Code mode & sandbox:** Code mode toggle with forced repo/environment gate in the composer (`f5cf89da`, `b2e3f516`), code-mode chat system prompt (`9581fe58`), code mode bound to the durable sandbox in the chat stream route (`932c6099`), `ModalSandboxWorkspace` + environment-secret injection (`c7f8244b`, `5163afd7`), sandbox visibility panel with status strip and lazy file tree (`ec85a8e6`), `agent.sandbox_file.read` capability (`46e69b85`).
+- **Chat context & tooling:** git diff / PR stats / CI status cards, pinnable repo+env context, slash commands (`c7782186`), conversation export (PDF/Markdown) as contract, API route, MCP tool, CLI command, and UI menu (`2eafb74b`, `6d2ae593`), SVG in-app preview and mobile-usable Files panel (`b3dd2e4f`), graph-grounded citation demo in chat (`8d99adb5`).
+- **Mobile usability:** collapsible chat composer (`379a2aca`), mobile-usable knowledge graph explorer (`db3ea425`).
+- **Storage:** filesystem storage driver + CI wiring, removing the Vercel Blob token requirement (`a4eb199c`).
+- **Telemetry & debugging:** `telemetry.error.cluster` fleet-wide error triage (`eae82f31`), `agent.debug.trace` structured failure diagnosis (`2c8ba588`).
+- **Engram:** nightly consolidation wired with idempotent reinforcement, deterministic distill identity, and TTL eviction (`6fa42cb3`).
+- **Web:** oxagen.sh marketing one-pager with gated field-manual ebook (`055cd31e`).
+- **MCP:** 6 missing repo MCP tools added, with contracts declaring MCP surface (`50ada5d8`).
+
+### Fixes
+
+- Repaired several post-merge regressions from PRs #658/#659/#630/#648, including duplicate agent-binding logic/broken JSX (`ff2cd42f`), stale tests/naming/env (`0b8bb4aa`), and a dropped `DEFAULT_AGENT_MODEL` import (`6680af9c`).
+- Chat: pin selectors now show the env/repo label instead of the raw system id (`12864c82`, `9475bd5b`); retry resilience, id-based history dedup, persist-failure warning, NUL-key fix (`f8ffdbe9`); import slash commands via a client-safe subpath (`83234044`); synced `parseAttachmentsField` so text-only sends no longer fail with "Invalid message" (`7ba6c7d5`).
+- CLI stability: throttled streaming renders, memoized measurement, zombie reaping, clean signal exit (`350ac1a2`); native copy/paste by default with line-count paste chips (`9bbf79d8`); stopped `settings.json` from silently masking model/env (`6e5182ea`); model-mask warning, split-brain get, scope-shadow warning, doctor precedence fixes (`4c4b8580`); atomic writes and dead-key write rejection for workspace config and credential store (`503396ed`, `86384089`); flush error debug entry before process exit (`97eba19d`).
+- Agent engine: balanced judge default, multimodal token estimate, retry buffering, empty-error and cache-aware projection fixes (`7bffc740`); tool-routing precision for graph/code tools (`0e8d8ac3`); dropped dead `no-control-regex`/`no-console` lint suppressions (`ea01480a`, `7043aedc`).
+- Engram: made the sync/ CRDT layer convergent (metadata-aware Merkle, stable bucketing, OR-Set/PN-Counter invariants) (`f87a041a`); fixed live-path retrieval/budget/hash correctness (`b10241e8`); stopped an API boot crash via lazy bundler-safe `createRequire` (`c2630fe4`).
+- Presenter decks: fixed presenter mode reconnecting instead of dying after one open (`96aeafa6`).
+- Repaired multiple CI-blackout/gate regressions across `apps/app`, contract-seam env tests, and Group 3 gate failures (`32c0f271`, `cf24d258`, `07e8311f`, `a334c818`, `636da026`, `248f7374`).
+- Database: tenant-policy manifest count corrected for new file-lock tables (`1b3f4cd7`); MCP coverage-config tool paths updated for ADR-022 renames (`2de9e81b`).
+
+### Internal
+
+- Repository-wide capability rename to `domain.subject.action` across API routes, MCP tools, handlers, and contracts, with regenerated docs/schemas and capabilities manifest (ADR-022 follow-through).
+- Added ADR-021 (inference doctrine), ADR-022 (capability naming standard), and ADR-023 (CLI fleet session-event-log) design docs, plus specs for the CLI interface redesign, app-parity UI overhaul, and graph file locking.
+- Extensive new test coverage: detached-dispatch contract, structured-tools parsers/integration, CRDT sync invariants, budget guard, file-lock lease, storage fs-driver/integration, conversation export serializer/handler/MCP/CLI/UI, agent selector, mobile hooks, and more.
+- Refactors: deduped rate-card/model-router/trace/fleet types onto `@oxagen/agent-engine` and routed the CLI planner through the `AgentAi` port (`29c8d53c`); deleted the dead `shrink/` module (`a7bc02b7`); extracted shared coding-core system prompt (`92ba4b5b`).
+- Performance: parallelized code-graph lookups and cached `generateObject` system prompts (`e355774a`); warmed the code-graph at REPL mount off the critical path (`e576b6f5`); fast path for conversational/lookup prompts (`de1b5e80`).
+- CI: added `STORAGE_DRIVER=fs`/`STORAGE_FS_ROOT` wiring for hermetic attachment uploads in the e2e pipeline; regenerated capabilities manifest and lockfiles for the budget package.
+
+## v1.0.1
+
+_Changes since v0.11.0._
+
+- chore(release): v1.0.0 (134cbd01) — macanderson
+
+## v1.0.0
+
+_Changes since v0.11.0._
+
+- No commits since the last release.
+
+## v0.11.0
+
+_Changes since v0.8.0._
+
+- feat(chat): surface graph-grounded citations under assistant answers (#618) (8174690a) — Mac Anderson
+- fix(mcp): externalize native duckdb chain in xmcp build (#620) (e271fcf5) — Mac Anderson
+- fix(app): resolve react-hooks/immutability lint failures blocking CI (#619) (d007e0f5) — Mac Anderson
+- fix(ci): provision Neo4j schema for unit-lane integration tests + refresh stale orgId assertion (#617) (4512710e) — Mac Anderson
+- OXA-2070 follow-ups: file-lock CLI/docs hardening + retire blackboard (OXA-2075) (#616) (ed02442f) — Mac Anderson
+- fix(ci): cancel superseded push runs on the same branch (#615) (74f1436d) — Mac Anderson
+- [OXA-2070] Wire agent-file-locking (blackboard) to Neo4j (#613) (fe378011) — Mac Anderson
+- fix(database): validate mcp_servers auth_config encrypted-shape constraint (#607) (34e9a243) — Mac Anderson
+- Feat/multimodal phase 2 4 (#614) (7fb4b35a) — Mac Anderson
+- fix(agent): wire Vector, Graph, and Lexical retrieval engines into compileAgentContext (#611) (7e1e2889) — Mac Anderson
+- fix(telemetry): close branch-coverage gate gap with targeted regression tests (#609) (ad2fb7ae) — Mac Anderson
+- fix(ontology): bind orgId/workspaceId explicitly across 16 scopedSession resolvers (OXA-2062) (#608) (52c568ce) — Mac Anderson
+- [OXA-2071] Wire engram session/fork.ts + session/replay.ts (trace UI + daemon) (#605) (0ae8302b) — Mac Anderson
+- A2A: per-agent identity, execution lineage, live resubscribe (#604) (a532205f) — Mac Anderson
+- fix(test): use a genuinely-invalid kind in asset.upload's 400 test (#612) (43ff5bfa) — Mac Anderson
+- fix(test): add eval.*/agent.trace.get/agent.sandbox.files.list to route-parity map (#610) (47af5062) — Mac Anderson
+- fix(test): mock loadWorkspacePromptConfigSafe in api chat.stream test (#606) (602929aa) — Mac Anderson
+- fix: restore two main regressions reintroduced by #596's early merge + fix e2e RLS boot failure (#603) (c417fd4f) — Mac Anderson
+- chore:upgrade nextjs 16.2.10 (9a3d97ea) — macanderson
+- fix(mcp): add missing publicId to asset.upload mock fixture (#602) (3659e97b) — Mac Anderson
+- feat(engram): restore blackboard sub-barrel + graph-file-lock wiring plan (#600) (f1b5520e) — Mac Anderson
+- fix(mcp): envelope-encrypt external MCP server credentials (#601) (8f71775d) — Mac Anderson
+- fix(ingestion): idempotent ClickHouse conformance events under Inngest retries (#599) (12849abc) — Mac Anderson
+- fix(security): fail-closed IAM edges — checkFn throw, 42P01 downgrade, MCP empty orgId (OXA-2056) (#598) (333479ee) — Mac Anderson
+- fix(security): durable audit writes + refuse-to-persist empty chain_hash (#597) (c5bcd4bb) — Mac Anderson
+- feat(app): multimodal phase 2+4 — video model input + coding-trace/workspace-context panels (#596) (3ecb72ae) — Mac Anderson
+- [OXA-2052] Fix ingestion dedup unbound $orgId param (#595) (345fb0ba) — Mac Anderson
+- test(ann): add multi-tenant recall regression tests for OXA-1929 (#594) (c88166b2) — Mac Anderson
+- fix(app): add missing workspace-membership gate on wand resolve actions (OXA-2049) (#593) (9f0f24e1) — Mac Anderson
+- fix(connectors): constant-time secret comparison in Zoom/Microsoft webhook verification (OXA-2051) (#592) (eec5da8c) — Mac Anderson
+- docs(memory): record that OXA-2028 (single-source StageKind) is already fixed on main (#591) (9e5c7325) — Mac Anderson
+- chore:added new agent skill files (d7574908) — macanderson
+- fix(auth): unblock prod migration chain so login works (P0) (5f99d9ce) — Claude
+- fix(ci): always reconcile prod Postgres on push to main (P0 login outage) (a837ca0e) — Claude
+- feat(cli): markdown rendering for assistant prose in the REPL transcript (#590) (42739621) — Mac Anderson
+- chore:added new agent skill files (772af6f8) — macanderson
+- feat(app): multimodal coding-agent web experience — image attachments, artifact cards, parity (#589) (15c93166) — Mac Anderson
+- feat(cli): banner v2 — gradient OXAGEN wordmark only; version+scope in HeaderBar (#588) (3ee60b0a) — Mac Anderson
+- Feat/evals v1 (#587) (604ed143) — Mac Anderson
+- Feat/usage dashboard (#586) (20483e17) — Mac Anderson
+- feat(cli): sunset-gradient oxagen.sh cli banner, persistent like Claude Code (#584) (e275fdca) — Mac Anderson
+- fix(mcp): register agent.trace.get + agent.execution.list in parity test (#585) (1b7bc715) — Mac Anderson
+- fix(handlers): drop stale duplicate createPlatformAgentAi import in agent.repo.edit (#582) (4698b0a3) — Mac Anderson
+- fix(handlers): audit-exempt the read-only billing.usage.breakdown handler (#581) (70730336) — Mac Anderson
+- fix(database): register agent.a2a_tasks in the RLS policy manifest (#580) (e7bf1298) — Mac Anderson
+- fix+feat: log swallowed errors and build buildable-now TODO sites (#578) (4b0b42de) — Mac Anderson
+- fix(database): register ai.* and eval.* tables in the RLS policy manifest (#579) (e12dedb4) — Mac Anderson
+- feat(a2a): Agent2Agent protocol surface alongside MCP (#572) (9c63eff6) — Mac Anderson
+- feat(ci): lint atlas migrations for duplicate versions and atlas.sum drift (#577) (694f02b3) — Mac Anderson
+- chore(bloat): verified rip-out — dead exports, unused deps, stale assets, zombie schema, dead tests (#564) (a346dcf9) — Mac Anderson
+- test(e2e): TOTP 2FA enrollment + second-factor sign-in flow (#575) (1ebde0ac) — Mac Anderson
+- feat(observability): light up OTel export + vendor-neutral error alerting + agent run-trace span-tree UI (#574) (145d1f0a) — Mac Anderson
+- fix(db): repair atlas.sum corrupted by #569 merge (stale + duplicate entries) (#576) (12992aa3) — Mac Anderson
+- reliability: circuit breakers, Inngest idempotency, StageKind drift, loud memory-recall (#570) (f2b5980a) — Mac Anderson
+- feat(evals): Evals v1 — datasets + LLM-as-judge over metered run traces (#569) (2e027539) — Mac Anderson
+- fix(db): resolve atlas migration version collision + checksum break on main (#568) (87e707ee) — Mac Anderson
+- feat(app): run the in-app chat agent on @oxagen/agent-engine (unify execution stacks) (#566) (8d1b9ed6) — Mac Anderson
+- docs(capabilities): sync registry — add 30 missing capability docs (#565) (90699379) — Mac Anderson
+- fix(handlers): typecheck error in bitemporal ontology test asserts (#571) (dce26615) — Mac Anderson
+- fix(mcp): register billing.usage.breakdown in parity test; fix CLAUDE.md migration path; regen .env.example (#567) (6c29b3f9) — Mac Anderson
+- fixed package.json (2cd5a81f) — macanderson
+- feat(graph): bi-temporal fact validity (valid + transaction time) in the knowledge graph (#563) (2e992ae3) — Mac Anderson
+- fix(ci): pass PLAYWRIGHT_BROWSERS_PATH through turbo to test:e2e (#562) (6a28adbe) — Mac Anderson
+- fix(security): RLS fail-closed in prod, TOTP 2FA for Owner/Admin, CORS localhost dev-only (#561) (653c09d5) — Mac Anderson
+- feat(ai): semantic response cache + Anthropic Message Batches (background inference) (#560) (d379fce6) — Mac Anderson
+- feat(billing): usage dashboard — per-model/surface/workspace breakdowns (OXA-1585) (#559) (9f51e8ef) — Mac Anderson
+- feat(connectors): generic poll/sync loop — make existing sources real (#558) (0df7f9b8) — Mac Anderson
+- fix(app): close apps/app IAM gate gap — gate ungated server actions (IDOR) (#557) (a7cfd88d) — Mac Anderson
+- fix(ann): oversample tenant-filtered vector searches to stop silent recall decay (#555) (f742ca02) — Mac Anderson
+- fix(handlers): align subagent child fixtures with summary/outputBytes contract fields (#556) (ed8e6e45) — Mac Anderson
+- docs: refresh all repo-level docs to Stripe-for-agents vision + current architecture (#554) (406bfcf7) — Mac Anderson
+- fix(env-manager): skip chmod-000 unreadable-file test when running as root (a6bc6122) — macanderson
+- docs: archive Specs & Plans section with shipped-status verdicts (#553) (ba85446a) — Mac Anderson
+- feat(web): apps/web static site — platform health deck as interim homepage (#552) (651336fd) — Mac Anderson
+- feat(agent): graph-mediated fleet coordination Phase 2 — claim/lease self-healing, graph projection, peer reads, scaling policy (#551) (9be0e774) — Mac Anderson
+- feat(vision): Stripe-for-agents north star + LLM vision gate in CI (#550) (678c6c14) — Mac Anderson
+- feat(cli): CI-aware turn inactivity guard — probe CI before aborting instead of a blanket 2h timeout (#549) (d455e95c) — Mac Anderson
+- feat(cli): /config TUI panel + /config doctor over the 4-tier governed config (#548) (2ae82500) — Mac Anderson
+- docs(specs): oxagen-cache-review — monorepo cache audit spec + phased plan (#547) (b392e2fa) — Mac Anderson
+- perf(ci+bench): run CI in prebuilt GHCR toolchain images; prewarm SWE-bench task images (#546) (bb92ab7f) — Mac Anderson
+- ci: add GHCR CI toolchain image + publish workflow (bootstrap) (#545) (d1bf7530) — Mac Anderson
+- docs(spec): Oxagen Rust CLI — standalone OSS BYOK spec + phased plan (#544) (72d20881) — Mac Anderson
+- fix(config): dedupe convergent OXAGEN_CLI_MOTION/OXAGEN_PLAN_TIMEOUT_MS registrations (#543) (5de97a00) — Mac Anderson
+- docs(specs): Phase 2 fleet coordination spec + fanout metrics harness + Atlas decision doc (#541) (1bb1428a) — Mac Anderson
+- fix(api): parity-map entry for agent.subagent.result.get (main test job red) (#538) (563f833b) — Mac Anderson
+- fix(config): register OXAGEN_CLI_MOTION + OXAGEN_PLAN_TIMEOUT_MS, regen .env.example (main env-check red) (#539) (486ed6e3) — Mac Anderson
+- fix(config): dedupe DO_NOT_TRACK/OXAGEN_TELEMETRY registry keys (TS1117, main red) (#537) (0bf7afae) — Mac Anderson
+- feat(cli): F4b cache-forked best-of-N mode (trunk snapshot + consensus select) (#534) (d8071bb4) — Mac Anderson
+- feat(cli): real per-turn planning + fleet subagent fan-out in the interactive TUI (#535) (1d6edf2a) — Mac Anderson
+- fix(cli): restore right panel borders; add /motion full|reduced|off animation config (#532) (c20e8a87) — Mac Anderson
+- test(cli): spread real agent-engine module in interactive REPL test mocks (#536) (5a8b02a8) — Mac Anderson
+- fix(cli): stream token burn live and show pipeline models at TUI launch (#533) (2d79d78d) — Mac Anderson
+- test(agent)+fix(api): fanout aggregate follow-ups from test-completeness audit (#530) (8784c752) — Mac Anderson
+- docs(specs): correct bench-report-and-dashboard.md to the private @oxagen/bench structure (#528) (d326db08) — Mac Anderson
+- feat(agent): compact-by-default fanout aggregate + agent.subagent.result.get (#527) (d58c0a75) — Mac Anderson
+- Fix/bench private package restructure (#526) (5b8e570f) — Mac Anderson
+- fix(agent-engine): don't let F1 localizer run a second semantic fallback in ENHANCE (#525) (51ca4110) — Mac Anderson
+- Feat/bench clickhouse schema (#524) (6706c107) — Mac Anderson
+- Spec/graph mediated fanout results (#523) (0cee6797) — Mac Anderson
+- fix(cli,bench,config): xhigh/max effort docs, bench effort default, telemetry env registration (#522) (c00da61b) — Mac Anderson
+- Worktree feat+model cache effort (#520) (a4d9188d) — Mac Anderson
+- Feat/swe rank1 scalpel (#521) (ea733070) — Mac Anderson
+- Feat/swe rank1 scalpel (#516) (53e08f18) — Mac Anderson
+- feat(cli,api,telemetry): anonymous opt-out CLI usage telemetry (#519) (6ace1e58) — Mac Anderson
+- docs(specs): graph-mediated fanout results spec (blackboard-lite) (#518) (d2147ac0) — Mac Anderson
+- feat: bench ClickHouse schema, typed ingestion, and oxagen bench list/replay (#517) (e63e749b) — Mac Anderson
+- Scalpel: SWE-bench rank-#1 spec + implementation (#514) (01b9d3e5) — Mac Anderson
+- feat(scripts): AI Gateway key rotation script (pnpm vercel:rotate-ai-key) (#515) (0339bdc3) — Mac Anderson
+- ci: bump test job timeout to 60m for whole-repo-affected runs (#513) (948551d7) — Mac Anderson
+- fix(config): regenerate .env.example, register OXAGEN_BEST_OF_N_VERIFY (#512) (f0347e3c) — Mac Anderson
+- fix(cli): finish Sonnet 4.6->5 sweep in metrics test, de-flake init-animation TUI tests (#511) (0b9d2317) — Mac Anderson
+- fix: repair merge artifacts breaking CI on main (#510) (1904dd61) — Mac Anderson
+- Feat/cli input bar animation (#509) (0ff4e091) — Mac Anderson
+- fix(cli): stop /mouse stale toggle, bound enhance timeout, fail fast on billing errors (#508) (db732a32) — Mac Anderson
+- test(cli): complete the init-animation test suite + fix a real bug + unblock CI (#507) (40464e02) — Mac Anderson
+- fix(cli): sweep retired Sonnet 4.6 to Sonnet 5, default balanced tier to Sonnet 5 (#506) (e5304366) — Mac Anderson
+- feat(cli,bench): auto-verify test union, N=5 cross-family, apply-fallback, defect fixes (#505) (e8fe85fd) — Mac Anderson
+- feat(cli): space-invaders + OXAGEN reveal animation for oxagen init (#504) (d7d48a63) — Mac Anderson
+- fix(cli): drop SGR mouse reports in PromptInput so clicks/scrolls don't spray garbage (#503) (0f86348e) — Mac Anderson
+- Feat/bench best of n (#502) (2b233727) — Mac Anderson
+- Fix/env register cli mouse (#500) (da66041c) — Mac Anderson
+- fix(env): register OXAGEN_CLI_MOUSE in ENV_REGISTRY + SCHEMA_EXEMPT (#499) (d53ca9b8) — Mac Anderson
+- feat(bench+cli): pipeline-per-candidate best-of-N + differentiated config + init/graph-reuse fixes (#498) (3e321c14) — Mac Anderson
+- feat(cli): REPO panel (worktree path + branch + PR#) + worktree-branch fix for the full-screen TUI (#497) (1075edb2) — Mac Anderson
+- feat(cli): local, free, AI-SDK-free embedding providers for the code graph (#496) (51199ac6) — Mac Anderson
+- fix(env): register OXAGEN_CLI_MOUSE in ENV_REGISTRY + SCHEMA_EXEMPT (#494) (060837cd) — Mac Anderson
+- fix(ai): allow system-in-messages under AI SDK v7 — unbreaks every platform CLI turn (#493) (8f9bdc74) — Mac Anderson
+- Feat/cli anthropic key fallback (#492) (4940561d) — Mac Anderson
+- chore:.gitignore the ai gateway key file (8e0fe56a) — macanderson
+- feat(cli): full-screen TUI REPL with in-app scroll and a live-telemetry dock (#491) (5cae1681) — Mac Anderson
+- feat(agent-engine): local coordinator + Sonnet 5 / Fable 5 defaults; turbo build green (#489) (4d7046f2) — Mac Anderson
+- feat(bench): wire oxagen solve best-of-N into the terminal-bench adapter (#488) (a4ac2bba) — Mac Anderson
+- fix(cli): pin FORCE_COLOR=3 in vitest env — deterministic ANSI for slash-menu tests (#490) (cdd346e1) — Mac Anderson
+- feat(cli): ANTHROPIC_API_KEY BYOK fallback + AI SDK v7 / provider-v4 migration (#487) (8ca806bb) — Mac Anderson
+- fix(env): register OXAGEN_MID_JUDGE_STEPS in ENV_REGISTRY + SCHEMA_EXEMPT (#486) (be8d3737) — Mac Anderson
+- docs(bench): benchmark analysis HTML — SWE-bench smoke run findings, process gaps, Rust verdict (#485) (0853d719) — Mac Anderson
+- feat(skills): publishable npx installer + CLI install.sh (#484) (cb60df48) — Mac Anderson
+- feat(docs): add TUI screenshot-style SVG screens to CLI docs (#483) (43545687) — Mac Anderson
+- feat(docs): CLI install landing page, site-wide install button + celebration, doc illustrations (#482) (51fa3f6d) — Mac Anderson
+- perf(cli): SWE-bench speedups — bounded enhance, prompt caching, verification budget (#481) (53475a38) — Mac Anderson
+- fix(ai): establish tenant scope around post-call credit charges (Inngest billing leak) (#480) (8584a0d5) — Mac Anderson
+- Fix/video duration clamp (#479) (e7c404dd) — Mac Anderson
+- fix(api): raise Vercel maxDuration to 800s so Inngest video renders survive (#478) (fd9bf5f9) — Mac Anderson
+- fix(video): snap durations to model-supported set, surface provider alternatives (#477) (b87d7b77) — Mac Anderson
+- fix(cli): render REPL inline so native terminal scrollback works (#475) (ce290613) — Mac Anderson
+- Fix the suggested prompts UI in the command menu: (26f0f4c3) — Mac Anderson
+- Fix/video duration clamp (#476) (c8f00a87) — Mac Anderson
+- fix(agent): structurally block test-file edits (OXAGEN_FORBID_TEST_EDITS) for the bench (#474) (9053f633) — Mac Anderson
+- feat(cli): replace cat-mouse thinking animation with rocket-vs-UFO duel (#472) (d49322d2) — Mac Anderson
+- feat(cli): slash-menu v2 — uniform cells, amber/green, monochrome lock, no rules (#471) (265909c9) — Mac Anderson
+- refactor(cli): clean up the slash command catalog — tighten, group, dedupe (#469) (a82523e3) — Mac Anderson
+- fix(bench): upload tree-sitter wasm assets into the container, not just oxagen.mjs (#470) (2b3c5afa) — Mac Anderson
+- feat(cli): embed markdown content + tag nodes/edges with domain in code graph (#467) (c2edea09) — Mac Anderson
+- fix(cli): local BYOK mode — use AI_GATEWAY_API_KEY without an Oxagen login (#462) (7c9688bb) — Mac Anderson
+- feat(cli): paste images + large text as [Image #N] / [Text #N] placeholders (#466) (3606724d) — Mac Anderson
+- feat(cli): slash-menu redesign — inline descriptions, per-command product colors, separators (#463) (a231d3cd) — Mac Anderson
+- feat(cli): oxagen config commands + multi-scope indexer (phases 4-5) (#464) (a1ad619e) — Mac Anderson
+- fix(cli): bundled code-graph broken by __dirname in ESM — the bench-blocking P0 (#465) (34fa0a80) — Mac Anderson
+- fix(bench): repair SWE-bench harness for current harbor + pin version (#461) (de896448) — Mac Anderson
+- Fix/duplicate solve command (#459) (023903c6) — Mac Anderson
+- fix(cli): drop unused activityGlyph import breaking @oxagen/cli lint (#458) (d0b9f8d0) — Mac Anderson
+- refactor: derive CodeGraphOperation from CodeGraphProvider instead of hand-copying the union (#456) (e51e263f) — Mac Anderson
+- fix(cli): remove duplicate solve command registration crashing the CLI (#457) (8ab2cecf) — Mac Anderson
+- --no-verify (af776153) — macanderson
+- Feat/cli best of n (#455) (846f46b0) — Mac Anderson
+- feat(cli): semantic_search over the local code graph + enhancer fallback (#451) (1c87af73) — Mac Anderson
+- feat(cli): fleet cancel-drain, isolate-by-default, and headless --json mode (#453) (c5327154) — Mac Anderson
+- feat(cli): shared activity vocabulary + slash single-source + REPL input editor (#454) (7cbe37be) — Mac Anderson
+- feat(cli): oxagen pr fix — active fix-to-green loop for PR CI (#452) (ff066da7) — Mac Anderson
+- feat(cli): mine recurring lessons into promotable workspace rules (#450) (ead81e15) — Mac Anderson
+- feat(cli): workspace config foundation — schema + 4-scope governed resolver (#449) (fe5e6b9f) — Mac Anderson
+- fix(engine): remove unused modelForTier import breaking main lint (#448) (fc6dbb0b) — Mac Anderson
+- fix(cli): remove dead agent/loop mock + update stale runAgent JSDoc references (#447) (b2a5d211) — Mac Anderson
+- feat(cli): oxagen solve — best-of-N task solving with a live multi-lane view (#446) (8e902f0f) — Mac Anderson
+- fix(agent): make code_graph a hard, prominent first-move mandate in the system prompt (#445) (d2529a98) — Mac Anderson
+- Feat/cli engine unification (#443) (06f7dc5a) — Mac Anderson
+- Feat/cli phase2 dead island (#444) (f8804e1d) — Mac Anderson
+- feat(cli): engine unification foundation — tool seams + shared extras + one-shot parity (#442) (60f67545) — Mac Anderson
+- fix(cli): copy-runtime-assets no longer references deleted dead-island JSONs (#441) (cb1084e7) — Mac Anderson
+- refactor(cli): delete ~8,400 LOC of dead code (pre-migration brain island) (#440) (4da9407a) — Mac Anderson
+- fix(mcp): green checks — recall test args carry all InferSchema keys (#439) (f6063198) — Mac Anderson
+- fix(agent-engine): headless localize step lists only wired locate tools + restore lost profile tests (#436) (7924a78c) — Mac Anderson
+- feat(memory): agents recall memories before acting — CLI loops + chat agent self-improvement wiring (#437) (d94cf8c3) — Mac Anderson
+- Feat/cli swe bench hardening (#435) (1c383d5a) — Mac Anderson
+- Feat/agents graph first context (#434) (2f92935f) — Mac Anderson
+- Feat/cli swe bench hardening (#433) (b163ae62) — Mac Anderson
+- Feat/agents graph first context (#432) (e80c71b2) — Mac Anderson
+- Feat/cli swe bench hardening (#431) (17bf5a0c) — Mac Anderson
+- Feat/cli swe bench hardening (#430) (ea96abbe) — Mac Anderson
+- Feat/memories sort filter citations (#429) (0e1109d8) — Mac Anderson
+- feat(ui): higher-contrast vibrant theme — de-pink light neutrals, ember dev code block, subtle in-app grid (#428) (93dd2985) — Mac Anderson
+- fix(config): declare OXAGEN_PROMPT_PROFILE in ENV_REGISTRY (#427) (6a30f558) — Mac Anderson
+- fix(app): repoint knowledge node pages to renamed inference route (#426) (a1e60514) — Mac Anderson
+- feat(ai): add Claude Fable 5 + Sonnet 5 to model selectors and rate cards (#425) (408102a5) — Mac Anderson
+- feat(cli): SWE-bench hardening — step-driver, compaction, retry, evidence judge, headless (#424) (df938d7f) — Mac Anderson
+- feat(memories): sort by citation count + filter by minimum citations (#423) (ddf9f06f) — Mac Anderson
+- Feat/cli swe bench hardening (#422) (800fe50d) — Mac Anderson
+- fix(app): green main — drop stale weight-axis imports + retarget memories edit test to two-axis model (#421) (d6b30684) — Mac Anderson
+- Feat/cli swe bench hardening (#420) (d6e76c75) — Mac Anderson
+- fix(app): green main — drop stale weight-axis imports + retarget memories edit test (#419) (fe3f710b) — Mac Anderson
+- Feat/cli swe bench hardening (#418) (55309e09) — Mac Anderson
+- fix(e2e): chat connection-create-inline spec asserts current wizard gate copy (#417) (2defb080) — Mac Anderson
+- Feat/cli swe bench hardening (#416) (04080b87) — Mac Anderson
+- fix(cli): repair REPL crash on launch (resetPending ReferenceError) (#415) (bea88e96) — Mac Anderson
+- fix(cli): repair CLI typecheck + lint clobbered by #403 merge — get main green (#414) (f2f19d8d) — Mac Anderson
+- Feat/cli swe bench hardening (#413) (d6be1f95) — Mac Anderson
+- Feat/cli swe bench hardening (#412) (c3e775d1) — Mac Anderson
+- fix(cli): document /coordinator + Ctrl-O fold in /help; reuse PanelTarget type (#411) (4ba4c9a0) — Mac Anderson
+- feat(cli): Fable default (opus→fable) + /coordinator remote|local on-device toggle (#408) (14bec31d) — Mac Anderson
+- fix(cli): make current main green — reconcile the half-merged terminal-fold + live-status REPL (#410) (29302a1f) — Mac Anderson
+- Fix/cli shell runner import and panel dupe (#407) (5d8ec272) — Mac Anderson
+- fix(cli): repair the REPL render — restore cat-mouse chase + the dropped live-status stack (#406) (8ea1acb5) — Mac Anderson
+- fix(cli): stop agent bash from hanging forever on timeout (#405) (46cdc2f3) — Mac Anderson
+- Update README.md (ef953245) — Mac Anderson
+- Update README.md (1eac3ef0) — Mac Anderson
+- fix(tests): update stale opus→fable model slug assertions after catalog migration (#404) (2ff6cb7d) — Mac Anderson
+- Feat/cli bang terminal panel (#403) (8cc163e9) — Mac Anderson
+- feat(cli): arrow-key navigation of the REPL Agent Team / Task panels (#400) (add3f627) — Mac Anderson
+- fix(cli): pin the REPL prompt bar to the bottom (full-screen TUI) (#401) (8501aebb) — Mac Anderson
+- --no-verify (#402) (47a1bec1) — Mac Anderson
+- feat(cli): pin REPL prompt bar to bottom-left with bottom-aligned agent panels (#399) (047658b8) — Mac Anderson
+- test(cli): cover !command terminal panel + fix store.ts override modifiers (#398) (0af0bde5) — Mac Anderson
+- fix(cli): repair REPL crash + get CLI package green (25f73f5c) — macanderson
+- feat(cli): !command live terminal panel + verbose agent narration (9d002848) — macanderson
+- save (57eb7e60) — macanderson
+- save (b0c6fc13) — macanderson
+- Feat/cli bang terminal panel (#397) (dcc87eac) — Mac Anderson
+- feat(cli): Agent Team + Task Progress side panel in the REPL TUI (#396) (5620c891) — Mac Anderson
+- feat(cli): Agent Team + Task Progress side panel in the REPL TUI (#395) (5463e168) — Mac Anderson
+- feat(cli): ascii cat-and-mouse chase on the REPL status rail (#394) (ab7930c9) — Mac Anderson
+- fix(cli): judge heuristic confidence + REPL cat-and-mouse whimsy (#393) (2330d818) — Mac Anderson
+- fix(billing): dunning-sweep low-balance check fails for every org (no tenant scope) (#392) (618d6e25) — Mac Anderson
+- fix: judge heuristic always returns 30/100 — wrong advisor model + hardcoded confidence (#391) (6b243805) — Mac Anderson
+- fix(cli): silence benign AI SDK responseFormat warning (#390) (ca668028) — Mac Anderson
+- feat(cli): latest-GA model defaults (single source of truth) + /hud running-agents view (#388) (4ccafe26) — Mac Anderson
+- Fix/cli ci green repl tests (#389) (1b8af311) — Mac Anderson
+- fix(agent): continue tool loop past first step in app chat; raise runaway backstop to 256 (46d6377e) — macanderson
+- Feat/cli latest model defaults and hud (#387) (a69cb305) — Mac Anderson
+- test(cli): replace flaky alt-screen frame guard with deterministic launchRepl test (#386) (0bdd6f52) — Mac Anderson
+- fix(cli): interrupt (Esc) no longer wedges the prompt queue (#385) (a55f29e7) — Mac Anderson
+- Fix/cli interrupt queue drain (#384) (b2fbebc6) — Mac Anderson
+- fix(cli): honor settings.json Bash(*) allow in the interactive broker (#383) (b16f1318) — Mac Anderson
+- fix(cli): stop duplicated REPL output (#382) (35966fcc) — Mac Anderson
+- fix(cli): repair oxagen REPL launch (broken JSX + missing Message fields) (#381) (594c946d) — Mac Anderson
+- feat(cli): graph-before-grep context layer + sync-embedding fix (pipeline Group 3) (#380) (b5567626) — Mac Anderson
+
+## Oxagen v0.10.0
+
+This release significantly overhauls the CLI's interactive REPL experience — introducing a full-screen TUI with live agent and task progress panels, a `!command` terminal panel for running shell commands inline, arrow-key panel navigation, a pinned prompt bar, and a new `/coordinator remote|local` command for switching to on-device GGUF inference. It also promotes the "precise" model tier from Opus to Fable, fixes several long-standing REPL stability bugs, and hardens the billing dunning sweep and judge heuristic.
+
+### Features
+
+- **`/coordinator remote|local` toggle** (`8ddd54fc`): New slash command switches the CLI coordinator between the metered platform gateway and a locally-loaded GGUF model (downloaded via `oxagen models pull`). The new `OnDeviceAgentAi` adapter (`apps/cli/src/agent/adapters/on-device-agent-ai.ts`) wraps the in-process GGUF runtime in the same AI SDK `streamText`/`generateObject` protocol used by the remote path — the tool loop is identical, only the backing model differs. Typed errors (`OptionalDepMissingError`, `NoFittingModelError`, `AutoDownloadDisabledError`) give developers actionable guidance when switching fails.
+
+- **`!command` live terminal panel** (`9d002848`, `8cc163e9`): Prefixing a REPL input with `!` now spawns a live-updating terminal panel that streams the command's stdout/stderr in real time. The new `shell-runner.ts` (`ShellRunner`) manages the subprocess in its own process group, so timeouts kill the full subtree — not just the top-level `bash` shell. A new `PromptInputTerminal` component handles `!`-prefixed input and a dedicated `TerminalPanel` renders the output alongside the agent transcript.
+
+- **Agent Team + Task Progress side panel** (`5463e168`, `5620c891`): The REPL TUI gains a right-hand sidebar (`agent-sidebar.tsx`) showing every registered agent (`AgentRegistry`) and its associated tasks (`TaskRegistry`) in real time. Panels are driven by the new process-wide `agentRegistry` singleton (`agent-registry.ts`) and `task-registry.ts`; producers register and patch entries via lightweight handles, while the sidebar subscribes to change events for live redraw.
+
+- **Arrow-key panel navigation** (`add3f627`): Agents and tasks in the side panel are now navigable with the up/down arrow keys. Panel navigation state is managed independently of the main prompt, with `Escape` returning focus to the input bar.
+
+- **Pinned prompt bar** (`8501aebb`, `047658b8`): The REPL prompt is now anchored to the bottom-left of the full-screen TUI, with agent panels aligned at the bottom so the layout is stable during long-running turns. A new `use-terminal-size.ts` hook tracks terminal dimensions and reflows the layout on resize.
+
+- **`/hud` running-agents view** (`4ccafe26`): New `/hud` slash command renders a live heads-up display of all in-flight agents — turn, subagent, monitor, and fleet — sourced from `AgentRegistry`. Entries are sorted active-before-finished, finished entries linger for a configurable TTL (default 8 s), and then are pruned automatically.
+
+- **ASCII cat-and-mouse animation on the REPL status rail** (`ab7930c9`): A small whimsical cat-and-mouse chase plays on the status rail while a turn is running. Set `OXAGEN_CLI_FUN=0` to disable it.
+
+- **Latest-GA model defaults as a single source of truth** (`4ccafe26`): `model-catalog.ts` is the new canonical declaration of current model slugs for all families (Haiku, Sonnet, Fable, OpenAI coding). All tier defaults, the agent-loop default, the pipeline judge default, and the runtime `models.json` registry are derived from it — a new anti-drift test suite (`model-catalog.test.ts`) fails immediately if any source diverges.
+
+- **Precise tier promoted from Opus → Fable** (`276e108e`): `modelForTier("precise")` now returns the Fable slug; `tierLabel("precise")` returns `"Fable"`. All tests, planner expectations, and the runtime registry have been updated accordingly.
+
+- **`OXAGEN_CLI_FUN` and `OXAGEN_GRAPH_DISABLED` env vars**: Two new optional env vars documented in `.env.example`. `OXAGEN_CLI_FUN=0` disables the status-rail animation; `OXAGEN_GRAPH_DISABLED=1` bypasses the graph context layer and forces the grep fallback for the entire shell session.
+
+- **App chat tool loop now continues past the first step** (`46d6377e`): `apps/app` chat stream route now passes `stopWhen: stepCountIs(256)` to `streamText`, matching the CLI and agent-engine defaults. Without this, the AI SDK's default `stopWhen: stepCountIs(1)` caused the app to halt after a tool call was issued — the model executed the tool but never received the result to compose a reply.
+
+### Fixes
+
+- **Agent bash no longer hangs forever on timeout** (`8a927a80`): `createCwdWorkspace` now delegates `exec` to `runShellCommandBuffered`, which runs commands in their own process group. The prior `execFile({ timeout })` only signalled the top-level `bash`, leaving grandchild processes holding the stdout pipe open indefinitely.
+
+- **Duplicated REPL output eliminated** (`35966fcc`).
+
+- **REPL crash on launch repaired** (`594c946d`, `25f73f5c`): Fixed broken JSX and missing `Message` fields that caused `oxagen` to crash on startup.
+
+- **Interrupt (`Esc`) no longer wedges the prompt queue** (`a55f29e7`): Pressing Escape to cancel a turn previously left the queue in a drained-but-blocked state; subsequent prompts would silently queue but never execute.
+
+- **`settings.json` `Bash(*)` allow now honoured in the interactive broker** (`b16f1318`): The permission broker was ignoring the `allow` list from `settings.json` in interactive sessions; commands that should have been auto-approved were incorrectly escalated to a prompt.
+
+- **Billing dunning sweep fixed for multi-tenant orgs** (`618d6e25`): The low-balance check in `billing.dunning-sweep.ts` was applying without a tenant scope, causing it to fire (or skip) incorrectly for every org rather than being scoped per-organisation.
+
+- **Judge heuristic confidence corrected** (`6b243805`, `2330d818`): The judge was hardcoding a 30/100 confidence score and using the wrong advisor model. It now uses the configured advisor and returns a meaningful confidence value.
+
+- **AI SDK `responseFormat` warning silenced** (`ca668028`): A benign but noisy warning from the AI SDK about `responseFormat` was filtered in the REPL output layer.
+
+- **`PanelTarget` export added to CLI public surface** (`276e108e`).
+
+### Internal
+
+- **`AgentRegistry`** (`agent-registry.ts`): Process-wide in-memory registry powering the `/hud`. Supports registration, patching, TTL-based pruning of finished entries, change subscriptions, and `remove()` for dismissing panel entries. Full test coverage in `agent-registry.test.ts`.
+
+- **`TaskRegistry`** (`task-registry.ts`): Companion registry tracking task progress within a turn. Upserts by id without duplication, advances through `pending → in_progress → done/failed`, and exposes `finalizeOpen` and `clear`. Full test coverage in `task-registry.test.ts`.
+
+- **`ShellRunner`** (`repl/shell-runner.ts`): Reusable shell subprocess manager with process-group isolation, timeout enforcement, stdout/stderr streaming, and `runShellCommandBuffered` for one-shot buffered execution. Test coverage in `shell-runner.test.ts`.
+
+- **`use-terminal-size.ts`**: Ink hook that tracks terminal columns/rows and re-renders on `SIGWINCH`.
+
+- **`double-press.ts`**: Utility for detecting double-key-press gestures (e.g. Ctrl-X twice to dismiss a panel entry).
+
+- **`ai-warnings.ts`** (`lib/ai-warnings.ts`): Centralised filter for known-benign AI SDK warnings, with tests in `ai-warnings.test.ts`.
+
+- **Deterministic REPL launch test** (`0bdd6f52`): Replaced a flaky alt-screen frame guard with a deterministic `launchRepl` integration test in `interactive.launch.test.tsx`.
+
+- **Expanded test coverage**: New test files for panel navigation (`panel-nav.test.tsx`, `interactive.panel-nav.test.tsx`), interrupt-queue drain (`interactive.interrupt-drain.test.tsx`), terminal panel (`terminal-panel.test.tsx`), agent sidebar (`agent-sidebar.test.tsx`), HUD (`hud.test.tsx`), prompt input terminal (`prompt-input-terminal.test.tsx`), permissions broker `settings.json` rules (`permissions.test.ts` additions), model catalog anti-drift ratchet (`model-catalog.test.ts`), and tool timeout/throw logging (`timeouts.test.ts` additions). The old `scrollback.test.ts` (201 lines) was removed alongside the `scrollback.ts` module it covered.
+
+## v0.9.0
+
+This release ships the **graph-before-grep context layer** (pipeline Group 3): the CLI agent now queries the local code graph — fusing structural traversal and optional semantic embedding — before falling back to a grep scan. Every fallback is logged with its reason. The release also fixes a sync-embedding bug in the code-graph store and adds the `graph push` command to ship locally-computed vectors to the server.
+
+### Features
+
+- **Graph-before-grep context resolver** (`b5567626`): `GraphContextResolver` is the new default context path for the CLI agent. It queries the code graph first; if coverage clears the 0.15 threshold the structured result (impacted files, symbols, edges) is returned directly. A miss — graph disabled, empty graph, or low coverage — falls back to grep (or fails closed when `fallbackToGrep: false`). Every decision is logged as a structured `[graph] hit` or `[graph] fallback=grep reason="…"` event.
+
+- **`graph_query` core** (`apps/cli/src/agent/context/graph-query.ts`): fuses two signals per query — semantic cosine ranking of file nodes against the query embedding and structural seed-symbol expansion with configurable hop depth and call-flow direction (`callers` / `callees` / `both`). Returns `{ impactedFiles, symbols, edges, coverage, source }`. Benchmarks confirm a single `graph_query` call replaces ≥ 50 % of the grep/read/glob calls a baseline agent would issue (75 % across the three representative scenarios in the test suite).
+
+- **Semantic index** (`apps/cli/src/agent/context/semantic-index.ts`): lazily embeds file nodes using `text-embedding-3-small` (1536-d) via the Vercel AI Gateway, persists vectors through the `CodeGraphStore`, and reuses them on subsequent queries. Nodes whose `embeddingProvider` no longer matches the active client are automatically re-embedded.
+
+- **`GatewayEmbeddingClient`** (`apps/cli/src/agent/context/embedding.ts`): wraps the AI SDK `embed` / `embedMany` calls against the shared gateway model. Returns `null` (logged degradation, no error) when no gateway key is available; the resolver continues with structural-only context. New `OXAGEN_GRAPH_DISABLED` env var (`1` or `true`) bypasses the graph for an entire shell session and forces the grep fallback.
+
+- **Grep fallback scanner** (`apps/cli/src/agent/context/grep-fallback.ts`): bounded async walk (≤ 4 000 files, ≤ 50 results) that skips `node_modules`, `.git`, `dist`, `.next`, and similar dirs, ranks files by lexical hit count, and returns `ImpactedFileRef[]`. Runs only on a graph miss.
+
+- **Graph traversal primitives** (`apps/cli/src/agent/context/traversal.ts`): `tokenize` (camelCase splitting, noise-token removal), `resolveSeeds` (name-anchor symbols from query or `focusSymbols`), `expandNeighbourhood` (BFS up to `maxNodes`), and `callFlow` (directed caller/callee walk).
+
+- **Context formatters** (`apps/cli/src/agent/context/format.ts`): `formatGraphResultJson` (the exact JSON payload the `graph_query` tool returns) and `formatGraphContextForPrompt` (compact human-readable block injected into worker prompts). Both are derived from the same `GraphResult` so the tool output and prompt context cannot drift.
+
+- **`graph push` command** (`apps/cli/src/commands/graph.push.ts`, `packages/handlers/src/graph.sync.push.ts`): new CLI command and server-side handler that ship locally-computed node embeddings to the platform, avoiding a redundant server re-embed. Covered by a new `graph.sync.push` contract in `packages/oxagen`.
+
+- **`@oxagen/code-graph` embed helpers** (`packages/code-graph/src/embed.ts`): exports `CODE_EMBED_DIM`, `CODE_EMBED_GATEWAY_MODEL`, `renderFileText`, and `renderSymbolText` — the shared rendering and dimension constants used by both the CLI embedding client and the server ingestion pipeline, keeping vector spaces compatible.
+
+- **`@ai-sdk/gateway` dependency** added to `apps/cli` for gateway-backed embedding.
+
+### Fixes
+
+- **Sync-embedding bug in `CodeGraphStore`** (`apps/cli/src/daemon/code-graph/store.ts`, `b5567626`): fixed an issue where `updateNodeEmbeddings` was not correctly persisting vectors written during the sync path, causing redundant re-embedding on subsequent resolver calls. The store now batches and commits vectors atomically; the new `store.embeddings.test.ts` covers the regression.
+
+- **GitHub-parse-file ingestion** (`packages/ingestion/src/functions/ingestion.github-parse-file.ts`): updated to handle the richer `CodeNode` type introduced by the embedding additions (new `embeddingProvider` and `embedding` fields on `code-graph/types.ts`).
+
+### Internal
+
+- **Full test suite for the context layer** (514 + lines across five new test files): `context.test.ts` covers config merging, traversal, the semantic index, `runGraphQuery`, `GraphContextResolver`, formatters, and embedding-client resolution; `embedding.test.ts` covers `GatewayEmbeddingClient` with mocked AI SDK calls; `grep-fallback.test.ts` covers the scanner against a real temp dir; `benchmark.test.ts` asserts the ≥ 50 % tool-call reduction; shared fixtures in `fixtures.ts`.
+
+- **Graph config slice** (`apps/cli/src/agent/context/config.ts`): `mergeGraphConfig` / `readGraphConfig` with `OXAGEN_GRAPH_DISABLED` env override; `MIN_COVERAGE = 0.15` constant shared between the resolver and tests.
+
+- **Config registry** (`packages/config/src/registry.ts`): added `graph` key for the new config slice.
+
+- **Public surface** re-exported from `apps/cli/src/agent/context/index.ts`; `apps/cli/src/agent/tools.ts` wires the `graph_query` tool into the agent tool registry.
+
+## What's new in v0.8.0
+
+This is the largest release since the project began. v0.8.0 delivers a full-featured CLI (authentication, REPL, pipeline, on-device models, cost tracking), a new two-axis memory model, browser automation and durable sandbox capabilities, agentic GitHub write support, a redesigned UI and marketing site, a comprehensive benchmark suite, and a brand-new `@oxagen/agent-engine` shared package — all accompanied by a major expansion of the contract, test, and observability infrastructure across the monorepo.
+
+---
+
+### Features
+
+#### CLI — REPL & UX
+- **Beautiful, scannable REPL output** with a permanently pinned input + status bar glued to the bottom of the terminal (`235ed76c`, `3e27f4ac`).
+- **History scrollback** (`58e77146`) and **themed diff view** with syntax highlighting (`29bb0dfe`, `diff-view.tsx`).
+- **Slash-command typeahead menu** and `/tui` fullscreen toggle (`d8fbd458`, `3c18d2ea`).
+- **Agent observability status line**: reasoning effort, per-call timeouts with ETA indicator, cache/cost status, and permissions UX (`4d7fcc83`, `58e77146`).
+- **`🏋️` pipeline-activated indicator** in the status line when the orchestration pipeline is running (`a5a7cfb0`).
+- Agent now correctly interprets tool results and reports a real terminal status instead of silently succeeding (`63688f52`).
+- Esc-twice reset confirmation is now handled synchronously (`52d4ac1d`); `/init` hang on gitignore + log spam fixed (`9249978b`).
+- REPL transcript rendered via `<Static>` with alternate-screen dropped for cleaner scroll behaviour (`29bb0dfe`).
+
+#### CLI — Authentication & Workspace
+- **`oxagen login`** with browser loopback OAuth (PKCE + single-use code store) and a tenant/workspace picker (`df4aac2d`, `66f1ffeb`, `8008798e`).
+- **`oxagen init` / `/init`**: scaffold `.oxagen/` settings, build a local code graph, print stats and domain summary (`f100e58f`).
+- **Workspace linker** (`.oxagen/workspace.json`) and global settings at `~/.oxagen/` with Claude Code parity (`290b92b2`, `53dc8730`).
+- **`oxagen logs`**: stream the `OXAGEN_CLI_DEBUG` file log for live debugging (`02d37313`).
+- Enterprise prompt-override unlock and Esc stop/reset (`9249978b`).
+
+#### CLI — Pipeline & Orchestration
+- **On-device model runtime + auto-provisioning** (`dd35f097`): download and run local models with automatic provisioning.
+- **Orchestrator + cross-vendor model routing** (`2a1d629f`): OpenAI advisor, evaluator-chosen worker model, `oxagen models` command.
+- **Pipeline state machine + verification + observability** (`043ea464`): typed contracts surface, background agent-to-agent monitors, assist/review tools (`prompt_enhancer`, `judge`, `user_survey`).
+- **`oxagen cost`**: structured session telemetry, baked-in rate card, verbose mode (`9c9943f0`, `179 + lines`).
+- **`oxagen memory import`**: bulk-import skill files as graph memories with an editable grid (`f3ee301e`).
+
+#### CLI — Code Graph
+- **`graph push` / `graph pull` / `graph lineage`**: bidirectional CLI ↔ workspace graph sync (ADR-018), local DuckDB replica (`5d623155`, `a78aea01`).
+- **Unified tree-sitter builder** shared between ingestion and CLI (`290e9a8c`).
+- `CALLS` + cross-package `IMPORTS` edges (execution flows) and LLM domain inference on code-graph nodes (`b260428b`, `2b1cf066`).
+- Commits linked to `SourceFile` via `:MODIFIED` edges for recent-changes graph queries (`9401769a`).
+- Structured `code_map` agent tool (graph-before-grep) (`832359c2`).
+- Code graph persisted to DuckDB and synced via the daemon (`8677699f`).
+
+#### Agent Engine — New Shared Package
+- **`@oxagen/agent-engine`** (`e60f573c`): unified brain module shared by CLI and in-app agent, covering fleet, pipeline, planner, router, tools, ports, and workspaces. ADR-019.
+- In-app `agent.repo.edit` capability runs the full `runTurn` pipeline, opening a PR against a connected repo (`7709271b`, `fa5b0839`).
+
+#### Memory — Two-Axis Model
+- **Two-axis memory model** (`2ef0e747`): `OBSERVATION → RULE → FACT` taxonomy with confidence scores and enforcement levels.
+- **Complete two-axis migration** across app UI, auto-cite, and tests (`4c2f2415`).
+- **Bulk-import** skill files as graph memories from the web UI and CLI (`f3ee301e`).
+- Full `agent.memory.*` capability suite: `remember`, `update`, `delete`, `list`, `cite`, `promote`, `evidence.attach`, `import.parse`, `import.commit`, `promotion.candidates`, `citations.list` — wired through MCP, API, and handlers.
+
+#### Durable Sandboxes & Browser Automation
+- **`agent.sandbox.*`** capabilities: `start`, `exec`, `snapshot`, `stop` — durable Modal-backed sandbox sessions with a local shim (`5fc8cbe9`, `ad4b9d91`).
+- **`browser.*`** capabilities: `navigate`, `fill`, `submit`, `click`, `read`, `screenshot`, `refresh` — drives a Playwright browser inside the durable sandbox (`d6b0275b`, `59b20fe4`).
+- **Playwright + `browserctl`** pre-installed in the durable agent image (`0be7ea6c`).
+- **`agent.feature.verify`**: cross-LLM judge verifies a visible feature using browser screenshots from a *different* vendor than the builder (`ea47a23b`, `3ca09018`).
+- **`feature-browser-proof` skill**: definition-of-done loop — sandbox → build → browser → screenshot → independent verdict.
+
+#### GitHub Write & Repo Capabilities
+- **`agent.repo.edit`**: agent edits a connected repo and opens a PR (`7709271b`).
+- **Per-workspace GitHub token resolution** (ADR-020): App installation tokens with OAuth fallback (`f62c5d69`).
+- **`/github/setup` landing route** for App reconfigure redirect (`aabfd26c`).
+- Repo capabilities: `repo.create`, `repo.fork`, `repo.branch.create`, `repo.file.put`, `repo.pr.open`.
+- GitHub App workspace settings page and GitHub connection settings UI (`1365d172`, `358`+).
+
+#### App — UI & Workspace
+- **Oxagen Tangerine palette** (`0c963b5b`): tangerine/rose/teak/narwhal design tokens.
+- **Docs-parity visual system** — ember hero, gradient/outline CTAs, wordmark headings (`f468db0d`).
+- **Shared markdown editor**, read-only renderer, and truncate-popover primitives (`08904994`).
+- **Environments & Secrets vault UI** with paste-`.env` bulk import (`0639b28f`).
+- **In-app agentic coding**: repo/env selector, CI monitor, PR inspection card (`b2fe700b`).
+- In-app agent drawer conversations are now persisted (`0a260319`).
+- P0 fix: `TabsPanel` content is now scrollable (marketplace MCP server list was clipped) (`c173d048`).
+- Automation/Activity preview pages and stale Integrations nav removed (`d218e0a7`).
+
+#### Benchmarking
+- **`@oxagen/bench-web`** (`99d1bed4`): Next.js eval dashboard launched via `pnpm eval:app`.
+- **SWE-bench** multi-vendor runner with a trustworthy real-data dashboard (`2555efbb`).
+- **Terminal-Bench (Harbor)** adapter for the Oxagen CLI (`84f54a01`).
+- **Context-quality eval gate** with RAGAS/DeepEval bridge; warm/self-improvement variants (`092fd6e3`, `bc09553f`).
+- **ClickHouse eval-results protocol** (`eval_runs` + `eval_results` tables) (`f7fafe85`).
+- One-command runner + ClickHouse ingestion for eval results (`e23be06e`).
+
+#### API, MCP & Contracts
+- New REST routes and MCP tools for every capability listed above (sandbox, browser, memory, repo, graph, org, workspace).
+- **`GET /v1/auth/whoami`** credential probe to unblock CLI API-key login (`eb8a5178`).
+- **`auth.cli.token`** loopback OAuth token endpoint (`auth.cli.token.ts`).
+- **`plugin.catalog.sync`** REST route (`728438c2`).
+- `org.list` and `workspace.list` capabilities wired end-to-end (`1758a183`, `296`+).
+- **Regenerated contract barrel** restoring 19 dead capabilities (`agent.memory.delete` et al.) (`ad1a38ba`).
+- **`apps/schemas`**: new package hosting `oxagen-cli-settings-schema.json` at `schemas.oxagen.sh` (`0a328134`).
+
+#### Docs
+- **Full CLI documentation** (`docs/cli/`): installation, account setup, quickstart, commands reference, configuration, knowledge graph, models (`bfe2e51d`, `#336`+).
+- Marketing landing page with 109 accuracy fixes from a full apps/docs audit (`a142ac4d`).
+- ADR-018 (bidirectional graph sync), ADR-019 (unified agent engine), ADR-020 (per-workspace GitHub credentials).
+- Capability reference pages for all new `browser.*`, `agent.sandbox.*`, `agent.memory.*`, `repo.*`, `graph.*`, and `code.map` capabilities.
+
+---
+
+### Fixes
+
+- **CLI**: agent must interpret tool results and report a real status — was silently reporting success on tool errors (`63688f52`).
+- **CLI**: pretty tool-call output + agent observability follow-ons (`a265d7e1`).
+- **CLI**: global settings tier at `~/.oxagen/` (home-dir, Claude Code parity) (`290b92b2`).
+- **CLI**: `/init` hang on gitignore write + log spam (`9249978b`).
+- **CLI**: Esc-twice reset confirmation now synchronous, was queued as a prompt (`52d4ac1d`).
+- **CLI**: close session-memory handle when REPL unmounts mid-open (`bfd9e6a0`).
+- **CLI**: bind `err` in login picker-failure catch, fixing ReferenceError (`1226afad`).
+- **CLI**: graph push must label symbols `:SourceSymbol`, not `:Symbol` (`de4e1fd6`).
+- **CLI**: publish standalone bundle from `release.ts` to drop `workspace:*` leak (`a2bd4b57`).
+- **IAM**: org owner is now a super-user — never locked out by un-seeded capability (`ed6fc2c2`).
+- **IAM**: API keys authorise as their creator on enterprise orgs (`a9fc062d`).
+- **IAM**: resolve API keys by fixed 12-char prefix window, not `_` split (`73f28dfc`).
+- **Auth**: forward `stopWhen` + `onError` through `streamAgentReply` (`6bd2c8da`).
+- **Graph**: enforce PascalCase node labels everywhere + descriptive inferred nodes (`93abe34a`).
+- **Graph**: type inferred edges descriptively, not as `:SEMANTIC_EDGE` (`66474030`).
+- **Graph explorer**: wire create-node/edge dialog vocab + serialise Neo4j reads (`aa8999a8`).
+- **Graph**: unblock knowledge-graph explorer — accept all explore ops + serialise reads (`b08db8c4`).
+- **Ontology**: idempotent Neo4j migrate over duplicate-`publicId` legacy `KnowledgeNodes` (`4afa3d36`).
+- **MCP**: register `org.list` + `workspace.list` tools for contract parity (`35968b44`).
+- **Memory**: wire `agent.memory.list` end-to-end + point Memories tab at Neo4j (`c6f5ffc0`).
+- **App**: repair broken import + remove duplicate `KIND_CONFIG` (`00ef997b`).
+- **App**: restore broken Memory settings page + remove stale Integrations page (`1d461c01`).
+- **App**: schema-builder Storybook stories 404 — serve fixtures, not live API (`398d660d`).
+- **API**: `repo.create` org is optional (stale test + lint) (`0b0152ec`).
+- **API**: guard module-scope `fileURLToPath` in skill handlers (was causing `FUNCTION_INVOCATION_FAILED`) (`34ff931a`).
+- **GitHub**: fallback to OAuth token when GitHub App token minting fails (`dca716f7`).
+- **GitHub source wizard**: didn't advance after install — Setup-URL leg dropped connection (`ebc00ae9`).
+- **GitHub**: drop `.js` import extensions for Turbopack resolution (`4a6b6316`).
+- **Schema-builder**: widen label/relationship dialogs + rebalance properties grid (`683fb57a`).
+- **Schemas**: regenerate CLI settings schema for `effort` field, unblocking main CI (`27aaaf81`).
+- **Bench**: make `pnpm eval:app` resilient to a busy port (`f0470f37`).
+- **Docs**: `HexField` re-export moved into the whitelisted UI layer (`b0b10e84`).
+- **UI**: scrollable `TabsPanel` content — marketplace MCP server list was clipped (`c173d048`).
+- **CI**: optimise `turbo.json` for parallelisation and cache efficiency (`eb96f3af`).
+- **CI**: app build/typecheck Node heap raised to 8 GB to fix cold-build OOM (`62431335`).
+- **Perf**: parallelise independent async I/O operations across handlers (`d585887b`).
+- **Agent**: raise timeout on lazy-import registry tests to fix CI flake (`fd384ef1`).
+- **Agent-engine**: use extensionless relative imports (Turbopack can't resolve `.js` → `.ts`) (`ff0b5299`).
+- **Database**: register `agent.sandbox_sessions` in RLS `POLICY_MANIFEST` (`6a3d3e1b`).
+- **RLS/CLI**: add `workspace.workspace_memory_policy` to manifest + fix lint (`2c4e55be`).
+- **Contracts**: dedupe duplicate `graphExport` export blocking CI (`cd7bc1a8`).
+- **Shell**: suppress agent bar in workspace-less sections (`1ae961b4`).
+
+---
+
+### Internal
+
+- **New `@oxagen/agent-engine` package** consolidates CLI brain modules (A4/A5/A6/A7) into a shared, platform-routed package (ADR-019) (`1f85130d`, `e60f573c`).
+- **New `@oxagen/code-graph` package**: unified tree-sitter parser + domain inference shared by CLI and ingestion (`290e9a8c`).
+- **New `@oxagen/github` package**: `fetch-client`, `app-auth`, `github-workspace` with full test coverage.
+- **New `@oxagen/sandbox` package**: Modal durable sandbox driver + local shim types.
+- **`apps/schemas`**: publishes `oxagen-cli-settings-schema.json` to `schemas.oxagen.sh`.
+- **`bench/`**: four new benchmark suites — `swe-bench`, `terminal-bench`, `context-eval`, `rag-eval`, each with Python harness, data ingestion, and `bench/web` dashboard.
+- **Database**: `agent_sandbox_sessions` table, `workspace_memory_policy` migration, two-axis memory enforcement column (`20260628*` migrations).
+- **Telemetry**: ClickHouse `eval_runs`/`eval_results` tables + migration runner with full test coverage (`f7fafe85`).
+- **Inngest**: `ingestion.github-commit-files`, `ingestion.github-infer-domains`, `auth.session-expiry-audit`, `engram.*` consolidation, and `memory.decay-pass` functions added/expanded.
+- **Coverage gates**: database raised to 85% lines; `agent-engine`, `auth`, `handlers`, `ingestion`, `plugins`, `ontology`, `telemetry` all gain substantial new test suites. `skills-lock.json` removed (`a509856e`).
+- **`tools/scripts`**: `run-evals.ts`, `eval-ingest.ts`, `preflight-ports.ts`, `lib/eval-protocol.ts`, `lib/dev-log-shipper.ts` added; `pnpm dev` now pre-flights ports to avoid crash when the stack is already running (`04d944b7`).
+- **Turbo**: exclude test files from build inputs; checks timeout raised 20 m → 60 m for cold-cache PRs.
+
+## What's new in v0.7.0
+
+This is the largest release in Oxagen's history, touching nearly every layer of the platform. The headline additions are: a fully-featured CLI agent with an on-device model runtime, a multi-vendor pipeline with per-call timeouts and live metrics, a two-axis memory model (OBSERVATION → RULE → FACT with confidence and enforcement), durable sandbox browser automation, an independent cross-LLM feature-verification judge, and a brand-new benchmark suite with a real-data dashboard. The web app gains a complete Environments & Secrets vault, GitHub App workspace integration, a redesigned Oxagen Tangerine palette, and shared markdown editor primitives. Dozens of API/MCP capabilities were wired end-to-end, a new `@oxagen/agent-engine` shared package was extracted, and the monorepo now ships hosted JSON Schema for CLI settings.
+
+---
+
+### Features
+
+#### CLI agent & REPL
+- **Beautiful, scannable REPL output** — messages, tool calls, and statuses are now formatted for readability in the terminal (`235ed76c`, #378).
+- **Pinned bottom layout** — input and status bar are always glued to the bottom of the terminal; transcript scrolls above using `<Static>` rendering, eliminating the alternate-screen flicker (`29bb0dfe`, `3e27f4ac`, #374, #347).
+- **History scrollback** — the REPL now supports scrollback through previous turns (`58e77146`, #376).
+- **Themed diffs** — file-change diffs are rendered with syntax colouring in the terminal (`58e77146`, #376).
+- **Slash-command typeahead menu** — `/` in the REPL shows a filterable list of all available slash commands with descriptions (`d8fbd458`, #283).
+- **`/tui` fullscreen toggle** — switch between fullscreen and inline REPL modes at will (#283).
+- **`oxagen init` / `/init`** — scaffolds `.oxagen` settings, builds the local code graph, and prints stats and domain breakdown (`f100e58f`, #281).
+- **`oxagen login`** — browser-based PKCE loopback OAuth with a tenant/workspace picker; persists workspace link in `.oxagen/workspace.json` (`df4aac2d`, `66f1ffeb`, `53dc8730`, #265, #308, #295).
+- **`oxagen logs`** — streams or dumps the `OXAGEN_CLI_DEBUG` file log (`02d37313`, #338).
+- **`oxagen cost`** — shows per-session cost broken down by model, cached vs. uncached tokens (`9c9943f0`, #211).
+- **Esc-to-stop / Esc-to-reset** — pressing Esc once stops the agent; pressing Esc twice shows a reset confirmation handled synchronously (`52d4ac1d`, #352).
+- **Pipeline activated indicator** — a 🏋️ icon appears in the status line whenever the pipeline is engaged (`a5a7cfb0`, #373).
+- **Agent turn timeouts + ETA indicator** — per-call configurable timeouts surface estimated time remaining in the status line (`edb8be29`, `58e77146`, #321, #376).
+- **Live status metrics** — cache hit rate, cost, and token counts update in the status bar during a turn (`58e77146`, #376).
+- **Agent observability** — reasoning traces, effort level, cache/cost status, and permissions UX are all surfaced in the REPL (`4d7fcc83`, `05bf6ecc`, #346, #343).
+- **Pretty tool-call output** — tool invocations and results are formatted as scannable cards rather than raw JSON (`a265a9d1`, #342).
+- **Agent correctly interprets tool results** — the agent now reads tool results and derives a real exit status instead of always reporting success (`63688f52`, #379).
+
+#### CLI pipeline
+- **Multi-vendor orchestrator and model routing** — a routing-policy JSON file directs different turn types to different model providers; an OpenAI evaluator can score outputs from another vendor (`708f9730`, `2a1d629f`, #228, #368).
+- **On-device model runtime with auto-provisioning** — the CLI can run models locally; missing model weights are downloaded and quantized automatically (`dd35f097`, #366).
+- **Assist + review tools** — `prompt_enhancer`, `judge`, and `user_survey` pipeline tools are available to every agent turn (`c2f61187`, #369).
+- **Background agent-to-agent monitors** — long-running monitors can spawn sub-agents and relay their outputs back to the REPL (`266eae7e`, #372).
+- **Typed pipeline contracts** — all pipeline I/O is validated against typed schemas at runtime (`8701dfa1`, #371).
+- **Pipeline state machine + verification + observability** — a formal state machine governs turn lifecycle; each state transition is logged and observable (`043ea464`, #375).
+
+#### CLI commands & settings
+- **`oxagen models`** — lists available models and their routing configuration.
+- **`oxagen rules`** — manages workspace-scoped agent rules.
+- **`oxagen settings`** — reads and writes the unified `settings.json` driver (env, model, permissions, hooks) (`4281e9c7`, #212).
+- **`oxagen memory import`** — bulk-imports skill files as graph memories via an editable grid (#333).
+- **`oxagen graph push/pull/lineage/status`** — bidirectional CLI↔workspace graph sync (ADR-018); `graph.lineage` shows execution lineage.
+- **`oxagen mcp`** — manages MCP server configuration from the CLI.
+- **Global settings at `~/.oxagen/`** — home-directory settings file follows Claude Code parity (`290b92b2`, #282).
+- **Hosted CLI settings JSON Schema** — `oxagen-cli-settings-schema.json` is published at `schemas.oxagen.sh` for editor validation (`0a328134`, #339).
+
+#### Unified agent engine (`@oxagen/agent-engine`)
+- New shared `@oxagen/agent-engine` package consolidates the agent brain (loop, planner, model router, rate card, fleet memory, evaluator, judge, prompt enhancer) so the CLI, in-app agent, and API all run identical logic (ADR-019, `e60f573c`, #284).
+- Platform port adapters wire the engine to Neo4j memory, the code graph, trace store, and AI routing (`09f25002`, `1f85130d`, #267).
+
+#### Memory
+- **Two-axis memory model** — memories are now typed as OBSERVATION → RULE → FACT with a `confidence` score and an `enforcement` level (`2ef0e747`, `4c2f2415`, #357, #361).
+- **Full memory CRUD** — `agent.memory.remember`, `agent.memory.update`, `agent.memory.delete`, `agent.memory.list`, `agent.memory.cite`, `agent.memory.promote`, `agent.memory.promotion.candidates`, `agent.memory.import.parse`, `agent.memory.import.commit`, `agent.memory.evidence.attach`, `agent.memory.citations.list` all wired through contracts → MCP → API → Neo4j handlers.
+- **Auto-cite in chat** — the in-app agent automatically cites memories it uses when generating a response.
+- **Bulk import** — the Memories tab gains an editable grid for importing memories from skill files, with a `memories-bulk-import` E2E spec (#333).
+- **Memory list wired to Neo4j** — the Memories tab now queries Neo4j instead of the legacy store (#237).
+
+#### Code graph & ingestion
+- New `@oxagen/code-graph` package — unified tree-sitter builder shared by ingestion and the CLI (`290e9a8c`, #274).
+- **LLM domain inference** — each code-graph node gets a `domain` property inferred by an LLM (`2b1cf066`, #278).
+- **CALLS + cross-package IMPORTS edges** — execution-flow edges are now captured (`b260428b`, #280).
+- **Commit → SourceFile `:MODIFIED` edges** — recent-change graph queries now work (`9401769a`, #277).
+- **`code.map` capability** — structured code-map retrieval for use as a graph-before-grep agent tool (`832359c2`, #276).
+- **`:TOUCHED_FILE` edges** — the in-app agent records which files it reads or edits (`5e7af08f`, #279).
+- **`graph.sync.push` + CLI code-delta up-sync** — CLI pushes local graph deltas to the platform (ADR-018 slices 2–3).
+- **Execution lineage** — `graph.lineage` and `:EXECUTION_STEP` edges track agent turn history.
+
+#### Durable sandboxes & browser automation
+- **`agent.sandbox.*`** — `start`, `exec`, `snapshot`, `stop` capabilities provision durable Modal sandbox sessions with Playwright pre-installed (`5fc8cbe9`, `ad4b9d91`, `b9c1aea1`).
+- **`browser.*`** — `navigate`, `fill`, `submit`, `click`, `read`, `screenshot`, `refresh` capabilities drive a browser inside the durable sandbox (`d6b0275b`, `59b20fe4`).
+- **`agent.feature.verify`** — cross-LLM judge surface: a different-vendor vision model reads screenshots from the sandbox browser and produces a pass/fail verdict against a requirement (`ea47a23b`, `3ca39018`).
+- **`feature-browser-proof` skill** — formalises the definition-of-done loop using sandbox + browser + judge; agents must run it before declaring a visible feature complete.
+
+#### GitHub & repo capabilities
+- **GitHub App workspace integration** — per-workspace App installation tokens with OAuth fallback (ADR-020); settings page lets workspace admins connect or reconfigure (`f62c5d69`, `1365d172`, #300).
+- **`agent.repo.edit`** — the agent engine can edit a connected repo and open a PR (`7709271b`, #268).
+- **`repo.*` capabilities** — `repo.create`, `repo.fork`, `repo.branch.create`, `repo.file.put`, `repo.pr.open` all wired through contracts → API → GitHub handler.
+- **`/github/setup` landing route** — handles post-install redirect from GitHub App configuration (`aabfd26c`).
+
+#### Web app
+- **Oxagen Tangerine palette** — the entire app is re-themed to tangerine/rose/teak/narwhal (`0c963b5b`, #359).
+- **Docs-parity visual system** — ember hero section, gradient/outline CTAs, wordmark headings matching the marketing site (`f468db0d`, #355).
+- **Environments & Secrets vault** — full CRUD UI for workspace environment variables with bulk `.env` paste import (`0639b28f`, #215).
+- **GitHub settings page** — dedicated GitHub connection settings panel for workspace admins (`1365d172`, #300).
+- **Shared markdown editor, read-only renderer, and truncate-popover** — reusable `markdown-code-editor`, `markdown-content`, and `truncated-text` primitives used across the app (`08904994`, `350`).
+- **CLI OAuth consent page** — `/cli/authorize` handles the PKCE loopback OAuth flow with a consent form (`auth.cli.token.ts`, `consent-form.tsx`).
+- **In-app agentic chat** — foundational components for repo/env selection and CI monitoring added to the chat panel (`b2fe700b`, #314).
+- **PR inspection card** — the chat panel can render pull-request summaries inline.
+- **Conversations persisted** — in-app agent drawer conversations are now persisted across page navigations (#223).
+
+#### Benchmark suite
+- New `bench/` workspace with four runners: **context-eval** (repo-grounded Q&A, oxagen vs Claude Code), **RAG-eval** (RAGAS/DeepEval), **SWE-bench** (multi-vendor verified harness), **Terminal-Bench / Harbor** adapter for the Oxagen CLI (`1e65ef7a`, `84f54a01`, `2555efbb`, `f591efca`, #316, #234, #340).
+- **`bench/web` (`oxagen.eval.harness`)** — Next.js dashboard that renders real benchmark data with charts and methodology detail (`fd2494ef`, `9fb8e184`, #341, #337).
+- **ClickHouse eval-results ingestion** — `eval_runs` + `eval_results` tables; `tools/scripts/eval-ingest.ts` ships results from CI (`f7fafe85`).
+- **`pnpm eval:app`** — single command to launch the benchmark dashboard, resilient to a busy port.
+
+#### API & MCP
+- **`GET /v1/auth/whoami`** — credential probe endpoint used by CLI API-key login (`eb8a5178`, #293).
+- **`auth.cli.token`** — PKCE single-use code store backing the CLI loopback OAuth flow (`8008798e`, #290).
+- **`org.list` + `workspace.list`** — listed and registered in MCP tool registry and API (`1758a183`, `b54e6c51`).
+- **`plugin.catalog.sync`** — REST route + contract test wired (#238).
+- **`graph.export`** — exports a workspace graph snapshot for CLI down-sync.
+- **IAM: org owner is a super-user** — org owners are never locked out by an un-seeded capability (`ed6fc2c2`, #322).
+- **API keys authorize as their creator** — fixes fail-closed behaviour on enterprise orgs (`a9fc062d`, #297).
+- Parallelized independent async I/O operations in several handlers for improved latency (`d585887b`, #303).
+
+#### Docs
+- Full **CLI guide** (`docs/cli/`) — installation, account setup, commands, knowledge-graph reference, configuration, quickstart (`bfe2e51d`).
+- ADR-018 (CLI↔workspace graph sync), ADR-019 (unified agent engine), ADR-020 (per-workspace GitHub credentials) published.
+- `browser.*` capability reference pages + capability index updated.
+- Marketing landing page shipped with 109 accuracy corrections from a full docs audit (`a142ac4d`, #336).
+
+---
+
+### Fixes
+
+- **REPL transcript via `<Static>`** — drops the alternate screen, so output is preserved in the terminal scrollback after the session ends (`29bb0dfe`, #374).
+- **Esc-twice reset confirmation** handled synchronously (was previously queued as a prompt and could be missed) (`52d4ac1d`, #352).
+- **Agent tool-result interpretation** — the agent now reads tool results before reporting a status; previously it could report success regardless of the tool's output (`63688f52`, #379).
+- **`HexField` re-export** moved into the whitelisted UI layer in both docs and app to fix Storybook 404s (`b0b10e84`, `5462657f`, #377, #370).
+- **Graph explorer** — fixed create-node/edge dialog vocabulary, serialised Neo4j reads in scoped sessions, PascalCase node label enforcement everywhere (`aa8999a8`, `93abe34a`, `b08db6c4`, #327, #313).
+- **Knowledge graph explorer** — accepts all explore ops and serialises Neo4j reads so the explorer no longer deadlocks (`b08db6c4`, #326).
+- **Stale contract barrel** — regenerated; 19 capabilities (`agent.memory.delete` et al.) were dead at runtime (`ad1a38ba`, #323).
+- **`/init` hang** — fixed gitignore parsing and log spam that caused `oxagen init` to stall; also fixed the Esc stop/reset flow and Enterprise prompt-override unlock (`9249978b`, #317).
+- **CLI loopback login** — bound `err` variable in login picker-failure catch to fix a `ReferenceError` (`1226afad`, #312).
+- **CLI API endpoint paths** — removed a double `user/` prefix in the linker (`f2cfa54a`, #307).
+- **CLI session-memory handle** — closed the session-memory file handle when the REPL unmounts mid-open to prevent a resource leak (`bfd9e6a0`, #272).
+- **`repo.create` personal-account repos** — fixed a 404 when creating a repo under a personal GitHub account (`ce4904d2`, #294).
+- **Schema-builder dialogs** — widened label/relationship dialogs and rebalanced the properties grid (`683fb57a`, #356).
+- **TabsPanel scroll** — P0 fix: scrollable `TabsPanel` content (marketplace MCP server list was clipped) (`c173d048`, #348).
+- **Memory settings page** — repaired the broken import that rendered the page blank (#302).
+- **GitHub source wizard** — fixed the Setup-URL leg that dropped the connection after install (`ebc00ae9`, #269).
+- **`agent-engine` extensionless relative imports** — Turbopack could not resolve `.js` → `.ts` mappings; fixed by dropping the extension (`ff0b5299`, #273).
+- **Schema CLI settings schema** — regenerated for the `effort` field to unblock main CI (`27aaaf81`, #367).
+- **`app` broken import + duplicate `KIND_CONFIG`** — repaired to unblock CI (`00ef997b`, #365).
+- **Turbo cache** — optimised `turbo.json` for parallelisation and cache efficiency; CI checks timeout raised from 20 min to 60 min for cold-cache PRs (`eb96f3af`, #304).
+- **App build OOM** — raised Node heap to 8 GB for CI cold builds (`62431335`).
+- **`api` module-scope `fileURLToPath`** — guarded to prevent `FUNCTION_INVOCATION_FAILED` taking the whole API down (`34ff931a`, #258).
+- **API key prefix resolution** — fixed to use a fixed 12-char prefix window instead of splitting on `_` (`73f28dfc`, #289).
+- **IAM fetch-authz** — org owner is now treated as a super-user; fixes lockout on enterprise orgs (`ed6fc2c2`, #322).
+- **`pnpm dev` pre-flight** — app ports are checked before startup so the dev server no longer crashes when the stack is already running (`04d944b7`, #217).
+- **`eval:app` port conflict** — `pnpm eval:app` is now resilient to a busy port (`f0470f37`, #335).
+- **GitHub `@oxagen/github` package** — migrated from Octokit to native fetch so Turbopack can build the Next.js app (`3fadbb85`, #240).
+- **Duplicate `graphExport` export** — deduplicated to unblock main CI (`cd7bc1a8`, #229).
+
+---
+
+### Internal
+
+- **Removed Automation/Activity pages and all preview/placeholder pages** — simplifies the app surface and eliminates dead routes (`d218e0a7`, #351).
+- **Removed Integrations nav/page** — replaced by per-capability settings tabs (`8a79f497`, #305, #306).
+- **`@oxagen/github` package** — new package encapsulating GitHub App auth, fetch client, and workspace token resolution; replaces scattered Octokit usage.
+- **`@oxagen/code-graph` package** — new package for the tree-sitter-based code graph builder, shared by ingestion and the CLI.
+- **`@oxagen/agent-engine` package** — new shared package (see Features above).
+- **`apps/schemas`** — new app hosting `oxagen-cli-settings-schema.json` on Vercel with a schema drift test.
+- **Database migrations** — `agent_sandbox_sessions` table, `workspace_memory_policy` table, and two-axis memory policy migration added.
+- **ClickHouse migration runner** — `memory_changes_enforcement` migration added (`telemetry`).
+- **Test coverage** — database package at 94% lines (gate raised to 85%); agent-engine, code-graph, handlers, auth, and CLI packages all gained comprehensive unit-test suites. Several flaky tests de-flaked (bulk-import `findBy` vs `getBy`, welcome-screen timers).
+- **`skills-lock.json` removed** (`a509856e`, #344).
+- **`pnpm eval:app` script** and `tools/scripts/eval-ingest.ts` added for one-command benchmark runs.
+- **Turbo build inputs** — test files excluded from build inputs; parallelisation improved across the monorepo (`eb96f3af`, #304).
+- **ADR-018, ADR-019, ADR-020** published under `docs/adr/`.
+
 ## What's new in Oxagen v0.6.4
 
 This release is a large step forward for the platform, shipping a fully unified agent engine, a production-ready CLI, browser automation capabilities, durable sandbox sessions, a bidirectional CLI↔workspace graph sync, and a sweeping set of bug fixes that unblocked several runtime-dead capability surfaces. Alongside the new features, this release closes IAM privilege-escalation gaps, resolves a critical whole-API outage caused by a module-scope import, regenerates a stale contract barrel that silently killed 19 capabilities at runtime, and hardens CI with better parallelism, timeouts, and coverage gates.

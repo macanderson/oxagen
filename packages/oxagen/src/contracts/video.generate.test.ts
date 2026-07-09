@@ -62,6 +62,18 @@ describe("video.generate capability", () => {
     ).toThrow();
   });
 
+  it("accepts an explicit gateway model id", () => {
+    const parsed = videoGenerate.input.parse({
+      prompt: "test",
+      model: "openai/sora-2",
+    });
+    expect(parsed.model).toBe("openai/sora-2");
+  });
+
+  it("rejects an empty model id", () => {
+    expect(() => videoGenerate.input.parse({ prompt: "test", model: "" })).toThrow();
+  });
+
   // ── output validation ───────────────────────────────────────────────────────
 
   it("parses a valid queued output", () => {
@@ -92,6 +104,33 @@ describe("video.generate capability", () => {
     });
     expect(parsed.render.props.prompt).toBe("ocean waves");
     expect(parsed.render.props.url).toBe("/api/v1/assets/gen_xyz");
+  });
+
+  it("parses an output carrying a duration adjustment and notice", () => {
+    const parsed = videoGenerate.output.parse({
+      status: "queued",
+      jobId: "gen_dur",
+      serveUrl: "/api/v1/assets/gen_dur",
+      durationAdjustment: {
+        requestedSeconds: 30,
+        effectiveSeconds: 8,
+        supportedSeconds: [4, 6, 8],
+        alternatives: [
+          { model: "openai/sora-2", supportedSeconds: [4, 8, 12], closestSeconds: 12 },
+        ],
+      },
+      render: {
+        componentId: "video-result",
+        props: {
+          url: "/api/v1/assets/gen_dur",
+          prompt: "epic",
+          notice: "google/veo supports 4, 6, 8 second videos — generating 8s instead of the requested 30s.",
+        },
+      },
+    });
+    expect(parsed.durationAdjustment?.effectiveSeconds).toBe(8);
+    expect(parsed.durationAdjustment?.alternatives[0]?.model).toBe("openai/sora-2");
+    expect(parsed.render.props.notice).toContain("generating 8s");
   });
 
   it("rejects output where render.componentId is not video-result", () => {

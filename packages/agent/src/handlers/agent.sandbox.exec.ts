@@ -16,6 +16,7 @@ import {
   SandboxSessionGoneError,
   type SessionRow,
 } from "./_sandbox-session";
+import { injectEnvironmentSecrets } from "./_environment-env";
 
 export type { AgentSandboxExecInput, AgentSandboxExecOutput };
 
@@ -34,12 +35,22 @@ export async function agentSandboxExecHandler(
     throw new SandboxSessionNotFoundError(input.sessionId);
   }
 
+  // Inject the session's bound environment secrets (if any) below the
+  // caller-supplied env. The environmentId was frozen onto the session's
+  // metadata at start time, so every command in the durable session sees the
+  // same trusted secrets without them living in the sandbox filesystem.
+  const { env } = await injectEnvironmentSecrets(
+    ctx,
+    row.metadata.environmentId,
+    input.env,
+  );
+
   let restored = false;
   let result = await driver.execInSession({
     sandboxId: row.sandboxId,
     command: input.command,
     timeoutMs: input.timeoutMs,
-    env: input.env,
+    env,
     stdin: input.stdin,
   });
 
@@ -101,7 +112,7 @@ async function emitExecTelemetry(
         source_system: `handler:${ctx.surface}`,
         stream_offset: null,
         payload: JSON.stringify({
-          capability: "agent.sandbox.exec",
+          capability: "run_sandbox_command",
           sessionId: input.sessionId,
           image: row.image,
           durationMs: result.durationMs,

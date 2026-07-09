@@ -4,7 +4,7 @@
  */
 import { describe, it, expect } from "vitest";
 import { MemoryWorkspace } from "./workspaces/memory";
-import { buildWorkspaceTools } from "./tools";
+import { buildWorkspaceTools, formatWithLineNumbers, describeEditFailure, clip } from "./tools";
 import type { CodingEvent } from "./types";
 
 async function run(tool: unknown, input: unknown): Promise<string> {
@@ -198,5 +198,154 @@ describe("buildWorkspaceTools – bash error paths", () => {
     const tools = buildWorkspaceTools(ws);
     await run(tools.bash, { command: "echo", timeout_ms: 9_999_999 });
     expect(observed[0]).toBe(600_000);
+  });
+});
+
+describe("per-tool timeout backstop", () => {
+  it("toolBackstopMs honors bash's declared timeout_ms plus grace, capped at max", async () => {
+    const { toolBackstopMs } = await import("./tools");
+    expect(toolBackstopMs("bash", { timeout_ms: 500_000 })).toBe(530_000);
+    expect(toolBackstopMs("bash", {})).toBe(150_000); // default 120s + 30s grace
+    expect(toolBackstopMs("bash", { timeout_ms: 9_999_999 })).toBe(630_000); // capped at 600s
+    expect(toolBackstopMs("read_file", {})).toBe(60_000);
+    expect(toolBackstopMs("grep", null)).toBe(60_000);
+  });
+
+  it("a wedged tool resolves to a backstop timeout string instead of hanging", async () => {
+    const { vi } = await import("vitest");
+    vi.useFakeTimers();
+    try {
+      const ws = new MemoryWorkspace({});
+      // Wedge grep: never resolves — the backstop must fire at 60s.
+      ws.grep = () => new Promise(() => {});
+      const tools = buildWorkspaceTools(ws);
+      const pending = run(tools.grep, { pattern: "x" });
+      await vi.advanceTimersByTimeAsync(60_001);
+      const out = await pending;
+      expect(out).toContain("timed out after 60s (backstop)");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("formatWithLineNumbers", () => {
+  it("prefixes each line with a right-aligned number and a tab", () => {
+    expect(formatWithLineNumbers("a\nb\nc")).toBe("1\ta\n2\tb\n3\tc");
+  });
+
+  it("reflects the true starting line number (offset-based) and right-aligns", () => {
+    // 10 lines starting at line 2 pushes the max number to 11 → width 2, so the
+    // single-digit numbers are space-padded.
+    const text = Array.from({ length: 10 }, (_, i) => `L${i}`).join("\n");
+    const out = formatWithLineNumbers(text, 2);
+    expect(out.startsWith(" 2\tL0\n")).toBe(true);
+    expect(out).toContain("11\tL9");
+  });
+
+  it("does not number the empty tail after a trailing newline", () => {
+    expect(formatWithLineNumbers("a\nb\n")).toBe("1\ta\n2\tb");
+  });
+
+  it("returns an empty string for empty input", () => {
+    expect(formatWithLineNumbers("")).toBe("");
+  });
+});
+
+describe("buildWorkspaceTools – read_file line numbers", () => {
+  it("numbers lines with their true file line number when offset is given", async () => {
+    const ws = new MemoryWorkspace({ "n.txt": "l1\nl2\nl3\nl4\nl5" });
+    const tools = buildWorkspaceTools(ws);
+    const out = await run(tools.read_file, { path: "n.txt", offset: 2, limit: 2 });
+    expect(out).toBe("2\tl2\n3\tl3");
+  });
+
+  it("still clips output over the 30k cap (middle-out)", async () => {
+    const ws = new MemoryWorkspace({ "big.txt": "x".repeat(40_000) });
+    const tools = buildWorkspaceTools(ws);
+    const out = await run(tools.read_file, { path: "big.txt" });
+    expect(out).toContain("truncated from the middle");
+    expect(out.length).toBeLessThan(31_000);
+  });
+});
+
+describe("clip (middle-out truncation)", () => {
+  it("returns short text unchanged", () => {
+    expect(clip("hello")).toBe("hello");
+  });
+
+  it("keeps BOTH the head and the tail, dropping the middle", () => {
+    // HEAD marker at the very start, TAIL marker at the very end — the tail is
+    // where a failing test/build puts its verdict, which head-only truncation lost.
+    const text = "HEAD_START" + "m".repeat(40_000) + "TAIL_END";
+    const out = clip(text);
+    expect(out.startsWith("HEAD_START")).toBe(true);
+    expect(out.endsWith("TAIL_END")).toBe(true);
+    expect(out).toContain("truncated from the middle");
+    expect(out.length).toBeLessThan(31_000);
+  });
+});
+
+describe("describeEditFailure", () => {
+  it("returns null when old_string appears exactly once", () => {
+    expect(describeEditFailure("a\nunique\nb", "unique")).toBeNull();
+  });
+
+  it("names the closest line and hints at whitespace when not found", () => {
+    const msg = describeEditFailure("const foo = 1;\nconst bar = 2;", "const fooo = 1;");
+    expect(msg).toContain("not found");
+    expect(msg).toContain("Closest match at line 1");
+    expect(msg).toContain("const foo = 1;");
+    expect(msg).toContain("Check exact whitespace");
+  });
+
+  it("lists occurrence line numbers and suggests replace_all when ambiguous", () => {
+    const msg = describeEditFailure("x\ny\nx\nz\nx", "x");
+    expect(msg).toContain("appears 3 times");
+    expect(msg).toContain("lines 1, 3, 5");
+    expect(msg).toContain("replace_all");
+  });
+});
+
+describe("buildWorkspaceTools – edit_file replace_all + structured feedback", () => {
+  it("replace_all replaces every occurrence and reports the count", async () => {
+    const ws = new MemoryWorkspace({ "a.ts": "a\na\na" });
+    const tools = buildWorkspaceTools(ws);
+    const out = await run(tools.edit_file, {
+      path: "a.ts",
+      old_string: "a",
+      new_string: "b",
+      replace_all: true,
+    });
+    expect(out).toContain("3 replacements");
+    expect(await ws.readFile("a.ts")).toBe("b\nb\nb");
+  });
+
+  it("leaves the single-match success message unchanged", async () => {
+    const ws = new MemoryWorkspace({ "a.ts": "foo bar" });
+    const tools = buildWorkspaceTools(ws);
+    const out = await run(tools.edit_file, { path: "a.ts", old_string: "bar", new_string: "baz" });
+    expect(out).toBe("Edited a.ts");
+  });
+
+  it("names the closest line when old_string is not found", async () => {
+    const ws = new MemoryWorkspace({ "a.ts": "const foo = 1;" });
+    const tools = buildWorkspaceTools(ws);
+    const out = await run(tools.edit_file, {
+      path: "a.ts",
+      old_string: "const fooo = 1;",
+      new_string: "x",
+    });
+    expect(out).toContain("Error editing a.ts");
+    expect(out).toContain("Closest match at line 1");
+  });
+
+  it("lists lines and suggests replace_all on an ambiguous match, without mutating", async () => {
+    const ws = new MemoryWorkspace({ "a.ts": "x\nx\nx" });
+    const tools = buildWorkspaceTools(ws);
+    const out = await run(tools.edit_file, { path: "a.ts", old_string: "x", new_string: "y" });
+    expect(out).toContain("appears 3 times");
+    expect(out).toContain("replace_all");
+    expect(await ws.readFile("a.ts")).toBe("x\nx\nx");
   });
 });

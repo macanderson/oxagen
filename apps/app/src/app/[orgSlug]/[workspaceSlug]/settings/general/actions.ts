@@ -120,7 +120,7 @@ export async function updateWorkspaceGeneralAction(
         description === undefined || description === "" ? null : description;
 
       const result = (await invoke(
-        "workspace.settings.write",
+        "update_workspace_settings",
         { name, slug, description: descriptionValue },
         ctx,
         { surface: "agent" },

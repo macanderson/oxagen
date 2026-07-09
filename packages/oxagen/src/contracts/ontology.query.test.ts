@@ -3,7 +3,7 @@ import { ontologyQuery } from "./ontology.query";
 
 describe("ontology.query contract", () => {
   it("is a read-only multi-hop traversal on api/mcp/agent/cli", () => {
-    expect(ontologyQuery.name).toBe("ontology.query");
+    expect(ontologyQuery.name).toBe("query_ontology");
     for (const s of ["api", "mcp", "agent", "cli"]) {
       expect(ontologyQuery.surfaces).toContain(s);
     }

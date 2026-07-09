@@ -1,6 +1,6 @@
 {
   "name": "@oxagen/sandbox",
-  "version": "0.6.4",
+  "version": "1.1.1",
   "private": true,
   "type": "module",
   "main": "./src/index.ts",
@@ -19,7 +19,6 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@oxagen/config": "workspace:*",
     "@vercel/sandbox": "2.0.2",
     "dockerode": "4.0.12",
     "tar-stream": "3.2.0",
@@ -28,8 +27,8 @@
   "devDependencies": {
     "@types/dockerode": "3.3.47",
     "@types/tar-stream": "3.1.4",
+    "@vitest/coverage-v8": "2.1.9",
     "typescript": "6.0.3",
-    "vitest": "2.1.9",
-    "@vitest/coverage-v8": "2.1.9"
+    "vitest": "2.1.9"
   }
 }

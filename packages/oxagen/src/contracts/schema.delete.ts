@@ -2,7 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const schemaDelete = registerCapability({
-  name: "schema.delete",
+  name: "delete_schema",
   domain: "schema",
   description: "Drop an entire named schema from the draft — its labels, relationship types, and properties.",
   mode: "sync",
@@ -10,7 +10,7 @@ export const schemaDelete = registerCapability({
   // (draft-state grounding), not yet exposed as an API route / MCP tool / CLI
   // command. Keep surfaces truthful so the MCP tool-registry parity guard holds.
   surfaces: ["agent"] as const,
-  layers: ["schema"],
+  layers: ["schema", "docs"],
   scoped: true,
   agent: { requiresApproval: true, riskLevel: "high", category: "schema" },
   sensitivity: "high",

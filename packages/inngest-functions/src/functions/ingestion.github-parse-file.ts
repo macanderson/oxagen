@@ -8,6 +8,10 @@ import { embedText } from "@oxagen/ai";
 import { parseSourceFile } from "@oxagen/ingestion/parsers";
 import type { ParsedSymbol } from "@oxagen/ingestion/parsers";
 import { chunkText } from "@oxagen/ingestion/embed";
+// Canonical embed-text renderers — the ONE place file/symbol embedding text is
+// built (shared with the CLI code-graph daemon). Replaces the ad-hoc inline
+// `path language symbolNames` string this function used to construct.
+import { renderFileText, renderSymbolText } from "@oxagen/code-graph";
 import { logger } from "../logger";
 
 // ---------------------------------------------------------------------------
@@ -264,11 +268,34 @@ export const [ingestionGithubParseFile] = createFunction(
 
       for (let batchIdx = 0; batchIdx < symbolBatches.length; batchIdx++) {
         const batch = symbolBatches[batchIdx]!;
-        await step.run(`upsert-symbols-batch-${batchIdx}`, () =>
-          runInTenantScope({ orgId, workspaceId }, async () => {
+        await step.run(`upsert-symbols-batch-${batchIdx}`, async () => {
+          // Embed each symbol's rendered text (kind + name + signature + doc +
+          // code slice) BEFORE opening the Neo4j session so a natural-language
+          // query matches the symbol body — same surface + telemetry as the file
+          // and chunk embeds. A failed embed must not fail the batch: the symbol
+          // is still upserted, just without a vector this run.
+          const symbolEmbeddings = await Promise.all(
+            batch.map(async (symbol) => {
+              try {
+                return await embedText(
+                  renderSymbolText(symbol, path),
+                  EMBED_TELEMETRY(orgId, workspaceId),
+                );
+              } catch (err) {
+                logger.warn(
+                  { err, path, symbol: symbol.name },
+                  "parse-file: symbol embed failed",
+                );
+                return null;
+              }
+            }),
+          );
+          return runInTenantScope({ orgId, workspaceId }, async () => {
             const session = scopedSession();
             try {
-              for (const symbol of batch) {
+              for (let i = 0; i < batch.length; i++) {
+                const symbol = batch[i]!;
+                const symbolEmbedding = symbolEmbeddings[i] ?? null;
                 const symbolNaturalKey = `github:${connectionId}:${owner}/${repo}:${path}:${symbol.kind}:${symbol.name}`;
                 await session.run(
                   // Same anchor pattern as SourceFile: MERGE on :SourceSymbol
@@ -296,6 +323,8 @@ export const [ingestionGithubParseFile] = createFunction(
                       s.sourceId    = $connectionId,
                       s.workspaceId = $workspaceId,
                       s.properties  = $properties,
+                      s.embedding   = coalesce($embedding, s.embedding),
+                      s.embeddingUpdatedAt = CASE WHEN $embedding IS NULL THEN s.embeddingUpdatedAt ELSE datetime() END,
                       s.updatedAt   = datetime()
                     WITH s
                     MATCH (f:SourceFile {naturalKey: $fileNaturalKey, orgId: $orgId})
@@ -311,6 +340,7 @@ export const [ingestionGithubParseFile] = createFunction(
                     fileNaturalKey: naturalKey,
                     connectionId,
                     workspaceId,
+                    embedding: symbolEmbedding,
                     properties: JSON.stringify({
                       kind: symbol.kind,
                       name: symbol.name,
@@ -333,8 +363,8 @@ export const [ingestionGithubParseFile] = createFunction(
             } finally {
               await session.close();
             }
-          }),
-        );
+          });
+        });
       }
     }
 
@@ -536,8 +566,16 @@ export const [ingestionGithubParseFile] = createFunction(
     }
 
     // ── Step 7: Embed file ─────────────────────────────────────────────────────
-    const embedInput =
-      `${path} ${parseResult.language} ${parseResult.symbols.map((s) => s.name).join(" ")}`.trim();
+    // Build the embedding text via the canonical renderer (path + language +
+    // symbol names + a head slice of the real content) so file embeddings match
+    // the CLI code-graph daemon exactly and searchable content is not just the
+    // path + symbol names.
+    const embedInput = renderFileText({
+      path,
+      language: parseResult.language,
+      content,
+      symbolNames: parseResult.symbols.map((s) => s.name),
+    });
 
     const embedding = await step.run("embed-file", () =>
       embedText(embedInput, {
@@ -571,9 +609,18 @@ export const [ingestionGithubParseFile] = createFunction(
     );
 
     // ── Step 7: Fire feature inference event (if applicable) ──────────────────
+    // Default: one per-file event → synchronous inference. With
+    // INGESTION_FEATURE_BATCH=1, emit the batched event instead → the events are
+    // collected via Inngest batchEvents and submitted as one Anthropic Message
+    // Batch (half price). Payload is identical; only the routing differs.
     if (parseResult.language !== "unknown" && parseResult.symbols.length > 0) {
+      const batchMode = process.env.INGESTION_FEATURE_BATCH === "1";
       await step.sendEvent("infer-features", {
-        name: "ingestion/github.infer-features" as const,
+        name: (batchMode
+          ? "ingestion/github.infer-features-batch"
+          : "ingestion/github.infer-features") as
+          | "ingestion/github.infer-features-batch"
+          | "ingestion/github.infer-features",
         data: {
           fileNaturalKey: naturalKey,
           symbols: parseResult.symbols,
