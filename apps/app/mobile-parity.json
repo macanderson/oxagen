@@ -32,6 +32,18 @@
     },
     {
       "file": "apps/app/src/components/shell/shell-frame.tsx",
+      "match": "hidden md:block",
+      "kind": "reflow",
+      "equivalent": "The persistent AgentBottomBar quick-launcher is desktop chrome; on mobile the bottom edge is owned by MobileBottomBar, whose primary \"Ask\" tab routes to the identical agent conversation surface, and in-flight conversation state lives in that surface itself."
+    },
+    {
+      "file": "apps/app/src/components/chat/chat-shell-client.tsx",
+      "match": "hidden w-64 shrink-0 flex-col gap-3 overflow-y-auto py-1 lg:flex",
+      "kind": "reflow",
+      "equivalent": "The right rail (CodingTracePanel + WorkspaceContextPanel) is desktop-only layout; below lg the identical panels open in a bottom Sheet via the floating chat-mobile-rail-trigger button rendered in the same file (mobileRailOpen state)."
+    },
+    {
+      "file": "apps/app/src/components/shell/shell-frame.tsx",
       "match": "hidden min-w-0 flex-1 sm:block",
       "kind": "reflow",
       "equivalent": "The persistent header AskBar is desktop-only; the same ask capability is reachable on mobile via the \"Ask\" primary tab shared by MobileBottomBar's getSidebarConfig, which routes to the identical /ask page."
@@ -106,15 +118,13 @@
       "file": "apps/app/src/app/[orgSlug]/settings/layout.tsx",
       "match": "hidden w-48 shrink-0 md:block",
       "kind": "reflow",
-      "equivalent": "Settings section nav re-presented on mobile as MobileSettingsNav — a sticky bottom-sheet section switcher above the app bottom bar with 44px targets and the identical item list.",
-      "pending": true
+      "equivalent": "Settings section nav re-presented on mobile as MobileSettingsNav — a sticky bottom-sheet section switcher above the app bottom bar with 44px targets and the identical item list."
     },
     {
       "file": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/layout.tsx",
       "match": "hidden w-48 shrink-0 md:block",
       "kind": "reflow",
-      "equivalent": "Settings section nav re-presented on mobile as MobileSettingsNav — a sticky bottom-sheet section switcher above the app bottom bar with 44px targets and the identical item list.",
-      "pending": true
+      "equivalent": "Settings section nav re-presented on mobile as MobileSettingsNav — a sticky bottom-sheet section switcher above the app bottom bar with 44px targets and the identical item list."
     }
   ]
 }

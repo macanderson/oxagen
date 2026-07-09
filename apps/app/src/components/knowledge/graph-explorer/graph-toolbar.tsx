@@ -117,7 +117,7 @@ export function GraphToolbar(props: GraphToolbarProps) {
 
       {props.stats && (
         <div
-          className="hidden items-center gap-1 text-xs text-muted-foreground md:flex"
+          className="flex items-center gap-1 text-xs text-muted-foreground"
           aria-live="polite"
         >
           <span className="tabular-nums">
