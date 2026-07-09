@@ -63,6 +63,29 @@ export class VercelSandboxUnsupportedError extends Error {
   }
 }
 
+// Ceiling on vCPU (mirrors the contract's sandboxResourcesSchema.vcpu max).
+const MAX_VCPU = 4;
+
+// @vercel/sandbox runtimes are a fixed set (node24 / python3.13); it cannot pull
+// an arbitrary container image. A template that pins a custom `runtime` image is
+// incompatible with this driver — fail fast and loud rather than silently
+// running the wrong (default) image.
+function assertNoCustomImage(req: SandboxRequest): void {
+  if (req.imageRef) {
+    throw new VercelSandboxUnsupportedError(
+      "Custom images are not supported on the vercel driver — its runtimes are " +
+        "fixed (node24 / python3.13). Use the modal or docker provider for a " +
+        "template with a custom runtime image.",
+    );
+  }
+}
+
+// A template's vcpu maps to @vercel/sandbox `resources.vcpus`; default 1.
+function vcpusFor(req: SandboxRequest): number {
+  if (req.vcpu && req.vcpu > 0) return Math.min(req.vcpu, MAX_VCPU);
+  return 1;
+}
+
 // Build optional Credentials object only when all three values are present.
 // The SDK resolves credentials from OIDC when none are provided.
 function credentialsFor(
@@ -137,6 +160,7 @@ export function createVercelSandbox(config: VercelSandboxConfig, sandboxImpl?: S
           "Embed any required input directly in the code file.",
       );
     }
+    assertNoCustomImage(req);
 
     const wallStart = Date.now();
     const networkPolicy = networkPolicyFor(req.network);
@@ -149,7 +173,7 @@ export function createVercelSandbox(config: VercelSandboxConfig, sandboxImpl?: S
       networkPolicy,
       timeout: req.timeoutMs,
       env: req.env,
-      resources: { vcpus: 1 },
+      resources: { vcpus: vcpusFor(req) },
       ...(credentials ?? {}),
     };
 
@@ -206,6 +230,7 @@ export function createVercelSandbox(config: VercelSandboxConfig, sandboxImpl?: S
           "Embed any required input directly in the code file.",
       );
     }
+    assertNoCustomImage(req);
 
     const networkPolicy = networkPolicyFor(req.network);
     const runtime = runtimeFor(req.language);
@@ -217,7 +242,7 @@ export function createVercelSandbox(config: VercelSandboxConfig, sandboxImpl?: S
       networkPolicy,
       timeout: req.timeoutMs,
       env: req.env,
-      resources: { vcpus: 1 },
+      resources: { vcpus: vcpusFor(req) },
       ...(credentials ?? {}),
     };
 
