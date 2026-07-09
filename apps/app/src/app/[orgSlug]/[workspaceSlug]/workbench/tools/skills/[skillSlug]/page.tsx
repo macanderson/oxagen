@@ -46,7 +46,10 @@ export default async function WorkbenchSkillDetailPage({ params }: PageProps) {
   // Fetch skill detail + active version content.
   let skill: SkillDetailData | null = null;
   try {
-    const out = await invoke("get_skill_version", { skillSlug }, ctx, { surface: "agent" });
+    // No { surface: "agent" }: this capability is exposed on ["api","mcp"] only,
+    // so asserting the agent surface throws surface_denied (caught below as a
+    // false not-found). apps/app omits opts.surface as a trusted server caller.
+    const out = await invoke("get_skill_version", { skillSlug }, ctx);
     const typed = out as {
       id: string;
       slug: string;
