@@ -22,7 +22,6 @@ import { agentSandboxFilesList } from "./agent.sandbox_file.list";
 import { agentSandboxFileRead } from "./agent.sandbox_file.read";
 import { agentSandboxLogsList } from "./agent.sandbox_log.list";
 import { agentSandboxList } from "./agent.sandbox.list";
-export { agentSandboxLogsList } from './agent.sandbox_log.list';
 import { browserNavigate } from "./browser.navigate";
 import { browserScreenshot } from "./browser.screenshot";
 import { browserFill } from "./browser.fill";
