@@ -56,7 +56,7 @@ jobs:
       - name: Install Atlas
         uses: ariga/setup-atlas@v0
         with:
-          version: v0.38.0
+          version: v1.2.2
 
       - name: Guard — DATABASE_URL is set
         run: |

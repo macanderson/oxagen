@@ -35,7 +35,7 @@ if [ -z "${DATABASE_URL:-}" ]; then
 fi
 
 # Keep in sync with ATLAS_VERSION in .github/workflows/pipeline.yml.
-ATLAS_VERSION="${ATLAS_VERSION:-v0.38.0}"
+ATLAS_VERSION="${ATLAS_VERSION:-v1.2.2}"
 ATLAS_DIR="${HOME}/.atlas-bin"
 ATLAS="${ATLAS_DIR}/atlas"
 
