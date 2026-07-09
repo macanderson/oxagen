@@ -5,7 +5,7 @@
  *
  * Covers:
  *   (a) Loading → not-connected state renders the Connect button (canManage)
- *   (b) Connect navigates to the signed install URL
+ *   (b) Connect navigates to the signed identity (OAuth authorize) URL
  *   (c) Not connected + viewer (canManage=false) hides Connect, shows ask-admin
  *   (d) Connected renders each installation + manage/add-org/reconnect controls
  *   (e) Connected + viewer hides add-org/reconnect/configure, keeps manage link
@@ -46,6 +46,7 @@ const CONNECTED: GithubStatusResponse = {
     },
   ],
   manageUrl: "https://github.com/apps/oxagen/installations/new",
+  identityUrl: "https://github.com/login/oauth/authorize?state=signed",
   installUrl: "https://github.com/apps/oxagen/installations/new?state=signed",
 };
 
@@ -53,6 +54,7 @@ const DISCONNECTED: GithubStatusResponse = {
   connected: false,
   installations: [],
   manageUrl: "https://github.com/apps/oxagen/installations/new",
+  identityUrl: "https://github.com/login/oauth/authorize?state=signed",
   installUrl: "https://github.com/apps/oxagen/installations/new?state=signed",
 };
 
@@ -99,13 +101,16 @@ describe("GithubConnectionSettings", () => {
     );
   });
 
-  it("navigates to the signed install URL when Connect is clicked", async () => {
+  it("navigates to the signed identity (OAuth authorize) URL when Connect is clicked", async () => {
     mockFetchOnceOk(DISCONNECTED);
     renderPanel(true);
 
     await waitFor(() => expect(screen.getByTestId("github-connect-btn")).toBeTruthy());
     fireEvent.click(screen.getByTestId("github-connect-btn"));
-    expect(window.location.href).toBe(DISCONNECTED.installUrl);
+    // The identity leg is the primary connect destination (lets a second tenant
+    // establish its own token), NOT the install URL.
+    expect(window.location.href).toBe(DISCONNECTED.identityUrl);
+    expect(window.location.href).not.toBe(DISCONNECTED.installUrl);
   });
 
   it("hides Connect and tells viewers to ask an admin when not connected", async () => {

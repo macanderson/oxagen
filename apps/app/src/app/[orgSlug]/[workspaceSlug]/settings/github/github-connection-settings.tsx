@@ -90,11 +90,15 @@ export function GithubConnectionSettings({
     return () => controller.abort();
   }, [load]);
 
-  // Start (or re-run) the GitHub App install. Navigating same-tab keeps the
-  // signed OAuth state intact; the callback returns to this page.
+  // Start (or re-run) the GitHub connection via the identity (OAuth authorize)
+  // leg. This always returns to our callback with code+state — even when the App
+  // is already installed on the target org — so a second Oxagen tenant can
+  // establish its own token. Fall back to installUrl if the server predates the
+  // identityUrl field. Navigating same-tab keeps the signed OAuth state intact;
+  // the callback returns to this page.
   const connect = React.useCallback(() => {
     if (state.phase !== "ready") return;
-    window.location.href = state.status.installUrl;
+    window.location.href = state.status.identityUrl ?? state.status.installUrl;
   }, [state]);
 
   const sourcesHref = workspace.knowledge.repos({ orgSlug, workspaceSlug });
