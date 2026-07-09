@@ -767,7 +767,7 @@ function LiteralEnvEditor({
               placeholder="LOG_LEVEL"
               onChange={(e) => {
                 const next = [...rows];
-                next[i] = { ...next[i], key: e.target.value };
+                next[i] = { key: e.target.value, value: row.value };
                 setRows(next);
               }}
             />
@@ -778,7 +778,7 @@ function LiteralEnvEditor({
               placeholder="info"
               onChange={(e) => {
                 const next = [...rows];
-                next[i] = { ...next[i], value: e.target.value };
+                next[i] = { key: row.key, value: e.target.value };
                 setRows(next);
               }}
             />
@@ -840,7 +840,7 @@ function ToolsEditor({
               value={t.kind}
               onChange={(v) => {
                 const next = [...tools];
-                next[i] = { ...next[i], kind: v as SandboxTemplateTool["kind"] };
+                next[i] = { ...t, kind: v as SandboxTemplateTool["kind"] };
                 setTools(next);
               }}
             >
@@ -857,7 +857,7 @@ function ToolsEditor({
               placeholder="ref (capability name / skill or server id)"
               onChange={(e) => {
                 const next = [...tools];
-                next[i] = { ...next[i], ref: e.target.value };
+                next[i] = { ...t, ref: e.target.value };
                 setTools(next);
               }}
             />
