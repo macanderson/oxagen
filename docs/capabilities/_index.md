@@ -309,6 +309,11 @@ contract-first design, IAM enforcement, and instrumentation.
 - [prompt.settings.read](prompt.settings.read.md) — Read the workspace prompt configuration including appended instructions and auto-improve toggle
 - [prompt.settings.write](prompt.settings.write.md) — Update the workspace prompt configuration (partial update)
 
+## Reference (2)
+
+- [reference.search](reference.search.md) — Tenant-scoped autocomplete search across every referenceable platform object (repositories, branches, files, directories, agents, skills, tools, MCP servers, capabilities, nodes, edges) for the chat @-mention picker
+- [reference.cite](reference.cite.md) — Record @-mention citations of knowledge-graph nodes within a chat execution, creating :Citation lineage and incrementing citation counters
+
 ## Repo (13)
 
 - [repo.branch.create](repo.branch.create.md) — Create a new branch in a GitHub repository, optionally from another branch

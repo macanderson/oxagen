@@ -311,6 +311,8 @@ async function searchEdges(
         const relType = record.get("relType") as string;
         const srcName = record.get("srcName") as string;
         const dstName = record.get("dstName") as string;
+        const srcLabel = record.get("srcLabel") as string | null;
+        const dstLabel = record.get("dstLabel") as string | null;
         const slug = [srcId, relType, dstId].join(EDGE_SLUG_SEPARATOR);
         rows.push({
           type: "edge",
@@ -320,8 +322,8 @@ async function searchEdges(
           description: relType,
           properties: {
             relationshipType: relType,
-            source: { id: srcId, label: record.get("srcLabel"), displayName: srcName },
-            target: { id: dstId, label: record.get("dstLabel"), displayName: dstName },
+            source: { id: srcId, label: srcLabel, displayName: srcName },
+            target: { id: dstId, label: dstLabel, displayName: dstName },
           },
         });
       }
