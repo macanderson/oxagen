@@ -67,9 +67,9 @@ describe("formatToolCall", () => {
     );
   });
 
-  it("renders dotted capability names with dashes and no raw JSON", () => {
+  it("renders snake capability names verbatim and no raw JSON", () => {
     const line = formatToolCall("suggest_semantic_edges", { nodeId: "n1", limit: 3 });
-    expect(line).toContain("semantic-edge-suggest(");
+    expect(line).toContain("suggest_semantic_edges(");
     expect(line).not.toContain("{");
   });
 

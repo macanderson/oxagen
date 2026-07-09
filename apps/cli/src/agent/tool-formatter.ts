@@ -57,11 +57,12 @@ export function getToolAccent(toolName: string): string {
 
 /**
  * Human-facing label for a tool chip. Single-word core tools (Read, Edit, Bash)
- * read best Title-cased; dotted capability names (`semantic.edge.suggest`) are
- * precise identifiers a developer recognizes, so they're kept verbatim.
+ * read best Title-cased; capability names (`suggest_semantic_edges`, legacy
+ * `semantic.edge.suggest`) are precise identifiers a developer recognizes, so
+ * they're kept verbatim.
  */
 export function toolDisplayLabel(toolName: string): string {
-  if (!toolName.includes(".")) {
+  if (!toolName.includes(".") && !toolName.includes("_")) {
     return toolName.charAt(0).toUpperCase() + toolName.slice(1);
   }
   return toolName;
