@@ -454,6 +454,11 @@ describe("createModalSandbox — createSession()", () => {
     const body = JSON.parse(init.body as string) as Record<string, unknown>;
     expect(body).toEqual({
       image: "python",
+      // Template resource fields ride the wire as explicit nulls when the
+      // session uses a base-kind image with default sizing.
+      image_ref: null,
+      vcpu: null,
+      disk_mb: null,
       memory_mb: 1_024,
       ttl_seconds: 3_600,
       idle_timeout_seconds: 120,
