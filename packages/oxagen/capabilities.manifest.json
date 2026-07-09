@@ -3778,6 +3778,39 @@
       }
     },
     {
+      "name": "cite_reference",
+      "file": "reference.cite.ts",
+      "domain": "reference",
+      "mode": "sync",
+      "surfaces": [
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "unit": false,
+        "docs": false
+      }
+    },
+    {
+      "name": "search_references",
+      "file": "reference.search.ts",
+      "domain": "reference",
+      "mode": "slug",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false,
+        "app": true
+      }
+    },
+    {
       "name": "create_branch",
       "file": "repo.branch.create.ts",
       "domain": "repo",
