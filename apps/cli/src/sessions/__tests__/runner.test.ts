@@ -45,11 +45,16 @@ const { SessionStore } = await import("../store.js");
 const { newSessionId } = await import("../ids.js");
 const { runSession } = await import("../runner.js");
 
+// Poll-based tests cost nothing extra when green, but the vitest default 5s
+// test timeout (and 4s poll deadlines) starve on loaded CI runners — this
+// file's collect step alone can take 30s+ there. Generous ceilings, no sleeps.
+vi.setConfig({ testTimeout: 60_000 });
+
 // ── Test helpers ─────────────────────────────────────────────────────────────
 
 const tick = (ms = 10): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
-async function until(cond: () => boolean, timeoutMs = 4000, stepMs = 10): Promise<void> {
+async function until(cond: () => boolean, timeoutMs = 30_000, stepMs = 10): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (!cond()) {
     if (Date.now() > deadline) throw new Error("until(): condition not met before deadline");
@@ -67,7 +72,7 @@ async function until(cond: () => boolean, timeoutMs = 4000, stepMs = 10): Promis
 async function untilDisk(
   sid: string,
   cond: (events: SessionEvent[]) => boolean,
-  timeoutMs = 4000,
+  timeoutMs = 30_000,
   stepMs = 10,
 ): Promise<SessionEvent[]> {
   const deadline = Date.now() + timeoutMs;

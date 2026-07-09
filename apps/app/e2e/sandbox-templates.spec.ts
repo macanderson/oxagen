@@ -155,17 +155,14 @@ test.describe("sandbox templates — create, set-default, export/import, bind ag
       timeout: 20_000,
     });
 
-    // Bind the Production environment (bind_agent_environment). The select's
-    // option text is "<name> (<slug>)" (plus a "★" suffix when it's the env
-    // default) for disambiguation, so it never equals the exact-match `label`
-    // Playwright requires — match the option by its (unique) visible text and
-    // select on its value instead.
-    const envSelect = page.getByTestId("agent-bind-env-select");
-    const productionValue = await envSelect
-      .locator("option", { hasText: "Production" })
-      .first()
-      .getAttribute("value");
-    await envSelect.selectOption(productionValue ?? "");
+    // Bind the Production environment (bind_agent_environment). The option
+    // label is "<name> (<slug>)" (+" ★" when default) — never the bare env
+    // name — so resolve the option's value instead of matching an exact label.
+    const bindSelect = page.getByTestId("agent-bind-env-select");
+    const productionOption = bindSelect.locator("option", { hasText: "Production" }).first();
+    await expect(productionOption).toBeAttached({ timeout: 20_000 });
+    const productionValue = await productionOption.getAttribute("value");
+    await bindSelect.selectOption(productionValue!);
     await page.getByTestId("agent-bind-submit").click();
     await expect(
       page.getByTestId("agent-binding-row-production"),
