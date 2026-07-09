@@ -20,6 +20,17 @@ import { decryptMcpAuthConfig } from "../mcp-server-auth-crypto";
 
 const logger = pino({ level: process.env.LOG_LEVEL ?? "info", base: { app: "agent.plugin-types.mcp" } });
 
+/**
+ * OAuth redirect_uri used by the runtime's DbOAuthClientProvider during token
+ * refresh. Prefers APP_URL but falls back to NEXT_PUBLIC_APP_URL (the one
+ * reliably set in production) so the redirect_uri stays an absolute URL —
+ * with neither set it would degrade to a relative path, which only works today
+ * because the refresh_token grant never sends redirect_uri.
+ */
+export function resolveMcpOAuthRedirectUrl(env: NodeJS.ProcessEnv = process.env): string {
+  return (env.APP_URL ?? env.NEXT_PUBLIC_APP_URL ?? "") + "/api/v1/mcp/oauth/callback";
+}
+
 async function contributeMcpTools(ctx: CapabilityContext, options?: PluginContributeOptions): Promise<ContributedRawTool[]> {
   if (!ctx.workspaceId) return [];
 
@@ -85,8 +96,7 @@ async function contributeMcpTools(ctx: CapabilityContext, options?: PluginContri
 
       if (server.authKind === "oauth" && server.orgListingId) {
         // OAuth path: build a DbOAuthClientProvider so the transport auto-refreshes.
-        const redirectUrl =
-          (process.env.APP_URL ?? "") + "/api/v1/mcp/oauth/callback";
+        const redirectUrl = resolveMcpOAuthRedirectUrl();
         const authProvider = new DbOAuthClientProvider({
           orgId: ctx.orgId,
           workspaceId: ctx.workspaceId,
