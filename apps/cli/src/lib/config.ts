@@ -27,12 +27,6 @@ export interface CliConfig {
   /** Model-runtime settings */
   runtime?: RuntimeConfig;
   /**
-   * Pipeline / assist-tool settings (Group 4: prompt enhancer, judge, survey).
-   * A partial override layered over the defaults; read through the typed
-   * accessors in `pipeline/config.ts`, not the flat `oxagen config` command.
-   */
-  pipeline?: import("../pipeline/config.js").AssistPipelineConfigPatch;
-  /**
    * Background-monitor settings (Group 5: ask-before-monitoring, dispatch
    * triggers, poll cadence). A partial override layered over the defaults;
    * read through the typed accessors in `monitors/config.ts`.
