@@ -168,5 +168,17 @@ test.describe("sandbox templates — create, set-default, export/import, bind ag
       path: path.join(SCREENSHOTS_DIR, "04-agent-bound.png"),
       fullPage: true,
     });
+
+    // ── 8. Unbind the environment (unbind_agent_environment) ─────────────────
+    await page.getByTestId("agent-binding-unbind-production").click();
+    // The binding row disappears; the card falls back to the empty state.
+    await expect(
+      page.getByTestId("agent-binding-row-production"),
+    ).toHaveCount(0, { timeout: 20_000 });
+
+    await page.screenshot({
+      path: path.join(SCREENSHOTS_DIR, "05-agent-unbound.png"),
+      fullPage: true,
+    });
   });
 });
