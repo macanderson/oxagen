@@ -1055,7 +1055,6 @@ footer{border-top:1px solid var(--line);background:var(--bg-raise);padding:64px 
   var API_BASE = /^(localhost|127\.0\.0\.1)$/.test(location.hostname)
     ? "http://localhost:4000"
     : "https://api.oxagen.sh";
-  var LEADS_URL = API_BASE + "/v1/marketing/leads";
   var CMS_LEADS_URL = API_BASE + "/v1/cms/leads";
   var reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -1212,7 +1211,8 @@ footer{border-top:1px solid var(--line);background:var(--bg-raise);padding:64px 
     status.classList.toggle("err", !!isErr);
   }
 
-  /* demo form: unchanged — still posts to the public marketing/leads endpoint */
+  /* demo form: posts to the CMS leads endpoint with intent:"demo" — the lead is
+     captured in cms.leads without minting a book code or sending the book email. */
   function wireForm(form) {
     form.addEventListener("submit", function (ev) {
       ev.preventDefault();
@@ -1222,21 +1222,33 @@ footer{border-top:1px solid var(--line);background:var(--bg-raise);padding:64px 
       if (!form.reportValidity()) { return; }
 
       var fd = new FormData(form);
+      var fullName = String(fd.get("name") || "").trim();
+      var spaceIdx = fullName.indexOf(" ");
+      var firstName = spaceIdx === -1 ? fullName : fullName.slice(0, spaceIdx);
+      var lastName = spaceIdx === -1 ? "" : fullName.slice(spaceIdx + 1).trim();
       var payload = {
-        name: String(fd.get("name") || "").trim(),
+        intent: "demo",
+        firstName: firstName,
+        lastName: lastName || firstName,
         email: String(fd.get("email") || "").trim().toLowerCase(),
         source: source,
         pagePath: location.pathname + location.hash
       };
-      ["company", "role", "message", "website"].forEach(function (k) {
-        var v = String(fd.get(k) || "").trim();
-        if (v) { payload[k] = v; }
-      });
+      var trackingCode = buildTrackingCode();
+      if (trackingCode) { payload.trackingCode = trackingCode; }
+      var company = String(fd.get("company") || "").trim();
+      if (company) { payload.company = company; }
+      var role = String(fd.get("role") || "").trim();
+      if (role) { payload.jobTitle = role; }
+      var message = String(fd.get("message") || "").trim();
+      if (message) { payload.message = message; }
+      var website = String(fd.get("website") || "").trim();
+      if (website) { payload.website = website; }
 
       btn.disabled = true;
       setStatus(form, "Sending…");
 
-      fetch(LEADS_URL, {
+      fetch(CMS_LEADS_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
