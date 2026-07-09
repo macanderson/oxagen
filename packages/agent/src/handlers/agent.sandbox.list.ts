@@ -16,6 +16,8 @@ type Sandbox = AgentSandboxListOutput["sandboxes"][number];
 const LIST_COLUMNS = {
   publicId: schema.sandboxSessions.publicId,
   sessionKey: schema.sandboxSessions.sessionKey,
+  // Projected for the human-friendly label stored under metadata.label.
+  metadata: schema.sandboxSessions.metadata,
   image: schema.sandboxSessions.image,
   status: schema.sandboxSessions.status,
   driver: schema.sandboxSessions.driver,

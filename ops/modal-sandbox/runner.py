@@ -164,7 +164,20 @@ DURABLE_IMAGES: dict[str, modal.Image] = {
     ),
 }
 
-# Alias trampoline for /sandbox/exec.  POSIX shells parse the whole `-c`
+# Working-directory persistence sentinel.
+#
+# Each /sandbox/exec runs a FRESH `sh -c` inside the durable container, so the
+# shell's cwd resets to the image default every call — a `cd` in one command is
+# invisible to the next.  The durable terminal (and any caller that wants a
+# stateful shell) fixes this by threading the working directory: it passes the
+# prior cwd in via OXAGEN_CWD and reads the resulting cwd back out.  The shell
+# emits its final `pwd` on stdout behind this RS-delimited sentinel; the runner
+# strips the trailer (`_split_cwd_trailer`) and returns it as the response's
+# `cwd`.  ASCII RS (0x1e) never appears in normal terminal output, so the split
+# is collision-proof; the token that follows it just aids log grepping.
+_CWD_SENTINEL = "\x1e__OXAGEN_CWD__="
+
+# Alias + cwd trampoline for /sandbox/exec.  POSIX shells parse the whole `-c`
 # string before running any of it, so aliases defined inside the command
 # string can never apply to that same string; defining them first and
 # `eval`-ing the real command (passed via $OXAGEN_EXEC_CMD) makes the shell
@@ -175,13 +188,25 @@ DURABLE_IMAGES: dict[str, modal.Image] = {
 # grep/find semantics.  The command -v guards keep custom template images
 # without the tools behaving byte-identically to before.  Per-call opt-out:
 # set OXAGEN_NO_FAST_ALIASES=1 in the exec env.
+#
+# After the aliases it restores the caller's OXAGEN_CWD (durable-terminal cwd
+# persistence) and, after the command, prints the final `pwd` behind
+# _CWD_SENTINEL.  The user command's exit code is captured BEFORE the trailer
+# so `cd` reporting can never mask a real failure.  `printf '\036…'` writes the
+# RS byte portably (busybox/dash/bash all honour octal escapes).
 _FAST_ALIAS_TRAMPOLINE = (
     'if [ -z "$OXAGEN_NO_FAST_ALIASES" ]; then '
     '[ -n "$BASH_VERSION" ] && shopt -s expand_aliases 2>/dev/null; '
     "command -v rg >/dev/null 2>&1 && alias grep=rg egrep=rg; "
     "command -v fd >/dev/null 2>&1 && alias find=fd && alias glob='fd --glob'; "
     "fi; "
-    'eval "$OXAGEN_EXEC_CMD"'
+    # Restore the caller's working directory.  Guarded on -d so a since-deleted
+    # dir falls back to the image default instead of aborting the command.
+    'if [ -n "$OXAGEN_CWD" ] && [ -d "$OXAGEN_CWD" ]; then cd "$OXAGEN_CWD"; fi; '
+    'eval "$OXAGEN_EXEC_CMD"; '
+    "__oxagen_rc=$?; "
+    "printf '\\036__OXAGEN_CWD__=%s' \"$(pwd 2>/dev/null)\"; "
+    "exit $__oxagen_rc"
 )
 
 RUNNER_SECRET = modal.Secret.from_name("oxagen-runner")
