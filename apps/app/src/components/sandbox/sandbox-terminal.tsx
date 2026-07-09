@@ -39,10 +39,24 @@ export interface SandboxExecResult {
   executionMs: number;
   timedOut: boolean;
   restored?: boolean;
+  /**
+   * Working directory AFTER the command ran. The terminal holds this in state
+   * and threads it into the next command so `cd` persists across the session
+   * (cleared only on a full page refresh, which remounts this component).
+   * null/undefined when the runner couldn't report it — the prior cwd is kept.
+   */
+  cwd?: string | null;
 }
 
-/** Injected runner — the page binds this to a `run_sandbox_command` action. */
-export type RunCommandFn = (command: string) => Promise<SandboxExecResult>;
+/**
+ * Injected runner — the page binds this to a `run_sandbox_command` action.
+ * `opts.cwd` carries the prior working directory so the stateless per-command
+ * shell resumes where the last one left off.
+ */
+export type RunCommandFn = (
+  command: string,
+  opts?: { cwd?: string },
+) => Promise<SandboxExecResult>;
 
 /** A completed (or in-flight) scrollback entry. */
 export interface TerminalEntry extends Partial<SandboxExecResult> {
@@ -114,6 +128,18 @@ export function SandboxTerminal({
   const [entries, setEntries] = useState<TerminalEntry[]>(initialHistory);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  // Current working directory, reconstructed from each command's result. Held
+  // in component state (not persisted) so it survives command→command but
+  // resets on a full page refresh — exactly the requested lifetime. Seeded from
+  // the last entry that carried a cwd so `initialHistory` warm-ups continue
+  // from where they left off.
+  const [cwd, setCwd] = useState<string | undefined>(() => {
+    for (let i = initialHistory.length - 1; i >= 0; i--) {
+      const c = initialHistory[i]?.cwd;
+      if (c) return c;
+    }
+    return undefined;
+  });
   // Command history navigation (↑/↓), most-recent last.
   const [historyIdx, setHistoryIdx] = useState<number | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -132,18 +158,26 @@ export function SandboxTerminal({
   const submit = useCallback(async () => {
     const command = input.trim();
     if (command.length === 0 || busy || disabled) return;
+    // The directory this command runs in (the previous command's result cwd).
+    // Recorded on the entry so the scrollback prompt shows where it ran, and
+    // passed to the runner so the shell resumes there.
+    const runCwd = cwd;
     setInput("");
     setHistoryIdx(null);
     setBusy(true);
-    setEntries((prev) => [...prev, { command, status: "running" }]);
+    setEntries((prev) => [...prev, { command, status: "running", cwd: runCwd }]);
     try {
-      const result = await runCommand(command);
+      const result = await runCommand(command, { cwd: runCwd });
+      // Advance the working directory for the next command. Ignore a
+      // null/undefined cwd (pre-cwd runner or uncapturable) — keep the prior one.
+      if (result.cwd) setCwd(result.cwd);
       setEntries((prev) => {
         const next = [...prev];
-        // Update the last (running) entry for this command.
+        // Update the last (running) entry for this command. Keep the ran-in cwd
+        // on the entry (its prompt), not the post-command result cwd.
         for (let i = next.length - 1; i >= 0; i--) {
           if (next[i]?.status === "running") {
-            next[i] = { command, status: "done", ...result };
+            next[i] = { command, status: "done", ...result, cwd: runCwd };
             break;
           }
         }
