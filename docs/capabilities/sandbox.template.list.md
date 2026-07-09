@@ -1,4 +1,4 @@
-# sandbox.template.list
+# list_sandbox_templates
 
 **Domain:** sandbox
 **Mode:** sync
@@ -11,7 +11,7 @@
 
 List sandbox templates in the active workspace, optionally filtered to one
 environment. This is the read path behind the `settings/environments` template
-picker and the source list for `agent.environment.bind`. Workspace members can
+picker and the source list for `bind_agent_environment`. Workspace members can
 read; only Owner/Admin can mutate templates.
 
 ## Input
@@ -24,7 +24,7 @@ read; only Owner/Admin can mutate templates.
 
 | Field       | Type                     | Notes                                     |
 | ----------- | ------------------------ | ------------------------------------------ |
-| `templates` | `SandboxTemplateSummary[]` | Same shape as `sandbox.template.get`; unfiltered when `environmentId` is omitted, scoped to the workspace's environments |
+| `templates` | `SandboxTemplateSummary[]` | Same shape as `get_sandbox_template`; unfiltered when `environmentId` is omitted, scoped to the workspace's environments |
 
 ## Side effects
 
@@ -44,7 +44,7 @@ Content-Type: application/json
 
 ## MCP
 
-Tool name: `sandbox.template.list`
+Tool name: `list_sandbox_templates`
 
 ## Errors
 

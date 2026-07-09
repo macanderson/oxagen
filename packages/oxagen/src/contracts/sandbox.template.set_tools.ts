@@ -7,7 +7,7 @@ import { sandboxTemplateSummarySchema } from "./sandbox.template.create";
 // illegal). The conforming form folds the compound into the action segment,
 // mirroring the existing set_default / set_enabled / set_secret precedent.
 export const sandboxTemplateSetTools = registerCapability({
-  name: "sandbox.template.set_tools",
+  name: "set_sandbox_template_tools",
   domain: "sandbox",
   description:
     "Replace the full set of preloaded tools on a sandbox template (replace-set semantics — the given tools become the template's entire tool set).",

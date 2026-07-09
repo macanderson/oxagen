@@ -282,6 +282,60 @@
       }
     },
     {
+      "name": "bind_agent_environment",
+      "file": "agent.environment.bind.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false,
+        "app": true
+      }
+    },
+    {
+      "name": "list_agent_environments",
+      "file": "agent.environment.list.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false,
+        "app": true
+      }
+    },
+    {
+      "name": "unbind_agent_environment",
+      "file": "agent.environment.unbind.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false,
+        "app": true
+      }
+    },
+    {
       "name": "get_execution_lineage",
       "file": "agent.execution.lineage.ts",
       "domain": "agent",
@@ -3968,6 +4022,167 @@
         "mcp": false,
         "unit": false,
         "docs": false
+      }
+    },
+    {
+      "name": "create_sandbox_template",
+      "file": "sandbox.template.create.ts",
+      "domain": "sandbox",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false,
+        "app": true
+      }
+    },
+    {
+      "name": "delete_sandbox_template",
+      "file": "sandbox.template.delete.ts",
+      "domain": "sandbox",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false,
+        "app": true
+      }
+    },
+    {
+      "name": "export_sandbox_template",
+      "file": "sandbox.template.export.ts",
+      "domain": "sandbox",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false,
+        "app": true
+      }
+    },
+    {
+      "name": "get_sandbox_template",
+      "file": "sandbox.template.get.ts",
+      "domain": "sandbox",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
+      }
+    },
+    {
+      "name": "import_sandbox_template",
+      "file": "sandbox.template.import.ts",
+      "domain": "sandbox",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false,
+        "app": true
+      }
+    },
+    {
+      "name": "list_sandbox_templates",
+      "file": "sandbox.template.list.ts",
+      "domain": "sandbox",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false,
+        "app": true
+      }
+    },
+    {
+      "name": "set_default_sandbox_template",
+      "file": "sandbox.template.set_default.ts",
+      "domain": "sandbox",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false,
+        "app": true
+      }
+    },
+    {
+      "name": "set_sandbox_template_tools",
+      "file": "sandbox.template.set_tools.ts",
+      "domain": "sandbox",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false,
+        "app": true
+      }
+    },
+    {
+      "name": "update_sandbox_template",
+      "file": "sandbox.template.update.ts",
+      "domain": "sandbox",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false,
+        "app": true
       }
     },
     {

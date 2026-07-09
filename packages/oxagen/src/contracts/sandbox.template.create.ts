@@ -37,7 +37,7 @@ export const sandboxTemplateSummarySchema = z.object({
 });
 
 export const sandboxTemplateCreate = registerCapability({
-  name: "sandbox.template.create",
+  name: "create_sandbox_template",
   domain: "sandbox",
   description:
     "Create a portable sandbox template under an environment: provider, runtime image, resources, network posture, selected vault keys, literal config, and preloaded tools.",

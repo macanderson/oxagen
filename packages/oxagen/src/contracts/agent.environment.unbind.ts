@@ -2,7 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const agentEnvironmentUnbind = registerCapability({
-  name: "agent.environment.unbind",
+  name: "unbind_agent_environment",
   domain: "agent",
   description:
     "Remove an agent's binding to an environment. When the removed binding was primary, resolution falls back to the workspace default environment and its default template.",
