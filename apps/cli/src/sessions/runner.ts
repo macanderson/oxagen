@@ -78,8 +78,7 @@ import { accumulateUsage } from "../agent/model-router.js";
 import { resolveModelId } from "../agent/model.js";
 import {
   AgentTimeoutError,
-  makeStallDetector,
-  makeTurnController,
+  createTurnRunner,
   resolveTurnInactivityMs,
 } from "../agent/timeouts.js";
 import { createCiWaitProbe } from "../lib/ci-wait.js";
@@ -460,26 +459,20 @@ export async function runSession(
     history: ModelMessage[] | undefined;
   }): Promise<TurnOutcome> {
     const { prompt, turn, history } = args;
-    const turnController = makeTurnController(sessionController.signal);
 
     // Progress guard (identical to one-shot): headless has no Esc, so an
     // inactivity abort is the only backstop against a hung turn. Deferred while
-    // a tool is executing; probes CI before aborting a turn watching checks.
-    const inactivityMs = resolveTurnInactivityMs();
-    let inFlightTools = 0;
+    // a tool is executing; probes CI before aborting a turn watching checks. The
+    // runner's controller chains to the SESSION controller, so a session cancel
+    // (inbox/SIGTERM) aborts the in-flight turn too.
     const turnFiles = new Set<string>();
     const ciProbe = createCiWaitProbe(cwd);
-    const stall = makeStallDetector(
-      inactivityMs,
-      () => {
-        if (!turnController.signal.aborted) {
-          turnController.abort(new AgentTimeoutError("turn inactivity", inactivityMs));
-        }
-      },
+    const runner = createTurnRunner(
+      { turnInactivityMs: resolveTurnInactivityMs() },
       {
-        shouldDefer: () => inFlightTools > 0,
-        probe: () => ciProbe.probe(),
+        callerSignal: sessionController.signal,
         onLog: (line) => void debugLog("timeout", line),
+        stall: { probe: () => ciProbe.probe() },
       },
     );
 
@@ -506,28 +499,28 @@ export async function runSession(
         }),
         codeGraph,
         fileLock,
-        signal: turnController.signal,
+        signal: runner.signal,
         onStage: (stage) => {
-          stall.reset();
+          runner.noteProgress();
           emit({ type: "stage", kind: stage.kind, label: stage.label, detail: stage.detail });
         },
         onText: (delta) => {
-          stall.reset();
+          runner.noteProgress();
           emitDelta("message", delta, turn);
         },
         onReasoning: (delta) => {
-          stall.reset();
+          runner.noteProgress();
           emitDelta("reasoning", delta, turn);
         },
         onToolCall: (name, input) => {
-          inFlightTools++;
+          runner.noteToolStart();
           ciProbe.noteToolCall(name, input);
-          stall.reset();
+          runner.noteProgress();
           emit({ type: "tool.start", name, input: stringifyToolInput(input) });
         },
         onToolEvent: ({ name, ok, durationMs }) => {
-          inFlightTools = Math.max(0, inFlightTools - 1);
-          stall.reset();
+          runner.noteToolEnd();
+          runner.noteProgress();
           emit({ type: "tool.end", name, ok, durationMs });
         },
         onFileChange: (diff, changedFiles) => {
@@ -568,8 +561,8 @@ export async function runSession(
         return { kind: "cancelled" };
       }
       const timeoutReason =
-        turnController.signal.reason instanceof AgentTimeoutError
-          ? turnController.signal.reason
+        runner.signal.reason instanceof AgentTimeoutError
+          ? runner.signal.reason
           : err instanceof AgentTimeoutError
             ? err
             : null;
@@ -586,7 +579,7 @@ export async function runSession(
       return { kind: timeoutReason ? "timeout" : "error", message };
     } finally {
       turnRunning = false;
-      stall.stop();
+      runner.stop();
     }
   }
 
