@@ -22,7 +22,15 @@ export const repoFilePut = registerCapability({
     path: z.string().describe("File path within the repository (e.g. src/index.ts)"),
     content: z.string().describe("Raw UTF-8 file content — base64 encoding is handled internally"),
     message: z.string().describe("Commit message"),
-    branch: z.string().optional().describe("Branch to commit to (defaults to the repository default branch)"),
+    branch: z
+      .string()
+      .optional()
+      .describe(
+        "Branch to commit to. Must be a non-default work branch: commits targeting " +
+          "the repository's default branch — or omitting this field, which would " +
+          "silently target it — are rejected (403). Create a branch with " +
+          "create_branch and land changes on the default branch via open_pr.",
+      ),
   }),
   output: z.object({
     commitSha: z.string().describe("SHA of the commit that created or updated the file"),

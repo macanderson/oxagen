@@ -14,7 +14,7 @@ Create a new branch in a GitHub repository, optionally from another branch.
 |-----------|------|----------|-------------|
 | `owner` | string | yes | Repository owner (user or organisation) |
 | `repo` | string | yes | Repository name |
-| `branch` | string | yes | Name of the new branch to create |
+| `branch` | string | yes | Name of the new branch to create. Must not be the repository's default branch name (rejected with 403) |
 | `fromBranch` | string | no | Branch to base the new branch on (defaults to the repository default branch) |
 
 ## Output
