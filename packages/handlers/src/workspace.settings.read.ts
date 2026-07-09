@@ -12,15 +12,17 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 }
 
 // `description` lives in the workspaces.settings JSONB bag (no dedicated column),
-// alongside other settings keys like promptConfig. Normalize defensively.
+// alongside other settings keys like promptConfig. `avatarUrl` IS a real column
+// (workspace.workspaces.avatar_url). Normalize both defensively.
 export function mapWorkspaceSettingsRow(row: {
   name: string;
   slug: string;
+  avatarUrl: string | null;
   settings: unknown;
 }): WorkspaceSettingsReadOutput {
   const settings = isRecord(row.settings) ? row.settings : {};
   const description = typeof settings.description === "string" ? settings.description : null;
-  return { name: row.name, slug: row.slug, description };
+  return { name: row.name, slug: row.slug, description, avatarUrl: row.avatarUrl ?? null };
 }
 
 // Reads workspace.workspaces for the active workspace (RLS limits the row to
@@ -37,7 +39,7 @@ export const workspaceSettingsReadHandler: CapabilityHandler<typeof workspaceSet
   const row = await withTenantDb((tx) =>
     tx.query.workspaces.findFirst({
       where: eq(schema.workspaces.id, ctx.workspaceId),
-      columns: { name: true, slug: true, settings: true },
+      columns: { name: true, slug: true, avatarUrl: true, settings: true },
     }),
   );
 

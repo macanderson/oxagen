@@ -17,20 +17,27 @@ import { TEST_CTX as CTX } from "./test-utils/fixtures";
 describe("workspace.settings.read handler", () => {
   beforeEach(() => mocks.findFirst.mockReset());
 
-  it("maps the workspace row, pulling description from the settings bag", async () => {
+  it("maps the workspace row, pulling description from the settings bag and avatarUrl from its column", async () => {
     mocks.findFirst.mockResolvedValue({
       name: "Research",
       slug: "research",
+      avatarUrl: "avatar:v1:{\"emoji\":\"🔬\",\"bg\":\"#2563eb\",\"mode\":\"full\"}",
       settings: { description: "R&D workspace", promptConfig: { x: 1 } },
     });
     const out = await workspaceSettingsReadHandler({}, CTX);
-    expect(out).toEqual({ name: "Research", slug: "research", description: "R&D workspace" });
+    expect(out).toEqual({
+      name: "Research",
+      slug: "research",
+      description: "R&D workspace",
+      avatarUrl: "avatar:v1:{\"emoji\":\"🔬\",\"bg\":\"#2563eb\",\"mode\":\"full\"}",
+    });
   });
 
-  it("returns null description when the settings bag has none", async () => {
-    mocks.findFirst.mockResolvedValue({ name: "W", slug: "w", settings: {} });
+  it("returns null description and avatarUrl when unset", async () => {
+    mocks.findFirst.mockResolvedValue({ name: "W", slug: "w", avatarUrl: null, settings: {} });
     const out = await workspaceSettingsReadHandler({}, CTX);
     expect(out.description).toBeNull();
+    expect(out.avatarUrl).toBeNull();
   });
 
   it("throws when the workspace is not found", async () => {

@@ -21,8 +21,10 @@ import {
   agentToolSchema,
   agentTriggerSchema,
 } from "@oxagen/oxagen/agent-schema";
+import { avatarUrlSchema } from "@oxagen/oxagen/avatar";
 import { workspace } from "@/lib/routes";
 import type { ScopeContext } from "@/lib/scope";
+import type { StudioCtx } from "@/lib/studio/scope";
 import { resolveStudioScope } from "@/lib/studio/scope";
 import {
   createAgent,
@@ -30,6 +32,7 @@ import {
   publishAgent,
   deployAgent,
   suggestAgentDefinition,
+  summarizeAgent,
   type AgentSuggestion,
   type AgentRecommendation,
 } from "@/lib/studio/agents";
@@ -57,6 +60,8 @@ const createSchema = z.object({
     .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, "Slug must be lowercase kebab-case"),
   name: z.string().min(1, "Name is required"),
   description: z.string().optional(),
+  // https:// URL or "avatar:v1:<json>" designed-avatar string; omit to leave unset.
+  avatarUrl: avatarUrlSchema.optional(),
   agentType: z.string().min(1),
   config: configSchema,
 });
@@ -66,6 +71,8 @@ const updateSchema = z.object({
   agentId: z.string().min(1),
   name: z.string().min(1).optional(),
   description: z.string().optional(),
+  // Omit = unchanged, a value = set, null = clear the avatar.
+  avatarUrl: avatarUrlSchema.nullable().optional(),
   agentType: z.string().min(1).optional(),
   config: configSchema,
 });
@@ -113,6 +120,18 @@ function revalidateAgents(orgSlug: string, workspaceSlug: string): void {
   revalidatePath(workspace.studio.agents(routeCtx));
 }
 
+// Regenerate an agent's LLM summary after a save, fail-open: a summary is a
+// nice-to-have blurb, so a model hiccup must never fail the create/update the
+// user actually asked for. Forced so the summary always reflects the just-saved
+// config (create → v1, update → vN+1 both advance the config checksum anyway).
+async function regenerateSummarySafe(ctx: StudioCtx, agentId: string): Promise<void> {
+  try {
+    await summarizeAgent(ctx, agentId, true);
+  } catch {
+    // swallow — the summary can be regenerated later (e.g. by the list page).
+  }
+}
+
 // ── Create ────────────────────────────────────────────────────────────────────
 
 export async function createAgentAction(
@@ -122,7 +141,7 @@ export async function createAgentAction(
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
   }
-  const { orgSlug, workspaceSlug, slug, name, description, agentType, config } =
+  const { orgSlug, workspaceSlug, slug, name, description, avatarUrl, agentType, config } =
     parsed.data;
 
   const { ctx, canManage } = await resolveStudioScope(orgSlug, workspaceSlug);
@@ -133,9 +152,12 @@ export async function createAgentAction(
       slug,
       name,
       description,
+      avatarUrl,
       agentType,
       config,
     });
+    // Fire the summary regeneration off the just-created agent (fail-open).
+    await regenerateSummarySafe(ctx, out.publicId);
     revalidateAgents(orgSlug, workspaceSlug);
     return {
       ok: true,
@@ -160,7 +182,7 @@ export async function updateAgentAction(
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
   }
-  const { orgSlug, workspaceSlug, agentId, name, description, agentType, config } =
+  const { orgSlug, workspaceSlug, agentId, name, description, avatarUrl, agentType, config } =
     parsed.data;
 
   const { ctx, canManage } = await resolveStudioScope(orgSlug, workspaceSlug);
@@ -171,9 +193,12 @@ export async function updateAgentAction(
       agentId,
       name,
       description,
+      avatarUrl,
       agentType,
       config,
     });
+    // Regenerate the summary against the just-saved config (fail-open).
+    await regenerateSummarySafe(ctx, agentId);
     revalidateAgents(orgSlug, workspaceSlug);
     return { ok: true, version: out.version, isPublished: out.isPublished };
   } catch (err) {

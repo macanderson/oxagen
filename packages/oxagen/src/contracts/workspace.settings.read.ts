@@ -1,10 +1,14 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
+import { avatarUrlOutputSchema } from "../avatar";
 
 const workspaceSettingsOutput = z.object({
   name: z.string(),
   slug: z.string(),
   description: z.string().nullable(),
+  // Nullable avatar: an https:// URL or a designed-avatar spec string
+  // ("avatar:v1:<json>"). Null when the workspace has no avatar set.
+  avatarUrl: avatarUrlOutputSchema,
 });
 
 export const workspaceSettingsRead = registerCapability({

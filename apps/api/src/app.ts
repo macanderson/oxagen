@@ -214,6 +214,7 @@ import { agentDefinitionPublishRoute } from "./routes/v1/agent.definition.publis
 import { agentDefinitionGetRoute } from "./routes/v1/agent.definition.get";
 import { agentDefinitionListRoute } from "./routes/v1/agent.definition.list";
 import { agentDefinitionSuggestRoute } from "./routes/v1/agent.definition.suggest";
+import { agentDefinitionSummarizeRoute } from "./routes/v1/agent.definition.summarize";
 import { evalDatasetCreateRoute } from "./routes/v1/eval.dataset.create";
 import { evalDatasetListRoute } from "./routes/v1/eval.dataset.list";
 import { evalDatasetGetRoute } from "./routes/v1/eval.dataset.get";
@@ -479,6 +480,7 @@ orgScoped.route("/agent/executions/lineage", agentExecutionLineageRoute);
 orgScoped.route("/agent/definitions/update", agentDefinitionUpdateRoute);
 orgScoped.route("/agent/definitions/publish", agentDefinitionPublishRoute);
 orgScoped.route("/agent/definitions/suggest", agentDefinitionSuggestRoute);
+orgScoped.route("/agent/definitions/summarize", agentDefinitionSummarizeRoute);
 orgScoped.route("/agent/definitions", agentDefinitionCreateRoute);
 orgScoped.route("/agent/definitions", agentDefinitionListRoute);
 orgScoped.route("/agent/definitions", agentDefinitionGetRoute);
