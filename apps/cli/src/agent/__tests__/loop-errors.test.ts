@@ -3,7 +3,7 @@
  * actionable line — so dogfooding failures (no credits, bad key, rate limit)
  * are legible instead of dumping the SDK's internal error object.
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { normalizeAgentError, isErrorResult, stringifyCapped } from "../loop.js";
 
 /** Shape of an AI SDK gateway error: provider JSON lives on `responseBody`. */
@@ -83,5 +83,34 @@ describe("stringifyCapped — bounds captured tool input/results", () => {
     const circular: Record<string, unknown> = {};
     circular.self = circular;
     expect(typeof stringifyCapped(circular, 100)).toBe("string");
+  });
+});
+
+describe("stringifyCapped — OXAGEN_DEBUG breadcrumb on fallback", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    delete process.env["OXAGEN_DEBUG"];
+  });
+
+  /** A value JSON.stringify throws on, forcing the String() fallback path. */
+  function circular(): Record<string, unknown> {
+    const c: Record<string, unknown> = {};
+    c.self = c;
+    return c;
+  }
+
+  it("writes a breadcrumb to stderr when OXAGEN_DEBUG is set", () => {
+    process.env["OXAGEN_DEBUG"] = "1";
+    const spy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+    stringifyCapped(circular(), 100);
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(String(spy.mock.calls[0]?.[0])).toContain("[loop] stringifyCapped");
+  });
+
+  it("stays silent when OXAGEN_DEBUG is unset", () => {
+    delete process.env["OXAGEN_DEBUG"];
+    const spy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+    stringifyCapped(circular(), 100);
+    expect(spy).not.toHaveBeenCalled();
   });
 });

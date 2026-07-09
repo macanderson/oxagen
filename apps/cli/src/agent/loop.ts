@@ -110,7 +110,15 @@ export function stringifyCapped(v: unknown, max: number): string {
   let s: string;
   try {
     s = typeof v === "string" ? v : JSON.stringify(v) ?? String(v);
-  } catch {
+  } catch (err) {
+    // JSON.stringify throws on circular references / BigInt — fall back to
+    // String(). Leave a breadcrumb under OXAGEN_DEBUG so a mangled tool-event
+    // payload can be traced, but never let this path break the turn.
+    if (process.env["OXAGEN_DEBUG"]) {
+      process.stderr.write(
+        `[loop] stringifyCapped fell back to String(): ${err instanceof Error ? err.message : String(err)}\n`,
+      );
+    }
     s = String(v);
   }
   return s.length > max ? s.slice(0, max) + "…" : s;
@@ -128,8 +136,15 @@ function gatewayMessage(error: unknown): string {
     try {
       const parsed = JSON.parse(body) as { error?: { message?: string } };
       if (parsed.error?.message) return parsed.error.message;
-    } catch {
-      /* not JSON */
+    } catch (err) {
+      // The gateway body wasn't JSON (e.g. an HTML 502 page) — fall through to
+      // the Error.message / String() path below. Breadcrumb under OXAGEN_DEBUG
+      // so an unparseable provider error can be diagnosed without leaking it.
+      if (process.env["OXAGEN_DEBUG"]) {
+        process.stderr.write(
+          `[loop] gatewayMessage body was not JSON: ${err instanceof Error ? err.message : String(err)}\n`,
+        );
+      }
     }
   }
   if (error instanceof Error) return error.message;
