@@ -1,0 +1,141 @@
+import { describe, expect, it } from "vitest";
+
+import {
+  MENTION_TYPES,
+  matchMentionTypes,
+  mentionGrammarPrompt,
+  mentionTypeInfo,
+  parseMentions,
+  serializeMention,
+  splitTextByMentions,
+  stripMentions,
+  type ChatMention,
+} from "./mentions";
+
+const fileMention: ChatMention = {
+  type: "file",
+  slug: "apps/app/src/proxy.ts",
+  location: "apps/app/src/proxy.ts",
+  label: "proxy.ts",
+};
+
+describe("serializeMention / parseMentions", () => {
+  it("round-trips a simple mention", () => {
+    const token = serializeMention(fileMention);
+    expect(token).toBe(
+      "[:file|:apps/app/src/proxy.ts|:apps/app/src/proxy.ts|:proxy.ts]",
+    );
+    const [parsed] = parseMentions(`please look at ${token} first`);
+    expect(parsed).toMatchObject(fileMention);
+    expect(parsed.raw).toBe(token);
+    expect(parsed.start).toBe("please look at ".length);
+    expect(parsed.end).toBe(parsed.start + token.length);
+  });
+
+  it("percent-encodes structural characters and round-trips them", () => {
+    const nasty: ChatMention = {
+      type: "node",
+      slug: "node_abc123",
+      location: "graph://org/ws?q=a|b",
+      label: "Weird ]name| 100%",
+    };
+    const token = serializeMention(nasty);
+    expect(token).not.toMatch(/\|(?!:)/); // no unencoded pipes inside fields
+    const [parsed] = parseMentions(token);
+    expect(parsed).toMatchObject(nasty);
+  });
+
+  it("round-trips newlines in labels", () => {
+    const m: ChatMention = {
+      type: "edge",
+      slug: "edge_1",
+      location: "",
+      label: "two\nlines",
+    };
+    const [parsed] = parseMentions(serializeMention(m));
+    expect(parsed.label).toBe("two\nlines");
+  });
+
+  it("parses multiple mentions in document order", () => {
+    const a = serializeMention({ ...fileMention, label: "a" });
+    const b = serializeMention({
+      type: "agent",
+      slug: "agt_1",
+      location: "",
+      label: "Reviewer",
+    });
+    const parsed = parseMentions(`${a} and ${b}`);
+    expect(parsed.map((p) => p.label)).toEqual(["a", "Reviewer"]);
+  });
+
+  it("ignores unknown types and malformed tokens", () => {
+    const text =
+      "[:martian|:x|:y|:z] [:file|:only-two-fields] [:file|:a|:b|:c]";
+    const parsed = parseMentions(text);
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0]).toMatchObject({ type: "file", slug: "a" });
+  });
+
+  it("returns an empty array for text without tokens", () => {
+    expect(parseMentions("no tokens here [not:one]")).toEqual([]);
+  });
+});
+
+describe("splitTextByMentions", () => {
+  it("splits text into interleaved segments", () => {
+    const token = serializeMention(fileMention);
+    const segments = splitTextByMentions(`fix ${token} now`);
+    expect(segments).toHaveLength(3);
+    expect(segments[0]).toEqual({ kind: "text", text: "fix " });
+    expect(segments[1].kind).toBe("mention");
+    expect(segments[2]).toEqual({ kind: "text", text: " now" });
+  });
+
+  it("handles token-only and empty text", () => {
+    const token = serializeMention(fileMention);
+    expect(splitTextByMentions(token)).toHaveLength(1);
+    expect(splitTextByMentions("")).toEqual([{ kind: "text", text: "" }]);
+  });
+});
+
+describe("stripMentions", () => {
+  it("replaces tokens with @Label markers", () => {
+    const token = serializeMention(fileMention);
+    expect(stripMentions(`fix ${token} now`)).toBe("fix @proxy.ts now");
+  });
+});
+
+describe("mention type registry", () => {
+  it("covers every type with metadata", () => {
+    for (const info of MENTION_TYPES) {
+      expect(mentionTypeInfo(info.type)).toBe(info);
+      expect(info.label.length).toBeGreaterThan(0);
+      expect(info.summary.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("matches types by prefix against type, label, and plural", () => {
+    expect(matchMentionTypes("")).toHaveLength(MENTION_TYPES.length);
+    expect(matchMentionTypes("rep").map((t) => t.type)).toContain(
+      "repository",
+    );
+    expect(matchMentionTypes("mcp").map((t) => t.type)).toEqual([
+      "mcp_server",
+    ]);
+    expect(matchMentionTypes("graph").map((t) => t.type)).toEqual([
+      "node",
+      "edge",
+    ]);
+    expect(matchMentionTypes("zzz")).toEqual([]);
+  });
+});
+
+describe("mentionGrammarPrompt", () => {
+  it("documents the grammar and every type", () => {
+    const prompt = mentionGrammarPrompt();
+    expect(prompt).toContain("[:TYPE|:SLUG|:LOCATION|:LABEL]");
+    for (const info of MENTION_TYPES) {
+      expect(prompt).toContain(`\`${info.type}\``);
+    }
+  });
+});

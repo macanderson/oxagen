@@ -12,3 +12,22 @@ export {
   slashCommandsPromptSection,
 } from "./slash-commands";
 export type { SlashCommand } from "./slash-commands";
+export {
+  MENTION_TYPES,
+  MENTION_TOKEN_REGEX,
+  isMentionType,
+  matchMentionTypes,
+  mentionGrammarPrompt,
+  mentionTypeInfo,
+  parseMentions,
+  serializeMention,
+  splitTextByMentions,
+  stripMentions,
+} from "./mentions";
+export type {
+  ChatMention,
+  MentionTextSegment,
+  MentionType,
+  MentionTypeInfo,
+  ParsedMention,
+} from "./mentions";
