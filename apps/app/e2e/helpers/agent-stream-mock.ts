@@ -75,23 +75,15 @@ export async function interceptAgentStream(
   });
 
   if (opts.holdRefresh ?? true) {
-    // Hold every GET to the /ask or /chat route so the live streamed bubbles
-    // persist through the assertions (see holdRefresh docs). This covers both
-    // the explicit router.refresh() (RSC GET, header `rsc: 1`) AND the
-    // router.replace(`${pathname}?c=${conversationId}`) that fires immediately
-    // after a brand-new conversation's first message (chat-shell-client.tsx) —
-    // that replace's own GET doesn't reliably carry `rsc: 1` in every Next.js
-    // navigation mode, so gating on that header alone let it slip through,
-    // race a real (mock-unaware) server round-trip, and reset() the streamed
-    // bubbles before the test could assert on them. The mocked POST stream is
-    // the only response this test depends on, so holding every GET here is
-    // safe — the full-document page.goto has already completed by the time
-    // this route is armed and falls through to continue() regardless.
+    // Hold the post-turn RSC refresh of the conversation page so the live
+    // streamed bubbles persist through the assertions (see holdRefresh docs).
+    // Match only RSC GETs (header `rsc: 1`) to the /ask or /chat route; the
+    // full-document page.goto has no RSC header and falls through to continue().
     await page.route(
       (url) => /\/(ask|chat)(\?|$)/.test(`${url.pathname}${url.search}`),
       async (route: Route) => {
         const req = route.request();
-        if (req.method() === "GET") {
+        if (req.method() === "GET" && req.headers()["rsc"] === "1") {
           // Never fulfill: the refresh stays pending, so the [messages]
           // reconcile that would reset() the streamed bubbles never fires.
           return;
