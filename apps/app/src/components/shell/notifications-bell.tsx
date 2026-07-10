@@ -125,7 +125,7 @@ export function NotificationsBell() {
               aria-haspopup="dialog"
               onClick={() => setOpen(true)}
               className={cn(
-                "relative flex h-9 w-9 items-center justify-center rounded-md",
+                "relative flex h-9 w-9 items-center justify-center rounded-md max-md:h-11 max-md:w-11",
                 "text-app-link-fg transition-colors",
                 "hover:bg-accent hover:text-app-link-hover-fg",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",

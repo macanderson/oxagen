@@ -27,7 +27,7 @@ export function BalancePill({ orgSlug, balanceCents, low }: BalancePillProps) {
       aria-label={`Remaining balance ${formatCents(balanceCents)}. Manage billing.`}
       title="Remaining balance — click to manage billing"
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-sm font-medium tabular-nums transition-colors",
+        "inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-sm font-medium tabular-nums transition-colors max-md:min-h-11",
         low
           ? "border-warning/40 bg-warning/10 text-warning hover:bg-warning/20"
           : "border-border bg-muted/50 text-app-topbar-fg hover:bg-muted",
