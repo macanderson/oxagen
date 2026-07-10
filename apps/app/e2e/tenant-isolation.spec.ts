@@ -43,7 +43,8 @@ import {
 
 function deQuote(raw: string | undefined, fallback: string): string {
   if (!raw) return fallback;
-  if (raw.length >= 2 && raw.startsWith('"') && raw.endsWith('"')) return raw.slice(1, -1);
+  if (raw.length >= 2 && raw.startsWith('"') && raw.endsWith('"'))
+    return raw.slice(1, -1);
   return raw;
 }
 
@@ -143,14 +144,24 @@ test.describe("tenant isolation — cross-org access denial", () => {
   // ── 2. User is denied access to a foreign org's routes ──────────────────────
 
   // The org layout gates membership via assertOrgMember() → notFound() for a
-  // non-member, so Org B routes render the 404 boundary (HTTP 404, URL
-  // unchanged) — NOT a /login redirect. 404 is deliberate: it does not even
-  // confirm Org B exists to a non-member.
-  const EXPECT_DENIED = async (page: import("@playwright/test").Page, path: string) => {
+  // non-member, so Org B routes render the 404 boundary (URL unchanged) — NOT
+  // a /login redirect. The 404 surface is deliberate: it does not even confirm
+  // Org B exists to a non-member.
+  //
+  // HTTP status note: under cacheComponents/Partial Prerendering the initial
+  // document is the prerendered static shell (HTTP 200) and notFound() fires
+  // inside the dynamic hole while streaming, so the status line can no longer
+  // flip to 404. The enforced contract is CONTENT-level: the not-found
+  // boundary renders, no org shell/data ever appears (leak check below), and
+  // cross-tenant API calls still hard-403.
+  const EXPECT_DENIED = async (
+    page: import("@playwright/test").Page,
+    path: string,
+  ) => {
     const resp = await page.goto(path);
-    // Initial document must be a 404 (notFound() from the org layout).
-    expect(resp?.status()).toBe(404);
-    // And the not-found surface — not an authed org shell — is what renders.
+    // Shell may stream as 200 under PPR; a real 404 is also acceptable.
+    expect([200, 404]).toContain(resp?.status() ?? 0);
+    // The not-found surface — not an authed org shell — is what renders.
     await expect(page).not.toHaveURL(/\/login/);
     await expect(page.getByText(/page not found|404/i).first()).toBeVisible();
   };
@@ -206,8 +217,10 @@ test.describe("tenant isolation — cross-org access denial", () => {
     await loginWithSession(context, fixtureA.sessionToken, baseURL);
     const resp = await page.goto(`/${ORG_B_SLUG}/billing/subscription`);
 
-    // Denied via notFound() → 404 boundary, never Org B content.
-    expect(resp?.status()).toBe(404);
+    // Denied via notFound() → 404 boundary, never Org B content. (Status may
+    // be 200 under PPR — see EXPECT_DENIED; the content assertions are the
+    // enforced isolation contract.)
+    expect([200, 404]).toContain(resp?.status() ?? 0);
     await expect(page.getByText(/page not found|404/i).first()).toBeVisible();
     // The 404 surface must not leak Org A's name/slug either.
     const bodyText = await page.locator("body").textContent();
