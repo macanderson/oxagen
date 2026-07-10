@@ -17,8 +17,16 @@ const execFileAsync = promisify(execFile);
 const DEFAULT_MAX_BUFFER = 8 * 1024 * 1024;
 
 /** Env overlay that defeats every color-forcing mechanism `gh` respects. */
-export function colorSafeEnv(base: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
-  return { ...base, NO_COLOR: "1", CLICOLOR_FORCE: "0", CLICOLOR: "0", FORCE_COLOR: "0" };
+export function colorSafeEnv(
+  base: NodeJS.ProcessEnv = process.env,
+): NodeJS.ProcessEnv {
+  return {
+    ...base,
+    NO_COLOR: "1",
+    CLICOLOR_FORCE: "0",
+    CLICOLOR: "0",
+    FORCE_COLOR: "0",
+  };
 }
 
 export interface RunGhOptions {
@@ -39,7 +47,10 @@ export async function runGh(
 }
 
 /** Run `gh <args>` and JSON.parse stdout — the `--json`/`api` call shape almost every caller wants. */
-export async function ghJson<T>(args: string[], opts: RunGhOptions = {}): Promise<T> {
+export async function ghJson<T>(
+  args: string[],
+  opts: RunGhOptions = {},
+): Promise<T> {
   const { stdout } = await runGh(args, opts);
   return JSON.parse(stdout) as T;
 }

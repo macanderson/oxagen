@@ -49,7 +49,11 @@ vi.mock("../../agent/trace-store.js", () => ({
   }),
 }));
 vi.mock("../../agent/fleet/memory.js", () => ({
-  openFleetMemory: () => ({ record: () => {}, recall: () => [], all: () => [] }),
+  openFleetMemory: () => ({
+    record: () => {},
+    recall: () => [],
+    all: () => [],
+  }),
 }));
 vi.mock("../../agent/memory.js", () => ({
   openSessionMemory: async () => ({
@@ -64,7 +68,8 @@ vi.mock("../../agent/project-context.js", () => ({
 vi.mock("../../agent/model.js", () => ({
   resolveModelId: (override?: string) => override ?? "test/model",
   resolveEffort: () => undefined,
-  isReasoningEffort: (s: string) => ["low", "medium", "high", "xhigh", "max"].includes(s),
+  isReasoningEffort: (s: string) =>
+    ["low", "medium", "high", "xhigh", "max"].includes(s),
   EFFORT_LEVELS: ["low", "medium", "high", "xhigh", "max"] as const,
 }));
 vi.mock("../../agent/code-graph.js", () => ({
@@ -88,17 +93,26 @@ const TEST_SESSION = {
   apiUrl: "http://localhost:4000",
 };
 
-const tick = (ms = 15): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+const tick = (ms = 15): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms));
 
-async function until(cond: () => boolean, timeoutMs = 4000, stepMs = 10): Promise<void> {
+async function until(
+  cond: () => boolean,
+  timeoutMs = 4000,
+  stepMs = 10,
+): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (!cond()) {
-    if (Date.now() - deadline > 0) throw new Error("until(): condition not met before deadline");
+    if (Date.now() - deadline > 0)
+      throw new Error("until(): condition not met before deadline");
     await tick(stepMs);
   }
 }
 
-async function submit(stdin: { write: (s: string) => void }, text: string): Promise<void> {
+async function submit(
+  stdin: { write: (s: string) => void },
+  text: string,
+): Promise<void> {
   stdin.write(text);
   await tick();
   stdin.write("\r");
@@ -119,8 +133,12 @@ describe("REPL /cost — inline CLI-command execution (no shell dead-end, no raw
     // call seen here is necessarily code that bypassed the capture-writer seam.
     stdoutSpy = vi
       .spyOn(process.stdout, "write")
-      .mockImplementation((() => true) as typeof process.stdout.write) as unknown as typeof stdoutSpy;
-    consoleLogSpy = vi.spyOn(console, "log").mockImplementation(() => undefined) as unknown as typeof consoleLogSpy;
+      .mockImplementation(
+        (() => true) as typeof process.stdout.write,
+      ) as unknown as typeof stdoutSpy;
+    consoleLogSpy = vi
+      .spyOn(console, "log")
+      .mockImplementation(() => undefined) as unknown as typeof consoleLogSpy;
   });
 
   afterEach(() => {
@@ -128,7 +146,9 @@ describe("REPL /cost — inline CLI-command execution (no shell dead-end, no raw
   });
 
   it("runs /cost inline and folds its output into an assistant message", async () => {
-    const { stdin, lastFrame } = render(<ReplApp options={{ session: TEST_SESSION, buildProgram }} />);
+    const { stdin, lastFrame } = render(
+      <ReplApp options={{ session: TEST_SESSION, buildProgram }} />,
+    );
     await tick();
 
     await submit(stdin, "/cost");
@@ -143,7 +163,9 @@ describe("REPL /cost — inline CLI-command execution (no shell dead-end, no raw
   });
 
   it("never calls the real process.stdout.write or console.log while running /cost", async () => {
-    const { stdin, lastFrame } = render(<ReplApp options={{ session: TEST_SESSION, buildProgram }} />);
+    const { stdin, lastFrame } = render(
+      <ReplApp options={{ session: TEST_SESSION, buildProgram }} />,
+    );
     await tick();
 
     stdoutSpy.mockClear();
@@ -157,7 +179,9 @@ describe("REPL /cost — inline CLI-command execution (no shell dead-end, no raw
   });
 
   it("runs /cost --rates inline and shows the baked-in rate card", async () => {
-    const { stdin, lastFrame } = render(<ReplApp options={{ session: TEST_SESSION, buildProgram }} />);
+    const { stdin, lastFrame } = render(
+      <ReplApp options={{ session: TEST_SESSION, buildProgram }} />,
+    );
     await tick();
 
     await submit(stdin, "/cost --rates");

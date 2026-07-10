@@ -10,11 +10,7 @@
  * No more mock data.
  */
 
-import {
-  CheckCircle2,
-  AlertTriangle,
-  XCircle,
-} from "lucide-react";
+import { CheckCircle2, AlertTriangle, XCircle } from "lucide-react";
 import Link from "next/link";
 import { Panel } from "@/components/ui/panel";
 import { Badge } from "@/components/ui/badge";
@@ -37,8 +33,7 @@ const _ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
 
 async function loadSignals(orgId: string) {
   const now = new Date();
-  const rlsEnforced =
-    process.env["TENANT_RLS_ENFORCEMENT_ENABLED"] === "true";
+  const rlsEnforced = process.env["TENANT_RLS_ENFORCEMENT_ENABLED"] === "true";
 
   // Run all DB queries in parallel via withSystemDb (RLS bypass is fine — this
   // is a security-manager surface that runs inside an org-member gate).
@@ -78,10 +73,11 @@ async function loadSignals(orgId: string) {
   const auditEventCount = auditRow[0]?.c ?? 0;
   const mfaRequired = policyRow[0]?.mfaRequired ?? false;
   const oldestKeyDate = apiKeyRow[0]?.oldest ?? null;
-  const oldestActiveApiKeyDays =
-    oldestKeyDate
-      ? Math.floor((now.getTime() - oldestKeyDate.getTime()) / (1000 * 60 * 60 * 24))
-      : null;
+  const oldestActiveApiKeyDays = oldestKeyDate
+    ? Math.floor(
+        (now.getTime() - oldestKeyDate.getTime()) / (1000 * 60 * 60 * 24),
+      )
+    : null;
 
   return { auditEventCount, mfaRequired, rlsEnforced, oldestActiveApiKeyDays };
 }
@@ -106,8 +102,10 @@ const STATUS_ICON_COLOR: Record<ControlStatus, string> = {
 
 function ControlStatusIcon({ status }: { status: ControlStatus }) {
   const cls = `mt-0.5 h-4 w-4 shrink-0 ${STATUS_ICON_COLOR[status]}`;
-  if (status === "active") return <CheckCircle2 className={cls} aria-hidden="true" />;
-  if (status === "partial") return <AlertTriangle className={cls} aria-hidden="true" />;
+  if (status === "active")
+    return <CheckCircle2 className={cls} aria-hidden="true" />;
+  if (status === "partial")
+    return <AlertTriangle className={cls} aria-hidden="true" />;
   return <XCircle className={cls} aria-hidden="true" />;
 }
 
@@ -158,8 +156,8 @@ export default async function SecurityCompliancePage({
         }
       >
         <p className="mb-4 text-sm text-muted-foreground">
-          Trust Service Criteria control status — derived from live platform signals, not static
-          declarations.
+          Trust Service Criteria control status — derived from live platform
+          signals, not static declarations.
         </p>
         <div className="mb-3 h-2 w-full rounded-full bg-muted overflow-hidden">
           <div
@@ -169,15 +167,21 @@ export default async function SecurityCompliancePage({
         </div>
         <div className="flex gap-4 text-xs text-muted-foreground">
           <span>
-            <span className="font-semibold text-[hsl(142_71%_45%)]">{summary.active}</span>{" "}
+            <span className="font-semibold text-[hsl(142_71%_45%)]">
+              {summary.active}
+            </span>{" "}
             active
           </span>
           <span>
-            <span className="font-semibold text-[hsl(38_92%_50%)]">{summary.partial}</span>{" "}
+            <span className="font-semibold text-[hsl(38_92%_50%)]">
+              {summary.partial}
+            </span>{" "}
             partial
           </span>
           <span>
-            <span className="font-semibold text-destructive">{summary.notStarted}</span>{" "}
+            <span className="font-semibold text-destructive">
+              {summary.notStarted}
+            </span>{" "}
             not started
           </span>
         </div>
@@ -187,60 +191,64 @@ export default async function SecurityCompliancePage({
       <Panel
         title="Control catalog"
         actions={
-          <Button variant="outline" size="sm" render={<Link href={org.security.audit(ctx)} />}>
+          <Button
+            variant="outline"
+            size="sm"
+            render={<Link href={org.security.audit(ctx)} />}
+          >
             View audit log
           </Button>
         }
       >
         <p className="mb-4 text-sm text-muted-foreground">
-          Trust Service Criteria controls and their current status. Every status is derived from
-          live system signals.
+          Trust Service Criteria controls and their current status. Every status
+          is derived from live system signals.
         </p>
         {categories.map((category, catIdx) => {
-            const catControls = controls.filter((c) => c.category === category);
-            return (
-              <div key={category}>
-                {catIdx > 0 && <Separator className="my-5" />}
-                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">
-                  {category}
-                </p>
-                <div className="flex flex-col gap-2">
-                  {catControls.map((ctrl) => (
-                    <div
-                      key={ctrl.id}
-                      className="flex flex-col gap-2 rounded-xl border border-border/60 bg-muted/30 px-4 py-3 sm:flex-row sm:items-start sm:gap-4"
-                    >
-                      <div className="flex items-start gap-3 flex-1 min-w-0">
-                        <ControlStatusIcon status={ctrl.status} />
-                        <div className="flex flex-col gap-0.5 min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="font-mono text-xs font-semibold text-foreground">
-                              {ctrl.criterion}
-                            </span>
-                            <span className="text-sm font-medium text-foreground">
-                              {ctrl.title}
-                            </span>
-                          </div>
-                          <p className="text-xs text-muted-foreground leading-snug">
-                            {ctrl.description}
-                          </p>
-                          <p className="text-xs text-muted-foreground/70 leading-snug italic mt-0.5">
-                            {ctrl.rationale}
-                          </p>
+          const catControls = controls.filter((c) => c.category === category);
+          return (
+            <div key={category}>
+              {catIdx > 0 && <Separator className="my-5" />}
+              <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">
+                {category}
+              </p>
+              <div className="flex flex-col gap-2">
+                {catControls.map((ctrl) => (
+                  <div
+                    key={ctrl.id}
+                    className="flex flex-col gap-2 rounded-xl border border-border/60 bg-muted/30 px-4 py-3 sm:flex-row sm:items-start sm:gap-4"
+                  >
+                    <div className="flex items-start gap-3 flex-1 min-w-0">
+                      <ControlStatusIcon status={ctrl.status} />
+                      <div className="flex flex-col gap-0.5 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-mono text-xs font-semibold text-foreground">
+                            {ctrl.criterion}
+                          </span>
+                          <span className="text-sm font-medium text-foreground">
+                            {ctrl.title}
+                          </span>
                         </div>
+                        <p className="text-xs text-muted-foreground leading-snug">
+                          {ctrl.description}
+                        </p>
+                        <p className="text-xs text-muted-foreground/70 leading-snug italic mt-0.5">
+                          {ctrl.rationale}
+                        </p>
                       </div>
-                      <Badge
-                        variant={STATUS_VARIANT[ctrl.status]}
-                        className="shrink-0 self-start text-xs"
-                      >
-                        {STATUS_LABEL[ctrl.status]}
-                      </Badge>
                     </div>
-                  ))}
-                </div>
+                    <Badge
+                      variant={STATUS_VARIANT[ctrl.status]}
+                      className="shrink-0 self-start text-xs"
+                    >
+                      {STATUS_LABEL[ctrl.status]}
+                    </Badge>
+                  </div>
+                ))}
               </div>
-            );
-          })}
+            </div>
+          );
+        })}
       </Panel>
     </div>
   );

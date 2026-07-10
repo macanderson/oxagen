@@ -5,7 +5,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ChatShellClient } from "./chat-shell-client";
 import { BackgroundTaskTray } from "./background-task-tray";
 import { resolvedTierCatalog } from "@oxagen/ai";
-import type { ComposerModelState, WorkspaceBudgetGovernance } from "./model-picker";
+import type {
+  ComposerModelState,
+  WorkspaceBudgetGovernance,
+} from "./model-picker";
 import type { McpServerSummary } from "./mcp-types";
 import type { RepoOption } from "./repo-selector";
 import type { EnvironmentOption } from "./environment-selector";

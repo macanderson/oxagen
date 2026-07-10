@@ -44,7 +44,10 @@ interface State {
   frame: number;
 }
 
-type Action = { kind: "event"; e: InitProgressEvent } | { kind: "tick" } | { kind: "reveal" };
+type Action =
+  | { kind: "event"; e: InitProgressEvent }
+  | { kind: "tick" }
+  | { kind: "reveal" };
 
 function initialState(): State {
   return {
@@ -70,13 +73,24 @@ function reducer(s: State, a: Action): State {
         // Throttle to ~PROGRESS_STEPS redraws regardless of repo size — a
         // 5,000-file monorepo shouldn't dispatch 5,000 state updates.
         const step = Math.max(1, Math.floor(e.filesTotal / PROGRESS_STEPS));
-        if (e.filesDone !== e.filesTotal && e.filesDone - s.filesDone < step) return s;
-        return { ...s, label: PHASE_LABEL.graph, filesDone: e.filesDone, filesTotal: e.filesTotal };
+        if (e.filesDone !== e.filesTotal && e.filesDone - s.filesDone < step)
+          return s;
+        return {
+          ...s,
+          label: PHASE_LABEL.graph,
+          filesDone: e.filesDone,
+          filesTotal: e.filesTotal,
+        };
       }
       return { ...s, label: PHASE_LABEL.graph };
     case "domains":
       if (e.status === "start") {
-        return { ...s, label: PHASE_LABEL.domains, filesTotal: e.totalFiles, filesDone: 0 };
+        return {
+          ...s,
+          label: PHASE_LABEL.domains,
+          filesTotal: e.totalFiles,
+          filesDone: 0,
+        };
       }
       if (e.status === "done") return { ...s, domainsFound: e.domains.length };
       if (e.status === "skipped") return { ...s, domainsFound: 0 };
@@ -134,7 +148,13 @@ export function InitAnimationApp({
   }, [state.revealing, spinnerTickMs]);
 
   if (state.revealing) {
-    return <InitRevealView onDone={onReady} tickMs={revealTickMs} holdMs={revealHoldMs} />;
+    return (
+      <InitRevealView
+        onDone={onReady}
+        tickMs={revealTickMs}
+        holdMs={revealHoldMs}
+      />
+    );
   }
 
   const bar = progressBar(state.filesDone, state.filesTotal);

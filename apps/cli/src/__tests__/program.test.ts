@@ -16,7 +16,16 @@ describe("describeCliCommands", () => {
 
   it("surfaces the same top-level commands `oxagen --help` lists", () => {
     // A representative spread across the command tree.
-    for (const name of ["agents", "cost", "graph", "code", "init", "settings", "mcp", "secret"]) {
+    for (const name of [
+      "agents",
+      "cost",
+      "graph",
+      "code",
+      "init",
+      "settings",
+      "mcp",
+      "secret",
+    ]) {
       expect(byName.has(name), `missing ${name}`).toBe(true);
     }
   });

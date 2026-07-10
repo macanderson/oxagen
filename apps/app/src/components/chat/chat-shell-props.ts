@@ -10,7 +10,10 @@
 import type { ChatMessage } from "./message-bubble";
 import type { ComposerAction } from "./message-composer";
 import type { BackgroundTaskSnapshot } from "./background-task-tray";
-import type { ComposerModelState, WorkspaceBudgetGovernance } from "./model-picker";
+import type {
+  ComposerModelState,
+  WorkspaceBudgetGovernance,
+} from "./model-picker";
 import type { McpServerSummary } from "./mcp-types";
 import type { RepoOption } from "./repo-selector";
 import type { EnvironmentOption } from "./environment-selector";
@@ -38,7 +41,9 @@ export interface ChatShellProps {
     amendedSteps?: import("./stream-event-types").PlanStep[],
   ) => Promise<{ ok: boolean; error?: string }>;
   fetchBackgroundTask: (taskId: string) => Promise<BackgroundTaskSnapshot>;
-  cancelBackgroundTask?: (taskId: string) => Promise<{ ok: boolean; error?: string }>;
+  cancelBackgroundTask?: (
+    taskId: string,
+  ) => Promise<{ ok: boolean; error?: string }>;
   initialBackgroundTaskIds?: string[];
   agentCapabilities?: readonly import("./plan-card").AgentCapability[];
   /** Slug values forwarded to ChatShellClient for /api/v1/chat/stream requests. */

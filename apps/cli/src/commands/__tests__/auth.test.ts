@@ -51,7 +51,12 @@ import {
 } from "../../lib/config.js";
 import { resolveLinkedAccount } from "../../lib/linker.js";
 import { browserLogin } from "../../auth/loopback-login.js";
-import { handleLogin, handleLogout, validatePlatformToken, runBrowserLogin } from "../auth.js";
+import {
+  handleLogin,
+  handleLogout,
+  validatePlatformToken,
+  runBrowserLogin,
+} from "../auth.js";
 
 const mockBrowserLogin = browserLogin as ReturnType<typeof vi.fn>;
 
@@ -62,7 +67,9 @@ const mockGetWorkspaceId = getWorkspaceId as ReturnType<typeof vi.fn>;
 const mockReadConfig = readConfig as ReturnType<typeof vi.fn>;
 const mockWriteConfig = writeConfig as ReturnType<typeof vi.fn>;
 const mockClearConfig = clearConfig as ReturnType<typeof vi.fn>;
-const mockResolveLinkedAccount = resolveLinkedAccount as ReturnType<typeof vi.fn>;
+const mockResolveLinkedAccount = resolveLinkedAccount as ReturnType<
+  typeof vi.fn
+>;
 
 /** A fully-resolved account, as the linker returns it on the happy path. */
 function linkedAccount(orgSlug = "acme", workspaceSlug = "main") {
@@ -117,7 +124,10 @@ afterEach(() => {
 describe("validatePlatformToken", () => {
   it("returns kind:valid for a 200 response", async () => {
     mockFetch.mockResolvedValue({ ok: true, status: 200 });
-    const result = await validatePlatformToken("tok_valid", "https://api.oxagen.sh");
+    const result = await validatePlatformToken(
+      "tok_valid",
+      "https://api.oxagen.sh",
+    );
     expect(result).toEqual({ kind: "valid" });
     expect(mockFetch).toHaveBeenCalledWith(
       "https://api.oxagen.sh/v1/auth/whoami",
@@ -132,25 +142,37 @@ describe("validatePlatformToken", () => {
 
   it("returns kind:invalid for a 401 response (auth layer rejected the key)", async () => {
     mockFetch.mockResolvedValue({ ok: false, status: 401 });
-    const result = await validatePlatformToken("tok_bad", "https://api.oxagen.sh");
+    const result = await validatePlatformToken(
+      "tok_bad",
+      "https://api.oxagen.sh",
+    );
     expect(result).toEqual({ kind: "invalid" });
   });
 
   it("returns kind:forbidden for a 403 response (valid key, IAM denied)", async () => {
     mockFetch.mockResolvedValue({ ok: false, status: 403 });
-    const result = await validatePlatformToken("tok_real", "https://api.oxagen.sh");
+    const result = await validatePlatformToken(
+      "tok_real",
+      "https://api.oxagen.sh",
+    );
     expect(result).toEqual({ kind: "forbidden" });
   });
 
   it("returns kind:unexpected for other non-ok statuses", async () => {
     mockFetch.mockResolvedValue({ ok: false, status: 500 });
-    const result = await validatePlatformToken("tok_x", "https://api.oxagen.sh");
+    const result = await validatePlatformToken(
+      "tok_x",
+      "https://api.oxagen.sh",
+    );
     expect(result).toEqual({ kind: "unexpected", status: 500 });
   });
 
   it("returns kind:network with detail on network error", async () => {
     mockFetch.mockRejectedValue(new Error("ECONNREFUSED"));
-    const result = await validatePlatformToken("tok_bad", "https://api.oxagen.sh");
+    const result = await validatePlatformToken(
+      "tok_bad",
+      "https://api.oxagen.sh",
+    );
     expect(result).toEqual({ kind: "network", detail: "ECONNREFUSED" });
   });
 });
@@ -280,7 +302,9 @@ describe("handleLogin — headless (--token/--org/--workspace flags)", () => {
     // Org/workspace are no longer required flags: a valid key plus the linker
     // (auto-select or prompt) resolves the scope. Pass only the token.
     mockFetch.mockResolvedValue({ ok: true, status: 200 });
-    mockResolveLinkedAccount.mockResolvedValue(linkedAccount("picked-org", "picked-ws"));
+    mockResolveLinkedAccount.mockResolvedValue(
+      linkedAccount("picked-org", "picked-ws"),
+    );
 
     await handleLogin({ token: "tok_valid" });
 
@@ -329,14 +353,18 @@ describe("handleLogin — headless (--token/--org/--workspace flags)", () => {
       workspaceSlug: "config-ws",
     });
     mockFetch.mockResolvedValue({ ok: true, status: 200 });
-    mockResolveLinkedAccount.mockResolvedValue(linkedAccount("picked-org", "picked-ws"));
+    mockResolveLinkedAccount.mockResolvedValue(
+      linkedAccount("picked-org", "picked-ws"),
+    );
 
     await handleLogin({});
 
     expect(mockFetch).toHaveBeenCalledWith(
       "https://api.oxagen.sh/v1/auth/whoami",
       expect.objectContaining({
-        headers: expect.objectContaining({ Authorization: "Bearer tok_config" }),
+        headers: expect.objectContaining({
+          Authorization: "Bearer tok_config",
+        }),
       }),
     );
     expect(mockWriteConfig).toHaveBeenCalledWith({
@@ -356,11 +384,19 @@ describe("runBrowserLogin", () => {
   });
 
   it("persists the session returned by browserLogin via writeConfig — the exact same shape `oxagen login` writes", async () => {
-    mockBrowserLogin.mockResolvedValue({ token: "tok_x", orgSlug: "acme", workspaceSlug: "main" });
+    mockBrowserLogin.mockResolvedValue({
+      token: "tok_x",
+      orgSlug: "acme",
+      workspaceSlug: "main",
+    });
 
     const result = await runBrowserLogin();
 
-    expect(result).toEqual({ token: "tok_x", orgSlug: "acme", workspaceSlug: "main" });
+    expect(result).toEqual({
+      token: "tok_x",
+      orgSlug: "acme",
+      workspaceSlug: "main",
+    });
     expect(mockWriteConfig).toHaveBeenCalledWith({
       token: "tok_x",
       orgSlug: "acme",
@@ -370,7 +406,11 @@ describe("runBrowserLogin", () => {
   });
 
   it("passes onStatus/signal straight through to browserLogin (no readline, no direct stdout write)", async () => {
-    mockBrowserLogin.mockResolvedValue({ token: "t", orgSlug: "o", workspaceSlug: "w" });
+    mockBrowserLogin.mockResolvedValue({
+      token: "t",
+      orgSlug: "o",
+      workspaceSlug: "w",
+    });
     const onStatus = vi.fn();
     const controller = new AbortController();
 
@@ -401,7 +441,11 @@ describe("runBrowserLogin", () => {
 
 describe("handleLogout", () => {
   it("clears config and confirms logout when session exists", () => {
-    mockReadConfig.mockReturnValue({ token: "tok_x", orgSlug: "org", workspaceSlug: "ws" });
+    mockReadConfig.mockReturnValue({
+      token: "tok_x",
+      orgSlug: "org",
+      workspaceSlug: "ws",
+    });
 
     handleLogout();
 

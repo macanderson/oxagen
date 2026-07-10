@@ -26,19 +26,25 @@ function signals(overrides: Partial<ControlSignals>): ControlSignals {
 
 describe("CC6.1 — logical access controls", () => {
   it("not_started when neither RLS nor MFA is configured", () => {
-    const controls = deriveComplianceControls(signals({ rlsEnforced: false, mfaRequired: false }));
+    const controls = deriveComplianceControls(
+      signals({ rlsEnforced: false, mfaRequired: false }),
+    );
     const cc61 = controls.find((c) => c.id === "cc6.1")!;
     expect(cc61.status).toBe("not_started");
   });
 
   it("partial when RLS enforced but MFA not required", () => {
-    const controls = deriveComplianceControls(signals({ rlsEnforced: true, mfaRequired: false }));
+    const controls = deriveComplianceControls(
+      signals({ rlsEnforced: true, mfaRequired: false }),
+    );
     const cc61 = controls.find((c) => c.id === "cc6.1")!;
     expect(cc61.status).toBe("partial");
   });
 
   it("active when both RLS enforced and MFA required", () => {
-    const controls = deriveComplianceControls(signals({ rlsEnforced: true, mfaRequired: true }));
+    const controls = deriveComplianceControls(
+      signals({ rlsEnforced: true, mfaRequired: true }),
+    );
     const cc61 = controls.find((c) => c.id === "cc6.1")!;
     expect(cc61.status).toBe("active");
   });
@@ -68,7 +74,9 @@ describe("CC6.2 — authentication and credential management", () => {
 
 describe("CC6.3 — role-based access", () => {
   it("is always partial regardless of signals", () => {
-    const c1 = deriveComplianceControls(signals({})).find((c) => c.id === "cc6.3")!;
+    const c1 = deriveComplianceControls(signals({})).find(
+      (c) => c.id === "cc6.3",
+    )!;
     const c2 = deriveComplianceControls(
       signals({ rlsEnforced: true, mfaRequired: true, auditEventCount: 1000 }),
     ).find((c) => c.id === "cc6.3")!;
@@ -95,7 +103,9 @@ describe("CC7.2 — audit trail and monitoring", () => {
   });
 
   it("rationale includes event count", () => {
-    const controls = deriveComplianceControls(signals({ auditEventCount: 4200 }));
+    const controls = deriveComplianceControls(
+      signals({ auditEventCount: 4200 }),
+    );
     const cc72 = controls.find((c) => c.id === "cc7.2")!;
     expect(cc72.rationale).toContain("4,200");
   });
@@ -107,7 +117,9 @@ describe("CC7.2 — audit trail and monitoring", () => {
 
 describe("CC9.2 — vendor risk", () => {
   it("is always partial", () => {
-    const controls = deriveComplianceControls(signals({})).find((c) => c.id === "cc9.2")!;
+    const controls = deriveComplianceControls(signals({})).find(
+      (c) => c.id === "cc9.2",
+    )!;
     expect(controls.status).toBe("partial");
   });
 });
@@ -118,30 +130,30 @@ describe("CC9.2 — vendor risk", () => {
 
 describe("CC6.api — API key rotation", () => {
   it("active when no active keys", () => {
-    const c = deriveComplianceControls(signals({ oldestActiveApiKeyDays: null })).find(
-      (c) => c.id === "cc6.api",
-    )!;
+    const c = deriveComplianceControls(
+      signals({ oldestActiveApiKeyDays: null }),
+    ).find((c) => c.id === "cc6.api")!;
     expect(c.status).toBe("active");
   });
 
   it("active when oldest key is within 180 days", () => {
-    const c = deriveComplianceControls(signals({ oldestActiveApiKeyDays: 90 })).find(
-      (c) => c.id === "cc6.api",
-    )!;
+    const c = deriveComplianceControls(
+      signals({ oldestActiveApiKeyDays: 90 }),
+    ).find((c) => c.id === "cc6.api")!;
     expect(c.status).toBe("active");
   });
 
   it("active at exactly 180 days", () => {
-    const c = deriveComplianceControls(signals({ oldestActiveApiKeyDays: 180 })).find(
-      (c) => c.id === "cc6.api",
-    )!;
+    const c = deriveComplianceControls(
+      signals({ oldestActiveApiKeyDays: 180 }),
+    ).find((c) => c.id === "cc6.api")!;
     expect(c.status).toBe("active");
   });
 
   it("partial when oldest key is older than 180 days", () => {
-    const c = deriveComplianceControls(signals({ oldestActiveApiKeyDays: 200 })).find(
-      (c) => c.id === "cc6.api",
-    )!;
+    const c = deriveComplianceControls(
+      signals({ oldestActiveApiKeyDays: 200 }),
+    ).find((c) => c.id === "cc6.api")!;
     expect(c.status).toBe("partial");
     expect(c.rationale).toContain("200");
   });
@@ -157,7 +169,9 @@ describe("summariseControls", () => {
     const controls = deriveComplianceControls(BASE_SIGNALS);
     const summary = summariseControls(controls);
     expect(summary.total).toBe(controls.length);
-    expect(summary.active + summary.partial + summary.notStarted).toBe(summary.total);
+    expect(summary.active + summary.partial + summary.notStarted).toBe(
+      summary.total,
+    );
   });
 
   it("returns 100% active when all signals are optimal", () => {

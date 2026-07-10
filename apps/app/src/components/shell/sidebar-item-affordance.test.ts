@@ -10,7 +10,9 @@ describe("sidebarItemAffordance", () => {
   });
 
   it("returns 'return' when both isReturn and external are true (isReturn takes precedence)", () => {
-    expect(sidebarItemAffordance({ isReturn: true, external: true })).toBe("return");
+    expect(sidebarItemAffordance({ isReturn: true, external: true })).toBe(
+      "return",
+    );
   });
 
   it("returns 'external' when external is true and isReturn is false", () => {
@@ -18,7 +20,9 @@ describe("sidebarItemAffordance", () => {
   });
 
   it("returns 'external' when external is true and isReturn is undefined", () => {
-    expect(sidebarItemAffordance({ external: true, isReturn: undefined })).toBe("external");
+    expect(sidebarItemAffordance({ external: true, isReturn: undefined })).toBe(
+      "external",
+    );
   });
 
   it("returns 'none' when neither flag is set", () => {
@@ -26,10 +30,14 @@ describe("sidebarItemAffordance", () => {
   });
 
   it("returns 'none' when both flags are false", () => {
-    expect(sidebarItemAffordance({ isReturn: false, external: false })).toBe("none");
+    expect(sidebarItemAffordance({ isReturn: false, external: false })).toBe(
+      "none",
+    );
   });
 
   it("returns 'none' when external is false and isReturn is false", () => {
-    expect(sidebarItemAffordance({ isReturn: false, external: false })).toBe("none");
+    expect(sidebarItemAffordance({ isReturn: false, external: false })).toBe(
+      "none",
+    );
   });
 });

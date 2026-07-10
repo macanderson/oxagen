@@ -53,7 +53,12 @@ export function SupportMenu({ orgSlug, workspaceSlug }: SupportMenuProps) {
     <Menu>
       <MenuTrigger
         render={
-          <Button variant="ghost" size="icon" aria-label="Help and support" className="text-app-link-fg hover:text-app-link-hover-fg" />
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Help and support"
+            className="text-app-link-fg hover:text-app-link-hover-fg"
+          />
         }
       >
         <LifeBuoy className="size-4" />
@@ -108,7 +113,9 @@ export function SupportMenu({ orgSlug, workspaceSlug }: SupportMenuProps) {
           <Mail className="size-4 text-muted-foreground" />
           <div className="flex flex-col">
             <span className="text-sm">Contact support</span>
-            <span className="text-xs text-muted-foreground">{SUPPORT_EMAIL}</span>
+            <span className="text-xs text-muted-foreground">
+              {SUPPORT_EMAIL}
+            </span>
           </div>
         </MenuItem>
 

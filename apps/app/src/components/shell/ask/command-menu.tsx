@@ -52,7 +52,11 @@ import type { EntityKind } from "./entity-prefix";
 import { useSuggestions } from "./use-suggestions";
 import type { SuggestionItem } from "./use-suggestions";
 import type { ScopeContext } from "@/lib/scope";
-import { getApplicableTemplates, renderTemplate, resolveVariables } from "@oxagen/prompt-templates";
+import {
+  getApplicableTemplates,
+  renderTemplate,
+  resolveVariables,
+} from "@oxagen/prompt-templates";
 import type { PromptTemplate } from "@oxagen/prompt-templates";
 import {
   Dialog,
@@ -89,25 +93,38 @@ function categoryIcon(
   category: PromptTemplate["category"] | SuggestionItem["category"],
 ): React.ReactNode {
   switch (category) {
-    case "create": return <PlusCircle className="h-4 w-4" aria-hidden="true" />;
-    case "investigate": return <ScanSearch className="h-4 w-4" aria-hidden="true" />;
-    case "configure": return <Settings className="h-4 w-4" aria-hidden="true" />;
-    case "communicate": return <MessageSquare className="h-4 w-4" aria-hidden="true" />;
-    case "analyze": return <BarChart2 className="h-4 w-4" aria-hidden="true" />;
-    default: return <Zap className="h-4 w-4" aria-hidden="true" />;
+    case "create":
+      return <PlusCircle className="h-4 w-4" aria-hidden="true" />;
+    case "investigate":
+      return <ScanSearch className="h-4 w-4" aria-hidden="true" />;
+    case "configure":
+      return <Settings className="h-4 w-4" aria-hidden="true" />;
+    case "communicate":
+      return <MessageSquare className="h-4 w-4" aria-hidden="true" />;
+    case "analyze":
+      return <BarChart2 className="h-4 w-4" aria-hidden="true" />;
+    default:
+      return <Zap className="h-4 w-4" aria-hidden="true" />;
   }
 }
 
 /** Map from entity kind to a Lucide icon for Search result rows. */
 function entityKindIcon(kind: EntityKind): React.ReactNode {
   switch (kind) {
-    case "run": return <CalendarClock className="h-4 w-4" aria-hidden="true" />;
-    case "principal": return <User className="h-4 w-4" aria-hidden="true" />;
-    case "playbook": return <BookOpen className="h-4 w-4" aria-hidden="true" />;
-    case "trigger": return <TriggerIcon className="h-4 w-4" aria-hidden="true" />;
-    case "event": return <CalendarClock className="h-4 w-4" aria-hidden="true" />;
-    case "agent": return <Bot className="h-4 w-4" aria-hidden="true" />;
-    default: return <Search className="h-4 w-4" aria-hidden="true" />;
+    case "run":
+      return <CalendarClock className="h-4 w-4" aria-hidden="true" />;
+    case "principal":
+      return <User className="h-4 w-4" aria-hidden="true" />;
+    case "playbook":
+      return <BookOpen className="h-4 w-4" aria-hidden="true" />;
+    case "trigger":
+      return <TriggerIcon className="h-4 w-4" aria-hidden="true" />;
+    case "event":
+      return <CalendarClock className="h-4 w-4" aria-hidden="true" />;
+    case "agent":
+      return <Bot className="h-4 w-4" aria-hidden="true" />;
+    default:
+      return <Search className="h-4 w-4" aria-hidden="true" />;
   }
 }
 
@@ -220,7 +237,8 @@ export function CommandMenu({ ctx }: CommandMenuProps) {
   const isSearchMode = entityMatch !== null;
 
   // ── LLM suggestions (OXA-1770) ─────────────────────────────────────────────
-  const currentPathname = pathname ?? `/${ctx.orgSlug ?? ""}/${ctx.workspaceSlug ?? ""}`;
+  const currentPathname =
+    pathname ?? `/${ctx.orgSlug ?? ""}/${ctx.workspaceSlug ?? ""}`;
   const { suggestions, loading: suggestionsLoading } = useSuggestions({
     pathname: currentPathname,
     orgSlug: ctx.orgSlug ?? "",
@@ -231,7 +249,8 @@ export function CommandMenu({ ctx }: CommandMenuProps) {
   });
 
   // Show suggestions section only when: no query, menu is open, and results exist OR loading.
-  const showSuggestions = !query.trim() && (suggestions.length > 0 || suggestionsLoading);
+  const showSuggestions =
+    !query.trim() && (suggestions.length > 0 || suggestionsLoading);
 
   // ── Entity search results (OXA-1771) ───────────────────────────────────────
   const { rows: searchRows, loading: searchLoading } = useEntitySearch({
@@ -249,7 +268,9 @@ export function CommandMenu({ ctx }: CommandMenuProps) {
     if (isSearchMode) return [];
     if (!query.trim()) return allTargets.slice(0, 8);
     const q = query.toLowerCase();
-    return allTargets.filter((t) => t.label.toLowerCase().includes(q)).slice(0, 8);
+    return allTargets
+      .filter((t) => t.label.toLowerCase().includes(q))
+      .slice(0, 8);
   }, [allTargets, query, isSearchMode]);
 
   const showRecent = !query.trim() && recent.length > 0;
@@ -258,7 +279,8 @@ export function CommandMenu({ ctx }: CommandMenuProps) {
   const quickActions = React.useMemo(() => {
     // In search mode the Quick Actions section is replaced by search results.
     if (query.trim() || isSearchMode) return [];
-    const currentPathname_ = pathname ?? `/${ctx.orgSlug ?? ""}/${ctx.workspaceSlug ?? ""}`;
+    const currentPathname_ =
+      pathname ?? `/${ctx.orgSlug ?? ""}/${ctx.workspaceSlug ?? ""}`;
     const pageEntity = pageCtx.entity
       ? {
           kind: pageCtx.entity.kind,
@@ -276,7 +298,14 @@ export function CommandMenu({ ctx }: CommandMenuProps) {
       capabilities: [],
       locale: "en",
     });
-  }, [query, isSearchMode, pathname, ctx.orgSlug, ctx.workspaceSlug, pageCtx.entity]);
+  }, [
+    query,
+    isSearchMode,
+    pathname,
+    ctx.orgSlug,
+    ctx.workspaceSlug,
+    pageCtx.entity,
+  ]);
 
   // ── Unified items list for keyboard navigation ─────────────────────────────
   const items: CommandItem[] = React.useMemo(() => {
@@ -284,7 +313,11 @@ export function CommandMenu({ ctx }: CommandMenuProps) {
     // Suggestions (only when no query, no search mode)
     if (!isSearchMode && !query.trim()) {
       for (const s of suggestions) {
-        result.push({ type: "suggestion", label: s.text, category: s.category });
+        result.push({
+          type: "suggestion",
+          label: s.text,
+          category: s.category,
+        });
       }
     }
     // Quick Actions
@@ -310,7 +343,16 @@ export function CommandMenu({ ctx }: CommandMenuProps) {
     // Ask fallback — always shown
     result.push({ type: "ask", label: query.trim() || "Ask Oxagen anything…" });
     return result;
-  }, [suggestions, quickActions, searchRows, filteredTargets, showRecent, recent, query, isSearchMode]);
+  }, [
+    suggestions,
+    quickActions,
+    searchRows,
+    filteredTargets,
+    showRecent,
+    recent,
+    query,
+    isSearchMode,
+  ]);
 
   // ── Activation ──────────────────────────────────────────────────────────────
   const activateItem = React.useCallback(
@@ -325,7 +367,8 @@ export function CommandMenu({ ctx }: CommandMenuProps) {
         pageCtx.openAskWithText(item.label, false);
       } else if (item.type === "quick-action") {
         const template = item.template;
-        const currentPathname_ = pathname ?? `/${ctx.orgSlug ?? ""}/${ctx.workspaceSlug ?? ""}`;
+        const currentPathname_ =
+          pathname ?? `/${ctx.orgSlug ?? ""}/${ctx.workspaceSlug ?? ""}`;
         const routeParams = extractRouteParams(currentPathname_);
         const pageEntity = pageCtx.entity
           ? {
@@ -389,7 +432,10 @@ export function CommandMenu({ ctx }: CommandMenuProps) {
   let sectionOffset = 0;
 
   return (
-    <Dialog open={pageCtx.isCommandOpen} onOpenChange={(open) => !open && pageCtx.closeCommand()}>
+    <Dialog
+      open={pageCtx.isCommandOpen}
+      onOpenChange={(open) => !open && pageCtx.closeCommand()}
+    >
       <DialogPopup
         className={cn(
           "fixed left-1/2 top-[20%] z-50 -translate-x-1/2 -translate-y-0",
@@ -404,7 +450,10 @@ export function CommandMenu({ ctx }: CommandMenuProps) {
 
         {/* Search input */}
         <div className="flex items-center border-b border-border/40 px-4">
-          <Search className="mr-2 h-4 w-4 shrink-0 text-muted-foreground/70" aria-hidden="true" />
+          <Search
+            className="mr-2 h-4 w-4 shrink-0 text-muted-foreground/70"
+            aria-hidden="true"
+          />
           <input
             ref={inputRef}
             type="text"
@@ -446,158 +495,203 @@ export function CommandMenu({ ctx }: CommandMenuProps) {
           className="max-h-[360px] overflow-y-auto py-2"
         >
           {/* Suggested for this page (OXA-1770) — shown when no query */}
-          {showSuggestions && (() => {
-            const baseIdx = sectionOffset;
-            sectionOffset += suggestions.length;
-            return (
-              <CommandSection label="Suggested for this page">
-                {suggestionsLoading && suggestions.length === 0 ? (
-                  <div className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground/60">
-                    <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
-                    <span>Loading suggestions…</span>
-                  </div>
-                ) : (
-                  suggestions.map((s, i) => (
-                    <CommandItemRow
-                      key={`sug-${i}`}
-                      id={`cmd-item-${baseIdx + i}`}
-                      label={s.text}
-                      icon={<Sparkles className="h-4 w-4" aria-hidden="true" />}
-                      active={clampedActiveIndex === baseIdx + i}
-                      onMouseEnter={() => setClampedActiveIndex(baseIdx + i)}
-                      onSelect={() =>
-                        void activateItem({ type: "suggestion", label: s.text, category: s.category })
-                      }
-                    />
-                  ))
-                )}
-              </CommandSection>
-            );
-          })()}
+          {showSuggestions &&
+            (() => {
+              const baseIdx = sectionOffset;
+              sectionOffset += suggestions.length;
+              return (
+                <CommandSection label="Suggested for this page">
+                  {suggestionsLoading && suggestions.length === 0 ? (
+                    <div className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground/60">
+                      <Loader2
+                        className="h-3 w-3 animate-spin"
+                        aria-hidden="true"
+                      />
+                      <span>Loading suggestions…</span>
+                    </div>
+                  ) : (
+                    suggestions.map((s, i) => (
+                      <CommandItemRow
+                        key={`sug-${i}`}
+                        id={`cmd-item-${baseIdx + i}`}
+                        label={s.text}
+                        icon={
+                          <Sparkles className="h-4 w-4" aria-hidden="true" />
+                        }
+                        active={clampedActiveIndex === baseIdx + i}
+                        onMouseEnter={() => setClampedActiveIndex(baseIdx + i)}
+                        onSelect={() =>
+                          void activateItem({
+                            type: "suggestion",
+                            label: s.text,
+                            category: s.category,
+                          })
+                        }
+                      />
+                    ))
+                  )}
+                </CommandSection>
+              );
+            })()}
 
           {/* Quick Actions — shown when no query and not in search mode (OXA-1769) */}
-          {quickActions.length > 0 && (() => {
-            const baseIdx = sectionOffset;
-            sectionOffset += quickActions.length;
-            return (
-              <CommandSection label="Quick Actions">
-                {quickActions.map((template, i) => (
-                  <CommandItemRow
-                    key={template.id}
-                    id={`cmd-item-${baseIdx + i}`}
-                    label={template.title}
-                    icon={categoryIcon(template.category)}
-                    active={clampedActiveIndex === baseIdx + i}
-                    onMouseEnter={() => setClampedActiveIndex(baseIdx + i)}
-                    onSelect={() =>
-                      void activateItem({ type: "quick-action", label: template.title, template })
-                    }
-                    secondary={template.description}
-                    trailing={
-                      template.shortcut ? (
-                        <kbd className="hidden rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground sm:block">
-                          {template.shortcut}
-                        </kbd>
-                      ) : undefined
-                    }
-                  />
-                ))}
-              </CommandSection>
-            );
-          })()}
-
-          {/* Search results (OXA-1771) — replaces Quick Actions + Navigate in search mode */}
-          {isSearchMode && (() => {
-            const baseIdx = sectionOffset;
-            sectionOffset += searchRows.length;
-            return (
-              <CommandSection label="Search results">
-                {searchLoading && searchRows.length === 0 ? (
-                  <div className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground/60">
-                    <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
-                    <span>Searching…</span>
-                  </div>
-                ) : searchRows.length === 0 ? (
-                  <div className="px-3 py-2 text-xs text-muted-foreground/60">
-                    No results found.
-                  </div>
-                ) : (
-                  searchRows.map((row, i) => (
+          {quickActions.length > 0 &&
+            (() => {
+              const baseIdx = sectionOffset;
+              sectionOffset += quickActions.length;
+              return (
+                <CommandSection label="Quick Actions">
+                  {quickActions.map((template, i) => (
                     <CommandItemRow
-                      key={`sr-${row.kind}-${row.id}`}
+                      key={template.id}
                       id={`cmd-item-${baseIdx + i}`}
-                      label={row.label}
-                      icon={entityKindIcon(row.kind)}
+                      label={template.title}
+                      icon={categoryIcon(template.category)}
                       active={clampedActiveIndex === baseIdx + i}
                       onMouseEnter={() => setClampedActiveIndex(baseIdx + i)}
                       onSelect={() =>
-                        void activateItem({ type: "search-result", label: row.label, row })
+                        void activateItem({
+                          type: "quick-action",
+                          label: template.title,
+                          template,
+                        })
                       }
-                      secondary={
-                        row.contextLine
-                          ? `${row.scope} · ${row.contextLine}`
-                          : row.scope
-                      }
+                      secondary={template.description}
                       trailing={
-                        <ArrowRight className="h-3.5 w-3.5 text-muted-foreground/50" aria-hidden="true" />
+                        template.shortcut ? (
+                          <kbd className="hidden rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground sm:block">
+                            {template.shortcut}
+                          </kbd>
+                        ) : undefined
                       }
                     />
-                  ))
-                )}
-              </CommandSection>
-            );
-          })()}
+                  ))}
+                </CommandSection>
+              );
+            })()}
+
+          {/* Search results (OXA-1771) — replaces Quick Actions + Navigate in search mode */}
+          {isSearchMode &&
+            (() => {
+              const baseIdx = sectionOffset;
+              sectionOffset += searchRows.length;
+              return (
+                <CommandSection label="Search results">
+                  {searchLoading && searchRows.length === 0 ? (
+                    <div className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground/60">
+                      <Loader2
+                        className="h-3 w-3 animate-spin"
+                        aria-hidden="true"
+                      />
+                      <span>Searching…</span>
+                    </div>
+                  ) : searchRows.length === 0 ? (
+                    <div className="px-3 py-2 text-xs text-muted-foreground/60">
+                      No results found.
+                    </div>
+                  ) : (
+                    searchRows.map((row, i) => (
+                      <CommandItemRow
+                        key={`sr-${row.kind}-${row.id}`}
+                        id={`cmd-item-${baseIdx + i}`}
+                        label={row.label}
+                        icon={entityKindIcon(row.kind)}
+                        active={clampedActiveIndex === baseIdx + i}
+                        onMouseEnter={() => setClampedActiveIndex(baseIdx + i)}
+                        onSelect={() =>
+                          void activateItem({
+                            type: "search-result",
+                            label: row.label,
+                            row,
+                          })
+                        }
+                        secondary={
+                          row.contextLine
+                            ? `${row.scope} · ${row.contextLine}`
+                            : row.scope
+                        }
+                        trailing={
+                          <ArrowRight
+                            className="h-3.5 w-3.5 text-muted-foreground/50"
+                            aria-hidden="true"
+                          />
+                        }
+                      />
+                    ))
+                  )}
+                </CommandSection>
+              );
+            })()}
 
           {/* Navigate section — hidden in search mode */}
-          {!isSearchMode && filteredTargets.length > 0 && (() => {
-            const baseIdx = sectionOffset;
-            sectionOffset += filteredTargets.length;
-            return (
-              <CommandSection label="Navigate">
-                {filteredTargets.map((target, i) => (
-                  <CommandItemRow
-                    key={target.href}
-                    id={`cmd-item-${baseIdx + i}`}
-                    label={target.label}
-                    icon={<Navigation className="h-4 w-4" aria-hidden="true" />}
-                    active={clampedActiveIndex === baseIdx + i}
-                    onMouseEnter={() => setClampedActiveIndex(baseIdx + i)}
-                    onSelect={() =>
-                      void activateItem({ type: "navigate", label: target.label, href: target.href })
-                    }
-                    trailing={
-                      <ArrowRight className="h-3.5 w-3.5 text-muted-foreground/50" aria-hidden="true" />
-                    }
-                  />
-                ))}
-              </CommandSection>
-            );
-          })()}
+          {!isSearchMode &&
+            filteredTargets.length > 0 &&
+            (() => {
+              const baseIdx = sectionOffset;
+              sectionOffset += filteredTargets.length;
+              return (
+                <CommandSection label="Navigate">
+                  {filteredTargets.map((target, i) => (
+                    <CommandItemRow
+                      key={target.href}
+                      id={`cmd-item-${baseIdx + i}`}
+                      label={target.label}
+                      icon={
+                        <Navigation className="h-4 w-4" aria-hidden="true" />
+                      }
+                      active={clampedActiveIndex === baseIdx + i}
+                      onMouseEnter={() => setClampedActiveIndex(baseIdx + i)}
+                      onSelect={() =>
+                        void activateItem({
+                          type: "navigate",
+                          label: target.label,
+                          href: target.href,
+                        })
+                      }
+                      trailing={
+                        <ArrowRight
+                          className="h-3.5 w-3.5 text-muted-foreground/50"
+                          aria-hidden="true"
+                        />
+                      }
+                    />
+                  ))}
+                </CommandSection>
+              );
+            })()}
 
           {/* Recent section */}
-          {showRecent && (() => {
-            const baseIdx = sectionOffset;
-            sectionOffset += recent.length;
-            return (
-              <CommandSection label="Recent">
-                {recent.map((entry, i) => (
-                  <CommandItemRow
-                    key={entry.query}
-                    id={`cmd-item-${baseIdx + i}`}
-                    label={entry.query}
-                    icon={<Clock className="h-4 w-4" aria-hidden="true" />}
-                    active={clampedActiveIndex === baseIdx + i}
-                    onMouseEnter={() => setClampedActiveIndex(baseIdx + i)}
-                    onSelect={() => void activateItem({ type: "recent", label: entry.query })}
-                  />
-                ))}
-              </CommandSection>
-            );
-          })()}
+          {showRecent &&
+            (() => {
+              const baseIdx = sectionOffset;
+              sectionOffset += recent.length;
+              return (
+                <CommandSection label="Recent">
+                  {recent.map((entry, i) => (
+                    <CommandItemRow
+                      key={entry.query}
+                      id={`cmd-item-${baseIdx + i}`}
+                      label={entry.query}
+                      icon={<Clock className="h-4 w-4" aria-hidden="true" />}
+                      active={clampedActiveIndex === baseIdx + i}
+                      onMouseEnter={() => setClampedActiveIndex(baseIdx + i)}
+                      onSelect={() =>
+                        void activateItem({
+                          type: "recent",
+                          label: entry.query,
+                        })
+                      }
+                    />
+                  ))}
+                </CommandSection>
+              );
+            })()}
 
           {/* Empty state when query has no nav matches (non-search mode) */}
           {!isSearchMode && query.trim() && filteredTargets.length === 0 && (
-            <div className="px-4 py-3 text-xs text-muted-foreground">No matching pages found.</div>
+            <div className="px-4 py-3 text-xs text-muted-foreground">
+              No matching pages found.
+            </div>
           )}
 
           {/* Ask fallback — always shown */}
@@ -607,8 +701,17 @@ export function CommandMenu({ ctx }: CommandMenuProps) {
               <CommandSection label="Ask">
                 <CommandItemRow
                   id={`cmd-item-${askIdx}`}
-                  label={query.trim() ? `Ask: "${query.trim()}"` : "Ask Oxagen anything…"}
-                  icon={<Sparkles className="h-4 w-4 text-foreground" aria-hidden="true" />}
+                  label={
+                    query.trim()
+                      ? `Ask: "${query.trim()}"`
+                      : "Ask Oxagen anything…"
+                  }
+                  icon={
+                    <Sparkles
+                      className="h-4 w-4 text-foreground"
+                      aria-hidden="true"
+                    />
+                  }
                   active={clampedActiveIndex === askIdx}
                   onMouseEnter={() => setClampedActiveIndex(askIdx)}
                   onSelect={() =>
@@ -625,9 +728,15 @@ export function CommandMenu({ ctx }: CommandMenuProps) {
 
         {/* Footer keyboard hints */}
         <div className="flex items-center gap-3 border-t border-border/30 px-4 py-2 text-[10px] text-muted-foreground/50">
-          <span><kbd className="font-mono">&#8593;&#8595;</kbd> navigate</span>
-          <span><kbd className="font-mono">&#8629;</kbd> select</span>
-          <span><kbd className="font-mono">Esc</kbd> close</span>
+          <span>
+            <kbd className="font-mono">&#8593;&#8595;</kbd> navigate
+          </span>
+          <span>
+            <kbd className="font-mono">&#8629;</kbd> select
+          </span>
+          <span>
+            <kbd className="font-mono">Esc</kbd> close
+          </span>
         </div>
       </DialogPopup>
     </Dialog>
@@ -690,7 +799,12 @@ function CommandItemRow({
       onMouseEnter={onMouseEnter}
       onClick={onSelect}
     >
-      <span className={cn("shrink-0", active ? "text-accent-foreground" : "text-muted-foreground/60")}>
+      <span
+        className={cn(
+          "shrink-0",
+          active ? "text-accent-foreground" : "text-muted-foreground/60",
+        )}
+      >
         {icon}
       </span>
       <span className="flex-1 min-w-0">

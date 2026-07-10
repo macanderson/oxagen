@@ -43,7 +43,9 @@ function resolveHost(opts: OllamaClientOptions): string {
 }
 
 function resolveModel(opts: OllamaClientOptions): string {
-  return opts.model ?? process.env["OXAGEN_EMBED_MODEL"] ?? DEFAULT_OLLAMA_MODEL;
+  return (
+    opts.model ?? process.env["OXAGEN_EMBED_MODEL"] ?? DEFAULT_OLLAMA_MODEL
+  );
 }
 
 interface OllamaEmbedResponse {
@@ -68,10 +70,13 @@ async function callEmbed(
     body: JSON.stringify({ model, prompt }),
     signal: AbortSignal.timeout(timeoutMs),
   });
-  if (!res.ok) throw new Error(`ollama embeddings request failed: ${res.status}`);
+  if (!res.ok)
+    throw new Error(`ollama embeddings request failed: ${res.status}`);
   const body = (await res.json()) as OllamaEmbedResponse;
   if (!Array.isArray(body.embedding) || body.embedding.length === 0) {
-    throw new Error("ollama embeddings: malformed response (no embedding array)");
+    throw new Error(
+      "ollama embeddings: malformed response (no embedding array)",
+    );
   }
   return body.embedding as number[];
 }
@@ -101,7 +106,13 @@ export class OllamaEmbeddingClient implements EmbeddingClient {
   }
 
   embed(text: string): Promise<number[]> {
-    return callEmbed(this.host, this.model, text, this.fetchImpl, this.timeoutMs);
+    return callEmbed(
+      this.host,
+      this.model,
+      text,
+      this.fetchImpl,
+      this.timeoutMs,
+    );
   }
 
   /**
@@ -132,7 +143,9 @@ export interface OllamaProbeResult {
  * wrong port, model not pulled, timeout) — `auto` mode reads that as "not a
  * candidate" and moves to the next tier.
  */
-export async function probeOllama(opts: OllamaClientOptions = {}): Promise<OllamaProbeResult | null> {
+export async function probeOllama(
+  opts: OllamaClientOptions = {},
+): Promise<OllamaProbeResult | null> {
   const fetchImpl = opts.fetchImpl ?? fetch;
   const host = resolveHost(opts);
   const model = resolveModel(opts);

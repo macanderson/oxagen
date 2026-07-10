@@ -66,10 +66,7 @@ import {
 import { MarkdownCodeEditor } from "@/components/ui/markdown-code-editor";
 import { MarkdownContent } from "@/components/ui/markdown-content";
 import { TruncatedText } from "@/components/ui/truncated-text";
-import {
-  MemoriesBulkImport,
-  type DraftMemory,
-} from "./memories-bulk-import";
+import { MemoriesBulkImport, type DraftMemory } from "./memories-bulk-import";
 // Shared kind/weight/class taxonomy lives in its own lightweight module (see
 // memory-kinds.ts) so the bulk-import grid can reuse it without importing this
 // CodeMirror-laden component. Re-exported here for existing consumers.
@@ -152,9 +149,7 @@ type UpdateMemoryResult =
   | { ok: true; memory: AgentMemoryRecord }
   | { ok: false; error: string };
 
-type DeleteMemoryResult =
-  | { ok: true }
-  | { ok: false; error: string };
+type DeleteMemoryResult = { ok: true } | { ok: false; error: string };
 
 type PromoteMemoryResult =
   | { ok: true; memory: AgentMemoryRecord }
@@ -399,13 +394,7 @@ function truncateId(id: string): string {
 // ---------------------------------------------------------------------------
 
 /** A 0-100 score meter — used for both confidenceScore and enforcementScore. */
-function ScoreMeter({
-  value,
-  label,
-}: {
-  value: number;
-  label: string;
-}) {
+function ScoreMeter({ value, label }: { value: number; label: string }) {
   const clamped = Math.max(0, Math.min(100, value));
   const pct = Math.round(clamped);
   const barColor =
@@ -599,7 +588,9 @@ function FilterBar({
             step="1"
             value={minCitations}
             onChange={(e) =>
-              setMinCitations(Math.max(0, Math.floor(Number(e.target.value) || 0)))
+              setMinCitations(
+                Math.max(0, Math.floor(Number(e.target.value) || 0)),
+              )
             }
             aria-label="Minimum number of citations"
             className="h-6 w-14 rounded-md border border-border/60 bg-background px-1.5 text-[11px] tabular-nums focus:outline-none focus:ring-1 focus:ring-ring"
@@ -904,7 +895,8 @@ function PromoteFlow({
             htmlFor={`promote-enforcement-${memoryId}`}
             className="text-[11px] text-muted-foreground"
           >
-            Enforcement: <span className="tabular-nums">{enforcementScore}</span>
+            Enforcement:{" "}
+            <span className="tabular-nums">{enforcementScore}</span>
           </label>
           <input
             id={`promote-enforcement-${memoryId}`}
@@ -951,8 +943,15 @@ function PromoteFlow({
       )}
 
       <div className="flex items-center gap-2">
-        <Button size="sm" variant="gradient" onClick={confirmPromote} disabled={isPending}>
-          {isPending ? "Promoting…" : `Confirm promote to ${CLASS_CONFIG[target].label}`}
+        <Button
+          size="sm"
+          variant="gradient"
+          onClick={confirmPromote}
+          disabled={isPending}
+        >
+          {isPending
+            ? "Promoting…"
+            : `Confirm promote to ${CLASS_CONFIG[target].label}`}
         </Button>
         <Button size="sm" variant="ghost" onClick={cancel} disabled={isPending}>
           Cancel
@@ -986,16 +985,26 @@ function PromotionCandidatesPanel({
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
       <div className="flex items-center gap-1.5">
-        <Sparkles className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+        <Sparkles
+          className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400"
+          aria-hidden="true"
+        />
         <span className="text-[11px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400">
           Suggested to promote
         </span>
       </div>
       <ul className="flex flex-col gap-2">
         {candidates.map((c) => (
-          <li key={c.id} className="flex flex-col gap-1.5 rounded-md bg-background/60 p-2">
+          <li
+            key={c.id}
+            className="flex flex-col gap-1.5 rounded-md bg-background/60 p-2"
+          >
             <div className="flex items-center justify-between gap-2">
-              <TruncatedText text={c.lesson} lines={1} className="text-xs text-foreground flex-1" />
+              <TruncatedText
+                text={c.lesson}
+                lines={1}
+                className="text-xs text-foreground flex-1"
+              />
               {expandedId !== c.id && (
                 <Button
                   size="sm"
@@ -1003,16 +1012,23 @@ function PromotionCandidatesPanel({
                   onClick={() => setExpandedId(c.id)}
                   aria-label={`Promote candidate: ${c.lesson}`}
                 >
-                  <ArrowUpCircle className="h-3 w-3 mr-1.5" aria-hidden="true" />
+                  <ArrowUpCircle
+                    className="h-3 w-3 mr-1.5"
+                    aria-hidden="true"
+                  />
                   Promote
                 </Button>
               )}
             </div>
             <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
-              <Badge className={`${getKindConfig(c.memoryKind).color} text-[10px] px-1.5 py-0 border-0 font-medium`}>
+              <Badge
+                className={`${getKindConfig(c.memoryKind).color} text-[10px] px-1.5 py-0 border-0 font-medium`}
+              >
                 {getKindConfig(c.memoryKind).label}
               </Badge>
-              <span>{c.citationCount} citation{c.citationCount === 1 ? "" : "s"}</span>
+              <span>
+                {c.citationCount} citation{c.citationCount === 1 ? "" : "s"}
+              </span>
               <span>{c.influenceCount} influential</span>
               <span>{Math.round(c.confidenceScore)}% confidence</span>
             </div>
@@ -1091,7 +1107,9 @@ function MemoryDetail({
   // Edit form state — reset to current record when entering edit mode.
   const [editLesson, setEditLesson] = React.useState(record.lesson);
   const [editKind, setEditKind] = React.useState(record.memoryKind);
-  const [editConfidence, setEditConfidence] = React.useState(record.confidenceScore);
+  const [editConfidence, setEditConfidence] = React.useState(
+    record.confidenceScore,
+  );
   const [editEnforcement, setEditEnforcement] = React.useState(
     record.enforcementScore ?? 50,
   );
@@ -1241,7 +1259,11 @@ function MemoryDetail({
               />
               <MetaField
                 label="Enforcement"
-                value={record.enforcementScore == null ? "—" : `${record.enforcementScore}`}
+                value={
+                  record.enforcementScore == null
+                    ? "—"
+                    : `${record.enforcementScore}`
+                }
               />
               <MetaField
                 label="Created"
@@ -1422,7 +1444,9 @@ function MemoryDetail({
                   className="text-[11px] text-muted-foreground"
                 >
                   Confidence:{" "}
-                  <span className="tabular-nums">{Math.round(editConfidence)}%</span>
+                  <span className="tabular-nums">
+                    {Math.round(editConfidence)}%
+                  </span>
                 </label>
                 <input
                   id="edit-memory-confidence"
@@ -1466,7 +1490,8 @@ function MemoryDetail({
               )}
               {record.memoryClass === "OBSERVATION" && (
                 <p className="text-[10px] text-muted-foreground">
-                  An OBSERVATION has no enforcement — promote it to a RULE to set one.
+                  An OBSERVATION has no enforcement — promote it to a RULE to
+                  set one.
                 </p>
               )}
             </div>
@@ -1535,7 +1560,10 @@ const INFER = "" as const;
 // FACT is intentionally excluded: it requires human confirmation and forces
 // enforcement to 100, so it is reserved for the dedicated promote flow rather
 // than one-off creation.
-const CREATABLE_CLASSES: Array<"OBSERVATION" | "RULE"> = ["OBSERVATION", "RULE"];
+const CREATABLE_CLASSES: Array<"OBSERVATION" | "RULE"> = [
+  "OBSERVATION",
+  "RULE",
+];
 
 function MemoryCreate({
   orgSlug,
@@ -1658,7 +1686,9 @@ function MemoryCreate({
               id="create-memory-class"
               value={memoryClass}
               onChange={(e) =>
-                setMemoryClass(e.target.value as "OBSERVATION" | "RULE" | typeof INFER)
+                setMemoryClass(
+                  e.target.value as "OBSERVATION" | "RULE" | typeof INFER,
+                )
               }
               disabled={isPending}
               aria-label="Memory class"
@@ -1683,7 +1713,8 @@ function MemoryCreate({
                 htmlFor="create-memory-enforcement"
                 className="text-[11px] text-muted-foreground"
               >
-                Enforcement: <span className="tabular-nums">{enforcementScore}</span>
+                Enforcement:{" "}
+                <span className="tabular-nums">{enforcementScore}</span>
               </label>
               <input
                 id="create-memory-enforcement"
@@ -1751,14 +1782,17 @@ export function MemoriesClient({
   commitImport,
 }: MemoriesClientProps) {
   const router = useRouter();
-  const [records, setRecords] = React.useState<AgentMemoryRecord[]>(initialRecords);
+  const [records, setRecords] =
+    React.useState<AgentMemoryRecord[]>(initialRecords);
   const [candidates, setCandidates] = React.useState<PromotionCandidate[]>([]);
   const [selectedRecord, setSelectedRecord] =
     React.useState<AgentMemoryRecord | null>(null);
   const [showCreate, setShowCreate] = React.useState(false);
   const [showBulkImport, setShowBulkImport] = React.useState(false);
   const [activeKinds, setActiveKinds] = React.useState<Set<string>>(new Set());
-  const [activeClasses, setActiveClasses] = React.useState<Set<MemoryClass>>(new Set());
+  const [activeClasses, setActiveClasses] = React.useState<Set<MemoryClass>>(
+    new Set(),
+  );
   const [searchQuery, setSearchQuery] = React.useState("");
   const [minConfidence, setMinConfidence] = React.useState(0);
   const [minCitations, setMinCitations] = React.useState(0);
@@ -1771,9 +1805,11 @@ export function MemoriesClient({
 
   const loadCandidates = React.useCallback(() => {
     if (!promotionCandidates) return;
-    void promotionCandidates({ orgSlug, workspaceSlug, limit: 3 }).then((result) => {
-      if (result.ok) setCandidates(result.candidates);
-    });
+    void promotionCandidates({ orgSlug, workspaceSlug, limit: 3 }).then(
+      (result) => {
+        if (result.ok) setCandidates(result.candidates);
+      },
+    );
   }, [promotionCandidates, orgSlug, workspaceSlug]);
 
   React.useEffect(() => {
@@ -1806,18 +1842,13 @@ export function MemoriesClient({
 
   /** Prepend a newly created record (newest first), then re-sync from server. */
   function handleMemoryCreated(created: AgentMemoryRecord) {
-    setRecords((prev) => [
-      created,
-      ...prev.filter((r) => r.id !== created.id),
-    ]);
+    setRecords((prev) => [created, ...prev.filter((r) => r.id !== created.id)]);
     router.refresh();
   }
 
   /** Optimistically apply an updated record to the list, then re-sync from server. */
   function handleMemoryUpdated(updated: AgentMemoryRecord) {
-    setRecords((prev) =>
-      prev.map((r) => (r.id === updated.id ? updated : r)),
-    );
+    setRecords((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
     // A promotion or edit can change candidate eligibility (e.g. it's no
     // longer an OBSERVATION) — refresh the suggestions too.
     loadCandidates();
@@ -1834,7 +1865,8 @@ export function MemoriesClient({
   const filtered = React.useMemo(() => {
     const matched = records.filter((r) => {
       // Class filter
-      if (activeClasses.size > 0 && !activeClasses.has(r.memoryClass)) return false;
+      if (activeClasses.size > 0 && !activeClasses.has(r.memoryClass))
+        return false;
       // Kind filter
       if (activeKinds.size > 0 && !activeKinds.has(r.memoryKind)) return false;
       // Confidence filter
@@ -1889,8 +1921,13 @@ export function MemoriesClient({
 
   // Class distribution for stats row — the primary epistemic axis.
   const classCounts = React.useMemo(() => {
-    const counts: Record<MemoryClass, number> = { OBSERVATION: 0, RULE: 0, FACT: 0 };
-    for (const r of records) counts[r.memoryClass] = (counts[r.memoryClass] ?? 0) + 1;
+    const counts: Record<MemoryClass, number> = {
+      OBSERVATION: 0,
+      RULE: 0,
+      FACT: 0,
+    };
+    for (const r of records)
+      counts[r.memoryClass] = (counts[r.memoryClass] ?? 0) + 1;
     return counts;
   }, [records]);
 

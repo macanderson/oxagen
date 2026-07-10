@@ -229,11 +229,9 @@ describe("recallWorkspaceMemory", () => {
 
 describe("recallWorkspaceMemoryDetailed", () => {
   it("returns both the volatile message and the raw memories on success", async () => {
-    const invokeFn = vi
-      .fn()
-      .mockResolvedValue({
-        memories: [memory({ id: "m-9", lesson: "Detailed lesson" })],
-      });
+    const invokeFn = vi.fn().mockResolvedValue({
+      memories: [memory({ id: "m-9", lesson: "Detailed lesson" })],
+    });
 
     const { message, memories } = await recallWorkspaceMemoryDetailed({
       query: "how does billing work?",

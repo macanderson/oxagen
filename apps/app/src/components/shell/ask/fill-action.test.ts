@@ -52,7 +52,12 @@ const baseInput: FillFormActionInput = {
     title: "Create project",
     fields: [
       { name: "name", label: "Name", type: "text", current: "old name" },
-      { name: "description", label: "Description", type: "textarea", current: "" },
+      {
+        name: "description",
+        label: "Description",
+        type: "textarea",
+        current: "",
+      },
     ],
   },
   instruction: "Fill in the project name as 'My Project'",
@@ -64,8 +69,19 @@ const baseInput: FillFormActionInput = {
 };
 
 const mockSession = { user: { id: "user-123" } };
-const mockOrg = { id: "org-abc", publicId: "pub-org-abc", name: "Acme", slug: "acme" };
-const mockWorkspace = { id: "ws-xyz", publicId: "pub-ws-xyz", orgId: "org-abc", name: "Production", slug: "prod" };
+const mockOrg = {
+  id: "org-abc",
+  publicId: "pub-org-abc",
+  name: "Acme",
+  slug: "acme",
+};
+const mockWorkspace = {
+  id: "ws-xyz",
+  publicId: "pub-ws-xyz",
+  orgId: "org-abc",
+  name: "Production",
+  slug: "prod",
+};
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -83,7 +99,13 @@ describe("fillFormAction", () => {
   it("maps handler diffs to FormFillResult on success", async () => {
     vi.mocked(invoke).mockResolvedValue({
       fields: [
-        { name: "name", current: "old name", proposed: "My Project", changed: true, reason: "Instruction says so" },
+        {
+          name: "name",
+          current: "old name",
+          proposed: "My Project",
+          changed: true,
+          reason: "Instruction says so",
+        },
         { name: "description", current: "", proposed: "", changed: false },
       ],
     });
@@ -112,7 +134,8 @@ describe("fillFormAction", () => {
     await fillFormAction(baseInput);
 
     expect(invoke).toHaveBeenCalledOnce();
-    const [capabilityName, capInput, ctx, opts] = vi.mocked(invoke).mock.calls[0]!;
+    const [capabilityName, capInput, ctx, opts] =
+      vi.mocked(invoke).mock.calls[0]!;
 
     // Capability name
     expect(capabilityName).toBe("fill_form");
@@ -128,7 +151,9 @@ describe("fillFormAction", () => {
 
     // Input carries the correct route and instruction
     expect((capInput as { route: string }).route).toBe("/acme/prod/knowledge");
-    expect((capInput as { instruction: string }).instruction).toBe(baseInput.instruction);
+    expect((capInput as { instruction: string }).instruction).toBe(
+      baseInput.instruction,
+    );
 
     // Options mark the dispatch as originating from the agent surface
     expect(opts).toEqual({ surface: "agent" });
@@ -157,8 +182,18 @@ describe("fillFormAction", () => {
 
     // All fields should be unchanged (proposed === current, changed === false)
     expect(result.fields).toHaveLength(2);
-    expect(result.fields[0]).toEqual({ name: "name", current: "old name", proposed: "old name", changed: false });
-    expect(result.fields[1]).toEqual({ name: "description", current: "", proposed: "", changed: false });
+    expect(result.fields[0]).toEqual({
+      name: "name",
+      current: "old name",
+      proposed: "old name",
+      changed: false,
+    });
+    expect(result.fields[1]).toEqual({
+      name: "description",
+      current: "",
+      proposed: "",
+      changed: false,
+    });
   });
 
   it("logs an error when invoke throws", async () => {
@@ -175,11 +210,18 @@ describe("fillFormAction", () => {
 
   // (c) Session failure — returns noopResult
   it("returns noopResult when session resolution fails", async () => {
-    vi.mocked(getSessionOrRedirect).mockRejectedValue(new Error("unauthenticated"));
+    vi.mocked(getSessionOrRedirect).mockRejectedValue(
+      new Error("unauthenticated"),
+    );
 
     const result = await fillFormAction(baseInput);
 
-    expect(result.fields[0]).toEqual({ name: "name", current: "old name", proposed: "old name", changed: false });
+    expect(result.fields[0]).toEqual({
+      name: "name",
+      current: "old name",
+      proposed: "old name",
+      changed: false,
+    });
   });
 
   it("logs an error when session resolution fails", async () => {
@@ -197,7 +239,9 @@ describe("fillFormAction", () => {
   // (b2) Failure fallback carries an `error` so the caller can surface it —
   // regression for the swallowed IAM/billing-denial silent-failure fix.
   it("sets `error` on the fallback result when invoke throws (IAM/billing denial surfaces)", async () => {
-    vi.mocked(invoke).mockRejectedValue(new Error("capability_not_installed: form.fill"));
+    vi.mocked(invoke).mockRejectedValue(
+      new Error("capability_not_installed: form.fill"),
+    );
 
     const result = await fillFormAction(baseInput);
 
@@ -207,7 +251,9 @@ describe("fillFormAction", () => {
   });
 
   it("sets `error` on the fallback when session resolution fails", async () => {
-    vi.mocked(getSessionOrRedirect).mockRejectedValue(new Error("session expired"));
+    vi.mocked(getSessionOrRedirect).mockRejectedValue(
+      new Error("session expired"),
+    );
 
     const result = await fillFormAction(baseInput);
 

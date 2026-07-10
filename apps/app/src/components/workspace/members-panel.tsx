@@ -1,6 +1,13 @@
 "use client";
 import * as React from "react";
-import { UserPlus, Mail, AlertCircle, CheckCircle2, AlertTriangle, Trash2 } from "lucide-react";
+import {
+  UserPlus,
+  Mail,
+  AlertCircle,
+  CheckCircle2,
+  AlertTriangle,
+  Trash2,
+} from "lucide-react";
 import type { OrgSeatUsage } from "@oxagen/billing";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -29,8 +36,14 @@ import {
 import { useToast } from "@/components/ui/toast";
 import { seatAlert } from "./seat-alert";
 import { formatDate } from "@/lib/utils";
-import { inviteMemberAction, declineInvitationAction } from "@/app/[orgSlug]/members/actions";
-import { removeMemberAction, changeMemberRoleAction } from "@/app/[orgSlug]/members/member-actions";
+import {
+  inviteMemberAction,
+  declineInvitationAction,
+} from "@/app/[orgSlug]/members/actions";
+import {
+  removeMemberAction,
+  changeMemberRoleAction,
+} from "@/app/[orgSlug]/members/member-actions";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -112,7 +125,9 @@ function AddMemberDialog({
 }) {
   const [open, setOpen] = React.useState(false);
   const [email, setEmail] = React.useState("");
-  const [role, setRole] = React.useState<"owner" | "admin" | "member" | "billing">("member");
+  const [role, setRole] = React.useState<
+    "owner" | "admin" | "member" | "billing"
+  >("member");
   const [pending, startTransition] = React.useTransition();
   const [fieldError, setFieldError] = React.useState<string | null>(null);
   const { add: addToast } = useToast();
@@ -152,7 +167,8 @@ function AddMemberDialog({
       } else {
         addToast({
           title: "Failed to send invitation",
-          description: "error" in res ? res.error : "An unexpected error occurred.",
+          description:
+            "error" in res ? res.error : "An unexpected error occurred.",
           type: "error",
         });
       }
@@ -160,7 +176,13 @@ function AddMemberDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) reset(); }}>
+    <Dialog
+      open={open}
+      onOpenChange={(v) => {
+        setOpen(v);
+        if (!v) reset();
+      }}
+    >
       <DialogTrigger
         render={
           <Button
@@ -202,7 +224,11 @@ function AddMemberDialog({
             </Alert>
           ) : null}
 
-          <form id="invite-form" onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <form
+            id="invite-form"
+            onSubmit={handleSubmit}
+            className="flex flex-col gap-4"
+          >
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="invite-email">Email address</Label>
               <Input
@@ -242,7 +268,9 @@ function AddMemberDialog({
         </DialogPanel>
 
         <DialogFooter className="flex-wrap">
-          <DialogClose render={<Button variant="ghost" className="max-md:h-11" />}>
+          <DialogClose
+            render={<Button variant="ghost" className="max-md:h-11" />}
+          >
             Cancel
           </DialogClose>
           <Button
@@ -277,7 +305,10 @@ function RemoveMemberDialog({
 
   function handleConfirm() {
     startTransition(async () => {
-      const res = await removeMemberAction({ orgSlug, targetUserId: member.userId });
+      const res = await removeMemberAction({
+        orgSlug,
+        targetUserId: member.userId,
+      });
       if (res.ok) {
         addToast({
           title: "Member removed",
@@ -320,13 +351,15 @@ function RemoveMemberDialog({
             <span className="font-medium">
               {member.displayName ?? member.email}
             </span>{" "}
-            from the org and revoke their access. This action cannot be undone without
-            sending a new invitation.
+            from the org and revoke their access. This action cannot be undone
+            without sending a new invitation.
           </DialogDescription>
         </DialogHeader>
 
         <DialogFooter className="flex-wrap">
-          <DialogClose render={<Button variant="ghost" className="max-md:h-11" />}>
+          <DialogClose
+            render={<Button variant="ghost" className="max-md:h-11" />}
+          >
             Cancel
           </DialogClose>
           <Button
@@ -348,7 +381,13 @@ function RemoveMemberDialog({
 // calls changeMemberRoleAction immediately (no separate confirm step — role
 // changes are reversible, unlike removes).
 
-const ORG_ROLES = ["Owner", "Admin", "Member", "Billing", "Compliance"] as const;
+const ORG_ROLES = [
+  "Owner",
+  "Admin",
+  "Member",
+  "Billing",
+  "Compliance",
+] as const;
 type OrgRoleName = (typeof ORG_ROLES)[number];
 
 function RoleSelector({
@@ -389,11 +428,7 @@ function RoleSelector({
   }
 
   return (
-    <Select
-      value={member.role}
-      onValueChange={handleChange}
-      disabled={pending}
-    >
+    <Select value={member.role} onValueChange={handleChange} disabled={pending}>
       <SelectTrigger
         className="h-7 min-w-[7rem] text-xs max-md:h-11"
         aria-label={`Change role for ${member.displayName ?? member.email}`}
@@ -437,7 +472,9 @@ function MemberRow({
       className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between"
     >
       <div className="flex flex-col">
-        <span className="font-medium">{member.displayName ?? member.email}</span>
+        <span className="font-medium">
+          {member.displayName ?? member.email}
+        </span>
         <span className="text-xs text-muted-foreground">{member.email}</span>
       </div>
       <div className="flex flex-wrap items-center gap-2">
@@ -486,44 +523,63 @@ function PendingInvitationsList({
 
   function handleDecline(publicId: string, email: string) {
     startDecline(async () => {
-      const res = await declineInvitationAction({ orgSlug, invitationPublicId: publicId });
+      const res = await declineInvitationAction({
+        orgSlug,
+        invitationPublicId: publicId,
+      });
       if (res.ok) {
-        addToast({ title: "Invitation revoked", description: email, type: "success" });
+        addToast({
+          title: "Invitation revoked",
+          description: email,
+          type: "success",
+        });
       } else {
-        addToast({ title: "Failed to revoke invitation", description: res.error, type: "error" });
+        addToast({
+          title: "Failed to revoke invitation",
+          description: res.error,
+          type: "error",
+        });
       }
     });
   }
 
   return (
-    <Panel title={<span className="flex items-center gap-2"><Mail className="h-4 w-4 text-muted-foreground" />Pending invitations<Badge variant="secondary">{invitations.length}</Badge></span>}>
-        <ul className="divide-y divide-border/60">
-          {invitations.map((inv) => (
-            <li
-              key={inv.publicId}
-              className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between"
-            >
-              <div className="flex flex-col">
-                <span className="font-medium">{inv.email}</span>
-                <span className="text-xs text-muted-foreground">
-                  Invited as {inv.role}
-                  {inv.expiresAt ? ` · Expires ${formatDate(inv.expiresAt)}` : ""}
-                </span>
-              </div>
-              {canManage ? (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="max-md:h-11 max-md:self-start"
-                  onClick={() => handleDecline(inv.publicId, inv.email)}
-                  disabled={declining}
-                >
-                  Revoke
-                </Button>
-              ) : null}
-            </li>
-          ))}
-        </ul>
+    <Panel
+      title={
+        <span className="flex items-center gap-2">
+          <Mail className="h-4 w-4 text-muted-foreground" />
+          Pending invitations
+          <Badge variant="secondary">{invitations.length}</Badge>
+        </span>
+      }
+    >
+      <ul className="divide-y divide-border/60">
+        {invitations.map((inv) => (
+          <li
+            key={inv.publicId}
+            className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between"
+          >
+            <div className="flex flex-col">
+              <span className="font-medium">{inv.email}</span>
+              <span className="text-xs text-muted-foreground">
+                Invited as {inv.role}
+                {inv.expiresAt ? ` · Expires ${formatDate(inv.expiresAt)}` : ""}
+              </span>
+            </div>
+            {canManage ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="max-md:h-11 max-md:self-start"
+                onClick={() => handleDecline(inv.publicId, inv.email)}
+                disabled={declining}
+              >
+                Revoke
+              </Button>
+            ) : null}
+          </li>
+        ))}
+      </ul>
     </Panel>
   );
 }
@@ -554,25 +610,36 @@ export function MembersPanel({
       <SeatAlertBanner orgSlug={orgSlug} seatUsage={seatUsage} />
 
       <Panel
-        title={<>Organization members<span className="ml-2 text-sm font-normal text-muted-foreground">{members.length} / {seatUsage.licenses}</span></>}
-        actions={canManage ? <AddMemberDialog orgSlug={orgSlug} seatUsage={seatUsage} /> : undefined}
+        title={
+          <>
+            Organization members
+            <span className="ml-2 text-sm font-normal text-muted-foreground">
+              {members.length} / {seatUsage.licenses}
+            </span>
+          </>
+        }
+        actions={
+          canManage ? (
+            <AddMemberDialog orgSlug={orgSlug} seatUsage={seatUsage} />
+          ) : undefined
+        }
       >
-          {members.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No members yet.</p>
-          ) : (
-            <ul className="divide-y divide-border/60">
-              {members.map((m) => (
-                <MemberRow
-                  key={m.publicId}
-                  orgSlug={orgSlug}
-                  member={m}
-                  canManage={canManage}
-                  isSelf={m.userId === viewerUserId}
-                  onRemoved={() => handleRemoved(m.userId)}
-                />
-              ))}
-            </ul>
-          )}
+        {members.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No members yet.</p>
+        ) : (
+          <ul className="divide-y divide-border/60">
+            {members.map((m) => (
+              <MemberRow
+                key={m.publicId}
+                orgSlug={orgSlug}
+                member={m}
+                canManage={canManage}
+                isSelf={m.userId === viewerUserId}
+                onRemoved={() => handleRemoved(m.userId)}
+              />
+            ))}
+          </ul>
+        )}
       </Panel>
 
       <PendingInvitationsList

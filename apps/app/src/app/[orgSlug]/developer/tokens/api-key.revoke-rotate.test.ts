@@ -33,15 +33,23 @@ import { revalidatePath } from "next/cache";
 import { invoke } from "@oxagen/oxagen";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, assertOrgAdmin } from "@/lib/resolve-org";
-import { revokeApiKeyAction, rotateApiKeyAction } from "@/app/[orgSlug]/developer/tokens/api-key";
+import {
+  revokeApiKeyAction,
+  rotateApiKeyAction,
+} from "@/app/[orgSlug]/developer/tokens/api-key";
 
 const mockInvoke = vi.mocked(invoke);
 const mockRevalidatePath = vi.mocked(revalidatePath);
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(getSessionOrRedirect).mockResolvedValue({ user: { id: "user-1" } } as never);
-  vi.mocked(resolveOrg).mockResolvedValue({ id: "org-1", slug: "acme" } as never);
+  vi.mocked(getSessionOrRedirect).mockResolvedValue({
+    user: { id: "user-1" },
+  } as never);
+  vi.mocked(resolveOrg).mockResolvedValue({
+    id: "org-1",
+    slug: "acme",
+  } as never);
   vi.mocked(assertOrgAdmin).mockResolvedValue(undefined);
 });
 
@@ -49,7 +57,10 @@ describe("revokeApiKeyAction", () => {
   it("gates on org admin, calls revoke_api_key, and revalidates the tokens path", async () => {
     mockInvoke.mockResolvedValue({ ok: true });
 
-    const result = await revokeApiKeyAction({ orgSlug: "acme", keyPublicId: "key_1" });
+    const result = await revokeApiKeyAction({
+      orgSlug: "acme",
+      keyPublicId: "key_1",
+    });
 
     expect(assertOrgAdmin).toHaveBeenCalledWith("org-1", "user-1");
     expect(mockInvoke).toHaveBeenCalledWith(
@@ -65,9 +76,9 @@ describe("revokeApiKeyAction", () => {
   it("denies a non-admin caller and never reaches invoke", async () => {
     vi.mocked(assertOrgAdmin).mockRejectedValue(new Error("NEXT_NOT_FOUND"));
 
-    await expect(revokeApiKeyAction({ orgSlug: "acme", keyPublicId: "key_1" })).rejects.toThrow(
-      "NEXT_NOT_FOUND",
-    );
+    await expect(
+      revokeApiKeyAction({ orgSlug: "acme", keyPublicId: "key_1" }),
+    ).rejects.toThrow("NEXT_NOT_FOUND");
     expect(mockInvoke).not.toHaveBeenCalled();
   });
 });

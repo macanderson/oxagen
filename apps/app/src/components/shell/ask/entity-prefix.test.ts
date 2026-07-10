@@ -26,7 +26,10 @@ describe("matchEntityPrefix", () => {
   // ── principal ──────────────────────────────────────────────────────────────
   it("matches '@alice@example.com' → kind=principal, remainder='alice@example.com'", () => {
     const result = matchEntityPrefix("@alice@example.com");
-    expect(result).toEqual({ kind: "principal", queryRemainder: "alice@example.com" });
+    expect(result).toEqual({
+      kind: "principal",
+      queryRemainder: "alice@example.com",
+    });
   });
 
   it("matches '@' alone → kind=principal, remainder=''", () => {
@@ -37,7 +40,10 @@ describe("matchEntityPrefix", () => {
   // ── playbook ───────────────────────────────────────────────────────────────
   it("matches 'playbook churn-investigate' → kind=playbook", () => {
     const result = matchEntityPrefix("playbook churn-investigate");
-    expect(result).toEqual({ kind: "playbook", queryRemainder: "churn-investigate" });
+    expect(result).toEqual({
+      kind: "playbook",
+      queryRemainder: "churn-investigate",
+    });
   });
 
   it("matches 'pb_abc-123' → kind=playbook, remainder='abc-123'", () => {

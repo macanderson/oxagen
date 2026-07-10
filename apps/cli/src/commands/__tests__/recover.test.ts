@@ -5,7 +5,15 @@
  * commitExists); pretty → the human view on stdout; a missing hash → uniform
  * stderr error line with exit 1. The commit ledger is mocked (no git / fs).
  */
-import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+  type Mock,
+} from "vitest";
 import type { CommandWriter } from "../../lib/capture-writer.js";
 
 vi.mock("../commit-ledger.js", () => ({
@@ -23,7 +31,10 @@ function makeWriter(): { writer: CommandWriter; out: string[]; err: string[] } {
   const out: string[] = [];
   const err: string[] = [];
   return {
-    writer: { write: (l) => void out.push(l), writeErr: (l) => void err.push(l) },
+    writer: {
+      write: (l) => void out.push(l),
+      writeErr: (l) => void err.push(l),
+    },
     out,
     err,
   };
@@ -83,7 +94,10 @@ describe("handleRecover", () => {
     mockExists.mockReturnValue(true);
     const { writer, out } = makeWriter();
     await handleRecover("abcdef12", { json: true }, writer);
-    expect(JSON.parse(out[0] as string)).toEqual({ ...ENTRY, commitExists: true });
+    expect(JSON.parse(out[0] as string)).toEqual({
+      ...ENTRY,
+      commitExists: true,
+    });
   });
 
   it("renders one entry with restore instructions in pretty mode", async () => {
@@ -93,7 +107,9 @@ describe("handleRecover", () => {
     await handleRecover("abcdef12", {}, writer);
     expect(out[0]).toContain("commit abcdef1234567890");
     expect(out[0]).toContain("(⚠ object not found in repo");
-    expect(out[0]).toContain("git -C /repo worktree add ../recovered-abcdef12 abcdef1234567890");
+    expect(out[0]).toContain(
+      "git -C /repo worktree add ../recovered-abcdef12 abcdef1234567890",
+    );
   });
 
   it("errors to stderr with exit 1 for an unknown hash", async () => {

@@ -21,7 +21,11 @@
 import { describe, it, expect } from "vitest";
 import { buildProgram } from "../../program.js";
 import { describeCliCommands } from "../../commands/meta.js";
-import { buildSlashCatalog, CLI_DISAMBIGUATION_PREFIX, BUILTIN_SLASH_NAMES } from "../catalog.js";
+import {
+  buildSlashCatalog,
+  CLI_DISAMBIGUATION_PREFIX,
+  BUILTIN_SLASH_NAMES,
+} from "../catalog.js";
 
 describe("describeCliCommands — recursive subcommand discovery", () => {
   it("includes top-level commands (unchanged, no regression)", () => {
@@ -87,7 +91,9 @@ describe("buildSlashCatalog — builtin-shadowed CLI command disambiguation", ()
   });
 
   it("the shadowed CLI command is reachable via its cli: disambiguated alias", () => {
-    const aliased = catalog().find((c) => c.name === `${CLI_DISAMBIGUATION_PREFIX}config`);
+    const aliased = catalog().find(
+      (c) => c.name === `${CLI_DISAMBIGUATION_PREFIX}config`,
+    );
     expect(aliased).toBeDefined();
     expect(aliased?.source).toBe("cli");
     expect(aliased?.productized).toBe(true);

@@ -8,11 +8,15 @@ describe("formatRelativeRenewal", () => {
   // ── today / past ─────────────────────────────────────────────────────────────
 
   it("returns 'renews today' when end === now", () => {
-    expect(formatRelativeRenewal("2026-06-05", { now: NOW })).toBe("renews today");
+    expect(formatRelativeRenewal("2026-06-05", { now: NOW })).toBe(
+      "renews today",
+    );
   });
 
   it("returns 'renews today' when end is in the past (≤0 days)", () => {
-    expect(formatRelativeRenewal("2026-06-04", { now: NOW })).toBe("renews today");
+    expect(formatRelativeRenewal("2026-06-04", { now: NOW })).toBe(
+      "renews today",
+    );
   });
 
   // ── 1 day ────────────────────────────────────────────────────────────────────
@@ -80,19 +84,21 @@ describe("formatRelativeRenewal", () => {
   // ── opts.cancel ──────────────────────────────────────────────────────────────
 
   it("replaces 'renews' with 'cancels' when cancel:true (today)", () => {
-    expect(formatRelativeRenewal("2026-06-05", { now: NOW, cancel: true })).toBe("cancels today");
+    expect(
+      formatRelativeRenewal("2026-06-05", { now: NOW, cancel: true }),
+    ).toBe("cancels today");
   });
 
   it("replaces 'renews' with 'cancels' when cancel:true (+1 day)", () => {
-    expect(formatRelativeRenewal("2026-06-06", { now: NOW, cancel: true })).toBe(
-      "cancels tomorrow on June 6th, 2026",
-    );
+    expect(
+      formatRelativeRenewal("2026-06-06", { now: NOW, cancel: true }),
+    ).toBe("cancels tomorrow on June 6th, 2026");
   });
 
   it("replaces 'renews' with 'cancels' when cancel:true (>30d)", () => {
-    expect(formatRelativeRenewal("2026-07-06", { now: NOW, cancel: true })).toBe(
-      "cancels in 1 month on July 6th, 2026",
-    );
+    expect(
+      formatRelativeRenewal("2026-07-06", { now: NOW, cancel: true }),
+    ).toBe("cancels in 1 month on July 6th, 2026");
   });
 
   // ── ordinal edge-cases ────────────────────────────────────────────────────────

@@ -29,7 +29,8 @@ function plainLine(e: InitProgressEvent): string | null {
       return e.status === "start" ? "Scaffolding settings…" : null;
     case "graph":
       if (e.status === "start") return "Building code graph…";
-      if (e.status === "done") return `Code graph: ${e.stats.files} files, ${e.stats.totalSymbols} symbols`;
+      if (e.status === "done")
+        return `Code graph: ${e.stats.files} files, ${e.stats.totalSymbols} symbols`;
       return null;
     case "domains":
       if (e.status === "start") return "Inferring domains…";
@@ -52,7 +53,9 @@ function shouldAnimate(opts: InitOptions): boolean {
   return true;
 }
 
-export async function runInitWithAnimation(opts: InitOptions): Promise<InitResult> {
+export async function runInitWithAnimation(
+  opts: InitOptions,
+): Promise<InitResult> {
   if (!shouldAnimate(opts)) {
     return runInit({
       ...opts,

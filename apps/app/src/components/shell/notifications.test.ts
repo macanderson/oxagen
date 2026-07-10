@@ -45,17 +45,35 @@ vi.mock("@oxagen/oxagen/contracts/notification.mark", () => ({
   },
 }));
 
-import { listNotificationsAction, markNotificationAction } from "./notifications";
+import {
+  listNotificationsAction,
+  markNotificationAction,
+} from "./notifications";
 import { getSessionOrRedirect } from "@/lib/session";
-import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
+import {
+  resolveOrg,
+  resolveWorkspace,
+  assertOrgMember,
+} from "@/lib/resolve-org";
 import { invoke } from "@oxagen/oxagen";
 
 // ---------------------------------------------------------------------------
 // Fixtures
 // ---------------------------------------------------------------------------
 const mockSession = { user: { id: "user-1" } };
-const mockOrg = { id: "org-abc", publicId: "pub-org", name: "Acme", slug: "acme" };
-const mockWs = { id: "ws-xyz", publicId: "pub-ws", orgId: "org-abc", name: "Prod", slug: "prod" };
+const mockOrg = {
+  id: "org-abc",
+  publicId: "pub-org",
+  name: "Acme",
+  slug: "acme",
+};
+const mockWs = {
+  id: "ws-xyz",
+  publicId: "pub-ws",
+  orgId: "org-abc",
+  name: "Prod",
+  slug: "prod",
+};
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -78,7 +96,10 @@ describe("listNotificationsAction", () => {
 
   it("passes unreadOnly and limit to the capability", async () => {
     vi.mocked(invoke).mockResolvedValue({ notifications: [] });
-    await listNotificationsAction("acme", "prod", { unreadOnly: true, limit: 10 });
+    await listNotificationsAction("acme", "prod", {
+      unreadOnly: true,
+      limit: 10,
+    });
     const [, input] = vi.mocked(invoke).mock.calls[0]!;
     expect((input as { unreadOnly: boolean }).unreadOnly).toBe(true);
     expect((input as { limit: number }).limit).toBe(10);
@@ -110,13 +131,19 @@ describe("listNotificationsAction", () => {
   });
 
   it("propagates errors from getSessionOrRedirect", async () => {
-    vi.mocked(getSessionOrRedirect).mockRejectedValue(new Error("unauthenticated"));
-    await expect(listNotificationsAction("acme", "prod")).rejects.toThrow("unauthenticated");
+    vi.mocked(getSessionOrRedirect).mockRejectedValue(
+      new Error("unauthenticated"),
+    );
+    await expect(listNotificationsAction("acme", "prod")).rejects.toThrow(
+      "unauthenticated",
+    );
   });
 
   it("propagates errors from invoke", async () => {
     vi.mocked(invoke).mockRejectedValue(new Error("handler error"));
-    await expect(listNotificationsAction("acme", "prod")).rejects.toThrow("handler error");
+    await expect(listNotificationsAction("acme", "prod")).rejects.toThrow(
+      "handler error",
+    );
   });
 });
 
@@ -162,6 +189,8 @@ describe("markNotificationAction", () => {
 
   it("propagates errors from invoke", async () => {
     vi.mocked(invoke).mockRejectedValue(new Error("mark error"));
-    await expect(markNotificationAction("acme", "prod", "notif-x")).rejects.toThrow("mark error");
+    await expect(
+      markNotificationAction("acme", "prod", "notif-x"),
+    ).rejects.toThrow("mark error");
   });
 });

@@ -16,12 +16,14 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import type { InitOptions, InitResult } from "../../commands/init-engine.js";
 
-const { runInitMock, renderSpy, unmountMock, waitUntilExitMock } = vi.hoisted(() => ({
-  runInitMock: vi.fn(),
-  renderSpy: vi.fn(),
-  unmountMock: vi.fn(),
-  waitUntilExitMock: vi.fn(async () => undefined),
-}));
+const { runInitMock, renderSpy, unmountMock, waitUntilExitMock } = vi.hoisted(
+  () => ({
+    runInitMock: vi.fn(),
+    renderSpy: vi.fn(),
+    unmountMock: vi.fn(),
+    waitUntilExitMock: vi.fn(async () => undefined),
+  }),
+);
 
 vi.mock("../../commands/init-engine.js", () => ({ runInit: runInitMock }));
 vi.mock("ink", () => ({
@@ -38,7 +40,9 @@ function setTTY(value: boolean | undefined): void {
 }
 
 function renderedOnReady(): () => void {
-  const element = renderSpy.mock.calls[0]?.[0] as { props: { onReady: () => void } } | undefined;
+  const element = renderSpy.mock.calls[0]?.[0] as
+    | { props: { onReady: () => void } }
+    | undefined;
   if (!element) throw new Error("ink.render was never called");
   return element.props.onReady;
 }
@@ -90,7 +94,9 @@ describe("runInitWithAnimation — plain-line fallback", () => {
       });
       return FIXED_RESULT;
     });
-    const stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const stderrSpy = vi
+      .spyOn(process.stderr, "write")
+      .mockImplementation(() => true);
 
     const result = await runInitWithAnimation({});
 
@@ -128,11 +134,15 @@ describe("runInitWithAnimation — plain-line fallback", () => {
       await opts.onProgress?.({ phase: "domains", status: "skipped" });
       return FIXED_RESULT;
     });
-    const stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const stderrSpy = vi
+      .spyOn(process.stderr, "write")
+      .mockImplementation(() => true);
 
     await runInitWithAnimation({});
 
-    expect(stderrSpy.mock.calls.map((c) => c[0])).toContain("Domains: skipped\n");
+    expect(stderrSpy.mock.calls.map((c) => c[0])).toContain(
+      "Domains: skipped\n",
+    );
   });
 });
 
@@ -144,7 +154,11 @@ describe("runInitWithAnimation — TTY animation hand-off", () => {
     let afterDomainsRan = false;
     runInitMock.mockImplementation(async (opts: InitOptions) => {
       await opts.onProgress?.({ phase: "graph", status: "start" });
-      await opts.onProgress?.({ phase: "domains", status: "done", domains: [] });
+      await opts.onProgress?.({
+        phase: "domains",
+        status: "done",
+        domains: [],
+      });
       afterDomainsRan = true; // only reachable once onProgress's await resolves
       return FIXED_RESULT;
     });
@@ -189,11 +203,19 @@ describe("runInitWithAnimation — TTY animation hand-off", () => {
     delete process.env["OXAGEN_CLI_FUN"];
 
     runInitMock.mockImplementation(async (opts: InitOptions) => {
-      await opts.onProgress?.({ phase: "domains", status: "start", totalFiles: 4 });
+      await opts.onProgress?.({
+        phase: "domains",
+        status: "start",
+        totalFiles: 4,
+      });
       // If the orchestrator incorrectly unblocked on "start", this would hang
       // forever waiting on a reveal that never fires — the 20ms wait below
       // proves it does not.
-      await opts.onProgress?.({ phase: "domains", status: "done", domains: [] });
+      await opts.onProgress?.({
+        phase: "domains",
+        status: "done",
+        domains: [],
+      });
       return FIXED_RESULT;
     });
 

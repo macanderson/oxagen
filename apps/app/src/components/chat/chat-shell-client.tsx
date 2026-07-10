@@ -9,12 +9,19 @@ import type { ChatMessage, MessageBubbleCallbacks } from "./message-bubble";
 import { PlanCard } from "./plan-card";
 import { ApprovalCard } from "./approval-card";
 import { ConsentCard } from "./consent-card";
-import { ToolActivityGroup, type ToolActivityItem } from "./tool-activity-group";
+import {
+  ToolActivityGroup,
+  type ToolActivityItem,
+} from "./tool-activity-group";
 import { CodeExecuteCard } from "./code-execute-card";
 import { MemoryCard } from "./memory-card";
 import { BackgroundTaskCard } from "./background-task-card";
 import { SubagentFanout } from "./subagent-fanout";
-import { CHAT_COMPONENTS, logUnknownComponent, UnknownComponentCard } from "./chat-component-registry";
+import {
+  CHAT_COMPONENTS,
+  logUnknownComponent,
+  UnknownComponentCard,
+} from "./chat-component-registry";
 import { StreamingText } from "./streaming-text";
 import { ReasoningCard } from "./reasoning-card";
 import { ActivityTimeline, TimelineItem } from "./activity-timeline";
@@ -22,7 +29,10 @@ import { useToolStream } from "./use-tool-stream";
 import type { ChatShellProps } from "./chat-shell-props";
 import type { StreamEvent } from "./stream-event-types";
 import type { ResolvedTierCatalog } from "@oxagen/ai/catalog";
-import type { ComposerModelState, WorkspaceBudgetGovernance } from "./model-picker";
+import type {
+  ComposerModelState,
+  WorkspaceBudgetGovernance,
+} from "./model-picker";
 import type { McpServerSummary } from "./mcp-types";
 import type { RepoOption } from "./repo-selector";
 import type { EnvironmentOption } from "./environment-selector";
@@ -203,7 +213,9 @@ export function ChatShellClient({
    * Called when `page_form_fill` completes (tool-call-end) with the fill result.
    * Use this to set fillResult in PageContext.
    */
-  onFormFillEnd?: (result: import("@/lib/ask/fill-types").FormFillResult) => void;
+  onFormFillEnd?: (
+    result: import("@/lib/ask/fill-types").FormFillResult,
+  ) => void;
   /**
    * Embedded mode (e.g. the floating in-app agent panel): the embedder owns the
    * conversation state instead of the RSC. When provided, ChatShellClient calls
@@ -211,7 +223,10 @@ export function ChatShellClient({
    * pinning the browser URL via router.replace — the floating panel has no route
    * of its own to pin.
    */
-  onConversationCreated?: (conversationId: string, conversationPublicId: string) => void;
+  onConversationCreated?: (
+    conversationId: string,
+    conversationPublicId: string,
+  ) => void;
   /**
    * Embedded mode: called after a turn completes to reconcile the live stream
    * with the persisted messages. When provided it REPLACES the router.refresh()
@@ -502,7 +517,10 @@ export function ChatShellClient({
       // DB row exists as soon as sendAction returns.
       if (wasNewConversation && result.conversationPublicId) {
         if (onConversationCreatedRef.current) {
-          onConversationCreatedRef.current(result.conversationId, result.conversationPublicId);
+          onConversationCreatedRef.current(
+            result.conversationId,
+            result.conversationPublicId,
+          );
         } else {
           router.replace(`${pathname}?c=${result.conversationPublicId}`);
           router.refresh();
@@ -543,7 +561,11 @@ export function ChatShellClient({
               activeServerIds: (() => {
                 const raw = formData.get("activeServerIds") as string | null;
                 if (!raw) return [];
-                try { return JSON.parse(raw) as string[]; } catch { return []; }
+                try {
+                  return JSON.parse(raw) as string[];
+                } catch {
+                  return [];
+                }
               })(),
               // Per-turn dollar budget (OXA — turn-budget). The composer
               // always sets this (see message-composer.tsx budgetPayload) but
@@ -553,7 +575,11 @@ export function ChatShellClient({
               budget: (() => {
                 const raw = formData.get("budget") as string | null;
                 if (!raw) return null;
-                try { return JSON.parse(raw); } catch { return null; }
+                try {
+                  return JSON.parse(raw);
+                } catch {
+                  return null;
+                }
               })(),
               // Forward attachment IDS ONLY — never the base64 bytes or the
               // full conversationAssetItem the composer persisted — the stream
@@ -632,8 +658,13 @@ export function ChatShellClient({
             // when present and fall back to the status line otherwise.
             const serverError = await readErrorMessage(res);
             const errMsg =
-              serverError ?? `Stream request failed (HTTP ${res.status}) — please try again.`;
-            console.warn("[chat]", `Stream request failed (HTTP ${res.status})`, serverError ?? "");
+              serverError ??
+              `Stream request failed (HTTP ${res.status}) — please try again.`;
+            console.warn(
+              "[chat]",
+              `Stream request failed (HTTP ${res.status})`,
+              serverError ?? "",
+            );
             setStreamErrorRef.current(errMsg);
             setIsStreamingRef.current(false);
             return;
@@ -778,7 +809,12 @@ export function ChatShellClient({
         }
       },
     }),
-    [wrappedResolveApproval, wrappedResolveConsent, resolvePlanAction, agentCapabilities],
+    [
+      wrappedResolveApproval,
+      wrappedResolveConsent,
+      resolvePlanAction,
+      agentCapabilities,
+    ],
   );
 
   // The live turn renders as a single ORDERED timeline (the chain of
@@ -803,7 +839,11 @@ export function ChatShellClient({
         if (!r) return null;
         return {
           node: (
-            <ReasoningCard text={r.text} status={r.status} durationMs={r.durationMs} />
+            <ReasoningCard
+              text={r.text}
+              status={r.status}
+              durationMs={r.durationMs}
+            />
           ),
           tone: r.status === "thinking" ? "thinking" : "done",
           active: r.status === "thinking",
@@ -833,12 +873,17 @@ export function ChatShellClient({
               ? "failed"
               : "running";
         const active = tc.status === "pending" || tc.status === "running";
-        const preview = (tc.inputPreview as Record<string, unknown> | null) ?? {};
-        const language = typeof preview.language === "string" ? preview.language : "node";
+        const preview =
+          (tc.inputPreview as Record<string, unknown> | null) ?? {};
+        const language =
+          typeof preview.language === "string" ? preview.language : "node";
         const code = typeof preview.code === "string" ? preview.code : "";
-        const outputRecord = (tc.output as Record<string, unknown> | null) ?? {};
+        const outputRecord =
+          (tc.output as Record<string, unknown> | null) ?? {};
         const exitCode =
-          typeof outputRecord.exitCode === "number" ? outputRecord.exitCode : undefined;
+          typeof outputRecord.exitCode === "number"
+            ? outputRecord.exitCode
+            : undefined;
         return {
           node: (
             <CodeExecuteCard
@@ -861,7 +906,11 @@ export function ChatShellClient({
         if (!seg || !seg.text) return null;
         return {
           node: (
-            <StreamingText text={seg.text} isStreaming={isStreaming} className="text-sm" />
+            <StreamingText
+              text={seg.text}
+              isStreaming={isStreaming}
+              className="text-sm"
+            />
           ),
           tone: "idle",
           active: false,
@@ -1114,7 +1163,8 @@ export function ChatShellClient({
           .map((tc) => ({
             capability: tc.capability,
             status: tc.status,
-            inputPreview: (tc.inputPreview as Record<string, unknown> | null) ?? null,
+            inputPreview:
+              (tc.inputPreview as Record<string, unknown> | null) ?? null,
             output: (tc.output as Record<string, unknown> | undefined) ?? null,
           })),
       ),
@@ -1124,154 +1174,155 @@ export function ChatShellClient({
   return (
     <div className="flex h-full w-full gap-4">
       <div className="mx-auto flex h-full min-w-0 max-w-3xl flex-1 flex-col gap-4">
-      {/* Toolbar row: export trigger (right-aligned). Hidden in the floating
+        {/* Toolbar row: export trigger (right-aligned). Hidden in the floating
           in-app panel (showFiles=false) — conversation files live on the full
           /ask page, in the side-panel's "Files" tab. */}
-      {showFiles && conversationPublicId ? (
-        <div className="flex shrink-0 items-center justify-end gap-1">
-          <ConversationExportMenu
-            conversationId={conversationPublicId}
-            orgSlug={orgSlug}
-            workspaceSlug={workspaceSlug}
-          />
-        </div>
-      ) : null}
-
-      <div
-        ref={scrollContainerRef}
-        // `relative` is load-bearing: it makes this scroll container the
-        // containing block for its absolutely-positioned descendants (e.g. the
-        // `.sr-only` labels inside message-footer icon buttons). Without it
-        // those abs elements anchor to the initial containing block, escape this
-        // container's `overflow` clipping, and inflate the document height —
-        // letting the whole page scroll past the composer on mobile and desktop.
-        className="relative min-h-0 flex-1 overflow-y-auto pr-2"
-        onScroll={handleScroll}
-      >
-        {messages.length === 0 && !hasLiveContent ? (
-          <div className="flex h-full flex-col items-center justify-center gap-4 text-center text-sm text-muted-foreground">
-            <div>
-              <p className="font-medium">Start a conversation.</p>
-              <p>Send a message below to begin.</p>
-            </div>
-            {/* Suggested chips in empty state */}
-            <SuggestedPromptChips
-              action={wrappedSendAction}
-              conversationId={conversationId}
-              parentMessageId={activeLeafMessageId}
-            />
-          </div>
-        ) : (
-          <div className="flex flex-col gap-4">
-            <MessageTree
-              messages={messages}
-              callbacks={callbacks}
+        {showFiles && conversationPublicId ? (
+          <div className="flex shrink-0 items-center justify-end gap-1">
+            <ConversationExportMenu
+              conversationId={conversationPublicId}
               orgSlug={orgSlug}
               workspaceSlug={workspaceSlug}
             />
-            {/* Live turn: the ordered chain of thought/action, rendered as a
+          </div>
+        ) : null}
+
+        <div
+          ref={scrollContainerRef}
+          // `relative` is load-bearing: it makes this scroll container the
+          // containing block for its absolutely-positioned descendants (e.g. the
+          // `.sr-only` labels inside message-footer icon buttons). Without it
+          // those abs elements anchor to the initial containing block, escape this
+          // container's `overflow` clipping, and inflate the document height —
+          // letting the whole page scroll past the composer on mobile and desktop.
+          className="relative min-h-0 flex-1 overflow-y-auto pr-2"
+          onScroll={handleScroll}
+        >
+          {messages.length === 0 && !hasLiveContent ? (
+            <div className="flex h-full flex-col items-center justify-center gap-4 text-center text-sm text-muted-foreground">
+              <div>
+                <p className="font-medium">Start a conversation.</p>
+                <p>Send a message below to begin.</p>
+              </div>
+              {/* Suggested chips in empty state */}
+              <SuggestedPromptChips
+                action={wrappedSendAction}
+                conversationId={conversationId}
+                parentMessageId={activeLeafMessageId}
+              />
+            </div>
+          ) : (
+            <div className="flex flex-col gap-4">
+              <MessageTree
+                messages={messages}
+                callbacks={callbacks}
+                orgSlug={orgSlug}
+                workspaceSlug={workspaceSlug}
+              />
+              {/* Live turn: the ordered chain of thought/action, rendered as a
                 connected timeline before the RSC revalidate replaces it with
                 the persisted message. */}
-            {hasLiveContent ? (
-              <div data-live-turn>
-                <ActivityTimeline>
-                  {/* Show the thinking bubble when streaming has started but no
+              {hasLiveContent ? (
+                <div data-live-turn>
+                  <ActivityTimeline>
+                    {/* Show the thinking bubble when streaming has started but no
                       timeline entries have arrived yet — covers the gap between
                       the user submitting and the first SSE event landing. */}
-                  {isStreaming && timelineEntries.length === 0 ? (
-                    <TimelineItem
-                      key="thinking-bubble"
-                      tone="thinking"
-                      isActive={true}
-                      isLast={true}
-                    >
-                      <ThinkingBubble />
-                    </TimelineItem>
+                    {isStreaming && timelineEntries.length === 0 ? (
+                      <TimelineItem
+                        key="thinking-bubble"
+                        tone="thinking"
+                        isActive={true}
+                        isLast={true}
+                      >
+                        <ThinkingBubble />
+                      </TimelineItem>
+                    ) : null}
+                    {timelineEntries.map((entry, i) => (
+                      <TimelineItem
+                        key={entry.key}
+                        // Anchor id for the coding-trace-panel rail's deep links
+                        // (`#turn-entry-<key>`) — see chat-component-registry's
+                        // sibling `coding-trace-panel.tsx`.
+                        id={`turn-entry-${entry.key}`}
+                        tone={entry.rendered.tone}
+                        // The pulsing ring only animates an in-flight node while the
+                        // turn is actually streaming.
+                        isActive={entry.rendered.active && isStreaming}
+                        isLast={
+                          i === timelineEntries.length - 1 &&
+                          turnUsage === undefined
+                        }
+                      >
+                        {entry.rendered.node}
+                      </TimelineItem>
+                    ))}
+                  </ActivityTimeline>
+                  {turnUsage !== undefined ? (
+                    <div id="turn-result">
+                      <MessageFooter
+                        text={Object.values(textSegments)
+                          .map((s) => s.text)
+                          .join("")}
+                        usage={turnUsage}
+                        orgSlug={orgSlug}
+                        workspaceSlug={workspaceSlug}
+                      />
+                    </div>
                   ) : null}
-                  {timelineEntries.map((entry, i) => (
-                    <TimelineItem
-                      key={entry.key}
-                      // Anchor id for the coding-trace-panel rail's deep links
-                      // (`#turn-entry-<key>`) — see chat-component-registry's
-                      // sibling `coding-trace-panel.tsx`.
-                      id={`turn-entry-${entry.key}`}
-                      tone={entry.rendered.tone}
-                      // The pulsing ring only animates an in-flight node while the
-                      // turn is actually streaming.
-                      isActive={entry.rendered.active && isStreaming}
-                      isLast={
-                        i === timelineEntries.length - 1 && turnUsage === undefined
-                      }
-                    >
-                      {entry.rendered.node}
-                    </TimelineItem>
-                  ))}
-                </ActivityTimeline>
-                {turnUsage !== undefined ? (
-                  <div id="turn-result">
-                    <MessageFooter
-                      text={Object.values(textSegments)
-                        .map((s) => s.text)
-                        .join("")}
-                      usage={turnUsage}
-                      orgSlug={orgSlug}
-                      workspaceSlug={workspaceSlug}
-                    />
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-          </div>
-        )}
-      </div>
-      {/* Suggested prompt chips — shown above the composer once there are messages
+                </div>
+              ) : null}
+            </div>
+          )}
+        </div>
+        {/* Suggested prompt chips — shown above the composer once there are messages
           (empty state renders its own chips above; this avoids duplication). */}
-      {messages.length > 0 || hasLiveContent ? (
-        <SuggestedPromptChips
-          action={wrappedSendAction}
-          conversationId={conversationId}
-          parentMessageId={activeLeafMessageId}
-          suggestions={suggestedPrompts}
-          conversationHistory={conversationHistory}
-          className="justify-center"
-        />
-      ) : null}
+        {messages.length > 0 || hasLiveContent ? (
+          <SuggestedPromptChips
+            action={wrappedSendAction}
+            conversationId={conversationId}
+            parentMessageId={activeLeafMessageId}
+            suggestions={suggestedPrompts}
+            conversationHistory={conversationHistory}
+            className="justify-center"
+          />
+        ) : null}
 
-      {/* Stream error banner — visible when an SSE fetch fails (non-2xx or
+        {/* Stream error banner — visible when an SSE fetch fails (non-2xx or
           mid-stream network error) so the user knows to retry. Cleared
           automatically on the next send. */}
-      {streamError ? (
-        <div
-          role="alert"
-          data-testid="stream-error-banner"
-          className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-        >
-          {streamError}
-        </div>
-      ) : null}
+        {streamError ? (
+          <div
+            role="alert"
+            data-testid="stream-error-banner"
+            className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive"
+          >
+            {streamError}
+          </div>
+        ) : null}
 
-      <MessageComposer
-        conversationId={conversationId}
-        parentMessageId={activeLeafMessageId}
-        action={wrappedSendAction}
-        disabled={hasPendingApproval}
-        modelConfig={modelConfig}
-        enterToSubmit={enterToSubmit}
-        pendingPromptBehavior={pendingPromptBehavior}
-        isStreaming={isStreaming}
-        onInterrupt={handleInterrupt}
-        initialModelState={initialModelState}
-        availableMcpServers={availableMcpServers}
-        availableRepos={availableRepos}
-        availableEnvironments={availableEnvironments}
-        availableAgents={availableAgents}
-        workspaceBudgetGovernance={workspaceBudgetGovernance}
-        orgSlug={orgSlug}
-        workspaceSlug={workspaceSlug}
-        boundAgentName={boundAgentName ?? null}
-        codeSessionPr={codeSessionPr}
-      />
-    </div>
+        <MessageComposer
+          conversationId={conversationId}
+          parentMessageId={activeLeafMessageId}
+          action={wrappedSendAction}
+          disabled={hasPendingApproval}
+          modelConfig={modelConfig}
+          enterToSubmit={enterToSubmit}
+          pendingPromptBehavior={pendingPromptBehavior}
+          isStreaming={isStreaming}
+          onInterrupt={handleInterrupt}
+          initialModelState={initialModelState}
+          availableMcpServers={availableMcpServers}
+          availableRepos={availableRepos}
+          availableEnvironments={availableEnvironments}
+          availableAgents={availableAgents}
+          workspaceBudgetGovernance={workspaceBudgetGovernance}
+          orgSlug={orgSlug}
+          workspaceSlug={workspaceSlug}
+          boundAgentName={boundAgentName ?? null}
+          codeSessionPr={codeSessionPr}
+        />
+      </div>
       {/* Right rail: turn-trace stage rail + files/workspace tabbed panel.
           Hidden in the floating in-app panel (showFiles=false, same gate the
           toolbar's export trigger uses) and on narrow viewports — the rail
@@ -1378,7 +1429,7 @@ function StepMarker({
     >
       <span>Step {index + 1}</span>
       {status === "running" ? (
-        <span className="text-info">·  working</span>
+        <span className="text-info">· working</span>
       ) : null}
     </div>
   );
@@ -1388,7 +1439,10 @@ function StepMarker({
 function ComponentSkeleton() {
   return (
     <div
-      className={cn("rounded-xl border bg-card px-4 py-3", "animate-pulse space-y-2")}
+      className={cn(
+        "rounded-xl border bg-card px-4 py-3",
+        "animate-pulse space-y-2",
+      )}
       aria-busy="true"
       aria-label="Loading component"
     >

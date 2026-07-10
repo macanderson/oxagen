@@ -47,7 +47,12 @@ import { invoke } from "@oxagen/oxagen";
 // Fixtures
 // ---------------------------------------------------------------------------
 const mockSession = { user: { id: "user-1" } };
-const mockOrg = { id: "org-abc", publicId: "pub-org", name: "Acme", slug: "acme" };
+const mockOrg = {
+  id: "org-abc",
+  publicId: "pub-org",
+  name: "Acme",
+  slug: "acme",
+};
 const mockApiKey = { id: "key-1", token: "oxg_key_abc123", name: "CI Key" };
 
 // ---------------------------------------------------------------------------
@@ -81,7 +86,9 @@ describe("createApiKeyAction", () => {
       expiresAt: "2027-01-01T00:00:00.000Z",
     });
     const [, input] = vi.mocked(invoke).mock.calls[0]!;
-    expect((input as { expiresAt: string }).expiresAt).toBe("2027-01-01T00:00:00.000Z");
+    expect((input as { expiresAt: string }).expiresAt).toBe(
+      "2027-01-01T00:00:00.000Z",
+    );
   });
 
   it("uses org-only sentinel workspace id in ctx", async () => {
@@ -105,24 +112,26 @@ describe("createApiKeyAction", () => {
   });
 
   it("propagates errors from getSessionOrRedirect", async () => {
-    vi.mocked(getSessionOrRedirect).mockRejectedValue(new Error("unauthenticated"));
-    await expect(createApiKeyAction({ orgSlug: "acme", name: "Key" })).rejects.toThrow(
-      "unauthenticated",
+    vi.mocked(getSessionOrRedirect).mockRejectedValue(
+      new Error("unauthenticated"),
     );
+    await expect(
+      createApiKeyAction({ orgSlug: "acme", name: "Key" }),
+    ).rejects.toThrow("unauthenticated");
   });
 
   it("propagates errors from resolveOrg", async () => {
     vi.mocked(resolveOrg).mockRejectedValue(new Error("org not found"));
-    await expect(createApiKeyAction({ orgSlug: "bad-org", name: "Key" })).rejects.toThrow(
-      "org not found",
-    );
+    await expect(
+      createApiKeyAction({ orgSlug: "bad-org", name: "Key" }),
+    ).rejects.toThrow("org not found");
   });
 
   it("propagates errors from invoke", async () => {
     vi.mocked(invoke).mockRejectedValue(new Error("handler error"));
-    await expect(createApiKeyAction({ orgSlug: "acme", name: "Key" })).rejects.toThrow(
-      "handler error",
-    );
+    await expect(
+      createApiKeyAction({ orgSlug: "acme", name: "Key" }),
+    ).rejects.toThrow("handler error");
   });
 
   it("gates on org admin: asserts before touching the capability", async () => {
@@ -133,9 +142,9 @@ describe("createApiKeyAction", () => {
   it("denies a non-admin caller and never reaches invoke (IDOR guard)", async () => {
     // assertOrgAdmin calls notFound() for a non-admin/non-member, which throws.
     vi.mocked(assertOrgAdmin).mockRejectedValue(new Error("NEXT_NOT_FOUND"));
-    await expect(createApiKeyAction({ orgSlug: "acme", name: "Key" })).rejects.toThrow(
-      "NEXT_NOT_FOUND",
-    );
+    await expect(
+      createApiKeyAction({ orgSlug: "acme", name: "Key" }),
+    ).rejects.toThrow("NEXT_NOT_FOUND");
     expect(invoke).not.toHaveBeenCalled();
   });
 });

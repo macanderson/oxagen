@@ -16,7 +16,11 @@ import { theme } from "../../tui/theme.js";
 
 const CLI: CliCommandMeta[] = [
   { name: "cost", description: "Project model cost", argumentHint: undefined },
-  { name: "graph", description: "Query the knowledge graph", argumentHint: undefined },
+  {
+    name: "graph",
+    description: "Query the knowledge graph",
+    argumentHint: undefined,
+  },
   // Collides with the built-in /replay — the built-in must win.
   { name: "replay", description: "CLI replay", argumentHint: "[turn]" },
 ];
@@ -66,7 +70,11 @@ describe("buildSlashCatalog", () => {
   });
 
   function build(): SlashCatalogEntry[] {
-    return buildSlashCatalog({ cwd: dir, cliCommands: CLI, userCommandsDir: userDir });
+    return buildSlashCatalog({
+      cwd: dir,
+      cliCommands: CLI,
+      userCommandsDir: userDir,
+    });
   }
 
   it("marks built-in and CLI commands productized, custom commands not", () => {
@@ -99,11 +107,18 @@ describe("buildSlashCatalog", () => {
 
   it("dedupes on name with precedence builtin > cli > custom", () => {
     // A custom command that shadows a built-in name must not displace the built-in.
-    writeFileSync(join(userDir, "mode.md"), "---\ndescription: custom mode\n---\nbody\n", "utf8");
+    writeFileSync(
+      join(userDir, "mode.md"),
+      "---\ndescription: custom mode\n---\nbody\n",
+      "utf8",
+    );
     const catalog = build();
     const modeEntries = catalog.filter((c) => c.name === "mode");
     expect(modeEntries).toHaveLength(1);
-    expect(modeEntries[0]).toMatchObject({ source: "builtin", productized: true });
+    expect(modeEntries[0]).toMatchObject({
+      source: "builtin",
+      productized: true,
+    });
 
     // The CLI `replay` collides with the built-in /replay → built-in wins.
     const replayEntries = catalog.filter((c) => c.name === "replay");
@@ -112,7 +127,11 @@ describe("buildSlashCatalog", () => {
   });
 
   it("orders builtin entries before cli before custom", () => {
-    writeFileSync(join(userDir, "zzz.md"), "---\ndescription: z\n---\nbody\n", "utf8");
+    writeFileSync(
+      join(userDir, "zzz.md"),
+      "---\ndescription: z\n---\nbody\n",
+      "utf8",
+    );
     const catalog = build();
     const sources = catalog.map((c) => c.source);
     const firstCli = sources.indexOf("cli");
@@ -124,7 +143,11 @@ describe("buildSlashCatalog", () => {
 });
 
 describe("filterSlashCatalog", () => {
-  const catalog = buildSlashCatalog({ cwd: tmpdir(), cliCommands: CLI, userCommandsDir: join(tmpdir(), "nope-does-not-exist") });
+  const catalog = buildSlashCatalog({
+    cwd: tmpdir(),
+    cliCommands: CLI,
+    userCommandsDir: join(tmpdir(), "nope-does-not-exist"),
+  });
 
   it("returns the whole catalog for an empty query", () => {
     expect(filterSlashCatalog(catalog, "")).toHaveLength(catalog.length);

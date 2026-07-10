@@ -26,7 +26,11 @@
  */
 import * as http from "node:http";
 import * as os from "node:os";
-import { generateCodeVerifier, codeChallengeS256, generateState } from "./pkce.js";
+import {
+  generateCodeVerifier,
+  codeChallengeS256,
+  generateState,
+} from "./pkce.js";
 import { openBrowser } from "./open-browser.js";
 
 const LOGIN_TIMEOUT_MS = 5 * 60 * 1000;
@@ -54,7 +58,10 @@ const SUCCESS_HTML = `<!DOCTYPE html>
 </html>`;
 
 function makeErrorHtml(message: string): string {
-  const escaped = message.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const escaped = message
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -103,7 +110,8 @@ export async function browserLogin({
   /** Abort the in-flight wait early (closes the loopback server, rejects). */
   signal?: AbortSignal;
 }): Promise<{ token: string; orgSlug: string; workspaceSlug: string }> {
-  const emit = onStatus ?? ((line: string) => void process.stdout.write(`${line}\n`));
+  const emit =
+    onStatus ?? ((line: string) => void process.stdout.write(`${line}\n`));
   const codeVerifier = generateCodeVerifier();
   const codeChallenge = codeChallengeS256(codeVerifier);
   const state = generateState();
@@ -115,7 +123,9 @@ export async function browserLogin({
     server.listen(0, "127.0.0.1", () => {
       const addr = server.address();
       if (!addr || typeof addr === "string") {
-        reject(new Error("Failed to bind loopback server: address unavailable"));
+        reject(
+          new Error("Failed to bind loopback server: address unavailable"),
+        );
         return;
       }
       resolve(addr.port);
@@ -201,29 +211,40 @@ export async function browserLogin({
           try {
             // ── CSRF guard ────────────────────────────────────────────────────
             if (returnedState !== state) {
-              await sendHtml(makeErrorHtml("State mismatch. This may be a CSRF attempt."));
-              closeAndSettle(() => reject(new Error("state mismatch (possible CSRF)")));
+              await sendHtml(
+                makeErrorHtml("State mismatch. This may be a CSRF attempt."),
+              );
+              closeAndSettle(() =>
+                reject(new Error("state mismatch (possible CSRF)")),
+              );
               return;
             }
 
             // ── Provider error ────────────────────────────────────────────────
             if (error) {
               await sendHtml(makeErrorHtml(`Authorization failed: ${error}`));
-              closeAndSettle(() => reject(new Error(`Authorization failed: ${error}`)));
+              closeAndSettle(() =>
+                reject(new Error(`Authorization failed: ${error}`)),
+              );
               return;
             }
 
             // ── Missing code ──────────────────────────────────────────────────
             if (!code) {
               await sendHtml(makeErrorHtml("No authorization code received."));
-              closeAndSettle(() => reject(new Error("No authorization code in callback")));
+              closeAndSettle(() =>
+                reject(new Error("No authorization code in callback")),
+              );
               return;
             }
 
             // ── Token exchange ────────────────────────────────────────────────
             const exchangeRes = await fetch(`${apiUrl}/v1/auth/cli/token`, {
               method: "POST",
-              headers: { "Content-Type": "application/json", Accept: "application/json" },
+              headers: {
+                "Content-Type": "application/json",
+                Accept: "application/json",
+              },
               body: JSON.stringify({
                 code,
                 code_verifier: codeVerifier,
@@ -234,7 +255,10 @@ export async function browserLogin({
             if (!exchangeRes.ok) {
               let errMsg = `Token exchange failed (HTTP ${exchangeRes.status})`;
               try {
-                const body = (await exchangeRes.json()) as Record<string, unknown>;
+                const body = (await exchangeRes.json()) as Record<
+                  string,
+                  unknown
+                >;
                 const desc = body["error_description"] ?? body["error"];
                 if (typeof desc === "string") errMsg += `: ${desc}`;
               } catch {

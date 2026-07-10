@@ -77,7 +77,9 @@ function unionOrdered(base: string[], extra: string[]): string[] {
  * Merge a bound agent definition into the current turn's config. Pure: no I/O,
  * no throw — the caller owns the async load and the fail-open try/catch.
  */
-export function applyAgentBinding(input: AgentBindingInput): AgentBindingResult {
+export function applyAgentBinding(
+  input: AgentBindingInput,
+): AgentBindingResult {
   const { def, skills, serverAllowlist, codeMode } = input;
   const agentTools = def.config.agentTools ?? [];
 

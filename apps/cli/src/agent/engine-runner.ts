@@ -14,7 +14,11 @@
  * permissions here (`gatePermissions: true`).
  */
 import { runTurn, type AgentAi } from "@oxagen/agent-engine";
-import { createCwdWorkspace, createCodeGraphProvider, createGatewayAgentAi } from "./adapters/index.js";
+import {
+  createCwdWorkspace,
+  createCodeGraphProvider,
+  createGatewayAgentAi,
+} from "./adapters/index.js";
 import { createMeteredAi } from "./metered-ai.js";
 import { queryCodeGraph } from "./code-graph.js";
 import { buildTurnExtras } from "./turn-extras.js";
@@ -34,7 +38,9 @@ export interface EngineRunnerOptions {
 }
 
 /** Build the engine-backed fleet runner. */
-export function createEngineRunner(runnerOpts: EngineRunnerOptions = {}): AgentRunner {
+export function createEngineRunner(
+  runnerOpts: EngineRunnerOptions = {},
+): AgentRunner {
   return async (opts) => {
     const cwd = opts.cwd;
     const ai =
@@ -56,7 +62,10 @@ export function createEngineRunner(runnerOpts: EngineRunnerOptions = {}): AgentR
     const enrichedContext = extras.systemAppend
       ? {
           text: (opts.projectContext?.text ?? "") + extras.systemAppend,
-          sources: [...(opts.projectContext?.sources ?? []), "workspace rules + hooks"],
+          sources: [
+            ...(opts.projectContext?.sources ?? []),
+            "workspace rules + hooks",
+          ],
         }
       : opts.projectContext;
 
@@ -74,7 +83,9 @@ export function createEngineRunner(runnerOpts: EngineRunnerOptions = {}): AgentR
         bare: true,
         readOnly: opts.readOnly,
         model: opts.model ?? opts.agent?.model,
-        codeGraph: createCodeGraphProvider((op, q, l) => queryCodeGraph(cwd, op, q, l)),
+        codeGraph: createCodeGraphProvider((op, q, l) =>
+          queryCodeGraph(cwd, op, q, l),
+        ),
         memory: opts.memory ?? undefined,
         signal: opts.signal,
         // File locking (ADR-021 §5): the fleet injects a LocalFileLockProvider so

@@ -77,7 +77,8 @@ export function SidebarItem({
     // Focus ring
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring",
     // Inactive — neutral hover (nav-link component tokens)
-    !active && "text-sidebar-nav-link-fg hover:bg-sidebar-nav-link-hover-bg hover:text-sidebar-nav-link-hover-fg",
+    !active &&
+      "text-sidebar-nav-link-fg hover:bg-sidebar-nav-link-hover-bg hover:text-sidebar-nav-link-hover-fg",
     // Active — nav-link active fill
     active && "bg-sidebar-nav-link-active-bg text-sidebar-nav-link-active-fg",
     className,
@@ -170,11 +171,7 @@ export function SidebarItem({
       );
     }
     return (
-      <button
-        type="button"
-        onClick={onClick}
-        className={sharedClasses}
-      >
+      <button type="button" onClick={onClick} className={sharedClasses}>
         {children}
       </button>
     );

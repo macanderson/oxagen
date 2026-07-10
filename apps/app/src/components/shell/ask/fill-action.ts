@@ -3,7 +3,10 @@ import "@oxagen/handlers/register";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, resolveWorkspace, getOrgRole } from "@/lib/resolve-org";
 import { invoke } from "@oxagen/oxagen";
-import { formFill, type FormFillOutput } from "@oxagen/oxagen/contracts/form.fill";
+import {
+  formFill,
+  type FormFillOutput,
+} from "@oxagen/oxagen/contracts/form.fill";
 import { logger } from "@oxagen/handlers/logger";
 import type { FillableFormSpec, FormFillResult } from "@/lib/ask/fill-types";
 
@@ -30,7 +33,9 @@ export interface FillFormActionInput {
  * can distinguish a swallowed auth/IAM/billing denial from a legitimate
  * "no changes proposed" result and surface an actionable message.
  */
-export async function fillFormAction(input: FillFormActionInput): Promise<FormFillResult> {
+export async function fillFormAction(
+  input: FillFormActionInput,
+): Promise<FormFillResult> {
   const noopFields = input.spec.fields.map((f) => ({
     name: f.name,
     current: f.current,
@@ -50,7 +55,10 @@ export async function fillFormAction(input: FillFormActionInput): Promise<FormFi
     // to honour this action's never-throw contract.
     const memberRole = await getOrgRole(org.id, session.user.id);
     if (!memberRole) {
-      return { fields: noopFields, error: "You do not have access to this organization." };
+      return {
+        fields: noopFields,
+        error: "You do not have access to this organization.",
+      };
     }
 
     let workspaceId = "";
@@ -105,7 +113,10 @@ export async function fillFormAction(input: FillFormActionInput): Promise<FormFi
     // failure (auth/IAM/billing denial, capability error) from a legitimate
     // "no changes proposed" result and surface an actionable message.
     logger.error({ err, route: input.context.route }, "fillFormAction failed");
-    const message = err instanceof Error ? err.message : "Unable to fill the form. Please try again.";
+    const message =
+      err instanceof Error
+        ? err.message
+        : "Unable to fill the form. Please try again.";
     return { fields: noopFields, error: message };
   }
 }

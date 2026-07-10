@@ -21,7 +21,13 @@
  *   - `off`     — no embedding client at all; `semantic_search` degrades to a
  *               plain miss and `graph_query` runs structural-only.
  */
-export const EMBED_PROVIDER_MODES = ["auto", "ollama", "onnx", "gateway", "off"] as const;
+export const EMBED_PROVIDER_MODES = [
+  "auto",
+  "ollama",
+  "onnx",
+  "gateway",
+  "off",
+] as const;
 export type EmbedProviderMode = (typeof EMBED_PROVIDER_MODES)[number];
 
 /** The context-layer config slice. Mirrors `contracts/config.ts` GraphConfig. */

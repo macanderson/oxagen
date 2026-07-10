@@ -6,7 +6,13 @@ import { render, screen, cleanup } from "@testing-library/react";
 // ── Mocks ────────────────────────────────────────────────────────────────────
 
 vi.mock("@/components/ui/panel", () => ({
-  Panel: ({ title, children }: { title: React.ReactNode; children: React.ReactNode }) => (
+  Panel: ({
+    title,
+    children,
+  }: {
+    title: React.ReactNode;
+    children: React.ReactNode;
+  }) => (
     <div>
       <div data-testid="panel-title">{title}</div>
       {children}
@@ -15,9 +21,13 @@ vi.mock("@/components/ui/panel", () => ({
 }));
 
 vi.mock("@/components/ui/badge", () => ({
-  Badge: ({ children, variant }: { children: React.ReactNode; variant?: string }) => (
-    <span data-variant={variant}>{children}</span>
-  ),
+  Badge: ({
+    children,
+    variant,
+  }: {
+    children: React.ReactNode;
+    variant?: string;
+  }) => <span data-variant={variant}>{children}</span>,
 }));
 
 vi.mock("@/components/ui/button", () => ({
@@ -34,14 +44,27 @@ vi.mock("@/components/ui/button", () => ({
   }) => {
     if (renderProp) {
       // DialogTrigger / DialogClose pass render={<Button />} — we must render children through
-      return <button onClick={onClick} disabled={disabled}>{children}</button>;
+      return (
+        <button onClick={onClick} disabled={disabled}>
+          {children}
+        </button>
+      );
     }
-    return <button onClick={onClick} disabled={disabled}>{children}</button>;
+    return (
+      <button onClick={onClick} disabled={disabled}>
+        {children}
+      </button>
+    );
   },
 }));
 
 vi.mock("@/components/ui/input", () => ({
-  Input: ({ value, onChange, disabled, ...props }: React.InputHTMLAttributes<HTMLInputElement>) => (
+  Input: ({
+    value,
+    onChange,
+    disabled,
+    ...props
+  }: React.InputHTMLAttributes<HTMLInputElement>) => (
     <input value={value} onChange={onChange} disabled={disabled} {...props} />
   ),
 }));
@@ -51,27 +74,63 @@ vi.mock("@/components/ui/separator", () => ({
 }));
 
 vi.mock("@/components/ui/dialog", () => ({
-  Dialog: ({ children, open, onOpenChange }: { children: React.ReactNode; open?: boolean; onOpenChange?: (open: boolean) => void }) => (
-    <div data-open={open} data-testid="dialog">{children}</div>
+  Dialog: ({
+    children,
+    open,
+    onOpenChange,
+  }: {
+    children: React.ReactNode;
+    open?: boolean;
+    onOpenChange?: (open: boolean) => void;
+  }) => (
+    <div data-open={open} data-testid="dialog">
+      {children}
+    </div>
   ),
-  DialogTrigger: ({ children, render: renderProp }: { children: React.ReactNode; render?: React.ReactElement }) => (
-    <div data-testid="dialog-trigger">{children}</div>
-  ),
-  DialogPopup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  DialogHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  DialogPanel: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  DialogFooter: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  DialogTitle: ({ children }: { children: React.ReactNode }) => <h2>{children}</h2>,
-  DialogDescription: ({ children }: { children: React.ReactNode }) => <p>{children}</p>,
-  DialogClose: ({ children, render: renderProp }: { children: React.ReactNode; render?: React.ReactElement }) => (
+  DialogTrigger: ({
+    children,
+    render: renderProp,
+  }: {
+    children: React.ReactNode;
+    render?: React.ReactElement;
+  }) => <div data-testid="dialog-trigger">{children}</div>,
+  DialogPopup: ({ children }: { children: React.ReactNode }) => (
     <div>{children}</div>
   ),
+  DialogHeader: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  DialogPanel: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  DialogFooter: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  DialogTitle: ({ children }: { children: React.ReactNode }) => (
+    <h2>{children}</h2>
+  ),
+  DialogDescription: ({ children }: { children: React.ReactNode }) => (
+    <p>{children}</p>
+  ),
+  DialogClose: ({
+    children,
+    render: renderProp,
+  }: {
+    children: React.ReactNode;
+    render?: React.ReactElement;
+  }) => <div>{children}</div>,
 }));
 
 vi.mock("@/components/ui/alert", () => ({
-  Alert: ({ children }: { children: React.ReactNode }) => <div role="alert">{children}</div>,
-  AlertTitle: ({ children }: { children: React.ReactNode }) => <strong>{children}</strong>,
-  AlertDescription: ({ children }: { children: React.ReactNode }) => <p>{children}</p>,
+  Alert: ({ children }: { children: React.ReactNode }) => (
+    <div role="alert">{children}</div>
+  ),
+  AlertTitle: ({ children }: { children: React.ReactNode }) => (
+    <strong>{children}</strong>
+  ),
+  AlertDescription: ({ children }: { children: React.ReactNode }) => (
+    <p>{children}</p>
+  ),
 }));
 
 vi.mock("@/components/ui/toast", () => ({
@@ -142,9 +201,9 @@ describe("SubscriptionSummary", () => {
         />,
       );
       // "Free" appears in both the badge and the prose; target the badge by data-variant
-      const freeBadge = screen.getAllByText("Free").find(
-        (el) => el.getAttribute("data-variant") === "muted",
-      );
+      const freeBadge = screen
+        .getAllByText("Free")
+        .find((el) => el.getAttribute("data-variant") === "muted");
       expect(freeBadge).toBeTruthy();
     });
 
@@ -156,9 +215,7 @@ describe("SubscriptionSummary", () => {
           canManageBilling={true}
         />,
       );
-      expect(
-        screen.getByText(/Upgrade below for more credits/i),
-      ).toBeTruthy();
+      expect(screen.getByText(/Upgrade below for more credits/i)).toBeTruthy();
     });
   });
 
@@ -248,7 +305,12 @@ describe("SubscriptionSummary", () => {
           subscription={subscription}
           orgSlug="acme"
           canManageBilling={true}
-          defaultCard={{ brand: "visa", last4: "4242", expMonth: 12, expYear: 2027 }}
+          defaultCard={{
+            brand: "visa",
+            last4: "4242",
+            expMonth: 12,
+            expYear: 2027,
+          }}
         />,
       );
       expect(screen.getByText(/visa/i)).toBeTruthy();

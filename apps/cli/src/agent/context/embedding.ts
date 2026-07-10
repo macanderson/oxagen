@@ -30,7 +30,10 @@
  */
 import { gateway } from "@ai-sdk/gateway";
 import { embed, embedMany } from "ai";
-import { CODE_EMBED_GATEWAY_MODEL, CODE_EMBED_DIM } from "@oxagen/code-graph/embed";
+import {
+  CODE_EMBED_GATEWAY_MODEL,
+  CODE_EMBED_DIM,
+} from "@oxagen/code-graph/embed";
 import { ensureGatewayKey } from "../env.js";
 import { readGraphConfig, type EmbedProviderMode } from "./config.js";
 import { createOllamaEmbeddingClient } from "./embedding-ollama.js";
@@ -142,9 +145,11 @@ export async function resolveEmbeddingClient(
 
   const mode = deps.mode ?? readGraphConfig().embedProvider;
   const hasKey = deps.hasKey ?? ((c: string) => ensureGatewayKey(c) !== null);
-  const tryOllama = deps.createOllamaClient ?? (() => createOllamaEmbeddingClient());
+  const tryOllama =
+    deps.createOllamaClient ?? (() => createOllamaEmbeddingClient());
   const tryOnnx = deps.createOnnxClient ?? (() => createOnnxEmbeddingClient());
-  const tryGateway = (): EmbeddingClient | null => (hasKey(cwd) ? new GatewayEmbeddingClient() : null);
+  const tryGateway = (): EmbeddingClient | null =>
+    hasKey(cwd) ? new GatewayEmbeddingClient() : null;
 
   switch (mode) {
     case "off":

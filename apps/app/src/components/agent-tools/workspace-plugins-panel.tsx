@@ -262,8 +262,9 @@ export function WorkspacePluginsPanel({
         <Alert variant="error">
           <AlertTitle>Couldn&apos;t load installed plugins</AlertTitle>
           <AlertDescription>
-            We hit an error reading this workspace&apos;s plugins, so the list below may be
-            incomplete. Reload the page to try again — your plugins have not been removed.
+            We hit an error reading this workspace&apos;s plugins, so the list
+            below may be incomplete. Reload the page to try again — your plugins
+            have not been removed.
           </AlertDescription>
         </Alert>
       )}
