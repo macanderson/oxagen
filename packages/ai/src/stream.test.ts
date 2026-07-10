@@ -13,9 +13,11 @@ const mocks = vi.hoisted(() => ({
 
 // "streamText" returns an object that has the stream shape; tests call
 // onFinish manually to exercise the telemetry path without a real LLM.
-mocks.streamText.mockImplementation((args: { onFinish: (...a: unknown[]) => unknown }) => ({
-  _onFinish: args.onFinish,
-}));
+mocks.streamText.mockImplementation(
+  (args: { onFinish: (...a: unknown[]) => unknown }) => ({
+    _onFinish: args.onFinish,
+  }),
+);
 mocks.insertTokenUsage.mockResolvedValue(undefined);
 mocks.hashPrompt.mockResolvedValue("aabbccdd");
 mocks.providerFromModelId.mockReturnValue("anthropic");
@@ -47,7 +49,11 @@ vi.mock("@oxagen/billing", async (importOriginal) => {
     chargeUsageCredits: mocks.chargeUsageCredits,
   };
 });
-vi.mock("./models", () => ({ defaultModel: mocks.defaultModel, modelIdOf: (m: { modelId: string } | string) => (typeof m === "string" ? m : m.modelId) }));
+vi.mock("./models", () => ({
+  defaultModel: mocks.defaultModel,
+  modelIdOf: (m: { modelId: string } | string) =>
+    typeof m === "string" ? m : m.modelId,
+}));
 
 import { streamAgentReply, reasoningRequestConfig } from "./stream";
 
@@ -73,9 +79,7 @@ const TELEMETRY = {
   messageId: "msg_abc",
 };
 
-const MESSAGES = [
-  { role: "user" as const, content: "hello" },
-];
+const MESSAGES = [{ role: "user" as const, content: "hello" }];
 
 const USAGE_EVENT = {
   text: "hi there",
@@ -115,7 +119,11 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
 
   it("forwards abortSignal verbatim to streamText when supplied", () => {
     const controller = new AbortController();
-    streamAgentReply({ messages: MESSAGES, telemetry: TELEMETRY, abortSignal: controller.signal });
+    streamAgentReply({
+      messages: MESSAGES,
+      telemetry: TELEMETRY,
+      abortSignal: controller.signal,
+    });
     const arg = mocks.streamText.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(arg.abortSignal).toBe(controller.signal);
   });
@@ -126,8 +134,28 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
     expect("abortSignal" in arg).toBe(false);
   });
 
+  it("forwards maxRetries verbatim (0 = outer system owns retries, e.g. the engine loop)", () => {
+    streamAgentReply({
+      messages: MESSAGES,
+      telemetry: TELEMETRY,
+      maxRetries: 0,
+    });
+    const arg = mocks.streamText.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(arg.maxRetries).toBe(0);
+  });
+
+  it("omits maxRetries when not supplied (SDK default stays for retry-less surfaces)", () => {
+    streamAgentReply({ messages: MESSAGES, telemetry: TELEMETRY });
+    const arg = mocks.streamText.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect("maxRetries" in arg).toBe(false);
+  });
+
   it("prepends the system prompt as an Anthropic-cacheable system message", () => {
-    streamAgentReply({ messages: MESSAGES, system: "You are Oxagen.", telemetry: TELEMETRY });
+    streamAgentReply({
+      messages: MESSAGES,
+      system: "You are Oxagen.",
+      telemetry: TELEMETRY,
+    });
     const arg = mocks.streamText.mock.calls[0]?.[0] as Record<string, unknown>;
     // AI SDK v7 rejects system-role entries in `messages` unless this flag is
     // set — without it every platform-routed turn fails with "Invalid prompt:
@@ -155,9 +183,15 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
   it("falls back to the openai namespace for a model id without a vendor prefix", () => {
     // defaultModel() returns { modelId: "claude-sonnet-5" } (no "/" prefix)
     // which lands in the default/back-compat branch.
-    streamAgentReply({ messages: MESSAGES, telemetry: TELEMETRY, effort: "high" });
+    streamAgentReply({
+      messages: MESSAGES,
+      telemetry: TELEMETRY,
+      effort: "high",
+    });
     const arg = mocks.streamText.mock.calls[0]?.[0] as Record<string, unknown>;
-    expect(arg.providerOptions).toEqual({ openai: { reasoningEffort: "high" } });
+    expect(arg.providerOptions).toEqual({
+      openai: { reasoningEffort: "high" },
+    });
     // default branch does NOT lock temperature
     expect(arg.temperature).toBe(0.7);
   });
@@ -173,16 +207,25 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
     const customModel = { modelId: "claude-3-haiku-20240307" };
     const before = mocks.defaultModel.mock.calls.length;
     // Cast needed because LanguageModel has more methods; modelId is what we test.
-    streamAgentReply({ messages: MESSAGES, telemetry: TELEMETRY, model: customModel as Parameters<typeof streamAgentReply>[0]["model"] });
+    streamAgentReply({
+      messages: MESSAGES,
+      telemetry: TELEMETRY,
+      model: customModel as Parameters<typeof streamAgentReply>[0]["model"],
+    });
     const after = mocks.defaultModel.mock.calls.length;
     // defaultModel must NOT have been invoked by this call
     expect(after - before).toBe(0);
     const arg = mocks.streamText.mock.calls[0]?.[0] as Record<string, unknown>;
-    expect((arg.model as { modelId: string }).modelId).toBe("claude-3-haiku-20240307");
+    expect((arg.model as { modelId: string }).modelId).toBe(
+      "claude-3-haiku-20240307",
+    );
   });
 
   it("onFinish writes a token_usage row with correct telemetry fields", async () => {
-    const result = streamAgentReply({ messages: MESSAGES, telemetry: TELEMETRY }) as StreamResult;
+    const result = streamAgentReply({
+      messages: MESSAGES,
+      telemetry: TELEMETRY,
+    }) as StreamResult;
     await result._onFinish(USAGE_EVENT);
 
     expect(mocks.insertTokenUsage).toHaveBeenCalledTimes(1);
@@ -201,7 +244,10 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
   });
 
   it("onFinish charges the org's credits through the gate meter", async () => {
-    const result = streamAgentReply({ messages: MESSAGES, telemetry: TELEMETRY }) as StreamResult;
+    const result = streamAgentReply({
+      messages: MESSAGES,
+      telemetry: TELEMETRY,
+    }) as StreamResult;
     await result._onFinish(USAGE_EVENT);
 
     expect(mocks.chargeUsageCredits).toHaveBeenCalledTimes(1);
@@ -216,7 +262,10 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
   });
 
   it("forwards prompt-cache reads (inputTokenDetails.cacheReadTokens) to telemetry and the meter", async () => {
-    const result = streamAgentReply({ messages: MESSAGES, telemetry: TELEMETRY }) as StreamResult;
+    const result = streamAgentReply({
+      messages: MESSAGES,
+      telemetry: TELEMETRY,
+    }) as StreamResult;
     await result._onFinish({
       text: "hi there",
       totalUsage: {
@@ -228,11 +277,17 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
       finishReason: "stop",
     });
     // Telemetry row records the real cached count (not hardcoded 0).
-    const rows = (mocks.insertTokenUsage.mock.calls[0] as [Array<Record<string, unknown>>])[0];
+    const rows = (
+      mocks.insertTokenUsage.mock.calls[0] as [Array<Record<string, unknown>>]
+    )[0];
     expect(rows[0]?.cached_tokens).toBe(80);
     // The meter receives cachedTokens so the cached portion is priced cheaper.
     expect(mocks.chargeUsageCredits).toHaveBeenCalledWith(
-      expect.objectContaining({ cachedTokens: 80, inputTokens: 100, outputTokens: 20 }),
+      expect.objectContaining({
+        cachedTokens: 80,
+        inputTokens: 100,
+        outputTokens: 20,
+      }),
     );
   });
 
@@ -251,16 +306,25 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
   });
 
   it("onFinish hashes the last user message content", async () => {
-    const result = streamAgentReply({ messages: MESSAGES, telemetry: TELEMETRY }) as StreamResult;
+    const result = streamAgentReply({
+      messages: MESSAGES,
+      telemetry: TELEMETRY,
+    }) as StreamResult;
     await result._onFinish(USAGE_EVENT);
     expect(mocks.hashPrompt).toHaveBeenCalledWith("hello");
   });
 
   it("hashes stringified content when the last user message content is not a plain string", async () => {
     const structuredMessages = [
-      { role: "user" as const, content: [{ type: "text" as const, text: "structured" }] },
+      {
+        role: "user" as const,
+        content: [{ type: "text" as const, text: "structured" }],
+      },
     ];
-    const result = streamAgentReply({ messages: structuredMessages, telemetry: TELEMETRY }) as StreamResult;
+    const result = streamAgentReply({
+      messages: structuredMessages,
+      telemetry: TELEMETRY,
+    }) as StreamResult;
     await result._onFinish(USAGE_EVENT);
     expect(mocks.hashPrompt).toHaveBeenCalledWith(
       JSON.stringify([{ type: "text", text: "structured" }]),
@@ -313,10 +377,17 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
   });
 
   it("resolves promptTokens/completionTokens to 0 when usage fields are missing", async () => {
-    const result = streamAgentReply({ messages: MESSAGES, telemetry: TELEMETRY }) as StreamResult;
+    const result = streamAgentReply({
+      messages: MESSAGES,
+      telemetry: TELEMETRY,
+    }) as StreamResult;
     await result._onFinish({
       text: "",
-      totalUsage: { inputTokens: undefined as unknown as number, outputTokens: undefined as unknown as number, totalTokens: 0 },
+      totalUsage: {
+        inputTokens: undefined as unknown as number,
+        outputTokens: undefined as unknown as number,
+        totalTokens: 0,
+      },
       finishReason: "stop",
     });
     const rows = (mocks.insertTokenUsage.mock.calls[0] as [unknown[]])[0];
@@ -341,7 +412,10 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
     // Claude 4.x uses adaptive thinking + output_config.effort (the older
     // type:"enabled"+budgetTokens shape is rejected by these models).
     expect(arg.providerOptions).toEqual({
-      anthropic: { thinking: { type: "adaptive" }, outputConfig: { effort: "medium" } },
+      anthropic: {
+        thinking: { type: "adaptive" },
+        outputConfig: { effort: "medium" },
+      },
     });
   });
 
@@ -365,17 +439,26 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
 
 describe("reasoningRequestConfig (@oxagen/ai)", () => {
   it("returns no providerOptions and temperatureLocked=false when effort is undefined", () => {
-    const result = reasoningRequestConfig("anthropic/claude-opus-4.8", undefined);
+    const result = reasoningRequestConfig(
+      "anthropic/claude-opus-4.8",
+      undefined,
+    );
     expect(result.providerOptions).toBeUndefined();
     expect(result.temperatureLocked).toBe(false);
   });
 
   describe("anthropic vendor", () => {
     it("sets adaptive thinking + output_config.effort and locks temperature", () => {
-      const result = reasoningRequestConfig("anthropic/claude-sonnet-5", "medium");
+      const result = reasoningRequestConfig(
+        "anthropic/claude-sonnet-5",
+        "medium",
+      );
       expect(result.temperatureLocked).toBe(true);
       expect(result.providerOptions).toEqual({
-        anthropic: { thinking: { type: "adaptive" }, outputConfig: { effort: "medium" } },
+        anthropic: {
+          thinking: { type: "adaptive" },
+          outputConfig: { effort: "medium" },
+        },
       });
     });
 
@@ -390,15 +473,25 @@ describe("reasoningRequestConfig (@oxagen/ai)", () => {
     });
 
     it("passes the effort level through to outputConfig (high)", () => {
-      const result = reasoningRequestConfig("anthropic/claude-opus-4.8", "high");
-      const opts = result.providerOptions?.anthropic as { outputConfig: { effort: string } };
+      const result = reasoningRequestConfig(
+        "anthropic/claude-opus-4.8",
+        "high",
+      );
+      const opts = result.providerOptions?.anthropic as {
+        outputConfig: { effort: string };
+      };
       expect(opts.outputConfig.effort).toBe("high");
     });
 
     it("passes the Anthropic-only xhigh/max levels through verbatim (Opus/Sonnet)", () => {
       for (const effort of ["xhigh", "max"] as const) {
-        const result = reasoningRequestConfig("anthropic/claude-opus-4.8", effort);
-        const opts = result.providerOptions?.anthropic as { outputConfig: { effort: string } };
+        const result = reasoningRequestConfig(
+          "anthropic/claude-opus-4.8",
+          effort,
+        );
+        const opts = result.providerOptions?.anthropic as {
+          outputConfig: { effort: string };
+        };
         expect(opts.outputConfig.effort).toBe(effort);
       }
     });
@@ -416,14 +509,20 @@ describe("reasoningRequestConfig (@oxagen/ai)", () => {
     it("passes through each portable effort level unchanged", () => {
       for (const effort of ["low", "medium", "high"] as const) {
         const result = reasoningRequestConfig("openai/o4", effort);
-        expect((result.providerOptions?.openai as { reasoningEffort: string }).reasoningEffort).toBe(effort);
+        expect(
+          (result.providerOptions?.openai as { reasoningEffort: string })
+            .reasoningEffort,
+        ).toBe(effort);
       }
     });
 
     it("clamps the Anthropic-only xhigh/max levels down to high", () => {
       for (const effort of ["xhigh", "max"] as const) {
         const result = reasoningRequestConfig("openai/gpt-5.2", effort);
-        expect((result.providerOptions?.openai as { reasoningEffort: string }).reasoningEffort).toBe("high");
+        expect(
+          (result.providerOptions?.openai as { reasoningEffort: string })
+            .reasoningEffort,
+        ).toBe("high");
       }
     });
   });
@@ -441,7 +540,11 @@ describe("reasoningRequestConfig (@oxagen/ai)", () => {
 
     it("maps high effort to 12288 budget tokens", () => {
       const result = reasoningRequestConfig("google/gemini-3-pro", "high");
-      const cfg = (result.providerOptions?.google as { thinkingConfig: { thinkingBudget: number } }).thinkingConfig;
+      const cfg = (
+        result.providerOptions?.google as {
+          thinkingConfig: { thinkingBudget: number };
+        }
+      ).thinkingConfig;
       expect(cfg.thinkingBudget).toBe(12288);
     });
 
@@ -451,7 +554,11 @@ describe("reasoningRequestConfig (@oxagen/ai)", () => {
         ["max", 49152],
       ] as const) {
         const result = reasoningRequestConfig("google/gemini-3-pro", effort);
-        const cfg = (result.providerOptions?.google as { thinkingConfig: { thinkingBudget: number } }).thinkingConfig;
+        const cfg = (
+          result.providerOptions?.google as {
+            thinkingConfig: { thinkingBudget: number };
+          }
+        ).thinkingConfig;
         expect(cfg.thinkingBudget).toBe(budget);
       }
     });

@@ -70,7 +70,11 @@ function messageText(msg: ModelMessage): string {
   if (typeof msg.content === "string") return msg.content;
   if (Array.isArray(msg.content)) {
     return msg.content
-      .map((part) => (typeof part === "object" && part !== null && "text" in part ? String((part as { text: unknown }).text) : ""))
+      .map((part) =>
+        typeof part === "object" && part !== null && "text" in part
+          ? String((part as { text: unknown }).text)
+          : "",
+      )
       .filter(Boolean)
       .join(" ");
   }
@@ -88,8 +92,12 @@ export function historyDigest(history: ModelMessage[]): string {
     if (msg.role !== "user" && msg.role !== "assistant") continue;
     const text = messageText(msg).trim();
     if (!text) continue;
-    const budget = Math.floor(HISTORY_DIGEST_MAX_CHARS / HISTORY_DIGEST_MAX_MESSAGES);
-    lines.push(`${msg.role}: ${text.length > budget ? text.slice(0, budget) + "…" : text}`);
+    const budget = Math.floor(
+      HISTORY_DIGEST_MAX_CHARS / HISTORY_DIGEST_MAX_MESSAGES,
+    );
+    lines.push(
+      `${msg.role}: ${text.length > budget ? text.slice(0, budget) + "…" : text}`,
+    );
   }
   return lines.join("\n").slice(-HISTORY_DIGEST_MAX_CHARS);
 }
@@ -129,24 +137,29 @@ export function fallbackPlan(goal: string): Plan {
  * (aborted signal) is re-thrown so the turn cancels instead of "planning".
  */
 export async function planReplTurn(opts: PlanReplTurnOptions): Promise<Plan> {
-  // Note: the single-deliverable fast path (skip the planner LLM call + its
-  // enhance for a trivially one-task goal) lives INSIDE the engine planner
-  // (planner/index.ts, ADR-021 §1) so every surface shares one heuristic — we
-  // deliberately do NOT re-implement it here to avoid a second divergent gate.
+  // The single-deliverable fast path (skip the planner LLM call + its enhance for
+  // a trivially one-task goal) lives INSIDE the engine planner (planner/index.ts,
+  // ADR-021 §1) so every surface shares one heuristic — we do NOT re-implement it
+  // here. Critically, the conversation digest is passed as the planner's SEPARATE
+  // `context`, never concatenated into the goal: prepending it made every
+  // history-bearing turn's goal multi-line, which defeated `isSingleTaskGoal` and
+  // forced the planner+enhance round-trip even for trivial follow-ups.
   const digest = historyDigest(opts.history);
-  const goal = digest
-    ? `Conversation so far (for reference resolution):\n${digest}\n\nCurrent request:\n${opts.goal}`
-    : opts.goal;
+  const context = digest
+    ? `Conversation so far (for reference resolution):\n${digest}`
+    : undefined;
   const envTimeout = Number(process.env["OXAGEN_PLAN_TIMEOUT_MS"]);
   const timeoutMs =
-    opts.timeoutMs ?? (Number.isFinite(envTimeout) ? envTimeout : DEFAULT_PLAN_TIMEOUT_MS);
+    opts.timeoutMs ??
+    (Number.isFinite(envTimeout) ? envTimeout : DEFAULT_PLAN_TIMEOUT_MS);
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     // Resolved inside the try: an engine build (or test mock) without a
     // planner export degrades to the fallback plan, same as a failed call.
     const plan = opts.planFn ?? enginePlanTasks;
     const planCall = plan({
-      goal,
+      goal: opts.goal,
+      context,
       model: opts.model,
       ai: opts.ai,
       codeGraph: opts.codeGraph ?? null,
@@ -169,12 +182,16 @@ export async function planReplTurn(opts: PlanReplTurnOptions): Promise<Plan> {
         ? await Promise.race([
             planCall,
             new Promise<never>((_, reject) => {
-              timer = setTimeout(() => reject(new Error("planning timed out")), timeoutMs);
+              timer = setTimeout(
+                () => reject(new Error("planning timed out")),
+                timeoutMs,
+              );
             }),
           ])
         : await planCall;
-    // Rehome the goal onto the raw submission (the digest prefix is planner
-    // input, not something to persist or replay).
+    // Pin the plan's goal to the raw submission. Now that the digest rides as
+    // separate `context` (not concatenated into the goal), the planner already
+    // returns `goal: opts.goal` — this is a defensive, now-redundant restatement.
     return { ...planned, goal: opts.goal, tasks: planned.tasks as Task[] };
   } catch (err) {
     if (opts.signal?.aborted) throw err;

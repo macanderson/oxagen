@@ -21,18 +21,113 @@ const MAX_OUTPUT = 30_000; // chars; keep tool output from blowing the context w
 // both ends preserves the command/context (head) AND the verdict (tail).
 const HEAD_FRACTION = 0.6;
 
+/** What {@link clip} elided, handed to a marker builder for the middle note. */
+export interface ClipInfo {
+  /** Number of chars dropped from the middle. */
+  dropped: number;
+  /** The retained head slice (its last line is typically partial). */
+  head: string;
+  /** The retained tail slice (its first line is typically partial). */
+  tail: string;
+}
+
+/** Generic middle-out note — used by every tool except an over-cap read_file. */
+function defaultClipMarker({ dropped }: ClipInfo): string {
+  return `… [${dropped} chars truncated from the middle — head + tail kept]`;
+}
+
 /**
  * Clip over-long tool output to {@link MAX_OUTPUT} chars, MIDDLE-OUT: keep the
- * head and the tail, drop the middle. Exported for tests.
+ * head and the tail, drop the middle. `markerFor` builds the injected middle
+ * note; it defaults to the generic char-count note. `read_file` overrides it
+ * with a line-aware, recover-the-middle hint (see {@link readFileTruncationMarker}).
+ * Exported for tests.
  */
-export function clip(text: string): string {
+export function clip(
+  text: string,
+  markerFor: (info: ClipInfo) => string = defaultClipMarker,
+): string {
   if (text.length <= MAX_OUTPUT) return text;
   const dropped = text.length - MAX_OUTPUT;
   const headLen = Math.floor(MAX_OUTPUT * HEAD_FRACTION);
   const tailLen = MAX_OUTPUT - headLen;
   const head = text.slice(0, headLen);
   const tail = text.slice(text.length - tailLen);
+  return `${head}\n${markerFor({ dropped, head, tail })}\n${tail}`;
+}
+
+/**
+ * Clip over-long `text` to `max` chars, MIDDLE-OUT: keep the head
+ * ({@link HEAD_FRACTION} of the budget by default) and the tail, drop the
+ * middle, and splice in a marker naming the elided char count. The parameterized
+ * sibling of {@link clip} (which is pinned to {@link MAX_OUTPUT} and takes a
+ * custom marker): use this where the per-stream char budget varies — e.g. the
+ * hosted sandbox-exec envelope caps stdout at 30k and stderr at 10k before the
+ * result enters model context (packages/agent runtime/materialize-tools.ts). The
+ * result is ~`max` chars plus the short marker. Pure. Exported for reuse + tests.
+ */
+export function clipMiddle(
+  text: string,
+  max: number,
+  headFraction: number = HEAD_FRACTION,
+): string {
+  if (text.length <= max) return text;
+  const dropped = text.length - max;
+  const headLen = Math.floor(max * headFraction);
+  const tailLen = max - headLen;
+  const head = text.slice(0, headLen);
+  const tail = text.slice(text.length - tailLen);
   return `${head}\n… [${dropped} chars truncated from the middle — head + tail kept]\n${tail}`;
+}
+
+/**
+ * Marker builder for an over-cap WHOLE-FILE `read_file`. Unlike the generic
+ * middle-out note it tells the model exactly how to recover what was dropped:
+ * the file's true line count, the (approximate) head/tail line spans kept, and
+ * a concrete `offset`/`limit` to re-read the elided middle. `clip` cuts by
+ * CHARS, so the boundary lines are partial and the head/tail line counts are
+ * approximate — hence the "~" and the harmless slight overlap in the suggested
+ * range. `totalLines` is the true line count of the full (pre-clip) content.
+ */
+export function readFileTruncationMarker(
+  totalLines: number,
+): (info: ClipInfo) => string {
+  return ({ head, tail }: ClipInfo): string => {
+    const headLines = head.split("\n").length;
+    const tailLines = tail.split("\n").length;
+    const middleLines = totalLines - headLines - tailLines;
+    if (middleLines > 0) {
+      return (
+        `… [truncated: file has ${totalLines} lines total, showing ~first ${headLines} ` +
+        `and last ${tailLines} lines — call read_file with offset:${headLines}, ` +
+        `limit:${middleLines} to fetch the elided middle]`
+      );
+    }
+    // Degenerate: one/few very long line(s). A line range can't address the
+    // clipped span (it's within a single line), so keep a char-oriented note.
+    return (
+      `… [truncated: file has ${totalLines} line(s) but exceeds the ${MAX_OUTPUT}-char ` +
+      `cap within a line — head + tail kept, middle chars elided]`
+    );
+  };
+}
+
+// ── Workspace-root path display (worktree divergence guard) ─────────────────
+// File tools resolve RELATIVE paths against the workspace root captured at
+// session start — never against wherever the last `bash` command `cd`-ed
+// (each bash call is a fresh shell in the root; `cd` does not persist). When
+// an agent works in a different checkout — e.g. a git worktree it created via
+// bash — a relative-path write silently lands in the LAUNCH directory, and
+// every bash verification in the worktree then reads back unchanged files:
+// "my edits aren't being written to disk". Echoing the RESOLVED absolute path
+// in every mutation result makes the divergence visible on the very first
+// write, so the model can self-correct by switching to absolute paths.
+
+/** Absolute display path for a mutation result: relative paths join `root`. */
+export function resolveDisplayPath(root: string, p: string): string {
+  if (p.startsWith("/") || /^[A-Za-z]:[\\/]/.test(p)) return p; // already absolute
+  const base = root.endsWith("/") ? root.slice(0, -1) : root;
+  return base === "" ? `/${p}` : `${base}/${p}`;
 }
 
 // ── read_file line numbering ─────────────────────────────────────────────────
@@ -411,7 +506,17 @@ export function buildWorkspaceTools(
           const text = await workspace.readFile(path, { offset, limit });
           // Number lines cat -n style so the model can cite/target exact lines;
           // `offset` (1-based) is the true line number of the first line read.
-          return clip(formatWithLineNumbers(text, offset ?? 1));
+          const formatted = formatWithLineNumbers(text, offset ?? 1);
+          // A whole-file read (no offset/limit) that overflows the cap gets an
+          // actionable, line-aware truncation note so the model re-reads the
+          // elided middle via offset/limit instead of guessing. A ranged read
+          // already targeted a span, so it keeps the generic middle-out marker.
+          const isRangeRead = offset !== undefined || limit !== undefined;
+          if (!isRangeRead && formatted.length > MAX_OUTPUT) {
+            const totalLines = formatted.split("\n").length;
+            return clip(formatted, readFileTruncationMarker(totalLines));
+          }
+          return clip(formatted);
         } catch (err) {
           return `Error reading ${path}: ${err instanceof Error ? err.message : String(err)}`;
         }
@@ -420,7 +525,9 @@ export function buildWorkspaceTools(
 
     write_file: tool({
       description:
-        "Write (create or overwrite) a file with the given content. Creates parent directories as needed.",
+        "Write (create or overwrite) a file with the given content. Creates parent directories as needed. " +
+        "Relative paths resolve against the session workspace root — NOT the cwd of any prior `bash` " +
+        "command — so pass absolute paths when working outside it (e.g. in a git worktree).",
       inputSchema: z.object({
         path: z.string(),
         content: z.string(),
@@ -465,7 +572,9 @@ export function buildWorkspaceTools(
       description:
         "Replace an exact substring in a file. By default old_string must appear " +
         "exactly once; set replace_all:true to replace every occurrence. Use for " +
-        "surgical edits.",
+        "surgical edits. Relative paths resolve against the session workspace root — " +
+        "NOT the cwd of any prior `bash` command — so pass absolute paths when " +
+        "working outside it (e.g. in a git worktree).",
       inputSchema: z.object({
         path: z.string(),
         old_string: z.string().describe("Exact text to replace."),
@@ -503,8 +612,8 @@ export function buildWorkspaceTools(
                 kind: "update",
               });
               return replace_all
-                ? `Edited ${path} (${count} replacement${count === 1 ? "" : "s"})`
-                : `Edited ${path}`;
+                ? `Edited ${shown} (${count} replacement${count === 1 ? "" : "s"})`
+                : `Edited ${shown}`;
             } catch (err) {
               return `Error editing ${path}: ${err instanceof Error ? err.message : String(err)}`;
             }

@@ -52,11 +52,15 @@ afterEach(() => {
 
 describe("gatewayReasoningOptions", () => {
   it("returns undefined when no effort is requested", () => {
-    expect(gatewayReasoningOptions("anthropic/claude-opus-4-8", undefined)).toBeUndefined();
+    expect(
+      gatewayReasoningOptions("anthropic/claude-opus-4-8", undefined),
+    ).toBeUndefined();
   });
 
   it("maps anthropic to adaptive thinking + outputConfig effort", () => {
-    expect(gatewayReasoningOptions("anthropic/claude-opus-4-8", "xhigh")).toEqual({
+    expect(
+      gatewayReasoningOptions("anthropic/claude-opus-4-8", "xhigh"),
+    ).toEqual({
       anthropic: {
         thinking: { type: "adaptive" },
         outputConfig: { effort: "xhigh" },
@@ -88,7 +92,9 @@ describe("gatewayReasoningOptions", () => {
   });
 
   it("returns undefined for deepseek (native reasoning, no knob)", () => {
-    expect(gatewayReasoningOptions("deepseek/deepseek-r2", "high")).toBeUndefined();
+    expect(
+      gatewayReasoningOptions("deepseek/deepseek-r2", "high"),
+    ).toBeUndefined();
   });
 
   it("falls back to the openai namespace for unknown vendors and bare slugs", () => {
@@ -138,8 +144,14 @@ describe("createGatewayAgentAi", () => {
     expect(messages[0]).toMatchObject({ role: "system", content: "sys" });
     expect(call["tools"]).toEqual({ bash: {} });
     expect(call["providerOptions"]).toEqual({
-      anthropic: { thinking: { type: "adaptive" }, outputConfig: { effort: "high" } },
+      anthropic: {
+        thinking: { type: "adaptive" },
+        outputConfig: { effort: "high" },
+      },
     });
+    // The engine's step loop owns retries — SDK-internal retries must be off
+    // or a transient 429 multiplies into ~15 upstream attempts worst case.
+    expect(call["maxRetries"]).toBe(0);
   });
 
   it("stream marks the system message and transcript tail as cache breakpoints", () => {
@@ -155,7 +167,9 @@ describe("createGatewayAgentAi", () => {
     } as never);
     const call = streamTextMock.mock.calls[0]?.[0] as Record<string, unknown>;
     const messages = call["messages"] as Array<Record<string, unknown>>;
-    const cache = { anthropic: { cacheControl: { type: "ephemeral", ttl: "1h" } } };
+    const cache = {
+      anthropic: { cacheControl: { type: "ephemeral", ttl: "1h" } },
+    };
     expect(messages).toHaveLength(4);
     expect(messages[0]?.["providerOptions"]).toEqual(cache); // system
     expect(messages[1]?.["providerOptions"]).toBeUndefined(); // old history untouched
@@ -183,7 +197,10 @@ describe("createGatewayAgentAi", () => {
     } as never);
 
     expect(generateObjectMock).toHaveBeenCalledTimes(1);
-    const call = generateObjectMock.mock.calls[0]?.[0] as Record<string, unknown>;
+    const call = generateObjectMock.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
     expect(call["model"]).toBe("openai/gpt-5.2");
     // `prompt` never reaches the SDK call — it becomes the sole user message so
     // the same message-level cache_control shaping as `stream` applies (see
@@ -191,7 +208,9 @@ describe("createGatewayAgentAi", () => {
     expect("prompt" in call).toBe(false);
     expect(call["allowSystemInMessages"]).toBe(true);
     const messages = call["messages"] as Array<Record<string, unknown>>;
-    const cache = { anthropic: { cacheControl: { type: "ephemeral", ttl: "1h" } } };
+    const cache = {
+      anthropic: { cacheControl: { type: "ephemeral", ttl: "1h" } },
+    };
     expect(messages[0]).toMatchObject({ role: "system", content: "sys" });
     expect(messages[0]?.["providerOptions"]).toEqual(cache);
     expect(messages[1]).toMatchObject({ role: "user", content: "classify" });
@@ -207,12 +226,17 @@ describe("createGatewayAgentAi", () => {
       schema: {} as never,
       messages: [{ role: "user", content: "hi" }],
     } as never);
-    const call = generateObjectMock.mock.calls[0]?.[0] as Record<string, unknown>;
+    const call = generateObjectMock.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
     expect(call["messages"]).toEqual([
       {
         role: "user",
         content: "hi",
-        providerOptions: { anthropic: { cacheControl: { type: "ephemeral", ttl: "1h" } } },
+        providerOptions: {
+          anthropic: { cacheControl: { type: "ephemeral", ttl: "1h" } },
+        },
       },
     ]);
     expect("prompt" in call).toBe(false);

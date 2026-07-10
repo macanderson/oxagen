@@ -47,6 +47,18 @@ describe("buildCodingCorePrompt — shared coding core (ADR-021 §7)", () => {
   });
 });
 
+describe("buildSystemPrompt — pinned file-tool root rule", () => {
+  it("warns in BOTH profiles that file tools ignore bash `cd` and need absolute paths outside cwd", () => {
+    for (const profile of ["interactive", "headless"] as const) {
+      const p = buildSystemPrompt({ ...base, profile });
+      expect(p).toContain("FILE-TOOL ROOT IS PINNED");
+      expect(p).toContain("NEVER persists");
+      expect(p).toContain("ABSOLUTE paths");
+      expect(p).toContain("git worktree");
+    }
+  });
+});
+
 describe("buildSystemPrompt — profiles", () => {
   it("headless adds the verification protocol and drops the live narration", () => {
     const p = buildSystemPrompt({ ...base, profile: "headless" });
@@ -123,6 +135,20 @@ describe("buildSystemPrompt — graph-first tool guidance", () => {
     expect(prompt).toContain("`dependents <file>`");
     expect(prompt).toContain("`imports <file>`");
     expect(prompt).toContain("Only fall back to `grep`");
+  });
+
+  it("instructs batching of independent tool calls into one message (wall-clock parallelism)", () => {
+    // The engine runs one step per assistant message and the AI SDK executes
+    // ALL of that message's tool calls concurrently — the model just has to be
+    // told to batch. Reads batch; edits stay sequential (per-turn file lock).
+    const prompt = buildSystemPrompt(base);
+    expect(prompt).toContain("BATCH INDEPENDENT TOOL CALLS");
+    expect(prompt).toContain("ONE message");
+    expect(prompt).toContain("File EDITS stay sequential");
+    // The example list adapts to wiring: no code_graph mention when unwired.
+    const withoutGraph = buildSystemPrompt({ ...base, hasCodeGraph: false });
+    expect(withoutGraph).toContain("BATCH INDEPENDENT TOOL CALLS");
+    expect(withoutGraph).not.toContain("code_graph");
   });
 
   it("drops graph guidance and keeps plain grep guidance when code_graph is not wired", () => {

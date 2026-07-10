@@ -14,7 +14,9 @@ import { buildWorkspaceTools } from "./tools";
 import type { FileLockProvider, FileLockGrant } from "./ports";
 
 async function run(tool: unknown, input: unknown): Promise<string> {
-  return (tool as { execute: (i: unknown, o: unknown) => Promise<string> }).execute(input, {});
+  return (
+    tool as { execute: (i: unknown, o: unknown) => Promise<string> }
+  ).execute(input, {});
 }
 
 function grantedLock(lockId = "lock-1"): FileLockGrant {
@@ -32,14 +34,21 @@ function fakeFileLock(overrides: Partial<FileLockProvider> = {}): {
 } {
   const acquire = vi.fn(overrides.acquire ?? (async () => grantedLock()));
   const release = vi.fn(overrides.release ?? (async () => undefined));
-  return { provider: { acquire, release, releaseAll: vi.fn() }, acquire, release };
+  return {
+    provider: { acquire, release, releaseAll: vi.fn() },
+    acquire,
+    release,
+  };
 }
 
 describe("buildWorkspaceTools — agent file locking (write_file)", () => {
   it("proceeds unlocked when no fileLock is injected (CLI default — byte-identical to before this feature)", async () => {
     const ws = new MemoryWorkspace({});
     const tools = buildWorkspaceTools(ws);
-    const result = await run(tools.write_file, { path: "a.ts", content: "hello" });
+    const result = await run(tools.write_file, {
+      path: "a.ts",
+      content: "hello",
+    });
     expect(result).toContain("Wrote 5 bytes");
     expect(await ws.readFile("a.ts")).toBe("hello");
   });
@@ -52,7 +61,10 @@ describe("buildWorkspaceTools — agent file locking (write_file)", () => {
       lockContext: { agentId: "agent-a", executionId: "turn-1" },
     });
 
-    const result = await run(tools.write_file, { path: "a.ts", content: "hello" });
+    const result = await run(tools.write_file, {
+      path: "a.ts",
+      content: "hello",
+    });
 
     expect(result).toContain("Wrote 5 bytes");
     expect(await ws.readFile("a.ts")).toBe("hello");
@@ -62,7 +74,10 @@ describe("buildWorkspaceTools — agent file locking (write_file)", () => {
       executionId: "turn-1",
       action: "write",
     });
-    expect(release).toHaveBeenCalledWith({ lockId: "lock-1", agentId: "agent-a" });
+    expect(release).toHaveBeenCalledWith({
+      lockId: "lock-1",
+      agentId: "agent-a",
+    });
   });
 
   it("does NOT perform the write when every acquire attempt is denied — returns a clear denial instead of silently skipping", async () => {
@@ -75,7 +90,10 @@ describe("buildWorkspaceTools — agent file locking (write_file)", () => {
       lockContext: { agentId: "agent-a", executionId: "turn-1" },
     });
 
-    const result = await run(tools.write_file, { path: "a.ts", content: "hello" });
+    const result = await run(tools.write_file, {
+      path: "a.ts",
+      content: "hello",
+    });
 
     expect(result).toContain("Blocked");
     expect(result).toContain("a.ts");
@@ -92,7 +110,9 @@ describe("buildWorkspaceTools — agent file locking (write_file)", () => {
     const { provider, acquire } = fakeFileLock({
       acquire: async () => {
         calls++;
-        return calls < 2 ? deniedLock("agent-b", Date.now() + 1_000) : grantedLock("lock-2");
+        return calls < 2
+          ? deniedLock("agent-b", Date.now() + 1_000)
+          : grantedLock("lock-2");
       },
     });
     const ws = new MemoryWorkspace({});
@@ -101,7 +121,10 @@ describe("buildWorkspaceTools — agent file locking (write_file)", () => {
       lockContext: { agentId: "agent-a", executionId: "turn-1" },
     });
 
-    const result = await run(tools.write_file, { path: "a.ts", content: "hello" });
+    const result = await run(tools.write_file, {
+      path: "a.ts",
+      content: "hello",
+    });
 
     expect(result).toContain("Wrote 5 bytes");
     expect(acquire).toHaveBeenCalledTimes(2);
@@ -124,7 +147,10 @@ describe("buildWorkspaceTools — agent file locking (write_file)", () => {
     });
 
     expect(result).toContain("Error editing missing.ts");
-    expect(release).toHaveBeenCalledWith({ lockId: "lock-1", agentId: "agent-a" });
+    expect(release).toHaveBeenCalledWith({
+      lockId: "lock-1",
+      agentId: "agent-a",
+    });
   });
 
   it("a release failure never surfaces to the tool result (best-effort; TTL/backstop covers it)", async () => {
@@ -139,7 +165,10 @@ describe("buildWorkspaceTools — agent file locking (write_file)", () => {
       lockContext: { agentId: "agent-a", executionId: "turn-1" },
     });
 
-    const result = await run(tools.write_file, { path: "a.ts", content: "hello" });
+    const result = await run(tools.write_file, {
+      path: "a.ts",
+      content: "hello",
+    });
     expect(result).toContain("Wrote 5 bytes");
   });
 
@@ -161,7 +190,10 @@ describe("buildWorkspaceTools — agent file locking (write_file)", () => {
       signal: controller.signal,
     });
 
-    const result = await run(tools.write_file, { path: "a.ts", content: "hello" });
+    const result = await run(tools.write_file, {
+      path: "a.ts",
+      content: "hello",
+    });
 
     expect(result).toContain("Blocked");
     expect(await ws.readFile("a.ts")).toBe("original");
@@ -185,7 +217,7 @@ describe("buildWorkspaceTools — agent file locking (edit_file)", () => {
       new_string: "2",
     });
 
-    expect(result).toContain("Edited a.ts");
+    expect(result).toContain("Edited /repo/a.ts");
     expect(await ws.readFile("a.ts")).toBe("const x = 2;");
     expect(acquire).toHaveBeenCalledWith({
       path: "a.ts",
@@ -193,7 +225,10 @@ describe("buildWorkspaceTools — agent file locking (edit_file)", () => {
       executionId: "turn-1",
       action: "write",
     });
-    expect(release).toHaveBeenCalledWith({ lockId: "lock-1", agentId: "agent-a" });
+    expect(release).toHaveBeenCalledWith({
+      lockId: "lock-1",
+      agentId: "agent-a",
+    });
   });
 
   it("two concurrent turns racing on the SAME path: the second sees a denial while the first still holds it", async () => {
@@ -207,10 +242,20 @@ describe("buildWorkspaceTools — agent file locking (edit_file)", () => {
       acquire: async ({ path, agentId }) => {
         const holder = holders.get(path);
         if (holder && holder !== agentId) {
-          return { granted: false, lockId: "", heldBy: holder, blockedUntil: Date.now() + 60_000 };
+          return {
+            granted: false,
+            lockId: "",
+            heldBy: holder,
+            blockedUntil: Date.now() + 60_000,
+          };
         }
         holders.set(path, agentId);
-        return { granted: true, lockId: `lock-${agentId}`, heldBy: null, blockedUntil: null };
+        return {
+          granted: true,
+          lockId: `lock-${agentId}`,
+          heldBy: null,
+          blockedUntil: null,
+        };
       },
       release: async ({ agentId }) => {
         // Only clear the holder if this agent is the one holding it — an
@@ -237,18 +282,27 @@ describe("buildWorkspaceTools — agent file locking (edit_file)", () => {
     // never resolving the write) — simulate by acquiring directly.
     holders.set("shared.ts", "chat-turn");
 
-    const fleetResult = await run(fleetTools.write_file, { path: "shared.ts", content: "from fleet" });
+    const fleetResult = await run(fleetTools.write_file, {
+      path: "shared.ts",
+      content: "from fleet",
+    });
     expect(fleetResult).toContain("Blocked");
     expect(fleetResult).toContain("chat-turn");
 
     // Once the chat turn releases (simulated), the fleet child can proceed.
     holders.delete("shared.ts");
-    const fleetRetry = await run(fleetTools.write_file, { path: "shared.ts", content: "from fleet" });
+    const fleetRetry = await run(fleetTools.write_file, {
+      path: "shared.ts",
+      content: "from fleet",
+    });
     expect(fleetRetry).toContain("Wrote");
     expect(await wsFleet.readFile("shared.ts")).toBe("from fleet");
 
     // Sanity: chatTools' own write to a DIFFERENT path is unaffected.
-    const chatResult = await run(chatTools.write_file, { path: "chat-only.ts", content: "from chat" });
+    const chatResult = await run(chatTools.write_file, {
+      path: "chat-only.ts",
+      content: "from chat",
+    });
     expect(chatResult).toContain("Wrote");
   });
 });

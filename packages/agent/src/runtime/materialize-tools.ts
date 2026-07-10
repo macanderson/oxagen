@@ -15,6 +15,7 @@ import { beforeTool, afterTool, onError } from "../hooks/runtime";
 import { createApprovalRequest, waitForApproval } from "./approval";
 import { checkConsent, recordConsent, DEFAULT_CONSENT_TTL_MS } from "./consent";
 import { isSandboxAvailable } from "@oxagen/sandbox";
+import { clipMiddle } from "@oxagen/agent-engine";
 import {
   getPluginTypeContributors,
   type ContributedRawTool,
@@ -175,6 +176,47 @@ const SANDBOX_FAMILY = new Set<string>([
   "snapshot_sandbox", // was agent.sandbox.snapshot
   "stop_sandbox", // was agent.sandbox.stop
 ]);
+
+// Model-facing output caps for the sandbox-exec capabilities (P0 token flood).
+// execute_code / run_sandbox_command return RAW stdout/stderr; a `cat bigfile`,
+// verbose pytest, or `npm install` would otherwise stream megabytes straight
+// into the model's context window. Mirrors the engine tools' 30k budget, with a
+// tighter cap on the (usually noisier, less load-bearing) stderr stream.
+const EXEC_STDOUT_MAX = 30_000; // chars
+const EXEC_STDERR_MAX = 10_000; // chars
+
+/**
+ * Clip the stdout/stderr of a sandbox-exec tool result to their model-context
+ * budgets, MIDDLE-OUT, BEFORE the envelope is returned to the AI SDK. No-op for
+ * every non-sandbox capability and for results that carry no string
+ * stdout/stderr (start/snapshot/stop return neither), so it's safe to gate on
+ * the whole {@link SANDBOX_FAMILY}.
+ *
+ * CRITICAL — this lives at the tool-materialization seam, NOT in the handlers:
+ * the same handlers are also driven programmatically by ModalSandboxWorkspace
+ * (readFile base64-decodes stdout; getChangedFiles splits it into the commit
+ * file list; diff returns it verbatim), which needs the EXACT, unclipped bytes.
+ * Clipping in the handler would corrupt file reads and silently drop files from
+ * commits. Returns a shallow copy so the original result — already measured by
+ * byteSize() for the pre-clip telemetry row above — is never mutated. Pure.
+ */
+function clipExecOutput(capName: string, result: unknown): unknown {
+  if (!SANDBOX_FAMILY.has(capName)) return result;
+  if (result === null || typeof result !== "object") return result;
+  const r = result as Record<string, unknown>;
+  const hasStdout = typeof r.stdout === "string";
+  const hasStderr = typeof r.stderr === "string";
+  if (!hasStdout && !hasStderr) return result;
+  return {
+    ...r,
+    ...(hasStdout
+      ? { stdout: clipMiddle(r.stdout as string, EXEC_STDOUT_MAX) }
+      : {}),
+    ...(hasStderr
+      ? { stderr: clipMiddle(r.stderr as string, EXEC_STDERR_MAX) }
+      : {}),
+  };
+}
 
 const RISK_ORDER: Record<string, number> = { low: 0, medium: 1, high: 2 };
 
@@ -382,7 +424,10 @@ export async function materializeTools(
             } catch {
               /* telemetry must never fail the call */
             }
-            return result;
+            // Cap the model-facing envelope AFTER byteSize() recorded the true
+            // (pre-clip) output size above, so a sandbox-exec token flood can't
+            // blow the context window. No-op for every other capability.
+            return clipExecOutput(cap.name, result);
           } catch (err) {
             await onError({
               capability: cap.name,
