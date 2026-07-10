@@ -20,7 +20,10 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const SCREENSHOT_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "screenshots");
+const SCREENSHOT_DIR = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "screenshots",
+);
 
 function scriptedCodingTurnEvents(parentMessageId: string): StreamEvent[] {
   const m = parentMessageId;
@@ -66,7 +69,10 @@ function scriptedCodingTurnEvents(parentMessageId: string): StreamEvent[] {
       componentId: "terminal-trace",
       props: {
         command: "pnpm --filter @oxagen/app build",
-        stdout: Array.from({ length: 50 }, (_, i) => `[build] step ${i + 1}/50 ok`).join("\n"),
+        stdout: Array.from(
+          { length: 50 },
+          (_, i) => `[build] step ${i + 1}/50 ok`,
+        ).join("\n"),
         stderr: "",
         exitCode: 1,
         durationMs: 4200,
@@ -135,8 +141,8 @@ function scriptedCodingTurnEvents(parentMessageId: string): StreamEvent[] {
             patch:
               "@@ -1,3 +1,3 @@\n" +
               " export const BUILD_CONFIG = {\n" +
-              "-  target: \"es2019\",\n" +
-              "+  target: \"es2022\",\n" +
+              '-  target: "es2019",\n' +
+              '+  target: "es2022",\n' +
               " };\n",
             additions: 1,
             deletions: 1,
@@ -152,10 +158,19 @@ function scriptedCodingTurnEvents(parentMessageId: string): StreamEvent[] {
       durationMs: 150,
     },
 
-    { type: "text", messageId: m, text: "Fixed the build — target bumped to es2022." },
+    {
+      type: "text",
+      messageId: m,
+      text: "Fixed the build — target bumped to es2022.",
+    },
     {
       type: "usage",
-      usage: { promptTokens: 512, completionTokens: 128, totalTokens: 640, creditsCharged: 4 },
+      usage: {
+        promptTokens: 512,
+        completionTokens: 128,
+        totalTokens: 640,
+        creditsCharged: 4,
+      },
     },
   ];
 }
@@ -174,7 +189,9 @@ test.describe("coding-agent-trace", () => {
   test("renders the terminal-trace + code-diff cards and the coding-trace-panel rail", async ({
     page,
   }) => {
-    const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "coding-trace" });
+    const { orgSlug } = await signUpFreshUser(page, {
+      orgPrefix: "coding-trace",
+    });
 
     await page.goto(`/${orgSlug}/default/ask`);
     const composer = page.getByPlaceholder(/send a message/i);
@@ -192,7 +209,9 @@ test.describe("coding-agent-trace", () => {
     await page.getByRole("button", { name: /send message/i }).click();
 
     // Inline cards render in the transcript.
-    const terminalTrace = page.locator('[data-component="terminal-trace-card"]');
+    const terminalTrace = page.locator(
+      '[data-component="terminal-trace-card"]',
+    );
     await expect(terminalTrace).toBeVisible({ timeout: 10_000 });
     const codeDiff = page.locator('[data-component="code-diff-card"]');
     await expect(codeDiff).toBeVisible({ timeout: 10_000 });
@@ -211,7 +230,10 @@ test.describe("coding-agent-trace", () => {
 
     const buildRow = page.getByTestId("trace-row-tool:tcl_build");
     await expect(buildRow).toBeVisible();
-    await expect(buildRow).toHaveAttribute("href", "#turn-entry-tool:tcl_build");
+    await expect(buildRow).toHaveAttribute(
+      "href",
+      "#turn-entry-tool:tcl_build",
+    );
 
     // The turn-entry anchor exists on the terminal-trace card's TimelineItem
     // wrapper, so the rail's link actually resolves to something in the DOM.
@@ -226,12 +248,35 @@ test.describe("coding-agent-trace", () => {
     // verified by checking the anchor becomes the in-view element.
     await codeRow.click();
     await expect(page.locator("#turn-entry-tool\\:tcl_code")).toBeInViewport();
+
+    // The inline CodeExecuteCard is COLLAPSED by default — tool input (the
+    // code) and output never render expanded in the conversation. Expanding
+    // via the header reveals the code block.
+    const codeCard = page.locator('[data-component="code-execute-card"]');
+    await expect(codeCard).toBeVisible();
+    await expect(codeCard.getByText("console.log('rebuilding');")).toBeHidden();
+    await codeCard
+      .getByRole("button", { name: /expand code run details/i })
+      .click();
+    await expect(
+      codeCard.getByText("console.log('rebuilding');"),
+    ).toBeVisible();
+
+    await page.screenshot({
+      path: path.join(
+        SCREENSHOT_DIR,
+        "coding-agent-trace-code-card-expanded.png",
+      ),
+      fullPage: true,
+    });
   });
 
   test("shows the workspace-context-panel's Workspace tab once a sandbox session starts", async ({
     page,
   }) => {
-    const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "coding-trace-ws" });
+    const { orgSlug } = await signUpFreshUser(page, {
+      orgPrefix: "coding-trace-ws",
+    });
 
     await page.goto(`/${orgSlug}/default/ask`);
     const composer = page.getByPlaceholder(/send a message/i);
@@ -273,7 +318,12 @@ test.describe("coding-agent-trace", () => {
       { type: "text", messageId: parentMessageId, text: "Sandbox is up." },
       {
         type: "usage",
-        usage: { promptTokens: 64, completionTokens: 16, totalTokens: 80, creditsCharged: 1 },
+        usage: {
+          promptTokens: 64,
+          completionTokens: 16,
+          totalTokens: 80,
+          creditsCharged: 1,
+        },
       },
     ];
     await interceptAgentStream(page, { events, delayMs: 40 });
@@ -281,7 +331,9 @@ test.describe("coding-agent-trace", () => {
     await composer.fill("Start a sandbox.");
     await page.getByRole("button", { name: /send message/i }).click();
 
-    const panel = page.locator('[data-component="workspace-context-panel-tabs"]');
+    const panel = page.locator(
+      '[data-component="workspace-context-panel-tabs"]',
+    );
     await expect(panel).toBeVisible({ timeout: 10_000 });
     const workspaceTab = panel.getByRole("tab", { name: /workspace/i });
     await expect(workspaceTab).toBeVisible({ timeout: 10_000 });

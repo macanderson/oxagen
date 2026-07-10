@@ -20,9 +20,23 @@ describe("workspace.settings.read capability", () => {
     expect(out.avatarUrl).toBeNull();
   });
 
+  it("parses an output with an avatar URL", () => {
+    const out = workspaceSettingsRead.output.parse({
+      name: "W",
+      slug: "w",
+      description: null,
+      avatarUrl: "https://cdn.example.com/w.png",
+    });
+    expect(out.avatarUrl).toBe("https://cdn.example.com/w.png");
+  });
+
   it("rejects a missing slug", () => {
     expect(() =>
-      workspaceSettingsRead.output.parse({ name: "W", description: null }),
+      workspaceSettingsRead.output.parse({
+        name: "W",
+        description: null,
+        avatarUrl: null,
+      }),
     ).toThrow();
   });
 
