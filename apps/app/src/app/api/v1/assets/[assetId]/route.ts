@@ -13,8 +13,9 @@ import {
   GeneratedAssetForbiddenError,
 } from "@oxagen/handlers";
 
-// Runs on the default Node.js runtime: the storage adapter uses Node.js
-// crypto + the Vercel Blob SDK (edge-unsafe).
+// Default Node.js runtime: the storage adapter uses Node.js crypto + the Vercel
+// Blob SDK — never move to edge. No `export const runtime` (incompatible with
+// cacheComponents; Node is the framework default).
 
 export async function GET(
   _req: Request,

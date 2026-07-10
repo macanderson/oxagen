@@ -29,8 +29,8 @@ import {
   type AuditExportFormat,
 } from "@/lib/audit-export";
 
-// Runs on the default Node.js runtime: node:crypto HMAC + DB access.
-// Never cached (access-controlled) — cacheComponents leaves handlers dynamic.
+// Default Node.js runtime: node:crypto HMAC + DB access — never move to edge. No
+// `export const runtime` (incompatible with cacheComponents; Node is default).
 
 function signingSecret(): string {
   // A dedicated key is preferred; fall back to the always-present auth secret so

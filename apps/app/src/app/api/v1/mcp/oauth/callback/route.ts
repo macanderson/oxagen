@@ -22,7 +22,9 @@ import { DbOAuthClientProvider, loadOAuthState, deleteOAuthState } from "@oxagen
 import { isNextRedirectError } from "@/lib/auth-denial";
 import { logger } from "@oxagen/handlers/logger";
 
-// Runs on the default Node.js runtime — MCP SDK auth uses Node crypto (edge-unsafe).
+// Runs on the default Node.js runtime — MCP SDK auth uses Node crypto, so this
+// route must never move to edge. No `export const runtime`: the segment config
+// is incompatible with cacheComponents (Node is the framework default).
 
 /**
  * Fetch wrapper for mcpAuth — see authorize/route.ts for full explanation.
