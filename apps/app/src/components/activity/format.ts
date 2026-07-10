@@ -11,7 +11,12 @@ export type RunStatus =
   | "cancelled"
   | "pending";
 
-/** Human duration from milliseconds. `—` when unknown. */
+/**
+ * Human duration from milliseconds. `—` when unknown.
+ *
+ * Intentionally distinct from the canonical `formatDuration` in `@/lib/utils`:
+ * this surface shows 2-decimal seconds and accepts null latencies.
+ */
 export function formatDuration(ms: number | null): string {
   if (ms === null || ms === undefined) return "—";
   if (ms < 1000) return `${ms}ms`;

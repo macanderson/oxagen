@@ -24,6 +24,7 @@
  */
 import * as React from "react";
 import { useRouter } from "next/navigation";
+import { slugify } from "@/lib/slug";
 import {
   ArrowLeft,
   ArrowRight,
@@ -186,14 +187,6 @@ const RETRIEVAL_STRATEGIES: GraphRetrievalStrategy[] = [
   "explicit",
 ];
 
-function slugify(input: string): string {
-  return input
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 60);
-}
-
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function AgentBuilder({
@@ -326,7 +319,7 @@ export function AgentBuilder({
 
   function onNameChange(value: string) {
     setName(value);
-    if (!slugEdited) setSlug(slugify(value));
+    if (!slugEdited) setSlug(slugify(value, 60));
   }
 
   /**
@@ -785,7 +778,7 @@ export function AgentBuilder({
                   placeholder="release-notes-writer"
                   onChange={(e) => {
                     setSlugEdited(true);
-                    setSlug(slugify(e.target.value));
+                    setSlug(slugify(e.target.value, 60));
                   }}
                   className="font-mono"
                   data-testid="agent-slug-input"

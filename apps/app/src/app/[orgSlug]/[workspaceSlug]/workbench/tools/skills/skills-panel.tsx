@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { formatDate } from "@/lib/utils";
 import { Download, ExternalLink, Plus, Search, Sparkles } from "lucide-react";
 import { CardGrid } from "@/components/lists/card-grid";
 import { ListPagination } from "@/components/lists/list-pagination";
@@ -49,12 +50,6 @@ interface SkillsPanelProps {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function formatDate(iso: string | null): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}
 
 function sourceLabel(source: string): string {
   if (source === "builtin") return "Built-in";

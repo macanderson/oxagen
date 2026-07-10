@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
+import { formatDate } from "@/lib/utils";
 import { CheckCircle, Download, History, Pencil } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -63,17 +64,6 @@ interface SkillDetailPanelProps {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function formatDate(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
 
 // ── Component ─────────────────────────────────────────────────────────────────
 

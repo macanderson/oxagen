@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
+import { formatDate } from "@/lib/utils";
 import { fetchVersions, diffVersions } from "./schema-service";
 import type { TenantSlugs, VersionItem, VersionDiff } from "./types";
 
@@ -17,14 +18,6 @@ interface VersionHistoryProps {
   slugs: TenantSlugs;
   pinnedVersionId: string | null;
   onPin: (versionId: string) => Promise<void>;
-}
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
 }
 
 function DiffView({ diff }: { diff: VersionDiff }) {

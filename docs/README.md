@@ -10,11 +10,24 @@ planned, and how to operate it.
 ```
 docs/
 ├── README.md                ← you are here
-├── adr/                     architectural decision records
-├── architecture/            long-lived design specs + implementation plans
-├── capabilities/            contract surface documentation (per-capability)
-├── epics/                   product epics with acceptance criteria
-└── queries/                 canonical SQL / Cypher / ClickHouse queries
+├── VISION.md                 product north star (metered/governed/graph-grounded control plane)
+├── adr/                      architectural decision records
+├── audits/                   committed release-audit HTML reports
+├── brand/                    brand assets
+├── capabilities/             contract surface documentation (per-capability)
+├── cli/                      CLI-specific docs (incl. point-in-time competitive snapshots)
+├── compliance/                SOC 2 / compliance references
+├── erd/                       entity-relationship diagrams
+├── guides/                    how-to guides
+├── ops/                       operational runbooks
+├── queries/                   canonical SQL / Cypher / ClickHouse queries
+├── reference/                  generated-artifact-shaped reference docs
+├── site/                       static marketing/reference page(s)
+├── specs/                      per-topic spec.md / plan.md (the actual home of
+│                                design specs — see below)
+├── superpowers/                 plans/specs (candidate for folding into specs/)
+├── CODEMAPS/                    generated architecture codemaps
+└── health-checks.md             draft (unfinished)
 ```
 
 ### `adr/` — Architectural Decision Records
@@ -23,31 +36,33 @@ One-shot decisions captured with their reasoning. Format: short markdown
 describing the decision, the context that produced it, alternatives
 considered, and the consequences. ADRs are **immutable once accepted** —
 when a decision is overturned, a new ADR is written that supersedes the
-old one.
+old one. See [`adr/README.md`](adr/README.md) for the full index.
 
 Use ADRs to record decisions like "we chose X over Y because Z." Use the
-architecture/ folder for the durable design intent that ADRs feed into.
+`specs/` folder for the durable design intent that ADRs feed into.
 
-### `architecture/` — Specs and plans
+### `specs/` — Specs and plans
 
-Each architectural topic lives in its own folder under `architecture/`,
-with two files:
+Each topic lives in its own folder under `specs/`, typically with:
 
 | File | Purpose |
 |---|---|
 | `spec.md` | **What** we're building, **why**, the constraints. Product + design + engineering align here. Updated when scope changes. |
 | `plan.md` | **How** we'll build it. Sequenced work, dependencies, milestones. Lives until implementation is complete, then archived. |
 
-Full convention is documented in [`architecture/README.md`](architecture/README.md).
-
-Current topics:
+Current topics (non-exhaustive — `ls docs/specs/` for the full, growing list):
 
 | Topic | Status |
 |---|---|
-| [`architecture/information-architecture/`](architecture/information-architecture/spec.md) | Spec'd |
-| [`architecture/application-shell/`](architecture/application-shell/spec.md) | Spec'd |
-| [`architecture/command-menu/`](architecture/command-menu/spec.md) | Spec'd |
-| [`architecture/iam/`](architecture/iam/plan.md) | Spec'd in IA · Wave 1 plan ready · OXA-1388/1389/1390 created |
+| [`specs/information-architecture/`](specs/information-architecture/spec.md) | Spec'd |
+| [`specs/application-shell/`](specs/application-shell/spec.md) | Spec'd |
+| [`specs/command-menu/`](specs/command-menu/spec.md) | Spec'd |
+| [`specs/iam/`](specs/iam/plan.md) | Spec'd |
+
+A number of specs describe features that have since shipped but carry no
+"Shipped"/"Archived" status header at the file itself — treat `apps/docs`'
+specs-and-plans section as the more current shipped/partial verdict until
+each spec is stamped or moved to an archive.
 
 ### `capabilities/` — Contract surface docs
 
@@ -55,18 +70,14 @@ Per-capability reference documentation generated from (and consistent
 with) the contract registry in `@oxagen/oxagen`. Each capability gets
 a stable URL that the audit log, the access matrix, and customer
 support escalations can deep-link to. When a contract ships, it gets a
-markdown counterpart here.
-
-### `epics/` — Product epics
-
-Discrete chunks of product work with acceptance criteria. One folder per
-epic. Epics describe *delivery* — the spec/plan in `architecture/`
-describes the *design*. Epics often reference architecture docs and
-ADRs; they're not a duplicate place to design.
+markdown counterpart here. See [`capabilities/_index.md`](capabilities/_index.md).
 
 ### `queries/` — Canonical queries
 
-The "official" version of frequently-needed read queries for each store:
+The "official" version of frequently-needed read queries. Currently a flat
+directory (`docs/queries/*.sql`) rather than the per-store subfolder
+structure below — adopt the subfolders as more queries are added, or treat
+this section as aspirational:
 
 - `queries/postgres/` — Drizzle-shape SQL for one-off reports
 - `queries/clickhouse/` — audit log + telemetry analysis queries
@@ -79,11 +90,10 @@ the seed corpus for the AI agent's query suggestions.
 
 | You want to … | Write a … |
 |---|---|
-| Capture *why* a decision was made and what was rejected | `adr/NNNN-title.md` |
-| Define a new system or surface and how it should be built | `architecture/<topic>/spec.md` + `plan.md` |
-| Document a contract for users and integrators | `capabilities/<contract-id>.md` |
-| Track a delivery milestone with acceptance criteria | `epics/<epic-name>/` |
-| Share a canonical query pattern | `queries/<store>/<purpose>.sql` |
+| Capture *why* a decision was made and what was rejected | `adr/ADR-NNN-title.md` |
+| Define a new system or surface and how it should be built | `specs/<topic>/spec.md` + `plan.md` |
+| Document a contract for users and integrators | `capabilities/<capability-name>.md` |
+| Share a canonical query pattern | `queries/<purpose>.sql` |
 
 ## Editing rules
 

@@ -1,4 +1,4 @@
-<!-- Generated: 2025-07-10 | Files scanned: all package.json | Token estimate: ~700 -->
+<!-- Generated: 2026-07-06, corrections applied 2026-07-10 | Files scanned: all package.json | Token estimate: ~700 -->
 
 # Dependencies & Integrations
 
@@ -10,7 +10,7 @@
 | **Neo4j** | Knowledge graph, lineage, memory | `NEO4J_URI/USERNAME/PASSWORD/DATABASE` | `@oxagen/engram`, `@oxagen/agent` |
 | **Inngest** | Background job orchestration | `INNGEST_EVENT_KEY`, `INNGEST_SIGNING_KEY` | `@oxagen/inngest-functions` |
 | **Stripe** | Billing, subscriptions, credits | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | `@oxagen/billing` |
-| **Vercel Blob** | File/asset storage | `VERCEL_BLOB_READ_WRITE_TOKEN` | `@oxagen/storage` |
+| **Vercel Blob** | File/asset storage | `BLOB_READ_WRITE_TOKEN` | `@oxagen/storage` |
 | **Vercel Sandbox** | Code execution sandbox | `VERCEL_SANDBOX_*` | `@oxagen/sandbox` |
 | **AI Gateway** | LLM proxy (all models) | `AI_GATEWAY_API_KEY` | `@oxagen/ai` |
 | **GitHub App** | OAuth, webhooks, repo sync | `GITHUB_APP_*` | `@oxagen/github` |
@@ -38,7 +38,7 @@ Package: `packages/ai/src/` — stream, generate-object, prompts registry.
 hono                    HTTP framework
 @hono/node-server       Node.js adapter
 drizzle-orm             ORM
-ai (Vercel AI SDK)      LLM streaming
+ai (Vercel AI SDK, 7.0.14) LLM streaming
 inngest                 Background jobs
 stripe                  Payments
 better-auth             Auth sessions
@@ -46,7 +46,7 @@ better-auth             Auth sessions
 
 ### App (`apps/app`)
 ```
-next (15)               React framework
+next (16.2.10)          React framework
 @base-ui/react          Accessible primitives
 @dnd-kit/*              Drag and drop
 @modelcontextprotocol/sdk  MCP client
@@ -73,7 +73,7 @@ xmcp                    MCP server framework (streamable HTTP)
 | Package | Consumers | Role |
 |---------|-----------|------|
 | `@oxagen/oxagen` | api, app, mcp, handlers | Contracts (Zod schemas), CapabilityContext |
-| `@oxagen/handlers` | api, app, mcp | Business logic handlers (398 files) |
+| `@oxagen/handlers` | api, app, mcp | Business logic handlers (473 total .ts incl. tests / 270 non-test) |
 | `@oxagen/database` | api, app, handlers, agent, billing, ... | Drizzle schema + client |
 | `@oxagen/auth` | api, app, mcp | Better Auth, session/API-key resolution |
 | `@oxagen/agent` | api, app | Agent runtime, memory, dispatch |
@@ -96,12 +96,13 @@ xmcp                    MCP server framework (streamable HTTP)
 | `@oxagen/config` | api, app, cli, mcp | Shared runtime config |
 | `@oxagen/ontology` | api, handlers | Ontology query/management |
 | `@oxagen/skills` | api, cli | Skill filesystem scanner |
-| `@oxagen/ui` | app | COSS component system (shadcn/Radix) |
+| `@oxagen/ui` | app | coss ui component system (Base UI–based; migrated off shadcn/Radix) |
 | `@oxagen/web` | app | Shared web utilities |
 | `@oxagen/code-graph` | cli, api | Code graph indexing |
 | `@oxagen/functions` | api, app | Shared function utilities |
 | `@oxagen/mcp-config` | cli, mcp | MCP server config schema |
 | `@oxagen/prompt-templates` | app, handlers | Prompt template library |
+| `@oxagen/bench` | bench/web | Deterministic eval/replay benchmark engine (`runBenchmark()`) |
 
 ## Tooling Packages
 

@@ -36,6 +36,7 @@ import {
   MenuItem,
   MenuSeparator,
 } from "@/components/ui/menu";
+import { formatDateTime } from "@/lib/utils";
 import type { ConnectionListOutput } from "@oxagen/oxagen/contracts/connection.list";
 
 type Connection = ConnectionListOutput["connections"][number];
@@ -134,16 +135,11 @@ function formatCount(n: number): string {
   return String(n);
 }
 
+// lastSyncAt is only rendered when present ({formattedDate && ...} below), so
+// this stays a thin null-passthrough wrapper around the shared formatter
+// rather than the shared helper's own "—" placeholder.
 function formatDate(iso: string | null): string | null {
-  if (!iso) return null;
-  const d = new Date(iso);
-  return d.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return iso ? formatDateTime(iso) : null;
 }
 
 // ── Sub-components ─────────────────────────────────────────────────────────────

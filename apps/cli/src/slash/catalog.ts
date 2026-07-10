@@ -31,13 +31,6 @@ export interface SlashCatalogEntry {
   source: SlashSource;
   /** First-party / pre-installed (built-in or CLI). Custom commands are false. */
   productized: boolean;
-  /**
-   * @deprecated No longer set — the menu renders every command name/args in one
-   * uniform color scheme (amber name, green args) and marks productized commands
-   * with a lock glyph instead of per-command colors. Kept optional for one
-   * release so any lingering reader compiles; safe to delete once unused.
-   */
-  color?: string;
 }
 
 /**

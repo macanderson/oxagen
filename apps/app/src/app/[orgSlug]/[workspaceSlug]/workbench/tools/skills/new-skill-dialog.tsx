@@ -15,6 +15,7 @@
  */
 import * as React from "react";
 import { useRouter } from "next/navigation";
+import { slugify } from "@/lib/slug";
 import {
   Dialog,
   DialogPopup,
@@ -112,15 +113,6 @@ const STEP_DESCRIPTIONS: Record<WizardStep, string> = {
   save: "One last look before the skill is created in this workspace.",
 };
 
-function slugify(input: string): string {
-  return input
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 64);
-}
-
 // ── Step indicator ────────────────────────────────────────────────────────────
 
 function StepIndicator({ current }: { current: WizardStep }) {
@@ -201,12 +193,12 @@ export function NewSkillDialog({
 
   const handleNameChange = (value: string) => {
     setName(value);
-    if (!slugEdited) setSlug(slugify(value));
+    if (!slugEdited) setSlug(slugify(value, 64));
   };
 
   const handleSlugChange = (value: string) => {
     setSlugEdited(true);
-    setSlug(slugify(value));
+    setSlug(slugify(value, 64));
   };
 
   // ── Step 1: describe → draft ────────────────────────────────────────────────

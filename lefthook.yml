@@ -7,16 +7,28 @@ pre-commit:
       glob: "packages/database/atlas/migrations/**"
       run: cd packages/database && atlas migrate validate --dir "file://atlas/migrations"
 
+    # Format staged TS/TSX/JS/JSON files with Biome (the sole formatter — see
+    # ADR-015) and re-stage the result. Scoped to staged files only — this is
+    # NOT the one-shot repo-wide `pnpm format` sweep ADR-015 still calls for
+    # before Biome is made a hard gate; it just keeps new changes formatted
+    # going forward without reformatting whole files on unrelated PRs.
+    format:
+      glob: "*.{ts,tsx,js,jsx,mjs,mts,cts,json,jsonc}"
+      exclude:
+        - "docs/**"
+        - ".agents/**"
+        - ".claude/**"
+      run: pnpm exec biome format --write {staged_files}
+      stage_fixed: true
+
     # Lint staged TS/JS, auto-fix, and re-stage the fixes.
     # docs/, .agents/, and .claude/ are excluded (docs + agent/skill assets
     # are not part of the typed source tree).
     #
-    # ADR-015: Biome is installed as the formatter and `pnpm format` is wired,
-    # but the pre-commit Biome-format step is intentionally NOT enabled yet — it
-    # must follow the one-shot `pnpm format` sweep (a coordinated, isolated commit
-    # in a quiet window) so unrelated PRs don't each carry whole-file reformatting.
-    # Until then pre-commit stays ESLint-only. Test suites run in CI, not in any
-    # git hook (see the pre-push note below).
+    # ADR-015: Biome (above) now covers pre-commit formatting on staged files;
+    # a full-repo `pnpm format` sweep is still pending before Biome becomes a
+    # hard CI gate. Test suites run in CI, not in any git hook (see the
+    # pre-push note below).
     lint:
       glob: "*.{ts,tsx,js,jsx,mjs,mts,cts}"
       exclude:
