@@ -12,6 +12,15 @@
 import * as React from "react";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/ui/empty-state";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { CapabilityIcon } from "@/components/plugins/capability-icon";
 import { KeyRound, Trash2 } from "lucide-react";
@@ -144,11 +153,12 @@ export function McpServerList({
 
   if (servers.length === 0) {
     return (
-      <div className="rounded-lg border border-border/40 bg-muted/20 px-6 py-8 text-center">
-        <p className="text-sm text-muted-foreground">
-          No MCP servers connected yet. Use the form above to connect one.
-        </p>
-      </div>
+      <EmptyState
+        size="sm"
+        variant="muted"
+        title="No MCP servers connected yet"
+        description="Use the form above to connect one."
+      />
     );
   }
 

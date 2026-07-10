@@ -44,7 +44,7 @@ const MenuPopup = React.forwardRef<
         ref={ref}
         className={cn(
           "z-50 min-w-[8rem] overflow-hidden rounded-lg border border-menu-popup-border bg-menu-popup-bg p-1 text-menu-popup-fg",
-          "origin-[var(--transform-origin)] transition-[opacity,transform] duration-[var(--motion-overlay)] ease-[var(--ease-entry)] data-[starting-style]:opacity-0 data-[starting-style]:scale-[0.98] data-[starting-style]:-translate-y-1 data-[ending-style]:opacity-0 data-[ending-style]:scale-[0.98] data-[ending-style]:-translate-y-1",
+          "origin-[var(--transform-origin)] transition-[opacity,transform,translate,scale] duration-[var(--motion-overlay)] ease-[var(--ease-entry)] data-[starting-style]:opacity-0 data-[starting-style]:scale-[0.98] data-[starting-style]:-translate-y-1 data-[ending-style]:opacity-0 data-[ending-style]:scale-[0.98] data-[ending-style]:-translate-y-1",
           className,
         )}
         {...props}
@@ -57,16 +57,20 @@ MenuPopup.displayName = "MenuPopup";
 interface MenuItemProps
   extends React.ComponentPropsWithoutRef<typeof MenuPrimitive.Item> {
   inset?: boolean;
+  /** `destructive` inks the item with the error token (delete/remove actions). */
+  variant?: "default" | "destructive";
 }
 
 const MenuItem = React.forwardRef<
   React.ComponentRef<typeof MenuPrimitive.Item>,
   MenuItemProps
->(({ className, inset, ...props }, ref) => (
+>(({ className, inset, variant = "default", ...props }, ref) => (
   <MenuPrimitive.Item
     ref={ref}
     className={cn(
       "relative flex cursor-pointer select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-menu-item-fg outline-none transition-colors data-[highlighted]:bg-menu-item-highlighted-bg data-[highlighted]:text-menu-item-highlighted-fg data-[disabled]:pointer-events-none data-[disabled]:text-menu-item-disabled-fg [&_svg]:size-4 [&_svg]:shrink-0",
+      variant === "destructive" &&
+        "text-error data-[highlighted]:bg-error/10 data-[highlighted]:text-error [&_svg]:text-error",
       inset && "pl-8",
       className,
     )}
@@ -185,7 +189,7 @@ const MenuSubPopup = React.forwardRef<
         ref={ref}
         className={cn(
           "z-50 min-w-[8rem] overflow-hidden rounded-lg border border-menu-popup-border bg-menu-popup-bg p-1 text-menu-popup-fg",
-          "origin-[var(--transform-origin)] transition-[opacity,transform] duration-[var(--motion-overlay)] ease-[var(--ease-entry)] data-[starting-style]:opacity-0 data-[starting-style]:scale-[0.98] data-[starting-style]:-translate-y-1 data-[ending-style]:opacity-0 data-[ending-style]:scale-[0.98] data-[ending-style]:-translate-y-1",
+          "origin-[var(--transform-origin)] transition-[opacity,transform,translate,scale] duration-[var(--motion-overlay)] ease-[var(--ease-entry)] data-[starting-style]:opacity-0 data-[starting-style]:scale-[0.98] data-[starting-style]:-translate-y-1 data-[ending-style]:opacity-0 data-[ending-style]:scale-[0.98] data-[ending-style]:-translate-y-1",
           className,
         )}
         {...props}
