@@ -141,6 +141,7 @@ import { pluginCatalogBrowse } from "./plugin.catalog.browse";
 import { pluginCatalogGet } from "./plugin.catalog.get";
 import { pluginCatalogSync } from "./plugin.catalog.sync";
 import { pluginCredentialReauth } from "./plugin.credential.reauth";
+import { pluginCredentialRevoke } from "./plugin.credential.revoke";
 import { pluginCredentialSetSecret } from "./plugin.credential.set_secret";
 import { pluginOrgInstall } from "./plugin.org.install";
 import { pluginOrgInstallBulk } from "./plugin.org.install_bulk";
@@ -561,6 +562,7 @@ export {
   pluginCatalogGet,
   pluginCatalogSync,
   pluginCredentialReauth,
+  pluginCredentialRevoke,
   pluginCredentialSetSecret,
   pluginOrgInstall,
   pluginOrgInstallBulk,
@@ -883,6 +885,7 @@ export const contracts = [
   pluginCatalogGet,
   pluginCatalogSync,
   pluginCredentialReauth,
+  pluginCredentialRevoke,
   pluginCredentialSetSecret,
   pluginOrgInstall,
   pluginOrgInstallBulk,

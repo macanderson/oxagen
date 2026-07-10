@@ -2,7 +2,6 @@
 import * as React from "react";
 import Link from "next/link";
 import { Brain, Network } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { TruncatedText } from "@/components/ui/truncated-text";
 import { NodeRef } from "@/components/knowledge/graph/node-ref";
 import { useTenantOptional } from "@/lib/tenant/tenant-context";
@@ -14,13 +13,13 @@ export interface MemoryCardProps {
   topN?: number;
 }
 
-// Epistemic class → badge variant. FACT is the most trustworthy (success);
+// Epistemic class → text color. FACT is the most trustworthy (success);
 // RULE is policy-enforced (warning, draws attention to enforcement); a plain
 // OBSERVATION is muted since it is the lowest rung of the confidence ladder.
-const CLASS_VARIANT: Record<string, "success" | "warning" | "muted" | "default"> = {
-  FACT: "success",
-  RULE: "warning",
-  OBSERVATION: "muted",
+const CLASS_TEXT: Record<string, string> = {
+  FACT: "text-success",
+  RULE: "text-warning",
+  OBSERVATION: "text-muted-foreground",
 };
 
 /**
@@ -44,9 +43,9 @@ export function MemoryCard({ memories, topN = 5 }: MemoryCardProps) {
       <div className="flex items-center gap-2">
         <Brain className="h-4 w-4 text-muted-foreground" />
         <span className="font-semibold">Recalled memories</span>
-        <Badge variant="muted" className="ml-auto tabular-nums">
+        <span className="ml-auto text-xs font-medium tabular-nums text-muted-foreground">
           {memories.length}
-        </Badge>
+        </span>
       </div>
       <ul className="space-y-2">
         {top.map((m) => {
@@ -74,9 +73,11 @@ export function MemoryCard({ memories, topN = 5 }: MemoryCardProps) {
                 </div>
               ) : null}
               <div className="mb-1 flex items-center gap-2 flex-wrap">
-                <Badge variant={CLASS_VARIANT[m.memoryClass] ?? "default"} className="uppercase">
+                <span
+                  className={`inline-flex items-center gap-1 text-xs font-medium uppercase ${CLASS_TEXT[m.memoryClass] ?? "text-foreground"}`}
+                >
                   {m.memoryClass}
-                </Badge>
+                </span>
                 <span className="text-muted-foreground tabular-nums">
                   confidence {Math.round(m.confidenceScore)}%
                 </span>

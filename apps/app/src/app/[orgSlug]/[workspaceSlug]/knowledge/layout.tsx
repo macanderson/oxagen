@@ -1,5 +1,6 @@
 import { PageHeader } from "@/components/ui/page-header";
 import { PageTabs } from "@/components/ui/page-tabs";
+import { MobileSettingsNav } from "@/components/ui/settings-nav";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { workspace } from "@/lib/routes";
 import type { ScopeContext } from "@/lib/scope";
@@ -37,8 +38,9 @@ export default async function KnowledgeLayout({
           }
         />
       </div>
-      <PageTabs tabs={tabs} className="mb-6" />
+      <PageTabs tabs={tabs} className="mb-6 max-md:hidden" />
       {children}
+      <MobileSettingsNav items={tabs} label="Knowledge" />
     </div>
   );
 }

@@ -1,7 +1,6 @@
 "use client";
 import * as React from "react";
 import { Check, ShieldAlert, X } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { RiskBadge } from "./risk-badge";
 import { StructuredField } from "./structured-value";
@@ -60,9 +59,7 @@ export function ApprovalCard({
         <ShieldAlert className="h-4 w-4 text-warning" />
         <span className="font-semibold">Approval required</span>
         <RiskBadge risk={riskLevel} />
-        <Badge variant="outline" className="font-mono">
-          {capability}
-        </Badge>
+        <span className="text-xs text-muted-foreground">{capability}</span>
         <span className="ml-auto text-xs tabular-nums text-muted-foreground">
           {expired || settled ? null : `Expires in ${formatRemaining(remaining)}`}
         </span>
@@ -74,16 +71,24 @@ export function ApprovalCard({
 
       <div className="flex items-center justify-end gap-2">
         {settled ? (
-          <Badge variant={optimistic === "approved" ? "success" : "destructive"}>
+          <span
+            className={
+              optimistic === "approved"
+                ? "inline-flex items-center gap-1 text-xs font-medium text-success"
+                : "inline-flex items-center gap-1 text-xs font-medium text-destructive"
+            }
+          >
             {optimistic === "approved" ? (
-              <Check className="mr-1 h-3 w-3" />
+              <Check className="h-3 w-3" />
             ) : (
-              <X className="mr-1 h-3 w-3" />
+              <X className="h-3 w-3" />
             )}
             {optimistic}
-          </Badge>
+          </span>
         ) : expired ? (
-          <Badge variant="muted">Expired</Badge>
+          <span className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground">
+            Expired
+          </span>
         ) : (
           <>
             <Button

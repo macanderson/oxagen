@@ -13,10 +13,6 @@ if (typeof globalThis.ResizeObserver === "undefined") {
   };
 }
 
-vi.mock("@/components/ui/badge", () => ({
-  Badge: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
-}));
-
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
