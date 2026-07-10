@@ -25,4 +25,5 @@ export * from "./billing-settings";
 export * from "./payment-methods";
 export * from "./autoreload";
 export * from "./dunning";
+export * from "./receipts";
 export * from "./disputes";

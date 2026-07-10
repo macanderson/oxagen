@@ -20,7 +20,17 @@
 //   audit_events TTL. DO NOT add event types here without also updating the
 //   CHECK constraint DDL in the migration file.
 
-import { boolean, check, index, integer, primaryKey, text, timestamp, uuid, uniqueIndex } from "drizzle-orm/pg-core";
+import {
+  boolean,
+  check,
+  index,
+  integer,
+  primaryKey,
+  text,
+  timestamp,
+  uuid,
+  uniqueIndex,
+} from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import {
   SECURITY_EVENT_TYPES,
@@ -63,8 +73,7 @@ export const securityEvents = securitySchema.table(
 
     // Event classification. CHECK constraint mirrors the TS union so the DB
     // rejects an unknown value even if application code drifts.
-    eventType: text("event_type")
-      .notNull(),
+    eventType: text("event_type").notNull(),
 
     // Who triggered the event. Nullable — some events fire before a user
     // session is established (e.g. failed sign-in with unknown email).
@@ -94,9 +103,15 @@ export const securityEvents = securitySchema.table(
     pk: primaryKey({ columns: [t.id, t.occurredAt] }),
 
     // Compliance range queries: "show me all events for org X in period Y"
-    orgOccurredIdx: index("security_events_org_occurred_idx").on(t.orgId, t.occurredAt),
+    orgOccurredIdx: index("security_events_org_occurred_idx").on(
+      t.orgId,
+      t.occurredAt,
+    ),
     // Alert queries: "show me all denied invocations in the last hour"
-    typeOccurredIdx: index("security_events_type_occurred_idx").on(t.eventType, t.occurredAt),
+    typeOccurredIdx: index("security_events_type_occurred_idx").on(
+      t.eventType,
+      t.occurredAt,
+    ),
 
     // DB-level CHECK constraints to enforce the typed union and outcome set.
     // The clause bodies are generated from the @oxagen/compliance single source
@@ -183,7 +198,7 @@ export const mcpServerChanges = securitySchema.table(
     serverId: uuid("server_id").notNull(),
 
     // What happened. CHECK constraint mirrors the TS union.
-    changeType: text("change_type").notNull(), // enable | disable | delete
+    changeType: text("change_type").notNull(), // enable | disable | delete | drift_detected
 
     // Who triggered it. Nullable — system/cron-driven changes have no actor.
     actorUserId: uuid("actor_user_id"),
@@ -206,7 +221,7 @@ export const mcpServerChanges = securitySchema.table(
     ),
     changeTypeCheck: check(
       "mcp_server_changes_change_type_check",
-      sql`${t.changeType} IN ('enable','disable','delete')`,
+      sql`${t.changeType} IN ('enable','disable','delete','drift_detected')`,
     ),
   }),
 );

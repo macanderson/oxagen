@@ -59,6 +59,15 @@ export const baseEnvSchema = z.object({
     .positive()
     .default(1),
 
+  // Distributed rate limiter (apps/api/src/middleware/distributed-rate-limit.ts).
+  // Per-workspace (fallback: per-org, then per-IP) fixed-window budgets, in
+  // requests per minute, for the expensive chat + agent-execution surfaces.
+  //  - RATE_LIMIT_CHAT_PER_MIN:       chat send / stream (/v1/**/chat/*).
+  //  - RATE_LIMIT_AGENT_EXEC_PER_MIN: agent code-exec / compose / sandbox ops /
+  //                                   background-task start, and the A2A RPC.
+  RATE_LIMIT_CHAT_PER_MIN: z.coerce.number().int().positive().default(60),
+  RATE_LIMIT_AGENT_EXEC_PER_MIN: z.coerce.number().int().positive().default(30),
+
   BETTER_AUTH_SECRET: z.string().min(32),
   BETTER_AUTH_URL: z.string().url(),
 

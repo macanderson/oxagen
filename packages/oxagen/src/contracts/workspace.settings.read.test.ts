@@ -8,6 +8,8 @@ describe("workspace.settings.read capability", () => {
   });
 
   it("parses a valid output with a null description", () => {
+    // avatarUrl is nullable but required (avatarUrlOutputSchema) — handlers
+    // always emit it, null when the workspace has no avatar.
     const out = workspaceSettingsRead.output.parse({
       name: "W",
       slug: "w",
@@ -30,7 +32,11 @@ describe("workspace.settings.read capability", () => {
 
   it("rejects a missing slug", () => {
     expect(() =>
-      workspaceSettingsRead.output.parse({ name: "W", description: null, avatarUrl: null }),
+      workspaceSettingsRead.output.parse({
+        name: "W",
+        description: null,
+        avatarUrl: null,
+      }),
     ).toThrow();
   });
 

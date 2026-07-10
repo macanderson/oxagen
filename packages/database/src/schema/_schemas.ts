@@ -29,3 +29,10 @@ export const evalSchema = pgSchema("eval");
 // tables use bypass-only RLS and are written through withSystemDb, never a
 // tenant query. See schema/cms.ts.
 export const cmsSchema = pgSchema("cms");
+// ratelimit — cross-cutting abuse-control counters for the distributed API rate
+// limiter. Isolated in its own schema (like `security`) so this hot, ephemeral,
+// high-churn data can be vacuumed/backed-up independently of operational state,
+// and so a tenant query can never read another org's counters. Not tenant-
+// scoped (counters key on org OR workspace OR IP); bypass-only RLS, written
+// exclusively through withSystemDb. See schema/ratelimit.ts.
+export const ratelimitSchema = pgSchema("ratelimit");

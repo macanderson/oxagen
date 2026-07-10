@@ -21,7 +21,11 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { BillingWebhookEvent, BillingDispute, BillingRefundedCharge } from "./provider";
+import type {
+  BillingWebhookEvent,
+  BillingDispute,
+  BillingRefundedCharge,
+} from "./provider";
 
 // ---------------------------------------------------------------------------
 // Module mocks — hoisted before any import of the module under test.
@@ -55,12 +59,36 @@ vi.mock("./grants", () => ({
   grantFreeCredits: vi.fn().mockResolvedValue(undefined),
 }));
 
-// Mock dunning handlers.
+// Mock dunning handlers. Spread the REAL module so resolveOrgFromInvoice — which
+// the real receipts.ts imports — stays available; only the two lifecycle handlers
+// are stubbed so their DB writes don't run in this dispatch test.
 const onInvoicePaymentFailedMock = vi.fn().mockResolvedValue(undefined);
 const onInvoiceRecoveredMock = vi.fn().mockResolvedValue(undefined);
-vi.mock("./dunning", () => ({
-  onInvoicePaymentFailed: onInvoicePaymentFailedMock,
-  onInvoiceRecovered: onInvoiceRecoveredMock,
+vi.mock("./dunning", async (importOriginal) => {
+  const real = await importOriginal<typeof import("./dunning")>();
+  return {
+    ...real,
+    onInvoicePaymentFailed: onInvoicePaymentFailedMock,
+    onInvoiceRecovered: onInvoiceRecoveredMock,
+  };
+});
+
+// Mock @oxagen/notifications so the REAL receipts.ts (invoice.paid receipt send)
+// runs against a spy instead of a live email transport. paymentFailedTemplate is
+// included because the real dunning module (spread above) imports it at load.
+const notifyOrgManagersMock = vi.fn().mockResolvedValue(undefined);
+vi.mock("@oxagen/notifications", () => ({
+  notifyOrgManagers: notifyOrgManagersMock,
+  paymentReceiptTemplate: vi.fn(() => ({
+    subject: "Payment receipt",
+    text: "receipt text",
+    html: "<html>receipt</html>",
+  })),
+  paymentFailedTemplate: vi.fn(() => ({
+    subject: "Payment failed",
+    text: "failed text",
+    html: "<html>failed</html>",
+  })),
 }));
 
 // Mock dispute handlers.
@@ -117,19 +145,28 @@ function makeDb(
     query: {
       subscriptions: { findFirst: vi.fn().mockResolvedValue(null) },
       orgBillingSettings: { findFirst: vi.fn().mockResolvedValue(null) },
+      organizations: {
+        findFirst: vi.fn().mockResolvedValue({ name: "Acme Inc" }),
+      },
       stripeEvents: {
-        findFirst: vi.fn().mockResolvedValue(
-          opts.existingEventId === undefined
-            ? null
-            : opts.existingEventId === null
+        findFirst: vi
+          .fn()
+          .mockResolvedValue(
+            opts.existingEventId === undefined
               ? null
-              : { id: opts.existingEventId },
-        ),
+              : opts.existingEventId === null
+                ? null
+                : { id: opts.existingEventId },
+          ),
       },
       stripeEventProcessing: {
-        findFirst: vi.fn().mockResolvedValue(
-          opts.processedAt === undefined ? null : { processedAt: opts.processedAt },
-        ),
+        findFirst: vi
+          .fn()
+          .mockResolvedValue(
+            opts.processedAt === undefined
+              ? null
+              : { processedAt: opts.processedAt },
+          ),
       },
     },
     _processingInsertChain: processingInsertChain,
@@ -137,16 +174,17 @@ function makeDb(
   };
 }
 
-const dbState: { instance: ReturnType<typeof makeDb> | null } = { instance: null };
+const dbState: { instance: ReturnType<typeof makeDb> | null } = {
+  instance: null,
+};
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  db: () => dbState.instance,
-  withTenantDb: async (fn: (tx: unknown) => unknown) => fn(dbState.instance),
-  withSystemDb: async (fn: (tx: unknown) => unknown) => fn(dbState.instance),
-
+    db: () => dbState.instance,
+    withTenantDb: async (fn: (tx: unknown) => unknown) => fn(dbState.instance),
+    withSystemDb: async (fn: (tx: unknown) => unknown) => fn(dbState.instance),
   };
 });
 
@@ -157,7 +195,9 @@ const { processStripeEvent } = await import("./webhooks");
 // Fixture helpers
 // ---------------------------------------------------------------------------
 
-function makeWebhookEvent(overrides: Partial<BillingWebhookEvent> = {}): BillingWebhookEvent {
+function makeWebhookEvent(
+  overrides: Partial<BillingWebhookEvent> = {},
+): BillingWebhookEvent {
   return {
     providerEventId: "evt_test_001",
     apiVersion: "2025-02-24.acacia",
@@ -188,11 +228,16 @@ describe("processStripeEvent", () => {
     expect(result).toEqual({ status: "applied" });
     expect(dbState.instance!.insert).toHaveBeenCalledTimes(2);
     expect(syncSubscriptionMock).toHaveBeenCalledWith("sub_test_001");
-    expect(dbState.instance!._processingInsertChain.onConflictDoUpdate).toHaveBeenCalledOnce();
+    expect(
+      dbState.instance!._processingInsertChain.onConflictDoUpdate,
+    ).toHaveBeenCalledOnce();
   });
 
   it("already-processed duplicate — conflict + processed row → 'duplicate', no dispatch", async () => {
-    dbState.instance = makeDb([], { existingEventId: "evt-row-1", processedAt: new Date() });
+    dbState.instance = makeDb([], {
+      existingEventId: "evt-row-1",
+      processedAt: new Date(),
+    });
 
     const event = makeWebhookEvent({ providerEventId: "evt_dupe_001" });
     const result = await processStripeEvent(event);
@@ -203,7 +248,10 @@ describe("processStripeEvent", () => {
   });
 
   it("retry after a failed dispatch — conflict + no processed row → re-dispatches → 'applied'", async () => {
-    dbState.instance = makeDb([], { existingEventId: "evt-row-2", processedAt: null });
+    dbState.instance = makeDb([], {
+      existingEventId: "evt-row-2",
+      processedAt: null,
+    });
 
     const event = makeWebhookEvent({ providerEventId: "evt_retry_001" });
     const result = await processStripeEvent(event);
@@ -251,6 +299,55 @@ describe("processStripeEvent", () => {
     expect(grantPlanCreditsForInvoicePaidMock).toHaveBeenCalledWith(invoice);
     expect(onInvoiceRecoveredMock).toHaveBeenCalledWith(invoice);
     expect(syncSubscriptionMock).not.toHaveBeenCalled();
+    // A paid, non-zero invoice emails the customer a receipt (via the real
+    // receipts.ts → notifyOrgManagers spy).
+    expect(notifyOrgManagersMock).toHaveBeenCalledOnce();
+    expect(notifyOrgManagersMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orgId: "org-abc",
+        kind: "system",
+        deepLink: "/settings/billing",
+      }),
+    );
+  });
+
+  it("invoice.paid — zero-amount invoice does NOT send a receipt", async () => {
+    dbState.instance = makeDb([{ id: "row-uuid-zero" }]);
+
+    const invoice = {
+      id: "in_zero_001",
+      providerInvoiceId: "in_zero_001",
+      number: "INV-000",
+      status: "paid" as const,
+      amountDueCents: 0,
+      amountPaidCents: 0,
+      amountRemainingCents: 0,
+      currency: "usd",
+      periodStart: new Date(),
+      periodEnd: new Date(),
+      dueAt: null,
+      paidAt: new Date(),
+      hostedInvoiceUrl: null,
+      invoicePdfUrl: null,
+      subscriptionId: "sub_test_001",
+      orgId: "org-abc",
+      billingReason: "subscription_create",
+      lineItems: [],
+    };
+
+    const event = makeWebhookEvent({
+      providerEventId: "evt_inv_zero_001",
+      type: "invoice.paid",
+      subscriptionId: undefined,
+      invoice,
+    });
+
+    const result = await processStripeEvent(event);
+
+    expect(result).toEqual({ status: "applied" });
+    // Grants + recovery still run; only the receipt email is skipped for $0.
+    expect(onInvoiceRecoveredMock).toHaveBeenCalledWith(invoice);
+    expect(notifyOrgManagersMock).not.toHaveBeenCalled();
   });
 
   it("invoice.payment_failed dispatches syncInvoiceFromStripe + dunning entry", async () => {
@@ -290,6 +387,9 @@ describe("processStripeEvent", () => {
     expect(syncInvoiceMock).toHaveBeenCalledWith("in_failed_001");
     expect(onInvoicePaymentFailedMock).toHaveBeenCalledWith(invoice);
     expect(onInvoiceRecoveredMock).not.toHaveBeenCalled();
+    // Payment failure must NOT send a payment receipt (that path emails the
+    // failure notice via onInvoicePaymentFailed, not a receipt).
+    expect(notifyOrgManagersMock).not.toHaveBeenCalled();
   });
 
   it("subscription.trial_will_end syncs subscription and returns 'applied'", async () => {
@@ -412,7 +512,9 @@ describe("processStripeEvent", () => {
   it("payment_method.updated upserts the payment method", async () => {
     // The upsertPaymentMethod function looks up a subscription by customerId.
     dbState.instance = makeDb([{ id: "row-uuid-8" }]);
-    dbState.instance!.query.subscriptions.findFirst = vi.fn().mockResolvedValue({ orgId: "org-abc" });
+    dbState.instance!.query.subscriptions.findFirst = vi
+      .fn()
+      .mockResolvedValue({ orgId: "org-abc" });
 
     const event = makeWebhookEvent({
       providerEventId: "evt_pm_updated_001",
@@ -550,7 +652,9 @@ describe("processStripeEvent", () => {
 
   it("payment_method.detached — updates the payment method with deletedAt", async () => {
     dbState.instance = makeDb([{ id: "row-uuid-14" }]);
-    dbState.instance!.query.subscriptions.findFirst = vi.fn().mockResolvedValue({ orgId: "org-abc" });
+    dbState.instance!.query.subscriptions.findFirst = vi
+      .fn()
+      .mockResolvedValue({ orgId: "org-abc" });
 
     const event = makeWebhookEvent({
       providerEventId: "evt_pm_detached_001",
@@ -575,7 +679,9 @@ describe("processStripeEvent", () => {
 
   it("payment_method.attached — upserts payment method when subscription exists", async () => {
     dbState.instance = makeDb([{ id: "row-uuid-15" }]);
-    dbState.instance!.query.subscriptions.findFirst = vi.fn().mockResolvedValue({ orgId: "org-abc" });
+    dbState.instance!.query.subscriptions.findFirst = vi
+      .fn()
+      .mockResolvedValue({ orgId: "org-abc" });
 
     const event = makeWebhookEvent({
       providerEventId: "evt_pm_attached_001",

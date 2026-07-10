@@ -7,6 +7,15 @@
  * the transport auto-refreshes via the provider's tokens()/saveTokens() interface.
  * On UnauthorizedError (or any auth failure), the credential is flipped to
  * needs_reauth and that server is skipped for this turn.
+ *
+ * DESCRIPTOR PINNING (pin-or-fail-closed): live tool descriptors are diffed
+ * against the newest mcp.tool_snapshots pins before anything reaches the model.
+ * Only exact-hash matches are contributed — and the PINNED descriptor (name,
+ * description, input schema) is what gets injected, never the live text. A
+ * drifted or never-pinned tool is excluded for the turn and audited as a
+ * `drift_detected` row in security.mcp_server_changes. Re-pinning is the
+ * explicit admin action of disabling + re-enabling the server (which
+ * re-captures snapshots), or re-registering it.
  */
 import { and, eq, inArray, isNull, or } from "drizzle-orm";
 import pino from "pino";
@@ -18,13 +27,23 @@ import {
   markCredentialNeedsReauth,
 } from "@oxagen/plugins";
 import type { CapabilityContext } from "../../types";
-import { connectMcp, materializeMcpTools } from "../../dispatch/mcp-client";
+import {
+  connectMcp,
+  listMcpToolDescriptors,
+  materializePinnedMcpTools,
+} from "../../dispatch/mcp-client";
 import {
   registerPluginType,
   type ContributedRawTool,
   type PluginContributeOptions,
 } from "../plugin-type";
 import { decryptMcpAuthConfig } from "../mcp-server-auth-crypto";
+import {
+  captureToolSnapshots,
+  diffDescriptorsAgainstPins,
+  readLatestPinnedDescriptors,
+  recordServerChange,
+} from "../mcp-snapshots";
 
 const logger = pino({
   level: process.env.LOG_LEVEL ?? "info",
@@ -160,19 +179,76 @@ async function contributeMcpTools(
         });
       }
 
-      const mcpTools = await materializeMcpTools(client, `mcp.${server.id}`);
-      for (const [rawKey, rawTool] of Object.entries(mcpTools)) {
-        const execute = rawTool.execute;
-        if (typeof execute !== "function") continue;
+      // ── Descriptor pinning (pin-or-fail-closed) ─────────────────────────
+      const live = await listMcpToolDescriptors(client);
+      let pins = await readLatestPinnedDescriptors(
+        ctx.orgId,
+        workspaceId,
+        server.id,
+      );
+      if (pins.length === 0 && live.length > 0) {
+        // No baseline on record (server registered before pinning existed, or
+        // its snapshot write was dropped). The admin's register/enable action
+        // is the trust event, so capture a trust-on-first-use baseline now —
+        // but if that write fails we must NOT proceed with unpinned live
+        // descriptors: skip the server for this turn (fail closed).
+        try {
+          await captureToolSnapshots({
+            orgId: ctx.orgId,
+            workspaceId,
+            mcpServerId: server.id,
+            descriptors: live,
+          });
+          pins = live;
+          logger.info(
+            { serverId: server.id, toolCount: live.length },
+            "no descriptor pins on record — captured trust-on-first-use baseline",
+          );
+        } catch (pinErr) {
+          logger.error(
+            { serverId: server.id, err: pinErr },
+            "failed to capture descriptor baseline — skipping server this turn (fail closed)",
+          );
+          continue;
+        }
+      }
+      const verdict = diffDescriptorsAgainstPins(live, pins);
+      if (verdict.drifted.length > 0 || verdict.unpinned.length > 0) {
+        // Poisoning containment: these tools never reach the model this turn.
+        logger.warn(
+          {
+            serverId: server.id,
+            serverName: server.name,
+            drifted: verdict.drifted,
+            unpinned: verdict.unpinned,
+          },
+          "MCP tool descriptor drift detected — drifted/unpinned tools excluded (fail closed); disable + re-enable the server to accept and re-pin",
+        );
+        await recordServerChange({
+          orgId: ctx.orgId,
+          workspaceId,
+          serverId: server.id,
+          changeType: "drift_detected",
+          actorUserId: null,
+        }).catch((auditErr) => {
+          logger.error(
+            { serverId: server.id, err: auditErr },
+            "failed to write drift_detected audit row",
+          );
+        });
+      }
+      // Only exact pin matches are contributed, and the PINNED descriptor is
+      // what the model sees — the live listing is used solely to execute.
+      for (const pinnedTool of materializePinnedMcpTools(
+        client,
+        `mcp.${server.id}`,
+        verdict.pinned,
+      )) {
         out.push({
-          realName: rawKey,
-          // AI SDK v7 allows function-valued tool descriptions (resolved with
-          // call options we don't have here) — only static strings carry over.
-          description:
-            typeof rawTool.description === "string"
-              ? rawTool.description
-              : undefined,
-          execute: execute as ContributedRawTool["execute"],
+          realName: pinnedTool.key,
+          description: pinnedTool.description ?? undefined,
+          inputSchema: pinnedTool.inputSchema,
+          execute: pinnedTool.execute,
           externalServerId: server.id,
         });
       }
