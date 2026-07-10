@@ -15,6 +15,8 @@
 import { z } from "zod";
 import { auth } from "@oxagen/auth";
 import { loadEnv } from "@oxagen/config/env";
+import { logger } from "@oxagen/handlers/logger";
+import { captureError } from "@oxagen/telemetry";
 
 // ---------------------------------------------------------------------------
 // Result type
@@ -76,9 +78,24 @@ export async function requestResetAction(
         redirectTo: `${appBaseUrl}/reset-password`,
       },
     });
-  } catch {
-    // Swallow all errors — we must never reveal whether an account exists.
-    // The email is only dispatched if Better Auth finds a matching account.
+  } catch (err) {
+    // Anti-enumeration: the CLIENT response stays ok:true regardless (never
+    // reveal whether an account exists or the send failed). But the failure
+    // must NOT be silent server-side — a total reset-email outage (SES/SMTP
+    // down, Better Auth send path throwing) would otherwise fail every request
+    // while the UI reports success, indistinguishable from the expected
+    // "no such account" no-op. Log + escalate so a spike is alertable. The
+    // error message here is a transport/send failure, never the email address.
+    logger.warn(
+      { err: err instanceof Error ? err.message : String(err) },
+      "[forgot-password] requestPasswordReset threw — client response unaffected (anti-enumeration)",
+    );
+    captureError({
+      error: err,
+      source: "app",
+      severity: "warn",
+      context: "forgot-password: requestPasswordReset failed",
+    });
   }
 
   // Always return ok:true (neutral response — anti-enumeration).

@@ -63,11 +63,14 @@ export const connectionDeleteHandler: CapabilityHandler<typeof connectionDelete>
 
   if (!job) throw new Error("connection.delete: failed to create deletion job");
 
-  // Fire Inngest async deletion job
+  // Fire Inngest async deletion job. deletionJobId lets the async function
+  // finalize THIS exact deletion_jobs row (mark it completed/failed with
+  // completed_at) instead of leaving it stuck at status='running' forever.
   await eventClient.send({
     name: "ingestion/connection.delete",
     data: {
       connectionId: conn.id,
+      deletionJobId: job.id,
       orgId: ctx.orgId,
       workspaceId: ctx.workspaceId,
       requestedBy: ctx.userId!,

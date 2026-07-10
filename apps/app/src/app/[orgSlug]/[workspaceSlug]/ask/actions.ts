@@ -188,6 +188,10 @@ export async function sendMessageAction(
       return { ok: true, conversationId, conversationPublicId, userMessageId };
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to send message";
+      logger.error(
+        { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+        "[ask] sendMessageAction failed",
+      );
       return { ok: false, error: message };
     }
   });
@@ -239,6 +243,10 @@ export async function resolveApprovalAction(
     revalidatePath(`/${ctx.orgSlug}/${ctx.workspaceSlug}/ask`);
     return { ok: true };
   } catch (err) {
+    logger.error(
+      { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId, approvalId },
+      "[ask] resolveApprovalAction failed",
+    );
     return { ok: false, error: err instanceof Error ? err.message : "Failed to resolve approval" };
   }
 }
@@ -263,6 +271,10 @@ export async function resolveConsentAction(
     revalidatePath(`/${ctx.orgSlug}/${ctx.workspaceSlug}/ask`);
     return { ok: true };
   } catch (err) {
+    logger.error(
+      { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId, approvalId },
+      "[ask] resolveConsentAction failed",
+    );
     return { ok: false, error: err instanceof Error ? err.message : "Failed to resolve consent" };
   }
 }
@@ -305,6 +317,10 @@ export async function resolvePlanAction(
     revalidatePath(`/${ctx.orgSlug}/${ctx.workspaceSlug}/ask`);
     return { ok: true };
   } catch (err) {
+    logger.error(
+      { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId, planId },
+      "[ask] resolvePlanAction failed",
+    );
     return { ok: false, error: err instanceof Error ? err.message : "Failed to resolve plan" };
   }
 }
