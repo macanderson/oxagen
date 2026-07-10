@@ -3,7 +3,11 @@ import { invoke } from "@oxagen/oxagen";
 import { logger } from "@oxagen/handlers/logger";
 import "@oxagen/handlers/register";
 import { getSessionOrRedirect } from "@/lib/session";
-import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
+import {
+  resolveOrg,
+  resolveWorkspace,
+  assertOrgMember,
+} from "@/lib/resolve-org";
 import { docsUrl } from "@/lib/docs-url";
 import { RegistryManager } from "@/components/agent-tools/registry-manager";
 import { addRegistry, removeRegistry } from "@/lib/agent-tools/install-actions";
@@ -11,8 +15,6 @@ import { addRegistry, removeRegistry } from "@/lib/agent-tools/install-actions";
 export const metadata: Metadata = {
   title: "MCP Server Registries | Settings",
 };
-
-export const dynamic = "force-dynamic";
 
 interface PageProps {
   params: Promise<{ orgSlug: string; workspaceSlug: string }>;
@@ -52,7 +54,9 @@ export default async function McpServerRegistriesPage({ params }: PageProps) {
     isDefault: boolean;
   }> = [];
   try {
-    const result = await invoke("list_plugin_registries", {}, ctx, { surface: "agent" });
+    const result = await invoke("list_plugin_registries", {}, ctx, {
+      surface: "agent",
+    });
     const typed = result as { registries: typeof initialRegistries };
     initialRegistries = typed.registries;
   } catch (err) {

@@ -6,17 +6,12 @@ import { PageHeader } from "@/components/ui/page-header";
 import { workspace } from "@/lib/routes";
 import type { ScopeContext } from "@/lib/scope";
 import { resolveWorkbenchScope } from "@/lib/workbench/scope";
-import {
-  ensureAgentSummaries,
-  listAgents,
-} from "@/lib/workbench/agents";
+import { ensureAgentSummaries, listAgents } from "@/lib/workbench/agents";
 import { AgentsGrid, type AgentGridRow } from "./agents-grid";
 
 export const metadata: Metadata = {
   title: "Agents | Workbench",
 };
-
-export const dynamic = "force-dynamic";
 
 interface PageProps {
   params: Promise<{ orgSlug: string; workspaceSlug: string }>;
@@ -34,7 +29,10 @@ export default async function WorkbenchAgentsPage({ params }: PageProps) {
   const { orgSlug, workspaceSlug } = await params;
   const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };
 
-  const { ctx, canManage } = await resolveWorkbenchScope(orgSlug, workspaceSlug);
+  const { ctx, canManage } = await resolveWorkbenchScope(
+    orgSlug,
+    workspaceSlug,
+  );
   const agents = await ensureAgentSummaries(ctx, await listAgents(ctx));
 
   // Route targets are resolved server-side so the client grid stays a pure
