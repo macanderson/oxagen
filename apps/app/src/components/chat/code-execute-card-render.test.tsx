@@ -18,6 +18,38 @@ import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 
 afterEach(cleanup);
 
+// Mock motion/react (the codebase test convention): motion.div → plain div,
+// AnimatePresence → passthrough, reduced-motion on. commit 3fa1c578 wrapped the
+// card body in AnimatePresence + an exit-animated motion.div; without this mock
+// the exit animation holds the collapsed body in the DOM, so the "collapsed by
+// default" assertion times out and leaves a duplicate render for the next test.
+vi.mock("motion/react", () => ({
+  motion: {
+    div: ({
+      children,
+      initial: _initial,
+      animate: _animate,
+      exit: _exit,
+      transition: _transition,
+      style,
+      ...rest
+    }: React.HTMLAttributes<HTMLDivElement> & {
+      initial?: unknown;
+      animate?: unknown;
+      exit?: unknown;
+      transition?: unknown;
+    }) => (
+      <div style={style} {...rest}>
+        {children}
+      </div>
+    ),
+  },
+  AnimatePresence: ({ children }: { children: React.ReactNode }) => (
+    <>{children}</>
+  ),
+  useReducedMotion: () => true,
+}));
+
 vi.mock("@/components/ui/tabs", () => ({
   Tabs: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   TabsList: ({ children }: { children: React.ReactNode }) => (

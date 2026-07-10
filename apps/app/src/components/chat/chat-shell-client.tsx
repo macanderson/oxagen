@@ -43,6 +43,7 @@ import {
   resolveDefaultRepoKey,
   resolveDefaultEnvId,
 } from "./agent-picker/code-session-defaults";
+import { resolveOptimisticDefaultAgent } from "./agent-picker/default-agent-optimistic";
 import { deriveComposerPr } from "./composer-pr-status-chip";
 import { SuggestedPromptChips } from "./suggested-prompt-chips";
 import type { ConversationMessageSummary } from "@/lib/page-context/suggested-prompts";
@@ -1210,7 +1211,11 @@ export function ChatShellClient({
       setCurrentDefaultAgentId(id);
       if (!setDefaultAgentAction) return;
       void setDefaultAgentAction(id).then((res) => {
-        if (!res.ok) setCurrentDefaultAgentId(defaultAgentId ?? null);
+        // Revert target is the original server-provided value, not the
+        // pre-toggle value (deliberate — see default-agent-optimistic.ts).
+        setCurrentDefaultAgentId(
+          resolveOptimisticDefaultAgent(res, id, defaultAgentId ?? null),
+        );
       });
     },
     [setDefaultAgentAction, defaultAgentId],
