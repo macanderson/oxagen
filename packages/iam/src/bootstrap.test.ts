@@ -8,14 +8,18 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   setKernelIAMRuntime: vi.fn<(fn: (args: unknown) => Promise<unknown>, enforced: boolean) => void>(),
+  setKernelAccessRequestCreator: vi.fn<(fn: (args: unknown) => Promise<string | null>) => void>(),
   checkIAM: vi.fn(),
+  createAccessRequest: vi.fn(),
 }));
 
 vi.mock("@oxagen/oxagen/kernel", () => ({
   setKernelIAMRuntime: mocks.setKernelIAMRuntime,
+  setKernelAccessRequestCreator: mocks.setKernelAccessRequestCreator,
 }));
 
 vi.mock("./check-iam", () => ({ checkIAM: mocks.checkIAM }));
+vi.mock("./access-request", () => ({ createAccessRequest: mocks.createAccessRequest }));
 
 import { bootstrapIAMRuntime } from "./bootstrap";
 
@@ -31,6 +35,26 @@ describe("bootstrapIAMRuntime()", () => {
     const [kernelFn, enforced] = mocks.setKernelIAMRuntime.mock.calls[0] ?? [];
     expect(typeof kernelFn).toBe("function");
     expect(enforced).toBe(true);
+  });
+
+  it("registers the JIT access-request creator that delegates to createAccessRequest", async () => {
+    mocks.createAccessRequest.mockResolvedValue("arq_wired_1");
+
+    bootstrapIAMRuntime();
+
+    expect(mocks.setKernelAccessRequestCreator).toHaveBeenCalledTimes(1);
+    const [creatorFn] = mocks.setKernelAccessRequestCreator.mock.calls[0] ?? [];
+    expect(typeof creatorFn).toBe("function");
+
+    const args = {
+      capability: "send_message",
+      ctx: { orgId: "org_1", workspaceId: "ws_1", userId: "usr_1", apiKeyId: null, requestId: "req_1", surface: "api", messageId: null },
+      principal: { id: "prn_1", kind: "human" as const, orgId: "org_1", workspaceId: "ws_1" },
+    };
+    const out = await (creatorFn as (a: unknown) => Promise<string | null>)(args);
+
+    expect(mocks.createAccessRequest).toHaveBeenCalledWith(args);
+    expect(out).toBe("arq_wired_1");
   });
 
   it("is idempotent — calling twice does not throw", () => {

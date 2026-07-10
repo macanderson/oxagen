@@ -80,7 +80,9 @@ let _entitlementGate: CapabilityEntitlementGateFn | null = null;
  * The gate must throw a CapabilityError with code "capability_not_installed"
  * to refuse access (use `capabilityNotInstalledError()` for the canonical shape).
  */
-export function setCapabilityEntitlementGate(gate: CapabilityEntitlementGateFn): void {
+export function setCapabilityEntitlementGate(
+  gate: CapabilityEntitlementGateFn,
+): void {
   _entitlementGate = gate;
 }
 
@@ -170,6 +172,57 @@ export function clearKernelIAMRuntime(): void {
   _iamEnforced = false;
 }
 
+// ── JIT access-request creator (injected at bootstrap) ───────────────────────
+//
+// When the IAM resolver returns `pending_approval`, the kernel must DENY the
+// action now but ALSO create an org.access_requests row so an approver can
+// grant it and the caller can poll for status. Creating that row is a DB write
+// owned by @oxagen/iam (withTenantDb + drizzle), which depends on @oxagen/oxagen
+// — so the kernel cannot import it without a dependency cycle. Instead the
+// creator is injected once at surface bootstrap (packages/iam/src/bootstrap.ts
+// via bootstrapIAMRuntime), mirroring the IAM-runtime injection pattern above.
+//
+// SECURITY INVARIANT: this seam only ADDS the pollable request id to the denial
+// — it can never turn a pending_approval into an allow. A missing creator, a
+// null return, or a thrown creator all still DENY (accessRequestId is simply
+// absent). See the pending_approval branch in _invokeCore.
+
+export interface KernelAccessRequestArgs {
+  /** Canonical capability name being requested. */
+  capability: string;
+  /** The invocation context (org/workspace/user scope). */
+  ctx: CapabilityContext;
+  /** The IAM-resolved principal, or null when none resolved. */
+  principal: ResolvedPrincipal | null;
+}
+
+/**
+ * Creates an access_requests row and returns its publicId (arq_…), or null when
+ * one could not be created (e.g. null principal / IAM tables absent). Runs
+ * inside the kernel's active tenant scope so its withTenantDb resolves.
+ */
+export type KernelAccessRequestCreatorFn = (
+  args: KernelAccessRequestArgs,
+) => Promise<string | null>;
+
+let _accessRequestCreator: KernelAccessRequestCreatorFn | null = null;
+
+/**
+ * Register the JIT access-request creator. Call once at surface bootstrap.
+ * When absent, pending_approval denials still deny — they just carry no
+ * pollable requestId.
+ */
+export function setKernelAccessRequestCreator(
+  fn: KernelAccessRequestCreatorFn,
+): void {
+  _accessRequestCreator = fn;
+}
+
+/** Remove the access-request creator. Used in tests to reset state. */
+export function clearKernelAccessRequestCreator(): void {
+  _accessRequestCreator = null;
+}
+
 // The capability kernel: the single dispatch path every surface (api, mcp,
 // cli, in-app agent) calls. It binds a registered *contract* to its
 // registered *handler*, validates input and output against the contract's
@@ -202,6 +255,12 @@ export type CapabilityErrorCode =
   | "no_handler"
   | "surface_denied"
   | "authz_denied"
+  // A "require_approval" IAM resolution: the action is DENIED right now, but a
+  // JIT access request has been created so an approver can grant it and the
+  // caller can poll for status. Distinct from "authz_denied" (a hard deny that
+  // is never pollable) so surfaces can serialize the pollable requestId. See
+  // the pending_approval branch in _invokeCore and setKernelAccessRequestCreator.
+  | "pending_approval"
   | "invalid_input"
   | "invalid_output"
   | "capability_not_installed";
@@ -211,6 +270,12 @@ export class CapabilityError extends Error {
     readonly capability: string,
     readonly code: CapabilityErrorCode,
     message: string,
+    /**
+     * Present only on a "pending_approval" denial — the publicId (arq_…) of the
+     * org.access_requests row created for this invocation, so the caller can
+     * poll for approval status. Additive: never set on any other code.
+     */
+    readonly accessRequestId?: string,
   ) {
     super(message);
     this.name = "CapabilityError";
@@ -389,7 +454,10 @@ export function hasHandler(name: string): boolean {
  * keeping `registerHandler` strict (genuine in-file/cross-module duplicates
  * still throw on the first, real registration pass).
  */
-export function registerHandlersOnce(token: string, register: () => void): void {
+export function registerHandlersOnce(
+  token: string,
+  register: () => void,
+): void {
   if (registeredTokens.has(token)) return;
   registeredTokens.add(token);
   register();
@@ -500,7 +568,11 @@ async function _invokeCore(
       errorCode: "unknown_capability",
       durationMs: Date.now() - startMs,
     });
-    throw new CapabilityError(name, "unknown_capability", `Unknown capability "${name}"`);
+    throw new CapabilityError(
+      name,
+      "unknown_capability",
+      `Unknown capability "${name}"`,
+    );
   }
 
   if (opts.surface && !getSurfaces(cap).includes(opts.surface)) {
@@ -588,7 +660,8 @@ async function _invokeCore(
               // principal is layered on after the check via runWithPrincipal.
               // Guarded by isUuid — runInTenantScope fail-closes on garbage,
               // and userId can legitimately be null (machine-to-machine).
-              userId: ctx.userId !== null && isUuid(ctx.userId) ? ctx.userId : null,
+              userId:
+                ctx.userId !== null && isUuid(ctx.userId) ? ctx.userId : null,
               capabilityName: canonical,
             },
             fn,
@@ -688,7 +761,53 @@ async function _invokeCore(
 
         if (iamResult !== null && iamResult.outcome !== "allow") {
           if (_iamEnforced) {
-            // Enforcement on: block the call.
+            // Enforcement on: block the call. A "pending_approval" resolution is
+            // a soft-deny — the action is DENIED right now, but we mint a JIT
+            // access request so an approver can grant it and the caller can poll
+            // for status. A hard "deny" mints nothing.
+            if (iamResult.outcome === "pending_approval") {
+              // Create the access_requests row via the injected creator. This
+              // runs inside the active tenant scope (withScope) so the creator's
+              // withTenantDb resolves. Creation NEVER changes the decision: a
+              // missing creator, a null return, or a thrown creator all still
+              // deny — accessRequestId is simply absent (SECURITY INVARIANT).
+              let accessRequestId: string | null = null;
+              const creator = _accessRequestCreator;
+              if (creator !== null) {
+                accessRequestId = await creator({
+                  capability: canonical,
+                  ctx,
+                  principal: resolvedPrincipal,
+                }).catch((err: unknown) => {
+                  console.error(
+                    `[kernel] JIT access-request creation failed for "${name}":`,
+                    err,
+                  );
+                  return null;
+                });
+              }
+              emitSecurityEvent({
+                capability: canonical,
+                outcome: "deny",
+                surface: ctx.surface,
+                orgId: ctx.orgId,
+                workspaceId: ctx.workspaceId,
+                actorUserId: ctx.userId,
+                requestId: ctx.requestId,
+                errorCode: "authz_denied",
+                durationMs: Date.now() - startMs,
+              });
+              throw new CapabilityError(
+                name,
+                "pending_approval",
+                `IAM requires approval for "${name}" — the action is denied pending approval` +
+                  (accessRequestId
+                    ? ` (access request ${accessRequestId})`
+                    : "") +
+                  ".",
+                accessRequestId ?? undefined,
+              );
+            }
             emitSecurityEvent({
               capability: canonical,
               outcome: "deny",
@@ -732,7 +851,8 @@ async function _invokeCore(
       // broke the connector Configure form). Unscoped capabilities are global,
       // read-only fetches — never metered AI turns — so skipping the gate for them
       // is correct as well as necessary. — OXA-1697.
-      const skipBilling = (cap as { noBillingGate?: boolean }).noBillingGate === true;
+      const skipBilling =
+        (cap as { noBillingGate?: boolean }).noBillingGate === true;
       if (_billingGate !== null && ctx.orgId && !skipBilling && isScoped) {
         await _billingGate(ctx.orgId);
       }
@@ -770,7 +890,10 @@ async function _invokeCore(
       // graph mutations — carries "who acted" without per-callsite threading.
       // runWithPrincipal is a passthrough when no scope is active (unscoped
       // capabilities). isUuid guards the fail-closed scope validation.
-      const checkedCtx: CheckedContext = { ...ctx, principal: resolvedPrincipal };
+      const checkedCtx: CheckedContext = {
+        ...ctx,
+        principal: resolvedPrincipal,
+      };
       const attribution =
         resolvedPrincipal !== null && isUuid(resolvedPrincipal.id)
           ? {
@@ -989,7 +1112,8 @@ export async function authorizeExternalCapability(
   }
 
   const outcome = iamResult?.outcome ?? "deny";
-  const reason = iamResult && "reason" in iamResult ? (iamResult.reason ?? null) : null;
+  const reason =
+    iamResult && "reason" in iamResult ? (iamResult.reason ?? null) : null;
   const isDenied = outcome !== "allow";
 
   emitSecurityEvent({

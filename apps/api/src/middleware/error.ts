@@ -22,9 +22,15 @@ export const errorMiddleware: ErrorHandler<AppEnv> = (err, c) => {
   const requestId = c.get("requestId") ?? "unknown";
 
   if (err instanceof HTTPException) {
-    logger.warn({ requestId, status: err.status, message: err.message }, "http exception");
+    logger.warn(
+      { requestId, status: err.status, message: err.message },
+      "http exception",
+    );
     return c.json(
-      { error: { code: errorCode(err.status), message: err.message }, requestId },
+      {
+        error: { code: errorCode(err.status), message: err.message },
+        requestId,
+      },
       err.status,
     );
   }
@@ -47,28 +53,69 @@ export const errorMiddleware: ErrorHandler<AppEnv> = (err, c) => {
   // CapabilityError — map known codes to HTTP status codes.
   if (err instanceof CapabilityError) {
     if (err.code === "authz_denied") {
-      logger.warn({ requestId, capability: err.capability, message: err.message }, "authz denied");
+      logger.warn(
+        { requestId, capability: err.capability, message: err.message },
+        "authz denied",
+      );
       return c.json(
         { error: { code: "forbidden", message: err.message }, requestId },
         403,
       );
     }
     if (err.code === "surface_denied") {
-      logger.warn({ requestId, capability: err.capability, message: err.message }, "surface denied");
+      logger.warn(
+        { requestId, capability: err.capability, message: err.message },
+        "surface denied",
+      );
       return c.json(
         { error: { code: "forbidden", message: err.message }, requestId },
         403,
       );
     }
+    if (err.code === "pending_approval") {
+      // JIT access request: the action is denied NOW (403), but a request has
+      // been created. Surface its id as `accessRequestId` — distinct from the
+      // envelope's `requestId` (the request-correlation id) — so the client can
+      // poll for approval. Additive to the deny shape; existing clients that
+      // read only the 403 + code still work.
+      logger.warn(
+        {
+          requestId,
+          capability: err.capability,
+          accessRequestId: err.accessRequestId,
+          message: err.message,
+        },
+        "pending approval",
+      );
+      return c.json(
+        {
+          error: {
+            code: "pending_approval",
+            message: err.message,
+            ...(err.accessRequestId
+              ? { accessRequestId: err.accessRequestId }
+              : {}),
+          },
+          requestId,
+        },
+        403,
+      );
+    }
     if (err.code === "unknown_capability" || err.code === "no_handler") {
-      logger.warn({ requestId, capability: err.capability, message: err.message }, "capability not found");
+      logger.warn(
+        { requestId, capability: err.capability, message: err.message },
+        "capability not found",
+      );
       return c.json(
         { error: { code: "not_found", message: err.message }, requestId },
         404,
       );
     }
     if (err.code === "invalid_input") {
-      logger.warn({ requestId, capability: err.capability, message: err.message }, "invalid capability input");
+      logger.warn(
+        { requestId, capability: err.capability, message: err.message },
+        "invalid capability input",
+      );
       return c.json(
         { error: { code: "bad_request", message: err.message }, requestId },
         400,
@@ -79,7 +126,10 @@ export const errorMiddleware: ErrorHandler<AppEnv> = (err, c) => {
 
   // Billing errors — map to 402 Payment Required.
   if (isBillingError(err)) {
-    logger.warn({ requestId, code: err.code, message: err.message }, "billing gate");
+    logger.warn(
+      { requestId, code: err.code, message: err.message },
+      "billing gate",
+    );
     return c.json(
       { error: { code: err.code, message: err.message }, requestId },
       402,
@@ -99,7 +149,10 @@ export const errorMiddleware: ErrorHandler<AppEnv> = (err, c) => {
     requestId: requestId === "unknown" ? null : requestId,
   });
   return c.json(
-    { error: { code: "internal_error", message: "Unexpected server error" }, requestId },
+    {
+      error: { code: "internal_error", message: "Unexpected server error" },
+      requestId,
+    },
     500,
   );
 };

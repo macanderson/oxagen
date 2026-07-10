@@ -288,6 +288,30 @@ describe("errorMiddleware CapabilityError", () => {
     expect(status).toBe(400);
     expect((body as { error: { code: string } }).error.code).toBe("bad_request");
   });
+
+  it("pending_approval → 403 with code 'pending_approval' and the pollable accessRequestId", async () => {
+    const { CapabilityError } = await import("@oxagen/oxagen/kernel");
+    const { status, body } = await triggerError(
+      new CapabilityError("test.cap", "pending_approval", "denied pending approval", "arq_abc123"),
+    );
+    expect(status).toBe(403);
+    const b = body as { error: { code: string; accessRequestId?: string }; requestId: string };
+    expect(b.error.code).toBe("pending_approval");
+    // The access-request id is surfaced under a field distinct from the
+    // envelope's request-correlation id so the client can poll for approval.
+    expect(b.error.accessRequestId).toBe("arq_abc123");
+  });
+
+  it("pending_approval without an accessRequestId omits the field but still 403s", async () => {
+    const { CapabilityError } = await import("@oxagen/oxagen/kernel");
+    const { status, body } = await triggerError(
+      new CapabilityError("test.cap", "pending_approval", "denied pending approval"),
+    );
+    expect(status).toBe(403);
+    const b = body as { error: { code: string; accessRequestId?: string } };
+    expect(b.error.code).toBe("pending_approval");
+    expect(b.error.accessRequestId).toBeUndefined();
+  });
 });
 
 // ── Billing errors → 402 Payment Required ────────────────────────────────────
