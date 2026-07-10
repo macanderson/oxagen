@@ -95,9 +95,10 @@ export const workspace = {
   // Ask — the front door (full-page ask/chat surface).
   ask: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/ask`,
 
-  // Workbench — build interactive agents. Two surfaces: Agents (the builder)
-  // and Agent Tools — the single home for everything an agent can be
-  // equipped with (skills, MCP servers, capabilities).
+  // Workbench — build interactive agents. Four first-class pages, each a
+  // sidebar destination: Agents (the builder), Agent Tools (the single home
+  // for everything an agent can be equipped with — skills, MCP servers,
+  // capabilities), Environments (env vars + secrets), and Sandboxes.
   workbench: {
     root: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/workbench`,
     agents: (ctx: Required<ScopeContext>): string =>
@@ -106,6 +107,10 @@ export const workspace = {
       `${wsBase(ctx)}/workbench/agents/new`,
     agent: (ctx: Required<ScopeContext>, agentId: string): string =>
       `${wsBase(ctx)}/workbench/agents/${encodeURIComponent(agentId)}`,
+    // Environments — named env-var/secret sets agents run with. Promoted from
+    // workspace settings to a first-class Workbench page.
+    environments: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/workbench/environments`,
     // Sandboxes — durable code-agent sandboxes: warm one, drive a terminal,
     // inspect its files. The detail page is keyed by the sbx_* session id.
     sandboxes: (ctx: Required<ScopeContext>): string =>
@@ -193,8 +198,11 @@ export const workspace = {
       `${wsBase(ctx)}/settings/knowledge`,
     memory: (ctx: Required<ScopeContext>): string =>
       `${wsBase(ctx)}/settings/memory`,
-    environments: (ctx: Required<ScopeContext>): string =>
-      `${wsBase(ctx)}/settings/environments`,
+    // MCP server registries — the catalog sources the marketplace and MCP
+    // install flows discover servers from. Registry admin is a settings
+    // concern; the servers themselves are managed in Workbench → Agent Tools.
+    mcpServerRegistries: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/settings/mcp-server-registries`,
     budget: (ctx: Required<ScopeContext>): string =>
       `${wsBase(ctx)}/settings/budget`,
   },

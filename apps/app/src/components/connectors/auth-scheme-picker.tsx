@@ -105,7 +105,7 @@ function SchemeFields({ schemeId }: SchemeFieldsProps) {
           </div>
           <div className="flex flex-wrap gap-1.5">
             {scheme.scopes.map((scope) => (
-              <Badge key={scope} variant="outline" className="text-xs font-mono">
+              <Badge key={scope} variant="outline" className="text-xs">
                 {scope}
               </Badge>
             ))}

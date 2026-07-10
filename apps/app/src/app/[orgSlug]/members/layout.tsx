@@ -3,6 +3,7 @@ import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { PageHeader } from "@/components/ui/page-header";
 import { PageTabs } from "@/components/ui/page-tabs";
+import { MobileSettingsNav } from "@/components/ui/settings-nav";
 import { resolveOrg } from "@/lib/resolve-org";
 import { org } from "@/lib/routes";
 
@@ -56,8 +57,9 @@ export default async function MembersLayout({
         title="Members"
         description="Manage who has access to this organization."
       />
-      <PageTabs tabs={tabs} className="mb-6" />
+      <PageTabs tabs={tabs} className="mb-6 max-md:hidden" />
       {children}
+      <MobileSettingsNav items={tabs} label="Members" />
     </div>
   );
 }

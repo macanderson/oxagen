@@ -2,7 +2,6 @@
 
 import { useState, type ReactElement } from "react";
 import { ChevronDown, ChevronRight, CheckCircle2, XCircle, Loader2, ListTree } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { formatDuration } from "../tool-call-card";
 import TerminalTraceCard, { type TerminalTraceCardProps } from "./terminal-trace-card";
 import CodeDiffCard, { type CodeDiffCardProps } from "./code-diff-card";
@@ -66,9 +65,7 @@ function StepRow({ step, index }: { step: CodingTraceStep; index: number }) {
         <span className="text-xs font-medium text-foreground">
           {step.title ?? `Step ${index + 1}`}
         </span>
-        <Badge variant="outline" className="font-mono text-[10px]">
-          {step.kind}
-        </Badge>
+        <span className="text-xs text-muted-foreground">{step.kind}</span>
         {step.durationMs !== undefined ? (
           <span className="ml-auto text-xs text-muted-foreground tabular-nums">
             {formatDuration(step.durationMs)}

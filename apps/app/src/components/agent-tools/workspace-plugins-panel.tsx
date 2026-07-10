@@ -8,7 +8,6 @@ import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { MarketplaceModal } from "@/components/plugins/marketplace-modal";
 import { CapabilityIcon } from "@/components/plugins/capability-icon";
 import { isRenderableImageUrl } from "@/lib/plugin-icon";
-import { RegistryManager, type RegistryRow } from "./registry-manager";
 import { ShoppingBag, Trash2 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -31,14 +30,12 @@ interface WorkspacePluginsPanelProps {
   orgId: string;
   workspaceId: string;
   initialPlugins: InstalledPlugin[];
-  initialRegistries: RegistryRow[];
   /**
    * True when the server-side installed-plugins read failed and the list was
    * degraded to empty. Drives an inline notice so an RLS/DB failure doesn't
    * masquerade as "no plugins installed".
    */
   loadError?: boolean;
-  docsBaseUrl: string;
   installAction: (input: {
     orgSlug: string;
     workspaceSlug: string;
@@ -82,22 +79,6 @@ interface WorkspacePluginsPanelProps {
     workspaceSlug: string;
     orgListingId: string;
   }) => Promise<{ ok: boolean; error?: string }>;
-  addRegistryAction: (input: {
-    orgSlug: string;
-    workspaceSlug: string;
-    name: string;
-    baseUrl: string;
-  }) => Promise<{
-    ok: boolean;
-    registryId?: string;
-    isDefault?: boolean;
-    error?: string;
-  }>;
-  removeRegistryAction: (input: {
-    orgSlug: string;
-    workspaceSlug: string;
-    registryId: string;
-  }) => Promise<{ ok: boolean; promotedId?: string | null; error?: string }>;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -149,15 +130,11 @@ export function WorkspacePluginsPanel({
   // destructured to satisfy no-unused-vars while keeping the prop accepted.
   workspaceId,
   initialPlugins,
-  initialRegistries,
   loadError = false,
-  docsBaseUrl,
   installAction,
   installBulkAction,
   toggleAction,
   uninstallAction,
-  addRegistryAction,
-  removeRegistryAction,
 }: WorkspacePluginsPanelProps) {
   const [plugins, setPlugins] = React.useState(initialPlugins);
   const [marketplaceOpen, setMarketplaceOpen] = React.useState(false);
@@ -291,17 +268,8 @@ export function WorkspacePluginsPanel({
         </Alert>
       )}
 
-      {/* Registry manager */}
-      <RegistryManager
-        orgSlug={orgSlug}
-        workspaceSlug={workspaceSlug}
-        initialRegistries={initialRegistries}
-        docsBaseUrl={docsBaseUrl}
-        addRegistryAction={addRegistryAction}
-        removeRegistryAction={removeRegistryAction}
-      />
-
-      {/* Installed plugins section */}
+      {/* Installed plugins section — registry administration lives in
+          Settings → MCP Server Registries, not here. */}
       <div className="rounded-xl border border-border/60 bg-card p-6">
         <div className="mb-4 flex items-center justify-between">
           <div>

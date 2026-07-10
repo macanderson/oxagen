@@ -26,7 +26,6 @@ import {
   arrayMove,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -67,10 +66,10 @@ export interface PlanCardProps {
   ) => Promise<{ ok: boolean; error?: string }>;
 }
 
-const RISK_VARIANT: Record<RiskLevel, "muted" | "warning" | "destructive"> = {
-  low: "muted",
-  medium: "warning",
-  high: "destructive",
+const RISK_TEXT: Record<RiskLevel, string> = {
+  low: "text-muted-foreground",
+  medium: "text-warning",
+  high: "text-destructive",
 };
 
 export function PlanCard({
@@ -179,9 +178,9 @@ export function PlanCard({
       <div className="flex items-center gap-2">
         <ListChecks className="h-4 w-4 text-muted-foreground" />
         <h4 className="text-sm font-semibold">{title}</h4>
-        <Badge variant="muted" className="ml-auto">
+        <span className="ml-auto inline-flex items-center gap-1 text-xs font-medium text-muted-foreground">
           {settled ? optimistic : amending ? "amending" : "awaiting approval"}
-        </Badge>
+        </span>
       </div>
 
       {amending && !settled ? (
@@ -226,9 +225,7 @@ export function PlanCard({
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-medium">{step.summary}</span>
                   {step.capability ? (
-                    <Badge variant="outline" className="font-mono text-[10px]">
-                      {step.capability}
-                    </Badge>
+                    <span className="text-xs text-muted-foreground">{step.capability}</span>
                   ) : null}
                   {step.dependsOn.length > 0 ? (
                     <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
@@ -396,9 +393,7 @@ function SortableStepRow({
         </button>
         <div className="min-w-0 flex-1 space-y-2">
           <div className="flex items-center gap-2">
-            <Badge variant="outline" className="font-mono text-[10px]">
-              {step.id}
-            </Badge>
+            <span className="shrink-0 text-xs text-muted-foreground">{step.id}</span>
             <Input
               value={step.summary}
               onChange={(e) => onChange(step.id, { summary: e.target.value })}
@@ -435,9 +430,9 @@ function SortableStepRow({
                     <SelectItem key={cap.name} value={cap.name}>
                       <span className="flex items-center gap-2">
                         <span className="font-mono text-[11px]">{cap.name}</span>
-                        <Badge variant={RISK_VARIANT[cap.riskLevel]} className="text-[9px]">
+                        <span className={cn("text-[9px] font-medium", RISK_TEXT[cap.riskLevel])}>
                           {cap.riskLevel}
-                        </Badge>
+                        </span>
                       </span>
                     </SelectItem>
                   ))}

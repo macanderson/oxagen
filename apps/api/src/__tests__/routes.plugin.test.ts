@@ -1,7 +1,8 @@
 /**
  * Unit tests for plugin route handlers:
  *   plugin.catalog.browse, plugin.catalog.get, plugin.catalog.sync,
- *   plugin.credential.reauth, plugin.credential.set_secret,
+ *   plugin.credential.reauth, plugin.credential.revoke,
+ *   plugin.credential.set_secret,
  *   plugin.org.install, plugin.org.install_bulk, plugin.org.list,
  *   set_plugin_enabled (scope=org|workspace), plugin.org.uninstall,
  *   plugin.registry.add, plugin.registry.list, plugin.registry.remove,
@@ -195,6 +196,34 @@ describe("plugin.credential.reauth route", () => {
     expect(mocks.invoke.mock.calls[0]?.[0]).toBe("reauth_plugin_credential");
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.orgListingId).toBe("lst-2");
+  });
+});
+
+// ── plugin.credential.revoke ─────────────────────────────────────────────
+
+describe("plugin.credential.revoke route", () => {
+  const PATH = "/plugin/credential/revoke";
+
+  it("happy path: 200 with revoked flag", async () => {
+    mocks.invoke.mockResolvedValue({ revoked: true });
+    const res = await app.fetch(
+      post(PATH, { orgListingId: "lst-1" }),
+    );
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ revoked: true });
+  });
+
+  it("calls invoke with 'revoke_plugin_credential'", async () => {
+    await app.fetch(post(PATH, { orgListingId: "lst-2" }));
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("revoke_plugin_credential");
+    const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(body.orgListingId).toBe("lst-2");
+  });
+
+  it("missing orgListingId → 400", async () => {
+    const res = await app.fetch(post(PATH, {}));
+    expect(res.status).toBe(400);
+    expect(mocks.invoke).not.toHaveBeenCalled();
   });
 });
 

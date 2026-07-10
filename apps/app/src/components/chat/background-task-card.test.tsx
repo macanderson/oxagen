@@ -2,18 +2,13 @@
 /**
  * background-task-card.test.tsx — verifies the live + persisted card surface
  * for the OXA-1469 background-task-progress event:
- *   - Renders the kind / label / status badge for each lifecycle phase.
+ *   - Renders the kind / label / status text for each lifecycle phase.
  *   - Shows a progress bar only while running AND when progressPct is known.
  *   - Carries the taskId + status as data-attrs the e2e test reads.
  */
-import * as React from "react";
-import { describe, it, expect, afterEach, vi } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
 import { BackgroundTaskCard } from "./background-task-card";
-
-vi.mock("@/components/ui/badge", () => ({
-  Badge: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
-}));
 
 afterEach(cleanup);
 

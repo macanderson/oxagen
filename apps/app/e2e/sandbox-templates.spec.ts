@@ -7,9 +7,10 @@
  *
  *   1. Sign up a fresh user + org (the OWNER — passes the Owner/Admin IAM gate
  *      that the server actions re-check, since apps/app does not bootstrap IAM).
- *   2. settings/environments: create an environment, then a sandbox template
- *      (create_sandbox_template), a second one, and promote the second to the
- *      environment default (set_default_sandbox_template).
+ *   2. workbench/environments: create an environment. Then on
+ *      workbench/sandboxes: create a sandbox template (create_sandbox_template),
+ *      a second one, and promote the second to the environment default
+ *      (set_default_sandbox_template).
  *   3. Export the default template's manifest (export_sandbox_template) and
  *      capture the downloaded JSON.
  *   4. Import that manifest back into the same environment under a new slug
@@ -44,7 +45,7 @@ test.beforeAll(async () => {
 });
 
 test.describe("sandbox templates — create, set-default, export/import, bind agent", () => {
-  test("full round-trip through settings/environments + agent bindings", async ({
+  test("full round-trip through workbench environments + sandboxes + agent bindings", async ({
     page,
   }) => {
     test.setTimeout(180_000);
@@ -52,17 +53,23 @@ test.describe("sandbox templates — create, set-default, export/import, bind ag
     // ── 1. Fresh owner + org ────────────────────────────────────────────────
     const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "sbx-tpl" });
 
-    // ── 2. Create an environment ────────────────────────────────────────────
-    await page.goto(`/${orgSlug}/default/settings/environments`);
+    // ── 2. Create an environment (Workbench → Environments) ─────────────────
+    await page.goto(`/${orgSlug}/default/workbench/environments`);
     await expect(page).not.toHaveURL(/\/login/);
-    await expect(page.getByTestId("sandbox-templates-section")).toBeVisible({
-      timeout: 20_000,
-    });
-
     await page.getByRole("button", { name: /new environment/i }).click();
     await page.locator("#env-name").fill("Production");
     await page.getByRole("button", { name: /^create$/i }).click();
-    // The new env's template group appears once the page revalidates.
+    // The new env chip renders once the page revalidates — wait before leaving.
+    await expect(
+      page.getByText("Production", { exact: true }).first(),
+    ).toBeVisible({ timeout: 20_000 });
+
+    // Templates now live on Workbench → Sandboxes; the new env's template
+    // group appears there once the page loads.
+    await page.goto(`/${orgSlug}/default/workbench/sandboxes`);
+    await expect(page.getByTestId("sandbox-templates-section")).toBeVisible({
+      timeout: 20_000,
+    });
     await expect(page.getByTestId("sandbox-env-group-production")).toBeVisible({
       timeout: 20_000,
     });

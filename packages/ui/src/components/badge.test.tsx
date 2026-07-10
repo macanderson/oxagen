@@ -12,8 +12,15 @@ import { Badge, badgeVariants } from "./badge";
 // ── Variant map ─────────────────────────────────────────────────────────────
 
 describe("badgeVariants — class map", () => {
-  it("default variant includes bg-primary", () => {
-    expect(badgeVariants({})).toContain("bg-primary");
+  it("default variant is the outlined ink chip (border-current, transparent bg)", () => {
+    const cls = badgeVariants({});
+    expect(cls).toContain("border-current");
+    expect(cls).toContain("bg-transparent");
+    expect(cls).toContain("text-foreground");
+    // Never a filled primary/secondary surface, never monospace.
+    expect(cls).not.toContain("bg-primary");
+    expect(cls).not.toContain("bg-secondary");
+    expect(cls).not.toContain("font-mono");
   });
   it("secondary variant includes bg-secondary", () => {
     expect(badgeVariants({ variant: "secondary" })).toContain("bg-secondary");
@@ -21,11 +28,11 @@ describe("badgeVariants — class map", () => {
   it("destructive variant includes bg-destructive", () => {
     expect(badgeVariants({ variant: "destructive" })).toContain("bg-destructive");
   });
-  it("outline variant is the token-driven surface chip (badge-bg/fg/border)", () => {
+  it("outline variant aliases the default outlined ink chip", () => {
     const cls = badgeVariants({ variant: "outline" });
-    expect(cls).toContain("bg-badge-bg");
-    expect(cls).toContain("text-badge-fg");
-    expect(cls).toContain("border-badge-border");
+    expect(cls).toContain("border-current");
+    expect(cls).toContain("bg-transparent");
+    expect(cls).toContain("text-foreground");
   });
   it("muted variant includes bg-muted", () => {
     expect(badgeVariants({ variant: "muted" })).toContain("bg-muted");
@@ -116,6 +123,6 @@ describe("Badge — render", () => {
     const btn = screen.getByRole("button", { name: "Action" });
     expect(btn).toBeInTheDocument();
     // Variant classes forwarded to the rendered element
-    expect(btn.className).toContain("bg-primary");
+    expect(btn.className).toContain("border-current");
   });
 });

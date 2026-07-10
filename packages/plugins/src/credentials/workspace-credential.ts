@@ -138,6 +138,36 @@ export async function listWorkspaceCredentialStatuses(key: {
   );
 }
 
+/**
+ * Deletes the credential row for a (workspace × org_listing) — the "Remove
+ * authentication" action. Touches no encrypted columns (nothing is decrypted),
+ * so it needs no KMS key. Returns true when a row was deleted, false when no
+ * credential existed for the key.
+ */
+export async function deleteWorkspaceSecret(key: {
+  orgId: string;
+  workspaceId: string;
+  orgListingId: string;
+}): Promise<boolean> {
+  return withSystemDb(async (tx) => {
+    const deleted = await tx
+      .delete(schema.mcpCredentials)
+      .where(
+        and(
+          // Defense-in-depth tenant scoping: withSystemDb bypasses RLS, so the
+          // orgId predicate is the only guard preventing a caller from deleting
+          // another tenant's credential by supplying a foreign
+          // (workspaceId, orgListingId) pair.
+          eq(schema.mcpCredentials.orgId, key.orgId),
+          eq(schema.mcpCredentials.workspaceId, key.workspaceId),
+          eq(schema.mcpCredentials.orgListingId, key.orgListingId),
+        ),
+      )
+      .returning({ id: schema.mcpCredentials.id });
+    return deleted.length > 0;
+  });
+}
+
 export interface WorkspaceSecret {
   secret: string | null;
   accessToken: string | null;
