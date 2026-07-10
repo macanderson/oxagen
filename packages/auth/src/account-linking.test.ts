@@ -49,12 +49,6 @@ vi.mock("drizzle-orm", () => ({
   isNotNull: (a: unknown) => ({ isNotNull: a }),
 }));
 
-// The default logger now routes to the structured pino logger + captureError
-// escalation (not console) — keep telemetry inert in unit tests.
-vi.mock("@oxagen/telemetry", () => ({
-  captureError: vi.fn(),
-}));
-
 import { logger as authLogger } from "./logger";
 import {
   isTrustedOAuthProvider,
