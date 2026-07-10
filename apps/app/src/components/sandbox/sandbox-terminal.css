@@ -1,0 +1,134 @@
+/**
+ * sandbox-terminal.css — the dedicated theme for the interactive sandbox
+ * terminal (NOT the shared code-surface used by chat scrollback cards).
+ *
+ * The chat `code-surface` is deliberately theme-aware and low-contrast so a
+ * captured-output card blends into the page. This surface is the opposite: a
+ * real, premium terminal console that reads as a distinct, recessed device in
+ * BOTH light and dark themes. It stays dark in both (a light "terminal" reads
+ * as a card, not a shell) — light text on a deep graphite in light mode, near
+ * black in dark mode — so contrast is high (≈13:1) either way.
+ *
+ * It is fully self-contained: it defines the ANSI colour classes that the
+ * shared `parseAnsiLine` emits (`.ansi-dim/.ansi-fg/.ansi-magenta/.ansi-cyan`)
+ * and scopes richer, terminal-tuned overrides of the semantic `text-*`
+ * utilities to `.sandbox-term`, so the terminal owns its whole palette without
+ * importing or editing chat's `code-surface.css`.
+ */
+
+.sandbox-term {
+  /* Light theme: a deep, cool graphite console — distinct from the white page
+   * chrome but not pure black, so it harmonises with a light app. */
+  --term-bg: #1b2130;
+  --term-bg-elevated: #212838;
+  --term-fg: #e8edf5;
+  --term-fg-muted: #9aa6bd;
+  --term-fg-faint: #6d7994;
+  --term-border: #2c3346;
+
+  /* Prompt chrome. */
+  --term-glyph: #6ee7a8; /* the ❯ prompt marker (starship-green) */
+  --term-path: #57c7ff; /* the cwd shown before the prompt */
+  --term-accent: #7cc4ff; /* caret + focus ring */
+
+  /* ANSI palette — bright, tuned for a dark console, shared by both themes
+   * (the surface is dark in both). Red/green/yellow/blue drive the scoped
+   * `text-*` overrides below; magenta/cyan/dim/fg drive the `.ansi-*` classes. */
+  --term-red: #ff7b72;
+  --term-green: #7ee787;
+  --term-yellow: #f2cc60;
+  --term-blue: #79c0ff;
+  --term-magenta: #d2a8ff;
+  --term-cyan: #56d4dd;
+  --term-dim: #7683a0;
+
+  color: var(--term-fg);
+  border-color: var(--term-border);
+  /* A faint top-down depth gradient so the console reads as a recessed device. */
+  background-color: var(--term-bg);
+  background-image: linear-gradient(
+    180deg,
+    var(--term-bg-elevated) 0%,
+    var(--term-bg) 120px
+  );
+  caret-color: var(--term-accent);
+}
+
+/* Dark theme: sink deeper than the page's dark cards for a true console feel. */
+.dark .sandbox-term {
+  --term-bg: #0a0e17;
+  --term-bg-elevated: #101623;
+  --term-fg: #e6edf3;
+  --term-fg-muted: #8b98ac;
+  --term-fg-faint: #5f6b80;
+  --term-border: #1e2634;
+}
+
+/* ── Text / border roles ─────────────────────────────────────────────────── */
+
+.sandbox-term .term-fg {
+  color: var(--term-fg);
+}
+.sandbox-term .term-fg-muted {
+  color: var(--term-fg-muted);
+}
+.sandbox-term .term-fg-faint {
+  color: var(--term-fg-faint);
+}
+.sandbox-term .term-border {
+  border-color: var(--term-border);
+}
+
+/* Prompt chrome. */
+.sandbox-term .term-glyph {
+  color: var(--term-glyph);
+}
+.sandbox-term .term-path {
+  color: var(--term-path);
+}
+
+/* Exit markers: a green ▲ for success, a red ✗ for a non-zero/errored run. */
+.sandbox-term .term-exit-ok {
+  color: var(--term-green);
+}
+.sandbox-term .term-exit-bad {
+  color: var(--term-red);
+}
+
+/* Native caret + selection tuned for the dark console. */
+.sandbox-term ::selection {
+  background-color: color-mix(in srgb, var(--term-accent) 30%, transparent);
+}
+
+/* ── ANSI classes emitted by parseAnsiLine ───────────────────────────────── */
+/* (`.ansi-magenta/.ansi-cyan/.ansi-fg/.ansi-dim` — the codes with no semantic
+ *  design-token equivalent.) */
+.sandbox-term .ansi-dim {
+  color: var(--term-dim);
+}
+.sandbox-term .ansi-fg {
+  color: var(--term-fg);
+}
+.sandbox-term .ansi-magenta {
+  color: var(--term-magenta);
+}
+.sandbox-term .ansi-cyan {
+  color: var(--term-cyan);
+}
+
+/* Terminal-tuned overrides of the semantic utilities parseAnsiLine emits for
+ * red/green/yellow/blue (codes 31-34/91-94). Scoped to `.sandbox-term` so the
+ * app-wide tokens are untouched; a plain (unlayered) rule reliably beats
+ * Tailwind's layered `.text-*` utility. */
+.sandbox-term .text-error {
+  color: var(--term-red);
+}
+.sandbox-term .text-success {
+  color: var(--term-green);
+}
+.sandbox-term .text-warning {
+  color: var(--term-yellow);
+}
+.sandbox-term .text-info {
+  color: var(--term-blue);
+}

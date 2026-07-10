@@ -31,7 +31,9 @@ function ok(partial: Partial<SandboxExecResult> = {}): SandboxExecResult {
 }
 
 function typeCommand(value: string) {
-  const input = screen.getByTestId("sandbox-terminal-input") as HTMLInputElement;
+  const input = screen.getByTestId(
+    "sandbox-terminal-input",
+  ) as HTMLInputElement;
   fireEvent.change(input, { target: { value } });
   fireEvent.keyDown(input, { key: "Enter" });
   return input;
@@ -40,7 +42,9 @@ function typeCommand(value: string) {
 describe("SandboxTerminal", () => {
   it("runs a command and renders its stdout + exit code", async () => {
     const runCommand = vi.fn(async () => ok({ stdout: "hello world" }));
-    render(<SandboxTerminal sessionId="sbx_abc123def456" runCommand={runCommand} />);
+    render(
+      <SandboxTerminal sessionId="sbx_abc123def456" runCommand={runCommand} />,
+    );
 
     typeCommand("echo hello world");
 
@@ -59,7 +63,9 @@ describe("SandboxTerminal", () => {
       .fn()
       .mockResolvedValueOnce(ok({ cwd: "/work/repo" }))
       .mockResolvedValueOnce(ok({ stdout: "file.txt", cwd: "/work/repo" }));
-    render(<SandboxTerminal sessionId="sbx_abc123def456" runCommand={runCommand} />);
+    render(
+      <SandboxTerminal sessionId="sbx_abc123def456" runCommand={runCommand} />,
+    );
 
     typeCommand("cd /work/repo");
     await waitFor(() =>
@@ -75,7 +81,9 @@ describe("SandboxTerminal", () => {
     // …and threaded into the next command so `cd` persists.
     typeCommand("ls");
     await waitFor(() =>
-      expect(runCommand).toHaveBeenNthCalledWith(2, "ls", { cwd: "/work/repo" }),
+      expect(runCommand).toHaveBeenNthCalledWith(2, "ls", {
+        cwd: "/work/repo",
+      }),
     );
   });
 
@@ -84,14 +92,18 @@ describe("SandboxTerminal", () => {
       .fn()
       .mockResolvedValueOnce(ok({ cwd: "/work" }))
       .mockResolvedValueOnce(ok({ stdout: "no cwd here" })); // runner omits cwd
-    render(<SandboxTerminal sessionId="sbx_abc123def456" runCommand={runCommand} />);
+    render(
+      <SandboxTerminal sessionId="sbx_abc123def456" runCommand={runCommand} />,
+    );
 
     typeCommand("pwd");
     await waitFor(() => expect(runCommand).toHaveBeenCalledTimes(1));
 
     typeCommand("some-tool");
     await waitFor(() =>
-      expect(runCommand).toHaveBeenNthCalledWith(2, "some-tool", { cwd: "/work" }),
+      expect(runCommand).toHaveBeenNthCalledWith(2, "some-tool", {
+        cwd: "/work",
+      }),
     );
 
     // A third command still resumes from /work — the undefined result didn't clobber it.
@@ -102,10 +114,10 @@ describe("SandboxTerminal", () => {
   });
 
   it("renders a non-zero exit and stderr", async () => {
-    const runCommand = vi.fn(async () =>
-      ok({ stderr: "boom", exitCode: 2 }),
+    const runCommand = vi.fn(async () => ok({ stderr: "boom", exitCode: 2 }));
+    render(
+      <SandboxTerminal sessionId="sbx_abc123def456" runCommand={runCommand} />,
     );
-    render(<SandboxTerminal sessionId="sbx_abc123def456" runCommand={runCommand} />);
 
     typeCommand("false");
 
@@ -117,7 +129,9 @@ describe("SandboxTerminal", () => {
     const runCommand = vi.fn(async () => {
       throw new Error("sandbox gone");
     });
-    render(<SandboxTerminal sessionId="sbx_abc123def456" runCommand={runCommand} />);
+    render(
+      <SandboxTerminal sessionId="sbx_abc123def456" runCommand={runCommand} />,
+    );
 
     typeCommand("ls");
 
@@ -134,7 +148,9 @@ describe("SandboxTerminal", () => {
         disabled
       />,
     );
-    const input = screen.getByTestId("sandbox-terminal-input") as HTMLInputElement;
+    const input = screen.getByTestId(
+      "sandbox-terminal-input",
+    ) as HTMLInputElement;
     expect(input.disabled).toBe(true);
     fireEvent.change(input, { target: { value: "ls" } });
     fireEvent.keyDown(input, { key: "Enter" });
@@ -143,7 +159,9 @@ describe("SandboxTerminal", () => {
 
   it("recalls the previous command with ArrowUp", async () => {
     const runCommand = vi.fn(async () => ok({ stdout: "done" }));
-    render(<SandboxTerminal sessionId="sbx_abc123def456" runCommand={runCommand} />);
+    render(
+      <SandboxTerminal sessionId="sbx_abc123def456" runCommand={runCommand} />,
+    );
 
     const input = typeCommand("git status") as HTMLInputElement;
     await waitFor(() => expect(runCommand).toHaveBeenCalledTimes(1));
@@ -172,5 +190,93 @@ describe("SandboxTerminal", () => {
     );
     expect(screen.getByText("cat file")).toBeTruthy();
     expect(screen.getByText("contents")).toBeTruthy();
+  });
+
+  it("keeps the input enabled while busy and refocuses it when the command completes", async () => {
+    // A runner we resolve by hand, so the command stays "in flight".
+    let resolve!: (r: SandboxExecResult) => void;
+    const runCommand = vi.fn(
+      () => new Promise<SandboxExecResult>((r) => (resolve = r)),
+    );
+    render(
+      <SandboxTerminal sessionId="sbx_abc123def456" runCommand={runCommand} />,
+    );
+    const input = screen.getByTestId(
+      "sandbox-terminal-input",
+    ) as HTMLInputElement;
+
+    fireEvent.change(input, { target: { value: "sleep 1" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    await waitFor(() => expect(runCommand).toHaveBeenCalledTimes(1));
+
+    // The focus-loss bug: a busy terminal must NOT disable its input.
+    expect(input.disabled).toBe(false);
+
+    // Simulate focus moving away (as a disabled input would have caused), then
+    // complete the command — the terminal refocuses the input for type-ahead.
+    input.blur();
+    expect(document.activeElement).not.toBe(input);
+    resolve(ok({ stdout: "done" }));
+    await waitFor(() => expect(document.activeElement).toBe(input));
+  });
+
+  it("queues a command entered while one is running and runs them FIFO", async () => {
+    const calls: string[] = [];
+    const resolvers: Array<(r: SandboxExecResult) => void> = [];
+    const runCommand = vi.fn((command: string) => {
+      calls.push(command);
+      return new Promise<SandboxExecResult>((r) => resolvers.push(r));
+    });
+    render(
+      <SandboxTerminal sessionId="sbx_abc123def456" runCommand={runCommand} />,
+    );
+    const input = screen.getByTestId(
+      "sandbox-terminal-input",
+    ) as HTMLInputElement;
+
+    // First command begins running.
+    fireEvent.change(input, { target: { value: "first" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    await waitFor(() => expect(runCommand).toHaveBeenCalledTimes(1));
+
+    // Second command entered mid-flight → rendered immediately as a queued line,
+    // but the runner is NOT called for it yet (FIFO-blocked behind the first).
+    fireEvent.change(input, { target: { value: "second" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(await screen.findByText("second")).toBeTruthy();
+    expect(screen.getByText(/queued/)).toBeTruthy();
+    expect(runCommand).toHaveBeenCalledTimes(1);
+
+    // Finish the first → the queued command now runs, in order.
+    resolvers[0](ok({ stdout: "1" }));
+    await waitFor(() => expect(runCommand).toHaveBeenCalledTimes(2));
+    expect(calls).toEqual(["first", "second"]);
+
+    resolvers[1](ok({ stdout: "2" }));
+    await waitFor(() => expect(screen.getAllByText(/exit 0/).length).toBe(2));
+  });
+
+  it("recalls both history entries with ArrowUp and clears with ArrowDown", async () => {
+    const runCommand = vi.fn(async () => ok({ stdout: "done" }));
+    render(
+      <SandboxTerminal sessionId="sbx_abc123def456" runCommand={runCommand} />,
+    );
+    const input = screen.getByTestId(
+      "sandbox-terminal-input",
+    ) as HTMLInputElement;
+
+    typeCommand("git status");
+    await waitFor(() => expect(runCommand).toHaveBeenCalledTimes(1));
+    typeCommand("ls -la");
+    await waitFor(() => expect(runCommand).toHaveBeenCalledTimes(2));
+
+    fireEvent.keyDown(input, { key: "ArrowUp" });
+    expect(input.value).toBe("ls -la");
+    fireEvent.keyDown(input, { key: "ArrowUp" });
+    expect(input.value).toBe("git status");
+    fireEvent.keyDown(input, { key: "ArrowDown" });
+    expect(input.value).toBe("ls -la");
+    fireEvent.keyDown(input, { key: "ArrowDown" });
+    expect(input.value).toBe("");
   });
 });
