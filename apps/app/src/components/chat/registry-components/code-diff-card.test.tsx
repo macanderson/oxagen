@@ -32,10 +32,6 @@ vi.mock("./diff-syntax", () => ({
       : [{ content: line, style: "color:#111;--shiki-dark:#eee" }],
 }));
 
-vi.mock("@/components/ui/badge", () => ({
-  Badge: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
-}));
-
 const SAMPLE_PATCH = [
   "@@ -1,3 +1,4 @@",
   " function greet() {",

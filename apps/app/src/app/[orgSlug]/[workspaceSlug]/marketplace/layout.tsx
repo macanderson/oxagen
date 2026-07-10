@@ -1,5 +1,6 @@
 import { PageHeader } from "@/components/ui/page-header";
 import { PageTabs } from "@/components/ui/page-tabs";
+import { MobileSettingsNav } from "@/components/ui/settings-nav";
 import { workspace } from "@/lib/routes";
 import type { ScopeContext } from "@/lib/scope";
 
@@ -37,8 +38,9 @@ export default async function MarketplaceLayout({
         title="Marketplace"
         description="Discover and install agent tools and integrations."
       />
-      <PageTabs tabs={tabs} className="mb-6" />
+      <PageTabs tabs={tabs} className="mb-6 max-md:hidden" />
       {children}
+      <MobileSettingsNav items={tabs} label="Marketplace" />
     </div>
   );
 }

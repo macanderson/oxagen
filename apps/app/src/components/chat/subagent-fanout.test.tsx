@@ -3,9 +3,9 @@
  * subagent-fanout.test.tsx
  *
  * Render + interaction tests for SubagentFanout:
- *   - Shows subagent count badge
+ *   - Shows the subagent count
  *   - Shows each child agent card
- *   - Renders correct status badge for each fanout status
+ *   - Renders the correct status text for each fanout status
  *   - Calls onSelectChild when a child card is clicked
  *   - Renders aggregated results panel when non-running and results exist
  */
@@ -16,12 +16,6 @@ import userEvent from "@testing-library/user-event";
 import { SubagentFanout } from "./subagent-fanout";
 
 afterEach(cleanup);
-
-vi.mock("@/components/ui/badge", () => ({
-  Badge: ({ children, variant }: { children: React.ReactNode; variant?: string }) => (
-    <span data-testid="badge" data-variant={variant}>{children}</span>
-  ),
-}));
 
 vi.mock("@/lib/utils", () => ({
   cn: (...args: unknown[]) => args.filter(Boolean).join(" "),
@@ -54,7 +48,7 @@ const BASE_SUBAGENTS = [
 ];
 
 describe("SubagentFanout", () => {
-  it("renders the subagent count badge", () => {
+  it("renders the subagent count", () => {
     render(
       <SubagentFanout
         fanoutId="fan-1"
@@ -157,7 +151,7 @@ describe("SubagentFanout", () => {
     expect(screen.queryByText("Aggregated result")).not.toBeInTheDocument();
   });
 
-  it("shows Running fanout status badge for running status", () => {
+  it("shows a muted Running status for running status", () => {
     render(
       <SubagentFanout
         fanoutId="fan-1"
@@ -166,10 +160,10 @@ describe("SubagentFanout", () => {
         status="running"
       />,
     );
-    expect(screen.getByText("Running")).toBeInTheDocument();
+    expect(screen.getByText("Running").className).toContain("text-muted-foreground");
   });
 
-  it("shows Completed fanout status badge for completed status", () => {
+  it("shows a success-toned Completed status for completed status", () => {
     render(
       <SubagentFanout
         fanoutId="fan-1"
@@ -178,10 +172,10 @@ describe("SubagentFanout", () => {
         status="completed"
       />,
     );
-    expect(screen.getByText("Completed")).toBeInTheDocument();
+    expect(screen.getByText("Completed").className).toContain("text-success");
   });
 
-  it("shows Timed out fanout status badge for timed_out status", () => {
+  it("shows a destructive-toned Timed out status for timed_out status", () => {
     render(
       <SubagentFanout
         fanoutId="fan-1"
@@ -190,10 +184,10 @@ describe("SubagentFanout", () => {
         status="timed_out"
       />,
     );
-    expect(screen.getByText("Timed out")).toBeInTheDocument();
+    expect(screen.getByText("Timed out").className).toContain("text-destructive");
   });
 
-  it("shows Partial fanout status badge for partial status", () => {
+  it("shows a warning-toned Partial status for partial status", () => {
     render(
       <SubagentFanout
         fanoutId="fan-1"
@@ -202,7 +196,7 @@ describe("SubagentFanout", () => {
         status="partial"
       />,
     );
-    expect(screen.getByText("Partial")).toBeInTheDocument();
+    expect(screen.getByText("Partial").className).toContain("text-warning");
   });
 
   it("sets data-fanout-status attribute correctly", () => {

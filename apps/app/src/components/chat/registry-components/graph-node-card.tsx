@@ -2,7 +2,6 @@
 import * as React from "react";
 import { Network, ArrowUpRight, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
 import { TruncatedText } from "@/components/ui/truncated-text";
 
 /**
@@ -73,14 +72,12 @@ export default function GraphNodeCard(props: GraphNodeCardProps): React.ReactEle
           {heading}
         </span>
         {node.label ? (
-          <Badge variant="outline" className="ml-auto shrink-0">
-            {node.label}
-          </Badge>
+          <span className="ml-auto shrink-0 text-xs text-muted-foreground">{node.label}</span>
         ) : null}
         {node.created === true ? (
-          <Badge variant="outline" className="shrink-0 gap-1 text-success">
+          <span className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-success">
             <Sparkles className="size-3" aria-hidden="true" /> New
-          </Badge>
+          </span>
         ) : null}
       </div>
 

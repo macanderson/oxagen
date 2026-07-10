@@ -1,498 +1,215 @@
 # Oxagen CLI
 
-Command-line interface for the [Oxagen](https://oxagen.ai) platform. Chat with the agent, run workflows, generate content, manage your organization, and integrate external MCP servers — all from your terminal.
+Agentic coding powered by Oxagen's knowledge-graph context engine. Run `oxagen`
+in a terminal for an interactive coding session (or `oxagen "<prompt>"` for a
+one-shot run) that grounds every turn in your workspace's knowledge graph,
+agent memory, and local code graph — plus platform commands for the graph,
+environments, secrets, sandboxes, and fleets of agents.
+
+Full reference: **https://docs.oxagen.sh/docs/cli**
 
 ## Installation
+
+**From the monorepo** (recommended today):
+
+```bash
+git clone https://github.com/oxagen/oxagen-monorepo.git
+cd oxagen-monorepo
+pnpm install
+
+pnpm --filter @oxagen/cli start -- --version     # run from source (tsx)
+# or
+pnpm --filter @oxagen/cli build                  # compile once
+node apps/cli/dist/index.js --version
+```
+
+**Standalone bundle** (portable, no install — CI/containers):
+
+```bash
+pnpm --filter @oxagen/cli bundle
+node apps/cli/dist-standalone/oxagen.mjs --version
+```
+
+**From npm:**
 
 ```bash
 npm install -g @oxagen/cli
 # or
 pnpm add -g @oxagen/cli
-```
-
-```bash
 oxagen --version
 ```
 
-### From source
+> The published npm package is not yet fully standalone-installable outside
+> the monorepo (it expects `tsx` on `PATH`). Prefer the monorepo or standalone
+> bundle methods until that lands.
+
+See https://docs.oxagen.sh/docs/cli/installation for the full walkthrough.
+
+## Two credentials, two jobs
+
+- **A gateway key** (BYOK, via the [Vercel AI Gateway](https://vercel.com/docs/ai-gateway)
+  or a plain `ANTHROPIC_API_KEY`) — all the agentic coding loop needs to run.
+  Resolved from `AI_GATEWAY_API_KEY` (env → `~/.oxagen/settings.json` →
+  `~/.config/oxagen/config.json` → nearest `.env.local`).
+- **An Oxagen platform account + API key** — needed only for platform commands
+  (`graph`, `env`, `secret`, `sandbox`, …) that reach your org's knowledge
+  graph, environments, and credential vault.
 
 ```bash
-cd oxagen-monorepo
-pnpm install
-pnpm -C apps/cli build
-node apps/cli/dist/index.js --version
+export AI_GATEWAY_API_KEY="vck_…"
+oxagen "summarize what this repository does"       # coding loop only — no account needed
 ```
 
-## Interactive mode
-
-Run `oxagen` with no arguments in a terminal to open the interactive TUI: an
-ASCII banner and a keyboard-navigable menu of every command group and command.
-
-- `↑/↓` move · `↵` select · `Esc` back · `q` quit · type to filter
-- Selecting a command opens a form for its arguments and flags, then runs it.
-- Secret inputs (passwords, tokens) are masked.
-
-Disable it (always print help instead) with `OXAGEN_NO_TUI=1`. Non-interactive
-usage — `oxagen <command> …`, pipes, and CI — is unaffected.
-
-## Authentication
-
-### Interactive (default)
-
-Run `oxagen login` in a terminal. A browser window opens at
-`https://app.oxagen.sh/cli/authorize`. After you approve, the CLI receives
-the token via a local loopback callback and saves the session automatically.
+## Authentication (platform commands)
 
 ```bash
-oxagen login       # opens browser, handles the full OAuth + PKCE flow
-oxagen logout      # clear the saved session
+oxagen login                                        # opens a browser, OAuth + org/workspace picker
+oxagen login --token oxk_live_… --org acme --workspace main   # CI / headless
+oxagen logout                                        # clear the saved session
+oxagen graph status                                  # confirm credentials work
 ```
 
-### CI / headless
+Create an account at https://app.oxagen.sh, mint an API key under
+**Organization → Developer → Tokens**, then see
+https://docs.oxagen.sh/docs/cli/account-setup for the full setup.
 
-When running in a non-interactive environment (CI, Docker, SSH pipe), pass
-`--token`, `--org`, and `--workspace` directly:
+## Commands
+
+Run `oxagen --help` for the live, authoritative list; append `--help` to any
+command for its flags. The full command tree lives in
+`apps/cli/src/program.tsx` and is documented at
+https://docs.oxagen.sh/docs/cli/commands.
+
+**Agentic coding loop**
 
 ```bash
-oxagen login \
-  --token  oxg_live_... \
-  --org    my-org \
-  --workspace  main
+oxagen [prompt...]        # REPL with no prompt; one-shot with a prompt; reads stdin if piped
+oxagen init                # scaffold .oxagen/, build the local code graph, link a workspace
+oxagen agents [goal...]    # plan a goal into tasks, dispatch a fleet of agents in parallel
+oxagen solve <prompt...>   # best-of-N candidate solutions, judged and merged
+oxagen pr status|watch|fix # watch or actively fix CI on a pull request
+oxagen view                 # dashboard: agent runs, spend, code-graph stats, health
+oxagen replay [turn]       # inspect how a past turn was handled
+oxagen trace <executionId> # a run as a span tree (steps, tool calls, children)
+oxagen logs                 # tail the CLI's own debug log
+oxagen cost                 # price tokens or roll up this project's recorded spend
+oxagen models                # inspect/select the coordinator model (on-device or cloud)
 ```
 
-You can also set environment variables instead of flags (checked first, before
-config file):
+**Knowledge graph & memory** (requires platform auth)
 
 ```bash
-export OXAGEN_API_TOKEN=oxg_live_...
-export OXAGEN_ORG_ID=my-org
-export OXAGEN_WORKSPACE_ID=main
+oxagen graph search|pull|push|lineage|status
+oxagen memory list|show|promote|candidates|import|rm
+oxagen remember "<lesson>" --class RULE --enforcement 90
 ```
 
-### Opt out of the browser on an interactive TTY
+**Configuration**
 
 ```bash
-oxagen login --no-browser   # prompts for token, org, and workspace inline
+oxagen config [key] [value]     # token, api-url, org, workspace, model
+oxagen settings show|get|set|validate|init   # layered settings.json
 ```
 
-Your session is written to `~/.config/oxagen/config.json` and reused by all subsequent commands.
-
-## Real-world scenarios
-
-### Chat with the agent
+**Extensibility**
 
 ```bash
-# One-shot message
-oxagen chat send "Summarize our Q2 pipeline and flag any blockers"
-
-# Resume an existing conversation
-oxagen chat send "Add the EMEA numbers too" --conversation conv_abc123
-
-# List recent conversations
-oxagen conversation list
-
-# Post directly to a known conversation ID
-oxagen conversation chat --conversation conv_abc123 --message "What changed since Monday?"
-
-# Rename a conversation for future reference
-oxagen conversation rename --conversation conv_abc123 --name "Q2 Pipeline Review"
+oxagen agent list|show|new              # named agent definitions
+oxagen agent env bind|unbind|list       # bind an agent to a platform environment
+oxagen command list|show|new|run        # custom slash commands
+oxagen rules list|show|new|check        # workspace rules, hard-blocked at the tool layer
+oxagen mcp add|list|remove|enable|disable|check   # external MCP servers for the agent loop
 ```
 
-### Run a workflow from CI/CD
+**Platform resources** (require platform auth)
 
 ```bash
-# Trigger a release-notes workflow from a GitHub Action or deploy hook
-oxagen workflow run \
-  --workflow release-notes-generator \
-  --input '{"version":"2.1.0","repo":"acme/platform"}'
-
-# Poll until it finishes
-oxagen workflow status --id wf_xyz789
-
-# Cancel if something goes wrong mid-run
-oxagen workflow cancel --id wf_xyz789
+oxagen env list|get|create|update|rm|set-default    # workspace environments
+oxagen secret list|set|rm|reveal|import|export      # encrypted credential vault
+oxagen sandbox files|cat                            # inspect a durable sandbox session
+oxagen sandbox template list|get|create|rm|set-default|export|import
+oxagen conversation export <id>                     # export a conversation as md/pdf
+oxagen asset upload <url>                            # ingest a binary asset
+oxagen a2a card                                       # Agent2Agent card for this workspace
+oxagen recover [hash]                                 # restore agent work from the commit ledger
+oxagen file-lock list|acquire|release                # the same locks write_file/edit_file use
 ```
 
-### Register an external MCP server
-
-Expose your own tools to the Oxagen agent. Once registered, the server appears in the web app's MCP picker and can be toggled on per-conversation.
+**Daemon & telemetry**
 
 ```bash
-# Register a streamable-http server with bearer auth
-oxagen agent mcp register \
-  --name "internal-data-api" \
-  --url https://tools.internal.example.com/mcp \
-  --transport streamable-http \
-  --auth bearer \
-  --auth-config '{"token":"sk-..."}'
-
-# Register a local stdio server
-oxagen agent mcp register \
-  --name "filesystem-tools" \
-  --url file:///usr/local/bin/my-mcp-server \
-  --transport stdio
-
-# Check health and discovered tool counts
-oxagen agent mcp list
+oxagen daemon start|stop|status     # keep indexes and the code graph warm between runs
+oxagen telemetry [on|off|status]    # anonymous usage telemetry (on by default)
 ```
 
-### Connect Claude Code to Oxagen's MCP server
-
-The Oxagen platform itself is an MCP server. Connect Claude Code, Claude Desktop, or Cursor to it using an API key.
-
-**Claude Code**
+**Auth**
 
 ```bash
-oxagen api-key create   # copy the key that's printed
-
-claude mcp add oxagen \
-  --transport http \
-  --url https://mcp.oxagen.sh/mcp \
-  --header "Authorization: Bearer $OXAGEN_API_KEY"
-```
-
-**Claude Desktop** — add to `claude_desktop_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "oxagen": {
-      "command": "npx",
-      "args": ["-y", "@oxagen/mcp-client"],
-      "env": { "OXAGEN_API_KEY": "your-key-here" }
-    }
-  }
-}
-```
-
-You can also retrieve connection instructions directly:
-
-```bash
-oxagen system install instructions
-```
-
-### Generate images and media
-
-```bash
-# Generate an image and print the URL
-oxagen image generate --prompt "isometric diagram of a multi-agent system"
-
-# Generate and save to disk
-oxagen image generate \
-  --prompt "product screenshot mockup, clean UI" \
-  --model gpt-image-1 \
-  --output ./assets/hero.png
-
-# Analyze an existing image
-oxagen image analyze --image ./screenshot.png
-
-# Generate a video clip
-oxagen video generate --prompt "short animation of data flowing through a pipeline"
-
-# Generate an SVG illustration
-oxagen svg generate --prompt "simple icon of a robot holding a document"
-```
-
-### Onboard a new team
-
-```bash
-# Create the org and workspace
-oxagen org create --name "Acme Corp"
-oxagen workspace create --name "Engineering" --org acme-corp
-
-# Invite members
-oxagen workspace invite send --email alice@acme.com --org acme-corp --workspace engineering
-oxagen workspace invite send --email bob@acme.com   --org acme-corp --workspace engineering
-
-# Promote to admin after they accept
-oxagen org member role change --user user_alice --role admin --org acme-corp
-
-# List who's in the workspace
-oxagen workspace member list --org acme-corp --workspace engineering
-```
-
-### Work with documents
-
-```bash
-# Create a document
-oxagen document create --title "Architecture Overview" --content "# Overview\n..."
-
-# Generate a document from a prompt (agent writes it)
-oxagen documents generate --prompt "Write a technical spec for our billing reconciliation system"
-
-# Export to PDF
-oxagen documents pdf create --document doc_abc123 --output spec.pdf
-
-# List all documents
-oxagen document list
-```
-
-### Manage plugins
-
-```bash
-# Browse what's available
-oxagen plugin catalog browse
-
-# Install for the org
-oxagen plugin org install --listing listing_linear
-
-# Enable for a specific workspace only
-oxagen plugin workspace set-enabled --plugin plugin_xyz --enabled true
-
-# Set OAuth credentials
-oxagen plugin credential set-secret --plugin plugin_linear --key access_token --value sk-...
-
-# List what's installed
-oxagen plugin org list
-
-# Remove
-oxagen plugin org uninstall --listing listing_linear
-```
-
-### Run a fleet of local agent sessions (Mission Control)
-
-Every session is an append-only NDJSON event log on disk; the TUI, `--json`
-pipes, and a second terminal all render the same stream (ADR-023).
-
-```bash
-oxagen fleet                          # Mission Control TUI: rail, merged timeline, live composer
-oxagen fleet dispatch "fix the auth bug"   # detached session; prints its sid and returns immediately
-oxagen fleet ls --json | jq '.[].sid'      # roster as machine JSON
-oxagen fleet watch --json                  # every agent's events, one NDJSON stream (pipe it anywhere)
-oxagen fleet send 7f2q "also add tests"    # follow-up turn into a running session
-oxagen fleet attach 7f2q                   # focus one session (TTY) or stream it (--json)
-oxagen fleet cancel --all && oxagen fleet clean
-```
-
-In the REPL, end any prompt with ` &` to background it into the fleet and keep
-typing. Full reference: the Fleet and Scripting pages in the docs.
-
-### Run background agent tasks
-
-```bash
-# Start a long-running analysis task
-oxagen agent task background start \
-  --description "Analyze all GitHub issues opened this week and produce a triage report"
-
-# Check progress
-oxagen agent task background read --task task_abc123
-
-# Cancel
-oxagen agent task background cancel --task task_abc123
-```
-
-### Automations
-
-```bash
-# Create a scheduled automation
-oxagen automation create \
-  --name "daily-standup-summary" \
-  --trigger '{"type":"cron","schedule":"0 9 * * 1-5"}'
-
-# Trigger manually (e.g., from a webhook handler)
-oxagen automation trigger --automation auto_abc123
-
-# List all automations
-oxagen automation list
-```
-
----
-
-## All commands
-
-```
 oxagen login / logout
-
-oxagen chat send
-oxagen conversation list / rename / archive / delete / purge / chat
-
-oxagen workflow run / status / cancel
-oxagen automation create / list / trigger
-
-oxagen agent mcp register / list
-oxagen agent memory recall / write
-oxagen agent skill list
-oxagen agent task background start / read / cancel
-oxagen agent tool list
-oxagen agent plan create / approve
-oxagen agent approval resolve
-
-oxagen image generate / analyze / create / list
-oxagen video generate
-oxagen svg generate
-oxagen documents generate / pdf create
-oxagen document create / list / read
-oxagen archive create
-oxagen asset upload
-oxagen form create / fill / submit
-
-oxagen org create / list
-oxagen org member add / remove / role change / invite accept / invite decline
-oxagen workspace create / list
-oxagen workspace invite send
-oxagen workspace member list
-oxagen workspace model settings read / write
-
-oxagen plugin catalog browse / get
-oxagen plugin org install / install-bulk / uninstall / list / set-enabled
-oxagen plugin workspace set-enabled
-oxagen plugin registry add / list / remove / sync
-oxagen plugin credential reauth / set-secret
-oxagen plugin denylist add / remove
-oxagen plugin settings set-auth-alerts
-
-oxagen billing status
-oxagen billing credits purchase
-oxagen billing subscription read / upgrade start
-
-oxagen api-key create / revoke
-
-oxagen skill workspace list
-oxagen user preferences read / write
-oxagen notifications list / mark
-oxagen privacy export / erase
-oxagen system install instructions
 ```
-
-Pass `--help` to any command for flags and usage:
-
-```bash
-oxagen workflow run --help
-```
-
----
 
 ## Configuration
 
-Session token and defaults are stored in `~/.config/oxagen/`. To avoid passing org and workspace IDs on every command, set these environment variables:
+Session token and defaults live in `~/.config/oxagen/config.json`. Set these
+to avoid passing org/workspace on every command (env vars win over the config
+file):
 
 ```bash
-export OXAGEN_ORG_ID=org_abc123
-export OXAGEN_WORKSPACE_ID=ws_xyz789
-export OXAGEN_API_TOKEN=sk-...
+export OXAGEN_ORG_ID=your-org-slug
+export OXAGEN_WORKSPACE_ID=your-workspace-slug
+export OXAGEN_API_TOKEN=oxk_live_…
+export OXAGEN_API_URL=https://api.oxagen.sh    # default; override for self-hosted/staging
 ```
-
-The CLI checks environment variables first, then falls back to saved config, then to command-line flags:
-
-```bash
-# Uses OXAGEN_WORKSPACE_ID env var if set, falls back to ~/.config/oxagen/config.json
-oxagen automation list
-
-# Overrides env var with explicit flag
-oxagen automation list --workspace ws_different456
-
-# Authenticate and save defaults to config (opens browser)
-oxagen login
-```
-
----
 
 ## Telemetry
 
 The CLI collects anonymous usage telemetry (command names, durations, coarse
-success/error categories, OS/arch) to improve the product. It **never**
-collects code, prompts, file contents, file paths, model slugs, API keys, or
-any other personal or identifying data — see [TELEMETRY.md](../../TELEMETRY.md)
-for the exact field list.
-
-Telemetry is **on by default**. Opt out any time:
+success/error categories, OS/arch) to improve the product. It never collects
+code, prompts, file contents, file paths, model slugs, API keys, or other
+personal data. On by default:
 
 ```bash
-oxagen telemetry off       # persists the choice to ~/.config/oxagen/config.json
-oxagen telemetry status    # show enabled/disabled, install id, ingest endpoint
-oxagen telemetry on        # re-enable
-
-# or, without touching config:
-export OXAGEN_TELEMETRY=0
-export DO_NOT_TRACK=1      # https://consoledonottrack.com/
+oxagen telemetry off
+oxagen telemetry status
+export DO_NOT_TRACK=1   # https://consoledonottrack.com/
 ```
-
----
-
-## Troubleshooting
-
-**`command not found: oxagen`** — ensure global install succeeded:
-
-```bash
-npm list -g @oxagen/cli
-npm install -g @oxagen/cli
-```
-
-**Auth failures** — clear and re-authenticate:
-
-```bash
-oxagen logout && oxagen login
-```
-
----
 
 ## Development
 
-### Install the `oxagen` binary onto your PATH (live, auto-rebuilding)
-
-Run this once from the **repo root** and leave it running:
+Run this once from the **repo root** and leave it running — it builds the
+package, installs an `oxagen` binary onto your PATH, then watches
+`apps/cli/src/**` and rebuilds on every save:
 
 ```bash
 pnpm cli:dev
 ```
 
-This builds the package, installs an `oxagen` binary onto your PATH, then watches
-`apps/cli/src/**` and rebuilds on every save. After it prints `watching for
-changes…`, open a second terminal and use `oxagen` like a published binary — every
-source edit is live on the next invocation, with no reinstall step:
-
-```bash
-oxagen --version
-oxagen --help
-oxagen login
-```
-
-**How it works.** The installed binary is a symlink from a PATH directory
-(`~/.local/bin/oxagen` when that's on your PATH) into the package's build output
-(`apps/cli/dist/index.js`). `tsc --watch` rewrites `dist/` in place on every change,
-and because a symlink always resolves to its target's current contents, the on-PATH
-`oxagen` is always the freshly-built code — the "reinstall" is automatic.
-
-Want a one-shot install without the watcher (build once, link, exit)?
+Open a second terminal and use `oxagen` like a published binary; every source
+edit is live on the next invocation. One-shot install without the watcher:
 
 ```bash
 pnpm cli:install
 ```
 
-If `cli:dev` warns that the chosen directory isn't on your PATH, add it to your shell
-profile (the script prints the exact line), e.g.:
+Other workflows:
 
 ```bash
-export PATH="$HOME/.local/bin:$PATH"
+pnpm -C apps/cli dev -- graph status   # run a single command from source with tsx
+pnpm -C apps/cli build                  # compile to dist/ once
+pnpm -C apps/cli bundle                 # standalone single-file bundle
+pnpm -C apps/cli test:unit              # run unit tests
+pnpm -C apps/cli lint                   # lint (zero warnings enforced)
+pnpm -C apps/cli typecheck              # type-check
 ```
 
-To uninstall the dev binary, remove the symlink: `rm "$(command -v oxagen)"`.
-
-### Other workflows
-
-```bash
-pnpm -C apps/cli dev -- auth whoami   # run a single command from source with tsx
-pnpm -C apps/cli build                # compile to dist/ once
-pnpm -C apps/cli test:unit            # run unit tests
-pnpm -C apps/cli lint                 # lint (zero warnings enforced)
-pnpm -C apps/cli typecheck            # type-check
-```
-
-Releases are managed monorepo-wide via `pnpm release:patch|minor|major`, which bumps all packages to the same version and syncs to Vercel.
-
-### Known gaps
-
-See [`GAPS.md`](./GAPS.md) for the tracked completeness, capability-parity, and `--help`
-documentation gaps and their prioritized fix plan.
-
----
+Releases are managed monorepo-wide via `pnpm release:patch|minor|major`, which
+bumps all packages to the same version and syncs it to Vercel.
 
 ## Support
 
 - Docs: https://docs.oxagen.sh
 - Issues: https://github.com/oxagen/oxagen-monorepo/issues
-- Email: support@oxagen.ai
 
 ## License
 
-MIT
+Proprietary — see [`LICENSE`](../../LICENSE).

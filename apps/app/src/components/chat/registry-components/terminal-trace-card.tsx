@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState, type ReactElement } from "react";
-import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@/components/ui/tabs";
 import { formatDuration } from "../tool-call-card";
 // Shared GitHub light/dark palette for every code / terminal output panel.
@@ -169,15 +168,22 @@ export default function TerminalTraceCard({
       data-status={exitCode === 0 ? "success" : "failed"}
     >
       <div className="flex flex-wrap items-center gap-2 border-b border-border/60 px-4 py-2.5">
-        <Badge variant="outline" className="font-mono">
-          terminal
-        </Badge>
         {exitCode !== undefined && exitCode !== null ? (
-          <Badge variant={exitCode === 0 ? "success" : "destructive"} className="tabular-nums">
+          <span
+            className={
+              exitCode === 0
+                ? "inline-flex items-center gap-1 text-xs font-medium tabular-nums text-success"
+                : "inline-flex items-center gap-1 text-xs font-medium tabular-nums text-destructive"
+            }
+          >
             exit {exitCode}
-          </Badge>
+          </span>
         ) : null}
-        {timedOut ? <Badge variant="destructive">Timed out</Badge> : null}
+        {timedOut ? (
+          <span className="inline-flex items-center gap-1 text-xs font-medium text-destructive">
+            Timed out
+          </span>
+        ) : null}
         {durationMs !== undefined ? (
           <span className="ml-auto text-xs text-muted-foreground tabular-nums">
             {formatDuration(durationMs)}

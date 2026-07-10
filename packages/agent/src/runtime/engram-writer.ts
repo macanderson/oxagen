@@ -1,9 +1,17 @@
 /**
  * Agent runtime integration for Engram memory writes.
  *
- * Always active — every agent turn emits episodic events to the memory
- * substrate. The store adapter is auto-detected from environment
- * (DuckDB local, ClickHouse cloud).
+ * NOTE (wiring status): these emitters are NOT yet invoked by the server chat
+ * routes (apps/api chat.stream, apps/app /api/v1/chat/stream). Wiring them into
+ * the agent turn loop so every turn emits episodic events is a separate,
+ * deliberate feature decision that has not landed. The async backends they
+ * depend on — the Inngest graph-sync/embed client and the ClickHouse
+ * compile-telemetry sink — ARE registered at surface bootstrap
+ * (bootstrapEngramRuntime), so these functions fire correctly the moment a
+ * caller invokes them; they no longer silently no-op on a null client.
+ *
+ * The store adapter is auto-detected from environment (DuckDB local,
+ * ClickHouse cloud).
  *
  * After writing the record (source of truth), fires an async Inngest event
  * (`engram/memory.graph-sync`) so the Neo4j worker can create :REMEMBERS

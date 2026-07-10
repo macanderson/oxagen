@@ -7,7 +7,9 @@ import { resolveOrg, resolveWorkspace, assertOrgMember, getOrgRole } from "@/lib
 import { runInTenantScope } from "@oxagen/tenancy";
 import { invoke } from "@oxagen/oxagen";
 
-export const runtime = "nodejs";
+// Runs on the default Node.js runtime (invoke() uses Node built-ins). No
+// `export const runtime` — the segment config is incompatible with
+// cacheComponents, and Node is the framework default; never move to edge.
 
 // Schema-registry browser proxy. Lives at /api/schema/* (NOT /api/v1/schema/*)
 // on purpose: apps/app rewrites /api/v1/:path* to the Hono API, which would

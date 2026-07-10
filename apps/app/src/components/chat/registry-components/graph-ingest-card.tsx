@@ -3,7 +3,6 @@ import * as React from "react";
 import { resolveRecordHref } from "@oxagen/oxagen/capability-meta";
 import { Network, ArrowRight, ArrowUpRight, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
 
 /**
  * graph-ingest-card — renders graph.ingest output: the entities and
@@ -90,10 +89,10 @@ export default function GraphIngestCard(props: GraphIngestCardProps): React.Reac
       <div className="flex items-center gap-2 border-b border-border/60 px-4 py-2.5">
         <Network className="size-4 shrink-0 text-primary" aria-hidden="true" />
         <span className="text-sm font-semibold">Knowledge graph updated</span>
-        <Badge variant="outline" className="ml-auto shrink-0">
+        <span className="ml-auto shrink-0 text-xs text-muted-foreground">
           {entities.length} node{entities.length === 1 ? "" : "s"} · {relationships.length} edge
           {relationships.length === 1 ? "" : "s"}
-        </Badge>
+        </span>
       </div>
 
       <div className="space-y-3 px-4 py-3">
@@ -127,9 +126,7 @@ export default function GraphIngestCard(props: GraphIngestCardProps): React.Reac
                         {e.name}
                       </span>
                     )}
-                    <Badge variant="outline" className="shrink-0 text-[10px]">
-                      {e.type}
-                    </Badge>
+                    <span className="shrink-0 text-[10px] text-muted-foreground">{e.type}</span>
                     <ConfidenceBadge value={e.confidence} />
                     {href ? (
                       <ArrowUpRight className="size-3 shrink-0 text-muted-foreground" aria-hidden="true" />

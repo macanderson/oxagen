@@ -17,6 +17,9 @@ const engramMocks = vi.hoisted(() => {
   const VectorRetrievalEngineSpy = vi.fn().mockImplementation(() => ({}));
   const GraphRetrievalEngineSpy = vi.fn().mockImplementation(() => ({}));
   const LexicalRetrievalEngineSpy = vi.fn().mockImplementation(() => ({}));
+  // emitCompileTelemetry is fired (fire-and-forget) after every successful
+  // compile(). Mocked so the test never touches the real ClickHouse sink.
+  const emitCompileTelemetrySpy = vi.fn().mockResolvedValue(undefined);
 
   return {
     compileSpy,
@@ -26,6 +29,7 @@ const engramMocks = vi.hoisted(() => {
     VectorRetrievalEngineSpy,
     GraphRetrievalEngineSpy,
     LexicalRetrievalEngineSpy,
+    emitCompileTelemetrySpy,
   };
 });
 
@@ -58,6 +62,7 @@ vi.mock("@oxagen/engram", () => ({
   VectorRetrievalEngine: engramMocks.VectorRetrievalEngineSpy,
   GraphRetrievalEngine: engramMocks.GraphRetrievalEngineSpy,
   LexicalRetrievalEngine: engramMocks.LexicalRetrievalEngineSpy,
+  emitCompileTelemetry: engramMocks.emitCompileTelemetrySpy,
 }));
 
 vi.mock("@oxagen/ai", () => ({
@@ -153,12 +158,32 @@ describe("compileAgentContext — success path", () => {
     });
     ontologyMocks.oversampledLimitSpy.mockReset().mockImplementation((limit: number) => limit * 3);
     tenancyMocks.runInTenantScopeSpy.mockReset().mockImplementation((_scope, fn: () => unknown) => fn());
+    engramMocks.emitCompileTelemetrySpy.mockReset().mockResolvedValue(undefined);
   });
 
   it("returns a ContextWindow on success", async () => {
     engramMocks.compileSpy.mockResolvedValueOnce(FAKE_WINDOW);
     const result = await compileAgentContext(CTX, MESSAGES);
     expect(result).toBe(FAKE_WINDOW);
+  });
+
+  it("emits compile telemetry with the compiled window after a successful compile", async () => {
+    engramMocks.compileSpy.mockResolvedValueOnce(FAKE_WINDOW);
+    await compileAgentContext(CTX, MESSAGES);
+    expect(engramMocks.emitCompileTelemetrySpy).toHaveBeenCalledTimes(1);
+    const [taskFrame, window] = engramMocks.emitCompileTelemetrySpy.mock.calls[0] as [
+      { namespace: { org: string; workspace: string } },
+      unknown,
+    ];
+    expect(taskFrame.namespace.org).toBe("org_1");
+    expect(window).toBe(FAKE_WINDOW);
+  });
+
+  it("does not emit compile telemetry when compile() throws (fallback path)", async () => {
+    engramMocks.compileSpy.mockRejectedValueOnce(new Error("compile boom"));
+    const result = await compileAgentContext(CTX, MESSAGES);
+    expect(result).toBeNull();
+    expect(engramMocks.emitCompileTelemetrySpy).not.toHaveBeenCalled();
   });
 
   it("calls compile() with a TaskFrame built from ctx and messages", async () => {

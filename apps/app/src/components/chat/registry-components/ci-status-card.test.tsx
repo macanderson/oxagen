@@ -3,8 +3,8 @@
  * ci-status-card.test.tsx
  *
  * Covers:
- *   - header badge + ref + short sha
- *   - delegates run roll-up to CiStatusSummary (overall badge, counts, runs)
+ *   - header ref + short sha (no decorative card-type chip)
+ *   - delegates run roll-up to CiStatusSummary (overall status, counts, runs)
  *   - empty-runs graceful message
  */
 
@@ -37,10 +37,11 @@ function props(overrides: Partial<CiStatusCardProps> = {}): CiStatusCardProps {
 }
 
 describe("CiStatusCard", () => {
-  it("renders the ci-status badge and the ref", () => {
+  it("renders the ref without a decorative ci-status chip", () => {
     render(<CiStatusCard {...props({ ref: "feat/x" })} />);
-    expect(screen.getByText("ci-status")).toBeInTheDocument();
     expect(screen.getByText("feat/x")).toBeInTheDocument();
+    // The static "ci-status" card-type label was removed — the ref is the header.
+    expect(screen.queryByText("ci-status")).not.toBeInTheDocument();
   });
 
   it("renders the short sha when present", () => {
@@ -48,7 +49,7 @@ describe("CiStatusCard", () => {
     expect(screen.getByText("(abcdef1)")).toBeInTheDocument();
   });
 
-  it("renders the overall verdict badge from the summary", () => {
+  it("renders the overall verdict status from the summary", () => {
     render(<CiStatusCard {...props({ overall: "failing" })} />);
     expect(screen.getByText("Failing")).toBeInTheDocument();
   });

@@ -101,6 +101,7 @@ const workspace: ResolvedWorkspace = {
   name: "Production",
   slug: "prod",
   description: "",
+  avatarUrl: null,
 };
 const user = { id: "u1", name: "Alice", email: "alice@example.com", image: null };
 const navDataPromise: Promise<ShellNavData> = Promise.resolve({

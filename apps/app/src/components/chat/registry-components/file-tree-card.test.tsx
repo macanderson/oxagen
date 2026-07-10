@@ -125,13 +125,14 @@ describe("FileTreeCard", () => {
     render(<FileTreeCard entries={[{ path: "src/nested/file.ts", kind: "file" }]} />);
     // "src" (depth 0) is open by default, revealing "nested" (depth 1).
     expect(screen.getByText("nested")).toBeInTheDocument();
-    // "nested" itself is collapsed by default. Its children stay MOUNTED so
-    // the CSS grid-rows (0fr→1fr) height animation can run — collapse is
-    // expressed via aria-expanded on the toggle, not by unmounting rows.
-    const nestedToggle = screen.getByRole("button", { name: "nested" });
-    expect(nestedToggle).toHaveAttribute("aria-expanded", "false");
-    await userEvent.click(nestedToggle);
-    expect(nestedToggle).toHaveAttribute("aria-expanded", "true");
+    // "nested" itself is collapsed by default. Children stay MOUNTED (the
+    // 0fr→1fr grid-rows animation needs them in the DOM), so collapse state
+    // is asserted via the dir row's aria-expanded, not DOM absence.
+    const nestedRow = screen.getByRole("button", { name: /nested/ });
+    expect(nestedRow).toHaveAttribute("aria-expanded", "false");
+    await userEvent.click(nestedRow);
+    expect(nestedRow).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText("file.ts")).toBeInTheDocument();
   });
 
   it("renders header actions when provided", () => {
@@ -201,15 +202,21 @@ describe("FileTreeCard", () => {
   });
 
   it("truncates long names in the middle, keeping the extension visible", () => {
-    const name = "extremely-long-component-file-name-for-mobile.tsx";
-    render(<FileTreeCard entries={[{ path: name, kind: "file" }]} />);
-    // The row renders truncateMiddle(name, 44) — wider than the helper's
-    // default. Assert the visible behavior (middle ellipsis, extension and
-    // full path preserved) rather than re-deriving the exact string.
-    const label = screen.getByTitle(name);
-    expect(label.textContent).toContain("…");
-    expect(label.textContent?.endsWith(".tsx")).toBe(true);
-    expect(label.textContent?.length).toBeLessThan(name.length);
+    render(
+      <FileTreeCard
+        entries={[
+          { path: "extremely-long-component-file-name-for-mobile.tsx", kind: "file" },
+        ]}
+      />,
+    );
+    // NameLabel renders with max=44 (wider than the 28 default) so mirror it.
+    const truncated = truncateMiddle(
+      "extremely-long-component-file-name-for-mobile.tsx",
+      44,
+    );
+    expect(truncated).toContain("…");
+    expect(truncated.endsWith(".tsx")).toBe(true);
+    expect(screen.getByText(truncated)).toBeInTheDocument();
   });
 });
 

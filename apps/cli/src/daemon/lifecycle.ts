@@ -14,6 +14,7 @@ import { homedir } from "node:os";
 import { existsSync, readFileSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { DaemonClient } from "./client.js";
+import { DEFAULT_DAEMON_CONFIG } from "./protocol.js";
 import { createOutput, type Output } from "../lib/output.js";
 import { stdoutWriter, type CommandWriter } from "../lib/capture-writer.js";
 
@@ -50,10 +51,10 @@ export async function startDaemon(
     // process itself is the "answer", so stdout stays quiet.
     const { ContextDaemon } = await import("./server.js");
     const daemon = new ContextDaemon({
+      ...DEFAULT_DAEMON_CONFIG,
       socketPath: SOCKET_PATH,
       pidFile: PID_FILE,
       logFile: LOG_FILE,
-      idleTimeoutMs: 30 * 60 * 1000,
       workspaceRoot: process.cwd(),
       dbPath: DB_PATH,
       codeGraphDbPath: CODE_GRAPH_DB_PATH,
