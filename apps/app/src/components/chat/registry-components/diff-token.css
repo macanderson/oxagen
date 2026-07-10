@@ -13,3 +13,33 @@
 .dark .diff-token {
   color: var(--shiki-dark) !important;
 }
+
+/*
+ * Disclosure chevron on a file section rotates from ▸ (closed) to ▾ (open).
+ * Driven off the native `<details open>` state so the affordance stays correct
+ * with zero JS — the card uses `<details>`/`<summary>` for the file collapse.
+ */
+.diff-file[open] > summary .diff-chevron {
+  transform: rotate(90deg);
+}
+
+/*
+ * Hunk header as a quiet separator, not raw diff text. A faint band with
+ * hairlines above/below de-emphasizes the `@@ … @@` line so the eye reads it
+ * as a section break between contiguous change regions rather than as code.
+ * Collapses adjacent borders: the first separator sits flush under the file
+ * header's own top border.
+ */
+.diff-hunk-sep {
+  background-color: color-mix(in srgb, var(--muted) 45%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+}
+.diff-hunk-sep:first-child {
+  border-top: 0;
+}
+
+/* Code renders cleaner without programming-ligature substitution in diffs. */
+.diff-token {
+  font-variant-ligatures: none;
+}

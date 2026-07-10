@@ -11,11 +11,20 @@
  */
 
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, cleanup, within, waitFor } from "@testing-library/react";
+import {
+  render,
+  screen,
+  cleanup,
+  within,
+  waitFor,
+  fireEvent,
+} from "@testing-library/react";
 import CodeDiffCard, {
+  classifyChange,
   countDiffStats,
   parseTokenStyle,
   parseUnifiedDiff,
+  splitPath,
 } from "./code-diff-card";
 import { diffAnchorId } from "./diff-anchor";
 
@@ -25,7 +34,8 @@ afterEach(cleanup);
 // needs WASM and is exercised in diff-syntax.test.ts. Here we assert the card
 // WIRES tokens into `.diff-token` spans carrying the dual-theme style.
 vi.mock("./diff-syntax", () => ({
-  inferLang: (path: string) => (path.endsWith(".ts") ? "typescript" : "plaintext"),
+  inferLang: (path: string) =>
+    path.endsWith(".ts") ? "typescript" : "plaintext",
   highlightLine: async (line: string, lang: string) =>
     lang === "plaintext" || line.length === 0
       ? [{ content: line }]
@@ -66,12 +76,20 @@ describe("parseUnifiedDiff", () => {
 
   it("ignores the 'no newline at end of file' marker", () => {
     const hunks = parseUnifiedDiff(SAMPLE_PATCH);
-    const markers = hunks[0]?.lines.filter((l) => l.content.includes("No newline"));
+    const markers = hunks[0]?.lines.filter((l) =>
+      l.content.includes("No newline"),
+    );
     expect(markers).toHaveLength(0);
   });
 
   it("skips pre-hunk file headers (---/+++)", () => {
-    const patch = ["--- a/foo.ts", "+++ b/foo.ts", "@@ -1 +1 @@", "-old", "+new"].join("\n");
+    const patch = [
+      "--- a/foo.ts",
+      "+++ b/foo.ts",
+      "@@ -1 +1 @@",
+      "-old",
+      "+new",
+    ].join("\n");
     const hunks = parseUnifiedDiff(patch);
     expect(hunks).toHaveLength(1);
     expect(hunks[0]?.lines).toHaveLength(2);
@@ -121,16 +139,38 @@ describe("CodeDiffCard", () => {
   it("renders file count and per-file path", () => {
     render(
       <CodeDiffCard
-        files={[{ path: "src/a.ts", patch: SAMPLE_PATCH }, { path: "src/b.ts", patch: null }]}
+        files={[
+          { path: "src/a.ts", patch: SAMPLE_PATCH },
+          { path: "src/b.ts", patch: null },
+        ]}
       />,
     );
     expect(screen.getByText("2 files changed")).toBeInTheDocument();
-    expect(screen.getByText("src/a.ts")).toBeInTheDocument();
-    expect(screen.getByText("src/b.ts")).toBeInTheDocument();
+    // The path is split into a dimmed directory + emphasized basename, so the
+    // full path lives in the element's `title` (and textContent), not a single
+    // text node — assert via the title the header exposes for the full path.
+    expect(screen.getByTitle("src/a.ts")).toBeInTheDocument();
+    expect(screen.getByTitle("src/b.ts")).toBeInTheDocument();
+    expect(screen.getByTitle("src/a.ts")).toHaveTextContent("src/a.ts");
+  });
+
+  it("splits the path into a dimmed directory and emphasized basename", () => {
+    render(
+      <CodeDiffCard
+        files={[{ path: "src/deep/file.ts", patch: SAMPLE_PATCH }]}
+      />,
+    );
+    const pathEl = screen.getByTitle("src/deep/file.ts");
+    // Directory prefix and basename are separate spans for the dim/emphasis
+    // treatment; together they reconstruct the full path.
+    expect(pathEl).toHaveTextContent("src/deep/file.ts");
+    expect(within(pathEl).getByText("file.ts")).toHaveClass("font-medium");
   });
 
   it("shows computed additions/deletions totals when patches are present", () => {
-    render(<CodeDiffCard files={[{ path: "src/a.ts", patch: SAMPLE_PATCH }]} />);
+    render(
+      <CodeDiffCard files={[{ path: "src/a.ts", patch: SAMPLE_PATCH }]} />,
+    );
     // With a single file, the header aggregate and the per-file row show the
     // same totals — scope to the file's own row to avoid an ambiguous match.
     const fileRow = within(document.getElementById("diff-src%2Fa.ts")!);
@@ -141,7 +181,14 @@ describe("CodeDiffCard", () => {
   it("prefers explicit additions/deletions over computed values", () => {
     render(
       <CodeDiffCard
-        files={[{ path: "src/a.ts", patch: SAMPLE_PATCH, additions: 40, deletions: 5 }]}
+        files={[
+          {
+            path: "src/a.ts",
+            patch: SAMPLE_PATCH,
+            additions: 40,
+            deletions: 5,
+          },
+        ]}
       />,
     );
     const fileRow = within(document.getElementById("diff-src%2Fa.ts")!);
@@ -152,12 +199,19 @@ describe("CodeDiffCard", () => {
   it("shows a fallback message when a file has no patch content", () => {
     render(<CodeDiffCard files={[{ path: "src/no-patch.ts" }]} />);
     expect(
-      screen.getByText("No diff content available for this file in this result."),
+      screen.getByText(
+        "No diff content available for this file in this result.",
+      ),
     ).toBeInTheDocument();
   });
 
   it("renders the summary text when provided", () => {
-    render(<CodeDiffCard files={[{ path: "a.ts", patch: SAMPLE_PATCH }]} summary="Fixed the bug" />);
+    render(
+      <CodeDiffCard
+        files={[{ path: "a.ts", patch: SAMPLE_PATCH }]}
+        summary="Fixed the bug"
+      />,
+    );
     expect(screen.getByText("Fixed the bug")).toBeInTheDocument();
   });
 
@@ -170,12 +224,19 @@ describe("CodeDiffCard", () => {
       />,
     );
     const link = screen.getByRole("link", { name: /PR #42/ });
-    expect(link).toHaveAttribute("href", "https://github.com/acme/repo/pull/42");
+    expect(link).toHaveAttribute(
+      "href",
+      "https://github.com/acme/repo/pull/42",
+    );
   });
 
   it("sets the file section id to the shared diff anchor id", () => {
-    render(<CodeDiffCard files={[{ path: "src/a.ts", patch: SAMPLE_PATCH }]} />);
-    expect(document.getElementById(diffAnchorId("src/a.ts"))).toBeInTheDocument();
+    render(
+      <CodeDiffCard files={[{ path: "src/a.ts", patch: SAMPLE_PATCH }]} />,
+    );
+    expect(
+      document.getElementById(diffAnchorId("src/a.ts")),
+    ).toBeInTheDocument();
   });
 
   it("opens the first file by default when there are multiple files", () => {
@@ -187,21 +248,31 @@ describe("CodeDiffCard", () => {
         ]}
       />,
     );
-    const first = document.getElementById(diffAnchorId("a.ts")) as HTMLDetailsElement;
-    const second = document.getElementById(diffAnchorId("b.ts")) as HTMLDetailsElement;
+    const first = document.getElementById(
+      diffAnchorId("a.ts"),
+    ) as HTMLDetailsElement;
+    const second = document.getElementById(
+      diffAnchorId("b.ts"),
+    ) as HTMLDetailsElement;
     expect(first.open).toBe(true);
     expect(second.open).toBe(false);
   });
 
   it("shows the hunk header inside the opened file section", () => {
     render(<CodeDiffCard files={[{ path: "a.ts", patch: SAMPLE_PATCH }]} />);
-    const section = document.getElementById(diffAnchorId("a.ts")) as HTMLElement;
+    const section = document.getElementById(
+      diffAnchorId("a.ts"),
+    ) as HTMLElement;
     expect(within(section).getByText("@@ -1,3 +1,4 @@")).toBeInTheDocument();
   });
 
   it("upgrades code lines to syntax-highlighted dual-theme tokens", async () => {
-    render(<CodeDiffCard files={[{ path: "src/a.ts", patch: SAMPLE_PATCH }]} />);
-    const section = document.getElementById(diffAnchorId("src/a.ts")) as HTMLElement;
+    render(
+      <CodeDiffCard files={[{ path: "src/a.ts", patch: SAMPLE_PATCH }]} />,
+    );
+    const section = document.getElementById(
+      diffAnchorId("src/a.ts"),
+    ) as HTMLElement;
     // Highlighting resolves in an effect, so wait for the .diff-token spans.
     await waitFor(() => {
       expect(section.querySelectorAll(".diff-token").length).toBeGreaterThan(0);
@@ -214,8 +285,12 @@ describe("CodeDiffCard", () => {
   });
 
   it("renders plain (uncoloured) lines for unknown languages, never .diff-token", async () => {
-    render(<CodeDiffCard files={[{ path: "notes.txt", patch: SAMPLE_PATCH }]} />);
-    const section = document.getElementById(diffAnchorId("notes.txt")) as HTMLElement;
+    render(
+      <CodeDiffCard files={[{ path: "notes.txt", patch: SAMPLE_PATCH }]} />,
+    );
+    const section = document.getElementById(
+      diffAnchorId("notes.txt"),
+    ) as HTMLElement;
     // Give the effect a tick; plaintext short-circuits to no highlight.
     await waitFor(() => {
       expect(within(section).getByText("@@ -1,3 +1,4 @@")).toBeInTheDocument();
@@ -230,7 +305,9 @@ describe("parseTokenStyle", () => {
   });
 
   it("camelCases standard props and preserves custom --shiki-* properties", () => {
-    expect(parseTokenStyle("color:#111;font-weight:bold;--shiki-dark:#eee")).toEqual({
+    expect(
+      parseTokenStyle("color:#111;font-weight:bold;--shiki-dark:#eee"),
+    ).toEqual({
       color: "#111",
       fontWeight: "bold",
       "--shiki-dark": "#eee",
@@ -238,6 +315,134 @@ describe("parseTokenStyle", () => {
   });
 
   it("ignores malformed declarations", () => {
-    expect(parseTokenStyle("color:#111;;garbage;:novalue;key:")).toEqual({ color: "#111" });
+    expect(parseTokenStyle("color:#111;;garbage;:novalue;key:")).toEqual({
+      color: "#111",
+    });
+  });
+});
+
+describe("splitPath", () => {
+  it("splits a nested path into a trailing-slash directory and basename", () => {
+    expect(splitPath("src/deep/file.ts")).toEqual({
+      dir: "src/deep/",
+      base: "file.ts",
+    });
+  });
+
+  it("returns an empty directory for a bare filename", () => {
+    expect(splitPath("README.md")).toEqual({ dir: "", base: "README.md" });
+  });
+});
+
+describe("classifyChange", () => {
+  it("returns 'modified' for an absent patch", () => {
+    expect(classifyChange(null)).toBe("modified");
+    expect(classifyChange(undefined)).toBe("modified");
+  });
+
+  it("detects an added file from a new-file header or /dev/null source", () => {
+    expect(classifyChange("new file mode 100644\n@@ -0,0 +1 @@\n+x")).toBe(
+      "added",
+    );
+    expect(classifyChange("--- /dev/null\n+++ b/x.ts\n@@ -0,0 +1 @@\n+x")).toBe(
+      "added",
+    );
+  });
+
+  it("detects a deleted file from a deleted-file header or /dev/null target", () => {
+    expect(classifyChange("deleted file mode 100644\n@@ -1 +0,0 @@\n-x")).toBe(
+      "deleted",
+    );
+    expect(classifyChange("--- a/x.ts\n+++ /dev/null\n@@ -1 +0,0 @@\n-x")).toBe(
+      "deleted",
+    );
+  });
+
+  it("returns 'modified' for an ordinary edit", () => {
+    expect(classifyChange(SAMPLE_PATCH)).toBe("modified");
+  });
+});
+
+describe("CodeDiffCard — change affordances & long-diff collapse", () => {
+  const NEW_FILE_PATCH = [
+    "new file mode 100644",
+    "--- /dev/null",
+    "+++ b/src/new.ts",
+    "@@ -0,0 +1,2 @@",
+    "+export const a = 1;",
+    "+export const b = 2;",
+  ].join("\n");
+
+  const DELETED_FILE_PATCH = [
+    "deleted file mode 100644",
+    "--- a/src/gone.ts",
+    "+++ /dev/null",
+    "@@ -1,1 +0,0 @@",
+    "-export const gone = true;",
+  ].join("\n");
+
+  it("shows a New badge for an added file", () => {
+    render(
+      <CodeDiffCard files={[{ path: "src/new.ts", patch: NEW_FILE_PATCH }]} />,
+    );
+    const section = document.getElementById(diffAnchorId("src/new.ts"))!;
+    expect(within(section).getByText("New")).toBeInTheDocument();
+    expect(section.getAttribute("data-change-kind")).toBe("added");
+  });
+
+  it("shows a Deleted badge for a removed file", () => {
+    render(
+      <CodeDiffCard
+        files={[{ path: "src/gone.ts", patch: DELETED_FILE_PATCH }]}
+      />,
+    );
+    const section = document.getElementById(diffAnchorId("src/gone.ts"))!;
+    expect(within(section).getByText("Deleted")).toBeInTheDocument();
+    expect(section.getAttribute("data-change-kind")).toBe("deleted");
+  });
+
+  it("exposes a copy-path button alongside the copy-diff button", () => {
+    render(
+      <CodeDiffCard files={[{ path: "src/a.ts", patch: SAMPLE_PATCH }]} />,
+    );
+    expect(
+      screen.getByRole("button", { name: "Copy path src/a.ts" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Copy diff for src/a.ts" }),
+    ).toBeInTheDocument();
+  });
+
+  it("collapses a long file's tail behind a 'Show N more lines' expander", async () => {
+    // 40 added code lines, over the 32-line threshold → first 20 shown, tail hidden.
+    const bigPatch = [
+      "@@ -0,0 +1,40 @@",
+      ...Array.from({ length: 40 }, (_, i) => `+const v${i} = ${i};`),
+    ].join("\n");
+    render(<CodeDiffCard files={[{ path: "src/big.ts", patch: bigPatch }]} />);
+    const section = document.getElementById(diffAnchorId("src/big.ts"))!;
+
+    // Only the first 20 line-rows are present before expanding.
+    expect(section.querySelectorAll("[data-line-type]")).toHaveLength(20);
+    const more = screen.getByRole("button", { name: /Show 20 more lines/ });
+
+    fireEvent.click(more);
+
+    // After expanding, the full 40 line-rows render.
+    await waitFor(() => {
+      expect(section.querySelectorAll("[data-line-type]")).toHaveLength(40);
+    });
+    expect(
+      screen.getByRole("button", { name: /Show fewer lines/ }),
+    ).toBeInTheDocument();
+  });
+
+  it("does not collapse a short file (no expander button)", () => {
+    render(
+      <CodeDiffCard files={[{ path: "src/a.ts", patch: SAMPLE_PATCH }]} />,
+    );
+    expect(
+      screen.queryByRole("button", { name: /Show .* more lines/ }),
+    ).not.toBeInTheDocument();
   });
 });

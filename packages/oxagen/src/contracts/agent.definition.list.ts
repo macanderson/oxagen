@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
+import { agentToolTypeSchema } from "../agent-schema";
 
 export const agentDefinitionList = registerCapability({
   name: "list_agent_defs",
@@ -10,7 +11,11 @@ export const agentDefinitionList = registerCapability({
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
   scoped: true,
-  agent: { requiresApproval: false, riskLevel: "low", category: "introspection" },
+  agent: {
+    requiresApproval: false,
+    riskLevel: "low",
+    category: "introspection",
+  },
   sensitivity: "low",
   defaultEffect: "deny",
   defaultRoles: {
@@ -59,6 +64,24 @@ export const agentDefinitionList = registerCapability({
           .describe(
             "True for product-managed (built-in) agents that are read-only to customers — viewable but not editable, publishable, deployable, or trigger-configurable",
           ),
+        /**
+         * Refs (type + ref only, never the config payloads) of everything the
+         * agent loads — functions, MCP servers, skills, subagents — taken from
+         * the config of its active version (or latest, when unpublished). Lets
+         * the app's agent picker render skill/tool chips per agent without an
+         * N+1 of get_agent_def calls. Empty when the agent loads nothing (or its
+         * config is absent/malformed). Refs-only by design: NOT the per-tool
+         * config (MCP auth, skill pins, subagent budgets) — fetch that via
+         * get_agent_def when a detail view needs it.
+         */
+        toolRefs: z
+          .array(
+            z.object({
+              type: agentToolTypeSchema,
+              ref: z.string(),
+            }),
+          )
+          .default([]),
       }),
     ),
   }),
