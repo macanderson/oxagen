@@ -80,7 +80,7 @@ const stubUseServerActions = {
   name: "oxagen-stub-use-server",
   enforce: "pre" as const,
   transform(code: string, id: string) {
-    const file = id.split("?")[0];
+    const file = id.split("?")[0] ?? id;
     if (!/\.[cm]?tsx?$/.test(file) || !file.includes("/src/")) return null;
     // Leading BOM, comments, and whitespace may precede the directive.
     const directive =
@@ -88,7 +88,9 @@ const stubUseServerActions = {
     if (!directive.test(code)) return null;
     const names = new Set<string>();
     const re = /export\s+async\s+function\s+([A-Za-z0-9_$]+)/g;
-    for (let m = re.exec(code); m; m = re.exec(code)) names.add(m[1]);
+    for (let m = re.exec(code); m; m = re.exec(code)) {
+      if (m[1]) names.add(m[1]);
+    }
     const stubs = [...names]
       .map(
         (n) =>
@@ -110,6 +112,10 @@ const config: StorybookConfig = {
   framework: { name: "@storybook/react-vite", options: {} },
   core: { disableTelemetry: true },
   viteFinal: async (cfg) => {
+    // Stub `"use server"` modules before any other transform so their
+    // server-only import graph never enters the browser bundle.
+    cfg.plugins = [stubUseServerActions, ...(cfg.plugins ?? [])];
+
     cfg.resolve = cfg.resolve ?? {};
     cfg.resolve.alias = {
       ...(cfg.resolve.alias ?? {}),
