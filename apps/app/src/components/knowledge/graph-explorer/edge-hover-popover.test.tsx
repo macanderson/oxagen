@@ -128,3 +128,40 @@ describe("EdgeHoverPopover — source/target display", () => {
     expect(screen.getByText("b")).toBeInTheDocument();
   });
 });
+
+describe("EdgeHoverPopover — property values", () => {
+  it("renders nested object/array property values readably, never '[object Object]'", () => {
+    const withProps: ExplorerNode = {
+      ...sourceNode,
+      properties: {
+        meta: { status: "open" },
+        tags: ["auth", "billing"],
+        title: "Login broken",
+      },
+    };
+    const { container } = render(
+      <EdgeHoverPopover edge={confirmedEdge} pos={pos} sourceNode={withProps} />,
+    );
+    expect(container.textContent).not.toContain("[object Object]");
+    // formatPropertyValue then truncate(…, 20): objects render as compact JSON,
+    // arrays comma-joined, strings as-is.
+    expect(container.textContent).toContain('{"status":"open"}');
+    expect(container.textContent).toContain("auth, billing");
+    expect(container.textContent).toContain("Login broken");
+  });
+
+  it("truncates long formatted values to the 20-char budget", () => {
+    const withProps: ExplorerNode = {
+      ...targetNode,
+      properties: {
+        description: "a".repeat(60),
+      },
+    };
+    const { container } = render(
+      <EdgeHoverPopover edge={confirmedEdge} pos={pos} targetNode={withProps} />,
+    );
+    // truncate(value, 20) → 19 chars + ellipsis.
+    expect(container.textContent).toContain(`${"a".repeat(19)}…`);
+    expect(container.textContent).not.toContain("a".repeat(21));
+  });
+});
