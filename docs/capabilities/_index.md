@@ -4,7 +4,7 @@ Reference for all declared capabilities across the Oxagen platform.
 Each capability is implemented across API, MCP, and agent surfaces with
 contract-first design, IAM enforcement, and instrumentation.
 
-## Agent (67)
+## Agent (68)
 
 - [agent.approval.resolve](agent.approval.resolve.md) — Approve or deny a pending tool-call approval request; resolution ends the tool-call wait and streams the next step
 - [agent.code.execute](agent.code.execute.md) — Execute a code snippet in an isolated sandbox and return the exit code, stdout, stderr, and execution time
@@ -16,6 +16,7 @@ contract-first design, IAM enforcement, and instrumentation.
 - [agent.definition.suggest](agent.definition.suggest.md) — AI-assisted agent setup — turns a plain-language description into a complete draft agent configuration (identity, instructions, graph access, tools, triggers), grounded in the workspace's real skills, ontologies, MCP servers, and capabilities
 - [agent.definition.summarize](agent.definition.summarize.md) — Generate or refresh a short, LLM-inferred plain-text summary of what an agent does, cached against a checksum of its config so it only regenerates when the config changed (or force is set)
 - [agent.definition.update](agent.definition.update.md) — Update an agent definition by snapshotting a new unpublished version with the updated config; the version number is bumped
+- [revise_agent_def](revise_agent_def.md) — AI-driven edit of an existing agent definition from a plain-language prompt; the model designs the revised config grounded in the workspace and a new unpublished version is bumped (slug immutable, publish stays separate)
 - [agent.deploy](agent.deploy.md) — Set an agent's deployment posture; activating requires a published active version, deactivating makes its triggers dormant
 - [bind_agent_environment](bind_agent_environment.md) — Bind an agent to an environment (and optionally a specific sandbox template within it); promoting one to primary atomically demotes the agent's previous primary
 - [list_agent_environments](list_agent_environments.md) — List an agent's environment bindings, with each binding's resolved sandbox template name
@@ -397,11 +398,12 @@ contract-first design, IAM enforcement, and instrumentation.
 - [semantic.edge.list](semantic.edge.list.md) — **Deprecated alias** for `semantic.relationship.list`; removed in v2
 - [semantic.edge.suggest](semantic.edge.suggest.md) — **Deprecated alias** for `semantic.relationship.suggest`; removed in v2
 
-## Skill (13)
+## Skill (14)
 
 - [skill.author](skill.author.md) — Author a new skill from a natural-language prompt: the model synthesises a validated .skill.md and installs it into the workspace
 - [skill.create](skill.create.md) — Create a tenant-authored skill with an initial v1 version from supplied .skill.md content (idempotent on slug)
 - [skill.draft](skill.draft.md) — Draft a skill configuration from a natural-language description for human review — the AI-assisted first step of skill setup; persists nothing
+- [revise_skill](revise_skill.md) — AI-driven edit of an existing skill from a plain-language prompt; the model redesigns the .skill.md body and saves a new activated version (slug immutable)
 - [skill.enable](skill.enable.md) — Enable or disable a workspace skill, hiding disabled skills from the agent while preserving their versions and data
 - [skill.workspace.list](skill.workspace.list.md) — List skills available in the workspace
 - [skill.workspace.install](skill.workspace.install.md) — Install a skill into a workspace from a builtin template or custom upload, idempotent on slug
