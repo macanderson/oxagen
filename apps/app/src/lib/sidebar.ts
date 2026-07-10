@@ -112,21 +112,6 @@ const workspaceConfig: SidebarConfig = {
           : `/${ctx.orgSlug}`,
       group: "primary",
     },
-    {
-      id: "evals",
-      label: "Evals",
-      icon: FlaskConical,
-      // Score what actually ran and got billed against a dataset — the
-      // eval.* capability family's dataset list + run-detail surface.
-      // Previously a true nav orphan (no sidebar entry, no in-page inbound
-      // links) despite being fully built; wired here next to Activity since
-      // both surfaces read from the same execution history.
-      href: (ctx) =>
-        ctx.workspaceSlug
-          ? workspace.evals.root(ctx as Required<ScopeContext>)
-          : `/${ctx.orgSlug}`,
-      group: "primary",
-    },
     // Workbench group — build interactive agents. The Agent Builder is the
     // centerpiece. Agent Tools is NOT a primary nav item: it is the second
     // tab of the Workbench surface (workbench/layout.tsx), always one click away
@@ -142,15 +127,41 @@ const workspaceConfig: SidebarConfig = {
       group: "tools",
     },
     {
+      id: "evals",
+      label: "Evals",
+      icon: FlaskConical,
+      // Score what actually ran and got billed against a dataset — the
+      // eval.* capability family's dataset list + run-detail surface.
+      // Previously a true nav orphan (no sidebar entry, no in-page inbound
+      // links) despite being fully built. group: "primary" places it right
+      // after Activity in the desktop sidebar (group-filtered render, see
+      // sidebar.tsx) since both surfaces read from the same execution
+      // history; it is declared here (after the "agents"/tools-group entry
+      // in raw array order) so the mobile bottom bar's unfiltered first-4
+      // cut (MAX_BAR_ITEMS, mobile-bottom-bar.tsx) is unaffected — Evals
+      // overflows into the mobile "More" sheet alongside Marketplace/Settings
+      // rather than displacing Agents from the visible bar.
+      href: (ctx) =>
+        ctx.workspaceSlug
+          ? workspace.evals.root(ctx as Required<ScopeContext>)
+          : `/${ctx.orgSlug}`,
+      group: "primary",
+    },
+    {
       id: "marketplace",
       label: "Marketplace",
       icon: ShoppingBag,
       // Discovery + install surface, two sides: Agent Tools and Integrations.
       // Managing what is installed lives in Workbench → Agent Tools.
+      // No-workspaceSlug fallback mirrors every other workspace-mode item
+      // above (org root) — it previously pointed at org.settings.plugins(),
+      // an org-scope route helper with no page behind it (latent 404),
+      // normally masked only because resolveSidebarCtx recovers the
+      // workspace slug from the URL before this branch is reached.
       href: (ctx) =>
         ctx.workspaceSlug
           ? workspace.marketplace.root(ctx as Required<ScopeContext>)
-          : org.settings.plugins(ctx),
+          : `/${ctx.orgSlug}`,
       group: "footer",
     },
     {

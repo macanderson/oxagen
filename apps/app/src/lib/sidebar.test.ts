@@ -76,11 +76,12 @@ describe("resolveSidebarMode", () => {
 // 2. getSidebarConfig — item counts per mode
 //
 // Spec:
-//   workspace: 7 items (Ask, Knowledge, Activity | Agents, Agent Tools |
+//   workspace: 8 items (Ask, Knowledge, Activity, Evals | Agents, Agent Tools |
 //       Marketplace, Settings)
 //     — Activity is the agent run-trace surface (recent runs + per-run span
-//       tree). The Workbench group holds Agents (the builder); Agent Tools is a
-//       tab inside the Workbench surface, not a primary nav item.
+//       tree). Evals scores what actually ran and got billed, next to
+//       Activity. The Workbench group holds Agents (the builder); Agent Tools
+//       is a tab inside the Workbench surface, not a primary nav item.
 //       Marketplace + Settings are pinned to the footer group. The old
 //       catch-all Automation area stays removed; "Workflows" is gone too
 //       (banned term).
@@ -89,10 +90,10 @@ describe("resolveSidebarMode", () => {
 // ---------------------------------------------------------------------------
 
 describe("getSidebarConfig item counts", () => {
-  it("workspace config has exactly 6 items", () => {
+  it("workspace config has exactly 7 items", () => {
     const config = getSidebarConfig("workspace");
     expect(config.mode).toBe("workspace");
-    expect(config.items).toHaveLength(6);
+    expect(config.items).toHaveLength(7);
   });
 
   it("org config has 6 items by default (access filtered for non-enterprise)", () => {
@@ -136,12 +137,19 @@ describe("getSidebarConfig item counts", () => {
     expect(ids).not.toContain("automation");
     // Agent Tools is reachable via the Workbench tabs, never as its own nav item.
     expect(ids).not.toContain("agent-tools");
-    // The clean spec tree, in order. Activity is the run-trace surface.
+    // The clean spec tree, in raw declaration order (mobile bottom bar's
+    // unfiltered MAX_BAR_ITEMS cut relies on this exact order — see
+    // mobile-bottom-bar.tsx). Activity is the run-trace surface; Evals
+    // (group: "primary") is declared after "agents" so it renders right
+    // after Activity in the desktop sidebar's group-filtered view (see the
+    // "workspace config 'tools' group" test below) without displacing Agents
+    // from the mobile bar's first four.
     expect(ids).toEqual([
       "ask",
       "knowledge",
       "activity",
       "agents",
+      "evals",
       "marketplace",
       "settings",
     ]);
@@ -189,6 +197,10 @@ describe("href builders produce correct paths", () => {
 
     it("activity -> /{org}/{ws}/activity", () => {
       expect(findItem("activity").href(wsCtx)).toBe("/acme/production/activity");
+    });
+
+    it("evals -> /{org}/{ws}/evals", () => {
+      expect(findItem("evals").href(wsCtx)).toBe("/acme/production/evals");
     });
 
     it("marketplace -> /{org}/{ws}/marketplace (workspace-scoped, from ws ctx)", () => {

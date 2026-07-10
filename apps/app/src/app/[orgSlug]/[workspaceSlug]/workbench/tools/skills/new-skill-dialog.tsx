@@ -15,6 +15,7 @@
  */
 import * as React from "react";
 import { useRouter } from "next/navigation";
+import { slugify } from "@/lib/slug";
 import {
   Dialog,
   DialogPopup,
@@ -111,15 +112,6 @@ const STEP_DESCRIPTIONS: Record<WizardStep, string> = {
   review: "Confirm the configuration the AI drafted. Every field is editable.",
   save: "One last look before the skill is created in this workspace.",
 };
-
-function slugify(input: string): string {
-  return input
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 64);
-}
 
 // ── Step indicator ────────────────────────────────────────────────────────────
 

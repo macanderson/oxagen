@@ -57,9 +57,10 @@ afterEach(() => {
 
 describe("MobileBottomBar — primary tabs", () => {
   it("renders the workspace destinations as client-routed tabs with resolved hrefs", () => {
-    // Workspace mode has six nav items (ask, knowledge, activity, agents,
-    // marketplace, settings); only the first four (MAX_BAR_ITEMS) fit the
-    // bar — the rest overflow into the "More" sheet, covered below.
+    // Workspace mode has seven nav items in raw declaration order (ask,
+    // knowledge, activity, agents, evals, marketplace, settings); only the
+    // first four (MAX_BAR_ITEMS) fit the bar — the rest (evals included)
+    // overflow into the "More" sheet, covered below.
     render(<MobileBottomBar ctx={wsCtx} user={user} />);
     const nav = screen.getByRole("navigation", { name: /mobile navigation/i });
     expect(within(nav).getByRole("link", { name: "Ask" })).toHaveAttribute("href", "/acme/prod/ask");
