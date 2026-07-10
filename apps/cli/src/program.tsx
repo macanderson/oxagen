@@ -1340,6 +1340,51 @@ export function buildProgram(): Command {
       },
     );
 
+  sandbox
+    .command("warm")
+    .description(
+      "Provision (or reuse) a durable code-agent sandbox, optionally cloning repos into it",
+    )
+    .option(
+      "--session-key <key>",
+      "Stable reuse key to warm one sandbox across turns (omit for a fresh session)",
+    )
+    .option("--label <label>", "Human-friendly name shown in the sandbox list")
+    .option(
+      "--image <image>",
+      "Base image: node | python | shell | agent (default agent)",
+    )
+    .option(
+      "--repo <owner/name[#branch]>",
+      "Repository to clone into the sandbox at provision time (repeatable, max 8)",
+      (value: string, previous: string[]) => previous.concat([value]),
+      [] as string[],
+    )
+    .option("--json", "Emit raw JSON output")
+    .action(
+      async (opts: {
+        sessionKey?: string;
+        label?: string;
+        image?: string;
+        repo?: string[];
+        json?: boolean;
+      }) => {
+        const { handleSandboxWarm } = await import("./commands/sandbox.js");
+        await handleSandboxWarm(opts);
+      },
+    );
+
+  sandbox
+    .command("rename <session-id> <label>")
+    .description("Set a durable sandbox session's human-friendly display label")
+    .option("--json", "Emit raw JSON output")
+    .action(
+      async (sessionId: string, label: string, opts: { json?: boolean }) => {
+        const { handleSandboxRename } = await import("./commands/sandbox.js");
+        await handleSandboxRename(sessionId, label, opts);
+      },
+    );
+
   // ── sandbox template: portable sandbox-template CRUD + export/import ─────────
 
   const sandboxTemplate = sandbox

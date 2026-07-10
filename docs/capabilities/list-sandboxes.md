@@ -17,21 +17,31 @@ session id one at a time.
 
 ## Read model
 
-Unlike the other `agent.sandbox.*` capabilities, this one never resolves a live
-sandbox driver: it is a pure Postgres read against the `sandbox_sessions`
-registry, so it works whether or not a durable driver is configured and returns
-instantly. Soft-deleted rows are excluded; an optional `status` narrows the
-lifecycle state. Results are ordered by `last_used_at DESC` (nulls last), then
-`created_at DESC`, so the most recently active sessions surface first. The
-driver-internal live sandbox id / snapshot id are never exposed — only the
-opaque public id (`sbx_…`).
+The registry read is a Postgres query against `sandbox_sessions`: soft-deleted
+rows are excluded, an optional `status` narrows the lifecycle state, and results
+are ordered by `last_used_at DESC` (nulls last), then `created_at DESC`, so the
+most recently active sessions surface first. The driver-internal live sandbox id
+/ snapshot id are never exposed — only the opaque public id (`sbx_…`).
+
+The read is followed by a **bounded live reconcile** so the list never reports a
+session as running/idle that its provider has already terminated. Each
+running|idle row is checked against **its own driver's** `sessionStatus` (keyed
+on the row's `driver` column — vendor-neutral, never the deployment default),
+capped at 25 driver calls per request, run with `Promise.allSettled` so a
+single provider hiccup can't fail the listing. When the provider reports a
+session gone, the row is corrected to `stopped` with the same terminal semantics
+as an explicit stop (soft-deleted) and the fix persisted. When no durable driver
+is configured, the reconcile is skipped entirely and the raw registry view is
+returned — so the capability still works with no sandbox backend and consumes no
+AI tokens (`noBillingGate`).
 
 ## Input
 
-| Field    | Type                                             | Notes                                                                          |
-| -------- | ------------------------------------------------ | ------------------------------------------------------------------------------ |
-| `status` | `"running" \| "idle" \| "stopped" \| "gone"` (optional) | Filter to sessions in this lifecycle status. Omit to include every non-deleted session. |
-| `limit`  | `number` (1–100, default 50)                     | Maximum number of sessions to return.                                          |
+| Field        | Type                                             | Notes                                                                          |
+| ------------ | ------------------------------------------------ | ------------------------------------------------------------------------------ |
+| `status`     | `"running" \| "idle" \| "stopped" \| "gone"` (optional) | Filter to sessions in this lifecycle status (applied after reconcile). Omit to include every non-deleted session. |
+| `activeOnly` | `boolean` (default `false`)                      | When true, return only sessions that are running or idle **after** reconcile — sessions the provider already terminated are dropped. |
+| `limit`      | `number` (1–100, default 50)                     | Maximum number of sessions to return.                                          |
 
 ## Output
 
@@ -45,17 +55,23 @@ Each `Sandbox`:
 | ------------ | ------------------------------------------------ | -------------------------------------------------------- |
 | `sessionId`  | `string`                                         | Opaque durable-session id (`sbx_…`) — the public id.     |
 | `sessionKey` | `string \| null`                                 | Caller-supplied reuse key, or null for ephemeral sessions. |
+| `label`      | `string \| null`                                 | Human-friendly display name (from `start_sandbox` or `rename_sandbox`), or null. |
 | `image`      | `"node" \| "python" \| "shell" \| "agent"`       | Runtime base image.                                      |
-| `status`     | `"running" \| "idle" \| "stopped" \| "gone"`     | Lifecycle status.                                        |
+| `status`     | `"running" \| "idle" \| "stopped" \| "gone"`     | Lifecycle status (post-reconcile; a provider-dead row reads `stopped`). |
 | `driver`     | `string`                                         | Sandbox driver identifier (e.g. `modal`).                |
+| `repos`      | `Array<{ owner, repo, branch? }>` (optional)     | Repositories provisioned into the sandbox at start time; omitted when none. |
 | `lastUsedAt` | `string \| null`                                 | ISO timestamp of the most recent interaction, or null.  |
 | `expiresAt`  | `string \| null`                                 | ISO soft-expiry timestamp, or null when no expiry.       |
 | `createdAt`  | `string`                                         | ISO timestamp the session was created.                  |
 
+Work-recovery fields (`recoveryStatus`, `recoveryBranch`, `recoveryCommit`,
+`graceDeadlineAt`, `dirty`, `flushedAt`, `recoveredAt`) also ride each row — see
+`docs/specs/sandbox-session-lifecycle`.
+
 ## Surfaces
 
-- **API:** `POST /v1/:org/:workspace/agent/sandbox/list` — body `{ status?, limit? }`
-- **MCP:** `list_sandboxes` tool (read-only, idempotent)
+- **API:** `POST /v1/:org/:workspace/agent/sandbox/list` — body `{ status?, activeOnly?, limit? }`
+- **MCP:** `list_sandboxes` tool (idempotent)
 - **Agent:** invoked via `invoke("list_sandboxes", ...)` — no approval required
 - **CLI:** `oxagen sandbox list [--status <status>] [--limit <n>] [--json]`
 
@@ -68,7 +84,10 @@ Each `Sandbox`:
 
 ## Side effects
 
-None. Pure read; no Postgres writes and no driver interaction.
+Self-healing only: when the live reconcile finds a running|idle row whose
+provider reports the session gone, it marks that row `stopped` (soft-delete) so
+the stale status is corrected on read. No other Postgres writes. When no durable
+driver is configured there is no reconcile and no write at all.
 
 ## Errors
 
