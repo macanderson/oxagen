@@ -8,9 +8,9 @@
 
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
+import { Stat, StatGroup } from "./stat";
 
 afterEach(cleanup);
-import { Stat, StatGroup } from "./stat";
 
 describe("Stat — render", () => {
   it("renders label, value, and hint", () => {

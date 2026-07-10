@@ -8,9 +8,9 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { SearchInput } from "./search-input";
 
 afterEach(cleanup);
-import { SearchInput } from "./search-input";
 
 describe("SearchInput", () => {
   it("renders a search-type input with the leading glyph padding", () => {
