@@ -5,6 +5,7 @@ import {
   publish,
   subscribe,
 } from "./stream-registry";
+import { logger } from "../../middleware/logger";
 
 const STATUS_EVENT = {
   kind: "status-update" as const,
@@ -77,7 +78,9 @@ describe("stream-registry", () => {
   });
 
   it("a listener that throws does not prevent delivery to other listeners", () => {
-    const errSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    // Listener failures are surfaced through the structured API logger
+    // (pino signature: (context, message)), not a bare console.error.
+    const errSpy = vi.spyOn(logger, "warn").mockImplementation(() => undefined);
     const received: unknown[] = [];
     const unsubBad = subscribe("a2a_throws", () => {
       throw new Error("listener boom");

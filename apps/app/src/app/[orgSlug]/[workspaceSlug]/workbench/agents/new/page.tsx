@@ -7,13 +7,14 @@ import type { ScopeContext } from "@/lib/scope";
 import { resolveWorkbenchScope } from "@/lib/workbench/scope";
 import { loadEquipSources } from "@/lib/workbench/equip-sources";
 import { AgentBuilder } from "../agent-builder";
-import { installPlugin, installBulkPlugin } from "@/lib/agent-tools/install-actions";
+import {
+  installPlugin,
+  installBulkPlugin,
+} from "@/lib/agent-tools/install-actions";
 
 export const metadata: Metadata = {
   title: "New Agent | Workbench",
 };
-
-export const dynamic = "force-dynamic";
 
 interface PageProps {
   params: Promise<{ orgSlug: string; workspaceSlug: string }>;
