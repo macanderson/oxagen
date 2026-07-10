@@ -16,7 +16,11 @@ function makeRegistry(startMs = 1_000) {
 describe("AgentRegistry", () => {
   it("registers an agent and exposes it in the snapshot", () => {
     const { reg } = makeRegistry();
-    reg.register({ kind: "turn", title: "add rate limiting", model: "anthropic/claude-sonnet-5" });
+    reg.register({
+      kind: "turn",
+      title: "add rate limiting",
+      model: "anthropic/claude-sonnet-5",
+    });
     const snap = reg.snapshot();
     expect(snap).toHaveLength(1);
     expect(snap[0]).toMatchObject({
@@ -29,9 +33,12 @@ describe("AgentRegistry", () => {
 
   it("update() patches fields and done() marks terminal", () => {
     const { reg } = makeRegistry();
-    const h = reg.register({ kind: "monitor", title: "CI run 42" });
+    const h = reg.register({ kind: "subagent", title: "CI run 42" });
     h.update({ detail: "polling", outputTokens: 128 });
-    expect(reg.snapshot()[0]).toMatchObject({ detail: "polling", outputTokens: 128 });
+    expect(reg.snapshot()[0]).toMatchObject({
+      detail: "polling",
+      outputTokens: 128,
+    });
     h.done("failed");
     expect(reg.snapshot()[0]?.status).toBe("failed");
   });
@@ -40,7 +47,7 @@ describe("AgentRegistry", () => {
     const { reg, advance } = makeRegistry();
     const a = reg.register({ kind: "turn", title: "first" });
     advance(10);
-    reg.register({ kind: "monitor", title: "second" });
+    reg.register({ kind: "subagent", title: "second" });
     advance(10);
     a.done(); // finish the older one
     const titles = reg.snapshot().map((x) => x.title);
@@ -71,9 +78,14 @@ describe("AgentRegistry", () => {
   it("summary() counts by status", () => {
     const { reg } = makeRegistry();
     reg.register({ kind: "turn", title: "run" });
-    reg.register({ kind: "monitor", title: "queued", status: "queued" });
+    reg.register({ kind: "subagent", title: "queued", status: "queued" });
     reg.register({ kind: "subagent", title: "boom" }).done("failed");
-    expect(reg.summary()).toMatchObject({ total: 3, running: 1, queued: 1, failed: 1 });
+    expect(reg.summary()).toMatchObject({
+      total: 3,
+      running: 1,
+      queued: 1,
+      failed: 1,
+    });
   });
 
   it("notifies subscribers on change and stops after unsubscribe", () => {
