@@ -7,9 +7,9 @@
 
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
+import { KeyValueList } from "./key-value-list";
 
 afterEach(cleanup);
-import { KeyValueList } from "./key-value-list";
 
 const items = [
   { label: "Status", value: "Active" },
