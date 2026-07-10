@@ -66,6 +66,7 @@ import {
   resolveGroundingCitations,
 } from "./recall-context";
 import { createChatMemoryProvider } from "./engine-memory";
+import { buildPageContextMessage } from "./page-context";
 import {
   applyAgentBinding,
   type AgentBindingDefinition,
@@ -997,108 +998,64 @@ export async function POST(request: NextRequest): Promise<Response> {
             : Promise.resolve<MemoryRecallHit[]>([]);
 
         // ── Page context (always) + Page-form-fill tool (request-scoped) ────
-        // When the client sends pageContext, always inject the current route
-        // (and optional entity summary) into the system prompt so the model
-        // knows what page the user is viewing. When a fillableForm is also
-        // present, register a request-scoped `page_form_fill` tool that routes
-        // through the kernel.invoke() boundary (IAM + metering).
+        // Page context is VOLATILE per-turn data — the `route` changes on every
+        // navigation and a form field's `current` value changes as the user
+        // types. It rides as a per-turn USER message (built by
+        // buildPageContextMessage), NOT the cached system prompt, so navigation
+        // and typing never bust the Anthropic prompt-cache breakpoint on the
+        // byte-stable system prefix (ADR-021 §2). This mirrors the code-mode /
+        // pinned / references context messages below. The message content is
+        // substantively identical to the text that previously rode in the
+        // system prompt — only its position changes.
+        //
+        // When a fillableForm is present, also register a request-scoped
+        // `page_form_fill` tool that routes through the kernel.invoke() boundary
+        // (IAM + metering).
+        const pageContextMessage = buildPageContextMessage(pageContext);
         let pageFormFillTool: ToolSet | undefined;
-        let pageContextSystemSuffix = "";
 
-        if (pageContext) {
-          const { route: pcRoute, entitySummary: pcEntitySummary } =
-            pageContext;
-
-          // Always surface the current page location to the model.
-          const pageLocationLines = [
-            "",
-            "---",
-            "",
-            "## Current page",
-            "",
-            `Route: ${pcRoute}`,
-            ...(pcEntitySummary ? [`Entity: ${pcEntitySummary}`] : []),
-          ];
-
-          if (pageContext.fillableForm) {
-            const {
-              formId: pcFormId,
-              title: pcFormTitle,
-              fields: pcFields,
-            } = pageContext.fillableForm;
-
-            // Build a compact field list for the system prompt.
-            const fieldLines = pcFields.map((f) => {
-              const optPart =
-                f.options && f.options.length > 0
-                  ? ` options=[${f.options.map((o) => `"${o.label}"`).join(", ")}]`
-                  : "";
-              const reqPart = f.required ? " required" : "";
-              const curPart =
-                f.current !== null &&
-                f.current !== undefined &&
-                f.current !== ""
-                  ? ` current="${String(f.current)}"`
-                  : "";
-              return `  - ${f.name} (${f.label}) type=${f.type}${reqPart}${curPart}${optPart}`;
-            });
-
-            pageContextSystemSuffix = [
-              ...pageLocationLines,
-              "",
-              `### Fillable form`,
-              "",
-              `Form: "${pcFormTitle}" (id: ${pcFormId})`,
-              "Fields:",
-              ...fieldLines,
-              "",
-              "**Behavior rules for form fill:**",
-              "- When the user asks to fill, update, or change this form, call the `page_form_fill` tool with a clear natural-language instruction.",
-              "- If the request is ambiguous (you cannot determine which field or what value without guessing), **ask a clarifying question** instead of calling the tool — never call `page_form_fill` with invented values.",
-              "- After the tool returns, briefly summarize the proposed changes and tell the user to review the suggestion panel. The proposals do NOT apply until the user accepts them.",
-            ].join("\n");
-            pageFormFillTool = {
-              page_form_fill: tool({
-                description:
-                  "Fill or suggest values for the page form the user is currently viewing. " +
-                  "Call this when the user asks to fill, update, or change the form. " +
-                  "Pass a clear natural-language instruction describing the desired changes. " +
-                  "If the request is ambiguous, ask a clarifying question instead.",
-                inputSchema: z.object({
-                  instruction: z
-                    .string()
-                    .min(1)
-                    .describe(
-                      "Natural-language instruction describing the desired form changes.",
-                    ),
-                }),
-                execute: async (input: { instruction: string }) => {
-                  const { instruction } = input;
-                  const rawResult = await invoke(
-                    "fill_form",
-                    {
-                      route: pcRoute,
-                      entitySummary: pcEntitySummary,
-                      instruction,
-                      fields: pcFields.map((f) => ({
-                        name: f.name,
-                        label: f.label,
-                        type: f.type,
-                        current: f.current,
-                        options: f.options,
-                        required: f.required,
-                      })),
-                    },
-                    capCtx,
-                    { surface: "agent" },
-                  );
-                  return formFill.output.parse(rawResult);
-                },
+        if (pageContext?.fillableForm) {
+          const { route: pcRoute, entitySummary: pcEntitySummary } = pageContext;
+          const { fields: pcFields } = pageContext.fillableForm;
+          pageFormFillTool = {
+            page_form_fill: tool({
+              description:
+                "Fill or suggest values for the page form the user is currently viewing. " +
+                "Call this when the user asks to fill, update, or change the form. " +
+                "Pass a clear natural-language instruction describing the desired changes. " +
+                "If the request is ambiguous, ask a clarifying question instead.",
+              inputSchema: z.object({
+                instruction: z
+                  .string()
+                  .min(1)
+                  .describe(
+                    "Natural-language instruction describing the desired form changes.",
+                  ),
               }),
-            };
-          } else {
-            pageContextSystemSuffix = pageLocationLines.join("\n");
-          }
+              execute: async (input: { instruction: string }) => {
+                const { instruction } = input;
+                const rawResult = await invoke(
+                  "fill_form",
+                  {
+                    route: pcRoute,
+                    entitySummary: pcEntitySummary,
+                    instruction,
+                    fields: pcFields.map((f) => ({
+                      name: f.name,
+                      label: f.label,
+                      type: f.type,
+                      current: f.current,
+                      options: f.options,
+                      required: f.required,
+                    })),
+                  },
+                  capCtx,
+                  { surface: "agent" },
+                );
+                return formFill.output.parse(rawResult);
+              },
+            }),
+          };
         }
 
         // Merge the page_form_fill tool (when present) alongside the
@@ -1398,23 +1355,29 @@ export async function POST(request: NextRequest): Promise<Response> {
           // AI-SDK file parts by the engine.
           ...(videoAttachments.length > 0 ? { videos: videoAttachments } : {}),
           history:
-            codeContextMessage || pinnedContextMessage || referencesContextMessage
+            codeContextMessage ||
+            pinnedContextMessage ||
+            referencesContextMessage ||
+            pageContextMessage
               ? [
                   ...historyForEngine,
                   ...([
                     codeContextMessage,
                     pinnedContextMessage,
                     referencesContextMessage,
+                    pageContextMessage,
                   ].filter(Boolean) as ModelMessage[]),
                 ]
               : historyForEngine,
-          // Prompt layering: base (chat OR coding) → bound agent instructions →
-          // page context suffix. The coding CONTRACT (codeModeSystemPrompt) must
-          // always sit ABOVE the customer's agent instructions, so the bound
-          // instructions are appended AFTER the base prompt, never merged into
-          // it. `boundInstructions` is "" for an unbound turn ⇒ byte-identical
+          // Prompt layering: base (chat OR coding) → bound agent instructions.
+          // The coding CONTRACT (codeModeSystemPrompt) must always sit ABOVE the
+          // customer's agent instructions, so the bound instructions are
+          // appended AFTER the base prompt, never merged into it.
+          // `boundInstructions` is "" for an unbound turn ⇒ byte-identical
           // baseline. `useCodeModePrompt` is true when the request enabled code
-          // mode OR the bound agent is a coding agent.
+          // mode OR the bound agent is a coding agent. Volatile page context is
+          // NOT folded in here — it rides as a per-turn user message
+          // (pageContextMessage) so the cached prefix stays byte-stable.
           system: resolvePrompt({
             key: "chat.system",
             baseline:
@@ -1442,8 +1405,7 @@ export async function POST(request: NextRequest): Promise<Response> {
               // baseline.
               (boundInstructions
                 ? `\n\n---\n\n## Agent instructions\n\n${boundInstructions}`
-                : "") +
-              pageContextSystemSuffix,
+                : ""),
             config: promptConfig,
           }),
           model: modelId,

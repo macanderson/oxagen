@@ -9,8 +9,9 @@ import { materializeTools, resolveAgentForA2A } from "@oxagen/agent";
 import { createPlatformAgentAi } from "@oxagen/agent/adapters";
 import { runCodingAgent } from "@oxagen/agent-engine";
 import { runInTenantScope } from "@oxagen/tenancy";
-import { insertEvents } from "@oxagen/telemetry";
+import { insertEvents, captureError } from "@oxagen/telemetry";
 import { schema, withTenantDb } from "@oxagen/database";
+import { logger } from "../../middleware/logger";
 import { and, eq } from "drizzle-orm";
 import type { ModelMessage } from "ai";
 import type { CapabilityContext } from "@oxagen/oxagen";
@@ -96,9 +97,9 @@ async function emitLifecycle(
     ]);
   } catch (err) {
     // Telemetry is best-effort — a ClickHouse hiccup must not fail the task.
-    console.error(
-      `[a2a.bridge] lifecycle event ${eventType} emit failed:`,
-      err instanceof Error ? err.message : String(err),
+    logger.warn(
+      { err, eventType, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+      "[a2a.bridge] lifecycle event emit failed",
     );
   }
 }
@@ -167,10 +168,22 @@ async function insertExecutionRow(args: {
         }),
     );
   } catch (err) {
-    console.error(
-      "[a2a.bridge] agent_executions insert failed:",
-      err instanceof Error ? err.message : String(err),
+    // Best-effort lineage row: log with context AND escalate via captureError so
+    // a spike in dropped agent_executions inserts is alertable the same way every
+    // other apps/api boundary is — a lost lineage row is a fleet-lineage hole.
+    logger.warn(
+      { err, orgId: args.ctx.orgId, workspaceId: args.ctx.workspaceId, originId: args.originId },
+      "[a2a.bridge] agent_executions insert failed",
     );
+    captureError({
+      error: err,
+      source: "api",
+      severity: "warn",
+      orgId: args.ctx.orgId,
+      workspaceId: args.ctx.workspaceId,
+      requestId: args.ctx.requestId,
+      context: "a2a.bridge: agent_executions insert failed",
+    });
     return null;
   }
 }
@@ -207,10 +220,23 @@ async function updateExecutionRow(args: {
         ),
     );
   } catch (err) {
-    console.error(
-      "[a2a.bridge] agent_executions terminal update failed:",
-      err instanceof Error ? err.message : String(err),
+    // Best-effort lineage update: log with context AND escalate via captureError
+    // — a dropped terminal update leaves the execution row stuck in 'running'
+    // with no token totals, undermining fleet lineage/audit.
+    logger.warn(
+      { err, orgId: args.ctx.orgId, workspaceId: args.ctx.workspaceId, executionId: args.executionId },
+      "[a2a.bridge] agent_executions terminal update failed",
     );
+    captureError({
+      error: err,
+      source: "api",
+      severity: "warn",
+      orgId: args.ctx.orgId,
+      workspaceId: args.ctx.workspaceId,
+      requestId: args.ctx.requestId,
+      executionId: args.executionId,
+      context: "a2a.bridge: agent_executions terminal update failed",
+    });
   }
 }
 
@@ -247,9 +273,9 @@ async function findExecutionIdForTask(
         }),
     );
   } catch (err) {
-    console.error(
-      "[a2a.bridge] parentExecutionId lookup failed:",
-      err instanceof Error ? err.message : String(err),
+    logger.warn(
+      { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId, taskInternalId },
+      "[a2a.bridge] parentExecutionId lookup failed",
     );
     return null;
   }
@@ -327,9 +353,9 @@ export async function runA2ATask(args: RunA2ATaskArgs): Promise<A2ATaskRow> {
   const skillId = getSkillId(inboundMessage);
   const resolvedAgent = skillId
     ? await resolveAgentForA2A(ctx.workspaceId, skillId).catch((err: unknown) => {
-        console.error(
-          "[a2a.bridge] resolveAgentForA2A failed — falling back to generic chat:",
-          err instanceof Error ? err.message : String(err),
+        logger.warn(
+          { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId, skillId },
+          "[a2a.bridge] resolveAgentForA2A failed — falling back to generic chat",
         );
         return null;
       })
@@ -540,7 +566,10 @@ export async function runA2ATask(args: RunA2ATaskArgs): Promise<A2ATaskRow> {
               : typeof errVal === "string"
                 ? errVal
                 : "Agent stream error";
-          console.error("[a2a.bridge] LLM stream error part:", errorMessage);
+          logger.warn(
+            { errorMessage, orgId: ctx.orgId, workspaceId: ctx.workspaceId, taskId },
+            "[a2a.bridge] LLM stream error part",
+          );
         }
       },
     });
@@ -551,7 +580,10 @@ export async function runA2ATask(args: RunA2ATaskArgs): Promise<A2ATaskRow> {
   } catch (err) {
     streamErrored = true;
     errorMessage = err instanceof Error ? err.message : "Agent execution failed";
-    console.error("[a2a.bridge] task execution threw:", errorMessage);
+    logger.warn(
+      { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId, taskId },
+      "[a2a.bridge] task execution threw",
+    );
   }
 
   if (streamErrored) {

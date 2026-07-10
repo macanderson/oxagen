@@ -6,9 +6,9 @@
  * IDs are stable contracts. Never rename a key without a migration —
  * persisted content_blocks rows reference them by string.
  *
- * The files under registry-components/ are stub implementations supplied by
- * the R agent. The M agent (svg-preview, image-preview, install-instructions)
- * and V agent (make-video-form) replace them with full implementations.
+ * The files under registry-components/ are full implementations (svg-preview,
+ * image-preview, install-instructions, make-video-form, and the rest of the
+ * registry), each with its own tests/stories.
  */
 import { lazy, type LazyExoticComponent } from "react";
 import * as React from "react";

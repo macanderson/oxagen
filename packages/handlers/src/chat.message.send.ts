@@ -7,15 +7,12 @@ import { generateObjectFor } from "@oxagen/ai";
 import { logger } from "./logger";
 
 /**
- * Foundation-milestone variant: persists the user turn and a placeholder
- * assistant message, then dispatches an Inngest event for the runner to
- * stream tokens into the assistant row. The streaming surface (SSE/RSC)
- * lives at the route layer; this handler returns terminal ids so the
- * route can subscribe to updates.
- *
- * The Vercel AI SDK integration lands with the agent epic — wiring the
- * trigger here keeps the contract stable so UI work can proceed against
- * the right shape today.
+ * Persists the user turn and a placeholder assistant message (metadata:
+ * { status: "pending" }), then returns their ids. It does not call the model
+ * or dispatch any background job. The LLM call and streaming happen in the
+ * stream route (POST /api/v1/chat/stream), which is the single LLM caller
+ * per turn (OXA-1509) and persists the assistant reply directly once the
+ * stream finishes.
  *
  * For new conversations with a non-empty first message, a title is
  * generated asynchronously using generateObjectFor. This happens in the

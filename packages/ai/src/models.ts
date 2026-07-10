@@ -47,7 +47,7 @@ function applyDevtools(model: LanguageModelV4): LanguageModelV4 {
  * model. The env defaults (see packages/config/src/env.ts) are:
  *   fast     → OXAGEN_LLM_FAST     (anthropic/claude-haiku-4.5)
  *   balanced → OXAGEN_LLM_BALANCED (anthropic/claude-sonnet-5)
- *   precise  → OXAGEN_LLM_PRECISE  (anthropic/claude-opus-4.8)
+ *   precise  → OXAGEN_LLM_PRECISE  (anthropic/claude-fable-5)
  */
 export type OxagenTier = "fast" | "balanced" | "precise";
 
