@@ -19,6 +19,8 @@ import type {
   BillingCustomerCreateInput,
   BillingCustomerSearchResult,
   BillingDispute,
+  BillingExternalInvoiceInput,
+  BillingExternalInvoiceResult,
   BillingInvoice,
   BillingInvoiceLineItem,
   BillingOffSessionChargeInput,
@@ -40,7 +42,9 @@ import type {
 } from "./provider";
 
 /** Wrap an optional Stripe idempotency key into request options. */
-function idempotency(key: string | undefined): Stripe.RequestOptions | undefined {
+function idempotency(
+  key: string | undefined,
+): Stripe.RequestOptions | undefined {
   return key ? { idempotencyKey: key } : undefined;
 }
 
@@ -79,9 +83,14 @@ function summarizeProration(
 }
 
 function stripeDisputeToNeutral(d: Stripe.Dispute): BillingDispute {
-  const chargeId = typeof d.charge === "string" ? d.charge : (d.charge?.id ?? null);
+  const chargeId =
+    typeof d.charge === "string" ? d.charge : (d.charge?.id ?? null);
   const piRef = d.payment_intent;
-  const paymentIntentId = piRef ? (typeof piRef === "string" ? piRef : piRef.id) : null;
+  const paymentIntentId = piRef
+    ? typeof piRef === "string"
+      ? piRef
+      : piRef.id
+    : null;
   return {
     id: d.id,
     chargeId,
@@ -161,11 +170,15 @@ function resolveProductId(sub: Stripe.Subscription): string | null {
   return typeof product === "string" ? product : product.id;
 }
 
-function resolveCustomerId(ref: string | Stripe.Customer | Stripe.DeletedCustomer): string {
+function resolveCustomerId(
+  ref: string | Stripe.Customer | Stripe.DeletedCustomer,
+): string {
   return typeof ref === "string" ? ref : ref.id;
 }
 
-function resolveSubscriptionRef(ref: string | Stripe.Subscription | null | undefined): string | null {
+function resolveSubscriptionRef(
+  ref: string | Stripe.Subscription | null | undefined,
+): string | null {
   if (!ref) return null;
   return typeof ref === "string" ? ref : ref.id;
 }
@@ -192,8 +205,13 @@ interface InvoiceSubscriptionParent {
   } | null;
 }
 
-function invoiceParent(invoice: Stripe.Invoice): InvoiceSubscriptionParent | null {
-  return (invoice as unknown as { parent?: InvoiceSubscriptionParent | null }).parent ?? null;
+function invoiceParent(
+  invoice: Stripe.Invoice,
+): InvoiceSubscriptionParent | null {
+  return (
+    (invoice as unknown as { parent?: InvoiceSubscriptionParent | null })
+      .parent ?? null
+  );
 }
 
 function resolveInvoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
@@ -201,7 +219,8 @@ function resolveInvoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
   const top = resolveSubscriptionRef(invoice.subscription);
   if (top) return top;
   // …then the Basil-era parent.subscription_details.subscription (string | {id}).
-  const parentSub = invoiceParent(invoice)?.subscription_details?.subscription ?? null;
+  const parentSub =
+    invoiceParent(invoice)?.subscription_details?.subscription ?? null;
   if (!parentSub) return null;
   return typeof parentSub === "string" ? parentSub : parentSub.id;
 }
@@ -216,17 +235,27 @@ function resolveInvoiceOrgId(invoice: Stripe.Invoice): string | null {
 }
 
 function stripeInvoiceToNeutral(invoice: Stripe.Invoice): BillingInvoice {
-  const ALLOWED_INV_STATUSES = new Set(["draft", "open", "paid", "void", "uncollectible"]);
-  const status = ALLOWED_INV_STATUSES.has(invoice.status ?? "") ? (invoice.status as string) : "draft";
+  const ALLOWED_INV_STATUSES = new Set([
+    "draft",
+    "open",
+    "paid",
+    "void",
+    "uncollectible",
+  ]);
+  const status = ALLOWED_INV_STATUSES.has(invoice.status ?? "")
+    ? (invoice.status as string)
+    : "draft";
 
-  const lineItems: BillingInvoiceLineItem[] = (invoice.lines?.data ?? []).map((line) => ({
-    description: line.description ?? "",
-    quantity: line.quantity ?? 1,
-    unitAmountCents: line.price?.unit_amount ?? 0,
-    totalCents: line.amount,
-    metric: (line.metadata?.metric as string | undefined) ?? null,
-    metadata: (line.metadata as Record<string, string>) ?? {},
-  }));
+  const lineItems: BillingInvoiceLineItem[] = (invoice.lines?.data ?? []).map(
+    (line) => ({
+      description: line.description ?? "",
+      quantity: line.quantity ?? 1,
+      unitAmountCents: line.price?.unit_amount ?? 0,
+      totalCents: line.amount,
+      metric: (line.metadata?.metric as string | undefined) ?? null,
+      metadata: (line.metadata as Record<string, string>) ?? {},
+    }),
+  );
 
   const orgId = resolveInvoiceOrgId(invoice);
   const subId = resolveInvoiceSubscriptionId(invoice);
@@ -255,7 +284,9 @@ function stripeInvoiceToNeutral(invoice: Stripe.Invoice): BillingInvoice {
   };
 }
 
-function stripeSubscriptionToNeutral(sub: Stripe.Subscription): BillingSubscription {
+function stripeSubscriptionToNeutral(
+  sub: Stripe.Subscription,
+): BillingSubscription {
   return {
     id: sub.id,
     customerId: resolveCustomerId(sub.customer),
@@ -272,7 +303,9 @@ function stripeSubscriptionToNeutral(sub: Stripe.Subscription): BillingSubscript
   };
 }
 
-function stripePaymentMethodToNeutral(pm: Stripe.PaymentMethod): BillingPaymentMethod {
+function stripePaymentMethodToNeutral(
+  pm: Stripe.PaymentMethod,
+): BillingPaymentMethod {
   const customerRef = pm.customer;
   const customerId = customerRef
     ? typeof customerRef === "string"
@@ -337,10 +370,35 @@ function stripeEventType(stripeType: string): BillingWebhookEventType {
 // ── StripeProvider ───────────────────────────────────────────────────────────
 
 export class StripeProvider implements BillingProvider {
+  /**
+   * A per-instance Stripe client built from an explicit secret key — used for a
+   * RESELLER-scoped provider that must bill from the reseller's own account. When
+   * absent, every method uses the platform env singleton (`stripeClient()`), so
+   * the default `new StripeProvider()` is unchanged.
+   */
+  private scopedClient: Stripe | null = null;
+
+  constructor(private readonly secretKey?: string) {}
+
+  /** The Stripe client this provider operates against: the scoped key, else the env singleton. */
+  private client(): Stripe {
+    if (!this.secretKey) return stripeClient();
+    if (!this.scopedClient) {
+      this.scopedClient = new Stripe(this.secretKey, {
+        apiVersion: "2025-02-24.acacia",
+        typescript: true,
+        appInfo: { name: "oxagen", version: "0.1.0" },
+      });
+    }
+    return this.scopedClient;
+  }
+
   // ── Customer ────────────────────────────────────────────────────────────────
 
-  async findCustomerByOrgId(orgId: string): Promise<BillingCustomerSearchResult | null> {
-    const stripe = stripeClient();
+  async findCustomerByOrgId(
+    orgId: string,
+  ): Promise<BillingCustomerSearchResult | null> {
+    const stripe = this.client();
     const found = await stripe.customers.search({
       query: `metadata['org_id']:'${orgId}'`,
       limit: 1,
@@ -349,7 +407,7 @@ export class StripeProvider implements BillingProvider {
   }
 
   async createCustomer(input: BillingCustomerCreateInput): Promise<string> {
-    const stripe = stripeClient();
+    const stripe = this.client();
     const customer = await stripe.customers.create({
       name: input.name,
       metadata: input.metadata,
@@ -360,7 +418,7 @@ export class StripeProvider implements BillingProvider {
   // ── Subscription ────────────────────────────────────────────────────────────
 
   async getSubscription(subscriptionId: string): Promise<BillingSubscription> {
-    const sub = await stripeClient().subscriptions.retrieve(subscriptionId, {
+    const sub = await this.client().subscriptions.retrieve(subscriptionId, {
       expand: ["items.data.price.product"],
     });
     return stripeSubscriptionToNeutral(sub);
@@ -374,18 +432,18 @@ export class StripeProvider implements BillingProvider {
     if (input.cancelAtPeriodEnd !== undefined) {
       params.cancel_at_period_end = input.cancelAtPeriodEnd;
     }
-    await stripeClient().subscriptions.update(subscriptionId, params);
+    await this.client().subscriptions.update(subscriptionId, params);
   }
 
   async cancelSubscription(subscriptionId: string): Promise<void> {
-    await stripeClient().subscriptions.cancel(subscriptionId);
+    await this.client().subscriptions.cancel(subscriptionId);
   }
 
   async upgradeSubscription(
     subscriptionId: string,
     input: BillingSubscriptionUpgradeInput,
   ): Promise<void> {
-    const stripe = stripeClient();
+    const stripe = this.client();
     const sub = await stripe.subscriptions.retrieve(subscriptionId);
     const item = sub.items.data[0];
     if (!item) throw new Error("subscription has no items");
@@ -404,7 +462,7 @@ export class StripeProvider implements BillingProvider {
     subscriptionId: string,
     input: BillingSubscriptionSeatUpdateInput,
   ): Promise<void> {
-    const stripe = stripeClient();
+    const stripe = this.client();
     const sub = await stripe.subscriptions.retrieve(subscriptionId);
     const item = sub.items.data[0];
     if (!item) throw new Error("subscription has no items");
@@ -425,7 +483,7 @@ export class StripeProvider implements BillingProvider {
     subscriptionId: string,
     input: BillingSeatPreviewInput,
   ): Promise<BillingProrationPreview> {
-    const stripe = stripeClient();
+    const stripe = this.client();
     const sub = await stripe.subscriptions.retrieve(subscriptionId);
     const item = sub.items.data[0];
     if (!item) throw new Error("subscription has no items");
@@ -445,7 +503,7 @@ export class StripeProvider implements BillingProvider {
     subscriptionId: string,
     input: BillingPlanPreviewInput,
   ): Promise<BillingProrationPreview> {
-    const stripe = stripeClient();
+    const stripe = this.client();
     const sub = await stripe.subscriptions.retrieve(subscriptionId);
     const item = sub.items.data[0];
     if (!item) throw new Error("subscription has no items");
@@ -463,47 +521,58 @@ export class StripeProvider implements BillingProvider {
 
   // ── Payment methods ───────────────────────────────────────────────────────────
 
-  async listPaymentMethods(customerId: string): Promise<BillingPaymentMethod[]> {
-    const res = await stripeClient().paymentMethods.list({ customer: customerId, type: "card" });
+  async listPaymentMethods(
+    customerId: string,
+  ): Promise<BillingPaymentMethod[]> {
+    const res = await this.client().paymentMethods.list({
+      customer: customerId,
+      type: "card",
+    });
     return res.data.map(stripePaymentMethodToNeutral);
   }
 
   async getDefaultPaymentMethodId(customerId: string): Promise<string | null> {
-    const cust = await stripeClient().customers.retrieve(customerId);
+    const cust = await this.client().customers.retrieve(customerId);
     if (cust.deleted) return null;
-    const dpm = (cust as Stripe.Customer).invoice_settings?.default_payment_method;
+    const dpm = (cust as Stripe.Customer).invoice_settings
+      ?.default_payment_method;
     if (!dpm) return null;
     return typeof dpm === "string" ? dpm : dpm.id;
   }
 
-  async setDefaultPaymentMethod(customerId: string, paymentMethodId: string): Promise<void> {
-    await stripeClient().customers.update(customerId, {
+  async setDefaultPaymentMethod(
+    customerId: string,
+    paymentMethodId: string,
+  ): Promise<void> {
+    await this.client().customers.update(customerId, {
       invoice_settings: { default_payment_method: paymentMethodId },
     });
   }
 
   async detachPaymentMethod(paymentMethodId: string): Promise<void> {
-    await stripeClient().paymentMethods.detach(paymentMethodId);
+    await this.client().paymentMethods.detach(paymentMethodId);
   }
 
   async createSetupIntent(customerId: string): Promise<BillingSetupIntent> {
-    const si = await stripeClient().setupIntents.create({
+    const si = await this.client().setupIntents.create({
       customer: customerId,
       payment_method_types: ["card"],
       usage: "off_session",
     });
-    if (!si.client_secret) throw new Error("Stripe did not return a SetupIntent client secret");
+    if (!si.client_secret)
+      throw new Error("Stripe did not return a SetupIntent client secret");
     return { clientSecret: si.client_secret, setupIntentId: si.id };
   }
 
   async chargeOffSession(
     input: BillingOffSessionChargeInput,
   ): Promise<BillingOffSessionChargeResult> {
-    const stripe = stripeClient();
+    const stripe = this.client();
     // Resolve a card to charge: explicit > customer default. PaymentIntent
     // confirmation requires a concrete payment_method off-session.
     const paymentMethodId =
-      input.paymentMethodId ?? (await this.getDefaultPaymentMethodId(input.customerId));
+      input.paymentMethodId ??
+      (await this.getDefaultPaymentMethodId(input.customerId));
     if (!paymentMethodId) {
       throw new Error("no payment method on file for off-session charge");
     }
@@ -520,16 +589,76 @@ export class StripeProvider implements BillingProvider {
       },
       idempotency(input.idempotencyKey),
     );
-    return { paymentIntentId: pi.id, status: pi.status, succeeded: pi.status === "succeeded" };
+    return {
+      paymentIntentId: pi.id,
+      status: pi.status,
+      succeeded: pi.status === "succeeded",
+    };
   }
 
   // ── Invoice ─────────────────────────────────────────────────────────────────
 
   async getInvoice(invoiceId: string): Promise<BillingInvoice> {
-    const invoice = await stripeClient().invoices.retrieve(invoiceId, {
+    const invoice = await this.client().invoices.retrieve(invoiceId, {
       expand: ["lines.data.price"],
     });
     return stripeInvoiceToNeutral(invoice);
+  }
+
+  async createExternalInvoice(
+    input: BillingExternalInvoiceInput,
+  ): Promise<BillingExternalInvoiceResult> {
+    const stripe = this.client();
+
+    // 1. Resolve the customer — reuse an existing id, else create one. The `:cust`
+    //    idempotency suffix dedupes the customer create on a retried push.
+    let customerId = input.customerId;
+    if (!customerId) {
+      const customer = await stripe.customers.create(
+        { name: input.customerName, metadata: input.customerMetadata },
+        idempotency(`${input.idempotencyKey}:cust`),
+      );
+      customerId = customer.id;
+    }
+
+    // 2. Attach one pending invoice item per line. `amount` is the line total in
+    //    cents; a per-line idempotency key dedupes items on a retried push.
+    for (const [index, line] of input.lines.entries()) {
+      await stripe.invoiceItems.create(
+        {
+          customer: customerId,
+          amount: line.amountCents,
+          currency: input.currency,
+          description: line.description,
+          metadata: { ...line.metadata, quantity: String(line.quantity) },
+        },
+        idempotency(`${input.idempotencyKey}:item:${index}`),
+      );
+    }
+
+    // 3. Draft an invoice that sweeps in those pending items.
+    const draft = await stripe.invoices.create(
+      {
+        customer: customerId,
+        collection_method: "send_invoice",
+        days_until_due: 30,
+        auto_advance: input.finalize,
+        pending_invoice_items_behavior: "include",
+        metadata: input.metadata,
+      },
+      idempotency(`${input.idempotencyKey}:invoice`),
+    );
+
+    // 4. Finalize (open) it when asked; otherwise leave a reviewable draft.
+    const invoice =
+      input.finalize && draft.id
+        ? await stripe.invoices.finalizeInvoice(draft.id)
+        : draft;
+
+    return {
+      providerCustomerId: customerId,
+      invoice: stripeInvoiceToNeutral(invoice),
+    };
   }
 
   // ── Checkout ─────────────────────────────────────────────────────────────────
@@ -539,7 +668,7 @@ export class StripeProvider implements BillingProvider {
   ): Promise<BillingCheckoutResult> {
     const seats = input.seats ?? 1;
     const taxEnabled = automaticTaxEnabled();
-    const session = await stripeClient().checkout.sessions.create({
+    const session = await this.client().checkout.sessions.create({
       mode: "subscription",
       customer: input.customerId,
       line_items: [{ price: input.priceId, quantity: seats }],
@@ -560,7 +689,7 @@ export class StripeProvider implements BillingProvider {
     input: BillingCheckoutPaymentInput,
   ): Promise<BillingCheckoutResult> {
     const taxEnabled = automaticTaxEnabled();
-    const session = await stripeClient().checkout.sessions.create({
+    const session = await this.client().checkout.sessions.create({
       mode: "payment",
       customer: input.customerId,
       line_items: [{ price: input.priceId, quantity: input.quantity }],
@@ -578,7 +707,7 @@ export class StripeProvider implements BillingProvider {
   async createDynamicCreditCheckout(
     input: BillingCheckoutDynamicCreditInput,
   ): Promise<BillingCheckoutResult> {
-    const session = await stripeClient().checkout.sessions.create({
+    const session = await this.client().checkout.sessions.create({
       mode: "payment",
       customer: input.customerId,
       line_items: [
@@ -620,7 +749,7 @@ export class StripeProvider implements BillingProvider {
   async getCheckoutSessionCreditPacks(
     sessionId: string,
   ): Promise<BillingCreditPackLineItem[]> {
-    const stripe = stripeClient();
+    const stripe = this.client();
     const lineItems = await stripe.checkout.sessions
       .listLineItems(sessionId, { expand: ["data.price.product"], limit: 100 })
       .autoPagingToArray({ limit: 10_000 });
@@ -643,7 +772,7 @@ export class StripeProvider implements BillingProvider {
 
   parseWebhookEvent(rawBody: string, signature: string): BillingWebhookEvent {
     const env = requireEnv(["STRIPE_WEBHOOK_SECRET"] as const);
-    const event = stripeClient().webhooks.constructEvent(
+    const event = this.client().webhooks.constructEvent(
       rawBody,
       signature,
       env.STRIPE_WEBHOOK_SECRET,

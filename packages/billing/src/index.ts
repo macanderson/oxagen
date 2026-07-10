@@ -26,3 +26,7 @@ export * from "./payment-methods";
 export * from "./autoreload";
 export * from "./dunning";
 export * from "./disputes";
+export * from "./reseller-pricing";
+export * from "./reseller-secret";
+export * from "./reseller";
+export * from "./reseller-rebill";

@@ -160,6 +160,8 @@ export const resellerRebillRunSchema = z.object({
   error: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
+  /** The priced lines snapshotted for this run — the invoice breakdown. */
+  lineItems: z.array(resellerRebillLineItemSchema),
 });
 export type ResellerRebillRun = z.output<typeof resellerRebillRunSchema>;
 

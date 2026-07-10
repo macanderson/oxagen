@@ -932,6 +932,9 @@ importers:
       '@oxagen/config':
         specifier: workspace:*
         version: link:../config
+      '@oxagen/crypto':
+        specifier: workspace:*
+        version: link:../crypto
       '@oxagen/database':
         specifier: workspace:*
         version: link:../database

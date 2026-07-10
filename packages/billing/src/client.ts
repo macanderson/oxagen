@@ -68,3 +68,15 @@ export function setBillingProvider(provider: BillingProvider): void {
 export function resetBillingProvider(): void {
   _provider = null;
 }
+
+/**
+ * Build a BillingProvider bound to a RESELLER's own Stripe secret key, for
+ * pushing that reseller's customer invoices from their account (not the
+ * platform's). Deliberately NOT wrapped in the shared "stripe" circuit breaker:
+ * the reseller account is a distinct dependency, and folding its health into the
+ * platform breaker would let one reseller's Stripe outage trip platform billing.
+ * Constructed per push (cheap) — never cached in the singleton.
+ */
+export function resellerBillingProvider(secretKey: string): BillingProvider {
+  return new StripeProvider(secretKey);
+}
