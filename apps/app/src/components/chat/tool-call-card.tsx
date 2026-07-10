@@ -47,9 +47,10 @@ export interface ToolCallCardProps {
  * A quiet, muted status glyph for the header row. Deliberately restrained:
  * tool calls happen constantly, so a completed call shows only a faint check
  * and a failed call a neutral dot + muted "failed" — never a red badge or X
- * screaming for attention in the conversation history.
+ * screaming for attention in the conversation history. Shared with
+ * CodeExecuteCard so both collapsed headers read as one family.
  */
-function HeaderStatus({ status }: { status: ToolCallStatus }) {
+export function HeaderStatus({ status }: { status: ToolCallStatus }) {
   if (status === "pending") {
     return (
       <span
@@ -59,14 +60,30 @@ function HeaderStatus({ status }: { status: ToolCallStatus }) {
     );
   }
   if (status === "running") {
-    return <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" aria-label="Running" />;
+    return (
+      <Loader2
+        className="h-3.5 w-3.5 animate-spin text-muted-foreground"
+        aria-label="Running"
+      />
+    );
   }
   if (status === "completed") {
-    return <Check className="h-3.5 w-3.5 text-muted-foreground" aria-label="Completed" />;
+    return (
+      <Check
+        className="h-3.5 w-3.5 text-muted-foreground"
+        aria-label="Completed"
+      />
+    );
   }
   return (
-    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground" aria-label="Failed">
-      <span className="inline-block h-1.5 w-1.5 rounded-full bg-muted-foreground/70" aria-hidden="true" />
+    <span
+      className="inline-flex items-center gap-1 text-xs text-muted-foreground"
+      aria-label="Failed"
+    >
+      <span
+        className="inline-block h-1.5 w-1.5 rounded-full bg-muted-foreground/70"
+        aria-hidden="true"
+      />
       failed
     </span>
   );
@@ -124,16 +141,29 @@ export function ToolCallCard(props: ToolCallCardProps) {
           type="button"
           onClick={() => setOpen((v) => !v)}
           aria-expanded={openState}
-          aria-label={openState ? "Collapse tool call details" : "Expand tool call details"}
+          aria-label={
+            openState
+              ? "Collapse tool call details"
+              : "Expand tool call details"
+          }
           title={capability}
           className="flex min-h-9 w-full items-center gap-2 px-3 py-1.5 text-left"
         >
           {openState ? (
-            <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <ChevronDown
+              className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+              aria-hidden="true"
+            />
           ) : (
-            <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <ChevronRight
+              className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+              aria-hidden="true"
+            />
           )}
-          <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <Icon
+            className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+            aria-hidden="true"
+          />
           <span className="truncate text-xs font-medium">{label}</span>
           <span className="ml-auto flex items-center gap-2">
             <HeaderStatus status={status} />
@@ -146,7 +176,12 @@ export function ToolCallCard(props: ToolCallCardProps) {
         </button>
       )}
       {open ? (
-        <div className={cn("@container space-y-2 px-3 py-2", !hideHeader && "border-t")}>
+        <div
+          className={cn(
+            "@container space-y-2 px-3 py-2",
+            !hideHeader && "border-t",
+          )}
+        >
           {/* Raw capability + risk detail belong in the detail body, not the
               collapsed row — the row stays calm and human-readable. */}
           <div className="flex items-center gap-2 font-mono text-[10px] text-muted-foreground">
@@ -182,7 +217,10 @@ export function ToolCallCard(props: ToolCallCardProps) {
                     Input
                   </span>
                   <div className="flex items-center gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2.5 text-xs text-muted-foreground">
-                    <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+                    <Loader2
+                      className="size-3.5 animate-spin"
+                      aria-hidden="true"
+                    />
                     Composing arguments…
                   </div>
                 </div>
@@ -206,12 +244,16 @@ export function ToolCallCard(props: ToolCallCardProps) {
                 ref={streamRef}
                 className="max-h-48 overflow-y-auto rounded-lg bg-black/85 p-2 font-mono text-xs text-success"
               >
-                {stdout ? <pre className="whitespace-pre-wrap">{stdout}</pre> : null}
+                {stdout ? (
+                  <pre className="whitespace-pre-wrap">{stdout}</pre>
+                ) : null}
                 {stderr ? (
                   <pre className="whitespace-pre-wrap text-error">{stderr}</pre>
                 ) : null}
                 {status === "running" && !stdout && !stderr ? (
-                  <span className="text-muted-foreground">Waiting for output…</span>
+                  <span className="text-muted-foreground">
+                    Waiting for output…
+                  </span>
                 ) : null}
               </div>
             </Section>
@@ -229,8 +271,13 @@ export function ToolCallCard(props: ToolCallCardProps) {
   );
 }
 
-
-function Section({ label, children }: { label: string; children: React.ReactNode }) {
+function Section({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className="space-y-1">
       <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
