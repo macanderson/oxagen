@@ -18,6 +18,7 @@ import "@oxagen/handlers/register";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { runInTenantScope } from "@oxagen/tenancy";
+import { logger } from "@oxagen/handlers/logger";
 import { resolveStudioScope } from "@/lib/studio/scope";
 import { workspace } from "@/lib/routes";
 import {
@@ -82,6 +83,10 @@ export async function startSandboxAction(
     revalidatePath(workspace.studio.sandboxes({ orgSlug, workspaceSlug }));
     return { ok: true, sandbox };
   } catch (err) {
+    logger.error(
+      { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId, templateId, sessionKey: key },
+      "studio.sandboxes: startSandboxAction failed",
+    );
     return {
       ok: false,
       error: errMessage(err, "Failed to start sandbox."),
@@ -117,6 +122,10 @@ export async function runSandboxCommandAction(
     );
     return { ok: true, result };
   } catch (err) {
+    logger.error(
+      { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId, sessionId },
+      "studio.sandboxes: runSandboxCommandAction failed",
+    );
     return {
       ok: false,
       error: errMessage(err, "Command failed to run."),
@@ -149,6 +158,10 @@ export async function stopSandboxAction(
     revalidatePath(workspace.studio.sandboxes({ orgSlug, workspaceSlug }));
     return { ok: true, stopped: out.stopped };
   } catch (err) {
+    logger.error(
+      { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId, sessionId },
+      "studio.sandboxes: stopSandboxAction failed",
+    );
     return { ok: false, error: errMessage(err, "Failed to stop sandbox.") };
   }
 }

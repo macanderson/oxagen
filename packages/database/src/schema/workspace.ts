@@ -82,6 +82,11 @@ export const workspaceUsers = workspaceSchema.table(
     workspaceId: uuid("workspace_id").notNull(),
     userId: uuid("user_id").notNull(),
     role: text("role").notNull(),
+    // DEPRECATED — dead column. Superseded by the IAM store
+    // (`iam.role_grants` / `iam.principal_role_assignments`), which is the sole
+    // source of truth for effective permissions. No app/handler/auth code reads
+    // or writes this; it retains its `{}` insert default only. Do NOT wire new
+    // authorization logic to it — grant via IAM instead.
     permissions: jsonb("permissions").notNull().default(sql`'{}'::jsonb`),
     joinedAt: timestamp("joined_at", { withTimezone: true, mode: "date" }).notNull(),
   },

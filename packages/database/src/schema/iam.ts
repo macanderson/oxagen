@@ -1,25 +1,22 @@
 // iam.ts — IAM data layer (OXA-1389, Phase 2).
 //
-// All 7 IAM tables live in the `org` Postgres schema — no separate `iam`
-// schema. The `org` schema is already in drizzle.config.ts's schemaFilter so
-// these tables are picked up automatically by `drizzle-kit generate`.
+// All 5 IAM tables live in their own dedicated `iam` Postgres schema
+// (`iamSchema = pgSchema("iam")` in ./_schemas). Atlas reads the desired state
+// via `drizzle-kit export`, so these tables are picked up automatically — there
+// is no drizzle-kit `schemaFilter` to maintain. There is NO IAM sessions table;
+// auth sessions live in `auth.sessions` (see auth.ts).
 //
 // CRITICAL: Do NOT use orgScopeMixin() on these tables. orgScopeMixin() forces
 // workspace_id NOT NULL, but principals/roles/role_grants are org-scoped
 // entities that may not carry a workspace_id. All IAM tables declare their
 // scope columns inline.
 //
-// Naming conventions (spec §4.3 public-id prefixes):
-//   principals               → prn_
-//   roles                    → rol_
-//   role_grants              → rlg_
-//   access_requests          → arq_
-//   sessions (IAM)           → ses_   (distinct from auth.sessions, export as iamSessions)
+// The five tables and their public-id prefixes (spec §4.3):
+//   principals                 → prn_
+//   roles                      → rol_
+//   role_grants                → rlg_
+//   access_requests            → arq_
 //   principal_role_assignments → pra_  (OXA-1498)
-//
-// Append-only rules:
-//   sessions — no updated_at/updated_by (sessions are append-leaning;
-//   revocation is tracked via revoked_at/revoked_by, never UPDATE).
 
 import { boolean, check, index, integer, jsonb, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";

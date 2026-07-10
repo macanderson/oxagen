@@ -14,10 +14,3 @@ export type {
   EmbeddedSkillFile,
   EmbeddedSkillReference,
 } from "./builtin-skills.generated";
-export { seedSkillsFromFilesystem, BUILTIN_ORG_ID, BUILTIN_WORKSPACE_ID } from "./seed";
-export type {
-  SkillSeedAdapter,
-  SeedSkillsOptions,
-  SeedSkillsResult,
-  SkillRow,
-} from "./seed";

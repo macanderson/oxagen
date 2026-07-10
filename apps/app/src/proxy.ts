@@ -44,9 +44,10 @@ export function proxy(request: NextRequest): NextResponse {
   // 2. v1 → v2 workspace route renames (§16 of the IA spec).
   //    Pattern: /{org}/{ws}/{old}(/{rest})? → /{org}/{ws}/{new}(/{rest})?
   //    Uses 301 (permanent, GET-preserving) per spec — these routes moved for good.
-  //    The Automation/Activity feature areas (agents, playbooks, workflows,
-  //    executions, runs) were removed entirely, so their legacy redirects are
-  //    gone too — old links fall through to a 404 rather than a dead redirect.
+  //    The Automation feature areas (playbooks, workflows, runs) were removed,
+  //    so their legacy redirects are gone too — old links fall through to a 404
+  //    rather than a dead redirect. Activity has since been reintroduced at
+  //    /{org}/{ws}/activity (2026-07-09) as a new route, not a redirect target.
   {
     const wsRouteMove = pathname.match(/^(\/[^/]+\/[^/]+)\/(.*)$/);
     if (wsRouteMove) {

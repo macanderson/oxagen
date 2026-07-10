@@ -23,9 +23,12 @@ import {
  * scoped to an org AND workspace; the `is_default` flag identifies the workspace's
  * default registry (enforced via partial unique index in the SQL migration).
  *
- * The `is_default_seed`, `last_synced_at`, and `last_synced_cursor` columns were
- * removed in the workspace-scoping rebuild (2026-06-17) — the catalog sync
- * machinery is gone; the marketplace queries installed_plugins directly.
+ * The `is_default_seed` column was removed in the workspace-scoping rebuild
+ * (2026-06-17). `last_synced_at` and `last_synced_cursor` are NOT dead — they
+ * remain live: the catalog sync loop (packages/plugins/src/catalog-sync.ts)
+ * writes them, and the marketplace browse handler
+ * (packages/handlers/src/plugin.catalog.browse.ts) reads them to drive
+ * incremental registry sync.
  *
  * The partial unique `UNIQUE (org_id, workspace_id) WHERE is_default` index is
  * expressed in the Atlas SQL migration (Task 2) via:
