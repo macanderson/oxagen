@@ -11,6 +11,7 @@ import {
   clip,
   clipMiddle,
   readFileTruncationMarker,
+  resolveDisplayPath,
 } from "./tools";
 import type { CodingEvent } from "./types";
 
@@ -19,6 +20,25 @@ async function run(tool: unknown, input: unknown): Promise<string> {
     tool as { execute: (i: unknown, o: unknown) => Promise<string> }
   ).execute(input, {});
 }
+
+describe("resolveDisplayPath", () => {
+  it("joins a relative path onto the workspace root", () => {
+    expect(resolveDisplayPath("/repo", "src/a.ts")).toBe("/repo/src/a.ts");
+  });
+
+  it("tolerates a trailing slash on the root", () => {
+    expect(resolveDisplayPath("/repo/", "a.ts")).toBe("/repo/a.ts");
+  });
+
+  it("returns absolute POSIX and Windows paths unchanged", () => {
+    expect(resolveDisplayPath("/repo", "/elsewhere/a.ts")).toBe(
+      "/elsewhere/a.ts",
+    );
+    expect(resolveDisplayPath("/repo", "C:\\work\\a.ts")).toBe(
+      "C:\\work\\a.ts",
+    );
+  });
+});
 
 describe("buildWorkspaceTools – write_file", () => {
   it("creates a new file and returns a byte-count confirmation", async () => {
@@ -31,6 +51,16 @@ describe("buildWorkspaceTools – write_file", () => {
     expect(result).toContain("5");
     expect(result).toContain("new.ts");
     expect(await ws.readFile("new.ts")).toBe("hello");
+  });
+
+  it("echoes the RESOLVED absolute path in the write confirmation (worktree divergence guard)", async () => {
+    const ws = new MemoryWorkspace({});
+    const tools = buildWorkspaceTools(ws);
+    const result = await run(tools.write_file, {
+      path: "new.ts",
+      content: "hello",
+    });
+    expect(result).toBe("Wrote 5 bytes to /repo/new.ts");
   });
 
   it("emits a file-edit event on write", async () => {
@@ -475,7 +505,7 @@ describe("buildWorkspaceTools – edit_file replace_all + structured feedback", 
     expect(await ws.readFile("a.ts")).toBe("b\nb\nb");
   });
 
-  it("leaves the single-match success message unchanged", async () => {
+  it("echoes the RESOLVED absolute path on a single-match edit (worktree divergence guard)", async () => {
     const ws = new MemoryWorkspace({ "a.ts": "foo bar" });
     const tools = buildWorkspaceTools(ws);
     const out = await run(tools.edit_file, {
@@ -484,6 +514,17 @@ describe("buildWorkspaceTools – edit_file replace_all + structured feedback", 
       new_string: "baz",
     });
     expect(out).toBe("Edited a.ts");
+  });
+
+  it("keeps an absolute input path as-is in the edit confirmation", async () => {
+    const ws = new MemoryWorkspace({ "/repo/a.ts": "foo bar" });
+    const tools = buildWorkspaceTools(ws);
+    const out = await run(tools.edit_file, {
+      path: "/repo/a.ts",
+      old_string: "bar",
+      new_string: "baz",
+    });
+    expect(out).toBe("Edited /repo/a.ts");
   });
 
   it("names the closest line when old_string is not found", async () => {

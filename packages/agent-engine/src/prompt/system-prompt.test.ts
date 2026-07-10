@@ -47,6 +47,18 @@ describe("buildCodingCorePrompt — shared coding core (ADR-021 §7)", () => {
   });
 });
 
+describe("buildSystemPrompt — pinned file-tool root rule", () => {
+  it("warns in BOTH profiles that file tools ignore bash `cd` and need absolute paths outside cwd", () => {
+    for (const profile of ["interactive", "headless"] as const) {
+      const p = buildSystemPrompt({ ...base, profile });
+      expect(p).toContain("FILE-TOOL ROOT IS PINNED");
+      expect(p).toContain("NEVER persists");
+      expect(p).toContain("ABSOLUTE paths");
+      expect(p).toContain("git worktree");
+    }
+  });
+});
+
 describe("buildSystemPrompt — profiles", () => {
   it("headless adds the verification protocol and drops the live narration", () => {
     const p = buildSystemPrompt({ ...base, profile: "headless" });
