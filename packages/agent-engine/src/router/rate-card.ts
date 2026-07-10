@@ -24,8 +24,9 @@ export interface ModelRate {
    * prompt/code-graph context across many steps bills the repeat reads at
    * this rate, not the fresh-input rate. Mirrors
    * `packages/billing/src/pricing.ts`'s `cachedInputPer1M`; kept in sync by
-   * hand since this card is intentionally vendored, not imported (same as
-   * apps/cli/src/agent/rate-card.ts's identical copy — keep both in sync).
+   * hand since this card is intentionally vendored, not imported.
+   * (apps/cli/src/agent/rate-card.ts is a pure re-export of this module —
+   * the old hand-synced CLI copy was deduped in 29c8d53c.)
    */
   cachedInputPer1M: number;
 }
@@ -56,10 +57,30 @@ export interface RateCardEntry {
  * pricing.ts.
  */
 export const RATE_CARD: RateCardEntry[] = [
-  { family: "claude-fable", label: "Claude Fable", vendor: "anthropic", rate: { inputPer1M: 15.0, outputPer1M: 75.0, cachedInputPer1M: 1.5 } },
-  { family: "claude-opus", label: "Claude Opus", vendor: "anthropic", rate: { inputPer1M: 15.0, outputPer1M: 75.0, cachedInputPer1M: 1.5 } },
-  { family: "claude-sonnet", label: "Claude Sonnet", vendor: "anthropic", rate: { inputPer1M: 3.0, outputPer1M: 15.0, cachedInputPer1M: 0.3 } },
-  { family: "claude-haiku", label: "Claude Haiku", vendor: "anthropic", rate: { inputPer1M: 1.0, outputPer1M: 5.0, cachedInputPer1M: 0.1 } },
+  {
+    family: "claude-fable",
+    label: "Claude Fable",
+    vendor: "anthropic",
+    rate: { inputPer1M: 15.0, outputPer1M: 75.0, cachedInputPer1M: 1.5 },
+  },
+  {
+    family: "claude-opus",
+    label: "Claude Opus",
+    vendor: "anthropic",
+    rate: { inputPer1M: 15.0, outputPer1M: 75.0, cachedInputPer1M: 1.5 },
+  },
+  {
+    family: "claude-sonnet",
+    label: "Claude Sonnet",
+    vendor: "anthropic",
+    rate: { inputPer1M: 3.0, outputPer1M: 15.0, cachedInputPer1M: 0.3 },
+  },
+  {
+    family: "claude-haiku",
+    label: "Claude Haiku",
+    vendor: "anthropic",
+    rate: { inputPer1M: 1.0, outputPer1M: 5.0, cachedInputPer1M: 0.1 },
+  },
   // gpt-5.5-pro/gpt-5.5 rows are from the AI Gateway's /v1/models pricing
   // (2026-07-07, base tier ≤272k context). They MUST sort before the generic
   // "gpt-5" prefix row: without them every gpt-5.5-pro token was priced at
@@ -67,18 +88,57 @@ export const RATE_CARD: RateCardEntry[] = [
   // configs look affordable on the cost dashboards while draining the real
   // gateway balance. gpt-5.5-pro publishes no cache-read rate; 50% of fresh
   // input follows the same OpenAI ratio as the other rows.
-  { family: "gpt-5.5-pro", label: "GPT-5.5 Pro", vendor: "openai", rate: { inputPer1M: 30.0, outputPer1M: 180.0, cachedInputPer1M: 15.0 } },
-  { family: "gpt-5.5", label: "GPT-5.5", vendor: "openai", rate: { inputPer1M: 5.0, outputPer1M: 30.0, cachedInputPer1M: 0.5 } },
-  { family: "gpt-5", label: "GPT-5", vendor: "openai", rate: { inputPer1M: 1.25, outputPer1M: 10.0, cachedInputPer1M: 0.625 } },
-  { family: "gpt-4o-mini", label: "GPT-4o mini", vendor: "openai", rate: { inputPer1M: 0.15, outputPer1M: 0.6, cachedInputPer1M: 0.075 } },
-  { family: "gpt-4o", label: "GPT-4o", vendor: "openai", rate: { inputPer1M: 2.5, outputPer1M: 10.0, cachedInputPer1M: 1.25 } },
+  {
+    family: "gpt-5.5-pro",
+    label: "GPT-5.5 Pro",
+    vendor: "openai",
+    rate: { inputPer1M: 30.0, outputPer1M: 180.0, cachedInputPer1M: 15.0 },
+  },
+  {
+    family: "gpt-5.5",
+    label: "GPT-5.5",
+    vendor: "openai",
+    rate: { inputPer1M: 5.0, outputPer1M: 30.0, cachedInputPer1M: 0.5 },
+  },
+  {
+    family: "gpt-5",
+    label: "GPT-5",
+    vendor: "openai",
+    rate: { inputPer1M: 1.25, outputPer1M: 10.0, cachedInputPer1M: 0.625 },
+  },
+  {
+    family: "gpt-4o-mini",
+    label: "GPT-4o mini",
+    vendor: "openai",
+    rate: { inputPer1M: 0.15, outputPer1M: 0.6, cachedInputPer1M: 0.075 },
+  },
+  {
+    family: "gpt-4o",
+    label: "GPT-4o",
+    vendor: "openai",
+    rate: { inputPer1M: 2.5, outputPer1M: 10.0, cachedInputPer1M: 1.25 },
+  },
   // Gateway /v1/models 2026-07-07 (base tier ≤200k): gemini-3-pro* $2/$12.
-  { family: "gemini-3-pro", label: "Gemini 3 Pro", vendor: "google", rate: { inputPer1M: 2.0, outputPer1M: 12.0, cachedInputPer1M: 0.2 } },
-  { family: "gemini", label: "Gemini", vendor: "google", rate: { inputPer1M: 1.25, outputPer1M: 5.0, cachedInputPer1M: 0.3125 } },
+  {
+    family: "gemini-3-pro",
+    label: "Gemini 3 Pro",
+    vendor: "google",
+    rate: { inputPer1M: 2.0, outputPer1M: 12.0, cachedInputPer1M: 0.2 },
+  },
+  {
+    family: "gemini",
+    label: "Gemini",
+    vendor: "google",
+    rate: { inputPer1M: 1.25, outputPer1M: 5.0, cachedInputPer1M: 0.3125 },
+  },
 ];
 
 /** Sonnet — used when a slug matches no family, so a run is never zero-charged. */
-export const FALLBACK_RATE: ModelRate = { inputPer1M: 3.0, outputPer1M: 15.0, cachedInputPer1M: 0.3 };
+export const FALLBACK_RATE: ModelRate = {
+  inputPer1M: 3.0,
+  outputPer1M: 15.0,
+  cachedInputPer1M: 0.3,
+};
 
 /** Strip "vendor/" and match the bare family. Exported for display/grouping. */
 export function familyOf(model: string): string {
@@ -209,9 +269,9 @@ export function projectCost(model: string, usage: TokenUsage): CostProjection {
  * one vendor.
  */
 export function compareModels(usage: TokenUsage): CostProjection[] {
-  return RATE_CARD.map((e) => projectCost(`${e.vendor}/${e.family}`, usage)).sort(
-    (a, b) => a.totalUsd - b.totalUsd,
-  );
+  return RATE_CARD.map((e) =>
+    projectCost(`${e.vendor}/${e.family}`, usage),
+  ).sort((a, b) => a.totalUsd - b.totalUsd);
 }
 
 /** The full rate card (for `oxagen cost --rates`). */
