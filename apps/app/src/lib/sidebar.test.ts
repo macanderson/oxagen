@@ -76,11 +76,11 @@ describe("resolveSidebarMode", () => {
 // 2. getSidebarConfig — item counts per mode
 //
 // Spec:
-//   workspace: 7 items (Ask, Knowledge, Activity | Agents, Agent Tools |
-//       Marketplace, Settings)
+//   workspace: 9 items (Ask, Knowledge, Activity | Agents, Agent Tools,
+//       Environments, Sandboxes | Marketplace, Settings)
 //     — Activity is the agent run-trace surface (recent runs + per-run span
-//       tree). The Workbench group holds Agents (the builder); Agent Tools is a
-//       tab inside the Workbench surface, not a primary nav item.
+//       tree). The Workbench group holds all four build destinations as
+//       first-class items — there is deliberately NO Workbench secondary nav.
 //       Marketplace + Settings are pinned to the footer group. The old
 //       catch-all Automation area stays removed; "Workflows" is gone too
 //       (banned term).
@@ -89,10 +89,10 @@ describe("resolveSidebarMode", () => {
 // ---------------------------------------------------------------------------
 
 describe("getSidebarConfig item counts", () => {
-  it("workspace config has exactly 6 items", () => {
+  it("workspace config has exactly 9 items", () => {
     const config = getSidebarConfig("workspace");
     expect(config.mode).toBe("workspace");
-    expect(config.items).toHaveLength(6);
+    expect(config.items).toHaveLength(9);
   });
 
   it("org config has 6 items by default (access filtered for non-enterprise)", () => {
@@ -120,10 +120,15 @@ describe("getSidebarConfig item counts", () => {
     expect(returnItems[0]?.id).toBe("back");
   });
 
-  it("workspace config 'tools' group holds exactly Agents (Agent Tools lives in the Workbench tabs, not the nav)", () => {
+  it("workspace config 'tools' group holds the four first-class Workbench destinations", () => {
     const items = getSidebarConfig("workspace").items;
     const toolsItems = items.filter((item) => item.group === "tools");
-    expect(toolsItems.map((i) => i.id)).toEqual(["agents"]);
+    expect(toolsItems.map((i) => i.id)).toEqual([
+      "agents",
+      "agent-tools",
+      "environments",
+      "sandboxes",
+    ]);
   });
 
   it("does NOT surface standalone Skills / Tools / Subagent Runs / Workflows / Automation items", () => {
@@ -134,14 +139,16 @@ describe("getSidebarConfig item counts", () => {
     expect(ids).not.toContain("agent-runs");
     expect(ids).not.toContain("workflows");
     expect(ids).not.toContain("automation");
-    // Agent Tools is reachable via the Workbench tabs, never as its own nav item.
-    expect(ids).not.toContain("agent-tools");
-    // The clean spec tree, in order. Activity is the run-trace surface.
+    // The clean spec tree, in order. Activity is the run-trace surface; the
+    // Workbench group promotes all four build destinations to the sidebar.
     expect(ids).toEqual([
       "ask",
       "knowledge",
       "activity",
       "agents",
+      "agent-tools",
+      "environments",
+      "sandboxes",
       "marketplace",
       "settings",
     ]);
@@ -197,6 +204,24 @@ describe("href builders produce correct paths", () => {
 
     it("agents -> /{org}/{ws}/workbench/agents", () => {
       expect(findItem("agents").href(wsCtx)).toBe("/acme/production/workbench/agents");
+    });
+
+    it("agent-tools -> /{org}/{ws}/workbench/tools", () => {
+      expect(findItem("agent-tools").href(wsCtx)).toBe(
+        "/acme/production/workbench/tools",
+      );
+    });
+
+    it("environments -> /{org}/{ws}/workbench/environments", () => {
+      expect(findItem("environments").href(wsCtx)).toBe(
+        "/acme/production/workbench/environments",
+      );
+    });
+
+    it("sandboxes -> /{org}/{ws}/workbench/sandboxes", () => {
+      expect(findItem("sandboxes").href(wsCtx)).toBe(
+        "/acme/production/workbench/sandboxes",
+      );
     });
 
     it("settings -> /{org}/{ws}/settings", () => {
@@ -444,12 +469,31 @@ describe("IA realignment (spec §4/§5/§19)", () => {
     expect(targets.find((t) => t.label === "Activity")).toBeUndefined();
   });
 
-  it("enumerateNavTargets has no Workflows or Workbench destination", () => {
+  it("enumerateNavTargets has no Workflows destination and no bare Workbench root", () => {
     const targets = enumerateNavTargets(ctx);
     expect(targets.find((t) => t.label === "Workflows")).toBeUndefined();
+    // Workbench pages are targets (Agents, Agent Tools, …) but the bare
+    // /workbench root is a redirect, never a destination itself.
     expect(targets.find((t) => t.label === "Workbench")).toBeUndefined();
     expect(targets.map((t) => t.href)).not.toContain("/acme/prod/workflows");
     expect(targets.map((t) => t.href)).not.toContain("/acme/prod/workbench");
+  });
+
+  it("enumerateNavTargets surfaces the four first-class Workbench destinations", () => {
+    const targets = enumerateNavTargets(ctx);
+    const byLabel = (label: string) => targets.find((t) => t.label === label);
+    expect(byLabel("Agents")?.href).toBe("/acme/prod/workbench/agents");
+    expect(byLabel("Agent Tools")?.href).toBe("/acme/prod/workbench/tools");
+    expect(byLabel("Environments")?.href).toBe(
+      "/acme/prod/workbench/environments",
+    );
+    expect(byLabel("Sandboxes")?.href).toBe("/acme/prod/workbench/sandboxes");
+    expect(byLabel("Agent Tools · MCP Servers")?.href).toBe(
+      "/acme/prod/workbench/tools/mcp",
+    );
+    expect(byLabel("Settings · MCP Registries")?.href).toBe(
+      "/acme/prod/settings/mcp-server-registries",
+    );
   });
 
   it("all workspace hrefs are unique", () => {

@@ -7,7 +7,7 @@
  *   - Shows Allow/Deny buttons when not resolved and not expired
  *   - Calls onResolved with (approvalId, decision, grantAllTools)
  *   - Passes grantAllTools=true when the "trust every tool" box is checked
- *   - Shows the resolved badge / Expired badge / error message
+ *   - Shows the resolved status / Expired status / error message
  */
 
 import { describe, it, expect, vi, afterEach } from "vitest";
@@ -16,12 +16,6 @@ import userEvent from "@testing-library/user-event";
 import { ConsentCard } from "./consent-card";
 
 afterEach(cleanup);
-
-vi.mock("@/components/ui/badge", () => ({
-  Badge: ({ children, variant }: { children: React.ReactNode; variant?: string }) => (
-    <span data-testid="badge" data-variant={variant}>{children}</span>
-  ),
-}));
 
 vi.mock("@/components/ui/button", () => ({
   Button: ({
@@ -88,7 +82,7 @@ const baseProps = {
 describe("ConsentCard", () => {
   it("renders the tool name and server id", () => {
     render(<ConsentCard {...baseProps} />);
-    // tool name appears in both the badge and the descriptive sentence.
+    // tool name appears in both the header label and the descriptive sentence.
     expect(screen.getAllByText("list_prs").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText("srv_1")).toBeInTheDocument();
   });
@@ -130,16 +124,20 @@ describe("ConsentCard", () => {
     expect(onResolved).toHaveBeenCalledWith("apr-c1", "denied", false);
   });
 
-  it("shows the granted badge when resolution='granted'", () => {
+  it("shows a success-toned granted status when resolution='granted'", () => {
     render(<ConsentCard {...baseProps} resolution="granted" />);
-    expect(screen.getByText("granted")).toBeInTheDocument();
+    const status = screen.getByText("granted");
+    expect(status).toBeInTheDocument();
+    expect(status.className).toContain("text-success");
     expect(screen.queryByText("Allow")).not.toBeInTheDocument();
   });
 
-  it("shows the Expired badge when expiresAt is in the past and unresolved", () => {
+  it("shows the muted Expired status when expiresAt is in the past and unresolved", () => {
     const PAST = new Date(Date.now() - 10_000).toISOString();
     render(<ConsentCard {...baseProps} expiresAt={PAST} />);
-    expect(screen.getByText("Expired")).toBeInTheDocument();
+    const expired = screen.getByText("Expired");
+    expect(expired).toBeInTheDocument();
+    expect(expired.className).toContain("text-muted-foreground");
   });
 
   it("shows an error message when onResolved returns not-ok", async () => {

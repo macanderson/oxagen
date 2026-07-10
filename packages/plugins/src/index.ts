@@ -15,6 +15,7 @@ export type { ResolvedKms } from "./credentials/kms";
 export {
   setWorkspaceSecret,
   getWorkspaceSecret,
+  deleteWorkspaceSecret,
   listWorkspaceCredentialStatuses,
 } from "./credentials/workspace-credential";
 export type {

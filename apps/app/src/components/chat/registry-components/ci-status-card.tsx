@@ -2,7 +2,6 @@
 
 import type { ReactElement } from "react";
 import { CircleDot } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import {
   CiStatusSummary,
   type CiCounts,
@@ -48,9 +47,6 @@ export default function CiStatusCard({
       data-component="ci-status-card"
     >
       <div className="flex flex-wrap items-center gap-2 border-b border-border/60 px-4 py-2.5">
-        <Badge variant="outline" className="font-mono">
-          ci-status
-        </Badge>
         <CircleDot className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
         <span className="min-w-0 flex-1 truncate font-mono text-xs text-foreground" title={ref}>
           {ref}

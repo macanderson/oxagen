@@ -86,14 +86,14 @@ vi.mock("@oxagen/oxagen", () => ({ invoke: mockInvoke }));
 vi.mock("@oxagen/handlers/register", () => ({}));
 vi.mock("@/lib/routes", () => ({
   workspace: {
-    settings: {
+    workbench: {
       environments: ({
         orgSlug,
         workspaceSlug,
       }: {
         orgSlug: string;
         workspaceSlug: string;
-      }) => `/${orgSlug}/${workspaceSlug}/settings/environments`,
+      }) => `/${orgSlug}/${workspaceSlug}/workbench/environments`,
     },
   },
 }));
@@ -198,7 +198,7 @@ describe("importEnvAction", () => {
       { surface: "agent" },
     );
     expect(mockRevalidatePath).toHaveBeenCalledWith(
-      "/acme/main/settings/environments",
+      "/acme/main/workbench/environments",
     );
   });
 
@@ -310,7 +310,7 @@ describe("setDefaultEnvironmentAction", () => {
       { surface: "agent" },
     );
     expect(mockRevalidatePath).toHaveBeenCalledWith(
-      "/acme/main/settings/environments",
+      "/acme/main/workbench/environments",
     );
   });
 
@@ -384,7 +384,7 @@ describe("upsertKeyAction", () => {
       { surface: "agent" },
     );
     expect(mockRevalidatePath).toHaveBeenCalledWith(
-      "/acme/main/settings/environments",
+      "/acme/main/workbench/environments",
     );
   });
 

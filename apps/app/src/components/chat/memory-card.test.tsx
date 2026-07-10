@@ -4,7 +4,7 @@
  *
  * Render tests for MemoryCard:
  *   - Renders null when memories is empty
- *   - Renders recalled memories with lessons, class badges, confidence/enforcement, scores
+ *   - Renders recalled memories with lessons, class labels, confidence/enforcement, scores
  *   - Respects topN limit
  *   - Renders node refs as links when present
  */
@@ -66,12 +66,6 @@ if (typeof globalThis.ResizeObserver === "undefined") {
 }
 
 afterEach(cleanup);
-
-vi.mock("@/components/ui/badge", () => ({
-  Badge: ({ children, variant }: { children: React.ReactNode; variant?: string }) => (
-    <span data-testid="badge" data-variant={variant}>{children}</span>
-  ),
-}));
 
 vi.mock("lucide-react", async (importOriginal) => {
   const real = await importOriginal<typeof import("lucide-react")>();
@@ -143,21 +137,17 @@ describe("MemoryCard", () => {
     expect(screen.getAllByText(/enforcement /)).toHaveLength(1);
   });
 
-  it("renders class badge for each memory", () => {
+  it("renders the class label for each memory", () => {
     const memories = [
       makeMemory("m1", "Lesson A", "FACT", 0.9),
       makeMemory("m2", "Lesson B", "OBSERVATION", 0.5),
     ];
     render(<MemoryCard queryId="q1" memories={memories} />);
-    const badges = screen.getAllByTestId("badge");
-    // First item: count badge + class badge; second item: class badge
-    const classes = badges.filter(
-      (b) => b.textContent === "FACT" || b.textContent === "OBSERVATION",
-    );
-    expect(classes.length).toBe(2);
+    expect(screen.getByText("FACT")).toBeInTheDocument();
+    expect(screen.getByText("OBSERVATION")).toBeInTheDocument();
   });
 
-  it("renders count badge matching total memories", () => {
+  it("renders the memory count matching total memories", () => {
     const memories = [
       makeMemory("m1", "L1", "FACT", 0.9),
       makeMemory("m2", "L2", "RULE", 0.8),
@@ -203,27 +193,22 @@ describe("MemoryCard", () => {
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
   });
 
-  it("uses 'success' badge variant for 'FACT' class", () => {
+  it("renders the 'FACT' class in success tone", () => {
     const memories = [makeMemory("m1", "L", "FACT", 0.9)];
-    const { container } = render(<MemoryCard queryId="q1" memories={memories} />);
-    const successBadge = container.querySelector("[data-variant='success']");
-    expect(successBadge).not.toBeNull();
-    expect(successBadge?.textContent).toBe("FACT");
+    render(<MemoryCard queryId="q1" memories={memories} />);
+    expect(screen.getByText("FACT").className).toContain("text-success");
   });
 
-  it("uses 'warning' badge variant for 'RULE' class", () => {
+  it("renders the 'RULE' class in warning tone", () => {
     const memories = [makeMemory("m1", "L", "RULE", 0.7)];
-    const { container } = render(<MemoryCard queryId="q1" memories={memories} />);
-    const warningBadge = container.querySelector("[data-variant='warning']");
-    expect(warningBadge).not.toBeNull();
+    render(<MemoryCard queryId="q1" memories={memories} />);
+    expect(screen.getByText("RULE").className).toContain("text-warning");
   });
 
-  it("uses 'muted' badge variant for 'OBSERVATION' class", () => {
+  it("renders the 'OBSERVATION' class in muted tone", () => {
     const memories = [makeMemory("m1", "L", "OBSERVATION", 0.3)];
-    const { container } = render(<MemoryCard queryId="q1" memories={memories} />);
-    const mutedBadge = container.querySelector("[data-variant='muted']");
-    // The count badge is also 'muted'; there should be at least one 'muted' badge
-    expect(mutedBadge).not.toBeNull();
+    render(<MemoryCard queryId="q1" memories={memories} />);
+    expect(screen.getByText("OBSERVATION").className).toContain("text-muted-foreground");
   });
 
   it("renders the lesson body through TruncatedText, not a raw <p> element", () => {

@@ -60,9 +60,13 @@ test.describe("Agent Tools consolidated IA", () => {
       fullPage: true,
     });
 
-    // MCP Servers tab renders connect form + external-client snippets.
+    // MCP Servers tab renders installed list + install surfaces + snippets.
     await gotoStable(page, `${ws}/workbench/tools/mcp`);
-    await expect(page.getByText("Connect a custom MCP server")).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText("Installed MCP servers")).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText("Install from the marketplace")).toBeVisible();
+    await expect(page.getByText("Connect manually")).toBeVisible();
+    // Registry administration must NOT render here — it lives in Settings.
+    await expect(page.getByTestId("add-registry-btn")).toHaveCount(0);
     await page.screenshot({
       path: path.join(SCREENSHOTS_DIR, "03-agent-tools-mcp.png"),
       fullPage: true,
@@ -111,6 +115,10 @@ test.describe("Agent Tools consolidated IA", () => {
       [`${ws}/marketplace/mcp`, /\/workbench\/tools\/mcp$/],
       [`${ws}/settings/plugins`, /\/workbench\/tools\/capabilities$/],
       [`${ws}/settings/skills`, /\/workbench\/tools\/skills$/],
+      // The whole Studio section renamed to Workbench — old URLs 301 across.
+      [`${ws}/studio`, /\/workbench\/agents$/],
+      [`${ws}/studio/tools/mcp`, /\/workbench\/tools\/mcp$/],
+      [`${ws}/settings/environments`, /\/workbench\/environments$/],
     ];
     for (const [from, to] of redirects) {
       await page.goto(from);

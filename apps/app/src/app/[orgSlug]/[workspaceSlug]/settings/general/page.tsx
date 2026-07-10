@@ -18,6 +18,7 @@ export default async function SettingsGeneralPage({
       initialName={ws.name}
       initialSlug={ws.slug}
       initialDescription={ws.description}
+      initialAvatarUrl={ws.avatarUrl}
     />
   );
 }
