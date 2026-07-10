@@ -38,7 +38,13 @@ export default tseslint.config(
       parserOptions: {
         // projectService enables type-aware rules only when a tsconfig.json
         // is present in the package.  Packages without one fall back gracefully.
-        projectService: true,
+        projectService: {
+          // Root-level files (vitest.workspace.ts) belong to no package
+          // tsconfig; lint them via the inferred default project instead of
+          // erroring when they are passed to eslint explicitly (pre-commit
+          // lints staged files by path).
+          allowDefaultProject: ["*.ts"],
+        },
         tsconfigRootDir: import.meta.dirname,
       },
     },

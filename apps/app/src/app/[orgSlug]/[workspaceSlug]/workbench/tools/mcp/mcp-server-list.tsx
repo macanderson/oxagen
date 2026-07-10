@@ -180,8 +180,8 @@ export function McpServerList({
       <EmptyState
         size="sm"
         variant="muted"
-        title="No MCP servers connected yet"
-        description="Use the form above to connect one."
+        title="No MCP servers installed yet"
+        description="Install one from the marketplace below, or connect a custom endpoint manually."
       />
     );
   }

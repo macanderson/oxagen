@@ -159,6 +159,9 @@ function EnvironmentsBar({
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
 
+  const slugify = (n: string) =>
+    n.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+
   return (
     <section className="flex flex-col gap-2">
       <div className="flex items-center justify-between">

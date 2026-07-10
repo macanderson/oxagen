@@ -16,6 +16,8 @@ export const metadata: Metadata = {
   title: "Agents | Workbench",
 };
 
+export const dynamic = "force-dynamic";
+
 interface PageProps {
   params: Promise<{ orgSlug: string; workspaceSlug: string }>;
 }

@@ -145,15 +145,6 @@
       "verifiedAt": null,
       "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
-    "plugin.registry.list": {
-      "route": "/[orgSlug]/[workspaceSlug]/settings/mcp-server-registries",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/mcp-server-registries/page.tsx",
-      "entry": "Registry manager (RegistryManager initialRegistries) on Settings → MCP Server Registries",
-      "testid": null,
-      "proof": null,
-      "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
-    },
     "list_conversations": {
       "route": "/[orgSlug]/[workspaceSlug]/ask",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/_shared/conversation-page.tsx",
