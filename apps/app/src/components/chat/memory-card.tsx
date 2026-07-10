@@ -20,13 +20,16 @@ export interface MemoryCardProps {
   variant?: "recall" | "write";
 }
 
-// Epistemic class → text color. FACT is the most trustworthy (success);
+// Epistemic class → badge variant. FACT is the most trustworthy (success);
 // RULE is policy-enforced (warning, draws attention to enforcement); a plain
 // OBSERVATION is muted since it is the lowest rung of the confidence ladder.
-const CLASS_TEXT: Record<string, string> = {
-  FACT: "text-success",
-  RULE: "text-warning",
-  OBSERVATION: "text-muted-foreground",
+const CLASS_VARIANT: Record<
+  string,
+  "success" | "warning" | "muted" | "default"
+> = {
+  FACT: "success",
+  RULE: "warning",
+  OBSERVATION: "muted",
 };
 
 /**
@@ -96,7 +99,9 @@ function summarySentence(
     .map(([label, count]) => `${count} ${pluralizeLabel(label, count)}`);
   const uncited = memories.filter((m) => !m.node).length;
   const uncitedClause =
-    uncited > 0 ? `, plus ${uncited} uncited ${uncited === 1 ? "memory" : "memories"}` : "";
+    uncited > 0
+      ? `, plus ${uncited} uncited ${uncited === 1 ? "memory" : "memories"}`
+      : "";
   return `${verb} ${joinClauses(clauses)}${uncitedClause}.`;
 }
 
@@ -111,7 +116,11 @@ function summarySentence(
  * This is the concrete proof that the answer is grounded in specific,
  * inspectable graph facts.
  */
-export function MemoryCard({ memories, topN = 5, variant = "recall" }: MemoryCardProps) {
+export function MemoryCard({
+  memories,
+  topN = 5,
+  variant = "recall",
+}: MemoryCardProps) {
   const tenant = useTenantOptional();
   const [expanded, setExpanded] = React.useState(false);
   const panelId = React.useId();
@@ -140,7 +149,10 @@ export function MemoryCard({ memories, topN = 5, variant = "recall" }: MemoryCar
           className="ml-auto inline-flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <ChevronDown
-            className={cn("size-4 transition-transform", expanded && "rotate-180")}
+            className={cn(
+              "size-4 transition-transform",
+              expanded && "rotate-180",
+            )}
             aria-hidden="true"
           />
         </button>
@@ -178,7 +190,15 @@ export function MemoryCard({ memories, topN = 5, variant = "recall" }: MemoryCar
               {top.map((m) => (
                 <li key={m.id} className="rounded-xl bg-muted p-2 text-xs">
                   <div className="mb-1 flex items-center gap-2 flex-wrap">
-                    <Badge variant={CLASS_VARIANT[m.memoryClass] ?? "default"} className="uppercase">
+                    <Badge
+                      variant={CLASS_VARIANT[m.memoryClass] ?? "default"}
+                      // Badge spreads extra props onto its span — expose the
+                      // variant + a stable testid for assertions (the shared
+                      // component itself emits no data attributes).
+                      data-testid="badge"
+                      data-variant={CLASS_VARIANT[m.memoryClass] ?? "default"}
+                      className="uppercase"
+                    >
                       {m.memoryClass}
                     </Badge>
                     <span className="text-muted-foreground tabular-nums">
@@ -204,7 +224,11 @@ export function MemoryCard({ memories, topN = 5, variant = "recall" }: MemoryCar
                       </a>
                     ) : null}
                   </div>
-                  <TruncatedText text={m.lesson} lines={3} className="leading-relaxed" />
+                  <TruncatedText
+                    text={m.lesson}
+                    lines={3}
+                    className="leading-relaxed"
+                  />
                 </li>
               ))}
             </ul>
