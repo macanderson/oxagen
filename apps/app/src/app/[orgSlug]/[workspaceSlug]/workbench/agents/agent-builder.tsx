@@ -24,6 +24,7 @@
  */
 import * as React from "react";
 import { useRouter } from "next/navigation";
+import { slugify } from "@/lib/slug";
 import {
   ArrowLeft,
   ArrowRight,
@@ -60,6 +61,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
 import { CopyableId } from "@/components/knowledge/graph-explorer/copyable-id";
+import { AvatarMaker } from "@/components/avatar/avatar-maker";
 import { workspace } from "@/lib/routes";
 import type { ScopeContext } from "@/lib/scope";
 import { MarketplaceModal } from "@/components/plugins/marketplace-modal";
@@ -99,6 +101,8 @@ export interface InitialAgent {
   agentKey?: string | null;
   name: string;
   description: string | null;
+  /** Avatar value: https URL or designed-avatar spec string. Null when unset. */
+  avatarUrl?: string | null;
   agentType: string;
   status: "draft" | "active" | "archived";
   deploymentStatus: "inactive" | "active";
@@ -183,14 +187,6 @@ const RETRIEVAL_STRATEGIES: GraphRetrievalStrategy[] = [
   "explicit",
 ];
 
-function slugify(input: string): string {
-  return input
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 60);
-}
-
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function AgentBuilder({
@@ -220,6 +216,8 @@ export function AgentBuilder({
   const [description, setDescription] = React.useState(
     initialAgent?.description ?? "",
   );
+  // Avatar value (photo URL or designed spec string) — persisted with the draft.
+  const [avatarUrl, setAvatarUrl] = React.useState(initialAgent?.avatarUrl ?? "");
   const [codeFeatures, setCodeFeatures] = React.useState(
     (initialAgent?.agentType ?? DEFAULT_AGENT_TYPE) === CODING_AGENT_TYPE,
   );
@@ -321,7 +319,7 @@ export function AgentBuilder({
 
   function onNameChange(value: string) {
     setName(value);
-    if (!slugEdited) setSlug(slugify(value));
+    if (!slugEdited) setSlug(slugify(value, 60));
   }
 
   /**
@@ -434,6 +432,8 @@ export function AgentBuilder({
         agentId,
         name: name.trim(),
         description: description.trim() || undefined,
+        // null clears a previously-set avatar; a string sets it.
+        avatarUrl: avatarUrl || null,
         agentType: agentType(),
         config,
       });
@@ -449,6 +449,7 @@ export function AgentBuilder({
       slug: slug.trim(),
       name: name.trim(),
       description: description.trim() || undefined,
+      avatarUrl: avatarUrl || undefined,
       agentType: agentType(),
       config,
     });
@@ -742,6 +743,19 @@ export function AgentBuilder({
           {/* ── Identity ─────────────────────────────────────────────────── */}
           {step.key === "identity" ? (
             <div className="flex flex-col gap-5" data-testid="step-identity">
+              {/* Agent avatar — photo or designed emoji/color tile, shown on
+                  the agents card grid and anywhere the agent is cited. */}
+              <div className="space-y-1">
+                <Label>Avatar</Label>
+                <AvatarMaker
+                  value={avatarUrl || null}
+                  onChange={setAvatarUrl}
+                  name={name || slug || "Agent"}
+                  shape="square"
+                  entityLabel="agent"
+                  disabled={disabled}
+                />
+              </div>
               <div className="space-y-1">
                 <Label htmlFor="agent-name">Name</Label>
                 <Input
@@ -764,7 +778,7 @@ export function AgentBuilder({
                   placeholder="release-notes-writer"
                   onChange={(e) => {
                     setSlugEdited(true);
-                    setSlug(slugify(e.target.value));
+                    setSlug(slugify(e.target.value, 60));
                   }}
                   className="font-mono"
                   data-testid="agent-slug-input"
@@ -1211,7 +1225,7 @@ export function AgentBuilder({
 
         {/* Step nav — inline on desktop; on mobile a sticky thumb bar pinned
             above the bottom nav (44px+ targets, safe-area aware). */}
-        <div className="mt-4 flex items-center justify-between gap-3 max-lg:sticky max-lg:bottom-[calc(var(--bottom-bar-h)+var(--bottom-bar-gap,0px)+env(safe-area-inset-bottom))] max-lg:z-10 max-lg:-mx-4 max-lg:border-t max-lg:border-border/60 max-lg:bg-background/95 max-lg:px-4 max-lg:py-3 max-lg:backdrop-blur">
+        <div className="mt-4 flex items-center justify-between gap-3 max-lg:sticky max-lg:bottom-[calc(var(--bottom-bar-h)+env(safe-area-inset-bottom))] max-lg:z-10 max-lg:-mx-4 max-lg:border-t max-lg:border-border/60 max-lg:bg-background/95 max-lg:px-4 max-lg:py-3 max-lg:backdrop-blur">
           <Button
             type="button"
             variant="ghost"

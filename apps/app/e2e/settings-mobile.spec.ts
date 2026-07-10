@@ -4,8 +4,8 @@
  * Mobile (390×844) one-thumb UX for the workspace + org settings surfaces
  * (ADR-026 mobile feature parity):
  *   1. The desktop settings sidebar is replaced below `md` by MobileSettingsNav —
- *      a sticky, thumb-reachable (≥44px) section switcher pinned above the app
- *      bottom bar that opens a bottom sheet.
+ *      a fixed, thumb-reachable (≥44px) section switcher docked flush on top of
+ *      the app bottom bar that opens a bottom sheet.
  *   2. The sheet exposes EVERY settings section — identical list to desktop,
  *      nothing dropped on mobile.
  *   3. Selecting a section client-navigates and closes the sheet.
@@ -29,10 +29,10 @@ const WORKSPACE_SECTIONS = [
   "Models",
   "Budget",
   "GitHub",
+  "MCP Registries",
   "Prompts",
   "Knowledge",
   "Memory",
-  "Environments",
 ];
 
 const ORG_SECTIONS = ["General", "Privacy"];
@@ -69,8 +69,15 @@ test.describe("settings — mobile one-thumb navigation @ 390px", () => {
     const box = await trigger.boundingBox();
     expect(box).not.toBeNull();
     expect(box!.height).toBeGreaterThanOrEqual(44);
-    // Bottom-zone placement: the trigger lives in the lower half of the screen.
+    // Bottom-zone placement: the trigger lives in the lower half of the screen,
+    // docked directly above the bottom bar with no floating gap beneath it.
     expect(box!.y).toBeGreaterThan(844 / 2);
+    const barBox = await page
+      .getByRole("navigation", { name: /mobile navigation/i })
+      .boundingBox();
+    expect(barBox).not.toBeNull();
+    // Switcher bottom edge (incl. its py-2 padding) meets the bar's top edge.
+    expect(Math.abs(box!.y + box!.height + 8 - barBox!.y)).toBeLessThanOrEqual(2);
 
     await expectNoHorizontalOverflow(page);
     await page.screenshot({

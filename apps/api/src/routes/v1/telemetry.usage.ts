@@ -21,6 +21,7 @@
 import { Hono } from "hono";
 import { parseUsageEventPayload, insertUsageEvents } from "@oxagen/telemetry";
 import { rateLimiter } from "../../middleware/rate-limit";
+import { logger } from "../../middleware/logger";
 import type { AppEnv } from "../../app";
 
 export const telemetryUsageRoute = new Hono<AppEnv>();
@@ -51,10 +52,7 @@ telemetryUsageRoute.post("/usage", async (c) => {
   try {
     await insertUsageEvents([{ ...result.data, timestamp: new Date().toISOString() }]);
   } catch (err) {
-    console.error(
-      "[telemetry.usage] insert failed:",
-      err instanceof Error ? err.message : String(err),
-    );
+    logger.error({ err }, "[telemetry.usage] insert failed");
     return c.json({ error: "internal_error", message: "Failed to record event" }, 500);
   }
 

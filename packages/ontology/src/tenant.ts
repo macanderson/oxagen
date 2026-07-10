@@ -8,10 +8,12 @@ import { session } from "./client";
 const SCOPE_GUARD = /\borgId\b/;
 
 /**
- * Return a Neo4j session whose run() automatically:
- *  1. Throws TenantScopeError if called outside an active tenant scope.
- *  2. Rejects Cypher that doesn't reference `orgId` (seam-bypass guard).
- *  3. Injects `$orgId` and `$workspaceId` into every params object so the
+ * Return a Neo4j session bound to the active tenant scope. Throws
+ * TenantScopeError immediately if there is no active tenant scope (checked at
+ * scopedSession() call time, not lazily inside run()). The returned session's
+ * run():
+ *  1. Rejects Cypher that doesn't reference `orgId` (seam-bypass guard).
+ *  2. Injects `$orgId` and `$workspaceId` into every params object so the
  *     Cypher never has to thread them manually.
  */
 export function scopedSession(): {

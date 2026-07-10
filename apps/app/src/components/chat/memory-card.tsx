@@ -20,13 +20,13 @@ export interface MemoryCardProps {
   variant?: "recall" | "write";
 }
 
-// Epistemic class → badge variant. FACT is the most trustworthy (success);
+// Epistemic class → text color. FACT is the most trustworthy (success);
 // RULE is policy-enforced (warning, draws attention to enforcement); a plain
 // OBSERVATION is muted since it is the lowest rung of the confidence ladder.
-const CLASS_VARIANT: Record<string, "success" | "warning" | "muted" | "default"> = {
-  FACT: "success",
-  RULE: "warning",
-  OBSERVATION: "muted",
+const CLASS_TEXT: Record<string, string> = {
+  FACT: "text-success",
+  RULE: "text-warning",
+  OBSERVATION: "text-muted-foreground",
 };
 
 /**

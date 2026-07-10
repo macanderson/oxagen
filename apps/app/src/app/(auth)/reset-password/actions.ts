@@ -17,6 +17,7 @@
 
 import { z } from "zod";
 import { auth } from "@oxagen/auth";
+import { logger } from "@oxagen/handlers/logger";
 
 // ---------------------------------------------------------------------------
 // Result type
@@ -99,6 +100,15 @@ export async function resetPasswordAction(
       return { ok: false, error: "Password is too long (maximum 128 characters)" };
     }
 
+    // Catch-all: none of the expected user-input errors above matched, so this
+    // is a genuine infra/Better Auth failure in the reset-completion path. The
+    // specific branches above are intentionally unlogged (expected input), but a
+    // systemic outage here would otherwise be undiagnosable. Never log the
+    // password — only the (transport/DB) message.
+    logger.warn(
+      { err: message || "unknown error" },
+      "[reset-password] unexpected failure completing password reset",
+    );
     return {
       ok: false,
       error: "Failed to reset password. Please request a new link.",

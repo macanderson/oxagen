@@ -195,7 +195,7 @@ export function AuditFilterBar({
         <div className="flex flex-wrap items-center gap-1">
           <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Active:</span>
           {selectedEventTypes.map((t) => (
-            <Badge key={t} variant="muted" className="font-mono text-[10px]">
+            <Badge key={t} variant="muted" className="text-[10px]">
               {t}
             </Badge>
           ))}

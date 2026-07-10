@@ -37,11 +37,22 @@ describe("nodeFromListed", () => {
       sourceId: "src",
       createdAt: "2026-01-01",
     });
-    expect(node).toMatchObject({ id: "n1", label: "Issue", displayName: "Bug", hydrated: true, degree: 0, sourceId: "src" });
+    expect(node).toMatchObject({
+      id: "n1",
+      label: "Issue",
+      displayName: "Bug",
+      hydrated: true,
+      degree: 0,
+      sourceId: "src",
+    });
     expect(node.properties).toEqual({ a: 1 });
   });
   it("omits absent optional fields", () => {
-    const node = nodeFromListed({ id: "n1", labels: ["Issue"], displayName: "X" });
+    const node = nodeFromListed({
+      id: "n1",
+      labels: ["Issue"],
+      displayName: "X",
+    });
     expect(node.sourceId).toBeUndefined();
     expect(node.createdAt).toBeUndefined();
   });
@@ -49,8 +60,34 @@ describe("nodeFromListed", () => {
 
 describe("nodeFromNeighbor", () => {
   it("maps a neighbor to an unhydrated stub", () => {
-    const node = nodeFromNeighbor({ nodeId: "n2", label: "Topic", displayName: "AI", edgeType: "RELATED_TO", direction: "out" });
-    expect(node).toMatchObject({ id: "n2", label: "Topic", displayName: "AI", hydrated: false });
+    const node = nodeFromNeighbor({
+      nodeId: "n2",
+      label: "Topic",
+      displayName: "AI",
+      edgeType: "RELATED_TO",
+      direction: "out",
+    });
+    expect(node).toMatchObject({
+      id: "n2",
+      label: "Topic",
+      displayName: "AI",
+      hydrated: false,
+    });
+    // No flag on the wire → leave it undefined so the client can distinguish
+    // "unknown" from an explicit customer-data false.
+    expect(node.isSystem).toBeUndefined();
+  });
+
+  it("carries the isSystem lineage flag when present", () => {
+    const node = nodeFromNeighbor({
+      nodeId: "exec",
+      label: "Execution",
+      displayName: "run",
+      edgeType: "EXECUTED",
+      direction: "in",
+      isSystem: true,
+    });
+    expect(node.isSystem).toBe(true);
   });
 });
 
@@ -60,18 +97,50 @@ describe("edgeId / edgesFromNeighbors", () => {
   });
   it("orients edges by direction", () => {
     const out = edgesFromNeighbors("anchor", [
-      { nodeId: "b", label: "X", displayName: "B", edgeType: "REL", direction: "out" },
-      { nodeId: "c", label: "Y", displayName: "C", edgeType: "REL", direction: "in" },
+      {
+        nodeId: "b",
+        label: "X",
+        displayName: "B",
+        edgeType: "REL",
+        direction: "out",
+      },
+      {
+        nodeId: "c",
+        label: "Y",
+        displayName: "C",
+        edgeType: "REL",
+        direction: "in",
+      },
     ]);
-    expect(out[0]).toMatchObject({ source: "anchor", target: "b", inferred: false });
-    expect(out[1]).toMatchObject({ source: "c", target: "anchor", inferred: false });
+    expect(out[0]).toMatchObject({
+      source: "anchor",
+      target: "b",
+      inferred: false,
+    });
+    expect(out[1]).toMatchObject({
+      source: "c",
+      target: "anchor",
+      inferred: false,
+    });
   });
 });
 
 describe("edgeFromSemantic", () => {
   it("maps to an inferred edge with confidence", () => {
-    const e = edgeFromSemantic({ id: "s1", sourceNodeId: "a", targetNodeId: "b", type: "CAUSES", confidence: 0.9 });
-    expect(e).toMatchObject({ source: "a", target: "b", type: "CAUSES", inferred: true, confidence: 0.9 });
+    const e = edgeFromSemantic({
+      id: "s1",
+      sourceNodeId: "a",
+      targetNodeId: "b",
+      type: "CAUSES",
+      confidence: 0.9,
+    });
+    expect(e).toMatchObject({
+      source: "a",
+      target: "b",
+      type: "CAUSES",
+      inferred: true,
+      confidence: 0.9,
+    });
   });
 });
 
@@ -79,7 +148,13 @@ function node(id: string, label = "Issue", hydrated = false): ExplorerNode {
   return { id, label, displayName: id, degree: 0, hydrated };
 }
 function edge(source: string, target: string, type = "REL"): ExplorerEdge {
-  return { id: edgeId(source, target, type), source, target, type, inferred: false };
+  return {
+    id: edgeId(source, target, type),
+    source,
+    target,
+    type,
+    inferred: false,
+  };
 }
 
 describe("mergeNodes", () => {
@@ -88,11 +163,17 @@ describe("mergeNodes", () => {
     expect(out.map((n) => n.id).sort()).toEqual(["a", "b"]);
   });
   it("upgrades a stub to a hydrated node", () => {
-    const out = mergeNodes([node("a", "Issue", false)], [node("a", "Issue", true)]);
+    const out = mergeNodes(
+      [node("a", "Issue", false)],
+      [node("a", "Issue", true)],
+    );
     expect(out.find((n) => n.id === "a")?.hydrated).toBe(true);
   });
   it("does not downgrade a hydrated node back to a stub", () => {
-    const out = mergeNodes([node("a", "Issue", true)], [node("a", "Issue", false)]);
+    const out = mergeNodes(
+      [node("a", "Issue", true)],
+      [node("a", "Issue", false)],
+    );
     expect(out.find((n) => n.id === "a")?.hydrated).toBe(true);
   });
 });
@@ -121,12 +202,20 @@ describe("reconcile", () => {
 
 describe("counts", () => {
   it("counts nodes by label descending", () => {
-    const out = countNodesByLabel([node("a", "Issue"), node("b", "Issue"), node("c", "Topic")]);
+    const out = countNodesByLabel([
+      node("a", "Issue"),
+      node("b", "Issue"),
+      node("c", "Topic"),
+    ]);
     expect(out[0]).toEqual({ type: "Issue", count: 2 });
     expect(out[1]).toEqual({ type: "Topic", count: 1 });
   });
   it("counts edges by type", () => {
-    const out = countEdgesByType([edge("a", "b", "REL"), edge("b", "c", "REL"), edge("c", "d", "PART_OF")]);
+    const out = countEdgesByType([
+      edge("a", "b", "REL"),
+      edge("b", "c", "REL"),
+      edge("c", "d", "PART_OF"),
+    ]);
     expect(out.find((t) => t.type === "REL")?.count).toBe(2);
   });
   it("converts a record to sorted counts, dropping the base label", () => {

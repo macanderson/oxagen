@@ -1,9 +1,8 @@
 "use client";
 import * as React from "react";
 import { ExternalLink, ArrowUpRight, Check, Minus } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, truncate } from "@/lib/utils";
 import { safeHref } from "@/lib/safe-url";
-import { Badge } from "@/components/ui/badge";
 import { TruncatedText } from "@/components/ui/truncated-text";
 
 /**
@@ -38,7 +37,6 @@ export interface CapabilityResultProps {
 }
 
 const MAX_ARRAY_ITEMS = 8;
-const MAX_STRING = 320;
 const MAX_DEPTH = 2;
 
 /** "graph.node.get" → "Graph node get"; "web.search" → "Web search". */
@@ -60,10 +58,6 @@ export function humanizeKey(key: string): string {
 
 export function isHttpUrl(value: string): boolean {
   return /^https?:\/\//i.test(value);
-}
-
-function truncate(value: string, max = MAX_STRING): string {
-  return value.length > max ? `${value.slice(0, max)}…` : value;
 }
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
@@ -161,11 +155,14 @@ function ValueView({
     const allScalar = shown.every((v) => !isPlainRecord(v) && !Array.isArray(v));
     if (allScalar) {
       return (
-        <div className="flex flex-wrap gap-1">
+        <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
           {shown.map((v, i) => (
-            <Badge key={i} variant="outline" className="font-normal">
+            <span key={i} className="text-xs text-foreground">
               {truncate(String(v), 60)}
-            </Badge>
+              {i < shown.length - 1 ? (
+                <span className="text-muted-foreground">,</span>
+              ) : null}
+            </span>
           ))}
           {value.length > MAX_ARRAY_ITEMS ? (
             <span className="text-xs text-muted-foreground">
@@ -295,9 +292,7 @@ export default function CapabilityResult(
           {heading}
         </span>
         {capability ? (
-          <Badge variant="outline" className="ml-auto shrink-0 font-mono text-[10px]">
-            {capability}
-          </Badge>
+          <span className="ml-auto shrink-0 text-xs text-muted-foreground">{capability}</span>
         ) : null}
       </div>
 

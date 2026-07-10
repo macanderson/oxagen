@@ -19,6 +19,7 @@ interface NeighborEntry extends EdgeValidity {
   description: string | null;
   edgeType: string;
   direction: "out" | "in";
+  isSystem: boolean;
 }
 
 /**
@@ -47,7 +48,9 @@ function resolveRelationshipTypes(
     for (const t of requested) {
       // Layer 1: lexical guard — reject before any Cypher interpolation.
       if (!RELATIONSHIP_TYPE_PATTERN.test(t)) {
-        throw new Error(`ontology.neighbors: relationship type "${t}" fails the lexical guard`);
+        throw new Error(
+          `ontology.neighbors: relationship type "${t}" fails the lexical guard`,
+        );
       }
       // Layer 2: when a registry is pinned, the type must be in the active vocab.
       if (activeVocab && !activeVocab.includes(t)) {
@@ -70,15 +73,16 @@ function resolveRelationshipTypes(
   return null;
 }
 
-export const ontologyNeighborsHandler: CapabilityHandler<typeof ontologyNeighbors> = async (
-  input,
-  ctx,
-) => {
+export const ontologyNeighborsHandler: CapabilityHandler<
+  typeof ontologyNeighbors
+> = async (input, ctx) => {
   const { orgId, workspaceId } = ctx;
 
   // Resolve the pinned active vocabulary (null when no version is pinned).
   const pinned = await getPinnedSchema(orgId, workspaceId);
-  const activeVocab = pinned ? pinned.relationshipTypes.map((r) => r.name) : null;
+  const activeVocab = pinned
+    ? pinned.relationshipTypes.map((r) => r.name)
+    : null;
   const edgeTypes = resolveRelationshipTypes(input.edgeTypes, activeVocab);
 
   let found = false;
@@ -119,7 +123,10 @@ export const ontologyNeighborsHandler: CapabilityHandler<typeof ontologyNeighbor
       // Bi-temporal read filter — only edges valid + known at the requested
       // instants survive. Defaults to now/now so an unstamped legacy edge (null
       // lower bounds) and a currently-valid edge both pass unchanged.
-      const validity = buildValidityFilter("r", { asOf: input.asOf, asKnownAt: input.asKnownAt });
+      const validity = buildValidityFilter("r", {
+        asOf: input.asOf,
+        asKnownAt: input.asKnownAt,
+      });
 
       // Fetch one extra row beyond the cap so we can flag truncation honestly.
       // BigInt forces the driver to send INTEGER on the Bolt wire — a plain JS
@@ -139,10 +146,18 @@ export const ontologyNeighborsHandler: CapabilityHandler<typeof ontologyNeighbor
            m.description AS description,
            type(r)       AS edgeType,
            CASE WHEN startNode(r) = n THEN 'out' ELSE 'in' END AS direction,
+           coalesce(m.is_system, false) AS isSystem,
            ${edgeValidityReturn("r")}
          ORDER BY m.displayName ASC
          LIMIT $fetchLimit`,
-        { nodeId: input.nodeId, orgId, workspaceId, edgeTypes, fetchLimit, ...validity.params },
+        {
+          nodeId: input.nodeId,
+          orgId,
+          workspaceId,
+          edgeTypes,
+          fetchLimit,
+          ...validity.params,
+        },
       );
 
       for (const record of result.records) {
@@ -157,6 +172,9 @@ export const ontologyNeighborsHandler: CapabilityHandler<typeof ontologyNeighbor
           description: record.get("description") as string | null,
           edgeType: record.get("edgeType") as string,
           direction: record.get("direction") as "out" | "in",
+          // `=== true` (not `as boolean`): a pre-backfill node row can surface
+          // null here and the contract output requires a real boolean.
+          isSystem: record.get("isSystem") === true,
           ...readEdgeValidity((k) => record.get(k)),
         });
       }

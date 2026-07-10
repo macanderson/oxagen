@@ -28,6 +28,13 @@ export interface ExplorerNode {
   degree: number;
   /** True once full properties have been hydrated (vs. a stub from a neighbor walk). */
   hydrated: boolean;
+  /**
+   * True when the node is product-owned runtime lineage (executions, agents,
+   * tools, generated files) rather than customer knowledge. Set on neighbor
+   * stubs pulled in by expansion; the seeded view is already filtered
+   * server-side, so hydrated seed nodes omit it.
+   */
+  isSystem?: boolean;
 }
 
 /** Relationship between two nodes. */
@@ -159,7 +166,12 @@ interface BaseRequest {
 
 export type ExploreRequest = BaseRequest &
   (
-    | { op: "graph"; labels?: string[]; limit?: number }
+    | {
+        op: "graph";
+        labels?: string[];
+        limit?: number;
+        includeSystem?: boolean;
+      }
     | { op: "expand"; nodeId: string }
     | {
         op: "nodes";
@@ -167,6 +179,7 @@ export type ExploreRequest = BaseRequest &
         query?: string;
         limit?: number;
         offset?: number;
+        includeSystem?: boolean;
       }
     | { op: "search"; query: string; labels?: string[] }
     | { op: "node"; nodeId: string }

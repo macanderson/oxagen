@@ -7,6 +7,11 @@
  * type rather than blindly stringified. Pure + node-testable.
  */
 
+// Re-exported so the module's existing consumers (copyable-id, edge-hover-popover,
+// graph-canvas-view) don't need an import-path change — the shared @/lib/utils
+// implementation is byte-identical to this module's former local definition.
+export { truncate } from "@/lib/utils";
+
 export type PropertyKind =
   | "null"
   | "boolean"
@@ -103,12 +108,6 @@ export function humanizeKey(key: string): string {
       return index === 0 ? lower.charAt(0).toUpperCase() + lower.slice(1) : lower;
     })
     .join(" ");
-}
-
-/** Truncate a long string for compact contexts (graph labels, chips). */
-export function truncate(value: string, max = 40): string {
-  if (value.length <= max) return value;
-  return `${value.slice(0, max - 1)}…`;
 }
 
 /** Format a 0..1 confidence as a whole-number percentage, e.g. 0.873 → "87%". */

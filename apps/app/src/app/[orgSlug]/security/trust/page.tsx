@@ -31,7 +31,7 @@ function SubProcessorRow({ sp }: { sp: SubProcessor }) {
       <div className="flex flex-1 flex-col gap-0.5 min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-sm font-medium text-foreground">{sp.name}</span>
-          <Badge variant="muted" className="text-[10px] font-mono">
+          <Badge variant="muted" className="text-[10px]">
             {sp.category}
           </Badge>
         </div>
@@ -135,7 +135,7 @@ export default async function SecurityTrustPage({
                 <span className="text-sm font-medium text-foreground">
                   Primary region
                 </span>
-                <Badge variant="muted" className="font-mono text-xs">
+                <Badge variant="muted" className="text-xs">
                   US-central (iad1)
                 </Badge>
               </div>
@@ -215,7 +215,7 @@ export default async function SecurityTrustPage({
                   <span className="text-sm font-medium text-foreground">
                     {row.label}
                   </span>
-                  <Badge variant="muted" className="font-mono text-xs">
+                  <Badge variant="muted" className="text-xs">
                     {row.value}
                   </Badge>
                 </div>
@@ -333,7 +333,7 @@ export default async function SecurityTrustPage({
                 <span className="text-sm font-medium text-foreground">
                   {row.store}
                 </span>
-                <Badge variant="muted" className="font-mono text-xs">
+                <Badge variant="muted" className="text-xs">
                   {row.region}
                 </Badge>
               </div>

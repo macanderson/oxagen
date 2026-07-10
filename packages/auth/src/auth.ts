@@ -6,7 +6,9 @@ import { eq } from "drizzle-orm";
 import { db } from "@oxagen/database/client";
 import { schema, withSystemDb } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
+import { captureError } from "@oxagen/telemetry";
 import { requireEnv } from "@oxagen/config/env";
+import { logger } from "./logger";
 import { createLocalKmsAdapter, loadMasterKey } from "@oxagen/crypto/kms";
 import { buildAccountTokenHooks, buildStripOnlyAccountHooks } from "./token-encryption";
 import { withTrustedLinkHardening } from "./account-linking";
@@ -522,7 +524,19 @@ export const auth = betterAuth({
             });
           } catch (err) {
             // Best-effort audit — never block sign-in for an audit failure.
-            console.error("[auth] session.create.after hook failed", { userId: s.userId, err });
+            // Route through the package logger (structured, queryable) AND
+            // escalate via captureError so a spike in dropped sign-in audit
+            // events is alertable — the failure here happens BEFORE
+            // emitSecurityEvent's own retry/escalation path could run
+            // (resolveFirstOrgId can throw first), so this is the only place it
+            // can be surfaced (OXA-2058 companion; never re-throw — OXA-1422).
+            logger.error({ userId: s.userId, err }, "[auth] session.create.after hook failed");
+            captureError({
+              error: err,
+              source: "app",
+              severity: "warn",
+              context: "auth session.create.after hook failed",
+            });
           }
         },
       },
@@ -552,7 +566,16 @@ export const auth = betterAuth({
             });
           } catch (err) {
             // Best-effort audit — never block sign-out for an audit failure.
-            console.error("[auth] session.delete.after hook failed", { userId: s.userId, err });
+            // Same escalation as session.create.after: structured logger +
+            // captureError so dropped sign-out audit events are alertable
+            // (OXA-2058 companion; never re-throw — OXA-1422).
+            logger.error({ userId: s.userId, err }, "[auth] session.delete.after hook failed");
+            captureError({
+              error: err,
+              source: "app",
+              severity: "warn",
+              context: "auth session.delete.after hook failed",
+            });
           }
         },
       },

@@ -14,26 +14,25 @@
  * size-adjust fallback metrics. Not required — the variable fonts are already
  * self-hosted and active via the shared CSS.
  */
+import { Suspense } from "react";
 import type { Metadata, Viewport } from "next";
-import { cookies } from "next/headers";
 import "./globals.css";
-import {
-  ThemeProvider,
-  THEME_COOKIE_NAME,
-  parseTheme,
-  themeClass,
-  MotionProvider,
-} from "@oxagen/ui";
+import { ThemeProvider, MotionProvider } from "@oxagen/ui";
 import { ToastProvider, ToastViewport } from "@/components/ui/toast";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { AppearanceBootstrap } from "@/components/appearance-bootstrap";
 import { PwaSplash } from "@/components/pwa/pwa-splash";
 import { InstallPrompt } from "@/components/pwa/install-prompt";
 import { RouteTransitionLoader } from "@/components/pwa/route-transition-loader";
+import { SwRegister } from "@/components/pwa/sw-register";
 
 export const metadata: Metadata = {
   title: "Oxagen",
   description: "Enterprise agent ontologies as a service",
-  manifest: "/pwa/manifest.json",
+  // No explicit `manifest` string here — apps/app/src/app/manifest.ts (Next's
+  // native metadata-route convention) is auto-detected and linked at
+  // /manifest.webmanifest. The old static apps/app/public/pwa/manifest.json
+  // stays on disk, unreferenced, for backward compatibility only.
   icons: {
     icon: [
       { url: "/favicon/favicon.svg", type: "image/svg+xml" },
@@ -96,45 +95,26 @@ export const viewport: Viewport = {
   ],
 };
 
-/** Valid font-size cookie values; default 'medium' when absent/invalid. */
-function parseFontSize(raw: string | undefined): "small" | "medium" | "large" {
-  if (raw === "small" || raw === "medium" || raw === "large") return raw;
-  return "medium";
-}
-
-/** Valid density cookie values; default 'comfortable' when absent/invalid. */
-function parseDensity(
-  raw: string | undefined,
-): "compact" | "comfortable" | "spacious" {
-  if (raw === "compact" || raw === "comfortable" || raw === "spacious")
-    return raw;
-  return "comfortable";
-}
-
-export default async function RootLayout({
+export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  // No-flash theming with no inline <script>: read the preference cookie on the
-  // server and render the resolved class straight onto <html>. "system" renders
-  // no class and is resolved by CSS @media (prefers-color-scheme) — see
-  // @oxagen/ui ThemeProvider / styles/tokens.css. Keep suppressHydrationWarning:
-  // for "system" the provider adds the OS-resolved class after hydration.
-  const cookieStore = await cookies();
-  const theme = parseTheme(cookieStore.get(THEME_COOKIE_NAME)?.value);
-  // Appearance: font-size and density are read from their own cookies and
-  // applied as data-* attributes on <html> so CSS can respond flash-free,
-  // matching the no-inline-script theming pattern.
-  const fontSize = parseFontSize(cookieStore.get("pref-font-size")?.value);
-  const density = parseDensity(cookieStore.get("pref-density")?.value);
-
+  // Cache Components: the root layout is part of the prerendered static shell,
+  // so it must not read runtime data (cookies/headers) — per-request <html>
+  // attributes are incompatible with a build-time shell. The shell renders
+  // neutral defaults ("system" theme = no class, resolved by CSS
+  // @media (prefers-color-scheme); medium/comfortable appearance) and
+  // <AppearanceBootstrap/> — an inline script INSIDE the shell — applies the
+  // user's cookie preferences to <html> before first paint. No flash.
+  // Keep suppressHydrationWarning: the bootstrap script (and, post-mount, the
+  // ThemeProvider) legitimately mutates the class/data-* attributes away from
+  // the prerendered values.
   return (
     <html
       lang="en"
-      className={themeClass(theme)}
-      data-font-size={fontSize}
-      data-density={density}
+      data-font-size="medium"
+      data-density="comfortable"
       suppressHydrationWarning
     >
       {/*
@@ -144,12 +124,23 @@ export default async function RootLayout({
        */}
       <body className="min-h-dvh font-sans antialiased">
         {/*
+         * Pre-paint appearance sync: applies theme/font-size/density cookies
+         * to <html> before anything paints. Must stay the first child of
+         * <body> so the parser executes it ahead of visible content.
+         */}
+        <AppearanceBootstrap />
+        {/*
          * PWA splash: renders instantly in standalone mode before any JS runs.
          * Gate is pure CSS (display-mode: standalone / minimal-ui) so browser
          * users incur zero layout cost. JS dismisses it after hydration.
          */}
         <PwaSplash />
-        <ThemeProvider initialTheme={theme}>
+        {/*
+         * No initialTheme: the provider adopts the theme cookie in a mount
+         * effect (its documented no-initialTheme mode), converging with what
+         * AppearanceBootstrap already applied pre-paint.
+         */}
+        <ThemeProvider>
           {/*
            * MotionProvider sets framer-motion's reducedMotion="user" so every
            * motion.* element across the app honours the OS reduce-motion setting
@@ -166,14 +157,24 @@ export default async function RootLayout({
             {/*
              * Route-transition loader: spinner during navigation, mobile-only
              * (gated at max-width:768px). Respects prefers-reduced-motion.
+             * Suspense: usePathname() is uncached request data under
+             * cacheComponents — without a boundary it blocks every page's
+             * prerender ("Uncached data was accessed outside of <Suspense>").
              */}
-            <RouteTransitionLoader />
+            <Suspense fallback={null}>
+              <RouteTransitionLoader />
+            </Suspense>
             {/*
              * Install prompt: deferred install CTA for Chrome/Android; manual
              * instructions for iOS. Never shown when already installed or
              * dismissed.
              */}
             <InstallPrompt />
+            {/*
+             * Service worker: app-shell/static-asset caching only (never
+             * offline mode — see sw.js). Production only; renders nothing.
+             */}
+            <SwRegister />
           </MotionProvider>
         </ThemeProvider>
       </body>

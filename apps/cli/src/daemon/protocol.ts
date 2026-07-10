@@ -78,6 +78,8 @@ export interface DaemonConfig {
   maxRssBytes?: number;
 }
 
-export const DEFAULT_DAEMON_CONFIG: Partial<DaemonConfig> = {
+// Pick<> (not Partial<>) so spreading this into a DaemonConfig literal
+// actually satisfies the required idleTimeoutMs field at the type level.
+export const DEFAULT_DAEMON_CONFIG: Pick<DaemonConfig, "idleTimeoutMs"> = {
   idleTimeoutMs: 30 * 60 * 1000,
 };

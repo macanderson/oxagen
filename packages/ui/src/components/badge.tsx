@@ -5,18 +5,21 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "../lib/utils";
 
 const badgeVariants = cva(
-  "inline-flex items-center rounded-md border font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+  "inline-flex items-center gap-1 rounded-md border font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 [&_svg]:size-3 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
-        default:
-          "border-transparent bg-primary text-primary-foreground hover:bg-primary/80",
+        // Default badge — an OUTLINED chip, never a filled/secondary surface.
+        // `border-current` keys the outline to the ink (text) color so it
+        // reads correctly on both light and dark layouts, and follows any
+        // text-color override a caller applies. Never monospace.
+        default: "border-current bg-transparent text-foreground",
         secondary:
           "border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80",
         destructive:
           "border-transparent bg-destructive text-destructive-foreground hover:bg-destructive/80",
-        // Surface badge — the token-driven neutral chip (badge-bg/fg/border).
-        outline: "border-badge-border bg-badge-bg text-badge-fg",
+        // Alias of default — the outlined ink chip IS the default now.
+        outline: "border-current bg-transparent text-foreground",
         muted: "border-transparent bg-muted text-muted-foreground",
         // Brand surface badges — paper-tan brand and neutral accent.
         brand: "border-transparent bg-brand text-brand-foreground",
@@ -26,6 +29,13 @@ const badgeVariants = cva(
         success: "border-transparent bg-success text-success-foreground",
         warning: "border-transparent bg-warning text-warning-foreground",
         error: "border-transparent bg-error text-error-foreground",
+        // Soft status variants — tinted fill, status-colored ink. The shared
+        // form of the `bg-success/12 text-success` pills hand-rolled across
+        // inference/schema surfaces. Same semantic tokens, quieter volume.
+        "info-soft": "border-info/25 bg-info/10 text-info",
+        "success-soft": "border-success/25 bg-success/10 text-success",
+        "warning-soft": "border-warning/25 bg-warning/10 text-warning",
+        "error-soft": "border-error/25 bg-error/10 text-error",
       },
       // coss ui adds size variants for density control. `lg` matches the fixed
       // shadcn/ui badge size.
@@ -44,9 +54,11 @@ export interface BadgeProps
     VariantProps<typeof badgeVariants> {
   /** Render the badge styling onto another element (Base UI `render`). */
   render?: React.ReactElement;
+  /** Leading status dot in the badge ink color (pairs with soft variants). */
+  dot?: boolean;
 }
 
-function Badge({ className, variant, size, render, children, ...props }: BadgeProps) {
+function Badge({ className, variant, size, render, dot, children, ...props }: BadgeProps) {
   return useRender({
     render: render ?? <span />,
     props: {
@@ -54,7 +66,14 @@ function Badge({ className, variant, size, render, children, ...props }: BadgePr
       ...props,
       // Forward children into the rendered element (default <span> or a
       // `render` element), so label content renders in both cases.
-      children,
+      children: dot ? (
+        <>
+          <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-current opacity-80" />
+          {children}
+        </>
+      ) : (
+        children
+      ),
     },
   });
 }

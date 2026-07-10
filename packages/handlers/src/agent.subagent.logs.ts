@@ -3,6 +3,7 @@ import { agentSubagentLogs } from "@oxagen/oxagen/contracts/agent.subagent.logs"
 import type { AgentSubagentAggregateOutput } from "@oxagen/oxagen/contracts/agent.subagent.aggregate";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { persistGeneratedAsset } from "./generated-asset.persist";
+import { slugify } from "./lib/asset-filename";
 import { logger } from "./logger";
 
 type Child = AgentSubagentAggregateOutput["children"][number];
@@ -146,7 +147,7 @@ export const agentSubagentLogsHandler: CapabilityHandler<typeof agentSubagentLog
     accessPolicy: "org",
   });
 
-  const filename = `${slugify(title)}.md`;
+  const filename = `${slugify(title).slice(0, 60) || "subagent-log"}.md`;
 
   logger.info(
     { fanoutId: input.fanoutId, childCount: aggregate.children.length, publicId: asset.publicId },
@@ -174,11 +175,3 @@ export const agentSubagentLogsHandler: CapabilityHandler<typeof agentSubagentLog
   };
 };
 
-function slugify(s: string): string {
-  const base = s
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 60);
-  return base.length > 0 ? base : "subagent-log";
-}

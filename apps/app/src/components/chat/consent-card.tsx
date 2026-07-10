@@ -1,7 +1,6 @@
 "use client";
 import * as React from "react";
 import { Check, Plug, ShieldCheck, X } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { StructuredField } from "./structured-value";
@@ -68,9 +67,7 @@ export function ConsentCard({
       <div className="flex items-center gap-2">
         <ShieldCheck className="h-4 w-4 text-primary" />
         <span className="font-semibold">Allow external tool?</span>
-        <Badge variant="outline" className="font-mono">
-          {toolName}
-        </Badge>
+        <span className="text-xs text-muted-foreground">{toolName}</span>
         <span className="ml-auto text-xs tabular-nums text-muted-foreground">
           {expired || settled ? null : `Expires in ${formatRemaining(remaining)}`}
         </span>
@@ -105,16 +102,24 @@ export function ConsentCard({
 
       <div className="flex items-center justify-end gap-2">
         {settled ? (
-          <Badge variant={optimistic === "granted" ? "success" : "destructive"}>
+          <span
+            className={
+              optimistic === "granted"
+                ? "inline-flex items-center gap-1 text-xs font-medium text-success"
+                : "inline-flex items-center gap-1 text-xs font-medium text-destructive"
+            }
+          >
             {optimistic === "granted" ? (
-              <Check className="mr-1 h-3 w-3" />
+              <Check className="h-3 w-3" />
             ) : (
-              <X className="mr-1 h-3 w-3" />
+              <X className="h-3 w-3" />
             )}
             {optimistic}
-          </Badge>
+          </span>
         ) : expired ? (
-          <Badge variant="muted">Expired</Badge>
+          <span className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground">
+            Expired
+          </span>
         ) : (
           <>
             <Button

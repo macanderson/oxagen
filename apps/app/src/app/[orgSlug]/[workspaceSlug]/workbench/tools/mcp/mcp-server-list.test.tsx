@@ -25,13 +25,17 @@
 
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import {
   McpServerList,
   connectionDisplay,
   type McpServerRow,
 } from "./mcp-server-list";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 // ---------------------------------------------------------------------------
 // (a) connectionDisplay — pure branch coverage
@@ -114,7 +118,16 @@ function makeRow(overrides: Partial<McpServerRow> = {}): McpServerRow {
   };
 }
 
-function renderList(rows: McpServerRow[]) {
+function renderList(
+  rows: McpServerRow[],
+  revokeAction: (input: {
+    orgSlug: string;
+    workspaceSlug: string;
+    orgListingId: string;
+  }) => Promise<{ ok: boolean; revoked?: boolean; error?: string }> = vi.fn(
+    async () => ({ ok: true, revoked: true }),
+  ),
+) {
   return render(
     <McpServerList
       orgSlug="acme"
@@ -122,6 +135,7 @@ function renderList(rows: McpServerRow[]) {
       initialServers={rows}
       toggleAction={vi.fn(async () => ({ ok: true }))}
       uninstallAction={vi.fn(async () => ({ ok: true }))}
+      revokeAction={revokeAction}
     />,
   );
 }
@@ -187,7 +201,39 @@ describe("McpServerList", () => {
   it("renders the empty state when no servers are installed", () => {
     renderList([]);
     expect(
-      screen.getByText(/No MCP servers connected yet/i),
+      screen.getByText(/No MCP servers installed yet/i),
     ).toBeInTheDocument();
+  });
+
+  // (f) remove-auth action — only rows with a stored credential offer it
+  it("renders Remove auth for a row with a credential and clears the status after revoking", async () => {
+    const user = userEvent.setup();
+    const revoke = vi.fn(async () => ({ ok: true, revoked: true }));
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    renderList([makeRow({ credentialStatus: "active" })], revoke);
+
+    const btn = screen.getByTestId("mcp-server-revoke-srv-1");
+    expect(btn).toHaveTextContent("Remove auth");
+    await user.click(btn);
+
+    expect(revoke).toHaveBeenCalledWith({
+      orgSlug: "acme",
+      workspaceSlug: "main",
+      orgListingId: "srv-1",
+    });
+    // Credential gone → status falls back to Needs authentication, action gone.
+    expect(
+      await screen.findByText("Needs authentication"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByTestId("mcp-server-revoke-srv-1"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("offers no Remove auth action when no credential is stored", () => {
+    renderList([makeRow()]);
+    expect(
+      screen.queryByTestId("mcp-server-revoke-srv-1"),
+    ).not.toBeInTheDocument();
   });
 });

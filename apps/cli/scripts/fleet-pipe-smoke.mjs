@@ -17,14 +17,11 @@
  *      external consumer (structural envelope check + monotonic seq), and tails
  *      it live in a spawned child that we kill once the seeded events arrive.
  *
- *   B. cli-subprocess (auto-detected) — the real `oxagen fleet ls|logs|watch
- *      --json` pipe. Runs only once the fleet command tree is wired
- *      (`commands/fleet.ts`); until then it SKIPs with a clear TODO, so this
- *      script is correct today and grows teeth automatically when #6 lands.
+ *   B. cli-subprocess — the real `oxagen fleet ls|logs|watch --json` pipe
+ *      against the wired `commands/fleet.ts` command tree.
  *
  *   C. live-dispatch (gated behind OXAGEN_SMOKE_LIVE=1) — `oxagen fleet dispatch`
- *      → a real detached worker → follow to its fate. A marked TODO that needs
- *      the worker command from #4/#6; SKIPs unless the env flag is set.
+ *      → a real detached worker → follow to its fate.
  *
  * Usage:
  *   node scripts/fleet-pipe-smoke.mjs            # legs A (+ B if wired)
@@ -375,7 +372,7 @@ async function legCliSubprocess(helperPath) {
   const fleetBase = await mkdtemp(join(tmpdir(), "oxa-smoke-cli-"));
   try {
     if (!(await fleetCliWired(fleetBase))) {
-      skip("`oxagen fleet` command tree not wired yet (commands/fleet.ts, task #6) — CLI pipe legs deferred");
+      skip("`oxagen fleet` command tree unavailable in this environment — CLI pipe legs deferred");
       return;
     }
     // Empty roster: `fleet ls --json | jq length` == 0.
@@ -410,8 +407,7 @@ async function legCliSubprocess(helperPath) {
 }
 
 // ---------------------------------------------------------------------------
-// Leg C — live detached dispatch (gated: OXAGEN_SMOKE_LIVE=1). TODO: needs the
-// `oxagen fleet dispatch`/`worker` command from #4/#6 to be wired end-to-end.
+// Leg C — live detached dispatch (gated: OXAGEN_SMOKE_LIVE=1).
 // ---------------------------------------------------------------------------
 
 async function legLiveDispatch() {
@@ -423,7 +419,7 @@ async function legLiveDispatch() {
   }
   const fleetBase = await mkdtemp(join(tmpdir(), "oxa-smoke-live-"));
   try {
-    // TODO(#4/#6): once `oxagen fleet dispatch` spawns a real detached worker,
+    // Once dispatched, follow the worker to its fate:
     //   1) dispatch a trivial prompt, capture the printed sid,
     //   2) follow (`fleet dispatch --follow` / `fleet watch <sid> --json`),
     //   3) assert a terminal session.end envelope and a 0/1 exit matching its fate.

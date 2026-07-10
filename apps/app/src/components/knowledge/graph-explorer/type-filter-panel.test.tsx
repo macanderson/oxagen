@@ -9,11 +9,16 @@
 
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
-import { TypeFilterPanel, type TypeFilterPanelProps } from "./type-filter-panel";
+import {
+  TypeFilterPanel,
+  type TypeFilterPanelProps,
+} from "./type-filter-panel";
 
 afterEach(cleanup);
 
-function makeProps(overrides: Partial<TypeFilterPanelProps> = {}): TypeFilterPanelProps {
+function makeProps(
+  overrides: Partial<TypeFilterPanelProps> = {},
+): TypeFilterPanelProps {
   return {
     nodeCounts: [
       { type: "Issue", count: 12 },
@@ -26,6 +31,7 @@ function makeProps(overrides: Partial<TypeFilterPanelProps> = {}): TypeFilterPan
     systemHidden: false,
     inferredCount: 3,
     confirmedCount: 9,
+    systemCount: 0,
     onToggleNodeType: vi.fn(),
     onToggleEdgeType: vi.fn(),
     onToggleInferred: vi.fn(),
@@ -58,13 +64,18 @@ describe("TypeFilterPanel — rendering", () => {
     expect(screen.getByText("Confirmed edges")).toBeInTheDocument();
   });
 
-  it("renders the 'System nodes' visibility row", () => {
-    render(<TypeFilterPanel {...makeProps()} />);
-    expect(screen.getByText("System nodes")).toBeInTheDocument();
+  it("renders the 'Agent activity' visibility row with its in-view count", () => {
+    render(<TypeFilterPanel {...makeProps({ systemCount: 4 })} />);
+    expect(screen.getByText("Agent activity")).toBeInTheDocument();
+    expect(screen.getByText("4")).toBeInTheDocument();
   });
 
   it("renders inferred count and confirmed count", () => {
-    render(<TypeFilterPanel {...makeProps({ inferredCount: 7, confirmedCount: 9 })} />);
+    render(
+      <TypeFilterPanel
+        {...makeProps({ inferredCount: 7, confirmedCount: 9 })}
+      />,
+    );
     expect(screen.getByText("7")).toBeInTheDocument();
     expect(screen.getByText("9")).toBeInTheDocument();
   });
@@ -154,15 +165,15 @@ describe("TypeFilterPanel — inferred toggle", () => {
   });
 });
 
-describe("TypeFilterPanel — system nodes toggle", () => {
-  // System nodes is the first row of the Visibility section: 2 node-type
+describe("TypeFilterPanel — agent activity toggle", () => {
+  // Agent activity is the first row of the Visibility section: 2 node-type
   // checkboxes precede it.
   const SYSTEM_CHECKBOX_INDEX = 2;
 
-  it("calls onToggleSystem when the System nodes row is clicked", () => {
+  it("calls onToggleSystem when the Agent activity row is clicked", () => {
     const onToggleSystem = vi.fn();
     render(<TypeFilterPanel {...makeProps({ onToggleSystem })} />);
-    fireEvent.click(screen.getByText("System nodes"));
+    fireEvent.click(screen.getByText("Agent activity"));
     expect(onToggleSystem).toHaveBeenCalledOnce();
   });
 
@@ -171,7 +182,9 @@ describe("TypeFilterPanel — system nodes toggle", () => {
       <TypeFilterPanel {...makeProps({ systemHidden: true })} />,
     );
     const checkboxes = container.querySelectorAll('[role="checkbox"]');
-    expect(checkboxes[SYSTEM_CHECKBOX_INDEX]).not.toHaveAttribute("data-checked");
+    expect(checkboxes[SYSTEM_CHECKBOX_INDEX]).not.toHaveAttribute(
+      "data-checked",
+    );
   });
 
   it("reflects systemHidden=false by marking the system row as visible", () => {
@@ -179,6 +192,9 @@ describe("TypeFilterPanel — system nodes toggle", () => {
       <TypeFilterPanel {...makeProps({ systemHidden: false })} />,
     );
     const checkboxes = container.querySelectorAll('[role="checkbox"]');
-    expect(checkboxes[SYSTEM_CHECKBOX_INDEX]).toHaveAttribute("data-checked", "");
+    expect(checkboxes[SYSTEM_CHECKBOX_INDEX]).toHaveAttribute(
+      "data-checked",
+      "",
+    );
   });
 });

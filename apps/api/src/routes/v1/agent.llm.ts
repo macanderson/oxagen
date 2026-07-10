@@ -42,6 +42,7 @@ import {
   type JSONSchema7,
 } from "@oxagen/ai";
 import { capabilityContext } from "../../lib/context";
+import { logger } from "../../middleware/logger";
 import type { AppEnv } from "../../app";
 
 // ── Request schema (subset of the OpenAI Chat Completions request) ─────────────
@@ -491,7 +492,10 @@ agentLlmRoute.post("/chat/completions", async (c) => {
       });
     } catch (err) {
       const reason = errorText(err);
-      console.error("[agent.llm] non-stream generation failed:", reason);
+      logger.error(
+        { reason, requestId: ctx.requestId, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+        "[agent.llm] non-stream generation failed",
+      );
       return c.json(openAiError(reason, "upstream_error"), 502);
     }
   }
@@ -625,7 +629,10 @@ agentLlmRoute.post("/chat/completions", async (c) => {
               // an OpenAI-style error object; the openai-compatible client turns
               // an unparseable chunk into an error stream part.
               const message = errorText((raw as { error?: unknown }).error);
-              console.error("[agent.llm] stream error part:", message);
+              logger.error(
+                { message, requestId: ctx.requestId, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+                "[agent.llm] stream error part",
+              );
               controller.enqueue(
                 encoder.encode(
                   `data: ${JSON.stringify(openAiError(message, "upstream_error"))}\n\n`,
@@ -651,7 +658,10 @@ agentLlmRoute.post("/chat/completions", async (c) => {
         });
       } catch (err) {
         const message = errorText(err);
-        console.error("[agent.llm] stream failed:", message);
+        logger.error(
+          { message, requestId: ctx.requestId, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+          "[agent.llm] stream failed",
+        );
         controller.enqueue(
           encoder.encode(
             `data: ${JSON.stringify(openAiError(message, "upstream_error"))}\n\n`,

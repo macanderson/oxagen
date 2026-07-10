@@ -8,7 +8,6 @@ import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { MarketplaceModal } from "@/components/plugins/marketplace-modal";
 import { CapabilityIcon } from "@/components/plugins/capability-icon";
 import { isRenderableImageUrl } from "@/lib/plugin-icon";
-import { RegistryManager, type RegistryRow } from "./registry-manager";
 import { ShoppingBag, Trash2 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -31,14 +30,12 @@ interface WorkspacePluginsPanelProps {
   orgId: string;
   workspaceId: string;
   initialPlugins: InstalledPlugin[];
-  initialRegistries: RegistryRow[];
   /**
    * True when the server-side installed-plugins read failed and the list was
    * degraded to empty. Drives an inline notice so an RLS/DB failure doesn't
    * masquerade as "no plugins installed".
    */
   loadError?: boolean;
-  docsBaseUrl: string;
   installAction: (input: {
     orgSlug: string;
     workspaceSlug: string;
@@ -82,22 +79,6 @@ interface WorkspacePluginsPanelProps {
     workspaceSlug: string;
     orgListingId: string;
   }) => Promise<{ ok: boolean; error?: string }>;
-  addRegistryAction: (input: {
-    orgSlug: string;
-    workspaceSlug: string;
-    name: string;
-    baseUrl: string;
-  }) => Promise<{
-    ok: boolean;
-    registryId?: string;
-    isDefault?: boolean;
-    error?: string;
-  }>;
-  removeRegistryAction: (input: {
-    orgSlug: string;
-    workspaceSlug: string;
-    registryId: string;
-  }) => Promise<{ ok: boolean; promotedId?: string | null; error?: string }>;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -149,15 +130,11 @@ export function WorkspacePluginsPanel({
   // destructured to satisfy no-unused-vars while keeping the prop accepted.
   workspaceId,
   initialPlugins,
-  initialRegistries,
   loadError = false,
-  docsBaseUrl,
   installAction,
   installBulkAction,
   toggleAction,
   uninstallAction,
-  addRegistryAction,
-  removeRegistryAction,
 }: WorkspacePluginsPanelProps) {
   const [plugins, setPlugins] = React.useState(initialPlugins);
   const [marketplaceOpen, setMarketplaceOpen] = React.useState(false);
@@ -291,17 +268,8 @@ export function WorkspacePluginsPanel({
         </Alert>
       )}
 
-      {/* Registry manager */}
-      <RegistryManager
-        orgSlug={orgSlug}
-        workspaceSlug={workspaceSlug}
-        initialRegistries={initialRegistries}
-        docsBaseUrl={docsBaseUrl}
-        addRegistryAction={addRegistryAction}
-        removeRegistryAction={removeRegistryAction}
-      />
-
-      {/* Installed plugins section */}
+      {/* Installed plugins section — registry administration lives in
+          Settings → MCP Server Registries, not here. */}
       <div className="rounded-xl border border-border/60 bg-card p-6">
         <div className="mb-4 flex items-center justify-between">
           <div>
@@ -341,99 +309,99 @@ export function WorkspacePluginsPanel({
             </Button>
           </div>
         ) : (
-          <div className="overflow-hidden rounded-lg border border-border/40">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border/40 text-xs">
-                  <th className="px-4 py-2 text-left font-medium">Plugin</th>
-                  <th className="px-4 py-2 text-left font-medium">Type</th>
-                  <th className="px-4 py-2 text-left font-medium">Enabled</th>
-                  <th className="px-4 py-2" />
-                </tr>
-              </thead>
-              <tbody>
-                {plugins.map((plugin) => (
-                  <React.Fragment key={plugin.id}>
-                    <tr
-                      className="border-b border-border/30 last:border-0"
-                      data-testid={`ws-plugin-row-${plugin.id}`}
-                    >
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          {(() => {
-                            const iconUrl = plugin.iconUrl;
-                            if (!iconUrl) {
-                              return (
-                                <span className="flex h-6 w-6 items-center justify-center rounded bg-muted flex-shrink-0">
-                                  {pluginTypeIcon(plugin.pluginType)}
-                                </span>
-                              );
-                            }
-                            if (iconUrl.startsWith("lucide:")) {
-                              const parts = iconUrl.split(":");
-                              const iconName = parts[1] ?? "brain-circuit";
-                              const color =
-                                parts[2] ||
-                                INSTALLED_TYPE_ICON[plugin.pluginType]?.color ||
-                                "#6b7280";
-                              return (
-                                <span className="flex h-6 w-6 items-center justify-center rounded flex-shrink-0">
-                                  <CapabilityIcon
-                                    iconName={iconName}
-                                    color={color}
-                                    size={24}
-                                  />
-                                </span>
-                              );
-                            }
-                            if (isRenderableImageUrl(iconUrl)) {
-                              return (
-                                <Image
-                                  src={iconUrl}
-                                  alt=""
-                                  width={24}
-                                  height={24}
-                                  unoptimized
-                                  className="h-6 w-6 rounded object-contain flex-shrink-0"
-                                  aria-hidden="true"
-                                />
-                              );
-                            }
-                            return (
-                              <span className="flex h-6 w-6 items-center justify-center rounded bg-muted flex-shrink-0">
-                                {pluginTypeIcon(plugin.pluginType)}
-                              </span>
-                            );
-                          })()}
-                          <div>
-                            <p
-                              className="font-medium"
-                              data-testid={`ws-plugin-name-${plugin.id}`}
-                            >
-                              {plugin.title ?? plugin.name}
-                            </p>
-                            {plugin.title && plugin.title !== plugin.name && (
-                              <p className="text-xs text-muted-foreground">
-                                {plugin.name}
-                              </p>
-                            )}
-                            {plugin.description && (
-                              <p className="mt-0.5 text-xs text-muted-foreground line-clamp-1">
-                                {plugin.description}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
+          <ul className="divide-y divide-border/30 overflow-hidden rounded-lg border border-border/40">
+            {plugins.map((plugin) => (
+              <li
+                key={plugin.id}
+                className="flex flex-col gap-2 px-4 py-3"
+                data-testid={`ws-plugin-row-${plugin.id}`}
+              >
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-6">
+                  <div className="flex min-w-0 flex-1 items-center gap-2">
+                    {(() => {
+                      const iconUrl = plugin.iconUrl;
+                      if (!iconUrl) {
+                        return (
+                          <span className="flex h-6 w-6 items-center justify-center rounded bg-muted flex-shrink-0">
+                            {pluginTypeIcon(plugin.pluginType)}
+                          </span>
+                        );
+                      }
+                      if (iconUrl.startsWith("lucide:")) {
+                        const parts = iconUrl.split(":");
+                        const iconName = parts[1] ?? "brain-circuit";
+                        const color =
+                          parts[2] ||
+                          INSTALLED_TYPE_ICON[plugin.pluginType]?.color ||
+                          "#6b7280";
+                        return (
+                          <span className="flex h-6 w-6 items-center justify-center rounded flex-shrink-0">
+                            <CapabilityIcon
+                              iconName={iconName}
+                              color={color}
+                              size={24}
+                            />
+                          </span>
+                        );
+                      }
+                      if (isRenderableImageUrl(iconUrl)) {
+                        return (
+                          <Image
+                            src={iconUrl}
+                            alt=""
+                            width={24}
+                            height={24}
+                            unoptimized
+                            className="h-6 w-6 rounded object-contain flex-shrink-0"
+                            aria-hidden="true"
+                          />
+                        );
+                      }
+                      return (
+                        <span className="flex h-6 w-6 items-center justify-center rounded bg-muted flex-shrink-0">
+                          {pluginTypeIcon(plugin.pluginType)}
+                        </span>
+                      );
+                    })()}
+                    <div className="min-w-0">
+                      <p
+                        className="font-medium"
+                        data-testid={`ws-plugin-name-${plugin.id}`}
+                      >
+                        {plugin.title ?? plugin.name}
+                      </p>
+                      {plugin.title && plugin.title !== plugin.name && (
+                        <p className="text-xs text-muted-foreground">
+                          {plugin.name}
+                        </p>
+                      )}
+                      {plugin.description && (
+                        <p className="mt-0.5 text-xs text-muted-foreground line-clamp-1">
+                          {plugin.description}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <dl className="flex flex-wrap items-center gap-x-6 gap-y-2">
+                    <div>
+                      <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                        Type
+                      </dt>
+                      <dd className="mt-0.5 text-sm">
                         <Badge
                           variant={pluginTypeBadgeVariant(plugin.pluginType)}
                           size="sm"
                         >
                           {plugin.pluginType.replace(/_/g, " ")}
                         </Badge>
-                      </td>
-                      <td className="px-4 py-3">
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                        Enabled
+                      </dt>
+                      <dd className="mt-0.5 text-sm">
                         <Switch
                           checked={plugin.wsEnabled}
                           onCheckedChange={(checked) =>
@@ -443,34 +411,32 @@ export function WorkspacePluginsPanel({
                           aria-label={`${plugin.wsEnabled ? "Disable" : "Enable"} ${plugin.title ?? plugin.name}`}
                           data-testid={`ws-plugin-toggle-${plugin.id}`}
                         />
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <button
-                          type="button"
-                          onClick={() => handleUninstall(plugin)}
-                          disabled={pendingIds.has(plugin.id)}
-                          className="text-muted-foreground hover:text-destructive transition-colors disabled:opacity-40"
-                          aria-label={`Remove ${plugin.title ?? plugin.name} from workspace`}
-                          data-testid={`ws-plugin-remove-btn-${plugin.id}`}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </td>
-                    </tr>
-                    {errors[plugin.id] && (
-                      <tr>
-                        <td colSpan={4} className="px-4 pb-2">
-                          <p className="text-xs text-destructive">
-                            {errors[plugin.id]}
-                          </p>
-                        </td>
-                      </tr>
-                    )}
-                  </React.Fragment>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                      </dd>
+                    </div>
+                  </dl>
+
+                  <div className="flex shrink-0 items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => handleUninstall(plugin)}
+                      disabled={pendingIds.has(plugin.id)}
+                      className="text-muted-foreground hover:text-destructive transition-colors disabled:opacity-40"
+                      aria-label={`Remove ${plugin.title ?? plugin.name} from workspace`}
+                      data-testid={`ws-plugin-remove-btn-${plugin.id}`}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                {errors[plugin.id] && (
+                  <p className="text-xs text-destructive">
+                    {errors[plugin.id]}
+                  </p>
+                )}
+              </li>
+            ))}
+          </ul>
         )}
       </div>
 

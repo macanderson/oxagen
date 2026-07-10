@@ -14,6 +14,14 @@ import { useState } from "react";
 import dynamic from "next/dynamic";
 import type { UsageBreakdownRow, UsageTimePoint } from "@oxagen/telemetry";
 import { Panel } from "@/components/ui/panel";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { SegmentedControl, SegmentedControlItem } from "@/components/ui/segmented-control";
 import type { UsageMetric } from "./usage-charts";
 import { formatTokens, formatUsdFromMicros } from "./usage-format";
@@ -145,51 +153,49 @@ function BreakdownTable({
   }
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[36rem] text-sm">
-        <thead>
-          <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
-            <th className="py-2 pr-4 font-medium">Name</th>
-            <th className="py-2 pr-4 text-right font-medium">Calls</th>
-            <th className="py-2 pr-4 text-right font-medium">Input</th>
-            <th className="py-2 pr-4 text-right font-medium">Output</th>
-            <th className="py-2 pr-4 text-right font-medium">Cached</th>
-            <th className="py-2 text-right font-medium">Cost</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => {
-            const sub = sublabel?.(r);
-            return (
-              <tr key={r.key} className="border-b border-border/50 last:border-0">
-                <td className="py-2 pr-4">
-                  <span className="font-medium text-foreground">{label(r)}</span>
-                  {sub ? (
-                    <span className="ml-2 font-mono text-[11px] text-muted-foreground">
-                      {sub}
-                    </span>
-                  ) : null}
-                </td>
-                <td className="py-2 pr-4 text-right tabular-nums">
-                  {r.executions.toLocaleString()}
-                </td>
-                <td className="py-2 pr-4 text-right tabular-nums">
-                  {formatTokens(r.inputTokens)}
-                </td>
-                <td className="py-2 pr-4 text-right tabular-nums">
-                  {formatTokens(r.outputTokens)}
-                </td>
-                <td className="py-2 pr-4 text-right tabular-nums">
-                  {formatTokens(r.cachedTokens)}
-                </td>
-                <td className="py-2 text-right font-medium tabular-nums">
-                  {formatUsdFromMicros(r.costMicros)}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+    <Table density="compact" className="min-w-[36rem]">
+      <TableHeader>
+        <TableRow>
+          <TableHead>Name</TableHead>
+          <TableHead className="text-right">Calls</TableHead>
+          <TableHead className="text-right">Input</TableHead>
+          <TableHead className="text-right">Output</TableHead>
+          <TableHead className="text-right">Cached</TableHead>
+          <TableHead className="text-right">Cost</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {rows.map((r) => {
+          const sub = sublabel?.(r);
+          return (
+            <TableRow key={r.key}>
+              <TableCell>
+                <span className="font-medium text-foreground">{label(r)}</span>
+                {sub ? (
+                  <span className="ml-2 font-mono text-[11px] text-muted-foreground">
+                    {sub}
+                  </span>
+                ) : null}
+              </TableCell>
+              <TableCell className="text-right tabular-nums">
+                {r.executions.toLocaleString()}
+              </TableCell>
+              <TableCell className="text-right tabular-nums">
+                {formatTokens(r.inputTokens)}
+              </TableCell>
+              <TableCell className="text-right tabular-nums">
+                {formatTokens(r.outputTokens)}
+              </TableCell>
+              <TableCell className="text-right tabular-nums">
+                {formatTokens(r.cachedTokens)}
+              </TableCell>
+              <TableCell className="text-right font-medium tabular-nums">
+                {formatUsdFromMicros(r.costMicros)}
+              </TableCell>
+            </TableRow>
+          );
+        })}
+      </TableBody>
+    </Table>
   );
 }

@@ -9,6 +9,8 @@ const mocks = vi.hoisted(() => ({
   getServerVersion: vi.fn(),
   deriveTransportTypes: vi.fn(),
   deriveAuthKind: vi.fn(),
+  fetchAndRenderReadme: vi.fn(),
+  isReadmeFresh: vi.fn(),
 }));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
@@ -25,6 +27,8 @@ vi.mock("@oxagen/plugins/registry", () => ({
   getServerVersion: mocks.getServerVersion,
   deriveTransportTypes: mocks.deriveTransportTypes,
   deriveAuthKind: mocks.deriveAuthKind,
+  fetchAndRenderReadme: mocks.fetchAndRenderReadme,
+  isReadmeFresh: mocks.isReadmeFresh,
 }));
 
 import { handler } from "./plugin.catalog.get";
@@ -58,6 +62,10 @@ const mediaImageManifest = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Default: no persistent readme cache in this live-lookup path, so
+  // isReadmeFresh(null, …) always reports "stale" — matches production
+  // behavior unless a test overrides it to prove the caching gate works.
+  mocks.isReadmeFresh.mockReturnValue(false);
 });
 
 describe("plugin.catalog.get handler", () => {
@@ -81,6 +89,16 @@ describe("plugin.catalog.get handler", () => {
     // The registry path must never be reached for a first-party pack.
     expect(mocks.withSystemDb).not.toHaveBeenCalled();
     expect(mocks.listServers).not.toHaveBeenCalled();
+  });
+
+  it("returns readmeHtml: null for a first-party pack (no repository to source from)", async () => {
+    mocks.getOxagenPlugin.mockReturnValue(mediaImageManifest);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = (await handler({ name: "oxagen/media-image", version: "latest" }, ctx as any)) as Record<string, unknown>;
+
+    expect(result.readmeHtml).toBeNull();
+    expect(mocks.fetchAndRenderReadme).not.toHaveBeenCalled();
   });
 
   it("forwards icon+color from the manifest per the SHARED ICON DATA CONTRACT", async () => {
@@ -156,6 +174,104 @@ describe("plugin.catalog.get handler", () => {
       authKind: "none",
       categories: ["search"],
     });
+    // No repository on this fixture → the README pipeline must not be invoked.
+    expect(mocks.fetchAndRenderReadme).not.toHaveBeenCalled();
+    expect(result.readmeHtml).toBeNull();
+  });
+
+  it("wires the README pipeline: calls fetchAndRenderReadme when a repository is present", async () => {
+    mocks.getOxagenPlugin.mockReturnValue(undefined);
+    mocks.withSystemDb.mockResolvedValue([{ id: "reg-1", baseUrl: "https://registry.example.com" }]);
+    const repository = { source: "github", url: "https://github.com/acme/brave-search" };
+    mocks.listServers.mockResolvedValue({
+      servers: [
+        {
+          server: {
+            name: "@scope/brave-search",
+            title: "Brave Search",
+            description: "Search the web.",
+            version: "2.3.0",
+            icons: [],
+            packages: [],
+            remotes: [{ url: "https://mcp.example.com", type: "streamable-http" }],
+            repository,
+          },
+          _meta: { categories: ["search"] },
+        },
+      ],
+    });
+    mocks.deriveTransportTypes.mockReturnValue(["streamable-http"]);
+    mocks.deriveAuthKind.mockReturnValue("none");
+    mocks.fetchAndRenderReadme.mockResolvedValue("<p>Hello README</p>");
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = (await handler({ name: "@scope/brave-search", version: "latest" }, ctx as any)) as Record<string, unknown>;
+
+    expect(mocks.fetchAndRenderReadme).toHaveBeenCalledWith(repository);
+    expect(result.readmeHtml).toBe("<p>Hello README</p>");
+  });
+
+  it("is fail-safe: a README fetch failure does not fail the whole get, and returns without readmeHtml", async () => {
+    mocks.getOxagenPlugin.mockReturnValue(undefined);
+    mocks.withSystemDb.mockResolvedValue([{ id: "reg-1", baseUrl: "https://registry.example.com" }]);
+    const repository = { source: "github", url: "https://github.com/acme/brave-search" };
+    mocks.listServers.mockResolvedValue({
+      servers: [
+        {
+          server: {
+            name: "@scope/brave-search",
+            title: "Brave Search",
+            description: "Search the web.",
+            version: "2.3.0",
+            icons: [],
+            packages: [],
+            remotes: [],
+            repository,
+          },
+          _meta: {},
+        },
+      ],
+    });
+    mocks.deriveTransportTypes.mockReturnValue([]);
+    mocks.deriveAuthKind.mockReturnValue("none");
+    mocks.fetchAndRenderReadme.mockRejectedValue(new Error("network unreachable"));
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = (await handler({ name: "@scope/brave-search", version: "latest" }, ctx as any)) as Record<string, unknown>;
+
+    expect(result.name).toBe("@scope/brave-search");
+    expect(result.readmeHtml).toBeNull();
+  });
+
+  it("respects the isReadmeFresh caching gate: skips fetchAndRenderReadme when a cache reports fresh", async () => {
+    mocks.getOxagenPlugin.mockReturnValue(undefined);
+    mocks.withSystemDb.mockResolvedValue([{ id: "reg-1", baseUrl: "https://registry.example.com" }]);
+    const repository = { source: "github", url: "https://github.com/acme/brave-search" };
+    mocks.listServers.mockResolvedValue({
+      servers: [
+        {
+          server: {
+            name: "@scope/brave-search",
+            title: "Brave Search",
+            description: "Search the web.",
+            version: "2.3.0",
+            icons: [],
+            packages: [],
+            remotes: [],
+            repository,
+          },
+          _meta: {},
+        },
+      ],
+    });
+    mocks.deriveTransportTypes.mockReturnValue([]);
+    mocks.deriveAuthKind.mockReturnValue("none");
+    mocks.isReadmeFresh.mockReturnValue(true);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await handler({ name: "@scope/brave-search", version: "latest" }, ctx as any);
+
+    expect(mocks.fetchAndRenderReadme).not.toHaveBeenCalled();
   });
 
   it("throws not-found when the server is absent from every enabled registry", async () => {

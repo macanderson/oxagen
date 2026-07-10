@@ -125,3 +125,32 @@ describe("MenuShortcut — standalone", () => {
     expect(getByText("⌘S").className).toContain("custom-sc");
   });
 });
+
+describe("MenuItem — destructive variant", () => {
+  it("inks the item with the error token when open", async () => {
+    const { findByText } = render(
+      <Menu open>
+        <MenuTrigger render={<button type="button" />}>Menu</MenuTrigger>
+        <MenuPopup>
+          <MenuItem variant="destructive">Delete</MenuItem>
+        </MenuPopup>
+      </Menu>
+    );
+    const item = await findByText("Delete");
+    expect(item.className).toContain("text-error");
+    expect(item.className).toContain("data-[highlighted]:bg-error/10");
+  });
+
+  it("default variant carries no error ink", async () => {
+    const { findByText } = render(
+      <Menu open>
+        <MenuTrigger render={<button type="button" />}>Menu</MenuTrigger>
+        <MenuPopup>
+          <MenuItem>Rename</MenuItem>
+        </MenuPopup>
+      </Menu>
+    );
+    const item = await findByText("Rename");
+    expect(item.className).not.toContain("text-error");
+  });
+});

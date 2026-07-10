@@ -12,13 +12,24 @@ import { and, eq, inArray, isNull, or } from "drizzle-orm";
 import pino from "pino";
 import { UnauthorizedError } from "@modelcontextprotocol/sdk/client/auth.js";
 import { schema, withTenantDb } from "@oxagen/database";
-import { getWorkspaceSecret, DbOAuthClientProvider, markCredentialNeedsReauth } from "@oxagen/plugins";
+import {
+  getWorkspaceSecret,
+  DbOAuthClientProvider,
+  markCredentialNeedsReauth,
+} from "@oxagen/plugins";
 import type { CapabilityContext } from "../../types";
 import { connectMcp, materializeMcpTools } from "../../dispatch/mcp-client";
-import { registerPluginType, type ContributedRawTool, type PluginContributeOptions } from "../plugin-type";
+import {
+  registerPluginType,
+  type ContributedRawTool,
+  type PluginContributeOptions,
+} from "../plugin-type";
 import { decryptMcpAuthConfig } from "../mcp-server-auth-crypto";
 
-const logger = pino({ level: process.env.LOG_LEVEL ?? "info", base: { app: "agent.plugin-types.mcp" } });
+const logger = pino({
+  level: process.env.LOG_LEVEL ?? "info",
+  base: { app: "agent.plugin-types.mcp" },
+});
 
 /**
  * OAuth redirect_uri used by the runtime's DbOAuthClientProvider during token
@@ -27,11 +38,19 @@ const logger = pino({ level: process.env.LOG_LEVEL ?? "info", base: { app: "agen
  * with neither set it would degrade to a relative path, which only works today
  * because the refresh_token grant never sends redirect_uri.
  */
-export function resolveMcpOAuthRedirectUrl(env: NodeJS.ProcessEnv = process.env): string {
-  return (env.APP_URL ?? env.NEXT_PUBLIC_APP_URL ?? "") + "/api/v1/mcp/oauth/callback";
+export function resolveMcpOAuthRedirectUrl(
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  return (
+    (env.APP_URL ?? env.NEXT_PUBLIC_APP_URL ?? "") +
+    "/api/v1/mcp/oauth/callback"
+  );
 }
 
-async function contributeMcpTools(ctx: CapabilityContext, options?: PluginContributeOptions): Promise<ContributedRawTool[]> {
+async function contributeMcpTools(
+  ctx: CapabilityContext,
+  options?: PluginContributeOptions,
+): Promise<ContributedRawTool[]> {
   if (!ctx.workspaceId) return [];
 
   // Enabled + healthy installs joined to the installed_plugins row (workspace-scoped).
@@ -108,6 +127,8 @@ async function contributeMcpTools(ctx: CapabilityContext, options?: PluginContri
           returnTo: "",
           clientName: "Oxagen",
           now: () => Date.now(),
+          // Pre-registered-client fallback for non-DCR providers (GitHub).
+          serverUrl: server.endpointUrl,
         });
         client = await connectMcp({
           endpointUrl: server.endpointUrl,
@@ -148,7 +169,9 @@ async function contributeMcpTools(ctx: CapabilityContext, options?: PluginContri
           // AI SDK v7 allows function-valued tool descriptions (resolved with
           // call options we don't have here) — only static strings carry over.
           description:
-            typeof rawTool.description === "string" ? rawTool.description : undefined,
+            typeof rawTool.description === "string"
+              ? rawTool.description
+              : undefined,
           execute: execute as ContributedRawTool["execute"],
           externalServerId: server.id,
         });
@@ -167,8 +190,14 @@ async function contributeMcpTools(ctx: CapabilityContext, options?: PluginContri
           { serverId: server.id, serverName: server.name },
           "auth failure for MCP server; marking needs_reauth",
         );
-        await markCredentialNeedsReauth(ctx.workspaceId, server.orgListingId).catch((e) => {
-          logger.error({ serverId: server.id, err: e }, "failed to mark needs_reauth");
+        await markCredentialNeedsReauth(
+          ctx.workspaceId,
+          server.orgListingId,
+        ).catch((e) => {
+          logger.error(
+            { serverId: server.id, err: e },
+            "failed to mark needs_reauth",
+          );
         });
       } else {
         // Per-server non-auth failure is isolated — log and continue.

@@ -86,7 +86,7 @@ describe("buildSlashCatalog", () => {
     expect(shipit?.description).toBe("Ship the branch");
   });
 
-  it("keeps built-ins in grouped BUILTIN_SLASH_COMMANDS order (not alphabetical) with no per-command color", () => {
+  it("keeps built-ins in grouped BUILTIN_SLASH_COMMANDS order (not alphabetical)", () => {
     const catalog = build();
     const builtinEntries = catalog.filter((c) => c.source === "builtin");
     expect(builtinEntries.length).toBe(BUILTIN_SLASH_COMMANDS.length);
@@ -95,10 +95,6 @@ describe("buildSlashCatalog", () => {
       BUILTIN_SLASH_COMMANDS.map((c) => c.name),
     );
     expect(builtinEntries[0]?.name).toBe("help");
-    // Per-command color is gone — the menu colors uniformly now.
-    for (const entry of builtinEntries) {
-      expect(entry.color).toBeUndefined();
-    }
   });
 
   it("dedupes on name with precedence builtin > cli > custom", () => {

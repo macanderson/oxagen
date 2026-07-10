@@ -11,8 +11,10 @@
  * Local KEK adapter (Vercel-native, no cloud KMS):
  *   import { createLocalKmsAdapter, loadMasterKey } from "@oxagen/crypto/kms";
  *
- * Drizzle column helper:
- *   import { encryptedBytea } from "@oxagen/crypto/drizzle";
+ * Drizzle column helper for encrypted-bytea columns lives in
+ * @oxagen/database (see packages/database/src/schema/_mixins.ts `bytea`) —
+ * @oxagen/crypto has no dependency on @oxagen/database, so it cannot own a
+ * Drizzle-typed column helper without introducing one.
  */
 
 export { encrypt, decrypt } from "./envelope";

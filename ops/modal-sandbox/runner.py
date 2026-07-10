@@ -326,6 +326,11 @@ class SandboxCreateRequest(BaseModel):
     org_id: str
     workspace_id: str
     setup_cmd: str | None = None
+    # Env injected into the setup_cmd exec ONLY (never persisted in the image).
+    # Trusted values (environment vault secrets, template literal_env) resolved
+    # by the TypeScript side — the credential channel that lets a setup command
+    # clone a private repo. May contain secrets: never echo values into errors.
+    setup_env: dict[str, str] | None = None
 
 
 class SandboxCreateResponse(BaseModel):
@@ -622,8 +627,16 @@ async def sandbox_create(
     # Run setup_cmd once to prepare the image (e.g. install deps, clone repo).
     # If it fails, terminate the sandbox and surface the error.
     if req.setup_cmd:
+        # GIT_TERMINAL_PROMPT=0 (overridable via setup_env) makes an
+        # unauthenticated clone of a private repo fail fast with git's clear
+        # "terminal prompts disabled" message instead of the cryptic
+        # "could not read Username …: No such device or address" a TTY-less
+        # exec produces when git tries to prompt.
+        setup_env = {"GIT_TERMINAL_PROMPT": "0", **(req.setup_env or {})}
         try:
-            setup_proc = await modal.Sandbox.exec.aio(sb, "sh", "-c", req.setup_cmd)
+            setup_proc = await modal.Sandbox.exec.aio(
+                sb, "sh", "-c", req.setup_cmd, env=setup_env
+            )
             setup_exit = await setup_proc.wait.aio()
             setup_stderr = (
                 decode_output(await setup_proc.stderr.read.aio()) if setup_exit != 0 else ""
@@ -639,8 +652,11 @@ async def sandbox_create(
                 await modal.Sandbox.terminate.aio(sb)
             except Exception:
                 pass
+            # 422, not 500: a failing caller-authored setup command is a
+            # request problem, not runner ill-health — keep 5xx meaningful
+            # for paging/alerting.
             raise HTTPException(
-                status_code=500,
+                status_code=422,
                 detail=f"setup_cmd exited {setup_exit}: {setup_stderr}",
             )
 

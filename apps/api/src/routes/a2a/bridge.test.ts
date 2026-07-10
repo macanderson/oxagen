@@ -345,6 +345,9 @@ describe("runA2ATask — skill-addressed routing (spec §3.1)", () => {
       status: "active",
       deploymentStatus: "active",
       activeVersionId: "ver-1",
+      avatarUrl: null,
+      summary: null,
+      summaryChecksum: null,
       activeVersion: { id: "ver-1", instructions: "Only discuss billing." },
     });
     setStreamParts([{ type: "text-delta", text: "ok" }]);

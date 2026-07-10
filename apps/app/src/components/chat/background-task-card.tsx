@@ -1,7 +1,6 @@
 "use client";
 import * as React from "react";
 import { Loader2, Check, CircleAlert, Clock, Ban } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import type { BackgroundTaskStatus } from "./stream-event-types";
 
 export interface BackgroundTaskCardProps {
@@ -53,9 +52,9 @@ export function BackgroundTaskCard({ taskId, kind, label, status, progressPct }:
       <div className="flex items-center gap-2">
         <StatusIcon status={status} />
         <span className="font-semibold">{title}</span>
-        <Badge variant="muted" className="ml-auto uppercase tracking-wide">
+        <span className="ml-auto inline-flex items-center gap-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
           {STATUS_LABEL[status]}
-        </Badge>
+        </span>
       </div>
       <div className="mt-1 font-mono text-[10px] text-muted-foreground">{kind}</div>
       {showBar ? (

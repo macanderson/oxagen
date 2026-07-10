@@ -28,6 +28,9 @@ export interface ResolvedWorkspace {
   // handler (mapWorkspaceSettingsRow). Exposed here so the General settings
   // page can render the saved value (persistence is observable).
   description: string;
+  // Avatar value: https URL or designed-avatar spec string (avatar:v1:…),
+  // written by workspace.settings.write. Null when unset.
+  avatarUrl: string | null;
 }
 
 // Per-request memoization keeps slug → row resolution at one query per
@@ -205,6 +208,7 @@ function mapWorkspaceRow(
     name: row.name,
     slug: row.slug,
     description,
+    avatarUrl: row.avatarUrl ?? null,
   };
 }
 

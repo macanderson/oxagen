@@ -30,11 +30,11 @@ docs/       capability specs, ADRs, architecture docs
 | Package | Key File | Purpose |
 |---|---|---|
 | `oxagen` | `src/kernel.ts` | Capability kernel — the one `invoke()` path |
-| `oxagen` | `src/contracts/` | ~294 capability contracts (Zod schemas + metadata) |
+| `oxagen` | `src/contracts/` | ~311 registered capabilities (count drifts; Zod schemas + metadata) |
 | `oxagen` | `src/iam/resolve.ts` | IAM policy resolution |
 | `handlers` | `src/register.ts` | All built-in capability handler registrations |
 | `agent` | `src/runtime/materialize-tools.ts` | Agent tool list builder |
-| `database` | `src/schema/` | 18 Drizzle Postgres schemas |
+| `database` | `src/schema/` | 20 domain Drizzle Postgres schema files (23 incl. `_mixins`/`_schemas`/`index`) |
 | `inngest-functions` | `src/functions/` | Durable background jobs |
 | `ingestion` | `src/pipeline.ts` | Universal connector pipeline |
 | `billing` | `src/metering.ts` | Credit gate + usage metering |
@@ -42,10 +42,10 @@ docs/       capability specs, ADRs, architecture docs
 
 ## Capability System
 
-Every feature is a **capability** with a unique dot-notation name (e.g. `chat.message.send`).
+Every feature is a **capability** with a unique verb-first snake_case name (e.g. `send_message`) — ADR-025 retired the old dotted `domain.subject.action` form with **no alias fallback**; contract/route/tool/doc *file* renames are a separate, still-in-progress "file-path realignment phase" (see `docs/specs/adr025-naming-mapping.md`), so many source files still use the old dotted stem even though the registered `name` is verb-first snake_case.
 
 **Adding a capability** — three required files:
-1. `packages/oxagen/src/contracts/<name>.ts` — `defineContract({ name, input, output, surfaces, defaultRoles, ... })`
+1. `packages/oxagen/src/contracts/<name>.ts` — `registerCapability({ name, input, output, surfaces, defaultRoles, ... })`
 2. `packages/oxagen/src/contracts/index.ts` — add barrel import
 3. `packages/handlers/src/<name>.ts` — handler implementation + registration in `register.ts`
 
@@ -108,7 +108,7 @@ Cross-domain Postgres queries use `src/relations.ts` (Drizzle). Never write raw 
 | `.agents/summary/interfaces.md` | Type signatures, HTTP routes, MCP protocol |
 | `.agents/summary/data_models.md` | All 16 Postgres schemas, Neo4j model, billing model |
 | `.agents/summary/workflows.md` | Chat turn, ingestion, IAM, billing, release, GDPR |
-| `docs/capabilities/_index.md` | All 140+ capability docs |
+| `docs/capabilities/_index.md` | Index of 350+ capability doc files (311 live capabilities + legacy stubs) |
 | `docs/adr/` | Architecture Decision Records |
 | `CLAUDE.md` | Engineering operating rules (prime directive, test gate, CI policy) |
 
@@ -120,7 +120,7 @@ Cross-domain Postgres queries use `src/relations.ts` (Drizzle). Never write raw 
 
 ### UI Component Import Convention
 
-**Never import `@oxagen/ui/components/*` directly in app code.** All frontend apps (`apps/app`, `apps/admin`, `apps/website`, `apps/docs`) must import UI components through their local re-export layer at `src/components/ui/<name>.tsx`.
+**Never import `@oxagen/ui/components/*` directly in app code.** All Next.js apps (`apps/app`, `apps/docs`, …) must import UI components through their local re-export layer at `src/components/ui/<name>.tsx`. (`apps/admin` and `apps/website` do not exist in this monorepo — the 7 apps are `api`, `app`, `cli`, `docs`, `mcp`, `schemas`, `web`.)
 
 ```ts
 // ✅ Correct — uses the app's re-export layer

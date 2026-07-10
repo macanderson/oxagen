@@ -85,6 +85,7 @@ export function ListToolbar({
           aria-hidden="true"
         />
         <Input
+          type="search"
           value={query}
           onChange={(e) => onQueryChange(e.target.value)}
           placeholder={searchPlaceholder}

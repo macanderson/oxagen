@@ -13,6 +13,10 @@
  * existing `togglePlugin`/`uninstallPlugin` actions from settings/plugins/
  * plugin-actions.ts (see mcp-server-list.tsx) since that logic is
  * plugin-type-agnostic.
+ *
+ * Also home to `revokeMcpCredential` — the "Remove authentication" action
+ * that deletes an installed MCP server's stored credential via the
+ * `revoke_plugin_credential` capability.
  */
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
@@ -65,5 +69,40 @@ export async function connectCustomMcpServer(
     return { ok: true, orgListingId: typed.orgListingId, authKind: typed.authKind };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Connect failed" };
+  }
+}
+
+const RevokeMcpCredentialSchema = z.object({
+  orgSlug: z.string().min(1),
+  workspaceSlug: z.string().min(1),
+  orgListingId: z.string().min(1),
+});
+
+/**
+ * "Remove authentication" for an installed MCP server: deletes the stored
+ * credential (OAuth tokens or secret) for the listing in this workspace, so
+ * the workspace must re-authenticate before the server can be used again.
+ * `revoked` reports whether a credential row actually existed.
+ */
+export async function revokeMcpCredential(
+  input: z.infer<typeof RevokeMcpCredentialSchema>,
+): Promise<{ ok: boolean; revoked?: boolean; error?: string }> {
+  const parsed = RevokeMcpCredentialSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Invalid input" };
+
+  const { orgSlug, workspaceSlug, orgListingId } = parsed.data;
+  const auth = await resolveAgentToolsManager(orgSlug, workspaceSlug);
+  if (!auth.ok) return { ok: false, error: auth.error };
+  const { org, ws, ctx } = auth.scope;
+
+  try {
+    const out = await runInTenantScope({ orgId: org.id, workspaceId: ws.id }, () =>
+      invoke("revoke_plugin_credential", { orgListingId }, ctx, { surface: "agent" }),
+    );
+    revalidatePath(workspace.workbench.tools.mcp({ orgSlug, workspaceSlug }));
+    const typed = out as { revoked: boolean };
+    return { ok: true, revoked: typed.revoked };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Revoke failed" };
   }
 }

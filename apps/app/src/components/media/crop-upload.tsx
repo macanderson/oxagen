@@ -29,7 +29,11 @@ export async function getCroppedBlob(imageSrc: string, area: Area): Promise<Blob
   const image = await new Promise<HTMLImageElement>((resolve, reject) => {
     const img = new Image();
     img.addEventListener("load", () => resolve(img));
-    img.addEventListener("error", reject);
+    // Reject with a real Error, never the raw event — an ErrorEvent (or nothing,
+    // in some environments) as a rejection reason gives callers no message/stack.
+    img.addEventListener("error", () =>
+      reject(new Error("failed to load source image for cropping")),
+    );
     img.src = imageSrc;
   });
 
@@ -127,10 +131,9 @@ export function useCropUpload({ onUploaded }: UseCropUploadOptions): UseCropUplo
   const [error, setError] = React.useState<string | null>(null);
 
   const reset = React.useCallback(() => {
-    setImageSrc((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return null;
-    });
+    // imageSrc is always a `data:` URL from FileReader.readAsDataURL — never a
+    // `blob:` object URL — so there is nothing to revoke here.
+    setImageSrc(null);
     setCrop({ x: 0, y: 0 });
     setZoom(1);
     setCroppedAreaPixels(null);
@@ -140,11 +143,6 @@ export function useCropUpload({ onUploaded }: UseCropUploadOptions): UseCropUplo
 
   const loadFile = React.useCallback(
     (file: File) => {
-      setImageSrc((prev) => {
-        if (prev) URL.revokeObjectURL(prev);
-        return prev;
-      });
-
       const reader = new FileReader();
       reader.addEventListener("load", () => {
         setImageSrc(reader.result as string);

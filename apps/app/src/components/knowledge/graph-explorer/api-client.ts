@@ -54,7 +54,7 @@ async function post<T>(
 
 export function fetchGraph(
   t: TenantSlugs,
-  opts: { labels?: string[]; limit?: number } = {},
+  opts: { labels?: string[]; limit?: number; includeSystem?: boolean } = {},
   signal?: AbortSignal,
 ): Promise<ExplorerGraphPayload> {
   return post<ExplorerGraphPayload>({ ...t, op: "graph", ...opts }, signal);
@@ -75,6 +75,7 @@ export function fetchNodes(
     query?: string;
     limit?: number;
     offset?: number;
+    includeSystem?: boolean;
   } = {},
   signal?: AbortSignal,
 ): Promise<ExplorerNodesPayload> {

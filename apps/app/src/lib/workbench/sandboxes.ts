@@ -52,13 +52,30 @@ export interface SandboxSummary {
   recoveredAt?: string | null;
 }
 
-/** One captured output line from a durable sandbox session. */
+/**
+ * One captured output line from a durable sandbox session — the exact shape the
+ * `list_sandbox_logs` capability returns. The previous `{ stream, text, at }`
+ * shape was WRONG (the fields are `line`/`ts`, never `text`/`at`), so the log
+ * console read `line.text` and rendered every row blank; keep this in lockstep
+ * with the contract's output.
+ */
 export interface SandboxLogLine {
+  /** ISO timestamp of the line. */
+  ts: string;
   /** Which pipe the line came from; `system` is a lifecycle/echo/timing note. */
   stream: "stdout" | "stderr" | "system";
-  text: string;
-  /** ISO timestamp of the line, when the capability records one. */
-  at?: string | null;
+  /** Verbosity bucket — `debug` covers command echoes and lifecycle plumbing. */
+  level: "normal" | "debug";
+  /** The command this line belongs to (empty for lifecycle notes). */
+  command: string;
+  /** Monotonic ordering key within the session. */
+  seq: number;
+  /** The captured output text. */
+  line: string;
+  /** Exit code, on the `system` line that closes a command; null otherwise. */
+  exitCode: number | null;
+  /** Wall-clock duration in ms, on that same `system` line; null otherwise. */
+  durationMs: number | null;
 }
 
 export interface SandboxExecResult {

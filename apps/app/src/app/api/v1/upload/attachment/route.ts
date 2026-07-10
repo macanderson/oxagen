@@ -8,11 +8,10 @@ import { persistGeneratedAsset, type AssetKind as GeneratedAssetKind } from "@ox
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
 
-// Chat/agent attachment upload runs on the Node runtime (the storage adapter
-// uses Node crypto + the Vercel Blob SDK) and must never be cached — every
-// response reflects a brand-new, access-controlled asset row.
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
+// Chat/agent attachment upload runs on the default Node.js runtime (the storage
+// adapter uses Node crypto + the Vercel Blob SDK) and must never move to edge —
+// every response reflects a brand-new, access-controlled asset row. No
+// `export const runtime`: incompatible with cacheComponents (Node is default).
 
 // Only "image" is wired to the composer in Phase 1 (video/document upload UI
 // is deferred — see multimodal blueprint Phase 2). Restricted to the

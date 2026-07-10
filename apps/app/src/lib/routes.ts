@@ -69,11 +69,14 @@ export const org = {
     tokens: (ctx: ScopeContext): string => `/${ctx.orgSlug}/developer/tokens`,
   },
 
-  // Org-level settings — editable by owners and admins only.
+  // Org-level settings — editable by owners and admins only. No `plugins`
+  // builder here: that route has no page behind it at org scope (plugins
+  // management lives at workspace scope, Workbench → Agent Tools) — removed
+  // after it was found dead (only consumer was the sidebar Marketplace
+  // fallback, itself fixed to fall back to the org root instead).
   settings: {
     root: (ctx: ScopeContext): string => `/${ctx.orgSlug}/settings/general`,
     general: (ctx: ScopeContext): string => `/${ctx.orgSlug}/settings/general`,
-    plugins: (ctx: ScopeContext): string => `/${ctx.orgSlug}/settings/plugins`,
     privacy: (ctx: ScopeContext): string => `/${ctx.orgSlug}/settings/privacy`,
   },
 } as const;
@@ -95,9 +98,10 @@ export const workspace = {
   // Ask — the front door (full-page ask/chat surface).
   ask: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/ask`,
 
-  // Workbench — build interactive agents. Two surfaces: Agents (the builder)
-  // and Agent Tools — the single home for everything an agent can be
-  // equipped with (skills, MCP servers, capabilities).
+  // Workbench — build interactive agents. Four first-class pages, each a
+  // sidebar destination: Agents (the builder), Agent Tools (the single home
+  // for everything an agent can be equipped with — skills, MCP servers,
+  // capabilities), Environments (env vars + secrets), and Sandboxes.
   workbench: {
     root: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/workbench`,
     agents: (ctx: Required<ScopeContext>): string =>
@@ -106,6 +110,10 @@ export const workspace = {
       `${wsBase(ctx)}/workbench/agents/new`,
     agent: (ctx: Required<ScopeContext>, agentId: string): string =>
       `${wsBase(ctx)}/workbench/agents/${encodeURIComponent(agentId)}`,
+    // Environments — named env-var/secret sets agents run with. Promoted from
+    // workspace settings to a first-class Workbench page.
+    environments: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/workbench/environments`,
     // Sandboxes — durable code-agent sandboxes: warm one, drive a terminal,
     // inspect its files. The detail page is keyed by the sbx_* session id.
     sandboxes: (ctx: Required<ScopeContext>): string =>
@@ -193,8 +201,11 @@ export const workspace = {
       `${wsBase(ctx)}/settings/knowledge`,
     memory: (ctx: Required<ScopeContext>): string =>
       `${wsBase(ctx)}/settings/memory`,
-    environments: (ctx: Required<ScopeContext>): string =>
-      `${wsBase(ctx)}/settings/environments`,
+    // MCP server registries — the catalog sources the marketplace and MCP
+    // install flows discover servers from. Registry admin is a settings
+    // concern; the servers themselves are managed in Workbench → Agent Tools.
+    mcpServerRegistries: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/settings/mcp-server-registries`,
     budget: (ctx: Required<ScopeContext>): string =>
       `${wsBase(ctx)}/settings/budget`,
   },

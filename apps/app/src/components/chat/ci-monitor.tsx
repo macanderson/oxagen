@@ -24,19 +24,23 @@ interface CIMonitorProps {
 }
 
 const statusIcon: Record<CIJob["status"], React.ReactNode> = {
-  pending: <Clock className="size-4 text-yellow-600" />,
-  running: <RefreshCw className="size-4 text-blue-600 animate-spin" />,
-  success: <CheckCircle className="size-4 text-green-600" />,
-  failure: <AlertCircle className="size-4 text-red-600" />,
-  skipped: <Clock className="size-4 text-gray-400" />,
+  pending: <Clock className="size-4 text-warning" />,
+  running: <RefreshCw className="size-4 text-info animate-spin" />,
+  success: <CheckCircle className="size-4 text-success" />,
+  failure: <AlertCircle className="size-4 text-error" />,
+  skipped: <Clock className="size-4 text-muted-foreground" />,
 };
 
-const statusColor: Record<CIJob["status"], string> = {
-  pending: "bg-yellow-100 text-yellow-800",
-  running: "bg-blue-100 text-blue-800",
-  success: "bg-green-100 text-green-800",
-  failure: "bg-red-100 text-red-800",
-  skipped: "bg-gray-100 text-gray-800",
+// Semantic Badge variants only — never raw palette colors (THEME.md).
+const statusVariant: Record<
+  CIJob["status"],
+  "warning-soft" | "info-soft" | "success-soft" | "error-soft" | "muted"
+> = {
+  pending: "warning-soft",
+  running: "info-soft",
+  success: "success-soft",
+  failure: "error-soft",
+  skipped: "muted",
 };
 
 export function CIMonitor({ jobs, branch, onRefresh, isLoading = false }: CIMonitorProps) {
@@ -94,7 +98,7 @@ export function CIMonitor({ jobs, branch, onRefresh, isLoading = false }: CIMoni
               {statusIcon[job.status]}
               <span className="truncate text-sm font-medium">{job.name}</span>
             </div>
-            <Badge className={statusColor[job.status]} variant="outline">
+            <Badge variant={statusVariant[job.status]} dot={job.status === "running"}>
               {job.status}
             </Badge>
           </a>

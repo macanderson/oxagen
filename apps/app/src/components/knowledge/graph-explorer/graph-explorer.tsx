@@ -22,6 +22,7 @@ import {
   RefreshCw,
   SlidersHorizontal,
 } from "lucide-react";
+import { NodeLabels } from "@oxagen/ontology/types";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { Button } from "@/components/ui/button";
 import {
@@ -82,7 +83,13 @@ export function GraphExplorer({ focusNodeId }: GraphExplorerProps = {}) {
     [tenant.orgSlug, tenant.workspaceSlug],
   );
 
-  const data = useExplorerData(slugs);
+  // Agent runtime lineage (executions, agents, tools — is_system nodes) is
+  // hidden by default: the explorer exists to inspect the source-system
+  // ontology the agents act on, not the activity they generate. Flipping the
+  // toggle reseeds the graph with lineage included (server-side opt-in).
+  const [systemHidden, setSystemHidden] = React.useState(true);
+
+  const data = useExplorerData(slugs, { includeSystem: !systemHidden });
 
   // Responsive behaviour: below `lg` the side panels become bottom sheets, and
   // touch devices (no real hover) never see the cursor-anchored edge popover.
@@ -103,7 +110,6 @@ export function GraphExplorer({ focusNodeId }: GraphExplorerProps = {}) {
     new Set(),
   );
   const [inferredHidden, setInferredHidden] = React.useState(false);
-  const [systemHidden, setSystemHidden] = React.useState(true);
   const [searching, setSearching] = React.useState(false);
   const [showFilters, setShowFilters] = React.useState(true);
   const [mobileFiltersOpen, setMobileFiltersOpen] = React.useState(false);
@@ -196,10 +202,15 @@ export function GraphExplorer({ focusNodeId }: GraphExplorerProps = {}) {
     () =>
       data.nodes.filter(
         (n) =>
-          !hiddenNodeTypes.has(n.label) &&
-          (!systemHidden || !isSystemLabel(n.label)),
+          !hiddenNodeTypes.has(n.label) && (!systemHidden || !isSystemNode(n)),
       ),
     [data.nodes, hiddenNodeTypes, systemHidden],
+  );
+  // Lineage nodes currently in view (pulled in by expansion) — shown as the
+  // count on the visibility toggle so the user knows what's being suppressed.
+  const systemCount = React.useMemo(
+    () => data.nodes.filter(isSystemNode).length,
+    [data.nodes],
   );
   const visibleNodeIds = React.useMemo(
     () => new Set(visibleNodes.map((n) => n.id)),
@@ -347,6 +358,7 @@ export function GraphExplorer({ focusNodeId }: GraphExplorerProps = {}) {
       systemHidden={systemHidden}
       inferredCount={inferredCount}
       confirmedCount={confirmedCount}
+      systemCount={systemCount}
       onToggleNodeType={toggleNodeType}
       onToggleEdgeType={toggleEdgeType}
       onToggleInferred={() => setInferredHidden((v) => !v)}
@@ -396,9 +408,7 @@ export function GraphExplorer({ focusNodeId }: GraphExplorerProps = {}) {
           <FilterToggle
             showFilters={isMobile ? mobileFiltersOpen : showFilters}
             onToggle={() =>
-              isMobile
-                ? setMobileFiltersOpen(true)
-                : setShowFilters((s) => !s)
+              isMobile ? setMobileFiltersOpen(true) : setShowFilters((s) => !s)
             }
           />
 
@@ -411,6 +421,7 @@ export function GraphExplorer({ focusNodeId }: GraphExplorerProps = {}) {
           ) : view === "table" ? (
             <GraphTableView
               tenant={slugs}
+              includeSystem={!systemHidden}
               visibleLabels={
                 hiddenNodeTypes.size > 0
                   ? nodeCounts
@@ -568,19 +579,40 @@ function toggleInSet(prev: Set<string>, value: string): Set<string> {
   return next;
 }
 
-function isSystemLabel(label: string): boolean {
-  const systemLabels = new Set([
-    "System",
-    "__System",
-    "_System",
-    "Internal",
-    "__Internal",
-    "_Internal",
-    "Metadata",
-    "__Metadata",
-    "_Metadata",
-  ]);
-  return systemLabels.has(label);
+/**
+ * Runtime lineage labels — mirrors the platform's fixed `NodeLabels` vocabulary
+ * (minus customer-facing kinds like EntityNode/Document/Conversation/Message,
+ * whose names can legitimately collide with ingested customer entity types).
+ * Only a fallback: the server's `isSystem` flag is the source of truth.
+ */
+const RUNTIME_LINEAGE_LABELS: ReadonlySet<string> = new Set([
+  NodeLabels.Agent,
+  NodeLabels.AgentVersion,
+  NodeLabels.Tool,
+  NodeLabels.ToolVersion,
+  NodeLabels.Playbook,
+  NodeLabels.PlaybookVersion,
+  NodeLabels.Execution,
+  NodeLabels.GeneratedFile,
+  NodeLabels.AgentMemory,
+  NodeLabels.WorkflowRun,
+  NodeLabels.Skill,
+  NodeLabels.SkillVersion,
+  NodeLabels.BackgroundTask,
+  NodeLabels.Plan,
+  NodeLabels.Fanout,
+]);
+
+/**
+ * True when the node is agent-runtime lineage rather than customer knowledge.
+ * The wire flag wins when present; unflagged neighbor stubs (payloads that
+ * predate the `isSystem` field) fall back to the runtime label vocabulary.
+ * Hydrated seed rows are filtered server-side, so the fallback never needs to
+ * judge them — and can't misfire on a customer entity type of the same name.
+ */
+function isSystemNode(node: ExplorerNode): boolean {
+  if (node.isSystem !== undefined) return node.isSystem;
+  return !node.hydrated && RUNTIME_LINEAGE_LABELS.has(node.label);
 }
 
 function FilterToggle({

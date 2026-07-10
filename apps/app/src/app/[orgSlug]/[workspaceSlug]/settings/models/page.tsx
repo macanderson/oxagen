@@ -22,8 +22,6 @@ import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org
 import { getSessionOrRedirect } from "@/lib/session";
 import { WorkspaceModelsForm } from "./models-form";
 
-export const dynamic = "force-dynamic";
-
 export const metadata: Metadata = {
   title: "AI Models — Workspace Settings",
 };

@@ -23,7 +23,11 @@ import userEvent from "@testing-library/user-event";
 
 afterEach(cleanup);
 
-vi.mock("@/lib/utils", () => ({
+// Spread the real module so formatBytes (used for the size column) and any
+// other util stay intact — a full-replacement mock silently drops them and
+// throws "No X export is defined on the mock" at render time.
+vi.mock("@/lib/utils", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/utils")>()),
   cn: (...args: unknown[]) => args.filter(Boolean).join(" "),
 }));
 
