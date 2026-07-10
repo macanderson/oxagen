@@ -20,7 +20,7 @@ import { queryCodeGraph } from "./code-graph.js";
 import { buildTurnExtras } from "./turn-extras.js";
 import { loadSettings } from "../settings/resolve.js";
 import { debugLog } from "../lib/debug-log.js";
-import type { AgentRunner } from "./fleet/orchestrator.js";
+import type { AgentRunner } from "./fleet/agent-runner.js";
 
 export interface EngineRunnerOptions {
   /**

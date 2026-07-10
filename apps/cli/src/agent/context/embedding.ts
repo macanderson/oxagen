@@ -35,18 +35,12 @@ import { ensureGatewayKey } from "../env.js";
 import { readGraphConfig, type EmbedProviderMode } from "./config.js";
 import { createOllamaEmbeddingClient } from "./embedding-ollama.js";
 import { createOnnxEmbeddingClient } from "./embedding-onnx.js";
+import type { EmbeddingClient } from "./embedding-types.js";
 
-/** A backend that turns text into `CODE_EMBED_DIM`-d vectors. Injectable for tests. */
-export interface EmbeddingClient {
-  /** The provider id stored alongside each vector so a model swap re-embeds. */
-  readonly providerId: string;
-  /** Vector dimension — always {@link CODE_EMBED_DIM} for the code graph. */
-  readonly dimensions: number;
-  /** Embed one text. */
-  embed(text: string): Promise<number[]>;
-  /** Embed many texts in one round-trip (order-preserving). */
-  embedBatch(texts: string[]): Promise<number[][]>;
-}
+// The port lives in embedding-types.ts (a leaf) so the provider modules above
+// can type-depend on it without importing this resolver back. Re-exported here
+// so existing consumers keep their import path.
+export type { EmbeddingClient } from "./embedding-types.js";
 
 /**
  * The provider id recorded on every vector. It is the model id, so a future
