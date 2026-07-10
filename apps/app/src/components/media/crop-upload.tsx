@@ -29,7 +29,11 @@ export async function getCroppedBlob(imageSrc: string, area: Area): Promise<Blob
   const image = await new Promise<HTMLImageElement>((resolve, reject) => {
     const img = new Image();
     img.addEventListener("load", () => resolve(img));
-    img.addEventListener("error", reject);
+    // Reject with a real Error, never the raw event — an ErrorEvent (or nothing,
+    // in some environments) as a rejection reason gives callers no message/stack.
+    img.addEventListener("error", () =>
+      reject(new Error("failed to load source image for cropping")),
+    );
     img.src = imageSrc;
   });
 

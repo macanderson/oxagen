@@ -3,6 +3,7 @@ import { graphNodeGet } from "@oxagen/oxagen/contracts/graph.node.get";
 import { scopedSession } from "@oxagen/ontology/tenant";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { logger } from "./logger";
+import { safeParseProperties } from "./lib/graph-properties";
 
 export const graphNodeGetHandler: CapabilityHandler<
   typeof graphNodeGet
@@ -43,15 +44,19 @@ export const graphNodeGetHandler: CapabilityHandler<
 
       const record = result.records[0];
       if (record) {
-        const rawProperties = record.get("properties") as string | null;
+        const rawProperties = record.get("properties") as unknown;
         nodeResult = {
           nodeId: record.get("nodeId") as string,
           label: record.get("label") as string,
           displayName: record.get("displayName") as string,
           description: record.get("description") as string | null,
-          properties: rawProperties
-            ? (JSON.parse(rawProperties) as Record<string, unknown>)
-            : null,
+          // Contract: null when the node has no properties column at all;
+          // a present-but-unreadable blob degrades to {} instead of 500ing
+          // the whole detail panel (safeParseProperties never throws).
+          properties:
+            rawProperties == null
+              ? null
+              : safeParseProperties(rawProperties, { nodeId: input.nodeId }),
           createdAt: String(record.get("createdAt")),
           updatedAt:
             record.get("updatedAt") != null

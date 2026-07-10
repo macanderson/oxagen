@@ -14,7 +14,11 @@ import { runInTenantScope } from "@oxagen/tenancy";
 import { logger } from "@oxagen/handlers/logger";
 import { PageHeader } from "@/components/ui/page-header";
 import { getSessionOrRedirect } from "@/lib/session";
-import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
+import {
+  resolveOrg,
+  resolveWorkspace,
+  assertOrgMember,
+} from "@/lib/resolve-org";
 import { EnvironmentsPanel } from "./environments-panel";
 import {
   readEnvironmentsAction,
@@ -34,8 +38,6 @@ export const metadata: Metadata = {
   title: "Environments | Workbench",
 };
 
-export const dynamic = "force-dynamic";
-
 export default async function WorkbenchEnvironmentsPage({
   params,
 }: {
@@ -47,19 +49,21 @@ export default async function WorkbenchEnvironmentsPage({
   const ws = await resolveWorkspace(org.id, workspaceSlug);
   await assertOrgMember(org.id, session.user.id);
 
-  const [wsRoleRow] = await runInTenantScope({ orgId: org.id, workspaceId: ws.id }, () =>
-    withTenantDb((tx) =>
-      tx
-        .select({ role: schema.workspaceUsers.role })
-        .from(schema.workspaceUsers)
-        .where(
-          and(
-            eq(schema.workspaceUsers.workspaceId, ws.id),
-            eq(schema.workspaceUsers.userId, session.user.id),
-          ),
-        )
-        .limit(1),
-    ),
+  const [wsRoleRow] = await runInTenantScope(
+    { orgId: org.id, workspaceId: ws.id },
+    () =>
+      withTenantDb((tx) =>
+        tx
+          .select({ role: schema.workspaceUsers.role })
+          .from(schema.workspaceUsers)
+          .where(
+            and(
+              eq(schema.workspaceUsers.workspaceId, ws.id),
+              eq(schema.workspaceUsers.userId, session.user.id),
+            ),
+          )
+          .limit(1),
+      ),
   );
   const wsRole = (wsRoleRow?.role ?? "viewer").toLowerCase();
   const canManage = wsRole === "owner" || wsRole === "admin";

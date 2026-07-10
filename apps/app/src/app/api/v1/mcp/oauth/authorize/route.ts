@@ -9,19 +9,22 @@
  * On REDIRECT: redirects the browser to the authorization server's authorize URL.
  * On AUTHORIZED (already connected): redirects to the workspace integrations page.
  */
-import { NextResponse, type NextRequest } from 'next/server';
-import { unstable_rethrow } from 'next/navigation';
-import { randomUUID } from 'node:crypto';
-import { auth as mcpAuth } from '@modelcontextprotocol/sdk/client/auth.js';
-import { and, eq } from 'drizzle-orm';
-import { schema, withSystemDb } from '@oxagen/database';
-import { DbOAuthClientProvider } from '@oxagen/plugins';
-import { getSession } from '@/lib/session';
-import { resolveReturnTo } from '@/lib/mcp-oauth/return-to';
-import { resolveOrg, assertMcpManager } from '@/lib/resolve-org';
-import { authDenialStatus, isNextRedirectError } from '@/lib/auth-denial';
-import { logger } from '@oxagen/handlers/logger';
-import type { FetchLike } from '@modelcontextprotocol/sdk/shared/transport.js';
+import { NextResponse, type NextRequest } from "next/server";
+import { unstable_rethrow } from "next/navigation";
+import { randomUUID } from "node:crypto";
+import { auth as mcpAuth } from "@modelcontextprotocol/sdk/client/auth.js";
+import { and, eq } from "drizzle-orm";
+import { schema, withSystemDb } from "@oxagen/database";
+import {
+  DbOAuthClientProvider,
+  resolveEndpointRedirects,
+} from "@oxagen/plugins";
+import { getSession } from "@/lib/session";
+import { resolveReturnTo } from "@/lib/mcp-oauth/return-to";
+import { resolveOrg, assertMcpManager } from "@/lib/resolve-org";
+import { authDenialStatus, isNextRedirectError } from "@/lib/auth-denial";
+import { logger } from "@oxagen/handlers/logger";
+import type { FetchLike } from "@modelcontextprotocol/sdk/shared/transport.js";
 
 // Runs on the default Node.js runtime — MCP SDK auth uses Node crypto, so this
 // route must never move to edge. No `export const runtime`: the segment config
@@ -40,9 +43,9 @@ import type { FetchLike } from '@modelcontextprotocol/sdk/shared/transport.js';
  *    Response makes cancel() a synchronous no-op.
  */
 const safeFetch: FetchLike = async (input, init) => {
-  const resp = await fetch(input, { ...init, cache: 'no-store' });
+  const resp = await fetch(input, { ...init, cache: "no-store" });
   if (!resp.ok) {
-    const text = await resp.text().catch(() => '');
+    const text = await resp.text().catch(() => "");
     return new Response(text || null, {
       status: resp.status,
       statusText: resp.statusText,
@@ -80,7 +83,7 @@ export async function GET(req: NextRequest): Promise<Response> {
       // Org/role gate denied (notFound). In a route handler this is not caught
       // by a render boundary, so we answer it ourselves as a handled response.
       return NextResponse.json(
-        { error: 'not found or not permitted' },
+        { error: "not found or not permitted" },
         { status: denialStatus },
       );
     }
@@ -95,36 +98,61 @@ export async function GET(req: NextRequest): Promise<Response> {
         err: String(err),
         stack: err instanceof Error ? err.stack : undefined,
       },
-      'mcp-oauth: authorize handler threw an unhandled error',
+      "mcp-oauth: authorize handler threw an unhandled error",
     );
-    return NextResponse.json(
-      { error: 'internal error' },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: "internal error" }, { status: 500 });
   }
+}
+
+/**
+ * Maps an mcpAuth failure to a short reason code carried back to the UI via
+ * ?mcp=error&reason=… — the result toast translates codes into actionable
+ * copy (raw error strings never reach the URL).
+ */
+function classifyAuthError(err: unknown): string {
+  const msg = String(err);
+  if (msg.includes("does not support dynamic client registration")) {
+    return "dcr_unsupported";
+  }
+  if (msg.includes("Invalid OAuth error response")) return "provider_error";
+  return "auth_failed";
+}
+
+/** Redirect back to the launching surface with error params for the toast. */
+function redirectBackWithError(
+  origin: string,
+  returnTo: string,
+  orgListingId: string,
+  reason: string,
+): NextResponse {
+  const dest = new URL(returnTo, origin);
+  dest.searchParams.set("mcp", "error");
+  dest.searchParams.set("listing", orgListingId);
+  dest.searchParams.set("reason", reason);
+  return NextResponse.redirect(dest.toString());
 }
 
 async function handleAuthorize(req: NextRequest): Promise<Response> {
   const session = await getSession();
   if (!session?.user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const url = new URL(req.url);
-  const orgSlug = url.searchParams.get('orgSlug');
-  const workspaceSlug = url.searchParams.get('workspaceSlug');
-  const orgListingId = url.searchParams.get('orgListingId');
+  const orgSlug = url.searchParams.get("orgSlug");
+  const workspaceSlug = url.searchParams.get("workspaceSlug");
+  const orgListingId = url.searchParams.get("orgListingId");
 
   if (!orgSlug || !workspaceSlug || !orgListingId) {
     return NextResponse.json(
-      { error: 'missing params: orgSlug, workspaceSlug, orgListingId' },
+      { error: "missing params: orgSlug, workspaceSlug, orgListingId" },
       { status: 400 },
     );
   }
 
   logger.info(
     { orgSlug, workspaceSlug, orgListingId },
-    'mcp-oauth: authorize flow started',
+    "mcp-oauth: authorize flow started",
   );
 
   const tenant = await resolveOrg(orgSlug);
@@ -144,7 +172,7 @@ async function handleAuthorize(req: NextRequest): Promise<Response> {
 
   if (!listing || listing.orgId !== tenant.id || !listing.endpointUrl) {
     return NextResponse.json(
-      { error: 'listing not found or not connectable' },
+      { error: "listing not found or not connectable" },
       { status: 404 },
     );
   }
@@ -165,7 +193,7 @@ async function handleAuthorize(req: NextRequest): Promise<Response> {
   });
 
   if (!workspace) {
-    return NextResponse.json({ error: 'workspace not found' }, { status: 404 });
+    return NextResponse.json({ error: "workspace not found" }, { status: 404 });
   }
 
   const state = randomUUID();
@@ -173,10 +201,40 @@ async function handleAuthorize(req: NextRequest): Promise<Response> {
   // Land back on whichever surface launched the flow (validated: same-origin
   // path inside this org only); default = Workbench → Agent Tools → MCP Servers.
   const returnTo = resolveReturnTo(
-    url.searchParams.get('returnTo'),
+    url.searchParams.get("returnTo"),
     orgSlug,
     workspaceSlug,
   );
+
+  // Registry metadata sometimes publishes a vanity URL that 301s to the real
+  // MCP endpoint (sh.inference.ac → api.inference.sh/mcp); OAuth discovery
+  // against the vanity origin probes the wrong host and fails. Resolve the
+  // redirect chain first and self-heal the stored listing so the agent
+  // runtime and callback leg use the real endpoint too.
+  let endpointUrl = listing.endpointUrl;
+  const resolvedUrl = await resolveEndpointRedirects(endpointUrl, {
+    fetchFn: safeFetch,
+  });
+  if (resolvedUrl !== endpointUrl) {
+    logger.info(
+      { orgId: tenant.id, orgListingId, from: endpointUrl, to: resolvedUrl },
+      "mcp-oauth: endpoint redirect resolved, self-healing listing",
+    );
+    endpointUrl = resolvedUrl;
+    try {
+      await withSystemDb(async (tx) => {
+        await tx
+          .update(schema.pluginInstalledPlugins)
+          .set({ endpointUrl: resolvedUrl, updatedAt: new Date() })
+          .where(eq(schema.pluginInstalledPlugins.id, orgListingId));
+      });
+    } catch (err) {
+      logger.error(
+        { orgListingId, err: String(err) },
+        "mcp-oauth: endpoint self-heal failed (non-fatal)",
+      );
+    }
+  }
 
   const provider = new DbOAuthClientProvider({
     orgId: tenant.id,
@@ -185,14 +243,17 @@ async function handleAuthorize(req: NextRequest): Promise<Response> {
     redirectUrl,
     state,
     returnTo,
-    clientName: 'Oxagen',
+    clientName: "Oxagen",
     now: () => Date.now(),
+    // Enables the pre-registered-client fallback for authorization servers
+    // without dynamic client registration (GitHub).
+    serverUrl: endpointUrl,
   });
 
   let result: string;
   try {
     result = await mcpAuth(provider, {
-      serverUrl: listing.endpointUrl,
+      serverUrl: endpointUrl,
       fetchFn: safeFetch,
     });
   } catch (err) {
@@ -203,41 +264,52 @@ async function handleAuthorize(req: NextRequest): Promise<Response> {
         err: String(err),
         stack: err instanceof Error ? err.stack : undefined,
       },
-      'mcp-oauth: mcpAuth threw during authorize',
+      "mcp-oauth: mcpAuth threw during authorize",
     );
-    return NextResponse.json(
-      { error: 'mcp auth failed', detail: String(err) },
-      { status: 502 },
+    // This is a full-page navigation — a JSON body would strand the user on a
+    // dead error page. Land back on the launching surface with a reason code
+    // the result toast can translate into actionable copy.
+    return redirectBackWithError(
+      url.origin,
+      returnTo,
+      orgListingId,
+      classifyAuthError(err),
     );
   }
 
   logger.info(
     { orgId: tenant.id, orgListingId, result },
-    'mcp-oauth: mcpAuth completed',
+    "mcp-oauth: mcpAuth completed",
   );
 
-  if (result === 'AUTHORIZED') {
+  if (result === "AUTHORIZED") {
     // Already connected — redirect straight back.
     logger.info(
       { orgId: tenant.id, orgListingId },
-      'mcp-oauth: already authorized, skipping flow',
+      "mcp-oauth: already authorized, skipping flow",
     );
     const dest = new URL(returnTo, url.origin);
-    dest.searchParams.set('mcp', 'already-connected');
-    dest.searchParams.set('listing', orgListingId);
+    dest.searchParams.set("mcp", "already-connected");
+    dest.searchParams.set("listing", orgListingId);
     return NextResponse.redirect(dest.toString());
   }
 
   if (!provider.pendingRedirect) {
-    return NextResponse.json(
-      { error: 'authorization server did not return a redirect URL' },
-      { status: 502 },
+    logger.error(
+      { orgId: tenant.id, orgListingId },
+      "mcp-oauth: authorization server did not return a redirect URL",
+    );
+    return redirectBackWithError(
+      url.origin,
+      returnTo,
+      orgListingId,
+      "no_redirect",
     );
   }
 
   logger.info(
     { orgId: tenant.id, orgListingId },
-    'mcp-oauth: redirecting to authorization server',
+    "mcp-oauth: redirecting to authorization server",
   );
   return NextResponse.redirect(provider.pendingRedirect.toString());
 }

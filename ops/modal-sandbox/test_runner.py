@@ -191,6 +191,69 @@ def test_create_setup_cmd_exec_error_terminates_and_surfaces(
     assert terminated == ["sb-456"]
 
 
+def test_create_setup_cmd_nonzero_exit_returns_422_and_injects_env(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The 2026-07-09 incident shape: setup_cmd cloned a private repo with no
+    # credential channel, git tried to prompt on a TTY-less exec, and the
+    # runner replied 500 as if it were ill. The endpoint must (a) run setup
+    # with the caller's trusted setup_env plus GIT_TERMINAL_PROMPT=0 so git
+    # fails fast with a clear message, and (b) classify the caller-authored
+    # command failure as 422, keeping 5xx meaningful for real runner faults.
+    async def fake_create(*args: object, **kwargs: object) -> SimpleNamespace:
+        return SimpleNamespace(object_id="sb-789")
+
+    captured_env: dict[str, str] = {}
+    terminated: list[str] = []
+
+    async def fake_wait() -> int:
+        return 128
+
+    async def fake_read_stderr() -> bytes:
+        return b"fatal: could not read Username for 'https://github.com': terminal prompts disabled\n"
+
+    async def fake_exec(
+        sb: SimpleNamespace, *argv: str, **kwargs: object
+    ) -> SimpleNamespace:
+        env = kwargs.get("env")
+        if isinstance(env, dict):
+            captured_env.update(env)
+        return SimpleNamespace(
+            wait=SimpleNamespace(aio=fake_wait),
+            stderr=SimpleNamespace(read=SimpleNamespace(aio=fake_read_stderr)),
+        )
+
+    async def fake_terminate(sb: SimpleNamespace) -> None:
+        terminated.append(sb.object_id)
+
+    fake_modal = SimpleNamespace(
+        Sandbox=SimpleNamespace(
+            exec=SimpleNamespace(aio=fake_exec),
+            terminate=SimpleNamespace(aio=fake_terminate),
+        )
+    )
+    monkeypatch.setattr(runner, "_create_sandbox", fake_create)
+    monkeypatch.setattr(runner, "modal", fake_modal)
+
+    res = client.post(
+        "/sandbox/create",
+        json={
+            **CREATE_BODY,
+            "setup_cmd": "git clone https://github.com/oxageninc/oxagen",
+            "setup_env": {"GITHUB_TOKEN": "ghs_test"},
+        },
+        headers=AUTH,
+    )
+    assert res.status_code == 422
+    detail = res.json()["detail"]
+    assert "setup_cmd exited 128" in detail
+    assert "terminal prompts disabled" in detail
+    # Trusted setup_env rides into the setup exec, plus the git prompt kill-switch.
+    assert captured_env["GITHUB_TOKEN"] == "ghs_test"
+    assert captured_env["GIT_TERMINAL_PROMPT"] == "0"
+    assert terminated == ["sb-789"]
+
+
 def test_create_rejects_unknown_image_kind(client: TestClient) -> None:
     res = client.post("/sandbox/create", json={**CREATE_BODY, "image": "java"}, headers=AUTH)
     # Pydantic Literal validation rejects it before the handler runs.

@@ -27,6 +27,7 @@ const {
   mockAssertMcpManager,
   mockWithSystemDb,
   mockMcpAuth,
+  mockResolveEndpoint,
   mockProviderInstances,
 } = vi.hoisted(() => ({
   mockGetSession: vi.fn(),
@@ -34,6 +35,7 @@ const {
   mockAssertMcpManager: vi.fn(),
   mockWithSystemDb: vi.fn(),
   mockMcpAuth: vi.fn(),
+  mockResolveEndpoint: vi.fn(),
   mockProviderInstances: [] as Array<{ pendingRedirect: URL | null }>,
 }));
 
@@ -45,7 +47,11 @@ vi.mock("@/lib/resolve-org", () => ({
 vi.mock("@oxagen/database", () => ({
   withSystemDb: mockWithSystemDb,
   schema: {
-    pluginInstalledPlugins: { id: "id", orgId: "orgId", endpointUrl: "endpointUrl" },
+    pluginInstalledPlugins: {
+      id: "id",
+      orgId: "orgId",
+      endpointUrl: "endpointUrl",
+    },
     workspaces: { id: "id", orgId: "orgId", slug: "slug" },
   },
 }));
@@ -58,8 +64,11 @@ vi.mock("@oxagen/plugins", () => ({
     mockProviderInstances.push(inst);
     return inst;
   }),
+  resolveEndpointRedirects: mockResolveEndpoint,
 }));
-vi.mock("@modelcontextprotocol/sdk/client/auth.js", () => ({ auth: mockMcpAuth }));
+vi.mock("@modelcontextprotocol/sdk/client/auth.js", () => ({
+  auth: mockMcpAuth,
+}));
 
 import { GET } from "./route";
 // Resolves to the vi.mock'd constructor above — imported so the returnTo tests
@@ -88,6 +97,8 @@ beforeEach(() => {
   mockGetSession.mockResolvedValue(SESSION);
   mockResolveOrg.mockResolvedValue(ORG);
   mockAssertMcpManager.mockResolvedValue(undefined);
+  // Default: the endpoint does not redirect (identity resolve).
+  mockResolveEndpoint.mockImplementation(async (u: string) => u);
 });
 
 describe("GET /api/v1/mcp/oauth/authorize — never crashes the function", () => {
@@ -163,6 +174,141 @@ describe("GET /api/v1/mcp/oauth/authorize — never crashes the function", () =>
     expect(res.status).toBe(307);
     expect(res.headers.get("location")).toBe(
       "https://auth.example.com/authorize?x=1",
+    );
+  });
+});
+
+describe("GET /api/v1/mcp/oauth/authorize — user-facing failure routing", () => {
+  /** Prime the listing + workspace lookups the happy path performs. */
+  function primeHappyLookups(): void {
+    mockWithSystemDb
+      .mockResolvedValueOnce({
+        id: "listing-1",
+        orgId: ORG.id,
+        endpointUrl: "https://mcp.example.com",
+      })
+      .mockResolvedValueOnce({ id: "ws-1" });
+  }
+
+  it("redirects back with reason=dcr_unsupported when the provider has no registration endpoint", async () => {
+    // The GitHub case: mcpAuth dies in registerClient because the AS metadata
+    // has no registration_endpoint. Pre-fix this surfaced as a raw JSON 502 on
+    // a full-page navigation — a dead end for the user.
+    primeHappyLookups();
+    mockMcpAuth.mockRejectedValueOnce(
+      new Error(
+        "Incompatible auth server: does not support dynamic client registration",
+      ),
+    );
+
+    const res = await GET(req() as never);
+
+    expect(res.status).toBe(307);
+    const dest = new URL(res.headers.get("location") ?? "");
+    expect(dest.origin).toBe("https://app.oxagen.sh");
+    expect(dest.pathname).toBe("/acme/main/workbench/tools/mcp");
+    expect(dest.searchParams.get("mcp")).toBe("error");
+    expect(dest.searchParams.get("listing")).toBe("listing-1");
+    expect(dest.searchParams.get("reason")).toBe("dcr_unsupported");
+  });
+
+  it("redirects back with reason=provider_error on an unparseable provider response", async () => {
+    primeHappyLookups();
+    mockMcpAuth.mockRejectedValueOnce(
+      new Error(
+        'HTTP 401: Invalid OAuth error response: […]. Raw body: {"success":false}',
+      ),
+    );
+
+    const res = await GET(req() as never);
+
+    const dest = new URL(res.headers.get("location") ?? "");
+    expect(dest.searchParams.get("mcp")).toBe("error");
+    expect(dest.searchParams.get("reason")).toBe("provider_error");
+  });
+
+  it("redirects back with reason=auth_failed on any other mcpAuth failure", async () => {
+    primeHappyLookups();
+    mockMcpAuth.mockRejectedValueOnce(new Error("ETIMEDOUT"));
+
+    const res = await GET(req() as never);
+
+    const dest = new URL(res.headers.get("location") ?? "");
+    expect(dest.searchParams.get("mcp")).toBe("error");
+    expect(dest.searchParams.get("reason")).toBe("auth_failed");
+  });
+
+  it("redirects back with reason=no_redirect when mcpAuth returns REDIRECT without a URL", async () => {
+    primeHappyLookups();
+    mockMcpAuth.mockResolvedValueOnce("REDIRECT"); // pendingRedirect stays null
+
+    const res = await GET(req() as never);
+
+    expect(res.status).toBe(307);
+    const dest = new URL(res.headers.get("location") ?? "");
+    expect(dest.searchParams.get("mcp")).toBe("error");
+    expect(dest.searchParams.get("reason")).toBe("no_redirect");
+  });
+});
+
+describe("GET /api/v1/mcp/oauth/authorize — endpoint redirect self-heal", () => {
+  it("resolves the endpoint's redirect chain, persists it, and authorizes against the real URL", async () => {
+    // The inference.ac case: the registry published a vanity URL that 301s to
+    // the real MCP endpoint on another host.
+    mockWithSystemDb
+      .mockResolvedValueOnce({
+        id: "listing-1",
+        orgId: ORG.id,
+        endpointUrl: "https://sh.inference.ac",
+      })
+      .mockResolvedValueOnce({ id: "ws-1" })
+      // Third call: the self-heal UPDATE of the listing's endpointUrl.
+      .mockResolvedValueOnce(undefined);
+    mockResolveEndpoint.mockResolvedValueOnce("https://api.inference.sh/mcp");
+    mockMcpAuth.mockImplementationOnce(async () => {
+      const inst = mockProviderInstances.at(-1);
+      if (!inst) throw new Error("provider was not constructed");
+      inst.pendingRedirect = new URL("https://auth.inference.sh/authorize");
+      return "REDIRECT";
+    });
+
+    const res = await GET(req() as never);
+
+    expect(res.status).toBe(307);
+    // The provider and mcpAuth both see the RESOLVED endpoint.
+    expect(vi.mocked(DbOAuthClientProvider)).toHaveBeenCalledWith(
+      expect.objectContaining({ serverUrl: "https://api.inference.sh/mcp" }),
+    );
+    expect(mockMcpAuth).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ serverUrl: "https://api.inference.sh/mcp" }),
+    );
+    // Listing lookup + workspace lookup + self-heal update.
+    expect(mockWithSystemDb).toHaveBeenCalledTimes(3);
+  });
+
+  it("a failing self-heal write never blocks the flow", async () => {
+    mockWithSystemDb
+      .mockResolvedValueOnce({
+        id: "listing-1",
+        orgId: ORG.id,
+        endpointUrl: "https://sh.inference.ac",
+      })
+      .mockResolvedValueOnce({ id: "ws-1" })
+      .mockRejectedValueOnce(new Error("ECONNREFUSED 5432"));
+    mockResolveEndpoint.mockResolvedValueOnce("https://api.inference.sh/mcp");
+    mockMcpAuth.mockImplementationOnce(async () => {
+      const inst = mockProviderInstances.at(-1);
+      if (!inst) throw new Error("provider was not constructed");
+      inst.pendingRedirect = new URL("https://auth.inference.sh/authorize");
+      return "REDIRECT";
+    });
+
+    const res = await GET(req() as never);
+
+    expect(res.status).toBe(307);
+    expect(res.headers.get("location")).toBe(
+      "https://auth.inference.sh/authorize",
     );
   });
 });

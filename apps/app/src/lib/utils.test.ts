@@ -188,6 +188,11 @@ describe("formatBytes", () => {
   it("formats GB range with one decimal", () => {
     expect(formatBytes(1.5 * 1024 * 1024 * 1024)).toBe("1.5 GB");
   });
+
+  it("returns '—' for NaN/Infinity instead of 'NaN GB'", () => {
+    expect(formatBytes(NaN)).toBe("—");
+    expect(formatBytes(Infinity)).toBe("—");
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -224,5 +229,12 @@ describe("formatDuration", () => {
   it("formats minutes + floored seconds", () => {
     expect(formatDuration(60_000)).toBe("1m 0s");
     expect(formatDuration(90_000)).toBe("1m 30s");
+  });
+
+  it("returns '—' for NaN/Infinity instead of the literal 'NaNm NaNs'", () => {
+    expect(formatDuration(NaN)).toBe("—");
+    expect(formatDuration(Infinity)).toBe("—");
+    // A missing duration commonly arrives as `undefined` coerced through arithmetic.
+    expect(formatDuration(undefined as unknown as number)).toBe("—");
   });
 });

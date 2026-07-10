@@ -91,6 +91,13 @@ export interface SandboxSessionSpec {
   workspaceId: string;
   /** One-shot command run once at create time (e.g. clone a repo / install). */
   setupCmd?: string;
+  /**
+   * Env injected into the `setupCmd` exec ONLY (not persisted in the image).
+   * TRUSTED values resolved server-side (environment vault secrets + template
+   * literal_env) — the credential channel that lets a setup command clone a
+   * private repo. May contain secrets: never log values.
+   */
+  setupEnv?: Record<string, string>;
 }
 
 export interface SandboxSessionHandle {

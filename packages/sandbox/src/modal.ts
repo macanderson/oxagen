@@ -111,6 +111,11 @@ function sessionBody(spec: SandboxSessionSpec) {
     org_id: spec.orgId,
     workspace_id: spec.workspaceId,
     setup_cmd: spec.setupCmd ?? null,
+    // Trusted env for the setup exec only (environment vault secrets +
+    // template literal_env), resolved server-side by agent.sandbox.start.
+    // Additive on the wire: a runner deployed before the field ignores it and
+    // runs setup_cmd env-less, exactly as before.
+    setup_env: spec.setupEnv ?? null,
   };
 }
 
@@ -164,7 +169,9 @@ export function createModalSandbox(config: ModalSandboxConfig): SandboxDriver {
       });
       if (!res.ok) {
         const text = await res.text().catch(() => "");
-        throw new Error(`modal runner ${res.status} ${path}: ${text.slice(0, 500)}`);
+        throw new Error(
+          `modal runner ${res.status} ${path}: ${text.slice(0, 500)}`,
+        );
       }
       return schema.parse(await res.json());
     } finally {
@@ -195,7 +202,9 @@ export function createModalSandbox(config: ModalSandboxConfig): SandboxDriver {
           const text = await res.text().catch(() => "");
           throw new Error(`modal runner ${res.status}: ${text.slice(0, 500)}`);
         }
-        const data: ModalRunResponse = ModalRunResponseSchema.parse(await res.json());
+        const data: ModalRunResponse = ModalRunResponseSchema.parse(
+          await res.json(),
+        );
         return {
           exitCode: data.exit_code,
           stdout: data.stdout,
@@ -221,7 +230,9 @@ export function createModalSandbox(config: ModalSandboxConfig): SandboxDriver {
     },
 
     // ── Durable sessions ──────────────────────────────────────────────────────
-    async createSession(spec: SandboxSessionSpec): Promise<SandboxSessionHandle> {
+    async createSession(
+      spec: SandboxSessionSpec,
+    ): Promise<SandboxSessionHandle> {
       // Bound provisioning (image pull + optional clone/install via setup_cmd)
       // on a fixed 5-minute budget — NOT the session TTL, which is the whole-day
       // lifetime ceiling and would let a wedged create hang the request.
@@ -231,7 +242,11 @@ export function createModalSandbox(config: ModalSandboxConfig): SandboxDriver {
         ModalSessionHandleSchema,
         300_000,
       );
-      return { sandboxId: data.sandbox_id, status: data.status, createdAt: data.created_at };
+      return {
+        sandboxId: data.sandbox_id,
+        status: data.status,
+        createdAt: data.created_at,
+      };
     },
 
     async execInSession(req: SandboxExecRequest): Promise<SandboxExecResult> {
@@ -281,7 +296,11 @@ export function createModalSandbox(config: ModalSandboxConfig): SandboxDriver {
         ModalSessionHandleSchema,
         300_000,
       );
-      return { sandboxId: data.sandbox_id, status: data.status, createdAt: data.created_at };
+      return {
+        sandboxId: data.sandbox_id,
+        status: data.status,
+        createdAt: data.created_at,
+      };
     },
 
     async stopSession(sandboxId: string): Promise<void> {

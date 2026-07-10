@@ -97,6 +97,61 @@ describe("graphNodeGetHandler", () => {
     expect(result.node?.description).toBeNull();
   });
 
+  it("resolves with {} properties instead of rejecting on a malformed JSON blob", async () => {
+    // Regression: an unguarded JSON.parse here 500'd the API and the detail
+    // panel showed "Failed to load node detail." for any node with a corrupt
+    // properties column.
+    mocks.run.mockResolvedValueOnce(
+      makeNodeRecord({
+        nodeId: "node-bad",
+        label: "Issue",
+        displayName: "Corrupt props",
+        description: null,
+        properties: "{not valid json",
+        createdAt: "2026-01-01T00:00:00Z",
+        updatedAt: null,
+      }),
+    );
+
+    const result = await graphNodeGetHandler({ nodeId: "node-bad" }, CTX);
+    expect(result.node?.properties).toEqual({});
+    expect(result.node?.displayName).toBe("Corrupt props");
+  });
+
+  it("passes native driver map properties through without JSON.parse", async () => {
+    mocks.run.mockResolvedValueOnce(
+      makeNodeRecord({
+        nodeId: "node-native",
+        label: "Topic",
+        displayName: "Native map",
+        description: null,
+        properties: { status: "open", nested: { deep: true } },
+        createdAt: "2026-01-01T00:00:00Z",
+        updatedAt: null,
+      }),
+    );
+
+    const result = await graphNodeGetHandler({ nodeId: "node-native" }, CTX);
+    expect(result.node?.properties).toEqual({ status: "open", nested: { deep: true } });
+  });
+
+  it("returns {} properties for a JSON blob that is not an object", async () => {
+    mocks.run.mockResolvedValueOnce(
+      makeNodeRecord({
+        nodeId: "node-scalar",
+        label: "Topic",
+        displayName: "Scalar props",
+        description: null,
+        properties: '"double-encoded"',
+        createdAt: "2026-01-01T00:00:00Z",
+        updatedAt: null,
+      }),
+    );
+
+    const result = await graphNodeGetHandler({ nodeId: "node-scalar" }, CTX);
+    expect(result.node?.properties).toEqual({});
+  });
+
   it("scopes the Cypher by BOTH orgId and workspaceId (tenant-isolation guard)", async () => {
     mocks.run.mockResolvedValueOnce({ records: [] });
     await graphNodeGetHandler({ nodeId: "node-3" }, CTX);

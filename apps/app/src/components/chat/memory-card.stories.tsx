@@ -51,6 +51,26 @@ export const GroundedRecall: Story = {
   },
 };
 
+/** Memory-write confirmation reuse of the card — the summary verb becomes "Remembered". */
+export const WriteConfirmation: Story = {
+  args: {
+    queryId: "mem_write_01",
+    variant: "write",
+    memories: [
+      {
+        id: "mem_write_01",
+        lesson: "Memory written → constraint-migrations-location",
+        memoryClass: "RULE",
+        memoryKind: "gotcha",
+        confidenceScore: 100,
+        enforcementScore: 90,
+        score: 1,
+        nodeRef: "constraint-migrations-location",
+      },
+    ],
+  },
+};
+
 /** A single low-confidence observation with no resolved graph node — falls back to the raw ref link. */
 export const UnresolvedObservation: Story = {
   args: {

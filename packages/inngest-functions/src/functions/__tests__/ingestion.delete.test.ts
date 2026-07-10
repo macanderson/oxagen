@@ -28,6 +28,12 @@ let capturedHandler: ((ctx: HandlerCtx) => unknown) | null = null;
 // never overwrites the primary handler.
 let capturedOnFailure: ((ctx: HandlerCtx) => unknown) | null = null;
 
+// The create-function adapter registers TWO Inngest functions when a config
+// carries onFailure: the primary (id = config.id) and a companion whose id is
+// `${config.id}.on-failure`, each passing its (wrapped) handler as the 3rd
+// arg — buildInngestConfig never forwards `onFailure` itself. Route the capture
+// by id; capturing `opts.onFailure` (the old shape) left capturedOnFailure null
+// and let the companion registration overwrite capturedHandler.
 mocks.createFunction.mockImplementation(
   (
     opts: { id?: string },

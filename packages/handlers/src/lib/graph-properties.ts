@@ -1,0 +1,92 @@
+import { logger } from "../logger";
+
+/**
+ * Shared tolerant decoder for the `GraphNode.properties` column.
+ *
+ * Nodes store their property bag as a JSON string, but real-world data drifts:
+ * an ingestion bug can write invalid/double-encoded JSON, and some driver
+ * paths return the value as a native Neo4j map object instead of a string.
+ * `graph.node.get` / `graph.node.list` previously called `JSON.parse()`
+ * unguarded, so a single bad blob rejected the whole handler — one corrupt
+ * node 500'd the entire graph-explorer page. Decoding must therefore never
+ * throw: a property bag we cannot read degrades to `{}` (with a warning) and
+ * the node still renders by its label/displayName.
+ */
+export function safeParseProperties(
+  raw: unknown,
+  context: { nodeId?: string } = {},
+): Record<string, unknown> {
+  if (raw === null || raw === undefined) return {};
+
+  if (typeof raw === "string") {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      logger.warn(
+        { nodeId: context.nodeId },
+        "graph properties: malformed JSON blob; substituting empty bag",
+      );
+      return {};
+    }
+    if (!isPlainObject(parsed)) {
+      // Valid JSON but not an object (a scalar, array, or double-encoded
+      // string) — callers require a Record, so degrade to empty.
+      logger.warn(
+        { nodeId: context.nodeId },
+        "graph properties: JSON blob is not an object; substituting empty bag",
+      );
+      return {};
+    }
+    return normalizeDriverIntegers(parsed);
+  }
+
+  if (isPlainObject(raw)) {
+    // Native map straight from the driver — pass it through.
+    return normalizeDriverIntegers(raw);
+  }
+
+  logger.warn(
+    { nodeId: context.nodeId, valueType: typeof raw },
+    "graph properties: unsupported value type; substituting empty bag",
+  );
+  return {};
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Shallow pass converting Neo4j Integer-like `{low, high}` values to plain JS
+ * numbers, mirroring the `toNumber` normalisation graph.node.list applies to
+ * its count aggregate. Only the exact two-key driver shape is converted; any
+ * other object is left untouched.
+ */
+function normalizeDriverIntegers(
+  bag: Record<string, unknown>,
+): Record<string, unknown> {
+  let needsCopy = false;
+  for (const value of Object.values(bag)) {
+    if (isDriverInteger(value)) {
+      needsCopy = true;
+      break;
+    }
+  }
+  if (!needsCopy) return bag;
+
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(bag)) {
+    out[key] = isDriverInteger(value) ? value.low : value;
+  }
+  return out;
+}
+
+function isDriverInteger(value: unknown): value is { low: number; high: number } {
+  return (
+    isPlainObject(value) &&
+    Object.keys(value).length === 2 &&
+    typeof value.low === "number" &&
+    typeof value.high === "number"
+  );
+}

@@ -144,6 +144,56 @@ describe("graphExportHandler", () => {
     expect(result.cursor).toBeNull();
   });
 
+  it("does not let one row with a malformed properties blob kill the export", async () => {
+    // Regression: an unguarded JSON.parse per row rejected the entire export
+    // on the first corrupt node/edge blob.
+    mocks.run
+      .mockResolvedValueOnce(countResult(2))
+      .mockResolvedValueOnce(
+        pageResult([
+          {
+            id: "good",
+            label: "Issue",
+            displayName: "A",
+            properties: JSON.stringify({ ok: true }),
+            sourceId: null,
+            isSystem: false,
+            updatedAt: null,
+          },
+          {
+            id: "bad",
+            label: "Issue",
+            displayName: "B",
+            properties: "{corrupt",
+            sourceId: null,
+            isSystem: false,
+            updatedAt: null,
+          },
+        ]),
+      )
+      .mockResolvedValueOnce(
+        pageResult([
+          {
+            id: "edge-bad",
+            sourceId: "good",
+            targetId: "bad",
+            type: "RELATES_TO",
+            properties: "{also corrupt",
+            inferred: false,
+          },
+        ]),
+      );
+
+    const result = await graphExportHandler(
+      { includeEdges: true, limit: 500, offset: 0 },
+      CTX,
+    );
+    expect(result.nodes).toHaveLength(2);
+    expect(result.nodes[0]?.properties).toEqual({ ok: true });
+    expect(result.nodes[1]?.properties).toEqual({});
+    expect(result.edges[0]?.properties).toEqual({});
+  });
+
   it("maps edges into the contract shape", async () => {
     mocks.run
       .mockResolvedValueOnce(countResult(1))

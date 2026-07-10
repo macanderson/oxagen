@@ -125,6 +125,44 @@ describe("graphNodeListHandler", () => {
     expect(node).not.toHaveProperty("createdAt");
   });
 
+  it("does not let one row with a malformed properties blob kill the whole list", async () => {
+    // Regression: an unguarded JSON.parse per row rejected the entire handler
+    // on the first corrupt node — a single bad blob blanked the graph
+    // explorer's initial load ("Couldn't load the graph").
+    mocks.run.mockResolvedValueOnce(countResult(3)).mockResolvedValueOnce(
+      pageResult([
+        { id: "good-1", label: "Issue", displayName: "A", properties: JSON.stringify({ ok: true }), sourceId: null, createdAt: null },
+        { id: "bad", label: "Issue", displayName: "B", properties: "{corrupt", sourceId: null, createdAt: null },
+        { id: "good-2", label: "Topic", displayName: "C", properties: JSON.stringify({ n: 1 }), sourceId: null, createdAt: null },
+      ]),
+    );
+
+    const result = await graphNodeListHandler({ limit: 50, offset: 0 }, CTX);
+    expect(result.nodes).toHaveLength(3);
+    expect(result.nodes.map((n) => n.id)).toEqual(["good-1", "bad", "good-2"]);
+    expect(result.nodes[0]?.properties).toEqual({ ok: true });
+    expect(result.nodes[1]?.properties).toEqual({});
+    expect(result.nodes[2]?.properties).toEqual({ n: 1 });
+  });
+
+  it("passes native driver map properties through without JSON.parse", async () => {
+    mocks.run.mockResolvedValueOnce(countResult(1)).mockResolvedValueOnce(
+      pageResult([
+        {
+          id: "n-native",
+          label: "Topic",
+          displayName: "Native map",
+          properties: { status: "open", nested: { deep: true } },
+          sourceId: null,
+          createdAt: null,
+        },
+      ]),
+    );
+
+    const result = await graphNodeListHandler({ limit: 50, offset: 0 }, CTX);
+    expect(result.nodes[0]?.properties).toEqual({ status: "open", nested: { deep: true } });
+  });
+
   it("computes hasMore from offset + page length vs total", async () => {
     mocks.run.mockResolvedValueOnce(countResult(100)).mockResolvedValueOnce(
       pageResult([

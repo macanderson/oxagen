@@ -941,6 +941,7 @@ export function ChatShellClient({
           node: (
             <MemoryCard
               queryId={w.memoryId}
+              variant="write"
               memories={[
                 {
                   id: w.memoryId,

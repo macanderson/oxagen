@@ -3,6 +3,7 @@ import { graphExport } from "@oxagen/oxagen/contracts/graph.export";
 import { scopedSession } from "@oxagen/ontology/tenant";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { logger } from "./logger";
+import { safeParseProperties } from "./lib/graph-properties";
 
 interface ExportedNode {
   id: string;
@@ -112,21 +113,22 @@ export const graphExportHandler: CapabilityHandler<typeof graphExport> = async (
       );
 
       for (const record of pageResult.records) {
-        const rawProperties = record.get("properties") as string | null;
+        const id = record.get("id") as string;
+        const rawProperties = record.get("properties") as unknown;
         const label = record.get("label") as string;
         const sourceId = record.get("sourceId") as string | null;
         const updatedAt = record.get("updatedAt") as string | null;
         const isSystem = record.get("isSystem") as boolean;
 
         nodes.push({
-          id: record.get("id") as string,
+          id,
           // Surface the anchor label and the domain label matching the
           // documented shape (e.g. ["KnowledgeNode", "Issue"]).
           labels: ["KnowledgeNode", label],
           displayName: record.get("displayName") as string,
-          properties: rawProperties
-            ? (JSON.parse(rawProperties) as Record<string, unknown>)
-            : {},
+          // safeParseProperties never throws — one corrupt blob must not
+          // reject the whole export page. Absent/unreadable → {}.
+          properties: safeParseProperties(rawProperties, { nodeId: id }),
           ...(sourceId != null ? { sourceId } : {}),
           isSystem: Boolean(isSystem),
           ...(updatedAt != null ? { updatedAt: String(updatedAt) } : {}),
@@ -157,15 +159,14 @@ export const graphExportHandler: CapabilityHandler<typeof graphExport> = async (
         );
 
         for (const record of edgeResult.records) {
-          const rawProps = record.get("properties") as string | null;
+          const edgeId = String(record.get("id"));
+          const rawProps = record.get("properties") as unknown;
           edges.push({
-            id: String(record.get("id")),
+            id: edgeId,
             sourceId: record.get("sourceId") as string,
             targetId: record.get("targetId") as string,
             type: record.get("type") as string,
-            properties: rawProps
-              ? (JSON.parse(rawProps) as Record<string, unknown>)
-              : {},
+            properties: safeParseProperties(rawProps, { nodeId: edgeId }),
             inferred: Boolean(record.get("inferred")),
           });
         }

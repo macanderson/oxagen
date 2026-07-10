@@ -21,6 +21,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // ---------------------------------------------------------------------------
 const withSystemDbMock = vi.fn();
 
+// captureError is the telemetry escalation seam used by the default logger's
+// error path; mocked so unit tests never touch the real telemetry pipeline.
+const captureErrorMock = vi.fn();
+
+vi.mock("@oxagen/telemetry", () => ({
+  captureError: (...args: unknown[]) => captureErrorMock(...args),
+}));
+
 vi.mock("@oxagen/database", () => ({
   withSystemDb: (fn: (tx: unknown) => unknown) => withSystemDbMock(fn),
   schema: {
@@ -53,24 +61,39 @@ import {
   type AccountLinkingLogger,
   type AccountDatabaseHooks,
 } from "./account-linking";
+import { logger } from "./logger";
 
 // A chainable, thenable drizzle-query stub that resolves to queued results.
 function makeTx(queue: unknown[]): Record<string, unknown> {
   const builder: Record<string, unknown> = {};
-  for (const m of ["select", "from", "where", "limit", "update", "set", "returning"]) {
+  for (const m of [
+    "select",
+    "from",
+    "where",
+    "limit",
+    "update",
+    "set",
+    "returning",
+  ]) {
     builder[m] = () => builder;
   }
-  builder.then = (onFulfilled: (v: unknown) => unknown, onRejected?: (e: unknown) => unknown) =>
-    Promise.resolve(queue.shift()).then(onFulfilled, onRejected);
+  builder.then = (
+    onFulfilled: (v: unknown) => unknown,
+    onRejected?: (e: unknown) => unknown,
+  ) => Promise.resolve(queue.shift()).then(onFulfilled, onRejected);
   return builder;
 }
 
-function fakeLogger(): AccountLinkingLogger & { warn: ReturnType<typeof vi.fn>; error: ReturnType<typeof vi.fn> } {
+function fakeLogger(): AccountLinkingLogger & {
+  warn: ReturnType<typeof vi.fn>;
+  error: ReturnType<typeof vi.fn>;
+} {
   return { warn: vi.fn(), error: vi.fn() };
 }
 
 beforeEach(() => {
   withSystemDbMock.mockReset();
+  captureErrorMock.mockReset();
 });
 
 // ---------------------------------------------------------------------------
@@ -181,9 +204,17 @@ function fakeStore(overrides: Partial<AccountLinkingStore> = {}): {
   loadLinkTargetFacts: ReturnType<typeof vi.fn>;
   clearLocalPassword: ReturnType<typeof vi.fn>;
 } {
-  const loadLinkTargetFacts = vi.fn(overrides.loadLinkTargetFacts ?? (async () => null));
-  const clearLocalPassword = vi.fn(overrides.clearLocalPassword ?? (async () => 0));
-  return { store: { loadLinkTargetFacts, clearLocalPassword }, loadLinkTargetFacts, clearLocalPassword };
+  const loadLinkTargetFacts = vi.fn(
+    overrides.loadLinkTargetFacts ?? (async () => null),
+  );
+  const clearLocalPassword = vi.fn(
+    overrides.clearLocalPassword ?? (async () => 0),
+  );
+  return {
+    store: { loadLinkTargetFacts, clearLocalPassword },
+    loadLinkTargetFacts,
+    clearLocalPassword,
+  };
 }
 
 describe("hardenTrustedProviderLink", () => {
@@ -201,9 +232,21 @@ describe("hardenTrustedProviderLink", () => {
 
   it("no-ops when userId is missing, empty, or not a string", async () => {
     const { store, loadLinkTargetFacts } = fakeStore();
-    expect(await hardenTrustedProviderLink({ providerId: "google" }, store)).toBe(false);
-    expect(await hardenTrustedProviderLink({ userId: "", providerId: "google" }, store)).toBe(false);
-    expect(await hardenTrustedProviderLink({ userId: 42, providerId: "google" }, store)).toBe(false);
+    expect(
+      await hardenTrustedProviderLink({ providerId: "google" }, store),
+    ).toBe(false);
+    expect(
+      await hardenTrustedProviderLink(
+        { userId: "", providerId: "google" },
+        store,
+      ),
+    ).toBe(false);
+    expect(
+      await hardenTrustedProviderLink(
+        { userId: 42, providerId: "google" },
+        store,
+      ),
+    ).toBe(false);
     expect(loadLinkTargetFacts).not.toHaveBeenCalled();
   });
 
@@ -211,7 +254,10 @@ describe("hardenTrustedProviderLink", () => {
     const { store, loadLinkTargetFacts, clearLocalPassword } = fakeStore({
       loadLinkTargetFacts: async () => null,
     });
-    const result = await hardenTrustedProviderLink({ userId: "u1", providerId: "google" }, store);
+    const result = await hardenTrustedProviderLink(
+      { userId: "u1", providerId: "google" },
+      store,
+    );
     expect(result).toBe(false);
     expect(loadLinkTargetFacts).toHaveBeenCalledWith("u1");
     expect(clearLocalPassword).not.toHaveBeenCalled();
@@ -219,27 +265,50 @@ describe("hardenTrustedProviderLink", () => {
 
   it("does NOT revoke when the existing account's email is already verified", async () => {
     const { store, clearLocalPassword } = fakeStore({
-      loadLinkTargetFacts: async () => ({ userEmailVerified: true, hasLocalPassword: true }),
+      loadLinkTargetFacts: async () => ({
+        userEmailVerified: true,
+        hasLocalPassword: true,
+      }),
     });
-    expect(await hardenTrustedProviderLink({ userId: "u1", providerId: "google" }, store)).toBe(false);
+    expect(
+      await hardenTrustedProviderLink(
+        { userId: "u1", providerId: "google" },
+        store,
+      ),
+    ).toBe(false);
     expect(clearLocalPassword).not.toHaveBeenCalled();
   });
 
   it("does NOT revoke when the unverified account has no password", async () => {
     const { store, clearLocalPassword } = fakeStore({
-      loadLinkTargetFacts: async () => ({ userEmailVerified: false, hasLocalPassword: false }),
+      loadLinkTargetFacts: async () => ({
+        userEmailVerified: false,
+        hasLocalPassword: false,
+      }),
     });
-    expect(await hardenTrustedProviderLink({ userId: "u1", providerId: "google" }, store)).toBe(false);
+    expect(
+      await hardenTrustedProviderLink(
+        { userId: "u1", providerId: "google" },
+        store,
+      ),
+    ).toBe(false);
     expect(clearLocalPassword).not.toHaveBeenCalled();
   });
 
   it("REVOKES and logs when a trusted provider links into an unverified account with a password", async () => {
     const { store, clearLocalPassword } = fakeStore({
-      loadLinkTargetFacts: async () => ({ userEmailVerified: false, hasLocalPassword: true }),
+      loadLinkTargetFacts: async () => ({
+        userEmailVerified: false,
+        hasLocalPassword: true,
+      }),
       clearLocalPassword: async () => 1,
     });
     const log = fakeLogger();
-    const result = await hardenTrustedProviderLink({ userId: "u1", providerId: "github" }, store, log);
+    const result = await hardenTrustedProviderLink(
+      { userId: "u1", providerId: "github" },
+      store,
+      log,
+    );
     expect(result).toBe(true);
     expect(clearLocalPassword).toHaveBeenCalledWith("u1");
     expect(log.warn).toHaveBeenCalledTimes(1);
@@ -251,22 +320,49 @@ describe("hardenTrustedProviderLink", () => {
 
   it("does NOT log a revocation when the password was already gone (race → 0 rows)", async () => {
     const { store } = fakeStore({
-      loadLinkTargetFacts: async () => ({ userEmailVerified: false, hasLocalPassword: true }),
+      loadLinkTargetFacts: async () => ({
+        userEmailVerified: false,
+        hasLocalPassword: true,
+      }),
       clearLocalPassword: async () => 0,
     });
     const log = fakeLogger();
-    expect(await hardenTrustedProviderLink({ userId: "u1", providerId: "google" }, store, log)).toBe(false);
+    expect(
+      await hardenTrustedProviderLink(
+        { userId: "u1", providerId: "google" },
+        store,
+        log,
+      ),
+    ).toBe(false);
     expect(log.warn).not.toHaveBeenCalled();
   });
 
-  it("uses the default console logger when none is injected", async () => {
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+  it("uses the default structured logger when none is injected", async () => {
+    const warnSpy = vi
+      .spyOn(logger, "warn")
+      .mockImplementation(() => undefined);
     const { store } = fakeStore({
-      loadLinkTargetFacts: async () => ({ userEmailVerified: false, hasLocalPassword: true }),
+      loadLinkTargetFacts: async () => ({
+        userEmailVerified: false,
+        hasLocalPassword: true,
+      }),
       clearLocalPassword: async () => 1,
     });
-    await hardenTrustedProviderLink({ userId: "u1", providerId: "google" }, store);
+    await hardenTrustedProviderLink(
+      { userId: "u1", providerId: "google" },
+      store,
+    );
     expect(warnSpy).toHaveBeenCalledTimes(1);
+    // pino signature: (context, message) — the revocation context must carry
+    // the identifying fields without ever including the password itself.
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: "u1",
+        providerId: "google",
+        revoked: 1,
+      }),
+      expect.stringContaining("revoked stale credential password"),
+    );
     warnSpy.mockRestore();
   });
 });
@@ -285,7 +381,9 @@ function fakeBaseHooks(): AccountDatabaseHooks & {
     void _at;
     return { data: rest };
   });
-  const updateBefore = vi.fn(async (account: Record<string, unknown>) => ({ data: account }));
+  const updateBefore = vi.fn(async (account: Record<string, unknown>) => ({
+    data: account,
+  }));
   return {
     create: { before: createBefore },
     update: { before: updateBefore },
@@ -319,7 +417,10 @@ describe("withTrustedLinkHardening", () => {
   it("invokes the hardening side effect on a trusted-provider create", async () => {
     const base = fakeBaseHooks();
     const { store, clearLocalPassword } = fakeStore({
-      loadLinkTargetFacts: async () => ({ userEmailVerified: false, hasLocalPassword: true }),
+      loadLinkTargetFacts: async () => ({
+        userEmailVerified: false,
+        hasLocalPassword: true,
+      }),
       clearLocalPassword: async () => 1,
     });
     const wrapped = withTrustedLinkHardening(base, store, fakeLogger());
@@ -346,7 +447,11 @@ describe("withTrustedLinkHardening", () => {
     const log = fakeLogger();
     const wrapped = withTrustedLinkHardening(base, store, log);
     // Must resolve (not reject) and still return the base transform result.
-    const out = await wrapped.create.before({ userId: "u1", providerId: "google", accessToken: "x" });
+    const out = await wrapped.create.before({
+      userId: "u1",
+      providerId: "google",
+      accessToken: "x",
+    });
     expect(out).toEqual({ data: { userId: "u1", providerId: "google" } });
     expect(log.error).toHaveBeenCalledTimes(1);
     expect(log.error).toHaveBeenCalledWith(
@@ -355,8 +460,10 @@ describe("withTrustedLinkHardening", () => {
     );
   });
 
-  it("logs hardening failures via the default console logger when none injected", async () => {
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+  it("logs hardening failures via the default structured logger when none injected", async () => {
+    const errorSpy = vi
+      .spyOn(logger, "error")
+      .mockImplementation(() => undefined);
     const base = fakeBaseHooks();
     const store: AccountLinkingStore = {
       loadLinkTargetFacts: async () => {
@@ -367,6 +474,16 @@ describe("withTrustedLinkHardening", () => {
     const wrapped = withTrustedLinkHardening(base, store);
     await wrapped.create.before({ userId: "u1", providerId: "google" });
     expect(errorSpy).toHaveBeenCalledTimes(1);
+    // The default error path also escalates through captureError so a spike in
+    // failed pre-hijacking mitigations is alertable, not just greppable.
+    expect(captureErrorMock).toHaveBeenCalledTimes(1);
+    expect(captureErrorMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: expect.any(Error),
+        source: "app",
+        severity: "warn",
+      }),
+    );
     errorSpy.mockRestore();
   });
 });
@@ -377,7 +494,9 @@ describe("withTrustedLinkHardening", () => {
 
 describe("createDbAccountLinkingStore", () => {
   it("loadLinkTargetFacts returns null when the user row is absent", async () => {
-    withSystemDbMock.mockImplementation((fn: (tx: unknown) => unknown) => fn(makeTx([[]])));
+    withSystemDbMock.mockImplementation((fn: (tx: unknown) => unknown) =>
+      fn(makeTx([[]])),
+    );
     const store = createDbAccountLinkingStore();
     expect(await store.loadLinkTargetFacts("missing")).toBeNull();
   });
@@ -414,7 +533,9 @@ describe("createDbAccountLinkingStore", () => {
   });
 
   it("clearLocalPassword returns 0 when no credential row carried a password", async () => {
-    withSystemDbMock.mockImplementation((fn: (tx: unknown) => unknown) => fn(makeTx([[]])));
+    withSystemDbMock.mockImplementation((fn: (tx: unknown) => unknown) =>
+      fn(makeTx([[]])),
+    );
     const store = createDbAccountLinkingStore();
     expect(await store.clearLocalPassword("u1")).toBe(0);
   });
