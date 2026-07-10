@@ -382,7 +382,7 @@
     "eval.dataset.list": {
       "route": "/[orgSlug]/[workspaceSlug]/evals",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/evals/page.tsx",
-      "entry": "DatasetsSection RSC → DatasetsClient table",
+      "entry": "DatasetsSection RSC → DatasetsClient list",
       "testid": "evals-datasets-table",
       "proof": null,
       "verifiedAt": null,

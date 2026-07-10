@@ -1,10 +1,8 @@
 "use client";
 
 /**
- * datasets-client.tsx — renders the workspace's eval datasets as a card grid
- * with client-side search / sort / pagination / CSV export from the shared
- * list toolkit (small-to-medium cardinality — cards read better than a table
- * and stay usable on mobile).
+ * datasets-client.tsx — renders the workspace's eval datasets as a definition-list-based
+ * item list (each dataset is an independent entity read across, not compared down columns).
  *
  * Read-only v1: no create/delete affordances yet (those are
  * eval.dataset.create / eval.dataset.from_traces, not wired to this UI).
