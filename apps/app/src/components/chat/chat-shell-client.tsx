@@ -36,7 +36,14 @@ import type {
 import type { McpServerSummary } from "./mcp-types";
 import type { RepoOption } from "./repo-selector";
 import type { EnvironmentOption } from "./environment-selector";
-import type { AgentOption } from "./agent-selector";
+import type { AgentOption } from "./agent-picker/agent-picker-types";
+import { ChatSelectionProvider } from "./agent-picker/chat-selection-context";
+import { AgentGallery } from "./agent-picker/agent-gallery";
+import {
+  resolveDefaultRepoKey,
+  resolveDefaultEnvId,
+} from "./agent-picker/code-session-defaults";
+import { resolveOptimisticDefaultAgent } from "./agent-picker/default-agent-optimistic";
 import { deriveComposerPr } from "./composer-pr-status-chip";
 import { SuggestedPromptChips } from "./suggested-prompt-chips";
 import type { ConversationMessageSummary } from "@/lib/page-context/suggested-prompts";
@@ -152,9 +159,13 @@ export function ChatShellClient({
   availableRepos,
   availableEnvironments,
   availableAgents,
+  defaultAgentId,
+  defaultRepoConnectionId,
+  defaultRepoSlug,
+  defaultEnvironmentId,
+  setDefaultAgentAction,
   workspaceBudgetGovernance,
   agentId,
-  boundAgentName,
   pageContext,
   onFormFillStart,
   onFormFillEnd,
@@ -189,15 +200,25 @@ export function ChatShellClient({
   availableEnvironments?: EnvironmentOption[];
   /** Selectable agents for the composer's agent picker. */
   availableAgents?: AgentOption[];
+  /** The workspace user's default agent preference (agt_… public id), or null. */
+  defaultAgentId?: string | null;
+  /** Workspace user's default repo connection (con_…) for code-session prefill. */
+  defaultRepoConnectionId?: string | null;
+  /** Workspace user's default owner/repo slug for code-session prefill. */
+  defaultRepoSlug?: string | null;
+  /** Workspace user's default environment id for code-session prefill. */
+  defaultEnvironmentId?: string | null;
+  /** Persists the workspace default agent when the picker's star is toggled. */
+  setDefaultAgentAction?: (
+    agentId: string | null,
+  ) => Promise<{ ok: boolean; error?: string }>;
   /** Workspace-level per-turn budget governance (OXA-2081). Null/omitted ⇒
    * no governance active for this workspace. */
   workspaceBudgetGovernance?: WorkspaceBudgetGovernance | null;
-  /** Bound published agent's public id (Ask page ?agent=…). Sent as `agentId`
-   * in each stream request so the route applies the agent's config. Null ⇒
-   * unbound. */
+  /** Bound published agent's public id (Ask page ?agent=…). Seeds the initial
+   * agent selection so the composer chip reflects the binding; the composer
+   * then carries it in each stream request as `agentId`. Null ⇒ unbound. */
   agentId?: string | null;
-  /** Human name of the bound agent — shown as the composer's bound indicator. */
-  boundAgentName?: string | null;
   /**
    * Page context forwarded from the current page. When a fillable form is
    * registered (e.g. in AskDrawer/WandPanel wrappers), this is passed to the
@@ -405,10 +426,6 @@ export function ChatShellClient({
   const consentSignalRef = useLatestRef(signalConsentResolved);
   const orgSlugRef = useLatestRef(orgSlug);
   const workspaceSlugRef = useLatestRef(workspaceSlug);
-  // Bound-agent id read at send-time (stable ref, like the slug refs) so the
-  // request body carries the CURRENT ?agent binding without re-creating the
-  // send callback on every navigation.
-  const agentIdRef = useLatestRef(agentId ?? null);
   const setIsStreamingRef = useLatestRef(setIsStreaming);
   // Page-form-fill callback refs — stable so wrappedSendAction deps don't change.
   const pageContextRef = useLatestRef(pageContext ?? null);
@@ -547,11 +564,6 @@ export function ChatShellClient({
               newConversation: wasNewConversation,
               orgSlug: orgSlugRef.current,
               workspaceSlug: workspaceSlugRef.current,
-              // Optional agent binding — the route loads this agent's definition
-              // and applies its instructions/skills/servers/code-mode. Omitted
-              // (undefined) when unbound, so the request is byte-identical to
-              // before this feature for a normal chat.
-              ...(agentIdRef.current ? { agentId: agentIdRef.current } : {}),
               tier: (formData.get("tier") as string) || null,
               model: (formData.get("model") as string) || null,
               effort: (formData.get("effort") as string) || null,
@@ -1171,27 +1183,70 @@ export function ChatShellClient({
     [order, toolCalls],
   );
 
+  // Agent-picker config: resolve the workspace user's saved coding defaults to
+  // live selector values, and track the default agent optimistically so the
+  // picker's star reflects a toggle instantly (reverting if the write fails).
+  const defaultRepoKey = React.useMemo(
+    () =>
+      resolveDefaultRepoKey(
+        availableRepos ?? [],
+        defaultRepoConnectionId ?? null,
+        defaultRepoSlug ?? null,
+      ),
+    [availableRepos, defaultRepoConnectionId, defaultRepoSlug],
+  );
+  const defaultEnvId = React.useMemo(
+    () =>
+      resolveDefaultEnvId(
+        availableEnvironments ?? [],
+        defaultEnvironmentId ?? null,
+      ),
+    [availableEnvironments, defaultEnvironmentId],
+  );
+  const [currentDefaultAgentId, setCurrentDefaultAgentId] = React.useState<
+    string | null
+  >(defaultAgentId ?? null);
+  const handleSetDefaultAgent = React.useCallback(
+    (id: string | null) => {
+      setCurrentDefaultAgentId(id);
+      if (!setDefaultAgentAction) return;
+      void setDefaultAgentAction(id).then((res) => {
+        // Revert target is the original server-provided value, not the
+        // pre-toggle value (deliberate — see default-agent-optimistic.ts).
+        setCurrentDefaultAgentId(
+          resolveOptimisticDefaultAgent(res, id, defaultAgentId ?? null),
+        );
+      });
+    },
+    [setDefaultAgentAction, defaultAgentId],
+  );
+
   return (
-    <div className="flex h-full w-full gap-4">
-      <div className="mx-auto flex h-full min-w-0 max-w-3xl flex-1 flex-col gap-4">
-        {/* Toolbar row: export trigger (right-aligned). Hidden in the floating
+    <ChatSelectionProvider
+      agents={availableAgents ?? []}
+      boundAgentId={agentId ?? null}
+      workspaceDefaultAgentId={currentDefaultAgentId}
+      defaultRepoKey={defaultRepoKey}
+      defaultEnvId={defaultEnvId}
+      conversationId={conversationId}
+      workspaceSlug={workspaceSlug}
+      isNewConversation={!conversationId}
+    >
+      <div className="flex h-full w-full gap-4">
+        <div className="mx-auto flex h-full min-w-0 max-w-3xl flex-1 flex-col gap-4">
+          {/* Toolbar row: export trigger (right-aligned). Hidden in the floating
           in-app panel (showFiles=false) — conversation files live on the full
           /ask page, in the side-panel's "Files" tab. */}
-        {showFiles && conversationPublicId ? (
-          <div className="flex shrink-0 items-center justify-end gap-1">
-            <ConversationExportMenu
-              conversationId={conversationPublicId}
-              orgSlug={orgSlug}
-              workspaceSlug={workspaceSlug}
-            />
-          </div>
-        ) : null}
+          {showFiles && conversationPublicId ? (
+            <div className="flex shrink-0 items-center justify-end gap-1">
+              <ConversationExportMenu
+                conversationId={conversationPublicId}
+                orgSlug={orgSlug}
+                workspaceSlug={workspaceSlug}
+              />
+            </div>
+          ) : null}
 
-        {/* The wrapper (not the scroll container) is the anchor for the mobile
-            Activity trigger below: an `absolute` child of the scroll container
-            would scroll away with the messages, and the old `fixed` placement
-            floated the pill over the composer's Send button on phones. */}
-        <div className="relative min-h-0 flex-1">
           <div
             ref={scrollContainerRef}
             // `relative` is load-bearing: it makes this scroll container the
@@ -1200,15 +1255,31 @@ export function ChatShellClient({
             // those abs elements anchor to the initial containing block, escape this
             // container's `overflow` clipping, and inflate the document height —
             // letting the whole page scroll past the composer on mobile and desktop.
-            className="relative h-full overflow-y-auto pr-2"
+            className="relative min-h-0 flex-1 overflow-y-auto pr-2"
             onScroll={handleScroll}
           >
             {messages.length === 0 && !hasLiveContent ? (
               <div className="flex h-full flex-col items-center justify-center gap-4 text-center text-sm text-muted-foreground">
-                <div>
-                  <p className="font-medium">Start a conversation.</p>
-                  <p>Send a message below to begin.</p>
-                </div>
+                {/* Agent gallery hero — pick who to chat with before the first turn.
+                Renders nothing for a workspace with no agents, which keeps the
+                plain "Start a conversation" empty state. */}
+                <AgentGallery
+                  agents={availableAgents ?? []}
+                  repos={availableRepos ?? []}
+                  environments={availableEnvironments ?? []}
+                  defaultRepoKey={defaultRepoKey}
+                  defaultEnvId={defaultEnvId}
+                  defaultAgentId={currentDefaultAgentId}
+                  onSetDefaultAgent={
+                    setDefaultAgentAction ? handleSetDefaultAgent : undefined
+                  }
+                />
+                {(availableAgents?.length ?? 0) === 0 ? (
+                  <div>
+                    <p className="font-medium">Start a conversation.</p>
+                    <p>Send a message below to begin.</p>
+                  </div>
+                ) : null}
                 {/* Suggested chips in empty state */}
                 <SuggestedPromptChips
                   action={wrappedSendAction}
@@ -1304,119 +1375,141 @@ export function ChatShellClient({
         </div>
         {/* Suggested prompt chips — shown above the composer once there are messages
           (empty state renders its own chips above; this avoids duplication). */}
-        {messages.length > 0 || hasLiveContent ? (
-          <SuggestedPromptChips
-            action={wrappedSendAction}
-            conversationId={conversationId}
-            parentMessageId={activeLeafMessageId}
-            suggestions={suggestedPrompts}
-            conversationHistory={conversationHistory}
-            className="justify-center"
-          />
-        ) : null}
+          {messages.length > 0 || hasLiveContent ? (
+            <SuggestedPromptChips
+              action={wrappedSendAction}
+              conversationId={conversationId}
+              parentMessageId={activeLeafMessageId}
+              suggestions={suggestedPrompts}
+              conversationHistory={conversationHistory}
+              className="justify-center"
+            />
+          ) : null}
 
-        {/* Stream error banner — visible when an SSE fetch fails (non-2xx or
+          {/* Stream error banner — visible when an SSE fetch fails (non-2xx or
           mid-stream network error) so the user knows to retry. Cleared
           automatically on the next send. */}
-        {streamError ? (
-          <div
-            role="alert"
-            data-testid="stream-error-banner"
-            className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-          >
-            {streamError}
-          </div>
-        ) : null}
+          {streamError ? (
+            <div
+              role="alert"
+              data-testid="stream-error-banner"
+              className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive"
+            >
+              {streamError}
+            </div>
+          ) : null}
 
-        <MessageComposer
-          conversationId={conversationId}
-          parentMessageId={activeLeafMessageId}
-          action={wrappedSendAction}
-          disabled={hasPendingApproval}
-          modelConfig={modelConfig}
-          enterToSubmit={enterToSubmit}
-          pendingPromptBehavior={pendingPromptBehavior}
-          isStreaming={isStreaming}
-          onInterrupt={handleInterrupt}
-          initialModelState={initialModelState}
-          availableMcpServers={availableMcpServers}
-          availableRepos={availableRepos}
-          availableEnvironments={availableEnvironments}
-          availableAgents={availableAgents}
-          workspaceBudgetGovernance={workspaceBudgetGovernance}
-          orgSlug={orgSlug}
-          workspaceSlug={workspaceSlug}
-          boundAgentName={boundAgentName ?? null}
-          codeSessionPr={codeSessionPr}
-        />
-      </div>
-      {/* Right rail: turn-trace stage rail + files/workspace tabbed panel.
+          <MessageComposer
+            conversationId={conversationId}
+            parentMessageId={activeLeafMessageId}
+            action={wrappedSendAction}
+            disabled={hasPendingApproval}
+            modelConfig={modelConfig}
+            enterToSubmit={enterToSubmit}
+            pendingPromptBehavior={pendingPromptBehavior}
+            isStreaming={isStreaming}
+            onInterrupt={handleInterrupt}
+            initialModelState={initialModelState}
+            availableMcpServers={availableMcpServers}
+            availableRepos={availableRepos}
+            availableEnvironments={availableEnvironments}
+            availableAgents={availableAgents}
+            defaultRepoKey={defaultRepoKey}
+            defaultEnvId={defaultEnvId}
+            defaultAgentId={currentDefaultAgentId}
+            onSetDefaultAgent={
+              setDefaultAgentAction ? handleSetDefaultAgent : undefined
+            }
+            workspaceBudgetGovernance={workspaceBudgetGovernance}
+            orgSlug={orgSlug}
+            workspaceSlug={workspaceSlug}
+            codeSessionPr={codeSessionPr}
+          />
+        </div>
+        {/* Right rail: turn-trace stage rail + files/workspace tabbed panel.
           Hidden in the floating in-app panel (showFiles=false, same gate the
           toolbar's export trigger uses) and on narrow viewports — the rail
           needs real width to be legible. */}
-      {showFiles ? (
-        <aside className="hidden w-64 shrink-0 flex-col gap-3 overflow-y-auto py-1 lg:flex">
-          <CodingTracePanel
-            order={order}
-            plans={plans}
-            toolCalls={toolCalls}
-            activeFanouts={activeFanouts}
-            turnUsage={turnUsage}
-            isStreaming={isStreaming}
-            className="w-full"
-          />
-          <WorkspaceContextPanel
-            conversationPublicId={conversationPublicId}
-            orgSlug={orgSlug}
-            workspaceSlug={workspaceSlug}
-            toolCalls={toolCalls}
-            className="min-h-64 flex-1"
-          />
-        </aside>
-      ) : null}
+        {showFiles ? (
+          <aside className="hidden w-64 shrink-0 flex-col gap-3 overflow-y-auto py-1 lg:flex">
+            <CodingTracePanel
+              order={order}
+              plans={plans}
+              toolCalls={toolCalls}
+              activeFanouts={activeFanouts}
+              turnUsage={turnUsage}
+              isStreaming={isStreaming}
+              className="w-full"
+            />
+            <WorkspaceContextPanel
+              conversationPublicId={conversationPublicId}
+              orgSlug={orgSlug}
+              workspaceSlug={workspaceSlug}
+              toolCalls={toolCalls}
+              className="min-h-64 flex-1"
+            />
+          </aside>
+        ) : null}
 
-      {/* Below lg the rail reflows into a bottom sheet (ADR-026 mobile parity);
-          its floating trigger lives inside the message viewport above (anchored
-          to the scroll-area wrapper, so it can't cover the composer). */}
-      {showFiles ? (
-        <div className="lg:hidden">
-          <Sheet open={mobileRailOpen} onOpenChange={setMobileRailOpen}>
-            <SheetPopup
-              side="bottom"
-              className="flex max-h-[85vh] flex-col gap-0 rounded-t-2xl p-0 pb-[env(safe-area-inset-bottom)]"
+        {/* Below lg the rail reflows into a bottom sheet (ADR-026 mobile parity):
+          a floating thumb-reachable trigger above the mobile bottom bar opens
+          the identical trace + workspace panels. */}
+        {showFiles ? (
+          <div className="lg:hidden">
+            <button
+              type="button"
+              data-testid="chat-mobile-rail-trigger"
+              aria-haspopup="dialog"
+              aria-expanded={mobileRailOpen}
+              onClick={() => setMobileRailOpen(true)}
+              className={cn(
+                "fixed right-3 z-20 flex h-11 items-center gap-1.5 rounded-full border border-border/60",
+                "bg-background/95 px-4 text-xs font-medium text-muted-foreground shadow-sm backdrop-blur",
+                "bottom-[calc(var(--bottom-bar-h)+var(--bottom-bar-gap,0px)+env(safe-area-inset-bottom)+0.75rem)] md:bottom-3",
+                "hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              )}
             >
-              <SheetHeader className="border-b px-4 py-3 text-left">
-                <SheetTitle>Activity</SheetTitle>
-                <SheetDescription className="sr-only">
-                  Turn trace and workspace context for this conversation
-                </SheetDescription>
-              </SheetHeader>
-              <div
-                className="flex flex-col gap-3 overflow-y-auto p-3"
-                data-testid="chat-mobile-rail-sheet"
+              <PanelRight className="size-4" aria-hidden="true" />
+              Activity
+            </button>
+            <Sheet open={mobileRailOpen} onOpenChange={setMobileRailOpen}>
+              <SheetPopup
+                side="bottom"
+                className="flex max-h-[85vh] flex-col gap-0 rounded-t-2xl p-0 pb-[env(safe-area-inset-bottom)]"
               >
-                <CodingTracePanel
-                  order={order}
-                  plans={plans}
-                  toolCalls={toolCalls}
-                  activeFanouts={activeFanouts}
-                  turnUsage={turnUsage}
-                  isStreaming={isStreaming}
-                  className="w-full"
-                />
-                <WorkspaceContextPanel
-                  conversationPublicId={conversationPublicId}
-                  orgSlug={orgSlug}
-                  workspaceSlug={workspaceSlug}
-                  toolCalls={toolCalls}
-                  className="min-h-64"
-                />
-              </div>
-            </SheetPopup>
-          </Sheet>
-        </div>
-      ) : null}
-    </div>
+                <SheetHeader className="border-b px-4 py-3 text-left">
+                  <SheetTitle>Activity</SheetTitle>
+                  <SheetDescription className="sr-only">
+                    Turn trace and workspace context for this conversation
+                  </SheetDescription>
+                </SheetHeader>
+                <div
+                  className="flex flex-col gap-3 overflow-y-auto p-3"
+                  data-testid="chat-mobile-rail-sheet"
+                >
+                  <CodingTracePanel
+                    order={order}
+                    plans={plans}
+                    toolCalls={toolCalls}
+                    activeFanouts={activeFanouts}
+                    turnUsage={turnUsage}
+                    isStreaming={isStreaming}
+                    className="w-full"
+                  />
+                  <WorkspaceContextPanel
+                    conversationPublicId={conversationPublicId}
+                    orgSlug={orgSlug}
+                    workspaceSlug={workspaceSlug}
+                    toolCalls={toolCalls}
+                    className="min-h-64"
+                  />
+                </div>
+              </SheetPopup>
+            </Sheet>
+          </div>
+        ) : null}
+      </div>
+    </ChatSelectionProvider>
   );
 }
 

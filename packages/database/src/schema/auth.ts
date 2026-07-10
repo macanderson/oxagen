@@ -394,6 +394,11 @@ export const workspaceUserPreferences = authSchema.table(
     // The user's preferred default environment (environments.public_id, env_…).
     // NULL = fall back to the workspace's isDefault environment.
     defaultEnvironmentId: text("default_environment_id"),
+    // The user's preferred default agent for this workspace, stored as the
+    // agents.public_id (agt_…). NULL = no default → the app falls back to its
+    // built-in selection. Not an FK: agents live in the agent schema and can be
+    // soft-deleted; the app resolves + validates the agent at read time.
+    defaultAgentId: text("default_agent_id"),
     // When the one-time repo-default prompt was shown/answered. NULL = never
     // prompted → the app should offer the prompt on first repo-selector open.
     repoDefaultPromptedAt: timestamp("repo_default_prompted_at", {
@@ -403,9 +408,8 @@ export const workspaceUserPreferences = authSchema.table(
   },
   (t) => ({
     // One preferences row per (user, workspace).
-    userWorkspaceIdx: uniqueIndex("workspace_user_preferences_user_workspace_idx").on(
-      t.userId,
-      t.workspaceId,
-    ),
+    userWorkspaceIdx: uniqueIndex(
+      "workspace_user_preferences_user_workspace_idx",
+    ).on(t.userId, t.workspaceId),
   }),
 );

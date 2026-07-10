@@ -19,10 +19,10 @@ import { agentDefinitionListHandler } from "@oxagen/agent/handlers/agent.definit
 import { logger } from "@oxagen/handlers/logger";
 import { isCodeAgentType } from "@oxagen/oxagen";
 import type { CapabilityContext } from "@oxagen/oxagen";
-// Type-only import from the (client) selector component — the single source of
-// truth for the option shape, mirroring how code-mode-data imports RepoOption
+// Type-only import from the pure agent-picker types module — the single source
+// of truth for the option shape, mirroring how code-mode-data imports RepoOption
 // from repo-selector. Erased at build time, so no client code is pulled in.
-import type { AgentOption } from "@/components/chat/agent-selector";
+import type { AgentOption } from "@/components/chat/agent-picker/agent-picker-types";
 
 export type { AgentOption };
 
@@ -49,11 +49,18 @@ export async function loadAgentOptions(
             description: a.description,
             agentType: a.agentType,
             isCode: isCodeAgentType(a.agentType),
+            avatarUrl: a.avatarUrl,
+            summary: a.summary,
+            managed: a.managed,
+            toolRefs: a.toolRefs,
           }),
         );
     });
   } catch (err) {
-    logger.warn({ err, orgId, workspaceId }, "agent-options-data: loadAgentOptions failed — degraded");
+    logger.warn(
+      { err, orgId, workspaceId },
+      "agent-options-data: loadAgentOptions failed — degraded",
+    );
     return [];
   }
 }

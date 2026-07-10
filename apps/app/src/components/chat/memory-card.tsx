@@ -2,10 +2,12 @@
 import * as React from "react";
 import Link from "next/link";
 import { Brain, ChevronDown, Network } from "lucide-react";
+import { motion, AnimatePresence, useReducedMotion } from "motion/react";
 import { Badge } from "@/components/ui/badge";
 import { TruncatedText } from "@/components/ui/truncated-text";
 import { NodeRef } from "@/components/knowledge/graph/node-ref";
 import { useTenantOptional } from "@/lib/tenant/tenant-context";
+import { transition } from "@oxagen/ui/lib/motion";
 import { cn } from "@/lib/utils";
 import type { KnowledgeNodeRef, MemoryRecallHit } from "./stream-event-types";
 
@@ -122,6 +124,7 @@ export function MemoryCard({
   variant = "recall",
 }: MemoryCardProps) {
   const tenant = useTenantOptional();
+  const reducedMotion = useReducedMotion();
   const [expanded, setExpanded] = React.useState(false);
   const panelId = React.useId();
   if (memories.length === 0) return null;
@@ -134,12 +137,14 @@ export function MemoryCard({
       : null;
   return (
     <div
-      className="rounded-xl border bg-card text-card-foreground shadow my-2 p-3 text-sm animate-in"
+      className="my-1.5 rounded-xl border border-border/60 bg-card/60 p-3 text-sm text-card-foreground animate-in"
       data-component="memory-card"
     >
       <div className="flex items-center gap-2">
         <Brain className="h-4 w-4 shrink-0 text-muted-foreground" />
-        <span className="min-w-0 flex-1 font-medium">{sentence}</span>
+        <span className="min-w-0 flex-1 font-medium text-foreground/90">
+          {sentence}
+        </span>
         <button
           type="button"
           onClick={() => setExpanded((v) => !v)}
@@ -158,82 +163,102 @@ export function MemoryCard({
         </button>
       </div>
       {/* The panel element always exists so aria-controls stays valid; its
-          content only mounts when expanded. */}
-      <div id={panelId} hidden={!expanded} className="mt-2 space-y-2">
-        {expanded ? (
-          <>
-            {nodes.length > 0 ? (
-              <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
-                {nodes.map((node, i) => {
-                  const graphHref = graphHrefFor(node);
-                  return (
-                    <span
-                      key={node.id ?? `candidate-${i}`}
-                      className="inline-flex min-w-0 items-center gap-0.5"
-                    >
-                      <NodeRef node={node} className="min-w-0" />
-                      {graphHref ? (
-                        <Link
-                          href={graphHref}
-                          className="inline-flex shrink-0 items-center rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                          aria-label={`View ${node.displayName} in the knowledge graph`}
+          content only mounts (and height-animates) when expanded. */}
+      <div id={panelId}>
+        <AnimatePresence initial={false}>
+          {expanded ? (
+            <motion.div
+              key="memory-body"
+              initial={
+                reducedMotion ? { opacity: 0 } : { height: 0, opacity: 0 }
+              }
+              animate={
+                reducedMotion ? { opacity: 1 } : { height: "auto", opacity: 1 }
+              }
+              exit={reducedMotion ? { opacity: 0 } : { height: 0, opacity: 0 }}
+              transition={transition.base}
+              style={{ overflow: "hidden" }}
+            >
+              <div className="mt-2 space-y-2">
+                {nodes.length > 0 ? (
+                  <div className="flex flex-wrap items-center gap-x-2.5 gap-y-2">
+                    {nodes.map((node, i) => {
+                      const graphHref = graphHrefFor(node);
+                      return (
+                        <span
+                          key={node.id ?? `candidate-${i}`}
+                          className="inline-flex min-w-0 items-center gap-0.5"
                         >
-                          <Network className="size-3" aria-hidden="true" />
-                        </Link>
-                      ) : null}
-                    </span>
-                  );
-                })}
-              </div>
-            ) : null}
-            <ul className="space-y-2">
-              {top.map((m) => (
-                <li key={m.id} className="rounded-xl bg-muted p-2 text-xs">
-                  <div className="mb-1 flex items-center gap-2 flex-wrap">
-                    <Badge
-                      variant={CLASS_VARIANT[m.memoryClass] ?? "default"}
-                      // Badge spreads extra props onto its span — expose the
-                      // variant + a stable testid for assertions (the shared
-                      // component itself emits no data attributes).
-                      data-testid="badge"
-                      data-variant={CLASS_VARIANT[m.memoryClass] ?? "default"}
-                      className="uppercase"
-                    >
-                      {m.memoryClass}
-                    </Badge>
-                    <span className="text-muted-foreground tabular-nums">
-                      confidence {Math.round(m.confidenceScore)}%
-                    </span>
-                    {m.enforcementScore != null && (
-                      <span className="text-muted-foreground tabular-nums">
-                        enforcement {m.enforcementScore}
-                      </span>
-                    )}
-                    <span className="text-muted-foreground tabular-nums">
-                      score {m.score.toFixed(2)}
-                    </span>
-                    {/* Fallback raw-id reference only when the subject node could
-                        not be resolved to a citable graph node. Resolved memories
-                        are cited via the NodeRef chips above. */}
-                    {!m.node && m.nodeRef ? (
-                      <a
-                        href={`#${m.nodeRef}`}
-                        className="ml-auto truncate font-mono text-[10px] text-foreground hover:underline"
-                      >
-                        {m.nodeRef}
-                      </a>
-                    ) : null}
+                          <NodeRef node={node} className="min-w-0" />
+                          {graphHref ? (
+                            <Link
+                              href={graphHref}
+                              className="inline-flex shrink-0 items-center rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                              aria-label={`View ${node.displayName} in the knowledge graph`}
+                            >
+                              <Network className="size-3" aria-hidden="true" />
+                            </Link>
+                          ) : null}
+                        </span>
+                      );
+                    })}
                   </div>
-                  <TruncatedText
-                    text={m.lesson}
-                    lines={3}
-                    className="leading-relaxed"
-                  />
-                </li>
-              ))}
-            </ul>
-          </>
-        ) : null}
+                ) : null}
+                <ul className="space-y-2">
+                  {top.map((m) => (
+                    <li
+                      key={m.id}
+                      className="rounded-xl bg-muted/70 p-2 text-xs"
+                    >
+                      <div className="mb-1 flex flex-wrap items-center gap-2">
+                        <Badge
+                          variant={CLASS_VARIANT[m.memoryClass] ?? "default"}
+                          // Badge spreads extra props onto its span — expose the
+                          // variant + a stable testid for assertions (the shared
+                          // component itself emits no data attributes).
+                          data-testid="badge"
+                          data-variant={
+                            CLASS_VARIANT[m.memoryClass] ?? "default"
+                          }
+                          className="uppercase"
+                        >
+                          {m.memoryClass}
+                        </Badge>
+                        <span className="text-muted-foreground tabular-nums">
+                          confidence {Math.round(m.confidenceScore)}%
+                        </span>
+                        {m.enforcementScore != null && (
+                          <span className="text-muted-foreground tabular-nums">
+                            enforcement {m.enforcementScore}
+                          </span>
+                        )}
+                        <span className="text-muted-foreground tabular-nums">
+                          score {m.score.toFixed(2)}
+                        </span>
+                        {/* Fallback raw-id reference only when the subject node
+                            could not be resolved to a citable graph node.
+                            Resolved memories are cited via the NodeRef chips. */}
+                        {!m.node && m.nodeRef ? (
+                          <a
+                            href={`#${m.nodeRef}`}
+                            className="ml-auto truncate font-mono text-[10px] text-foreground hover:underline"
+                          >
+                            {m.nodeRef}
+                          </a>
+                        ) : null}
+                      </div>
+                      <TruncatedText
+                        text={m.lesson}
+                        lines={3}
+                        className="leading-relaxed"
+                      />
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
       </div>
     </div>
   );

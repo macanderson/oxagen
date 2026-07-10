@@ -8,7 +8,7 @@
 
 ## Intent
 
-List the agent definitions in the current workspace with their identity, lifecycle status, deployment posture, and latest version number. Optionally filter by lifecycle status.
+List the agent definitions in the current workspace with their identity, lifecycle status, deployment posture, latest version number, and a refs-only view of the tools each agent loads. Optionally filter by lifecycle status.
 
 ## Input
 
@@ -32,6 +32,7 @@ List the agent definitions in the current workspace with their identity, lifecyc
 | `agents[].deploymentStatus` | `"inactive" \| "active"` | Deployment posture. |
 | `agents[].latestVersion` | `number \| null` | Highest version number, or null when none. |
 | `agents[].managed` | `boolean` | True for product-managed built-in agents — read-only to customers. |
+| `agents[].toolRefs` | `{ type, ref }[]` | Refs (type + ref only) of everything the agent loads — functions, MCP servers, skills, subagents — taken from the config of its active version (else latest), matching `agent.definition.get` resolution. Lets the app's agent picker render tool/skill chips without an N+1 of `get_agent_def`. Refs-only by design: never the per-tool config payloads (MCP auth, skill pins, budgets). Empty (`[]`) when the agent loads nothing or its config is absent/malformed. `type` ∈ `"function" \| "mcp_server" \| "skill" \| "agent"`. |
 
 ## Roles
 
