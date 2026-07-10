@@ -8,6 +8,12 @@
  * not bootstrap the IAM kernel (see CLAUDE.md gotcha), so every server
  * surface must gate explicitly.
  *
+ * These invoke() calls deliberately DO NOT pass { surface: "agent" }. The skill
+ * capabilities are exposed on ["api","mcp"] (some also "agent"); asserting a
+ * surface the contract doesn't list makes the kernel throw surface_denied. The
+ * app is a trusted server caller (ctx.surface === "app") and omits opts.surface
+ * so no surface allowlist is enforced — matching lib/workbench/equip-sources.ts.
+ *
  * Adapted from settings/skills/skill-actions.ts (same contracts, same
  * shapes) — the only changes are the route target (workbench, not settings)
  * and the shared `resolveWorkbenchScope` helper, plus the new `createSkillAction`.
@@ -47,9 +53,7 @@ export async function installSkill(
   const { ctx } = auth.scope;
 
   try {
-    await invoke("install_skill", { skillSlug: parsed.data.skillSlug }, ctx, {
-      surface: "agent",
-    });
+    await invoke("install_skill", { skillSlug: parsed.data.skillSlug }, ctx);
     const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };
     revalidatePath(skillsPath(routeCtx));
     return { ok: true };
@@ -88,7 +92,6 @@ export async function editSkill(
         commitMessage: parsed.data.commitMessage,
       },
       ctx,
-      { surface: "agent" },
     );
     const typed = out as { versionId: string; version: string };
     const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };
@@ -124,7 +127,6 @@ export async function activateVersion(
       "activate_skill_version",
       { skillSlug: parsed.data.skillSlug, versionId: parsed.data.versionId },
       ctx,
-      { surface: "agent" },
     );
     const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };
     revalidatePath(skillsPath(routeCtx));
@@ -158,7 +160,6 @@ export async function exportSkill(
       "export_skill",
       { skillSlug: parsed.data.skillSlug, versionId: parsed.data.versionId },
       ctx,
-      { surface: "agent" },
     );
     const typed = out as { content: string; filename: string };
     return { ok: true, content: typed.content, filename: typed.filename };
@@ -204,7 +205,7 @@ export async function draftSkillAction(
   const { ctx } = auth.scope;
 
   try {
-    const out = await invoke("draft_skill", { prompt }, ctx, { surface: "agent" });
+    const out = await invoke("draft_skill", { prompt }, ctx);
     const typed = out as { draft: SkillDraftResult };
     return { ok: true, draft: typed.draft };
   } catch (err) {
@@ -280,7 +281,6 @@ export async function createSkillAction(
       "create_skill",
       { name, slug, description, body: fullBody, activate },
       ctx,
-      { surface: "agent" },
     );
     const typed = out as { slug: string; created: boolean };
     const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };

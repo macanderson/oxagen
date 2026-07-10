@@ -274,11 +274,13 @@ describe("installBulkPlugin server action", () => {
     });
 
     expect(res.ok).toBe(true);
+    // install_skill (skill.workspace.install) is exposed on ["api","mcp"] only,
+    // so the app must NOT assert { surface: "agent" } (that throws surface_denied
+    // in prod). The call passes exactly three args — no opts object.
     expect(mockInvoke).toHaveBeenCalledWith(
       "install_skill",
       { slug: "summarize", workspace_id: "ws-1" },
       expect.objectContaining({ orgId: "org-1", workspaceId: "ws-1" }),
-      { surface: "agent" },
     );
     // install_bulk is never called when there are no non-skill items.
     expect(mockInvoke).not.toHaveBeenCalledWith(

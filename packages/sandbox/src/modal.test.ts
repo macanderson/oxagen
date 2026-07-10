@@ -578,10 +578,11 @@ describe("createModalSandbox — execInSession()", () => {
       timeout_ms: 5_000,
       env: { CI: "1" },
       stdin: "input\n",
+      cwd: null,
     });
   });
 
-  it("sends null env and stdin when omitted", async () => {
+  it("sends null env, stdin and cwd when omitted", async () => {
     const fetchSpy = makeFetch(200, execBody);
     const driver = makeSessionDriver(fetchSpy);
 
@@ -591,9 +592,43 @@ describe("createModalSandbox — execInSession()", () => {
     const body = JSON.parse(init.body as string) as {
       env: unknown;
       stdin: unknown;
+      cwd: unknown;
     };
     expect(body.env).toBeNull();
     expect(body.stdin).toBeNull();
+    expect(body.cwd).toBeNull();
+  });
+
+  it("forwards a caller-supplied cwd on the request body", async () => {
+    const fetchSpy = makeFetch(200, execBody);
+    const driver = makeSessionDriver(fetchSpy);
+
+    await driver.execInSession(makeExecReq({ cwd: "/work/repo/src" }));
+
+    const [, init] = lastCall(fetchSpy);
+    const body = JSON.parse(init.body as string) as { cwd: unknown };
+    expect(body.cwd).toBe("/work/repo/src");
+  });
+
+  it("maps the runner's resulting cwd into the result", async () => {
+    const driver = makeSessionDriver(
+      makeFetch(200, { ...execBody, cwd: "/work/repo" }),
+    );
+
+    const result = await driver.execInSession(makeExecReq());
+
+    expect(result.cwd).toBe("/work/repo");
+  });
+
+  it("leaves cwd undefined when a pre-cwd runner omits the field", async () => {
+    // Backward compatibility: a runner deployed before cwd support returns no
+    // `cwd` key. The nullish schema tolerates it and the driver reports
+    // undefined, so the caller keeps its prior directory instead of throwing.
+    const driver = makeSessionDriver(makeFetch(200, execBody));
+
+    const result = await driver.execInSession(makeExecReq());
+
+    expect(result.cwd).toBeUndefined();
   });
 
   it("surfaces gone: true when the runner reports the sandbox was reaped", async () => {

@@ -48,27 +48,31 @@ export default async function WorkbenchSkillsPage({ params }: PageProps) {
   const { ctx, canManage } = await resolveWorkbenchScope(orgSlug, workspaceSlug);
 
   // Fetch installed skills list.
+  //
+  // NOTE: do NOT pass { surface: "agent" } here. list_workspace_skills (like the
+  // other skill read/manage capabilities) is exposed only on ["api","mcp"], so
+  // asserting the "agent" surface makes the kernel throw surface_denied — which
+  // the catch below would swallow into a permanently-empty list (the bug where
+  // created skills never appeared). apps/app is a trusted server caller; it omits
+  // opts.surface so no surface allowlist is enforced (see equip-sources.ts).
   let skillItems: SkillListItem[] = [];
   try {
-    const result = await invoke("list_workspace_skills", {}, ctx, { surface: "agent" });
+    const result = await invoke("list_workspace_skills", {}, ctx);
     const typed = result as { skills: SkillListItem[] };
     skillItems = typed.skills ?? [];
   } catch {
     // Degrade gracefully — show empty state.
   }
 
-  // Fetch usage metrics for all skills (non-fatal).
+  // Fetch usage metrics for all skills (non-fatal). get_skill_metrics takes an
+  // optional skillId (omit → workspace-wide aggregation) and returns a `skills`
+  // array keyed per skill; we index it by slug to merge into the table.
   const metricsMap = new Map<string, SkillMetrics>();
   if (skillItems.length > 0) {
     try {
-      const metricsResult = await invoke(
-        "get_skill_metrics",
-        { slugs: skillItems.map((s) => s.slug) },
-        ctx,
-        { surface: "agent" },
-      );
-      const typed = metricsResult as { metrics: SkillMetrics[] };
-      for (const m of typed.metrics ?? []) {
+      const metricsResult = await invoke("get_skill_metrics", {}, ctx);
+      const typed = metricsResult as { skills: SkillMetrics[] };
+      for (const m of typed.skills ?? []) {
         metricsMap.set(m.slug, m);
       }
     } catch {

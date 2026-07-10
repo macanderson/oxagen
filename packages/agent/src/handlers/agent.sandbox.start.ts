@@ -50,6 +50,7 @@ export async function agentSandboxStartHandler(
     ttlSeconds: input.ttlSeconds,
     idleTimeoutSeconds: input.idleTimeoutSeconds,
     network,
+    ...(input.label ? { label: input.label } : {}),
     ...(environmentId ? { environmentId } : {}),
     ...(template?.runtime ? { imageRef: template.runtime } : {}),
     ...(template?.resources.vcpu !== undefined ? { vcpu: template.resources.vcpu } : {}),

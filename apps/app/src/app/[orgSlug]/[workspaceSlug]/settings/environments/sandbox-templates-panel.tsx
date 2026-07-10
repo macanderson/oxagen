@@ -206,7 +206,7 @@ export function SandboxTemplatesPanel(props: Props) {
                 <span className="text-sm font-medium">{env.name}</span>
                 <span className="text-xs text-muted-foreground">{env.slug}</span>
                 {env.isDefault && (
-                  <Badge variant="secondary" size="sm">
+                  <Badge variant="outline" size="sm">
                     ★ default env
                   </Badge>
                 )}
@@ -251,7 +251,7 @@ export function SandboxTemplatesPanel(props: Props) {
                           <div className="flex items-center gap-2">
                             <span className="font-medium">{t.name}</span>
                             {t.isDefault && (
-                              <Badge variant="secondary" size="sm">
+                              <Badge variant="outline" size="sm">
                                 ★ default
                               </Badge>
                             )}

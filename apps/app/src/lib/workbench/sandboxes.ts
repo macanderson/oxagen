@@ -23,6 +23,8 @@ export type SandboxStatus = "running" | "idle" | "stopped" | "gone";
 export interface SandboxSummary {
   sessionId: string;
   sessionKey: string | null;
+  /** Human-friendly name given when the sandbox was warmed, or null when unnamed. */
+  label: string | null;
   image: SandboxImage;
   status: SandboxStatus;
   driver: string;
@@ -120,8 +122,20 @@ export async function startSandbox(
   input: {
     image?: SandboxImage;
     sessionKey?: string;
+    /** Human-friendly name persisted on the session and shown in the list. */
+    label?: string;
     setupCmd?: string;
     network?: "allow" | "deny";
+    /**
+     * Warm from a saved sandbox template (sbx_…) instead of a bare image — the
+     * template's provider/runtime/resources/network + vault secret selection are
+     * frozen onto the session. `start_sandbox` accepts these; the previous
+     * helper silently dropped them, so warming from a real template was
+     * impossible from the app.
+     */
+    sandboxTemplateId?: string;
+    /** Workspace environment (env_…) whose vault secrets bind to the session. */
+    environmentId?: string;
   },
 ): Promise<SandboxStartResult> {
   return (await invoke("start_sandbox", input, ctx, {
@@ -131,7 +145,7 @@ export async function startSandbox(
 
 export async function runSandboxCommand(
   ctx: WorkbenchCtx,
-  input: { sessionId: string; command: string; timeoutMs?: number },
+  input: { sessionId: string; command: string; cwd?: string; timeoutMs?: number },
 ): Promise<SandboxExecResult> {
   return (await invoke("run_sandbox_command", input, ctx, {
     surface: "agent",

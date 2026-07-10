@@ -57,6 +57,7 @@ export async function agentSandboxExecHandler(
     timeoutMs: input.timeoutMs,
     env,
     stdin: input.stdin,
+    cwd: input.cwd,
   });
 
   // The sandbox was reaped (idle timeout / TTL / OOM). Restore from the last
@@ -79,6 +80,7 @@ export async function agentSandboxExecHandler(
       // still strip reserved caller keys, exactly like the first attempt.
       env,
       stdin: input.stdin,
+      cwd: input.cwd,
     });
     if (result.gone) {
       // Restore itself didn't stick — surface rather than loop.
@@ -97,6 +99,9 @@ export async function agentSandboxExecHandler(
     executionMs: result.durationMs,
     timedOut: result.timedOut,
     restored,
+    // Surface the post-command working directory so a stateful caller can thread
+    // it into the next exec. null when the driver couldn't capture it.
+    cwd: result.cwd ?? null,
   };
 }
 

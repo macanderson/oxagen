@@ -50,63 +50,12 @@ vi.mock("@oxagen/agent", () => ({
   materializeTools: mocks.materializeTools,
 }));
 
-vi.mock("@oxagen/database", () => ({
+// Spread the real module so new module-level `schema.<table>` projections in
+// transitively imported services never crash this suite at import time; only
+// the DB entrypoint is overridden.
+vi.mock("@oxagen/database", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@oxagen/database")>()),
   withTenantDb: mocks.withTenantDb,
-  schema: {
-    messages: {
-      conversationId: "conversation_id",
-      orgId: "org_id",
-      workspaceId: "workspace_id",
-      role: "role",
-      content: "content",
-      createdAt: "created_at",
-    },
-    conversations: { id: "id" },
-    agents: {
-      id: "id",
-      activeVersionId: "active_version_id",
-      workspaceId: "workspace_id",
-      slug: "slug",
-    },
-    // Required by vault-secret-service module-level KEY_COLUMNS initializer.
-    secretKeys: {
-      id: "id",
-      publicId: "public_id",
-      key: "key",
-      sensitive: "sensitive",
-      memo: "memo",
-      defaultValueEnc: "default_value_enc",
-      defaultValueText: "default_value_text",
-      defaultValueKmsKeyId: "default_value_kms_key_id",
-      workspaceId: "workspace_id",
-      deletedAt: "deleted_at",
-      environmentId: "environment_id",
-    },
-    secretValues: {
-      secretKeyId: "secret_key_id",
-      environmentId: "environment_id",
-    },
-    environments: {
-      id: "id",
-      publicId: "public_id",
-      workspaceId: "workspace_id",
-      deletedAt: "deleted_at",
-    },
-    // Required by packages/agent's _sandbox-session module-level SESSION_COLUMNS
-    // initializer, transitively reached via runCodingAgent and the agent.sandbox.*
-    // handlers registered through @oxagen/handlers (PR #644 chat→runCodingAgent).
-    sandboxSessions: {
-      id: "id",
-      publicId: "public_id",
-      sandboxId: "sandbox_id",
-      snapshotId: "snapshot_id",
-      image: "image",
-      status: "status",
-      metadata: "metadata",
-      workspaceId: "workspace_id",
-      sessionKey: "session_key",
-    },
-  },
 }));
 
 vi.mock("@oxagen/tenancy", () => ({

@@ -273,3 +273,71 @@ def test_create_sandbox_drops_unsupported_kwargs_one_at_a_time(
     assert len(seen) == 3
     assert all("memory" in k for k in seen)
     assert "ephemeral_disk" not in seen[-1] and "cpu" not in seen[-1]
+
+
+# ── _split_cwd_trailer (durable-terminal cwd persistence) ─────────────────────
+
+
+def test_split_cwd_trailer_extracts_cwd_and_strips_it() -> None:
+    # The trampoline appends "\x1e__OXAGEN_CWD__=<pwd>" with no trailing newline.
+    raw = "file-a.txt\nfile-b.txt\n" + runner._CWD_SENTINEL + "/work/repo"
+    stdout, cwd = runner._split_cwd_trailer(raw)
+    assert cwd == "/work/repo"
+    assert stdout == "file-a.txt\nfile-b.txt\n"
+    # The RS sentinel byte must not leak into the returned stdout.
+    assert "\x1e" not in stdout
+    assert "__OXAGEN_CWD__" not in stdout
+
+
+def test_split_cwd_trailer_handles_empty_command_output() -> None:
+    # A command that prints nothing (e.g. `cd /tmp`) still reports its new cwd.
+    raw = runner._CWD_SENTINEL + "/tmp"
+    stdout, cwd = runner._split_cwd_trailer(raw)
+    assert stdout == ""
+    assert cwd == "/tmp"
+
+
+def test_split_cwd_trailer_absent_returns_none() -> None:
+    # No trailer (command self-`exit`ed, timed out, or a custom image without the
+    # trampoline) → cwd None so the caller keeps its prior directory; stdout intact.
+    stdout, cwd = runner._split_cwd_trailer("plain output, no sentinel\n")
+    assert stdout == "plain output, no sentinel\n"
+    assert cwd is None
+
+
+def test_split_cwd_trailer_uses_last_occurrence() -> None:
+    # If the command itself printed the sentinel bytes, our always-last trailer
+    # (rfind) still wins so the reported cwd is the real one.
+    raw = "echoed " + runner._CWD_SENTINEL + "/decoy" + runner._CWD_SENTINEL + "/real"
+    stdout, cwd = runner._split_cwd_trailer(raw)
+    assert cwd == "/real"
+    assert stdout == "echoed " + runner._CWD_SENTINEL + "/decoy"
+
+
+def test_split_cwd_trailer_blank_pwd_is_none() -> None:
+    # `$(pwd)` can be empty if the cwd was deleted; treat that as "not captured".
+    stdout, cwd = runner._split_cwd_trailer("out\n" + runner._CWD_SENTINEL)
+    assert stdout == "out\n"
+    assert cwd is None
+
+
+def test_exec_trampoline_restores_and_reports_cwd() -> None:
+    # Guard the shell contract the split logic depends on: the trampoline must
+    # cd into $OXAGEN_CWD and emit the final pwd behind the sentinel.
+    t = runner._FAST_ALIAS_TRAMPOLINE
+    assert 'cd "$OXAGEN_CWD"' in t
+    assert 'eval "$OXAGEN_EXEC_CMD"' in t
+    # Octal \036 is the RS byte the Python sentinel matches on.
+    assert "\\036__OXAGEN_CWD__=%s" in t
+    # The user command's exit code is preserved past the trailer.
+    assert "__oxagen_rc=$?" in t
+    assert "exit $__oxagen_rc" in t
+
+
+def test_exec_request_cwd_defaults_to_none() -> None:
+    req = runner.SandboxExecRequest(sandbox_id="sb-1", command="ls", timeout_ms=1_000)
+    assert req.cwd is None
+    req2 = runner.SandboxExecRequest(
+        sandbox_id="sb-1", command="ls", timeout_ms=1_000, cwd="/work"
+    )
+    assert req2.cwd == "/work"

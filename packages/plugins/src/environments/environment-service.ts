@@ -31,15 +31,19 @@ export function isValidEnvironmentSlug(slug: string): boolean {
   return ENVIRONMENT_SLUG_PATTERN.test(slug);
 }
 
-const ENV_COLUMNS = {
-  id: schema.environments.id,
-  publicId: schema.environments.publicId,
-  name: schema.environments.name,
-  slug: schema.environments.slug,
-  description: schema.environments.description,
-  isDefault: schema.environments.isDefault,
-  isActive: schema.environments.isActive,
-} as const;
+// Built per call, never at module scope: test suites mock @oxagen/database
+// with a partial `schema`, and a module-level `schema.<table>.<col>` access
+// crashes every importer at load time.
+const envColumns = () =>
+  ({
+    id: schema.environments.id,
+    publicId: schema.environments.publicId,
+    name: schema.environments.name,
+    slug: schema.environments.slug,
+    description: schema.environments.description,
+    isDefault: schema.environments.isDefault,
+    isActive: schema.environments.isActive,
+  }) as const;
 
 interface EnvRow {
   id: string;
@@ -64,7 +68,7 @@ function toSummary(row: EnvRow): EnvironmentSummary {
 
 async function loadEnv(tx: Tx, workspaceId: string, publicId: string): Promise<EnvRow> {
   const [row] = await tx
-    .select(ENV_COLUMNS)
+    .select(envColumns())
     .from(schema.environments)
     .where(
       and(
@@ -100,7 +104,7 @@ export async function createEnvironment(
         createdByUserId: actor.userId ?? null,
         updatedByUserId: actor.userId ?? null,
       })
-      .returning(ENV_COLUMNS);
+      .returning(envColumns());
     if (!row) throw new Error("[environments] insert returned no row");
     return toSummary(row);
   });
@@ -109,7 +113,7 @@ export async function createEnvironment(
 export async function listEnvironments(actor: EnvironmentActor): Promise<EnvironmentSummary[]> {
   return withTenantDb(async (tx) => {
     const rows = await tx
-      .select(ENV_COLUMNS)
+      .select(envColumns())
       .from(schema.environments)
       .where(
         and(
@@ -163,7 +167,7 @@ export async function updateEnvironment(
         updatedByUserId: actor.userId ?? null,
       })
       .where(eq(schema.environments.id, existing.id))
-      .returning(ENV_COLUMNS);
+      .returning(envColumns());
     if (!row) throw new Error("[environments] update returned no row");
     return toSummary(row);
   });
@@ -219,7 +223,7 @@ export async function setDefaultEnvironment(
         updatedByUserId: actor.userId ?? null,
       })
       .where(eq(schema.environments.id, target.id))
-      .returning(ENV_COLUMNS);
+      .returning(envColumns());
     if (!row) throw new Error("[environments] set_default returned no row");
     return toSummary(row);
   });

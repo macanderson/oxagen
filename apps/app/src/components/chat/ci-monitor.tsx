@@ -94,7 +94,7 @@ export function CIMonitor({ jobs, branch, onRefresh, isLoading = false }: CIMoni
               {statusIcon[job.status]}
               <span className="truncate text-sm font-medium">{job.name}</span>
             </div>
-            <Badge className={statusColor[job.status]} variant="secondary">
+            <Badge className={statusColor[job.status]} variant="outline">
               {job.status}
             </Badge>
           </a>
