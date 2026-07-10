@@ -18,7 +18,17 @@
 //   access_requests            → arq_
 //   principal_role_assignments → pra_  (OXA-1498)
 
-import { boolean, check, index, integer, jsonb, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import {
+  boolean,
+  check,
+  index,
+  integer,
+  jsonb,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { iamSchema } from "./_schemas";
 import { auditMixin, idMixin, softDeleteMixin } from "./_mixins";
@@ -114,7 +124,10 @@ export const roleGrants = iamSchema.table(
   },
   (t) => ({
     // Hot path: "what effect does this role have on this capability?"
-    roleCapabilityIdx: index("role_grants_role_capability_idx").on(t.roleId, t.capabilityId),
+    roleCapabilityIdx: index("role_grants_role_capability_idx").on(
+      t.roleId,
+      t.capabilityId,
+    ),
     orgIdx: index("role_grants_org_idx").on(t.orgId),
     effectCheck: check(
       "role_grants_effect_check",
@@ -148,6 +161,13 @@ export const accessRequests = iamSchema.table(
   (t) => ({
     requesterIdx: index("access_requests_requester_idx").on(t.requesterId),
     orgStatusIdx: index("access_requests_org_status_idx").on(t.orgId, t.status),
+    // Race-safe dedupe: at most one 'pending' request per
+    // (org, requester, capability, scope) tuple. createAccessRequest() catches
+    // the resulting 23505 and re-selects the surviving row rather than relying
+    // solely on its app-side SELECT-then-INSERT pre-check.
+    pendingDedupeIdx: uniqueIndex("access_requests_pending_dedupe_idx")
+      .on(t.orgId, t.requesterId, t.capabilityId, t.scopeKind, t.scopeId)
+      .where(sql`${t.status} = 'pending'`),
     statusCheck: check(
       "access_requests_status_check",
       sql`${t.status} IN ('pending', 'approved', 'denied', 'expired')`,
@@ -237,5 +257,7 @@ export type NewIamRoleGrant = typeof roleGrants.$inferInsert;
 export type IamAccessRequest = typeof accessRequests.$inferSelect;
 export type NewIamAccessRequest = typeof accessRequests.$inferInsert;
 
-export type IamPrincipalRoleAssignment = typeof principalRoleAssignments.$inferSelect;
-export type NewIamPrincipalRoleAssignment = typeof principalRoleAssignments.$inferInsert;
+export type IamPrincipalRoleAssignment =
+  typeof principalRoleAssignments.$inferSelect;
+export type NewIamPrincipalRoleAssignment =
+  typeof principalRoleAssignments.$inferInsert;
