@@ -11,7 +11,7 @@
 // STATE, not STRUCTURE: this answers "does the code compile right now?" — a
 // runtime STATE question. It does NOT answer "what type does this symbol have?"
 // or "what depends on this module?" — those are STRUCTURE questions for
-// code_graph/code_map, which read the graph without executing the compiler.
+// code_graph, which reads the graph without executing the compiler.
 
 import { tool, type Tool } from "ai";
 import { z } from "zod";
@@ -28,7 +28,11 @@ import { parseTscErrors, shQuote, MAX_BUILD_ERRORS } from "./parse";
 const DEFAULT_TIMEOUT_MS = 300_000;
 
 /** Per-verbosity ceiling on reported compiler errors (minimal = the default cap). */
-export const BUILD_ERROR_CAPS = { minimal: MAX_BUILD_ERRORS, standard: 60, verbose: 120 } as const;
+export const BUILD_ERROR_CAPS = {
+  minimal: MAX_BUILD_ERRORS,
+  standard: 60,
+  verbose: 120,
+} as const;
 
 interface StructuredToolDeps {
   signal?: AbortSignal;
@@ -62,7 +66,10 @@ export function buildCompileCommand(opts: {
     : `pnpm exec tsc --noEmit --pretty false`;
 }
 
-export function buildBuildPackageRunTool(workspace: Workspace, deps: StructuredToolDeps): Tool {
+export function buildBuildPackageRunTool(
+  workspace: Workspace,
+  deps: StructuredToolDeps,
+): Tool {
   return tool({
     description:
       "Typecheck (default) or build a package and return deduped, file-grouped compiler " +
@@ -74,7 +81,7 @@ export function buildBuildPackageRunTool(workspace: Workspace, deps: StructuredT
       "`typecheck` is the fast feedback loop; use mode `build` only when you specifically need " +
       "the full build. Anti-triggers: to RUN tests use `test_unit_run`; for arbitrary shell use " +
       "`bash`. This answers the STATE question 'does it compile?' — to ask what a symbol's type " +
-      "is or what depends on a module (structure), use `code_graph`/`code_map`.",
+      "is or what depends on a module (structure), use `code_graph`.",
     inputSchema: z.object({
       scope: scopeSchema
         .optional()
@@ -84,7 +91,9 @@ export function buildBuildPackageRunTool(workspace: Workspace, deps: StructuredT
       mode: z
         .enum(["typecheck", "build"])
         .optional()
-        .describe("'typecheck' (default, fast) or 'build' (full package build)."),
+        .describe(
+          "'typecheck' (default, fast) or 'build' (full package build).",
+        ),
       verbosity: verbositySchema.optional(),
       limit: limitSchema(BUILD_ERROR_CAPS.verbose).describe(
         `Max compiler errors to report (1–${BUILD_ERROR_CAPS.verbose}). Omit to let verbosity choose.`,
@@ -92,7 +101,11 @@ export function buildBuildPackageRunTool(workspace: Workspace, deps: StructuredT
     }),
     execute: async ({ scope, mode, verbosity, limit }) => {
       const resolvedMode = mode ?? "typecheck";
-      const maxErrors = resolveLimit((verbosity ?? "minimal") as Verbosity, BUILD_ERROR_CAPS, limit);
+      const maxErrors = resolveLimit(
+        (verbosity ?? "minimal") as Verbosity,
+        BUILD_ERROR_CAPS,
+        limit,
+      );
       const command = buildCompileCommand({
         pkg: scope?.package,
         files: scope?.files,
@@ -102,9 +115,15 @@ export function buildBuildPackageRunTool(workspace: Workspace, deps: StructuredT
       const start = Date.now();
       let result;
       try {
-        result = await workspace.exec(command, { timeoutMs: DEFAULT_TIMEOUT_MS, signal: deps.signal });
+        result = await workspace.exec(command, {
+          timeoutMs: DEFAULT_TIMEOUT_MS,
+          signal: deps.signal,
+        });
       } catch (err) {
-        return { status: "error" as const, error: `Failed to run ${resolvedMode}: ${err instanceof Error ? err.message : String(err)}` };
+        return {
+          status: "error" as const,
+          error: `Failed to run ${resolvedMode}: ${err instanceof Error ? err.message : String(err)}`,
+        };
       }
       deps.onEvent?.({ type: "command", command, exitCode: result.exitCode });
       const durationMs = Date.now() - start;
@@ -119,7 +138,13 @@ export function buildBuildPackageRunTool(workspace: Workspace, deps: StructuredT
       const ok = result.exitCode === 0 && parsed.errorCount === 0;
       if (ok) {
         // Success: never echo the raw output — a compact status is all the model needs.
-        return { status: "ok" as const, mode: resolvedMode, errorCount: 0, errors: [], durationMs };
+        return {
+          status: "ok" as const,
+          mode: resolvedMode,
+          errorCount: 0,
+          errors: [],
+          durationMs,
+        };
       }
       return {
         status: "fail" as const,

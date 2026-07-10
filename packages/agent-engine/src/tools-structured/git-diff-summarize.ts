@@ -10,7 +10,7 @@
 // STATE, not STRUCTURE: the diff is the uncommitted STATE of the tree. The
 // per-file `symbols` are the enclosing declarations git names in its hunk
 // headers — they are code-graph NODE NAMES, meant to be piped straight into
-// `code_graph`/`code_map` to answer the STRUCTURE questions this tool never does
+// `code_graph` to answer the STRUCTURE questions this tool never does
 // (callers of a changed function, its type, its neighbours). This tool is
 // deliberately AST-free and does no structural search.
 
@@ -28,7 +28,11 @@ import { combineDiff, shQuote, MAX_DIFF_FILES } from "./parse";
 const DEFAULT_TIMEOUT_MS = 60_000;
 
 /** Per-verbosity ceiling on the reported file list (minimal = the default cap). */
-export const DIFF_FILE_CAPS = { minimal: MAX_DIFF_FILES, standard: 100, verbose: 200 } as const;
+export const DIFF_FILE_CAPS = {
+  minimal: MAX_DIFF_FILES,
+  standard: 100,
+  verbose: 200,
+} as const;
 
 interface StructuredToolDeps {
   signal?: AbortSignal;
@@ -48,7 +52,10 @@ export function buildDiffCommands(opts: { base: string; scope?: string }): {
   };
 }
 
-export function buildGitDiffSummarizeTool(workspace: Workspace, deps: StructuredToolDeps): Tool {
+export function buildGitDiffSummarizeTool(
+  workspace: Workspace,
+  deps: StructuredToolDeps,
+): Tool {
   return tool({
     description:
       "Summarize the current diff as a typed per-file overview: change type, +/- counts, and " +
@@ -63,7 +70,9 @@ export function buildGitDiffSummarizeTool(workspace: Workspace, deps: Structured
       ref: z
         .string()
         .optional()
-        .describe("Diff base (default: HEAD — i.e. all working-tree changes vs the last commit). Pass a branch/sha to compare against it."),
+        .describe(
+          "Diff base (default: HEAD — i.e. all working-tree changes vs the last commit). Pass a branch/sha to compare against it.",
+        ),
       path: z
         .string()
         .optional()
@@ -75,28 +84,51 @@ export function buildGitDiffSummarizeTool(workspace: Workspace, deps: Structured
     }),
     execute: async ({ ref, path, verbosity, limit }) => {
       const base = ref ?? "HEAD";
-      const maxFiles = resolveLimit((verbosity ?? "minimal") as Verbosity, DIFF_FILE_CAPS, limit);
+      const maxFiles = resolveLimit(
+        (verbosity ?? "minimal") as Verbosity,
+        DIFF_FILE_CAPS,
+        limit,
+      );
       const { numstat, u0 } = buildDiffCommands({ base, scope: path });
       let numstatRes;
       let u0Res;
       try {
         [numstatRes, u0Res] = await Promise.all([
-          workspace.exec(numstat, { timeoutMs: DEFAULT_TIMEOUT_MS, signal: deps.signal }),
-          workspace.exec(u0, { timeoutMs: DEFAULT_TIMEOUT_MS, signal: deps.signal }),
+          workspace.exec(numstat, {
+            timeoutMs: DEFAULT_TIMEOUT_MS,
+            signal: deps.signal,
+          }),
+          workspace.exec(u0, {
+            timeoutMs: DEFAULT_TIMEOUT_MS,
+            signal: deps.signal,
+          }),
         ]);
       } catch (err) {
-        return { error: `Failed to run git diff: ${err instanceof Error ? err.message : String(err)}` };
+        return {
+          error: `Failed to run git diff: ${err instanceof Error ? err.message : String(err)}`,
+        };
       }
-      deps.onEvent?.({ type: "command", command: numstat, exitCode: numstatRes.exitCode });
+      deps.onEvent?.({
+        type: "command",
+        command: numstat,
+        exitCode: numstatRes.exitCode,
+      });
 
       if (numstatRes.exitCode !== 0) {
-        const msg = (numstatRes.stderr || numstatRes.stdout).trim().slice(0, 500);
+        const msg = (numstatRes.stderr || numstatRes.stdout)
+          .trim()
+          .slice(0, 500);
         return { error: `git diff failed: ${msg || "(no output)"}` };
       }
 
       const summary = combineDiff(numstatRes.stdout, u0Res.stdout, maxFiles);
       if (summary.files.length === 0) {
-        return { files: [], totals: summary.totals, truncated: false, note: `No changes vs ${base}.` };
+        return {
+          files: [],
+          totals: summary.totals,
+          truncated: false,
+          note: `No changes vs ${base}.`,
+        };
       }
       return summary;
     },
