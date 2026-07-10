@@ -21,6 +21,11 @@ const widgetTypeEnum = z.enum([
   "secret",
   "number",
   "textarea",
+  // Multi-line monospace input for SQL / JSON / payload config. Declared by the
+  // custom-sql, custom-webhook, and google-bigquery connector schemas; omitting
+  // it here made get_plugin_schema fail OUTPUT validation (invalid_output → 500)
+  // for exactly those connectors.
+  "code",
   "select",
   "multi-select",
   "tag-input",

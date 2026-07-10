@@ -8,8 +8,9 @@
 //      last filesystem snapshot. DB work is deliberately split into small
 //      `withTenantDb` calls so no transaction is held open across a multi-second
 //      Modal exec/HTTP round-trip.
+import pino from "pino";
 import { withTenantDb, schema } from "@oxagen/database";
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import {
   getSandbox,
   isSandboxAvailable,
@@ -20,6 +21,11 @@ import {
 } from "@oxagen/sandbox";
 import type { SecretSelection } from "@oxagen/plugins";
 import type { CapabilityContext } from "../types";
+
+const logger = pino({
+  level: process.env.LOG_LEVEL ?? "info",
+  base: { app: "agent.sandbox-session" },
+});
 
 export class DurableSandboxUnavailableError extends Error {
   readonly code = "durable_sandbox_unavailable";
@@ -66,6 +72,42 @@ export function requireDurableDriver(provider?: string): DurableSandboxDriver {
   return driver;
 }
 
+/**
+ * Resolve the durable driver for an EXISTING session, keyed on the provider that
+ * actually created it (the row's `driver` column) rather than the deployment
+ * default — vendor neutrality for the whole session lifecycle (exec, snapshot,
+ * stop, reaper reconcile). A null column falls back to the deployment default,
+ * so pre-column rows still resolve.
+ *
+ * Throwing variant: for handlers (exec/file/log/snapshot) that cannot proceed
+ * without a live driver. Fails closed with DurableSandboxUnavailableError.
+ */
+export function requireDurableDriverForRow(driver: string | null): DurableSandboxDriver {
+  return requireDurableDriver(driver ?? undefined);
+}
+
+/**
+ * Non-throwing variant of {@link requireDurableDriverForRow}: resolve the
+ * session's driver, or return null when no durable driver is available for that
+ * provider (unconfigured, missing creds, or non-session-capable). Lets a caller
+ * that only needs a best-effort provider call — `stop_sandbox` retiring a row,
+ * `list_sandboxes` reconciling status — still do its Postgres work when the
+ * provider is unreachable instead of throwing. Never resolves the wrong
+ * provider: an explicit `driver` column that cannot be built yields null, not a
+ * silent fallback to the deployment default.
+ */
+export function resolveSessionDriver(driver: string | null): DurableSandboxDriver | null {
+  if (!isSandboxAvailable()) return null;
+  try {
+    const resolved = getSandbox(driver ?? undefined);
+    return isDurableSandboxDriver(resolved) ? resolved : null;
+  } catch {
+    // getSandbox(provider) throws for an unknown/unconfigured provider (e.g.
+    // "modal" without runner creds). Treat as unavailable, not fatal.
+    return null;
+  }
+}
+
 /** Persisted on the registry row so a restored session reuses the same spec. */
 export interface SessionMeta {
   memoryMb: number;
@@ -109,6 +151,13 @@ export interface SessionRow {
   snapshotId: string | null;
   image: SandboxImageKind;
   status: string;
+  /**
+   * Provider that created this session (the `driver` column, e.g. "modal").
+   * Every lifecycle op (exec/snapshot/stop/reaper) resolves the driver from
+   * THIS, not the deployment default, so a session never targets the wrong
+   * provider. Null only for pre-column legacy rows → fall back to the default.
+   */
+  driver: string | null;
   metadata: SessionMeta;
 }
 
@@ -119,6 +168,7 @@ const SESSION_COLUMNS = {
   snapshotId: schema.sandboxSessions.snapshotId,
   image: schema.sandboxSessions.image,
   status: schema.sandboxSessions.status,
+  driver: schema.sandboxSessions.driver,
   metadata: schema.sandboxSessions.metadata,
 } as const;
 
@@ -131,6 +181,7 @@ function toRow(raw: Record<string, unknown> | undefined): SessionRow | null {
     snapshotId: (raw.snapshotId as string | null) ?? null,
     image: raw.image as SandboxImageKind,
     status: raw.status as string,
+    driver: (raw.driver as string | null) ?? null,
     metadata: (raw.metadata as SessionMeta | null) ?? {
       memoryMb: 2048,
       ttlSeconds: 86_400,
@@ -178,24 +229,62 @@ export async function findReusableSession(
   });
 }
 
-/** Look a session up by its opaque public id, scoped to the workspace. */
+/**
+ * Look a session up by its opaque public id, scoped to the workspace.
+ *
+ * By default soft-deleted rows are excluded (an already-stopped session reads as
+ * "not found"). Pass `includeDeleted: true` so a caller that must be idempotent
+ * over a retired session — `stop_sandbox` returning success for a second stop —
+ * can still observe the terminal row.
+ */
 export async function getSessionByPublicId(
   ctx: CapabilityContext,
   publicId: string,
+  opts: { includeDeleted?: boolean } = {},
 ): Promise<SessionRow | null> {
   return withTenantDb(async (tx) => {
+    const conditions = [
+      eq(schema.sandboxSessions.publicId, publicId),
+      eq(schema.sandboxSessions.workspaceId, ctx.workspaceId),
+    ];
+    if (!opts.includeDeleted) {
+      conditions.push(isNull(schema.sandboxSessions.deletedAt));
+    }
     const [raw] = await tx
       .select(SESSION_COLUMNS)
       .from(schema.sandboxSessions)
-      .where(
-        and(
-          eq(schema.sandboxSessions.publicId, publicId),
-          eq(schema.sandboxSessions.workspaceId, ctx.workspaceId),
-          isNull(schema.sandboxSessions.deletedAt),
-        ),
-      )
+      .where(and(...conditions))
       .limit(1);
     return toRow(raw);
+  });
+}
+
+/**
+ * Merge a partial patch into a session's metadata jsonb WITHOUT clobbering the
+ * other keys. Uses the Postgres `||` jsonb concat operator so a concurrent
+ * writer's keys survive — `rename_sandbox` sets `label` while `start`/`exec` may
+ * hold the frozen session spec (memoryMb, secretSelection, …) in the same blob.
+ * Tenant-scoped; bumps `updated_at` (not `$onUpdate`-managed on this table).
+ */
+export async function updateSessionMetadata(
+  ctx: CapabilityContext,
+  id: string,
+  patch: Record<string, unknown>,
+): Promise<void> {
+  await withTenantDb(async (tx) => {
+    await tx
+      .update(schema.sandboxSessions)
+      .set({
+        metadata: sql`${schema.sandboxSessions.metadata} || ${JSON.stringify(patch)}::jsonb`,
+        updatedAt: new Date(),
+        updatedByUserId: ctx.userId,
+      })
+      .where(
+        and(
+          eq(schema.sandboxSessions.id, id),
+          eq(schema.sandboxSessions.workspaceId, ctx.workspaceId),
+        ),
+      );
   });
 }
 

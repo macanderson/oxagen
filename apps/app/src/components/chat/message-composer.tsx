@@ -1,8 +1,6 @@
 "use client";
 import * as React from "react";
-import { Badge } from "@/components/ui/badge";
 import {
-  Bot,
   Brain,
   ChevronDown,
   ChevronUp,
@@ -32,10 +30,7 @@ import {
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-media-query";
-import {
-  supportsReasoning,
-  getModel,
-} from "@oxagen/ai/catalog";
+import { supportsReasoning, getModel } from "@oxagen/ai/catalog";
 import type { ResolvedTierCatalog, EffortLevel } from "@oxagen/ai/catalog";
 import {
   ModelPicker,
@@ -53,7 +48,10 @@ import { SlashCommandMenu } from "./slash-command-menu";
 // Import from the client-safe subpath, NOT the @oxagen/ai barrel: the barrel
 // pulls telemetry/clickhouse/opentelemetry (async_hooks) into the client bundle
 // and breaks the build. slash-commands.ts is dependency-free.
-import { matchSlashCommands, type SlashCommand } from "@oxagen/ai/slash-commands";
+import {
+  matchSlashCommands,
+  type SlashCommand,
+} from "@oxagen/ai/slash-commands";
 // Same client-safe-subpath rule as slash-commands: mentions.ts is dependency-free.
 import {
   applyMentionPlaceholders,
@@ -68,7 +66,9 @@ import { useMentionSearch } from "./mentions/use-mention-search";
 import type { MentionSearchResult } from "./mentions/mention-meta";
 import type { RepoOption } from "./repo-selector";
 import type { EnvironmentOption } from "./environment-selector";
-import { AgentSelector, type AgentOption } from "./agent-selector";
+import type { AgentOption } from "./agent-picker/agent-picker-types";
+import { AgentContextChip } from "./agent-picker/agent-context-chip";
+import { useComposerSelectionState } from "./agent-picker/chat-selection-context";
 import {
   pinStorageKey,
   readStoredPins,
@@ -77,7 +77,11 @@ import {
   DRAFT_PREFIX,
 } from "./pinned-context";
 import { MessageQueue } from "./message-queue";
-import { AttachmentChip, hasInFlightUploads, type PendingAttachment } from "./attachment-chip";
+import {
+  AttachmentChip,
+  hasInFlightUploads,
+  type PendingAttachment,
+} from "./attachment-chip";
 import { extractVideoFrames } from "./extract-video-frames";
 
 /** Images attach directly; videos attach too (Phase 2) — a video-capable model
@@ -113,7 +117,9 @@ interface ComposerMention extends PendingMention {
   description: string | null;
 }
 
-function toUploadedMeta(attachments: PendingAttachment[]): UploadedAttachmentMeta[] {
+function toUploadedMeta(
+  attachments: PendingAttachment[],
+): UploadedAttachmentMeta[] {
   // Map each video attachment's LOCAL id → its server publicId, so a keyframe
   // (which references the video by local id, created before the video finished
   // uploading) can be linked to the real publicId at submit time.
@@ -123,33 +129,47 @@ function toUploadedMeta(attachments: PendingAttachment[]): UploadedAttachmentMet
       videoPublicIdByLocalId.set(a.id, a.publicId);
     }
   }
-  return attachments
-    .filter(
-      (a): a is PendingAttachment & Required<Pick<PendingAttachment, "publicId" | "kind" | "mimeType" | "url" | "name">> =>
-        a.status === "uploaded" &&
-        a.publicId !== undefined &&
-        a.kind !== undefined &&
-        a.mimeType !== undefined &&
-        a.url !== undefined &&
-        a.name !== undefined,
-    )
-    // Drop an orphan keyframe whose source video failed to upload — sending it
-    // as a plain image would misrepresent it as a user-picked picture.
-    .filter(
-      (a) =>
-        a.keyframeForVideoLocalId === undefined ||
-        videoPublicIdByLocalId.has(a.keyframeForVideoLocalId),
-    )
-    .map((a) => ({
-      publicId: a.publicId,
-      kind: a.kind,
-      name: a.name,
-      mimeType: a.mimeType,
-      url: a.url,
-      ...(a.keyframeForVideoLocalId
-        ? { keyframeForVideo: videoPublicIdByLocalId.get(a.keyframeForVideoLocalId)! }
-        : {}),
-    }));
+  return (
+    attachments
+      .filter(
+        (
+          a,
+        ): a is PendingAttachment &
+          Required<
+            Pick<
+              PendingAttachment,
+              "publicId" | "kind" | "mimeType" | "url" | "name"
+            >
+          > =>
+          a.status === "uploaded" &&
+          a.publicId !== undefined &&
+          a.kind !== undefined &&
+          a.mimeType !== undefined &&
+          a.url !== undefined &&
+          a.name !== undefined,
+      )
+      // Drop an orphan keyframe whose source video failed to upload — sending it
+      // as a plain image would misrepresent it as a user-picked picture.
+      .filter(
+        (a) =>
+          a.keyframeForVideoLocalId === undefined ||
+          videoPublicIdByLocalId.has(a.keyframeForVideoLocalId),
+      )
+      .map((a) => ({
+        publicId: a.publicId,
+        kind: a.kind,
+        name: a.name,
+        mimeType: a.mimeType,
+        url: a.url,
+        ...(a.keyframeForVideoLocalId
+          ? {
+              keyframeForVideo: videoPublicIdByLocalId.get(
+                a.keyframeForVideoLocalId,
+              )!,
+            }
+          : {}),
+      }))
+  );
 }
 
 /** Build the per-turn budget wire payload from a model-state snapshot. Shared
@@ -201,7 +221,9 @@ function codePayload(
 }
 
 export interface ComposerAction {
-  (formData: FormData): Promise<{
+  (
+    formData: FormData,
+  ): Promise<{
     ok: boolean;
     error?: string;
     // sendMessageAction returns these on success so the caller can start the
@@ -243,7 +265,10 @@ export const COMPOSER_COLLAPSED_STORAGE_KEY = "oxagen.chat.composerCollapsed";
 
 function persistComposerCollapsed(collapsed: boolean) {
   try {
-    window.localStorage.setItem(COMPOSER_COLLAPSED_STORAGE_KEY, collapsed ? "1" : "0");
+    window.localStorage.setItem(
+      COMPOSER_COLLAPSED_STORAGE_KEY,
+      collapsed ? "1" : "0",
+    );
   } catch {
     // Private mode / storage quota — the preference just doesn't persist.
   }
@@ -265,11 +290,14 @@ export function MessageComposer({
   availableRepos,
   availableEnvironments,
   availableAgents,
+  defaultRepoKey,
+  defaultEnvId,
+  defaultAgentId,
+  onSetDefaultAgent,
   workspaceBudgetGovernance,
   onInputHasContentChange,
   orgSlug,
   workspaceSlug,
-  boundAgentName,
   codeSessionPr,
 }: {
   conversationId: string | null;
@@ -305,6 +333,14 @@ export function MessageComposer({
   availableEnvironments?: EnvironmentOption[];
   /** Selectable agents for the agent picker; a code agent governs code mode. */
   availableAgents?: AgentOption[];
+  /** Prefill for a code agent's repo session (a `RepoOption.key`); from workspace prefs. */
+  defaultRepoKey?: string | null;
+  /** Prefill for a code agent's environment session; from workspace prefs. */
+  defaultEnvId?: string | null;
+  /** The workspace user's current default agent (agt_… public id), or null. */
+  defaultAgentId?: string | null;
+  /** Toggle the workspace default agent from the picker's star. Omitted ⇒ star hidden. */
+  onSetDefaultAgent?: (agentId: string | null) => void;
   /**
    * Workspace-level per-turn budget governance (OXA-2081), resolved
    * server-side via `workspace.budget.policy.read`. Null/omitted ⇒ no
@@ -317,13 +353,6 @@ export function MessageComposer({
    * `false` → input is empty / cleared (show suggested prompts).
    */
   onInputHasContentChange?: (hasContent: boolean) => void;
-  /**
-   * Human name of the published agent this session is bound to (Ask page
-   * ?agent=…). When set, the composer shows a "Session bound to: <name>"
-   * indicator so the user knows the agent's instructions/tools are applied to
-   * every turn. Null/omitted ⇒ normal unbound chat (no indicator).
-   */
-  boundAgentName?: string | null;
   /**
    * The pull request the coding agent has opened for this conversation, if any.
    * Rendered as a compact "PR #123 ●" chip in the composer footer whose status
@@ -345,17 +374,31 @@ export function MessageComposer({
       workspaceBudgetGovernance ?? null,
     ),
   );
-  const [activeServerIds, setActiveServerIds] = React.useState<Set<string>>(new Set());
+  const [activeServerIds, setActiveServerIds] = React.useState<Set<string>>(
+    new Set(),
+  );
 
   // ── Code mode (OXA app-code-mode) ─────────────────────────────────────────
   // When on, a coding turn runs in a sandbox against a selected repo +
   // environment — both are REQUIRED before the send gate opens (see
   // `codeGateBlocked` below).
   const [manualCodeMode, setManualCodeMode] = React.useState(false);
-  const [selectedRepoKey, setSelectedRepoKey] = React.useState<string | null>(null);
-  const [selectedEnvId, setSelectedEnvId] = React.useState<string | null>(null);
-  const selectedRepo = availableRepos?.find((r) => r.key === selectedRepoKey) ?? null;
-  const selectedEnv = availableEnvironments?.find((e) => e.id === selectedEnvId) ?? null;
+  // Agent + code-session (repo/env) selection lives in a shared store so the
+  // composer chip and the empty-state gallery drive the SAME selection. Without
+  // a provider (a bare composer in tests) this transparently falls back to a
+  // self-contained local store, so the composer behaves identically either way.
+  const {
+    selectedAgentId,
+    selectedRepoKey,
+    selectedEnvId,
+    setSelectedRepoKey,
+    setSelectedEnvId,
+    applyAgentSelection,
+  } = useComposerSelectionState();
+  const selectedRepo =
+    availableRepos?.find((r) => r.key === selectedRepoKey) ?? null;
+  const selectedEnv =
+    availableEnvironments?.find((e) => e.id === selectedEnvId) ?? null;
 
   // ── Agent selection (OXA app-agent-selector) ──────────────────────────────
   // The selected agent GOVERNS code mode: a code agent (isCode) forces it on
@@ -363,7 +406,6 @@ export function MessageComposer({
   // hides that UI. With no agent selected (the "Default chat" option, or a
   // workspace that never created an agent) the manual Code2 toggle owns code
   // mode, so agent-less workspaces behave exactly as they did before.
-  const [selectedAgentId, setSelectedAgentId] = React.useState<string | null>(null);
   const selectedAgent =
     availableAgents?.find((a) => a.agentId === selectedAgentId) ?? null;
   const agentGovernsCode = selectedAgent !== null;
@@ -409,7 +451,11 @@ export function MessageComposer({
     // The textarea is CSS-hidden while collapsed (so drafts survive) — focus
     // it on the frame after the expanded layout commits.
     requestAnimationFrame(() => {
-      (formRef.current?.elements.namedItem("content") as HTMLTextAreaElement | null)?.focus();
+      (
+        formRef.current?.elements.namedItem(
+          "content",
+        ) as HTMLTextAreaElement | null
+      )?.focus();
     });
   }, []);
 
@@ -484,16 +530,21 @@ export function MessageComposer({
       writeStoredPins(pinKey, null);
     } else {
       setIsPinned(true);
-      writeStoredPins(pinKey, { repoKey: selectedRepoKey, envId: selectedEnvId });
+      writeStoredPins(pinKey, {
+        repoKey: selectedRepoKey,
+        envId: selectedEnvId,
+      });
     }
   }, [isPinned, pinKey, selectedRepoKey, selectedEnvId]);
   const handleSelectRepoKey = (key: string) => {
     setSelectedRepoKey(key);
-    if (isPinned) writeStoredPins(pinKey, { repoKey: key, envId: selectedEnvId });
+    if (isPinned)
+      writeStoredPins(pinKey, { repoKey: key, envId: selectedEnvId });
   };
   const handleSelectEnvId = (id: string) => {
     setSelectedEnvId(id);
-    if (isPinned) writeStoredPins(pinKey, { repoKey: selectedRepoKey, envId: id });
+    if (isPinned)
+      writeStoredPins(pinKey, { repoKey: selectedRepoKey, envId: id });
   };
 
   // ── Slash commands ────────────────────────────────────────────────────────
@@ -518,24 +569,32 @@ export function MessageComposer({
   // literal token travels inline in `content` — the agent is taught the
   // grammar and the transcript re-renders tokens as inspectable chips.
   const [mentionAnchor, setMentionAnchor] = React.useState<number | null>(null);
-  const [mentionStage, setMentionStage] = React.useState<"type" | "search">("type");
-  const [mentionTypeSel, setMentionTypeSel] = React.useState<MentionTypeInfo | null>(null);
+  const [mentionStage, setMentionStage] = React.useState<"type" | "search">(
+    "type",
+  );
+  const [mentionTypeSel, setMentionTypeSel] =
+    React.useState<MentionTypeInfo | null>(null);
   const [mentionQuery, setMentionQuery] = React.useState("");
   const [mentionActiveIndex, setMentionActiveIndex] = React.useState(0);
-  const [pendingMentions, setPendingMentions] = React.useState<ComposerMention[]>([]);
+  const [pendingMentions, setPendingMentions] = React.useState<
+    ComposerMention[]
+  >([]);
   const mentionOpen = mentionAnchor !== null;
   const mentionTypes = React.useMemo(
     () => matchMentionTypes(mentionStage === "type" ? mentionQuery : ""),
     [mentionStage, mentionQuery],
   );
-  const { results: mentionResults, loading: mentionLoading } = useMentionSearch({
-    orgSlug,
-    workspaceSlug,
-    type: mentionTypeSel?.type ?? null,
-    query: mentionQuery,
-    enabled: mentionOpen && mentionStage === "search",
-  });
-  const mentionItemCount = mentionStage === "type" ? mentionTypes.length : mentionResults.length;
+  const { results: mentionResults, loading: mentionLoading } = useMentionSearch(
+    {
+      orgSlug,
+      workspaceSlug,
+      type: mentionTypeSel?.type ?? null,
+      query: mentionQuery,
+      enabled: mentionOpen && mentionStage === "search",
+    },
+  );
+  const mentionItemCount =
+    mentionStage === "type" ? mentionTypes.length : mentionResults.length;
   const closeMentionMenu = React.useCallback(() => {
     setMentionAnchor(null);
     setMentionStage("type");
@@ -564,7 +623,14 @@ export function MessageComposer({
       selectedEnv,
       selectedAgentId,
     };
-  }, [codeMode, selectedRepo, selectedEnvId, isPinned, selectedEnv, selectedAgentId]);
+  }, [
+    codeMode,
+    selectedRepo,
+    selectedEnvId,
+    isPinned,
+    selectedEnv,
+    selectedAgentId,
+  ]);
 
   // Stable ref for the callback so the textarea onChange handler never
   // captures a stale closure — the identity of the ref never changes.
@@ -634,9 +700,9 @@ export function MessageComposer({
   const applySlashCommand = React.useCallback(
     (command: SlashCommand) => {
       setSlashQuery(null);
-      const ta = formRef.current?.elements.namedItem("content") as
-        | HTMLTextAreaElement
-        | null;
+      const ta = formRef.current?.elements.namedItem(
+        "content",
+      ) as HTMLTextAreaElement | null;
       if (command.clientAction === "pin") {
         if (ta) {
           ta.value = "";
@@ -665,9 +731,9 @@ export function MessageComposer({
   // to a bare "@" in the textarea and scope the live search to the type.
   const applyMentionType = React.useCallback(
     (info: MentionTypeInfo) => {
-      const ta = formRef.current?.elements.namedItem("content") as
-        | HTMLTextAreaElement
-        | null;
+      const ta = formRef.current?.elements.namedItem(
+        "content",
+      ) as HTMLTextAreaElement | null;
       if (ta && mentionAnchor !== null) {
         const caret = ta.selectionStart ?? ta.value.length;
         ta.value = ta.value.slice(0, mentionAnchor + 1) + ta.value.slice(caret);
@@ -686,9 +752,9 @@ export function MessageComposer({
   // and remember the structured mention for token substitution at submit.
   const applyMentionResult = React.useCallback(
     (result: MentionSearchResult) => {
-      const ta = formRef.current?.elements.namedItem("content") as
-        | HTMLTextAreaElement
-        | null;
+      const ta = formRef.current?.elements.namedItem(
+        "content",
+      ) as HTMLTextAreaElement | null;
       if (ta && mentionAnchor !== null) {
         const mention = {
           type: result.type,
@@ -727,14 +793,21 @@ export function MessageComposer({
   // (dep array [isStreaming]) reads the current parentMessageId / conversationId
   // rather than the stale closure captured when isStreaming last changed.
   const parentMessageIdRef = React.useRef(parentMessageId);
-  React.useEffect(() => { parentMessageIdRef.current = parentMessageId; }, [parentMessageId]);
+  React.useEffect(() => {
+    parentMessageIdRef.current = parentMessageId;
+  }, [parentMessageId]);
   const conversationIdRef = React.useRef(conversationId);
-  React.useEffect(() => { conversationIdRef.current = conversationId; }, [conversationId]);
+  React.useEffect(() => {
+    conversationIdRef.current = conversationId;
+  }, [conversationId]);
   const activeServerIdsRef = React.useRef(activeServerIds);
-  React.useEffect(() => { activeServerIdsRef.current = activeServerIds; }, [activeServerIds]);
+  React.useEffect(() => {
+    activeServerIdsRef.current = activeServerIds;
+  }, [activeServerIds]);
   // Holds the id of the deferred-dispatch setTimeout so it can be cancelled on
   // unmount and before scheduling a new one.
-  const dispatchTimerRef = React.useRef<ReturnType<typeof setTimeout>>(undefined);
+  const dispatchTimerRef =
+    React.useRef<ReturnType<typeof setTimeout>>(undefined);
   React.useEffect(() => () => clearTimeout(dispatchTimerRef.current), []);
 
   // FIFO queue for messages submitted while a stream is in flight (queue mode).
@@ -763,7 +836,8 @@ export function MessageComposer({
       fd.set("kind", kind);
       if (orgSlug) fd.set("orgSlug", orgSlug);
       if (workspaceSlug) fd.set("workspaceSlug", workspaceSlug);
-      if (conversationIdRef.current) fd.set("conversationId", conversationIdRef.current);
+      if (conversationIdRef.current)
+        fd.set("conversationId", conversationIdRef.current);
 
       xhr.upload.onprogress = (evt) => {
         if (!evt.lengthComputable) return;
@@ -781,7 +855,12 @@ export function MessageComposer({
         } catch {
           parsed = null;
         }
-        if (xhr.status >= 200 && xhr.status < 300 && parsed && typeof parsed === "object") {
+        if (
+          xhr.status >= 200 &&
+          xhr.status < 300 &&
+          parsed &&
+          typeof parsed === "object"
+        ) {
           const item = parsed as {
             publicId?: string;
             kind?: string;
@@ -811,7 +890,9 @@ export function MessageComposer({
               ? String((parsed as { error?: unknown }).error)
               : `Upload failed (HTTP ${xhr.status})`;
           setAttachments((prev) =>
-            prev.map((a) => (a.id === id ? { ...a, status: "error", error: message } : a)),
+            prev.map((a) =>
+              a.id === id ? { ...a, status: "error", error: message } : a,
+            ),
           );
         }
       };
@@ -820,7 +901,9 @@ export function MessageComposer({
         xhrsRef.current.delete(id);
         setAttachments((prev) =>
           prev.map((a) =>
-            a.id === id ? { ...a, status: "error", error: "Network error during upload" } : a,
+            a.id === id
+              ? { ...a, status: "error", error: "Network error during upload" }
+              : a,
           ),
         );
       };
@@ -852,7 +935,9 @@ export function MessageComposer({
    */
   const attachVideoKeyframes = React.useCallback(
     async (videoLocalId: string, file: File) => {
-      const frames = await extractVideoFrames(file, { maxFrames: VIDEO_KEYFRAME_COUNT });
+      const frames = await extractVideoFrames(file, {
+        maxFrames: VIDEO_KEYFRAME_COUNT,
+      });
       if (frames.length === 0) return;
       const baseName = file.name.replace(/\.[^.]+$/, "") || "video";
       const keyframes: PendingAttachment[] = frames.map((frame, i) => ({
@@ -871,7 +956,8 @@ export function MessageComposer({
       }));
       setAttachments((prev) => [...prev, ...keyframes]);
       queueMicrotask(() => {
-        for (const kf of keyframes) uploadAttachment(kf.id, kf.file, "image", kf.file.name);
+        for (const kf of keyframes)
+          uploadAttachment(kf.id, kf.file, "image", kf.file.name);
       });
     },
     [newLocalId, uploadAttachment],
@@ -902,7 +988,12 @@ export function MessageComposer({
         queueMicrotask(() => {
           for (const a of next) {
             const isVideo = a.file.type.startsWith("video/");
-            uploadAttachment(a.id, a.file, isVideo ? "video" : "image", a.file.name);
+            uploadAttachment(
+              a.id,
+              a.file,
+              isVideo ? "video" : "image",
+              a.file.name,
+            );
             if (isVideo) void attachVideoKeyframes(a.id, a.file);
           }
         });
@@ -986,19 +1077,23 @@ export function MessageComposer({
     model.generate === null && supportsReasoning(resolvedTextModel);
 
   // Placeholder text varies by media mode.
-  const placeholder =
-    disabled
-      ? (disabledReason ?? "Composer paused.")
-      : model.generate === "image"
-        ? "Describe the image you want…"
-        : model.generate === "video"
-          ? "Describe the video you want…"
-          : "Send a message…";
+  const placeholder = disabled
+    ? (disabledReason ?? "Composer paused.")
+    : model.generate === "image"
+      ? "Describe the image you want…"
+      : model.generate === "video"
+        ? "Describe the video you want…"
+        : "Send a message…";
 
   function toggleGenerate(kind: "image" | "video") {
     if (model.generate === kind) {
       // Toggle off — return to text defaults.
-      setModel((s) => ({ ...s, generate: null, mediaTier: "basic", mediaModel: null }));
+      setModel((s) => ({
+        ...s,
+        generate: null,
+        mediaTier: "basic",
+        mediaModel: null,
+      }));
     } else {
       // Toggle on — switch to this kind, pre-filling mediaModel from the
       // workspace/user seeded preference when available. When a seeded model
@@ -1027,8 +1122,12 @@ export function MessageComposer({
     // Swap "@Label" mention placeholders for their full reference tokens so
     // the literal [:type|:slug|:location|:label] text travels in `content`.
     const contentValue = String(fd.get("content") ?? "");
-    const contentWithTokens = applyMentionPlaceholders(contentValue, pendingMentions);
-    if (contentWithTokens !== contentValue) fd.set("content", contentWithTokens);
+    const contentWithTokens = applyMentionPlaceholders(
+      contentValue,
+      pendingMentions,
+    );
+    if (contentWithTokens !== contentValue)
+      fd.set("content", contentWithTokens);
     if (conversationId) fd.set("conversationId", conversationId);
     if (parentMessageId) fd.set("parentMessageId", parentMessageId);
     if (attachmentsSnapshot.length > 0) {
@@ -1100,7 +1199,12 @@ export function MessageComposer({
     // otherwise resolve an attachment the server hasn't finished persisting.
     if (hasInFlightUploads(attachments)) return;
 
-    const contentRaw = (formRef.current?.elements.namedItem("content") as HTMLTextAreaElement | null)?.value ?? "";
+    const contentRaw =
+      (
+        formRef.current?.elements.namedItem(
+          "content",
+        ) as HTMLTextAreaElement | null
+      )?.value ?? "";
     if (contentRaw.trim().length === 0) return;
 
     const attachmentsSnapshot = toUploadedMeta(attachments);
@@ -1124,14 +1228,25 @@ export function MessageComposer({
         const content = applyMentionPlaceholders(contentRaw, pendingMentions);
         setQueue((prev) => [
           ...prev,
-          { id: nextQueueId(), content, modelState: snapshot, attachments: attachmentsSnapshot },
+          {
+            id: nextQueueId(),
+            content,
+            modelState: snapshot,
+            attachments: attachmentsSnapshot,
+          },
         ]);
         setPendingMentions([]);
         closeMentionMenu();
         clearAttachments();
-        (formRef.current?.elements.namedItem("content") as HTMLTextAreaElement | null)?.dispatchEvent(new Event("input"));
+        (
+          formRef.current?.elements.namedItem(
+            "content",
+          ) as HTMLTextAreaElement | null
+        )?.dispatchEvent(new Event("input"));
         // Reset the native textarea value directly so the placeholder reappears.
-        const ta = formRef.current?.elements.namedItem("content") as HTMLTextAreaElement | null;
+        const ta = formRef.current?.elements.namedItem(
+          "content",
+        ) as HTMLTextAreaElement | null;
         if (ta) ta.value = "";
         // Notify parent that input is now empty (chips should reappear).
         if (inputHasContentRef.current) {
@@ -1169,8 +1284,10 @@ export function MessageComposer({
       fd.set("content", next.content);
       const currentConversationId = conversationIdRef.current;
       const currentParentMessageId = parentMessageIdRef.current;
-      if (currentConversationId) fd.set("conversationId", currentConversationId);
-      if (currentParentMessageId) fd.set("parentMessageId", currentParentMessageId);
+      if (currentConversationId)
+        fd.set("conversationId", currentConversationId);
+      if (currentParentMessageId)
+        fd.set("parentMessageId", currentParentMessageId);
       if (next.attachments.length > 0) {
         fd.set("attachments", JSON.stringify(next.attachments));
       }
@@ -1200,11 +1317,19 @@ export function MessageComposer({
       }
       fd.set("budget", JSON.stringify(budgetPayload(ms)));
       const currentCode = codeStateRef.current;
-      const code = codePayload(currentCode.codeMode, currentCode.selectedRepo, currentCode.selectedEnv);
+      const code = codePayload(
+        currentCode.codeMode,
+        currentCode.selectedRepo,
+        currentCode.selectedEnv,
+      );
       if (code) fd.set("code", JSON.stringify(code));
-      if (currentCode.selectedAgentId) fd.set("agentId", currentCode.selectedAgentId);
+      if (currentCode.selectedAgentId)
+        fd.set("agentId", currentCode.selectedAgentId);
       if (currentCode.isPinned && !currentCode.codeMode) {
-        const pinned = buildPinnedContext(currentCode.selectedRepo, currentCode.selectedEnv);
+        const pinned = buildPinnedContext(
+          currentCode.selectedRepo,
+          currentCode.selectedEnv,
+        );
         if (pinned) fd.set("pinnedContext", JSON.stringify(pinned));
       }
       // Defer the dispatch out of the caller (effect / event handler) so the
@@ -1246,17 +1371,20 @@ export function MessageComposer({
   }, []);
 
   /** Move a queued message up or down one slot (clamped at the ends). */
-  const reorderQueued = React.useCallback((index: number, direction: "up" | "down") => {
-    setQueue((prev) => {
-      const target = direction === "up" ? index - 1 : index + 1;
-      if (target < 0 || target >= prev.length) return prev;
-      const next = [...prev];
-      const [moved] = next.splice(index, 1);
-      if (!moved) return prev;
-      next.splice(target, 0, moved);
-      return next;
-    });
-  }, []);
+  const reorderQueued = React.useCallback(
+    (index: number, direction: "up" | "down") => {
+      setQueue((prev) => {
+        const target = direction === "up" ? index - 1 : index + 1;
+        if (target < 0 || target >= prev.length) return prev;
+        const next = [...prev];
+        const [moved] = next.splice(index, 1);
+        if (!moved) return prev;
+        next.splice(target, 0, moved);
+        return next;
+      });
+    },
+    [],
+  );
 
   /**
    * Send a queued message now: jump it to the front of the queue. When no
@@ -1301,13 +1429,16 @@ export function MessageComposer({
     if (mentionOpen) {
       if (e.key === "ArrowDown") {
         e.preventDefault();
-        if (mentionItemCount > 0) setMentionActiveIndex((i) => (i + 1) % mentionItemCount);
+        if (mentionItemCount > 0)
+          setMentionActiveIndex((i) => (i + 1) % mentionItemCount);
         return;
       }
       if (e.key === "ArrowUp") {
         e.preventDefault();
         if (mentionItemCount > 0) {
-          setMentionActiveIndex((i) => (i - 1 + mentionItemCount) % mentionItemCount);
+          setMentionActiveIndex(
+            (i) => (i - 1 + mentionItemCount) % mentionItemCount,
+          );
         }
         return;
       }
@@ -1320,7 +1451,8 @@ export function MessageComposer({
         }
         if (mentionResults.length > 0) {
           e.preventDefault();
-          const result = mentionResults[mentionActiveIndex] ?? mentionResults[0];
+          const result =
+            mentionResults[mentionActiveIndex] ?? mentionResults[0];
           if (result) applyMentionResult(result);
           return;
         }
@@ -1345,7 +1477,9 @@ export function MessageComposer({
       }
       if (e.key === "ArrowUp") {
         e.preventDefault();
-        setSlashActiveIndex((i) => (i - 1 + slashCommands.length) % slashCommands.length);
+        setSlashActiveIndex(
+          (i) => (i - 1 + slashCommands.length) % slashCommands.length,
+        );
         return;
       }
       if (e.key === "Enter" || e.key === "Tab") {
@@ -1364,8 +1498,7 @@ export function MessageComposer({
     const isEnter = e.key === "Enter";
     if (!isEnter) return;
 
-    const isEmpty =
-      (e.currentTarget.value ?? "").trim().length === 0;
+    const isEmpty = (e.currentTarget.value ?? "").trim().length === 0;
     if (isEmpty) {
       // Suppress empty-submit in all modes; allow newline via default.
       if (enterToSubmit && !e.shiftKey) e.preventDefault();
@@ -1411,7 +1544,9 @@ export function MessageComposer({
   const effortSelect = (
     <Select
       value={model.effort ?? "medium"}
-      onValueChange={(v) => setModel((s) => ({ ...s, effort: v as EffortLevel }))}
+      onValueChange={(v) =>
+        setModel((s) => ({ ...s, effort: v as EffortLevel }))
+      }
     >
       <SelectTrigger
         size="sm"
@@ -1452,18 +1587,6 @@ export function MessageComposer({
 
   return (
     <div className="flex flex-col">
-      {/* Bound-agent indicator: when the session is launched from a published
-          agent (Ask page ?agent=…), show which agent's instructions + equipped
-          tools are applied to every turn. Purely informational — the binding
-          itself is carried in the request body's agentId. */}
-      {boundAgentName ? (
-        <div className="mb-2 flex items-center gap-2" data-testid="bound-agent-indicator">
-          <Badge variant="outline" size="sm" className="gap-1">
-            <Bot className="h-3 w-3" aria-hidden="true" />
-            Session bound to: {boundAgentName}
-          </Badge>
-        </div>
-      ) : null}
       <form
         ref={formRef}
         onSubmit={onSubmit}
@@ -1476,226 +1599,258 @@ export function MessageComposer({
           isDragOver && "ring-2 ring-primary",
         )}
       >
-      {/* Hidden native file input — triggered by the paperclip button. Accepts
+        {/* Hidden native file input — triggered by the paperclip button. Accepts
           images and videos; a video's keyframes are sampled client-side for the
           vision-only fallback path (Phase 2). */}
-      {canAttach ? (
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept={ATTACHMENT_ACCEPT}
-          multiple
-          hidden
-          onChange={handleFileInputChange}
-          aria-hidden="true"
-          tabIndex={-1}
-        />
-      ) : null}
-      {/* CSS-hidden (not unmounted) while collapsed so the draft text and the
+        {canAttach ? (
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept={ATTACHMENT_ACCEPT}
+            multiple
+            hidden
+            onChange={handleFileInputChange}
+            aria-hidden="true"
+            tabIndex={-1}
+          />
+        ) : null}
+        {/* CSS-hidden (not unmounted) while collapsed so the draft text and the
           form's `content` field survive collapse/expand round-trips. */}
-      <div className="relative">
-        {slashOpen ? (
-          <SlashCommandMenu
-            commands={slashCommands}
-            activeIndex={slashActiveIndex}
-            onSelect={applySlashCommand}
-            onHoverIndex={setSlashActiveIndex}
+        <div className="relative">
+          {slashOpen ? (
+            <SlashCommandMenu
+              commands={slashCommands}
+              activeIndex={slashActiveIndex}
+              onSelect={applySlashCommand}
+              onHoverIndex={setSlashActiveIndex}
+            />
+          ) : null}
+          {mentionOpen ? (
+            <MentionMenu
+              stage={mentionStage}
+              types={mentionTypes}
+              results={mentionResults}
+              selectedType={mentionTypeSel}
+              activeIndex={mentionActiveIndex}
+              loading={mentionLoading}
+              query={mentionQuery}
+              onSelectType={applyMentionType}
+              onSelectResult={applyMentionResult}
+              onHoverIndex={setMentionActiveIndex}
+            />
+          ) : null}
+          <Textarea
+            name="content"
+            required
+            placeholder={placeholder}
+            rows={isMobile ? 2 : 3}
+            disabled={pending || disabled}
+            onKeyDown={onKeyDown}
+            onChange={handleTextareaChange}
+            onBlur={() => {
+              setSlashQuery(null);
+              closeMentionMenu();
+            }}
+            onPaste={canAttach ? handlePaste : undefined}
+            className={cn(
+              "border-none bg-transparent shadow-none focus-visible:ring-0",
+              composerCollapsed && "hidden",
+            )}
           />
-        ) : null}
-        {mentionOpen ? (
-          <MentionMenu
-            stage={mentionStage}
-            types={mentionTypes}
-            results={mentionResults}
-            selectedType={mentionTypeSel}
-            activeIndex={mentionActiveIndex}
-            loading={mentionLoading}
-            query={mentionQuery}
-            onSelectType={applyMentionType}
-            onSelectResult={applyMentionResult}
-            onHoverIndex={setMentionActiveIndex}
-          />
-        ) : null}
-        <Textarea
-          name="content"
-          required
-          placeholder={placeholder}
-          rows={isMobile ? 2 : 3}
-          disabled={pending || disabled}
-          onKeyDown={onKeyDown}
-          onChange={handleTextareaChange}
-          onBlur={() => {
-            setSlashQuery(null);
-            closeMentionMenu();
-          }}
-          onPaste={canAttach ? handlePaste : undefined}
-          className={cn(
-            "border-none bg-transparent shadow-none focus-visible:ring-0",
-            composerCollapsed && "hidden",
-          )}
-        />
-      </div>
-      {/* Pending attachment strip — thumbnails with upload progress/remove.
-          Hidden video keyframes are excluded (they ride with their video). */}
-      {visibleAttachments.length > 0 && !composerCollapsed ? (
-        <div className="flex flex-wrap gap-2" data-testid="attachment-strip">
-          {visibleAttachments.map((a) => (
-            <AttachmentChip key={a.id} attachment={a} onRemove={removeAttachment} />
-          ))}
         </div>
-      ) : null}
-      {/* Pending @-mention strip — the structured references attached to this
+        {/* Pending attachment strip — thumbnails with upload progress/remove.
+          Hidden video keyframes are excluded (they ride with their video). */}
+        {visibleAttachments.length > 0 && !composerCollapsed ? (
+          <div className="flex flex-wrap gap-2" data-testid="attachment-strip">
+            {visibleAttachments.map((a) => (
+              <AttachmentChip
+                key={a.id}
+                attachment={a}
+                onRemove={removeAttachment}
+              />
+            ))}
+          </div>
+        ) : null}
+        {/* Pending @-mention strip — the structured references attached to this
           draft. Each chip is hover-inspectable; removing one only detaches the
           reference (the "@Label" text stays as plain words). */}
-      {pendingMentions.length > 0 && !composerCollapsed ? (
-        <div className="flex flex-wrap gap-1.5" data-testid="mention-strip">
-          {pendingMentions.map((m, index) => (
-            <MentionChip
-              key={`${m.mention.type}:${m.mention.slug}:${index}`}
-              mention={m.mention}
-              properties={m.properties}
-              description={m.description}
-              onRemove={() =>
-                setPendingMentions((prev) => prev.filter((_, i) => i !== index))
-              }
-            />
-          ))}
-        </div>
-      ) : null}
-      {/* Queued messages (queue mode): ordered list with reorder / edit /
+        {pendingMentions.length > 0 && !composerCollapsed ? (
+          <div className="flex flex-wrap gap-1.5" data-testid="mention-strip">
+            {pendingMentions.map((m, index) => (
+              <MentionChip
+                key={`${m.mention.type}:${m.mention.slug}:${index}`}
+                mention={m.mention}
+                properties={m.properties}
+                description={m.description}
+                onRemove={() =>
+                  setPendingMentions((prev) =>
+                    prev.filter((_, i) => i !== index),
+                  )
+                }
+              />
+            ))}
+          </div>
+        ) : null}
+        {/* Queued messages (queue mode): ordered list with reorder / edit /
           remove / send-now controls. */}
-      {!composerCollapsed && (
-        <MessageQueue
-          items={queue.map((q) => ({ id: q.id, content: q.content }))}
-          isStreaming={isStreaming}
-          onRemove={removeQueued}
-          onReorder={reorderQueued}
-          onEdit={editQueued}
-          onSendNow={sendQueuedNow}
-        />
-      )}
-      {error ? <p className="text-xs text-destructive">{error}</p> : null}
-      {disabled && disabledReason ? (
-        <p className="text-xs text-muted-foreground">{disabledReason}</p>
-      ) : null}
-      {codeGateBlocked && !composerCollapsed ? (
-        <p className="text-xs text-muted-foreground" data-testid="code-mode-gate-hint">
-          Select a repository and environment to start coding.
-        </p>
-      ) : null}
+        {!composerCollapsed && (
+          <MessageQueue
+            items={queue.map((q) => ({ id: q.id, content: q.content }))}
+            isStreaming={isStreaming}
+            onRemove={removeQueued}
+            onReorder={reorderQueued}
+            onEdit={editQueued}
+            onSendNow={sendQueuedNow}
+          />
+        )}
+        {error ? <p className="text-xs text-destructive">{error}</p> : null}
+        {disabled && disabledReason ? (
+          <p className="text-xs text-muted-foreground">{disabledReason}</p>
+        ) : null}
+        {codeGateBlocked && !composerCollapsed ? (
+          <p
+            className="text-xs text-muted-foreground"
+            data-testid="code-mode-gate-hint"
+          >
+            Select a repository and environment to start coding.
+          </p>
+        ) : null}
 
-      {/* Compact context controls — a single small row UNDER the textarea:
+        {/* Compact context controls — a single small row UNDER the textarea:
           org/repository on the bottom-left, environment (+ the open-PR chip and
           pin toggle) on the bottom-right. Replaces the two former heavy bars
           (code-mode toolbar / pin context bar) that sat ABOVE the composer and
           each duplicated the repo/env selectors. Code mode drops the pin (both
           selections are required to send anyway); pin mode keeps it. Hidden
           while collapsed. */}
-      {!composerCollapsed && (showContextControls || codeSessionPr) ? (
-        <ComposerContextControls
-          repositories={availableRepos ?? []}
-          environments={availableEnvironments ?? []}
-          selectedRepoKey={selectedRepoKey}
-          selectedEnvId={selectedEnvId}
-          onSelectRepo={(repo) => handleSelectRepoKey(repo.key)}
-          onSelectEnv={handleSelectEnvId}
-          mode={codeMode ? "code" : "pin"}
-          isPinned={isPinned}
-          onTogglePin={togglePin}
-          pr={codeSessionPr ?? null}
-          orgSlug={orgSlug}
-          workspaceSlug={workspaceSlug}
-          disabled={pending || disabled}
-        />
-      ) : null}
+        {!composerCollapsed && (showContextControls || codeSessionPr) ? (
+          <ComposerContextControls
+            repositories={availableRepos ?? []}
+            environments={availableEnvironments ?? []}
+            selectedRepoKey={selectedRepoKey}
+            selectedEnvId={selectedEnvId}
+            onSelectRepo={(repo) => handleSelectRepoKey(repo.key)}
+            onSelectEnv={handleSelectEnvId}
+            mode={codeMode ? "code" : "pin"}
+            isPinned={isPinned}
+            onTogglePin={togglePin}
+            pr={codeSessionPr ?? null}
+            orgSlug={orgSlug}
+            workspaceSlug={workspaceSlug}
+            disabled={pending || disabled}
+          />
+        ) : null}
 
-      {/* Toolbar. Collapsed: a slim single row (~40px) with a tap-to-expand
+        {/* Toolbar. Collapsed: a slim single row (~40px) with a tap-to-expand
           affordance, the send button, and the expand chevron. Expanded on
           desktop: the full control row (flex-wrap as an overflow safety net).
           Expanded on mobile: only the essentials inline (attach, code mode,
           send) — everything else lives in the bottom overflow sheet. */}
-      <div className={cn("flex items-center gap-1", !composerCollapsed && "flex-wrap")}>
-        {composerCollapsed ? (
-          <button
-            type="button"
-            data-testid="composer-expand-affordance"
-            onClick={expandComposer}
-            className="h-10 min-w-0 flex-1 truncate rounded-md px-2 text-left text-sm text-muted-foreground hover:bg-muted"
-          >
-            {placeholder}
-          </button>
-        ) : (
-          <>
-            {/* Model picker + agent picker + reasoning effort — inline on
+        <div
+          className={cn(
+            "flex items-center gap-1",
+            !composerCollapsed && "flex-wrap",
+          )}
+        >
+          {composerCollapsed ? (
+            <button
+              type="button"
+              data-testid="composer-expand-affordance"
+              onClick={expandComposer}
+              className="h-10 min-w-0 flex-1 truncate rounded-md px-2 text-left text-sm text-muted-foreground hover:bg-muted"
+            >
+              {placeholder}
+            </button>
+          ) : (
+            <>
+              {/* Model picker + agent picker + reasoning effort — inline on
                 desktop, in the overflow sheet on mobile. The agent picker:
                 selecting a code agent reveals the repo/code tooling + UI (and
                 runs the turn in the sandbox); a chat agent / the default keeps
                 the plain composer. Renders nothing when the workspace has no
                 agents, so agent-less workspaces are unaffected. */}
-            {!isMobile && (
-              <>
-                <ModelPicker value={model} onChange={setModel} modelConfig={modelConfig} />
-                <AgentSelector
-                  agents={availableAgents ?? []}
-                  value={selectedAgentId}
-                  onChange={setSelectedAgentId}
-                />
-                {showEffortControl && effortSelect}
-              </>
-            )}
+              {!isMobile && (
+                <>
+                  <ModelPicker
+                    value={model}
+                    onChange={setModel}
+                    modelConfig={modelConfig}
+                  />
+                  <AgentContextChip
+                    agents={availableAgents ?? []}
+                    repos={availableRepos ?? []}
+                    environments={availableEnvironments ?? []}
+                    defaultRepoKey={defaultRepoKey ?? null}
+                    defaultEnvId={defaultEnvId ?? null}
+                    defaultAgentId={defaultAgentId ?? null}
+                    onSetDefaultAgent={onSetDefaultAgent}
+                    selectedAgentId={selectedAgentId}
+                    selectedRepoKey={selectedRepoKey}
+                    selectedEnvId={selectedEnvId}
+                    onApply={applyAgentSelection}
+                  />
+                  {showEffortControl && effortSelect}
+                </>
+              )}
 
-            {/* Attach image or video — opens the native file picker;
+              {/* Attach image or video — opens the native file picker;
                 paste/drag-drop also work. Essential — always inline. */}
-            {canAttach ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                aria-label="Attach image or video"
-                disabled={pending || disabled || visibleAttachments.length >= MAX_ATTACHMENTS}
-                onClick={() => fileInputRef.current?.click()}
-                className={cn("p-0", isMobile ? "h-11 w-11" : "h-8 w-8")}
-              >
-                <Paperclip className="h-4 w-4" />
-              </Button>
-            ) : null}
+              {canAttach ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  aria-label="Attach image or video"
+                  disabled={
+                    pending ||
+                    disabled ||
+                    visibleAttachments.length >= MAX_ATTACHMENTS
+                  }
+                  onClick={() => fileInputRef.current?.click()}
+                  className={cn("p-0", isMobile ? "h-11 w-11" : "h-8 w-8")}
+                >
+                  <Paperclip className="h-4 w-4" />
+                </Button>
+              ) : null}
 
-            {/* Image / video generation toggles — inline on desktop, in the
+              {/* Image / video generation toggles — inline on desktop, in the
                 overflow sheet on mobile. */}
-            {!isMobile && (
-              <>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  aria-label="Generate image"
-                  aria-pressed={model.generate === "image"}
-                  onClick={() => toggleGenerate("image")}
-                  className={cn(
-                    "h-8 w-8 p-0",
-                    model.generate === "image" && "bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary",
-                  )}
-                >
-                  <ImageIcon className="h-4 w-4" />
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  aria-label="Generate video"
-                  aria-pressed={model.generate === "video"}
-                  onClick={() => toggleGenerate("video")}
-                  className={cn(
-                    "h-8 w-8 p-0",
-                    model.generate === "video" && "bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary",
-                  )}
-                >
-                  <Video className="h-4 w-4" />
-                </Button>
-              </>
-            )}
+              {!isMobile && (
+                <>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    aria-label="Generate image"
+                    aria-pressed={model.generate === "image"}
+                    onClick={() => toggleGenerate("image")}
+                    className={cn(
+                      "h-8 w-8 p-0",
+                      model.generate === "image" &&
+                        "bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary",
+                    )}
+                  >
+                    <ImageIcon className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    aria-label="Generate video"
+                    aria-pressed={model.generate === "video"}
+                    onClick={() => toggleGenerate("video")}
+                    className={cn(
+                      "h-8 w-8 p-0",
+                      model.generate === "video" &&
+                        "bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary",
+                    )}
+                  >
+                    <Video className="h-4 w-4" />
+                  </Button>
+                </>
+              )}
 
-            {/* Code mode toggle — routes the turn to a sandboxed coding agent
+              {/* Code mode toggle — routes the turn to a sandboxed coding agent
                 against the selected repo + environment (chosen in the compact
                 context controls below). Requires both selections before send
                 unblocks. Hidden
@@ -1703,209 +1858,236 @@ export function MessageComposer({
                 vs chat — decides, so a manual toggle would contradict it);
                 the manual toggle only owns code mode for the default
                 (no-agent) path. Essential — always inline when shown. */}
-            {!agentGovernsCode && (
+              {!agentGovernsCode && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  aria-label="Toggle code mode"
+                  aria-pressed={codeMode}
+                  disabled={!hasRepos && !codeMode}
+                  title={
+                    !hasRepos && !codeMode
+                      ? "Connect a GitHub repository to use code mode"
+                      : undefined
+                  }
+                  onClick={() => setManualCodeMode((v) => !v)}
+                  className={cn(
+                    "p-0",
+                    isMobile ? "h-11 w-11" : "h-8 w-8",
+                    codeMode &&
+                      "bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary",
+                  )}
+                >
+                  <Code2 className="h-4 w-4" />
+                </Button>
+              )}
+
+              {!isMobile && (
+                <>
+                  {/* MCP server activation picker — only when servers are available */}
+                  {(availableMcpServers?.length ?? 0) > 0 && (
+                    <McpServerPicker
+                      servers={availableMcpServers!}
+                      activeServerIds={activeServerIds}
+                      onActiveServerIdsChange={setActiveServerIds}
+                    />
+                  )}
+
+                  {/* Per-turn dollar budget — off by default. Every change is
+                    re-clamped against workspace governance (OXA-2081) so a
+                    "ceiling" can never be exceeded, even transiently, by a
+                    member's own edit. */}
+                  {budgetControl}
+                </>
+              )}
+
+              {/* Mobile: overflow controls live in a bottom sheet. */}
+              {isMobile && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  aria-label="More composer options"
+                  aria-expanded={overflowOpen}
+                  data-testid="composer-overflow-btn"
+                  onClick={() => setOverflowOpen(true)}
+                  className="h-11 w-11 p-0"
+                >
+                  <SlidersHorizontal className="h-4 w-4" />
+                </Button>
+              )}
+            </>
+          )}
+          <div className="ml-auto flex items-center gap-1.5">
+            {isStreaming && queue.length > 0 ? (
+              <span className="text-xs tabular-nums text-muted-foreground">
+                {queue.length} queued
+              </span>
+            ) : null}
+            <Button
+              type="submit"
+              // Disabled while any attachment upload is still in flight — sending
+              // now would resolve a publicId the server hasn't finished persisting.
+              // Also disabled while code mode is on but repo/environment aren't
+              // both selected yet (see codeGateBlocked).
+              disabled={
+                pending || disabled || uploadsInFlight || codeGateBlocked
+              }
+              size="sm"
+              aria-label={
+                isStreaming && pendingPromptBehavior === "interrupt"
+                  ? "Interrupt and send"
+                  : isStreaming
+                    ? "Queue message"
+                    : "Send message"
+              }
+              className={cn(isMobile && !composerCollapsed && "h-11")}
+              style={
+                !pending && !disabled && !uploadsInFlight && !codeGateBlocked
+                  ? {
+                      background: "var(--primary)",
+                      border: "none",
+                      color: "var(--primary-foreground)",
+                    }
+                  : undefined
+              }
+            >
+              <Send className="h-3.5 w-3.5" />
+              {pending
+                ? "Sending…"
+                : uploadsInFlight
+                  ? "Uploading…"
+                  : isStreaming && pendingPromptBehavior === "interrupt"
+                    ? "Interrupt"
+                    : "Send"}
+            </Button>
+
+            {/* Collapse / expand the whole composer — persists to localStorage. */}
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              aria-label={
+                composerCollapsed ? "Expand composer" : "Collapse composer"
+              }
+              aria-expanded={!composerCollapsed}
+              data-testid="composer-collapse-toggle"
+              onClick={composerCollapsed ? expandComposer : collapseComposer}
+              className={cn(
+                "p-0",
+                isMobile && !composerCollapsed ? "h-11 w-11" : "h-8 w-8",
+              )}
+            >
+              {composerCollapsed ? (
+                <ChevronUp className="h-4 w-4" />
+              ) : (
+                <ChevronDown className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
+        </div>
+      </form>
+
+      {/* Mobile overflow sheet: the non-essential toolbar controls as
+        thumb-friendly full-width rows (≥44px tall). Portaled to the body, so
+        interactive children here are OUTSIDE the form — every control is a
+        type="button"/stateful picker, never a submit. */}
+      {isMobile && !composerCollapsed ? (
+        <Sheet open={overflowOpen} onOpenChange={setOverflowOpen}>
+          <SheetPopup
+            side="bottom"
+            data-testid="composer-overflow-sheet"
+            className="max-h-[70vh] rounded-t-2xl pb-[max(1.5rem,env(safe-area-inset-bottom))]"
+          >
+            <SheetHeader className="mb-2">
+              <SheetTitle className="text-sm">Composer options</SheetTitle>
+              <SheetDescription className="sr-only">
+                Model, generation, MCP server, and budget controls for this
+                turn.
+              </SheetDescription>
+            </SheetHeader>
+            <SheetPanel className="gap-1">
+              <div className="flex min-h-11 items-center justify-between gap-2">
+                <span className="text-sm">Model</span>
+                <ModelPicker
+                  value={model}
+                  onChange={setModel}
+                  modelConfig={modelConfig}
+                />
+              </div>
+              {(availableAgents?.length ?? 0) > 0 && (
+                <div className="flex min-h-11 items-center justify-between gap-2">
+                  <span className="text-sm">Agent</span>
+                  <AgentContextChip
+                    agents={availableAgents ?? []}
+                    repos={availableRepos ?? []}
+                    environments={availableEnvironments ?? []}
+                    defaultRepoKey={defaultRepoKey ?? null}
+                    defaultEnvId={defaultEnvId ?? null}
+                    defaultAgentId={defaultAgentId ?? null}
+                    onSetDefaultAgent={onSetDefaultAgent}
+                    selectedAgentId={selectedAgentId}
+                    selectedRepoKey={selectedRepoKey}
+                    selectedEnvId={selectedEnvId}
+                    onApply={applyAgentSelection}
+                  />
+                </div>
+              )}
+              {showEffortControl && (
+                <div className="flex min-h-11 items-center justify-between gap-2">
+                  <span className="text-sm">Reasoning effort</span>
+                  {effortSelect}
+                </div>
+              )}
               <Button
                 type="button"
                 variant="ghost"
-                size="sm"
-                aria-label="Toggle code mode"
-                aria-pressed={codeMode}
-                disabled={!hasRepos && !codeMode}
-                title={!hasRepos && !codeMode ? "Connect a GitHub repository to use code mode" : undefined}
-                onClick={() => setManualCodeMode((v) => !v)}
+                aria-label="Generate image"
+                aria-pressed={model.generate === "image"}
+                onClick={() => toggleGenerate("image")}
                 className={cn(
-                  "p-0",
-                  isMobile ? "h-11 w-11" : "h-8 w-8",
-                  codeMode && "bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary",
+                  "h-11 w-full justify-start gap-2 px-2 text-sm",
+                  model.generate === "image" &&
+                    "bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary",
                 )}
               >
-                <Code2 className="h-4 w-4" />
+                <ImageIcon className="h-4 w-4" />
+                Generate image
               </Button>
-            )}
-
-            {!isMobile && (
-              <>
-                {/* MCP server activation picker — only when servers are available */}
-                {(availableMcpServers?.length ?? 0) > 0 && (
+              <Button
+                type="button"
+                variant="ghost"
+                aria-label="Generate video"
+                aria-pressed={model.generate === "video"}
+                onClick={() => toggleGenerate("video")}
+                className={cn(
+                  "h-11 w-full justify-start gap-2 px-2 text-sm",
+                  model.generate === "video" &&
+                    "bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary",
+                )}
+              >
+                <Video className="h-4 w-4" />
+                Generate video
+              </Button>
+              {(availableMcpServers?.length ?? 0) > 0 && (
+                <div className="flex min-h-11 items-center justify-between gap-2">
+                  <span className="text-sm">MCP servers</span>
                   <McpServerPicker
                     servers={availableMcpServers!}
                     activeServerIds={activeServerIds}
                     onActiveServerIdsChange={setActiveServerIds}
                   />
-                )}
-
-                {/* Per-turn dollar budget — off by default. Every change is
-                    re-clamped against workspace governance (OXA-2081) so a
-                    "ceiling" can never be exceeded, even transiently, by a
-                    member's own edit. */}
+                </div>
+              )}
+              <div className="flex min-h-11 items-center justify-between gap-2">
+                <span className="text-sm">Per-turn budget</span>
                 {budgetControl}
-              </>
-            )}
-
-            {/* Mobile: overflow controls live in a bottom sheet. */}
-            {isMobile && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                aria-label="More composer options"
-                aria-expanded={overflowOpen}
-                data-testid="composer-overflow-btn"
-                onClick={() => setOverflowOpen(true)}
-                className="h-11 w-11 p-0"
-              >
-                <SlidersHorizontal className="h-4 w-4" />
-              </Button>
-            )}
-          </>
-        )}
-        <div className="ml-auto flex items-center gap-1.5">
-          {isStreaming && queue.length > 0 ? (
-            <span className="text-xs tabular-nums text-muted-foreground">
-              {queue.length} queued
-            </span>
-          ) : null}
-          <Button
-            type="submit"
-            // Disabled while any attachment upload is still in flight — sending
-            // now would resolve a publicId the server hasn't finished persisting.
-            // Also disabled while code mode is on but repo/environment aren't
-            // both selected yet (see codeGateBlocked).
-            disabled={pending || disabled || uploadsInFlight || codeGateBlocked}
-            size="sm"
-            aria-label={
-              isStreaming && pendingPromptBehavior === "interrupt"
-                ? "Interrupt and send"
-                : isStreaming
-                  ? "Queue message"
-                  : "Send message"
-            }
-            className={cn(isMobile && !composerCollapsed && "h-11")}
-            style={
-              !pending && !disabled && !uploadsInFlight && !codeGateBlocked
-                ? {
-                    background: "var(--primary)",
-                    border: "none",
-                    color: "var(--primary-foreground)",
-                  }
-                : undefined
-            }
-          >
-            <Send className="h-3.5 w-3.5" />
-            {pending
-              ? "Sending…"
-              : uploadsInFlight
-                ? "Uploading…"
-                : isStreaming && pendingPromptBehavior === "interrupt"
-                  ? "Interrupt"
-                  : "Send"}
-          </Button>
-
-          {/* Collapse / expand the whole composer — persists to localStorage. */}
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            aria-label={composerCollapsed ? "Expand composer" : "Collapse composer"}
-            aria-expanded={!composerCollapsed}
-            data-testid="composer-collapse-toggle"
-            onClick={composerCollapsed ? expandComposer : collapseComposer}
-            className={cn("p-0", isMobile && !composerCollapsed ? "h-11 w-11" : "h-8 w-8")}
-          >
-            {composerCollapsed ? (
-              <ChevronUp className="h-4 w-4" />
-            ) : (
-              <ChevronDown className="h-4 w-4" />
-            )}
-          </Button>
-        </div>
-      </div>
-    </form>
-
-    {/* Mobile overflow sheet: the non-essential toolbar controls as
-        thumb-friendly full-width rows (≥44px tall). Portaled to the body, so
-        interactive children here are OUTSIDE the form — every control is a
-        type="button"/stateful picker, never a submit. */}
-    {isMobile && !composerCollapsed ? (
-      <Sheet open={overflowOpen} onOpenChange={setOverflowOpen}>
-        <SheetPopup
-          side="bottom"
-          data-testid="composer-overflow-sheet"
-          className="max-h-[70vh] rounded-t-2xl pb-[max(1.5rem,env(safe-area-inset-bottom))]"
-        >
-          <SheetHeader className="mb-2">
-            <SheetTitle className="text-sm">Composer options</SheetTitle>
-            <SheetDescription className="sr-only">
-              Model, generation, MCP server, and budget controls for this turn.
-            </SheetDescription>
-          </SheetHeader>
-          <SheetPanel className="gap-1">
-            <div className="flex min-h-11 items-center justify-between gap-2">
-              <span className="text-sm">Model</span>
-              <ModelPicker value={model} onChange={setModel} modelConfig={modelConfig} />
-            </div>
-            {(availableAgents?.length ?? 0) > 0 && (
-              <div className="flex min-h-11 items-center justify-between gap-2">
-                <span className="text-sm">Agent</span>
-                <AgentSelector
-                  agents={availableAgents ?? []}
-                  value={selectedAgentId}
-                  onChange={setSelectedAgentId}
-                />
               </div>
-            )}
-            {showEffortControl && (
-              <div className="flex min-h-11 items-center justify-between gap-2">
-                <span className="text-sm">Reasoning effort</span>
-                {effortSelect}
-              </div>
-            )}
-            <Button
-              type="button"
-              variant="ghost"
-              aria-label="Generate image"
-              aria-pressed={model.generate === "image"}
-              onClick={() => toggleGenerate("image")}
-              className={cn(
-                "h-11 w-full justify-start gap-2 px-2 text-sm",
-                model.generate === "image" && "bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary",
-              )}
-            >
-              <ImageIcon className="h-4 w-4" />
-              Generate image
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              aria-label="Generate video"
-              aria-pressed={model.generate === "video"}
-              onClick={() => toggleGenerate("video")}
-              className={cn(
-                "h-11 w-full justify-start gap-2 px-2 text-sm",
-                model.generate === "video" && "bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary",
-              )}
-            >
-              <Video className="h-4 w-4" />
-              Generate video
-            </Button>
-            {(availableMcpServers?.length ?? 0) > 0 && (
-              <div className="flex min-h-11 items-center justify-between gap-2">
-                <span className="text-sm">MCP servers</span>
-                <McpServerPicker
-                  servers={availableMcpServers!}
-                  activeServerIds={activeServerIds}
-                  onActiveServerIdsChange={setActiveServerIds}
-                />
-              </div>
-            )}
-            <div className="flex min-h-11 items-center justify-between gap-2">
-              <span className="text-sm">Per-turn budget</span>
-              {budgetControl}
-            </div>
-          </SheetPanel>
-        </SheetPopup>
-      </Sheet>
-    ) : null}
+            </SheetPanel>
+          </SheetPopup>
+        </Sheet>
+      ) : null}
     </div>
   );
 }

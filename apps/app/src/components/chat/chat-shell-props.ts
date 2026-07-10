@@ -17,7 +17,7 @@ import type {
 import type { McpServerSummary } from "./mcp-types";
 import type { RepoOption } from "./repo-selector";
 import type { EnvironmentOption } from "./environment-selector";
-import type { AgentOption } from "./agent-selector";
+import type { AgentOption } from "./agent-picker/agent-picker-types";
 
 export interface ChatShellProps {
   conversationId: string | null;
@@ -63,14 +63,24 @@ export interface ChatShellProps {
   availableEnvironments?: EnvironmentOption[];
   /** Selectable agents for the composer's agent picker (see _shared/agent-options-data.ts). */
   availableAgents?: AgentOption[];
+  /** The workspace user's default agent preference (agt_… public id), or null. */
+  defaultAgentId?: string | null;
+  /** Workspace user's default repo connection (con_…) for code-session prefill. */
+  defaultRepoConnectionId?: string | null;
+  /** Workspace user's default owner/repo slug for code-session prefill. */
+  defaultRepoSlug?: string | null;
+  /** Workspace user's default environment id for code-session prefill. */
+  defaultEnvironmentId?: string | null;
+  /** Persists the workspace default agent when the picker's star is toggled. */
+  setDefaultAgentAction?: (
+    agentId: string | null,
+  ) => Promise<{ ok: boolean; error?: string }>;
   /** Workspace-level per-turn budget governance (OXA-2081). Null/omitted ⇒
    * no governance active for this workspace. */
   workspaceBudgetGovernance?: WorkspaceBudgetGovernance | null;
   /** Bound published agent's public id (from the Ask page's ?agent=… param).
-   * Forwarded verbatim in each /api/v1/chat/stream request body as `agentId`.
+   * Seeds the initial agent selection so the composer chip reflects the binding;
+   * the composer then carries it in each stream request as `agentId`.
    * Null/omitted ⇒ normal unbound chat. */
   agentId?: string | null;
-  /** Human name of the bound agent, resolved server-side — shown as the
-   * "Session bound to: <name>" indicator. Null when unbound or unresolved. */
-  boundAgentName?: string | null;
 }

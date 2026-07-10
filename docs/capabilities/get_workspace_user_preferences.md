@@ -10,15 +10,15 @@
 
 Read the calling user's **per-workspace** coding-agent defaults: their
 preferred default repository (connection id plus the resolved owner/repo
-slug for display), default environment, and whether the one-time "set a
-default repo?" prompt has already been shown. Unlike
+slug for display), default environment, default agent, and whether the
+one-time "set a default repo?" prompt has already been shown. Unlike
 [user.preferences.read](user.preferences.read.md) (per-user, UI/model
 prefs), this is scoped to `(user, workspace)` — each workspace a user
-belongs to carries its own default repo/environment.
+belongs to carries its own default repo/environment/agent.
 
 Readable by every workspace member (not just admins) so the app can
-pre-select the user's default repo/environment in the coding-agent UI and
-decide whether to surface the first-time prompt.
+pre-select the user's default repo/environment/agent in the coding-agent UI
+and decide whether to surface the first-time prompt.
 
 ## Input
 
@@ -31,6 +31,7 @@ No fields.
 | `defaultRepoConnectionId` | `string \| null` | Preferred default repo connection `publicId` (`con_…`); `null` = no default set. |
 | `defaultRepoSlug` | `string \| null` | Denormalized `owner/repo` slug of the default connection, for display; `null` when unset. |
 | `defaultEnvironmentId` | `string \| null` | Preferred default environment `publicId` (`env_…`); `null` = use the workspace default. |
+| `defaultAgentId` | `string \| null` | Preferred default agent `publicId` (`agt_…`); `null` = no default → the app uses its built-in selection. |
 | `repoDefaultPrompted` | `boolean` | Whether the one-time repo-default prompt has been shown/answered. `false` = never prompted — the app should offer it on first repo-selector open. |
 
 ## Roles

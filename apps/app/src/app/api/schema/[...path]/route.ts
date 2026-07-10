@@ -30,6 +30,42 @@ const ADMIN_ONLY_CAPABILITIES = new Set([
   "dispatch_schema_reconcile",
 ]);
 
+// Maps the browser-facing URL path (kept stable for the schema-service client)
+// to the canonical ADR-025 verb-first capability name. ADR-025 removed the old
+// dotted names (schema.registry.get, …) and their aliases, so the capability is
+// no longer a mechanical `schema.${path.join(".")}` transform of the URL — it
+// must be looked up explicitly.
+const PATH_TO_CAPABILITY: Record<string, string> = {
+  "registry/get": "get_schema_registry",
+  "registry/config": "get_registry_config",
+  list: "list_schemas",
+  toggle: "toggle_schema",
+  "label/upsert": "upsert_schema_label",
+  "label/delete": "delete_schema_label",
+  "relationship/upsert": "upsert_schema_relationship",
+  "relationship/delete": "delete_schema_relationship",
+  "property/upsert": "upsert_schema_property",
+  "property/delete": "delete_schema_property",
+  "version/list": "list_schema_versions",
+  "version/diff": "diff_schema_versions",
+  "version/create": "create_schema_version",
+  "version/pin": "pin_schema_version",
+  export: "export_schema",
+  recommend: "recommend_schema",
+  "reconcile/dispatch": "dispatch_schema_reconcile",
+  "reconcile/status": "get_reconcile_status",
+  setup: "setup_schema",
+  "validate/node": "validate_schema_node",
+  "validate/relationship": "validate_schema_relationship",
+  chat: "run_schema_chat",
+  delete: "delete_schema",
+};
+
+// The schema assistant applies chat-proposed mutations by POSTing the canonical
+// capability name directly (see applyMutation in schema-service.ts), so accept
+// any already-canonical name in addition to the mapped URL paths.
+const KNOWN_CAPABILITIES = new Set(Object.values(PATH_TO_CAPABILITY));
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ path: string[] }> },
@@ -44,7 +80,11 @@ export async function POST(
 
   // ── Resolve capability from path segments ─────────────────────────────
   const { path } = await params;
-  const capability = `schema.${path.join(".")}`;
+  const pathKey = path.join("/");
+  const capability = PATH_TO_CAPABILITY[pathKey] ?? (KNOWN_CAPABILITIES.has(pathKey) ? pathKey : null);
+  if (!capability) {
+    return NextResponse.json({ error: `Unknown schema capability: ${pathKey}` }, { status: 404 });
+  }
 
   // ── Parse body ────────────────────────────────────────────────────────
   let rawBody: Record<string, unknown>;

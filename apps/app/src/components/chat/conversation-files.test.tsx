@@ -304,6 +304,47 @@ describe("ConversationFilesList", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("offers 'Download all' as a ZIP once MORE THAN ONE file exists", async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(MOCK_ASSETS),
+    });
+    const { ConversationFilesList } = await import("./conversation-files");
+    render(<ConversationFilesList conversationPublicId="conv_abc" active={true} />);
+    await waitFor(() => {
+      expect(screen.getByText("quarterly-revenue-chart.png")).toBeInTheDocument();
+    });
+
+    // The header shows the count and a "Download all" anchor pointed at the
+    // conversation's archive route, marked `download` so the browser saves the
+    // streamed ZIP instead of navigating.
+    expect(screen.getByText("4 files")).toBeInTheDocument();
+    const downloadAll = screen.getByLabelText("Download all 4 files as a ZIP archive");
+    expect(downloadAll).toHaveAttribute(
+      "href",
+      "/api/v1/conversations/conv_abc/assets/archive",
+    );
+    expect(downloadAll).toHaveAttribute("download");
+  });
+
+  it("hides 'Download all' when the conversation has only one file", async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve([MOCK_ASSETS[0]]),
+    });
+    const { ConversationFilesList } = await import("./conversation-files");
+    render(<ConversationFilesList conversationPublicId="conv_abc" active={true} />);
+    await waitFor(() => {
+      expect(screen.getByText("quarterly-revenue-chart.png")).toBeInTheDocument();
+    });
+    // A single file's row already has its own Download button — the bulk ZIP
+    // affordance only appears from the second file onward.
+    expect(screen.queryByLabelText(/Download all .* as a ZIP archive/)).toBeNull();
+    expect(screen.queryByText(/files$/)).toBeNull();
+  });
+
   it("shows an info Alert (not an error) when there are no assets", async () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,

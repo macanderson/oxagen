@@ -10,15 +10,22 @@ export const userWorkspacePreferencesWriteHandler: CapabilityHandler<
   typeof userWorkspacePreferencesWrite
 > = async (input, ctx) => {
   if (!ctx.userId) {
-    logger.warn({}, "user.workspace-preferences.write: rejected — no authenticated user");
-    throw new Error("user.workspace-preferences.write requires an authenticated user");
+    logger.warn(
+      {},
+      "user.workspace-preferences.write: rejected — no authenticated user",
+    );
+    throw new Error(
+      "user.workspace-preferences.write requires an authenticated user",
+    );
   }
   if (!ctx.workspaceId || !ctx.orgId) {
     logger.warn(
       { userId: ctx.userId },
       "user.workspace-preferences.write: rejected — no workspace context",
     );
-    throw new Error("user.workspace-preferences.write requires a workspace context");
+    throw new Error(
+      "user.workspace-preferences.write requires a workspace context",
+    );
   }
 
   const userId = ctx.userId;
@@ -38,23 +45,33 @@ export const userWorkspacePreferencesWriteHandler: CapabilityHandler<
     ...("defaultRepoConnectionId" in input
       ? { defaultRepoConnectionId: input.defaultRepoConnectionId }
       : {}),
-    ...("defaultRepoSlug" in input ? { defaultRepoSlug: input.defaultRepoSlug } : {}),
+    ...("defaultRepoSlug" in input
+      ? { defaultRepoSlug: input.defaultRepoSlug }
+      : {}),
     ...("defaultEnvironmentId" in input
       ? { defaultEnvironmentId: input.defaultEnvironmentId }
+      : {}),
+    ...("defaultAgentId" in input
+      ? { defaultAgentId: input.defaultAgentId }
       : {}),
     ...(promptedAt ? { repoDefaultPromptedAt: promptedAt } : {}),
   };
 
   // Partial update — only touch fields explicitly provided; leave the rest.
-  const updateSet: Partial<NewWorkspaceUserPreferences> & { updatedByUserId: string } = {
+  const updateSet: Partial<NewWorkspaceUserPreferences> & {
+    updatedByUserId: string;
+  } = {
     updatedByUserId: userId,
     updatedAt: now,
   };
   if ("defaultRepoConnectionId" in input)
     updateSet.defaultRepoConnectionId = input.defaultRepoConnectionId;
-  if ("defaultRepoSlug" in input) updateSet.defaultRepoSlug = input.defaultRepoSlug;
+  if ("defaultRepoSlug" in input)
+    updateSet.defaultRepoSlug = input.defaultRepoSlug;
   if ("defaultEnvironmentId" in input)
     updateSet.defaultEnvironmentId = input.defaultEnvironmentId;
+  if ("defaultAgentId" in input)
+    updateSet.defaultAgentId = input.defaultAgentId;
   if (promptedAt) updateSet.repoDefaultPromptedAt = promptedAt;
 
   await withTenantDb((tx) =>
@@ -80,13 +97,16 @@ export const userWorkspacePreferencesWriteHandler: CapabilityHandler<
         defaultRepoConnectionId: true,
         defaultRepoSlug: true,
         defaultEnvironmentId: true,
+        defaultAgentId: true,
         repoDefaultPromptedAt: true,
       },
     }),
   );
 
   if (!row) {
-    throw new Error("user.workspace-preferences.write: upserted row not found on re-read");
+    throw new Error(
+      "user.workspace-preferences.write: upserted row not found on re-read",
+    );
   }
 
   logger.info(
@@ -98,6 +118,7 @@ export const userWorkspacePreferencesWriteHandler: CapabilityHandler<
     defaultRepoConnectionId: row.defaultRepoConnectionId ?? null,
     defaultRepoSlug: row.defaultRepoSlug ?? null,
     defaultEnvironmentId: row.defaultEnvironmentId ?? null,
+    defaultAgentId: row.defaultAgentId ?? null,
     repoDefaultPrompted: row.repoDefaultPromptedAt != null,
   };
 };

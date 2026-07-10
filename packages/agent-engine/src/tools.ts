@@ -578,7 +578,7 @@ export function buildWorkspaceTools(
                 bytes: content.length,
                 kind: existed ? "update" : "create",
               });
-              return `Wrote ${content.length} bytes to ${path}`;
+              return `Wrote ${content.length} bytes to ${resolveDisplayPath(workspace.root, path)}`;
             } catch (err) {
               return `Error writing ${path}: ${err instanceof Error ? err.message : String(err)}`;
             }

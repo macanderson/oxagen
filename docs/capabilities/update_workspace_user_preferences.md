@@ -30,6 +30,7 @@ no change; `null` = clear the default; value = set it.
 | `defaultRepoConnectionId` | `string \| null` (min 1 char if string) | Repo connection `publicId` to set as default. |
 | `defaultRepoSlug` | `string \| null` (min 1 char if string) | Denormalized `owner/repo` slug of the default connection, for display. |
 | `defaultEnvironmentId` | `string \| null` (min 1 char if string) | Environment `publicId` to set as default. |
+| `defaultAgentId` | `string \| null` (min 1 char if string) | Agent `publicId` (`agt_…`) to set as the workspace default agent. |
 | `markRepoPrompted` | `boolean` (opt.) | When `true`, stamps `repo_default_prompted_at = now()` so the one-time prompt is not shown again. |
 
 ## Output
@@ -42,6 +43,7 @@ Returns the full, merged state after the update (same shape as
 | `defaultRepoConnectionId` | `string \| null` | |
 | `defaultRepoSlug` | `string \| null` | |
 | `defaultEnvironmentId` | `string \| null` | |
+| `defaultAgentId` | `string \| null` | |
 | `repoDefaultPrompted` | `boolean` | |
 
 ## Roles

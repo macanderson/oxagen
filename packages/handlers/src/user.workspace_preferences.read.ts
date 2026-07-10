@@ -10,6 +10,7 @@ const WS_PREF_DEFAULTS = {
   defaultRepoConnectionId: null,
   defaultRepoSlug: null,
   defaultEnvironmentId: null,
+  defaultAgentId: null,
   repoDefaultPrompted: false,
 };
 
@@ -17,15 +18,22 @@ export const userWorkspacePreferencesReadHandler: CapabilityHandler<
   typeof userWorkspacePreferencesRead
 > = async (_input, ctx) => {
   if (!ctx.userId) {
-    logger.warn({}, "user.workspace-preferences.read: rejected — no authenticated user");
-    throw new Error("user.workspace-preferences.read requires an authenticated user");
+    logger.warn(
+      {},
+      "user.workspace-preferences.read: rejected — no authenticated user",
+    );
+    throw new Error(
+      "user.workspace-preferences.read requires an authenticated user",
+    );
   }
   if (!ctx.workspaceId) {
     logger.warn(
       { userId: ctx.userId },
       "user.workspace-preferences.read: rejected — no workspace context",
     );
-    throw new Error("user.workspace-preferences.read requires a workspace context");
+    throw new Error(
+      "user.workspace-preferences.read requires a workspace context",
+    );
   }
 
   const userId = ctx.userId;
@@ -41,6 +49,7 @@ export const userWorkspacePreferencesReadHandler: CapabilityHandler<
         defaultRepoConnectionId: true,
         defaultRepoSlug: true,
         defaultEnvironmentId: true,
+        defaultAgentId: true,
         repoDefaultPromptedAt: true,
       },
     }),
@@ -63,6 +72,7 @@ export const userWorkspacePreferencesReadHandler: CapabilityHandler<
     defaultRepoConnectionId: row.defaultRepoConnectionId ?? null,
     defaultRepoSlug: row.defaultRepoSlug ?? null,
     defaultEnvironmentId: row.defaultEnvironmentId ?? null,
+    defaultAgentId: row.defaultAgentId ?? null,
     repoDefaultPrompted: row.repoDefaultPromptedAt != null,
   };
 };
