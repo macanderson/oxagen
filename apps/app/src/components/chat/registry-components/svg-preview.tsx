@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useCallback } from "react";
 import { Copy, Check, Download } from "lucide-react";
+import { useCopyToClipboard } from "@/components/ui/copy-button";
 
 export interface SvgPreviewProps {
   /** Sanitized inline SVG markup string. */
@@ -34,21 +35,13 @@ export interface SvgPreviewProps {
  * automatically to the user's light/dark mode preference.
  */
 export default function SvgPreview({ svg, title, serveUrl }: SvgPreviewProps) {
-  const [copied, setCopied] = useState(false);
+  const { copied, copy } = useCopyToClipboard({ timeout: 2000 });
 
   // Encode the SVG as a data URI using encodeURIComponent so it is safe to
   // embed as an <img> src. This is the XSS-safe rendering path.
   const dataUri = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 
-  const handleCopy = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(svg);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Clipboard access denied — fail silently.
-    }
-  }, [svg]);
+  const handleCopy = useCallback(() => void copy(svg), [copy, svg]);
 
   return (
     <div
@@ -85,7 +78,9 @@ export default function SvgPreview({ svg, title, serveUrl }: SvgPreviewProps) {
             ) : (
               <Copy className="size-3.5" aria-hidden="true" />
             )}
-            <span className="hidden sm:inline">{copied ? "Copied" : "Copy SVG"}</span>
+            <span className="hidden sm:inline">
+              {copied ? "Copied" : "Copy SVG"}
+            </span>
           </button>
         </div>
       </div>

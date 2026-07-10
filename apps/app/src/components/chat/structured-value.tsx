@@ -19,9 +19,14 @@
  */
 import * as React from "react";
 import { Check, Clock, Copy, ExternalLink, Minus } from "lucide-react";
+import { useCopyToClipboard } from "@/components/ui/copy-button";
 import { cn } from "@/lib/utils";
 import { CopyableId } from "@/components/knowledge/graph-explorer/copyable-id";
-import { detectKind, humanizeKey, truncate } from "@/components/knowledge/graph-explorer/lib/format";
+import {
+  detectKind,
+  humanizeKey,
+  truncate,
+} from "@/components/knowledge/graph-explorer/lib/format";
 import { TruncatedText } from "@/components/ui/truncated-text";
 
 /** Serialize a value to JSON for the copy affordance; never throws. Kept local
@@ -44,7 +49,8 @@ export interface StructuredValueProps {
 
 // ── value classification ────────────────────────────────────────────────────
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // Prefixed ids: `fan_p48e66…`, `mcs_abc123`, `org_…`. The suffix is captured so
 // we can require it to look OPAQUE (see isOpaqueToken) — otherwise plain status
 // enums shaped like `in_progress` / `not_started` would be mistaken for ids.
@@ -66,7 +72,12 @@ export function looksLikeId(value: string, keyHint?: string): boolean {
   if (UUID_RE.test(value)) return true;
   const prefixed = PREFIXED_ID_RE.exec(value);
   if (prefixed && isOpaqueToken(prefixed[1] ?? "")) return true;
-  if (keyHint && KEY_IS_ID_RE.test(keyHint) && /^[A-Za-z0-9_-]{6,}$/.test(value)) return true;
+  if (
+    keyHint &&
+    KEY_IS_ID_RE.test(keyHint) &&
+    /^[A-Za-z0-9_-]{6,}$/.test(value)
+  )
+    return true;
   return OPAQUE_TOKEN_RE.test(value);
 }
 
@@ -79,12 +90,26 @@ export function looksLikeEnum(value: string): boolean {
 /** Tone dot color for known lifecycle/status words; undefined = neutral enum. */
 export function statusToneDot(value: string): string | undefined {
   const v = value.toLowerCase();
-  if (/^(running|in_progress|processing|streaming|active|live|started|open)$/.test(v)) return "bg-info";
-  if (/^(completed|complete|success|succeeded|done|ok|ready|connected|enabled|granted|approved|passed)$/.test(v))
+  if (
+    /^(running|in_progress|processing|streaming|active|live|started|open)$/.test(
+      v,
+    )
+  )
+    return "bg-info";
+  if (
+    /^(completed|complete|success|succeeded|done|ok|ready|connected|enabled|granted|approved|passed)$/.test(
+      v,
+    )
+  )
     return "bg-success";
-  if (/^(failed|error|errored|cancelled|canceled|denied|expired|disabled|rejected|blocked)$/.test(v))
+  if (
+    /^(failed|error|errored|cancelled|canceled|denied|expired|disabled|rejected|blocked)$/.test(
+      v,
+    )
+  )
     return "bg-destructive";
-  if (/^(pending|queued|waiting|idle|paused|draft|scheduled|warning)$/.test(v)) return "bg-warning";
+  if (/^(pending|queued|waiting|idle|paused|draft|scheduled|warning)$/.test(v))
+    return "bg-warning";
   return undefined;
 }
 
@@ -109,8 +134,15 @@ function Chip({
 }) {
   return (
     <span className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-border/70 bg-muted/50 px-1.5 py-0.5 text-[11px] font-medium text-foreground">
-      {tone ? <span className={cn("size-1.5 shrink-0 rounded-full", tone)} aria-hidden="true" /> : null}
-      <span className="truncate" title={title}>{children}</span>
+      {tone ? (
+        <span
+          className={cn("size-1.5 shrink-0 rounded-full", tone)}
+          aria-hidden="true"
+        />
+      ) : null}
+      <span className="truncate" title={title}>
+        {children}
+      </span>
     </span>
   );
 }
@@ -133,10 +165,16 @@ function ScalarValue({ value, keyHint }: { value: unknown; keyHint?: string }) {
         </span>
       );
     case "number":
-      return <span className="tabular-nums">{new Intl.NumberFormat().format(value as number)}</span>;
+      return (
+        <span className="tabular-nums">
+          {new Intl.NumberFormat().format(value as number)}
+        </span>
+      );
     case "date": {
       const d = new Date(value as string);
-      const label = Number.isNaN(d.getTime()) ? String(value) : d.toLocaleString();
+      const label = Number.isNaN(d.getTime())
+        ? String(value)
+        : d.toLocaleString();
       return (
         <span className="inline-flex items-center gap-1.5">
           <Clock className="size-3 text-muted-foreground" aria-hidden="true" />
@@ -158,9 +196,15 @@ function ScalarValue({ value, keyHint }: { value: unknown; keyHint?: string }) {
       );
     case "string": {
       const s = value as string;
-      if (s.length === 0) return <span className="text-muted-foreground">—</span>;
+      if (s.length === 0)
+        return <span className="text-muted-foreground">—</span>;
       if (looksLikeId(s, keyHint)) return <CopyableId value={s} max={24} />;
-      if (looksLikeEnum(s)) return <Chip tone={statusToneDot(s)} title={s}>{s}</Chip>;
+      if (looksLikeEnum(s))
+        return (
+          <Chip tone={statusToneDot(s)} title={s}>
+            {s}
+          </Chip>
+        );
       // Genuine free text (not an id/enum) — clamp to a few lines with a
       // click-to-reveal popover for the full, formatted content.
       return <TruncatedText text={s} lines={3} />;
@@ -172,7 +216,13 @@ function ScalarValue({ value, keyHint }: { value: unknown; keyHint?: string }) {
 
 // ── container renderers ─────────────────────────────────────────────────────
 
-function RecordGrid({ record, depth }: { record: Record<string, unknown>; depth: number }) {
+function RecordGrid({
+  record,
+  depth,
+}: {
+  record: Record<string, unknown>;
+  depth: number;
+}) {
   const entries = Object.entries(record);
   if (entries.length === 0) {
     return <span className="text-xs text-muted-foreground">No fields</span>;
@@ -188,7 +238,10 @@ function RecordGrid({ record, depth }: { record: Record<string, unknown>; depth:
       {entries.map(([key, val]) =>
         isScalar(val) ? (
           <React.Fragment key={key}>
-            <dt className="truncate pt-px text-xs text-muted-foreground" title={humanizeKey(key)}>
+            <dt
+              className="truncate pt-px text-xs text-muted-foreground"
+              title={humanizeKey(key)}
+            >
               {humanizeKey(key)}
             </dt>
             <dd className="min-w-0 text-xs text-foreground">
@@ -200,7 +253,10 @@ function RecordGrid({ record, depth }: { record: Record<string, unknown>; depth:
             key={key}
             className="col-span-2 grid min-w-0 grid-cols-[minmax(5rem,max-content)_minmax(0,1fr)] gap-x-4 @lg:col-span-4"
           >
-            <dt className="truncate pt-px text-xs text-muted-foreground" title={humanizeKey(key)}>
+            <dt
+              className="truncate pt-px text-xs text-muted-foreground"
+              title={humanizeKey(key)}
+            >
               {humanizeKey(key)}
             </dt>
             <dd className="min-w-0 text-xs text-foreground">
@@ -213,7 +269,15 @@ function RecordGrid({ record, depth }: { record: Record<string, unknown>; depth:
   );
 }
 
-function ArrayValue({ items, keyHint, depth }: { items: unknown[]; keyHint?: string; depth: number }) {
+function ArrayValue({
+  items,
+  keyHint,
+  depth,
+}: {
+  items: unknown[];
+  keyHint?: string;
+  depth: number;
+}) {
   if (items.length === 0) {
     return <span className="text-xs text-muted-foreground">Empty</span>;
   }
@@ -223,10 +287,15 @@ function ArrayValue({ items, keyHint, depth }: { items: unknown[]; keyHint?: str
       <div className="flex flex-wrap gap-1.5">
         {items.map((item, i) => {
           const s = typeof item === "string" ? item : null;
-          if (s !== null && looksLikeId(s, keyHint)) return <CopyableId key={i} value={s} max={20} />;
+          if (s !== null && looksLikeId(s, keyHint))
+            return <CopyableId key={i} value={s} max={20} />;
           const label = typeof item === "object" ? "—" : String(item ?? "—");
           return (
-            <Chip key={i} tone={s !== null ? statusToneDot(s) : undefined} title={label}>
+            <Chip
+              key={i}
+              tone={s !== null ? statusToneDot(s) : undefined}
+              title={label}
+            >
               {label}
             </Chip>
           );
@@ -249,15 +318,27 @@ function ArrayValue({ items, keyHint, depth }: { items: unknown[]; keyHint?: str
   );
 }
 
-export function StructuredValue({ value, keyHint, depth = 0 }: StructuredValueProps) {
+export function StructuredValue({
+  value,
+  keyHint,
+  depth = 0,
+}: StructuredValueProps) {
   const kind = detectKind(value);
   if (kind === "object") {
-    const grid = <RecordGrid record={value as Record<string, unknown>} depth={depth} />;
+    const grid = (
+      <RecordGrid record={value as Record<string, unknown>} depth={depth} />
+    );
     // Top level sits flush in the field card; nested records indent under a rule.
-    return depth === 0 ? grid : <div className="mt-1 border-l border-border/60 pl-3">{grid}</div>;
+    return depth === 0 ? (
+      grid
+    ) : (
+      <div className="mt-1 border-l border-border/60 pl-3">{grid}</div>
+    );
   }
   if (kind === "array") {
-    return <ArrayValue items={value as unknown[]} keyHint={keyHint} depth={depth} />;
+    return (
+      <ArrayValue items={value as unknown[]} keyHint={keyHint} depth={depth} />
+    );
   }
   return <ScalarValue value={value} keyHint={keyHint} />;
 }
@@ -266,19 +347,11 @@ export function StructuredValue({ value, keyHint, depth = 0 }: StructuredValuePr
 
 /** Small ghost button that copies the value as JSON — without ever showing it. */
 function CopyJsonButton({ value }: { value: unknown }) {
-  const [copied, setCopied] = React.useState(false);
-  const timer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-  React.useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
-  const onCopy = React.useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(valueToJson(value));
-      setCopied(true);
-      if (timer.current) clearTimeout(timer.current);
-      timer.current = setTimeout(() => setCopied(false), 1400);
-    } catch {
-      // Clipboard unavailable (insecure context) — no-op.
-    }
-  }, [value]);
+  const { copied, copy } = useCopyToClipboard({ timeout: 1400 });
+  const onCopy = React.useCallback(
+    () => void copy(valueToJson(value)),
+    [copy, value],
+  );
   return (
     <button
       type="button"
@@ -310,12 +383,24 @@ export interface StructuredFieldProps {
  * value rendered as a structured tree inside a subtle card. The standard way to
  * present a tool input/result (or an approval/consent preview).
  */
-export function StructuredField({ label, value, copyable = true, className }: StructuredFieldProps) {
+export function StructuredField({
+  label,
+  value,
+  copyable = true,
+  className,
+}: StructuredFieldProps) {
   return (
-    <div className={cn("space-y-1.5", className)} data-testid="structured-field">
+    <div
+      className={cn("space-y-1.5", className)}
+      data-testid="structured-field"
+    >
       <div className="flex items-center justify-between gap-2">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</span>
-        {copyable && value !== undefined && value !== null ? <CopyJsonButton value={value} /> : null}
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          {label}
+        </span>
+        {copyable && value !== undefined && value !== null ? (
+          <CopyJsonButton value={value} />
+        ) : null}
       </div>
       <div className="@container overflow-x-auto rounded-lg border border-border/60 bg-muted/30 px-3 py-2.5">
         <StructuredValue value={value} />

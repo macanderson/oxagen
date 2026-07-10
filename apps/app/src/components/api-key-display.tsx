@@ -1,8 +1,8 @@
 "use client";
 
-import * as React from "react";
 import { Check, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useCopyToClipboard } from "@/components/ui/copy-button";
 import { useToast } from "@/components/ui/toast";
 
 interface ApiKeyDisplayProps {
@@ -14,21 +14,23 @@ interface ApiKeyDisplayProps {
   expiresAt: string | null;
 }
 
-export function ApiKeyDisplay({ rawKey, name, createdAt, expiresAt }: ApiKeyDisplayProps) {
-  const [copied, setCopied] = React.useState(false);
+export function ApiKeyDisplay({
+  rawKey,
+  name,
+  createdAt,
+  expiresAt,
+}: ApiKeyDisplayProps) {
+  const { copied, copy } = useCopyToClipboard({ timeout: 2000 });
   const toast = useToast();
 
   const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(rawKey);
-      setCopied(true);
+    if (await copy(rawKey)) {
       toast.add({
         title: "API key copied",
         description: "API key has been successfully copied to your clipboard.",
         type: "success",
       });
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
+    } else {
       toast.add({
         title: "Failed to copy",
         description: "Could not copy the API key to clipboard.",
@@ -45,14 +47,22 @@ export function ApiKeyDisplay({ rawKey, name, createdAt, expiresAt }: ApiKeyDisp
       <div className="flex flex-col gap-2">
         <p className="text-sm font-medium text-foreground">{name}</p>
         <p className="text-xs text-muted-foreground">
-          Created {createdDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-          {expiresDate && ` • Expires ${expiresDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`}
+          Created{" "}
+          {createdDate.toLocaleDateString("en-US", {
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+          })}
+          {expiresDate &&
+            ` • Expires ${expiresDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`}
         </p>
       </div>
 
       <div className="flex items-center gap-2">
         <div className="flex-1 overflow-hidden rounded-lg border border-border/40 bg-muted/50 p-3">
-          <code className="break-all font-mono text-xs text-foreground">{rawKey}</code>
+          <code className="break-all font-mono text-xs text-foreground">
+            {rawKey}
+          </code>
         </div>
         <Button
           type="button"
@@ -72,7 +82,8 @@ export function ApiKeyDisplay({ rawKey, name, createdAt, expiresAt }: ApiKeyDisp
 
       <div className="rounded-lg border border-warning/40 bg-warning/12 p-3">
         <p className="text-xs text-warning">
-          <strong>Save this key securely.</strong> You won&apos;t be able to see it again after you leave this page.
+          <strong>Save this key securely.</strong> You won&apos;t be able to see
+          it again after you leave this page.
         </p>
       </div>
     </div>

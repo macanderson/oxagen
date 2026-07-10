@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import { Check, Copy, RefreshCw } from "lucide-react";
+import { useCopyToClipboard } from "@/components/ui/copy-button";
 import { cn } from "@/lib/utils";
 import {
   Sheet,
@@ -90,7 +91,10 @@ const MOBILE_QUERY = "(max-width: 767px)";
  */
 function useIsMobileViewport(): boolean {
   const subscribe = useCallback((onChange: () => void) => {
-    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+    if (
+      typeof window === "undefined" ||
+      typeof window.matchMedia !== "function"
+    ) {
       return () => {};
     }
     const mql = window.matchMedia(MOBILE_QUERY);
@@ -98,7 +102,10 @@ function useIsMobileViewport(): boolean {
     return () => mql.removeEventListener("change", onChange);
   }, []);
   const getSnapshot = useCallback(() => {
-    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+    if (
+      typeof window === "undefined" ||
+      typeof window.matchMedia !== "function"
+    ) {
       return false;
     }
     return window.matchMedia(MOBILE_QUERY).matches;
@@ -155,21 +162,12 @@ function CopyButton({
   className?: string;
   children?: ReactNode;
 }) {
-  const [copied, setCopied] = useState(false);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => () => {
-    if (timer.current) clearTimeout(timer.current);
-  }, []);
+  const { copied, copy } = useCopyToClipboard();
   return (
     <button
       type="button"
       aria-label={label}
-      onClick={() => {
-        void navigator.clipboard?.writeText(value);
-        setCopied(true);
-        if (timer.current) clearTimeout(timer.current);
-        timer.current = setTimeout(() => setCopied(false), 1500);
-      }}
+      onClick={() => void copy(value)}
       className={cn(
         "inline-flex min-h-11 min-w-11 items-center justify-center gap-1 rounded-md px-1.5 py-1 text-xs text-muted-foreground hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:min-h-0 md:min-w-0",
         className,
@@ -210,11 +208,15 @@ export default function WorkspaceContextPanel({
   // fetches; `loadingDirs` is mirrored into state for the row spinners.
   const loadedDirsRef = useRef<Set<string>>(new Set());
   const loadingDirsRef = useRef<Set<string>>(new Set());
-  const [loadingDirs, setLoadingDirs] = useState<ReadonlySet<string>>(new Set());
+  const [loadingDirs, setLoadingDirs] = useState<ReadonlySet<string>>(
+    new Set(),
+  );
 
   // File viewer state.
   const [viewerPath, setViewerPath] = useState<string | null>(null);
-  const [viewerData, setViewerData] = useState<SandboxFileReadResponse | null>(null);
+  const [viewerData, setViewerData] = useState<SandboxFileReadResponse | null>(
+    null,
+  );
   const [viewerError, setViewerError] = useState<string | null>(null);
 
   const initialDepth = depth ?? LAZY_FETCH_DEPTH;
@@ -240,13 +242,21 @@ export default function WorkspaceContextPanel({
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = (await res.json()) as SandboxFilesListResponse;
         if (!cancelled) {
-          loadedDirsRef.current = computeLoadedDirs(path ?? "", json.entries, initialDepth);
+          loadedDirsRef.current = computeLoadedDirs(
+            path ?? "",
+            json.entries,
+            initialDepth,
+          );
           setEntries(json.entries);
           setError(null);
         }
       } catch (err) {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Failed to load workspace files");
+          setError(
+            err instanceof Error
+              ? err.message
+              : "Failed to load workspace files",
+          );
         }
       }
     }
@@ -263,7 +273,11 @@ export default function WorkspaceContextPanel({
   const handleDirExpand = useCallback(
     (dirPath: string) => {
       if (!scopeBase) return;
-      if (loadedDirsRef.current.has(dirPath) || loadingDirsRef.current.has(dirPath)) return;
+      if (
+        loadedDirsRef.current.has(dirPath) ||
+        loadingDirsRef.current.has(dirPath)
+      )
+        return;
       loadingDirsRef.current.add(dirPath);
       setLoadingDirs(new Set(loadingDirsRef.current));
 
@@ -272,11 +286,19 @@ export default function WorkspaceContextPanel({
           const res = await fetch(`${scopeBase}/agent/sandbox/files`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ sessionId, path: dirPath, depth: LAZY_FETCH_DEPTH }),
+            body: JSON.stringify({
+              sessionId,
+              path: dirPath,
+              depth: LAZY_FETCH_DEPTH,
+            }),
           });
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           const json = (await res.json()) as SandboxFilesListResponse;
-          for (const dir of computeLoadedDirs(dirPath, json.entries, LAZY_FETCH_DEPTH)) {
+          for (const dir of computeLoadedDirs(
+            dirPath,
+            json.entries,
+            LAZY_FETCH_DEPTH,
+          )) {
             loadedDirsRef.current.add(dir);
           }
           setEntries((prev) => mergeEntries(prev ?? [], json.entries));
@@ -284,7 +306,9 @@ export default function WorkspaceContextPanel({
         } catch (err) {
           // Keep the dir unloaded so a re-toggle retries, and surface the
           // failure inline rather than swallowing it.
-          setError(err instanceof Error ? err.message : "Failed to load directory");
+          setError(
+            err instanceof Error ? err.message : "Failed to load directory",
+          );
         } finally {
           loadingDirsRef.current.delete(dirPath);
           setLoadingDirs(new Set(loadingDirsRef.current));
@@ -314,7 +338,9 @@ export default function WorkspaceContextPanel({
         if (!cancelled) setViewerData(json);
       } catch (err) {
         if (!cancelled) {
-          setViewerError(err instanceof Error ? err.message : "Failed to read file");
+          setViewerError(
+            err instanceof Error ? err.message : "Failed to read file",
+          );
         }
       }
     })();
@@ -347,7 +373,8 @@ export default function WorkspaceContextPanel({
   // render so mounting doesn't double-fetch; only genuine changes reload.
   const prevSignalRef = useRef(refreshSignal);
   useEffect(() => {
-    if (refreshSignal === undefined || prevSignalRef.current === refreshSignal) return;
+    if (refreshSignal === undefined || prevSignalRef.current === refreshSignal)
+      return;
     prevSignalRef.current = refreshSignal;
     softRefresh();
   }, [refreshSignal, softRefresh]);
@@ -376,7 +403,9 @@ export default function WorkspaceContextPanel({
         className="my-2 rounded-xl border border-destructive/20 bg-destructive/5 px-4 py-3"
         data-component="workspace-context-panel"
       >
-        <p className="text-sm text-destructive">Failed to load workspace files: {error}</p>
+        <p className="text-sm text-destructive">
+          Failed to load workspace files: {error}
+        </p>
       </div>
     );
   }
@@ -390,7 +419,10 @@ export default function WorkspaceContextPanel({
         Sandbox running
       </span>
       <CopyButton value={sessionId} label="Copy session id">
-        <span className="hidden font-mono text-[11px] sm:inline" title={sessionId}>
+        <span
+          className="hidden font-mono text-[11px] sm:inline"
+          title={sessionId}
+        >
           {shortSessionId(sessionId)}
         </span>
       </CopyButton>
@@ -433,7 +465,8 @@ export default function WorkspaceContextPanel({
         ) : null}
         {viewerData.truncated ? (
           <p className="rounded-md border border-border bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
-            File truncated — {formatBytes(viewerData.sizeBytes)} on disk; showing the first part.
+            File truncated — {formatBytes(viewerData.sizeBytes)} on disk;
+            showing the first part.
           </p>
         ) : null}
         <pre className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap break-all rounded-md border border-border bg-muted/40 p-3 font-mono text-xs leading-relaxed">
@@ -446,7 +479,9 @@ export default function WorkspaceContextPanel({
   return (
     <div data-component="workspace-context-panel">
       {error && entries ? (
-        <p className="mb-1 text-xs text-destructive">Failed to load directory: {error}</p>
+        <p className="mb-1 text-xs text-destructive">
+          Failed to load directory: {error}
+        </p>
       ) : null}
       <FileTreeCard
         entries={entries ?? []}
@@ -482,13 +517,18 @@ export default function WorkspaceContextPanel({
                 <>
                   <span>{formatBytes(viewerData.sizeBytes)}</span>
                   <span aria-hidden="true">·</span>
-                  <span>{viewerData.encoding === "base64" ? "binary" : "utf-8"}</span>
+                  <span>
+                    {viewerData.encoding === "base64" ? "binary" : "utf-8"}
+                  </span>
                 </>
               ) : (
                 <span>Reading file…</span>
               )}
               {viewerData ? (
-                <CopyButton value={viewerData.content} label="Copy file contents">
+                <CopyButton
+                  value={viewerData.content}
+                  label="Copy file contents"
+                >
                   <span className="text-[11px]">Copy</span>
                 </CopyButton>
               ) : null}
