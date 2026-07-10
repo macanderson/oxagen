@@ -20,6 +20,25 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
+
+/**
+ * Route prefixes where the nudge must never render: pre-auth and onboarding
+ * flows have tall bottom-anchored forms, and the banner was found covering
+ * the "Sign in" / "Create account" / org-creation submit buttons on phones.
+ * The nudge belongs inside the app, once the user is actually using it.
+ */
+const SUPPRESSED_ROUTE_PREFIXES = [
+  "/login",
+  "/signup",
+  "/forgot-password",
+  "/reset-password",
+  "/two-factor",
+  "/verify",
+  "/new-organization",
+  "/cli/authorize",
+  "/github/setup",
+];
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -108,6 +127,12 @@ function persistDismissed(): void {
 
 export function InstallPrompt() {
   const [state, setState] = useState<PromptState>({ kind: "idle" });
+  // usePathname() is typed non-null in the app router but CAN be null outside
+  // it (tests, pages-router mounts) — treat that as "no route, don't suppress".
+  const pathname = usePathname() ?? "";
+  const suppressed = SUPPRESSED_ROUTE_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(prefix + "/"),
+  );
 
   useEffect(() => {
     // Never show if already installed or previously dismissed.
@@ -159,7 +184,7 @@ export function InstallPrompt() {
     setState({ kind: "idle" });
   }, [state]);
 
-  if (state.kind === "idle") return null;
+  if (state.kind === "idle" || suppressed) return null;
 
   return (
     <div
