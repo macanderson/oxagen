@@ -110,6 +110,8 @@ export function readFileTruncationMarker(
       `cap within a line — head + tail kept, middle chars elided]`
     );
   };
+}
+
 // ── Workspace-root path display (worktree divergence guard) ─────────────────
 // File tools resolve RELATIVE paths against the workspace root captured at
 // session start — never against wherever the last `bash` command `cd`-ed
