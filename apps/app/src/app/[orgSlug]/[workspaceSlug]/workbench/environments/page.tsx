@@ -34,8 +34,6 @@ export const metadata: Metadata = {
   title: "Environments | Workbench",
 };
 
-export const dynamic = "force-dynamic";
-
 export default async function WorkbenchEnvironmentsPage({
   params,
 }: {

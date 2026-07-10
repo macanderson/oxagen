@@ -22,7 +22,7 @@ import { DbOAuthClientProvider, loadOAuthState, deleteOAuthState } from "@oxagen
 import { isNextRedirectError } from "@/lib/auth-denial";
 import { logger } from "@oxagen/handlers/logger";
 
-export const runtime = "nodejs"; // MCP SDK auth uses Node crypto — edge-unsafe.
+// Runs on the default Node.js runtime — MCP SDK auth uses Node crypto (edge-unsafe).
 
 /**
  * Fetch wrapper for mcpAuth — see authorize/route.ts for full explanation.

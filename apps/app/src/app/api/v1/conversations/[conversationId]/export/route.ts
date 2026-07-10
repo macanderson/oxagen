@@ -21,8 +21,7 @@ import "@oxagen/handlers/register";
 import type { ConversationExportOutput } from "@oxagen/oxagen/contracts/conversation.export";
 import { getSession } from "@/lib/session";
 
-// Node runtime: uses crypto + DB + pdf-lib.
-export const runtime = "nodejs";
+// Runs on the default Node.js runtime: uses crypto + DB + pdf-lib (edge-unsafe).
 
 export async function GET(
   req: Request,

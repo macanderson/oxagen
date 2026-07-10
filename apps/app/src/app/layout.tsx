@@ -14,6 +14,7 @@
  * size-adjust fallback metrics. Not required — the variable fonts are already
  * self-hosted and active via the shared CSS.
  */
+import { Suspense } from "react";
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { ThemeProvider, MotionProvider } from "@oxagen/ui";
@@ -156,8 +157,13 @@ export default function RootLayout({
             {/*
              * Route-transition loader: spinner during navigation, mobile-only
              * (gated at max-width:768px). Respects prefers-reduced-motion.
+             * Suspense: usePathname() is uncached request data under
+             * cacheComponents — without a boundary it blocks every page's
+             * prerender ("Uncached data was accessed outside of <Suspense>").
              */}
-            <RouteTransitionLoader />
+            <Suspense fallback={null}>
+              <RouteTransitionLoader />
+            </Suspense>
             {/*
              * Install prompt: deferred install CTA for Chrome/Android; manual
              * instructions for iOS. Never shown when already installed or

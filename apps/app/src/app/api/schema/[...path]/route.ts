@@ -7,8 +7,6 @@ import { resolveOrg, resolveWorkspace, assertOrgMember, getOrgRole } from "@/lib
 import { runInTenantScope } from "@oxagen/tenancy";
 import { invoke } from "@oxagen/oxagen";
 
-export const runtime = "nodejs";
-
 // Schema-registry browser proxy. Lives at /api/schema/* (NOT /api/v1/schema/*)
 // on purpose: apps/app rewrites /api/v1/:path* to the Hono API, which would
 // shadow a catch-all filesystem route. /api/schema/* sits outside that rewrite
