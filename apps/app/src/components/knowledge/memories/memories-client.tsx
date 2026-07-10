@@ -27,13 +27,11 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowUpCircle,
-  BadgeCheck,
   Bug,
   BrainCircuit,
   ChevronRight,
   Clock,
   Copy,
-  Eye,
   Filter,
   FileText,
   Fingerprint,
@@ -72,15 +70,25 @@ import {
   MemoriesBulkImport,
   type DraftMemory,
 } from "./memories-bulk-import";
-// Shared kind/weight taxonomy lives in its own lightweight module (see
+// Shared kind/weight/class taxonomy lives in its own lightweight module (see
 // memory-kinds.ts) so the bulk-import grid can reuse it without importing this
 // CodeMirror-laden component. Re-exported here for existing consumers.
 export {
   ALL_KINDS,
   KIND_CONFIG,
   WEIGHT_CONFIG,
+  ALL_CLASSES,
+  CLASS_CONFIG,
+  RECOMMENDED_MEMORY_KINDS,
   type MemoryKind,
   type MemoryWeight,
+  type MemoryClass,
+} from "./memory-kinds";
+import {
+  ALL_CLASSES,
+  CLASS_CONFIG,
+  RECOMMENDED_MEMORY_KINDS,
+  type MemoryClass,
 } from "./memory-kinds";
 
 // ---------------------------------------------------------------------------
@@ -90,25 +98,8 @@ export {
 // file never pulls the server contracts/zod bundle in — see agent.memory.model.
 // ---------------------------------------------------------------------------
 
-export type MemoryClass = "OBSERVATION" | "RULE" | "FACT";
 export type MemoryStatus = "ACTIVE" | "SUPERSEDED" | "RETRACTED" | "ARCHIVED";
 type ActorKind = "AGENT" | "USER" | "SYSTEM";
-
-// Canonical content-domain kinds (agent.memory.model#RECOMMENDED_MEMORY_KINDS).
-// memoryKind is an open string — these are suggestions, not a closed enum.
-export const RECOMMENDED_MEMORY_KINDS = [
-  "FEEDBACK",
-  "PERFORMANCE",
-  "STYLE",
-  "PREFERENCE",
-  "VOICE",
-  "PROSE",
-  "routine-change",
-  "constraint",
-  "bug-root-cause",
-  "convention-deviation",
-  "gotcha",
-] as const;
 
 export interface AgentMemoryRecord {
   id: string;
@@ -367,33 +358,6 @@ export function getKindConfig(kind: string): (typeof KIND_CONFIG)[string] {
     }
   );
 }
-
-// ---------------------------------------------------------------------------
-// Class (epistemic status) configuration — the primary axis of the model
-// ---------------------------------------------------------------------------
-
-export const ALL_CLASSES: MemoryClass[] = ["OBSERVATION", "RULE", "FACT"];
-
-export const CLASS_CONFIG: Record<
-  MemoryClass,
-  { label: string; icon: React.ComponentType<{ className?: string }>; color: string }
-> = {
-  OBSERVATION: {
-    label: "Observation",
-    icon: Eye,
-    color: "bg-zinc-400/20 text-zinc-600 dark:text-zinc-400",
-  },
-  RULE: {
-    label: "Rule",
-    icon: ShieldAlert,
-    color: "bg-amber-500/15 text-amber-700 dark:text-amber-400",
-  },
-  FACT: {
-    label: "Fact",
-    icon: BadgeCheck,
-    color: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
-  },
-};
 
 /** The next rung(s) up the confidence ladder a memory can be promoted to. */
 function nextClassTargets(current: MemoryClass): Array<"RULE" | "FACT"> {
