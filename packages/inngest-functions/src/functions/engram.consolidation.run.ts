@@ -46,6 +46,9 @@ export const [engramConsolidationRun] = createFunction(
         promotedRules: 0,
         reinforced: 0,
         evicted: 0,
+        contradictions: 0,
+        decayed: 0,
+        coldTier: 0,
       };
 
       for (const namespace of namespaces) {
@@ -60,6 +63,9 @@ export const [engramConsolidationRun] = createFunction(
         totals.promotedRules += counts.promotedRules;
         totals.reinforced += counts.reinforced;
         totals.evicted += counts.evicted;
+        totals.contradictions += counts.contradictions;
+        totals.decayed += counts.decayed;
+        totals.coldTier += counts.coldTier;
         logger.info(
           { namespace, ...counts },
           "engram.consolidation: workspace done",

@@ -41,9 +41,7 @@ const schemaFieldSchema = z.object({
   options: z
     .array(z.object({ value: z.string(), label: z.string() }))
     .optional(),
-  dependsOn: z
-    .object({ field: z.string(), value: z.unknown() })
-    .optional(),
+  dependsOn: z.object({ field: z.string(), value: z.unknown() }).optional(),
   validation: fieldValidationSchema.optional(),
 });
 
@@ -163,7 +161,7 @@ export const pluginSchemaGet = registerCapability({
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   agent: { requiresApproval: false, riskLevel: "low", category: "plugin" },
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: false,
   sensitivity: "low",
   defaultEffect: "deny",
@@ -172,7 +170,9 @@ export const pluginSchemaGet = registerCapability({
     workspace: { Owner: "allow", Member: "allow" },
   },
   input: z.object({
-    pluginId: z.string().describe("Connector plugin identifier (e.g. 'github', 'google-drive')"),
+    pluginId: z
+      .string()
+      .describe("Connector plugin identifier (e.g. 'github', 'google-drive')"),
   }),
   output: connectorPluginSchemaOutput,
 });

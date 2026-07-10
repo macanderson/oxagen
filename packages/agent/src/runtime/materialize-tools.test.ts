@@ -36,7 +36,8 @@ const FIXTURE = [
 
 vi.mock("@oxagen/oxagen", () => ({
   listCapabilities: () => FIXTURE,
-  getSurfaces: (c: { surfaces?: readonly string[] }) => c.surfaces ?? ["api", "mcp"],
+  getSurfaces: (c: { surfaces?: readonly string[] }) =>
+    c.surfaces ?? ["api", "mcp"],
   getCapability: () => undefined,
 }));
 
@@ -65,7 +66,12 @@ const dbMocks = vi.hoisted(() => {
       authStrategy: "mcp.authStrategy",
       authConfig: "mcp.authConfig",
     },
-    pluginInstalledPlugins: { id: "listing.id", enabled: "listing.enabled", deletedAt: "listing.deletedAt", authKind: "listing.authKind" },
+    pluginInstalledPlugins: {
+      id: "listing.id",
+      enabled: "listing.enabled",
+      deletedAt: "listing.deletedAt",
+      authKind: "listing.authKind",
+    },
     pluginOrgDenylist: { orgId: "deny.orgId", serverName: "deny.serverName" },
   };
   const rowsByTable = new Map<unknown, unknown[]>();
@@ -84,10 +90,10 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  db: dbMocks.db,
-  withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => fn(dbMocks.db()),
-  schema: dbMocks.schema,
-
+    db: dbMocks.db,
+    withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn(dbMocks.db()),
+    schema: dbMocks.schema,
   };
 });
 
@@ -109,12 +115,18 @@ vi.mock("@oxagen/plugins", () => ({
     pendingRedirect: null,
   })),
   markCredentialNeedsReauth: vi.fn(async () => undefined),
-  listEntitledCapabilityPluginIds: vi.fn(async (_orgId: string, _workspaceId: string) => new Set<string>()),
+  listEntitledCapabilityPluginIds: vi.fn(
+    async (_orgId: string, _workspaceId: string) => new Set<string>(),
+  ),
 }));
 
 vi.mock("@oxagen/oxagen/kernel", () => ({
   invoke: vi.fn(async () => ({ ok: true })),
-  authorizeExternalCapability: vi.fn(async () => ({ allowed: true, outcome: "allow", reason: null })),
+  authorizeExternalCapability: vi.fn(async () => ({
+    allowed: true,
+    outcome: "allow",
+    reason: null,
+  })),
 }));
 
 // Lightweight @oxagen/tenancy shim. The real runInTenantScope asserts UUIDs and
@@ -159,15 +171,36 @@ vi.mock("@oxagen/sandbox", () => ({
 // Stub @modelcontextprotocol/sdk/client/auth.js — UnauthorizedError used by the MCP contributor.
 vi.mock("@modelcontextprotocol/sdk/client/auth.js", () => ({
   UnauthorizedError: class UnauthorizedError extends Error {
-    constructor(msg?: string) { super(msg ?? "Unauthorized"); this.name = "UnauthorizedError"; }
+    constructor(msg?: string) {
+      super(msg ?? "Unauthorized");
+      this.name = "UnauthorizedError";
+    }
   },
 }));
 
-// Stub the MCP client so tests can inject fake tool executes.
-vi.mock("../dispatch/mcp-client", () => ({
-  connectMcp: vi.fn(async () => ({})),
-  materializeMcpTools: vi.fn(async () => ({})),
-}));
+// Stub the MCP network seams; materializePinnedMcpTools stays real so the
+// descriptor-pinning contribution path is exercised end-to-end.
+vi.mock("../dispatch/mcp-client", async (importOriginal) => {
+  const real = await importOriginal<typeof import("../dispatch/mcp-client")>();
+  return {
+    ...real,
+    connectMcp: vi.fn(async () => ({})),
+    listMcpToolDescriptors: vi.fn(async () => []),
+  };
+});
+
+// Descriptor-pin I/O seams (pure diff/hash helpers stay real). With no pins on
+// record and a succeeding capture, the contributor trust-on-first-use pins the
+// live listing — so tools flow through exactly as before pinning existed.
+vi.mock("./mcp-snapshots", async (importOriginal) => {
+  const real = await importOriginal<typeof import("./mcp-snapshots")>();
+  return {
+    ...real,
+    readLatestPinnedDescriptors: vi.fn(async () => []),
+    captureToolSnapshots: vi.fn(async () => 0),
+    recordServerChange: vi.fn(async () => undefined),
+  };
+});
 
 const mocks = vi.hoisted(() => ({
   beforeTool: vi.fn(async () => undefined),
@@ -199,7 +232,10 @@ vi.mock("./approval", () => ({
 // first-use prompt / pre-grant-inline / denial-short-circuit paths.
 const consentMocks = vi.hoisted(() => ({
   checkConsent: vi.fn(
-    async (): Promise<{ status: "granted" | "denied"; active: boolean } | null> => null,
+    async (): Promise<{
+      status: "granted" | "denied";
+      active: boolean;
+    } | null> => null,
   ),
   recordConsent: vi.fn(async () => ({ consentId: "mcons_x" })),
 }));
@@ -219,7 +255,7 @@ vi.mock("@oxagen/telemetry", async (importOriginal) => {
 
 import { materializeTools } from "./materialize-tools";
 import { invoke, authorizeExternalCapability } from "@oxagen/oxagen/kernel";
-import { connectMcp, materializeMcpTools } from "../dispatch/mcp-client";
+import { connectMcp, listMcpToolDescriptors } from "../dispatch/mcp-client";
 import { listEntitledCapabilityPluginIds } from "@oxagen/plugins";
 import { pluginForContract } from "@oxagen/oxagen/plugins";
 // Note: the @oxagen/database `db` is driven via `dbMocks.db` (hoisted above) —
@@ -230,7 +266,9 @@ const CTX = {
   workspaceId: "ws_1",
   userId: "u_1",
   apiKeyId: null,
-  requestId: "req_1", surface: "runner" as const, messageId: null,
+  requestId: "req_1",
+  surface: "runner" as const,
+  messageId: null,
 };
 
 describe("materializeTools", () => {
@@ -238,7 +276,11 @@ describe("materializeTools", () => {
     dbMocks.rowsByTable.clear();
     vi.mocked(invoke).mockClear();
     vi.mocked(authorizeExternalCapability).mockClear();
-    vi.mocked(authorizeExternalCapability).mockResolvedValue({ allowed: true, outcome: "allow", reason: null });
+    vi.mocked(authorizeExternalCapability).mockResolvedValue({
+      allowed: true,
+      outcome: "allow",
+      reason: null,
+    });
     mocks.insertToolInvocation.mockClear();
     mocks.insertToolInvocation.mockResolvedValue(undefined);
   });
@@ -262,7 +304,9 @@ describe("materializeTools", () => {
   });
 
   it("filters by allowlist", async () => {
-    const { tools } = await materializeTools(CTX, { allowlist: new Set(["capA"]) });
+    const { tools } = await materializeTools(CTX, {
+      allowlist: new Set(["capA"]),
+    });
     expect(Object.keys(tools)).toEqual(["capA"]);
   });
 
@@ -279,12 +323,18 @@ describe("materializeTools", () => {
 
   it("produces AI SDK tools with description, inputSchema, and execute", async () => {
     const { tools } = await materializeTools(CTX);
-    const t = tools.capA as { description?: string; inputSchema?: unknown; execute?: (i: unknown) => Promise<unknown> };
+    const t = tools.capA as {
+      description?: string;
+      inputSchema?: unknown;
+      execute?: (i: unknown) => Promise<unknown>;
+    };
     expect(t.description).toBe("low risk agent cap");
     expect(t.inputSchema).toBeDefined();
     expect(typeof t.execute).toBe("function");
     await t.execute!({ x: "hello" });
-    expect(invoke).toHaveBeenCalledWith("capA", { x: "hello" }, CTX, { surface: "agent" });
+    expect(invoke).toHaveBeenCalledWith("capA", { x: "hello" }, CTX, {
+      surface: "agent",
+    });
   });
 
   it("fires before/after hooks around a successful invocation", async () => {
@@ -292,7 +342,9 @@ describe("materializeTools", () => {
     mocks.afterTool.mockClear();
     mocks.onError.mockClear();
     const { tools } = await materializeTools(CTX);
-    await (tools.capA as unknown as { execute: (i: unknown) => Promise<unknown> }).execute({ x: "hi" });
+    await (
+      tools.capA as unknown as { execute: (i: unknown) => Promise<unknown> }
+    ).execute({ x: "hi" });
     expect(mocks.beforeTool).toHaveBeenCalledTimes(1);
     expect(mocks.afterTool).toHaveBeenCalledTimes(1);
     expect(mocks.onError).not.toHaveBeenCalled();
@@ -305,7 +357,9 @@ describe("materializeTools", () => {
     vi.mocked(invoke).mockRejectedValueOnce(new Error("boom"));
     const { tools } = await materializeTools(CTX);
     await expect(
-      (tools.capA as unknown as { execute: (i: unknown) => Promise<unknown> }).execute({ x: "hi" }),
+      (
+        tools.capA as unknown as { execute: (i: unknown) => Promise<unknown> }
+      ).execute({ x: "hi" }),
     ).rejects.toThrow("boom");
     expect(mocks.beforeTool).toHaveBeenCalledTimes(1);
     expect(mocks.afterTool).not.toHaveBeenCalled();
@@ -316,17 +370,23 @@ describe("materializeTools", () => {
     mocks.createApprovalRequest.mockClear();
     mocks.waitForApproval.mockClear();
     const fixtureGated = [
-      { ...FIXTURE[2], agent: { riskLevel: "high" as const, requiresApproval: true } },
+      {
+        ...FIXTURE[2],
+        agent: { riskLevel: "high" as const, requiresApproval: true },
+      },
     ];
     vi.doMock("@oxagen/oxagen", () => ({
       listCapabilities: () => fixtureGated,
-      getSurfaces: (c: { surfaces?: readonly string[] }) => c.surfaces ?? ["api", "mcp"],
+      getSurfaces: (c: { surfaces?: readonly string[] }) =>
+        c.surfaces ?? ["api", "mcp"],
       getCapability: () => undefined,
     }));
     vi.resetModules();
     const { materializeTools: mt } = await import("./materialize-tools");
     const { tools } = await mt({ ...CTX, messageId: "msg_42" });
-    await (tools.capB as unknown as { execute: (i: unknown) => Promise<unknown> }).execute({ y: 1 });
+    await (
+      tools.capB as unknown as { execute: (i: unknown) => Promise<unknown> }
+    ).execute({ y: 1 });
     expect(mocks.createApprovalRequest).toHaveBeenCalledTimes(1);
     expect(mocks.waitForApproval).toHaveBeenCalledTimes(1);
   });
@@ -341,18 +401,24 @@ describe("materializeTools", () => {
     });
     vi.mocked(invoke).mockClear();
     const fixtureGated = [
-      { ...FIXTURE[2], agent: { riskLevel: "high" as const, requiresApproval: true } },
+      {
+        ...FIXTURE[2],
+        agent: { riskLevel: "high" as const, requiresApproval: true },
+      },
     ];
     vi.doMock("@oxagen/oxagen", () => ({
       listCapabilities: () => fixtureGated,
-      getSurfaces: (c: { surfaces?: readonly string[] }) => c.surfaces ?? ["api", "mcp"],
+      getSurfaces: (c: { surfaces?: readonly string[] }) =>
+        c.surfaces ?? ["api", "mcp"],
       getCapability: () => undefined,
     }));
     vi.resetModules();
     const { materializeTools: mt } = await import("./materialize-tools");
     const { tools } = await mt({ ...CTX, messageId: "msg_42" });
     await expect(
-      (tools.capB as unknown as { execute: (i: unknown) => Promise<unknown> }).execute({ y: 1 }),
+      (
+        tools.capB as unknown as { execute: (i: unknown) => Promise<unknown> }
+      ).execute({ y: 1 }),
     ).rejects.toThrow(/approval denied/);
     expect(invoke).not.toHaveBeenCalled();
   });
@@ -366,9 +432,14 @@ describe("materializeTools", () => {
     vi.mocked(invoke).mockResolvedValueOnce({ filled: true });
     const { tools } = await materializeTools(CTX);
     // Keyed by the model-safe alias; execute still invokes the real "form.fill".
-    const formFillTool = tools["fill_form"] as { execute?: (i: unknown) => Promise<unknown> };
+    const formFillTool = tools["fill_form"] as {
+      execute?: (i: unknown) => Promise<unknown>;
+    };
     expect(formFillTool).toBeDefined();
-    const result = await formFillTool.execute!({ formId: "workspace-general", values: { name: "Prod" } });
+    const result = await formFillTool.execute!({
+      formId: "workspace-general",
+      values: { name: "Prod" },
+    });
     // Kernel invoke must have been called — not the agent-internal loader
     expect(invoke).toHaveBeenCalledWith(
       "fill_form",
@@ -397,13 +468,16 @@ describe("materializeTools", () => {
     ];
     vi.doMock("@oxagen/oxagen", () => ({
       listCapabilities: () => customFixture,
-      getSurfaces: (c: { surfaces?: readonly string[] }) => c.surfaces ?? ["api", "mcp"],
+      getSurfaces: (c: { surfaces?: readonly string[] }) =>
+        c.surfaces ?? ["api", "mcp"],
       getCapability: () => undefined,
     }));
     vi.resetModules();
     const { materializeTools: mt } = await import("./materialize-tools");
     const { tools } = await mt(CTX);
-    const svgTool = tools["generate_svg"] as { execute?: (i: unknown) => Promise<unknown> };
+    const svgTool = tools["generate_svg"] as {
+      execute?: (i: unknown) => Promise<unknown>;
+    };
     expect(svgTool).toBeDefined();
     const result = await svgTool.execute!({ prompt: "a red circle" });
     expect(invoke).toHaveBeenCalledWith(
@@ -418,17 +492,23 @@ describe("materializeTools", () => {
   it("no messageId → no approval request (direct MCP/API path)", async () => {
     mocks.createApprovalRequest.mockClear();
     const fixtureGated = [
-      { ...FIXTURE[2], agent: { riskLevel: "high" as const, requiresApproval: true } },
+      {
+        ...FIXTURE[2],
+        agent: { riskLevel: "high" as const, requiresApproval: true },
+      },
     ];
     vi.doMock("@oxagen/oxagen", () => ({
       listCapabilities: () => fixtureGated,
-      getSurfaces: (c: { surfaces?: readonly string[] }) => c.surfaces ?? ["api", "mcp"],
+      getSurfaces: (c: { surfaces?: readonly string[] }) =>
+        c.surfaces ?? ["api", "mcp"],
       getCapability: () => undefined,
     }));
     vi.resetModules();
     const { materializeTools: mt } = await import("./materialize-tools");
     const { tools } = await mt({ ...CTX, messageId: null });
-    await (tools.capB as unknown as { execute: (i: unknown) => Promise<unknown> }).execute({ y: 1 });
+    await (
+      tools.capB as unknown as { execute: (i: unknown) => Promise<unknown> }
+    ).execute({ y: 1 });
     expect(mocks.createApprovalRequest).not.toHaveBeenCalled();
   });
 
@@ -446,24 +526,35 @@ describe("materializeTools", () => {
       return { approvalId: "appr_scoped" };
     });
     const fixtureGated = [
-      { ...FIXTURE[2], agent: { riskLevel: "high" as const, requiresApproval: true } },
+      {
+        ...FIXTURE[2],
+        agent: { riskLevel: "high" as const, requiresApproval: true },
+      },
     ];
     vi.doMock("@oxagen/oxagen", () => ({
       listCapabilities: () => fixtureGated,
-      getSurfaces: (c: { surfaces?: readonly string[] }) => c.surfaces ?? ["api", "mcp"],
+      getSurfaces: (c: { surfaces?: readonly string[] }) =>
+        c.surfaces ?? ["api", "mcp"],
       getCapability: () => undefined,
     }));
     vi.resetModules();
     const { materializeTools: mt } = await import("./materialize-tools");
     const { tools } = await mt({ ...CTX, messageId: "msg_42" });
-    await (tools.capB as unknown as { execute: (i: unknown) => Promise<unknown> }).execute({ y: 1 });
+    await (
+      tools.capB as unknown as { execute: (i: unknown) => Promise<unknown> }
+    ).execute({ y: 1 });
     expect(mocks.createApprovalRequest).toHaveBeenCalledTimes(1);
     // The approval write saw an active scope carrying the turn's tenant ids.
-    expect(scopeAtApproval).toEqual({ orgId: CTX.orgId, workspaceId: CTX.workspaceId });
+    expect(scopeAtApproval).toEqual({
+      orgId: CTX.orgId,
+      workspaceId: CTX.workspaceId,
+    });
     // And the scope is unwound afterwards (no leak across tool calls).
     expect(tenancyMock.state.current).toBeNull();
     // Restore the shared default impl for subsequent tests.
-    mocks.createApprovalRequest.mockImplementation(async () => ({ approvalId: "appr_x" }));
+    mocks.createApprovalRequest.mockImplementation(async () => ({
+      approvalId: "appr_x",
+    }));
   });
 });
 
@@ -483,12 +574,17 @@ describe("materializeTools — external MCP IAM enforcement (GAP-4)", () => {
     authKind: "secret", // static bearer path (not oauth)
   };
 
-  // A fake MCP tool execute function the test can spy on.
-  const fakeExecute = vi.fn(async () => ({ data: "result" }));
+  // The transport spy: the real materializePinnedMcpTools executes via the MCP
+  // client's callTool, so "the transport ran" now means fakeExecute was called.
+  const fakeExecute = vi.fn(async () => ({ content: { data: "result" } }));
 
   beforeEach(() => {
     vi.mocked(authorizeExternalCapability).mockClear();
-    vi.mocked(authorizeExternalCapability).mockResolvedValue({ allowed: true, outcome: "allow", reason: null });
+    vi.mocked(authorizeExternalCapability).mockResolvedValue({
+      allowed: true,
+      outcome: "allow",
+      reason: null,
+    });
     fakeExecute.mockClear();
     mocks.insertToolInvocation.mockClear();
     mocks.insertToolInvocation.mockResolvedValue(undefined);
@@ -497,21 +593,27 @@ describe("materializeTools — external MCP IAM enforcement (GAP-4)", () => {
     dbMocks.rowsByTable.clear();
     dbMocks.rowsByTable.set(dbMocks.schema.mcpServers, [MCP_SERVER]);
 
-    // connectMcp returns a stub client; materializeMcpTools returns one tool.
-    vi.mocked(connectMcp).mockResolvedValue({} as Awaited<ReturnType<typeof connectMcp>>);
-    vi.mocked(materializeMcpTools).mockResolvedValue({
-      [`mcp.${MCP_SERVER.id}.list_pull_requests`]: {
+    // connectMcp returns a stub client whose callTool is the transport spy; the
+    // live listing carries one tool, trust-on-first-use pinned by the contributor
+    // (readLatestPinnedDescriptors is mocked to [] above).
+    vi.mocked(connectMcp).mockResolvedValue({
+      callTool: fakeExecute,
+    } as unknown as Awaited<ReturnType<typeof connectMcp>>);
+    vi.mocked(listMcpToolDescriptors).mockResolvedValue([
+      {
+        name: "list_pull_requests",
         description: "List PRs",
-        inputSchema: z.record(z.string(), z.unknown()),
-        execute: fakeExecute,
-      } as unknown as import("ai").Tool,
-    });
+        inputSchema: { type: "object" },
+      },
+    ]);
   });
 
   it("calls authorizeExternalCapability with the per-tool synthetic id before the transport (GAP-4)", async () => {
     const { tools } = await materializeTools(CTX);
     const toolAlias = `mcp_${MCP_SERVER.id}_list_pull_requests`;
-    const t = tools[toolAlias] as { execute?: (i: unknown) => Promise<unknown> };
+    const t = tools[toolAlias] as {
+      execute?: (i: unknown) => Promise<unknown>;
+    };
     expect(t).toBeDefined();
     await t.execute!({});
     expect(authorizeExternalCapability).toHaveBeenCalledWith(
@@ -531,8 +633,12 @@ describe("materializeTools — external MCP IAM enforcement (GAP-4)", () => {
     });
     const { tools } = await materializeTools(CTX);
     const toolAlias = `mcp_${MCP_SERVER.id}_list_pull_requests`;
-    await (tools[toolAlias] as { execute?: (i: unknown) => Promise<unknown> }).execute!({});
-    expect(scopeAtIam).toEqual({ orgId: CTX.orgId, workspaceId: CTX.workspaceId });
+    await (tools[toolAlias] as { execute?: (i: unknown) => Promise<unknown> })
+      .execute!({});
+    expect(scopeAtIam).toEqual({
+      orgId: CTX.orgId,
+      workspaceId: CTX.workspaceId,
+    });
     expect(tenancyMock.state.current).toBeNull();
   });
 
@@ -544,7 +650,9 @@ describe("materializeTools — external MCP IAM enforcement (GAP-4)", () => {
     });
     const { tools } = await materializeTools(CTX);
     const toolAlias = `mcp_${MCP_SERVER.id}_list_pull_requests`;
-    const t = tools[toolAlias] as { execute?: (i: unknown) => Promise<unknown> };
+    const t = tools[toolAlias] as {
+      execute?: (i: unknown) => Promise<unknown>;
+    };
     const result = await t.execute!({});
     // Transport must NOT have run.
     expect(fakeExecute).not.toHaveBeenCalled();
@@ -562,35 +670,49 @@ describe("materializeTools — external MCP IAM enforcement (GAP-4)", () => {
     });
     const { tools } = await materializeTools(CTX);
     const toolAlias = `mcp_${MCP_SERVER.id}_list_pull_requests`;
-    const t = tools[toolAlias] as { execute?: (i: unknown) => Promise<unknown> };
+    const t = tools[toolAlias] as {
+      execute?: (i: unknown) => Promise<unknown>;
+    };
     await t.execute!({});
     expect(mocks.insertToolInvocation).toHaveBeenCalledTimes(1);
     // vi.fn() mock.calls has an inferred tuple type that TypeScript tightens
     // to [] in hoisted mocks. Cast through unknown to access the call arg.
-    const call = (mocks.insertToolInvocation.mock.calls[0] as unknown as [unknown])?.[0] as Record<string, unknown>;
+    const call = (
+      mocks.insertToolInvocation.mock.calls[0] as unknown as [unknown]
+    )?.[0] as Record<string, unknown>;
     expect(call.status).toBe("failed");
     expect(call.error_class).toBe("IamDenied");
-    expect(call.capability_name).toBe(`mcp.${MCP_SERVER.id}.list_pull_requests`);
+    expect(call.capability_name).toBe(
+      `mcp.${MCP_SERVER.id}.list_pull_requests`,
+    );
     expect(call.external_server_id).toBe(MCP_SERVER.id);
   });
 
   it("meters a successful invocation as status=completed (allowed path unchanged)", async () => {
     const { tools } = await materializeTools(CTX);
     const toolAlias = `mcp_${MCP_SERVER.id}_list_pull_requests`;
-    const t = tools[toolAlias] as { execute?: (i: unknown) => Promise<unknown> };
+    const t = tools[toolAlias] as {
+      execute?: (i: unknown) => Promise<unknown>;
+    };
     await t.execute!({});
     expect(fakeExecute).toHaveBeenCalledTimes(1);
     expect(mocks.insertToolInvocation).toHaveBeenCalledTimes(1);
-    const call = (mocks.insertToolInvocation.mock.calls[0] as unknown as [unknown])?.[0] as Record<string, unknown>;
+    const call = (
+      mocks.insertToolInvocation.mock.calls[0] as unknown as [unknown]
+    )?.[0] as Record<string, unknown>;
     expect(call.status).toBe("completed");
-    expect(call.capability_name).toBe(`mcp.${MCP_SERVER.id}.list_pull_requests`);
+    expect(call.capability_name).toBe(
+      `mcp.${MCP_SERVER.id}.list_pull_requests`,
+    );
   });
 
   it("uses defaultEffect=allow for MCP tools (user intentionally registered the server)", async () => {
     const { tools } = await materializeTools(CTX);
     const toolAlias = `mcp_${MCP_SERVER.id}_list_pull_requests`;
-    await (tools[toolAlias] as { execute?: (i: unknown) => Promise<unknown> }).execute!({});
-    const [capName, , defaultEffect] = (vi.mocked(authorizeExternalCapability).mock.calls[0] ?? []) as [string, unknown, string];
+    await (tools[toolAlias] as { execute?: (i: unknown) => Promise<unknown> })
+      .execute!({});
+    const [capName, , defaultEffect] = (vi.mocked(authorizeExternalCapability)
+      .mock.calls[0] ?? []) as [string, unknown, string];
     expect(capName).toBe(`mcp.${MCP_SERVER.id}.list_pull_requests`);
     expect(defaultEffect).toBe("allow");
   });
@@ -606,7 +728,9 @@ describe("materializeTools — external MCP IAM enforcement (GAP-4)", () => {
     // Server row needs a publicId for the allowlist check in contributeMcpTools.
     const serverWithPublicId = { ...MCP_SERVER, publicId: "mcs_abc" };
     dbMocks.rowsByTable.set(dbMocks.schema.mcpServers, [serverWithPublicId]);
-    const { tools } = await materializeTools(CTX, { serverAllowlist: new Set(["mcs_abc"]) });
+    const { tools } = await materializeTools(CTX, {
+      serverAllowlist: new Set(["mcs_abc"]),
+    });
     const toolAlias = `mcp_${MCP_SERVER.id}_list_pull_requests`;
     // The DB mock ignores WHERE conditions and returns all rows, so tools are contributed.
     expect(tools[toolAlias]).toBeDefined();
@@ -630,13 +754,16 @@ describe("materializeTools — external MCP IAM enforcement (GAP-4)", () => {
     });
     vi.resetModules();
     const { materializeTools: mt } = await import("./materialize-tools");
-    const mod = await import("./plugin-type") as typeof import("./plugin-type") & { __spyContributor?: { contributeTools: ReturnType<typeof vi.fn> } };
+    const mod = (await import(
+      "./plugin-type"
+    )) as typeof import("./plugin-type") & {
+      __spyContributor?: { contributeTools: ReturnType<typeof vi.fn> };
+    };
     const allowlist = new Set(["mcs_x1", "mcs_x2"]);
     await mt(CTX, { serverAllowlist: allowlist });
-    expect(mod.__spyContributor?.contributeTools).toHaveBeenCalledWith(
-      CTX,
-      { serverAllowlist: allowlist },
-    );
+    expect(mod.__spyContributor?.contributeTools).toHaveBeenCalledWith(CTX, {
+      serverAllowlist: allowlist,
+    });
   });
 });
 
@@ -656,20 +783,31 @@ describe("materializeTools — first-use consent gate (OXA-816)", () => {
     healthStatus: "healthy",
     authKind: "secret",
   };
-  const fakeExecute = vi.fn(async () => ({ data: "result" }));
+  // Transport spy — the real materializePinnedMcpTools executes via callTool.
+  const fakeExecute = vi.fn(async () => ({ content: { data: "result" } }));
   // Chat surface: messageId + userId present so the consent gate is active.
   const CHAT_CTX = { ...CTX, messageId: "msg_42", userId: "u_1" };
 
   beforeEach(() => {
     vi.mocked(authorizeExternalCapability).mockClear();
-    vi.mocked(authorizeExternalCapability).mockResolvedValue({ allowed: true, outcome: "allow", reason: null });
+    vi.mocked(authorizeExternalCapability).mockResolvedValue({
+      allowed: true,
+      outcome: "allow",
+      reason: null,
+    });
     fakeExecute.mockClear();
     mocks.insertToolInvocation.mockClear();
     mocks.insertToolInvocation.mockResolvedValue(undefined);
     mocks.createApprovalRequest.mockClear();
-    mocks.createApprovalRequest.mockResolvedValue({ approvalId: "appr_consent" });
+    mocks.createApprovalRequest.mockResolvedValue({
+      approvalId: "appr_consent",
+    });
     mocks.waitForApproval.mockClear();
-    mocks.waitForApproval.mockResolvedValue({ approvalId: "appr_consent", resolution: "approved", note: null });
+    mocks.waitForApproval.mockResolvedValue({
+      approvalId: "appr_consent",
+      resolution: "approved",
+      note: null,
+    });
     consentMocks.checkConsent.mockClear();
     consentMocks.checkConsent.mockResolvedValue(null);
     consentMocks.recordConsent.mockClear();
@@ -677,53 +815,97 @@ describe("materializeTools — first-use consent gate (OXA-816)", () => {
 
     dbMocks.rowsByTable.clear();
     dbMocks.rowsByTable.set(dbMocks.schema.mcpServers, [MCP_SERVER]);
-    vi.mocked(connectMcp).mockResolvedValue({} as Awaited<ReturnType<typeof connectMcp>>);
-    vi.mocked(materializeMcpTools).mockResolvedValue({
-      [`mcp.${MCP_SERVER.id}.list_pull_requests`]: {
+    vi.mocked(connectMcp).mockResolvedValue({
+      callTool: fakeExecute,
+    } as unknown as Awaited<ReturnType<typeof connectMcp>>);
+    vi.mocked(listMcpToolDescriptors).mockResolvedValue([
+      {
+        name: "list_pull_requests",
         description: "List PRs",
-        inputSchema: z.record(z.string(), z.unknown()),
-        execute: fakeExecute,
-      } as unknown as import("ai").Tool,
-    });
+        inputSchema: { type: "object" },
+      },
+    ]);
   });
 
   it("first-use call with no grant solicits consent, blocks, then records + runs on approval", async () => {
-    const events: Array<{ approvalId: string; serverId: string; toolName: string }> = [];
+    const events: Array<{
+      approvalId: string;
+      serverId: string;
+      toolName: string;
+    }> = [];
     const { tools } = await materializeTools(CHAT_CTX, {
-      onConsentRequired: (e) => events.push({ approvalId: e.approvalId, serverId: e.serverId, toolName: e.toolName }),
+      onConsentRequired: (e) =>
+        events.push({
+          approvalId: e.approvalId,
+          serverId: e.serverId,
+          toolName: e.toolName,
+        }),
     });
     const alias = `mcp_${MCP_SERVER.id}_list_pull_requests`;
-    await (tools[alias] as { execute?: (i: unknown) => Promise<unknown> }).execute!({});
+    await (tools[alias] as { execute?: (i: unknown) => Promise<unknown> })
+      .execute!({});
     // The consent check ran, an approval row was created, and the event fired.
-    expect(consentMocks.checkConsent).toHaveBeenCalledWith(CHAT_CTX, "u_1", MCP_SERVER.id, "list_pull_requests");
+    expect(consentMocks.checkConsent).toHaveBeenCalledWith(
+      CHAT_CTX,
+      "u_1",
+      MCP_SERVER.id,
+      "list_pull_requests",
+    );
     expect(mocks.createApprovalRequest).toHaveBeenCalledTimes(1);
     expect(mocks.waitForApproval).toHaveBeenCalledTimes(1);
     expect(events).toEqual([
-      { approvalId: "appr_consent", serverId: MCP_SERVER.id, toolName: "list_pull_requests" },
+      {
+        approvalId: "appr_consent",
+        serverId: MCP_SERVER.id,
+        toolName: "list_pull_requests",
+      },
     ]);
     // The grant was persisted and the transport ran on approval.
     expect(consentMocks.recordConsent).toHaveBeenCalledTimes(1);
-    expect(((consentMocks.recordConsent.mock.calls[0] as unknown as [{ status: string }])[0]).status).toBe("granted");
+    expect(
+      (
+        consentMocks.recordConsent.mock.calls[0] as unknown as [
+          { status: string },
+        ]
+      )[0].status,
+    ).toBe("granted");
     expect(fakeExecute).toHaveBeenCalledTimes(1);
   });
 
   it("records denial and blocks the transport when consent is denied at the prompt", async () => {
-    mocks.waitForApproval.mockResolvedValueOnce({ approvalId: "appr_consent", resolution: "denied", note: null });
+    mocks.waitForApproval.mockResolvedValueOnce({
+      approvalId: "appr_consent",
+      resolution: "denied",
+      note: null,
+    });
     const { tools } = await materializeTools(CHAT_CTX);
     const alias = `mcp_${MCP_SERVER.id}_list_pull_requests`;
-    const result = await (tools[alias] as { execute?: (i: unknown) => Promise<unknown> }).execute!({});
+    const result = await (
+      tools[alias] as { execute?: (i: unknown) => Promise<unknown> }
+    ).execute!({});
     expect(consentMocks.recordConsent).toHaveBeenCalledTimes(1);
-    expect(((consentMocks.recordConsent.mock.calls[0] as unknown as [{ status: string }])[0]).status).toBe("denied");
+    expect(
+      (
+        consentMocks.recordConsent.mock.calls[0] as unknown as [
+          { status: string },
+        ]
+      )[0].status,
+    ).toBe("denied");
     expect(fakeExecute).not.toHaveBeenCalled();
     expect(typeof result).toBe("string");
     expect(result as string).toMatch(/consent denied/i);
   });
 
   it("short-circuits without prompting when an active denied grant exists", async () => {
-    consentMocks.checkConsent.mockResolvedValueOnce({ status: "denied", active: true });
+    consentMocks.checkConsent.mockResolvedValueOnce({
+      status: "denied",
+      active: true,
+    });
     const { tools } = await materializeTools(CHAT_CTX);
     const alias = `mcp_${MCP_SERVER.id}_list_pull_requests`;
-    const result = await (tools[alias] as { execute?: (i: unknown) => Promise<unknown> }).execute!({});
+    const result = await (
+      tools[alias] as { execute?: (i: unknown) => Promise<unknown> }
+    ).execute!({});
     // No new prompt, no new record — the existing denial decides it.
     expect(mocks.createApprovalRequest).not.toHaveBeenCalled();
     expect(consentMocks.recordConsent).not.toHaveBeenCalled();
@@ -732,10 +914,14 @@ describe("materializeTools — first-use consent gate (OXA-816)", () => {
   });
 
   it("runs inline (no prompt) when an active grant or wildcard pre-grant exists", async () => {
-    consentMocks.checkConsent.mockResolvedValueOnce({ status: "granted", active: true });
+    consentMocks.checkConsent.mockResolvedValueOnce({
+      status: "granted",
+      active: true,
+    });
     const { tools } = await materializeTools(CHAT_CTX);
     const alias = `mcp_${MCP_SERVER.id}_list_pull_requests`;
-    await (tools[alias] as { execute?: (i: unknown) => Promise<unknown> }).execute!({});
+    await (tools[alias] as { execute?: (i: unknown) => Promise<unknown> })
+      .execute!({});
     expect(mocks.createApprovalRequest).not.toHaveBeenCalled();
     expect(consentMocks.recordConsent).not.toHaveBeenCalled();
     expect(fakeExecute).toHaveBeenCalledTimes(1);
@@ -745,7 +931,8 @@ describe("materializeTools — first-use consent gate (OXA-816)", () => {
     // CTX has messageId:null — direct API/MCP caller. The gate must not fire.
     const { tools } = await materializeTools(CTX);
     const alias = `mcp_${MCP_SERVER.id}_list_pull_requests`;
-    await (tools[alias] as { execute?: (i: unknown) => Promise<unknown> }).execute!({});
+    await (tools[alias] as { execute?: (i: unknown) => Promise<unknown> })
+      .execute!({});
     expect(consentMocks.checkConsent).not.toHaveBeenCalled();
     expect(mocks.createApprovalRequest).not.toHaveBeenCalled();
     expect(fakeExecute).toHaveBeenCalledTimes(1);
@@ -778,7 +965,9 @@ describe("materializeTools — entitlement filter (WP4)", () => {
     // Default: pluginForContract returns undefined (all builtins).
     vi.mocked(pluginForContract).mockReturnValue(undefined);
     // Default: empty entitled set.
-    vi.mocked(listEntitledCapabilityPluginIds).mockResolvedValue(new Set<string>());
+    vi.mocked(listEntitledCapabilityPluginIds).mockResolvedValue(
+      new Set<string>(),
+    );
   });
 
   it("includes plugin-claimed capability when org is entitled to the pack", async () => {
@@ -798,7 +987,9 @@ describe("materializeTools — entitlement filter (WP4)", () => {
     vi.mocked(pluginForContract).mockImplementation((name: string) =>
       name === "capB" ? PLUGIN_MANIFEST : undefined,
     );
-    vi.mocked(listEntitledCapabilityPluginIds).mockResolvedValue(new Set<string>());
+    vi.mocked(listEntitledCapabilityPluginIds).mockResolvedValue(
+      new Set<string>(),
+    );
     const { tools } = await materializeTools(CTX);
     expect(tools.capB).toBeUndefined();
     // Builtin capabilities (capA, form.fill) are unaffected.
@@ -812,7 +1003,9 @@ describe("materializeTools — entitlement filter (WP4)", () => {
     vi.mocked(pluginForContract).mockImplementation((name: string) =>
       name === "capB" ? PLUGIN_MANIFEST : undefined,
     );
-    vi.mocked(listEntitledCapabilityPluginIds).mockResolvedValue(new Set<string>());
+    vi.mocked(listEntitledCapabilityPluginIds).mockResolvedValue(
+      new Set<string>(),
+    );
     const { tools } = await materializeTools(CTX);
     expect(tools.capA).toBeDefined();
     expect(tools["fill_form"]).toBeDefined();
@@ -837,7 +1030,11 @@ describe("materializeTools — entitlement filter (WP4)", () => {
 
   it("fetches the entitled set at most once per materializeTools call", async () => {
     // Multiple plugin-claimed capabilities in one call — only one DB fetch.
-    const PLUGIN_B = { ...PLUGIN_MANIFEST, id: "oxagen/other", contracts: ["capA"] };
+    const PLUGIN_B = {
+      ...PLUGIN_MANIFEST,
+      id: "oxagen/other",
+      contracts: ["capA"],
+    };
     vi.mocked(pluginForContract).mockImplementation((name: string) => {
       if (name === "capB") return PLUGIN_MANIFEST;
       if (name === "capA") return PLUGIN_B;
@@ -850,6 +1047,9 @@ describe("materializeTools — entitlement filter (WP4)", () => {
     // Even though both capA and capB are plugin-claimed, the entitlement service
     // is called exactly once per materializeTools invocation.
     expect(listEntitledCapabilityPluginIds).toHaveBeenCalledTimes(1);
-    expect(listEntitledCapabilityPluginIds).toHaveBeenCalledWith(CTX.orgId, CTX.workspaceId);
+    expect(listEntitledCapabilityPluginIds).toHaveBeenCalledWith(
+      CTX.orgId,
+      CTX.workspaceId,
+    );
   });
 });

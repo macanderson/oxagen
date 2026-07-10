@@ -22,8 +22,14 @@
 // dispatch through kernel.invoke(). The dead defineContract.ts file was
 // deleted in the release-audit-ce1cec3 fix bundle.
 
-import { setKernelIAMRuntime, type KernelIAMCheckFn } from "@oxagen/oxagen/kernel";
+import {
+  setKernelIAMRuntime,
+  setKernelAccessRequestCreator,
+  type KernelIAMCheckFn,
+  type KernelAccessRequestCreatorFn,
+} from "@oxagen/oxagen/kernel";
 import { checkIAM } from "./check-iam";
+import { createAccessRequest } from "./access-request";
 
 /**
  * Wire the real IAM enforcement runtime into kernel.invoke() (OXA-1498).
@@ -42,4 +48,13 @@ export function bootstrapIAMRuntime(): void {
   };
 
   setKernelIAMRuntime(kernelIAMAdapter, /* enforced */ true);
+
+  // Wire the JIT access-request creator so a `pending_approval` resolution mints
+  // an org.access_requests row the caller can poll. The kernel calls this only
+  // on the enforced pending_approval deny path; it can never grant access —
+  // createAccessRequest already degrades to null when the principal is absent.
+  const accessRequestCreator: KernelAccessRequestCreatorFn = (args) =>
+    createAccessRequest(args);
+
+  setKernelAccessRequestCreator(accessRequestCreator);
 }

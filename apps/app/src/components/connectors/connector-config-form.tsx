@@ -25,7 +25,10 @@ import { RecordTypeSelector } from "./record-type-selector";
 import { FiltersPanel } from "./filters-panel";
 import { InferencePanel } from "./inference-panel";
 import { SyncCadencePanel } from "./sync-cadence-panel";
-import { useConnectorSchema, type FieldError } from "./connector-schema-provider";
+import {
+  useConnectorSchema,
+  type FieldError,
+} from "./connector-schema-provider";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -46,7 +49,13 @@ export interface ConnectorConfigFormProps {
 
 // ── Section header ─────────────────────────────────────────────────────────────
 
-function SectionHeader({ title, description }: { title: string; description?: string }) {
+function SectionHeader({
+  title,
+  description,
+}: {
+  title: string;
+  description?: string;
+}) {
   return (
     <div className="flex flex-col gap-0.5 border-b border-border/40 pb-3 mb-4">
       <p className="text-sm font-semibold text-foreground">{title}</p>
@@ -106,7 +115,9 @@ export function ConnectorConfigForm({
     for (const field of schema.config?.fields ?? []) {
       touchField(field.key);
     }
-    const scheme = schema.auth?.schemes.find((s) => s.id === selectedAuthSchemeId);
+    const scheme = schema.auth?.schemes.find(
+      (s) => s.id === selectedAuthSchemeId,
+    );
     for (const field of scheme?.fields ?? []) {
       touchField(field.key);
     }
@@ -170,7 +181,10 @@ export function ConnectorConfigForm({
         );
 
         if (validateRes.ok) {
-          const validateData = await validateRes.json() as { valid: boolean; errors: FieldError[] };
+          const validateData = (await validateRes.json()) as {
+            valid: boolean;
+            errors: FieldError[];
+          };
           if (!validateData.valid && validateData.errors.length > 0) {
             setErrors(validateData.errors);
             setSubmitting(false);
@@ -186,11 +200,16 @@ export function ConnectorConfigForm({
           return;
         }
 
-        // 3. Submit: install or configure
-        const endpoint =
-          mode === "configure" && integrationId
-            ? `${API_BASE}/v1/${orgSlug}/${workspaceSlug}/integrations/${encodeURIComponent(integrationId)}/configure`
-            : `${API_BASE}/v1/${orgSlug}/${workspaceSlug}/integrations/install`;
+        // 3. Submit: install or configure.
+        // Routes are POST /integrations (root — install_integration) and
+        // PATCH /integrations/:id/configure (configure_integration); see
+        // apps/api/src/routes/v1/integration.ts. Both matter: a plain
+        // /integrations/install path 404s (there is no such sub-route), and
+        // configure only responds to PATCH, not POST.
+        const isConfigure = mode === "configure" && Boolean(integrationId);
+        const endpoint = isConfigure
+          ? `${API_BASE}/v1/${orgSlug}/${workspaceSlug}/integrations/${encodeURIComponent(integrationId ?? "")}/configure`
+          : `${API_BASE}/v1/${orgSlug}/${workspaceSlug}/integrations`;
 
         const body = {
           pluginId: schema.metadata.id,
@@ -200,16 +219,20 @@ export function ConnectorConfigForm({
         };
 
         const res = await fetch(endpoint, {
-          method: "POST",
+          method: isConfigure ? "PATCH" : "POST",
           credentials: "include",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
         });
 
-        const data = await res.json().catch(() => ({})) as Record<string, unknown>;
+        const data = (await res.json().catch(() => ({}))) as Record<
+          string,
+          unknown
+        >;
 
         if (!res.ok) {
-          const msg = typeof data.error === "string" ? data.error : `HTTP ${res.status}`;
+          const msg =
+            typeof data.error === "string" ? data.error : `HTTP ${res.status}`;
           setSubmitError(msg);
           return;
         }
@@ -219,7 +242,9 @@ export function ConnectorConfigForm({
           status: typeof data.status === "string" ? data.status : "queued",
         });
       } catch (err: unknown) {
-        setSubmitError(err instanceof Error ? err.message : "Something went wrong");
+        setSubmitError(
+          err instanceof Error ? err.message : "Something went wrong",
+        );
       } finally {
         setSubmitting(false);
       }
@@ -284,7 +309,12 @@ export function ConnectorConfigForm({
           />
           <div className="flex flex-col gap-5">
             {schema.config?.fields.map((field) => (
-              <FieldRenderer key={field.key} field={field} namespace="config" disabled={submitting} />
+              <FieldRenderer
+                key={field.key}
+                field={field}
+                namespace="config"
+                disabled={submitting}
+              />
             ))}
           </div>
         </section>
@@ -332,14 +362,18 @@ export function ConnectorConfigForm({
           role="alert"
           className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2.5 text-sm text-destructive"
         >
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          <AlertTriangle
+            className="mt-0.5 h-4 w-4 shrink-0"
+            aria-hidden="true"
+          />
           <div className="flex flex-col gap-0.5">
             {formState.errors.slice(0, 3).map((e, i) => (
               <span key={i}>{e.message}</span>
             ))}
             {formState.errors.length > 3 && (
               <span className="text-muted-foreground">
-                …and {formState.errors.length - 3} more error{formState.errors.length - 3 !== 1 ? "s" : ""}
+                …and {formState.errors.length - 3} more error
+                {formState.errors.length - 3 !== 1 ? "s" : ""}
               </span>
             )}
           </div>
@@ -369,18 +403,19 @@ export function ConnectorConfigForm({
             Cancel
           </Button>
         )}
-        <Button
-          type="submit"
-          size="sm"
-          disabled={submitting}
-        >
+        <Button type="submit" size="sm" disabled={submitting}>
           {submitting ? (
             <>
-              <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+              <Loader2
+                className="mr-2 h-3.5 w-3.5 animate-spin"
+                aria-hidden="true"
+              />
               {mode === "configure" ? "Saving…" : "Connecting…"}
             </>
+          ) : mode === "configure" ? (
+            "Save changes"
           ) : (
-            mode === "configure" ? "Save changes" : "Connect"
+            "Connect"
           )}
         </Button>
       </div>

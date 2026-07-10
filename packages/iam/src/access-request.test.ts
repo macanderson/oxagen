@@ -4,6 +4,8 @@
 //   - null principal → returns null (graceful degradation)
 //   - Successful insert → returns publicId
 //   - DB error → returns null (graceful degradation)
+//   - Idempotency: an existing pending request is returned, no duplicate insert
+//   - Scope derivation (org vs workspace)
 
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
@@ -11,6 +13,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   insertFn: vi.fn(),
+  selectFn: vi.fn(),
   dbFn: vi.fn(),
 }));
 
@@ -18,11 +21,11 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  db: mocks.dbFn,
-  // withTenantDb: pass-through — invokes the callback with the same fake tx
-  // the handler expects. No scope GUC overhead in unit tests (OXA-1515).
-  withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => fn(mocks.dbFn()),
-
+    db: mocks.dbFn,
+    // withTenantDb: pass-through — invokes the callback with the same fake tx
+    // the handler expects. No scope GUC overhead in unit tests (OXA-1515).
+    withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn(mocks.dbFn()),
   };
 });
 
@@ -48,11 +51,29 @@ const PRINCIPAL: ResolvedPrincipal = {
   workspaceId: "ws_ar_test",
 };
 
+// Build the select().from().where().limit() chain the dedup lookup calls,
+// resolving to `rows`. Defaults to no existing pending request.
+function stubExistingPending(rows: Array<{ publicId: string }>): void {
+  mocks.selectFn.mockReturnValue({
+    from: () => ({
+      where: () => ({
+        limit: () => Promise.resolve(rows),
+      }),
+    }),
+  });
+}
+
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe("createAccessRequest()", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Default: no existing pending request → the insert path runs.
+    stubExistingPending([]);
+    mocks.dbFn.mockReturnValue({
+      select: mocks.selectFn,
+      insert: mocks.insertFn,
+    });
   });
 
   // ── null principal → null ────────────────────────────────────────────────
@@ -77,7 +98,6 @@ describe("createAccessRequest()", () => {
         returning: () => Promise.resolve([{ publicId: "arq_test_123" }]),
       }),
     });
-    mocks.dbFn.mockReturnValue({ insert: mocks.insertFn });
 
     const result = await createAccessRequest({
       capability: "send_message",
@@ -96,7 +116,6 @@ describe("createAccessRequest()", () => {
         returning: () => Promise.resolve([]),
       }),
     });
-    mocks.dbFn.mockReturnValue({ insert: mocks.insertFn });
 
     const result = await createAccessRequest({
       capability: "send_message",
@@ -107,6 +126,23 @@ describe("createAccessRequest()", () => {
     expect(result).toBeNull();
   });
 
+  // ── Idempotency ──────────────────────────────────────────────────────────
+
+  it("returns the existing pending request's publicId without inserting a duplicate", async () => {
+    // A pending request already exists for this (org, requester, capability, scope).
+    stubExistingPending([{ publicId: "arq_existing_1" }]);
+
+    const result = await createAccessRequest({
+      capability: "send_message",
+      ctx: CTX,
+      principal: PRINCIPAL,
+    });
+
+    expect(result).toBe("arq_existing_1");
+    // The dedup short-circuits before the insert — no duplicate row.
+    expect(mocks.insertFn).not.toHaveBeenCalled();
+  });
+
   // ── DB error → null ──────────────────────────────────────────────────────
 
   it("returns null when the DB insert throws (graceful degradation)", async () => {
@@ -115,7 +151,6 @@ describe("createAccessRequest()", () => {
         returning: () => Promise.reject(new Error("connection refused")),
       }),
     });
-    mocks.dbFn.mockReturnValue({ insert: mocks.insertFn });
 
     const result = await createAccessRequest({
       capability: "send_message",
@@ -139,7 +174,6 @@ describe("createAccessRequest()", () => {
         };
       },
     });
-    mocks.dbFn.mockReturnValue({ insert: mocks.insertFn });
 
     await createAccessRequest({
       capability: "send_message",
@@ -162,7 +196,6 @@ describe("createAccessRequest()", () => {
         };
       },
     });
-    mocks.dbFn.mockReturnValue({ insert: mocks.insertFn });
 
     await createAccessRequest({
       capability: "send_message",
@@ -187,10 +220,12 @@ describe("createAccessRequest()", () => {
         };
       },
     });
-    mocks.dbFn.mockReturnValue({ insert: mocks.insertFn });
 
     // TypeScript's CapabilityContext types workspaceId as string | null.
-    const ctxNullWs: CapabilityContext = { ...CTX, workspaceId: null as unknown as string };
+    const ctxNullWs: CapabilityContext = {
+      ...CTX,
+      workspaceId: null as unknown as string,
+    };
 
     await createAccessRequest({
       capability: "send_message",

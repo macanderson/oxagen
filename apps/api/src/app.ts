@@ -6,6 +6,10 @@ import { errorMiddleware } from "./middleware/error";
 import { authMiddleware } from "./middleware/auth";
 import { orgMiddleware } from "./middleware/org";
 import { workspaceMiddleware } from "./middleware/workspace";
+import {
+  distributedRateLimiter,
+  rateLimitBudgets,
+} from "./middleware/distributed-rate-limit";
 import { health } from "./routes/health";
 import { stripeWebhook } from "./routes/stripe";
 import { inngestRoute } from "./routes/inngest";
@@ -357,9 +361,41 @@ userScoped.route("/user/budget/read", budgetPolicyReadRoute);
 userScoped.route("/user/budget/write", budgetPolicyWriteRoute);
 app.route("/v1", userScoped);
 
+// Distributed, workspace-keyed rate limiters for the expensive surfaces. Budgets
+// are env-tunable (requests/minute) with conservative defaults; the store is
+// Postgres so the limit is global across serverless instances (the in-memory
+// rateLimiter would only bound each warm instance). `max` is a lazy resolver so
+// the env budget is read on the first limited request, not at module load —
+// importing app.ts (route tests, tooling) must never require env access.
+const chatRateLimiter = distributedRateLimiter({
+  keyPrefix: "chat",
+  max: () => rateLimitBudgets().chat,
+});
+const agentExecRateLimiter = distributedRateLimiter({
+  keyPrefix: "agent",
+  max: () => rateLimitBudgets().agentExec,
+});
+// A2A is an external agent-to-agent surface — give it its own bucket (same
+// budget) so inbound A2A traffic can't starve the interactive agent bucket.
+const a2aRateLimiter = distributedRateLimiter({
+  keyPrefix: "a2a",
+  max: () => rateLimitBudgets().agentExec,
+});
+
 // /v1/:org_slug/:workspace_slug/* — org + workspace scoped routes.
 const orgScoped = new Hono<AppEnv>();
 orgScoped.use("*", authMiddleware, orgMiddleware, workspaceMiddleware);
+// Rate limiting: mounted AFTER auth/org/workspace (so orgId/workspaceId are
+// populated for keying) and BEFORE the route registrations below — Hono runs
+// middleware in registration order, so a limiter registered after a route would
+// not wrap it. The limiter counts POST only, so cheap co-located GET reads
+// (e.g. /agent/sandbox/list under the /agent/sandbox/* mount, or the
+// /agent/tasks background-task read) pass through untouched.
+orgScoped.use("/chat/*", chatRateLimiter);
+orgScoped.use("/agent/code/execute", agentExecRateLimiter);
+orgScoped.use("/agent/compose", agentExecRateLimiter);
+orgScoped.use("/agent/sandbox/*", agentExecRateLimiter);
+orgScoped.use("/agent/tasks", agentExecRateLimiter);
 orgScoped.route("/workspaces", workspaceCreateRoute);
 orgScoped.route("/billing/subscription", billingSubscriptionReadRoute);
 orgScoped.route(
@@ -692,6 +728,10 @@ app.route("/v1/agent/llm", agentLlmScoped);
 // gated by authMiddleware only. Full endpoint: POST /a2a.
 const a2aScoped = new Hono<AppEnv>();
 a2aScoped.use("*", authMiddleware);
+// Rate-limit the A2A RPC transport (POST /a2a) — the API key carries
+// org+workspace scope, so the limiter keys per workspace just like the /v1
+// agent surfaces. Registered before the route so it wraps it.
+a2aScoped.use("*", a2aRateLimiter);
 a2aScoped.route("/", a2aRpcRoute);
 app.route("/a2a", a2aScoped);
 

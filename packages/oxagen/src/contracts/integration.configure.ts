@@ -4,10 +4,11 @@ import { registerCapability } from "../registry";
 export const integrationConfigure = registerCapability({
   name: "configure_integration",
   domain: "integration",
-  description: "Update plugin instance config: credentials, sync cadence, inference toggles, ontology prompts.",
+  description:
+    "Update plugin instance config: credentials, sync cadence, inference toggles, ontology prompts.",
   mode: "sync",
   surfaces: ["api", "mcp", "cli", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "medium", category: "plugin" },
   sensitivity: "medium",
@@ -24,7 +25,10 @@ export const integrationConfigure = registerCapability({
       .enum(["manual", "polling", "webhook"])
       .optional()
       .describe("Update sync trigger method"),
-    inferenceEnabled: z.boolean().optional().describe("Enable/disable LLM inference"),
+    inferenceEnabled: z
+      .boolean()
+      .optional()
+      .describe("Enable/disable LLM inference"),
     ontologyPrompt: z
       .string()
       .optional()
@@ -43,5 +47,9 @@ export const integrationConfigure = registerCapability({
   }),
 });
 
-export type IntegrationConfigureInput = z.output<typeof integrationConfigure.input>;
-export type IntegrationConfigureOutput = z.output<typeof integrationConfigure.output>;
+export type IntegrationConfigureInput = z.output<
+  typeof integrationConfigure.input
+>;
+export type IntegrationConfigureOutput = z.output<
+  typeof integrationConfigure.output
+>;
