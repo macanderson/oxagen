@@ -23,6 +23,7 @@ _None._
 | name | string | Workspace display name |
 | slug | string | URL slug (unique within the org) |
 | description | string \| null | Free-text description (stored in the settings bag) |
+| avatarUrl | string \| null | `https://` URL or `avatar:v1:<json>` designed-avatar spec; `null` when unset |
 
 ## Side effects
 

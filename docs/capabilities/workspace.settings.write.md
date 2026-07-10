@@ -8,33 +8,41 @@
 
 ## Intent
 
-Update the active workspace's general settings (partial). Routes the settings
-page edit through the capability kernel so the same fields are editable from the
-agent, MCP, and CLI — every write runs through IAM, metering, and audit instead
-of a page-local server action.
+Update the active workspace's general settings — name, slug, description, and
+avatar — as a **partial** update: omit a field to leave it unchanged, pass a
+value to set it, pass `null` (description and avatarUrl only) to clear it.
+Routes the workspace settings edit through the capability kernel so the same
+fields are reachable from the agent, MCP, and CLI with consistent IAM,
+metering, and audit.
+
+Allowed for org/workspace Owners and Admins only (`defaultEffect: deny`).
 
 ## Input
 
-All fields optional — omit = leave unchanged, value = set, null = clear (description only).
-
 | Field | Type | Notes |
 | --- | --- | --- |
-| name | string? | 1–120 chars |
-| slug | string? | lowercase letters, numbers, single hyphens (unique within the org) |
-| description | string \| null? | ≤2000 chars; stored in the settings bag |
+| name | string (1–120, trimmed), optional | New display name |
+| slug | string (1–100, kebab-case), optional | New URL slug; must be unique within the org |
+| description | string (≤2000) \| null, optional | Free-text description; `null` clears it |
+| avatarUrl | string \| null, optional | `https://` URL or an `avatar:v1:<json>` designed-avatar spec; `null` clears the avatar (mirrors org.settings.write) |
 
 ## Output
 
-The full workspace settings object (same shape as `workspace.settings.read`).
+| Field | Type | Notes |
+| --- | --- | --- |
+| name | string | Workspace display name after the update |
+| slug | string | URL slug after the update |
+| description | string \| null | Description after the update |
+| avatarUrl | string \| null | Avatar after the update; `null` when unset |
 
 ## Side effects
 
-Updates `workspace.workspaces` for the active workspace. `description` is
-merged into the `settings` JSONB bag (other settings keys are preserved).
-ClickHouse observes the write via the kernel. A slug collision surfaces as a
-clean "already in use" error rather than a raw unique-constraint violation.
+Persists the changed fields to Postgres (workspace row + settings bag).
+ClickHouse observes the invocation via the kernel; the change is audit-logged.
 
 ## Errors
 
-- Slug already in use by another workspace in the org.
-- Requires a workspace context; throws when the workspace is not found.
+- Requires a workspace context.
+- Denied for non-admin members (IAM `defaultEffect: deny`; org/workspace Owner
+  or Admin required).
+- Rejects an invalid or duplicate slug.
