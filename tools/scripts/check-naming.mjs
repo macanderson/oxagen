@@ -60,7 +60,7 @@ const ACTIONS = new Set([
   "reconcile", "approve", "decline", "accept", "resolve", "suggest", "infer",
   "check", "verify", "validate", "analyze", "chat", "change", "mark", "send",
   "open", "format", "parse", "upload", "refresh", "screenshot", "submit",
-  "fill", "click", "navigate",
+  "fill", "click", "navigate", "revise",
   // associative verbs — bind/unbind an agent to an environment (Spec §5.6).
   "bind", "unbind",
   // imperative verbs used by shipped capabilities that predate this list
