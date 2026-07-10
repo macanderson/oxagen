@@ -94,6 +94,8 @@ export async function agentSandboxStartHandler(
     network,
     ...(input.label ? { label: input.label } : {}),
     ...(environmentId ? { environmentId } : {}),
+    // owner/repo/branch ONLY — never the token; list_sandboxes surfaces this.
+    ...(repos.length > 0 ? { repos } : {}),
     ...(template?.runtime ? { imageRef: template.runtime } : {}),
     ...(template?.resources.vcpu !== undefined
       ? { vcpu: template.resources.vcpu }
@@ -149,13 +151,6 @@ export async function agentSandboxStartHandler(
     ...(setupEnv ? { setupEnv } : {}),
   };
 
-  // Persist the requested repos (owner/repo/branch ONLY — never the token) into
-  // the session metadata jsonb under `repos`, which list_sandboxes surfaces per
-  // row. Widened locally so this typechecks whether or not SessionMeta has yet
-  // grown the field in _sandbox-session.ts.
-  const metadata: SessionMeta & { repos?: SessionRepoRef[] } =
-    repos.length > 0 ? { ...meta, repos } : meta;
-
   // ── Reuse path ──────────────────────────────────────────────────────────────
   if (input.sessionKey) {
     const existing = await findReusableSession(ctx, input.sessionKey);
@@ -196,7 +191,7 @@ export async function agentSandboxStartHandler(
     driver: driver.name,
     image: input.image,
     sandboxId: handle.sandboxId,
-    metadata,
+    metadata: meta,
     expiresAt,
   });
 
