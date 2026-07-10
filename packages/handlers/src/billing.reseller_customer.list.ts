@@ -1,3 +1,4 @@
+// audit-exempt: read-only list of reseller customers — no state change; covered by the kernel capability.invoke_* audit.
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { resellerCustomerList } from "@oxagen/oxagen/contracts/billing.reseller_customer.list";
 import { listResellerCustomers } from "@oxagen/billing";

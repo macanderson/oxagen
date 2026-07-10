@@ -1,3 +1,4 @@
+// audit-exempt: read-only rebill preview computation — no invoice is created or pushed; the mutating path (billing.reseller_rebill.push) emits billing.reseller_rebill_pushed.
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { resellerRebillPreview } from "@oxagen/oxagen/contracts/billing.reseller_rebill.preview";
 import { previewResellerRebill } from "@oxagen/billing";

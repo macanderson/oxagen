@@ -23,13 +23,12 @@ import type { ConnectedAccountsState } from "./security-types";
 // Mocks
 // ---------------------------------------------------------------------------
 
-const { mockUpdateProfileAction, mockSetPasswordAction, mockRouterRefresh } = vi.hoisted(
-  () => ({
+const { mockUpdateProfileAction, mockSetPasswordAction, mockRouterRefresh } =
+  vi.hoisted(() => ({
     mockUpdateProfileAction: vi.fn(),
     mockSetPasswordAction: vi.fn(),
     mockRouterRefresh: vi.fn(),
-  }),
-);
+  }));
 
 vi.mock("./profile-action", () => ({
   updateProfileAction: mockUpdateProfileAction,
@@ -43,6 +42,23 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: mockRouterRefresh }),
 }));
 
+// next/image validates src hostnames against next.config.js, which jsdom tests
+// don't load — AvatarMaker renders the avatar through it, so shim to <img>.
+vi.mock("next/image", () => ({
+  default: ({
+    src,
+    alt,
+    ...rest
+  }: {
+    src: string;
+    alt: string;
+    [k: string]: unknown;
+  }) => (
+    // eslint-disable-next-line @next/next/no-img-element -- jsdom test shim; real next/image requires Next.js runtime
+    <img src={src} alt={alt} {...rest} />
+  ),
+}));
+
 // page-context hooks — no-op in tests
 vi.mock("@/lib/page-context", () => ({
   useRegisterFillableForm: vi.fn(),
@@ -52,7 +68,10 @@ vi.mock("@/lib/page-context", () => ({
 // connected-accounts and set-password are sub-components — mock them for isolation
 vi.mock("./connected-accounts", () => ({
   ConnectedAccounts: ({ state }: { state: ConnectedAccountsState }) => (
-    <div data-testid="connected-accounts" data-has-password={state.hasPassword} />
+    <div
+      data-testid="connected-accounts"
+      data-has-password={state.hasPassword}
+    />
   ),
 }));
 
@@ -84,7 +103,9 @@ vi.mock("@/components/media/avatar-upload", () => ({
 }));
 
 vi.mock("@/components/ui/field-fill-transition", () => ({
-  FieldFillTransition: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  FieldFillTransition: ({ children }: { children: React.ReactNode }) => (
+    <>{children}</>
+  ),
 }));
 
 vi.mock("@/components/ui/button", () => ({
@@ -101,14 +122,19 @@ vi.mock("@/components/ui/button", () => ({
     className?: string;
     variant?: string;
   }) => (
-    <button type={(type as "button" | "submit" | "reset") ?? "button"} disabled={disabled}>
+    <button
+      type={(type as "button" | "submit" | "reset") ?? "button"}
+      disabled={disabled}
+    >
       {children}
     </button>
   ),
 }));
 
 vi.mock("@/components/ui/input", () => ({
-  Input: (props: React.InputHTMLAttributes<HTMLInputElement>) => <input {...props} />,
+  Input: (props: React.InputHTMLAttributes<HTMLInputElement>) => (
+    <input {...props} />
+  ),
 }));
 
 vi.mock("@/components/ui/label", () => ({
@@ -122,8 +148,18 @@ vi.mock("@/components/ui/label", () => ({
 }));
 
 vi.mock("next/link", () => ({
-  default: ({ href, children, className }: { href: string; children: React.ReactNode; className?: string }) => (
-    <a href={href} className={className}>{children}</a>
+  default: ({
+    href,
+    children,
+    className,
+  }: {
+    href: string;
+    children: React.ReactNode;
+    className?: string;
+  }) => (
+    <a href={href} className={className}>
+      {children}
+    </a>
   ),
 }));
 
@@ -140,7 +176,9 @@ import { ProfileForm } from "./profile-form";
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeState(overrides: Partial<ConnectedAccountsState> = {}): ConnectedAccountsState {
+function makeState(
+  overrides: Partial<ConnectedAccountsState> = {},
+): ConnectedAccountsState {
   return {
     accounts: [],
     hasPassword: true,
@@ -194,7 +232,9 @@ describe("ProfileForm", () => {
 
   it("renders the Save changes button", () => {
     render(<ProfileForm {...defaultProps} />);
-    expect(screen.getByRole("button", { name: /save changes/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /save changes/i }),
+    ).toBeInTheDocument();
   });
 
   it("renders the ConnectedAccounts component", () => {
@@ -207,12 +247,22 @@ describe("ProfileForm", () => {
   // ---------------------------------------------------------------------------
 
   it("does NOT render SetPasswordForm when hasPassword is true", () => {
-    render(<ProfileForm {...defaultProps} connectedAccountsState={makeState({ hasPassword: true })} />);
+    render(
+      <ProfileForm
+        {...defaultProps}
+        connectedAccountsState={makeState({ hasPassword: true })}
+      />,
+    );
     expect(screen.queryByTestId("set-password-form")).not.toBeInTheDocument();
   });
 
   it("renders SetPasswordForm when hasPassword is false", () => {
-    render(<ProfileForm {...defaultProps} connectedAccountsState={makeState({ hasPassword: false })} />);
+    render(
+      <ProfileForm
+        {...defaultProps}
+        connectedAccountsState={makeState({ hasPassword: false })}
+      />,
+    );
     expect(screen.getByTestId("set-password-form")).toBeInTheDocument();
   });
 
