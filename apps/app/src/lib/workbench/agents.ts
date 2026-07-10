@@ -217,7 +217,7 @@ export async function updateAgent(
  * lists "agent" in its surfaces.
  */
 export async function summarizeAgent(
-  ctx: StudioCtx,
+  ctx: WorkbenchCtx,
   agentId: string,
   force?: boolean,
 ): Promise<AgentDefinitionSummarizeOutput> {
@@ -238,7 +238,7 @@ export async function summarizeAgent(
  * list page calls before rendering.
  */
 export async function ensureAgentSummaries(
-  ctx: StudioCtx,
+  ctx: WorkbenchCtx,
   agents: AgentListRow[],
   limit = 3,
 ): Promise<AgentListRow[]> {

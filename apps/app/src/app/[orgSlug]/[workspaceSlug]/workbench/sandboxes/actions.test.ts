@@ -69,14 +69,29 @@ describe("startSandboxAction", () => {
     expect(resolveWorkbenchScope).not.toHaveBeenCalled();
   });
 
-  it("gates non-managers", async () => {
-    resolveWorkbenchScope.mockResolvedValue(scope(false));
-    const res = await startSandboxAction({ ...SCOPE, templateId: "oxagen-agent" });
+  it("requires a name", async () => {
+    resolveWorkbenchScope.mockResolvedValue(scope(true));
+    const res = await startSandboxAction({
+      ...SCOPE,
+      name: "   ",
+      templateId: "oxagen-agent",
+    });
     expect(res.ok).toBe(false);
     expect(startSandbox).not.toHaveBeenCalled();
   });
 
-  it("warms a sandbox from the template's image + setupCmd", async () => {
+  it("gates non-managers", async () => {
+    resolveWorkbenchScope.mockResolvedValue(scope(false));
+    const res = await startSandboxAction({
+      ...SCOPE,
+      name: "my box",
+      templateId: "oxagen-agent",
+    });
+    expect(res.ok).toBe(false);
+    expect(startSandbox).not.toHaveBeenCalled();
+  });
+
+  it("warms a sandbox from the template's image + setupCmd, passing the label + a slug-seeded key", async () => {
     resolveWorkbenchScope.mockResolvedValue(scope(true));
     startSandbox.mockResolvedValue({
       sessionId: "sbx_new",
@@ -85,23 +100,44 @@ describe("startSandboxAction", () => {
       createdAt: "2026-07-08T00:00:00.000Z",
       reused: false,
     });
-    const res = await startSandboxAction({ ...SCOPE, templateId: "oxagen-agent" });
+    const res = await startSandboxAction({
+      ...SCOPE,
+      name: "Acme API refactor",
+      templateId: "oxagen-agent",
+    });
     expect(res.ok).toBe(true);
     expect(startSandbox).toHaveBeenCalledTimes(1);
     const [, arg] = startSandbox.mock.calls[0] as [
       unknown,
-      { image?: string; setupCmd?: string; sessionKey?: string },
+      { image?: string; label?: string; setupCmd?: string; sessionKey?: string; sandboxTemplateId?: string },
     ];
     expect(arg.image).toBe("agent");
+    expect(arg.label).toBe("Acme API refactor");
     expect(typeof arg.setupCmd).toBe("string");
     expect(arg.setupCmd).toContain("git init");
-    expect(arg.sessionKey).toBeTruthy();
+    expect(arg.sandboxTemplateId).toBeUndefined();
+    // Key is seeded from the slugified name for readability, with a random suffix.
+    expect(arg.sessionKey).toMatch(/^sbx_acme-api-refactor_[0-9a-f]{8}$/);
+  });
+
+  it("routes a saved-template id (sbx_…) to sandboxTemplateId, not an image", async () => {
+    resolveWorkbenchScope.mockResolvedValue(scope(true));
+    startSandbox.mockResolvedValue({ sessionId: "sbx_y", reused: false });
+    await startSandboxAction({ ...SCOPE, name: "eval box", templateId: "sbx_tmpl123" });
+    const [, arg] = startSandbox.mock.calls[0] as [
+      unknown,
+      { image?: string; setupCmd?: string; sandboxTemplateId?: string; label?: string },
+    ];
+    expect(arg.sandboxTemplateId).toBe("sbx_tmpl123");
+    expect(arg.label).toBe("eval box");
+    expect(arg.image).toBeUndefined();
+    expect(arg.setupCmd).toBeUndefined();
   });
 
   it("passes an empty-setupCmd template as undefined setupCmd", async () => {
     resolveWorkbenchScope.mockResolvedValue(scope(true));
     startSandbox.mockResolvedValue({ sessionId: "sbx_x", reused: false });
-    await startSandboxAction({ ...SCOPE, templateId: "blank" });
+    await startSandboxAction({ ...SCOPE, name: "blank box", templateId: "blank" });
     const [, arg] = startSandbox.mock.calls[0] as [
       unknown,
       { image?: string; setupCmd?: string; sessionKey?: string },
@@ -113,7 +149,11 @@ describe("startSandboxAction", () => {
     resolveWorkbenchScope.mockResolvedValue(scope(true));
     startSandbox.mockRejectedValue(new Error("Durable sandbox not available"));
     isSandboxUnavailable.mockReturnValue(true);
-    const res = await startSandboxAction({ ...SCOPE, templateId: "oxagen-agent" });
+    const res = await startSandboxAction({
+      ...SCOPE,
+      name: "my box",
+      templateId: "oxagen-agent",
+    });
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.unavailable).toBe(true);
   });

@@ -77,16 +77,18 @@ export function SkillsPanel({
   const [filter, setFilter] = React.useState("");
   const [newSkillOpen, setNewSkillOpen] = React.useState(false);
 
-  const filtered = React.useMemo(
-    () =>
-      skills.filter(
-        (s) =>
-          s.name.toLowerCase().includes(filter.toLowerCase()) ||
-          s.slug.toLowerCase().includes(filter.toLowerCase()) ||
-          s.description.toLowerCase().includes(filter.toLowerCase()),
-      ),
-    [skills, filter],
-  );
+  const filtered = React.useMemo(() => {
+    const q = filter.toLowerCase();
+    // Null-safe: a single row with a missing name/slug/description must never
+    // throw and blank the entire table (the original bug did exactly that when
+    // the list contract omitted slug — see this route's page.tsx notes).
+    return skills.filter(
+      (s) =>
+        (s.name ?? "").toLowerCase().includes(q) ||
+        (s.slug ?? "").toLowerCase().includes(q) ||
+        (s.description ?? "").toLowerCase().includes(q),
+    );
+  }, [skills, filter]);
 
   return (
     <div className="flex flex-col gap-6">

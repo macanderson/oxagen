@@ -142,3 +142,9 @@ tools/eval-out/
 .anthropic-api-key
 # stores `manderson` team linked vercel api key
 .ai-gateway-api-key
+
+# Orphaned atomic-write temp files (writer creates `<file>.tmp.<pid>.<hash>`,
+# writes, then renames; an interrupted write leaves the temp behind). These must
+# never be committed — one leaked into #807 as page.tsx.tmp.45759.f25485f00a57.
+*.tmp.*
+*.tmp
