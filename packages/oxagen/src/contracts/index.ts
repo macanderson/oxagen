@@ -18,6 +18,7 @@ import { agentSandboxStart } from "./agent.sandbox.start";
 import { agentSandboxExec } from "./agent.sandbox.exec";
 import { agentSandboxSnapshot } from "./agent.sandbox.snapshot";
 import { agentSandboxStop } from "./agent.sandbox.stop";
+import { agentSandboxRename } from "./agent.sandbox.rename";
 import { agentSandboxFilesList } from "./agent.sandbox_file.list";
 import { agentSandboxFileRead } from "./agent.sandbox_file.read";
 import { agentSandboxLogsList } from "./agent.sandbox_log.list";
@@ -498,6 +499,7 @@ export {
   agentSandboxExec,
   agentSandboxSnapshot,
   agentSandboxStop,
+  agentSandboxRename,
   agentSandboxFilesList,
   agentSandboxFileRead,
   agentSandboxLogsList,
@@ -834,6 +836,7 @@ export const contracts = [
   agentSandboxExec,
   agentSandboxSnapshot,
   agentSandboxStop,
+  agentSandboxRename,
   agentSandboxFilesList,
   agentSandboxFileRead,
   agentSandboxLogsList,

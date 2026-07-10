@@ -58,6 +58,7 @@ import "./contracts/agent.plan.create";
 import "./contracts/agent.repo.edit";
 import "./contracts/agent.sandbox.exec";
 import "./contracts/agent.sandbox.list";
+import "./contracts/agent.sandbox.rename";
 import "./contracts/agent.sandbox.snapshot";
 import "./contracts/agent.sandbox.start";
 import "./contracts/agent.sandbox.stop";
