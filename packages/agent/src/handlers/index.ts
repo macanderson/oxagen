@@ -22,6 +22,7 @@ const LOADERS: Record<string, LoaderEntry> = {
   "run_sandbox_command": () => import("./agent.sandbox.exec"),
   "snapshot_sandbox": () => import("./agent.sandbox.snapshot"),
   "stop_sandbox": () => import("./agent.sandbox.stop"),
+  "rename_sandbox": () => import("./agent.sandbox.rename"),
   "list_sandboxes": () => import("./agent.sandbox.list"),
   "list_sandbox_files": () => import("./agent.sandbox_file.list"),
   "list_sandbox_logs": () => import("./agent.sandbox_log.list"),
