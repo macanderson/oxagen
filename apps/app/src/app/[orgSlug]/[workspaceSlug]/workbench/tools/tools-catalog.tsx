@@ -2,7 +2,7 @@
 /**
  * tools-catalog.tsx — Workbench → Tools catalog panel.
  *
- * Read-only, hand-rolled table over the workspace's agent tools (from
+ * Read-only card catalog over the workspace's agent tools (from
  * `agent.tool.list`, wrapped by `listAgentTools`). Supports client-side
  * search (name/domain) plus domain and risk-level filters, and opens a Sheet
  * with the full tool detail on row click. No mutations — equipping tools
@@ -11,7 +11,7 @@
  */
 import * as React from "react";
 import Link from "next/link";
-import { Search, Flag, ExternalLink, Wrench } from "lucide-react";
+import { Search, Flag, ExternalLink, Wrench, Download } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,6 +31,9 @@ import {
   SheetPanel,
 } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
+import { CardGrid } from "@/components/lists/card-grid";
+import { ListPagination } from "@/components/lists/list-pagination";
+import { toCsv, downloadCsv, type CsvColumn } from "@/lib/lists/csv";
 import type { AgentToolRow } from "@/lib/workbench/tools";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -84,17 +87,42 @@ function uniqueDomains(tools: AgentToolRow[]): string[] {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
+const TOOLS_PAGE_SIZE = 24;
+
+const TOOLS_CSV_COLUMNS: CsvColumn[] = [
+  { key: "name", header: "Tool name" },
+  { key: "description", header: "Description" },
+  { key: "domain", header: "Domain" },
+  { key: "category", header: "Category" },
+  { key: "riskLevel", header: "Risk" },
+  { key: "requiresApproval", header: "Requires approval" },
+  { key: "external", header: "External" },
+];
+
 export function ToolsCatalog({ tools, marketplaceHref }: ToolsCatalogProps) {
   const [query, setQuery] = React.useState("");
   const [domain, setDomain] = React.useState<string>(ALL_DOMAINS);
   const [risk, setRisk] = React.useState<RiskFilter>("all");
   const [selected, setSelected] = React.useState<AgentToolRow | null>(null);
+  const [page, setPage] = React.useState(1);
 
   const domains = React.useMemo(() => uniqueDomains(tools), [tools]);
   const filtered = React.useMemo(
     () => filterTools(tools, query, domain, risk),
     [tools, query, domain, risk],
   );
+
+  // The catalog can hold hundreds of tools — paginate the card grid so first
+  // paint stays cheap. Page resets whenever the filter set changes.
+  const pageCount = Math.max(1, Math.ceil(filtered.length / TOOLS_PAGE_SIZE));
+  const clampedPage = Math.min(page, pageCount);
+  const pageRows = filtered.slice(
+    (clampedPage - 1) * TOOLS_PAGE_SIZE,
+    clampedPage * TOOLS_PAGE_SIZE,
+  );
+  React.useEffect(() => {
+    setPage(1);
+  }, [query, domain, risk]);
 
   return (
     <div className="flex flex-col gap-4" data-testid="tools-catalog">
@@ -147,6 +175,19 @@ export function ToolsCatalog({ tools, marketplaceHref }: ToolsCatalogProps) {
           <Button
             variant="outline"
             size="sm"
+            startIcon={<Download className="h-3.5 w-3.5" aria-hidden="true" />}
+            onClick={() =>
+              downloadCsv(
+                "agent-tools.csv",
+                toCsv(TOOLS_CSV_COLUMNS, filtered as unknown as Record<string, unknown>[]),
+              )
+            }
+          >
+            Export
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
             render={<Link href={marketplaceHref} />}
             data-testid="tools-install-more-button"
           >
@@ -164,82 +205,63 @@ export function ToolsCatalog({ tools, marketplaceHref }: ToolsCatalogProps) {
       ) : filtered.length === 0 ? (
         <ToolsCatalogEmptyState message="No tools match your search or filters." />
       ) : (
-        <div className="rounded-md border bg-card overflow-x-auto" data-testid="tools-table">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b">
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground">
-                  Tool name
-                </th>
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground">Domain</th>
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground">
-                  Category
-                </th>
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground">Risk</th>
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground">
-                  Approval
-                </th>
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground">
-                  External
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((tool, idx) => (
-                <tr
-                  key={tool.name}
-                  onClick={() => setSelected(tool)}
-                  className={`border-b last:border-0 hover:bg-muted/20 transition-colors cursor-pointer${idx % 2 === 1 ? " bg-muted/5" : ""}`}
-                  data-testid={`tool-row-${tool.name}`}
-                >
-                  <td className="px-4 py-3">
-                    <div className="flex flex-col gap-0.5">
-                      <span className="font-medium text-foreground font-mono text-xs">
-                        {tool.name}
-                      </span>
-                      <span className="text-xs text-muted-foreground line-clamp-1">
-                        {tool.description}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground">{tool.domain}</td>
-                  <td className="px-4 py-3 text-muted-foreground">{tool.category ?? "—"}</td>
-                  <td className="px-4 py-3">
-                    <Badge
-                      variant={riskBadgeVariant(tool.riskLevel)}
-                      className="text-xs"
-                      data-testid={`tool-risk-badge-${tool.name}`}
-                    >
-                      {riskLabel(tool.riskLevel)}
+        <>
+          <CardGrid data-testid="tools-grid">
+            {pageRows.map((tool) => (
+              <button
+                key={tool.name}
+                type="button"
+                onClick={() => setSelected(tool)}
+                className="flex flex-col gap-2 rounded-lg border bg-card p-4 text-left transition-colors hover:border-border/80"
+                data-testid={`tool-row-${tool.name}`}
+              >
+                <span className="font-medium text-foreground font-mono text-xs break-all">
+                  {tool.name}
+                </span>
+                <span className="line-clamp-2 text-xs text-muted-foreground">
+                  {tool.description}
+                </span>
+                <span className="mt-auto flex flex-wrap items-center gap-1.5 pt-1">
+                  <Badge variant="outline" className="text-xs">
+                    {tool.domain}
+                  </Badge>
+                  {tool.category ? (
+                    <Badge variant="outline" className="text-xs">
+                      {tool.category}
                     </Badge>
-                  </td>
-                  <td className="px-4 py-3">
-                    {tool.requiresApproval ? (
-                      <Flag
-                        className="h-3.5 w-3.5 text-warning-foreground"
-                        aria-label="Requires approval"
-                        data-testid={`tool-approval-flag-${tool.name}`}
-                      />
-                    ) : (
-                      <span className="text-muted-foreground">—</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    {tool.external ? (
-                      <ExternalLink
-                        className="h-3.5 w-3.5 text-muted-foreground"
-                        aria-label="External tool"
-                        data-testid={`tool-external-icon-${tool.name}`}
-                      />
-                    ) : (
-                      <span className="text-muted-foreground">—</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                  ) : null}
+                  <Badge
+                    variant={riskBadgeVariant(tool.riskLevel)}
+                    className="text-xs"
+                    data-testid={`tool-risk-badge-${tool.name}`}
+                  >
+                    {riskLabel(tool.riskLevel)}
+                  </Badge>
+                  {tool.requiresApproval ? (
+                    <Flag
+                      className="h-3.5 w-3.5 text-warning-foreground"
+                      aria-label="Requires approval"
+                      data-testid={`tool-approval-flag-${tool.name}`}
+                    />
+                  ) : null}
+                  {tool.external ? (
+                    <ExternalLink
+                      className="h-3.5 w-3.5 text-muted-foreground"
+                      aria-label="External tool"
+                      data-testid={`tool-external-icon-${tool.name}`}
+                    />
+                  ) : null}
+                </span>
+              </button>
+            ))}
+          </CardGrid>
+          <ListPagination
+            page={clampedPage}
+            pageCount={pageCount}
+            onPageChange={setPage}
+            className="self-end"
+          />
+        </>
       )}
 
       {/* Detail sheet */}

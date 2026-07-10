@@ -1,10 +1,19 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { Breadcrumb } from "@/components/ui/breadcrumb";
+import { PageHeader } from "@/components/ui/page-header";
 import { workspace } from "@/lib/routes";
 import type { ScopeContext } from "@/lib/scope";
 import { resolveWorkbenchScope } from "@/lib/workbench/scope";
 import { loadEquipSources } from "@/lib/workbench/equip-sources";
 import { AgentBuilder } from "../agent-builder";
 import { installPlugin, installBulkPlugin } from "@/lib/agent-tools/install-actions";
+
+export const metadata: Metadata = {
+  title: "New Agent | Workbench",
+};
+
+export const dynamic = "force-dynamic";
 
 interface PageProps {
   params: Promise<{ orgSlug: string; workspaceSlug: string }>;
@@ -29,15 +38,30 @@ export default async function NewAgentPage({ params }: PageProps) {
   const sources = await loadEquipSources(ctx, org.id, ws.id);
 
   return (
-    <AgentBuilder
-      mode="create"
-      orgSlug={orgSlug}
-      workspaceSlug={workspaceSlug}
-      canManage={canManage}
-      readOnly={false}
-      sources={sources}
-      installAction={installPlugin}
-      installBulkAction={installBulkPlugin}
-    />
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        title="New agent"
+        description="Compose an agent step by step — identity, instructions, and everything it's equipped with."
+        className="pb-0"
+        breadcrumb={
+          <Breadcrumb
+            items={[
+              { label: "Agents", href: workspace.workbench.agents(routeCtx) },
+              { label: "New" },
+            ]}
+          />
+        }
+      />
+      <AgentBuilder
+        mode="create"
+        orgSlug={orgSlug}
+        workspaceSlug={workspaceSlug}
+        canManage={canManage}
+        readOnly={false}
+        sources={sources}
+        installAction={installPlugin}
+        installBulkAction={installBulkPlugin}
+      />
+    </div>
   );
 }

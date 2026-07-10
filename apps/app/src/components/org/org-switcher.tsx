@@ -1,5 +1,5 @@
 "use client";
-import Image from "next/image";
+import { EntityAvatar } from "@/components/avatar/entity-avatar";
 import { useRouter } from "next/navigation";
 import { ChevronsUpDown, Plus, Check, Settings, CreditCard } from "lucide-react";
 import {
@@ -30,7 +30,7 @@ export interface CurrentOrg {
   name: string;
 }
 
-/** Square org avatar: the logo image, or the name's initial in a muted tile. */
+/** Square org avatar: photo, designed avatar:v1: tile, or initials fallback. */
 function OrgAvatar({
   name,
   avatarUrl,
@@ -40,28 +40,14 @@ function OrgAvatar({
   avatarUrl?: string | null;
   className?: string;
 }) {
-  if (avatarUrl) {
-    return (
-      <Image
-        src={avatarUrl}
-        alt=""
-        aria-hidden="true"
-        width={32}
-        height={32}
-        className={cn("size-8 shrink-0 rounded-md object-cover", className)}
-      />
-    );
-  }
   return (
-    <span
-      aria-hidden="true"
-      className={cn(
-        "flex size-8 shrink-0 items-center justify-center rounded-md bg-foreground/[0.08] text-xs font-semibold uppercase text-foreground",
-        className,
-      )}
-    >
-      {name.charAt(0)}
-    </span>
+    <EntityAvatar
+      value={avatarUrl}
+      name={name}
+      shape="square"
+      size="md"
+      className={cn("shrink-0", className)}
+    />
   );
 }
 

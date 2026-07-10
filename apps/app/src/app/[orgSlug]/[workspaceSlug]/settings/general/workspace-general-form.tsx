@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useRegisterFillableForm, useRegisterPageEntity } from "@/lib/page-context";
 import type { FillableFormSpec, FieldDescriptor } from "@/lib/ask/fill-types";
 import { slugify } from "@/lib/slug";
+import { AvatarMaker } from "@/components/avatar/avatar-maker";
 import { updateWorkspaceGeneralAction } from "./actions";
 
 // ---------------------------------------------------------------------------
@@ -22,6 +23,7 @@ interface WorkspaceGeneralFormProps {
   initialName: string;
   initialSlug: string;
   initialDescription: string;
+  initialAvatarUrl: string | null;
 }
 
 interface FormValues {
@@ -41,6 +43,7 @@ export function WorkspaceGeneralForm({
   initialName,
   initialSlug,
   initialDescription,
+  initialAvatarUrl,
 }: WorkspaceGeneralFormProps) {
   const router = useRouter();
   const [values, setValues] = React.useState<FormValues>({
@@ -48,6 +51,8 @@ export function WorkspaceGeneralForm({
     slug: initialSlug,
     description: initialDescription,
   });
+  // Avatar value (photo URL or designed spec string) — saved with the form.
+  const [avatarUrl, setAvatarUrl] = React.useState<string>(initialAvatarUrl ?? "");
   const [isSaving, setIsSaving] = React.useState(false);
   const [savedAt, setSavedAt] = React.useState<Date | null>(null);
 
@@ -133,6 +138,7 @@ export function WorkspaceGeneralForm({
         name: values.name,
         slug: values.slug,
         description: values.description || undefined,
+        avatarUrl,
       });
       if (result.ok) {
         setSavedAt(new Date());
@@ -193,6 +199,25 @@ export function WorkspaceGeneralForm({
         className="flex flex-col gap-6"
         noValidate
       >
+        {/* Workspace avatar — photo upload+crop or designed emoji/color tile.
+            Saved with the rest of the form through workspace.settings.write. */}
+        <div className="flex flex-col gap-1.5">
+          <span className="text-sm font-medium leading-none text-foreground">
+            Avatar
+          </span>
+          <AvatarMaker
+            value={avatarUrl || null}
+            onChange={(next) => {
+              setAvatarUrl(next);
+              setSavedAt(null);
+            }}
+            name={values.name || workspaceSlug}
+            shape="square"
+            entityLabel="workspace"
+            disabled={isSaving}
+          />
+        </div>
+
         {/* Workspace name */}
         <div className="flex flex-col gap-1.5">
           <label

@@ -29,8 +29,8 @@ const NO_HANDLER_OK = new Set<string>([
   // bound under the snake key in the agent LOADERS) — no longer allowlisted.
   // Pre-existing gaps (no registerHandler on origin/main either):
   "upsert_graph_relationship", // graph.relationship.upsert — deprecation alias, no kernel handler
-  "erase_data", // privacy.data.erase — handler file exists but never wired into register.ts
-  "export_data", // privacy.data.export — handler file exists but never wired into register.ts
+  // erase_data / export_data (privacy.data.*) were wired into register.ts 2026-07-09
+  // and no longer belong in this allowlist.
   "approve_semantic_relationship", // semantic.relationship.* — no handler file
   "infer_semantic_relationships",
   "list_semantic_relationships",

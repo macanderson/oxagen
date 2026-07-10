@@ -1,5 +1,6 @@
 import { PageHeader } from "@/components/ui/page-header";
 import { PageTabs } from "@/components/ui/page-tabs";
+import { MobileSettingsNav } from "@/components/ui/settings-nav";
 import { org } from "@/lib/routes";
 
 export default async function BillingLayout({
@@ -24,8 +25,9 @@ export default async function BillingLayout({
         title="Billing"
         description="Plans, subscription, usage, and credits."
       />
-      <PageTabs tabs={tabs} className="mb-6" />
+      <PageTabs tabs={tabs} className="mb-6 max-md:hidden" />
       {children}
+      <MobileSettingsNav items={tabs} label="Billing" />
     </div>
   );
 }

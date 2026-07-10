@@ -402,4 +402,191 @@ describe("ingestion.pipeline Inngest function", () => {
       expect(result).toMatchObject({ action: "updated_principal" });
     });
   });
+
+  // ── DeliveryConfig enforcement (record-type / path / label filters + inference gate) ──
+  describe("DeliveryConfig enforcement", () => {
+    // Mocks the step-1 JOIN read (entity_type_mappings ⨝ source_connections):
+    // returns one mapping row with the connection's delivery_config attached.
+    function mockRowWithConfig(
+      deliveryConfig: unknown,
+      mappingRow: { oxagen_entity_type: string; property_mappings: Record<string, string> } = {
+        oxagen_entity_type: "task",
+        property_mappings: {},
+      },
+    ): void {
+      mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) =>
+        fn({
+          execute: vi
+            .fn()
+            .mockResolvedValue([{ ...mappingRow, delivery_config: deliveryConfig }]),
+        }),
+      );
+    }
+
+    function eventsFrom(sendEvent: ReturnType<typeof vi.fn>): Array<{ name: string; data: Record<string, unknown> }> {
+      return sendEvent.mock.calls[0]![1] as Array<{ name: string; data: Record<string, unknown> }>;
+    }
+
+    // ── Stage 1: record-type filter ─────────────────────────────────────────
+    it("drops a record whose type is not in recordTypeFilters (Stage 1)", async () => {
+      mocks.getConnector.mockReturnValue({ normalizeRecord: () => NORMALIZED });
+      mockRowWithConfig({ recordTypeFilters: ["issue"] }); // BASE_EVENT is pull_request
+
+      const sendEvent = vi.fn().mockResolvedValue(undefined);
+      const step = makeStep({ sendEvent });
+      const result = await capturedHandler!({ event: { data: BASE_EVENT }, step });
+
+      expect(result).toEqual({ skipped: true, reason: "record_type_not_allowed" });
+      expect(mocks.upsertEntityNode).not.toHaveBeenCalled();
+      expect(mocks.embedEntity).not.toHaveBeenCalled();
+      expect(sendEvent).not.toHaveBeenCalled();
+    });
+
+    it("keeps a record whose type IS in recordTypeFilters", async () => {
+      mocks.getConnector.mockReturnValue({ normalizeRecord: () => NORMALIZED });
+      mockRowWithConfig({ recordTypeFilters: ["pull_request", "issue"] });
+
+      const step = makeStep();
+      const result = await capturedHandler!({ event: { data: BASE_EVENT }, step });
+
+      expect(result).toEqual({ naturalKey: "github:conn-abc:42", action: "created_principal" });
+      expect(mocks.upsertEntityNode).toHaveBeenCalled();
+    });
+
+    // ── Stage 2: path filter ────────────────────────────────────────────────
+    it("drops a record whose path matches pathFilters (Stage 2)", async () => {
+      mocks.getConnector.mockReturnValue({
+        normalizeRecord: () => ({ ...NORMALIZED, properties: { path: "node_modules/pkg/index.ts" } }),
+      });
+      mockRowWithConfig({ pathFilters: ["node_modules/**"] });
+
+      const sendEvent = vi.fn().mockResolvedValue(undefined);
+      const step = makeStep({ sendEvent });
+      const result = await capturedHandler!({ event: { data: BASE_EVENT }, step });
+
+      expect(result).toEqual({ skipped: true, reason: "path_filtered" });
+      expect(mocks.upsertEntityNode).not.toHaveBeenCalled();
+      expect(mocks.embedEntity).not.toHaveBeenCalled();
+      expect(sendEvent).not.toHaveBeenCalled();
+    });
+
+    it("keeps a record whose path does not match pathFilters", async () => {
+      mocks.getConnector.mockReturnValue({
+        normalizeRecord: () => ({ ...NORMALIZED, properties: { path: "src/index.ts" } }),
+      });
+      mockRowWithConfig({ pathFilters: ["node_modules/**"] });
+
+      const step = makeStep();
+      const result = await capturedHandler!({ event: { data: BASE_EVENT }, step });
+
+      expect(result).toMatchObject({ action: "created_principal" });
+      expect(mocks.upsertEntityNode).toHaveBeenCalled();
+    });
+
+    // ── Stage 2: label filter ───────────────────────────────────────────────
+    it("drops a record whose label matches labelFilters (Stage 2)", async () => {
+      mocks.getConnector.mockReturnValue({
+        normalizeRecord: () => ({ ...NORMALIZED, properties: { labels: [{ name: "wontfix" }] } }),
+      });
+      mockRowWithConfig({ labelFilters: ["wontfix"] });
+
+      const sendEvent = vi.fn().mockResolvedValue(undefined);
+      const step = makeStep({ sendEvent });
+      const result = await capturedHandler!({ event: { data: BASE_EVENT }, step });
+
+      expect(result).toEqual({ skipped: true, reason: "label_filtered" });
+      expect(mocks.upsertEntityNode).not.toHaveBeenCalled();
+      expect(sendEvent).not.toHaveBeenCalled();
+    });
+
+    it("keeps a record whose labels do not match labelFilters", async () => {
+      mocks.getConnector.mockReturnValue({
+        normalizeRecord: () => ({ ...NORMALIZED, properties: { labels: ["bug", "p1"] } }),
+      });
+      mockRowWithConfig({ labelFilters: ["wontfix"] });
+
+      const step = makeStep();
+      const result = await capturedHandler!({ event: { data: BASE_EVENT }, step });
+
+      expect(result).toMatchObject({ action: "created_principal" });
+      expect(mocks.upsertEntityNode).toHaveBeenCalled();
+    });
+
+    // ── Stage 5/6: semantic-inference gate ──────────────────────────────────
+    it("skips embed and the entity.infer event when semanticInference.enabled is false", async () => {
+      mocks.getConnector.mockReturnValue({ normalizeRecord: () => NORMALIZED });
+      mockRowWithConfig({ semanticInference: { enabled: false } });
+
+      const sendEvent = vi.fn().mockResolvedValue(undefined);
+      const step = makeStep({ sendEvent });
+      const result = await capturedHandler!({ event: { data: BASE_EVENT }, step });
+
+      // Node is still written; only embedding + semantic inference are skipped.
+      expect(result).toEqual({ naturalKey: "github:conn-abc:42", action: "created_principal" });
+      expect(mocks.upsertEntityNode).toHaveBeenCalled();
+      expect(mocks.embedEntity).not.toHaveBeenCalled();
+
+      const events = eventsFrom(sendEvent);
+      expect(events).toHaveLength(1);
+      expect(events[0]!.name).toBe("ingestion/entity.created");
+    });
+
+    it("skips inference when perRecordType disables this record type", async () => {
+      mocks.getConnector.mockReturnValue({ normalizeRecord: () => NORMALIZED });
+      mockRowWithConfig({
+        semanticInference: { enabled: true, perRecordType: { pull_request: false } },
+      });
+
+      const sendEvent = vi.fn().mockResolvedValue(undefined);
+      const step = makeStep({ sendEvent });
+      await capturedHandler!({ event: { data: BASE_EVENT }, step });
+
+      expect(mocks.embedEntity).not.toHaveBeenCalled();
+      const events = eventsFrom(sendEvent);
+      expect(events).toHaveLength(1);
+      expect(events[0]!.name).toBe("ingestion/entity.created");
+    });
+
+    it("runs embed and fires entity.infer when semanticInference.enabled is true", async () => {
+      mocks.getConnector.mockReturnValue({ normalizeRecord: () => NORMALIZED });
+      mockRowWithConfig({ semanticInference: { enabled: true } });
+
+      const sendEvent = vi.fn().mockResolvedValue(undefined);
+      const step = makeStep({ sendEvent });
+      await capturedHandler!({ event: { data: BASE_EVENT }, step });
+
+      expect(mocks.embedEntity).toHaveBeenCalled();
+      const events = eventsFrom(sendEvent);
+      expect(events).toHaveLength(2);
+      expect(events.map((e) => e.name)).toEqual([
+        "ingestion/entity.created",
+        "ingestion/entity.infer",
+      ]);
+    });
+
+    // ── Backward compatibility: unset / empty DeliveryConfig ────────────────
+    it("applies no filtering and runs inference when delivery_config is null (backward compatible)", async () => {
+      mocks.getConnector.mockReturnValue({ normalizeRecord: () => NORMALIZED });
+      mockRowWithConfig(null);
+
+      const sendEvent = vi.fn().mockResolvedValue(undefined);
+      const step = makeStep({ sendEvent });
+      const result = await capturedHandler!({ event: { data: BASE_EVENT }, step });
+
+      expect(result).toEqual({ naturalKey: "github:conn-abc:42", action: "created_principal" });
+      expect(mocks.embedEntity).toHaveBeenCalled();
+      expect(eventsFrom(sendEvent)).toHaveLength(2);
+    });
+
+    it("applies no filtering when every filter array is empty", async () => {
+      mocks.getConnector.mockReturnValue({ normalizeRecord: () => NORMALIZED });
+      mockRowWithConfig({ recordTypeFilters: [], pathFilters: [], labelFilters: [] });
+
+      const step = makeStep();
+      const result = await capturedHandler!({ event: { data: BASE_EVENT }, step });
+
+      expect(result).toMatchObject({ action: "created_principal" });
+      expect(mocks.upsertEntityNode).toHaveBeenCalled();
+    });
+  });
 });

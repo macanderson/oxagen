@@ -34,6 +34,8 @@ describe("agent.definition.list capability", () => {
           deploymentStatus: "active",
           latestVersion: 1,
           managed: true,
+          avatarUrl: "avatar:v1:{\"emoji\":\"🤖\",\"bg\":\"#0ea5e9\",\"mode\":\"full\"}",
+          summary: "Answers QA questions grounded in the workspace graph.",
         },
         {
           agentId: "agt_2",
@@ -47,6 +49,8 @@ describe("agent.definition.list capability", () => {
           deploymentStatus: "inactive",
           latestVersion: null,
           managed: false,
+          avatarUrl: null,
+          summary: null,
         },
       ],
     });

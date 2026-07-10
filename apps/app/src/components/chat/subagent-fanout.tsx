@@ -1,7 +1,6 @@
 "use client";
 import * as React from "react";
 import { Check, Loader2, Users, X } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { StructuredField } from "./structured-value";
 import type { SubagentChild, SubagentStatus } from "./stream-event-types";
@@ -35,7 +34,9 @@ export function SubagentFanout({
     >
       <div className="flex items-center gap-2">
         <Users className="h-4 w-4 text-muted-foreground" />
-        <Badge variant="muted">{subagents.length} subagents</Badge>
+        <span className="text-xs font-medium text-muted-foreground">
+          {subagents.length} subagents
+        </span>
         <FanoutStatus status={status} />
       </div>
 
@@ -92,29 +93,29 @@ function ChildCard({
 function FanoutStatus({ status }: { status: SubagentStatus }) {
   if (status === "running") {
     return (
-      <Badge variant="muted" className="ml-auto">
-        <Loader2 className="mr-1 h-3 w-3 animate-spin" /> Running
-      </Badge>
+      <span className="ml-auto inline-flex items-center gap-1 text-xs font-medium text-muted-foreground">
+        <Loader2 className="h-3 w-3 animate-spin" /> Running
+      </span>
     );
   }
   if (status === "completed") {
     return (
-      <Badge variant="success" className="ml-auto">
-        <Check className="mr-1 h-3 w-3" /> Completed
-      </Badge>
+      <span className="ml-auto inline-flex items-center gap-1 text-xs font-medium text-success">
+        <Check className="h-3 w-3" /> Completed
+      </span>
     );
   }
   if (status === "timed_out") {
     return (
-      <Badge variant="destructive" className="ml-auto">
-        <X className="mr-1 h-3 w-3" /> Timed out
-      </Badge>
+      <span className="ml-auto inline-flex items-center gap-1 text-xs font-medium text-destructive">
+        <X className="h-3 w-3" /> Timed out
+      </span>
     );
   }
   return (
-    <Badge variant="warning" className="ml-auto">
+    <span className="ml-auto inline-flex items-center gap-1 text-xs font-medium text-warning">
       Partial
-    </Badge>
+    </span>
   );
 }
 

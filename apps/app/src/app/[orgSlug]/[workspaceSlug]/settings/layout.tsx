@@ -14,19 +14,21 @@ export default async function SettingsLayout({
   const { orgSlug, workspaceSlug } = await params;
   const ctx: Required<ScopeContext> = { orgSlug, workspaceSlug };
 
+  // Workspace configuration only. Anything about BUILDING with agents —
+  // agents, tools, MCP servers, environments, sandboxes — lives in the
+  // Workbench, never here. The one MCP concern that IS settings-shaped is
+  // registry administration: which catalog sources the marketplace and MCP
+  // install flows discover servers from.
   const navItems = [
     { label: "General", href: workspace.settings.general(ctx) },
     { label: "Members", href: workspace.settings.members(ctx) },
     { label: "Models", href: workspace.settings.models(ctx) },
     { label: "Budget", href: workspace.settings.budget(ctx) },
     { label: "GitHub", href: workspace.settings.github(ctx) },
-    // Lives under Workbench → Agent Tools (the one equip home, PR #683) — the
-    // settings entry is the discoverability path for install + authenticate.
-    { label: "MCP Servers", href: workspace.workbench.tools.mcp(ctx) },
+    { label: "MCP Registries", href: workspace.settings.mcpServerRegistries(ctx) },
     { label: "Prompts", href: workspace.settings.prompts(ctx) },
     { label: "Knowledge", href: workspace.settings.knowledge(ctx) },
     { label: "Memory", href: workspace.settings.memory(ctx) },
-    { label: "Environments", href: workspace.settings.environments(ctx) },
   ];
 
   return (

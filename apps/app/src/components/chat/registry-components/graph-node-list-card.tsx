@@ -3,7 +3,6 @@ import * as React from "react";
 import { resolveRecordHref } from "@oxagen/oxagen/capability-meta";
 import { Network, ArrowUpRight } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
 import { TruncatedText } from "@/components/ui/truncated-text";
 
 /**
@@ -97,9 +96,9 @@ export default function GraphNodeListCard(
                   </p>
                 </div>
                 {row.labels.slice(0, 2).map((l) => (
-                  <Badge key={l} variant="outline" className="shrink-0">
+                  <span key={l} className="shrink-0 text-xs text-muted-foreground">
                     {l}
-                  </Badge>
+                  </span>
                 ))}
                 {row.score !== undefined ? (
                   <span className="shrink-0 text-xs tabular-nums text-muted-foreground">

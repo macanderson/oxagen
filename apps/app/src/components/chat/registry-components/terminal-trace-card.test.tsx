@@ -4,7 +4,7 @@
  *
  * Covers:
  *   - parseAnsiLine: color/bold SGR codes, reset, non-SGR sequence stripping
- *   - TerminalTraceCard render: exit-code badge, timed-out badge, duration,
+ *   - TerminalTraceCard render: exit-code status, timed-out status, duration,
  *     command line, stdout/stderr content, auto-collapse beyond 40 lines
  */
 
@@ -12,20 +12,6 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
 
 afterEach(cleanup);
-
-vi.mock("@/components/ui/badge", () => ({
-  Badge: ({
-    children,
-    variant,
-  }: {
-    children: React.ReactNode;
-    variant?: string;
-  }) => (
-    <span data-testid="badge" data-variant={variant}>
-      {children}
-    </span>
-  ),
-}));
 
 vi.mock("@/components/ui/tabs", () => ({
   Tabs: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
@@ -107,23 +93,27 @@ describe("parseAnsiLine", () => {
 });
 
 describe("TerminalTraceCard", () => {
-  it("renders the exit code badge", async () => {
+  it("renders the exit code as a success-toned status for exit 0", async () => {
     const { default: TerminalTraceCard } = await import("./terminal-trace-card");
     render(<TerminalTraceCard exitCode={0} stdout="ok" />);
-    expect(screen.getByText("exit 0")).toBeInTheDocument();
+    const status = screen.getByText("exit 0");
+    expect(status).toBeInTheDocument();
+    expect(status.className).toContain("text-success");
   });
 
-  it("renders a destructive-styled exit code badge for a non-zero exit", async () => {
+  it("renders a destructive-toned exit code status for a non-zero exit", async () => {
     const { default: TerminalTraceCard } = await import("./terminal-trace-card");
     render(<TerminalTraceCard exitCode={1} stderr="boom" />);
-    const badge = screen.getByText("exit 1");
-    expect(badge.closest("[data-variant]")).toHaveAttribute("data-variant", "destructive");
+    const status = screen.getByText("exit 1");
+    expect(status.className).toContain("text-destructive");
   });
 
-  it("shows a timed-out badge when timedOut is true", async () => {
+  it("shows a timed-out status when timedOut is true", async () => {
     const { default: TerminalTraceCard } = await import("./terminal-trace-card");
     render(<TerminalTraceCard exitCode={124} timedOut stdout="" />);
-    expect(screen.getByText("Timed out")).toBeInTheDocument();
+    const timedOut = screen.getByText("Timed out");
+    expect(timedOut).toBeInTheDocument();
+    expect(timedOut.className).toContain("text-destructive");
   });
 
   it("renders duration when provided", async () => {

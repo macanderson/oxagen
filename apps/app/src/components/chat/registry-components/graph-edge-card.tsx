@@ -3,7 +3,6 @@ import * as React from "react";
 import { resolveRecordHref } from "@oxagen/oxagen/capability-meta";
 import { ArrowRight, Sparkles, GitMerge } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
 
 /**
  * graph-edge-card — renders graph.edge.upsert output. The edgeId is the
@@ -27,6 +26,12 @@ function parseEdgeId(edgeId: string): { from?: string; type?: string; to?: strin
   return { from: parts[0], type: parts.slice(1, -1).join(":"), to: parts[parts.length - 1] };
 }
 
+// Intentionally local, NOT @oxagen/ui/components/brand's NodeChip: the shared
+// component is a decorative span (kind/id/label, no navigation), while this one
+// must render as an <a href> deep-link to the node detail page via
+// resolveRecordHref — swapping in the shared chip would silently drop
+// click-through navigation. Keep this local until the shared NodeChip grows
+// optional href support.
 function NodeChip({
   id,
   href,
@@ -77,9 +82,9 @@ export default function GraphEdgeCard(props: GraphEdgeCardProps): React.ReactEle
           Relationship {created ? "created" : "exists"}
         </span>
         {created ? (
-          <Badge variant="outline" className="ml-auto shrink-0 gap-1 text-success">
+          <span className="ml-auto inline-flex shrink-0 items-center gap-1 text-xs font-medium text-success">
             <Sparkles className="size-3" aria-hidden="true" /> New
-          </Badge>
+          </span>
         ) : null}
       </div>
 

@@ -130,7 +130,7 @@ import {
 // ---------------------------------------------------------------------------
 
 const org = { id: "org-id-1", slug: "acme", name: "Acme Corp", publicId: "org_1" };
-const workspace = { id: "ws-id-1", orgId: "org-id-1", slug: "prod", name: "Production", publicId: "ws_1", description: "" };
+const workspace = { id: "ws-id-1", orgId: "org-id-1", slug: "prod", name: "Production", publicId: "ws_1", description: "", avatarUrl: null };
 
 const orgs = [
   { publicId: "org_1", slug: "acme", name: "Acme Corp", logoUrl: null },
