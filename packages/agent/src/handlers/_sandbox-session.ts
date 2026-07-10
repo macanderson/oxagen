@@ -122,6 +122,14 @@ export interface SessionMeta {
    */
   label?: string;
   /**
+   * Repositories cloned into the sandbox at provision time (persisted by
+   * `start_sandbox` from its `repos` input). Display-only passthrough surfaced
+   * by `list_sandboxes`; never carries a token. Inline shape matches
+   * `SessionRepoRef` in `_sandbox-repos.ts` (kept inline to avoid an import
+   * cycle). Absent for sessions started without repos.
+   */
+  repos?: Array<{ owner: string; repo: string; branch?: string }>;
+  /**
    * Workspace environment id (env_…) bound to this session at start time, if
    * any. `agent.sandbox.exec` resolves this environment's vault secrets and
    * injects them (below the caller-supplied env) into every command, so a
