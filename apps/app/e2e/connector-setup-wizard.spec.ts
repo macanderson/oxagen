@@ -76,9 +76,16 @@ test("Connector setup wizard renders the schema-driven form and installs the con
   }
 
   // Schema-driven config fields render (no OAuth auth fields — see file header).
-  const sharedDrivesToggle = page.getByLabel("Shared Drives Only");
+  // getByRole("switch"), not getByLabel: the Base UI Switch renders BOTH a
+  // role=switch span and a hidden native checkbox associated with the same
+  // label, so getByLabel resolves to 2 elements and trips strict mode.
+  const sharedDrivesToggle = page.getByRole("switch", {
+    name: "Shared Drives Only",
+  });
   await expect(sharedDrivesToggle).toBeVisible();
-  await expect(page.getByLabel("Exclude Trashed Files")).toBeChecked();
+  await expect(
+    page.getByRole("switch", { name: "Exclude Trashed Files" }),
+  ).toBeChecked();
 
   // Form interaction: toggle a config field and confirm the control reflects it.
   await sharedDrivesToggle.click();
