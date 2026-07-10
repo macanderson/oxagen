@@ -332,6 +332,26 @@ export default function WorkspaceContextPanel({
     setRefreshKey((k) => k + 1);
   }, []);
 
+  // Soft refresh: re-fetch the root listing WITHOUT clearing to the skeleton, so
+  // a post-command reload doesn't flash empty. Lazy-expansion bookkeeping is
+  // reset (deep listings re-fetch on re-expand); the current tree stays visible
+  // until the fresh entries replace it.
+  const softRefresh = useCallback(() => {
+    loadedDirsRef.current = new Set();
+    loadingDirsRef.current = new Set();
+    setLoadingDirs(new Set());
+    setRefreshKey((k) => k + 1);
+  }, []);
+
+  // Drive the soft refresh off the parent's nonce. A ref guards the initial
+  // render so mounting doesn't double-fetch; only genuine changes reload.
+  const prevSignalRef = useRef(refreshSignal);
+  useEffect(() => {
+    if (refreshSignal === undefined || prevSignalRef.current === refreshSignal) return;
+    prevSignalRef.current = refreshSignal;
+    softRefresh();
+  }, [refreshSignal, softRefresh]);
+
   // ── Loading skeleton ──────────────────────────────────────────────────────
 
   if (!entries && !error) {
