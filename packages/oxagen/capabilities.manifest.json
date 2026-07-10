@@ -2624,7 +2624,8 @@
         "api": false,
         "mcp": false,
         "unit": false,
-        "docs": false
+        "docs": false,
+        "app": true
       }
     },
     {
@@ -2666,7 +2667,8 @@
         "api": false,
         "mcp": false,
         "unit": false,
-        "docs": false
+        "docs": false,
+        "app": true
       }
     },
     {
@@ -3109,7 +3111,8 @@
         "api": false,
         "mcp": false,
         "unit": false,
-        "docs": false
+        "docs": false,
+        "app": true
       }
     },
     {
