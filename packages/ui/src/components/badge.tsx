@@ -5,18 +5,21 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "../lib/utils";
 
 const badgeVariants = cva(
-  "inline-flex items-center rounded-md border font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+  "inline-flex items-center rounded-md border font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
   {
     variants: {
       variant: {
-        default:
-          "border-transparent bg-primary text-primary-foreground hover:bg-primary/80",
+        // Default badge — an OUTLINED chip, never a filled/secondary surface.
+        // `border-current` keys the outline to the ink (text) color so it
+        // reads correctly on both light and dark layouts, and follows any
+        // text-color override a caller applies. Never monospace.
+        default: "border-current bg-transparent text-foreground",
         secondary:
           "border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80",
         destructive:
           "border-transparent bg-destructive text-destructive-foreground hover:bg-destructive/80",
-        // Surface badge — the token-driven neutral chip (badge-bg/fg/border).
-        outline: "border-badge-border bg-badge-bg text-badge-fg",
+        // Alias of default — the outlined ink chip IS the default now.
+        outline: "border-current bg-transparent text-foreground",
         muted: "border-transparent bg-muted text-muted-foreground",
         // Brand surface badges — paper-tan brand and neutral accent.
         brand: "border-transparent bg-brand text-brand-foreground",

@@ -3,7 +3,6 @@ import * as React from "react";
 import { resolveRecordHref } from "@oxagen/oxagen/capability-meta";
 import { ArrowRight, Sparkles, GitMerge } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
 
 /**
  * graph-edge-card — renders graph.edge.upsert output. The edgeId is the
@@ -77,9 +76,9 @@ export default function GraphEdgeCard(props: GraphEdgeCardProps): React.ReactEle
           Relationship {created ? "created" : "exists"}
         </span>
         {created ? (
-          <Badge variant="outline" className="ml-auto shrink-0 gap-1 text-success">
+          <span className="ml-auto inline-flex shrink-0 items-center gap-1 text-xs font-medium text-success">
             <Sparkles className="size-3" aria-hidden="true" /> New
-          </Badge>
+          </span>
         ) : null}
       </div>
 

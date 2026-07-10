@@ -4,12 +4,12 @@
  *
  * Render + interaction tests for CodeExecuteCard:
  *   - Renders the human-readable "Run code" header label
- *   - Renders language badge
+ *   - Renders the language label
  *   - Renders code content in a pre block
  *   - Renders status icon
  *   - Shows "Waiting for output..." in stdout tab when status=running
- *   - Shows exit code badge when not running
- *   - Shows OOM killed badge when oomKilled=true
+ *   - Shows the exit code status when not running
+ *   - Shows the OOM killed status when oomKilled=true
  *   - Shows "Preview HTML" button when stdout is HTML and status=completed
  */
 
@@ -17,20 +17,6 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
 
 afterEach(cleanup);
-
-vi.mock("@/components/ui/badge", () => ({
-  Badge: ({
-    children,
-    variant,
-  }: {
-    children: React.ReactNode;
-    variant?: string;
-  }) => (
-    <span data-testid="badge" data-variant={variant}>
-      {children}
-    </span>
-  ),
-}));
 
 vi.mock("@/components/ui/tabs", () => ({
   Tabs: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
@@ -100,10 +86,12 @@ describe("CodeExecuteCard", () => {
     expect(document.querySelector("[title='execute_code']")).toBeInTheDocument();
   });
 
-  it("renders language badge", async () => {
+  it("renders the language as a plain muted label", async () => {
     const { CodeExecuteCard } = await import("./code-execute-card");
     render(<CodeExecuteCard {...baseProps} />);
-    expect(screen.getByText("python")).toBeInTheDocument();
+    const language = screen.getByText("python");
+    expect(language).toBeInTheDocument();
+    expect(language.className).toContain("text-muted-foreground");
   });
 
   it("renders code in a pre/code block", async () => {
@@ -131,19 +119,23 @@ describe("CodeExecuteCard", () => {
     expect(screen.getByText("Waiting for output…")).toBeInTheDocument();
   });
 
-  it("shows exit code badge when status is not running", async () => {
+  it("shows a success-toned exit code status when status is not running", async () => {
     const { CodeExecuteCard } = await import("./code-execute-card");
     render(<CodeExecuteCard {...baseProps} />);
-    expect(screen.getByText(/exit 0/)).toBeInTheDocument();
+    const status = screen.getByText(/exit 0/);
+    expect(status).toBeInTheDocument();
+    expect(status.className).toContain("text-success");
   });
 
-  it("shows OOM killed badge when oomKilled=true", async () => {
+  it("shows a destructive-toned OOM killed status when oomKilled=true", async () => {
     const { CodeExecuteCard } = await import("./code-execute-card");
     render(<CodeExecuteCard {...baseProps} oomKilled exitCode={1} />);
-    expect(screen.getByText("OOM killed")).toBeInTheDocument();
+    const oom = screen.getByText("OOM killed");
+    expect(oom).toBeInTheDocument();
+    expect(oom.className).toContain("text-destructive");
   });
 
-  it("does not show exit code badge when running", async () => {
+  it("does not show the exit code status when running", async () => {
     const { CodeExecuteCard } = await import("./code-execute-card");
     render(
       <CodeExecuteCard

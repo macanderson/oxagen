@@ -186,9 +186,10 @@ export function RegistryManager({
     <div className="rounded-xl border border-border/60 bg-card p-6">
       <div className="mb-4 flex items-center justify-between">
         <div>
-          <h3 className="text-sm font-semibold text-foreground">Plugin Registries</h3>
+          <h3 className="text-sm font-semibold text-foreground">MCP Server Registries</h3>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Registries are sources Oxagen discovers and installs plugins from.
+            Registries are the catalog sources Oxagen discovers and installs MCP
+            servers and plugins from.
           </p>
         </div>
         <div className="flex items-center gap-2">

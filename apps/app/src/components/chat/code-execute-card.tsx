@@ -1,6 +1,5 @@
 "use client";
 import * as React from "react";
-import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsPanel, TabsList, TabsTab } from "@/components/ui/tabs";
 import { StatusIcon } from "./status-icon";
 import { formatDuration } from "./tool-call-card";
@@ -85,9 +84,7 @@ export function CodeExecuteCard({
       <div className="flex min-h-9 items-center gap-2" title="execute_code">
         <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
         <span className="truncate text-xs font-medium">{label}</span>
-        <Badge variant="muted" size="sm" className="uppercase">
-          {language}
-        </Badge>
+        <span className="text-xs uppercase text-muted-foreground">{language}</span>
         <StatusIcon status={status} />
         {durationMs != null && status !== "running" ? (
           <span className="ml-auto text-xs text-muted-foreground tabular-nums">
@@ -125,13 +122,20 @@ export function CodeExecuteCard({
 
       {status !== "running" ? (
         <div className="flex flex-wrap items-center gap-2 text-xs">
-          <Badge
-            variant={exitCode === 0 ? "success" : "destructive"}
-            className="tabular-nums"
+          <span
+            className={
+              exitCode === 0
+                ? "inline-flex items-center gap-1 text-xs font-medium tabular-nums text-success"
+                : "inline-flex items-center gap-1 text-xs font-medium tabular-nums text-destructive"
+            }
           >
             exit {exitCode ?? "?"}
-          </Badge>
-          {oomKilled ? <Badge variant="destructive">OOM killed</Badge> : null}
+          </span>
+          {oomKilled ? (
+            <span className="inline-flex items-center gap-1 text-xs font-medium text-destructive">
+              OOM killed
+            </span>
+          ) : null}
           {hasHtmlOutput ? (
             <button
               type="button"

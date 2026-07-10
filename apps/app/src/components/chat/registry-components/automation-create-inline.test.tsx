@@ -141,12 +141,6 @@ vi.mock("@/components/ui/select", () => ({
   ),
 }));
 
-vi.mock("@/components/ui/badge", () => ({
-  Badge: ({ children, className }: { children: React.ReactNode; className?: string }) => (
-    <span className={className}>{children}</span>
-  ),
-}));
-
 vi.mock("lucide-react", async (importOriginal) => {
   const real = await importOriginal<typeof import("lucide-react")>();
   return {

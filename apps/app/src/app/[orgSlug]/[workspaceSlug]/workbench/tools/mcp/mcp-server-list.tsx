@@ -7,14 +7,16 @@
  * enable/disable or delete logic. OAuth listings additionally surface their
  * credential status (from mcp.credentials) with an Authenticate /
  * Re-authenticate action into the OAuth authorize route — an installed OAuth
- * server does nothing until that flow completes.
+ * server does nothing until that flow completes — plus a "Remove auth"
+ * action (revoke_plugin_credential) that deletes the stored credential so
+ * the server must be re-authenticated before it can be used again.
  */
 import * as React from "react";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CapabilityIcon } from "@/components/plugins/capability-icon";
-import { KeyRound, Trash2 } from "lucide-react";
+import { KeyRound, ShieldOff, Trash2 } from "lucide-react";
 import { mcpAuthorizeUrl } from "@/lib/mcp-oauth/authorize-url";
 
 export interface McpServerRow {
@@ -81,6 +83,11 @@ interface McpServerListProps {
     workspaceSlug: string;
     orgListingId: string;
   }) => Promise<{ ok: boolean; error?: string }>;
+  revokeAction: (input: {
+    orgSlug: string;
+    workspaceSlug: string;
+    orgListingId: string;
+  }) => Promise<{ ok: boolean; revoked?: boolean; error?: string }>;
 }
 
 export function McpServerList({
@@ -89,6 +96,7 @@ export function McpServerList({
   initialServers,
   toggleAction,
   uninstallAction,
+  revokeAction,
 }: McpServerListProps) {
   const [servers, setServers] = React.useState(initialServers);
   // The parent server component re-queries and passes fresh `initialServers`
@@ -142,11 +150,36 @@ export function McpServerList({
     }
   };
 
+  const handleRevoke = async (server: McpServerRow) => {
+    if (
+      !window.confirm(
+        `Remove authentication for "${server.title ?? server.name}"? The server stays installed but can't be used until you authenticate again.`,
+      )
+    )
+      return;
+    setPendingIds((prev) => new Set(prev).add(server.id));
+    setError(server.id, null);
+    const result = await revokeAction({ orgSlug, workspaceSlug, orgListingId: server.id });
+    setPendingIds((prev) => {
+      const next = new Set(prev);
+      next.delete(server.id);
+      return next;
+    });
+    if (!result.ok) {
+      setError(server.id, result.error ?? "Remove authentication failed");
+    } else {
+      setServers((prev) =>
+        prev.map((s) => (s.id === server.id ? { ...s, credentialStatus: null } : s)),
+      );
+    }
+  };
+
   if (servers.length === 0) {
     return (
       <div className="rounded-lg border border-border/40 bg-muted/20 px-6 py-8 text-center">
         <p className="text-sm text-muted-foreground">
-          No MCP servers connected yet. Use the form above to connect one.
+          No MCP servers installed yet. Install one from the marketplace below,
+          or connect a custom endpoint manually.
         </p>
       </div>
     );
@@ -238,6 +271,20 @@ export function McpServerList({
                           >
                             <KeyRound className="h-3 w-3" aria-hidden="true" />
                             {display.action}
+                          </Button>
+                        ) : null}
+                        {/* Remove auth — only meaningful while a credential row
+                            exists. Keeps the install; deletes the credential. */}
+                        {server.credentialStatus !== null ? (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleRevoke(server)}
+                            disabled={pendingIds.has(server.id)}
+                            data-testid={`mcp-server-revoke-${server.id}`}
+                          >
+                            <ShieldOff className="h-3 w-3" aria-hidden="true" />
+                            Remove auth
                           </Button>
                         ) : null}
                       </div>

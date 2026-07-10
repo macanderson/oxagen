@@ -5,7 +5,7 @@
  * Tests for BackgroundTaskTray and related helpers:
  *   - TaskTrayProvider + useTaskTray context
  *   - BackgroundTaskTray renders null when no tasks
- *   - BackgroundTaskTray shows task count badge
+ *   - BackgroundTaskTray shows the active/total task count
  *   - Collapse/expand toggle behaviour
  *   - Dismiss terminal task
  *   - formatDuration re-export from tool-call-card
@@ -19,12 +19,6 @@ import { TaskTrayProvider, useTaskTray, BackgroundTaskTray } from "./background-
 import { useEffect } from "react";
 
 afterEach(cleanup);
-
-vi.mock("@/components/ui/badge", () => ({
-  Badge: ({ children, variant }: { children: React.ReactNode; variant?: string }) => (
-    <span data-testid="badge" data-variant={variant}>{children}</span>
-  ),
-}));
 
 vi.mock("@/components/ui/button", () => ({
   Button: ({
@@ -181,7 +175,7 @@ describe("BackgroundTaskTray", () => {
     expect(screen.getByText("Background tasks")).toBeInTheDocument();
   });
 
-  it("shows the correct active/total badge text", () => {
+  it("shows the correct active/total count text", () => {
     const fetchTask = vi.fn().mockReturnValue(new Promise(() => {}));
     render(
       <BackgroundTaskTray

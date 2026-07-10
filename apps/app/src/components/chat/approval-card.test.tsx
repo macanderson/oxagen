@@ -3,9 +3,9 @@
  * approval-card.test.tsx
  *
  * Render + interaction tests for ApprovalCard:
- *   - Shows capability name and risk badge
+ *   - Shows capability name and risk indicator
  *   - Shows approve/deny buttons when not resolved and not expired
- *   - Shows resolved badge when resolution is set
+ *   - Shows the resolved status text when resolution is set
  *   - Calls onResolved with correct arguments
  *   - Shows error message when resolution fails
  */
@@ -16,12 +16,6 @@ import userEvent from "@testing-library/user-event";
 import { ApprovalCard } from "./approval-card";
 
 afterEach(cleanup);
-
-vi.mock("@/components/ui/badge", () => ({
-  Badge: ({ children, variant }: { children: React.ReactNode; variant?: string }) => (
-    <span data-testid="badge" data-variant={variant}>{children}</span>
-  ),
-}));
 
 vi.mock("@/components/ui/button", () => ({
   Button: ({
@@ -122,7 +116,7 @@ describe("ApprovalCard", () => {
     expect(screen.getByText("Deny")).toBeInTheDocument();
   });
 
-  it("shows approved badge when resolution='approved'", () => {
+  it("shows a success-toned approved status when resolution='approved'", () => {
     render(
       <ApprovalCard
         approvalId="a1"
@@ -133,11 +127,13 @@ describe("ApprovalCard", () => {
         resolution="approved"
       />,
     );
-    expect(screen.getByText("approved")).toBeInTheDocument();
+    const status = screen.getByText("approved");
+    expect(status).toBeInTheDocument();
+    expect(status.className).toContain("text-success");
     expect(screen.queryByText("Approve")).not.toBeInTheDocument();
   });
 
-  it("shows denied badge when resolution='denied'", () => {
+  it("shows a destructive-toned denied status when resolution='denied'", () => {
     render(
       <ApprovalCard
         approvalId="a1"
@@ -148,7 +144,9 @@ describe("ApprovalCard", () => {
         resolution="denied"
       />,
     );
-    expect(screen.getByText("denied")).toBeInTheDocument();
+    const status = screen.getByText("denied");
+    expect(status).toBeInTheDocument();
+    expect(status.className).toContain("text-destructive");
   });
 
   it("calls onResolved with approvalId and 'approved' on Approve click", async () => {
@@ -219,7 +217,7 @@ describe("ApprovalCard", () => {
     });
   });
 
-  it("shows Expired badge when expiresAt is in the past and no resolution", () => {
+  it("shows the Expired status when expiresAt is in the past and no resolution", () => {
     const PAST = new Date(Date.now() - 10_000).toISOString();
     render(
       <ApprovalCard

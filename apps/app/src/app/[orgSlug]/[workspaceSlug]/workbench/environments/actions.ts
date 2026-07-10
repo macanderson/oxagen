@@ -145,7 +145,7 @@ async function asManager<T>(
 }
 
 function revalidate(args: { orgSlug: string; workspaceSlug: string }): void {
-  revalidatePath(routes.settings.environments(args));
+  revalidatePath(routes.workbench.environments(args));
 }
 
 /**

@@ -295,9 +295,7 @@ export default function CapabilityResult(
           {heading}
         </span>
         {capability ? (
-          <Badge variant="outline" className="ml-auto shrink-0 font-mono text-[10px]">
-            {capability}
-          </Badge>
+          <span className="ml-auto shrink-0 text-xs text-muted-foreground">{capability}</span>
         ) : null}
       </div>
 

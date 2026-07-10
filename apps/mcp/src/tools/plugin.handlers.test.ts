@@ -142,6 +142,44 @@ describe("plugin.credential.reauth handler", () => {
   });
 });
 
+// ── plugin.credential.revoke ──────────────────────────────────────────────────
+
+import handler_pluginCredentialRevoke, {
+  schema as pluginCredentialRevokeSchema,
+  metadata as pluginCredentialRevokeMetadata,
+} from "./plugin.credential.revoke";
+
+describe("plugin.credential.revoke handler", () => {
+  it("exports schema and metadata", () => {
+    expect(pluginCredentialRevokeSchema).toBeDefined();
+    expect(pluginCredentialRevokeMetadata.name).toBe("revoke_plugin_credential");
+  });
+
+  it("is annotated as a destructive, idempotent, non-read-only tool", () => {
+    expect(pluginCredentialRevokeMetadata.annotations).toMatchObject({
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: true,
+    });
+  });
+
+  it("calls invoke with revoke args", async () => {
+    const fakeOutput = { revoked: true };
+    mocks.invoke.mockResolvedValue(fakeOutput);
+
+    const args = { orgListingId: "orl_1" };
+    const result = await handler_pluginCredentialRevoke(args);
+
+    expect(mocks.invoke).toHaveBeenCalledWith(
+      "revoke_plugin_credential",
+      args,
+      fakeCtx,
+      { surface: "mcp" },
+    );
+    expect(result).toEqual({ revoked: true });
+  });
+});
+
 // ── plugin.credential.set_secret ─────────────────────────────────────────────
 
 import handler_pluginCredentialSetSecret, {

@@ -122,7 +122,7 @@ function errorMessage(err: unknown, fallback: string): string {
 }
 
 function revalidate(args: { orgSlug: string; workspaceSlug: string }): void {
-  revalidatePath(routes.settings.environments(args));
+  revalidatePath(routes.workbench.sandboxes(args));
 }
 
 // ── Reads (any workspace member) ──────────────────────────────────────────────

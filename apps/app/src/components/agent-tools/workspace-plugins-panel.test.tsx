@@ -23,7 +23,6 @@ import {
   WorkspacePluginsPanel,
   type InstalledPlugin,
 } from "./workspace-plugins-panel";
-import type { RegistryRow } from "./registry-manager";
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
@@ -94,10 +93,6 @@ vi.mock("@/components/plugins/marketplace-modal", () => ({
     ) : null,
 }));
 
-vi.mock("./registry-manager", () => ({
-  RegistryManager: () => <div data-testid="registry-manager" />,
-}));
-
 vi.mock("@/components/ui/alert", () => ({
   Alert: ({ children }: { children: React.ReactNode }) => (
     <div role="alert">{children}</div>
@@ -131,8 +126,6 @@ const PLUGIN: InstalledPlugin = {
   enabled: true,
   wsEnabled: true,
 };
-
-const EMPTY_REGISTRIES: RegistryRow[] = [];
 
 type ToggleInput = {
   orgSlug: string;
@@ -181,19 +174,6 @@ type InstallBulkInput = {
   }>;
 };
 
-type AddRegistryInput = {
-  orgSlug: string;
-  workspaceSlug: string;
-  name: string;
-  baseUrl: string;
-};
-
-type RemoveRegistryInput = {
-  orgSlug: string;
-  workspaceSlug: string;
-  registryId: string;
-};
-
 function makeActions(overrides: {
   toggleAction?: (input: ToggleInput) => Promise<{ ok: boolean; error?: string }>;
   uninstallAction?: (input: UninstallInput) => Promise<{ ok: boolean; error?: string }>;
@@ -211,12 +191,6 @@ function makeActions(overrides: {
     uninstallAction: vi.fn((_input: UninstallInput) =>
       Promise.resolve({ ok: true as const }),
     ),
-    addRegistryAction: vi.fn((_input: AddRegistryInput) =>
-      Promise.resolve({ ok: true as const }),
-    ),
-    removeRegistryAction: vi.fn((_input: RemoveRegistryInput) =>
-      Promise.resolve({ ok: true as const, promotedId: null }),
-    ),
     ...overrides,
   };
 }
@@ -233,9 +207,7 @@ function renderPanel(
       orgId="org-id-1"
       workspaceId="ws-id-1"
       initialPlugins={plugins}
-      initialRegistries={EMPTY_REGISTRIES}
       loadError={loadError}
-      docsBaseUrl="https://docs.example.com"
       {...actions}
     />,
   );

@@ -57,9 +57,10 @@ afterEach(() => {
 
 describe("MobileBottomBar — primary tabs", () => {
   it("renders the workspace destinations as client-routed tabs with resolved hrefs", () => {
-    // Workspace mode has six nav items (ask, knowledge, activity, agents,
-    // marketplace, settings); only the first four (MAX_BAR_ITEMS) fit the
-    // bar — the rest overflow into the "More" sheet, covered below.
+    // Workspace mode has nine nav items (ask, knowledge, activity, agents,
+    // agent-tools, environments, sandboxes, marketplace, settings); only the
+    // first four (MAX_BAR_ITEMS) fit the bar — the rest overflow into the
+    // "More" sheet, covered below.
     render(<MobileBottomBar ctx={wsCtx} user={user} />);
     const nav = screen.getByRole("navigation", { name: /mobile navigation/i });
     expect(within(nav).getByRole("link", { name: "Ask" })).toHaveAttribute("href", "/acme/prod/ask");
@@ -77,16 +78,33 @@ describe("MobileBottomBar — primary tabs", () => {
     expect(screen.getByRole("link", { name: "Knowledge" })).not.toHaveAttribute("aria-current");
   });
 
-  it("overflows Marketplace and Settings into the More sheet while the first four destinations stay in the bar", () => {
+  it("overflows the Workbench extras, Marketplace, and Settings into the More sheet while the first four destinations stay in the bar", async () => {
     render(<MobileBottomBar ctx={wsCtx} user={user} />);
     const nav = screen.getByRole("navigation", { name: /mobile navigation/i });
     expect(screen.getByRole("button", { name: /more navigation/i })).toBeInTheDocument();
     expect(within(nav).getByRole("link", { name: "Agents" })).toBeInTheDocument();
-    // Agent Tools is no longer a nav destination at all — it lives in the
-    // Workbench tabs, so it must not appear in the bar or the More sheet.
+    // Items past MAX_BAR_ITEMS never render in the bar itself.
     expect(within(nav).queryByRole("link", { name: "Agent Tools" })).toBeNull();
+    expect(within(nav).queryByRole("link", { name: "Environments" })).toBeNull();
+    expect(within(nav).queryByRole("link", { name: "Sandboxes" })).toBeNull();
     expect(within(nav).queryByRole("link", { name: "Marketplace" })).toBeNull();
     expect(within(nav).queryByRole("link", { name: "Settings" })).toBeNull();
+    // …but every overflow destination is reachable from the More sheet.
+    await userEvent.click(screen.getByRole("button", { name: /more navigation/i }));
+    await waitFor(() => {
+      expect(screen.getByRole("link", { name: "Agent Tools" })).toHaveAttribute(
+        "href",
+        "/acme/prod/workbench/tools",
+      );
+    });
+    expect(screen.getByRole("link", { name: "Environments" })).toHaveAttribute(
+      "href",
+      "/acme/prod/workbench/environments",
+    );
+    expect(screen.getByRole("link", { name: "Sandboxes" })).toHaveAttribute(
+      "href",
+      "/acme/prod/workbench/sandboxes",
+    );
   });
 });
 

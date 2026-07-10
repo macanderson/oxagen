@@ -6,7 +6,7 @@
  *   - Renders plan title
  *   - Renders step summaries
  *   - Renders Approve and Deny buttons when status=pending
- *   - Shows approved badge when status=approved
+ *   - Shows the approved status text when status=approved
  *   - Shows rationale when opened
  *   - Shows error message when onResolve fails
  */
@@ -50,12 +50,6 @@ vi.mock("@dnd-kit/sortable", () => ({
 
 vi.mock("@dnd-kit/utilities", () => ({
   CSS: { Transform: { toString: () => "" } },
-}));
-
-vi.mock("@/components/ui/badge", () => ({
-  Badge: ({ children, variant }: { children: React.ReactNode; variant?: string }) => (
-    <span data-testid="badge" data-variant={variant}>{children}</span>
-  ),
 }));
 
 vi.mock("@/components/ui/button", () => ({
@@ -179,7 +173,7 @@ describe("PlanCard", () => {
     expect(screen.getByRole("button", { name: /Deny/ })).toBeInTheDocument();
   });
 
-  it("renders 'approved' badge when status=approved", async () => {
+  it("renders the 'approved' status text when status=approved", async () => {
     const { PlanCard } = await import("./plan-card");
     render(
       <PlanCard
@@ -189,9 +183,9 @@ describe("PlanCard", () => {
         status="approved"
       />,
     );
-    const badges = screen.getAllByTestId("badge");
-    const approvedBadge = badges.find((b) => b.textContent?.toLowerCase().includes("approved"));
-    expect(approvedBadge).toBeTruthy();
+    const status = screen.getByText("approved");
+    expect(status).toBeInTheDocument();
+    expect(status.className).toContain("text-muted-foreground");
   });
 
   it("renders rationale toggle button when rationale is provided", async () => {

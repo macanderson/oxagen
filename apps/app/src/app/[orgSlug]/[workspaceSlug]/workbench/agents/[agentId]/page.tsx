@@ -1,4 +1,7 @@
 import { notFound } from "next/navigation";
+import { Breadcrumb } from "@/components/ui/breadcrumb";
+import { PageHeader } from "@/components/ui/page-header";
+import { workspace } from "@/lib/routes";
 import { resolveWorkbenchScope } from "@/lib/workbench/scope";
 import { getAgent } from "@/lib/workbench/agents";
 import { loadEquipSources } from "@/lib/workbench/equip-sources";
@@ -72,6 +75,22 @@ export default async function EditAgentPage({ params }: PageProps) {
 
   return (
     <div className="flex flex-col gap-6">
+      <PageHeader
+        title={agent.name}
+        description={readOnly ? "Read-only agent view." : "Edit this agent's identity, instructions, and equipment."}
+        className="pb-0"
+        breadcrumb={
+          <Breadcrumb
+            items={[
+              {
+                label: "Agents",
+                href: workspace.workbench.agents({ orgSlug, workspaceSlug }),
+              },
+              { label: agent.name },
+            ]}
+          />
+        }
+      />
       <AgentBuilder
       mode="edit"
       orgSlug={orgSlug}

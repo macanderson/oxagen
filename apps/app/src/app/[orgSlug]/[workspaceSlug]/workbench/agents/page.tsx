@@ -1,12 +1,18 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { Bot, Plus, Rocket } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/ui/page-header";
 import { CopyableId } from "@/components/knowledge/graph-explorer/copyable-id";
 import { workspace } from "@/lib/routes";
 import type { ScopeContext } from "@/lib/scope";
 import { resolveWorkbenchScope } from "@/lib/workbench/scope";
 import { listAgents, type AgentListRow } from "@/lib/workbench/agents";
+
+export const metadata: Metadata = {
+  title: "Agents | Workbench",
+};
 
 export const dynamic = "force-dynamic";
 
@@ -37,22 +43,26 @@ export default async function WorkbenchAgentsPage({ params }: PageProps) {
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Header + primary action */}
-      <div className="flex items-center justify-between gap-4">
-        <div className="text-sm text-muted-foreground">
-          {agents.length} agent{agents.length !== 1 ? "s" : ""}
-        </div>
-        {canManage ? (
-          <Button
-            variant="gradient"
-            size="sm"
-            startIcon={<Plus className="h-3.5 w-3.5" aria-hidden="true" />}
-            data-testid="agents-new-button"
-            render={<Link href={workspace.workbench.agentNew(routeCtx)} />}
-          >
-            New agent
-          </Button>
-        ) : null}
+      <PageHeader
+        title="Agents"
+        description="Build interactive agents and equip them with skills, MCP servers, and capabilities."
+        className="pb-0"
+        actions={
+          canManage ? (
+            <Button
+              variant="gradient"
+              size="sm"
+              startIcon={<Plus className="h-3.5 w-3.5" aria-hidden="true" />}
+              data-testid="agents-new-button"
+              render={<Link href={workspace.workbench.agentNew(routeCtx)} />}
+            >
+              New agent
+            </Button>
+          ) : undefined
+        }
+      />
+      <div className="text-sm text-muted-foreground">
+        {agents.length} agent{agents.length !== 1 ? "s" : ""}
       </div>
 
       {agents.length === 0 ? (

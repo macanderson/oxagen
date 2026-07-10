@@ -358,6 +358,11 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./plugin.credential.reauth"))
         .handler as CapabilityHandlerFn,
   );
+  registerHandler("revoke_plugin_credential",
+    async () =>
+      (await import("./plugin.credential.revoke"))
+        .handler as CapabilityHandlerFn,
+  );
   registerHandler("list_notifications",
     async () =>
       (await import("./notification.list")).handler as CapabilityHandlerFn,
