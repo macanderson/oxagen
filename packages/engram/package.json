@@ -27,7 +27,6 @@
     "zod": "3.25.76"
   },
   "optionalDependencies": {
-    "blake3": "2.1.7",
     "duckdb": "1.3.0"
   },
   "devDependencies": {

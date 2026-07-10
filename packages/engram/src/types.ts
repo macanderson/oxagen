@@ -132,7 +132,7 @@ export type RecordBody =
 // ---------------------------------------------------------------------------
 
 export const MemoryRecordSchema = z.object({
-  /** Content-addressed ID: blake3(kind + namespace + body). */
+  /** Content-addressed ID: sha256(kind + namespace + body) — see hash.ts. */
   id: z.string().length(64),
   /** Discriminant for body type. */
   kind: RecordKindSchema,
