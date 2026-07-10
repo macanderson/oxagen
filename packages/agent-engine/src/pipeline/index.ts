@@ -32,7 +32,11 @@ import { runCodingAgent } from "../engine";
 import { estimateMessageTokens } from "../loop-driver";
 import { buildSystemPrompt } from "../prompt/system-prompt";
 import { evaluatePrompt } from "../evaluate/evaluator";
-import { judgeCompleteness, judgePanel, buildRevisionPrompt } from "../evaluate/judge";
+import {
+  judgeCompleteness,
+  judgePanel,
+  buildRevisionPrompt,
+} from "../evaluate/judge";
 import { enhancePrompt } from "../evaluate/prompt-enhancer";
 import { createSpecTestTracker } from "../oracle/spec-test";
 import {
@@ -63,7 +67,13 @@ import type {
   EngineNonFatalError,
   RunCodingAgentResult,
 } from "../types";
-import type { AgentAi, MemoryProvider, TraceStore, GraphSyncProvider, FileLockProvider } from "../ports";
+import type {
+  AgentAi,
+  MemoryProvider,
+  TraceStore,
+  GraphSyncProvider,
+  FileLockProvider,
+} from "../ports";
 import type {
   EnhancementTrace,
   JudgeVerdict,
@@ -76,7 +86,11 @@ import type {
   TurnTrace,
 } from "../trace/types";
 
-const TIER_RANK: Record<ModelTier, number> = { fast: 0, balanced: 1, precise: 2 };
+const TIER_RANK: Record<ModelTier, number> = {
+  fast: 0,
+  balanced: 1,
+  precise: 2,
+};
 
 /** Cap stored free-text so a single trace file can't grow without bound. */
 function truncate(s: string, max: number): string {
@@ -349,8 +363,15 @@ function collectActivity(
   files: Set<string>,
   commands: string[],
 ): void {
-  const obj = (input ?? {}) as { path?: unknown; command?: unknown; cmd?: unknown };
-  if ((name === "write_file" || name === "edit_file") && typeof obj.path === "string") {
+  const obj = (input ?? {}) as {
+    path?: unknown;
+    command?: unknown;
+    cmd?: unknown;
+  };
+  if (
+    (name === "write_file" || name === "edit_file") &&
+    typeof obj.path === "string"
+  ) {
     files.add(obj.path);
   }
   if (name === "bash") {
@@ -413,7 +434,9 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
   // (another chat turn, another fleet subagent child) gets its OWN id here,
   // so two live agents correctly see each other as conflicting holders.
   const turnLockId = newTraceId();
-  const lockContext = opts.fileLock ? { agentId: turnLockId, executionId: turnLockId } : undefined;
+  const lockContext = opts.fileLock
+    ? { agentId: turnLockId, executionId: turnLockId }
+    : undefined;
   // Verbose telemetry accumulators (left empty/undefined when verbose is off).
   const phases: PhaseStat[] = [];
   const toolEvents: ToolEvent[] = [];
@@ -423,7 +446,17 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
 
   // ── Bare mode: skip the pipeline, run the agent directly. ──
   if (opts.bare) {
-    return runBare(opts, cwd, startedAt, filesTouched, commandsRun, onToolCall, phases, toolEvents, thinkingLog);
+    return runBare(
+      opts,
+      cwd,
+      startedAt,
+      filesTouched,
+      commandsRun,
+      onToolCall,
+      phases,
+      toolEvents,
+      thinkingLog,
+    );
   }
 
   let usage = emptyUsage();
@@ -434,12 +467,16 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
     { prompt: opts.prompt, model: opts.triageModel, signal: opts.signal },
     opts.ai,
   );
-  phases.push(phaseStat("evaluate", 0, evalStart, evaluation.model, evaluation.usage));
+  phases.push(
+    phaseStat("evaluate", 0, evalStart, evaluation.model, evaluation.usage),
+  );
   usage = mergeUsage(usage, evaluation.usage);
   opts.onStage?.({
     kind: "evaluate",
     label: `evaluated · completeness ${evaluation.completeness}/100 · complexity ${evaluation.complexity}/100`,
-    detail: evaluation.fallback ? "heuristic" : evaluation.model.split("/").pop(),
+    detail: evaluation.fallback
+      ? "heuristic"
+      : evaluation.model.split("/").pop(),
   });
 
   // ── 2. ENHANCE ──
@@ -474,7 +511,9 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
   opts.onStage?.({
     kind: "enhance",
     label:
-      enhanced.resolved.length || enhanced.hasMemory || enhanced.usedSemanticFallback
+      enhanced.resolved.length ||
+      enhanced.hasMemory ||
+      enhanced.usedSemanticFallback
         ? `enhanced · ${enhanced.resolved.length} code refs${enhanced.usedSemanticFallback ? " (+semantic)" : ""} · ${enhanced.hasMemory ? "memory" : "no memory"}`
         : "enhanced · no extra context found",
   });
@@ -496,8 +535,13 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
   // genuinely invalid/absent var, not on 0.
   const maxReviseRoundsEnv = Number(process.env["OXAGEN_MAX_REVISE_ROUNDS"]);
   const envMaxReviseRounds =
-    Number.isFinite(maxReviseRoundsEnv) && maxReviseRoundsEnv >= 0 ? maxReviseRoundsEnv : undefined;
-  const maxRounds = Math.max(0, opts.maxReviseRounds ?? envMaxReviseRounds ?? 1);
+    Number.isFinite(maxReviseRoundsEnv) && maxReviseRoundsEnv >= 0
+      ? maxReviseRoundsEnv
+      : undefined;
+  const maxRounds = Math.max(
+    0,
+    opts.maxReviseRounds ?? envMaxReviseRounds ?? 1,
+  );
   const judgeRounds: JudgeVerdict[] = [];
   let history = opts.history ?? [];
   let prompt = enhanced.prompt;
@@ -515,8 +559,12 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
     const estimatedInputTokens =
       Math.ceil(enhanced.prompt.length / 4) +
       estimateMessageTokens(history) +
-      Math.ceil(composeAgentSystem(opts, cwd, enhanced.hasLocalization).length / 4);
-    const estimatedOutputTokens = Math.round(400 + (evaluation.complexity / 100) * 4000);
+      Math.ceil(
+        composeAgentSystem(opts, cwd, enhanced.hasLocalization).length / 4,
+      );
+    const estimatedOutputTokens = Math.round(
+      400 + (evaluation.complexity / 100) * 4000,
+    );
     const costProjection = projectCost(routed.model, {
       inputTokens: estimatedInputTokens,
       outputTokens: estimatedOutputTokens,
@@ -537,8 +585,12 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
     if (opts.confirmScope) {
       const decision: ScopeReviewDecision = await opts.confirmScope(scopeInfo);
       if (!decision.proceed) {
-        opts.onStage?.({ kind: "complete", label: "cancelled at scope review" });
-        const cancelText = "⛔ Cancelled at scope review — nothing was executed.";
+        opts.onStage?.({
+          kind: "complete",
+          label: "cancelled at scope review",
+        });
+        const cancelText =
+          "⛔ Cancelled at scope review — nothing was executed.";
         const trace = assembleTrace({
           cwd,
           originalPrompt: opts.prompt,
@@ -599,7 +651,11 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
   // the caller's guard. One wrapped guard, defined once, reads the mutable
   // baseline — so a "prompt"-mode approval's raised ceiling (held inside the
   // caller's guard) persists across rounds. Passed to every runCodingAgent call.
-  const budgetBaseline = { inputTokens: 0, outputTokens: 0, cachedInputTokens: 0 };
+  const budgetBaseline = {
+    inputTokens: 0,
+    outputTokens: 0,
+    cachedInputTokens: 0,
+  };
   const turnBudgetGuard: RunTurnOptions["budgetGuard"] = opts.budgetGuard
     ? (u) =>
         opts.budgetGuard!({
@@ -622,7 +678,9 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
   const midJudgeStepsEnv = Number(process.env["OXAGEN_MID_JUDGE_STEPS"]);
   const midJudgeSteps =
     opts.midJudgeSteps ??
-    (Number.isFinite(midJudgeStepsEnv) && midJudgeStepsEnv > 0 ? midJudgeStepsEnv : 0);
+    (Number.isFinite(midJudgeStepsEnv) && midJudgeStepsEnv > 0
+      ? midJudgeStepsEnv
+      : 0);
 
   // F2: Spec-first oracle tracker. Watches for a repro signal: test-like bash command
   // with failing exit → later same command passing exit. State: 'none' (no failing test
@@ -673,7 +731,11 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
         }
         if (e.type === "tool-call") onToolCall(e.name, e.input);
         if (e.type === "tool-result") {
-          opts.onToolEvent?.({ name: e.name, ok: e.ok, durationMs: e.durationMs });
+          opts.onToolEvent?.({
+            name: e.name,
+            ok: e.ok,
+            durationMs: e.durationMs,
+          });
           if (e.name === "bash") {
             let command = e.input;
             try {
@@ -688,17 +750,22 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
             tracker.observe({ command, exitCode: e.ok ? 0 : 1 });
           }
         }
-        if (e.type === "final-diff") opts.onFileChange?.(e.diff, e.changedFiles);
+        if (e.type === "final-diff")
+          opts.onFileChange?.(e.diff, e.changedFiles);
         captureToolEvent(e, toolEvents, opts.verbose);
       },
     });
-    if (segReasoning.trim()) thinkingLog.push({ round: segRound, text: segReasoning });
+    if (segReasoning.trim())
+      thinkingLog.push({ round: segRound, text: segReasoning });
     return segResult;
   }
 
   for (let round = 0; ; round++) {
     if (round > 0) {
-      opts.onStage?.({ kind: "revise", label: `revising · round ${round} (incomplete work)` });
+      opts.onStage?.({
+        kind: "revise",
+        label: `revising · round ${round} (incomplete work)`,
+      });
     }
     opts.onStage?.({
       kind: "execute",
@@ -714,7 +781,11 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
     budgetBaseline.cachedInputTokens = cachedInputTokens;
     // Capture bash command outputs THIS round so the judge sees test results
     // (the decisive completeness signal), not just the command strings.
-    const roundCommandOutputs: Array<{ command: string; output: string; ok: boolean }> = [];
+    const roundCommandOutputs: Array<{
+      command: string;
+      output: string;
+      ok: boolean;
+    }> = [];
 
     let result: Awaited<ReturnType<typeof runCodingAgent>>;
 
@@ -740,7 +811,8 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
       if (shouldInjectSpecGate(tracker, specGateEnabled)) {
         opts.onStage?.({
           kind: "judge",
-          label: "spec gate: no failing repro yet — skipping mid-judge, injecting repro instruction",
+          label:
+            "spec gate: no failing repro yet — skipping mid-judge, injecting repro instruction",
         });
         prompt = specGateInstruction();
       } else if (
@@ -752,7 +824,10 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
         // and let phase B keep working. Mirrors the read-only / spec-gate skips.
         (phaseAResult.changedFiles.length > 0 || roundCommandOutputs.length > 0)
       ) {
-        opts.onStage?.({ kind: "judge", label: "mid-session check · verifying completeness so far" });
+        opts.onStage?.({
+          kind: "judge",
+          label: "mid-session check · verifying completeness so far",
+        });
         const midJudgeStart = Date.now();
         const midVerdict = await judgeCompleteness(
           {
@@ -769,7 +844,15 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
           opts.ai,
         ).catch(() => null);
         if (midVerdict) {
-          phases.push(phaseStat("judge", -1, midJudgeStart, midVerdict.model, midVerdict.usage));
+          phases.push(
+            phaseStat(
+              "judge",
+              -1,
+              midJudgeStart,
+              midVerdict.model,
+              midVerdict.usage,
+            ),
+          );
           usage = mergeUsage(usage, midVerdict.usage);
           opts.onStage?.({
             kind: "judge",
@@ -796,7 +879,9 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
         label: "executing · phase B (post mid-session check)",
       });
       const remainingSteps =
-        opts.maxSteps !== undefined ? Math.max(1, opts.maxSteps - phaseAResult.steps) : undefined;
+        opts.maxSteps !== undefined
+          ? Math.max(1, opts.maxSteps - phaseAResult.steps)
+          : undefined;
       const phaseBResult = await runSegment(
         prompt,
         phaseAResult.messages,
@@ -809,73 +894,43 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
       // Combine A + B into a single result for the standard post-loop accounting.
       result = {
         ...phaseBResult,
-        text: (phaseAResult.text ? phaseAResult.text + "\n" : "") + phaseBResult.text,
+        text:
+          (phaseAResult.text ? phaseAResult.text + "\n" : "") +
+          phaseBResult.text,
         steps: phaseAResult.steps + phaseBResult.steps,
         usage: {
-          inputTokens: (phaseAResult.usage.inputTokens ?? 0) + (phaseBResult.usage.inputTokens ?? 0),
-          outputTokens: (phaseAResult.usage.outputTokens ?? 0) + (phaseBResult.usage.outputTokens ?? 0),
-          totalTokens: (phaseAResult.usage.totalTokens ?? 0) + (phaseBResult.usage.totalTokens ?? 0),
+          inputTokens:
+            (phaseAResult.usage.inputTokens ?? 0) +
+            (phaseBResult.usage.inputTokens ?? 0),
+          outputTokens:
+            (phaseAResult.usage.outputTokens ?? 0) +
+            (phaseBResult.usage.outputTokens ?? 0),
+          totalTokens:
+            (phaseAResult.usage.totalTokens ?? 0) +
+            (phaseBResult.usage.totalTokens ?? 0),
           cachedInputTokens:
-            (phaseAResult.usage.cachedInputTokens ?? 0) + (phaseBResult.usage.cachedInputTokens ?? 0),
+            (phaseAResult.usage.cachedInputTokens ?? 0) +
+            (phaseBResult.usage.cachedInputTokens ?? 0),
         },
       };
       // Reset prompt to original for the end-of-round judge input below.
       prompt = enhanced.prompt;
     } else {
       // Standard single-segment execution.
-      let roundReasoning = "";
-      result = await runCodingAgent({
-        workspace: opts.workspace,
-        ai: opts.ai,
-        instruction: prompt,
-        images: round === 0 ? opts.images : undefined,
-        model: routed.model,
-        effort: opts.effort,
-        system: composeAgentSystem(opts, cwd, enhanced.hasLocalization),
+      result = await runSegment(
+        prompt,
         history,
-        maxSteps: opts.maxSteps,
-        extraTools: opts.extraTools,
-        wrapTools: opts.wrapTools,
-        readOnly: opts.readOnly,
-        codeGraph: opts.codeGraph ?? undefined,
-        memory: opts.memory ?? undefined,
-        onError: opts.onError,
-        signal: opts.signal,
-        budgetGuard: turnBudgetGuard,
-        fileLock: opts.fileLock,
-        lockContext,
-        onEvent: (e) => {
-          if (e.type === "text") opts.onText?.(e.delta);
-          if (e.type === "reasoning") {
-            opts.onReasoning?.(e.delta);
-            roundReasoning += e.delta;
-          }
-          if (e.type === "tool-call") onToolCall(e.name, e.input);
-          if (e.type === "tool-result") {
-            opts.onToolEvent?.({ name: e.name, ok: e.ok, durationMs: e.durationMs });
-            if (e.name === "bash") {
-              let command = e.input;
-              try {
-                const parsed = JSON.parse(e.input) as { command?: unknown };
-                if (typeof parsed.command === "string") command = parsed.command;
-              } catch {
-                /* input wasn't JSON — keep the stringified form */
-              }
-              roundCommandOutputs.push({ command, output: e.result, ok: e.ok });
-              // F2: Feed the spec-test oracle. CodingEvent only exposes boolean ok,
-              // so exitCode is a 0/1 mapping.
-              tracker.observe({ command, exitCode: e.ok ? 0 : 1 });
-            }
-          }
-          if (e.type === "final-diff") opts.onFileChange?.(e.diff, e.changedFiles);
-          captureToolEvent(e, toolEvents, opts.verbose);
-        },
-      });
-      if (roundReasoning.trim()) thinkingLog.push({ round, text: roundReasoning });
+        opts.maxSteps,
+        round,
+        round === 0 ? opts.images : undefined,
+        roundCommandOutputs,
+      );
     }
 
     const execUsage = accumulateUsage(emptyUsage(), routed.model, result.usage);
-    phases.push(phaseStat("execute", round, execStart, routed.model, execUsage));
+    phases.push(
+      phaseStat("execute", round, execStart, routed.model, execUsage),
+    );
     usage = mergeUsage(usage, execUsage);
     history = result.messages;
     lastText = result.text;
@@ -893,7 +948,7 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
     // ADR-021 §1: the deterministic judge-skip is ON by default (opt out with a
     // falsey OXAGEN_LADDER). Never spend a frontier completeness judge where
     // executed evidence already settles the outcome.
-    let verdict: typeof judgeRounds[0] | undefined;
+    let verdict: (typeof judgeRounds)[0] | undefined;
     // Fast-path conversational turn that changed nothing: the caller classified
     // this as a lookup/Q&A and no files were touched, so there is no executed
     // evidence for a frontier completeness judge (and its revise loop) to
@@ -910,7 +965,8 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
         model: "deterministic/fast-path",
         usage: emptyUsage(),
         fallback: false,
-        reasoning: "Fast-path conversational turn with no file changes — nothing to verify; judge skipped.",
+        reasoning:
+          "Fast-path conversational turn with no file changes — nothing to verify; judge skipped.",
       };
       opts.onStage?.({
         kind: "judge",
@@ -921,7 +977,12 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
       // (1) Read-only turn that changed nothing: the judge can never trigger a
       // revise (canRevise gates on !readOnly) and there is no diff to verify, so
       // a judge call here is pure waste. Settle it deterministically.
-      if (shouldSkipJudgeReadOnly({ readOnly: !!opts.readOnly, diff: result.diff })) {
+      if (
+        shouldSkipJudgeReadOnly({
+          readOnly: !!opts.readOnly,
+          diff: result.diff,
+        })
+      ) {
         verdict = {
           complete: true,
           confidence: 100,
@@ -930,7 +991,8 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
           model: "deterministic/read-only",
           usage: emptyUsage(),
           fallback: false,
-          reasoning: "Read-only turn with no file changes — nothing to verify; judge skipped.",
+          reasoning:
+            "Read-only turn with no file changes — nothing to verify; judge skipped.",
         };
         opts.onStage?.({
           kind: "judge",
@@ -1015,7 +1077,9 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
       });
     }
 
-    phases.push(phaseStat("judge", round, judgeStart, verdict.model, verdict.usage));
+    phases.push(
+      phaseStat("judge", round, judgeStart, verdict.model, verdict.usage),
+    );
     usage = mergeUsage(usage, verdict.usage);
     judgeRounds.push(verdict);
 
@@ -1025,7 +1089,9 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
     // complete — revising it doubles turn cost for marginal expected gain.
     // Confident-incomplete verdicts still revise. Tune/disable via
     // OXAGEN_REVISE_MIN_CONFIDENCE (default 40; 0 restores always-revise).
-    const reviseMinConfidence = Number(process.env["OXAGEN_REVISE_MIN_CONFIDENCE"] ?? 40);
+    const reviseMinConfidence = Number(
+      process.env["OXAGEN_REVISE_MIN_CONFIDENCE"] ?? 40,
+    );
     const canRevise =
       !verdict.complete &&
       round < maxRounds &&
@@ -1069,9 +1135,14 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
   // A throwing sync MUST NOT fail the turn — both are wrapped in void/catch.
   if (opts.graphSync && filesTouched.size > 0) {
     const touchedArr = [...filesTouched];
-    void Promise.resolve(opts.graphSync.ensureGraph(touchedArr)).catch(() => {});
+    void Promise.resolve(opts.graphSync.ensureGraph(touchedArr)).catch(
+      () => {},
+    );
     void Promise.resolve(
-      opts.graphSync.recordLineage({ executionId: trace.id, touchedFiles: touchedArr }),
+      opts.graphSync.recordLineage({
+        executionId: trace.id,
+        touchedFiles: touchedArr,
+      }),
     ).catch(() => {});
   }
 
@@ -1083,7 +1154,9 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
   // same fail-soft shape as graphSync above: a throwing release must never
   // fail the turn — the lock's own TTL is the ultimate backstop.
   if (opts.fileLock && lockContext) {
-    void Promise.resolve(opts.fileLock.releaseAll(lockContext.executionId)).catch(() => {});
+    void Promise.resolve(
+      opts.fileLock.releaseAll(lockContext.executionId),
+    ).catch(() => {});
   }
 
   // Record a lesson when the judge had to send the agent back (a gotcha).
@@ -1091,16 +1164,13 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
     const firstVerdict = judgeRounds[0];
     if (firstVerdict && firstVerdict.findings.length > 0) {
       void Promise.resolve(
-        opts.memory.remember(
-          "gotcha",
-          {
-            lesson:
-              `Work for "${truncate(opts.prompt, 80)}" was first judged incomplete: ` +
-              truncate(firstVerdict.findings.join("; "), 200),
-            files: [...filesTouched].slice(0, 5),
-            outcome: finalComplete ? "success" : "failure",
-          },
-        ),
+        opts.memory.remember("gotcha", {
+          lesson:
+            `Work for "${truncate(opts.prompt, 80)}" was first judged incomplete: ` +
+            truncate(firstVerdict.findings.join("; "), 200),
+          files: [...filesTouched].slice(0, 5),
+          outcome: finalComplete ? "success" : "failure",
+        }),
       ).catch(() => {});
     }
   }
@@ -1134,7 +1204,15 @@ function phaseStat(
   usage: UsageTotals,
 ): PhaseStat {
   const finishedAt = Date.now();
-  return { phase, round, startedAt, finishedAt, durationMs: finishedAt - startedAt, model, usage };
+  return {
+    phase,
+    round,
+    startedAt,
+    finishedAt,
+    durationMs: finishedAt - startedAt,
+    model,
+    usage,
+  };
 }
 
 function enhancementSource(
@@ -1158,9 +1236,16 @@ interface RouteResult {
  * evaluator is the authority — it already chose the cheapest tier that does the job
  * well. The deterministic router is consulted only as a one-way SAFETY FLOOR.
  */
-function selectModel(override: string | undefined, evaluation: PromptEvaluation): RouteResult {
+function selectModel(
+  override: string | undefined,
+  evaluation: PromptEvaluation,
+): RouteResult {
   if (override) {
-    return { model: override, tier: tierForSlug(override), rationale: "pinned model" };
+    return {
+      model: override,
+      tier: tierForSlug(override),
+      rationale: "pinned model",
+    };
   }
   let tier = evaluation.recommendedTier;
   let rationale = `evaluator chose ${tierLabel(tier)} — cheapest tier for the job (complexity ${evaluation.complexity}/100)`;
@@ -1204,11 +1289,17 @@ export function pickTieredAdvisor(
   diffLines: number,
 ): string | undefined {
   if (process.env["OXAGEN_LLM_ADVISOR"]) return undefined; // explicit judge model wins
-  const complexityCeiling = Number(process.env["OXAGEN_JUDGE_FAST_COMPLEXITY_MAX"] ?? 35);
+  const complexityCeiling = Number(
+    process.env["OXAGEN_JUDGE_FAST_COMPLEXITY_MAX"] ?? 35,
+  );
   const diffCeiling = Number(process.env["OXAGEN_DIFF_BUDGET"] ?? 120);
   // A non-positive ceiling opts out entirely (a complexity of exactly 0 would
   // otherwise still satisfy `0 <= 0`).
-  if (complexityCeiling > 0 && complexity <= complexityCeiling && diffLines <= diffCeiling) {
+  if (
+    complexityCeiling > 0 &&
+    complexity <= complexityCeiling &&
+    diffLines <= diffCeiling
+  ) {
     const fast = modelForTier("fast");
     if (fast !== executorModel) return fast;
   }
@@ -1249,7 +1340,10 @@ function assembleTrace(a: AssembleArgs): TurnTrace {
     createdAt: a.startedAt,
     cwd: a.cwd,
     originalPrompt: a.originalPrompt,
-    evaluation: { ...a.evaluation, refinedPrompt: truncate(a.evaluation.refinedPrompt, 4000) },
+    evaluation: {
+      ...a.evaluation,
+      refinedPrompt: truncate(a.evaluation.refinedPrompt, 4000),
+    },
     enhancement: {
       ...a.enhancement,
       prompt: truncate(a.enhancement.prompt, 8000),
@@ -1261,7 +1355,10 @@ function assembleTrace(a: AssembleArgs): TurnTrace {
     response: truncate(a.response, 4000),
     filesTouched: a.filesTouched,
     commandsRun: a.commandsRun,
-    judgeRounds: a.judgeRounds.map((v) => ({ ...v, reasoning: truncate(v.reasoning, 2000) })),
+    judgeRounds: a.judgeRounds.map((v) => ({
+      ...v,
+      reasoning: truncate(v.reasoning, 2000),
+    })),
     finalComplete: a.finalComplete,
     steps: a.steps,
     usage: a.usage,
@@ -1298,7 +1395,8 @@ async function runBare(
   // pin (`opts.model`) always wins. This value BOTH labels the run (usage,
   // trace.selectedModel) AND is passed to runCodingAgent below, so the label can
   // never diverge from what actually executes.
-  const model = opts.model ?? modelForTier(classifyTier({ text: opts.prompt }).tier);
+  const model =
+    opts.model ?? modelForTier(classifyTier({ text: opts.prompt }).tier);
   opts.onStage?.({ kind: "execute", label: "executing (pipeline off)" });
   const execStart = Date.now();
   let bareReasoning = "";
@@ -1306,7 +1404,9 @@ async function runBare(
   // per-turn shape as the full pipeline path above — bare mode is its own
   // single-round "turn", so it gets its own lock identity.
   const bareLockId = newTraceId();
-  const lockContext = opts.fileLock ? { agentId: bareLockId, executionId: bareLockId } : undefined;
+  const lockContext = opts.fileLock
+    ? { agentId: bareLockId, executionId: bareLockId }
+    : undefined;
   const result = await runCodingAgent({
     workspace: opts.workspace,
     ai: opts.ai,
@@ -1340,7 +1440,11 @@ async function runBare(
       }
       if (e.type === "tool-call") onToolCall(e.name, e.input);
       if (e.type === "tool-result")
-        opts.onToolEvent?.({ name: e.name, ok: e.ok, durationMs: e.durationMs });
+        opts.onToolEvent?.({
+          name: e.name,
+          ok: e.ok,
+          durationMs: e.durationMs,
+        });
       if (e.type === "final-diff") opts.onFileChange?.(e.diff, e.changedFiles);
       captureToolEvent(e, toolEvents, opts.verbose);
     },
@@ -1375,8 +1479,18 @@ async function runBare(
     cwd,
     originalPrompt: opts.prompt,
     evaluation,
-    enhancement: { prompt: opts.prompt, context: "", resolved: [], lessonCount: 0, source: "none" },
-    routed: { model, tier: tierForSlug(model), rationale: "bare mode (no routing)" },
+    enhancement: {
+      prompt: opts.prompt,
+      context: "",
+      resolved: [],
+      lessonCount: 0,
+      source: "none",
+    },
+    routed: {
+      model,
+      tier: tierForSlug(model),
+      rationale: "bare mode (no routing)",
+    },
     response: result.text,
     filesTouched: [...filesTouched],
     commandsRun,
@@ -1393,15 +1507,22 @@ async function runBare(
 
   if (opts.graphSync && filesTouched.size > 0) {
     const touchedArr = [...filesTouched];
-    void Promise.resolve(opts.graphSync.ensureGraph(touchedArr)).catch(() => {});
+    void Promise.resolve(opts.graphSync.ensureGraph(touchedArr)).catch(
+      () => {},
+    );
     void Promise.resolve(
-      opts.graphSync.recordLineage({ executionId: trace.id, touchedFiles: touchedArr }),
+      opts.graphSync.recordLineage({
+        executionId: trace.id,
+        touchedFiles: touchedArr,
+      }),
     ).catch(() => {});
   }
 
   // Turn-end batch release — see the full-pipeline path's identical block above.
   if (opts.fileLock && lockContext) {
-    void Promise.resolve(opts.fileLock.releaseAll(lockContext.executionId)).catch(() => {});
+    void Promise.resolve(
+      opts.fileLock.releaseAll(lockContext.executionId),
+    ).catch(() => {});
   }
 
   if (opts.trace) {
