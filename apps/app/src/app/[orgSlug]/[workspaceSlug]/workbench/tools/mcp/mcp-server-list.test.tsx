@@ -201,7 +201,7 @@ describe("McpServerList", () => {
   it("renders the empty state when no servers are installed", () => {
     renderList([]);
     expect(
-      screen.getByText(/No MCP servers installed yet/i),
+      screen.getByText(/No MCP servers connected yet/i),
     ).toBeInTheDocument();
   });
 
