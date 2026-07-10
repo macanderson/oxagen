@@ -223,7 +223,7 @@ Base UI data-attributes:
 Tune feel via `--motion-*` / `--ease-*` tokens. The Tangerine skin keeps all
 motion from the system: button hover-grow, tab slide, overlay enter/exit, control
 transitions, `.hover-lift`, `.hover-glow` (tangerine ring), `.animate-in`,
-`.stream-caret`, wand pulse. The skin stays **flat** — no gradients, glows, mesh,
+wand pulse. The skin stays **flat** — no gradients, glows, mesh,
 or glassmorphism on chrome (depth is a 1px border); the tangerine→rose gradient is
 reserved for the brand mark and marketing surfaces only.
 

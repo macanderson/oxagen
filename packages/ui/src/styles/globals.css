@@ -910,21 +910,6 @@
     animation: fade-in var(--motion-base) var(--ease-entry);
   }
 
-  /*
-   * Typewriter caret — trails streamed AI text while a response is written.
-   * `steps(1)` gives a hard on/off blink (terminal cursor). Suppressed under
-   * prefers-reduced-motion by the global rule below.
-   */
-  .stream-caret {
-    display: inline-block;
-    width: 0.5ch;
-    height: 1em;
-    transform: translateY(0.12em);
-    background-color: currentColor;
-    border-radius: 1px;
-    animation: caret-blink 1s steps(1) infinite;
-  }
-
   /* The Oxagen wordmark — set in Space Grotesk, ALWAYS lowercase ("oxagen").
      text-transform guarantees the lowercase lockup even if a caller passes
      mixed-case text. */
@@ -1097,11 +1082,6 @@
 @keyframes fade-in {
   from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes caret-blink {
-  0%, 49% { opacity: 1; }
-  50%, 100% { opacity: 0; }
 }
 
 /* a11y: honor the OS reduce-motion setting globally (kill-switch). */
