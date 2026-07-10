@@ -54,7 +54,11 @@ test("Connector setup wizard renders the schema-driven form and installs the con
     `/${user.orgSlug}/default/marketplace/integrations/google-drive`,
   );
 
-  await expect(page.getByText("Connect Google Drive")).toBeVisible();
+  // exact:true — Next streams the document <title> ("Connect Google Drive |
+  // Marketplace") into the body, and substring getByText matches it too.
+  await expect(
+    page.getByText("Connect Google Drive", { exact: true }),
+  ).toBeVisible();
 
   // Schema is SSR-prefetched by getConnectorSetupSchemaAction — if the client
   // provider still had to fetch it live, the schema request below would come
