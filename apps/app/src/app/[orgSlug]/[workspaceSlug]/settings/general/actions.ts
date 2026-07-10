@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { invoke } from "@oxagen/oxagen";
+import { avatarUrlSchema } from "@oxagen/oxagen/avatar";
 // Side-effect import: bind every foundation handler so invoke() can resolve.
 import "@oxagen/handlers/register";
 import type { WorkspaceSettingsWriteOutput } from "@oxagen/oxagen/contracts/workspace.settings.write";
@@ -31,6 +32,9 @@ const UpdateWorkspaceGeneralSchema = z.object({
       "Slug must be lowercase letters, numbers, and single hyphens",
     ),
   description: z.string().max(2000).optional(),
+  // https URL or designed-avatar spec string — the canonical avatar validator.
+  // Empty string means "clear the avatar" (normalized to null below).
+  avatarUrl: avatarUrlSchema.optional().or(z.literal("")),
 });
 
 type UpdateInput = z.infer<typeof UpdateWorkspaceGeneralSchema>;
@@ -67,7 +71,7 @@ export async function updateWorkspaceGeneralAction(
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
   }
 
-  const { orgSlug, workspaceSlug, name, slug, description } = parsed.data;
+  const { orgSlug, workspaceSlug, name, slug, description, avatarUrl } = parsed.data;
 
   // Resolve org + workspace — notFound() on mismatch prevents cross-tenant writes.
   const org = await resolveOrg(orgSlug);
@@ -119,9 +123,12 @@ export async function updateWorkspaceGeneralAction(
       const descriptionValue =
         description === undefined || description === "" ? null : description;
 
+      // Same normalization for the avatar: empty string clears the column.
+      const avatarValue = avatarUrl === undefined || avatarUrl === "" ? null : avatarUrl;
+
       const result = (await invoke(
         "update_workspace_settings",
-        { name, slug, description: descriptionValue },
+        { name, slug, description: descriptionValue, avatarUrl: avatarValue },
         ctx,
         { surface: "agent" },
       )) as WorkspaceSettingsWriteOutput;
