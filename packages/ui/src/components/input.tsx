@@ -10,14 +10,18 @@ import { cn } from "../lib/utils";
  * `aria-invalid` (bare inputs).
  */
 const inputVariants = cva(
-  "flex w-full rounded-md border border-input-border bg-input-bg px-3 py-1 text-sm text-input-fg transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-input-placeholder hover:border-input-border-hover focus-visible:outline-none focus-visible:border-input-border-focus focus-visible:ring-1 focus-visible:ring-input-ring data-[invalid]:border-input-invalid-border data-[invalid]:focus-visible:ring-input-invalid-ring aria-[invalid=true]:border-input-invalid-border aria-[invalid=true]:focus-visible:ring-input-invalid-ring disabled:cursor-not-allowed disabled:bg-input-disabled-bg disabled:text-input-disabled-fg",
+  // `max-md:text-base` is load-bearing on phones: a font-size under 16px makes
+  // iOS Safari auto-zoom the page on focus, breaking fixed chrome layout.
+  "flex w-full rounded-md border border-input-border bg-input-bg px-3 py-1 text-sm max-md:text-base text-input-fg transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-input-placeholder hover:border-input-border-hover focus-visible:outline-none focus-visible:border-input-border-focus focus-visible:ring-1 focus-visible:ring-input-ring data-[invalid]:border-input-invalid-border data-[invalid]:focus-visible:ring-input-invalid-ring aria-[invalid=true]:border-input-invalid-border aria-[invalid=true]:focus-visible:ring-input-invalid-ring disabled:cursor-not-allowed disabled:bg-input-disabled-bg disabled:text-input-disabled-fg",
   {
     // coss ui density scale. `lg` matches the shadcn/ui input height (36px).
+    // Below `md` every size floors at h-11 (44px) — the Apple HIG touch
+    // minimum; the desktop density scale is untouched.
     variants: {
       size: {
-        sm: "h-7",
-        default: "h-8",
-        lg: "h-9",
+        sm: "h-7 max-md:h-11",
+        default: "h-8 max-md:h-11",
+        lg: "h-9 max-md:h-11",
       },
     },
     defaultVariants: { size: "default" },

@@ -121,6 +121,12 @@ html[data-density="spacious"] {
   body:has([data-mobile-bottom-bar]) {
     --pwa-toast-bottom: calc(var(--bottom-bar-h) + env(safe-area-inset-bottom, 0px));
   }
+  /* Section pages add a fixed sub-nav switcher on top of the bar (3.8125rem =
+     py-2 ×2 + h-11 trigger + border, mirroring MobileSettingsNav's spacer);
+     overlays must clear that too. */
+  body:has([data-mobile-bottom-bar]):has([data-mobile-section-nav]) {
+    --pwa-toast-bottom: calc(var(--bottom-bar-h) + 3.8125rem + env(safe-area-inset-bottom, 0px));
+  }
 }
 
 /* ── Wand widget ────────────────────────────────────────────────────────── */

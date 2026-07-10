@@ -28,9 +28,13 @@ export function EnterpriseUpsell({ orgSlug, feature, currentTier }: EnterpriseUp
       <AlertTitle>{feature} is an Enterprise feature</AlertTitle>
       <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <span>
-          You&rsquo;re on the {TIER_LABELS[currentTier]} plan. SOC&nbsp;2 compliance tooling —
-          exportable audit trails, evidence bundles, and SIEM streaming — unlocks on the
-          Enterprise plan. Everything below is shown as a preview.
+          {/* The trailing space lives INSIDE the expression: the compiled
+              output was observed dropping the bare text-node space after the
+              expression, rendering "Freeplan". */}
+          You&rsquo;re on the {`${TIER_LABELS[currentTier]} plan`}. SOC&nbsp;2
+          compliance tooling — exportable audit trails, evidence bundles, and
+          SIEM streaming — unlocks on the Enterprise plan. Everything below is
+          shown as a preview.
         </span>
         <Button
           variant="gradient"
