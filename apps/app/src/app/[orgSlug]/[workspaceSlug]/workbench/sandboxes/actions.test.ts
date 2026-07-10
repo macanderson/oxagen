@@ -7,14 +7,18 @@ const {
   startSandbox,
   runSandboxCommand,
   stopSandbox,
+  listSandboxes,
   listSandboxLogs,
+  renameSandbox,
   isSandboxUnavailable,
 } = vi.hoisted(() => ({
   resolveWorkbenchScope: vi.fn(),
   startSandbox: vi.fn(),
   runSandboxCommand: vi.fn(),
   stopSandbox: vi.fn(),
+  listSandboxes: vi.fn(),
   listSandboxLogs: vi.fn(),
+  renameSandbox: vi.fn(),
   isSandboxUnavailable: vi.fn(() => false),
 }));
 
@@ -28,7 +32,9 @@ vi.mock("@/lib/workbench/sandboxes", () => ({
   startSandbox,
   runSandboxCommand,
   stopSandbox,
+  listSandboxes,
   listSandboxLogs,
+  renameSandbox,
   isSandboxUnavailable,
 }));
 
@@ -37,6 +43,8 @@ import {
   runSandboxCommandAction,
   stopSandboxAction,
   listSandboxLogsAction,
+  renameSandboxAction,
+  refreshSandboxesAction,
 } from "./actions";
 
 const SCOPE = { orgSlug: "acme", workspaceSlug: "eng" };
@@ -109,7 +117,13 @@ describe("startSandboxAction", () => {
     expect(startSandbox).toHaveBeenCalledTimes(1);
     const [, arg] = startSandbox.mock.calls[0] as [
       unknown,
-      { image?: string; label?: string; setupCmd?: string; sessionKey?: string; sandboxTemplateId?: string },
+      {
+        image?: string;
+        label?: string;
+        setupCmd?: string;
+        sessionKey?: string;
+        sandboxTemplateId?: string;
+      },
     ];
     expect(arg.image).toBe("agent");
     expect(arg.label).toBe("Acme API refactor");
@@ -123,10 +137,19 @@ describe("startSandboxAction", () => {
   it("routes a saved-template id (sbx_…) to sandboxTemplateId, not an image", async () => {
     resolveWorkbenchScope.mockResolvedValue(scope(true));
     startSandbox.mockResolvedValue({ sessionId: "sbx_y", reused: false });
-    await startSandboxAction({ ...SCOPE, name: "eval box", templateId: "sbx_tmpl123" });
+    await startSandboxAction({
+      ...SCOPE,
+      name: "eval box",
+      templateId: "sbx_tmpl123",
+    });
     const [, arg] = startSandbox.mock.calls[0] as [
       unknown,
-      { image?: string; setupCmd?: string; sandboxTemplateId?: string; label?: string },
+      {
+        image?: string;
+        setupCmd?: string;
+        sandboxTemplateId?: string;
+        label?: string;
+      },
     ];
     expect(arg.sandboxTemplateId).toBe("sbx_tmpl123");
     expect(arg.label).toBe("eval box");
@@ -137,7 +160,11 @@ describe("startSandboxAction", () => {
   it("passes an empty-setupCmd template as undefined setupCmd", async () => {
     resolveWorkbenchScope.mockResolvedValue(scope(true));
     startSandbox.mockResolvedValue({ sessionId: "sbx_x", reused: false });
-    await startSandboxAction({ ...SCOPE, name: "blank box", templateId: "blank" });
+    await startSandboxAction({
+      ...SCOPE,
+      name: "blank box",
+      templateId: "blank",
+    });
     const [, arg] = startSandbox.mock.calls[0] as [
       unknown,
       { image?: string; setupCmd?: string; sessionKey?: string },
@@ -154,6 +181,142 @@ describe("startSandboxAction", () => {
       name: "my box",
       templateId: "oxagen-agent",
     });
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.unavailable).toBe(true);
+  });
+
+  it("forwards a valid repos list to clone", async () => {
+    resolveWorkbenchScope.mockResolvedValue(scope(true));
+    startSandbox.mockResolvedValue({ sessionId: "sbx_r", reused: false });
+    const repos = [
+      { owner: "acme", repo: "api", branch: "main" },
+      { owner: "acme", repo: "web" },
+    ];
+    await startSandboxAction({
+      ...SCOPE,
+      name: "with repos",
+      templateId: "oxagen-agent",
+      repos,
+    });
+    const [, arg] = startSandbox.mock.calls[0] as [
+      unknown,
+      { repos?: unknown },
+    ];
+    expect(arg.repos).toEqual(repos);
+  });
+
+  it("rejects more than 8 repos", async () => {
+    resolveWorkbenchScope.mockResolvedValue(scope(true));
+    const repos = Array.from({ length: 9 }, (_, i) => ({
+      owner: "acme",
+      repo: `repo${i}`,
+    }));
+    const res = await startSandboxAction({
+      ...SCOPE,
+      name: "too many repos",
+      templateId: "oxagen-agent",
+      repos,
+    });
+    expect(res.ok).toBe(false);
+    expect(startSandbox).not.toHaveBeenCalled();
+  });
+
+  it("rejects a repo entry missing owner/repo", async () => {
+    resolveWorkbenchScope.mockResolvedValue(scope(true));
+    const res = await startSandboxAction({
+      ...SCOPE,
+      name: "bad repo shape",
+      templateId: "oxagen-agent",
+      repos: [{ owner: "", repo: "api" }],
+    });
+    expect(res.ok).toBe(false);
+    expect(startSandbox).not.toHaveBeenCalled();
+  });
+});
+
+describe("renameSandboxAction", () => {
+  it("gates non-managers", async () => {
+    resolveWorkbenchScope.mockResolvedValue(scope(false));
+    const res = await renameSandboxAction({
+      ...SCOPE,
+      sessionId: "sbx_1",
+      label: "New name",
+    });
+    expect(res.ok).toBe(false);
+    expect(renameSandbox).not.toHaveBeenCalled();
+  });
+
+  it("rejects a blank label", async () => {
+    resolveWorkbenchScope.mockResolvedValue(scope(true));
+    const res = await renameSandboxAction({
+      ...SCOPE,
+      sessionId: "sbx_1",
+      label: "   ",
+    });
+    expect(res.ok).toBe(false);
+    expect(renameSandbox).not.toHaveBeenCalled();
+  });
+
+  it("renames on success and trims the label", async () => {
+    resolveWorkbenchScope.mockResolvedValue(scope(true));
+    renameSandbox.mockResolvedValue({ sessionId: "sbx_1", label: "Renamed" });
+    const res = await renameSandboxAction({
+      ...SCOPE,
+      sessionId: "sbx_1",
+      label: "  Renamed  ",
+    });
+    expect(res.ok).toBe(true);
+    if (res.ok) expect(res.sandbox.label).toBe("Renamed");
+    const [, arg] = renameSandbox.mock.calls[0] as [
+      unknown,
+      { sessionId: string; label: string },
+    ];
+    expect(arg).toEqual({ sessionId: "sbx_1", label: "Renamed" });
+  });
+
+  it("surfaces a handler failure", async () => {
+    resolveWorkbenchScope.mockResolvedValue(scope(true));
+    renameSandbox.mockRejectedValue(new Error("boom"));
+    const res = await renameSandboxAction({
+      ...SCOPE,
+      sessionId: "sbx_1",
+      label: "New name",
+    });
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error).toBe("boom");
+  });
+});
+
+describe("refreshSandboxesAction", () => {
+  it("does NOT gate on canManage — any resolved workspace member can poll the list", async () => {
+    resolveWorkbenchScope.mockResolvedValue(scope(false));
+    listSandboxes.mockResolvedValue([
+      { sessionId: "sbx_1", status: "running" },
+    ]);
+    const res = await refreshSandboxesAction({ ...SCOPE, activeOnly: true });
+    expect(res.ok).toBe(true);
+    if (res.ok)
+      expect(res.sandboxes).toEqual([
+        { sessionId: "sbx_1", status: "running" },
+      ]);
+  });
+
+  it("passes activeOnly through to listSandboxes", async () => {
+    resolveWorkbenchScope.mockResolvedValue(scope(true));
+    listSandboxes.mockResolvedValue([]);
+    await refreshSandboxesAction({ ...SCOPE, activeOnly: false });
+    const [, arg] = listSandboxes.mock.calls[0] as [
+      unknown,
+      { activeOnly?: boolean },
+    ];
+    expect(arg.activeOnly).toBe(false);
+  });
+
+  it("flags the unavailable-driver case", async () => {
+    resolveWorkbenchScope.mockResolvedValue(scope(true));
+    listSandboxes.mockRejectedValue(new Error("Durable sandbox not available"));
+    isSandboxUnavailable.mockReturnValue(true);
+    const res = await refreshSandboxesAction({ ...SCOPE });
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.unavailable).toBe(true);
   });
@@ -239,7 +402,9 @@ describe("listSandboxLogsAction", () => {
 
   it("flags the unavailable-driver case", async () => {
     resolveWorkbenchScope.mockResolvedValue(scope(true));
-    listSandboxLogs.mockRejectedValue(new Error("Durable sandbox not available"));
+    listSandboxLogs.mockRejectedValue(
+      new Error("Durable sandbox not available"),
+    );
     isSandboxUnavailable.mockReturnValue(true);
     const res = await listSandboxLogsAction({ ...SCOPE, sessionId: "sbx_1" });
     expect(res.ok).toBe(false);

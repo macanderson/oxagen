@@ -10,6 +10,7 @@ import {
   startSandbox,
   runSandboxCommand,
   stopSandbox,
+  renameSandbox,
   isSandboxUnavailable,
 } from "./sandboxes";
 
@@ -40,6 +41,17 @@ describe("lib/workbench/sandboxes", () => {
     expect(out).toEqual([{ sessionId: "sbx_1" }]);
   });
 
+  it("listSandboxes forwards activeOnly for the live-reconciled, truthful view", async () => {
+    invoke.mockResolvedValue({ sandboxes: [] });
+    await listSandboxes(CTX, { activeOnly: true });
+    expect(invoke).toHaveBeenCalledWith(
+      "list_sandboxes",
+      { activeOnly: true },
+      CTX,
+      { surface: "agent" },
+    );
+  });
+
   it("startSandbox forwards image/sessionKey/setupCmd", async () => {
     invoke.mockResolvedValue({ sessionId: "sbx_2", reused: false });
     await startSandbox(CTX, {
@@ -50,10 +62,47 @@ describe("lib/workbench/sandboxes", () => {
     });
     expect(invoke).toHaveBeenCalledWith(
       "start_sandbox",
-      { image: "agent", sessionKey: "k1", setupCmd: "echo hi", network: "allow" },
+      {
+        image: "agent",
+        sessionKey: "k1",
+        setupCmd: "echo hi",
+        network: "allow",
+      },
       CTX,
       { surface: "agent" },
     );
+  });
+
+  it("startSandbox forwards repos to clone", async () => {
+    invoke.mockResolvedValue({ sessionId: "sbx_3", reused: false });
+    const repos = [{ owner: "acme", repo: "api", branch: "main" }];
+    await startSandbox(CTX, {
+      image: "agent",
+      sessionKey: "k2",
+      repos,
+      network: "allow",
+    });
+    expect(invoke).toHaveBeenCalledWith(
+      "start_sandbox",
+      { image: "agent", sessionKey: "k2", repos, network: "allow" },
+      CTX,
+      { surface: "agent" },
+    );
+  });
+
+  it("renameSandbox calls rename_sandbox with the session id and label", async () => {
+    invoke.mockResolvedValue({ sessionId: "sbx_2", label: "New name" });
+    const out = await renameSandbox(CTX, {
+      sessionId: "sbx_2",
+      label: "New name",
+    });
+    expect(invoke).toHaveBeenCalledWith(
+      "rename_sandbox",
+      { sessionId: "sbx_2", label: "New name" },
+      CTX,
+      { surface: "agent" },
+    );
+    expect(out).toEqual({ sessionId: "sbx_2", label: "New name" });
   });
 
   it("runSandboxCommand calls run_sandbox_command", async () => {
@@ -81,9 +130,13 @@ describe("lib/workbench/sandboxes", () => {
 
   it("isSandboxUnavailable recognises the driver-off error", () => {
     expect(
-      isSandboxUnavailable(new Error("Durable sandbox sessions are not available.")),
+      isSandboxUnavailable(
+        new Error("Durable sandbox sessions are not available."),
+      ),
     ).toBe(true);
-    expect(isSandboxUnavailable(new Error("Set SANDBOX_ENABLED=true"))).toBe(true);
+    expect(isSandboxUnavailable(new Error("Set SANDBOX_ENABLED=true"))).toBe(
+      true,
+    );
     expect(isSandboxUnavailable(new Error("some other failure"))).toBe(false);
     expect(isSandboxUnavailable(null)).toBe(false);
   });
