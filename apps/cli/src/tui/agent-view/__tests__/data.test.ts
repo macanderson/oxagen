@@ -11,7 +11,10 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { SessionStore, type SessionMetaView } from "../../../sessions/store.js";
 import type { SessionEvent } from "../../../sessions/events.js";
-import { createCodeGraphStore, type FileGraph } from "../../../daemon/code-graph/store.js";
+import {
+  createCodeGraphStore,
+  type FileGraph,
+} from "../../../daemon/code-graph/store.js";
 import {
   collectAgentViewData,
   formatAge,
@@ -27,7 +30,10 @@ import {
   type SessionRow,
 } from "../data.js";
 
-const metaView = (sid: string, over: Partial<SessionMetaView> = {}): SessionMetaView =>
+const metaView = (
+  sid: string,
+  over: Partial<SessionMetaView> = {},
+): SessionMetaView =>
   ({
     v: 1,
     sid,
@@ -50,7 +56,11 @@ const metaView = (sid: string, over: Partial<SessionMetaView> = {}): SessionMeta
 
 describe("resolveAuthStatus", () => {
   it("reports a complete platform session", () => {
-    const s = resolveAuthStatus({ token: "t", orgSlug: "acme", workspaceSlug: "prod" });
+    const s = resolveAuthStatus({
+      token: "t",
+      orgSlug: "acme",
+      workspaceSlug: "prod",
+    });
     expect(s.mode).toBe("platform");
     expect(s.ok).toBe(true);
     expect(s.label).toBe("acme / prod");
@@ -90,7 +100,11 @@ describe("summarizeSession", () => {
   it("counts a live run's duration to now, a finished run's to its end", () => {
     const now = 10_000;
     const live = summarizeSession(
-      metaView("s-1", { state: "running", derivedState: "running", createdAt: 5_000 }),
+      metaView("s-1", {
+        state: "running",
+        derivedState: "running",
+        createdAt: 5_000,
+      }),
       now,
     );
     expect(live.live).toBe(true);
@@ -105,7 +119,10 @@ describe("summarizeSession", () => {
   });
 
   it("carries model/agent through only when present", () => {
-    const withModel = summarizeSession(metaView("s-3", { model: "haiku", agent: "code" }), 3_000);
+    const withModel = summarizeSession(
+      metaView("s-3", { model: "haiku", agent: "code" }),
+      3_000,
+    );
     expect(withModel.model).toBe("haiku");
     expect(withModel.agent).toBe("code");
     const without = summarizeSession(metaView("s-4"), 3_000);
@@ -153,8 +170,16 @@ describe("rollupSessions", () => {
     todayStart.setHours(0, 0, 0, 0);
     const yesterday = todayStart.getTime() - 60_000;
     const rows = [
-      row({ sid: "old", startedAt: yesterday, usage: { inputTokens: 0, outputTokens: 0, costUsd: 2 } }),
-      row({ sid: "new", startedAt: now, usage: { inputTokens: 0, outputTokens: 0, costUsd: 3 } }),
+      row({
+        sid: "old",
+        startedAt: yesterday,
+        usage: { inputTokens: 0, outputTokens: 0, costUsd: 2 },
+      }),
+      row({
+        sid: "new",
+        startedAt: now,
+        usage: { inputTokens: 0, outputTokens: 0, costUsd: 3 },
+      }),
     ];
     const r = rollupSessions(rows, now);
     expect(r.costUsdTotal).toBeCloseTo(5);
@@ -176,7 +201,15 @@ describe("recentActivity", () => {
 
   it("keeps only salient lines, capped to the limit, newest kept", () => {
     const events = [
-      ev(1, { type: "session.start", title: "fix bug", prompt: "p", cwd: "/", mode: "once", owner: "tui", pid: 1 }),
+      ev(1, {
+        type: "session.start",
+        title: "fix bug",
+        prompt: "p",
+        cwd: "/",
+        mode: "once",
+        owner: "tui",
+        pid: 1,
+      }),
       ev(2, { type: "reasoning.delta", text: "thinking", turn: 1 }), // dropped (not salient)
       ev(3, { type: "tool.end", name: "bash", ok: true, durationMs: 100 }),
       ev(4, { type: "message.end", text: "Done.", turn: 1 }),
@@ -195,11 +228,13 @@ describe("formatters", () => {
     expect(formatCount(2_500_000)).toBe("2.5M");
   });
 
-  it("formatUsd handles dust, cents, and large sums", () => {
-    expect(formatUsd(0)).toBe("$0.00");
-    expect(formatUsd(0.004)).toBe("<$0.01");
-    expect(formatUsd(0.42)).toBe("$0.42");
-    expect(formatUsd(1500)).toBe("$1,500");
+  it("formatUsd matches the canonical engine formatter (no drift)", () => {
+    // Re-exported from agent/model-router (the engine rate-card formatter) so
+    // this dashboard renders costs identically to every other repl/tui panel.
+    expect(formatUsd(0)).toBe("$0");
+    expect(formatUsd(0.00004)).toBe("<$0.0001");
+    expect(formatUsd(0.42)).toBe("$0.4200");
+    expect(formatUsd(1500)).toBe("$1500.00");
   });
 
   it("formatAge renders coarse relative time", () => {
@@ -226,7 +261,12 @@ describe("collectAgentViewData", () => {
     embeddedFiles: 100,
     lastIndexedAt: 1234,
   };
-  const daemonUp: DaemonStatus = { running: true, socketPath: "/x.sock", pid: 42, uptimeSeconds: 60 };
+  const daemonUp: DaemonStatus = {
+    running: true,
+    socketPath: "/x.sock",
+    pid: 42,
+    uptimeSeconds: 60,
+  };
 
   beforeEach(async () => {
     root = await mkdtemp(join(tmpdir(), "oxagen-view-"));
@@ -252,16 +292,32 @@ describe("collectAgentViewData", () => {
       state: "done",
     });
     const w = store.openWriter(done);
-    w.append({ type: "session.start", title: "ship the audit view", prompt: "p", cwd: root, mode: "once", owner: "worker", pid: process.pid });
+    w.append({
+      type: "session.start",
+      title: "ship the audit view",
+      prompt: "p",
+      cwd: root,
+      mode: "once",
+      owner: "worker",
+      pid: process.pid,
+    });
     w.append({ type: "message.end", text: "Shipped it.", turn: 1 });
-    w.patchMeta({ state: "done", turns: 1, usage: { inputTokens: 100, outputTokens: 50, costUsd: 0.25 } });
+    w.patchMeta({
+      state: "done",
+      turns: 1,
+      usage: { inputTokens: 100, outputTokens: 50, costUsd: 0.25 },
+    });
     await w.flush();
 
     const data = await collectAgentViewData({
       cwd: root,
       now,
       store,
-      auth: resolveAuthStatus({ token: "t", orgSlug: "acme", workspaceSlug: "prod" }),
+      auth: resolveAuthStatus({
+        token: "t",
+        orgSlug: "acme",
+        workspaceSlug: "prod",
+      }),
       probeCodeGraph: async () => codeGraphReady,
       probeDaemon: async () => daemonUp,
     });
@@ -272,7 +328,9 @@ describe("collectAgentViewData", () => {
     expect(data.rollup.total).toBe(1);
     expect(data.rollup.fleetRuns).toBe(1);
     expect(data.rollup.costUsdTotal).toBeCloseTo(0.25);
-    expect(data.activity.some((l) => l.text.includes("Shipped it."))).toBe(true);
+    expect(data.activity.some((l) => l.text.includes("Shipped it."))).toBe(
+      true,
+    );
     expect(data.codeGraph).toEqual(codeGraphReady);
     expect(data.daemon).toEqual(daemonUp);
     expect(data.auth.mode).toBe("platform");
@@ -366,7 +424,14 @@ describe("probeCodeGraphAt (real DuckDB read path)", () => {
     await store.replaceFile("/some/other/repo", "x.ts", {
       contentHash: "h",
       nodes: [
-        { id: "f9", kind: "file", name: "x.ts", path: "x.ts", range: { start: 1, end: 2 }, language: "ts" },
+        {
+          id: "f9",
+          kind: "file",
+          name: "x.ts",
+          path: "x.ts",
+          range: { start: 1, end: 2 },
+          language: "ts",
+        },
       ],
       edges: [],
     });

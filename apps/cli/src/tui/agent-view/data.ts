@@ -28,7 +28,11 @@
 import { existsSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { SessionEvent, SessionState, TurnUsage } from "../../sessions/events.js";
+import type {
+  SessionEvent,
+  SessionState,
+  TurnUsage,
+} from "../../sessions/events.js";
 import {
   isActiveState,
   openFleetStore,
@@ -38,7 +42,12 @@ import {
 import { fleetRoot, projectRoot } from "../../sessions/paths.js";
 import { defaultCodeGraphDbPath } from "../../daemon/code-graph/store.js";
 import { DaemonClient } from "../../daemon/client.js";
-import { getOrgId, getToken, getWorkspaceId, readConfig } from "../../lib/config.js";
+import {
+  getOrgId,
+  getToken,
+  getWorkspaceId,
+  readConfig,
+} from "../../lib/config.js";
 import {
   toAggregateLine,
   type AggregateEmphasis,
@@ -143,7 +152,10 @@ export interface SessionRow {
 }
 
 /** Distill one on-disk session into an audit row. Pure. */
-export function summarizeSession(meta: SessionMetaView, now: number): SessionRow {
+export function summarizeSession(
+  meta: SessionMetaView,
+  now: number,
+): SessionRow {
   const end =
     meta.endedAt ?? (isActiveState(meta.derivedState) ? now : meta.updatedAt);
   return {
@@ -159,7 +171,9 @@ export function summarizeSession(meta: SessionMetaView, now: number): SessionRow
     durationMs: Math.max(0, end - meta.createdAt),
     usage: meta.usage,
     ...(meta.summary !== undefined ? { summary: meta.summary } : {}),
-    ...(meta.lastActivity !== undefined ? { lastActivity: meta.lastActivity } : {}),
+    ...(meta.lastActivity !== undefined
+      ? { lastActivity: meta.lastActivity }
+      : {}),
     updatedAt: meta.updatedAt,
   };
 }
@@ -190,7 +204,10 @@ function startOfLocalDay(now: number): number {
 }
 
 /** Aggregate rows into the overview rollup. Pure. */
-export function rollupSessions(rows: readonly SessionRow[], now: number): SessionRollup {
+export function rollupSessions(
+  rows: readonly SessionRow[],
+  now: number,
+): SessionRollup {
   const byState: StateCounts = {
     running: 0,
     waiting: 0,
@@ -219,7 +236,8 @@ export function rollupSessions(rows: readonly SessionRow[], now: number): Sessio
     if (r.owner === "worker") fleetRuns += 1;
     else interactiveRuns += 1;
     if (r.live) active += 1;
-    if (lastActivityAt === null || r.updatedAt > lastActivityAt) lastActivityAt = r.updatedAt;
+    if (lastActivityAt === null || r.updatedAt > lastActivityAt)
+      lastActivityAt = r.updatedAt;
   }
 
   return {
@@ -325,7 +343,9 @@ export interface CollectDeps {
  * IO probes default to the live implementations but are injectable so unit
  * tests exercise the aggregation without DuckDB or a socket.
  */
-export async function collectAgentViewData(deps: CollectDeps): Promise<AgentViewData> {
+export async function collectAgentViewData(
+  deps: CollectDeps,
+): Promise<AgentViewData> {
   const now = deps.now ?? Date.now();
   const root = projectRoot(deps.cwd);
   const store = deps.store ?? openFleetStore(fleetRoot(deps.cwd));
@@ -361,7 +381,9 @@ export async function collectAgentViewData(deps: CollectDeps): Promise<AgentView
   const codeGraph = deps.probeCodeGraph
     ? await deps.probeCodeGraph()
     : await defaultProbeCodeGraph(deps.cwd);
-  const daemon = deps.probeDaemon ? await deps.probeDaemon() : await defaultProbeDaemon();
+  const daemon = deps.probeDaemon
+    ? await deps.probeDaemon()
+    : await defaultProbeDaemon();
 
   return {
     auth,
@@ -486,10 +508,16 @@ async function queryCodeGraphStats(
   dbPath: string,
 ): Promise<CodeGraphStatus> {
   const conn = db.connect();
-  const query = (sql: string, params: unknown[] = []): Promise<Record<string, unknown>[]> =>
+  const query = (
+    sql: string,
+    params: unknown[] = [],
+  ): Promise<Record<string, unknown>[]> =>
     new Promise((resolve, reject) => {
-      conn.all(sql, ...params, (err: Error | null, rows: Record<string, unknown>[]) =>
-        err ? reject(err) : resolve(rows ?? []),
+      conn.all(
+        sql,
+        ...params,
+        (err: Error | null, rows: Record<string, unknown>[]) =>
+          err ? reject(err) : resolve(rows ?? []),
       );
     });
 
@@ -534,7 +562,9 @@ async function queryCodeGraphStats(
       root,
       files: Number(chosen["files"] ?? 0),
       symbols: Number(chosen["symbols"] ?? 0),
-      edges: Number((edgeRows[0] as Record<string, unknown> | undefined)?.["cnt"] ?? 0),
+      edges: Number(
+        (edgeRows[0] as Record<string, unknown> | undefined)?.["cnt"] ?? 0,
+      ),
       embeddedFiles: Number(chosen["embedded"] ?? 0),
       lastIndexedAt: last == null ? null : Number(last),
     };
@@ -553,13 +583,10 @@ export function formatCount(n: number): string {
   return `${(n / 1_000_000).toFixed(1)}M`;
 }
 
-/** A compact USD amount: `<$0.01` for dust, `$0.42`, `$12.30`, `$1,240`. */
-export function formatUsd(n: number): string {
-  if (n <= 0) return "$0.00";
-  if (n < 0.01) return "<$0.01";
-  if (n < 1000) return `$${n.toFixed(2)}`;
-  return `$${Math.round(n).toLocaleString()}`;
-}
+// USD formatting: the canonical engine formatter (re-exported so this
+// dashboard renders costs identically to every other repl/tui panel — this
+// file previously carried a drifted hand-rolled copy).
+export { formatUsd } from "../../agent/model-router.js";
 
 /** Relative age: `just now` / `12s ago` / `5m ago` / `3h ago` / `2d ago`. */
 export function formatAge(ts: number, now: number): string {
