@@ -15,6 +15,11 @@ import {
 } from "./_sandbox-session";
 import { driverNetworkForMode, resolveRunTemplate } from "./_sandbox-template";
 import { injectEnvironmentSecrets } from "./_environment-env";
+import {
+  composeRepoCloneScript,
+  type SessionRepoRef,
+} from "./_sandbox-repos";
+import { resolveGitHubToken } from "@oxagen/github/workspace-token";
 
 export type { AgentSandboxStartInput, AgentSandboxStartOutput };
 
@@ -50,6 +55,38 @@ export async function agentSandboxStartHandler(
     ? resolved!.environment.id
     : input.environmentId;
 
+  // ── Multi-repo clone (server-composed) ───────────────────────────────────────
+  // When repos[] is present we resolve the workspace's GitHub token, compose a
+  // deterministic clone script server-side, and prepend it (via &&) to any
+  // user/preset setupCmd so it runs once at create time. The token is resolved
+  // through the blessed workspace chain and delivered ONLY via setupEnv as
+  // $GITHUB_TOKEN — it never appears in the script text or the persisted metadata.
+  const repos: SessionRepoRef[] = (input.repos ?? []).map((r) => ({
+    owner: r.owner,
+    repo: r.repo,
+    ...(r.branch ? { branch: r.branch } : {}),
+  }));
+  let githubToken: string | undefined;
+  if (repos.length > 0) {
+    try {
+      githubToken = await resolveGitHubToken(ctx);
+    } catch {
+      // No workspace GitHub connection resolved — still clone public repos
+      // anonymously. A private repo then fails loudly at clone time (runner 422).
+      githubToken = undefined;
+    }
+  }
+  const cloneScript = composeRepoCloneScript(repos, {
+    hasToken: Boolean(githubToken),
+  });
+  // Clone script first, then the caller's setupCmd — a failed clone short-circuits
+  // the && chain and exits non-zero, so provisioning fails instead of returning a
+  // half-provisioned sandbox.
+  const composedSetupCmd =
+    [cloneScript, input.setupCmd]
+      .filter((s): s is string => Boolean(s))
+      .join(" && ") || undefined;
+
   const meta: SessionMeta = {
     memoryMb,
     ttlSeconds: input.ttlSeconds,
@@ -71,12 +108,13 @@ export async function agentSandboxStartHandler(
         }
       : {}),
   };
-  // setupCmd runs at CREATE time, before any agent.sandbox.exec — so it must
-  // see the same trusted env (template literal_env → environment vault) every
-  // later exec sees, or a private-repo clone in setup has no credential
-  // channel at all (git then dies trying to prompt for a username). There is
-  // no caller env at start time, so only the trusted sources are merged.
-  const setupEnv = input.setupCmd
+  // The composed setupCmd (repo clone script and/or the caller's setupCmd) runs
+  // at CREATE time, before any agent.sandbox.exec — so it must see the same
+  // trusted env (template literal_env → environment vault) every later exec sees,
+  // or a private-repo clone in setup has no credential channel at all (git then
+  // dies trying to prompt for a username). There is no caller env at start time,
+  // so only the trusted sources are merged.
+  let setupEnv = composedSetupCmd
     ? (
         await injectEnvironmentSecrets(ctx, environmentId, undefined, {
           selection: template?.secretSelection,
@@ -84,6 +122,13 @@ export async function agentSandboxStartHandler(
         })
       ).env
     : undefined;
+  // Deliver the resolved GitHub token to the clone script through the trusted
+  // setup_env channel as $GITHUB_TOKEN (referenced, never interpolated, in the
+  // script). Placed on top so it wins over any same-named vault value for the
+  // clone. Never persisted on the session metadata.
+  if (githubToken) {
+    setupEnv = { ...(setupEnv ?? {}), GITHUB_TOKEN: githubToken };
+  }
 
   const spec: SandboxSessionSpec = {
     image: input.image,
@@ -100,9 +145,16 @@ export async function agentSandboxStartHandler(
     network,
     orgId: ctx.orgId,
     workspaceId: ctx.workspaceId,
-    setupCmd: input.setupCmd,
+    setupCmd: composedSetupCmd,
     ...(setupEnv ? { setupEnv } : {}),
   };
+
+  // Persist the requested repos (owner/repo/branch ONLY — never the token) into
+  // the session metadata jsonb under `repos`, which list_sandboxes surfaces per
+  // row. Widened locally so this typechecks whether or not SessionMeta has yet
+  // grown the field in _sandbox-session.ts.
+  const metadata: SessionMeta & { repos?: SessionRepoRef[] } =
+    repos.length > 0 ? { ...meta, repos } : meta;
 
   // ── Reuse path ──────────────────────────────────────────────────────────────
   if (input.sessionKey) {
@@ -144,7 +196,7 @@ export async function agentSandboxStartHandler(
     driver: driver.name,
     image: input.image,
     sandboxId: handle.sandboxId,
-    metadata: meta,
+    metadata,
     expiresAt,
   });
 

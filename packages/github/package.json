@@ -6,7 +6,8 @@
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./workspace-token": "./src/workspace-token.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -15,7 +16,10 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@oxagen/agent-engine": "workspace:*"
+    "@oxagen/agent-engine": "workspace:*",
+    "@oxagen/crypto": "workspace:*",
+    "@oxagen/database": "workspace:*",
+    "drizzle-orm": "0.45.2"
   },
   "devDependencies": {
     "typescript": "6.0.3",
