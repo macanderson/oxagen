@@ -198,11 +198,14 @@ const EXT_ICON: Record<string, LucideIcon> = {
   rar: FileArchive, "7z": FileArchive,
 };
 
-/** Pick a monochromatic icon for a file by extension (case-insensitive). */
-function fileIconFor(name: string): LucideIcon {
+/** Extension key into EXT_ICON (case-insensitive); "" when there is no usable
+ * extension (or a bare dotfile like ".env"), which falls back to the generic
+ * icon at the lookup site. Returning the key (not the component) keeps the
+ * icon selection a static-map lookup in render, which react-hooks/
+ * static-components can verify never creates a new component. */
+function fileExtKey(name: string): string {
   const dot = name.lastIndexOf(".");
-  if (dot <= 0) return File; // no ext, or a bare dotfile like ".env" → generic
-  return EXT_ICON[name.slice(dot + 1).toLowerCase()] ?? File;
+  return dot <= 0 ? "" : name.slice(dot + 1).toLowerCase();
 }
 
 // Compact indentation so deep paths fit phone-width screens; ≥44px touch
@@ -344,7 +347,7 @@ function FileRow({
   const { onFileSelect } = interactions;
   const ignored = node.gitignored || inheritedIgnored;
   const muted = ignored || isHidden(node.name);
-  const FileIcon = fileIconFor(node.name);
+  const FileIcon = EXT_ICON[fileExtKey(node.name)] ?? File;
 
   const name = (
     <>
