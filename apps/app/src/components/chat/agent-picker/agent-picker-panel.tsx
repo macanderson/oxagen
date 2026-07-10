@@ -1,0 +1,465 @@
+"use client";
+import * as React from "react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import {
+  ArrowLeft,
+  Bot,
+  Check,
+  Code2,
+  MessageSquare,
+  Shield,
+  Star,
+} from "lucide-react";
+import { fadeInUp, staggerContainer, transition } from "@oxagen/ui/lib/motion";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { SearchInput } from "@/components/ui/search-input";
+import { EntityAvatar } from "@/components/avatar/entity-avatar";
+import { RepoSelector, type RepoOption } from "../repo-selector";
+import {
+  EnvironmentSelector,
+  type EnvironmentOption,
+} from "../environment-selector";
+import { CapabilityStrip } from "./capability-strip";
+import type { AgentOption } from "./agent-picker-types";
+import type { AgentSelectionApply } from "./chat-selection-context";
+
+/**
+ * agent-picker-panel.tsx — the shared agent-selection surface, presented either
+ * as a composer popover (`variant="popover"`) or as an empty-state gallery hero
+ * (`variant="gallery"`). Lists the workspace's agents with avatar, type, a
+ * one-line description, and a capability strip; a star per row sets the user's
+ * default. Choosing a code agent slides in an inline repo + environment setup
+ * step; choosing a chat agent (or the Default assistant) applies immediately.
+ */
+
+export interface AgentPickerPanelProps {
+  agents: AgentOption[];
+  repos: RepoOption[];
+  environments: EnvironmentOption[];
+  /** Prefill for a code agent's repo session (a `RepoOption.key`). */
+  defaultRepoKey: string | null;
+  /** Prefill for a code agent's environment session. */
+  defaultEnvId: string | null;
+  /** The workspace user's current default agent (agt_… public id), or null. */
+  defaultAgentId: string | null;
+  /** Toggle the default agent. Omitted ⇒ the star affordance is hidden. */
+  onSetDefaultAgent?: (agentId: string | null) => void;
+  /** The currently selected agent (from the shared store). */
+  selectedAgentId: string | null;
+  /** Current code-session repo/env selection, to preselect the setup step. */
+  selectedRepoKey: string | null;
+  selectedEnvId: string | null;
+  /** Apply an agent (+ optional repo/env) to the composer. */
+  onApply: (sel: AgentSelectionApply) => void;
+  /** Called after a selection is applied — popover closes / gallery collapses. */
+  onDismiss?: () => void;
+  variant: "popover" | "gallery";
+  className?: string;
+}
+
+/** Small pill marking an agent as code- or chat-capable. */
+function KindBadge({ isCode }: { isCode: boolean }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex shrink-0 items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-medium leading-none",
+        isCode
+          ? "border-primary/30 bg-primary/10 text-primary"
+          : "border-border bg-background text-muted-foreground",
+      )}
+    >
+      {isCode ? (
+        <Code2 className="size-2.5" />
+      ) : (
+        <MessageSquare className="size-2.5" />
+      )}
+      {isCode ? "code" : "chat"}
+    </span>
+  );
+}
+
+/** Pill marking a platform-managed agent (vs. a user-authored one). */
+function ManagedBadge() {
+  return (
+    <span className="inline-flex shrink-0 items-center gap-1 rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] font-medium leading-none text-muted-foreground">
+      <Shield className="size-2.5" />
+      managed
+    </span>
+  );
+}
+
+function agentMatches(agent: AgentOption, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  return (
+    agent.name.toLowerCase().includes(q) ||
+    (agent.description?.toLowerCase().includes(q) ?? false) ||
+    (agent.summary?.toLowerCase().includes(q) ?? false)
+  );
+}
+
+export function AgentPickerPanel({
+  agents,
+  repos,
+  environments,
+  defaultRepoKey,
+  defaultEnvId,
+  defaultAgentId,
+  onSetDefaultAgent,
+  selectedAgentId,
+  selectedRepoKey,
+  selectedEnvId,
+  onApply,
+  onDismiss,
+  variant,
+  className,
+}: AgentPickerPanelProps) {
+  const reduce = useReducedMotion();
+  const [query, setQuery] = React.useState("");
+  // Inline code-agent setup step: when set, the repo/env sub-view is shown for
+  // the pending agent instead of the list.
+  const [setupAgent, setSetupAgent] = React.useState<AgentOption | null>(null);
+  const [setupRepoKey, setSetupRepoKey] = React.useState<string | null>(null);
+  const [setupEnvId, setSetupEnvId] = React.useState<string | null>(null);
+
+  const filtered = React.useMemo(
+    () => agents.filter((a) => agentMatches(a, query)),
+    [agents, query],
+  );
+
+  // Roving focus over the rows (index 0 = Default assistant, 1..N = agents).
+  const rowRefs = React.useRef<Array<HTMLButtonElement | null>>([]);
+  const focusRow = React.useCallback((index: number) => {
+    const rows = rowRefs.current.filter(Boolean) as HTMLButtonElement[];
+    if (rows.length === 0) return;
+    const clamped = ((index % rows.length) + rows.length) % rows.length;
+    rows[clamped]?.focus();
+  }, []);
+
+  const applyAgent = React.useCallback(
+    (agent: AgentOption | null) => {
+      if (agent && agent.isCode) {
+        // Prefill the setup step from the live selection, else workspace defaults.
+        setSetupAgent(agent);
+        setSetupRepoKey(selectedRepoKey ?? defaultRepoKey);
+        setSetupEnvId(selectedEnvId ?? defaultEnvId);
+        return;
+      }
+      onApply({ agentId: agent?.agentId ?? null });
+      onDismiss?.();
+    },
+    [
+      onApply,
+      onDismiss,
+      selectedRepoKey,
+      selectedEnvId,
+      defaultRepoKey,
+      defaultEnvId,
+    ],
+  );
+
+  const confirmSetup = React.useCallback(() => {
+    if (!setupAgent) return;
+    onApply({
+      agentId: setupAgent.agentId,
+      repoKey: setupRepoKey,
+      envId: setupEnvId,
+    });
+    onDismiss?.();
+  }, [setupAgent, setupRepoKey, setupEnvId, onApply, onDismiss]);
+
+  const handleListKeyDown = React.useCallback(
+    (e: React.KeyboardEvent<HTMLDivElement>) => {
+      const rows = rowRefs.current.filter(Boolean) as HTMLButtonElement[];
+      const activeIndex = rows.indexOf(
+        document.activeElement as HTMLButtonElement,
+      );
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        focusRow(activeIndex < 0 ? 0 : activeIndex + 1);
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        focusRow(activeIndex < 0 ? rows.length - 1 : activeIndex - 1);
+      }
+    },
+    [focusRow],
+  );
+
+  const setupBusy = setupAgent !== null;
+  const canConfirm = Boolean(setupRepoKey && setupEnvId);
+
+  return (
+    <div
+      className={cn(
+        "flex min-h-0 flex-col",
+        variant === "popover" ? "w-[22rem] max-w-[92vw]" : "w-full",
+        className,
+      )}
+      data-agent-picker={variant}
+    >
+      <AnimatePresence mode="wait" initial={false}>
+        {setupBusy ? (
+          <motion.div
+            key="setup"
+            initial={reduce ? undefined : { opacity: 0, x: 8 }}
+            animate={reduce ? undefined : { opacity: 1, x: 0 }}
+            exit={reduce ? undefined : { opacity: 0, x: 8 }}
+            transition={transition.base}
+            className="flex flex-col gap-3 p-3"
+          >
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Back to agent list"
+                onClick={() => setSetupAgent(null)}
+              >
+                <ArrowLeft className="size-4" />
+              </Button>
+              <div className="flex min-w-0 items-center gap-2">
+                <EntityAvatar
+                  value={setupAgent.avatarUrl}
+                  name={setupAgent.name}
+                  size="sm"
+                  shape="square"
+                />
+                <span className="truncate text-sm font-medium">
+                  {setupAgent.name}
+                </span>
+                <KindBadge isCode />
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Where should this agent work? Pick the repository and environment
+              for this session.
+            </p>
+            <div className="flex flex-col gap-2">
+              <RepoSelector
+                repositories={repos}
+                selectedKey={setupRepoKey}
+                onSelectRepo={(repo) => setSetupRepoKey(repo.key)}
+                className="w-full sm:w-full"
+                ariaLabel="Session repository"
+              />
+              <EnvironmentSelector
+                environments={environments}
+                selectedEnvId={setupEnvId}
+                onSelectEnv={(id) => setSetupEnvId(id)}
+                className="w-full sm:w-full"
+                ariaLabel="Session environment"
+              />
+            </div>
+            {repos.length === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                Connect a GitHub repository to run this agent against your code.
+              </p>
+            ) : null}
+            <Button
+              variant="primary"
+              size="sm"
+              disabled={!canConfirm}
+              onClick={confirmSetup}
+              className="w-full"
+            >
+              Chat with {setupAgent.name}
+            </Button>
+          </motion.div>
+        ) : (
+          <motion.div
+            key="list"
+            initial={reduce ? undefined : { opacity: 0 }}
+            animate={reduce ? undefined : { opacity: 1 }}
+            exit={reduce ? undefined : { opacity: 0 }}
+            transition={transition.base}
+            className="flex min-h-0 flex-col"
+          >
+            <div className="border-b border-border p-2">
+              <SearchInput
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onClear={() => setQuery("")}
+                placeholder="Search agents"
+                aria-label="Search agents"
+                onKeyDown={(e) => {
+                  if (e.key === "ArrowDown") {
+                    e.preventDefault();
+                    focusRow(0);
+                  }
+                }}
+              />
+            </div>
+            <motion.div
+              role="listbox"
+              aria-label="Agents"
+              onKeyDown={handleListKeyDown}
+              variants={reduce ? undefined : staggerContainer}
+              initial={reduce ? undefined : "hidden"}
+              animate={reduce ? undefined : "visible"}
+              className={cn(
+                "flex min-h-0 flex-col gap-0.5 overflow-y-auto p-1.5",
+                variant === "popover" ? "max-h-[24rem]" : "max-h-[26rem]",
+              )}
+            >
+              <AgentRow
+                ref={(el) => {
+                  rowRefs.current[0] = el;
+                }}
+                reduce={reduce}
+                icon={<Bot className="size-5 text-muted-foreground" />}
+                name="Default assistant"
+                description="General chat — no repository tools"
+                isSelected={selectedAgentId === null}
+                onSelect={() => applyAgent(null)}
+              />
+              {filtered.map((agent, i) => {
+                const isDefault = defaultAgentId === agent.agentId;
+                return (
+                  <AgentRow
+                    key={agent.agentId}
+                    ref={(el) => {
+                      rowRefs.current[i + 1] = el;
+                    }}
+                    reduce={reduce}
+                    avatar={
+                      <EntityAvatar
+                        value={agent.avatarUrl}
+                        name={agent.name}
+                        size="md"
+                        shape="square"
+                      />
+                    }
+                    name={agent.name}
+                    description={agent.summary ?? agent.description}
+                    isCode={agent.isCode}
+                    managed={agent.managed}
+                    toolRefs={agent.toolRefs}
+                    isSelected={selectedAgentId === agent.agentId}
+                    isDefault={isDefault}
+                    onSelect={() => applyAgent(agent)}
+                    onToggleDefault={
+                      onSetDefaultAgent
+                        ? () =>
+                            onSetDefaultAgent(isDefault ? null : agent.agentId)
+                        : undefined
+                    }
+                  />
+                );
+              })}
+              {filtered.length === 0 ? (
+                <p className="px-3 py-6 text-center text-xs text-muted-foreground">
+                  No agents match “{query}”.
+                </p>
+              ) : null}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+interface AgentRowProps {
+  reduce: boolean | null;
+  avatar?: React.ReactNode;
+  icon?: React.ReactNode;
+  name: string;
+  description: string | null;
+  isCode?: boolean;
+  managed?: boolean;
+  toolRefs?: AgentOption["toolRefs"];
+  isSelected: boolean;
+  isDefault?: boolean;
+  onSelect: () => void;
+  onToggleDefault?: () => void;
+}
+
+const AgentRow = React.forwardRef<HTMLButtonElement, AgentRowProps>(
+  function AgentRow(
+    {
+      reduce,
+      avatar,
+      icon,
+      name,
+      description,
+      isCode,
+      managed,
+      toolRefs,
+      isSelected,
+      isDefault,
+      onSelect,
+      onToggleDefault,
+    },
+    ref,
+  ) {
+    const Row = reduce ? "div" : motion.div;
+    return (
+      <Row
+        {...(reduce ? {} : { variants: fadeInUp })}
+        className="group relative flex items-start gap-2 rounded-lg"
+      >
+        <button
+          ref={ref}
+          type="button"
+          role="option"
+          aria-selected={isSelected}
+          onClick={onSelect}
+          className={cn(
+            "flex min-w-0 flex-1 items-start gap-3 rounded-lg px-2.5 py-2 text-left transition-colors duration-[var(--motion-micro)]",
+            "hover:bg-muted focus-visible:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            isSelected && "bg-muted/60",
+          )}
+        >
+          <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center">
+            {avatar ?? icon}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="flex items-center gap-1.5">
+              <span className="truncate text-sm font-medium text-foreground">
+                {name}
+              </span>
+              {isCode !== undefined && <KindBadge isCode={isCode} />}
+              {managed && <ManagedBadge />}
+              {isSelected && (
+                <Check className="size-3.5 shrink-0 text-primary" />
+              )}
+            </span>
+            {description ? (
+              <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                {description}
+              </span>
+            ) : null}
+            {toolRefs && toolRefs.length > 0 ? (
+              <CapabilityStrip toolRefs={toolRefs} className="mt-1" />
+            ) : null}
+          </span>
+        </button>
+        {onToggleDefault ? (
+          <button
+            type="button"
+            aria-pressed={Boolean(isDefault)}
+            aria-label={
+              isDefault
+                ? `Remove ${name} as default assistant`
+                : `Set ${name} as default assistant`
+            }
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleDefault();
+            }}
+            className={cn(
+              "absolute right-2 top-2 inline-flex items-center gap-1 rounded px-1.5 py-1 text-[10px] font-medium leading-none transition-opacity duration-[var(--motion-micro)]",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              isDefault
+                ? "text-primary opacity-100"
+                : "text-muted-foreground opacity-0 hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100",
+            )}
+          >
+            <Star className={cn("size-3.5", isDefault && "fill-current")} />
+            {isDefault ? "Default" : null}
+          </button>
+        ) : null}
+      </Row>
+    );
+  },
+);
