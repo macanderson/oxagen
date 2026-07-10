@@ -20,7 +20,15 @@ import type { MemoryProvider } from "../ports";
 import type { ContextRetrieval } from "../trace/types";
 import { localize } from "../localize";
 import { loadPrior, renderPrior } from "../priors";
-import { filterRecall, tagRecall, type RecallItem } from "../memory/applicability";
+import {
+  filterRecall,
+  tagRecall,
+  type RecallItem,
+} from "../memory/applicability";
+import { CODEY_EXT, extractCandidates } from "../internal/extract-candidates";
+
+// Re-exported for existing consumers (tests import it from this module).
+export { extractCandidates };
 
 export interface EnhanceOptions {
   prompt: string;
@@ -118,28 +126,6 @@ export interface EnhanceResult {
   retrieval: ContextRetrieval;
 }
 
-const CODEY_EXT =
-  /\.(ts|tsx|js|jsx|mjs|cjs|json|md|mdx|css|scss|sql|py|go|rs|sh|yml|yaml|toml)$/;
-
-/**
- * Capitalized prose words that pattern-match the CamelCase symbol heuristic but
- * are almost never the symbol the user means. Mining them injects noise — e.g.
- * "Fix the validator" once resolved `Fix` to jquery's `fixInput` and burned
- * context tokens on irrelevant definitions. Lowercase comparison so `FIX`/`Fix`
- * both drop; real symbols like `FixDecimalInputMixin` are unaffected (full-token
- * match only).
- */
-const PROSE_STOPWORDS = new Set([
-  "add", "added", "allow", "allows", "also", "and", "any", "are", "because",
-  "before", "but", "can", "change", "changed", "confirm", "could", "create",
-  "description", "does", "example", "expected", "fix", "fixed", "for", "from",
-  "have", "here", "how", "however", "instead", "into", "issue", "make", "may",
-  "must", "new", "not", "note", "now", "only", "please", "problem", "remove",
-  "replace", "should", "since", "some", "support", "that", "the", "then",
-  "there", "therefore", "this", "update", "use", "used", "using", "when",
-  "where", "which", "while", "will", "with", "would", "you",
-]);
-
 /**
  * Literal candidates resolved at or below this count → the prompt is probably
  * conceptual (names no exact symbol/path), so fall back to one embedding
@@ -150,48 +136,18 @@ const SEMANTIC_FALLBACK_MAX_RESOLVED = 1;
 /** Bounded — a few files to orient the agent, not a second exploration budget. */
 const SEMANTIC_FALLBACK_LIMIT = 5;
 
-/**
- * Pull likely code references out of a natural-language prompt: backticked spans,
- * file paths, and identifier-shaped tokens (CamelCase / snake_case / dotted).
- */
-export function extractCandidates(prompt: string): { symbols: string[]; paths: string[] } {
-  const symbols = new Set<string>();
-  const paths = new Set<string>();
-
-  // Backticked spans are the strongest signal — the user is quoting code.
-  for (const m of prompt.matchAll(/`([^`]+)`/g)) {
-    const inner = (m[1] ?? "").trim();
-    if (!inner) continue;
-    if (inner.includes("/") || CODEY_EXT.test(inner)) paths.add(inner);
-    else if (/^[\w.$]+$/.test(inner)) symbols.add(inner);
-  }
-
-  // Bare file paths and identifiers in the surrounding prose. Trailing
-  // sentence punctuation is not part of the identifier — "ASCIIUsernameValidator."
-  // at the end of a sentence must still mine the symbol.
-  for (const m of prompt.matchAll(/[A-Za-z0-9_./-]+/g)) {
-    const tok = m[0].replace(/[.]+$/, "");
-    if (!tok) continue;
-    if (CODEY_EXT.test(tok) || (tok.includes("/") && tok.length > 3)) {
-      paths.add(tok.replace(/^\.\//, ""));
-    } else if (
-      (/^[A-Z][A-Za-z0-9]{2,}$/.test(tok) || /^[a-z]+_[a-z0-9_]+$/.test(tok)) &&
-      !PROSE_STOPWORDS.has(tok.toLowerCase())
-    ) {
-      // CamelCase (Foo, GraphNode) or snake_case (build_tools) — likely symbols.
-      symbols.add(tok);
-    }
-  }
-
-  return { symbols: [...symbols], paths: [...paths] };
-}
-
 /** True when a code-graph result string represents a real hit (not a "No …" miss). */
 function isHit(result: string): boolean {
-  return result.length > 0 && !/^No (symbols?|file) /.test(result) && !/^Nothing imports/.test(result);
+  return (
+    result.length > 0 &&
+    !/^No (symbols?|file) /.test(result) &&
+    !/^Nothing imports/.test(result)
+  );
 }
 
-export async function enhancePrompt(opts: EnhanceOptions): Promise<EnhanceResult> {
+export async function enhancePrompt(
+  opts: EnhanceOptions,
+): Promise<EnhanceResult> {
   const { prompt, codeGraph, memory } = opts;
   const max = opts.maxSymbols ?? 6;
   const startedAt = Date.now();
@@ -211,7 +167,9 @@ export async function enhancePrompt(opts: EnhanceOptions): Promise<EnhanceResult
   // enhance budget, it never extends it.
 
   const deadline =
-    opts.timeoutMs && opts.timeoutMs > 0 ? startedAt + opts.timeoutMs : Infinity;
+    opts.timeoutMs && opts.timeoutMs > 0
+      ? startedAt + opts.timeoutMs
+      : Infinity;
   const remaining = (): number =>
     deadline === Infinity ? Number.MAX_SAFE_INTEGER : deadline - Date.now();
 
@@ -294,7 +252,11 @@ export async function enhancePrompt(opts: EnhanceOptions): Promise<EnhanceResult
 
       // Filter recall items: stage 1 (lexical), stage 2 (scorer=null for now).
       // Candidate files come from the localization pass above — never re-localize.
-      const filtered = await filterRecall(items, { issue: prompt, candidateFiles: localizedFiles }, null);
+      const filtered = await filterRecall(
+        items,
+        { issue: prompt, candidateFiles: localizedFiles },
+        null,
+      );
       const taggedRecall = tagRecall(filtered);
       memoryContext = taggedRecall;
       filteredRecall = true;
@@ -314,7 +276,8 @@ export async function enhancePrompt(opts: EnhanceOptions): Promise<EnhanceResult
       for (const q of opts.extraQueries ?? []) {
         const t = q.trim();
         if (!t) continue;
-        if (t.includes("/") || CODEY_EXT.test(t)) pathSet.add(t.replace(/^\.\//, ""));
+        if (t.includes("/") || CODEY_EXT.test(t))
+          pathSet.add(t.replace(/^\.\//, ""));
         else if (/^[\w.$]+$/.test(t)) symSet.add(t);
         // Multi-word topics that aren't identifiers are skipped — they won't resolve.
       }
@@ -361,18 +324,26 @@ export async function enhancePrompt(opts: EnhanceOptions): Promise<EnhanceResult
         const symsPairs = await Promise.all(
           pathCandidates.map(async (p) => ({
             p,
-            syms: await queryWithin(codeGraph.query("file_symbols", p, 12), symsBudget),
+            syms: await queryWithin(
+              codeGraph.query("file_symbols", p, 12),
+              symsBudget,
+            ),
           })),
         );
 
-        const hitPaths = symsPairs.filter(({ syms }) => isHit(syms)).map(({ p }) => p);
+        const hitPaths = symsPairs
+          .filter(({ syms }) => isHit(syms))
+          .map(({ p }) => p);
         const depsBudget = remaining();
         const depsPairs =
           hitPaths.length > 0 && depsBudget > 0
             ? await Promise.all(
                 hitPaths.map(async (p) => ({
                   p,
-                  deps: await queryWithin(codeGraph.query("dependents", p, 8), depsBudget),
+                  deps: await queryWithin(
+                    codeGraph.query("dependents", p, 8),
+                    depsBudget,
+                  ),
                 })),
               )
             : [];
@@ -393,7 +364,10 @@ export async function enhancePrompt(opts: EnhanceOptions): Promise<EnhanceResult
       // configurations for the cli app") that names no symbol or path
       // directly. Embed the raw prompt once and cosine-rank file nodes so the
       // agent gets real context instead of falling through to blind grep.
-      if (resolved.length <= SEMANTIC_FALLBACK_MAX_RESOLVED && remaining() > 0) {
+      if (
+        resolved.length <= SEMANTIC_FALLBACK_MAX_RESOLVED &&
+        remaining() > 0
+      ) {
         const semanticHits = await queryWithin(
           codeGraph.query("semantic_search", prompt, SEMANTIC_FALLBACK_LIMIT),
           remaining(),
@@ -420,9 +394,9 @@ export async function enhancePrompt(opts: EnhanceOptions): Promise<EnhanceResult
   }
   if (hasMemory && memoryContext) {
     parts.push(
-      (filteredRecall
+      filteredRecall
         ? memoryContext
-        : "## Recalled context (from prior sessions)\n" + memoryContext),
+        : "## Recalled context (from prior sessions)\n" + memoryContext,
     );
   }
 
@@ -435,7 +409,9 @@ export async function enhancePrompt(opts: EnhanceOptions): Promise<EnhanceResult
     symbolsQueried,
     pathsQueried,
     resolved,
-    unresolved: [...symbolsQueried, ...pathsQueried].filter((c) => !resolvedSet.has(c)),
+    unresolved: [...symbolsQueried, ...pathsQueried].filter(
+      (c) => !resolvedSet.has(c),
+    ),
   };
 
   return {

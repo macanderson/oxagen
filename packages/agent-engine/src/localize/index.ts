@@ -20,6 +20,7 @@
  */
 
 import type { CodeGraphProvider } from "../types";
+import { CODEY_EXT, extractCandidates } from "../internal/extract-candidates";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -91,22 +92,6 @@ const W_SYMBOL = 2;
 const W_SEMANTIC = 1;
 const W_DEPENDENTS = 0.5;
 
-// ── Prose stopwords (mirrors prompt-enhancer to avoid noise) ──────────────────
-
-const PROSE_STOPWORDS = new Set([
-  "add", "added", "allow", "allows", "also", "and", "any", "are", "because",
-  "before", "but", "can", "change", "changed", "confirm", "could", "create",
-  "description", "does", "example", "expected", "fix", "fixed", "for", "from",
-  "have", "here", "how", "however", "instead", "into", "issue", "make", "may",
-  "must", "new", "not", "note", "now", "only", "please", "problem", "remove",
-  "replace", "should", "since", "some", "support", "that", "the", "then",
-  "there", "therefore", "this", "update", "use", "used", "using", "when",
-  "where", "which", "while", "will", "with", "would", "you",
-]);
-
-const CODEY_EXT =
-  /\.(ts|tsx|js|jsx|mjs|cjs|json|md|mdx|css|scss|sql|py|go|rs|sh|yml|yaml|toml)$/;
-
 // ── parseTraceback ────────────────────────────────────────────────────────────
 
 /**
@@ -144,8 +129,7 @@ export function parseTraceback(text: string): TracebackFrame[] {
   // ── Node.js format ────────────────────────────────────────────────────────
   // Matches:  at SymbolName (path/to/file.js:42:7)
   //           at path/to/file.js:42:7   (anonymous)
-  const nodeRe =
-    /at\s+(?:([^\s(]+)\s+\()?([^():]+\.[a-z]+):(\d+)(?::\d+)?\)?/g;
+  const nodeRe = /at\s+(?:([^\s(]+)\s+\()?([^():]+\.[a-z]+):(\d+)(?::\d+)?\)?/g;
   while ((m = nodeRe.exec(text)) !== null) {
     const symbol = m[1] ?? "<anonymous>";
     const file = m[2] ?? "";
@@ -163,43 +147,6 @@ export function parseTraceback(text: string): TracebackFrame[] {
 /** Returns true when a file path belongs to stdlib / vendor and should be skipped. */
 function isVendorFrame(file: string): boolean {
   return VENDOR_PATTERNS.some((re) => re.test(file));
-}
-
-// ── extractCandidates (local copy, aligned with prompt-enhancer) ──────────────
-
-/**
- * Pull likely code references out of natural-language text: backticked spans,
- * file paths, and identifier-shaped tokens (CamelCase / snake_case).
- * Mirrors `extractCandidates` from `evaluate/prompt-enhancer.ts` to avoid a
- * cross-module import cycle (localize must stay a leaf module).
- */
-function extractCandidates(text: string): { symbols: string[]; paths: string[] } {
-  const symbols = new Set<string>();
-  const paths = new Set<string>();
-
-  // Backticked spans are the strongest signal.
-  for (const bm of text.matchAll(/`([^`]+)`/g)) {
-    const inner = (bm[1] ?? "").trim();
-    if (!inner) continue;
-    if (inner.includes("/") || CODEY_EXT.test(inner)) paths.add(inner);
-    else if (/^[\w.$]+$/.test(inner)) symbols.add(inner);
-  }
-
-  // Bare file paths and identifiers in surrounding prose.
-  for (const tm of text.matchAll(/[A-Za-z0-9_./-]+/g)) {
-    const tok = tm[0].replace(/[.]+$/, "");
-    if (!tok) continue;
-    if (CODEY_EXT.test(tok) || (tok.includes("/") && tok.length > 3)) {
-      paths.add(tok.replace(/^\.\//, ""));
-    } else if (
-      (/^[A-Z][A-Za-z0-9]{2,}$/.test(tok) || /^[a-z]+_[a-z0-9_]+$/.test(tok)) &&
-      !PROSE_STOPWORDS.has(tok.toLowerCase())
-    ) {
-      symbols.add(tok);
-    }
-  }
-
-  return { symbols: [...symbols], paths: [...paths] };
 }
 
 // ── isHit ─────────────────────────────────────────────────────────────────────
@@ -403,7 +350,12 @@ export async function localize(
       : Infinity;
 
   try {
-    return await _localize(issue, graph, opts.semanticFallback ?? true, deadline);
+    return await _localize(
+      issue,
+      graph,
+      opts.semanticFallback ?? true,
+      deadline,
+    );
   } catch {
     return EMPTY_MAP;
   }
@@ -441,7 +393,13 @@ async function _localize(
 
   for (const frame of frames) {
     // Try to resolve via graph search (symbol name)
-    const searchResult = await safeQuery(graph, "search", frame.symbol, 4, deadline);
+    const searchResult = await safeQuery(
+      graph,
+      "search",
+      frame.symbol,
+      4,
+      deadline,
+    );
     if (isHit(searchResult)) {
       for (const p of parseGraphPaths(searchResult)) {
         const e = touch(p);
@@ -452,7 +410,13 @@ async function _localize(
     }
 
     // Also try file_symbols on the frame's file path (resolves relative paths)
-    const fileResult = await safeQuery(graph, "file_symbols", frame.file, 8, deadline);
+    const fileResult = await safeQuery(
+      graph,
+      "file_symbols",
+      frame.file,
+      8,
+      deadline,
+    );
     if (isHit(fileResult)) {
       // The file path itself or the paths returned
       const resolved = parseGraphPaths(fileResult);
@@ -523,7 +487,13 @@ async function _localize(
 
   const distinctFiles = scoreMap.size;
   if (semanticFallback && distinctFiles < SEMANTIC_FALLBACK_THRESHOLD) {
-    const semResult = await safeQuery(graph, "semantic_search", issue, 5, deadline);
+    const semResult = await safeQuery(
+      graph,
+      "semantic_search",
+      issue,
+      5,
+      deadline,
+    );
     if (isHit(semResult)) {
       for (const p of parseGraphPaths(semResult)) {
         const e = touch(p);
@@ -571,7 +541,12 @@ async function _localize(
  */
 async function safeQuery(
   graph: CodeGraphProvider,
-  operation: "search" | "file_symbols" | "dependents" | "imports" | "semantic_search",
+  operation:
+    | "search"
+    | "file_symbols"
+    | "dependents"
+    | "imports"
+    | "semantic_search",
   query: string,
   limit: number | undefined,
   deadline: number,
