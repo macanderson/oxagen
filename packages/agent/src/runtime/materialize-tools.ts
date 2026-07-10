@@ -1,5 +1,5 @@
-import { tool, type Tool, type ToolSet } from "@oxagen/ai";
-import { z, type ZodTypeAny } from "zod";
+import { tool, jsonSchema, type Tool, type ToolSet } from "@oxagen/ai";
+import { type ZodTypeAny } from "zod";
 import pino from "pino";
 import {
   insertToolInvocation,
@@ -194,6 +194,22 @@ function passesRisk(
 const APPROVAL_TTL_MS = 5 * 60 * 1000;
 // HITL window the consent card is answerable in (same as the approval card).
 const CONSENT_PROMPT_TTL_MS = 5 * 60 * 1000;
+
+// Model-facing input schema for a contributed external tool. When the
+// contributor supplied a pinned JSONSchema contract (descriptor pinning,
+// mcp-snapshots.ts), the model is constrained by it; providers reject
+// non-object tool parameter schemas, so anything else normalizes to the
+// permissive object schema (semantically what z.record(unknown) was, but
+// expressed as JSON Schema so all external tools flow through one path).
+function toExternalToolInputSchema(
+  pinned: Record<string, unknown> | undefined,
+): ReturnType<typeof jsonSchema<Record<string, unknown>>> {
+  const usable =
+    pinned && typeof pinned === "object" && pinned.type === "object";
+  return jsonSchema<Record<string, unknown>>(
+    usable ? pinned : { type: "object", additionalProperties: true },
+  );
+}
 
 // Parse a synthetic external-MCP capability id `mcp.<serverId>.<tool>` into its
 // parts. serverId is a UUID (no dots); the tool name may itself contain dots,
@@ -437,7 +453,7 @@ export async function materializeTools(
         capturedKey,
         tool({
           description: raw.description,
-          inputSchema: z.record(z.string(), z.unknown()),
+          inputSchema: toExternalToolInputSchema(raw.inputSchema),
           execute: async (input: unknown) => {
             const invocationId = crypto.randomUUID();
             const startedAt = Date.now();
@@ -610,16 +626,15 @@ export async function materializeTools(
             // Started inside any active kernel/stream span so the parent
             // context propagates automatically. Attributes are PII-safe:
             // tool name only, no input/output content.
-            const _otelToolSpan = trace.getTracer("oxagen.agent.tools").startSpan(
-              "tool.external",
-              {
+            const _otelToolSpan = trace
+              .getTracer("oxagen.agent.tools")
+              .startSpan("tool.external", {
                 kind: SpanKind.CLIENT,
                 attributes: {
                   "tool.name": capturedKey,
                   "tool.risk_level": "low",
                 },
-              },
-            );
+              });
             try {
               const result = await capturedExecute(input, {
                 toolCallId: invocationId,
