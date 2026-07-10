@@ -5,6 +5,8 @@
 //   - Successful insert → returns publicId
 //   - DB error → returns null (graceful degradation)
 //   - Idempotency: an existing pending request is returned, no duplicate insert
+//   - Race safety: a 23505 from the partial unique index on insert re-selects
+//     and returns the concurrent winner's row instead of failing
 //   - Scope derivation (org vs workspace)
 
 import { describe, expect, it, vi, beforeEach } from "vitest";
@@ -159,6 +161,98 @@ describe("createAccessRequest()", () => {
     });
 
     expect(result).toBeNull();
+  });
+
+  // ── Race safety (access_requests_pending_dedupe_idx, 23505) ──────────────
+
+  it("returns the concurrent winner's publicId when insert hits the unique-violation race", async () => {
+    // Pre-check select finds nothing (both requests raced past it), then the
+    // insert fails with a real Postgres 23505 shape, then the post-violation
+    // re-select finds the row the other request committed first.
+    mocks.selectFn
+      .mockReturnValueOnce({
+        from: () => ({ where: () => ({ limit: () => Promise.resolve([]) }) }),
+      })
+      .mockReturnValueOnce({
+        from: () => ({
+          where: () => ({
+            limit: () => Promise.resolve([{ publicId: "arq_race_winner" }]),
+          }),
+        }),
+      });
+
+    const uniqueViolation = Object.assign(
+      new Error(
+        'duplicate key value violates unique constraint "access_requests_pending_dedupe_idx"',
+      ),
+      { code: "23505", constraint_name: "access_requests_pending_dedupe_idx" },
+    );
+    mocks.insertFn.mockReturnValue({
+      values: () => ({ returning: () => Promise.reject(uniqueViolation) }),
+    });
+
+    const result = await createAccessRequest({
+      capability: "send_message",
+      ctx: CTX,
+      principal: PRINCIPAL,
+    });
+
+    expect(result).toBe("arq_race_winner");
+    expect(mocks.insertFn).toHaveBeenCalledTimes(1);
+    expect(mocks.selectFn).toHaveBeenCalledTimes(2);
+  });
+
+  it("returns null when the unique-violation re-select finds no pending row (status changed mid-race)", async () => {
+    // Both selects (pre-check and post-violation re-select) come up empty —
+    // e.g. the winning row was approved/denied between the violation and the
+    // re-select. Must not throw the raw 23505 to the caller.
+    mocks.selectFn
+      .mockReturnValueOnce({
+        from: () => ({ where: () => ({ limit: () => Promise.resolve([]) }) }),
+      })
+      .mockReturnValueOnce({
+        from: () => ({ where: () => ({ limit: () => Promise.resolve([]) }) }),
+      });
+
+    const uniqueViolation = Object.assign(
+      new Error("duplicate key value violates unique constraint"),
+      {
+        code: "23505",
+      },
+    );
+    mocks.insertFn.mockReturnValue({
+      values: () => ({ returning: () => Promise.reject(uniqueViolation) }),
+    });
+
+    const result = await createAccessRequest({
+      capability: "send_message",
+      ctx: CTX,
+      principal: PRINCIPAL,
+    });
+
+    expect(result).toBeNull();
+  });
+
+  it("propagates non-unique-violation insert errors through the same graceful-degradation path", async () => {
+    // A generic connection error has no .code === "23505", so isUniqueViolation
+    // is false and this falls through to the plain error-logging path, not the
+    // race-recovery re-select.
+    mocks.insertFn.mockReturnValue({
+      values: () => ({
+        returning: () => Promise.reject(new Error("connection refused")),
+      }),
+    });
+
+    const result = await createAccessRequest({
+      capability: "send_message",
+      ctx: CTX,
+      principal: PRINCIPAL,
+    });
+
+    expect(result).toBeNull();
+    // Only the pre-check select ran — no race-recovery re-select for a
+    // non-23505 error.
+    expect(mocks.selectFn).toHaveBeenCalledTimes(1);
   });
 
   // ── Scope derivation ─────────────────────────────────────────────────────
