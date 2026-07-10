@@ -110,6 +110,19 @@ html[data-density="spacious"] {
   --bottom-bar-gap: 0.75rem; /* 12px — breathing room reserved above the bar   */
 }
 
+/*
+ * Fixed bottom overlays that live OUTSIDE the shell (e.g. the PWA install
+ * toast in the root layout) read --pwa-toast-bottom for their `bottom`. When
+ * the mobile bottom nav is mounted (sub-`md` shell pages), raise them above
+ * the bar; everywhere else (auth pages, ≥md where the bar is display:none)
+ * they stay at the safe-area edge.
+ */
+@media (max-width: 767px) {
+  body:has([data-mobile-bottom-bar]) {
+    --pwa-toast-bottom: calc(var(--bottom-bar-h) + env(safe-area-inset-bottom, 0px));
+  }
+}
+
 /* ── Wand widget ────────────────────────────────────────────────────────── */
 /*
  * The gradient ring on the floating wand button pulses gently to draw

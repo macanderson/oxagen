@@ -44,7 +44,15 @@ export function WorkspaceSwitcher({
   return (
     <>
       <Menu>
-        <MenuTrigger render={<Button variant="outline" size="sm" className="gap-2" />}>
+        <MenuTrigger
+          render={
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2 max-md:min-h-11"
+            />
+          }
+        >
           <span className="truncate">{current.name}</span>
           <ChevronsUpDown className="h-3.5 w-3.5 opacity-50" />
         </MenuTrigger>
@@ -56,7 +64,9 @@ export function WorkspaceSwitcher({
               onClick={() => router.push(`/${orgSlug}/${w.slug}`)}
             >
               <span className="flex-1">{w.name}</span>
-              {w.publicId === current.publicId ? <Check className="h-3.5 w-3.5" /> : null}
+              {w.publicId === current.publicId ? (
+                <Check className="h-3.5 w-3.5" />
+              ) : null}
             </MenuItem>
           ))}
           <MenuSeparator />

@@ -22,9 +22,23 @@ import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { MoreHorizontal } from "lucide-react";
-import { Sheet, SheetPopup, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
-import { UserSwitcher, type SessionUser } from "@/components/shell/user-switcher";
-import { activeHrefFor, getSidebarConfig, resolveSidebarCtx, resolveSidebarMode } from "@/lib/sidebar";
+import {
+  Sheet,
+  SheetPopup,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/sheet";
+import {
+  UserSwitcher,
+  type SessionUser,
+} from "@/components/shell/user-switcher";
+import {
+  activeHrefFor,
+  getSidebarConfig,
+  resolveSidebarCtx,
+  resolveSidebarMode,
+} from "@/lib/sidebar";
 import { cn } from "@/lib/utils";
 import type { ScopeContext } from "@/lib/scope";
 
@@ -43,7 +57,9 @@ function tabClass(isActive: boolean): string {
   return cn(
     "flex h-[var(--bottom-bar-h)] min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-1 transition-colors active:scale-95",
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
-    isActive ? "text-app-link-active-fg" : "text-app-link-fg hover:text-app-link-hover-fg",
+    isActive
+      ? "text-app-link-active-fg"
+      : "text-app-link-fg hover:text-app-link-hover-fg",
   );
 }
 
@@ -67,7 +83,9 @@ export function MobileBottomBar({ ctx, user, planTier }: MobileBottomBarProps) {
 
   if (barItems.length === 0) return null;
 
-  const moreActive = moreItems.some((item) => item.href(effectiveCtx) === activeHref);
+  const moreActive = moreItems.some(
+    (item) => item.href(effectiveCtx) === activeHref,
+  );
   // Only surface "More" when its sheet would have content — overflow nav items
   // and/or the account control. Prevents opening a header-only empty sheet (e.g.
   // an org route with ≤4 items during a transient user=undefined render).
@@ -77,6 +95,10 @@ export function MobileBottomBar({ ctx, user, planTier }: MobileBottomBarProps) {
     <>
       <nav
         aria-label="Mobile navigation"
+        // Marker consumed by globals.css: when this bar is mounted, fixed
+        // bottom overlays (e.g. the PWA install toast) offset above it via
+        // `--pwa-toast-bottom` instead of covering the tabs.
+        data-mobile-bottom-bar=""
         className={cn(
           "fixed inset-x-0 bottom-0 z-40 flex items-stretch justify-around md:hidden",
           "border-t border-app-topbar-border bg-app-topbar-bg pb-[env(safe-area-inset-bottom)]",
@@ -95,7 +117,9 @@ export function MobileBottomBar({ ctx, user, planTier }: MobileBottomBarProps) {
               className={tabClass(isActive)}
             >
               <Icon className="h-5 w-5 shrink-0" aria-hidden="true" />
-              <span className="truncate text-[10px] font-medium">{item.label}</span>
+              <span className="truncate text-[10px] font-medium">
+                {item.label}
+              </span>
             </Link>
           );
         })}
@@ -125,11 +149,16 @@ export function MobileBottomBar({ ctx, user, planTier }: MobileBottomBarProps) {
           >
             <SheetHeader className="border-b px-4 py-3 text-left">
               <SheetTitle>More</SheetTitle>
-              <SheetDescription className="sr-only">Additional navigation and account options</SheetDescription>
+              <SheetDescription className="sr-only">
+                Additional navigation and account options
+              </SheetDescription>
             </SheetHeader>
 
             {moreItems.length > 0 ? (
-              <nav className="flex flex-col gap-0.5 overflow-y-auto p-2" aria-label="More destinations">
+              <nav
+                className="flex flex-col gap-0.5 overflow-y-auto p-2"
+                aria-label="More destinations"
+              >
                 {moreItems.map((item) => {
                   const href = item.href(effectiveCtx);
                   const isActive = href === activeHref;
@@ -153,7 +182,9 @@ export function MobileBottomBar({ ctx, user, planTier }: MobileBottomBarProps) {
                       <Icon
                         className={cn(
                           "h-4 w-4 shrink-0",
-                          isActive ? "text-sidebar-nav-link-active-fg" : "text-muted-foreground",
+                          isActive
+                            ? "text-sidebar-nav-link-active-fg"
+                            : "text-muted-foreground",
                         )}
                         aria-hidden="true"
                       />

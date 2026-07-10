@@ -11,7 +11,7 @@
  * reaviz BarChart of per-item scores gives an at-a-glance score distribution.
  */
 
-import { BarChart, BarSeries, LinearYAxis, LinearXAxis } from "reaviz";
+import dynamic from "next/dynamic";
 import { FlaskConical } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import type { EvalRunGetOutput } from "@oxagen/oxagen/contracts/eval.run.get";
@@ -23,6 +23,18 @@ export interface RunDetailClientProps {
   run: Run | null;
   results: Result[];
 }
+
+// reaviz (d3) measures the DOM — client-only, code-split off the route bundle
+// so the summary + results table paint before the chart library loads.
+const RunScoreChart = dynamic(
+  () => import("./run-score-chart").then((m) => m.RunScoreChart),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-[220px] w-full animate-pulse rounded-md bg-muted/50" />
+    ),
+  },
+);
 
 const STATUS_VARIANT: Record<Run["status"], "success" | "info" | "warning" | "error" | "muted"> = {
   pending: "muted",
@@ -148,13 +160,7 @@ export function RunDetailClient({ run, results }: RunDetailClientProps) {
             Per-item scores
           </p>
           <div style={{ height: 220 }}>
-            <BarChart
-              height={220}
-              data={chartData}
-              series={<BarSeries colorScheme="cybertron" />}
-              xAxis={<LinearXAxis type="category" />}
-              yAxis={<LinearYAxis type="value" domain={[0, 1]} />}
-            />
+            <RunScoreChart data={chartData} />
           </div>
         </div>
       )}

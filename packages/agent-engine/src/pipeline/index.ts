@@ -66,6 +66,7 @@ import type {
   ImageAttachment,
   EngineNonFatalError,
   RunCodingAgentResult,
+  AskUserCallback,
 } from "../types";
 import type {
   AgentAi,
@@ -126,6 +127,9 @@ function composeAgentSystem(
     // Never reference a tool the model does not have: code_graph is only
     // materialized when a provider is injected.
     hasCodeGraph: Boolean(opts.codeGraph),
+    // Likewise ask_user: the rule appears only when a human-in-the-loop
+    // callback was supplied (an interactive surface).
+    hasAskUser: Boolean(opts.askUser),
     hasLocalization,
     profile: opts.profile,
     // A named-agent persona replaces the default identity (its systemPrompt
@@ -189,6 +193,14 @@ export interface RunTurnOptions {
   memory?: MemoryProvider | null;
   /** Code graph provider for prompt enhancement. */
   codeGraph?: CodeGraphProvider | null;
+  /**
+   * Interactive clarification callback. Supplied ONLY by a surface with a human
+   * to ask (the REPL). When present, every `runCodingAgent` round this turn runs
+   * gets the `ask_user` tool, and the system prompt gains the "ask when truly
+   * ambiguous" rule (via `hasAskUser`). Omitted on headless / one-shot / chat
+   * turns — the tool is then never advertised, since nobody could answer it.
+   */
+  askUser?: AskUserCallback | null;
   /** Trace sink for recording the turn record. */
   trace?: TraceStore | null;
   /**
@@ -334,6 +346,17 @@ export interface RunTurnOptions {
    * changes (syntax-highlighted diff) as they land.
    */
   onFileChange?: (diff: string, changedFiles: string[]) => void;
+  /**
+   * Fired the moment a write_file/edit_file lands on disk, with whether the
+   * write created the file or updated an existing one. Unlike `onFileChange`
+   * (end-of-round cumulative diff) this is per-edit, so a UI can render each
+   * file's diff as soon as the agent touches it.
+   */
+  onFileEdit?: (e: {
+    path: string;
+    kind: "create" | "update";
+    bytes: number;
+  }) => void;
 }
 
 export interface RunTurnResult {
@@ -715,6 +738,7 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
       wrapTools: opts.wrapTools,
       readOnly: opts.readOnly,
       codeGraph: opts.codeGraph ?? undefined,
+      askUser: opts.askUser ?? undefined,
       memory: opts.memory ?? undefined,
       onError: opts.onError,
       signal: opts.signal,
@@ -748,6 +772,8 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
             tracker.observe({ command, exitCode: e.ok ? 0 : 1 });
           }
         }
+        if (e.type === "file-edit")
+          opts.onFileEdit?.({ path: e.path, kind: e.kind, bytes: e.bytes });
         if (e.type === "final-diff")
           opts.onFileChange?.(e.diff, e.changedFiles);
         captureToolEvent(e, toolEvents, opts.verbose);
@@ -1422,6 +1448,7 @@ async function runBare(
     wrapTools: opts.wrapTools,
     readOnly: opts.readOnly,
     codeGraph: opts.codeGraph ?? undefined,
+    askUser: opts.askUser ?? undefined,
     memory: opts.memory ?? undefined,
     onError: opts.onError,
     signal: opts.signal,
@@ -1443,6 +1470,8 @@ async function runBare(
           ok: e.ok,
           durationMs: e.durationMs,
         });
+      if (e.type === "file-edit")
+        opts.onFileEdit?.({ path: e.path, kind: e.kind, bytes: e.bytes });
       if (e.type === "final-diff") opts.onFileChange?.(e.diff, e.changedFiles);
       captureToolEvent(e, toolEvents, opts.verbose);
     },

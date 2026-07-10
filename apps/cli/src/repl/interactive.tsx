@@ -22,7 +22,7 @@
  *
  * Presentational pieces live in ./components; this file is the container.
  */
-import { Box, Static, Text, useApp, useInput } from "ink";
+import { Box, Static, Text, useApp, useInput, useStdin } from "ink";
 import React, {
   useState,
   useCallback,
@@ -33,8 +33,8 @@ import React, {
 } from "react";
 import type { ModelMessage } from "ai";
 import { readFile } from "node:fs/promises";
+import { isAbsolute, join } from "node:path";
 import { existsSync } from "node:fs";
-import { join } from "node:path";
 import { theme } from "../tui/theme.js";
 import { runTurn, type AgentAi, type StageEvent } from "@oxagen/agent-engine";
 import {
@@ -57,6 +57,7 @@ import { queryCodeGraph, warmCodeGraph } from "../agent/code-graph.js";
 import type { Session } from "../lib/session.js";
 import {
   resolveModelId,
+  explicitModelId,
   resolveEffort,
   isReasoningEffort,
   EFFORT_LEVELS,
@@ -126,6 +127,15 @@ import type { ScopeReviewInfo, ScopeReviewDecision } from "../agent/trace.js";
 import { HudPanel } from "./hud.js";
 import { ConfigPanel } from "./config-panel.js";
 import { DiffPanel } from "./diff-panel.js";
+import { FilesPanel } from "./files-panel.js";
+import {
+  recordTouch,
+  normalizeTouchPath,
+  type TouchOp,
+  type TouchedFile,
+} from "./files-touched.js";
+import { openInEditor } from "./open-in-editor.js";
+import { getFileDiff } from "./git-diff.js";
 import { LoginPanel } from "./login-panel.js";
 import type { InteractiveLoginResult } from "../commands/auth.js";
 import type { PasteSubmission } from "./paste.js";
@@ -167,7 +177,11 @@ import {
   formatElapsed,
 } from "./fullscreen-chrome.js";
 import { useMouseWheel } from "./use-mouse-wheel.js";
-import { enterFullscreen } from "./alt-screen.js";
+import {
+  enterFullscreen,
+  suspendFullscreen,
+  resumeFullscreen,
+} from "./alt-screen.js";
 import { resolveGitInfo } from "./git-info.js";
 import { useRepoInfo } from "./use-repo-info.js";
 import {
@@ -332,7 +346,14 @@ export function ReplApp({
   const [ctrlCArmed, setCtrlCArmed] = useState(false);
   const lastCtrlCRef = useRef<number | null>(null);
   const ctrlCHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [model, setModel] = useState<string>(resolveModelId(options.model));
+  // WORKER model: null = "auto" — the engine's per-turn router picks the
+  // cheapest sufficient tier (evaluator recommendation + the precise safety
+  // floor for auth/billing/security/migration/architecture work). A non-null
+  // slug is an explicit user pin (--model, OXAGEN_MODEL, `oxagen config
+  // model`, or /worker-model) and is passed through verbatim — pinned wins.
+  const [model, setModel] = useState<string | null>(
+    explicitModelId(options.model) ?? null,
+  );
   // Per-function model overrides (undefined ⇒ the engine's own default for that
   // role: advisor tier for judge, local heuristic / OXAGEN_LLM_EVALUATOR for
   // triage). Driven by /judge-model and /triage-model; threaded per turn.
@@ -671,6 +692,43 @@ export function ReplApp({
     diffOpenRef.current = false;
     setDiffOpen(false);
   }, []);
+  // The /files "Files Touched" panel — same takeover pattern as /diff. The
+  // STORE lives in filesTouchedRef and accumulates across every turn of the
+  // session: reads from read_file tool calls, creates/updates from the
+  // engine's per-edit file-edit events, deletes detected at hydrate time
+  // (git status "D" / vanished from disk). touchVersion bumps re-render the
+  // panel while it's open so rows appear live as the agent works.
+  const [filesOpen, setFilesOpen] = useState(false);
+  const filesOpenRef = useRef(false);
+  const closeFilesPanel = useCallback((): void => {
+    filesOpenRef.current = false;
+    setFilesOpen(false);
+  }, []);
+  const filesTouchedRef = useRef<Map<string, TouchedFile>>(new Map());
+  const touchSeqRef = useRef(0);
+  const [, setTouchVersion] = useState(0);
+  const noteTouch = useCallback(
+    (path: string, op: TouchOp): void => {
+      recordTouch(
+        filesTouchedRef.current,
+        path,
+        op,
+        cwd,
+        ++touchSeqRef.current,
+      );
+      if (filesOpenRef.current) setTouchVersion((v) => v + 1);
+    },
+    [cwd],
+  );
+  // Enter/→ in the Files Touched panel hands off to the /diff panel, opened
+  // straight on the selected file (one diff implementation, not two).
+  const showDiffForTouched = useCallback((path: string): void => {
+    filesOpenRef.current = false;
+    setFilesOpen(false);
+    setDiffInitialPath(path);
+    diffOpenRef.current = true;
+    setDiffOpen(true);
+  }, []);
   // Visibility of the right-hand Agent Team / Task Progress dock. "auto" shows it
   // only while a turn is monitoring work; /panel pins it "on" or hides it "off".
   const [panelMode, setPanelMode] = useState<PanelMode>("auto");
@@ -761,7 +819,7 @@ export function ReplApp({
     INITIAL_TELEMETRY_STATE,
     (initial) => ({
       ...initial,
-      models: resolveModelRoles(resolveModelId(options.model), {
+      models: resolveModelRoles(explicitModelId(options.model) ?? "auto", {
         triage: options.triageModel,
         judge: options.judgeModel,
       }),
@@ -1019,6 +1077,34 @@ export function ReplApp({
       ]);
     },
     [commit],
+  );
+
+  // Double-Ctrl-O in the Files Touched panel: open the highlighted file in
+  // $VISUAL/$EDITOR (or the OS default app). GUI editors detach and return
+  // immediately; a terminal editor (vim, nano, …) must own the TTY, so the
+  // REPL suspends around a blocking run — leave the alt screen (fullscreen
+  // only), drop raw mode, hand stdio to the editor, restore both on exit.
+  const { stdin: rawStdin, setRawMode } = useStdin();
+  const openTouchedInEditor = useCallback(
+    (relPath: string): void => {
+      const abs = isAbsolute(relPath) ? relPath : join(cwd, relPath);
+      const result = openInEditor(abs, {
+        suspendTui: () => {
+          if (fullscreen) suspendFullscreen(process.stdout);
+          if (rawStdin.isTTY) setRawMode(false);
+        },
+        resumeTui: () => {
+          if (rawStdin.isTTY) setRawMode(true);
+          if (fullscreen) resumeFullscreen(process.stdout);
+        },
+      });
+      pushAssistant(
+        result.ok
+          ? `Opened ${relPath} in ${result.label}.`
+          : `Couldn't open ${relPath}: ${result.error}`,
+      );
+    },
+    [cwd, fullscreen, pushAssistant, rawStdin, setRawMode],
   );
 
   // Called once by the LoginPanel (see the /login handler below) on a
@@ -1489,6 +1575,10 @@ export function ReplApp({
     if (configOpenRef.current) return;
     // Same for the /diff panel (its own useInput handles navigation/scroll/Esc).
     if (diffOpenRef.current) return;
+    // Same for the /files panel (its own useInput handles nav/Ctrl-O/Esc —
+    // including the double-Ctrl-O editor gesture, which must not fall through
+    // to the global verbose toggle below).
+    if (filesOpenRef.current) return;
     // Same for the /login panel (its own useInput handles Esc/any-key).
     if (loginOpenRef.current) return;
 
@@ -1823,6 +1913,13 @@ export function ReplApp({
         setDiffOpen(true);
         return;
       }
+      if (cmd === "/files") {
+        // Files Touched — every file the agent read/created/updated/deleted
+        // this session, with live +/- counts and editor/diff shortcuts.
+        filesOpenRef.current = true;
+        setFilesOpen(true);
+        return;
+      }
       if (cmd === "/panel") {
         // Pin/unpin the right-hand Agent Team / Task Progress dock. From "auto"
         // (or "off") the first toggle pins it "on"; toggling again hides it "off".
@@ -1895,7 +1992,7 @@ export function ReplApp({
           // Persistence is best-effort — the in-session change still applies.
         }
         // Compute the readout with the just-changed role plus the current others.
-        const worker = role === "worker" ? slug : modelRef.current;
+        const worker = role === "worker" ? slug : (modelRef.current ?? "auto");
         const triage = role === "triage" ? slug : triageModelRef.current;
         const judge = role === "judge" ? slug : judgeModelRef.current;
         dispatchTelemetry({
@@ -1907,10 +2004,38 @@ export function ReplApp({
             (saved ? " (saved to .oxagen/settings.local.json)." : "."),
         );
       };
+      // Shared by /worker-model and /model: "auto" unpins (per-turn routing),
+      // a slug pins, bare prints the current state.
+      const workerModelReadout = (): string =>
+        modelRef.current ??
+        `auto — routed per turn: cheapest sufficient tier, ` +
+          `${resolveModelId()} default, precise tier for auth/billing/security/migrations. ` +
+          `Pin with /worker-model <slug>.`;
+      const handleWorkerModelCommand = (slug: string): void => {
+        if (!slug) {
+          pushAssistant(`Current worker model: ${workerModelReadout()}`);
+          return;
+        }
+        if (slug === "auto" || slug === "default") {
+          setModel(null);
+          dispatchTelemetry({
+            type: "seed-models",
+            models: resolveModelRoles("auto", {
+              triage: triageModelRef.current,
+              judge: judgeModelRef.current,
+            }),
+          });
+          pushAssistant(
+            "Worker model set to auto — each turn routes to the cheapest sufficient tier " +
+              "(precise tier for high-stakes work). Session-only: a persisted pin " +
+              "(settings workerModel, OXAGEN_MODEL, or `oxagen config model`) re-applies on restart.",
+          );
+          return;
+        }
+        applyRoleModel("worker", slug);
+      };
       if (cmd === "/worker-model") {
-        const slug = text.slice("/worker-model".length).trim();
-        if (slug) applyRoleModel("worker", slug);
-        else pushAssistant(`Current worker model: ${modelRef.current}`);
+        handleWorkerModelCommand(text.slice("/worker-model".length).trim());
         return;
       }
       if (cmd === "/judge-model") {
@@ -1933,9 +2058,7 @@ export function ReplApp({
       }
       if (cmd === "/model") {
         // Alias for /worker-model — sets and persists the executor model.
-        const slug = text.slice("/model".length).trim();
-        if (slug) applyRoleModel("worker", slug);
-        else pushAssistant(`Current model: ${modelRef.current}`);
+        handleWorkerModelCommand(text.slice("/model".length).trim());
         return;
       }
       if (cmd === "/coordinator") {
@@ -1962,7 +2085,7 @@ export function ReplApp({
           setCoordinator("haiku");
           pushAssistant(
             "Coordinator set to REMOTE — turns run on the metered platform gateway " +
-              `(${modelRef.current}). /coordinator local to run fully on-device.`,
+              `(${modelRef.current ?? "auto-routed"}). /coordinator local to run fully on-device.`,
           );
           return;
         }
@@ -2411,7 +2534,8 @@ export function ReplApp({
       // Skipped in read-only mode: the resolver's only job is to write.
       if (modeRef.current !== "readonly") {
         const deterministic = resolveDeterministicTurn(submission, {
-          fileExists: (relPath) => existsSync(join(cwd, relPath)),
+          fileExists: (relPath) => 
+          (join(cwd, relPath)),
         });
         if (deterministic) {
           commit([
@@ -2510,6 +2634,12 @@ export function ReplApp({
       const turn: Message[] = [];
       let assistantOpen = false;
       let reasoningOpen = false;
+      // Per-edit diff bookkeeping: which files already had their diff pushed
+      // this turn (and the exact text shown), so the round's final-diff isn't
+      // re-pushed when it would only repeat what's already on screen, and a
+      // repeat edit landing identical content doesn't push a duplicate.
+      const editDiffsShown = new Set<string>();
+      const lastEditDiff = new Map<string, string>();
       // Every stream sink below (onReasoning, onText, onFileChange, etc.) calls
       // `render()` on every streamed token/delta — a fast model call can fire
       // this dozens of times a second. Route it through a throttle that
@@ -2602,14 +2732,14 @@ export function ReplApp({
         void debugLog("turn", "turn.start", {
           mode: "repl",
           readOnly: modeRef.current === "readonly",
-          model: modelRef.current,
+          model: modelRef.current ?? "auto",
           prompt: submission,
         });
         // Surface this turn in the `/hud` heads-up display for its whole life.
         hudHandle = agentRegistry.register({
           kind: "turn",
           title: submission,
-          model: modelRef.current,
+          model: modelRef.current ?? "auto",
         });
 
         // Resolve this turn's pasted image attachments (Ctrl-V) into bytes.
@@ -2859,7 +2989,10 @@ export function ReplApp({
         let budgetGraceWarned = false;
         const budgetGuard = createTurnBudgetGuard(
           budgetRef.current,
-          modelRef.current,
+          // Auto-routed turns are priced at the default (balanced) rate — the
+          // routed model isn't known until the pipeline's ROUTE stage. Same
+          // assumption the one-shot path makes (one-shot.ts buildBudgetGuard).
+          modelRef.current ?? resolveModelId(),
           {
             // "grace" mode: at most once per turn is plenty of noise.
             onWithinGrace: (verdict: TurnBudgetVerdict) => {
@@ -2909,7 +3042,11 @@ export function ReplApp({
             brokerRef.current ?? undefined,
           ),
           ai: activeAiRef.current,
-          model: modelRef.current,
+          // null ⇒ auto: the pipeline's selectModel routes this turn to the
+          // cheapest sufficient tier, with the precise safety floor for
+          // auth/billing/security/migration work. The scope card shows the
+          // routed model + rationale. An explicit pin passes through verbatim.
+          model: modelRef.current ?? undefined,
           // Per-function overrides (undefined ⇒ engine default for that role).
           // Judge takes a panel-shaped list; a single slug is a one-judge panel.
           judgeModels: judgeModelRef.current
@@ -2995,6 +3132,12 @@ export function ReplApp({
             inFlightTools++;
             ciProbe.noteToolCall(name, input);
             noteProgress();
+            // Files Touched store: reads count as touches (creates/updates
+            // land via onFileEdit below; deletes are detected at hydrate).
+            if (name === "read_file") {
+              const p = (input as { path?: unknown } | null)?.path;
+              if (typeof p === "string") noteTouch(p, "R");
+            }
             // Heartbeat: an executing tool is the classic silent stretch — name
             // it (e.g. "bash · pnpm test") so the indicator shows what's running.
             lastActivityRef.current = summarizeInput(name, input);
@@ -3077,13 +3220,56 @@ export function ReplApp({
             turn[turn.length - 1] = { ...last, content: last.content + delta };
             render();
           },
+          onFileEdit: ({ path, kind }) => {
+            if (runner.signal.aborted) return;
+            noteProgress();
+            noteTouch(path, kind === "create" ? "C" : "U");
+            // Show THIS file's diff the moment the edit lands (traditional
+            // git-diff styling, themed to the terminal background) instead of
+            // waiting for the round's cumulative final diff.
+            const rel = normalizeTouchPath(path, cwd);
+            void getFileDiff(cwd, {
+              path: rel,
+              status: kind === "create" ? "?" : "M",
+              untracked: kind === "create",
+            }).then((diff) => {
+              if (runner.signal.aborted || !diff.trim()) return;
+              // A repeat edit that lands the same cumulative diff (or an
+              // edit git can't see) adds nothing — don't re-push.
+              if (lastEditDiff.get(rel) === diff) return;
+              lastEditDiff.set(rel, diff);
+              editDiffsShown.add(rel);
+              closeStreamingBlocks();
+              turn.push({
+                role: "diff",
+                content: "",
+                diff,
+                changedFiles: [rel],
+                timestamp: Date.now(),
+              });
+              render();
+            });
+          },
           onFileChange: (diff, changedFiles) => {
             if (runner.signal.aborted) return;
             noteProgress();
             // Render the code changes as a syntax-highlighted diff message, so
             // the user sees exactly what changed — themed to the terminal
-            // background. Skip empty diffs (no textual change to show).
+            // background. Skip empty diffs (no textual change to show), and
+            // skip entirely when every changed file's diff already streamed
+            // per-edit above — the final diff would only repeat what's on
+            // screen. (changedFiles also carries the user's own pre-existing
+            // working-tree edits, which were never shown per-edit; a round
+            // with any of those still surfaces the full diff here.)
             if (!diff.trim()) return;
+            if (
+              editDiffsShown.size > 0 &&
+              changedFiles.every((f) =>
+                editDiffsShown.has(normalizeTouchPath(f, cwd)),
+              )
+            ) {
+              return;
+            }
             closeStreamingBlocks();
             turn.push({
               role: "diff",
@@ -3490,7 +3676,7 @@ export function ReplApp({
         <LiveClock
           render={(now) => (
             <HeaderBar
-              model={model}
+              model={model ?? "auto"}
               version={pkg.version}
               scope={`${session.orgSlug}/${session.workspaceSlug}`}
               branch={repoInfo.branch}
@@ -3611,6 +3797,15 @@ export function ReplApp({
               width={Math.min(cols - 2, 100)}
               maxBodyRows={Math.max(8, rows - 18)}
               initialPath={diffInitialPath}
+            />
+          ) : filesOpen ? (
+            <FilesPanel
+              cwd={cwd}
+              entries={Array.from(filesTouchedRef.current.values())}
+              onClose={closeFilesPanel}
+              onShowDiff={showDiffForTouched}
+              onOpenFile={openTouchedInEditor}
+              width={Math.min(cols - 2, 100)}
             />
           ) : configOpen ? (
             <ConfigPanel
@@ -3840,6 +4035,14 @@ export function ReplApp({
               onClose={closeDiffPanel}
               initialPath={diffInitialPath}
             />
+          ) : filesOpen ? (
+            <FilesPanel
+              cwd={cwd}
+              entries={Array.from(filesTouchedRef.current.values())}
+              onClose={closeFilesPanel}
+              onShowDiff={showDiffForTouched}
+              onOpenFile={openTouchedInEditor}
+            />
           ) : configOpen ? (
             <ConfigPanel cwd={cwd} onClose={closeConfigPanel} />
           ) : loginOpen ? (
@@ -3865,7 +4068,7 @@ export function ReplApp({
           <Box marginBottom={1} flexShrink={0} flexDirection="column">
             {motion === "full" ? <SpaceInvaders active={isStreaming} /> : null}
             <StatusLine
-              model={model}
+              model={model ?? "auto"}
               branch={branchRef.current}
               // Tokens + cost + cache all come from the live metrics bus (every
               // model call — evaluator, worker per-step, judge — contributes), so

@@ -101,6 +101,9 @@ export async function runCodingAgent(
         // (the CLI's default).
         fileLock: opts.fileLock,
         lockContext: opts.lockContext,
+        // Interactive clarification: register `ask_user` only when a surface
+        // with a human supplied the callback (mirrors codeGraph gating).
+        askUser: opts.askUser,
       })
     : ({} as ToolSet);
   // Merge caller-supplied extra tools (e.g. MCP), then apply the caller's final

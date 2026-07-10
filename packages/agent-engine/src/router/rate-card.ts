@@ -118,6 +118,33 @@ export const RATE_CARD: RateCardEntry[] = [
     vendor: "openai",
     rate: { inputPer1M: 2.5, outputPer1M: 10.0, cachedInputPer1M: 1.25 },
   },
+  // Zhipu GLM rows from the AI Gateway's /v1/models pricing (2026-07-10).
+  // Specific families MUST sort before the generic "glm" prefix row (same
+  // first-match rule as the gpt-5.5 rows above).
+  {
+    family: "glm-5.2-fast",
+    label: "GLM 5.2 Fast",
+    vendor: "zai",
+    rate: { inputPer1M: 3.0, outputPer1M: 10.25, cachedInputPer1M: 0.5 },
+  },
+  {
+    family: "glm-5.2",
+    label: "GLM 5.2",
+    vendor: "zai",
+    rate: { inputPer1M: 1.4, outputPer1M: 4.4, cachedInputPer1M: 0.26 },
+  },
+  {
+    family: "glm-5-turbo",
+    label: "GLM 5 Turbo",
+    vendor: "zai",
+    rate: { inputPer1M: 1.2, outputPer1M: 4.0, cachedInputPer1M: 0.24 },
+  },
+  {
+    family: "glm",
+    label: "GLM",
+    vendor: "zai",
+    rate: { inputPer1M: 0.95, outputPer1M: 3.15, cachedInputPer1M: 0.2 },
+  },
   // Gateway /v1/models 2026-07-07 (base tier ≤200k): gemini-3-pro* $2/$12.
   {
     family: "gemini-3-pro",

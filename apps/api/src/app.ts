@@ -30,6 +30,7 @@ import { agentSandboxStartRoute } from "./routes/v1/agent.sandbox.start";
 import { agentSandboxExecRoute } from "./routes/v1/agent.sandbox.exec";
 import { agentSandboxSnapshotRoute } from "./routes/v1/agent.sandbox.snapshot";
 import { agentSandboxStopRoute } from "./routes/v1/agent.sandbox.stop";
+import { agentSandboxRenameRoute } from "./routes/v1/agent.sandbox.rename";
 import { agentSandboxListRoute } from "./routes/v1/agent.sandbox.list";
 import { agentSandboxFilesListRoute } from "./routes/v1/agent.sandbox_file.list";
 import { agentSandboxLogsListRoute } from "./routes/v1/agent.sandbox_log.list";
@@ -427,6 +428,8 @@ orgScoped.route("/agent/sandbox/start", agentSandboxStartRoute);
 orgScoped.route("/agent/sandbox/exec", agentSandboxExecRoute);
 orgScoped.route("/agent/sandbox/snapshot", agentSandboxSnapshotRoute);
 orgScoped.route("/agent/sandbox/stop", agentSandboxStopRoute);
+// Set a session's human-friendly display label (metadata-only, no driver call).
+orgScoped.route("/agent/sandbox/rename", agentSandboxRenameRoute);
 // List durable sessions in the workspace (id, status, timestamps) — read-only.
 orgScoped.route("/agent/sandbox/list", agentSandboxListRoute);
 orgScoped.route("/agent/sandbox/files", agentSandboxFilesListRoute);

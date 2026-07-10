@@ -52,6 +52,7 @@ import type {
 import { autoTitleConversation } from "./auto-title";
 import {
   buildRecentTurns,
+  extractToolActivity,
   generateTurnSuggestions,
   type TurnSuggestion,
 } from "./suggest-prompts";
@@ -1579,6 +1580,14 @@ export async function POST(request: NextRequest): Promise<Response> {
               userText: content,
               assistantText,
             }),
+            // Ground the suggestions in what the agent actually DID this turn
+            // — capabilities invoked (with inputs + failures) and files
+            // changed — so the chips name real files/errors/entities instead
+            // of generic next steps. Both values already exist for memory
+            // capture above; this adds no extra work to the turn.
+            toolActivity: extractToolActivity(persistedBlocks),
+            changedFiles: result.changedFiles,
+            codeMode: useCodeModePrompt,
             orgId: tenant.id,
             workspaceId: workspace.id,
             messageId: requestId,

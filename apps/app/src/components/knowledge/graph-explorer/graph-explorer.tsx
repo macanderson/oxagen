@@ -452,13 +452,18 @@ export function GraphExplorer({ focusNodeId }: GraphExplorerProps = {}) {
             />
           )}
 
-          {data.truncated && data.status === "ready" && (
-            <div className="pointer-events-none absolute bottom-3 left-1/2 w-max max-w-[calc(100%-1.5rem)] -translate-x-1/2 rounded-full border border-border bg-card/90 px-3 py-1 text-center text-[11px] text-muted-foreground shadow-sm">
-              {isMobile
-                ? "Showing a sample — tap a node, then “Expand neighbours”."
-                : "Showing a sample of the graph — double-click a node to expand, or use search."}
-            </div>
-          )}
+          {/* `nodes.length > 0` guard: with zero loaded nodes the EmptyState
+              owns the canvas — the sample pill would overlap its copy and
+              tell the user to tap nodes that aren't there. */}
+          {data.truncated &&
+            data.status === "ready" &&
+            data.nodes.length > 0 && (
+              <div className="pointer-events-none absolute bottom-3 left-1/2 w-max max-w-[calc(100%-1.5rem)] -translate-x-1/2 rounded-full border border-border bg-card/90 px-3 py-1 text-center text-[11px] text-muted-foreground shadow-sm">
+                {isMobile
+                  ? "Showing a sample — tap a node, then “Expand neighbours”."
+                  : "Showing a sample of the graph — double-click a node to expand, or use search."}
+              </div>
+            )}
         </main>
 
         {/* Right: detail panel (desktop side panel; a bottom sheet below lg) */}

@@ -38,6 +38,16 @@ describe("rateFor", () => {
     expect(rateFor("anthropic/claude-sonnet-4.6")).toEqual({ inputPer1M: 3.0, outputPer1M: 15.0, cachedInputPer1M: 0.3 });
   });
 
+  it("prices GLM 5.2 from the gateway card (judge-role slug)", () => {
+    expect(rateFor("zai/glm-5.2")).toEqual({ inputPer1M: 1.4, outputPer1M: 4.4, cachedInputPer1M: 0.26 });
+  });
+
+  it("matches glm-5.2-fast before glm-5.2, and unknown GLMs hit the generic glm row", () => {
+    expect(rateFor("zai/glm-5.2-fast")).toEqual({ inputPer1M: 3.0, outputPer1M: 10.25, cachedInputPer1M: 0.5 });
+    expect(rateFor("zai/glm-5-turbo")).toEqual({ inputPer1M: 1.2, outputPer1M: 4.0, cachedInputPer1M: 0.24 });
+    expect(rateFor("zai/glm-4.7-flash")).toEqual({ inputPer1M: 0.95, outputPer1M: 3.15, cachedInputPer1M: 0.2 });
+  });
+
   it("matches the most-specific family first (gpt-4o-mini before gpt-4o)", () => {
     expect(rateFor("openai/gpt-4o-mini")).toEqual({ inputPer1M: 0.15, outputPer1M: 0.6, cachedInputPer1M: 0.075 });
     expect(rateFor("openai/gpt-4o")).toEqual({ inputPer1M: 2.5, outputPer1M: 10.0, cachedInputPer1M: 1.25 });
