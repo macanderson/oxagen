@@ -60,6 +60,10 @@ export function SandboxDetailClient({
   const router = useRouter();
   const [stopping, startStop] = useTransition();
   const [stopError, setStopError] = useState<string | null>(null);
+  // Bumped after every command so the file tree re-reads the sandbox — a
+  // `mkdir`/`rm`/clone in the terminal shows up immediately (drives the
+  // WorkspaceContextPanel's refreshSignal) instead of waiting for manual refresh.
+  const [filesRefresh, setFilesRefresh] = useState(0);
 
   const runCommand: RunCommandFn = useCallback(
     async (command, opts) => {
@@ -71,6 +75,8 @@ export function SandboxDetailClient({
         cwd: opts?.cwd,
       });
       if (!res.ok) throw new Error(res.error);
+      // The command may have mutated the filesystem; nudge the file tree.
+      setFilesRefresh((n) => n + 1);
       return res.result;
     },
     [orgSlug, workspaceSlug, sessionId],
@@ -174,6 +180,7 @@ export function SandboxDetailClient({
             orgSlug={orgSlug}
             workspaceSlug={workspaceSlug}
             title="Sandbox files"
+            refreshSignal={filesRefresh}
           />
         </div>
       </div>
