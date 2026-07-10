@@ -38,7 +38,6 @@ function recordingDriver(): { driver: SandboxDriver; runReqs: SandboxRequest[] }
       runReqs.push(req);
       return RESULT;
     }),
-    // eslint-disable-next-line require-yield
     async *stream(req: SandboxRequest) {
       runReqs.push(req);
     },

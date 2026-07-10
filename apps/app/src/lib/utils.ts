@@ -62,3 +62,19 @@ export function truncate(value: string, max: number): string {
   if (value.length <= max) return value;
   return `${value.slice(0, max - 1)}…`;
 }
+
+/**
+ * Human duration from milliseconds: "800ms", "1.5s", "2m 5s".
+ *
+ * The canonical duration formatter (chat tool cards, traces, trays).
+ * Two surfaces intentionally keep their own distinct display formats:
+ * activity/format.ts (2-decimal seconds + "—" for null) and
+ * ci-status-summary.tsx (mm:ss clock style).
+ */
+export function formatDuration(ms: number): string {
+  if (ms < 1000) return `${ms}ms`;
+  if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
+  const mins = Math.floor(ms / 60_000);
+  const secs = Math.floor((ms % 60_000) / 1000);
+  return `${mins}m ${secs}s`;
+}
