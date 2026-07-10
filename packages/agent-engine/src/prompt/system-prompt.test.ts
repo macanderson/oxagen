@@ -137,6 +137,20 @@ describe("buildSystemPrompt — graph-first tool guidance", () => {
     expect(prompt).toContain("Only fall back to `grep`");
   });
 
+  it("instructs batching of independent tool calls into one message (wall-clock parallelism)", () => {
+    // The engine runs one step per assistant message and the AI SDK executes
+    // ALL of that message's tool calls concurrently — the model just has to be
+    // told to batch. Reads batch; edits stay sequential (per-turn file lock).
+    const prompt = buildSystemPrompt(base);
+    expect(prompt).toContain("BATCH INDEPENDENT TOOL CALLS");
+    expect(prompt).toContain("ONE message");
+    expect(prompt).toContain("File EDITS stay sequential");
+    // The example list adapts to wiring: no code_graph mention when unwired.
+    const withoutGraph = buildSystemPrompt({ ...base, hasCodeGraph: false });
+    expect(withoutGraph).toContain("BATCH INDEPENDENT TOOL CALLS");
+    expect(withoutGraph).not.toContain("code_graph");
+  });
+
   it("drops graph guidance and keeps plain grep guidance when code_graph is not wired", () => {
     const prompt = buildSystemPrompt({ ...base, hasCodeGraph: false });
     expect(prompt).not.toContain("code_graph");

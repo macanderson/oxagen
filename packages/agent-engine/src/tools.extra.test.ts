@@ -9,6 +9,8 @@ import {
   formatWithLineNumbers,
   describeEditFailure,
   clip,
+  clipMiddle,
+  readFileTruncationMarker,
   resolveDisplayPath,
 } from "./tools";
 import type { CodingEvent } from "./types";
@@ -354,12 +356,65 @@ describe("buildWorkspaceTools – read_file line numbers", () => {
     expect(out).toBe("2\tl2\n3\tl3");
   });
 
-  it("still clips output over the 30k cap (middle-out)", async () => {
-    const ws = new MemoryWorkspace({ "big.txt": "x".repeat(40_000) });
+  it("gives an actionable, line-aware truncation hint for an over-cap whole-file read", async () => {
+    // A large MULTI-LINE file: the model should learn the total line count and
+    // the exact offset/limit to fetch the elided middle it can't see.
+    const lines = Array.from(
+      { length: 5000 },
+      (_, i) => `line ${i + 1}: ${"x".repeat(20)}`,
+    );
+    const ws = new MemoryWorkspace({ "big.txt": lines.join("\n") });
     const tools = buildWorkspaceTools(ws);
     const out = await run(tools.read_file, { path: "big.txt" });
-    expect(out).toContain("truncated from the middle");
+    expect(out).toContain("5000 lines total");
+    expect(out).toMatch(/offset:\d+/);
+    expect(out).toMatch(/limit:\d+/);
+    // Still capped like every other over-cap tool output.
     expect(out.length).toBeLessThan(31_000);
+  });
+
+  it("keeps the generic middle-out marker for a RANGE read that overflows the cap", async () => {
+    // offset/limit were supplied, so the model already chose a span — no
+    // line-aware recovery hint, just the generic char-count note.
+    const lines = Array.from(
+      { length: 5000 },
+      (_, i) => `line ${i + 1}: ${"x".repeat(20)}`,
+    );
+    const ws = new MemoryWorkspace({ "big.txt": lines.join("\n") });
+    const tools = buildWorkspaceTools(ws);
+    const out = await run(tools.read_file, {
+      path: "big.txt",
+      offset: 1,
+      limit: 5000,
+    });
+    expect(out).toContain("truncated from the middle");
+    expect(out).not.toContain("lines total");
+    expect(out.length).toBeLessThan(31_000);
+  });
+});
+
+describe("readFileTruncationMarker", () => {
+  it("emits a concrete offset/limit hint when a middle span of lines is elided", () => {
+    const marker = readFileTruncationMarker(5000);
+    const msg = marker({
+      dropped: 120_000,
+      head: Array.from({ length: 900 }, () => "h").join("\n"), // 900 head lines
+      tail: Array.from({ length: 600 }, () => "t").join("\n"), // 600 tail lines
+    });
+    expect(msg).toContain("5000 lines total");
+    expect(msg).toContain("offset:900");
+    expect(msg).toContain("limit:3500"); // 5000 - 900 - 600
+  });
+
+  it("falls back to a char-oriented note for a single over-cap line (no line range)", () => {
+    const marker = readFileTruncationMarker(1);
+    const msg = marker({
+      dropped: 10_000,
+      head: "h".repeat(18_000),
+      tail: "t".repeat(12_000),
+    });
+    expect(msg).toContain("1 line(s)");
+    expect(msg).not.toContain("offset:");
   });
 });
 
@@ -377,6 +432,38 @@ describe("clip (middle-out truncation)", () => {
     expect(out.endsWith("TAIL_END")).toBe(true);
     expect(out).toContain("truncated from the middle");
     expect(out.length).toBeLessThan(31_000);
+  });
+});
+
+describe("clipMiddle (parameterized middle-out truncation)", () => {
+  it("returns text at or under the cap unchanged", () => {
+    expect(clipMiddle("small", 10_000)).toBe("small");
+    expect(clipMiddle("x".repeat(100), 100)).toBe("x".repeat(100));
+  });
+
+  it("clips to an arbitrary cap with a char-count marker, keeping head + tail", () => {
+    const text = "HEAD" + "z".repeat(20_000) + "TAIL";
+    const out = clipMiddle(text, 5_000);
+    expect(out.startsWith("HEAD")).toBe(true);
+    expect(out.endsWith("TAIL")).toBe(true);
+    expect(out).toContain("truncated from the middle");
+    // head (⌊0.6·5000⌋=3000) + tail (2000) + short marker → bounded near the cap.
+    expect(out.length).toBeLessThan(5_200);
+    // Marker reports the exact elided count: 20008 total − 5000 kept = 15008.
+    expect(out).toContain(`${text.length - 5_000} chars truncated`);
+  });
+
+  it("applies the tighter 10k stderr budget the exec envelope uses", () => {
+    const out = clipMiddle("e".repeat(50_000), 10_000);
+    expect(out).toContain("truncated from the middle");
+    expect(out.length).toBeLessThan(10_500);
+  });
+
+  it("honors a custom head fraction", () => {
+    const text = "A".repeat(1_000) + "B".repeat(1_000);
+    const out = clipMiddle(text, 100, 0.5);
+    expect(out.startsWith("A".repeat(50))).toBe(true); // head = 50% of 100
+    expect(out.endsWith("B".repeat(50))).toBe(true); // tail = the remaining 50
   });
 });
 
@@ -426,7 +513,7 @@ describe("buildWorkspaceTools – edit_file replace_all + structured feedback", 
       old_string: "bar",
       new_string: "baz",
     });
-    expect(out).toBe("Edited /repo/a.ts");
+    expect(out).toBe("Edited a.ts");
   });
 
   it("keeps an absolute input path as-is in the edit confirmation", async () => {

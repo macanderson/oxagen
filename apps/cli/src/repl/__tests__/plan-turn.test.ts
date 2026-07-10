@@ -8,7 +8,13 @@
  */
 import { describe, expect, it } from "vitest";
 import type { ModelMessage } from "ai";
-import { fallbackPlan, historyDigest, planReplTurn, type PlanFn } from "../plan-turn.js";
+import { isSingleTaskGoal } from "@oxagen/agent-engine";
+import {
+  fallbackPlan,
+  historyDigest,
+  planReplTurn,
+  type PlanFn,
+} from "../plan-turn.js";
 import type { Plan } from "../../agent/fleet/types.js";
 import { emptyUsage } from "../../agent/fleet/types.js";
 
@@ -84,10 +90,12 @@ describe("fallbackPlan", () => {
 });
 
 describe("planReplTurn", () => {
-  it("returns the planner's tasks and rehomes the goal onto the raw submission", async () => {
+  it("forwards the RAW goal plus the conversation digest as separate context", async () => {
     let seenGoal = "";
+    let seenContext: string | undefined;
     const planFn: PlanFn = async (opts) => {
       seenGoal = opts.goal;
+      seenContext = opts.context;
       return makePlan(3) as never;
     };
     const plan = await planReplTurn({
@@ -98,19 +106,51 @@ describe("planReplTurn", () => {
     });
     expect(plan.tasks).toHaveLength(3);
     expect(plan.goal).toBe("current ask");
-    // The planner saw the conversation digest AND the current request.
-    expect(seenGoal).toContain("earlier ask");
-    expect(seenGoal).toContain("current ask");
+    // The planner receives the RAW goal (so the engine single-task fast path is
+    // never defeated) and the conversation digest as SEPARATE context.
+    expect(seenGoal).toBe("current ask");
+    expect(seenContext).toContain("earlier ask");
   });
 
-  it("passes the raw goal when there is no history", async () => {
+  it("passes the raw goal and no context when there is no history", async () => {
     let seenGoal = "";
+    let seenContext: string | undefined = "sentinel";
     const planFn: PlanFn = async (opts) => {
       seenGoal = opts.goal;
+      seenContext = opts.context;
       return makePlan(1) as never;
     };
     await planReplTurn({ goal: "solo ask", history: [], ai: AI_STUB, planFn });
     expect(seenGoal).toBe("solo ask");
+    expect(seenContext).toBeUndefined();
+  });
+
+  it("keeps a trivial single-task goal fast-path-eligible on a history-bearing turn", async () => {
+    // Regression for the defeated fast path: the digest used to be prepended to
+    // the goal, making it multi-line so `isSingleTaskGoal` always returned false
+    // and every follow-up paid for a planner+enhance round-trip. The goal handed
+    // to the engine planner must stay the raw, single-line submission.
+    let seenGoal = "";
+    let seenContext: string | undefined;
+    const planFn: PlanFn = async (opts) => {
+      seenGoal = opts.goal;
+      seenContext = opts.context;
+      return makePlan(1) as never;
+    };
+    await planReplTurn({
+      goal: "fix the typo in README",
+      history: [
+        { role: "user", content: "add a route" },
+        { role: "assistant", content: "done, added /v1/foo" },
+      ],
+      ai: AI_STUB,
+      planFn,
+    });
+    expect(seenGoal).toBe("fix the typo in README");
+    // The exact predicate the engine planner uses to skip the LLM call.
+    expect(isSingleTaskGoal(seenGoal)).toBe(true);
+    // The history still reaches the planner — just as reference-resolution context.
+    expect(seenContext).toContain("add a route");
   });
 
   it("hands the agent roster through to the planner", async () => {
@@ -141,7 +181,12 @@ describe("planReplTurn", () => {
     const planFn: PlanFn = async () => {
       throw new Error("gateway down");
     };
-    const plan = await planReplTurn({ goal: "do a thing", history: [], ai: AI_STUB, planFn });
+    const plan = await planReplTurn({
+      goal: "do a thing",
+      history: [],
+      ai: AI_STUB,
+      planFn,
+    });
     expect(plan.tasks).toHaveLength(1);
     expect(plan.tasks[0]!.description).toBe("do a thing");
   });

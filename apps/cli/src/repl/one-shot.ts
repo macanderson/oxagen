@@ -41,7 +41,7 @@ import {
   TURN_BUDGET_MODES,
   type TurnBudgetPolicy,
   type TurnBudgetVerdict,
-} from "@oxagen/billing";
+} from "@oxagen/billing/turn-budget";
 import { PermissionBroker, type PermissionMode } from "../agent/permissions.js";
 import { loadSettings } from "../settings/resolve.js";
 import { buildTurnExtras, type TurnExtras } from "../agent/turn-extras.js";

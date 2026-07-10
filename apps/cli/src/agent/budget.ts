@@ -20,7 +20,7 @@ import {
   parseTurnBudgetMode,
   type TurnBudgetMode,
   type TurnBudgetPolicy,
-} from "@oxagen/billing";
+} from "@oxagen/billing/turn-budget";
 
 /** Parse `--budget <usd>` into a positive dollar amount, or null when invalid. */
 export function parseBudgetFlag(raw: string): number | null {

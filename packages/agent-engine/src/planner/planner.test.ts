@@ -39,10 +39,20 @@ function makeAi(tasks: RawTask[], capture?: { args?: unknown }): AgentAi {
 describe("planTasks", () => {
   it("produces a draft plan with the goal and resolved per-task models", async () => {
     const ai = makeAi([
-      { id: "add-route", title: "Add route", description: "add a GET route", dependsOn: [], files: ["api.ts"], tier: "balanced" },
+      {
+        id: "add-route",
+        title: "Add route",
+        description: "add a GET route",
+        dependsOn: [],
+        files: ["api.ts"],
+        tier: "balanced",
+      },
     ]);
 
-    const plan = await planTasks({ goal: "add a listing endpoint, then document it", ai });
+    const plan = await planTasks({
+      goal: "add a listing endpoint, then document it",
+      ai,
+    });
 
     expect(plan.status).toBe("draft");
     expect(plan.goal).toBe("add a listing endpoint, then document it");
@@ -58,7 +68,14 @@ describe("planTasks", () => {
   it("escalates a task's tier when the router flags a high-stakes domain (never under-spend)", async () => {
     // The model proposed 'fast', but the description touches auth → precise floor wins.
     const ai = makeAi([
-      { id: "auth", title: "Rework login", description: "change the auth session password flow", dependsOn: [], files: ["auth.ts"], tier: "fast" },
+      {
+        id: "auth",
+        title: "Rework login",
+        description: "change the auth session password flow",
+        dependsOn: [],
+        files: ["auth.ts"],
+        tier: "fast",
+      },
     ]);
 
     const plan = await planTasks({ goal: "harden auth, and add tests", ai });
@@ -69,7 +86,14 @@ describe("planTasks", () => {
   it("keeps the model's higher tier when the router would under-spend", async () => {
     // Description is mechanical → router says 'fast', but the model asked for 'precise'.
     const ai = makeAi([
-      { id: "t1", title: "rename var", description: "rename a local variable", dependsOn: [], files: ["a.ts"], tier: "precise" },
+      {
+        id: "t1",
+        title: "rename var",
+        description: "rename a local variable",
+        dependsOn: [],
+        files: ["a.ts"],
+        tier: "precise",
+      },
     ]);
 
     const plan = await planTasks({ goal: "rename, then reformat", ai });
@@ -78,9 +102,29 @@ describe("planTasks", () => {
 
   it("backfills a missing id and de-duplicates repeated ids", async () => {
     const ai = makeAi([
-      { title: "first", description: "do first", tier: "fast", files: [], dependsOn: [] },
-      { id: "dup", title: "second", description: "do second", tier: "fast", files: [], dependsOn: [] },
-      { id: "dup", title: "third", description: "do third", tier: "fast", files: [], dependsOn: [] },
+      {
+        title: "first",
+        description: "do first",
+        tier: "fast",
+        files: [],
+        dependsOn: [],
+      },
+      {
+        id: "dup",
+        title: "second",
+        description: "do second",
+        tier: "fast",
+        files: [],
+        dependsOn: [],
+      },
+      {
+        id: "dup",
+        title: "third",
+        description: "do third",
+        tier: "fast",
+        files: [],
+        dependsOn: [],
+      },
     ]);
 
     const plan = await planTasks({ goal: "several things", ai });
@@ -93,22 +137,60 @@ describe("planTasks", () => {
 
   it("keeps an agent assignment only when it names a roster member", async () => {
     const roster: AgentDefinition[] = [
-      { name: "db-expert", description: "database specialist", systemPrompt: "" },
+      {
+        name: "db-expert",
+        description: "database specialist",
+        systemPrompt: "",
+      },
     ];
     const ai = makeAi([
-      { id: "a", title: "migrate", description: "add a table", tier: "balanced", files: [], dependsOn: [], agent: "db-expert" },
-      { id: "b", title: "ghost", description: "do it", tier: "balanced", files: [], dependsOn: [], agent: "nonexistent" },
+      {
+        id: "a",
+        title: "migrate",
+        description: "add a table",
+        tier: "balanced",
+        files: [],
+        dependsOn: [],
+        agent: "db-expert",
+      },
+      {
+        id: "b",
+        title: "ghost",
+        description: "do it",
+        tier: "balanced",
+        files: [],
+        dependsOn: [],
+        agent: "nonexistent",
+      },
     ]);
 
-    const plan = await planTasks({ goal: "db work, then migrate", ai, agents: roster });
+    const plan = await planTasks({
+      goal: "db work, then migrate",
+      ai,
+      agents: roster,
+    });
     expect(plan.tasks.find((t) => t.id === "a")!.agent).toBe("db-expert");
     expect(plan.tasks.find((t) => t.id === "b")!.agent).toBeUndefined();
   });
 
   it("drops dependencies that point at non-existent ids and self-edges", async () => {
     const ai = makeAi([
-      { id: "a", title: "A", description: "do a", tier: "fast", files: [], dependsOn: ["ghost", "a"] },
-      { id: "b", title: "B", description: "do b", tier: "fast", files: [], dependsOn: ["a"] },
+      {
+        id: "a",
+        title: "A",
+        description: "do a",
+        tier: "fast",
+        files: [],
+        dependsOn: ["ghost", "a"],
+      },
+      {
+        id: "b",
+        title: "B",
+        description: "do b",
+        tier: "fast",
+        files: [],
+        dependsOn: ["a"],
+      },
     ]);
 
     const plan = await planTasks({ goal: "two tasks, in sequence", ai });
@@ -119,10 +201,23 @@ describe("planTasks", () => {
   it("includes the agent roster in the planning prompt when agents are provided", async () => {
     const capture: { args?: unknown } = {};
     const roster: AgentDefinition[] = [
-      { name: "db-expert", description: "database specialist", systemPrompt: "" },
+      {
+        name: "db-expert",
+        description: "database specialist",
+        systemPrompt: "",
+      },
     ];
     const ai = makeAi(
-      [{ id: "a", title: "A", description: "do a", tier: "fast", files: [], dependsOn: [] }],
+      [
+        {
+          id: "a",
+          title: "A",
+          description: "do a",
+          tier: "fast",
+          files: [],
+          dependsOn: [],
+        },
+      ],
       capture,
     );
 
@@ -135,7 +230,16 @@ describe("planTasks", () => {
   it("honours a pinned planning model override", async () => {
     const capture: { args?: unknown } = {};
     const ai = makeAi(
-      [{ id: "a", title: "A", description: "do a", tier: "fast", files: [], dependsOn: [] }],
+      [
+        {
+          id: "a",
+          title: "A",
+          description: "do a",
+          tier: "fast",
+          files: [],
+          dependsOn: [],
+        },
+      ],
       capture,
     );
 
@@ -146,18 +250,41 @@ describe("planTasks", () => {
   it("perf #9: defaults the planner call to the fast tier for a non-precise multi-part goal", async () => {
     const capture: { args?: unknown } = {};
     const ai = makeAi(
-      [{ id: "a", title: "A", description: "do a", tier: "fast", files: [], dependsOn: [] }],
+      [
+        {
+          id: "a",
+          title: "A",
+          description: "do a",
+          tier: "fast",
+          files: [],
+          dependsOn: [],
+        },
+      ],
       capture,
     );
     // Multi-part (has "and"/"then") but nothing high-stakes → cheap decomposition.
-    await planTasks({ goal: "rename the helper and update its callers, then run the tests", ai });
-    expect((capture.args as { model: string }).model).toBe(modelForTier("fast"));
+    await planTasks({
+      goal: "rename the helper and update its callers, then run the tests",
+      ai,
+    });
+    expect((capture.args as { model: string }).model).toBe(
+      modelForTier("fast"),
+    );
   });
 
   it("perf #9: escalates the planner call to precise for a high-stakes multi-part goal", async () => {
     const capture: { args?: unknown } = {};
     const ai = makeAi(
-      [{ id: "a", title: "A", description: "do a", tier: "precise", files: [], dependsOn: [] }],
+      [
+        {
+          id: "a",
+          title: "A",
+          description: "do a",
+          tier: "precise",
+          files: [],
+          dependsOn: [],
+        },
+      ],
       capture,
     );
     // Auth/billing/migration hits PRECISE_DOMAINS → decomposition must not under-tier.
@@ -165,7 +292,9 @@ describe("planTasks", () => {
       goal: "add auth to the billing API and migrate the payments schema, then document it",
       ai,
     });
-    expect((capture.args as { model: string }).model).toBe(modelForTier("precise"));
+    expect((capture.args as { model: string }).model).toBe(
+      modelForTier("precise"),
+    );
   });
 });
 
@@ -203,9 +332,65 @@ describe("planTasks — deterministic single-task fast-path", () => {
 
   it("still runs the planner model call for a multi-part goal", async () => {
     const ai = makeAi([
-      { id: "a", title: "A", description: "do a", tier: "fast", files: [], dependsOn: [] },
+      {
+        id: "a",
+        title: "A",
+        description: "do a",
+        tier: "fast",
+        files: [],
+        dependsOn: [],
+      },
     ]);
     await planTasks({ goal: "do X, then Y, and also Z", ai });
     expect(ai.generateObject).toHaveBeenCalledOnce();
+  });
+
+  it("takes the fast path for a single-task goal even when conversation context is supplied", async () => {
+    // Regression: the REPL passes recent-conversation context on every
+    // history-bearing turn. Context must not defeat the fast path — the heuristic
+    // sees only the raw (single-line) goal, so no planner model call fires.
+    const ai = makeAi([]); // if the model were called it would return zero tasks
+    const plan = await planTasks({
+      goal: "fix the typo in README",
+      ai,
+      context:
+        "Conversation so far (for reference resolution):\nuser: add a route\nassistant: done",
+    });
+
+    expect(ai.generateObject).not.toHaveBeenCalled();
+    expect(plan.tasks).toHaveLength(1);
+    expect(plan.tasks[0]!.title).toBe("fix the typo in README");
+  });
+
+  it("renders the conversation context as its own block ahead of the goal on the planner call", async () => {
+    const capture: { args?: unknown } = {};
+    const ai = makeAi(
+      [
+        {
+          id: "a",
+          title: "A",
+          description: "do a",
+          tier: "fast",
+          files: [],
+          dependsOn: [],
+        },
+      ],
+      capture,
+    );
+
+    await planTasks({
+      goal: "do X, then Y, and also Z",
+      ai,
+      context:
+        "Conversation so far (for reference resolution):\nuser: build the widget",
+    });
+
+    const prompt = (capture.args as { prompt: string }).prompt;
+    expect(prompt).toContain("Conversation so far (for reference resolution):");
+    expect(prompt).toContain("user: build the widget");
+    // Context precedes the goal block so reference resolution has the antecedent.
+    expect(prompt.indexOf("Conversation so far")).toBeLessThan(
+      prompt.indexOf("Goal:"),
+    );
   });
 });

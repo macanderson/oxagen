@@ -33,6 +33,8 @@ import React, {
 } from "react";
 import type { ModelMessage } from "ai";
 import { readFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { theme } from "../tui/theme.js";
 import { runTurn, type AgentAi, type StageEvent } from "@oxagen/agent-engine";
 import {
@@ -76,6 +78,7 @@ import { openFleetMemory } from "../agent/fleet/memory.js";
 import { openPlanStore } from "../agent/fleet/store.js";
 import { loadAgents } from "../agents/loader.js";
 import { planReplTurn, fallbackPlan } from "./plan-turn.js";
+import { resolveDeterministicTurn } from "./deterministic-resolver.js";
 import { classifyPromptIntent } from "./prompt-intent.js";
 import { runFleetTurn } from "./fleet-turn.js";
 import { agentRegistry, type AgentHandle } from "../agent/agent-registry.js";
@@ -189,6 +192,9 @@ import {
   type PermissionMode,
 } from "../agent/permissions.js";
 import { loadSettings } from "../settings/resolve.js";
+// Subpath import, NOT the @oxagen/billing barrel: the barrel eagerly loads
+// Stripe + drizzle + the whole billing surface (~400 ms measured), which would
+// sit on the REPL's first-paint critical path for four small helpers.
 import {
   createTurnBudgetGuard,
   formatBudgetUsd,
@@ -196,7 +202,7 @@ import {
   TURN_BUDGET_OFF,
   type TurnBudgetPolicy,
   type TurnBudgetVerdict,
-} from "@oxagen/billing";
+} from "@oxagen/billing/turn-budget";
 import { parseBudgetCommand, describeBudgetModes } from "../agent/budget.js";
 import pkg from "../../package.json" with { type: "json" };
 
@@ -2391,6 +2397,54 @@ export function ReplApp({
           } else {
             pushAssistant(
               `Unknown command: /${name}. Type /help for built-ins, or / to browse the menu.`,
+            );
+          }
+          return;
+        }
+      }
+
+      // Determinism before intelligence: a submission that maps to a fully
+      // determined artifact (e.g. a .gitignore composed from curated
+      // templates) resolves in-process — no planner, no engine loop, no model
+      // call. The matcher classifies every word of the submission and falls
+      // through to the normal pipeline on ANY doubt (deterministic-resolver.ts).
+      // Skipped in read-only mode: the resolver's only job is to write.
+      if (modeRef.current !== "readonly") {
+        const deterministic = resolveDeterministicTurn(submission, {
+          fileExists: (relPath) => existsSync(join(cwd, relPath)),
+        });
+        if (deterministic) {
+          commit([
+            ...allRef.current,
+            { role: "user", content: submission, timestamp: Date.now() },
+          ]);
+          try {
+            const gated = createGatedWorkspace(
+              workspaceRef.current,
+              brokerRef.current ?? undefined,
+            );
+            await gated.writeFile(deterministic.path, deterministic.content);
+            pushAssistant(`⚡ ${deterministic.summary}`);
+            // Deterministic turns bypass runTurn — extend the conversation
+            // history manually (same as fleet turns) so follow-ups see it.
+            historyRef.current = [
+              ...historyRef.current,
+              { role: "user", content: submission },
+              { role: "assistant", content: deterministic.summary },
+            ];
+            setTurns((n) => n + 1);
+            void debugLog("turn", "turn.end", {
+              mode: "repl-deterministic",
+              path: deterministic.path,
+              targets: deterministic.targets,
+            });
+          } catch (err) {
+            // Broker denial or fs failure — surface it and stop. Deliberately
+            // do NOT fall through to the model: a denied write should stay
+            // denied, not be retried through a costlier path.
+            pushAssistant(
+              `Deterministic resolve of ${deterministic.path} did not complete: ` +
+                `${err instanceof Error ? err.message : String(err)}`,
             );
           }
           return;

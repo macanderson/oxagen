@@ -8,7 +8,7 @@
  * CLI-side input parsing built on top of them.
  */
 import { describe, it, expect } from "vitest";
-import { DEFAULT_TURN_BUDGET_MODE } from "@oxagen/billing";
+import { DEFAULT_TURN_BUDGET_MODE } from "@oxagen/billing/turn-budget";
 import {
   parseBudgetFlag,
   resolveBudgetFlags,

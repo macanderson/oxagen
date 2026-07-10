@@ -160,7 +160,7 @@ export function buildProgram(): Command {
         // platform persistence — the CLI runs BYOK/offline). Dynamic import so
         // @oxagen/billing only loads when the flag is actually used, matching
         // this file's "no side effects until an action runs" contract.
-        let budget: import("@oxagen/billing").TurnBudgetPolicy | undefined;
+        let budget: import("@oxagen/billing/turn-budget").TurnBudgetPolicy | undefined;
         if (opts.budget !== undefined) {
           const { resolveBudgetFlags } = await import("./agent/budget.js");
           const resolved = resolveBudgetFlags(opts.budget, opts.budgetMode);

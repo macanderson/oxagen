@@ -57,6 +57,11 @@ export function createPlatformAgentAi(
         effort: args.effort,
         stopWhen: args.stopWhen,
         onError: args.onError,
+        // The engine's step loop owns retries (classified, jittered backoff) —
+        // SDK-internal retries underneath it multiply upstream attempts on a
+        // flaky provider and block abort while they spin. Same treatment the
+        // generateObject path already gets.
+        maxRetries: 0,
         ...(args.abortSignal !== undefined ? { abortSignal: args.abortSignal } : {}),
         telemetry,
       });
