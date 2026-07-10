@@ -8,7 +8,7 @@ export const integrationInstall = registerCapability({
     "Install a plugin instance from catalog or custom URL. Fetches schema, validates config, and installs in workspace scope.",
   mode: "async",
   surfaces: ["api", "mcp", "cli", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   agent: { requiresApproval: true, riskLevel: "high", category: "plugin" },
   sensitivity: "high",
@@ -18,15 +18,26 @@ export const integrationInstall = registerCapability({
     workspace: { Owner: "allow", Member: "allow" },
   },
   input: z.object({
-    pluginId: z.string().describe("Plugin identifier from catalog (e.g., 'github', 'google-drive')"),
-    version: z.string().optional().describe("Plugin version (latest if omitted)"),
+    pluginId: z
+      .string()
+      .describe(
+        "Plugin identifier from catalog (e.g., 'github', 'google-drive')",
+      ),
+    version: z
+      .string()
+      .optional()
+      .describe("Plugin version (latest if omitted)"),
     schemaUrl: z
       .string()
       .url()
       .optional()
       .describe("For custom plugins: HTTPS URL to fetch schema.yaml from"),
-    config: z.record(z.unknown()).describe("Plugin configuration matching the schema"),
-    displayName: z.string().describe("Human-readable display name for this plugin instance"),
+    config: z
+      .record(z.unknown())
+      .describe("Plugin configuration matching the schema"),
+    displayName: z
+      .string()
+      .describe("Human-readable display name for this plugin instance"),
   }),
   output: z.object({
     jobId: z.string().describe("Background install job ID"),
@@ -37,4 +48,6 @@ export const integrationInstall = registerCapability({
 });
 
 export type IntegrationInstallInput = z.output<typeof integrationInstall.input>;
-export type IntegrationInstallOutput = z.output<typeof integrationInstall.output>;
+export type IntegrationInstallOutput = z.output<
+  typeof integrationInstall.output
+>;

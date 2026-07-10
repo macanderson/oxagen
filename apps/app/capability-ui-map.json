@@ -10,6 +10,33 @@
     "verifiedBy": "session id / agent that captured the proof"
   },
   "bindings": {
+    "get_plugin_schema": {
+      "route": "/[orgSlug]/[workspaceSlug]/marketplace/integrations/[connectorId]",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/marketplace/integrations/[connectorId]/page.tsx",
+      "entry": "Page load SSR-prefetches the connector schema (getConnectorSetupSchemaAction) to drive ConnectorConfigForm's dynamic fields",
+      "testid": null,
+      "proof": "apps/app/e2e/connector-setup-wizard.spec.ts",
+      "verifiedAt": "2026-07-10",
+      "verifiedBy": "session_0171c9SvAk9sxjKLzCr7uBWL"
+    },
+    "install_integration": {
+      "route": "/[orgSlug]/[workspaceSlug]/marketplace/integrations/[connectorId]",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/marketplace/integrations/[connectorId]/page.tsx",
+      "entry": "ConnectorConfigForm \"Connect\" submit → POST /integrations",
+      "testid": null,
+      "proof": "apps/app/e2e/connector-setup-wizard.spec.ts",
+      "verifiedAt": "2026-07-10",
+      "verifiedBy": "session_0171c9SvAk9sxjKLzCr7uBWL"
+    },
+    "configure_integration": {
+      "route": "/[orgSlug]/[workspaceSlug]/marketplace/integrations/[connectorId]",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/marketplace/integrations/[connectorId]/page.tsx",
+      "entry": "ConnectorConfigForm \"Save changes\" submit (mode=\"configure\") → PATCH /integrations/:id/configure",
+      "testid": null,
+      "proof": "apps/app/e2e/connector-setup-wizard.spec.ts",
+      "verifiedAt": "2026-07-10",
+      "verifiedBy": "session_0171c9SvAk9sxjKLzCr7uBWL"
+    },
     "search_references": {
       "route": "/[orgSlug]/[workspaceSlug]/chat",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/chat/page.tsx",
