@@ -1,7 +1,10 @@
 "use client";
 import * as React from "react";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronRight } from "lucide-react";
+import { motion, AnimatePresence, useReducedMotion } from "motion/react";
 import { Tabs, TabsPanel, TabsList, TabsTab } from "@/components/ui/tabs";
+import { transition } from "@oxagen/ui/lib/motion";
+import { cn } from "@/lib/utils";
 import { HeaderStatus, formatDuration } from "./tool-call-card";
 import { toolCallMeta } from "./tool-call-meta";
 // Shared GitHub light/dark palette — same surface as the terminal & trace card.
@@ -58,6 +61,7 @@ export function CodeExecuteCard({
   durationMs,
   defaultOpen = false,
 }: CodeExecuteCardProps) {
+  const reducedMotion = useReducedMotion();
   const [open, setOpen] = React.useState(defaultOpen);
   const stdoutRef = React.useRef<HTMLPreElement>(null);
   const stderrRef = React.useRef<HTMLPreElement>(null);
@@ -98,19 +102,15 @@ export function CodeExecuteCard({
           open ? "Collapse code run details" : "Expand code run details"
         }
         title="execute_code"
-        className="flex min-h-9 w-full items-center gap-2 px-3 py-1.5 text-left"
+        className="flex min-h-9 w-full items-center gap-2 px-3 py-1.5 text-left transition-colors hover:bg-muted/40"
       >
-        {open ? (
-          <ChevronDown
-            className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
-            aria-hidden="true"
-          />
-        ) : (
-          <ChevronRight
-            className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
-            aria-hidden="true"
-          />
-        )}
+        <ChevronRight
+          className={cn(
+            "h-3.5 w-3.5 shrink-0 text-muted-foreground/70 transition-transform",
+            open && "rotate-90",
+          )}
+          aria-hidden="true"
+        />
         <Icon
           className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
           aria-hidden="true"
@@ -129,83 +129,102 @@ export function CodeExecuteCard({
         </span>
       </button>
 
-      {open ? (
-        <div className="space-y-2 border-t px-3 py-2">
-          <pre className="code-surface overflow-x-auto rounded-lg p-3 font-mono text-xs leading-relaxed">
-            <code>{code}</code>
-          </pre>
-
-          <Tabs defaultValue="stdout">
-            <TabsList>
-              <TabsTab value="stdout">stdout</TabsTab>
-              <TabsTab value="stderr">stderr</TabsTab>
-            </TabsList>
-            <TabsPanel value="stdout">
-              <pre
-                ref={stdoutRef}
-                className="code-surface-bare max-h-48 overflow-y-auto rounded-lg p-2 font-mono text-xs text-success"
-              >
-                {stdout ?? (status === "running" ? "Waiting for output…" : "")}
+      <AnimatePresence initial={false}>
+        {open ? (
+          <motion.div
+            key="code-execute-body"
+            initial={
+              reducedMotion ? { opacity: 0 } : { height: 0, opacity: 0 }
+            }
+            animate={
+              reducedMotion ? { opacity: 1 } : { height: "auto", opacity: 1 }
+            }
+            exit={reducedMotion ? { opacity: 0 } : { height: 0, opacity: 0 }}
+            transition={transition.base}
+            style={{ overflow: "hidden" }}
+          >
+            <div className="space-y-2 border-t px-3 py-2.5">
+              <pre className="code-surface overflow-x-auto rounded-lg p-3 font-mono text-xs leading-relaxed">
+                <code>{code}</code>
               </pre>
-            </TabsPanel>
-            <TabsPanel value="stderr">
-              <pre
-                ref={stderrRef}
-                className="code-surface-bare max-h-48 overflow-y-auto rounded-lg p-2 font-mono text-xs text-error"
-              >
-                {stderr ?? ""}
-              </pre>
-            </TabsPanel>
-          </Tabs>
 
-          {status !== "running" ? (
-            <div className="flex flex-wrap items-center gap-2 text-xs">
-              <span
-                className={
-                  exitCode === 0
-                    ? "inline-flex items-center gap-1 text-xs font-medium tabular-nums text-success"
-                    : "inline-flex items-center gap-1 text-xs font-medium tabular-nums text-destructive"
-                }
-              >
-                exit {exitCode ?? "?"}
-              </span>
-              {oomKilled ? (
-                <span className="inline-flex items-center gap-1 text-xs font-medium text-destructive">
-                  OOM killed
-                </span>
+              <Tabs defaultValue="stdout">
+                <TabsList>
+                  <TabsTab value="stdout">stdout</TabsTab>
+                  <TabsTab value="stderr">stderr</TabsTab>
+                </TabsList>
+                <TabsPanel value="stdout">
+                  <pre
+                    ref={stdoutRef}
+                    className="code-surface-bare max-h-48 overflow-y-auto rounded-lg p-2.5 font-mono text-xs leading-relaxed text-success"
+                  >
+                    {stdout ??
+                      (status === "running" ? "Waiting for output…" : "")}
+                  </pre>
+                </TabsPanel>
+                <TabsPanel value="stderr">
+                  <pre
+                    ref={stderrRef}
+                    className="code-surface-bare max-h-48 overflow-y-auto rounded-lg p-2.5 font-mono text-xs leading-relaxed text-error"
+                  >
+                    {stderr ?? ""}
+                  </pre>
+                </TabsPanel>
+              </Tabs>
+
+              {status !== "running" ? (
+                <div className="flex flex-wrap items-center gap-2 text-xs">
+                  <span
+                    className={cn(
+                      "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium tabular-nums",
+                      exitCode === 0
+                        ? "bg-success/15 text-success"
+                        : "bg-destructive/15 text-destructive",
+                    )}
+                  >
+                    exit {exitCode ?? "?"}
+                  </span>
+                  {oomKilled ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-destructive/15 px-2 py-0.5 text-xs font-medium text-destructive">
+                      OOM killed
+                    </span>
+                  ) : null}
+                  {hasHtmlOutput ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowHtmlPreview((v) => !v)}
+                      className="ml-auto inline-flex items-center gap-1 rounded-md border border-border bg-muted px-2 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      aria-expanded={showHtmlPreview}
+                      aria-label={
+                        showHtmlPreview
+                          ? "Hide HTML preview"
+                          : "Show HTML preview"
+                      }
+                    >
+                      {showHtmlPreview ? "Hide Preview" : "Preview HTML"}
+                    </button>
+                  ) : null}
+                </div>
               ) : null}
-              {hasHtmlOutput ? (
-                <button
-                  type="button"
-                  onClick={() => setShowHtmlPreview((v) => !v)}
-                  className="ml-auto inline-flex items-center gap-1 rounded-md border border-border bg-muted px-2 py-1 text-xs font-medium text-foreground hover:bg-muted/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors"
-                  aria-expanded={showHtmlPreview}
-                  aria-label={
-                    showHtmlPreview ? "Hide HTML preview" : "Show HTML preview"
+
+              {/* Sandboxed HTML artifact preview — only shown when stdout is HTML and user toggled it. */}
+              {hasHtmlOutput && showHtmlPreview && stdout != null ? (
+                <Suspense
+                  fallback={
+                    <div
+                      className="h-32 animate-pulse rounded-xl bg-muted"
+                      aria-busy="true"
+                      aria-label="Loading preview"
+                    />
                   }
                 >
-                  {showHtmlPreview ? "Hide Preview" : "Preview HTML"}
-                </button>
+                  <HtmlArtifact html={stdout} title={`Output — ${language}`} />
+                </Suspense>
               ) : null}
             </div>
-          ) : null}
-
-          {/* Sandboxed HTML artifact preview — only shown when stdout is HTML and user toggled it. */}
-          {hasHtmlOutput && showHtmlPreview && stdout != null ? (
-            <Suspense
-              fallback={
-                <div
-                  className="h-32 animate-pulse rounded-xl bg-muted"
-                  aria-busy="true"
-                  aria-label="Loading preview"
-                />
-              }
-            >
-              <HtmlArtifact html={stdout} title={`Output — ${language}`} />
-            </Suspense>
-          ) : null}
-        </div>
-      ) : null}
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
     </div>
   );
 }
