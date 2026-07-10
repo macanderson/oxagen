@@ -16,7 +16,6 @@ import { NextResponse, type NextRequest } from "next/server";
 import { unstable_rethrow } from "next/navigation";
 import { auth as mcpAuth } from "@modelcontextprotocol/sdk/client/auth.js";
 import { and, eq, ne, sql } from "drizzle-orm";
-import type { FetchLike } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { schema, withSystemDb } from "@oxagen/database";
 import {
   DbOAuthClientProvider,
@@ -24,29 +23,12 @@ import {
   deleteOAuthState,
 } from "@oxagen/plugins";
 import { isNextRedirectError } from "@/lib/auth-denial";
+import { safeFetch } from "@/lib/mcp-oauth/safe-fetch";
 import { logger } from "@oxagen/handlers/logger";
 
 // Runs on the default Node.js runtime — MCP SDK auth uses Node crypto, so this
 // route must never move to edge. No `export const runtime`: the segment config
 // is incompatible with cacheComponents (Node is the framework default).
-
-/**
- * Fetch wrapper for mcpAuth — see authorize/route.ts for full explanation.
- * `cache: "no-store"` bypasses Next's per-URL dedup locks; pre-draining
- * non-OK bodies prevents the patched Response's body.cancel() from hanging.
- */
-const safeFetch: FetchLike = async (input, init) => {
-  const resp = await fetch(input, { ...init, cache: "no-store" });
-  if (!resp.ok) {
-    const text = await resp.text().catch(() => "");
-    return new Response(text || null, {
-      status: resp.status,
-      statusText: resp.statusText,
-      headers: resp.headers,
-    });
-  }
-  return resp;
-};
 
 /**
  * GET wrapper — guarantees the serverless function never crashes with an

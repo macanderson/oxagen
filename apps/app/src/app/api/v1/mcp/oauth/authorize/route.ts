@@ -23,37 +23,12 @@ import { getSession } from "@/lib/session";
 import { resolveReturnTo } from "@/lib/mcp-oauth/return-to";
 import { resolveOrg, assertMcpManager } from "@/lib/resolve-org";
 import { authDenialStatus, isNextRedirectError } from "@/lib/auth-denial";
+import { safeFetch } from "@/lib/mcp-oauth/safe-fetch";
 import { logger } from "@oxagen/handlers/logger";
-import type { FetchLike } from "@modelcontextprotocol/sdk/shared/transport.js";
 
 // Runs on the default Node.js runtime — MCP SDK auth uses Node crypto, so this
 // route must never move to edge. No `export const runtime`: the segment config
 // is incompatible with cacheComponents (Node is the framework default).
-
-/**
- * Fetch wrapper for mcpAuth that works around two Next.js patched-fetch
- * behaviours that hang the OAuth discovery sequence:
- *
- * 1. Next's caching layer takes per-URL locks for request deduplication;
- *    mcpAuth's sequential well-known fetches can deadlock on the lock held by
- *    the previous request. `cache: "no-store"` bypasses the lock entirely.
- * 2. Next wraps Response objects; calling body.cancel() on a non-2xx response
- *    (the SDK cancels the 404 from /.well-known/oauth-protected-resource) can
- *    block indefinitely. Pre-draining non-OK bodies and returning a plain
- *    Response makes cancel() a synchronous no-op.
- */
-const safeFetch: FetchLike = async (input, init) => {
-  const resp = await fetch(input, { ...init, cache: "no-store" });
-  if (!resp.ok) {
-    const text = await resp.text().catch(() => "");
-    return new Response(text || null, {
-      status: resp.status,
-      statusText: resp.statusText,
-      headers: resp.headers,
-    });
-  }
-  return resp;
-};
 
 /**
  * GET wrapper — converts every thrown value into a real HTTP Response so the
