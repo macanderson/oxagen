@@ -1,7 +1,5 @@
 # semantic.edge.suggest
 
-> **Deprecated** — `semantic.edge.suggest` is a one-release alias for [`semantic.relationship.suggest`](semantic.relationship.suggest.md), which will be the canonical name from v2 onward. Migrate now: the capability name is the only change; input, output, and API path are identical.
-
 Returns inferred semantic edges that are pending human review (below the auto-accept confidence threshold). Intended for the approval flow UI — edges returned here are read-only candidates until a workspace member approves or dismisses them.
 
 ## Mode

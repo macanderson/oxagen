@@ -3,7 +3,7 @@ import { registerCapability } from "../registry";
 import { LABEL_PATTERN } from "../lib/label-pattern";
 
 // Re-export the label guard so handlers can import it from the contract layer
-// (matches how RELATIONSHIP_TYPE_PATTERN is surfaced via graph.relationship.upsert).
+// (matches how RELATIONSHIP_TYPE_PATTERN is surfaced via graph.edge.upsert).
 export { LABEL_PATTERN, assertSafeLabel } from "../lib/label-pattern";
 
 /**
@@ -21,7 +21,8 @@ export { LABEL_PATTERN, assertSafeLabel } from "../lib/label-pattern";
 export const graphNodeLabelAdd = registerCapability({
   name: "add_node_label",
   domain: "graph",
-  description: "Add one or more labels to a node (multi-label, idempotent, never removes existing labels).",
+  description:
+    "Add one or more labels to a node (multi-label, idempotent, never removes existing labels).",
   mode: "sync",
   // Agent + ingestion primitive. Not on api/mcp/cli surfaces yet — keep the
   // surface set truthful so the route/tool parity guards hold.
@@ -44,7 +45,9 @@ export const graphNodeLabelAdd = registerCapability({
   }),
   output: z.object({
     nodeId: z.string(),
-    labels: z.array(z.string()).describe("The node's full label set after the add"),
+    labels: z
+      .array(z.string())
+      .describe("The node's full label set after the add"),
     added: z.array(z.string()).describe("Labels that were not already present"),
   }),
 });

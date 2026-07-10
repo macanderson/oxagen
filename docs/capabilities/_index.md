@@ -243,8 +243,7 @@ contract-first design, IAM enforcement, and instrumentation.
 | `graph.node.label.remove`   | Remove one or more labels from a node (multi-label, idempotent, leaves other labels intact).                                                              |
 | `graph.node.labels.get`     | Read a node's full label set (read-only companion to the label add/remove primitives).                                                                    |
 | `graph.search`              | Unified natural-language semantic (vector) search across the entire knowledge graph by embedding similarity.                                               |
-| `graph.relationship.upsert` | Create or update a directed typed relationship between two KnowledgeNodes (open-vocabulary type, replaces graph.edge.upsert).                             |
-| `graph.edge.upsert`         | **Deprecated** — one-release alias for `graph.relationship.upsert`; removed in v2.                                                                        |
+| `graph.edge.upsert`         | Create or update a directed typed relationship between two KnowledgeNodes (open-vocabulary type, Cypher-safe via the RELATIONSHIP_TYPE_PATTERN guard).      |
 | `graph.edge.delete`         | Delete a directed relationship between two nodes.                                                                                                         |
 | `graph.cypher`              | Execute a read-only Cypher query against the tenant graph.                                                                                                |
 | `graph.ingest`              | Extract entities + relationships from text and commit them to the graph with confidence.                                                                  |
@@ -404,16 +403,12 @@ contract-first design, IAM enforcement, and instrumentation.
 - [secret.reveal](secret.reveal.md) — Reveal a single secret's plaintext value for an environment; Owner/Admin only, every reveal is audited (api, mcp)
 - [secret.export](secret.export.md) — Export an environment's resolved secret set as decrypted key/value pairs and .env text; Owner/Admin only, every export is audited (api, mcp)
 
-## Semantic (8)
+## Semantic (4)
 
-- [semantic.relationship.approve](semantic.relationship.approve.md) — Approve or reject an inferred semantic relationship candidate; approved relationships become permanent Neo4j relationships
-- [semantic.relationship.infer](semantic.relationship.infer.md) — Run LLM inference to discover cross-source relationships (async)
-- [semantic.relationship.list](semantic.relationship.list.md) — Paginated browse of inferred semantic relationships with filtering
-- [semantic.relationship.suggest](semantic.relationship.suggest.md) — Return unapproved relationship candidates for human review
-- [semantic.edge.approve](semantic.edge.approve.md) — **Deprecated alias** for `semantic.relationship.approve`; removed in v2
-- [semantic.edge.infer](semantic.edge.infer.md) — **Deprecated alias** for `semantic.relationship.infer`; removed in v2
-- [semantic.edge.list](semantic.edge.list.md) — **Deprecated alias** for `semantic.relationship.list`; removed in v2
-- [semantic.edge.suggest](semantic.edge.suggest.md) — **Deprecated alias** for `semantic.relationship.suggest`; removed in v2
+- [semantic.edge.approve](semantic.edge.approve.md) — Approve or reject an inferred semantic edge candidate; approved edges become permanent Neo4j relationships
+- [semantic.edge.infer](semantic.edge.infer.md) — Run LLM inference to discover cross-source semantic edges (async)
+- [semantic.edge.list](semantic.edge.list.md) — Paginated browse of inferred semantic edges with filtering
+- [semantic.edge.suggest](semantic.edge.suggest.md) — Return unapproved semantic edge candidates for human review
 
 ## Skill (14)
 

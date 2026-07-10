@@ -19,23 +19,13 @@ const OLD_DOTTED_NAMES = [
   "workflow.run",
 ];
 
-// Capabilities with NO kernel handler registration. These are PRE-EXISTING gaps
-// (verified unregistered on origin/main, the working reverted baseline — the
-// rename did NOT introduce them) or handler-less by design. Excluded from the
-// hasHandler gate; the gate's job is to prove the dotted→snake realignment added
-// zero NEW no_handler, not to fix long-standing wiring gaps.
-const NO_HANDLER_OK = new Set<string>([
-  // render_agent_ui now HAS a real handler (main #701 added agent.ui.render.ts,
-  // bound under the snake key in the agent LOADERS) — no longer allowlisted.
-  // Pre-existing gaps (no registerHandler on origin/main either):
-  "upsert_graph_relationship", // graph.relationship.upsert — deprecation alias, no kernel handler
-  // erase_data / export_data (privacy.data.*) were wired into register.ts 2026-07-09
-  // and no longer belong in this allowlist.
-  "approve_semantic_relationship", // semantic.relationship.* — no handler file
-  "infer_semantic_relationships",
-  "list_semantic_relationships",
-  "suggest_semantic_relationships",
-]);
+// Capabilities with NO kernel handler registration, excluded from the hasHandler
+// gate. This set is intentionally EMPTY: the last handler-less family
+// (upsert_graph_relationship + semantic.relationship.*) was deleted outright —
+// contracts, API routes, and MCP tools — so every registered capability now
+// resolves a real handler. Do NOT re-add an entry here to paper over a missing
+// handler; wire the handler (or delete the capability) instead.
+const NO_HANDLER_OK = new Set<string>([]);
 
 describe("ADR-025 naming realignment — dispatch probe", () => {
   const caps = listCapabilities();
@@ -47,20 +37,23 @@ describe("ADR-025 naming realignment — dispatch probe", () => {
       if (NO_HANDLER_OK.has(cap.name)) continue;
       if (!hasHandler(cap.name)) noHandler.push(cap.name);
     }
-    if (noHandler.length) console.log("MISSING HANDLERS:", noHandler.join(", "));
+    if (noHandler.length)
+      console.log("MISSING HANDLERS:", noHandler.join(", "));
     expect(noHandler).toEqual([]);
   });
 
   it("every registered capability name is snake_case (no dots remain)", () => {
     const dotted = caps.map((c) => c.name).filter((n) => n.includes("."));
-    if (dotted.length) console.log("DOTTED NAMES REGISTERED:", dotted.join(", "));
+    if (dotted.length)
+      console.log("DOTTED NAMES REGISTERED:", dotted.join(", "));
     expect(dotted).toEqual([]);
   });
 
   it("no OLD dotted capability name resolves (aliases gone, keys realigned)", () => {
     const leaked: string[] = [];
     for (const dotted of OLD_DOTTED_NAMES) {
-      if (getCapability(dotted) !== undefined) leaked.push("getCapability:" + dotted);
+      if (getCapability(dotted) !== undefined)
+        leaked.push("getCapability:" + dotted);
       if (hasHandler(dotted)) leaked.push("hasHandler:" + dotted);
     }
     if (leaked.length) console.log("DOTTED LEAKS:", leaked.join(", "));
@@ -68,7 +61,13 @@ describe("ADR-025 naming realignment — dispatch probe", () => {
   });
 
   it("representative capabilities resolve contract + handler", () => {
-    for (const name of ["create_org", "set_plugin_enabled", "send_message", "list_agent_tools", "ingest_graph"]) {
+    for (const name of [
+      "create_org",
+      "set_plugin_enabled",
+      "send_message",
+      "list_agent_tools",
+      "ingest_graph",
+    ]) {
       expect(getCapability(name), `contract ${name}`).toBeDefined();
       expect(hasHandler(name), `handler ${name}`).toBe(true);
     }

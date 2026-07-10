@@ -1,6 +1,6 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { ontologyNeighbors } from "@oxagen/oxagen/contracts/ontology.neighbors";
-import { RELATIONSHIP_TYPE_PATTERN } from "@oxagen/oxagen/contracts/graph.relationship.upsert";
+import { RELATIONSHIP_TYPE_PATTERN } from "@oxagen/oxagen/contracts/graph.edge.upsert";
 import { scopedSession } from "@oxagen/ontology/tenant";
 import {
   buildValidityFilter,

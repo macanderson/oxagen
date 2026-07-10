@@ -65,7 +65,7 @@ export function isErrorResult(out: unknown): boolean {
 export function stringifyCapped(v: unknown, max: number): string {
   let s: string;
   try {
-    s = typeof v === "string" ? v : JSON.stringify(v) ?? String(v);
+    s = typeof v === "string" ? v : (JSON.stringify(v) ?? String(v));
   } catch {
     s = String(v);
   }
@@ -80,7 +80,9 @@ export function stringifyCapped(v: unknown, max: number): string {
  * directly — so the same loop meters correctly on the platform and stays
  * BYOK/unmetered in the CLI (ADR-019).
  */
-export async function runCodingAgent(opts: RunCodingAgentOptions): Promise<RunCodingAgentResult> {
+export async function runCodingAgent(
+  opts: RunCodingAgentOptions,
+): Promise<RunCodingAgentResult> {
   const onEvent = opts.onEvent ?? (() => undefined);
   // Filesystem tools exist ONLY when a workspace is injected. A surface with no
   // repository (the in-app chat agent) starts with an empty tool set and relies
@@ -89,7 +91,6 @@ export async function runCodingAgent(opts: RunCodingAgentOptions): Promise<RunCo
     ? buildWorkspaceTools(opts.workspace, {
         readOnly: opts.readOnly,
         codeGraph: opts.codeGraph,
-        codeMap: opts.codeMap,
         onEvent,
         // Forward the turn signal so an aborted turn kills any in-flight bash subtree.
         signal: opts.signal,
@@ -192,7 +193,12 @@ export async function runCodingAgent(opts: RunCodingAgentOptions): Promise<RunCo
   // SDK's internal multi-step loop; the prompt cache keeps each resend cheap.
   let conversation: ModelMessage[] = messages;
   let text = "";
-  const usage = { inputTokens: 0, outputTokens: 0, totalTokens: 0, cachedInputTokens: 0 };
+  const usage = {
+    inputTokens: 0,
+    outputTokens: 0,
+    totalTokens: 0,
+    cachedInputTokens: 0,
+  };
   let steps = 0;
   let retriesUsed = 0;
   let overflowRetries = 0;
@@ -226,8 +232,14 @@ export async function runCodingAgent(opts: RunCodingAgentOptions): Promise<RunCo
 
     // Compact BEFORE the call so the request itself fits. Keep the task + recent
     // working set verbatim; truncate the bulky content of older tool results.
-    if (estimateMessageTokens(conversation) > contextWindow * compactionThreshold) {
-      conversation = compactMessages(conversation, { keepLastN: 8, contentCap: 2000 }).messages;
+    if (
+      estimateMessageTokens(conversation) >
+      contextWindow * compactionThreshold
+    ) {
+      conversation = compactMessages(conversation, {
+        keepLastN: 8,
+        contentCap: 2000,
+      }).messages;
     }
 
     let streamError: unknown = null;
@@ -274,7 +286,9 @@ export async function runCodingAgent(opts: RunCodingAgentOptions): Promise<RunCo
           toolStartedAt.set(part.toolCallId, Date.now());
           const toolName = part.toolName;
           const input: unknown = part.input;
-          deferred.push(() => onEvent({ type: "tool-call", name: toolName, input }));
+          deferred.push(() =>
+            onEvent({ type: "tool-call", name: toolName, input }),
+          );
         } else if (part.type === "tool-result") {
           // `preliminary` results (streamed partial output) are progress, not
           // completion — the final result for the same call follows.
@@ -298,8 +312,14 @@ export async function runCodingAgent(opts: RunCodingAgentOptions): Promise<RunCo
                 if (toolName === "bash") {
                   const succCount = (successCounts.get(sig) ?? 0) + 1;
                   successCounts.set(sig, succCount);
-                  if (succCount >= SUCCESSFUL_REPEAT_THRESHOLD && !successNudged.has(sig)) {
-                    pendingNudge = successfulRepeatNudgeMessage(toolName, succCount);
+                  if (
+                    succCount >= SUCCESSFUL_REPEAT_THRESHOLD &&
+                    !successNudged.has(sig)
+                  ) {
+                    pendingNudge = successfulRepeatNudgeMessage(
+                      toolName,
+                      succCount,
+                    );
                     successNudged.add(sig);
                   }
                 }
@@ -308,7 +328,11 @@ export async function runCodingAgent(opts: RunCodingAgentOptions): Promise<RunCo
                 const count = (failingCounts.get(sig) ?? 0) + 1;
                 failingCounts.set(sig, count);
                 if (count >= LOOP_NUDGE_THRESHOLD && !nudged.has(sig)) {
-                  pendingNudge = loopNudgeMessage(toolName, count, stringifyCapped(output, 400));
+                  pendingNudge = loopNudgeMessage(
+                    toolName,
+                    count,
+                    stringifyCapped(output, 400),
+                  );
                   nudged.add(sig);
                 }
               }
@@ -335,7 +359,11 @@ export async function runCodingAgent(opts: RunCodingAgentOptions): Promise<RunCo
             const count = (failingCounts.get(sig) ?? 0) + 1;
             failingCounts.set(sig, count);
             if (count >= LOOP_NUDGE_THRESHOLD && !nudged.has(sig)) {
-              pendingNudge = loopNudgeMessage(toolName, count, stringifyCapped(error, 400));
+              pendingNudge = loopNudgeMessage(
+                toolName,
+                count,
+                stringifyCapped(error, 400),
+              );
               nudged.add(sig);
             }
             onEvent({
@@ -351,7 +379,9 @@ export async function runCodingAgent(opts: RunCodingAgentOptions): Promise<RunCo
       }
 
       if (streamError) {
-        throw streamError instanceof Error ? streamError : new Error(String(streamError));
+        throw streamError instanceof Error
+          ? streamError
+          : new Error(String(streamError));
       }
       if (opts.signal?.aborted) break;
 
@@ -370,7 +400,8 @@ export async function runCodingAgent(opts: RunCodingAgentOptions): Promise<RunCo
       // AI SDK v7 nests cache reads under `inputTokenDetails`; our aggregate keeps
       // the flat `cachedInputTokens` field. Optional-chained: BYOK/mock streams may
       // omit the details object.
-      usage.cachedInputTokens += stepUsage.inputTokenDetails?.cacheReadTokens ?? 0;
+      usage.cachedInputTokens +=
+        stepUsage.inputTokenDetails?.cacheReadTokens ?? 0;
       conversation = [...conversation, ...response.messages];
       steps += (await result.steps).length || 1;
 
@@ -401,7 +432,10 @@ export async function runCodingAgent(opts: RunCodingAgentOptions): Promise<RunCo
       // The model just repeated an identical failing call past the threshold —
       // inject a corrective instruction so the next step changes approach.
       if (pendingNudge) {
-        conversation = [...conversation, { role: "user", content: pendingNudge }];
+        conversation = [
+          ...conversation,
+          { role: "user", content: pendingNudge },
+        ];
       }
     } catch (err) {
       // User cancel — never retry; fall through to the post-loop abort throw.
@@ -413,7 +447,10 @@ export async function runCodingAgent(opts: RunCodingAgentOptions): Promise<RunCo
       if (isContextOverflowError(err) && overflowRetries < maxOverflowRetries) {
         overflowRetries++;
         const before = estimateMessageTokens(conversation);
-        conversation = compactMessages(conversation, { keepLastN: 4, contentCap: 800 }).messages;
+        conversation = compactMessages(conversation, {
+          keepLastN: 4,
+          contentCap: 800,
+        }).messages;
         if (estimateMessageTokens(conversation) < before) continue;
         throw err; // couldn't shrink — give up rather than spin
       }
@@ -457,11 +494,20 @@ export async function runCodingAgent(opts: RunCodingAgentOptions): Promise<RunCo
 
   if (opts.memory)
     void Promise.resolve(
-      opts.memory.remember("coding_turn", { instruction: opts.instruction, changedFiles }),
+      opts.memory.remember("coding_turn", {
+        instruction: opts.instruction,
+        changedFiles,
+      }),
     ).catch(() => {});
   if (opts.trace)
     void Promise.resolve(
-      opts.trace.record({ instruction: opts.instruction, changedFiles, steps, text, usage }),
+      opts.trace.record({
+        instruction: opts.instruction,
+        changedFiles,
+        steps,
+        text,
+        usage,
+      }),
     ).catch(() => {});
 
   return {

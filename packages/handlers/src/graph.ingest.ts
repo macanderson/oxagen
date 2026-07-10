@@ -3,9 +3,12 @@ import { generateObjectFor } from "@oxagen/ai";
 import type { CapabilityContext, CapabilityHandler } from "@oxagen/oxagen";
 import { graphIngest } from "@oxagen/oxagen/contracts/graph.ingest";
 import type { GraphIngestOutput } from "@oxagen/oxagen/contracts/graph.ingest";
-import { RELATIONSHIP_TYPE_PATTERN } from "@oxagen/oxagen/contracts/graph.relationship.upsert";
+import { RELATIONSHIP_TYPE_PATTERN } from "@oxagen/oxagen/contracts/graph.edge.upsert";
 import { invoke } from "@oxagen/oxagen/kernel";
-import { sanitizeLabel as toPascalLabel, toLabelKey } from "@oxagen/ontology/labels";
+import {
+  sanitizeLabel as toPascalLabel,
+  toLabelKey,
+} from "@oxagen/ontology/labels";
 import { getPinnedSchema } from "./schema.pinned";
 import { logger } from "./logger";
 import {
@@ -25,7 +28,9 @@ const propertyScalar = z.union([z.string(), z.number(), z.boolean()]);
 // is something the model fills consistently; we fold it back into a map in code.
 const propertyPair = z.object({
   key: z.string().describe("snake_case attribute name, e.g. hull_number"),
-  value: propertyScalar.describe("the attribute value, exactly as stated in the text"),
+  value: propertyScalar.describe(
+    "the attribute value, exactly as stated in the text",
+  ),
 });
 
 // The LLM extraction shape. Confidence is clamped to [0,1]; the relationship
@@ -45,7 +50,9 @@ const extractionSchema = z.object({
         properties: z
           .array(propertyPair)
           .default([])
-          .describe("Every concrete attribute the text states about this entity, as key/value pairs"),
+          .describe(
+            "Every concrete attribute the text states about this entity, as key/value pairs",
+          ),
       }),
     )
     .default([]),
@@ -94,8 +101,15 @@ export async function extractGraph(args: {
   maxEntities: number;
   ctx: CapabilityContext;
 }): Promise<GraphExtraction> {
-  const { text, typeHints, allowedRelationshipTypes, workspacePrompt, vocab, maxEntities, ctx } =
-    args;
+  const {
+    text,
+    typeHints,
+    allowedRelationshipTypes,
+    workspacePrompt,
+    vocab,
+    maxEntities,
+    ctx,
+  } = args;
   const vocabularyPrompt = renderVocabularyPrompt(vocab);
 
   // Relationship-type guidance: when the workspace pins a registry, constrain the
@@ -121,7 +135,9 @@ export async function extractGraph(args: {
     relTypeGuidance,
     `- Produce at most ${maxEntities} entities.`,
     vocabularyPrompt ? `\n${vocabularyPrompt}` : "",
-    typeHints.length > 0 ? `\nADDITIONAL ENTITY TYPES TO LOOK FOR: ${typeHints.join(", ")}` : "",
+    typeHints.length > 0
+      ? `\nADDITIONAL ENTITY TYPES TO LOOK FOR: ${typeHints.join(", ")}`
+      : "",
     workspacePrompt ? `\nWORKSPACE GRAPH GUIDANCE:\n${workspacePrompt}` : "",
     `\nSOURCE TEXT:\n${text.slice(0, 100_000)}`,
     `\nReturn JSON { entities: [{name, type, description?, confidence, properties: [{key, value}]}], relationships: [{fromName, toName, relationshipType, confidence}] }.`,
@@ -142,7 +158,10 @@ export async function extractGraph(args: {
   // The schema's .default([]) leaves the arrays optional in the inferred input
   // type; normalize to the concrete output shape.
   return {
-    entities: (object.entities ?? []).map((e) => ({ ...e, properties: e.properties ?? [] })),
+    entities: (object.entities ?? []).map((e) => ({
+      ...e,
+      properties: e.properties ?? [],
+    })),
     relationships: object.relationships ?? [],
   };
 }
@@ -196,8 +215,12 @@ export const graphIngestHandler: CapabilityHandler<typeof graphIngest> = async (
     resolveIngestVocabulary(ctx),
     getPinnedSchema(ctx.orgId, ctx.workspaceId),
   ]);
-  const allowedRelationshipTypes = pinned ? pinned.relationshipTypes.map((r) => r.name) : null;
-  const allowedSet = allowedRelationshipTypes ? new Set(allowedRelationshipTypes) : null;
+  const allowedRelationshipTypes = pinned
+    ? pinned.relationshipTypes.map((r) => r.name)
+    : null;
+  const allowedSet = allowedRelationshipTypes
+    ? new Set(allowedRelationshipTypes)
+    : null;
 
   const extraction = await extractGraph({
     text: input.text,
@@ -283,7 +306,10 @@ export const graphIngestHandler: CapabilityHandler<typeof graphIngest> = async (
       )) as { edgeId?: string; relationshipId?: string; created: boolean };
       relationships.push({
         // graph.ingest output was renamed edgeId→relationshipId in the schema-registry epic
-        relationshipId: out.relationshipId ?? out.edgeId ?? `${fromId}:${r.relationshipType}:${toId}`,
+        relationshipId:
+          out.relationshipId ??
+          out.edgeId ??
+          `${fromId}:${r.relationshipType}:${toId}`,
         from: r.fromName,
         to: r.toName,
         // graph.ingest output was renamed edgeType→relationshipType in the schema-registry epic
@@ -292,7 +318,10 @@ export const graphIngestHandler: CapabilityHandler<typeof graphIngest> = async (
         created: out.created,
       });
     } catch (err) {
-      logger.warn({ err, from: r.fromName, to: r.toName }, "graph.ingest: relationship upsert failed");
+      logger.warn(
+        { err, from: r.fromName, to: r.toName },
+        "graph.ingest: relationship upsert failed",
+      );
     }
   }
 

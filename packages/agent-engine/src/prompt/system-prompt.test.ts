@@ -28,14 +28,18 @@ describe("buildCodingCorePrompt — shared coding core (ADR-021 §7)", () => {
   });
 
   it("lets a surface override the identity while keeping the shared discipline", () => {
-    const p = buildCodingCorePrompt({ identity: "You are oxagen, running in the terminal." });
+    const p = buildCodingCorePrompt({
+      identity: "You are oxagen, running in the terminal.",
+    });
     expect(p.startsWith("You are oxagen, running in the terminal.")).toBe(true);
     expect(p).toContain("Use the provided tools to read, search, and edit");
     expect(p).toContain("Make the smallest correct change");
   });
 
   it("appends surface sections after the core, dropping blank ones", () => {
-    const p = buildCodingCorePrompt({ extraSections: ["## Extra\nrule one", "   ", ""] });
+    const p = buildCodingCorePrompt({
+      extraSections: ["## Extra\nrule one", "   ", ""],
+    });
     expect(p).toContain(HISTORICAL_DEFAULT_SYSTEM);
     expect(p).toContain("## Extra\nrule one");
     // Exactly one blank-line separator between core and the single kept section.
@@ -78,12 +82,20 @@ describe("buildSystemPrompt — profiles", () => {
 
   it("both profiles share the profile-independent tool rules", () => {
     const shared = "Prefer `edit_file` for surgical changes";
-    expect(buildSystemPrompt({ ...base, profile: "headless" })).toContain(shared);
-    expect(buildSystemPrompt({ ...base, profile: "interactive" })).toContain(shared);
+    expect(buildSystemPrompt({ ...base, profile: "headless" })).toContain(
+      shared,
+    );
+    expect(buildSystemPrompt({ ...base, profile: "interactive" })).toContain(
+      shared,
+    );
     // The shared "read before you edit" rule reaches both, too.
     const readFirst = "`read_file` it first";
-    expect(buildSystemPrompt({ ...base, profile: "headless" })).toContain(readFirst);
-    expect(buildSystemPrompt({ ...base, profile: "interactive" })).toContain(readFirst);
+    expect(buildSystemPrompt({ ...base, profile: "headless" })).toContain(
+      readFirst,
+    );
+    expect(buildSystemPrompt({ ...base, profile: "interactive" })).toContain(
+      readFirst,
+    );
   });
 
   it("both profiles mention A2A cross-agent interop: skillId addressing, resubscribe, and trace lineage", () => {
@@ -98,7 +110,7 @@ describe("buildSystemPrompt — profiles", () => {
 });
 
 describe("buildSystemPrompt — graph-first tool guidance", () => {
-  it("mandates code_graph FIRST as a hard rule, lists every operation, and never references the unwired code_map", () => {
+  it("mandates code_graph FIRST as a hard rule and lists every operation", () => {
     const prompt = buildSystemPrompt(base);
     // A forceful, prominent mandate — not a soft preference the model shrugs off.
     expect(prompt).toContain("CODE GRAPH FIRST");
@@ -111,14 +123,6 @@ describe("buildSystemPrompt — graph-first tool guidance", () => {
     expect(prompt).toContain("`dependents <file>`");
     expect(prompt).toContain("`imports <file>`");
     expect(prompt).toContain("Only fall back to `grep`");
-    // code_map is optional and rarely wired — a rule pointing at a missing
-    // tool silently breaks the graph-first habit, so it must be opt-in.
-    expect(prompt).not.toContain("code_map");
-  });
-
-  it("mentions code_map only when the tool is wired", () => {
-    const prompt = buildSystemPrompt({ ...base, hasCodeMap: true });
-    expect(prompt).toContain("call `code_map` BEFORE `grep` or `bash`");
   });
 
   it("drops graph guidance and keeps plain grep guidance when code_graph is not wired", () => {
@@ -132,8 +136,11 @@ describe("buildSystemPrompt — graph-first tool guidance", () => {
   it("headless localization step lists only the wired locate tools, graph first", () => {
     const withGraph = buildSystemPrompt({ ...base, profile: "headless" });
     expect(withGraph).toContain("use `code_graph`/`grep` (in that order)");
-    expect(withGraph).not.toContain("code_map");
-    const bare = buildSystemPrompt({ ...base, profile: "headless", hasCodeGraph: false });
+    const bare = buildSystemPrompt({
+      ...base,
+      profile: "headless",
+      hasCodeGraph: false,
+    });
     expect(bare).toContain("use `grep` to find the real source");
     expect(bare).not.toContain("code_graph");
   });
@@ -151,7 +158,9 @@ describe("buildSystemPrompt — graph-first tool guidance", () => {
 describe("buildSystemPrompt — F1 localization trust-but-verify rule", () => {
   it("adds the spec's one-line rule when a localization block was injected this turn", () => {
     const prompt = buildSystemPrompt({ ...base, hasLocalization: true });
-    expect(prompt).toContain("Candidate locations were computed from the code graph.");
+    expect(prompt).toContain(
+      "Candidate locations were computed from the code graph.",
+    );
     expect(prompt).toContain("Verify with one read before");
     expect(prompt).toContain("do not re-derive them.");
   });
@@ -163,8 +172,14 @@ describe("buildSystemPrompt — F1 localization trust-but-verify rule", () => {
   });
 
   it("keeps the rule on the headless profile alongside the verification protocol", () => {
-    const prompt = buildSystemPrompt({ ...base, profile: "headless", hasLocalization: true });
-    expect(prompt).toContain("Candidate locations were computed from the code graph.");
+    const prompt = buildSystemPrompt({
+      ...base,
+      profile: "headless",
+      hasLocalization: true,
+    });
+    expect(prompt).toContain(
+      "Candidate locations were computed from the code graph.",
+    );
     expect(prompt).toContain("Verification protocol");
   });
 });

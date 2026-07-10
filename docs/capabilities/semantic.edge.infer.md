@@ -1,7 +1,5 @@
 # semantic.edge.infer
 
-> **Deprecated** — `semantic.edge.infer` is a one-release alias for [`semantic.relationship.infer`](semantic.relationship.infer.md), which will be the canonical name from v2 onward. Migrate now: the capability name is the only change; input, output, and API path are identical.
-
 Run LLM inference to discover and link nodes across sources with confidence scores. Triggers an async job; edges at or above the `confidenceThreshold` are auto-accepted, edges below it are staged for human review via `semantic.edge.suggest`.
 
 ## Mode

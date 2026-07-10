@@ -213,10 +213,6 @@ export type {
 } from "./compiler/telemetry";
 
 // Embedding
-export { embedRecord, extractEmbeddingText } from "./embed/pipeline";
-export type { EmbedResult, EmbedOpts } from "./embed/pipeline";
-export { quantizeToInt8, dequantizeFromInt8 } from "./embed/quantize";
-export type { QuantizedVector } from "./embed/quantize";
 
 // ---------------------------------------------------------------------------
 // Phase D: Consolidation & Learning

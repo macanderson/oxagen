@@ -24,44 +24,44 @@ import {
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { ExplorerEdge, ExplorerNode } from "./types";
 
-const {
-  NODES,
-  EDGES,
-  expandMock,
-  reloadMock,
-  addSubgraphMock,
-  canvasProps,
-} = vi.hoisted(() => {
-  const NODES = [
-    {
-      id: "n1",
-      label: "Person",
-      displayName: "Ada Lovelace",
-      degree: 1,
-      hydrated: true,
-      properties: {},
-    },
-    {
-      id: "n2",
-      label: "Company",
-      displayName: "Analytical Engines",
-      degree: 1,
-      hydrated: true,
-      properties: {},
-    },
-  ];
-  const EDGES = [
-    { id: "e1", source: "n1", target: "n2", type: "WORKS_AT", inferred: false },
-  ];
-  return {
-    NODES,
-    EDGES,
-    expandMock: vi.fn(() => Promise.resolve()),
-    reloadMock: vi.fn(),
-    addSubgraphMock: vi.fn(),
-    canvasProps: { current: null as Record<string, unknown> | null },
-  };
-});
+const { NODES, EDGES, expandMock, reloadMock, addSubgraphMock, canvasProps } =
+  vi.hoisted(() => {
+    const NODES = [
+      {
+        id: "n1",
+        label: "Person",
+        displayName: "Ada Lovelace",
+        degree: 1,
+        hydrated: true,
+        properties: {},
+      },
+      {
+        id: "n2",
+        label: "Company",
+        displayName: "Analytical Engines",
+        degree: 1,
+        hydrated: true,
+        properties: {},
+      },
+    ];
+    const EDGES = [
+      {
+        id: "e1",
+        source: "n1",
+        target: "n2",
+        type: "WORKS_AT",
+        inferred: false,
+      },
+    ];
+    return {
+      NODES,
+      EDGES,
+      expandMock: vi.fn(() => Promise.resolve()),
+      reloadMock: vi.fn(),
+      addSubgraphMock: vi.fn(),
+      canvasProps: { current: null as Record<string, unknown> | null },
+    };
+  });
 
 vi.mock("@/lib/tenant/tenant-context", () => ({
   useTenant: () => ({ orgSlug: "acme", workspaceSlug: "main" }),
@@ -111,9 +111,8 @@ vi.mock("./api-client", () => ({
 }));
 
 // CRUD dialogs are covered by their own suites; keep this one focused.
-vi.mock("./create-node-dialog", () => ({ CreateNodeDialog: () => null }));
+vi.mock("./node-dialog", () => ({ NodeDialog: () => null }));
 vi.mock("./create-edge-dialog", () => ({ CreateEdgeDialog: () => null }));
-vi.mock("./edit-node-dialog", () => ({ EditNodeDialog: () => null }));
 vi.mock("./edit-edge-dialog", () => ({ EditEdgeDialog: () => null }));
 
 // Base UI sheet renders through a portal/backdrop stack that jsdom does not
@@ -213,9 +212,7 @@ describe("GraphExplorer — desktop (≥lg, hover-capable)", () => {
 
   it("shows the edge hover popover on hover-capable devices", () => {
     render(<GraphExplorer />);
-    act(() =>
-      canvas().onEdgeHover(EDGES[0] as ExplorerEdge, { x: 10, y: 10 }),
-    );
+    act(() => canvas().onEdgeHover(EDGES[0] as ExplorerEdge, { x: 10, y: 10 }));
     const tooltip = screen.getByRole("tooltip");
     // Scope to the tooltip — the type-filter panel lists "WORKS_AT" too.
     expect(within(tooltip).getByText("WORKS_AT")).toBeInTheDocument();
@@ -287,9 +284,7 @@ describe("GraphExplorer — mobile (<lg, touch)", () => {
 
   it("never renders the edge hover popover on touch devices", () => {
     render(<GraphExplorer />);
-    act(() =>
-      canvas().onEdgeHover(EDGES[0] as ExplorerEdge, { x: 10, y: 10 }),
-    );
+    act(() => canvas().onEdgeHover(EDGES[0] as ExplorerEdge, { x: 10, y: 10 }));
     expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
   });
 

@@ -48,7 +48,11 @@ const TEST_BASENAME_PATTERNS: RegExp[] = [
  * matches anywhere in the path, whether absolute or repo-relative. Pure.
  */
 export function isTestPath(relPath: string): boolean {
-  const segments = relPath.replace(/\\/g, "/").toLowerCase().split("/").filter(Boolean);
+  const segments = relPath
+    .replace(/\\/g, "/")
+    .toLowerCase()
+    .split("/")
+    .filter(Boolean);
   const basename = segments[segments.length - 1] ?? "";
   if (segments.slice(0, -1).some((seg) => TEST_DIR_NAMES.has(seg))) return true;
   return TEST_BASENAME_PATTERNS.some((re) => re.test(basename));
@@ -65,7 +69,7 @@ export function isTestPath(relPath: string): boolean {
 // structured tool reuses, so naming is decided once, not per tool.
 //
 // The legacy core seven (read_file, write_file, edit_file, list_dir, glob, grep,
-// bash) and code_graph / code_map deliberately KEEP their historical
+// bash) and code_graph deliberately KEEP their historical
 // model-facing names (training-prior protection) and are intentionally absent
 // from this registry — they are not `domain.subject.action` and must not be
 // renamed.
@@ -134,11 +138,15 @@ export const scopeSchema = z
     all: z
       .boolean()
       .optional()
-      .describe("Operate on the widest scope the tool allows (not the whole repo where forbidden)."),
+      .describe(
+        "Operate on the widest scope the tool allows (not the whole repo where forbidden).",
+      ),
   })
   .refine(
     (s) =>
-      [s.package !== undefined, s.files !== undefined, s.all === true].filter(Boolean).length === 1,
+      [s.package !== undefined, s.files !== undefined, s.all === true].filter(
+        Boolean,
+      ).length === 1,
     { message: "Provide exactly one of: package, files, or all." },
   );
 
@@ -168,7 +176,9 @@ export function limitSchema(hardMax: number) {
     .min(1)
     .max(hardMax)
     .optional()
-    .describe(`Max items to return (1–${hardMax}). Omit to let verbosity choose the cap.`);
+    .describe(
+      `Max items to return (1–${hardMax}). Omit to let verbosity choose the cap.`,
+    );
 }
 
 /**

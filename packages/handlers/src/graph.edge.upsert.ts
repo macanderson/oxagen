@@ -1,6 +1,6 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { graphEdgeUpsert } from "@oxagen/oxagen/contracts/graph.edge.upsert";
-import { RELATIONSHIP_TYPE_PATTERN } from "@oxagen/oxagen/contracts/graph.relationship.upsert";
+import { RELATIONSHIP_TYPE_PATTERN } from "@oxagen/oxagen/contracts/graph.edge.upsert";
 import { scopedSession } from "@oxagen/ontology/tenant";
 import {
   edgeCloseOnSupersedeSet,
@@ -61,14 +61,15 @@ function buildSupersedeQuery(relationshipType: string): string {
           RETURN count(old) AS closed`;
 }
 
-export const graphEdgeUpsertHandler: CapabilityHandler<typeof graphEdgeUpsert> = async (
-  input,
-  ctx,
-) => {
+export const graphEdgeUpsertHandler: CapabilityHandler<
+  typeof graphEdgeUpsert
+> = async (input, ctx) => {
   const { orgId, workspaceId } = ctx;
   const query = buildUpsertQuery(input.relationshipType);
 
-  const propertiesJson = input.properties ? JSON.stringify(input.properties) : null;
+  const propertiesJson = input.properties
+    ? JSON.stringify(input.properties)
+    : null;
   const validity = edgeValidityParams(input.observedAt);
 
   let created = false;
@@ -79,13 +80,16 @@ export const graphEdgeUpsertHandler: CapabilityHandler<typeof graphEdgeUpsert> =
     try {
       // Close conflicting facts first so the new assertion is the sole open edge.
       if (input.supersede) {
-        const closeResult = await session.run(buildSupersedeQuery(input.relationshipType), {
-          fromNodeId: input.fromNodeId,
-          toNodeId: input.toNodeId,
-          orgId,
-          workspaceId,
-          ...edgeCloseParams(input.observedAt),
-        });
+        const closeResult = await session.run(
+          buildSupersedeQuery(input.relationshipType),
+          {
+            fromNodeId: input.fromNodeId,
+            toNodeId: input.toNodeId,
+            orgId,
+            workspaceId,
+            ...edgeCloseParams(input.observedAt),
+          },
+        );
         superseded = Number(closeResult.records[0]?.get("closed") ?? 0);
       }
 
@@ -114,7 +118,14 @@ export const graphEdgeUpsertHandler: CapabilityHandler<typeof graphEdgeUpsert> =
   const edgeId = `${input.fromNodeId}:${input.relationshipType}:${input.toNodeId}`;
 
   logger.info(
-    { edgeId, created, superseded, relationshipType: input.relationshipType, orgId, workspaceId },
+    {
+      edgeId,
+      created,
+      superseded,
+      relationshipType: input.relationshipType,
+      orgId,
+      workspaceId,
+    },
     "graph.edge.upsert: relationship upserted",
   );
 

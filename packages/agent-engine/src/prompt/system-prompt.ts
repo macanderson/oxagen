@@ -50,10 +50,14 @@ export interface CodingSurfaceAdapters {
  * prefix; ADR-021 §2), so it is a safe drop-in. Surfaces pass adapters to add
  * their own identity/sections while sharing the exact core wording.
  */
-export function buildCodingCorePrompt(adapters: CodingSurfaceAdapters = {}): string {
+export function buildCodingCorePrompt(
+  adapters: CodingSurfaceAdapters = {},
+): string {
   const identity = adapters.identity ?? CODING_CORE_IDENTITY;
   const core = [identity, CODING_CORE_TOOLS, CODING_CORE_DISCIPLINE].join(" ");
-  const extra = (adapters.extraSections ?? []).filter((s) => s.trim().length > 0);
+  const extra = (adapters.extraSections ?? []).filter(
+    (s) => s.trim().length > 0,
+  );
   return extra.length > 0 ? [core, "", ...extra].join("\n") : core;
 }
 
@@ -71,13 +75,6 @@ export interface SystemPromptOptions {
    */
   hasCodeGraph?: boolean;
   /**
-   * Whether the `code_map` tool is wired for this run (a CodeMapProvider was
-   * supplied). Defaults to false — the tool is optional and rarely wired, and
-   * a prompt rule pointing at a tool the model does not have silently breaks
-   * the whole context-gathering habit.
-   */
-  hasCodeMap?: boolean;
-  /**
    * Whether this turn's ENHANCE stage injected an F1 deterministic-localization
    * block (`## Candidate locations (deterministic)`) into the prompt. Adds the
    * spec's one-line rule telling the model to verify the candidates with one
@@ -86,23 +83,18 @@ export interface SystemPromptOptions {
    */
   hasLocalization?: boolean;
   profile?: "interactive" | "headless";
-
 }
 
 export function buildSystemPrompt(opts: SystemPromptOptions): string {
   const { cwd, projectContext, readOnly, agent } = opts;
   const hasCodeGraph = opts.hasCodeGraph ?? true;
-  const hasCodeMap = opts.hasCodeMap ?? false;
   const profile = opts.profile ?? "interactive";
   // Tools the model may use to locate code, best-first — the headless
   // localization step must list only the tools actually wired for this run.
-  const locateToolList = [
-    ...(hasCodeGraph ? ["`code_graph`"] : []),
-    ...(hasCodeMap ? ["`code_map`"] : []),
-    "`grep`",
-  ];
+  const locateToolList = [...(hasCodeGraph ? ["`code_graph`"] : []), "`grep`"];
   const locateTools =
-    locateToolList.join("/") + (locateToolList.length > 1 ? " (in that order)" : "");
+    locateToolList.join("/") +
+    (locateToolList.length > 1 ? " (in that order)" : "");
   const preamble = agent
     ? [
         agent.systemPrompt.trim(),
@@ -146,14 +138,6 @@ export function buildSystemPrompt(opts: SystemPromptOptions): string {
           "  rather than a code symbol — never as your first move for a symbol.",
         ]
       : ["- Use `grep` and `glob` to locate code instead of guessing paths."]),
-    ...(hasCodeMap
-      ? [
-          "- For conceptual or multi-word queries ('everything related to payments', 'auth session",
-          "  handling'), call `code_map` BEFORE `grep` or `bash`. It returns semantically matched",
-          "  files, symbols, call edges, and recent commits in one structured bundle — far faster",
-          "  than grepping.",
-        ]
-      : []),
     // F1 deterministic localization (docs/specs/swe-rank1-scalpel.md §F1): the
     // one-line trust-but-verify rule, present ONLY when a candidate-locations
     // block was actually injected this turn — a rule about a block the model
