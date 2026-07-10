@@ -19,6 +19,14 @@ const honoApiBase = (
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Cache Components (Next 16): opt-in caching via `use cache` + cacheLife/
+  // cacheTag, Partial Prerendering by default, and build-time enforcement that
+  // every runtime data access (cookies/headers/params/searchParams/uncached IO)
+  // sits under a <Suspense> boundary (loading.tsx counts). Route segment
+  // configs (`dynamic`, `revalidate`, `fetchCache`) are replaced by this model
+  // — do not reintroduce them. See docs/adr/ and
+  // https://nextjs.org/docs/app/api-reference/config/next-config-js/cacheComponents
+  cacheComponents: true,
   // Proxy /api/v1/* requests to the Hono API so browser calls stay same-origin
   // and the Better Auth session cookie is forwarded server-side. Only paths
   // WITHOUT a local App Router handler should fall through to this rewrite.
