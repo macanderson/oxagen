@@ -19,7 +19,7 @@
       "verifiedAt": "2026-07-09",
       "verifiedBy": "session_019E1ntgMUqV3uXN8gfsbkSG"
     },
-    "skill.workspace.list": {
+    "list_workspace_skills": {
       "route": "/[orgSlug]/[workspaceSlug]/workbench/tools/skills",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/tools/skills/page.tsx",
       "entry": "Skills table loads installed workspace skills on render",
@@ -28,7 +28,7 @@
       "verifiedAt": null,
       "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
-    "skill.workspace.install": {
+    "install_skill": {
       "route": "/[orgSlug]/[workspaceSlug]/marketplace/agent-tools",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/marketplace/agent-tools/page.tsx",
       "entry": "\"Install\" on an agent_skill marketplace row → installPlugin",
@@ -37,7 +37,7 @@
       "verifiedAt": null,
       "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
-    "skill.draft": {
+    "draft_skill": {
       "route": "/[orgSlug]/[workspaceSlug]/workbench/tools/skills",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/tools/skills/page.tsx",
       "entry": "\"New skill\" button → NewSkillDialog AI wizard (draftSkillAction)",
@@ -46,7 +46,7 @@
       "verifiedAt": null,
       "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
-    "skill.metrics.read": {
+    "get_skill_metrics": {
       "route": "/[orgSlug]/[workspaceSlug]/workbench/tools/skills",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/tools/skills/page.tsx",
       "entry": "Skills table Last Used / Uses columns",
@@ -55,7 +55,7 @@
       "verifiedAt": null,
       "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
-    "skill.export": {
+    "export_skill": {
       "route": "/[orgSlug]/[workspaceSlug]/workbench/tools/skills/[skillSlug]",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/tools/skills/[skillSlug]/page.tsx",
       "entry": "SkillDetailPanel export/download (exportSkill)",
@@ -64,7 +64,7 @@
       "verifiedAt": null,
       "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
-    "skill.version.list": {
+    "list_skill_versions": {
       "route": "/[orgSlug]/[workspaceSlug]/workbench/tools/skills/[skillSlug]",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/tools/skills/[skillSlug]/page.tsx",
       "entry": "Version history list in SkillDetailPanel",
@@ -73,7 +73,7 @@
       "verifiedAt": null,
       "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
-    "skill.version.get": {
+    "get_skill_version": {
       "route": "/[orgSlug]/[workspaceSlug]/workbench/tools/skills/[skillSlug]",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/tools/skills/[skillSlug]/page.tsx",
       "entry": "Skill detail load fetches active version content",
@@ -82,7 +82,7 @@
       "verifiedAt": null,
       "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
-    "skill.version.upload": {
+    "upload_skill_version": {
       "route": "/[orgSlug]/[workspaceSlug]/workbench/tools/skills/[skillSlug]",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/tools/skills/[skillSlug]/page.tsx",
       "entry": "SkillDetailPanel edit-and-save (editSkill → skill.version.upload)",
@@ -91,7 +91,7 @@
       "verifiedAt": null,
       "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
-    "skill.version.activate": {
+    "activate_skill_version": {
       "route": "/[orgSlug]/[workspaceSlug]/workbench/tools/skills/[skillSlug]",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/tools/skills/[skillSlug]/page.tsx",
       "entry": "\"Activate\" on a version row (activateVersion)",
@@ -100,7 +100,7 @@
       "verifiedAt": null,
       "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
-    "plugin.org.install": {
+    "install_plugin": {
       "route": "/[orgSlug]/[workspaceSlug]/workbench/tools/mcp",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/tools/mcp/page.tsx",
       "entry": "\"Install\" on a catalog search row (McpCatalogSearch → installPlugin); also marketplace agent-tools browse",
@@ -109,16 +109,16 @@
       "verifiedAt": "2026-07-08",
       "verifiedBy": "session_012L8WKM81ZqYaiLYsqLvkw6"
     },
-    "plugin.org.install_bulk": {
-      "route": "/[orgSlug]/[workspaceSlug]/marketplace/agent-tools",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/marketplace/agent-tools/page.tsx",
-      "entry": "\"Install selected\" bulk action → installBulkPlugin",
-      "testid": null,
+    "install_plugins_bulk": {
+      "route": "/[orgSlug]/[workspaceSlug]/workbench/tools/capabilities",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/tools/capabilities/page.tsx",
+      "entry": "\"Browse Marketplace\" button -> MarketplaceModal checkbox multi-select -> \"Install selected\" (handleBulkInstall) -> installBulkAction prop -> installBulkPlugin -> invoke(\"install_plugins_bulk\")",
+      "testid": "marketplace-bulk-install-btn",
       "proof": null,
       "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
+      "verifiedBy": "static-trace/session_01DT3cxXyqx6W9zmCj9wuiVy"
     },
-    "plugin.workspace.set_enabled": {
+    "set_plugin_enabled": {
       "route": "/[orgSlug]/[workspaceSlug]/workbench/tools/capabilities",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/tools/capabilities/page.tsx",
       "entry": "Per-plugin enable/disable toggle (togglePlugin)",
@@ -127,7 +127,7 @@
       "verifiedAt": null,
       "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
-    "plugin.org.uninstall": {
+    "uninstall_plugin": {
       "route": "/[orgSlug]/[workspaceSlug]/workbench/tools/capabilities",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/tools/capabilities/page.tsx",
       "entry": "\"Remove\" on an installed-plugin row (uninstallPlugin)",
@@ -136,16 +136,16 @@
       "verifiedAt": null,
       "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
-    "plugin.registry.list": {
-      "route": "/[orgSlug]/[workspaceSlug]/settings/mcp-server-registries",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/mcp-server-registries/page.tsx",
-      "entry": "Registry manager (RegistryManager initialRegistries) on Settings → MCP Server Registries",
+    "list_plugin_registries": {
+      "route": "/[orgSlug]/[workspaceSlug]/workbench/tools/capabilities",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/tools/capabilities/page.tsx",
+      "entry": "Registry manager section (WorkspacePluginsPanel initialRegistries)",
       "testid": null,
       "proof": null,
       "verifiedAt": null,
       "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
-    "conversation.list": {
+    "list_conversations": {
       "route": "/[orgSlug]/[workspaceSlug]/ask",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/_shared/conversation-page.tsx",
       "entry": "Conversation history nav — initial list, Load more, Archived expander",
@@ -154,7 +154,7 @@
       "verifiedAt": null,
       "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
-    "conversation.rename": {
+    "rename_conversation": {
       "route": "/[orgSlug]/[workspaceSlug]/ask",
       "page": "apps/app/src/components/conversations/conversation-item.tsx",
       "entry": "Row ⋯ menu → Rename → RenameDialog submit",
@@ -163,7 +163,7 @@
       "verifiedAt": null,
       "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
-    "conversation.archive": {
+    "archive_conversation": {
       "route": "/[orgSlug]/[workspaceSlug]/ask",
       "page": "apps/app/src/components/conversations/conversation-item.tsx",
       "entry": "Row ⋯ menu → Archive/Unarchive",
@@ -172,7 +172,7 @@
       "verifiedAt": null,
       "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
-    "conversation.delete": {
+    "delete_conversation": {
       "route": "/[orgSlug]/[workspaceSlug]/ask",
       "page": "apps/app/src/components/conversations/conversation-item.tsx",
       "entry": "Row ⋯ menu → Delete → DeleteConfirmDialog",
@@ -181,7 +181,7 @@
       "verifiedAt": null,
       "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
-    "conversation.purge": {
+    "purge_conversations": {
       "route": "/[orgSlug]/[workspaceSlug]/ask",
       "page": "apps/app/src/components/conversations/conversation-list.tsx",
       "entry": "Archived section → \"Delete all\" → DeleteConfirmDialog",
@@ -190,7 +190,7 @@
       "verifiedAt": null,
       "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
-    "notification.list": {
+    "list_notifications": {
       "route": "/[orgSlug]/[workspaceSlug]/* (shell)",
       "page": "apps/app/src/components/shell/notifications-bell.tsx",
       "entry": "Bell icon → Sheet drawer loads feed",
@@ -199,7 +199,7 @@
       "verifiedAt": null,
       "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
-    "notification.mark": {
+    "mark_notification": {
       "route": "/[orgSlug]/[workspaceSlug]/* (shell)",
       "page": "apps/app/src/components/shell/notifications-bell.tsx",
       "entry": "Notification click (mark read) + hover Archive button",
@@ -208,7 +208,7 @@
       "verifiedAt": null,
       "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
-    "user.preferences.write": {
+    "update_user_preferences": {
       "route": "/account/preferences",
       "page": "apps/app/src/app/account/preferences/preferences-form.tsx",
       "entry": "\"Save preferences\" submit",
@@ -217,7 +217,7 @@
       "verifiedAt": null,
       "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
-    "command.menu.suggest": {
+    "suggest_commands": {
       "route": "/[orgSlug]/[workspaceSlug]/* (Cmd+K)",
       "page": "apps/app/src/components/shell/ask/command-menu.tsx",
       "entry": "Command Menu \"Suggested for this page\" (empty-query) via use-suggestions",
@@ -226,7 +226,7 @@
       "verifiedAt": null,
       "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
-    "workspace.model_settings.read": {
+    "get_model_settings": {
       "route": "/[orgSlug]/[workspaceSlug]/settings/models",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/models/page.tsx",
       "entry": "WorkspaceModelsForm reads server-fetched settings",
@@ -235,7 +235,7 @@
       "verifiedAt": null,
       "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
-    "workspace.model_settings.write": {
+    "update_model_settings": {
       "route": "/[orgSlug]/[workspaceSlug]/settings/models",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/models/models-action.ts",
       "entry": "\"Save changes\" in models-form.tsx → updateWorkspaceModelsAction",
@@ -244,7 +244,7 @@
       "verifiedAt": null,
       "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
-    "workspace.budget_policy.read": {
+    "get_budget_policy": {
       "route": "/[orgSlug]/[workspaceSlug]/settings/budget",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/budget/page.tsx",
       "entry": "WorkspaceBudgetForm reads server-fetched policy",
@@ -253,7 +253,7 @@
       "verifiedAt": null,
       "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
-    "workspace.budget_policy.write": {
+    "update_budget_policy": {
       "route": "/[orgSlug]/[workspaceSlug]/settings/budget",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/budget/budget-action.ts",
       "entry": "\"Save changes\" in budget-form.tsx → updateWorkspaceBudgetAction",
@@ -262,7 +262,7 @@
       "verifiedAt": null,
       "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
-    "budget.policy.write": {
+    "update_user_budget": {
       "route": "/[orgSlug]/[workspaceSlug]/ask (chat composer)",
       "page": "apps/app/src/components/chat/budget-actions.ts",
       "entry": "\"Save as default\" in BudgetControl popover → saveBudgetDefaultAction",
@@ -271,7 +271,7 @@
       "verifiedAt": null,
       "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
-    "org.member.remove": {
+    "remove_org_member": {
       "route": "/[orgSlug]/members",
       "page": "apps/app/src/app/[orgSlug]/members/page.tsx",
       "entry": "MembersPanel → RemoveMemberDialog confirm → removeMemberAction",
@@ -280,7 +280,7 @@
       "verifiedAt": null,
       "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
-    "org.member_role.change": {
+    "change_member_role": {
       "route": "/[orgSlug]/members",
       "page": "apps/app/src/app/[orgSlug]/members/page.tsx",
       "entry": "MembersPanel → RoleSelector → changeMemberRoleAction",
@@ -289,7 +289,7 @@
       "verifiedAt": null,
       "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
-    "api.key.create": {
+    "create_api_key": {
       "route": "/[orgSlug]/developer/tokens",
       "page": "apps/app/src/app/[orgSlug]/developer/tokens/page.tsx",
       "entry": "TokensPanel → CreateKeyDialog form → createApiKeyAction",
@@ -298,7 +298,7 @@
       "verifiedAt": null,
       "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
-    "api.key.revoke": {
+    "revoke_api_key": {
       "route": "/[orgSlug]/developer/tokens",
       "page": "apps/app/src/app/[orgSlug]/developer/tokens/page.tsx",
       "entry": "ActiveKeyRow Revoke/Confirm → revokeApiKeyAction",
@@ -307,7 +307,7 @@
       "verifiedAt": null,
       "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
-    "api.key.rotate": {
+    "rotate_api_key": {
       "route": "/[orgSlug]/developer/tokens",
       "page": "apps/app/src/app/[orgSlug]/developer/tokens/page.tsx",
       "entry": "ActiveKeyRow Rotate → rotateApiKeyAction",
@@ -316,7 +316,7 @@
       "verifiedAt": null,
       "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
-    "connection.list": {
+    "list_connections": {
       "route": "/[orgSlug]/[workspaceSlug]/knowledge/repos",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/knowledge/repos/connections-section.tsx",
       "entry": "ConnectionsSection RSC invoke(connection.list) → KnowledgeConnectionsClient",
@@ -325,7 +325,7 @@
       "verifiedAt": null,
       "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
-    "graph.stats": {
+    "get_graph_stats": {
       "route": "/[orgSlug]/[workspaceSlug]/knowledge/inference",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/knowledge/inference/page.tsx",
       "entry": "GraphStatsSection RSC → GraphStatsBoxes on load",
@@ -334,7 +334,7 @@
       "verifiedAt": null,
       "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
-    "graph.node.get": {
+    "get_node": {
       "route": "/[orgSlug]/[workspaceSlug]/knowledge/nodes/[nodeId]",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/knowledge/nodes/[nodeId]/page.tsx",
       "entry": "Node detail page server-fetch (deep-linked from graph explorer)",
@@ -343,7 +343,7 @@
       "verifiedAt": null,
       "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
-    "graph.ingest": {
+    "ingest_graph": {
       "route": "/[orgSlug]/[workspaceSlug]/ask",
       "page": "apps/app/src/components/chat/message-footer.tsx",
       "entry": "\"Save as Knowledge\" under assistant messages → saveAsKnowledgeAction",
@@ -352,7 +352,7 @@
       "verifiedAt": null,
       "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
-    "agent.definition.get": {
+    "get_agent_def": {
       "route": "/[orgSlug]/[workspaceSlug]/workbench/agents/[agentId]",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/agents/[agentId]/page.tsx",
       "entry": "EditAgentPage RSC → getAgent() → AgentBuilder edit mode",
@@ -361,7 +361,7 @@
       "verifiedAt": null,
       "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
-    "agent.memory.write": {
+    "write_memory": {
       "route": "/[orgSlug]/[workspaceSlug]/ask",
       "page": "apps/app/src/components/chat/message-footer.tsx",
       "entry": "\"Save as Memory\" under assistant messages → saveAsMemoryAction",
@@ -370,7 +370,7 @@
       "verifiedAt": null,
       "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
-    "eval.run.get": {
+    "get_eval_run": {
       "route": "/[orgSlug]/[workspaceSlug]/evals/runs/[runId]",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/evals/runs/[runId]/page.tsx",
       "entry": "RunDetailSection RSC → RunDetailClient",
@@ -379,16 +379,16 @@
       "verifiedAt": null,
       "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
-    "eval.dataset.list": {
+    "list_datasets": {
       "route": "/[orgSlug]/[workspaceSlug]/evals",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/evals/page.tsx",
-      "entry": "DatasetsSection RSC → DatasetsClient table",
+      "entry": "DatasetsSection RSC → DatasetsClient list",
       "testid": "evals-datasets-table",
       "proof": null,
       "verifiedAt": null,
       "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
-    "video.generate": {
+    "generate_video": {
       "route": "/[orgSlug]/[workspaceSlug]/ask",
       "page": "apps/app/src/components/chat/registry-components/make-video-form.tsx",
       "entry": "make-video-form chat component → videoGenerateAction",

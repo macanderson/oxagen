@@ -58,10 +58,9 @@ const ACTIONS = new Set([
   "activate", "install", "uninstall", "register", "reauth", "rotate", "revoke",
   "reveal", "pin", "purchase", "load", "map", "diff", "patch", "sync",
   "reconcile", "approve", "decline", "accept", "resolve", "suggest", "infer",
-  "revise",
   "check", "verify", "validate", "analyze", "chat", "change", "mark", "send",
   "open", "format", "parse", "upload", "refresh", "screenshot", "submit",
-  "fill", "click", "navigate", "revise",
+  "fill", "click", "navigate",
   // associative verbs — bind/unbind an agent to an environment (Spec §5.6).
   "bind", "unbind",
   // imperative verbs used by shipped capabilities that predate this list
@@ -69,6 +68,11 @@ const ACTIONS = new Set([
   // renaming a shipped capability requires the seed-then-deploy runbook
   // (docs/specs/adr025-reland-runbook.md), so the verbs are admitted instead.
   "draft", "save", "post", "debug",
+  // LLM-assisted revision of an existing definition (revise_agent_def,
+  // revise_skill) — distinct from `edit`/`update` (direct mutation): revise
+  // regenerates content from feedback. Shipped without this entry, which
+  // broke pre-push for every branch; admitted per the shipped-verb policy.
+  "revise",
   // snake_case compound actions
   "set_enabled", "set_default", "set_secret", "set_auth_alerts", "set_tools",
   "import_env", "install_bulk", "from_traces",

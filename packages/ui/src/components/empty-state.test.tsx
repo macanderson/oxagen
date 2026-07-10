@@ -7,10 +7,10 @@
 
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
-
-afterEach(cleanup);
 import { Database } from "lucide-react";
 import { EmptyState } from "./empty-state";
+
+afterEach(cleanup);
 
 describe("EmptyState — render", () => {
   it("renders title, description, and action", () => {

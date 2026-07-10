@@ -9,6 +9,14 @@
  * Server-side caching: uses unstable_cache keyed on a hash of the
  * SuggestionContext (excluding session fields), TTL 1 hour — so suggestions for
  * the same page entity are shared across users (spec §7 server cache layer).
+ *
+ * Cache Components note: this deliberately stays on unstable_cache rather than
+ * `"use cache"`. The directive keys on ALL arguments and closed-over values,
+ * and this cache must EXCLUDE the session-specific fields (userId, requestId)
+ * from its key so entries are shared org-wide — with `"use cache"` the
+ * per-request requestId would make every key unique and the cache would never
+ * hit. unstable_cache's explicit key-parts express that exclusion; it remains
+ * a supported caching layer alongside Cache Components.
  */
 import "@oxagen/handlers/register";
 

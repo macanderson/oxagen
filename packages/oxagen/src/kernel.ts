@@ -425,34 +425,6 @@ export interface InvokeOptions {
 }
 
 /**
- * The one dispatch path. Resolves the contract, validates input against the
- * contract schema, runs the IAM check (OXA-1498), runs the bound handler, and
- * validates the output so a drifting handler can never return a shape that
- * violates the contract.
- *
- * IAM behaviour (controlled by setKernelIAMRuntime):
- *   - When an IAM check function is registered:
- *       ALWAYS resolves authz and emits the ClickHouse audit event.
- *       When enforcement=true (IAM_ENFORCEMENT_ENABLED=true):
- *         throws CapabilityError(code='authz_denied') on deny or pending_approval.
- *       When enforcement=false (default):
- *         logs would-deny decisions and proceeds — zero lockout risk.
- *       When checkFn THROWS (resolver error — DB down, migration missing,
- *         resolver bug): ALWAYS fails closed (throws CapabilityError,
- *         code='authz_denied')), regardless of the enforcement flag (OXA-2056).
- *         A throw means the check could not be evaluated at all —
- *         categorically different from a policy "deny" decision, which is the
- *         only case the enforcement flag is allowed to soften. Silently
- *         granting access because the resolver happened to error is a
- *         fail-open bug, not graceful degradation.
- *   - When no IAM check function is registered: proceeds as before (no IAM).
- *
- * Emits a `KernelSecurityEvent` after every invocation attempt — allow,
- * deny (surface/input/unknown errors), or error (output validation / handler
- * throw). The emit is fire-and-forget; the capability response is never
- * delayed by the audit write.
- */
-/**
  * The one dispatch path. Starts an OpenTelemetry span for the invocation and
  * delegates to _invokeCore which contains the full IAM → billing → handler
  * pipeline. The span is "active" for the entire invocation, so child async
@@ -510,11 +482,11 @@ async function _invokeCore(
 ): Promise<unknown> {
   const startMs = Date.now();
   const cap = getCapability(name);
-  // The canonical identity for this invocation (ADR-022). getCapability resolves
-  // a legacy alias to its live contract, so a call made under an old name is
-  // dispatched, gated, and metered under the canonical name. For an unknown
-  // name (cap === undefined) canonical falls back to the raw name so the
-  // "unknown capability" telemetry still records what was actually called.
+  // The identity for this invocation. getCapability performs an exact registry
+  // lookup (ADR-025 removed alias resolution — see resolveHandler's own comment
+  // below), so cap.name always equals name when a capability is found. For an
+  // unknown name (cap === undefined) canonical falls back to the raw name so
+  // the "unknown capability" telemetry still records what was actually called.
   const canonical = cap?.name ?? name;
   if (!cap) {
     emitSecurityEvent({

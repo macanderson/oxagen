@@ -24,9 +24,6 @@ import {
 import { ConsentForm } from "./consent-form";
 import type { OrgOption } from "./consent-form";
 
-// Reads session headers + query params on every request.
-export const dynamic = "force-dynamic";
-
 // ---------------------------------------------------------------------------
 // Inline error page (rendered for invalid params — never redirects)
 // ---------------------------------------------------------------------------

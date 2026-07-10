@@ -7,9 +7,9 @@
 
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
+import { Spinner, spinnerVariants } from "./spinner";
 
 afterEach(cleanup);
-import { Spinner, spinnerVariants } from "./spinner";
 
 describe("spinnerVariants — class map", () => {
   it("defaults to size-4 with animate-spin", () => {

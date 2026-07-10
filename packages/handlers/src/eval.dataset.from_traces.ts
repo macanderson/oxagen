@@ -4,17 +4,8 @@ import { schema, withTenantDb, isUniqueViolation } from "@oxagen/database";
 import { and, desc, eq, inArray, or } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
 import { chSelect } from "@oxagen/telemetry";
+import { slugify } from "./lib/asset-filename";
 import { logger } from "./logger";
-
-function slugify(name: string): string {
-  return (
-    name
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "")
-      .slice(0, 60) || "traces"
-  );
-}
 
 /**
  * Read the set of metered turn ids for this workspace within the window. These
@@ -66,7 +57,7 @@ async function meteredTurnIds(
 export const evalDatasetFromTracesHandler: CapabilityHandler<
   typeof evalDatasetFromTraces
 > = async (input, ctx) => {
-  const slug = input.slug ?? slugify(input.name);
+  const slug = input.slug ?? (slugify(input.name).slice(0, 60) || "traces");
   const turnIds = await meteredTurnIds(input.sinceHours, input.capabilityName);
 
   try {

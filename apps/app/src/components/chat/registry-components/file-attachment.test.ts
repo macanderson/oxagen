@@ -10,8 +10,9 @@
 import { describe, it, expect, vi } from "vitest";
 
 // ── formatBytes ──────────────────────────────────────────────────────────────
-// Import the pure helper directly (no React required).
-import { formatBytes } from "./file-attachment";
+// formatBytes is the shared @/lib/utils helper, re-imported (not re-defined)
+// by file-attachment.tsx; import it directly (no React required).
+import { formatBytes } from "@/lib/utils";
 
 describe("formatBytes", () => {
   it("formats bytes below 1 KB", () => {

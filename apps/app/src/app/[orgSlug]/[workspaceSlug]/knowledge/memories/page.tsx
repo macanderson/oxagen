@@ -16,8 +16,6 @@ import {
 import { TableSkeleton } from "@/components/loading";
 import { MemoriesSection } from "./memories-section";
 
-export const dynamic = "force-dynamic";
-
 interface PageProps {
   params: Promise<{ orgSlug: string; workspaceSlug: string }>;
 }

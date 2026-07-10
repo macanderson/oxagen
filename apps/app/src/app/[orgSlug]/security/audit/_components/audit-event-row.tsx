@@ -6,7 +6,7 @@
 import * as React from "react";
 import { ChevronRight, CheckCircle2, XCircle, AlertTriangle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
+import { cn, formatDateTimeWithSeconds } from "@/lib/utils";
 
 export interface AuditEventRowData {
   id: string;
@@ -35,17 +35,6 @@ function OutcomeIcon({ outcome }: { outcome: string }) {
     return <CheckCircle2 className="mr-1 h-3 w-3" aria-hidden="true" />;
   if (outcome === "deny") return <XCircle className="mr-1 h-3 w-3" aria-hidden="true" />;
   return <AlertTriangle className="mr-1 h-3 w-3" aria-hidden="true" />;
-}
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
 }
 
 function Detail({ label, value, mono }: { label: string; value: string | null; mono?: boolean }) {
@@ -83,7 +72,7 @@ export function AuditEventRow({ row }: { row: AuditEventRowData }) {
             {row.capability ? ` · ${row.capability}` : ""}
           </p>
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <span>{formatDate(row.occurredAt)}</span>
+            <span>{formatDateTimeWithSeconds(row.occurredAt)}</span>
             {row.ip && <span className="font-mono">{row.ip}</span>}
           </div>
         </div>

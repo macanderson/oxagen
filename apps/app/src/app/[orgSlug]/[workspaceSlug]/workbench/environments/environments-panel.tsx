@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { slugify } from "@/lib/slug";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";

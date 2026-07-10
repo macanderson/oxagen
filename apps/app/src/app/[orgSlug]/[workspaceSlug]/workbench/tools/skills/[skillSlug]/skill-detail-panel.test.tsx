@@ -705,12 +705,13 @@ describe("SkillDetailPanel — version history heading", () => {
     expect(screen.getByText("Version History")).toBeInTheDocument();
   });
 
-  it("renders table headers", () => {
+  it("renders attribute labels for each version entry", () => {
+    // Version history is now a <ul> of <li> entries (a chronological log read
+    // item-by-item), not a <table> — "Version" and "Message" are the entry's
+    // identity (unlabeled, like a git log line) and "Actions" has no label
+    // (just buttons), so only the labeled attributes remain as <dt> text.
     renderPanel({ versions: [v1] });
-    expect(screen.getByText("Version")).toBeInTheDocument();
-    expect(screen.getByText("Message")).toBeInTheDocument();
     expect(screen.getByText("Created")).toBeInTheDocument();
     expect(screen.getByText("Author")).toBeInTheDocument();
-    expect(screen.getByText("Actions")).toBeInTheDocument();
   });
 });

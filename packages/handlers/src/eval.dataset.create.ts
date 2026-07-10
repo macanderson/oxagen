@@ -2,21 +2,13 @@ import type { CapabilityHandler } from "@oxagen/oxagen";
 import { evalDatasetCreate } from "@oxagen/oxagen/contracts/eval.dataset.create";
 import { schema, withTenantDb, isUniqueViolation } from "@oxagen/database";
 import { HTTPException } from "hono/http-exception";
+import { slugify } from "./lib/asset-filename";
 import { logger } from "./logger";
-
-/** Derive a kebab-case slug from a free-form name. */
-function slugify(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 60) || "dataset";
-}
 
 export const evalDatasetCreateHandler: CapabilityHandler<
   typeof evalDatasetCreate
 > = async (input, ctx) => {
-  const slug = input.slug ?? slugify(input.name);
+  const slug = input.slug ?? (slugify(input.name).slice(0, 60) || "dataset");
   try {
     return await withTenantDb(async (tx) => {
       const [row] = await tx

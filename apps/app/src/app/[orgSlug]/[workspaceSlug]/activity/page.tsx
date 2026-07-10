@@ -14,8 +14,6 @@ import { PageHeader } from "@/components/ui/page-header";
 import { TableSkeleton } from "@/components/loading";
 import { ActivitySection } from "./activity-section";
 
-export const dynamic = "force-dynamic";
-
 interface PageProps {
   params: Promise<{ orgSlug: string; workspaceSlug: string }>;
   searchParams: Promise<{ before?: string }>;
