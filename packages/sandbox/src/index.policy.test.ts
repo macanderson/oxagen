@@ -18,7 +18,11 @@
  */
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { getSandbox, setSandboxForTests } from "./index";
-import { DEFAULT_POLICY, SandboxPolicyError, type SandboxPolicy } from "./policy";
+import {
+  DEFAULT_POLICY,
+  SandboxPolicyError,
+  type SandboxPolicy,
+} from "./policy";
 import type { SandboxDriver, SandboxRequest, SandboxResult } from "./types";
 
 const RESULT: SandboxResult = {
@@ -30,7 +34,10 @@ const RESULT: SandboxResult = {
   oomKilled: false,
 };
 
-function recordingDriver(): { driver: SandboxDriver; runReqs: SandboxRequest[] } {
+function recordingDriver(): {
+  driver: SandboxDriver;
+  runReqs: SandboxRequest[];
+} {
   const runReqs: SandboxRequest[] = [];
   const driver: SandboxDriver = {
     name: "recording",
@@ -66,7 +73,12 @@ describe("getSandbox() policy seam", () => {
     setSandboxForTests(driver);
 
     await getSandbox().run(
-      makeReq({ timeoutMs: 10_000, memoryMb: 256, network: "deny", language: "python" }),
+      makeReq({
+        timeoutMs: 10_000,
+        memoryMb: 256,
+        network: "deny",
+        language: "python",
+      }),
     );
 
     expect(runReqs[0]).toMatchObject({
@@ -83,17 +95,17 @@ describe("getSandbox() policy seam", () => {
 
     await getSandbox().run(makeReq({ timeoutMs: 999_999, memoryMb: 99_999 }));
 
-    expect(runReqs[0].timeoutMs).toBe(DEFAULT_POLICY.maxTimeoutMs);
-    expect(runReqs[0].memoryMb).toBe(DEFAULT_POLICY.maxMemoryMb);
+    expect(runReqs[0]!.timeoutMs).toBe(DEFAULT_POLICY.maxTimeoutMs);
+    expect(runReqs[0]!.memoryMb).toBe(DEFAULT_POLICY.maxMemoryMb);
   });
 
   it("rejects a request that asks for network when the policy forbids it", async () => {
     const { driver, runReqs } = recordingDriver();
     setSandboxForTests(driver);
 
-    await expect(getSandbox().run(makeReq({ network: "allow" }))).rejects.toBeInstanceOf(
-      SandboxPolicyError,
-    );
+    await expect(
+      getSandbox().run(makeReq({ network: "allow" })),
+    ).rejects.toBeInstanceOf(SandboxPolicyError);
     // The driver is never reached when the policy rejects.
     expect(runReqs).toHaveLength(0);
   });
@@ -102,7 +114,10 @@ describe("getSandbox() policy seam", () => {
     const { driver } = recordingDriver();
     setSandboxForTests(driver);
 
-    const policy: SandboxPolicy = { ...DEFAULT_POLICY, allowedLanguages: ["node", "python"] };
+    const policy: SandboxPolicy = {
+      ...DEFAULT_POLICY,
+      allowedLanguages: ["node", "python"],
+    };
 
     await expect(
       getSandbox(undefined, policy).run(makeReq({ language: "shell" })),

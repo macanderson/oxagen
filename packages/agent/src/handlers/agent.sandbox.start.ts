@@ -14,6 +14,7 @@ import {
   type SessionMeta,
 } from "./_sandbox-session";
 import { driverNetworkForMode, resolveRunTemplate } from "./_sandbox-template";
+import { injectEnvironmentSecrets } from "./_environment-env";
 
 export type { AgentSandboxStartInput, AgentSandboxStartOutput };
 
@@ -37,13 +38,17 @@ export async function agentSandboxStartHandler(
 
   // Fail fast on a not-yet-implemented network mode BEFORE requiring a driver or
   // provisioning anything.
-  const network = template ? driverNetworkForMode(template.network.mode) : input.network;
+  const network = template
+    ? driverNetworkForMode(template.network.mode)
+    : input.network;
   // A template's provider must be session-capable; requireDurableDriver throws a
   // clear error for docker/vercel or an unconfigured modal.
   const driver = requireDurableDriver(template?.provider);
 
   const memoryMb = template?.resources.memoryMb ?? input.memoryMb;
-  const environmentId = template ? resolved!.environment.id : input.environmentId;
+  const environmentId = template
+    ? resolved!.environment.id
+    : input.environmentId;
 
   const meta: SessionMeta = {
     memoryMb,
@@ -53,24 +58,50 @@ export async function agentSandboxStartHandler(
     ...(input.label ? { label: input.label } : {}),
     ...(environmentId ? { environmentId } : {}),
     ...(template?.runtime ? { imageRef: template.runtime } : {}),
-    ...(template?.resources.vcpu !== undefined ? { vcpu: template.resources.vcpu } : {}),
-    ...(template?.resources.diskMb !== undefined ? { diskMb: template.resources.diskMb } : {}),
+    ...(template?.resources.vcpu !== undefined
+      ? { vcpu: template.resources.vcpu }
+      : {}),
+    ...(template?.resources.diskMb !== undefined
+      ? { diskMb: template.resources.diskMb }
+      : {}),
     ...(template
-      ? { secretSelection: template.secretSelection, literalEnv: template.literalEnv }
+      ? {
+          secretSelection: template.secretSelection,
+          literalEnv: template.literalEnv,
+        }
       : {}),
   };
+  // setupCmd runs at CREATE time, before any agent.sandbox.exec — so it must
+  // see the same trusted env (template literal_env → environment vault) every
+  // later exec sees, or a private-repo clone in setup has no credential
+  // channel at all (git then dies trying to prompt for a username). There is
+  // no caller env at start time, so only the trusted sources are merged.
+  const setupEnv = input.setupCmd
+    ? (
+        await injectEnvironmentSecrets(ctx, environmentId, undefined, {
+          selection: template?.secretSelection,
+          literalEnv: template?.literalEnv,
+        })
+      ).env
+    : undefined;
+
   const spec: SandboxSessionSpec = {
     image: input.image,
     ...(template?.runtime ? { imageRef: template.runtime } : {}),
     memoryMb,
-    ...(template?.resources.vcpu !== undefined ? { vcpu: template.resources.vcpu } : {}),
-    ...(template?.resources.diskMb !== undefined ? { diskMb: template.resources.diskMb } : {}),
+    ...(template?.resources.vcpu !== undefined
+      ? { vcpu: template.resources.vcpu }
+      : {}),
+    ...(template?.resources.diskMb !== undefined
+      ? { diskMb: template.resources.diskMb }
+      : {}),
     ttlSeconds: input.ttlSeconds,
     idleTimeoutSeconds: input.idleTimeoutSeconds,
     network,
     orgId: ctx.orgId,
     workspaceId: ctx.workspaceId,
     setupCmd: input.setupCmd,
+    ...(setupEnv ? { setupEnv } : {}),
   };
 
   // ── Reuse path ──────────────────────────────────────────────────────────────

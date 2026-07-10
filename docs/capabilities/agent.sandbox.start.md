@@ -31,7 +31,7 @@ always provision a fresh session.
 | `ttlSeconds`         | `integer`                                     | `86400`   | Hard ceiling on total session lifetime in seconds (300–86400, max 24h).                                                               |
 | `idleTimeoutSeconds` | `integer`                                     | `1200`    | Reap the sandbox after this many seconds of inactivity (60–86400). Primary cost control — a reaped session restores from its last snapshot on next exec. |
 | `network`            | `"allow" \| "deny"`                           | `"allow"` | Network policy. Durable build sandboxes default to `"allow"` so they can clone repos and install dependencies.                        |
-| `setupCmd`           | `string?`                                     | undefined | Optional shell command run once at create time (e.g. `git clone … && pnpm i`). Skipped on warm reuse.                                |
+| `setupCmd`           | `string?`                                     | undefined | Optional shell command run once at create time (e.g. `git clone … && pnpm i`). Skipped on warm reuse. Runs with the session's trusted env injected (see notes). |
 
 ## Output
 
@@ -88,3 +88,24 @@ Tool name: `agent.sandbox.start`
 - Pair with `agent.sandbox.snapshot` at meaningful milestones (repo cloned,
   deps installed) so idle reaps do not lose work.
 - Explicit `agent.sandbox.stop` when done is preferred over relying on idle reap.
+
+### Cloning private repositories in `setupCmd`
+
+`setupCmd` runs with the same **trusted env** every later `agent.sandbox.exec`
+sees: the bound environment's vault secrets plus a sandbox template's literal
+env (lowest precedence). To clone a private repo at create time, store a token
+(e.g. `GITHUB_TOKEN`) in the workspace environment's vault, bind the
+environment via `environmentId` (or a template), and reference it:
+
+```sh
+git clone https://x-access-token:$GITHUB_TOKEN@github.com/org/repo /workspace/repo
+```
+
+Git terminal prompts are disabled during setup (`GIT_TERMINAL_PROMPT=0`), so an
+unauthenticated clone of a private repo fails immediately with
+`terminal prompts disabled` — surfaced as HTTP 422 from the runner (a caller
+command failure, not runner ill-health) — instead of dying with the cryptic
+`could not read Username for 'https://github.com': No such device or address`.
+For agent-driven repo workflows, prefer the managed path (the agent workspace
+clones with the org's GitHub App installation token after the session starts)
+over hand-rolling tokens in `setupCmd`.
