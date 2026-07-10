@@ -21,6 +21,14 @@ const mockDriver: SandboxDriver = {
 vi.mock("@oxagen/sandbox", () => ({
   isSandboxAvailable: vi.fn(() => true),
   getSandbox: vi.fn((): SandboxDriver => mockDriver),
+  // The handler imports DEFAULT_POLICY to build a template-derived effective
+  // policy; mirror the real conservative defaults here.
+  DEFAULT_POLICY: {
+    allowedLanguages: ["node", "python", "shell"],
+    maxTimeoutMs: 30_000,
+    maxMemoryMb: 512,
+    allowNetwork: false,
+  },
 }));
 
 const { mockInsertEvents } = vi.hoisted(() => ({
@@ -48,6 +56,7 @@ vi.mock("@oxagen/plugins", async (importOriginal) => {
 });
 
 import { agentCodeExecuteHandler } from "./agent.code.execute";
+import { CapabilityError } from "@oxagen/oxagen/kernel";
 import { isSandboxAvailable, getSandbox } from "@oxagen/sandbox";
 import type { ResolvedSandboxTemplate, SandboxTemplateSummary } from "@oxagen/plugins";
 
@@ -139,6 +148,39 @@ describe("agent.code.execute handler", () => {
         CTX,
       ),
     ).rejects.toThrow("Code execution is not available");
+  });
+
+  it("maps a SandboxPolicyError from the seam to an invalid_input CapabilityError", async () => {
+    // The dispatch seam throws SandboxPolicyError on a hard boundary (disallowed
+    // language / network). The handler must re-surface it as a structured
+    // capability error (→ 400) rather than let it leak as an unclassified 500.
+    class SandboxPolicyError extends Error {
+      readonly code = "sandbox_policy_violation";
+      constructor(message: string) {
+        super(message);
+        this.name = "SandboxPolicyError";
+      }
+    }
+    mockRun.mockRejectedValueOnce(
+      new SandboxPolicyError("network access not allowed by policy"),
+    );
+
+    const promise = agentCodeExecuteHandler(
+      {
+        language: "node",
+        code: "fetch('http://x')",
+        timeoutMs: 5_000,
+        memoryMb: 128,
+        network: "allow",
+      },
+      CTX,
+    );
+
+    await expect(promise).rejects.toBeInstanceOf(CapabilityError);
+    await expect(promise).rejects.toMatchObject({
+      code: "invalid_input",
+      message: "network access not allowed by policy",
+    });
   });
 
   it("passes env vars and stdin to sandbox", async () => {
@@ -375,8 +417,17 @@ describe("agent.code.execute handler — sandbox template", () => {
       CTX,
     );
 
-    // The template's provider selects the driver per run.
-    expect(vi.mocked(getSandbox)).toHaveBeenCalledWith("docker");
+    // The template's provider selects the driver per run, AND its trusted,
+    // contract-bounded resources are threaded in as the effective policy ceiling
+    // so the 4 GB / 120 s / network-allow run is NOT clamped to DEFAULT_POLICY.
+    expect(vi.mocked(getSandbox)).toHaveBeenCalledWith(
+      "docker",
+      expect.objectContaining({
+        maxMemoryMb: 4096,
+        maxTimeoutMs: 120_000,
+        allowNetwork: true,
+      }),
+    );
     expect(mockRun).toHaveBeenCalledWith(
       expect.objectContaining({
         imageRef: "ghcr.io/acme/swe-bench@sha256:abc",

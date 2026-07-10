@@ -8,8 +8,6 @@
 
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
-
-afterEach(cleanup);
 import {
   Table,
   TableBody,
@@ -21,6 +19,8 @@ import {
   TableHeader,
   TableRow,
 } from "./table";
+
+afterEach(cleanup);
 
 function renderTable(tableProps: React.ComponentProps<typeof Table> = {}) {
   return render(

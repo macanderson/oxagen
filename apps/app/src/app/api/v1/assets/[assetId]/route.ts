@@ -13,12 +13,8 @@ import {
   GeneratedAssetForbiddenError,
 } from "@oxagen/handlers";
 
-// Node runtime: the storage adapter uses Node.js crypto + the Vercel Blob SDK.
-export const runtime = "nodejs";
-
-// Never cache: every response is access-controlled; a stale cache entry could
-// serve one user's private asset to another session.
-export const dynamic = "force-dynamic";
+// Runs on the default Node.js runtime: the storage adapter uses Node.js
+// crypto + the Vercel Blob SDK (edge-unsafe).
 
 export async function GET(
   _req: Request,

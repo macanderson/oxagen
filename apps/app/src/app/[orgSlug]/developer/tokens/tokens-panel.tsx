@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Panel } from "@/components/ui/panel";
+import { formatDate } from "@/lib/utils";
 import {
   createApiKeyAction,
   revokeApiKeyAction,
@@ -37,15 +38,6 @@ interface TokensPanelProps {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function formatDate(d: string | null): string {
-  if (!d) return "—";
-  return new Date(d).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
 
 function obfuscatePrefix(prefix: string): string {
   return `${prefix}${"•".repeat(32)}`;

@@ -22,8 +22,6 @@ import "@oxagen/handlers/register";
 import { getSession } from "@/lib/session";
 import { resolveWorkspaceScope } from "@/lib/resolve-org";
 
-export const dynamic = "force-dynamic";
-
 export async function GET(request: NextRequest) {
   const session = await getSession();
   if (!session?.user) {

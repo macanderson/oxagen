@@ -29,9 +29,8 @@ import {
   type AuditExportFormat,
 } from "@/lib/audit-export";
 
-// Node runtime: node:crypto HMAC + DB access. Never cache (access-controlled).
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
+// Runs on the default Node.js runtime: node:crypto HMAC + DB access.
+// Never cached (access-controlled) — cacheComponents leaves handlers dynamic.
 
 function signingSecret(): string {
   // A dedicated key is preferred; fall back to the always-present auth secret so

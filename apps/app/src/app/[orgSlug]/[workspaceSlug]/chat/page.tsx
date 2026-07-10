@@ -1,8 +1,6 @@
 import { redirect } from "next/navigation";
 import { workspace } from "@/lib/routes";
 
-export const dynamic = "force-dynamic";
-
 /**
  * Legacy `/chat` route — consolidated onto `/ask` (the canonical conversation
  * surface). This redirect preserves bookmarked / deep-linked conversation URLs

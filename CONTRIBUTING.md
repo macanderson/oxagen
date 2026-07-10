@@ -29,7 +29,7 @@ pnpm dev                     # starts Docker + migrations + all apps
 
 Other rules:
 
-- Commit messages: imperative mood, under 72 chars (`Add capability: agent.code.execute`).
+- Commit messages: imperative mood, under 72 chars (`Add capability: execute_code`) — dotted capability names are retired (ADR-025).
 - Don't rebase, squash, or cherry-pick to "tidy" shared history — correct, complete, pushed work beats a pretty history.
 - Everything committed must be **functionally complete**: fully wired end-to-end, every layer present, tests passing, no dead code.
 
@@ -50,7 +50,7 @@ If `gate` fails on any step, fix it before requesting review. The CI gate is ide
 Every user-facing action is a **capability**: a typed contract exposed with parity across API, MCP, CLI, and UI. The correct order is always contract → API route → MCP tool → UI/CLI wire-up — never wire a UI surface to live data before the contract exists.
 
 1. Define the contract in `packages/oxagen/src/contracts/<name>.ts`
-2. Add the barrel import to `packages/oxagen/src/contracts/index.ts`
+2. Add the barrel import to `packages/oxagen/src/contracts/index.ts` — note `tools/scripts/check_manifest.mjs` also auto-generates `contracts.generated.ts` from the contracts directory, but the hand-maintained `index.ts` barrel remains the authoritative one consumed by the rest of the codebase
 3. Implement the handler in `packages/handlers/src/<name>.ts`
 4. Register it in `packages/handlers/src/register.ts`
 5. Add the API route in `apps/api/src/routes/v1/<capability>.ts`
@@ -91,7 +91,7 @@ pnpm db:lint-migrations  # verify integrity
 pnpm db:migrate          # apply locally
 ```
 
-Never create migration files manually — always use `atlas migrate diff`. Migration files go in `packages/database/migrations/`, never in `apps/`.
+Never create migration files manually — always use `atlas migrate diff`. Migration files go in `packages/database/atlas/migrations/`, never in `apps/`.
 
 **Target check before any mutation script:** echo the DB URL first; local = `localhost:5433`. `tsx --env-file=.env.local` does **not** override a shell-exported `DATABASE_URL` — `unset DATABASE_URL` to force local targeting. **Verify with a `SELECT` after migration** — don't trust logs alone.
 

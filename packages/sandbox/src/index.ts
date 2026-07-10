@@ -6,7 +6,13 @@ export { createDockerSandbox } from "./docker";
 export { createModalSandbox } from "./modal";
 export { createVercelSandbox } from "./vercel";
 
-import type { SandboxDriver } from "./types";
+import type {
+  SandboxDriver,
+  SandboxRequest,
+  SandboxResult,
+  SandboxStreamChunk,
+} from "./types";
+import { applyPolicy, DEFAULT_POLICY, type SandboxPolicy } from "./policy";
 import { createDockerSandbox } from "./docker";
 import { createModalSandbox } from "./modal";
 import { createVercelSandbox } from "./vercel";
@@ -142,21 +148,85 @@ function createDefaultDriver(): SandboxDriver {
   return createDockerDriver();
 }
 
-/**
- * Resolve a sandbox driver.
- *
- * With no argument, returns the deployment-default driver selected by
- * `SANDBOX_DRIVER` (or auto-detect). With a `provider`, returns the driver for
- * that provider — a sandbox template's per-run override — building it on first
- * use. `SANDBOX_DRIVER` remains the default/fallback for runs with no template.
- */
-export function getSandbox(provider?: string): SandboxDriver {
+// ── Policy enforcement seam ──────────────────────────────────────────────────
+// Every SandboxRequest carries MODEL-supplied resource / network / language
+// fields, which are untrusted. `getSandbox()` is the single chokepoint that
+// EVERY one-shot run/stream caller (agent.code.execute, code.format, …) funnels
+// through, so the policy is enforced HERE — exactly once, upstream of all three
+// drivers — rather than trusting each caller or each driver to clamp. This is
+// the "upstream applyPolicy" that docker.ts's MIN_MEMORY_MB comment assumes.
+// `applyPolicy` clamps timeout/memory to the ceiling SILENTLY (a valid request
+// is a no-op) and throws SandboxPolicyError on a hard boundary (disallowed
+// language or network). The durable session-lifecycle methods (createSession,
+// execInSession, …) take a different request shape (SandboxSessionSpec /
+// SandboxExecRequest) and pass through untouched — their resource governance
+// lives in the spec the handler builds — so the wrapper only gates run/stream.
+//
+// Template interplay (per-call policy override): a workspace's sandbox template
+// is TRUSTED, contract-bounded config (≤8 GB / ≤300 s) whose declared resources
+// may legitimately exceed the conservative DEFAULT_POLICY. Callers thread the
+// template's limits in as the effective `policy` so those requests are NOT
+// clamped down to defaults; with no `policy` argument, DEFAULT_POLICY applies.
+function withPolicy(driver: SandboxDriver, policy: SandboxPolicy): SandboxDriver {
+  return new Proxy(driver, {
+    get(target, prop, receiver) {
+      if (prop === "run") {
+        // async so a rejected policy surfaces as a rejected promise, never a
+        // synchronous throw — run() must always hand back a Promise.
+        return async (req: SandboxRequest): Promise<SandboxResult> =>
+          target.run(applyPolicy(req, policy));
+      }
+      if (prop === "stream") {
+        // stream() returns an AsyncIterable synchronously; a rejected policy
+        // throws when the stream is opened (before any driver work), which the
+        // `for await` caller surfaces on setup.
+        return (req: SandboxRequest): AsyncIterable<SandboxStreamChunk> =>
+          target.stream(applyPolicy(req, policy));
+      }
+      const value = Reflect.get(target, prop, receiver);
+      // Bind driver methods to the real driver so `this` inside a session /
+      // lifecycle method is the driver, never the proxy — the proxy exists
+      // only to gate run/stream through the policy. Non-function props (name,
+      // supportsSessions, …) forward verbatim so isDurableSandboxDriver() and
+      // observability still see the true driver surface.
+      return typeof value === "function"
+        ? (value as (...args: unknown[]) => unknown).bind(target)
+        : value;
+    },
+  });
+}
+
+// Resolve the RAW (unwrapped) driver — test override, explicit provider, or the
+// cached env-driven default. Kept separate from getSandbox so the policy wrapper
+// is applied uniformly to every return path (including the test override).
+function resolveDriver(provider?: string): SandboxDriver {
   // Test injection wins for every path so one mock covers all call sites.
   if (_testOverride) return _testOverride;
   if (provider) return driverForProvider(provider);
   if (_default) return _default;
   _default = createDefaultDriver();
   return _default;
+}
+
+/**
+ * Resolve a sandbox driver, wrapped so every run/stream request is validated and
+ * clamped against `policy` at this single seam before any driver sees it.
+ *
+ * With no `provider`, returns the deployment-default driver selected by
+ * `SANDBOX_DRIVER` (or auto-detect). With a `provider`, returns the driver for
+ * that provider — a sandbox template's per-run override — building it on first
+ * use. `SANDBOX_DRIVER` remains the default/fallback for runs with no template.
+ *
+ * `policy` defaults to the conservative DEFAULT_POLICY. A template-aware caller
+ * passes a policy derived from the template's (trusted, contract-bounded)
+ * resources so those requests are governed by the template ceiling instead of
+ * being clamped to defaults.
+ */
+export function getSandbox(
+  provider?: string,
+  policy: SandboxPolicy = DEFAULT_POLICY,
+): SandboxDriver {
+  return withPolicy(resolveDriver(provider), policy);
 }
 
 export function setSandboxForTests(driver: SandboxDriver | null): void {

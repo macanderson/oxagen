@@ -13,6 +13,7 @@
  * not directly by the user. The state validates the flow.
  */
 import { NextResponse, type NextRequest } from "next/server";
+import { unstable_rethrow } from "next/navigation";
 import { auth as mcpAuth } from "@modelcontextprotocol/sdk/client/auth.js";
 import { and, eq, ne, sql } from "drizzle-orm";
 import type { FetchLike } from "@modelcontextprotocol/sdk/shared/transport.js";
@@ -21,7 +22,7 @@ import { DbOAuthClientProvider, loadOAuthState, deleteOAuthState } from "@oxagen
 import { isNextRedirectError } from "@/lib/auth-denial";
 import { logger } from "@oxagen/handlers/logger";
 
-export const runtime = "nodejs"; // MCP SDK auth uses Node crypto — edge-unsafe.
+// Runs on the default Node.js runtime — MCP SDK auth uses Node crypto (edge-unsafe).
 
 /**
  * Fetch wrapper for mcpAuth — see authorize/route.ts for full explanation.
@@ -69,6 +70,11 @@ export async function GET(req: NextRequest): Promise<Response> {
     return await handleCallback(req);
   } catch (err) {
     if (isNextRedirectError(err)) throw err;
+    // Cache Components: the build-time prerender bails out of this GET by
+    // THROWING on the first request-data access (req.url), which happens
+    // inside the try above. Rethrow Next-internal errors so the bail-out
+    // escapes instead of being logged and baked into static output as a 500.
+    unstable_rethrow(err);
     logger.error(
       {
         err: String(err),

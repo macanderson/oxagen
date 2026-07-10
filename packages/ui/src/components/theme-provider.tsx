@@ -3,27 +3,35 @@
  * ThemeProvider / useTheme — self-hosted, class-based theming for all Oxagen
  * Next.js apps. Vendor-neutral replacement for `next-themes`.
  *
- * No-flash WITHOUT an inline bootstrap `<script>`. The preference lives in a
- * cookie ({@link THEME_COOKIE_NAME}); the root layout (a Server Component) reads
- * it and renders the resolved class onto `<html>` directly, so the correct
- * theme is in the SSR HTML before first paint. `"system"` renders no class and
- * is resolved by CSS `@media (prefers-color-scheme)` (see styles/tokens.css).
+ * The preference lives in a cookie ({@link THEME_COOKIE_NAME}). `"system"`
+ * renders no class and is resolved by CSS `@media (prefers-color-scheme)`
+ * (see styles/tokens.css). Two no-flash integration modes:
  *
- * Why no `<script>`: React 19.2 (Next 16) replaces any client-rendered
- * executable `<script>` with a `<div>` and logs "Encountered a script tag while
- * rendering React component" — there is no React-side escape (`next/script`
- * beforeInteractive renders the same kind of node and additionally defers
- * execution, reintroducing the flash). Server-rendering the class sidesteps the
- * problem entirely: there is no script to render.
+ *   1. SSR-cookie mode (apps WITHOUT Cache Components): the root layout (a
+ *      Server Component) reads the cookie via {@link parseTheme} and renders
+ *      the resolved class onto `<html>` directly, then passes it as
+ *      `initialTheme`. No inline `<script>` needed.
+ *   2. Bootstrap-script mode (apps WITH `cacheComponents: true`, e.g.
+ *      apps/app): the root layout is prerendered into a static shell and must
+ *      not read cookies, so it renders no theme class and embeds a tiny
+ *      SERVER-rendered inline script (see apps/app AppearanceBootstrap) that
+ *      applies the cookie's class before first paint. Omit `initialTheme`;
+ *      the provider adopts the cookie in a mount effect.
+ *
+ * Inline-script caveat: React 19.2 (Next 16) replaces CLIENT-rendered
+ * executable `<script>` elements with a `<div>` and logs "Encountered a script
+ * tag while rendering React component". A script emitted by a Server Component
+ * into the initial HTML stream is executed by the browser's parser, not React,
+ * so bootstrap-script mode is safe — but never render an executable `<script>`
+ * from a client component.
  *
  * Split of responsibilities:
- *   - The root layout (server) reads the cookie via {@link parseTheme} and sets
- *     `<html className={themeClass(theme)} suppressHydrationWarning>`.
+ *   - The root layout (server) establishes the pre-paint class via mode 1 or 2.
  *   - {@link ThemeProvider} (this file, "use client") owns React state, the
  *     `setTheme` setter, system-preference + cross-tab sync, cookie persistence,
  *     and reflecting the resolved class onto `<html>`. It renders NO `<script>`.
  *
- * Usage (root layout — a Server Component):
+ * Usage (SSR-cookie mode root layout — a Server Component):
  *   import { cookies } from "next/headers";
  *   import { ThemeProvider, THEME_COOKIE_NAME, parseTheme, themeClass } from "@oxagen/ui";
  *   export default async function RootLayout({ children }) {

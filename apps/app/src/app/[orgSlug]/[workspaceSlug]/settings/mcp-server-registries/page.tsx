@@ -12,8 +12,6 @@ export const metadata: Metadata = {
   title: "MCP Server Registries | Settings",
 };
 
-export const dynamic = "force-dynamic";
-
 interface PageProps {
   params: Promise<{ orgSlug: string; workspaceSlug: string }>;
 }

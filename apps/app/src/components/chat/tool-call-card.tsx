@@ -1,7 +1,7 @@
 "use client";
 import * as React from "react";
 import { Check, ChevronDown, ChevronRight, Loader2 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, formatDuration } from "@/lib/utils";
 import { JsonSnippet } from "./json-snippet";
 import { StructuredField } from "./structured-value";
 import { toolCallMeta } from "./tool-call-meta";
@@ -249,10 +249,7 @@ export function safeJson(value: unknown): string {
   }
 }
 
-export function formatDuration(ms: number): string {
-  if (ms < 1000) return `${ms}ms`;
-  if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
-  const mins = Math.floor(ms / 60_000);
-  const secs = Math.floor((ms % 60_000) / 1000);
-  return `${mins}m ${secs}s`;
-}
+// Canonical implementation lives in @/lib/utils; re-exported here because the
+// chat surface's consumers (and their module mocks in tests) import it from
+// this module.
+export { formatDuration };

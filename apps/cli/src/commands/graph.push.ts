@@ -566,3 +566,9 @@ export async function getCodePushCursor(
 
 // Re-export path helper (tests + status command use it)
 export { join, homedir };
+
+// Re-export git helpers so `oxagen graph status` can resolve the same repo
+// identifier used here (`getCodePushCursor` needs `org`/`workspace`/`repo`
+// to look up the stored SHA — status.ts mirrors the push command's own
+// `gitRoot(cwd)` → `repoId(root)` resolution rather than duplicating it).
+export { gitRoot, repoId };

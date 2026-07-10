@@ -7,7 +7,8 @@
  *
  * Layout (top → bottom):
  *   brand    — Oxagen mark (wordmark hidden in rail mode)
- *   primary  — main nav items (Ask, Knowledge, Automation, Activity)
+ *   primary  — main nav items (Ask, Knowledge, Activity, Evals)
+ *   tools    — Workbench group (Agents)
  *   footer   — pinned nav items (Marketplace, Settings) + the account control
  *
  * Client component: reads `usePathname()` for active state and the collapse
