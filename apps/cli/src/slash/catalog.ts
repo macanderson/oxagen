@@ -153,6 +153,11 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<
       "Review working-tree changes — pick a changed file, view its diff",
     argumentHint: "[path]",
   },
+  {
+    name: "files",
+    description:
+      "Files Touched — every file the agent read/created/updated/deleted this session; view diffs, open in your editor",
+  },
   { name: "hud", description: "Toggle the running-agents heads-up display" },
   { name: "panel", description: "Toggle the Agent Team + Task side panel" },
   {

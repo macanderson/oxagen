@@ -67,6 +67,22 @@ export function enterFullscreen(stream: NodeJS.WriteStream): FullscreenHandle {
 }
 
 /**
+ * Temporarily hand the terminal back to a child process (a blocking terminal
+ * editor launched from the `/files` panel): restore the normal screen buffer
+ * and cursor, and disarm mouse reporting so the editor sees clean input.
+ * Pair with {@link resumeFullscreen} once the child exits. No-ops are safe —
+ * the sequences are idempotent, same as `leave()` above.
+ */
+export function suspendFullscreen(stream: NodeJS.WriteStream): void {
+  stream.write(SHOW_CURSOR + DISABLE_MOUSE + LEAVE_ALT_SCREEN);
+}
+
+/** Re-enter the alternate screen after {@link suspendFullscreen}. */
+export function resumeFullscreen(stream: NodeJS.WriteStream): void {
+  stream.write(ENTER_ALT_SCREEN + HIDE_CURSOR);
+}
+
+/**
  * Arms SGR mouse-wheel reporting. A REACT-level concern (not part of
  * {@link enterFullscreen}) because it's opt-in and user-toggleable at runtime
  * (`/mouse`, or `OXAGEN_CLI_MOUSE=1` at launch — it defaults OFF so native

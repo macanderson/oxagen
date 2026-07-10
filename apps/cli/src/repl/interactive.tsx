@@ -22,7 +22,7 @@
  *
  * Presentational pieces live in ./components; this file is the container.
  */
-import { Box, Static, Text, useApp, useInput } from "ink";
+import { Box, Static, Text, useApp, useInput, useStdin } from "ink";
 import React, {
   useState,
   useCallback,
@@ -33,6 +33,7 @@ import React, {
 } from "react";
 import type { ModelMessage } from "ai";
 import { readFile } from "node:fs/promises";
+import { isAbsolute, join } from "node:path";
 import { theme } from "../tui/theme.js";
 import { runTurn, type AgentAi, type StageEvent } from "@oxagen/agent-engine";
 import {
@@ -123,6 +124,15 @@ import type { ScopeReviewInfo, ScopeReviewDecision } from "../agent/trace.js";
 import { HudPanel } from "./hud.js";
 import { ConfigPanel } from "./config-panel.js";
 import { DiffPanel } from "./diff-panel.js";
+import { FilesPanel } from "./files-panel.js";
+import {
+  recordTouch,
+  normalizeTouchPath,
+  type TouchOp,
+  type TouchedFile,
+} from "./files-touched.js";
+import { openInEditor } from "./open-in-editor.js";
+import { getFileDiff } from "./git-diff.js";
 import { LoginPanel } from "./login-panel.js";
 import type { InteractiveLoginResult } from "../commands/auth.js";
 import type { PasteSubmission } from "./paste.js";
@@ -164,7 +174,11 @@ import {
   formatElapsed,
 } from "./fullscreen-chrome.js";
 import { useMouseWheel } from "./use-mouse-wheel.js";
-import { enterFullscreen } from "./alt-screen.js";
+import {
+  enterFullscreen,
+  suspendFullscreen,
+  resumeFullscreen,
+} from "./alt-screen.js";
 import { resolveGitInfo } from "./git-info.js";
 import { useRepoInfo } from "./use-repo-info.js";
 import {
@@ -665,6 +679,43 @@ export function ReplApp({
     diffOpenRef.current = false;
     setDiffOpen(false);
   }, []);
+  // The /files "Files Touched" panel — same takeover pattern as /diff. The
+  // STORE lives in filesTouchedRef and accumulates across every turn of the
+  // session: reads from read_file tool calls, creates/updates from the
+  // engine's per-edit file-edit events, deletes detected at hydrate time
+  // (git status "D" / vanished from disk). touchVersion bumps re-render the
+  // panel while it's open so rows appear live as the agent works.
+  const [filesOpen, setFilesOpen] = useState(false);
+  const filesOpenRef = useRef(false);
+  const closeFilesPanel = useCallback((): void => {
+    filesOpenRef.current = false;
+    setFilesOpen(false);
+  }, []);
+  const filesTouchedRef = useRef<Map<string, TouchedFile>>(new Map());
+  const touchSeqRef = useRef(0);
+  const [, setTouchVersion] = useState(0);
+  const noteTouch = useCallback(
+    (path: string, op: TouchOp): void => {
+      recordTouch(
+        filesTouchedRef.current,
+        path,
+        op,
+        cwd,
+        ++touchSeqRef.current,
+      );
+      if (filesOpenRef.current) setTouchVersion((v) => v + 1);
+    },
+    [cwd],
+  );
+  // Enter/→ in the Files Touched panel hands off to the /diff panel, opened
+  // straight on the selected file (one diff implementation, not two).
+  const showDiffForTouched = useCallback((path: string): void => {
+    filesOpenRef.current = false;
+    setFilesOpen(false);
+    setDiffInitialPath(path);
+    diffOpenRef.current = true;
+    setDiffOpen(true);
+  }, []);
   // Visibility of the right-hand Agent Team / Task Progress dock. "auto" shows it
   // only while a turn is monitoring work; /panel pins it "on" or hides it "off".
   const [panelMode, setPanelMode] = useState<PanelMode>("auto");
@@ -1013,6 +1064,34 @@ export function ReplApp({
       ]);
     },
     [commit],
+  );
+
+  // Double-Ctrl-O in the Files Touched panel: open the highlighted file in
+  // $VISUAL/$EDITOR (or the OS default app). GUI editors detach and return
+  // immediately; a terminal editor (vim, nano, …) must own the TTY, so the
+  // REPL suspends around a blocking run — leave the alt screen (fullscreen
+  // only), drop raw mode, hand stdio to the editor, restore both on exit.
+  const { stdin: rawStdin, setRawMode } = useStdin();
+  const openTouchedInEditor = useCallback(
+    (relPath: string): void => {
+      const abs = isAbsolute(relPath) ? relPath : join(cwd, relPath);
+      const result = openInEditor(abs, {
+        suspendTui: () => {
+          if (fullscreen) suspendFullscreen(process.stdout);
+          if (rawStdin.isTTY) setRawMode(false);
+        },
+        resumeTui: () => {
+          if (rawStdin.isTTY) setRawMode(true);
+          if (fullscreen) resumeFullscreen(process.stdout);
+        },
+      });
+      pushAssistant(
+        result.ok
+          ? `Opened ${relPath} in ${result.label}.`
+          : `Couldn't open ${relPath}: ${result.error}`,
+      );
+    },
+    [cwd, fullscreen, pushAssistant, rawStdin, setRawMode],
   );
 
   // Called once by the LoginPanel (see the /login handler below) on a
@@ -1483,6 +1562,10 @@ export function ReplApp({
     if (configOpenRef.current) return;
     // Same for the /diff panel (its own useInput handles navigation/scroll/Esc).
     if (diffOpenRef.current) return;
+    // Same for the /files panel (its own useInput handles nav/Ctrl-O/Esc —
+    // including the double-Ctrl-O editor gesture, which must not fall through
+    // to the global verbose toggle below).
+    if (filesOpenRef.current) return;
     // Same for the /login panel (its own useInput handles Esc/any-key).
     if (loginOpenRef.current) return;
 
@@ -1815,6 +1898,13 @@ export function ReplApp({
         setDiffInitialPath(arg || undefined);
         diffOpenRef.current = true;
         setDiffOpen(true);
+        return;
+      }
+      if (cmd === "/files") {
+        // Files Touched — every file the agent read/created/updated/deleted
+        // this session, with live +/- counts and editor/diff shortcuts.
+        filesOpenRef.current = true;
+        setFilesOpen(true);
         return;
       }
       if (cmd === "/panel") {
@@ -2456,6 +2546,12 @@ export function ReplApp({
       const turn: Message[] = [];
       let assistantOpen = false;
       let reasoningOpen = false;
+      // Per-edit diff bookkeeping: which files already had their diff pushed
+      // this turn (and the exact text shown), so the round's final-diff isn't
+      // re-pushed when it would only repeat what's already on screen, and a
+      // repeat edit landing identical content doesn't push a duplicate.
+      const editDiffsShown = new Set<string>();
+      const lastEditDiff = new Map<string, string>();
       // Every stream sink below (onReasoning, onText, onFileChange, etc.) calls
       // `render()` on every streamed token/delta — a fast model call can fire
       // this dozens of times a second. Route it through a throttle that
@@ -2941,6 +3037,12 @@ export function ReplApp({
             inFlightTools++;
             ciProbe.noteToolCall(name, input);
             noteProgress();
+            // Files Touched store: reads count as touches (creates/updates
+            // land via onFileEdit below; deletes are detected at hydrate).
+            if (name === "read_file") {
+              const p = (input as { path?: unknown } | null)?.path;
+              if (typeof p === "string") noteTouch(p, "R");
+            }
             // Heartbeat: an executing tool is the classic silent stretch — name
             // it (e.g. "bash · pnpm test") so the indicator shows what's running.
             lastActivityRef.current = summarizeInput(name, input);
@@ -3023,13 +3125,56 @@ export function ReplApp({
             turn[turn.length - 1] = { ...last, content: last.content + delta };
             render();
           },
+          onFileEdit: ({ path, kind }) => {
+            if (runner.signal.aborted) return;
+            noteProgress();
+            noteTouch(path, kind === "create" ? "C" : "U");
+            // Show THIS file's diff the moment the edit lands (traditional
+            // git-diff styling, themed to the terminal background) instead of
+            // waiting for the round's cumulative final diff.
+            const rel = normalizeTouchPath(path, cwd);
+            void getFileDiff(cwd, {
+              path: rel,
+              status: kind === "create" ? "?" : "M",
+              untracked: kind === "create",
+            }).then((diff) => {
+              if (runner.signal.aborted || !diff.trim()) return;
+              // A repeat edit that lands the same cumulative diff (or an
+              // edit git can't see) adds nothing — don't re-push.
+              if (lastEditDiff.get(rel) === diff) return;
+              lastEditDiff.set(rel, diff);
+              editDiffsShown.add(rel);
+              closeStreamingBlocks();
+              turn.push({
+                role: "diff",
+                content: "",
+                diff,
+                changedFiles: [rel],
+                timestamp: Date.now(),
+              });
+              render();
+            });
+          },
           onFileChange: (diff, changedFiles) => {
             if (runner.signal.aborted) return;
             noteProgress();
             // Render the code changes as a syntax-highlighted diff message, so
             // the user sees exactly what changed — themed to the terminal
-            // background. Skip empty diffs (no textual change to show).
+            // background. Skip empty diffs (no textual change to show), and
+            // skip entirely when every changed file's diff already streamed
+            // per-edit above — the final diff would only repeat what's on
+            // screen. (changedFiles also carries the user's own pre-existing
+            // working-tree edits, which were never shown per-edit; a round
+            // with any of those still surfaces the full diff here.)
             if (!diff.trim()) return;
+            if (
+              editDiffsShown.size > 0 &&
+              changedFiles.every((f) =>
+                editDiffsShown.has(normalizeTouchPath(f, cwd)),
+              )
+            ) {
+              return;
+            }
             closeStreamingBlocks();
             turn.push({
               role: "diff",
@@ -3558,6 +3703,15 @@ export function ReplApp({
               maxBodyRows={Math.max(8, rows - 18)}
               initialPath={diffInitialPath}
             />
+          ) : filesOpen ? (
+            <FilesPanel
+              cwd={cwd}
+              entries={Array.from(filesTouchedRef.current.values())}
+              onClose={closeFilesPanel}
+              onShowDiff={showDiffForTouched}
+              onOpenFile={openTouchedInEditor}
+              width={Math.min(cols - 2, 100)}
+            />
           ) : configOpen ? (
             <ConfigPanel
               cwd={cwd}
@@ -3785,6 +3939,14 @@ export function ReplApp({
               cwd={cwd}
               onClose={closeDiffPanel}
               initialPath={diffInitialPath}
+            />
+          ) : filesOpen ? (
+            <FilesPanel
+              cwd={cwd}
+              entries={Array.from(filesTouchedRef.current.values())}
+              onClose={closeFilesPanel}
+              onShowDiff={showDiffForTouched}
+              onOpenFile={openTouchedInEditor}
             />
           ) : configOpen ? (
             <ConfigPanel cwd={cwd} onClose={closeConfigPanel} />
