@@ -1,5 +1,5 @@
 /**
- * sandbox-actions.test.ts — unit tests for the sandbox-template server actions.
+ * sandbox-template-actions.test.ts — unit tests for the sandbox-template server actions.
  *
  * Covers, for the sandbox.template.* capability family:
  *   - reads (list) invoke the right capability with surface:"agent"
@@ -73,9 +73,9 @@ vi.mock("@/lib/workbench/scope", () => ({ buildWorkbenchCtx: mockBuildWorkbenchC
 vi.mock("@/lib/workbench/equip-sources", () => ({ loadEquipSources: mockLoadEquipSources }));
 vi.mock("@/lib/routes", () => ({
   workspace: {
-    settings: {
-      environments: ({ orgSlug, workspaceSlug }: { orgSlug: string; workspaceSlug: string }) =>
-        `/${orgSlug}/${workspaceSlug}/settings/environments`,
+    workbench: {
+      sandboxes: ({ orgSlug, workspaceSlug }: { orgSlug: string; workspaceSlug: string }) =>
+        `/${orgSlug}/${workspaceSlug}/workbench/sandboxes`,
     },
   },
 }));
@@ -90,7 +90,7 @@ import {
   deleteTemplateAction,
   exportTemplateAction,
   importTemplateAction,
-} from "./sandbox-actions";
+} from "./sandbox-template-actions";
 
 const SCOPE = { orgSlug: "acme", workspaceSlug: "default" };
 
@@ -150,7 +150,7 @@ describe("createTemplateAction", () => {
       expect.any(Object),
       { surface: "agent" },
     );
-    expect(mockRevalidatePath).toHaveBeenCalledWith("/acme/default/settings/environments");
+    expect(mockRevalidatePath).toHaveBeenCalledWith("/acme/default/workbench/sandboxes");
   });
 
   it("member: role gate rejects, invoke NOT called", async () => {

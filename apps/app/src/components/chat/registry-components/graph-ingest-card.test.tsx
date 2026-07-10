@@ -1,11 +1,7 @@
 // @vitest-environment jsdom
-import { describe, it, expect, afterEach, vi } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
 import GraphIngestCard from "./graph-ingest-card";
-
-vi.mock("@/components/ui/badge", () => ({
-  Badge: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
-}));
 
 afterEach(cleanup);
 
@@ -32,7 +28,7 @@ describe("GraphIngestCard", () => {
       .map((el) => el.closest("a"))
       .find((a): a is HTMLAnchorElement => a !== null);
     expect(link?.getAttribute("href")).toBe("/acme/ws/knowledge/nodes/n_1");
-    // type badge + confidence shown
+    // type label + confidence shown
     expect(screen.getByText("Vessel")).toBeTruthy();
     expect(screen.getByText("95%")).toBeTruthy();
     // relationship edge type

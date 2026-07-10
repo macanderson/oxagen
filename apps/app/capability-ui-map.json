@@ -137,9 +137,9 @@
       "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
     "plugin.registry.list": {
-      "route": "/[orgSlug]/[workspaceSlug]/workbench/tools/capabilities",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/tools/capabilities/page.tsx",
-      "entry": "Registry manager section (WorkspacePluginsPanel initialRegistries)",
+      "route": "/[orgSlug]/[workspaceSlug]/settings/mcp-server-registries",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/mcp-server-registries/page.tsx",
+      "entry": "Registry manager (RegistryManager initialRegistries) on Settings → MCP Server Registries",
       "testid": null,
       "proof": null,
       "verifiedAt": null,
@@ -398,8 +398,8 @@
       "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
     "list_sandbox_templates": {
-      "route": "/[orgSlug]/[workspaceSlug]/settings/environments",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/environments/page.tsx",
+      "route": "/[orgSlug]/[workspaceSlug]/workbench/sandboxes",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/sandboxes/page.tsx",
       "entry": "SandboxTemplatesPanel list via readTemplatesAction",
       "testid": "sandbox-templates-section",
       "proof": "apps/app/e2e/sandbox-templates.spec.ts",
@@ -407,8 +407,8 @@
       "verifiedBy": "session_01NwQYbMXBT77CTwujnPHRH7"
     },
     "create_sandbox_template": {
-      "route": "/[orgSlug]/[workspaceSlug]/settings/environments",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/environments/sandbox-actions.ts",
+      "route": "/[orgSlug]/[workspaceSlug]/workbench/sandboxes",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/sandboxes/sandbox-template-actions.ts",
       "entry": "\"New template\" → TemplateDialog create → createTemplateAction",
       "testid": "sandbox-template-save-btn",
       "proof": "apps/app/e2e/sandbox-templates.spec.ts",
@@ -416,8 +416,8 @@
       "verifiedBy": "session_01NwQYbMXBT77CTwujnPHRH7"
     },
     "update_sandbox_template": {
-      "route": "/[orgSlug]/[workspaceSlug]/settings/environments",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/environments/sandbox-actions.ts",
+      "route": "/[orgSlug]/[workspaceSlug]/workbench/sandboxes",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/sandboxes/sandbox-template-actions.ts",
       "entry": "\"Edit\" → TemplateDialog save → updateTemplateAction",
       "testid": null,
       "proof": "apps/app/e2e/sandbox-templates.spec.ts",
@@ -425,8 +425,8 @@
       "verifiedBy": "session_01NwQYbMXBT77CTwujnPHRH7"
     },
     "delete_sandbox_template": {
-      "route": "/[orgSlug]/[workspaceSlug]/settings/environments",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/environments/sandbox-actions.ts",
+      "route": "/[orgSlug]/[workspaceSlug]/workbench/sandboxes",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/sandboxes/sandbox-template-actions.ts",
       "entry": "\"Delete\" per template row → deleteTemplateAction (promote-first guard)",
       "testid": null,
       "proof": "apps/app/e2e/sandbox-templates.spec.ts",
@@ -434,8 +434,8 @@
       "verifiedBy": "session_01NwQYbMXBT77CTwujnPHRH7"
     },
     "set_default_sandbox_template": {
-      "route": "/[orgSlug]/[workspaceSlug]/settings/environments",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/environments/sandbox-actions.ts",
+      "route": "/[orgSlug]/[workspaceSlug]/workbench/sandboxes",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/sandboxes/sandbox-template-actions.ts",
       "entry": "\"Set default\" per template row → setDefaultTemplateAction",
       "testid": null,
       "proof": "apps/app/e2e/sandbox-templates.spec.ts",
@@ -443,8 +443,8 @@
       "verifiedBy": "session_01NwQYbMXBT77CTwujnPHRH7"
     },
     "set_sandbox_template_tools": {
-      "route": "/[orgSlug]/[workspaceSlug]/settings/environments",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/environments/sandbox-actions.ts",
+      "route": "/[orgSlug]/[workspaceSlug]/workbench/sandboxes",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/sandboxes/sandbox-template-actions.ts",
       "entry": "TemplateDialog edit save replace-sets tools → setTemplateToolsAction",
       "testid": null,
       "proof": "apps/app/e2e/sandbox-templates.spec.ts",
@@ -452,8 +452,8 @@
       "verifiedBy": "session_01NwQYbMXBT77CTwujnPHRH7"
     },
     "export_sandbox_template": {
-      "route": "/[orgSlug]/[workspaceSlug]/settings/environments",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/environments/sandbox-actions.ts",
+      "route": "/[orgSlug]/[workspaceSlug]/workbench/sandboxes",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/sandboxes/sandbox-template-actions.ts",
       "entry": "\"Export\" per template row → exportTemplateAction → manifest download",
       "testid": null,
       "proof": "apps/app/e2e/sandbox-templates.spec.ts",
@@ -461,8 +461,8 @@
       "verifiedBy": "session_01NwQYbMXBT77CTwujnPHRH7"
     },
     "import_sandbox_template": {
-      "route": "/[orgSlug]/[workspaceSlug]/settings/environments",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/environments/sandbox-actions.ts",
+      "route": "/[orgSlug]/[workspaceSlug]/workbench/sandboxes",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/sandboxes/sandbox-template-actions.ts",
       "entry": "\"Import manifest\" → ImportDialog confirm → importTemplateAction",
       "testid": "sandbox-import-confirm-btn",
       "proof": "apps/app/e2e/sandbox-templates.spec.ts",
@@ -497,8 +497,8 @@
       "verifiedBy": "session_01NwQYbMXBT77CTwujnPHRH7"
     },
     "list_environments": {
-      "route": "/[orgSlug]/[workspaceSlug]/settings/environments",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/environments/actions.ts",
+      "route": "/[orgSlug]/[workspaceSlug]/workbench/environments",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/environments/actions.ts",
       "entry": "EnvironmentsBar list from readEnvironmentsAction",
       "testid": null,
       "proof": "apps/app/e2e/sandbox-templates.spec.ts",
@@ -506,8 +506,8 @@
       "verifiedBy": "session_01NwQYbMXBT77CTwujnPHRH7"
     },
     "list_secret_keys": {
-      "route": "/[orgSlug]/[workspaceSlug]/settings/environments",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/environments/actions.ts",
+      "route": "/[orgSlug]/[workspaceSlug]/workbench/environments",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/environments/actions.ts",
       "entry": "SecretsSection table from readSecretKeysAction",
       "testid": null,
       "proof": "apps/app/e2e/sandbox-templates.spec.ts",
@@ -515,8 +515,8 @@
       "verifiedBy": "session_01NwQYbMXBT77CTwujnPHRH7"
     },
     "delete_secret_key": {
-      "route": "/[orgSlug]/[workspaceSlug]/settings/environments",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/environments/actions.ts",
+      "route": "/[orgSlug]/[workspaceSlug]/workbench/environments",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/environments/actions.ts",
       "entry": "\"Delete\" per row in SecretsSection → deleteKeyAction",
       "testid": null,
       "proof": "apps/app/e2e/sandbox-templates.spec.ts",

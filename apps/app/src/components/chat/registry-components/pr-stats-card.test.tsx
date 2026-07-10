@@ -4,7 +4,7 @@
  *
  * Covers:
  *   - relativeTime helper across buckets
- *   - header state badges (open/draft/merged/closed)
+ *   - header state labels (open/draft/merged/closed)
  *   - number, title link, author, stat row (branches, +/-, files, commits)
  *   - comment count summary, expansion, review-comment path, truncation notice
  *   - "No comments" empty state
@@ -107,24 +107,24 @@ describe("PrStatsCard header", () => {
     expect(link).toHaveAttribute("href", "https://github.com/acme/repo/pull/42");
   });
 
-  it("renders an Open badge for an open non-draft PR", () => {
+  it("renders a success-toned Open label for an open non-draft PR", () => {
     render(<PrStatsCard {...props({ state: "open", draft: false })} />);
-    expect(screen.getByText("Open")).toBeInTheDocument();
+    expect(screen.getByText("Open").className).toContain("text-success");
   });
 
-  it("renders a Draft badge for a draft PR", () => {
+  it("renders a muted Draft label for a draft PR", () => {
     render(<PrStatsCard {...props({ state: "open", draft: true })} />);
-    expect(screen.getByText("Draft")).toBeInTheDocument();
+    expect(screen.getByText("Draft").className).toContain("text-muted-foreground");
   });
 
-  it("renders a Merged badge for a merged PR", () => {
+  it("renders a Merged label for a merged PR", () => {
     render(<PrStatsCard {...props({ state: "merged" })} />);
-    expect(screen.getByText("Merged")).toBeInTheDocument();
+    expect(screen.getByText("Merged").className).toContain("text-foreground");
   });
 
-  it("renders a Closed badge for a closed PR", () => {
+  it("renders a destructive-toned Closed label for a closed PR", () => {
     render(<PrStatsCard {...props({ state: "closed" })} />);
-    expect(screen.getByText("Closed")).toBeInTheDocument();
+    expect(screen.getByText("Closed").className).toContain("text-destructive");
   });
 });
 

@@ -1,7 +1,6 @@
 "use client";
 import * as React from "react";
 import { ChevronDown, ChevronUp, Loader2, X } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { formatDuration } from "./tool-call-card";
@@ -171,9 +170,9 @@ export function BackgroundTaskTray({ initialTaskIds, fetchTask, cancelTask }: Ba
             className={cn("h-3.5 w-3.5", activeCount > 0 ? "animate-spin text-foreground" : "text-muted-foreground")}
           />
           <span className="font-semibold">Background tasks</span>
-          <Badge variant="muted" className="ml-auto">
+          <span className="ml-auto text-xs font-medium tabular-nums text-muted-foreground">
             {activeCount}/{taskIds.length}
-          </Badge>
+          </span>
           {collapsed ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
         </button>
         {!collapsed ? (
@@ -221,18 +220,18 @@ function TaskRow({
     <div className="rounded-xl bg-muted p-2 text-xs">
       <div className="flex items-center gap-2">
         <span className="font-semibold">{snapshot?.label ?? snapshot?.kind ?? taskId}</span>
-        <Badge
-          variant={
+        <span
+          className={cn(
+            "ml-auto inline-flex items-center gap-1 text-xs font-medium",
             status === "completed"
-              ? "success"
+              ? "text-success"
               : status === "failed" || status === "cancelled"
-              ? "destructive"
-              : "muted"
-          }
-          className="ml-auto"
+                ? "text-destructive"
+                : "text-muted-foreground",
+          )}
         >
           {status}
-        </Badge>
+        </span>
       </div>
       <div className="mt-1 flex items-center justify-between text-[10px] text-muted-foreground tabular-nums">
         <span>{snapshot?.kind ?? "—"}</span>

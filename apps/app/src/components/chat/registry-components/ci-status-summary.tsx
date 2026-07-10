@@ -8,7 +8,6 @@ import {
   MinusCircle,
   XCircle,
 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
 /**
@@ -84,13 +83,13 @@ export function formatDuration(durationMs: number): string {
 
 const OVERALL_META: Record<
   CiOverall,
-  { variant: "success" | "error" | "warning" | "muted" | "secondary"; label: string; spin: boolean }
+  { textClass: string; label: string; spin: boolean }
 > = {
-  passing: { variant: "success", label: "Passing", spin: false },
-  failing: { variant: "error", label: "Failing", spin: false },
-  pending: { variant: "warning", label: "Pending", spin: true },
-  neutral: { variant: "muted", label: "Neutral", spin: false },
-  unknown: { variant: "secondary", label: "Unknown", spin: false },
+  passing: { textClass: "text-success", label: "Passing", spin: false },
+  failing: { textClass: "text-destructive", label: "Failing", spin: false },
+  pending: { textClass: "text-warning", label: "Pending", spin: true },
+  neutral: { textClass: "text-muted-foreground", label: "Neutral", spin: false },
+  unknown: { textClass: "text-muted-foreground", label: "Unknown", spin: false },
 };
 
 /** Icon + colour for a single run row, keyed on lifecycle + conclusion. */
@@ -141,12 +140,12 @@ export function CiStatusSummary({ overall, counts, runs }: CiStatusSummaryProps)
   return (
     <div className="flex flex-col gap-2" data-component="ci-status-summary">
       <div className="flex flex-wrap items-center gap-2">
-        <Badge variant={meta.variant} className="inline-flex items-center gap-1">
+        <span className={cn("inline-flex items-center gap-1 text-xs font-medium", meta.textClass)}>
           {meta.spin ? (
             <Loader2 className="size-3 animate-spin" aria-hidden="true" />
           ) : null}
           {meta.label}
-        </Badge>
+        </span>
         {line ? (
           <span className="text-xs tabular-nums text-muted-foreground">{line}</span>
         ) : null}

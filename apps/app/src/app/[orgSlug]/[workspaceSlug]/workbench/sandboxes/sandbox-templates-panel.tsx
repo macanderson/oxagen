@@ -22,12 +22,12 @@ import {
   type SandboxTemplateManifest,
   type SandboxTemplateTool,
 } from "@oxagen/oxagen/contracts/sandbox-template-manifest";
-import type { EnvironmentSummary, SecretKeySummary } from "./actions";
+import type { EnvironmentSummary, SecretKeySummary } from "../environments/actions";
 import type {
   ActionResult,
   SandboxTemplateSummary,
   ToolSourceOption,
-} from "./sandbox-actions";
+} from "./sandbox-template-actions";
 
 // ── Network-mode metadata (four modes are declared but not yet provisionable) ─
 

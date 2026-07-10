@@ -1232,7 +1232,7 @@ export function AgentBuilder({
 
         {/* Step nav — inline on desktop; on mobile a sticky thumb bar pinned
             above the bottom nav (44px+ targets, safe-area aware). */}
-        <div className="mt-4 flex items-center justify-between gap-3 max-lg:sticky max-lg:bottom-[calc(var(--bottom-bar-h)+var(--bottom-bar-gap,0px)+env(safe-area-inset-bottom))] max-lg:z-10 max-lg:-mx-4 max-lg:border-t max-lg:border-border/60 max-lg:bg-background/95 max-lg:px-4 max-lg:py-3 max-lg:backdrop-blur">
+        <div className="mt-4 flex items-center justify-between gap-3 max-lg:sticky max-lg:bottom-[calc(var(--bottom-bar-h)+env(safe-area-inset-bottom))] max-lg:z-10 max-lg:-mx-4 max-lg:border-t max-lg:border-border/60 max-lg:bg-background/95 max-lg:px-4 max-lg:py-3 max-lg:backdrop-blur">
           <Button
             type="button"
             variant="ghost"

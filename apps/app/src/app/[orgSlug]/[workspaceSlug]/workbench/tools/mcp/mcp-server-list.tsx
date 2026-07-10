@@ -7,7 +7,9 @@
  * enable/disable or delete logic. OAuth listings additionally surface their
  * credential status (from mcp.credentials) with an Authenticate /
  * Re-authenticate action into the OAuth authorize route — an installed OAuth
- * server does nothing until that flow completes.
+ * server does nothing until that flow completes — plus a "Remove auth"
+ * action (revoke_plugin_credential) that deletes the stored credential so
+ * the server must be re-authenticated before it can be used again.
  */
 import * as React from "react";
 import { Switch } from "@/components/ui/switch";
@@ -23,7 +25,7 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { CapabilityIcon } from "@/components/plugins/capability-icon";
-import { KeyRound, Trash2 } from "lucide-react";
+import { KeyRound, ShieldOff, Trash2 } from "lucide-react";
 import { mcpAuthorizeUrl } from "@/lib/mcp-oauth/authorize-url";
 
 export interface McpServerRow {
@@ -90,6 +92,11 @@ interface McpServerListProps {
     workspaceSlug: string;
     orgListingId: string;
   }) => Promise<{ ok: boolean; error?: string }>;
+  revokeAction: (input: {
+    orgSlug: string;
+    workspaceSlug: string;
+    orgListingId: string;
+  }) => Promise<{ ok: boolean; revoked?: boolean; error?: string }>;
 }
 
 export function McpServerList({
@@ -98,6 +105,7 @@ export function McpServerList({
   initialServers,
   toggleAction,
   uninstallAction,
+  revokeAction,
 }: McpServerListProps) {
   const [servers, setServers] = React.useState(initialServers);
   // The parent server component re-queries and passes fresh `initialServers`
@@ -148,6 +156,30 @@ export function McpServerList({
       setError(server.id, result.error ?? "Uninstall failed");
     } else {
       setServers((prev) => prev.filter((s) => s.id !== server.id));
+    }
+  };
+
+  const handleRevoke = async (server: McpServerRow) => {
+    if (
+      !window.confirm(
+        `Remove authentication for "${server.title ?? server.name}"? The server stays installed but can't be used until you authenticate again.`,
+      )
+    )
+      return;
+    setPendingIds((prev) => new Set(prev).add(server.id));
+    setError(server.id, null);
+    const result = await revokeAction({ orgSlug, workspaceSlug, orgListingId: server.id });
+    setPendingIds((prev) => {
+      const next = new Set(prev);
+      next.delete(server.id);
+      return next;
+    });
+    if (!result.ok) {
+      setError(server.id, result.error ?? "Remove authentication failed");
+    } else {
+      setServers((prev) =>
+        prev.map((s) => (s.id === server.id ? { ...s, credentialStatus: null } : s)),
+      );
     }
   };
 

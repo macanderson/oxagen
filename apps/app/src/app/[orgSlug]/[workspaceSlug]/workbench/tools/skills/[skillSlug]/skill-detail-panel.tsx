@@ -184,7 +184,7 @@ export function SkillDetailPanel({
                 {skill.source === "builtin" ? "Built-in" : "Custom"}
               </Badge>
               {skill.activeVersion && (
-                <Badge variant="outline" className="font-mono text-xs">
+                <Badge variant="outline" className="text-xs">
                   {skill.activeVersion}
                 </Badge>
               )}

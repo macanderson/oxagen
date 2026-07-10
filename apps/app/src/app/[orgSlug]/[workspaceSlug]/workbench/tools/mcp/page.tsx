@@ -12,7 +12,8 @@ import {
   togglePlugin,
   uninstallPlugin,
 } from "@/lib/agent-tools/install-actions";
-import { connectCustomMcpServer } from "@/lib/agent-tools/mcp-actions";
+import { connectCustomMcpServer, revokeMcpCredential } from "@/lib/agent-tools/mcp-actions";
+import { workspace } from "@/lib/routes";
 import { ConnectMcpForm } from "./connect-mcp-form";
 import { McpCatalogSearch } from "./mcp-catalog-search";
 import { McpOauthResultToast } from "./mcp-oauth-result-toast";
@@ -95,15 +96,21 @@ async function highlight(code: string, lang: string): Promise<string> {
 }
 
 /**
- * Workbench → Agent Tools → MCP Servers.
+ * Workbench → Agent Tools → MCP Servers — manage the servers this workspace
+ * has installed.
  *
- * (a) Connect a custom MCP server by endpoint (plugin.org.install, mcp_server,
- *     custom endpoint) — see @/lib/agent-tools/mcp-actions.ts /
- *     connect-mcp-form.tsx.
- * (b) List installed mcp_server plugins for this workspace, with the same
- *     toggle/uninstall actions as the Capabilities tab.
+ * (a) Installed mcp_server plugins, first: credential status per server with
+ *     Authenticate / Re-authenticate (OAuth authorize route) and Remove auth
+ *     (revoke_plugin_credential), plus the same toggle/uninstall actions as
+ *     the Capabilities tab.
+ * (b) Install NEW servers: from the marketplace catalog (McpCatalogSearch →
+ *     plugin.catalog.browse) or manually by endpoint (plugin.org.install,
+ *     custom endpoint) — see @/lib/agent-tools/mcp-actions.ts.
  * (c) Copy-paste snippets for pointing an external MCP client
  *     (Claude Code / Claude Desktop / Cursor) at mcp.oxagen.sh.
+ *
+ * Registry administration deliberately does NOT live here — catalog sources
+ * are managed in Settings → MCP Server Registries.
  */
 export default async function AgentToolsMcpPage({ params }: PageProps) {
   const { orgSlug, workspaceSlug } = await params;
@@ -200,14 +207,41 @@ export default async function AgentToolsMcpPage({ params }: PageProps) {
         <McpOauthResultToast serverNames={serverNames} />
       </Suspense>
 
-      {/* ── Install from the catalog ─────────────────────────────────────────── */}
+      {/* ── Installed MCP servers ────────────────────────────────────────────── */}
       <div className="rounded-xl border border-border/60 bg-card p-6">
         <div className="mb-4">
-          <h2 className="text-sm font-semibold text-foreground">Install from the catalog</h2>
+          <h2 className="text-sm font-semibold text-foreground">Installed MCP servers</h2>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Search the MCP registry and install hosted servers into this workspace.
-            OAuth-protected servers (Stripe, GitHub, …) prompt you to authenticate right
-            after install.
+            Servers this workspace can use. Authenticate or reconnect when a
+            credential expires, remove authentication to force a fresh sign-in,
+            or uninstall the server entirely.
+          </p>
+        </div>
+        <McpServerList
+          orgSlug={orgSlug}
+          workspaceSlug={workspaceSlug}
+          initialServers={initialServers}
+          toggleAction={togglePlugin}
+          uninstallAction={uninstallPlugin}
+          revokeAction={revokeMcpCredential}
+        />
+      </div>
+
+      {/* ── Install from the marketplace ─────────────────────────────────────── */}
+      <div className="rounded-xl border border-border/60 bg-card p-6">
+        <div className="mb-4">
+          <h2 className="text-sm font-semibold text-foreground">Install from the marketplace</h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Search the marketplace catalog and install hosted servers into this
+            workspace. OAuth-protected servers (Stripe, GitHub, …) prompt you to
+            authenticate right after install. Catalog sources are administered in{" "}
+            <a
+              href={workspace.settings.mcpServerRegistries({ orgSlug, workspaceSlug })}
+              className="font-medium underline underline-offset-2 hover:no-underline"
+            >
+              Settings → MCP Server Registries
+            </a>
+            .
           </p>
         </div>
         <McpCatalogSearch
@@ -220,7 +254,7 @@ export default async function AgentToolsMcpPage({ params }: PageProps) {
       {/* ── Connect a custom MCP server ─────────────────────────────────────── */}
       <div className="rounded-xl border border-border/60 bg-card p-6">
         <div className="mb-4">
-          <h2 className="text-sm font-semibold text-foreground">Connect a custom MCP server</h2>
+          <h2 className="text-sm font-semibold text-foreground">Connect manually</h2>
           <p className="mt-0.5 text-xs text-muted-foreground">
             Point this workspace at any MCP-compatible server by endpoint URL.
           </p>
@@ -229,23 +263,6 @@ export default async function AgentToolsMcpPage({ params }: PageProps) {
           orgSlug={orgSlug}
           workspaceSlug={workspaceSlug}
           connectAction={connectCustomMcpServer}
-        />
-      </div>
-
-      {/* ── Installed MCP servers ────────────────────────────────────────────── */}
-      <div className="rounded-xl border border-border/60 bg-card p-6">
-        <div className="mb-4">
-          <h2 className="text-sm font-semibold text-foreground">Installed MCP servers</h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            MCP servers connected to this workspace, from the catalog or a custom endpoint.
-          </p>
-        </div>
-        <McpServerList
-          orgSlug={orgSlug}
-          workspaceSlug={workspaceSlug}
-          initialServers={initialServers}
-          toggleAction={togglePlugin}
-          uninstallAction={uninstallPlugin}
         />
       </div>
 
