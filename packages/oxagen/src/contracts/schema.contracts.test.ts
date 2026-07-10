@@ -24,22 +24,31 @@ import { schemaValidateNode } from "./schema.validate.node";
 import { schemaValidateRelationship } from "./schema.validate.relationship";
 import { schemaReconcileDispatch } from "./schema.reconcile.dispatch";
 import { schemaReconcileStatus } from "./schema.reconcile.status";
-import { graphRelationshipUpsert } from "./graph.relationship.upsert";
-import { semanticRelationshipApprove } from "./semantic.relationship.approve";
-import { semanticRelationshipInfer } from "./semantic.relationship.infer";
-import { semanticRelationshipList } from "./semantic.relationship.list";
-import { semanticRelationshipSuggest } from "./semantic.relationship.suggest";
 
 // Ensure the imports above are not tree-shaken by referencing them
 void [
-  schemaRegistryGet, schemaRegistryConfig, schemaList, schemaToggle,
-  schemaLabelUpsert, schemaLabelDelete, schemaRelationshipUpsert, schemaRelationshipDelete,
-  schemaPropertyUpsert, schemaPropertyDelete, schemaVersionCreate, schemaVersionPin,
-  schemaVersionList, schemaVersionDiff, schemaExport, schemaRecommend,
-  schemaSetup, schemaChat, schemaValidateNode, schemaValidateRelationship,
-  schemaReconcileDispatch, schemaReconcileStatus, graphRelationshipUpsert,
-  semanticRelationshipApprove, semanticRelationshipInfer, semanticRelationshipList,
-  semanticRelationshipSuggest,
+  schemaRegistryGet,
+  schemaRegistryConfig,
+  schemaList,
+  schemaToggle,
+  schemaLabelUpsert,
+  schemaLabelDelete,
+  schemaRelationshipUpsert,
+  schemaRelationshipDelete,
+  schemaPropertyUpsert,
+  schemaPropertyDelete,
+  schemaVersionCreate,
+  schemaVersionPin,
+  schemaVersionList,
+  schemaVersionDiff,
+  schemaExport,
+  schemaRecommend,
+  schemaSetup,
+  schemaChat,
+  schemaValidateNode,
+  schemaValidateRelationship,
+  schemaReconcileDispatch,
+  schemaReconcileStatus,
 ];
 
 describe("RELATIONSHIP_TYPE_PATTERN", () => {
@@ -58,22 +67,38 @@ describe("RELATIONSHIP_TYPE_PATTERN", () => {
 
 describe("FieldErrorSchema", () => {
   it("parses valid field error", () => {
-    const result = FieldErrorSchema.safeParse({ field: "name", message: "required", code: "required" });
+    const result = FieldErrorSchema.safeParse({
+      field: "name",
+      message: "required",
+      code: "required",
+    });
     expect(result.success).toBe(true);
   });
   it("rejects unknown code", () => {
-    const result = FieldErrorSchema.safeParse({ field: "name", message: "bad", code: "notacode" });
+    const result = FieldErrorSchema.safeParse({
+      field: "name",
+      message: "bad",
+      code: "notacode",
+    });
     expect(result.success).toBe(false);
   });
 });
 
 describe("PropertyInputSchema", () => {
   it("parses valid property", () => {
-    const result = PropertyInputSchema.safeParse({ key: "email", dataType: "email", required: true });
+    const result = PropertyInputSchema.safeParse({
+      key: "email",
+      dataType: "email",
+      required: true,
+    });
     expect(result.success).toBe(true);
   });
   it("rejects unknown dataType", () => {
-    const result = PropertyInputSchema.safeParse({ key: "x", dataType: "uuid", required: false });
+    const result = PropertyInputSchema.safeParse({
+      key: "x",
+      dataType: "uuid",
+      required: false,
+    });
     expect(result.success).toBe(false);
   });
 });
@@ -117,7 +142,10 @@ describe("schema.label.upsert contract", () => {
       naturalKeyProps: ["email"],
     });
     expect(inputResult.success).toBe(true);
-    const outputResult = cap!.output.safeParse({ labelId: "scl_abc", created: true });
+    const outputResult = cap!.output.safeParse({
+      labelId: "scl_abc",
+      created: true,
+    });
     expect(outputResult.success).toBe(true);
   });
   it("rejects label upsert missing required fields", () => {
@@ -166,12 +194,23 @@ describe("schema.recommend contract", () => {
     expect(inputResult.success).toBe(true);
     const outputResult = cap!.output.safeParse({
       proposal: {
-        schemas: [{
-          name: "starter",
-          displayName: "Starter",
-          labels: [{ name: "Customer", properties: [{ key: "email", dataType: "email", required: true }] }],
-          relationshipTypes: [{ name: "EMPLOYS", startLabel: "Company", endLabel: "Person" }],
-        }],
+        schemas: [
+          {
+            name: "starter",
+            displayName: "Starter",
+            labels: [
+              {
+                name: "Customer",
+                properties: [
+                  { key: "email", dataType: "email", required: true },
+                ],
+              },
+            ],
+            relationshipTypes: [
+              { name: "EMPLOYS", startLabel: "Company", endLabel: "Person" },
+            ],
+          },
+        ],
       },
       rationale: "Based on observed labels...",
       sampledCount: 187,
@@ -180,55 +219,30 @@ describe("schema.recommend contract", () => {
   });
 });
 
-describe("graph.relationship.upsert contract", () => {
-  it("registers under new name", () => {
-    const cap = getCapability("upsert_graph_relationship");
-    expect(cap).toBeDefined();
-  });
-  it("accepts valid relationship type", () => {
-    const cap = getCapability("upsert_graph_relationship");
-    const result = cap!.input.safeParse({
-      fromNodeId: "kn_abc",
-      toNodeId: "kn_def",
-      relationshipType: "EMPLOYS",
-    });
-    expect(result.success).toBe(true);
-  });
-  it("rejects injection strings", () => {
-    const cap = getCapability("upsert_graph_relationship");
-    const result = cap!.input.safeParse({
-      fromNodeId: "kn_abc",
-      toNodeId: "kn_def",
-      relationshipType: "`]->()-[:x`",
-    });
-    expect(result.success).toBe(false);
-  });
-});
-
-describe("semantic.relationship.* contracts register", () => {
-  it("semantic.relationship.approve registers", () => {
-    expect(getCapability("approve_semantic_relationship")).toBeDefined();
-  });
-  it("semantic.relationship.infer registers", () => {
-    expect(getCapability("infer_semantic_relationships")).toBeDefined();
-  });
-  it("semantic.relationship.list registers", () => {
-    expect(getCapability("list_semantic_relationships")).toBeDefined();
-  });
-  it("semantic.relationship.suggest registers", () => {
-    expect(getCapability("suggest_semantic_relationships")).toBeDefined();
-  });
-});
-
 describe("all 22 schema contracts register", () => {
   const expectedNames = [
-    "get_schema_registry", "get_registry_config", "list_schemas", "toggle_schema",
-    "upsert_schema_label", "delete_schema_label", "upsert_schema_relationship",
-    "delete_schema_relationship", "upsert_schema_property", "delete_schema_property",
-    "create_schema_version", "pin_schema_version", "list_schema_versions",
-    "diff_schema_versions", "export_schema", "recommend_schema", "setup_schema",
-    "run_schema_chat", "validate_schema_node", "validate_schema_relationship",
-    "dispatch_schema_reconcile", "get_reconcile_status",
+    "get_schema_registry",
+    "get_registry_config",
+    "list_schemas",
+    "toggle_schema",
+    "upsert_schema_label",
+    "delete_schema_label",
+    "upsert_schema_relationship",
+    "delete_schema_relationship",
+    "upsert_schema_property",
+    "delete_schema_property",
+    "create_schema_version",
+    "pin_schema_version",
+    "list_schema_versions",
+    "diff_schema_versions",
+    "export_schema",
+    "recommend_schema",
+    "setup_schema",
+    "run_schema_chat",
+    "validate_schema_node",
+    "validate_schema_relationship",
+    "dispatch_schema_reconcile",
+    "get_reconcile_status",
   ];
   for (const name of expectedNames) {
     it(`${name} registers`, () => {

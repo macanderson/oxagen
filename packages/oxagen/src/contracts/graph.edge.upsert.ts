@@ -1,28 +1,32 @@
-// STATUS (2026-07-10): this is the LIVE implementation of graph relationship
-// upserts — it has the registered handler, tests, and the app's graph-explorer
-// as a caller. Its intended successor, `graph.relationship.upsert`
-// (upsert_graph_relationship), is declared and mounted on API/MCP but has NO
-// registered handler yet (see packages/handlers capability-dispatch.probe.test.ts
-// allowlist) — calling it throws no_handler at dispatch. Until that migration
-// is finished (or abandoned), do NOT treat this contract as removable.
+// STATUS (2026-07-10): this is the LIVE, canonical implementation of graph
+// relationship upserts — it has the registered handler (upsert_edge), tests, and
+// the app's graph-explorer as a caller. A planned rename to a separate
+// `graph.relationship.upsert` (upsert_graph_relationship) capability was never
+// given a handler and has been removed; `upsert_edge` is the single
+// relationship-upsert capability.
 //
 // The fixed `GRAPH_EDGE_TYPES` enum is GONE (Workspace Schema Registry §3.2):
 // customers define their own relationship types in the registry, and Cypher
 // safety is enforced by the always-on lexical `RELATIONSHIP_TYPE_PATTERN` guard
-// plus the pinned active-vocabulary allow-list. This contract mirrors the
-// `graph.relationship.upsert` input shape (a regex-validated
-// `relationshipType`) and no longer references any enum.
+// plus the pinned active-vocabulary allow-list. The `relationshipType` input is a
+// regex-validated open-vocabulary string and no longer references any enum.
 import { z } from "zod";
 import { registerCapability } from "../registry";
 import { RELATIONSHIP_TYPE_PATTERN } from "../lib/relationship-type-pattern";
 import { observedAtField, supersedeField } from "../lib/temporal-query";
 
+// Re-export so handlers (which may import only from `@oxagen/oxagen/contracts/*`,
+// the single oxagen subpath exposed to them) can share the one lexical Cypher
+// guard. This re-export previously lived on the removed graph.relationship.upsert
+// contract; it now lives on the surviving canonical contract.
+export { RELATIONSHIP_TYPE_PATTERN } from "../lib/relationship-type-pattern";
+
 export const graphEdgeUpsert = registerCapability({
   name: "upsert_edge",
   domain: "graph",
   description:
-    "DEPRECATED — use graph.relationship.upsert. MERGE a typed relationship between two " +
-    "KnowledgeNodes. Relationship type must match the RELATIONSHIP_TYPE_PATTERN lexical guard.",
+    "MERGE a typed relationship between two KnowledgeNodes. Relationship type must " +
+    "match the RELATIONSHIP_TYPE_PATTERN lexical guard.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent", "cli"] as const,
   layers: ["schema", "api", "mcp", "unit", "docs"],

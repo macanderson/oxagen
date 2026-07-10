@@ -2504,20 +2504,6 @@
       }
     },
     {
-      "name": "upsert_graph_relationship",
-      "file": "graph.relationship.upsert.ts",
-      "domain": "graph",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent", "cli"],
-      "layers": {
-        "schema": true,
-        "api": false,
-        "mcp": false,
-        "unit": false,
-        "docs": false
-      }
-    },
-    {
       "name": "search_graph",
       "file": "graph.search.ts",
       "domain": "graph",
@@ -4048,62 +4034,6 @@
     {
       "name": "suggest_semantic_edges",
       "file": "semantic.edge.suggest.ts",
-      "domain": "semantic",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "schema": true,
-        "api": false,
-        "mcp": false,
-        "unit": false,
-        "docs": false
-      }
-    },
-    {
-      "name": "approve_semantic_relationship",
-      "file": "semantic.relationship.approve.ts",
-      "domain": "semantic",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "schema": true,
-        "api": false,
-        "mcp": false,
-        "unit": false,
-        "docs": false
-      }
-    },
-    {
-      "name": "infer_semantic_relationships",
-      "file": "semantic.relationship.infer.ts",
-      "domain": "semantic",
-      "mode": "async",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "schema": true,
-        "api": false,
-        "mcp": false,
-        "unit": false,
-        "docs": false
-      }
-    },
-    {
-      "name": "list_semantic_relationships",
-      "file": "semantic.relationship.list.ts",
-      "domain": "semantic",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "schema": true,
-        "api": false,
-        "mcp": false,
-        "unit": false,
-        "docs": false
-      }
-    },
-    {
-      "name": "suggest_semantic_relationships",
-      "file": "semantic.relationship.suggest.ts",
       "domain": "semantic",
       "mode": "sync",
       "surfaces": ["api", "mcp", "agent"],

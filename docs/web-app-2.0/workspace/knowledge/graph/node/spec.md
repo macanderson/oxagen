@@ -31,7 +31,7 @@ The inspectable ground-truth view of a single graph node — its full property b
 - `ontology.neighbors` (`get_ontology_neighbors`) — neighbors section.
 - `graph.node.delete` (`delete_node`) — admin delete.
 - `graph.node_label.add` / `graph.node_label.remove` (`add_node_label` / `remove_node_label`) — admin label edit.
-- `graph.relationship.upsert` (`upsert_graph_relationship`) — admin add/edit relationship.
+- `graph.edge.upsert` (`upsert_edge`) — admin add/edit relationship.
 - `graph.edge.delete` (`delete_edge`) — admin remove relationship.
 
 ## Data sources
