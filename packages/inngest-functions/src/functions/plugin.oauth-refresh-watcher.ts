@@ -15,7 +15,10 @@
 import { and, eq, lt, sql } from "drizzle-orm";
 import { auth as mcpAuth } from "@modelcontextprotocol/sdk/client/auth.js";
 import { schema, withSystemDb } from "@oxagen/database";
-import { DbOAuthClientProvider, markCredentialNeedsReauth } from "@oxagen/plugins";
+import {
+  DbOAuthClientProvider,
+  markCredentialNeedsReauth,
+} from "@oxagen/plugins";
 import { createFunction } from "../create-function";
 import { logger } from "../logger";
 
@@ -37,20 +40,29 @@ export const [pluginOauthRefreshWatcher] = createFunction(
           .from(schema.mcpCredentials)
           .innerJoin(
             schema.pluginInstalledPlugins,
-            eq(schema.mcpCredentials.orgListingId, schema.pluginInstalledPlugins.id),
+            eq(
+              schema.mcpCredentials.orgListingId,
+              schema.pluginInstalledPlugins.id,
+            ),
           )
           .where(
             and(
               eq(schema.mcpCredentials.authKind, "oauth"),
               eq(schema.mcpCredentials.status, "active"),
               // expiresAt < now() + 10 minutes
-              lt(schema.mcpCredentials.expiresAt, sql`now() + interval '10 minutes'`),
+              lt(
+                schema.mcpCredentials.expiresAt,
+                sql`now() + interval '10 minutes'`,
+              ),
             ),
           ),
       ),
     );
 
-    logger.info({ count: expiring.length }, "plugin.oauth-refresh-watcher: expiring credentials found");
+    logger.info(
+      { count: expiring.length },
+      "plugin.oauth-refresh-watcher: expiring credentials found",
+    );
 
     let refreshed = 0;
     let markedReauth = 0;
@@ -69,12 +81,15 @@ export const [pluginOauthRefreshWatcher] = createFunction(
             orgListingId: cred.orgListingId!,
             // redirectUrl is unused during a refresh (no browser redirect happens)
             // but required by the provider interface.
-            redirectUrl: (process.env.APP_URL ?? "") + "/api/v1/mcp/oauth/callback",
+            redirectUrl:
+              (process.env.APP_URL ?? "") + "/api/v1/mcp/oauth/callback",
             // Stable state key — not a fresh PKCE flow.
             state: "refresh:" + cred.orgListingId,
             returnTo: "",
             clientName: "Oxagen",
             now: () => Date.now(),
+            // Pre-registered-client fallback for non-DCR providers (GitHub).
+            serverUrl: endpointUrl,
           });
 
           // auth() will detect an existing refresh_token and exchange it for a

@@ -18,7 +18,11 @@ import { auth as mcpAuth } from "@modelcontextprotocol/sdk/client/auth.js";
 import { and, eq, ne, sql } from "drizzle-orm";
 import type { FetchLike } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { schema, withSystemDb } from "@oxagen/database";
-import { DbOAuthClientProvider, loadOAuthState, deleteOAuthState } from "@oxagen/plugins";
+import {
+  DbOAuthClientProvider,
+  loadOAuthState,
+  deleteOAuthState,
+} from "@oxagen/plugins";
 import { isNextRedirectError } from "@/lib/auth-denial";
 import { logger } from "@oxagen/handlers/logger";
 
@@ -94,14 +98,20 @@ async function handleCallback(req: NextRequest): Promise<Response> {
   const state = url.searchParams.get("state");
 
   if (!code || !state) {
-    return NextResponse.json({ error: "missing code or state" }, { status: 400 });
+    return NextResponse.json(
+      { error: "missing code or state" },
+      { status: 400 },
+    );
   }
 
   // Look up the PKCE/state data saved during the authorize step.
   const stateData = await loadOAuthState(state, Date.now());
   if (!stateData) {
     logger.warn({ state }, "mcp-oauth: callback state expired or not found");
-    return NextResponse.json({ error: "state expired or not found" }, { status: 400 });
+    return NextResponse.json(
+      { error: "state expired or not found" },
+      { status: 400 },
+    );
   }
 
   // Verify the listing still exists + get the endpointUrl.
@@ -129,6 +139,9 @@ async function handleCallback(req: NextRequest): Promise<Response> {
     returnTo: stateData.returnTo,
     clientName: "Oxagen",
     now: () => Date.now(),
+    // Token exchange re-reads clientInformation(); for pre-registered
+    // (non-DCR) providers the client only exists in env, matched by this URL.
+    serverUrl: listing.endpointUrl,
   });
 
   // Exchange the code for tokens (mcpAuth detects the code and calls the token endpoint).
@@ -184,7 +197,10 @@ async function handleCallback(req: NextRequest): Promise<Response> {
           discoveredTools: [],
         })
         .onConflictDoUpdate({
-          target: [schema.mcpServers.workspaceId, schema.mcpServers.orgListingId],
+          target: [
+            schema.mcpServers.workspaceId,
+            schema.mcpServers.orgListingId,
+          ],
           // mcp_servers_ws_listing_uniq is a PARTIAL unique index; ON CONFLICT
           // only matches it when the inference clause carries the same predicate.
           targetWhere: sql`org_listing_id IS NOT NULL`,
@@ -220,7 +236,10 @@ async function handleCallback(req: NextRequest): Promise<Response> {
       );
     }
 
-    logger.info({ orgId: stateData.orgId, orgListingId: stateData.orgListingId }, "mcp-oauth: token exchange succeeded, install upserted and marked healthy");
+    logger.info(
+      { orgId: stateData.orgId, orgListingId: stateData.orgListingId },
+      "mcp-oauth: token exchange succeeded, install upserted and marked healthy",
+    );
     return redirectBack(url.origin, stateData.returnTo, {
       mcp: "connected",
       listing: stateData.orgListingId,
@@ -229,7 +248,10 @@ async function handleCallback(req: NextRequest): Promise<Response> {
 
   // Unexpected: mcpAuth returned REDIRECT during a callback (shouldn't happen
   // with a valid code, but handle it gracefully).
-  logger.warn({ orgId: stateData.orgId, orgListingId: stateData.orgListingId, result }, "mcp-oauth: unexpected REDIRECT result during callback");
+  logger.warn(
+    { orgId: stateData.orgId, orgListingId: stateData.orgListingId, result },
+    "mcp-oauth: unexpected REDIRECT result during callback",
+  );
   return redirectBack(url.origin, stateData.returnTo, {
     mcp: "error",
     listing: stateData.orgListingId,

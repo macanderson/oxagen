@@ -43,9 +43,21 @@ export const baseEnvSchema = z.object({
   //  - FAILURE_THRESHOLD: consecutive failures that trip a breaker open.
   //  - RESET_TIMEOUT_MS:  how long a tripped breaker stays open before a probe.
   //  - SUCCESS_THRESHOLD: consecutive probe successes that close it again.
-  CIRCUIT_BREAKER_FAILURE_THRESHOLD: z.coerce.number().int().positive().default(5),
-  CIRCUIT_BREAKER_RESET_TIMEOUT_MS: z.coerce.number().int().positive().default(30000),
-  CIRCUIT_BREAKER_SUCCESS_THRESHOLD: z.coerce.number().int().positive().default(1),
+  CIRCUIT_BREAKER_FAILURE_THRESHOLD: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(5),
+  CIRCUIT_BREAKER_RESET_TIMEOUT_MS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(30000),
+  CIRCUIT_BREAKER_SUCCESS_THRESHOLD: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(1),
 
   BETTER_AUTH_SECRET: z.string().min(32),
   BETTER_AUTH_URL: z.string().url(),
@@ -71,6 +83,11 @@ export const baseEnvSchema = z.object({
   GITHUB_LOGIN_CLIENT_SECRET: z.string().optional(),
   GITHUB_DATA_CLIENT_ID: z.string().optional(),
   GITHUB_DATA_CLIENT_SECRET: z.string().optional(),
+  // Pre-registered OAuth clients for MCP authorization servers without RFC 7591
+  // dynamic client registration (GitHub MCP). JSON: endpoint host → client.
+  // Malformed values are tolerated at runtime (logged + ignored), so the schema
+  // only asserts string-ness, not JSON validity.
+  MCP_OAUTH_PREREGISTERED_CLIENTS: z.string().optional(),
 
   // GitHub App OAuth — used for the data-connector OAuth flow (repo ingestion).
   // Separate from GITHUB_DATA_CLIENT_* (data client is for future use).
@@ -133,7 +150,10 @@ export const baseEnvSchema = z.object({
   // deployments are unaffected. Adding a new driver requires: (1) implementing
   // the StorageAdapter interface, (2) extending this enum, (3) adding a case
   // in client.ts resolveAdapter(). See docs/guides/storage-driver-authoring.md.
-  STORAGE_DRIVER: z.enum(["vercel-blob", "fs"]).default("vercel-blob").optional(),
+  STORAGE_DRIVER: z
+    .enum(["vercel-blob", "fs"])
+    .default("vercel-blob")
+    .optional(),
 
   // Root directory for the "fs" storage driver. Only read when STORAGE_DRIVER=fs
   // (the CI e2e container and local dev without a Vercel Blob token). Absolute
@@ -357,7 +377,12 @@ export const baseEnvSchema = z.object({
   // inject a corrective instruction instead of generic completeness feedback.
   // Enforces test-before-patch discipline to prevent wrong-spec patches.
   OXAGEN_SPEC_GATE: z
-    .union([z.literal("1"), z.literal("true"), z.literal("0"), z.literal("false")])
+    .union([
+      z.literal("1"),
+      z.literal("true"),
+      z.literal("0"),
+      z.literal("false"),
+    ])
     .optional()
     .transform((v) => v === "1" || v === "true"),
   // Deterministic judge-skip / adaptive compute ladder (ADR-021 §1). ON by
@@ -366,7 +391,12 @@ export const baseEnvSchema = z.object({
   // completeness judge is skipped. Set to 0/false to OPT OUT and force the judge
   // to run every round. Normalized boolean = "judge-skip enabled".
   OXAGEN_LADDER: z
-    .union([z.literal("1"), z.literal("true"), z.literal("0"), z.literal("false")])
+    .union([
+      z.literal("1"),
+      z.literal("true"),
+      z.literal("0"),
+      z.literal("false"),
+    ])
     .optional()
     .transform((v) => v !== "0" && v !== "false"),
   // Diff line count threshold for fast-path submission (default 120).

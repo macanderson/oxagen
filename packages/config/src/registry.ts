@@ -31,7 +31,11 @@ export const SERVICE_NAMES: readonly ServiceName[] = [
   "admin",
   "docs",
 ];
-export const ENV_NAMES: readonly EnvName[] = ["development", "preview", "production"];
+export const ENV_NAMES: readonly EnvName[] = [
+  "development",
+  "preview",
+  "production",
+];
 
 /**
  * Where a variable's value originates when the env-manager deploys it.
@@ -90,13 +94,18 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: [],
     requiredIn: [],
     valueOrigin: "static",
-    staticValue: { development: "development", preview: "production", production: "production" },
+    staticValue: {
+      development: "development",
+      preview: "production",
+      production: "production",
+    },
   },
 
   // ── Postgres (Neon in prod, Docker locally) ─────────────────────────────────
   DATABASE_URL: {
     group: "Postgres",
-    description: "Neon Postgres connection string. Prod = live branch; preview/dev = dev branch.",
+    description:
+      "Neon Postgres connection string. Prod = live branch; preview/dev = dev branch.",
     secret: true,
     clientExposed: false,
     services: ["api", "app", "mcp", "admin"],
@@ -300,7 +309,10 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api", "app"],
     requiredIn: ALL,
     valueOrigin: "static",
-    staticValue: { development: "http://localhost:3000", production: APP_PROD_URL },
+    staticValue: {
+      development: "http://localhost:3000",
+      production: APP_PROD_URL,
+    },
   },
   BETTER_AUTH_TRUSTED_ORIGINS: {
     group: "Better Auth",
@@ -311,7 +323,10 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api", "app"],
     requiredIn: [],
     valueOrigin: "static",
-    staticValue: { development: "http://localhost:3000", production: APP_PROD_URL },
+    staticValue: {
+      development: "http://localhost:3000",
+      production: APP_PROD_URL,
+    },
   },
   AUTH_TOKEN_ENCRYPTION_KEY: {
     group: "Better Auth",
@@ -359,7 +374,8 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   // reserved for the future google-workspace connection).
   GOOGLE_LOGIN_CLIENT_ID: {
     group: "OAuth providers",
-    description: "Google LOGIN OAuth client id (social sign-in; minimal scopes).",
+    description:
+      "Google LOGIN OAuth client id (social sign-in; minimal scopes).",
     secret: false,
     clientExposed: false,
     services: ["api", "app"],
@@ -377,7 +393,8 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   },
   GOOGLE_DATA_CLIENT_ID: {
     group: "OAuth providers",
-    description: "Google DATA OAuth client id (Workspace data scopes; future connection).",
+    description:
+      "Google DATA OAuth client id (Workspace data scopes; future connection).",
     secret: false,
     clientExposed: false,
     services: ["api", "app"],
@@ -398,7 +415,8 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   // github connection — keeps repo-access scopes off the plain-login client).
   GITHUB_LOGIN_CLIENT_ID: {
     group: "OAuth providers",
-    description: "GitHub LOGIN OAuth client id (social sign-in; minimal scopes).",
+    description:
+      "GitHub LOGIN OAuth client id (social sign-in; minimal scopes).",
     secret: false,
     clientExposed: false,
     services: ["api", "app"],
@@ -416,7 +434,8 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   },
   GITHUB_DATA_CLIENT_ID: {
     group: "OAuth providers",
-    description: "GitHub DATA OAuth client id (repo-ingestion scopes; future connection).",
+    description:
+      "GitHub DATA OAuth client id (repo-ingestion scopes; future connection).",
     secret: false,
     clientExposed: false,
     services: ["api", "app"],
@@ -432,11 +451,27 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
   },
+  MCP_OAUTH_PREREGISTERED_CLIENTS: {
+    group: "OAuth providers",
+    description:
+      "Pre-registered OAuth clients for MCP authorization servers that do NOT support " +
+      "RFC 7591 dynamic client registration (GitHub MCP, notably). JSON object mapping " +
+      "the MCP server's endpoint HOST to the client registered with that provider, e.g. " +
+      '{"api.githubcopilot.com":{"client_id":"…","client_secret":"…"}}. Each provider ' +
+      "app must list <app-origin>/api/v1/mcp/oauth/callback as its callback URL. When a " +
+      "host is absent the flow falls back to dynamic client registration as before.",
+    secret: true,
+    clientExposed: false,
+    services: ["api", "app"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
 
   // ── GitHub App (connector OAuth + webhooks) ──────────────────────────────────
   GITHUB_APP_CLIENT_ID: {
     group: "github",
-    description: "GitHub App OAuth client id — used for the data-connector OAuth flow.",
+    description:
+      "GitHub App OAuth client id — used for the data-connector OAuth flow.",
     secret: false,
     clientExposed: false,
     services: ["api"],
@@ -454,7 +489,8 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   },
   GITHUB_APP_WEBHOOK_SECRET: {
     group: "github",
-    description: "GitHub App webhook signing secret — validates inbound webhook payloads.",
+    description:
+      "GitHub App webhook signing secret — validates inbound webhook payloads.",
     secret: true,
     clientExposed: false,
     services: ["api"],
@@ -463,7 +499,8 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   },
   GITHUB_APP_INSTALL_STATE_SECRET: {
     group: "github",
-    description: "HMAC secret used to sign the OAuth state parameter for GitHub App installs.",
+    description:
+      "HMAC secret used to sign the OAuth state parameter for GitHub App installs.",
     secret: true,
     clientExposed: false,
     services: ["api"],
@@ -526,7 +563,8 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   // deploying SLACK_DATA_CLIENT_* (without it Slack rejects the refresh request).
   SLACK_DATA_CLIENT_ID: {
     group: "Ingestion",
-    description: "Slack DATA OAuth client id for token refresh (ingestion cron). Token rotation must be enabled in the Slack app.",
+    description:
+      "Slack DATA OAuth client id for token refresh (ingestion cron). Token rotation must be enabled in the Slack app.",
     secret: false,
     clientExposed: false,
     services: ["api"],
@@ -535,7 +573,8 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   },
   SLACK_DATA_CLIENT_SECRET: {
     group: "Ingestion",
-    description: "Slack DATA OAuth client secret for token refresh (ingestion cron).",
+    description:
+      "Slack DATA OAuth client secret for token refresh (ingestion cron).",
     secret: true,
     clientExposed: false,
     services: ["api"],
@@ -544,7 +583,8 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   },
   ZOOM_DATA_CLIENT_ID: {
     group: "Ingestion",
-    description: "Zoom DATA OAuth client id for token refresh (ingestion cron). Zoom rotates the refresh token on each use.",
+    description:
+      "Zoom DATA OAuth client id for token refresh (ingestion cron). Zoom rotates the refresh token on each use.",
     secret: false,
     clientExposed: false,
     services: ["api"],
@@ -553,7 +593,8 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   },
   ZOOM_DATA_CLIENT_SECRET: {
     group: "Ingestion",
-    description: "Zoom DATA OAuth client secret for token refresh (ingestion cron).",
+    description:
+      "Zoom DATA OAuth client secret for token refresh (ingestion cron).",
     secret: true,
     clientExposed: false,
     services: ["api"],
@@ -562,7 +603,8 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   },
   SALESFORCE_DATA_CLIENT_ID: {
     group: "Ingestion",
-    description: "Salesforce DATA OAuth client id for token refresh (ingestion cron).",
+    description:
+      "Salesforce DATA OAuth client id for token refresh (ingestion cron).",
     secret: false,
     clientExposed: false,
     services: ["api"],
@@ -571,7 +613,8 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   },
   SALESFORCE_DATA_CLIENT_SECRET: {
     group: "Ingestion",
-    description: "Salesforce DATA OAuth client secret for token refresh (ingestion cron).",
+    description:
+      "Salesforce DATA OAuth client secret for token refresh (ingestion cron).",
     secret: true,
     clientExposed: false,
     services: ["api"],
@@ -580,7 +623,8 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   },
   MICROSOFT_DATA_CLIENT_ID: {
     group: "Ingestion",
-    description: "Microsoft DATA OAuth client id for token refresh (ingestion cron; MS Graph offline_access).",
+    description:
+      "Microsoft DATA OAuth client id for token refresh (ingestion cron; MS Graph offline_access).",
     secret: false,
     clientExposed: false,
     services: ["api"],
@@ -589,7 +633,8 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   },
   MICROSOFT_DATA_CLIENT_SECRET: {
     group: "Ingestion",
-    description: "Microsoft DATA OAuth client secret for token refresh (ingestion cron).",
+    description:
+      "Microsoft DATA OAuth client secret for token refresh (ingestion cron).",
     secret: true,
     clientExposed: false,
     services: ["api"],
@@ -610,7 +655,8 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   },
   STRIPE_PUBLISHABLE_KEY: {
     group: "Stripe",
-    description: "Stripe publishable key (pk_live in prod, pk_test in preview/dev).",
+    description:
+      "Stripe publishable key (pk_live in prod, pk_test in preview/dev).",
     secret: false,
     clientExposed: false,
     services: ["api", "app"],
@@ -827,7 +873,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   OXAGEN_LLM_FAST: {
     group: "AI providers",
     description:
-      "Fast text tier (\"Oxagen Fast\") — the gateway model id @oxagen/ai resolves for " +
+      'Fast text tier ("Oxagen Fast") — the gateway model id @oxagen/ai resolves for ' +
       "the fast tier. The ask-page default.",
     secret: false,
     clientExposed: false,
@@ -838,7 +884,8 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   },
   OXAGEN_LLM_BALANCED: {
     group: "AI providers",
-    description: "Balanced text tier (\"Oxagen Balanced\") — gateway model id for the balanced tier.",
+    description:
+      'Balanced text tier ("Oxagen Balanced") — gateway model id for the balanced tier.',
     secret: false,
     clientExposed: false,
     services: ["api", "app", "mcp"],
@@ -848,7 +895,8 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   },
   OXAGEN_LLM_PRECISE: {
     group: "AI providers",
-    description: "Precise text tier (\"Oxagen Precise\") — gateway model id for the precise tier.",
+    description:
+      'Precise text tier ("Oxagen Precise") — gateway model id for the precise tier.',
     secret: false,
     clientExposed: false,
     services: ["api", "app", "mcp"],
@@ -859,7 +907,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   OXAGEN_LLM_IMAGE_BASIC: {
     group: "AI providers",
     description:
-      "Basic image tier (\"Oxagen Basic\") — default gateway image model for composer " +
+      'Basic image tier ("Oxagen Basic") — default gateway image model for composer ' +
       "image generation.",
     secret: false,
     clientExposed: false,
@@ -870,7 +918,8 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   },
   OXAGEN_LLM_IMAGE_ADVANCED: {
     group: "AI providers",
-    description: "Advanced image tier (\"Oxagen Advanced\") — high-fidelity gateway image model.",
+    description:
+      'Advanced image tier ("Oxagen Advanced") — high-fidelity gateway image model.',
     secret: false,
     clientExposed: false,
     services: ["api", "app", "mcp"],
@@ -881,7 +930,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   OXAGEN_LLM_VIDEO_BASIC: {
     group: "AI providers",
     description:
-      "Basic video tier (\"Oxagen Basic\") — default gateway video model for composer " +
+      'Basic video tier ("Oxagen Basic") — default gateway video model for composer ' +
       "video generation (pipeline stub).",
     secret: false,
     clientExposed: false,
@@ -892,7 +941,8 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   },
   OXAGEN_LLM_VIDEO_ADVANCED: {
     group: "AI providers",
-    description: "Advanced video tier (\"Oxagen Advanced\") — high-fidelity gateway video model.",
+    description:
+      'Advanced video tier ("Oxagen Advanced") — high-fidelity gateway video model.',
     secret: false,
     clientExposed: false,
     services: ["api", "app", "mcp"],
@@ -917,7 +967,8 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   },
   SMTP_PORT: {
     group: "Email",
-    description: "SMTP port. 465 = implicit TLS; 587 = STARTTLS (TLS enforced).",
+    description:
+      "SMTP port. 465 = implicit TLS; 587 = STARTTLS (TLS enforced).",
     secret: false,
     clientExposed: false,
     services: ["api", "app", "mcp", "website", "admin"],
@@ -947,7 +998,8 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   },
   SMTP_FROM_EMAIL: {
     group: "Email",
-    description: "Default sender address. Its domain must be verified at the provider.",
+    description:
+      "Default sender address. Its domain must be verified at the provider.",
     secret: false,
     clientExposed: false,
     services: ["api", "app", "mcp", "website", "admin"],
@@ -969,7 +1021,8 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   // ── Linear (capability provenance) ───────────────────────────────────────────
   LINEAR_API_KEY: {
     group: "Linear",
-    description: "Linear API key (tooling/provenance; not read by deployed apps).",
+    description:
+      "Linear API key (tooling/provenance; not read by deployed apps).",
     secret: true,
     clientExposed: false,
     services: [],
@@ -996,7 +1049,10 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["app", "website"],
     requiredIn: ALL,
     valueOrigin: "static",
-    staticValue: { development: "http://localhost:3000", production: APP_PROD_URL },
+    staticValue: {
+      development: "http://localhost:3000",
+      production: APP_PROD_URL,
+    },
   },
   NEXT_PUBLIC_API_URL: {
     group: "Public URLs",
@@ -1006,7 +1062,10 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["app", "website"],
     requiredIn: ALL,
     valueOrigin: "static",
-    staticValue: { development: "http://localhost:4000", production: API_PROD_URL },
+    staticValue: {
+      development: "http://localhost:4000",
+      production: API_PROD_URL,
+    },
   },
   A2A_PUBLIC_URL: {
     group: "Public URLs",
@@ -1020,7 +1079,10 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api", "mcp"],
     requiredIn: [],
     valueOrigin: "static",
-    staticValue: { development: "http://localhost:4000", production: API_PROD_URL },
+    staticValue: {
+      development: "http://localhost:4000",
+      production: API_PROD_URL,
+    },
   },
   APP_URL: {
     group: "Public URLs",
@@ -1032,7 +1094,10 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api", "app", "mcp"],
     requiredIn: [],
     valueOrigin: "static",
-    staticValue: { development: "http://localhost:3000", production: APP_PROD_URL },
+    staticValue: {
+      development: "http://localhost:3000",
+      production: APP_PROD_URL,
+    },
   },
   MARKETING_URL: {
     group: "Public URLs",
@@ -1045,17 +1110,24 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api"],
     requiredIn: [],
     valueOrigin: "static",
-    staticValue: { development: "http://localhost:8080", production: MARKETING_PROD_URL },
+    staticValue: {
+      development: "http://localhost:8080",
+      production: MARKETING_PROD_URL,
+    },
   },
   MCP_URL: {
     group: "Public URLs",
-    description: "MCP server origin used to build install instructions and client connections.",
+    description:
+      "MCP server origin used to build install instructions and client connections.",
     secret: false,
     clientExposed: false,
     services: ["api", "app", "mcp"],
     requiredIn: [],
     valueOrigin: "static",
-    staticValue: { development: "http://localhost:4100", production: MCP_PROD_URL },
+    staticValue: {
+      development: "http://localhost:4100",
+      production: MCP_PROD_URL,
+    },
   },
   NEXT_PUBLIC_DOCS_URL: {
     group: "Public URLs",
@@ -1109,7 +1181,11 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api", "app", "mcp"],
     requiredIn: [],
     valueOrigin: "static",
-    staticValue: { development: "docker", preview: "vercel", production: "vercel" },
+    staticValue: {
+      development: "docker",
+      preview: "vercel",
+      production: "vercel",
+    },
   },
   MODAL_RUNNER_URL: {
     group: "Sandbox",
@@ -1131,7 +1207,8 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   },
   VERCEL_SANDBOX_TOKEN: {
     group: "Sandbox",
-    description: "Vercel Sandbox token (SANDBOX_DRIVER=vercel; OIDC auto-resolves on Vercel).",
+    description:
+      "Vercel Sandbox token (SANDBOX_DRIVER=vercel; OIDC auto-resolves on Vercel).",
     secret: true,
     clientExposed: false,
     services: ["api", "app", "mcp"],
@@ -1247,7 +1324,8 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   // ── env-manager tooling (operator/local-only; never pushed to app projects) ──
   VERCEL_TOKEN: {
     group: "env-manager tooling",
-    description: "Vercel API token (admin) the env-manager uses to read/write project env vars.",
+    description:
+      "Vercel API token (admin) the env-manager uses to read/write project env vars.",
     secret: true,
     clientExposed: false,
     services: [],
@@ -1266,7 +1344,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   VERCEL_TEAM_SLUG: {
     group: "env-manager tooling",
     description:
-      "Vercel team slug for `pnpm env:pull` --scope (e.g. \"oxagen\"). Optional — when unset, " +
+      'Vercel team slug for `pnpm env:pull` --scope (e.g. "oxagen"). Optional — when unset, ' +
       "the CLI resolves the team from each project's linked .vercel/project.json.",
     secret: false,
     clientExposed: false,
@@ -1315,7 +1393,8 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   // ── CLI / tooling ────────────────────────────────────────────────────────────
   OXAGEN_API_TOKEN: {
     group: "CLI",
-    description: "API token used by the CLI to authenticate requests; falls back to the value stored in ~/.oxagen/config.json.",
+    description:
+      "API token used by the CLI to authenticate requests; falls back to the value stored in ~/.oxagen/config.json.",
     secret: true,
     clientExposed: false,
     services: [],
@@ -1324,7 +1403,8 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   },
   OXAGEN_ORG_ID: {
     group: "CLI",
-    description: "Default org slug for CLI commands; falls back to the value stored in ~/.oxagen/config.json.",
+    description:
+      "Default org slug for CLI commands; falls back to the value stored in ~/.oxagen/config.json.",
     secret: false,
     clientExposed: false,
     services: [],
@@ -1333,7 +1413,8 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   },
   OXAGEN_WORKSPACE_ID: {
     group: "CLI",
-    description: "Default workspace slug for CLI commands; falls back to the value stored in ~/.oxagen/config.json.",
+    description:
+      "Default workspace slug for CLI commands; falls back to the value stored in ~/.oxagen/config.json.",
     secret: false,
     clientExposed: false,
     services: [],
@@ -1350,7 +1431,10 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: [],
     requiredIn: [],
     valueOrigin: "static",
-    staticValue: { development: "http://localhost:4000", production: "https://api.oxagen.sh" },
+    staticValue: {
+      development: "http://localhost:4000",
+      production: "https://api.oxagen.sh",
+    },
   },
   OXAGEN_APP_URL: {
     group: "CLI",
@@ -1362,7 +1446,10 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: [],
     requiredIn: [],
     valueOrigin: "static",
-    staticValue: { development: "http://localhost:3000", production: "https://app.oxagen.sh" },
+    staticValue: {
+      development: "http://localhost:3000",
+      production: "https://app.oxagen.sh",
+    },
   },
   OXAGEN_MODEL: {
     group: "CLI",
@@ -1545,8 +1632,8 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   OXAGEN_COORDINATOR: {
     group: "CLI",
     description:
-      "Coordinator model for the CLI agent: \"on-device\" (default) or a cloud registry id " +
-      "like \"haiku\". Overrides `runtime.coordinator` in ~/.config/oxagen/config.json.",
+      'Coordinator model for the CLI agent: "on-device" (default) or a cloud registry id ' +
+      'like "haiku". Overrides `runtime.coordinator` in ~/.config/oxagen/config.json.',
     secret: false,
     clientExposed: false,
     services: [],
@@ -1556,7 +1643,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   OXAGEN_ONDEVICE_MODEL: {
     group: "CLI",
     description:
-      "On-device model id: \"auto\" (resolve the best code model for this device) or a pinned " +
+      'On-device model id: "auto" (resolve the best code model for this device) or a pinned ' +
       "capability-table modelId. Overrides `runtime.onDevice.modelId` in the CLI config.",
     secret: false,
     clientExposed: false,
@@ -1579,7 +1666,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     group: "CLI",
     description:
       "Gateway model slug the CLI turn pipeline uses to evaluate each prompt (completeness " +
-      "+ complexity scoring, context hints, refined rewrite). Defaults to \"local\" — the " +
+      '+ complexity scoring, context hints, refined rewrite). Defaults to "local" — the ' +
       "deterministic cost-router heuristic, no model call.",
     secret: false,
     clientExposed: false,
@@ -2031,7 +2118,8 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   },
   INGESTION_CRYPTO_PROVIDER: {
     group: "Ingestion",
-    description: "Credential encryption backend for ingestion: 'env' (AES-256-GCM via INGESTION_ENCRYPTION_KEY) or 'kms' (AWS KMS).",
+    description:
+      "Credential encryption backend for ingestion: 'env' (AES-256-GCM via INGESTION_ENCRYPTION_KEY) or 'kms' (AWS KMS).",
     secret: false,
     clientExposed: false,
     services: ["api"],
@@ -2041,7 +2129,8 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   },
   INGESTION_ENCRYPTION_KEY: {
     group: "Ingestion",
-    description: "Base64-encoded 32-byte master key for AES-256-GCM credential encryption (INGESTION_CRYPTO_PROVIDER=env).",
+    description:
+      "Base64-encoded 32-byte master key for AES-256-GCM credential encryption (INGESTION_CRYPTO_PROVIDER=env).",
     secret: true,
     clientExposed: false,
     services: ["api"],
@@ -2050,7 +2139,8 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   },
   AWS_KMS_INGESTION_KEY_ARN: {
     group: "Ingestion",
-    description: "AWS KMS key ARN for credential encryption (INGESTION_CRYPTO_PROVIDER=kms).",
+    description:
+      "AWS KMS key ARN for credential encryption (INGESTION_CRYPTO_PROVIDER=kms).",
     secret: false,
     clientExposed: false,
     services: ["api"],
@@ -2070,7 +2160,8 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   },
   PRIVACY_ERASURE_GRACE_DAYS: {
     group: "Privacy",
-    description: "Grace period in days before a hard-delete erasure job runs (GDPR Art.17). Set to 0 for immediate erasure in test envs.",
+    description:
+      "Grace period in days before a hard-delete erasure job runs (GDPR Art.17). Set to 0 for immediate erasure in test envs.",
     secret: false,
     clientExposed: false,
     services: ["api"],
@@ -2082,7 +2173,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
 
 // ─── Derivations (the single place every surface reads from) ─────────────────
 
-const SCHEMA_KEYS: ReadonlySet<string> = new Set(Object.keys(baseEnvSchema.shape));
+const SCHEMA_KEYS: ReadonlySet<string> = new Set(
+  Object.keys(baseEnvSchema.shape),
+);
 
 /** True iff the variable is enforced by the Zod `baseEnvSchema` runtime validator. */
 export function isValidated(key: string): boolean {
@@ -2097,7 +2190,9 @@ export function registryKeys(): string[] {
 /** Keys a given service needs present in a given environment (the gap-detector contract). */
 export function requiredKeysFor(service: ServiceName, env: EnvName): string[] {
   return Object.entries(ENV_REGISTRY)
-    .filter(([, m]) => m.services.includes(service) && m.requiredIn.includes(env))
+    .filter(
+      ([, m]) => m.services.includes(service) && m.requiredIn.includes(env),
+    )
     .map(([k]) => k);
 }
 
@@ -2144,9 +2239,12 @@ export function renderEnvExample(): string {
     const flags: string[] = [];
     if (!isValidated(key)) flags.push("not-in-schema");
     if (meta.secret) flags.push("secret");
-    if (meta.requiredIn.length > 0) flags.push(`required:${meta.requiredIn.join("/")}`);
+    if (meta.requiredIn.length > 0)
+      flags.push(`required:${meta.requiredIn.join("/")}`);
     else flags.push("optional");
-    lines.push(`# ${meta.description}${flags.length ? `  [${flags.join(", ")}]` : ""}`);
+    lines.push(
+      `# ${meta.description}${flags.length ? `  [${flags.join(", ")}]` : ""}`,
+    );
     const value = staticValueFor(key, "development") ?? meta.placeholder ?? "";
     lines.push(`${key}=${value}`);
     lines.push("");
