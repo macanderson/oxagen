@@ -290,6 +290,38 @@ describe("conversation linkage (resolveConversationId)", () => {
     expect(row.messageId).toBe("msg-42");
   });
 
+  it("resolves a public 'cnv_…' conversationId to the internal UUID (composer upload path)", async () => {
+    // Regression: the composer upload route forwards the client-facing public
+    // id; inserting it raw into the uuid column 500'd every upload made while
+    // a conversation was active.
+    mocks.msgSelect.mockResolvedValueOnce([{ id: "conv-uuid-from-public" }]);
+    await persistGeneratedAsset({
+      ...BASE,
+      kind: "image",
+      bytes: new Uint8Array([1]),
+      mimeType: "image/png",
+      conversationId: "cnv_9e49p5ne9bdmef5x57tsvw",
+    });
+    const row = mocks.values.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(mocks.msgSelect).toHaveBeenCalledTimes(1);
+    expect(row.conversationId).toBe("conv-uuid-from-public");
+  });
+
+  it("drops the linkage (never throws) when a public id matches no org conversation", async () => {
+    // Org-scoped resolution: a forged/foreign "cnv_…" id resolves to nothing,
+    // so the asset persists unlinked instead of linking cross-org or failing.
+    mocks.msgSelect.mockResolvedValueOnce([]);
+    await persistGeneratedAsset({
+      ...BASE,
+      kind: "image",
+      bytes: new Uint8Array([1]),
+      mimeType: "image/png",
+      conversationId: "cnv_not_in_this_org",
+    });
+    const row = mocks.values.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(row.conversationId).toBeUndefined();
+  });
+
   it("leaves conversationId undefined when neither id is supplied", async () => {
     await persistGeneratedAsset({
       ...BASE,

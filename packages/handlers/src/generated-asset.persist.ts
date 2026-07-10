@@ -9,7 +9,7 @@
 // identically by apps/app, apps/api, and the inngest workers.
 
 import { randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { schema, withSystemDb, type Tx } from "@oxagen/database";
 import { storage } from "@oxagen/storage";
 import { emitGeneratedFileSyncEvent } from "./generated-asset.sync-event";
@@ -128,7 +128,10 @@ function deriveDisplayName(
   const explicit = (displayName ?? "").trim();
   if (explicit.length > 0) return explicit.slice(0, 120);
   const firstLine = (prompt.split(/[\n.!?]/)[0] ?? prompt)
-    .replace(/^\s*(?:generate|create|make|write|build|render|draw|produce|compose)\b[^:\n-]*[:-]\s*/i, "")
+    .replace(
+      /^\s*(?:generate|create|make|write|build|render|draw|produce|compose)\b[^:\n-]*[:-]\s*/i,
+      "",
+    )
     .trim();
   return firstLine.length > 0 ? firstLine.slice(0, 80) : `${kind} file`;
 }
@@ -172,13 +175,35 @@ function buildMetadata(
  * Returns the explicit `conversationId` when supplied; otherwise the message's
  * conversation; otherwise null. Never throws — a generation must not fail just
  * because the linkage can't be resolved.
+ *
+ * Callers pass `conversationId` in one of two shapes: the internal UUID (the
+ * chat stream route, which already holds the row) or the client-facing public
+ * id ("cnv_…" — the composer upload path forwards it straight from the form).
+ * The `conversation_id` uuid column rejects a public id outright (every
+ * composer upload into an active conversation 500'd), so the public shape is
+ * resolved here — org-scoped, so a forged id can never link an asset into
+ * another org's conversation.
  */
 async function resolveConversationId(
   tx: Tx,
+  orgId: string,
   conversationId: string | null | undefined,
   messageId: string | null | undefined,
 ): Promise<string | null> {
-  if (conversationId) return conversationId;
+  if (conversationId) {
+    if (!conversationId.startsWith("cnv_")) return conversationId;
+    const [conv] = await tx
+      .select({ id: schema.conversations.id })
+      .from(schema.conversations)
+      .where(
+        and(
+          eq(schema.conversations.publicId, conversationId),
+          eq(schema.conversations.orgId, orgId),
+        ),
+      )
+      .limit(1);
+    return conv?.id ?? null;
+  }
   if (!messageId) return null;
   const [msg] = await tx
     .select({ conversationId: schema.messages.conversationId })
@@ -221,6 +246,7 @@ export async function persistGeneratedAsset(
   const [row] = await withSystemDb(async (tx) => {
     const conversationId = await resolveConversationId(
       tx,
+      args.orgId,
       args.conversationId,
       args.messageId,
     );
@@ -336,6 +362,7 @@ export async function createPendingGeneratedAsset(
   const [row] = await withSystemDb(async (tx) => {
     const conversationId = await resolveConversationId(
       tx,
+      args.orgId,
       args.conversationId,
       args.messageId,
     );
