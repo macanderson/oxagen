@@ -6,22 +6,22 @@
  * EngramMemory nodes. Then looks up full records from the episodic store.
  */
 import type { EpisodicStore } from "../store/episodic";
-import type { RetrievalCandidate, RetrievalEngine, RetrievalQuery } from "./types";
-
-/** Estimate token cost from body size. */
-function estimateTokens(body: unknown): number {
-  const str = typeof body === "string" ? body : JSON.stringify(body ?? {});
-  return Math.max(1, Math.ceil(str.length / 4));
-}
+import type {
+  RetrievalCandidate,
+  RetrievalEngine,
+  RetrievalQuery,
+} from "./types";
+import { estimateTokens } from "./types";
 
 /**
  * Interface for the Neo4j query function. Injected so this module doesn't
  * hard-depend on neo4j-driver or @oxagen/ontology.
  */
 export interface GraphQueryFn {
-  (cypher: string, params: Record<string, unknown>): Promise<
-    Array<{ recordId: string; salience: number }>
-  >;
+  (
+    cypher: string,
+    params: Record<string, unknown>,
+  ): Promise<Array<{ recordId: string; salience: number }>>;
 }
 
 export class GraphRetrievalEngine implements RetrievalEngine {

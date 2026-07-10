@@ -54,3 +54,9 @@ export interface RetrievalEngine {
   name: string;
   retrieve(query: RetrievalQuery): Promise<RetrievalCandidate[]>;
 }
+
+/** Estimate token cost from body size (rough: 1 token ≈ 4 chars). */
+export function estimateTokens(body: unknown): number {
+  const str = typeof body === "string" ? body : JSON.stringify(body ?? {});
+  return Math.max(1, Math.ceil(str.length / 4));
+}

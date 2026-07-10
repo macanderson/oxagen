@@ -6,13 +6,12 @@
  * to have run so records have embeddings.
  */
 import type { EpisodicStore } from "../store/episodic";
-import type { RetrievalCandidate, RetrievalEngine, RetrievalQuery } from "./types";
-
-/** Estimate token cost from body size. */
-function estimateTokens(body: unknown): number {
-  const str = typeof body === "string" ? body : JSON.stringify(body ?? {});
-  return Math.max(1, Math.ceil(str.length / 4));
-}
+import type {
+  RetrievalCandidate,
+  RetrievalEngine,
+  RetrievalQuery,
+} from "./types";
+import { estimateTokens } from "./types";
 
 /**
  * Function that generates an embedding from text.
@@ -25,9 +24,10 @@ export type EmbedFn = (text: string) => Promise<number[]>;
  * Returns recordId + cosine similarity score.
  */
 export interface VectorQueryFn {
-  (embedding: number[], opts: { orgId: string; workspaceId: string; limit: number }): Promise<
-    Array<{ recordId: string; score: number }>
-  >;
+  (
+    embedding: number[],
+    opts: { orgId: string; workspaceId: string; limit: number },
+  ): Promise<Array<{ recordId: string; score: number }>>;
 }
 
 export class VectorRetrievalEngine implements RetrievalEngine {
@@ -36,7 +36,11 @@ export class VectorRetrievalEngine implements RetrievalEngine {
   private embedFn: EmbedFn;
   private vectorQuery: VectorQueryFn;
 
-  constructor(store: EpisodicStore, embedFn: EmbedFn, vectorQuery: VectorQueryFn) {
+  constructor(
+    store: EpisodicStore,
+    embedFn: EmbedFn,
+    vectorQuery: VectorQueryFn,
+  ) {
     this.store = store;
     this.embedFn = embedFn;
     this.vectorQuery = vectorQuery;
