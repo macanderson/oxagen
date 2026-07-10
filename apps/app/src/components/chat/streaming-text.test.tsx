@@ -13,9 +13,11 @@ import { render, screen, cleanup } from "@testing-library/react";
 
 afterEach(cleanup);
 
-// Mock reduced motion to true so text renders immediately
+// Reduced motion defaults to true so text renders immediately; individual
+// tests flip it to false to exercise the animated reveal path.
+const motionMock = vi.hoisted(() => ({ reduced: true }));
 vi.mock("motion/react", () => ({
-  useReducedMotion: () => true,
+  useReducedMotion: () => motionMock.reduced,
 }));
 
 vi.mock("@/lib/utils", () => ({
@@ -58,6 +60,27 @@ describe("StreamingText", () => {
     const { StreamingText } = await import("./streaming-text");
     render(<StreamingText text="Streaming" isStreaming={true} />);
     expect(document.querySelector(".stream-caret")).not.toBeInTheDocument();
+  });
+
+  it("renders no caret mid-reveal with motion enabled (the state that used to show one)", async () => {
+    motionMock.reduced = false;
+    // A no-op rAF freezes the reveal at count=0, pinning the component in the
+    // mid-reveal state (count < text.length) where the caret used to render.
+    vi.stubGlobal("requestAnimationFrame", vi.fn());
+    vi.stubGlobal("cancelAnimationFrame", vi.fn());
+    try {
+      const { StreamingText } = await import("./streaming-text");
+      render(
+        <StreamingText
+          text="Streaming reveal in progress"
+          isStreaming={true}
+        />,
+      );
+      expect(document.querySelector(".stream-caret")).not.toBeInTheDocument();
+    } finally {
+      vi.unstubAllGlobals();
+      motionMock.reduced = true;
+    }
   });
 
   it("renders no caret when not streaming", async () => {
