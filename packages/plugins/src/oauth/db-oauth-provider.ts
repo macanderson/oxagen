@@ -17,8 +17,12 @@ import type {
   OAuthClientMetadata,
   OAuthTokens,
 } from "@modelcontextprotocol/sdk/shared/auth.js";
-import { setWorkspaceSecret, getWorkspaceSecret } from "../credentials/workspace-credential";
+import {
+  setWorkspaceSecret,
+  getWorkspaceSecret,
+} from "../credentials/workspace-credential";
 import { saveOAuthState, loadOAuthState } from "./state-store";
+import { preregisteredClientForEndpoint } from "./preregistered-clients";
 
 export interface DbProviderCtx {
   orgId: string;
@@ -34,6 +38,13 @@ export interface DbProviderCtx {
   clientName: string;
   /** Returns current time in ms — injectable for testing. */
   now: () => number;
+  /**
+   * The MCP server's endpoint URL. When set, providers that do not support
+   * RFC 7591 dynamic client registration (GitHub) can still authenticate via
+   * a pre-registered client configured in MCP_OAUTH_PREREGISTERED_CLIENTS,
+   * matched by this URL's host.
+   */
+  serverUrl?: string;
 }
 
 export class DbOAuthClientProvider implements OAuthClientProvider {
@@ -72,16 +83,30 @@ export class DbOAuthClientProvider implements OAuthClientProvider {
       workspaceId: this.c.workspaceId,
       orgListingId: this.c.orgListingId,
     });
-    if (!cred?.oauthClientId) return undefined;
+    if (!cred?.oauthClientId) {
+      // No DCR result stored. Fall back to a platform-level pre-registered
+      // client (env-configured, matched by endpoint host) — the only way to
+      // authenticate against authorization servers without a
+      // registration_endpoint (GitHub). The SDK checks clientInformation()
+      // before attempting DCR, so returning one here skips registration.
+      if (this.c.serverUrl) {
+        return preregisteredClientForEndpoint(this.c.serverUrl);
+      }
+      return undefined;
+    }
     // Return the minimal OAuthClientInformation shape.
     const info: OAuthClientInformation = {
       client_id: cred.oauthClientId,
-      ...(cred.oauthClientSecret ? { client_secret: cred.oauthClientSecret } : {}),
+      ...(cred.oauthClientSecret
+        ? { client_secret: cred.oauthClientSecret }
+        : {}),
     };
     return info;
   }
 
-  async saveClientInformation(info: OAuthClientInformationMixed): Promise<void> {
+  async saveClientInformation(
+    info: OAuthClientInformationMixed,
+  ): Promise<void> {
     // Cache full info for the lifetime of this provider instance.
     this.clientInfoCache = info as OAuthClientInformationFull;
     // Persist to mcp.credentials (oauthClientId plain, oauthClientSecret encrypted).
