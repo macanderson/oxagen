@@ -30,6 +30,8 @@ import {
 } from "react";
 import { cn } from "@/lib/utils";
 import { parseAnsiLine } from "@/components/chat/registry-components/terminal-trace-card";
+// Shared GitHub light/dark palette — same surface as the trace card & log console.
+import "@/components/chat/registry-components/code-surface.css";
 
 /** Result of one command, minus the command text (the caller supplies that). */
 export interface SandboxExecResult {
@@ -99,7 +101,7 @@ function AnsiLines({ text }: { text: string }) {
 
 function ExitTag({ entry }: { entry: TerminalEntry }) {
   if (entry.status === "running") {
-    return <span className="text-neutral-500">running…</span>;
+    return <span className="code-fg-muted">running…</span>;
   }
   if (entry.status === "error") {
     return <span className="text-error">error</span>;
@@ -249,12 +251,12 @@ export function SandboxTerminal({
   return (
     <div
       className={cn(
-        "flex flex-col overflow-hidden rounded-xl border border-border bg-black/90",
+        "code-surface flex flex-col overflow-hidden rounded-xl border",
         className,
       )}
     >
-      <div className="flex items-center justify-between border-b border-white/10 px-3 py-2">
-        <span className="font-mono text-xs text-neutral-400">
+      <div className="code-border flex items-center justify-between border-b px-3 py-2">
+        <span className="code-fg-muted font-mono text-xs">
           terminal · {shortId}
         </span>
         {busy ? (
@@ -268,16 +270,16 @@ export function SandboxTerminal({
         aria-label="Sandbox terminal output"
         aria-live="polite"
         data-testid="sandbox-terminal-scrollback"
-        className="max-h-[28rem] min-h-[12rem] flex-1 overflow-y-auto overflow-x-auto p-3 font-mono text-xs leading-relaxed text-neutral-200"
+        className="max-h-[28rem] min-h-[12rem] flex-1 overflow-y-auto overflow-x-auto p-3 font-mono text-xs leading-relaxed"
       >
         {welcome ? (
-          <div className="mb-2 whitespace-pre-wrap text-neutral-500">
+          <div className="code-fg-muted mb-2 whitespace-pre-wrap">
             {welcome}
           </div>
         ) : null}
 
         {entries.length === 0 && !welcome ? (
-          <div className="text-neutral-600">
+          <div className="code-fg-faint">
             Type a command and press Enter to run it in this sandbox.
           </div>
         ) : null}
@@ -294,7 +296,7 @@ export function SandboxTerminal({
                 </span>
               ) : null}
               <span className="shrink-0 text-success">$</span>
-              <span className="whitespace-pre-wrap break-words text-neutral-100">
+              <span className="code-fg whitespace-pre-wrap break-words">
                 {entry.command}
               </span>
             </div>
@@ -311,7 +313,7 @@ export function SandboxTerminal({
         ))}
       </div>
 
-      <div className="flex items-center gap-2 border-t border-white/10 px-3 py-2">
+      <div className="code-border flex items-center gap-2 border-t border-t px-3 py-2">
         {cwd ? (
           <span
             data-testid="sandbox-terminal-cwd"
@@ -337,7 +339,7 @@ export function SandboxTerminal({
           autoComplete="off"
           autoCapitalize="off"
           className={cn(
-            "flex-1 bg-transparent font-mono text-xs text-neutral-100 placeholder:text-neutral-600",
+            "code-fg flex-1 bg-transparent font-mono text-xs placeholder:text-[color:var(--code-fg-faint)]",
             "focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-60",
           )}
         />

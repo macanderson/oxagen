@@ -56,7 +56,7 @@ export async function fetchSandboxLogs(args: {
   const result = await clickhouse().query({
     query: `
       SELECT
-        toString(ts) AS ts,
+        toString(ts) AS ts_text,
         stream,
         level,
         command,
@@ -84,7 +84,12 @@ export async function fetchSandboxLogs(args: {
   });
 
   interface Raw {
-    ts: string;
+    // Aliased `ts_text` (not `ts`) so the raw DateTime64 column stays bound in
+    // the WHERE/ORDER BY clauses. A `toString(ts) AS ts` alias shadows the
+    // column, making ClickHouse compare the String alias against the
+    // `{since:DateTime64(3)}` param — "No operation greaterOrEquals between
+    // String and DateTime64(3)".
+    ts_text: string;
     stream: string;
     level: string;
     command: string;
@@ -96,7 +101,7 @@ export async function fetchSandboxLogs(args: {
   const rows = (await result.json()) as Raw[];
   // Fetched newest-first for the tail; hand back oldest-first for the console.
   return rows.reverse().map((r) => ({
-    ts: r.ts,
+    ts: r.ts_text,
     stream: (r.stream === "stderr" || r.stream === "system" ? r.stream : "stdout") as SandboxLogLine["stream"],
     level: r.level === "debug" ? "debug" : "normal",
     command: r.command,
