@@ -49,8 +49,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  withSystemDb: mockWithSystemDb,
-
+    withSystemDb: mockWithSystemDb,
   };
 });
 
@@ -100,9 +99,16 @@ describe("resolveOrg", () => {
 
   // (a) Returns mapped fields on success
   it("returns ResolvedOrg with correct mapped fields", async () => {
-    setMockRows([{ id: "org-1", publicId: "pub-1", name: "Acme", slug: "acme" }]);
+    setMockRows([
+      { id: "org-1", publicId: "pub-1", name: "Acme", slug: "acme" },
+    ]);
     const result = await resolveOrg("acme");
-    expect(result).toEqual({ id: "org-1", publicId: "pub-1", name: "Acme", slug: "acme" });
+    expect(result).toEqual({
+      id: "org-1",
+      publicId: "pub-1",
+      name: "Acme",
+      slug: "acme",
+    });
   });
 
   // (b) Calls notFound() when empty
@@ -158,7 +164,15 @@ describe("resolveWorkspace", () => {
 
   // (c) Returns mapped fields on success
   it("returns ResolvedWorkspace with correct mapped fields", async () => {
-    setMockRows([{ id: "ws-1", publicId: "pub-ws-1", orgId: "org-1", name: "Production", slug: "prod" }]);
+    setMockRows([
+      {
+        id: "ws-1",
+        publicId: "pub-ws-1",
+        orgId: "org-1",
+        name: "Production",
+        slug: "prod",
+      },
+    ]);
     const result = await resolveWorkspace("org-1", "prod");
     expect(result).toEqual({
       id: "ws-1",
@@ -168,6 +182,8 @@ describe("resolveWorkspace", () => {
       slug: "prod",
       // description is derived from the settings JSONB bag; absent settings → "".
       description: "",
+      // avatarUrl maps straight off the row; absent → null.
+      avatarUrl: null,
     });
   });
 
@@ -208,13 +224,23 @@ describe("resolveWorkspace", () => {
   // (d) Calls notFound() when empty
   it("calls notFound() when no workspace row is returned", async () => {
     setMockRows([]);
-    await expect(resolveWorkspace("org-1", "missing")).rejects.toThrow("NEXT_NOT_FOUND");
+    await expect(resolveWorkspace("org-1", "missing")).rejects.toThrow(
+      "NEXT_NOT_FOUND",
+    );
     expect(notFoundMock).toHaveBeenCalledOnce();
   });
 
   // (e) Chains orgId + slug correctly
   it("passes both orgId and slug to the where clause", async () => {
-    setMockRows([{ id: "ws-2", publicId: "pub-ws-2", orgId: "org-2", name: "Staging", slug: "staging" }]);
+    setMockRows([
+      {
+        id: "ws-2",
+        publicId: "pub-ws-2",
+        orgId: "org-2",
+        name: "Staging",
+        slug: "staging",
+      },
+    ]);
     await resolveWorkspace("org-2", "staging");
 
     // The where mock receives the and() expression; check that eq() was called
@@ -245,7 +271,9 @@ describe("assertBillingManager", () => {
   for (const role of BILLING_MANAGER_ROLES) {
     it(`role '${role}' passes without calling notFound()`, async () => {
       setMockRows([{ role }]);
-      await expect(assertBillingManager("org-1", "user-1")).resolves.toBeUndefined();
+      await expect(
+        assertBillingManager("org-1", "user-1"),
+      ).resolves.toBeUndefined();
       expect(notFoundMock).not.toHaveBeenCalled();
     });
   }
@@ -253,20 +281,26 @@ describe("assertBillingManager", () => {
   for (const role of NON_MANAGER_ROLES) {
     it(`role '${role}' → notFound()`, async () => {
       setMockRows([{ role }]);
-      await expect(assertBillingManager("org-1", "user-1")).rejects.toThrow("NEXT_NOT_FOUND");
+      await expect(assertBillingManager("org-1", "user-1")).rejects.toThrow(
+        "NEXT_NOT_FOUND",
+      );
       expect(notFoundMock).toHaveBeenCalledOnce();
     });
   }
 
   it("no row (non-member) → notFound()", async () => {
     setMockRows([]);
-    await expect(assertBillingManager("org-1", "user-x")).rejects.toThrow("NEXT_NOT_FOUND");
+    await expect(assertBillingManager("org-1", "user-x")).rejects.toThrow(
+      "NEXT_NOT_FOUND",
+    );
     expect(notFoundMock).toHaveBeenCalledOnce();
   });
 
   it("null role field → notFound()", async () => {
     setMockRows([{ role: null }]);
-    await expect(assertBillingManager("org-1", "user-1")).rejects.toThrow("NEXT_NOT_FOUND");
+    await expect(assertBillingManager("org-1", "user-1")).rejects.toThrow(
+      "NEXT_NOT_FOUND",
+    );
     expect(notFoundMock).toHaveBeenCalledOnce();
   });
 });
@@ -298,20 +332,26 @@ describe("assertOrgAdmin", () => {
   for (const role of NON_ADMIN_ROLES) {
     it(`role '${role}' → notFound()`, async () => {
       setMockRows([{ role }]);
-      await expect(assertOrgAdmin("org-1", "user-1")).rejects.toThrow("NEXT_NOT_FOUND");
+      await expect(assertOrgAdmin("org-1", "user-1")).rejects.toThrow(
+        "NEXT_NOT_FOUND",
+      );
       expect(notFoundMock).toHaveBeenCalledOnce();
     });
   }
 
   it("no row (non-member) → notFound()", async () => {
     setMockRows([]);
-    await expect(assertOrgAdmin("org-1", "user-x")).rejects.toThrow("NEXT_NOT_FOUND");
+    await expect(assertOrgAdmin("org-1", "user-x")).rejects.toThrow(
+      "NEXT_NOT_FOUND",
+    );
     expect(notFoundMock).toHaveBeenCalledOnce();
   });
 
   it("null role field → notFound()", async () => {
     setMockRows([{ role: null }]);
-    await expect(assertOrgAdmin("org-1", "user-1")).rejects.toThrow("NEXT_NOT_FOUND");
+    await expect(assertOrgAdmin("org-1", "user-1")).rejects.toThrow(
+      "NEXT_NOT_FOUND",
+    );
     expect(notFoundMock).toHaveBeenCalledOnce();
   });
 });

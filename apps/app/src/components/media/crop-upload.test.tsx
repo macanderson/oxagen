@@ -12,14 +12,21 @@ import * as React from "react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, cleanup, waitFor, act } from "@testing-library/react";
 import type { Area } from "react-easy-crop";
-import { getCroppedBlob, uploadAvatarBlob, useCropUpload, CropSurface } from "./crop-upload";
+import {
+  getCroppedBlob,
+  uploadAvatarBlob,
+  useCropUpload,
+  CropSurface,
+} from "./crop-upload";
 
 afterEach(cleanup);
 
 // react-easy-crop relies on canvas/DOM measurement APIs that jsdom doesn't
 // implement; stub it the same way avatar-upload.test.tsx does.
 vi.mock("react-easy-crop", () => ({
-  default: ({ zoom }: { zoom: number }) => <div data-testid="cropper" data-zoom={zoom} />,
+  default: ({ zoom }: { zoom: number }) => (
+    <div data-testid="cropper" data-zoom={zoom} />
+  ),
 }));
 vi.mock("react-easy-crop/react-easy-crop.css", () => ({}));
 
@@ -39,9 +46,13 @@ describe("getCroppedBlob", () => {
 
     HTMLCanvasElement.prototype.getContext = vi
       .fn()
-      .mockReturnValue({ drawImage: vi.fn() }) as unknown as typeof HTMLCanvasElement.prototype.getContext;
+      .mockReturnValue({
+        drawImage: vi.fn(),
+      }) as unknown as typeof HTMLCanvasElement.prototype.getContext;
 
-    HTMLCanvasElement.prototype.toBlob = vi.fn(function toBlob(callback: BlobCallback) {
+    HTMLCanvasElement.prototype.toBlob = vi.fn(function toBlob(
+      callback: BlobCallback,
+    ) {
       callback(new Blob(["fake-image-bytes"], { type: "image/webp" }));
     }) as unknown as typeof HTMLCanvasElement.prototype.toBlob;
 
@@ -80,38 +91,47 @@ describe("getCroppedBlob", () => {
   it("rejects when the canvas 2d context is unavailable", async () => {
     HTMLCanvasElement.prototype.getContext = vi
       .fn()
-      .mockReturnValue(null) as unknown as typeof HTMLCanvasElement.prototype.getContext;
+      .mockReturnValue(
+        null,
+      ) as unknown as typeof HTMLCanvasElement.prototype.getContext;
 
-    await expect(getCroppedBlob("data:image/png;base64,abc", AREA)).rejects.toThrow(
-      /canvas 2d context unavailable/i,
-    );
+    await expect(
+      getCroppedBlob("data:image/png;base64,abc", AREA),
+    ).rejects.toThrow(/canvas 2d context unavailable/i);
   });
 
   it("rejects when canvas.toBlob produces null", async () => {
-    HTMLCanvasElement.prototype.toBlob = vi.fn(function toBlob(callback: BlobCallback) {
+    HTMLCanvasElement.prototype.toBlob = vi.fn(function toBlob(
+      callback: BlobCallback,
+    ) {
       callback(null);
     }) as unknown as typeof HTMLCanvasElement.prototype.toBlob;
 
-    await expect(getCroppedBlob("data:image/png;base64,abc", AREA)).rejects.toThrow(
-      /canvas\.toBlob produced null/i,
-    );
+    await expect(
+      getCroppedBlob("data:image/png;base64,abc", AREA),
+    ).rejects.toThrow(/canvas\.toBlob produced null/i);
   });
 
   it("rejects when the source image fails to load", async () => {
     vi.stubGlobal(
       "Image",
       class {
-        onerror: (() => void) | null = null;
-        addEventListener(event: string, cb: () => void) {
+        onerror: ((event: Event) => void) | null = null;
+        addEventListener(event: string, cb: (event: Event) => void) {
           if (event === "error") this.onerror = cb;
         }
         set src(_value: string) {
-          queueMicrotask(() => this.onerror?.());
+          // Real DOM invokes the "error" listener WITH an ErrorEvent — the
+          // implementation rejects with that event, so the fake must pass one
+          // or the rejection value is undefined and toBeDefined() fails.
+          queueMicrotask(() => this.onerror?.(new Event("error")));
         }
       },
     );
 
-    await expect(getCroppedBlob("data:image/png;base64,bad", AREA)).rejects.toBeDefined();
+    await expect(
+      getCroppedBlob("data:image/png;base64,bad", AREA),
+    ).rejects.toBeDefined();
   });
 });
 
@@ -129,16 +149,26 @@ describe("uploadAvatarBlob", () => {
   it("returns the CDN URL on a successful upload", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue({ ok: true, json: async () => ({ url: "https://cdn.example.com/a.webp" }) }),
+      vi
+        .fn()
+        .mockResolvedValue({
+          ok: true,
+          json: async () => ({ url: "https://cdn.example.com/a.webp" }),
+        }),
     );
 
-    await expect(uploadAvatarBlob(blob)).resolves.toBe("https://cdn.example.com/a.webp");
+    await expect(uploadAvatarBlob(blob)).resolves.toBe(
+      "https://cdn.example.com/a.webp",
+    );
   });
 
   it("POSTs to /api/v1/upload/avatar with a multipart form", async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValue({ ok: true, json: async () => ({ url: "https://cdn.example.com/a.webp" }) });
+      .mockResolvedValue({
+        ok: true,
+        json: async () => ({ url: "https://cdn.example.com/a.webp" }),
+      });
     vi.stubGlobal("fetch", fetchMock);
 
     await uploadAvatarBlob(blob);
@@ -152,22 +182,40 @@ describe("uploadAvatarBlob", () => {
   it("throws the server's error message on a failed response", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue({ ok: false, status: 400, json: async () => ({ error: "Bad image" }) }),
+      vi
+        .fn()
+        .mockResolvedValue({
+          ok: false,
+          status: 400,
+          json: async () => ({ error: "Bad image" }),
+        }),
     );
 
     await expect(uploadAvatarBlob(blob)).rejects.toThrow("Bad image");
   });
 
   it("throws a generic status message when the server omits an error field", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 500, json: async () => ({}) }));
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue({ ok: false, status: 500, json: async () => ({}) }),
+    );
 
-    await expect(uploadAvatarBlob(blob)).rejects.toThrow(/Upload failed \(500\)/);
+    await expect(uploadAvatarBlob(blob)).rejects.toThrow(
+      /Upload failed \(500\)/,
+    );
   });
 
   it("throws when the server reports success but returns no url", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }),
+    );
 
-    await expect(uploadAvatarBlob(blob)).rejects.toThrow(/Server returned no URL/i);
+    await expect(uploadAvatarBlob(blob)).rejects.toThrow(
+      /Server returned no URL/i,
+    );
   });
 });
 
@@ -238,7 +286,11 @@ describe("CropSurface", () => {
 // ---------------------------------------------------------------------------
 
 /** Minimal harness exposing every useCropUpload field/handler as clickable buttons. */
-function CropUploadHarness({ onUploaded }: { onUploaded: (url: string) => void }) {
+function CropUploadHarness({
+  onUploaded,
+}: {
+  onUploaded: (url: string) => void;
+}) {
   const cropUpload = useCropUpload({ onUploaded });
 
   return (
@@ -262,10 +314,18 @@ function CropUploadHarness({ onUploaded }: { onUploaded: (url: string) => void }
       >
         Complete crop
       </button>
-      <button type="button" data-testid="save" onClick={() => void cropUpload.save()}>
+      <button
+        type="button"
+        data-testid="save"
+        onClick={() => void cropUpload.save()}
+      >
         Save
       </button>
-      <button type="button" data-testid="reset" onClick={() => cropUpload.reset()}>
+      <button
+        type="button"
+        data-testid="reset"
+        onClick={() => cropUpload.reset()}
+      >
         Reset
       </button>
     </div>
@@ -282,8 +342,12 @@ describe("useCropUpload", () => {
 
     HTMLCanvasElement.prototype.getContext = vi
       .fn()
-      .mockReturnValue({ drawImage: vi.fn() }) as unknown as typeof HTMLCanvasElement.prototype.getContext;
-    HTMLCanvasElement.prototype.toBlob = vi.fn(function toBlob(callback: BlobCallback) {
+      .mockReturnValue({
+        drawImage: vi.fn(),
+      }) as unknown as typeof HTMLCanvasElement.prototype.getContext;
+    HTMLCanvasElement.prototype.toBlob = vi.fn(function toBlob(
+      callback: BlobCallback,
+    ) {
       callback(new Blob(["fake"], { type: "image/webp" }));
     }) as unknown as typeof HTMLCanvasElement.prototype.toBlob;
 
@@ -307,7 +371,12 @@ describe("useCropUpload", () => {
 
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue({ ok: true, json: async () => ({ url: "https://cdn.example.com/cropped.webp" }) }),
+      vi
+        .fn()
+        .mockResolvedValue({
+          ok: true,
+          json: async () => ({ url: "https://cdn.example.com/cropped.webp" }),
+        }),
     );
   });
 
@@ -333,7 +402,9 @@ describe("useCropUpload", () => {
       input.dispatchEvent(new Event("change", { bubbles: true }));
     });
 
-    await waitFor(() => expect(screen.getByTestId("has-image")).toHaveTextContent("true"));
+    await waitFor(() =>
+      expect(screen.getByTestId("has-image")).toHaveTextContent("true"),
+    );
   });
 
   it("sets canSave once a crop region is reported", async () => {
@@ -345,7 +416,9 @@ describe("useCropUpload", () => {
       Object.defineProperty(input, "files", { value: [file] });
       input.dispatchEvent(new Event("change", { bubbles: true }));
     });
-    await waitFor(() => expect(screen.getByTestId("has-image")).toHaveTextContent("true"));
+    await waitFor(() =>
+      expect(screen.getByTestId("has-image")).toHaveTextContent("true"),
+    );
 
     await act(async () => {
       screen.getByTestId("complete-crop").click();
@@ -364,7 +437,9 @@ describe("useCropUpload", () => {
       Object.defineProperty(input, "files", { value: [file] });
       input.dispatchEvent(new Event("change", { bubbles: true }));
     });
-    await waitFor(() => expect(screen.getByTestId("has-image")).toHaveTextContent("true"));
+    await waitFor(() =>
+      expect(screen.getByTestId("has-image")).toHaveTextContent("true"),
+    );
 
     await act(async () => {
       screen.getByTestId("complete-crop").click();
@@ -374,13 +449,23 @@ describe("useCropUpload", () => {
       screen.getByTestId("save").click();
     });
 
-    await waitFor(() => expect(onUploaded).toHaveBeenCalledWith("https://cdn.example.com/cropped.webp"));
+    await waitFor(() =>
+      expect(onUploaded).toHaveBeenCalledWith(
+        "https://cdn.example.com/cropped.webp",
+      ),
+    );
   });
 
   it("surfaces an error message and does not call onUploaded when the upload fails", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue({ ok: false, status: 500, json: async () => ({ error: "Server exploded" }) }),
+      vi
+        .fn()
+        .mockResolvedValue({
+          ok: false,
+          status: 500,
+          json: async () => ({ error: "Server exploded" }),
+        }),
     );
     const onUploaded = vi.fn();
     render(<CropUploadHarness onUploaded={onUploaded} />);
@@ -391,7 +476,9 @@ describe("useCropUpload", () => {
       Object.defineProperty(input, "files", { value: [file] });
       input.dispatchEvent(new Event("change", { bubbles: true }));
     });
-    await waitFor(() => expect(screen.getByTestId("has-image")).toHaveTextContent("true"));
+    await waitFor(() =>
+      expect(screen.getByTestId("has-image")).toHaveTextContent("true"),
+    );
 
     await act(async () => {
       screen.getByTestId("complete-crop").click();
@@ -400,14 +487,22 @@ describe("useCropUpload", () => {
       screen.getByTestId("save").click();
     });
 
-    await waitFor(() => expect(screen.getByTestId("error")).toHaveTextContent("Server exploded"));
+    await waitFor(() =>
+      expect(screen.getByTestId("error")).toHaveTextContent("Server exploded"),
+    );
     expect(onUploaded).not.toHaveBeenCalled();
   });
 
   it("reset() clears image, error, and canSave", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue({ ok: false, status: 500, json: async () => ({ error: "Server exploded" }) }),
+      vi
+        .fn()
+        .mockResolvedValue({
+          ok: false,
+          status: 500,
+          json: async () => ({ error: "Server exploded" }),
+        }),
     );
     render(<CropUploadHarness onUploaded={vi.fn()} />);
     const file = new File(["fake-bytes"], "photo.png", { type: "image/png" });
@@ -417,14 +512,18 @@ describe("useCropUpload", () => {
       Object.defineProperty(input, "files", { value: [file] });
       input.dispatchEvent(new Event("change", { bubbles: true }));
     });
-    await waitFor(() => expect(screen.getByTestId("has-image")).toHaveTextContent("true"));
+    await waitFor(() =>
+      expect(screen.getByTestId("has-image")).toHaveTextContent("true"),
+    );
     await act(async () => {
       screen.getByTestId("complete-crop").click();
     });
     await act(async () => {
       screen.getByTestId("save").click();
     });
-    await waitFor(() => expect(screen.getByTestId("error")).toHaveTextContent("Server exploded"));
+    await waitFor(() =>
+      expect(screen.getByTestId("error")).toHaveTextContent("Server exploded"),
+    );
 
     await act(async () => {
       screen.getByTestId("reset").click();
