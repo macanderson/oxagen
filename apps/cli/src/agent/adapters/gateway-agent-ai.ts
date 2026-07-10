@@ -187,6 +187,11 @@ export function createGatewayAgentAi(opts: GatewayAgentAiOptions = {}): AgentAi 
         tools: args.tools,
         stopWhen: args.stopWhen,
         abortSignal: args.abortSignal,
+        // The engine's step loop owns retries (classified retryable-vs-fatal,
+        // jittered backoff, maxRetries 4) — leaving the SDK default (2) under
+        // it multiplies upstream attempts on a flaky gateway and blocks abort
+        // while the inner retries spin. Same treatment as generateObject.
+        maxRetries: 0,
         ...(providerOptions ? { providerOptions } : {}),
         onError: args.onError,
         // ALWAYS defined (even when the caller passes no onStepFinish) so we can
