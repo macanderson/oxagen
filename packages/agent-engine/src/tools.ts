@@ -35,6 +35,24 @@ export function clip(text: string): string {
   return `${head}\n… [${dropped} chars truncated from the middle — head + tail kept]\n${tail}`;
 }
 
+// ── Workspace-root path display (worktree divergence guard) ─────────────────
+// File tools resolve RELATIVE paths against the workspace root captured at
+// session start — never against wherever the last `bash` command `cd`-ed
+// (each bash call is a fresh shell in the root; `cd` does not persist). When
+// an agent works in a different checkout — e.g. a git worktree it created via
+// bash — a relative-path write silently lands in the LAUNCH directory, and
+// every bash verification in the worktree then reads back unchanged files:
+// "my edits aren't being written to disk". Echoing the RESOLVED absolute path
+// in every mutation result makes the divergence visible on the very first
+// write, so the model can self-correct by switching to absolute paths.
+
+/** Absolute display path for a mutation result: relative paths join `root`. */
+export function resolveDisplayPath(root: string, p: string): string {
+  if (p.startsWith("/") || /^[A-Za-z]:[\\/]/.test(p)) return p; // already absolute
+  const base = root.endsWith("/") ? root.slice(0, -1) : root;
+  return base === "" ? `/${p}` : `${base}/${p}`;
+}
+
 // ── read_file line numbering ─────────────────────────────────────────────────
 
 /**
@@ -420,7 +438,9 @@ export function buildWorkspaceTools(
 
     write_file: tool({
       description:
-        "Write (create or overwrite) a file with the given content. Creates parent directories as needed.",
+        "Write (create or overwrite) a file with the given content. Creates parent directories as needed. " +
+        "Relative paths resolve against the session workspace root — NOT the cwd of any prior `bash` " +
+        "command — so pass absolute paths when working outside it (e.g. in a git worktree).",
       inputSchema: z.object({
         path: z.string(),
         content: z.string(),
@@ -438,7 +458,7 @@ export function buildWorkspaceTools(
             try {
               await workspace.writeFile(path, content);
               onEvent({ type: "file-edit", path, bytes: content.length });
-              return `Wrote ${content.length} bytes to ${path}`;
+              return `Wrote ${content.length} bytes to ${resolveDisplayPath(workspace.root, path)}`;
             } catch (err) {
               return `Error writing ${path}: ${err instanceof Error ? err.message : String(err)}`;
             }
@@ -451,7 +471,9 @@ export function buildWorkspaceTools(
       description:
         "Replace an exact substring in a file. By default old_string must appear " +
         "exactly once; set replace_all:true to replace every occurrence. Use for " +
-        "surgical edits.",
+        "surgical edits. Relative paths resolve against the session workspace root — " +
+        "NOT the cwd of any prior `bash` command — so pass absolute paths when " +
+        "working outside it (e.g. in a git worktree).",
       inputSchema: z.object({
         path: z.string(),
         old_string: z.string().describe("Exact text to replace."),
@@ -483,9 +505,10 @@ export function buildWorkspaceTools(
                 },
               );
               onEvent({ type: "file-edit", path, bytes: new_string.length });
+              const shown = resolveDisplayPath(workspace.root, path);
               return replace_all
-                ? `Edited ${path} (${count} replacement${count === 1 ? "" : "s"})`
-                : `Edited ${path}`;
+                ? `Edited ${shown} (${count} replacement${count === 1 ? "" : "s"})`
+                : `Edited ${shown}`;
             } catch (err) {
               return `Error editing ${path}: ${err instanceof Error ? err.message : String(err)}`;
             }
