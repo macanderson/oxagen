@@ -70,14 +70,12 @@ function makeExecReq(
   };
 }
 
-function makeFetch(
-  status: number,
-  body: unknown,
-): typeof fetch {
+function makeFetch(status: number, body: unknown): typeof fetch {
   return vi.fn().mockResolvedValue({
     ok: status >= 200 && status < 300,
     status,
-    text: () => Promise.resolve(typeof body === "string" ? body : JSON.stringify(body)),
+    text: () =>
+      Promise.resolve(typeof body === "string" ? body : JSON.stringify(body)),
     json: () => Promise.resolve(body),
   }) as unknown as typeof fetch;
 }
@@ -113,22 +111,30 @@ describe("createModalSandbox — run() HTTP 200 success", () => {
 
   it("passes language, code, timeoutMs, memoryMb, network, orgId, workspaceId to the runner", async () => {
     const fetchSpy = makeFetch(200, {
-      exit_code: 0, stdout: "", stderr: "", duration_ms: 1, timed_out: false, oom_killed: false,
+      exit_code: 0,
+      stdout: "",
+      stderr: "",
+      duration_ms: 1,
+      timed_out: false,
+      oom_killed: false,
     });
     const driver = createModalSandbox({ ...BASE_CONFIG, fetchImpl: fetchSpy });
 
-    await driver.run(makeReq({
-      language: "python",
-      code: "print('ok')",
-      timeoutMs: 10_000,
-      memoryMb: 512,
-      network: "allow",
-      orgId: "org_abc",
-      workspaceId: "wrk_xyz",
-    }));
+    await driver.run(
+      makeReq({
+        language: "python",
+        code: "print('ok')",
+        timeoutMs: 10_000,
+        memoryMb: 512,
+        network: "allow",
+        orgId: "org_abc",
+        workspaceId: "wrk_xyz",
+      }),
+    );
 
     expect(fetchSpy).toHaveBeenCalledOnce();
-    const [url, init] = (fetchSpy as ReturnType<typeof vi.fn>).mock.calls[0] as [string, RequestInit];
+    const [url, init] = (fetchSpy as ReturnType<typeof vi.fn>).mock
+      .calls[0] as [string, RequestInit];
     expect(url).toBe("https://example.modal.run/run");
     const body = JSON.parse(init.body as string) as {
       language: string;
@@ -150,20 +156,35 @@ describe("createModalSandbox — run() HTTP 200 success", () => {
 
   it("forwards the workspace files map to the runner", async () => {
     const fetchSpy = makeFetch(200, {
-      exit_code: 0, stdout: "", stderr: "", duration_ms: 1, timed_out: false, oom_killed: false,
+      exit_code: 0,
+      stdout: "",
+      stderr: "",
+      duration_ms: 1,
+      timed_out: false,
+      oom_killed: false,
     });
     const driver = createModalSandbox({ ...BASE_CONFIG, fetchImpl: fetchSpy });
 
     await driver.run(makeReq({ files: { "util.js": "1", "src/a.js": "2" } }));
 
-    const [, init] = (fetchSpy as ReturnType<typeof vi.fn>).mock.calls[0] as [string, RequestInit];
-    const body = JSON.parse(init.body as string) as { files?: Record<string, string> };
+    const [, init] = (fetchSpy as ReturnType<typeof vi.fn>).mock.calls[0] as [
+      string,
+      RequestInit,
+    ];
+    const body = JSON.parse(init.body as string) as {
+      files?: Record<string, string>;
+    };
     expect(body.files).toEqual({ "util.js": "1", "src/a.js": "2" });
   });
 
   it("sends a template's imageRef as the runner image, overriding the language default", async () => {
     const fetchSpy = makeFetch(200, {
-      exit_code: 0, stdout: "", stderr: "", duration_ms: 1, timed_out: false, oom_killed: false,
+      exit_code: 0,
+      stdout: "",
+      stderr: "",
+      duration_ms: 1,
+      timed_out: false,
+      oom_killed: false,
     });
     const driver = createModalSandbox({ ...BASE_CONFIG, fetchImpl: fetchSpy });
 
@@ -171,7 +192,10 @@ describe("createModalSandbox — run() HTTP 200 success", () => {
       makeReq({ imageRef: "ghcr.io/acme/x@sha256:1", vcpu: 2, diskMb: 4_096 }),
     );
 
-    const [, init] = (fetchSpy as ReturnType<typeof vi.fn>).mock.calls[0] as [string, RequestInit];
+    const [, init] = (fetchSpy as ReturnType<typeof vi.fn>).mock.calls[0] as [
+      string,
+      RequestInit,
+    ];
     const body = JSON.parse(init.body as string) as {
       image: string;
       vcpu: unknown;
@@ -238,7 +262,10 @@ describe("createModalSandbox — AbortController timeout", () => {
       });
     }) as unknown as typeof fetch;
 
-    const driver = createModalSandbox({ ...BASE_CONFIG, fetchImpl: hangingFetch });
+    const driver = createModalSandbox({
+      ...BASE_CONFIG,
+      fetchImpl: hangingFetch,
+    });
     const req = makeReq({ timeoutMs: 5_000 });
 
     const runPromise = driver.run(req);
@@ -306,7 +333,10 @@ describe("createModalSandbox — stream()", () => {
     }
 
     expect(chunks).toHaveLength(1);
-    expect(chunks[0]).toMatchObject({ channel: "stdout", data: "only-stdout\n" });
+    expect(chunks[0]).toMatchObject({
+      channel: "stdout",
+      data: "only-stdout\n",
+    });
   });
 
   it("yields no chunks when both stdout and stderr are empty", async () => {
@@ -487,6 +517,7 @@ describe("createModalSandbox — createSession()", () => {
       org_id: "org_z",
       workspace_id: "wrk_z",
       setup_cmd: "git clone repo",
+      setup_env: null,
     });
   });
 
@@ -495,7 +526,11 @@ describe("createModalSandbox — createSession()", () => {
     const driver = makeSessionDriver(fetchSpy);
 
     await driver.createSession(
-      makeSessionSpec({ imageRef: "ghcr.io/acme/x@sha256:2", vcpu: 3, diskMb: 8_192 }),
+      makeSessionSpec({
+        imageRef: "ghcr.io/acme/x@sha256:2",
+        vcpu: 3,
+        diskMb: 8_192,
+      }),
     );
 
     const [, init] = lastCall(fetchSpy);
@@ -518,6 +553,23 @@ describe("createModalSandbox — createSession()", () => {
     const [, init] = lastCall(fetchSpy);
     const body = JSON.parse(init.body as string) as { setup_cmd: unknown };
     expect(body.setup_cmd).toBeNull();
+  });
+
+  it("forwards setupEnv as setup_env alongside setup_cmd", async () => {
+    const fetchSpy = makeFetch(200, handleBody);
+    const driver = makeSessionDriver(fetchSpy);
+
+    await driver.createSession(
+      makeSessionSpec({
+        setupCmd:
+          "git clone https://x-access-token:$GITHUB_TOKEN@github.com/o/r",
+        setupEnv: { GITHUB_TOKEN: "ghs_x" },
+      }),
+    );
+
+    const [, init] = lastCall(fetchSpy);
+    const body = JSON.parse(init.body as string) as { setup_env: unknown };
+    expect(body.setup_env).toEqual({ GITHUB_TOKEN: "ghs_x" });
   });
 
   it("throws with status + path + body when the runner returns an error", async () => {

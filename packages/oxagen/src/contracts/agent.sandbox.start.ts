@@ -53,7 +53,7 @@ export const agentSandboxStart = registerCapability({
       .max(80)
       .optional()
       .describe(
-        "Human-friendly name for this sandbox (e.g. \"acme-api refactor\"), shown " +
+        'Human-friendly name for this sandbox (e.g. "acme-api refactor"), shown ' +
           "in the sandbox list so a person can tell sessions apart. Stored on the " +
           "session's metadata; does not affect reuse (that's sessionKey).",
       ),
@@ -63,7 +63,9 @@ export const agentSandboxStart = registerCapability({
       .min(256)
       .max(8192)
       .default(2048)
-      .describe("Memory limit in MiB (durable build sandboxes default higher)."),
+      .describe(
+        "Memory limit in MiB (durable build sandboxes default higher).",
+      ),
     ttlSeconds: z
       .number()
       .int()
@@ -94,7 +96,12 @@ export const agentSandboxStart = registerCapability({
       .max(8192)
       .optional()
       .describe(
-        "Optional shell command run ONCE at create time (e.g. `git clone … && pnpm i`).",
+        "Optional shell command run ONCE at create time (e.g. `git clone … && pnpm i`). " +
+          "Runs with the session's trusted env (bound environment's vault secrets + " +
+          "template literal env) injected, so a private-repo clone can authenticate via " +
+          "e.g. a GITHUB_TOKEN vault secret: `git clone https://x-access-token:$GITHUB_TOKEN@github.com/org/repo`. " +
+          "Git prompts are disabled (GIT_TERMINAL_PROMPT=0); an unauthenticated private " +
+          "clone fails fast with a clear error instead of hanging.",
       ),
     environmentId: z
       .string()
@@ -122,13 +129,17 @@ export const agentSandboxStart = registerCapability({
   output: z.object({
     sessionId: z
       .string()
-      .describe("Opaque durable-session id (sbx_…); pass to agent.sandbox.exec."),
+      .describe(
+        "Opaque durable-session id (sbx_…); pass to agent.sandbox.exec.",
+      ),
     status: z.string(),
     image: z.enum(["node", "python", "shell", "agent"]),
     createdAt: z.string(),
     reused: z
       .boolean()
-      .describe("True when an existing warm (or snapshot-restored) session was returned."),
+      .describe(
+        "True when an existing warm (or snapshot-restored) session was returned.",
+      ),
   }),
 });
 
