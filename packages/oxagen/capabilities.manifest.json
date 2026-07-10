@@ -1026,6 +1026,25 @@
       }
     },
     {
+      "name": "list_sandbox_logs",
+      "file": "agent.sandbox_log.list.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": true
+      }
+    },
+    {
       "name": "list_agent_skills",
       "file": "agent.skill.list.ts",
       "domain": "agent",
@@ -3775,6 +3794,39 @@
         "docs": false,
         "mcp": false,
         "unit": false
+      }
+    },
+    {
+      "name": "cite_reference",
+      "file": "reference.cite.ts",
+      "domain": "reference",
+      "mode": "sync",
+      "surfaces": [
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "unit": false,
+        "docs": false
+      }
+    },
+    {
+      "name": "search_references",
+      "file": "reference.search.ts",
+      "domain": "reference",
+      "mode": "slug",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false,
+        "app": true
       }
     },
     {

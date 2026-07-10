@@ -52,12 +52,24 @@ export async function agentSandboxFilesListHandler(
   }
   const targetDir = rel ? `${WORKSPACE_ROOT}/${rel}` : WORKSPACE_ROOT;
 
-  // `%y` = entry type (f/d/l/…), `%s` = size in bytes, `%p` = full path,
-  // tab-separated and newline-delimited. `-mindepth 1` excludes the starting
-  // directory itself; `-maxdepth` bounds the recursion (validated 1-5).
-  const command =
+  // Two sections in one exec so a single restore-retry covers both:
+  //
+  //  1. `find` — `%y` = entry type (f/d/l/…), `%s` = size, `%p` = full path,
+  //     tab-separated and newline-delimited. `-mindepth 1` excludes the starting
+  //     directory itself; `-maxdepth` bounds the recursion (validated 1-5).
+  //  2. `git ls-files` — the set of paths git considers ignored, collapsed to
+  //     whole ignored directories (`--directory` → `node_modules/`) so it never
+  //     enumerates a huge ignored tree. Each line is tagged `i\t…` so the parser
+  //     can tell it apart from a `find` line (whose `%y` is always f/d/l, never
+  //     `i`). Empty when the workspace is not a git repo. Paths are relative to
+  //     WORKSPACE_ROOT — the same frame the find paths are normalized into below.
+  const findCmd =
     `find ${shellQuote(targetDir)} -mindepth 1 -maxdepth ${input.depth} ` +
     `\\( -type f -o -type d \\) -printf '%y\\t%s\\t%p\\n' 2>/dev/null`;
+  const ignoreCmd =
+    `git -C ${shellQuote(WORKSPACE_ROOT)} -c core.quotePath=false ls-files ` +
+    `-o -i --exclude-standard --directory 2>/dev/null | sed 's/^/i\\t/'`;
+  const command = `${findCmd}; ${ignoreCmd}`;
 
   let result = await driver.execInSession({
     sandboxId: row.sandboxId,
@@ -92,14 +104,34 @@ export async function agentSandboxFilesListHandler(
 }
 
 /**
- * Parse the fixed `%y\t%s\t%p` find output into normalized entries. Paths are
- * returned workspace-relative (relative to WORKSPACE_ROOT), sorted for
- * deterministic ordering. Non-file/dir types (symlinks, sockets) are dropped.
+ * Parse the combined `find` + `git ls-files` output into normalized entries.
+ *
+ * Two line shapes share the stream: `find` rows (`%y\t%s\t%p`, `%y` ∈ f/d/l) and
+ * git-ignore rows (`i\t<path>`). We collect the ignore set first, then mark each
+ * file/dir entry as `gitignored` when its workspace-relative path IS an ignored
+ * path or lives UNDER an ignored directory (git collapses those to the dir with
+ * `--directory`, so `node_modules/` covers everything beneath it). Paths are
+ * returned workspace-relative, sorted for deterministic ordering; non-file/dir
+ * types (symlinks, sockets) are dropped.
  */
 export function parseFindOutput(stdout: string): Entry[] {
+  const lines = stdout.split("\n");
+
+  // Pass 1: the git-ignored paths (trailing slash from `--directory` stripped so
+  // a single prefix rule covers both an ignored file and an ignored directory).
+  const ignored: string[] = [];
+  for (const line of lines) {
+    if (!line.startsWith("i\t")) continue;
+    const p = line.slice(2).replace(/\/$/, "");
+    if (p.length > 0) ignored.push(p);
+  }
+  const isIgnored = (path: string): boolean =>
+    ignored.some((g) => path === g || path.startsWith(`${g}/`));
+
+  // Pass 2: the find entries.
   const entries: Entry[] = [];
-  for (const line of stdout.split("\n")) {
-    if (line.length === 0) continue;
+  for (const line of lines) {
+    if (line.length === 0 || line.startsWith("i\t")) continue;
     const tab1 = line.indexOf("\t");
     const tab2 = line.indexOf("\t", tab1 + 1);
     if (tab1 < 0 || tab2 < 0) continue;
@@ -120,11 +152,15 @@ export function parseFindOutput(stdout: string): Entry[] {
     }
 
     const size = Number.parseInt(sizeRaw, 10);
-    entries.push({
+    const entry: Entry = {
       path: relPath,
       kind,
       sizeBytes: Number.isFinite(size) && size >= 0 ? size : 0,
-    });
+    };
+    // Only set the flag when true — the client treats absent as "not ignored",
+    // keeping the payload lean for the common (source-file) case.
+    if (isIgnored(relPath)) entry.gitignored = true;
+    entries.push(entry);
   }
   entries.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
   return entries;

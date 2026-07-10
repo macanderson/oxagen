@@ -22,6 +22,16 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./agent.definition.suggest"))
         .agentDefinitionSuggestHandler as CapabilityHandlerFn,
   );
+  registerHandler("revise_agent_def",
+    async () =>
+      (await import("./agent.definition.revise"))
+        .agentDefinitionReviseHandler as CapabilityHandlerFn,
+  );
+  registerHandler("summarize_agent_def",
+    async () =>
+      (await import("./agent.definition.summarize"))
+        .agentDefinitionSummarizeHandler as CapabilityHandlerFn,
+  );
   registerHandler("get_memory_policy",
     async () =>
       (await import("./agent.memory_policy.read"))
@@ -514,6 +524,11 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./skill.draft"))
         .skillDraftHandler as CapabilityHandlerFn,
   );
+  registerHandler("revise_skill",
+    async () =>
+      (await import("./skill.revise"))
+        .skillReviseHandler as CapabilityHandlerFn,
+  );
   registerHandler("create_skill",
     async () =>
       (await import("./skill.create"))
@@ -831,6 +846,11 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./command.menu.suggest"))
         .commandMenuSuggestHandler as CapabilityHandlerFn,
+  );
+  registerHandler("search_references",
+    async () =>
+      (await import("./reference.search"))
+        .referenceSearchHandler as CapabilityHandlerFn,
   );
   // ── Schema Registry ───────────────────────────────────────────────────────────
   registerHandler("get_schema_registry",

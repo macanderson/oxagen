@@ -74,71 +74,12 @@ vi.mock("../middleware/logger", () => ({
   requestLogger: vi.fn(async (_c: unknown, next: () => Promise<void>) => next()),
 }));
 
-vi.mock("@oxagen/database", () => ({
+// Spread the real module so new module-level `schema.<table>` projections in
+// transitively imported services never crash this suite at import time; only
+// the DB entrypoint is overridden.
+vi.mock("@oxagen/database", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@oxagen/database")>()),
   withTenantDb: mocks.withTenantDb,
-  schema: {
-    sourceConnections: {
-      id: "id",
-      orgId: "org_id",
-      workspaceId: "workspace_id",
-      connectorId: "connector_id",
-      status: "status",
-      deliveryConfig: "delivery_config",
-      publicId: "public_id",
-      deletedAt: "deleted_at",
-    },
-    // Required by vault-secret-service module-level KEY_COLUMNS initializer
-    secretKeys: {
-      id: "id",
-      publicId: "public_id",
-      key: "key",
-      sensitive: "sensitive",
-      memo: "memo",
-      defaultValueEnc: "default_value_enc",
-      defaultValueText: "default_value_text",
-      defaultValueKmsKeyId: "default_value_kms_key_id",
-      workspaceId: "workspace_id",
-      deletedAt: "deleted_at",
-      environmentId: "environment_id",
-    },
-    secretValues: {
-      secretKeyId: "secret_key_id",
-      environmentId: "environment_id",
-    },
-    environments: {
-      id: "id",
-      publicId: "public_id",
-      workspaceId: "workspace_id",
-      deletedAt: "deleted_at",
-    },
-    // Required by packages/agent's _agent-definition module-level agentColumns
-    // initializer, transitively reached via the file-locking (OXA-2070) wiring.
-    agents: {
-      id: "id",
-      publicId: "public_id",
-      slug: "slug",
-      name: "name",
-      description: "description",
-      agentType: "agent_type",
-      status: "status",
-      deploymentStatus: "deployment_status",
-      activeVersionId: "active_version_id",
-    },
-    // Required by packages/agent's _sandbox-session module-level SESSION_COLUMNS
-    // initializer, transitively reached via the agent.sandbox.* handlers
-    // registered through @oxagen/handlers (PR #637 sandbox workspace wiring).
-    sandboxSessions: {
-      id: "id",
-      publicId: "public_id",
-      sandboxId: "sandbox_id",
-      snapshotId: "snapshot_id",
-      image: "image",
-      status: "status",
-      metadata: "metadata",
-      workspaceId: "workspace_id",
-      sessionKey: "session_key",
-    },
-  },
 }));
 
 vi.mock("@oxagen/tenancy", () => ({

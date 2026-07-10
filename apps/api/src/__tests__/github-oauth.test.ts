@@ -148,6 +148,14 @@ vi.mock("@oxagen/ingestion/connectors", () => ({
   getConnector: vi.fn(() => ({ verifyWebhook: vi.fn().mockReturnValue(true) })),
 }));
 
+// The github_installations registry upsert has its own dedicated suite
+// (github-installations.test.ts). Stub it to a no-op so the callback logic tests
+// aren't perturbed by its extra withSystemDb call in the resolution sequence.
+// MUST resolve a promise — the callback chains `.catch()` on the result.
+vi.mock("../routes/v1/github-installations", () => ({
+  upsertGithubInstallation: vi.fn().mockResolvedValue(undefined),
+}));
+
 // Stub global fetch for GitHub API calls
 global.fetch = mocks.fetch as unknown as typeof fetch;
 

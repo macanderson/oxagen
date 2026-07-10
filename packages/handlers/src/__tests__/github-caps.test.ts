@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => {
   const openPullRequest = vi.fn();
   const getAuthenticatedUser = vi.fn();
   const getFileContent = vi.fn();
+  const getRepoInfo = vi.fn();
   const withTenantDb = vi.fn();
 
   const mockClient = {
@@ -30,6 +31,7 @@ const mocks = vi.hoisted(() => {
     openPullRequest,
     getAuthenticatedUser,
     getFileContent,
+    getRepoInfo,
   };
 
   return {
@@ -39,6 +41,7 @@ const mocks = vi.hoisted(() => {
     createBranch,
     openPullRequest,
     getFileContent,
+    getRepoInfo,
     mockClient,
     withTenantDb,
   };
@@ -145,6 +148,15 @@ function withToken(fn: () => Promise<void>): () => Promise<void> {
   };
 }
 
+/** Repo lookup consumed by the default-branch write guard (OXA-2117). */
+function stubRepoInfo(defaultBranch = "main") {
+  mocks.getRepoInfo.mockResolvedValueOnce({
+    fullName: "myorg/myrepo",
+    htmlUrl: "https://github.com/myorg/myrepo",
+    defaultBranch,
+  });
+}
+
 // ── 3: repo.create handler ────────────────────────────────────────────────────
 
 describe("repo.create handler", () => {
@@ -242,10 +254,11 @@ describe("repo.file.put handler", () => {
     withToken(async () => {
       // No prior content — this is a create, so the diff should be a
       // "whole file added" patch (before = "").
+      stubRepoInfo("main");
       mocks.getFileContent.mockResolvedValueOnce(null);
       mocks.putFile.mockResolvedValueOnce({
         commitSha: "abc123",
-        htmlUrl: "https://github.com/myorg/myrepo/blob/main/src/index.ts",
+        htmlUrl: "https://github.com/myorg/myrepo/blob/feat/topic/src/index.ts",
       });
 
       const result = await repoFilePutHandler(
@@ -255,7 +268,7 @@ describe("repo.file.put handler", () => {
           path: "src/index.ts",
           content: "export const x = 1;",
           message: "Add index.ts",
-          branch: "main",
+          branch: "feat/topic",
         },
         ctx,
       );
@@ -264,7 +277,7 @@ describe("repo.file.put handler", () => {
         owner: "myorg",
         repo: "myrepo",
         path: "src/index.ts",
-        ref: "main",
+        ref: "feat/topic",
       });
       expect(mocks.putFile).toHaveBeenCalledWith({
         owner: "myorg",
@@ -272,11 +285,11 @@ describe("repo.file.put handler", () => {
         path: "src/index.ts",
         content: "export const x = 1;",
         message: "Add index.ts",
-        branch: "main",
+        branch: "feat/topic",
       });
       expect(result.commitSha).toBe("abc123");
       expect(result.htmlUrl).toBe(
-        "https://github.com/myorg/myrepo/blob/main/src/index.ts",
+        "https://github.com/myorg/myrepo/blob/feat/topic/src/index.ts",
       );
       expect(result.diffs).toHaveLength(1);
       expect(result.diffs?.[0]).toMatchObject({
@@ -291,10 +304,11 @@ describe("repo.file.put handler", () => {
   it(
     "diffs against the prior content when updating an existing file",
     withToken(async () => {
+      stubRepoInfo("main");
       mocks.getFileContent.mockResolvedValueOnce("export const x = 0;");
       mocks.putFile.mockResolvedValueOnce({
         commitSha: "def456",
-        htmlUrl: "https://github.com/myorg/myrepo/blob/main/src/index.ts",
+        htmlUrl: "https://github.com/myorg/myrepo/blob/feat/topic/src/index.ts",
       });
 
       const result = await repoFilePutHandler(
@@ -304,7 +318,7 @@ describe("repo.file.put handler", () => {
           path: "src/index.ts",
           content: "export const x = 1;",
           message: "Update index.ts",
-          branch: "main",
+          branch: "feat/topic",
         },
         ctx,
       );
@@ -323,10 +337,11 @@ describe("repo.file.put handler", () => {
   it(
     "still returns a commit result when reading the prior content fails",
     withToken(async () => {
+      stubRepoInfo("main");
       mocks.getFileContent.mockRejectedValueOnce(new Error("network blip"));
       mocks.putFile.mockResolvedValueOnce({
         commitSha: "ghi789",
-        htmlUrl: "https://github.com/myorg/myrepo/blob/main/src/index.ts",
+        htmlUrl: "https://github.com/myorg/myrepo/blob/feat/topic/src/index.ts",
       });
 
       const result = await repoFilePutHandler(
@@ -336,7 +351,7 @@ describe("repo.file.put handler", () => {
           path: "src/index.ts",
           content: "export const x = 1;",
           message: "Add index.ts",
-          branch: "main",
+          branch: "feat/topic",
         },
         ctx,
       );
@@ -346,6 +361,59 @@ describe("repo.file.put handler", () => {
       // failing the whole commit over a non-critical diff-enrichment error.
       expect(result.diffs).toHaveLength(1);
       expect(result.diffs?.[0]?.additions).toBe(1);
+    }),
+  );
+
+  it(
+    "rejects a commit targeting the default branch (OXA-2117)",
+    withToken(async () => {
+      mocks.putFile.mockClear();
+      stubRepoInfo("main");
+
+      await expect(
+        repoFilePutHandler(
+          {
+            owner: "myorg",
+            repo: "myrepo",
+            path: "src/index.ts",
+            content: "export const x = 1;",
+            message: "Direct-to-main commit",
+            branch: "main",
+          },
+          ctx,
+        ),
+      ).rejects.toMatchObject({
+        status: 403,
+        message: expect.stringContaining("default branch"),
+      });
+
+      expect(mocks.putFile).not.toHaveBeenCalled();
+    }),
+  );
+
+  it(
+    "rejects a commit when branch is omitted — it would silently target the default branch",
+    withToken(async () => {
+      mocks.putFile.mockClear();
+      stubRepoInfo("develop");
+
+      await expect(
+        repoFilePutHandler(
+          {
+            owner: "myorg",
+            repo: "myrepo",
+            path: "src/index.ts",
+            content: "export const x = 1;",
+            message: "Branchless commit",
+          },
+          ctx,
+        ),
+      ).rejects.toMatchObject({
+        status: 403,
+        message: expect.stringContaining('"develop"'),
+      });
+
+      expect(mocks.putFile).not.toHaveBeenCalled();
     }),
   );
 });
@@ -406,6 +474,7 @@ describe("repo.branch.create handler", () => {
   it(
     "calls createBranch with correct args",
     withToken(async () => {
+      stubRepoInfo("main");
       mocks.createBranch.mockResolvedValueOnce({
         ref: "refs/heads/feature/my-branch",
         sha: "deadbeef",
@@ -431,6 +500,26 @@ describe("repo.branch.create handler", () => {
         ref: "refs/heads/feature/my-branch",
         sha: "deadbeef",
       });
+    }),
+  );
+
+  it(
+    "rejects creating a branch named after the default branch (OXA-2117)",
+    withToken(async () => {
+      mocks.createBranch.mockClear();
+      stubRepoInfo("main");
+
+      await expect(
+        repoBranchCreateHandler(
+          { owner: "myorg", repo: "myrepo", branch: "main" },
+          ctx,
+        ),
+      ).rejects.toMatchObject({
+        status: 403,
+        message: expect.stringContaining("default branch"),
+      });
+
+      expect(mocks.createBranch).not.toHaveBeenCalled();
     }),
   );
 });
@@ -503,6 +592,31 @@ describe("repo.pr.open handler", () => {
         body: undefined,
         draft: undefined,
       });
+    }),
+  );
+
+  it(
+    "rejects a pull request whose head equals its base (OXA-2117)",
+    withToken(async () => {
+      mocks.openPullRequest.mockClear();
+
+      await expect(
+        repoPrOpenHandler(
+          {
+            owner: "myorg",
+            repo: "myrepo",
+            title: "Self PR",
+            head: "main",
+            base: "main",
+          },
+          ctx,
+        ),
+      ).rejects.toMatchObject({
+        status: 400,
+        message: expect.stringContaining("head and base to differ"),
+      });
+
+      expect(mocks.openPullRequest).not.toHaveBeenCalled();
     }),
   );
 });

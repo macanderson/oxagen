@@ -87,6 +87,8 @@ export async function agentDefinitionGetHandler(
       agentKey: composeAgentKey(orgNamespace, workspaceNamespace, agent.slug),
       name: agent.name,
       description: agent.description,
+      avatarUrl: agent.avatarUrl,
+      summary: agent.summary,
       agentType: agent.agentType,
       status: agent.status,
       deploymentStatus: agent.deploymentStatus,

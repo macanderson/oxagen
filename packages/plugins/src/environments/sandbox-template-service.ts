@@ -71,26 +71,30 @@ export interface ResolvedSandboxTemplate {
 }
 
 // ── column projections ────────────────────────────────────────────────────────
+// Built per call, never at module scope: test suites mock @oxagen/database
+// with a partial `schema`, and a module-level `schema.<table>.<col>` access
+// crashes every importer at load time (takes the whole /v1 route mount with it).
 
-const TEMPLATE_COLUMNS = {
-  id: schema.sandboxTemplates.id,
-  publicId: schema.sandboxTemplates.publicId,
-  environmentInternalId: schema.sandboxTemplates.environmentId,
-  environmentPublicId: schema.environments.publicId,
-  environmentName: schema.environments.name,
-  environmentSlug: schema.environments.slug,
-  name: schema.sandboxTemplates.name,
-  slug: schema.sandboxTemplates.slug,
-  description: schema.sandboxTemplates.description,
-  isDefault: schema.sandboxTemplates.isDefault,
-  isActive: schema.sandboxTemplates.isActive,
-  provider: schema.sandboxTemplates.provider,
-  runtime: schema.sandboxTemplates.runtime,
-  resources: schema.sandboxTemplates.resources,
-  network: schema.sandboxTemplates.network,
-  secretSelection: schema.sandboxTemplates.secretSelection,
-  literalEnv: schema.sandboxTemplates.literalEnv,
-} as const;
+const templateColumns = () =>
+  ({
+    id: schema.sandboxTemplates.id,
+    publicId: schema.sandboxTemplates.publicId,
+    environmentInternalId: schema.sandboxTemplates.environmentId,
+    environmentPublicId: schema.environments.publicId,
+    environmentName: schema.environments.name,
+    environmentSlug: schema.environments.slug,
+    name: schema.sandboxTemplates.name,
+    slug: schema.sandboxTemplates.slug,
+    description: schema.sandboxTemplates.description,
+    isDefault: schema.sandboxTemplates.isDefault,
+    isActive: schema.sandboxTemplates.isActive,
+    provider: schema.sandboxTemplates.provider,
+    runtime: schema.sandboxTemplates.runtime,
+    resources: schema.sandboxTemplates.resources,
+    network: schema.sandboxTemplates.network,
+    secretSelection: schema.sandboxTemplates.secretSelection,
+    literalEnv: schema.sandboxTemplates.literalEnv,
+  }) as const;
 
 interface TemplateRow {
   id: string;
@@ -149,7 +153,7 @@ function toSummary(row: TemplateRow, tools: SandboxTemplateToolSummary[]): Sandb
 
 async function loadTemplateRow(tx: Tx, workspaceId: string, publicId: string): Promise<TemplateRow> {
   const [row] = await tx
-    .select(TEMPLATE_COLUMNS)
+    .select(templateColumns())
     .from(schema.sandboxTemplates)
     .innerJoin(
       schema.environments,
@@ -351,7 +355,7 @@ export async function listTemplates(
       filters.push(eq(schema.sandboxTemplates.environmentId, env.id));
     }
     const rows = await tx
-      .select(TEMPLATE_COLUMNS)
+      .select(templateColumns())
       .from(schema.sandboxTemplates)
       .innerJoin(
         schema.environments,
@@ -885,14 +889,16 @@ export async function installTemplatesFromPack(
 
 // ── agent-environment bindings (Spec §5.6) ───────────────────────────────────
 
-const BINDING_COLUMNS = {
-  id: schema.agentEnvironmentBindings.id,
-  publicId: schema.agentEnvironmentBindings.publicId,
-  agentId: schema.agentEnvironmentBindings.agentId,
-  environmentInternalId: schema.agentEnvironmentBindings.environmentId,
-  sandboxTemplateInternalId: schema.agentEnvironmentBindings.sandboxTemplateId,
-  isPrimary: schema.agentEnvironmentBindings.isPrimary,
-} as const;
+// Per-call for the same reason as templateColumns() — no schema access at import.
+const bindingColumns = () =>
+  ({
+    id: schema.agentEnvironmentBindings.id,
+    publicId: schema.agentEnvironmentBindings.publicId,
+    agentId: schema.agentEnvironmentBindings.agentId,
+    environmentInternalId: schema.agentEnvironmentBindings.environmentId,
+    sandboxTemplateInternalId: schema.agentEnvironmentBindings.sandboxTemplateId,
+    isPrimary: schema.agentEnvironmentBindings.isPrimary,
+  }) as const;
 
 async function bindingSummary(
   tx: Tx,
@@ -1055,7 +1061,7 @@ export async function bindAgentEnvironment(
     }
 
     const [row] = await tx
-      .select(BINDING_COLUMNS)
+      .select(bindingColumns())
       .from(schema.agentEnvironmentBindings)
       .where(
         and(
@@ -1095,7 +1101,7 @@ export async function listAgentBindings(
   return withTenantDb(async (tx) => {
     const agentInternalId = await resolveAgentInternalId(tx, actor.workspaceId, input.agentId);
     const rows = await tx
-      .select(BINDING_COLUMNS)
+      .select(bindingColumns())
       .from(schema.agentEnvironmentBindings)
       .where(
         and(

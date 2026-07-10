@@ -1095,6 +1095,27 @@ export function buildProgram(): Command {
       },
     );
 
+  sandbox
+    .command("logs <session-id>")
+    .description(
+      "Print captured stdout/stderr/command output for a durable sandbox session",
+    )
+    .option(
+      "--debug",
+      "Include debug lines (command echoes, timings, plumbing); off by default",
+    )
+    .option("--limit <n>", "Max lines to return (1-2000, default 500)")
+    .option("--json", "Emit raw JSON output")
+    .action(
+      async (
+        sessionId: string,
+        opts: { debug?: boolean; limit?: string; json?: boolean },
+      ) => {
+        const { handleSandboxLogs } = await import("./commands/sandbox.js");
+        await handleSandboxLogs(sessionId, opts);
+      },
+    );
+
   // ── sandbox template: portable sandbox-template CRUD + export/import ─────────
 
   const sandboxTemplate = sandbox

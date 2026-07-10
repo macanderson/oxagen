@@ -19,10 +19,10 @@ vi.mock("./authz", () => ({
 }));
 vi.mock("@/lib/routes", () => ({
   workspace: {
-    studio: {
+    workbench: {
       tools: {
         capabilities: ({ orgSlug, workspaceSlug }: { orgSlug: string; workspaceSlug: string }) =>
-          `/${orgSlug}/${workspaceSlug}/studio/tools/capabilities`,
+          `/${orgSlug}/${workspaceSlug}/workbench/tools/capabilities`,
       },
     },
   },
@@ -32,7 +32,7 @@ import { revalidatePath } from "next/cache";
 import { invoke } from "@oxagen/oxagen";
 import { resolveAgentToolsManager } from "./authz";
 import { addRegistry, removeRegistry } from "./install-actions";
-import type { ResolvedStudioScope } from "@/lib/studio/scope";
+import type { ResolvedWorkbenchScope } from "@/lib/workbench/scope";
 
 const mockInvoke = vi.mocked(invoke);
 const mockResolveManager = vi.mocked(resolveAgentToolsManager);
@@ -42,7 +42,7 @@ const AUTHORIZED_SCOPE = {
   org: { id: "org-1" },
   ws: { id: "ws-1" },
   ctx: { orgId: "org-1", workspaceId: "ws-1" },
-} as unknown as ResolvedStudioScope;
+} as unknown as ResolvedWorkbenchScope;
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -86,7 +86,7 @@ describe("addRegistry", () => {
       AUTHORIZED_SCOPE.ctx,
       { surface: "agent" },
     );
-    expect(mockRevalidatePath).toHaveBeenCalledWith("/acme/main/studio/tools/capabilities");
+    expect(mockRevalidatePath).toHaveBeenCalledWith("/acme/main/workbench/tools/capabilities");
     expect(result).toEqual({ ok: true, registryId: "reg_1", isDefault: false });
   });
 
@@ -132,7 +132,7 @@ describe("removeRegistry", () => {
       AUTHORIZED_SCOPE.ctx,
       { surface: "agent" },
     );
-    expect(mockRevalidatePath).toHaveBeenCalledWith("/acme/main/studio/tools/capabilities");
+    expect(mockRevalidatePath).toHaveBeenCalledWith("/acme/main/workbench/tools/capabilities");
     expect(result).toEqual({ ok: true, promotedId: "reg_2" });
   });
 

@@ -24,8 +24,11 @@ ARG ATLAS_VERSION=v0.38.0
 ENV COREPACK_HOME=/opt/corepack \
     COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 
+# ripgrep/fd/fzf: fast search toolchain for any agent or script shelling out
+# in CI. Debian ships fd-find's binary as `fdfind`, hence the symlink.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends postgresql-client jq \
+    && apt-get install -y --no-install-recommends postgresql-client jq ripgrep fd-find fzf \
+    && ln -sf "$(command -v fdfind)" /usr/local/bin/fd \
     && rm -rf /var/lib/apt/lists/*
 
 # Corepack (not a global pnpm binary) so the repo's package.json

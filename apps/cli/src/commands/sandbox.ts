@@ -7,6 +7,11 @@
  * `oxagen sandbox cat <sessionId> <path>` — the read counterpart: print one
  * file's contents (agent.sandbox_file.read). Binary files are emitted as a
  * base64 notice rather than raw bytes so terminals stay usable.
+ *
+ * `oxagen sandbox logs <sessionId>` — print a session's captured
+ * stdout/stderr/command output (agent.sandbox_log.list). `--debug` OFF (the
+ * default) shows only program output; `--debug` ON includes command echoes,
+ * timings, and other system/debug plumbing.
  */
 import { apiPost } from "../lib/api.js";
 import { stdoutWriter, type CommandWriter } from "../lib/capture-writer.js";
@@ -34,6 +39,28 @@ interface SandboxFileReadResponse {
   encoding: "utf8" | "base64";
   sizeBytes: number;
   truncated: boolean;
+}
+
+interface SandboxLogsResponse {
+  lines: Array<{
+    ts: string;
+    stream: "stdout" | "stderr" | "system";
+    level: "normal" | "debug";
+    command: string;
+    seq: number;
+    line: string;
+    exitCode: number | null;
+    durationMs: number | null;
+  }>;
+}
+
+/**
+ * Dim system/debug plumbing so real program output stands out — but only on an
+ * interactive TTY. Piped output and the REPL's captured writer stay clean of
+ * ANSI escapes.
+ */
+function dim(s: string): string {
+  return process.stdout.isTTY ? `\x1b[2m${s}\x1b[0m` : s;
 }
 
 export async function handleSandboxList(
@@ -121,5 +148,37 @@ export async function handleSandboxCat(
   writer.write(res.content);
   if (res.truncated) {
     writer.writeErr(`(truncated: file is ${res.sizeBytes} bytes on disk)`);
+  }
+}
+
+export async function handleSandboxLogs(
+  sessionId: string,
+  opts: { debug?: boolean; limit?: string; json?: boolean },
+  writer: CommandWriter = stdoutWriter,
+): Promise<void> {
+  const body: Record<string, unknown> = { sessionId };
+  // --debug OFF ⇒ only program output (level: "normal"); --debug ON ⇒ omit
+  // level so the API returns every line (command echoes, timings, plumbing).
+  if (!opts.debug) body.level = "normal";
+  if (opts.limit !== undefined) body.limit = parseInt(opts.limit, 10);
+
+  const res = await apiPost<SandboxLogsResponse>("agent/sandbox/logs", body, writer);
+
+  if (opts.json) {
+    writer.write(JSON.stringify(res, null, 2));
+    return;
+  }
+
+  if (res.lines.length === 0) {
+    writer.writeErr("(no log lines)");
+    return;
+  }
+
+  for (const l of res.lines) {
+    const text = `[${l.stream}] ${l.line}`;
+    // Command echoes/timings ('system') and debug-level lines are plumbing —
+    // dim them so genuine program output reads clearly.
+    const isMeta = l.stream === "system" || l.level === "debug";
+    writer.write(isMeta ? dim(text) : text);
   }
 }

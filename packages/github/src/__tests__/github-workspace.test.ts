@@ -14,6 +14,7 @@ function makeClient(overrides: Partial<GitHubClient> = {}): GitHubClient {
     createBranch: vi.fn(),
     openPullRequest: vi.fn(),
     getAuthenticatedUser: vi.fn(),
+    getRepoInfo: vi.fn(),
     getFileContent: vi.fn(),
     getTree: vi.fn(),
     getPullRequest: vi.fn(),

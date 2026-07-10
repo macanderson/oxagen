@@ -19,7 +19,7 @@ import { cn } from "@/lib/utils";
  * live/deployed in this environment.
  *
  * Per row: a status dot, the human Name (slug muted beneath — never the raw id
- * as the primary label), the latest version, and a deep-link to the Studio
+ * as the primary label), the latest version, and a deep-link to the Workbench
  * agent page. Managed (product built-in, read-only) agents carry a subtle tag.
  */
 

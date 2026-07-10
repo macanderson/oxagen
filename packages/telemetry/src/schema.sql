@@ -279,3 +279,25 @@ CREATE TABLE IF NOT EXISTS dev_logs (
 PARTITION BY toYYYYMMDD(ts)
 ORDER BY (dev_session, service, ts)
 TTL toDateTime(ts) + INTERVAL 14 DAY;
+
+-- Durable-sandbox command output (spec: sandbox-session-lifecycle §5.2). One row
+-- per line of a coding-session command's stdout/stderr, plus a 'system'/'debug'
+-- line per command (the command echo + exit code + duration). Powers the sandbox
+-- inspector's log console; the debug toggle filters on `level`. Tenant-scoped;
+-- 14-day TTL. Keyed by the opaque session public id (sbx_…).
+CREATE TABLE IF NOT EXISTS sandbox_log_events (
+  ts DateTime64(3) DEFAULT now64(3) CODEC(DoubleDelta, ZSTD(1)),
+  org_id UUID,
+  workspace_id UUID,
+  session_id String,
+  stream LowCardinality(String),
+  level LowCardinality(String),
+  command String CODEC(ZSTD(3)),
+  seq UInt32,
+  line String CODEC(ZSTD(3)),
+  exit_code Nullable(Int32),
+  duration_ms Nullable(UInt32)
+) ENGINE = MergeTree()
+PARTITION BY toYYYYMMDD(ts)
+ORDER BY (org_id, workspace_id, session_id, ts)
+TTL toDateTime(ts) + INTERVAL 14 DAY;

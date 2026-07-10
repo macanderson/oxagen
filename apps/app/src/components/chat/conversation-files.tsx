@@ -1,13 +1,16 @@
 "use client";
 
 /**
- * ConversationFiles — a Slack-channel-files-style panel listing every
+ * ConversationFilesList — a Slack-channel-files-style list of every
  * generated_asset attached to the active conversation, newest-first.
  *
- * Accessed via a header button that slides open a Sheet panel on the right.
- * Data is fetched client-side from GET /api/v1/conversations/[id]/assets so
- * the panel is always fresh (no RSC revalidation lag) and so it doesn't add
- * to the server-component render budget.
+ * This is the single, reusable list body: it owns the client-side fetch from
+ * GET /api/v1/conversations/[id]/assets (always fresh — no RSC revalidation
+ * lag, no server-component render-budget cost) plus the loading / error /
+ * empty / list rendering. It is embedded directly in the persistent chat
+ * side-panel's "Files" tab (see `workspace-context-panel.tsx`), which is now
+ * the sole surface for conversation files — the old Sheet-based drawer that a
+ * header paperclip button slid open has been removed as duplicate UI.
  *
  * Each row shows a file-type icon (or an inline thumbnail for images), the
  * full filename (with extension), the file size, the created timestamp, and a
@@ -23,10 +26,6 @@
  * Content-Disposition and the image decoder never executes scripts, so the
  * preview is XSS-safe without weakening the serve route. Never render asset
  * SVG markup with dangerouslySetInnerHTML here.
- *
- * The panel is responsive:
- *   Mobile: full-width Sheet overlay (right side), rows ≥44px tall
- *   Desktop: fixed-width Sheet (the list is compact and scrollable)
  */
 
 import * as React from "react";
@@ -43,15 +42,7 @@ import {
   Paperclip,
   LoaderCircle,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import {
-  Sheet,
-  SheetTrigger,
-  SheetPopup,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
 import {
   Dialog,
   DialogPopup,
@@ -59,7 +50,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { useLatestRef } from "@/lib/use-latest-ref";
 import type { ConversationAssetItem } from "@/app/api/v1/conversations/[conversationId]/assets/route";
 
 // ---------------------------------------------------------------------------
@@ -379,21 +369,17 @@ export interface ConversationFilesListProps {
   /** publicId of the active conversation (from URL ?c= param). Null if no conversation yet. */
   conversationPublicId: string | null;
   /**
-   * Whether this list should be fetching/showing data right now. The Sheet
-   * variant (`ConversationFiles`) passes its open state so the fetch only
-   * fires while the panel is visible; an always-visible embedding (e.g. a
-   * persistent side-panel tab) passes `true`.
+   * Whether this list should be fetching/showing data right now. The persistent
+   * side-panel's "Files" tab passes `tab === "files"` so the fetch only fires
+   * while that tab is visible; an always-visible embedding passes `true`.
    */
   active: boolean;
-  /** Called whenever the loaded asset count changes (undefined while loading/errored). */
-  onCountChange?: (count: number | undefined) => void;
 }
 
 /**
- * The actual conversation-assets list: fetch lifecycle + loading/error/empty/
- * list rendering, extracted from `ConversationFiles` so both the header Sheet
- * trigger AND `WorkspaceContextPanel`'s "Files" tab share one fetch/render
- * implementation instead of two copies drifting apart.
+ * The conversation-assets list: fetch lifecycle + loading/error/empty/list
+ * rendering. Mounted by `WorkspaceContextPanel`'s "Files" tab — the single
+ * surface for conversation files.
  *
  * Fetch lifecycle:
  *   - Idle: no fetch in flight.
@@ -406,7 +392,6 @@ export interface ConversationFilesListProps {
 export function ConversationFilesList({
   conversationPublicId,
   active,
-  onCountChange,
 }: ConversationFilesListProps) {
   const [assets, setAssets] = React.useState<ConversationAssetItem[] | null>(null);
   const [loading, setLoading] = React.useState(false);
@@ -452,10 +437,6 @@ export function ConversationFilesList({
   }, [active, conversationPublicId, retryKey]);
 
   const total = assets?.length ?? 0;
-  const onCountChangeRef = useLatestRef(onCountChange);
-  React.useEffect(() => {
-    onCountChangeRef.current?.(assets ? total : undefined);
-  }, [assets, total, onCountChangeRef]);
 
   return (
     <>
@@ -499,65 +480,5 @@ export function ConversationFilesList({
 
       <AssetPreviewDialog item={preview} onClose={() => setPreview(null)} />
     </>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Main component
-// ---------------------------------------------------------------------------
-
-export interface ConversationFilesProps {
-  /** publicId of the active conversation (from URL ?c= param). Null if no conversation yet. */
-  conversationPublicId: string | null;
-}
-
-/**
- * Conversation files panel. Renders a trigger button; clicking it fetches the
- * asset list (via `ConversationFilesList`) and opens a Sheet overlay with the
- * file list.
- */
-export function ConversationFiles({ conversationPublicId }: ConversationFilesProps) {
-  const [open, setOpen] = React.useState(false);
-  const [count, setCount] = React.useState<number | undefined>(undefined);
-
-  return (
-    <Sheet open={open} onOpenChange={setOpen}>
-      <SheetTrigger
-        render={
-          <Button
-            variant="ghost"
-            size="sm"
-            className="gap-1.5"
-            aria-label="View conversation files"
-            disabled={!conversationPublicId}
-          />
-        }
-      >
-        <Paperclip className="size-4" aria-hidden="true" />
-        <span className="hidden sm:inline">Files</span>
-      </SheetTrigger>
-
-      {/* Full-width on mobile so rows and touch targets have room; fixed width from sm up. */}
-      <SheetPopup side="right" className="flex w-full flex-col p-0 sm:w-80 sm:max-w-sm">
-        <SheetHeader className="border-b border-border px-4 py-3">
-          <SheetTitle className="text-base">
-            Conversation Files
-            {count ? (
-              <span className="ml-1.5 text-xs font-normal text-muted-foreground">
-                ({count})
-              </span>
-            ) : null}
-          </SheetTitle>
-        </SheetHeader>
-
-        <div className="min-h-0 flex-1 overflow-y-auto p-2">
-          <ConversationFilesList
-            conversationPublicId={conversationPublicId}
-            active={open}
-            onCountChange={setCount}
-          />
-        </div>
-      </SheetPopup>
-    </Sheet>
   );
 }

@@ -18,6 +18,8 @@ import type { CapabilityContext } from "../types";
 import { agentSandboxStartHandler } from "../handlers/agent.sandbox.start";
 import { agentSandboxExecHandler } from "../handlers/agent.sandbox.exec";
 import { agentSandboxStopHandler } from "../handlers/agent.sandbox.stop";
+import { releaseSession } from "../handlers/_sandbox-session";
+import { captureSandboxCommandLogs } from "../handlers/_sandbox-logs";
 
 /** Thrown when a sandbox-backed workspace is used with no driver configured. */
 export class SandboxWorkspaceUnavailableError extends Error {
@@ -187,6 +189,26 @@ export class ModalSandboxWorkspace implements Workspace {
     }
   }
 
+  /**
+   * Release the session at turn end WITHOUT tearing the sandbox down: mark it
+   * 'idle' and start its reap grace clock, so the next turn of the same
+   * conversation reconnects to this same warm sandbox (and its working tree,
+   * including uncommitted edits). The sandbox-reaper drops it ~2-3 min later if
+   * no turn resumes — recovering any dirty work to a branch first
+   * (spec: sandbox-session-lifecycle §4). Use this, NOT dispose(), for a
+   * persistent per-conversation coding session. Safe to call multiple times.
+   */
+  async release(): Promise<void> {
+    if (!this.sessionId) return;
+    const sessionId = this.sessionId;
+    try {
+      await this.withScope(() => releaseSession(this.ctx, sessionId));
+    } catch {
+      // Best-effort; a failed release just leaves the session 'running' until the
+      // reaper's stale-running backstop reclaims it. Work is never at risk.
+    }
+  }
+
   // ── Command execution ──────────────────────────────────────────────────────
 
   /** Run a command in the session, restoring-on-reap via the shared handler. */
@@ -219,10 +241,17 @@ export class ModalSandboxWorkspace implements Workspace {
     const sessionId = await this.ensureSession();
     // Run in the workspace root so relative paths resolve against the clone.
     const wrapped = `cd ${shq(this.root)} && ${command}`;
-    return this.execRaw(sessionId, {
+    const startedAt = Date.now();
+    const result = await this.execRaw(sessionId, {
       command: wrapped,
       timeoutMs: opts?.timeoutMs ?? this.defaultTimeoutMs,
     });
+    // Capture the agent's REAL command output for the sandbox inspector's log
+    // console (fire-and-forget; the ORIGINAL command, not the `cd` wrapper).
+    // Only exec() is captured — internal FS ops via execRaw are excluded so the
+    // console shows agent commands, not readFile/list/grep plumbing.
+    void captureSandboxCommandLogs(this.ctx, sessionId, command, result, Date.now() - startedAt);
+    return result;
   }
 
   // ── Filesystem: reads ──────────────────────────────────────────────────────
@@ -260,8 +289,16 @@ export class ModalSandboxWorkspace implements Workspace {
     const sessionId = await this.ensureSession();
     // Enumerate tracked+untracked files, then filter with the same glob→regex
     // the GitHub workspace uses, so glob semantics match across backends.
+    // fd (parallel traversal) when the image ships it; --hidden --no-ignore
+    // keeps its result set byte-identical to the find fallback. The fallback
+    // must be `command find`: the Modal runner's exec trampoline aliases
+    // find→fd for agent-typed commands, and fd cannot parse find's flags.
+    const enumerate =
+      "if command -v fd >/dev/null 2>&1; " +
+      "then fd --type f --hidden --no-ignore --exclude .git 2>/dev/null; " +
+      "else command find . -type f -not -path '*/.git/*' 2>/dev/null | sed 's|^\\./||'; fi";
     const res = await this.execRaw(sessionId, {
-      command: `cd ${shq(this.root)} && find . -type f -not -path '*/.git/*' 2>/dev/null | sed 's|^\\./||'`,
+      command: `cd ${shq(this.root)} && ${enumerate}`,
       timeoutMs: FS_TIMEOUT_MS,
     });
     const re = globToRegExp(pattern);
@@ -274,13 +311,23 @@ export class ModalSandboxWorkspace implements Workspace {
   async grep(pattern: string, opts?: { path?: string; glob?: string }): Promise<string[]> {
     const sessionId = await this.ensureSession();
     const searchPath = opts?.path ? shq(toRelPath(opts.path) || ".") : "'.'";
-    const include = opts?.glob ? ` --include=${shq(opts.glob)}` : "";
-    // Real recursive grep in the sandbox: -I skips binaries, -n gives line
-    // numbers, ERE for parity with the JS RegExp callers expect. Hits are capped
-    // to keep tool output bounded (ADR-021 §3).
+    // Real recursive search in the sandbox: ripgrep when the image ships it
+    // (parallel + SIMD, same file:line:text output), POSIX grep otherwise.
+    // The fallback must be `command grep` — the Modal runner's exec trampoline
+    // aliases grep→rg for agent-typed commands, and rg cannot parse grep's
+    // -rInE bundle. --hidden --no-ignore keeps rg's result set identical to
+    // grep -rI (both skip binaries). Hits are capped to keep tool output
+    // bounded (ADR-021 §3); the sed strips the ./ prefix so both branches emit
+    // identical paths and the .git post-filter actually applies.
+    const rgGlob = opts?.glob ? ` -g ${shq(opts.glob)}` : "";
+    const grepInclude = opts?.glob ? ` --include=${shq(opts.glob)}` : "";
+    const search =
+      "if command -v rg >/dev/null 2>&1; " +
+      `then rg --line-number --no-heading --hidden --no-ignore${rgGlob} -- ${shq(pattern)} ${searchPath}; ` +
+      `else command grep -rInE${grepInclude} -- ${shq(pattern)} ${searchPath}; fi`;
     const cmd =
-      `cd ${shq(this.root)} && grep -rInE${include} -- ${shq(pattern)} ${searchPath} ` +
-      `2>/dev/null | grep -v '^\\.git/' | head -n ${GREP_MAX_HITS}`;
+      `cd ${shq(this.root)} && { ${search}; } 2>/dev/null ` +
+      `| sed 's|^\\./||' | command grep -v '^\\.git/' | head -n ${GREP_MAX_HITS}`;
     const res = await this.execRaw(sessionId, { command: cmd, timeoutMs: FS_TIMEOUT_MS });
     return res.stdout.split("\n").filter((l) => l.length > 0);
   }

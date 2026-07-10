@@ -31,7 +31,7 @@ import { revalidatePath } from "next/cache";
 import { invoke } from "@oxagen/oxagen";
 import { resolveAgentToolsManager } from "./authz";
 import { connectCustomMcpServer } from "./mcp-actions";
-import type { ResolvedStudioScope } from "@/lib/studio/scope";
+import type { ResolvedWorkbenchScope } from "@/lib/workbench/scope";
 
 const mockInvoke = vi.mocked(invoke);
 const mockResolveManager = vi.mocked(resolveAgentToolsManager);
@@ -50,7 +50,7 @@ const AUTHORIZED_SCOPE = {
   org: { id: "org-1" },
   ws: { id: "ws-1" },
   ctx: { orgId: "org-1", workspaceId: "ws-1" },
-} as unknown as ResolvedStudioScope;
+} as unknown as ResolvedWorkbenchScope;
 
 beforeEach(() => {
   vi.clearAllMocks();

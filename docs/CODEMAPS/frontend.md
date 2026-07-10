@@ -75,7 +75,7 @@ apps/app/src/app/[orgSlug]/[workspaceSlug]/layout.tsx → workspace shell
     /                                    → ActivityPage (execution list)
     /[executionId]                       → ExecutionDetailPage (span tree, lineage)
 
-  /studio                                → StudioPage (agent/skill/tool authoring hub)
+  /workbench                             → WorkbenchPage (agent/skill/tool authoring hub)
     /agents                              → AgentsListPage + AgentEditorForm
     /skills                              → SkillsAuthoringPage
     /tools                               → ToolsPage

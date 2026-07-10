@@ -8,6 +8,22 @@ export * from "./memory/neo4j";
 export * as hooks from "./hooks/runtime";
 export { resolveHandler, invokeCapability } from "./handlers/index";
 export type { CapabilityHandlerFn } from "./handlers/index";
+// Sandbox session lifecycle & work-recovery (spec: sandbox-session-lifecycle).
+// The reaper (packages/inngest-functions) and the recover_sandbox_session
+// capability both drive these; exported here as the public lifecycle surface.
+export {
+  releaseSession,
+  sandboxGraceSeconds,
+  sandboxStaleRunningSeconds,
+  markSessionStatus,
+  getSessionByPublicId,
+} from "./handlers/_sandbox-session";
+export {
+  recoverSandboxSession,
+  recoveryLabel,
+} from "./handlers/recover-sandbox-session";
+export type { RecoveryOutcome, RecoveryKind } from "./handlers/recover-sandbox-session";
+export { agentSandboxStopHandler } from "./handlers/agent.sandbox.stop";
 // Typed subagent-fanout errors — surfaces (apps/api) import these to map an
 // unknown / cross-tenant fanout id to a 404 instead of a 500 via instanceof,
 // not a brittle error-message regex.

@@ -31,6 +31,9 @@ const ACTIVE_AGENT = {
   slug: "qa-chat",
   name: "QA",
   description: "desc",
+  avatarUrl: "https://cdn.example.com/a.png",
+  summary: "Answers workspace questions.",
+  summaryChecksum: "abc123",
   agentType: "interactive_chat",
   status: "active",
   deploymentStatus: "active",
@@ -50,6 +53,9 @@ describe("agent.definition.get handler", () => {
     expect(out.version).toBe(1);
     expect(out.isPublished).toBe(true);
     expect(out.config.agentTools).toHaveLength(1);
+    // avatar + summary are surfaced from the agent identity row.
+    expect(out.avatarUrl).toBe("https://cdn.example.com/a.png");
+    expect(out.summary).toBe("Answers workspace questions.");
   });
 
   it("sets managed=true when agentType is interactive_chat", async () => {

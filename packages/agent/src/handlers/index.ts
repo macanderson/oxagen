@@ -24,6 +24,7 @@ const LOADERS: Record<string, LoaderEntry> = {
   "stop_sandbox": () => import("./agent.sandbox.stop"),
   "list_sandboxes": () => import("./agent.sandbox.list"),
   "list_sandbox_files": () => import("./agent.sandbox_file.list"),
+  "list_sandbox_logs": () => import("./agent.sandbox_log.list"),
   "read_sandbox_file": () => import("./agent.sandbox_file.read"),
   // Browser automation inside a durable session — all seven thin wrappers live
   // in one module (browser.ts) that drives `browserctl` via execInSession.
@@ -67,6 +68,9 @@ const LOADERS: Record<string, LoaderEntry> = {
   "promote_memory": () => import("./agent.memory.promote"),
   "list_memory_promotions": () => import("./agent.memory_promotion.list"),
   "cite_memory": () => import("./agent.memory.cite"),
+  // @-mention citations: any :GraphNode a user references in chat gets the
+  // same citation_count bookkeeping as automatic memory citations.
+  "cite_reference": () => import("./reference.cite"),
   "attach_memory_evidence": () => import("./agent.memory_evidence.attach"),
   "list_memory_citations": () => import("./agent.memory_citation.list"),
   "resolve_approval": () => import("./agent.approval.resolve"),

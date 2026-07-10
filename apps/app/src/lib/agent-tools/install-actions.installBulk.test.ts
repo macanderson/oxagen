@@ -78,10 +78,10 @@ vi.mock("@oxagen/oxagen", () => ({ invoke: mockInvoke }));
 vi.mock("@oxagen/handlers/register", () => ({}));
 vi.mock("@/lib/routes", () => ({
   workspace: {
-    studio: {
+    workbench: {
       tools: {
         capabilities: ({ orgSlug, workspaceSlug }: { orgSlug: string; workspaceSlug: string }) =>
-          `/${orgSlug}/${workspaceSlug}/studio/tools/capabilities`,
+          `/${orgSlug}/${workspaceSlug}/workbench/tools/capabilities`,
       },
     },
   },
@@ -162,7 +162,7 @@ describe("installBulkPlugin server action", () => {
 
     expect(res.ok).toBe(true);
     expect(res.failures).toBeUndefined();
-    expect(mockRevalidatePath).toHaveBeenCalledWith("/acme/main/studio/tools/capabilities");
+    expect(mockRevalidatePath).toHaveBeenCalledWith("/acme/main/workbench/tools/capabilities");
   });
 
   it("wraps the invoke call in runInTenantScope with the correct org and workspace ids", async () => {
@@ -274,11 +274,13 @@ describe("installBulkPlugin server action", () => {
     });
 
     expect(res.ok).toBe(true);
+    // install_skill (skill.workspace.install) is exposed on ["api","mcp"] only,
+    // so the app must NOT assert { surface: "agent" } (that throws surface_denied
+    // in prod). The call passes exactly three args — no opts object.
     expect(mockInvoke).toHaveBeenCalledWith(
       "install_skill",
       { slug: "summarize", workspace_id: "ws-1" },
       expect.objectContaining({ orgId: "org-1", workspaceId: "ws-1" }),
-      { surface: "agent" },
     );
     // install_bulk is never called when there are no non-skill items.
     expect(mockInvoke).not.toHaveBeenCalledWith(

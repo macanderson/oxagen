@@ -33,6 +33,12 @@ export const agentDefinitionGet = registerCapability({
       ),
     name: z.string(),
     description: z.string().nullable(),
+    // Nullable avatar: an https:// URL or a designed-avatar spec string
+    // ("avatar:v1:<json>"). Null when the agent has no avatar set.
+    avatarUrl: z.string().nullable(),
+    // LLM-inferred, plain-text (<=256 char) description of what the agent does.
+    // Null until agent.definition.summarize has run for the agent.
+    summary: z.string().nullable(),
     agentType: z.string(),
     status: z.enum(["draft", "active", "archived"]),
     deploymentStatus: z.enum(["inactive", "active"]),

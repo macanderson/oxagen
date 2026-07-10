@@ -5,10 +5,12 @@
  * tabbed "Files" / "Workspace" view mounted alongside the transcript (see
  * `chat-shell-client.tsx`).
  *
- * "Files" reuses `ConversationFilesList` (`./conversation-files.tsx`) — the
- * exact same fetch (`GET /api/v1/conversations/:id/assets`) and row rendering
- * the header's Sheet-based `ConversationFiles` trigger uses, so there is one
- * implementation of "list this conversation's generated assets", not two.
+ * "Files" renders `ConversationFilesList` (`./conversation-files.tsx`) — the
+ * client-side fetch (`GET /api/v1/conversations/:id/assets`) and row rendering
+ * for this conversation's generated assets. This tab is now the sole surface
+ * for conversation files; the old Sheet-based drawer trigger was removed as
+ * duplicate UI, leaving one implementation of "list this conversation's
+ * generated assets", not two.
  *
  * "Workspace" delegates entirely to the existing model-dispatched
  * `registry-components/workspace-context-panel.tsx` (componentId

@@ -70,10 +70,6 @@ vi.mock("./message-composer", () => ({
 // ── UI/component stubs ───────────────────────────────────────────────────────
 vi.mock("./message-tree", () => ({ MessageTree: () => null }));
 vi.mock("./suggested-prompt-chips", () => ({ SuggestedPromptChips: () => null }));
-vi.mock("./conversation-files", () => ({
-  ConversationFiles: () => <div data-testid="conversation-files" />,
-  ConversationFilesList: () => <div data-testid="conversation-files-list" />,
-}));
 vi.mock("./coding-trace-panel", () => ({
   CodingTracePanel: () => <div data-testid="coding-trace-panel" />,
 }));
@@ -428,8 +424,7 @@ describe("ChatShellClient — stream error banner on non-2xx SSE response", () =
 // the contract that makes the user's prompt persist there:
 //   - onConversationCreated is called (and router URL pin is skipped) when a
 //     turn creates the conversation;
-//   - reloadMessages is called after the turn (replacing router.refresh());
-//   - showFiles={false} hides the conversation-files trigger.
+//   - reloadMessages is called after the turn (replacing router.refresh()).
 
 describe("ChatShellClient — embedded mode (in-app panel)", () => {
   afterEach(() => {
@@ -499,33 +494,6 @@ describe("ChatShellClient — embedded mode (in-app panel)", () => {
     await renderEmbeddedAndSubmit({ reloadMessages, onConversationCreated: vi.fn() });
     expect(reloadMessages).toHaveBeenCalled();
     expect(mockRefresh).not.toHaveBeenCalled();
-  });
-
-  it("hides the conversation-files trigger when showFiles={false}", async () => {
-    cleanup();
-    await renderClient();
-    // Default (showFiles undefined → true) renders the files trigger.
-    expect(screen.getByTestId("conversation-files")).toBeInTheDocument();
-
-    cleanup();
-    const { ChatShellClient } = await import("./chat-shell-client");
-    render(
-      <ChatShellClient
-        conversationId={null}
-        conversationPublicId={null}
-        activeLeafMessageId={null}
-        messages={[]}
-        sendAction={noop}
-        resolveApprovalAction={async () => ({ ok: true })}
-        resolveConsentAction={async () => ({ ok: true })}
-        resolvePlanAction={async () => ({ ok: true })}
-        orgSlug="test-org"
-        workspaceSlug="test-ws"
-        modelConfig={modelConfig}
-        showFiles={false}
-      />,
-    );
-    expect(screen.queryByTestId("conversation-files")).not.toBeInTheDocument();
   });
 
   it("mounts the coding-trace-panel + workspace-context-panel rail by default, hides it when showFiles={false}", async () => {

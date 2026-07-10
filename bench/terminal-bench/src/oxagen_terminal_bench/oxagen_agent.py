@@ -176,12 +176,16 @@ _NODE_SETUP_MAJOR = 22
 # the CLI's own default (`solve --candidates` defaults to 3, see solve.ts).
 _DEFAULT_BEST_OF_N_CANDIDATES = 3
 
-# Static ripgrep for the task container (x86_64 musl — SWE-bench images are
-# x86_64, and a musl static binary runs on any distro). Without rg on PATH the
-# CLI's `grep` tool falls back to an in-process JS walk that reads every file
-# in the repo — pathologically slow on Django-sized trees under emulation.
-# Pinned version + sha256 (computed from the official GitHub release asset);
-# extracted once to a host cache and uploaded per container.
+# Static fast-search tools for the task container (x86_64 — SWE-bench images are
+# x86_64, and a static binary runs on any distro). Without these on PATH the
+# CLI's search tooling (and any shell command the agent runs) falls back to an
+# in-process JS walk / `find` that reads every file in the repo — pathologically
+# slow on Django-sized trees under emulation. Each is a pinned static release,
+# sha256-verified (checksum computed from the official GitHub release asset),
+# extracted once to a host cache, and uploaded per container.
+#
+# ripgrep and fd nest their binary under a versioned dir inside the tarball; fzf
+# is a single static Go binary sitting at the tarball root (member == "fzf").
 _RG_VERSION = "14.1.0"
 _RG_URL = (
     "https://github.com/BurntSushi/ripgrep/releases/download/"
@@ -189,39 +193,104 @@ _RG_URL = (
 )
 _RG_SHA256 = "f84757b07f425fe5cf11d87df6644691c644a5cd2348a2c670894272999d3ba7"
 
+_FD_VERSION = "10.4.2"
+_FD_URL = (
+    "https://github.com/sharkdp/fd/releases/download/"
+    f"v{_FD_VERSION}/fd-v{_FD_VERSION}-x86_64-unknown-linux-musl.tar.gz"
+)
+_FD_SHA256 = "e3257d48e29a6be965187dbd24ce9af564e0fe67b3e73c9bdcd180f4ec11bdde"
 
-def _cached_rg_binary() -> Path | None:
-    """Download (once), verify, and extract the static `rg` binary on the host.
+_FZF_VERSION = "0.74.0"
+_FZF_URL = (
+    "https://github.com/junegunn/fzf/releases/download/"
+    f"v{_FZF_VERSION}/fzf-{_FZF_VERSION}-linux_amd64.tar.gz"
+)
+_FZF_SHA256 = "cf919f05b7581b4c744d764eaa704665d61dd6d3ca785f0df2351281dff60cda"
 
-    Returns the path to the extracted binary, or None on any failure — rg is an
-    optimization, never a trial blocker.
-    """
+
+def _bench_tool_cache() -> Path:
+    """Host cache dir for the provisioned static search-tool binaries."""
     cache = Path.home() / ".cache" / "oxagen-bench"
     cache.mkdir(parents=True, exist_ok=True)
-    binary = cache / f"rg-{_RG_VERSION}-x86_64-musl"
+    return cache
+
+
+def _download_static_binary(
+    label: str,
+    url: str,
+    sha256: str,
+    member: str,
+    *,
+    binary: Path,
+    tarball: Path,
+) -> Path | None:
+    """Download (once), verify sha256, and extract `member` from a pinned static
+    release tarball into `binary` (a stable host-cache path).
+
+    Returns the path to the extracted binary, or None on any failure — these
+    search tools are an optimization, never a trial blocker. `binary`/`tarball`
+    are passed in so each tool keeps its own stable cache filenames.
+    """
     if binary.is_file():
         return binary
-    tarball = cache / f"ripgrep-{_RG_VERSION}-x86_64-musl.tar.gz"
     try:
         if not tarball.is_file():
-            urllib.request.urlretrieve(_RG_URL, tarball)  # noqa: S310 — pinned https URL
+            urllib.request.urlretrieve(url, tarball)  # noqa: S310 — pinned https URL
         digest = hashlib.sha256(tarball.read_bytes()).hexdigest()
-        if digest != _RG_SHA256:
+        if digest != sha256:
             print(
-                f"oxagen-adapter: ripgrep tarball sha256 mismatch ({digest}); skipping",
+                f"oxagen-adapter: {label} tarball sha256 mismatch ({digest}); skipping",
                 file=sys.stderr,
             )
             tarball.unlink(missing_ok=True)
             return None
-        member = f"ripgrep-{_RG_VERSION}-x86_64-unknown-linux-musl/rg"
         with tarfile.open(tarball) as tf, tempfile.TemporaryDirectory() as td:
             tf.extract(member, td, filter="data")
             (Path(td) / member).rename(binary)
         binary.chmod(0o755)
         return binary
     except Exception as exc:
-        print(f"oxagen-adapter: ripgrep provisioning failed ({exc}); skipping", file=sys.stderr)
+        print(f"oxagen-adapter: {label} provisioning failed ({exc}); skipping", file=sys.stderr)
         return None
+
+
+def _cached_rg_binary() -> Path | None:
+    """Download (once), verify, and extract the static `rg` binary on the host."""
+    cache = _bench_tool_cache()
+    return _download_static_binary(
+        "ripgrep",
+        _RG_URL,
+        _RG_SHA256,
+        f"ripgrep-{_RG_VERSION}-x86_64-unknown-linux-musl/rg",
+        binary=cache / f"rg-{_RG_VERSION}-x86_64-musl",
+        tarball=cache / f"ripgrep-{_RG_VERSION}-x86_64-musl.tar.gz",
+    )
+
+
+def _cached_fd_binary() -> Path | None:
+    """Download (once), verify, and extract the static `fd` binary on the host."""
+    cache = _bench_tool_cache()
+    return _download_static_binary(
+        "fd",
+        _FD_URL,
+        _FD_SHA256,
+        f"fd-v{_FD_VERSION}-x86_64-unknown-linux-musl/fd",
+        binary=cache / f"fd-{_FD_VERSION}-x86_64-musl",
+        tarball=cache / f"fd-{_FD_VERSION}-x86_64-musl.tar.gz",
+    )
+
+
+def _cached_fzf_binary() -> Path | None:
+    """Download (once), verify, and extract the static `fzf` binary on the host."""
+    cache = _bench_tool_cache()
+    return _download_static_binary(
+        "fzf",
+        _FZF_URL,
+        _FZF_SHA256,
+        "fzf",  # fzf's tarball places the binary at the root, no enclosing dir
+        binary=cache / f"fzf-{_FZF_VERSION}-amd64",
+        tarball=cache / f"fzf-{_FZF_VERSION}-amd64.tar.gz",
+    )
 
 
 def _is_truthy(value: str | None) -> bool:
@@ -384,8 +453,8 @@ def _locate_bundle() -> Path:
 # To pre-bake task images for SWE-bench, use the prewarm tooling in
 # bench/swe-bench/ (see PREWARM.md there):
 #   1. `prewarm.py` builds oxagen-prewarmed/<name>:<envhash>-<bundlesha>
-#      images (Node 22 + bundle + wasm + rg + wrapper baked in) on top of
-#      each task's own environment image;
+#      images (Node 22 + bundle + wasm + rg/fd/fzf + wrapper baked in) on top
+#      of each task's own environment image;
 #   2. run.sh with OXAGEN_PREWARMED=1 passes Harbor
 #      `--env oxagen_swe_bench.prewarm_env:PrewarmedDockerEnvironment`,
 #      which points the trial at that image when it exists locally;
@@ -515,6 +584,40 @@ class OxagenAgent(BaseInstalledAgent):
             )
             return False
 
+    async def _provision_search_tool(
+        self, environment: BaseEnvironment, name: str, binary: Path | None
+    ) -> None:
+        """Upload a static search-tool binary (rg / fd / fzf) to
+        ``/usr/local/bin/<name>``, best-effort.
+
+        Skipped when provisioning failed on the host (``binary`` is None) or the
+        image already ships the tool (probed first so pre-baked images pay zero
+        upload cost). Never raises — these tools are an optimization, never a
+        trial blocker.
+        """
+        if binary is None:
+            return
+        have = False
+        try:
+            probe = await environment.exec(command=f"command -v {name}", timeout_sec=30)
+            have = probe.return_code == 0
+        except Exception:
+            have = False  # probe is best-effort; fall back to upload
+        if have:
+            self.logger.info(
+                "oxagen-adapter: %s already present in image, skipping upload", name
+            )
+            return
+        remote_tmp = f"/tmp/oxa-{name}"
+        await environment.upload_file(binary, remote_tmp)
+        await self.exec_as_root(
+            environment,
+            command=(
+                f"command -v {name} >/dev/null 2>&1 || "
+                f"{{ cp {remote_tmp} /usr/local/bin/{name} && chmod +x /usr/local/bin/{name}; }}"
+            ),
+        )
+
     async def install(self, environment: BaseEnvironment) -> None:
         bundle_path = _locate_bundle()
 
@@ -560,33 +663,15 @@ class OxagenAgent(BaseInstalledAgent):
                 ),
             )
 
-        # 3) Static ripgrep so the CLI's grep tool never falls back to the
-        #    in-process JS walk (see _RG_* above). Best-effort: skipped when the
-        #    image already has rg (probed first so pre-baked images pay zero
-        #    upload cost) or provisioning failed.
-        rg = _cached_rg_binary()
-        if rg is not None:
-            have_rg = False
-            try:
-                probe = await environment.exec(
-                    command="command -v rg", timeout_sec=30
-                )
-                have_rg = probe.return_code == 0
-            except Exception:
-                have_rg = False  # probe is best-effort; fall back to upload
-            if have_rg:
-                self.logger.info(
-                    "oxagen-adapter: rg already present in image, skipping upload"
-                )
-            else:
-                await environment.upload_file(rg, "/tmp/oxa-rg")
-                await self.exec_as_root(
-                    environment,
-                    command=(
-                        "command -v rg >/dev/null 2>&1 || "
-                        "{ cp /tmp/oxa-rg /usr/local/bin/rg && chmod +x /usr/local/bin/rg; }"
-                    ),
-                )
+        # 3) Static fast-search tools (rg / fd / fzf) so the CLI's search tooling
+        #    (and any shell command the agent runs) reaches for the fast native
+        #    binaries instead of an in-process JS walk / `find` (see _RG_/_FD_/
+        #    _FZF_ above). Best-effort per tool: each is skipped when the image
+        #    already ships it (probed first so pre-baked images pay zero upload
+        #    cost) or host provisioning failed.
+        await self._provision_search_tool(environment, "rg", _cached_rg_binary())
+        await self._provision_search_tool(environment, "fd", _cached_fd_binary())
+        await self._provision_search_tool(environment, "fzf", _cached_fzf_binary())
 
         # 4) Optional: live context engine (persistent memory/trace via DuckDB).
         if _is_truthy(os.environ.get("OXAGEN_INSTALL_DUCKDB")):

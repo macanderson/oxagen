@@ -2,8 +2,10 @@
 /**
  * conversation-files.test.tsx
  *
- * Render + interaction tests for ConversationFiles:
- *   - Renders the trigger button (Paperclip icon) in idle state
+ * Render + interaction tests for ConversationFilesList — the single list body
+ * mounted by the chat side-panel's "Files" tab (the old Sheet-based drawer was
+ * removed as duplicate UI):
+ *   - Does not fetch while inactive; renders without crashing
  *   - Shows a loading spinner while the fetch is in flight
  *   - Shows conversation files (filename, size, timestamp) after data loads
  *   - Renders an inline "open in new tab" affordance for images/video and a
@@ -23,25 +25,6 @@ afterEach(cleanup);
 
 vi.mock("@/lib/utils", () => ({
   cn: (...args: unknown[]) => args.filter(Boolean).join(" "),
-}));
-
-vi.mock("@/components/ui/button", () => ({
-  Button: ({
-    children,
-    onClick,
-    type,
-    "aria-label": ariaLabel,
-    ...rest
-  }: React.ButtonHTMLAttributes<HTMLButtonElement> & { "aria-label"?: string }) => (
-    <button
-      type={(type as "button" | "submit" | "reset") ?? "button"}
-      onClick={onClick}
-      aria-label={ariaLabel}
-      {...rest}
-    >
-      {children}
-    </button>
-  ),
 }));
 
 // Alert primitives — render semantic roles so empty/error states are assertable.
@@ -71,30 +54,6 @@ vi.mock("@/components/ui/dialog", () => ({
   ),
   DialogHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   DialogTitle: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-}));
-
-vi.mock("@/components/ui/sheet", () => ({
-  Sheet: ({
-    children,
-    open,
-    onOpenChange,
-  }: {
-    children: React.ReactNode;
-    open?: boolean;
-    onOpenChange?: (v: boolean) => void;
-  }) => (
-    <div data-testid="sheet" data-open={open ? "true" : "false"}>
-      <button data-testid="sheet-open-trigger" onClick={() => onOpenChange?.(true)} />
-      {children}
-    </div>
-  ),
-  SheetTrigger: ({ render: renderProp }: { children?: React.ReactNode; render?: React.ReactElement }) =>
-    renderProp ?? null,
-  SheetPopup: ({ children }: { children: React.ReactNode }) => (
-    <div data-testid="sheet-popup">{children}</div>
-  ),
-  SheetHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  SheetTitle: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 
 vi.mock("lucide-react", async (importOriginal) => {
@@ -167,18 +126,22 @@ const MOCK_ASSETS = [
   },
 ];
 
-describe("ConversationFiles", () => {
-  it("renders without crashing in idle state", async () => {
-    const { ConversationFiles } = await import("./conversation-files");
-    render(<ConversationFiles conversationPublicId="conv_abc" />);
+describe("ConversationFilesList", () => {
+  it("renders without crashing and does not fetch while inactive", async () => {
+    const fetchSpy = vi.fn();
+    global.fetch = fetchSpy;
+    const { ConversationFilesList } = await import("./conversation-files");
+    render(<ConversationFilesList conversationPublicId="conv_abc" active={false} />);
     expect(document.body).toBeInTheDocument();
+    // Inactive lists never hit the network — the fetch only fires while the
+    // "Files" tab is the visible tab.
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it("shows the loading spinner while the fetch is in flight", async () => {
     global.fetch = vi.fn().mockReturnValue(new Promise(() => {}));
-    const { ConversationFiles } = await import("./conversation-files");
-    render(<ConversationFiles conversationPublicId="conv_abc" />);
-    await userEvent.click(screen.getByTestId("sheet-open-trigger"));
+    const { ConversationFilesList } = await import("./conversation-files");
+    render(<ConversationFilesList conversationPublicId="conv_abc" active={true} />);
     await waitFor(() => {
       expect(screen.getByTestId("icon-loader")).toBeInTheDocument();
     });
@@ -190,9 +153,8 @@ describe("ConversationFiles", () => {
       status: 200,
       json: () => Promise.resolve(MOCK_ASSETS),
     });
-    const { ConversationFiles } = await import("./conversation-files");
-    render(<ConversationFiles conversationPublicId="conv_abc" />);
-    await userEvent.click(screen.getByTestId("sheet-open-trigger"));
+    const { ConversationFilesList } = await import("./conversation-files");
+    render(<ConversationFilesList conversationPublicId="conv_abc" active={true} />);
     await waitFor(() => {
       expect(screen.getByText("quarterly-revenue-chart.png")).toBeInTheDocument();
       expect(screen.getByText("onboarding-checklist.docx")).toBeInTheDocument();
@@ -209,9 +171,8 @@ describe("ConversationFiles", () => {
       status: 200,
       json: () => Promise.resolve(MOCK_ASSETS),
     });
-    const { ConversationFiles } = await import("./conversation-files");
-    render(<ConversationFiles conversationPublicId="conv_abc" />);
-    await userEvent.click(screen.getByTestId("sheet-open-trigger"));
+    const { ConversationFilesList } = await import("./conversation-files");
+    render(<ConversationFilesList conversationPublicId="conv_abc" active={true} />);
     await waitFor(() => {
       expect(screen.getByText("quarterly-revenue-chart.png")).toBeInTheDocument();
     });
@@ -259,9 +220,10 @@ describe("ConversationFiles", () => {
       status: 200,
       json: () => Promise.resolve(MOCK_ASSETS),
     });
-    const { ConversationFiles } = await import("./conversation-files");
-    const { container } = render(<ConversationFiles conversationPublicId="conv_abc" />);
-    await userEvent.click(screen.getByTestId("sheet-open-trigger"));
+    const { ConversationFilesList } = await import("./conversation-files");
+    const { container } = render(
+      <ConversationFilesList conversationPublicId="conv_abc" active={true} />,
+    );
     await waitFor(() => {
       expect(screen.getByText("agentic-flow-diagram.svg")).toBeInTheDocument();
     });
@@ -284,9 +246,8 @@ describe("ConversationFiles", () => {
       status: 200,
       json: () => Promise.resolve(MOCK_ASSETS),
     });
-    const { ConversationFiles } = await import("./conversation-files");
-    render(<ConversationFiles conversationPublicId="conv_abc" />);
-    await userEvent.click(screen.getByTestId("sheet-open-trigger"));
+    const { ConversationFilesList } = await import("./conversation-files");
+    render(<ConversationFilesList conversationPublicId="conv_abc" active={true} />);
     await waitFor(() => {
       expect(screen.getByText("agentic-flow-diagram.svg")).toBeInTheDocument();
     });
@@ -323,9 +284,8 @@ describe("ConversationFiles", () => {
       status: 200,
       json: () => Promise.resolve(MOCK_ASSETS),
     });
-    const { ConversationFiles } = await import("./conversation-files");
-    render(<ConversationFiles conversationPublicId="conv_abc" />);
-    await userEvent.click(screen.getByTestId("sheet-open-trigger"));
+    const { ConversationFilesList } = await import("./conversation-files");
+    render(<ConversationFilesList conversationPublicId="conv_abc" active={true} />);
     await waitFor(() => {
       expect(screen.getByText("agentic-flow-diagram.svg")).toBeInTheDocument();
     });
@@ -346,9 +306,8 @@ describe("ConversationFiles", () => {
       status: 200,
       json: () => Promise.resolve([]),
     });
-    const { ConversationFiles } = await import("./conversation-files");
-    render(<ConversationFiles conversationPublicId="conv_abc" />);
-    await userEvent.click(screen.getByTestId("sheet-open-trigger"));
+    const { ConversationFilesList } = await import("./conversation-files");
+    render(<ConversationFilesList conversationPublicId="conv_abc" active={true} />);
     await waitFor(() => {
       expect(screen.getByText("No files yet")).toBeInTheDocument();
     });
@@ -362,9 +321,8 @@ describe("ConversationFiles", () => {
       status: 404,
       json: () => Promise.resolve({ error: { code: "not_found" } }),
     });
-    const { ConversationFiles } = await import("./conversation-files");
-    render(<ConversationFiles conversationPublicId="conv_abc" />);
-    await userEvent.click(screen.getByTestId("sheet-open-trigger"));
+    const { ConversationFilesList } = await import("./conversation-files");
+    render(<ConversationFilesList conversationPublicId="conv_abc" active={true} />);
     await waitFor(() => {
       expect(screen.getByText("No files yet")).toBeInTheDocument();
     });
@@ -376,9 +334,8 @@ describe("ConversationFiles", () => {
 
   it("shows an error Alert and a Retry button when the fetch fails", async () => {
     global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 500 });
-    const { ConversationFiles } = await import("./conversation-files");
-    render(<ConversationFiles conversationPublicId="conv_abc" />);
-    await userEvent.click(screen.getByTestId("sheet-open-trigger"));
+    const { ConversationFilesList } = await import("./conversation-files");
+    render(<ConversationFilesList conversationPublicId="conv_abc" active={true} />);
     await waitFor(() => {
       expect(screen.getByText("Couldn't load files (HTTP 500)")).toBeInTheDocument();
       expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
@@ -389,9 +346,8 @@ describe("ConversationFiles", () => {
   it("does not fetch when conversationPublicId is null", async () => {
     const fetchSpy = vi.fn();
     global.fetch = fetchSpy;
-    const { ConversationFiles } = await import("./conversation-files");
-    render(<ConversationFiles conversationPublicId={null} />);
-    await userEvent.click(screen.getByTestId("sheet-open-trigger"));
+    const { ConversationFilesList } = await import("./conversation-files");
+    render(<ConversationFilesList conversationPublicId={null} active={true} />);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });

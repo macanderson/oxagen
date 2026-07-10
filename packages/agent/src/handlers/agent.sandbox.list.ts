@@ -10,18 +10,42 @@ export type { AgentSandboxListInput, AgentSandboxListOutput };
 
 type Sandbox = AgentSandboxListOutput["sandboxes"][number];
 
+/**
+ * Pull the human-friendly `label` out of the session's metadata JSON blob.
+ * Metadata is an untyped jsonb bag (`SessionMeta`), so we defensively check the
+ * shape rather than trust a cast — a non-string / missing label degrades to null.
+ */
+function readLabel(metadata: unknown): string | null {
+  if (metadata && typeof metadata === "object") {
+    const label = (metadata as { label?: unknown }).label;
+    if (typeof label === "string" && label.trim().length > 0) return label;
+  }
+  return null;
+}
+
 // Columns projected for the listing. Deliberately excludes the driver-internal
 // sandboxId / snapshotId — the client never needs the live driver handle, only
 // the opaque public id (sbx_…).
 const LIST_COLUMNS = {
   publicId: schema.sandboxSessions.publicId,
   sessionKey: schema.sandboxSessions.sessionKey,
+  // Projected for the human-friendly label stored under metadata.label.
+  metadata: schema.sandboxSessions.metadata,
   image: schema.sandboxSessions.image,
   status: schema.sandboxSessions.status,
   driver: schema.sandboxSessions.driver,
   lastUsedAt: schema.sandboxSessions.lastUsedAt,
   expiresAt: schema.sandboxSessions.expiresAt,
   createdAt: schema.sandboxSessions.createdAt,
+  // Lifecycle & work-recovery fields (spec: sandbox-session-lifecycle) — so the
+  // listing surfaces reap/recovery state without a per-session round-trip.
+  recoveryStatus: schema.sandboxSessions.recoveryStatus,
+  recoveryBranch: schema.sandboxSessions.recoveryBranch,
+  recoveryCommit: schema.sandboxSessions.recoveryCommit,
+  graceDeadlineAt: schema.sandboxSessions.graceDeadlineAt,
+  dirty: schema.sandboxSessions.dirty,
+  flushedAt: schema.sandboxSessions.flushedAt,
+  recoveredAt: schema.sandboxSessions.recoveredAt,
 } as const;
 
 /**
@@ -64,16 +88,25 @@ export async function agentSandboxListHandler(
 function toSandbox(row: {
   publicId: string;
   sessionKey: string | null;
+  metadata: unknown;
   image: string;
   status: string;
   driver: string;
   lastUsedAt: Date | null;
   expiresAt: Date | null;
   createdAt: Date;
+  recoveryStatus: string;
+  recoveryBranch: string | null;
+  recoveryCommit: string | null;
+  graceDeadlineAt: Date | null;
+  dirty: boolean | null;
+  flushedAt: Date | null;
+  recoveredAt: Date | null;
 }): Sandbox {
   return {
     sessionId: row.publicId,
     sessionKey: row.sessionKey,
+    label: readLabel(row.metadata),
     // The DB CHECK constraint restricts these columns to the enum members, so
     // the narrowing cast is safe — no runtime value can fall outside the union.
     image: row.image as Sandbox["image"],
@@ -82,5 +115,13 @@ function toSandbox(row: {
     lastUsedAt: row.lastUsedAt ? row.lastUsedAt.toISOString() : null,
     expiresAt: row.expiresAt ? row.expiresAt.toISOString() : null,
     createdAt: row.createdAt.toISOString(),
+    // Lifecycle & work-recovery (spec: sandbox-session-lifecycle).
+    recoveryStatus: row.recoveryStatus,
+    recoveryBranch: row.recoveryBranch,
+    recoveryCommit: row.recoveryCommit,
+    graceDeadlineAt: row.graceDeadlineAt ? row.graceDeadlineAt.toISOString() : null,
+    dirty: row.dirty,
+    flushedAt: row.flushedAt ? row.flushedAt.toISOString() : null,
+    recoveredAt: row.recoveredAt ? row.recoveredAt.toISOString() : null,
   };
 }

@@ -17,7 +17,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 
-// Hoisted mutable store state so the (hoisted) vi.mock factory can read it.
+// Hoisted mutable store state + pathname so the (hoisted) vi.mock factories can
+// read them. `pathname` defaults to a non-`/ask` route so the bar renders in the
+// existing suites; the route-suppression suite overrides it per test.
 const h = vi.hoisted(() => ({
   state: {
     visibility: "closed" as "open" | "collapsed" | "closed",
@@ -25,10 +27,15 @@ const h = vi.hoisted(() => ({
     conversationTitle: null as string | null,
     open: vi.fn(),
   },
+  pathname: "/acme/prod/knowledge",
 }));
 
 vi.mock("./use-agent-panel-store", () => ({
   useAgentPanelStore: () => h.state,
+}));
+
+vi.mock("next/navigation", () => ({
+  usePathname: () => h.pathname,
 }));
 
 import { AgentBottomBar } from "./agent-bottom-bar";
@@ -38,6 +45,7 @@ beforeEach(() => {
   h.state.status = "idle";
   h.state.conversationTitle = null;
   h.state.open = vi.fn();
+  h.pathname = "/acme/prod/knowledge";
 });
 
 afterEach(cleanup);
@@ -67,6 +75,29 @@ describe("AgentBottomBar — always-present chrome", () => {
     render(<AgentBottomBar />);
     fireEvent.click(screen.getByRole("button", { name: /open ai agent/i }));
     expect(h.state.open).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("AgentBottomBar — route suppression", () => {
+  it("renders nothing on the /ask conversation surface", () => {
+    h.pathname = "/acme/prod/ask";
+    const { container } = render(<AgentBottomBar />);
+    expect(container).toBeEmptyDOMElement();
+    expect(screen.queryByRole("toolbar", { name: /agent toolbar/i })).toBeNull();
+  });
+
+  it("still renders on a non-/ask route", () => {
+    h.pathname = "/acme/prod/knowledge";
+    render(<AgentBottomBar />);
+    expect(screen.getByRole("toolbar", { name: /agent toolbar/i })).toBeInTheDocument();
+  });
+
+  it("does not false-positive on a route where an earlier segment is 'ask'", () => {
+    // An org/workspace literally named "ask" must not suppress the bar on its
+    // other pages — only the trailing `/ask` segment counts.
+    h.pathname = "/ask/prod/knowledge";
+    render(<AgentBottomBar />);
+    expect(screen.getByRole("toolbar", { name: /agent toolbar/i })).toBeInTheDocument();
   });
 });
 

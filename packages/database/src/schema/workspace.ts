@@ -20,6 +20,11 @@ export const workspaces = workspaceSchema.table(
     // Derived from the slug at creation via deriveNamespace() over the org's
     // existing workspace namespaces.
     namespace: citext("namespace").notNull(),
+    // Nullable avatar. Either an https:// URL or the platform designed-avatar
+    // spec string "avatar:v1:<json>" ({emoji,bg,mode}); capped at 512 chars at
+    // the contract layer. Same column name as users/organizations for
+    // consistency, even though it may carry the spec string, not a plain URL.
+    avatarUrl: text("avatar_url"),
     settings: jsonb("settings").notNull().default(sql`'{}'::jsonb`),
     // Workspace-level model defaults. NULL means the workspace sets no default
     // for that dimension and the user's own preference (or the system default)

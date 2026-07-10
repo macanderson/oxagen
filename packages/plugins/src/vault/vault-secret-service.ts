@@ -123,20 +123,24 @@ async function existingDefaultPlaintext(
   return row.defaultValueText;
 }
 
-const KEY_COLUMNS = {
-  id: schema.secretKeys.id,
-  publicId: schema.secretKeys.publicId,
-  key: schema.secretKeys.key,
-  sensitive: schema.secretKeys.sensitive,
-  memo: schema.secretKeys.memo,
-  defaultValueEnc: schema.secretKeys.defaultValueEnc,
-  defaultValueText: schema.secretKeys.defaultValueText,
-  defaultValueKmsKeyId: schema.secretKeys.defaultValueKmsKeyId,
-} as const;
+// Built per call, never at module scope: test suites mock @oxagen/database
+// with a partial `schema`, and a module-level `schema.<table>.<col>` access
+// crashes every importer at load time.
+const keyColumns = () =>
+  ({
+    id: schema.secretKeys.id,
+    publicId: schema.secretKeys.publicId,
+    key: schema.secretKeys.key,
+    sensitive: schema.secretKeys.sensitive,
+    memo: schema.secretKeys.memo,
+    defaultValueEnc: schema.secretKeys.defaultValueEnc,
+    defaultValueText: schema.secretKeys.defaultValueText,
+    defaultValueKmsKeyId: schema.secretKeys.defaultValueKmsKeyId,
+  }) as const;
 
 async function loadKeyByPublicId(tx: Tx, workspaceId: string, publicId: string): Promise<KeyRow> {
   const [row] = await tx
-    .select(KEY_COLUMNS)
+    .select(keyColumns())
     .from(schema.secretKeys)
     .where(
       and(
@@ -186,7 +190,7 @@ async function upsertSecretKeyTx(
     throw new Error(`[vault] invalid secret key name: ${input.key}`);
   }
   const [existing] = await tx
-    .select(KEY_COLUMNS)
+    .select(keyColumns())
     .from(schema.secretKeys)
     .where(
       and(
@@ -337,7 +341,7 @@ export interface SecretKeySummary {
 export async function listSecretKeys(actor: VaultActor): Promise<SecretKeySummary[]> {
   return withTenantDb(async (tx) => {
     const keys = await tx
-      .select(KEY_COLUMNS)
+      .select(keyColumns())
       .from(schema.secretKeys)
       .where(
         and(
@@ -482,7 +486,7 @@ export async function exportSecrets(
       keyFilters.push(inArray(schema.secretKeys.publicId, input.keyIds));
     }
     const keys = await tx
-      .select(KEY_COLUMNS)
+      .select(keyColumns())
       .from(schema.secretKeys)
       .where(and(...keyFilters))
       .orderBy(schema.secretKeys.key);
@@ -671,7 +675,7 @@ export async function resolveEnvironmentSecrets(actor: {
   return withTenantDb(async (tx) => {
     const environmentId = await loadEnvironmentId(tx, actor.workspaceId, actor.environmentId);
     const allKeys = await tx
-      .select(KEY_COLUMNS)
+      .select(keyColumns())
       .from(schema.secretKeys)
       .where(
         and(
