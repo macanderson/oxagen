@@ -43,30 +43,12 @@ import {
   type UsageTotals,
 } from "./types.js";
 
-/** The runner interface the fleet depends on — backed by {@link runTurn} via {@link createEngineRunner} (injectable for tests). */
-export type AgentRunner = (opts: {
-  prompt: string;
-  cwd: string;
-  model?: string;
-  projectContext?: ProjectContext;
-  agent?: AgentDefinition;
-  readOnly?: boolean;
-  signal?: AbortSignal;
-  memory?: MemoryProvider | null;
-  /**
-   * File-lock port injected per task (ADR-021 §5). When present, the engine's
-   * write-path tools acquire on first write to a path so two tasks never
-   * clobber the same file. `runTurn` mints its own per-turn holder identity, so
-   * no lock context is threaded here. Omitted → unlocked (as before).
-   */
-  fileLock?: FileLockProvider | null;
-  onText?: (delta: string) => void;
-  onToolCall?: (name: string, input: unknown) => void;
-}) => Promise<{
-  text: string;
-  steps: number;
-  usage: { inputTokens?: number; outputTokens?: number };
-}>;
+// The runner port lives in agent-runner.ts (a leaf) so its implementation
+// (engine-runner.ts) can type-depend on it without importing this orchestrator
+// back — this module value-imports createEngineRunner as the default runner.
+// Re-exported so existing consumers keep their import path.
+import type { AgentRunner } from "./agent-runner.js";
+export type { AgentRunner } from "./agent-runner.js";
 
 /**
  * A discrete lifecycle transition for one task — emitted (as the "task" event)

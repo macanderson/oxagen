@@ -83,7 +83,7 @@ vi.mock("@/lib/utils", () => ({
   formatCents: (c: number) => `$${(c / 100).toFixed(2)}`,
 }));
 
-vi.mock("@/lib/billing-format", () => ({
+vi.mock("./billing-format", () => ({
   formatRelativeRenewal: vi.fn(() => "renews in 30 days"),
 }));
 

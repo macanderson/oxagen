@@ -24,7 +24,7 @@ import { invoke } from "@oxagen/oxagen";
 import { runInTenantScope } from "@oxagen/tenancy";
 import "@oxagen/handlers/register";
 import { workspace } from "@/lib/routes";
-import { resolveAgentToolsManager } from "./authz";
+import { resolveAgentToolsManager } from "@/lib/agent-tools/authz";
 
 const ConnectCustomMcpSchema = z.object({
   orgSlug: z.string().min(1),

@@ -1,9 +1,12 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { graphSyncPush } from "@oxagen/oxagen/contracts/graph.sync.push";
-import { RELATIONSHIP_TYPE_PATTERN } from "@oxagen/oxagen/contracts/graph.relationship.upsert";
+import { RELATIONSHIP_TYPE_PATTERN } from "@oxagen/oxagen/contracts/graph.edge.upsert";
 import { scopedSession } from "@oxagen/ontology/tenant";
 import { sanitizeLabel } from "@oxagen/ontology/labels";
-import { edgeValidityOnCreateSet, edgeValidityParams } from "@oxagen/ontology/temporal";
+import {
+  edgeValidityOnCreateSet,
+  edgeValidityParams,
+} from "@oxagen/ontology/temporal";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { isValidCodeEmbedding } from "@oxagen/code-graph/embed";
 import { logger } from "./logger";
@@ -28,10 +31,9 @@ import { logger } from "./logger";
  *     the label is not already on the node). Applied within the same session
  *     to avoid a second round-trip.
  */
-export const graphSyncPushHandler: CapabilityHandler<typeof graphSyncPush> = async (
-  input,
-  ctx,
-) => {
+export const graphSyncPushHandler: CapabilityHandler<
+  typeof graphSyncPush
+> = async (input, ctx) => {
   const { orgId, workspaceId } = ctx;
 
   let nodesUpserted = 0;
@@ -48,7 +50,7 @@ export const graphSyncPushHandler: CapabilityHandler<typeof graphSyncPush> = asy
           // PascalCase the `label` display property so it matches the structural
           // domain label applied below (and the rest of the graph); fall back to
           // the raw label / "Node" when the type is unusable as an identifier.
-          label: sanitizeLabel(n.labels[0] ?? "") ?? (n.labels[0] ?? "Node"),
+          label: sanitizeLabel(n.labels[0] ?? "") ?? n.labels[0] ?? "Node",
           displayName: n.displayName,
           // Serialise properties as JSON string — same pattern as graph.node.upsert
           properties: n.properties ? JSON.stringify(n.properties) : null,
@@ -126,7 +128,15 @@ export const graphSyncPushHandler: CapabilityHandler<typeof graphSyncPush> = asy
       if (input.edges.length > 0) {
         // Group by type so we can use one UNWIND MERGE per type (Cypher
         // requires the relationship type to be a literal, not a parameter).
-        const byType = new Map<string, Array<{ fromKey: string; toKey: string; props: string | null; inferred: boolean }>>();
+        const byType = new Map<
+          string,
+          Array<{
+            fromKey: string;
+            toKey: string;
+            props: string | null;
+            inferred: boolean;
+          }>
+        >();
 
         for (const e of input.edges) {
           const relType = e.type.toUpperCase();
@@ -173,7 +183,9 @@ export const graphSyncPushHandler: CapabilityHandler<typeof graphSyncPush> = asy
 
       // ── 3. Tombstone deleted nodes ──────────────────────────────────────────
       if (input.tombstones && input.tombstones.length > 0) {
-        const tombstoneKeys = input.tombstones.map((t) => `sync:${input.source}:${t.key}`);
+        const tombstoneKeys = input.tombstones.map(
+          (t) => `sync:${input.source}:${t.key}`,
+        );
 
         // Count matched nodes first, then DETACH DELETE them. The DELETE clause
         // makes rows invisible to RETURN, so we capture the count first via
@@ -196,7 +208,14 @@ export const graphSyncPushHandler: CapabilityHandler<typeof graphSyncPush> = asy
   });
 
   logger.info(
-    { nodesUpserted, edgesUpserted, tombstoned, source: input.source, orgId, workspaceId },
+    {
+      nodesUpserted,
+      edgesUpserted,
+      tombstoned,
+      source: input.source,
+      orgId,
+      workspaceId,
+    },
     "graph.sync.push: sync completed",
   );
 

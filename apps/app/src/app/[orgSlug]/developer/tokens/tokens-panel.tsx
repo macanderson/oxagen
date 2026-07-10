@@ -18,7 +18,7 @@ import {
   createApiKeyAction,
   revokeApiKeyAction,
   rotateApiKeyAction,
-} from "@/lib/actions/api-key";
+} from "./api-key";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 

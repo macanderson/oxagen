@@ -11,7 +11,7 @@ import {
   slashQuery,
   type SlashCatalogEntry,
 } from "../catalog.js";
-import type { CliCommandMeta } from "../../program.js";
+import type { CliCommandMeta } from "../../commands/meta.js";
 import { theme } from "../../tui/theme.js";
 
 const CLI: CliCommandMeta[] = [

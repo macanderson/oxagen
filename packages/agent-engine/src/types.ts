@@ -1,5 +1,10 @@
 import type { ModelMessage, ToolSet } from "ai";
-import type { AgentAi, MemoryProvider, TraceStore, FileLockProvider } from "./ports";
+import type {
+  AgentAi,
+  MemoryProvider,
+  TraceStore,
+  FileLockProvider,
+} from "./ports";
 
 /**
  * A non-fatal internal failure the engine surfaces through `onError` instead of
@@ -86,7 +91,10 @@ export interface CommandResult {
 
 export interface Workspace {
   root: string;
-  readFile(p: string, opts?: { offset?: number; limit?: number }): Promise<string>;
+  readFile(
+    p: string,
+    opts?: { offset?: number; limit?: number },
+  ): Promise<string>;
   writeFile(p: string, content: string): Promise<void>;
   /**
    * Replace `oldString` with `newString`, returning the number of replacements.
@@ -102,8 +110,14 @@ export interface Workspace {
   ): Promise<number>;
   list(dir?: string): Promise<string[]>;
   glob(pattern: string): Promise<string[]>;
-  grep(pattern: string, opts?: { path?: string; glob?: string }): Promise<string[]>;
-  exec(command: string, opts?: { timeoutMs?: number; signal?: AbortSignal }): Promise<CommandResult>;
+  grep(
+    pattern: string,
+    opts?: { path?: string; glob?: string },
+  ): Promise<string[]>;
+  exec(
+    command: string,
+    opts?: { timeoutMs?: number; signal?: AbortSignal },
+  ): Promise<CommandResult>;
   diff(): Promise<string>;
 }
 
@@ -129,59 +143,15 @@ export type CodingEvent =
 
 export interface CodeGraphProvider {
   query(
-    operation: "search" | "file_symbols" | "dependents" | "imports" | "semantic_search",
+    operation:
+      | "search"
+      | "file_symbols"
+      | "dependents"
+      | "imports"
+      | "semantic_search",
     query: string,
     limit?: number,
   ): Promise<string>;
-}
-
-/** Output shape for a single code.map result (mirrors contract output). */
-export interface CodeMapBundle {
-  files: Array<{
-    nodeId: string;
-    path: string;
-    language: string;
-    displayName: string;
-    domain?: string;
-    score: number;
-  }>;
-  symbols: Array<{
-    nodeId: string;
-    name: string;
-    kind: string;
-    path: string;
-    startLine: number;
-    endLine: number;
-    signature: string;
-    docComment?: string;
-    domain?: string;
-    score: number;
-  }>;
-  calls: Array<{
-    callerNodeId: string;
-    calleeNodeId: string;
-    callerName: string;
-    calleeName: string;
-  }>;
-  recentChanges: Array<{
-    commitSha: string;
-    message: string;
-    authorName: string;
-    committedAt: string;
-    modifiedFiles: string[];
-  }>;
-}
-
-/**
- * Provider that answers "give me everything related to <concept>" queries.
- * Injected when the platform's code.map capability is available (in-app agent
- * and CLI with a connected workspace).
- */
-export interface CodeMapProvider {
-  query(
-    conceptQuery: string,
-    opts?: { limit?: number; domain?: string; kinds?: Array<"file" | "symbol" | "chunk" | "commit"> },
-  ): Promise<CodeMapBundle>;
 }
 
 export interface RunCodingAgentOptions {
@@ -230,8 +200,6 @@ export interface RunCodingAgentOptions {
   compactionThreshold?: number;
   readOnly?: boolean;
   codeGraph?: CodeGraphProvider;
-  /** Optional semantic code-map provider — enables the `code_map` tool. */
-  codeMap?: CodeMapProvider;
   memory?: MemoryProvider;
   trace?: TraceStore;
   /**
@@ -305,7 +273,9 @@ export interface RunCodingAgentOptions {
    * misclassified as a model error and hit the retry loop. Swallow internally
    * and return "continue" on failure so a broken meter never wedges a turn.
    */
-  budgetGuard?: (usage: RunCodingAgentResult["usage"]) => Promise<"continue" | "stop">;
+  budgetGuard?: (
+    usage: RunCodingAgentResult["usage"],
+  ) => Promise<"continue" | "stop">;
 }
 
 /** Why {@link runCodingAgent} ended the turn. Absent ⇒ natural finish. */

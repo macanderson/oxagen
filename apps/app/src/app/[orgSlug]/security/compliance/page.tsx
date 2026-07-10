@@ -31,7 +31,7 @@ import {
   deriveComplianceControls,
   summariseControls,
   type ControlStatus,
-} from "@/lib/compliance-controls";
+} from "./compliance-controls";
 
 const _ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
 

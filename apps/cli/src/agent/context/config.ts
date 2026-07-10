@@ -14,23 +14,25 @@
  * `contracts/config.ts` `GraphConfig`.
  */
 import { readConfig } from "../../lib/config.js";
+import {
+  EMBED_PROVIDER_MODES,
+  DEFAULT_GRAPH_CONFIG,
+  type EmbedProviderMode,
+  type GraphConfig,
+  type GraphConfigPatch,
+} from "./config-schema.js";
 
-/**
- * Which backend `resolveEmbeddingClient` (embedding.ts) uses:
- *   - `auto`    (default) — Ollama if reachable → local ONNX if installed →
- *               the platform gateway if a key is configured → null (lexical
- *               degrade). Zero-config: tries the free/local/offline options
- *               first.
- *   - `ollama`  — local Ollama server only (see embedding-ollama.ts).
- *   - `onnx`    — in-process ONNX model via `fastembed` only (see
- *               embedding-onnx.ts). `local` is accepted as an alias.
- *   - `gateway` — the platform's Vercel AI Gateway model only (the original,
- *               pre-local-embeddings behaviour).
- *   - `off`     — no embedding client at all; `semantic_search` degrades to a
- *               plain miss and `graph_query` runs structural-only.
- */
-export const EMBED_PROVIDER_MODES = ["auto", "ollama", "onnx", "gateway", "off"] as const;
-export type EmbedProviderMode = (typeof EMBED_PROVIDER_MODES)[number];
+// The config SHAPE (modes, GraphConfig, defaults) lives in config-schema.ts —
+// a leaf — because lib/config.ts composes it into CliConfig while this module
+// reads it back through readConfig() from that same file (a type-level import
+// cycle, until the shape moved out). Re-exported so consumers keep their path.
+export {
+  EMBED_PROVIDER_MODES,
+  DEFAULT_GRAPH_CONFIG,
+  type EmbedProviderMode,
+  type GraphConfig,
+  type GraphConfigPatch,
+} from "./config-schema.js";
 
 /** Accepted spellings that map onto a canonical {@link EmbedProviderMode}. */
 const EMBED_PROVIDER_ALIASES: Record<string, EmbedProviderMode> = { local: "onnx" };
@@ -51,27 +53,6 @@ export function parseEmbedProviderMode(raw: string | undefined | null): EmbedPro
     : undefined;
 }
 
-/** The context-layer config slice. Mirrors `contracts/config.ts` GraphConfig. */
-export interface GraphConfig {
-  /** Master switch. When false, the resolver goes straight to grep (logged). */
-  enabled: boolean;
-  /**
-   * GraphRAG backend endpoint. The default port `0` is a sentinel meaning "no
-   * remote backend" — the local tree-sitter code graph (DuckDB) is the backend.
-   * A real `http(s)://` endpoint is honoured by future remote-backed builds.
-   */
-  endpoint: string;
-  /** Upper bound on nodes in a returned subgraph — caps token cost per query. */
-  maxNodes: number;
-  /** When true, a graph miss falls back to grep/scan (logged); false fails closed. */
-  fallbackToGrep: boolean;
-  /** Which embedding backend powers `semantic_search`. See {@link EmbedProviderMode}. */
-  embedProvider: EmbedProviderMode;
-}
-
-/** A partial override written into `config.json` under `graph`. */
-export type GraphConfigPatch = Partial<GraphConfig>;
-
 /**
  * Coverage below this threshold counts as a graph *miss* and triggers the
  * logged fallback. `coverage` is 0..1 confidence the graph answered the query;
@@ -80,15 +61,6 @@ export type GraphConfigPatch = Partial<GraphConfig>;
  * number.
  */
 export const MIN_COVERAGE = 0.15;
-
-/** Baked-in defaults. Mirrors `graph-tools.json -> config.graph`. */
-export const DEFAULT_GRAPH_CONFIG: GraphConfig = {
-  enabled: true,
-  endpoint: "http://localhost:0/graphrag",
-  maxNodes: 200,
-  fallbackToGrep: true,
-  embedProvider: "auto",
-};
 
 /**
  * Resolve the effective graph config: user overrides from `config.json` layered

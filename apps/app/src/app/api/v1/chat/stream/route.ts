@@ -82,7 +82,7 @@ import { evaluateTurnCreditGate } from "./credit-gate";
 import {
   applyAgentBinding,
   type AgentBindingDefinition,
-} from "@/lib/chat/apply-agent-binding";
+} from "./apply-agent-binding";
 // Per-turn dollar budget (OXA — turn-budget). The gate itself (policy shape,
 // modes, the pure evaluator, createTurnBudgetGuard) lives in @oxagen/billing —
 // this route only resolves the effective policy and wires the three hooks to
@@ -1030,7 +1030,7 @@ export async function POST(request: NextRequest): Promise<Response> {
                 )
                 // FAIL-OPEN (see comment above) but never SILENT: a swallowed
                 // governance-read failure (down DB, denied IAM, unregistered
-                // handler) must be observable or a mis-applied budget is
+                // handler) must be observable, or a mis-applied budget is
                 // undiagnosable in the field.
                 .catch((err) => {
                   logger.warn(
@@ -1279,7 +1279,16 @@ export async function POST(request: NextRequest): Promise<Response> {
             const token = await runInTenantScope(
               { orgId: tenant.id, workspaceId: workspace.id },
               () => resolveGitHubToken(capCtx),
-            ).catch(() => undefined);
+            ).catch((err) => {
+              // Best-effort: the sandbox still boots without a token (private
+              // repos just fail to clone downstream). Log so a missing token is
+              // diagnosable rather than a silent, confusing clone failure.
+              logger.warn(
+                { err: String(err), requestId },
+                "[chat/stream] GitHub token resolution failed — sandbox will run unauthenticated",
+              );
+              return undefined;
+            });
             codeWorkspace = new ModalSandboxWorkspace({
               ctx: capCtx,
               // Stable per-(workspace, conversation, repo) key so every turn of

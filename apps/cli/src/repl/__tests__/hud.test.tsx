@@ -40,15 +40,19 @@ describe("HudPanel", () => {
     unmount();
   });
 
-  it("renders a background monitor and a just-finished agent together", () => {
-    agentRegistry.register({ kind: "monitor", title: "actions run 42", detail: "watching" });
+  it("renders a background subagent and a just-finished agent together", () => {
+    agentRegistry.register({
+      kind: "subagent",
+      title: "actions run 42",
+      detail: "watching",
+    });
     agentRegistry.register({ kind: "turn", title: "done thing" }).done();
     const { lastFrame, unmount } = render(<HudPanel nowFn={nowFn} />);
     const frame = lastFrame() ?? "";
-    expect(frame).toContain("[monitor]");
+    expect(frame).toContain("[subagent]");
     expect(frame).toContain("actions run 42");
     expect(frame).toContain("done thing");
-    // Header reflects one running (monitor) and one done (turn).
+    // Header reflects one running (subagent) and one done (turn).
     expect(frame).toContain("1 running");
     expect(frame).toContain("✓ 1");
     unmount();

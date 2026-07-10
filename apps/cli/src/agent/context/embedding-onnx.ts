@@ -31,7 +31,7 @@
 import { mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { EmbeddingClient } from "./embedding.js";
+import type { EmbeddingClient } from "./embedding-types.js";
 
 /** Prefix on every ONNX-produced `providerId`, e.g. "local-onnx:bge-small-en-v1.5". */
 export const ONNX_PROVIDER_PREFIX = "local-onnx:";

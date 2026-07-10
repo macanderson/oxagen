@@ -3,7 +3,7 @@
  * at a glance, à la Claude Code's task list.
  *
  * It is a live view of the process-wide {@link agentRegistry}: the active REPL
- * turn, any background monitors, and any in-process fleet subagents. It
+ * turn and any in-process fleet subagents. It
  * subscribes to registry `change` events and re-renders, and ticks once a second
  * so elapsed timers advance even when nothing else changes. Rendered inline in
  * the REPL's live region (above the input row); Esc or `/hud` again closes it.
@@ -27,8 +27,6 @@ function kindLabel(kind: AgentKind): string {
       return "turn";
     case "subagent":
       return "subagent";
-    case "monitor":
-      return "monitor";
     case "fleet":
       return "fleet";
   }
@@ -43,7 +41,13 @@ function elapsed(from: number, to: number): string {
   return `${m}m${rem.toString().padStart(2, "0")}s`;
 }
 
-function AgentLine({ agent, now }: { agent: RunningAgent; now: number }): React.ReactElement {
+function AgentLine({
+  agent,
+  now,
+}: {
+  agent: RunningAgent;
+  now: number;
+}): React.ReactElement {
   const { glyph, color } = activityGlyph(agent.status);
   const model = agent.model ? tierLabel(tierForSlug(agent.model)) : null;
   return (
@@ -92,10 +96,16 @@ function AgentLine({ agent, now }: { agent: RunningAgent; now: number }): React.
  * The panel. Reads the registry live. `nowFn` is injectable so tests render at a
  * fixed instant; production uses the wall clock and a 1s tick.
  */
-export function HudPanel({ nowFn }: { nowFn?: () => number } = {}): React.ReactElement {
+export function HudPanel({
+  nowFn,
+}: {
+  nowFn?: () => number;
+} = {}): React.ReactElement {
   const now = nowFn ?? (() => Date.now());
   const [, setTick] = useState(0);
-  const [agents, setAgents] = useState<RunningAgent[]>(() => agentRegistry.snapshot());
+  const [agents, setAgents] = useState<RunningAgent[]>(() =>
+    agentRegistry.snapshot(),
+  );
 
   useEffect(() => {
     const refresh = (): void => setAgents(agentRegistry.snapshot());
@@ -135,7 +145,9 @@ export function HudPanel({ nowFn }: { nowFn?: () => number } = {}): React.ReactE
 
       {agents.length === 0 ? (
         <Box paddingLeft={2}>
-          <Text dimColor>No agents running. Start a turn or dispatch work.</Text>
+          <Text dimColor>
+            No agents running. Start a turn or dispatch work.
+          </Text>
         </Box>
       ) : (
         <Box flexDirection="column" marginTop={1} gap={1}>

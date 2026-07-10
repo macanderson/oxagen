@@ -167,8 +167,4 @@ export interface WriteOpts {
   salience?: number;
   causality?: string[];
   provenance: Provenance;
-  /** Graph node reference this memory is about (creates :REMEMBERS edge). */
-  nodeRef?: string;
-  /** IDs of KnowledgeNode entities this memory relates to (creates :ABOUT edges). */
-  entityRefs?: string[];
 }

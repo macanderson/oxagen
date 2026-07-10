@@ -25,7 +25,11 @@ import {
   Video,
   Wrench,
 } from "lucide-react";
-import { deriveToolCallLabel, toolCallIcon, toolCallMeta } from "./tool-call-meta";
+import {
+  deriveToolCallLabel,
+  toolCallIcon,
+  toolCallMeta,
+} from "./tool-call-meta";
 
 describe("toolCallMeta — curated map", () => {
   it("maps agent.code.execute to 'Run code' with the Code2 icon", () => {
@@ -63,7 +67,9 @@ describe("toolCallMeta — curated map", () => {
 
   it("maps knowledge graph capabilities", () => {
     expect(toolCallMeta("query_ontology").label).toBe("Query knowledge graph");
-    expect(toolCallMeta("get_ontology_neighbors").label).toBe("Explore graph neighbors");
+    expect(toolCallMeta("get_ontology_neighbors").label).toBe(
+      "Explore graph neighbors",
+    );
     expect(toolCallMeta("query_ontology").Icon).toBe(Network);
   });
 
@@ -84,7 +90,9 @@ describe("deriveToolCallLabel — fallback derivation", () => {
   });
 
   it("handles two-segment capabilities", () => {
-    expect(deriveToolCallLabel("list_notifications")).toBe("List notifications");
+    expect(deriveToolCallLabel("list_notifications")).toBe(
+      "List notifications",
+    );
   });
 
   it("drops the generic 'agent' prefix when more segments remain", () => {
@@ -123,7 +131,7 @@ describe("toolCallIcon — domain icons", () => {
     expect(toolCallIcon("analyze_image")).toBe(ImageIcon);
     expect(toolCallIcon("generate_video")).toBe(Video);
     expect(toolCallIcon("read_document")).toBe(FileText);
-    expect(toolCallIcon("infer_semantic_relationships")).toBe(Network);
+    expect(toolCallIcon("infer_semantic_edges")).toBe(Network);
     expect(toolCallIcon("send_message")).toBe(MessageSquare);
     expect(toolCallIcon("add_conversation_attachment")).toBe(MessageSquare);
     expect(toolCallIcon("upload_asset")).toBe(Paperclip);

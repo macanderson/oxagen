@@ -11,7 +11,7 @@ import {
   resolveOrgOrRedirect,
 } from "@/lib/resolve-org";
 import { loadMfaPolicy } from "@/app/[orgSlug]/security/mfa/actions";
-import { evaluateMfaGate } from "@/lib/mfa-enforcement";
+import { evaluateMfaGate } from "./mfa-enforcement";
 
 // Sentinel workspaceId for org-only routes (no workspace context). — OXA-1515
 const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";

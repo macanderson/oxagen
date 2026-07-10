@@ -103,7 +103,7 @@ vi.mock("@/components/ui/alert", () => ({
   ),
 }));
 
-vi.mock("@/lib/plugin-icon", () => ({
+vi.mock("./plugin-icon", () => ({
   isRenderableImageUrl: (url: unknown) =>
     typeof url === "string" && url.startsWith("https://"),
 }));

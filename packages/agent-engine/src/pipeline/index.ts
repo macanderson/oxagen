@@ -124,10 +124,8 @@ function composeAgentSystem(
     projectContext: opts.projectContext,
     readOnly: opts.readOnly,
     // Never reference a tool the model does not have: code_graph is only
-    // materialized when a provider is injected, and code_map is never wired
-    // on the pipeline path (RunTurnOptions has no codeMap provider).
+    // materialized when a provider is injected.
     hasCodeGraph: Boolean(opts.codeGraph),
-    hasCodeMap: false,
     hasLocalization,
     profile: opts.profile,
     // A named-agent persona replaces the default identity (its systemPrompt

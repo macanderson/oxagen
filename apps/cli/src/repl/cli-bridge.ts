@@ -15,7 +15,9 @@
  * same option definitions (coercion functions, `--no-x` negation, repeatable
  * `collect` options, defaults) that `oxagen <cmd> --help` documents, so there
  * is exactly one place flags are declared — no drift between the shell CLI
- * and the REPL's inline seam. `buildProgram()` is rebuilt fresh on every call
+ * and the REPL's inline seam. The program factory is injected by the caller
+ * (ultimately program.tsx via ReplOptions.buildProgram — this module never
+ * imports the composition root statically) and rebuilt fresh on every call
  * (documented as side-effect-free in program.tsx) specifically so option state
  * (e.g. a `collect`-accumulated array option) never leaks between unrelated
  * invocations sharing one long-lived REPL process.
@@ -31,7 +33,6 @@
  *      read as a dead-end even for commands that could have run).
  */
 import type { Command } from "commander";
-import { buildProgram } from "../program.js";
 import { captureWriter, type CommandWriter } from "../lib/capture-writer.js";
 import { CLI_DISAMBIGUATION_PREFIX } from "../slash/catalog.js";
 
@@ -406,14 +407,20 @@ const REGISTRY: Record<string, CliAdapter> = {
  * catalog name (bare, colon-joined, or `cli:`-prefixed — all are accepted;
  * the `cli:` disambiguation prefix and path are stripped identically here).
  */
-export async function runInlineCliCommand(name: string, rawArgs: string): Promise<CliDispatchResult> {
+export async function runInlineCliCommand(
+  name: string,
+  rawArgs: string,
+  buildProgram?: () => Command,
+): Promise<CliDispatchResult> {
   const path = splitPath(name);
   const key = path.join(":");
   const adapter = REGISTRY[key];
   if (!adapter) {
     return { ok: false, output: `"${name}" is not wired for inline execution.` };
   }
-  const root = buildProgram();
+  // Injected normally (ReplOptions.buildProgram); lazy-imported as a fallback
+  // so this module keeps zero static edges to the composition root.
+  const root = (buildProgram ?? (await import("../program.js")).buildProgram)();
   const node = findCommandNode(root, path);
   if (!node) {
     return { ok: false, output: `Could not resolve CLI command "${name}".` };

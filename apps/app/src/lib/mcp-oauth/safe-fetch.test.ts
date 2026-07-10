@@ -4,19 +4,19 @@
  * can misbehave (hang, slow, error, non-OK) and asserts the wrapper degrades
  * safely rather than hanging the serverless function.
  */
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
-  describe,
-  it,
-  expect,
-  vi,
-  beforeEach,
-  afterEach,
-} from "vitest";
-import { createSafeFetch, DEFAULT_MCP_OAUTH_FETCH_TIMEOUT_MS } from "./safe-fetch";
+  createSafeFetch,
+  DEFAULT_MCP_OAUTH_FETCH_TIMEOUT_MS,
+} from "./safe-fetch";
 
 const warn = vi.fn();
 vi.mock("@oxagen/handlers/logger", () => ({
-  logger: { error: vi.fn(), warn: (...a: unknown[]) => warn(...a), info: vi.fn() },
+  logger: {
+    error: vi.fn(),
+    warn: (...a: unknown[]) => warn(...a),
+    info: vi.fn(),
+  },
 }));
 
 beforeEach(() => {
@@ -83,7 +83,8 @@ describe("createSafeFetch", () => {
 
   it("pre-drains a non-OK body and returns a plain Response (no cancel() hang)", async () => {
     const fake = vi.fn(
-      async () => new Response("not found", { status: 404, statusText: "Not Found" }),
+      async () =>
+        new Response("not found", { status: 404, statusText: "Not Found" }),
     );
     const safeFetch = createSafeFetch(fake, 5000);
     const res = await safeFetch(

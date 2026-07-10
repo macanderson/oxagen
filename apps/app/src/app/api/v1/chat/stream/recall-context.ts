@@ -1,4 +1,5 @@
 import type { ModelMessage } from "@oxagen/ai";
+import { logger } from "@oxagen/handlers/logger";
 import { invoke, type CapabilityContext } from "@oxagen/oxagen";
 import {
   agentMemoryRecall,
@@ -163,7 +164,16 @@ export async function recallWorkspaceMemoryDetailed(args: {
         // and metering attribute it correctly. agent.memory.recall does not
         // expose an `app` surface.
         { surface: "agent" },
-      ).catch(() => null),
+      ).catch((err) => {
+        // Best-effort: recall never blocks or fails a turn, but a swallowed
+        // recall error must be observable — otherwise the self-improvement
+        // flywheel silently stops and nobody knows.
+        logger.warn(
+          { err: String(err), executionRef: args.executionRef },
+          "[chat/recall] memory recall failed — degrading to no recalled memory",
+        );
+        return null;
+      }),
       timeout,
     ]);
     if (raw === null || raw === undefined) return empty;
@@ -173,7 +183,11 @@ export async function recallWorkspaceMemoryDetailed(args: {
       message: buildRecalledMemoryMessage(parsed.data.memories),
       memories: parsed.data.memories,
     };
-  } catch {
+  } catch (err) {
+    logger.warn(
+      { err: String(err), executionRef: args.executionRef },
+      "[chat/recall] unexpected recall error — degrading to no recalled memory",
+    );
     return empty;
   } finally {
     if (timer !== undefined) clearTimeout(timer);
@@ -223,7 +237,10 @@ export async function resolveGroundingCitations(args: {
   timeoutMs?: number;
 }): Promise<MemoryRecallHit[]> {
   const { memories } = args;
-  const toHit = (m: RecalledMemory, node?: KnowledgeNodeRef): MemoryRecallHit => ({
+  const toHit = (
+    m: RecalledMemory,
+    node?: KnowledgeNodeRef,
+  ): MemoryRecallHit => ({
     id: m.id,
     lesson: m.lesson,
     memoryClass: m.memoryClass,
@@ -251,12 +268,9 @@ export async function resolveGroundingCitations(args: {
 
   const resolveOne = async (nodeId: string): Promise<void> => {
     try {
-      const raw = await doInvoke(
-        graphNodeGet.name,
-        { nodeId },
-        args.ctx,
-        { surface: "agent" },
-      );
+      const raw = await doInvoke(graphNodeGet.name, { nodeId }, args.ctx, {
+        surface: "agent",
+      });
       const parsed = graphNodeGet.output.safeParse(raw);
       if (!parsed.success || !parsed.data.node) return;
       const n = parsed.data.node;
@@ -279,13 +293,12 @@ export async function resolveGroundingCitations(args: {
     timer = setTimeout(() => resolve(), timeoutMs);
   });
   try {
-    await Promise.race([
-      Promise.all(uniqueRefs.map(resolveOne)),
-      timeout,
-    ]);
+    await Promise.race([Promise.all(uniqueRefs.map(resolveOne)), timeout]);
   } finally {
     if (timer !== undefined) clearTimeout(timer);
   }
 
-  return memories.map((m) => toHit(m, m.nodeRef ? refToNode.get(m.nodeRef) : undefined));
+  return memories.map((m) =>
+    toHit(m, m.nodeRef ? refToNode.get(m.nodeRef) : undefined),
+  );
 }

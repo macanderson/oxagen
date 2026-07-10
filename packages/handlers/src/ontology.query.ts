@@ -1,8 +1,11 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { ontologyQuery } from "@oxagen/oxagen/contracts/ontology.query";
-import { RELATIONSHIP_TYPE_PATTERN } from "@oxagen/oxagen/contracts/graph.relationship.upsert";
+import { RELATIONSHIP_TYPE_PATTERN } from "@oxagen/oxagen/contracts/graph.edge.upsert";
 import { scopedSession } from "@oxagen/ontology/tenant";
-import { buildValidityFilter, type EdgeValidity } from "@oxagen/ontology/temporal";
+import {
+  buildValidityFilter,
+  type EdgeValidity,
+} from "@oxagen/ontology/temporal";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { getPinnedSchema } from "./schema.pinned";
 import { logger } from "./logger";
@@ -42,7 +45,9 @@ function resolveRelationshipTypes(
   if (requested && requested.length > 0) {
     for (const t of requested) {
       if (!RELATIONSHIP_TYPE_PATTERN.test(t)) {
-        throw new Error(`ontology.query: relationship type "${t}" fails the lexical guard`);
+        throw new Error(
+          `ontology.query: relationship type "${t}" fails the lexical guard`,
+        );
       }
       if (activeVocab && !activeVocab.includes(t)) {
         throw new Error(
@@ -70,7 +75,9 @@ function relTypePattern(relTypes: string[] | null): string {
   if (relTypes === null) return "";
   for (const t of relTypes) {
     if (!RELATIONSHIP_TYPE_PATTERN.test(t)) {
-      throw new Error(`ontology.query: relationship type "${t}" fails the lexical guard`);
+      throw new Error(
+        `ontology.query: relationship type "${t}" fails the lexical guard`,
+      );
     }
   }
   return relTypes.map((t) => `\`${t}\``).join("|");
@@ -96,16 +103,24 @@ function buildMatchPattern(
   }
 }
 
-export const ontologyQueryHandler: CapabilityHandler<typeof ontologyQuery> = async (input, ctx) => {
+export const ontologyQueryHandler: CapabilityHandler<
+  typeof ontologyQuery
+> = async (input, ctx) => {
   const { orgId, workspaceId } = ctx;
 
   // Resolve the pinned active vocabulary (null when no version is pinned), then
   // the §3.2 two-layer relationship-type guard.
   const pinned = await getPinnedSchema(orgId, workspaceId);
-  const activeVocab = pinned ? pinned.relationshipTypes.map((r) => r.name) : null;
+  const activeVocab = pinned
+    ? pinned.relationshipTypes.map((r) => r.name)
+    : null;
   const relTypeList = resolveRelationshipTypes(input.edgeTypes, activeVocab);
   const relTypes = relTypePattern(relTypeList);
-  const matchPattern = buildMatchPattern(input.direction, relTypes, input.maxDepth);
+  const matchPattern = buildMatchPattern(
+    input.direction,
+    relTypes,
+    input.maxDepth,
+  );
 
   let startNode: TraversedNode | null = null;
   const nodesById = new Map<string, TraversedNode>();
@@ -147,7 +162,10 @@ export const ontologyQueryHandler: CapabilityHandler<typeof ontologyQuery> = asy
       // traversal only crosses edges that are valid + known at the requested
       // instants. Defaults to now/now; null lower bounds keep unstamped legacy
       // edges traversable (behaviour-preserving).
-      const validity = buildValidityFilter("rel", { asOf: input.asOf, asKnownAt: input.asKnownAt });
+      const validity = buildValidityFilter("rel", {
+        asOf: input.asOf,
+        asKnownAt: input.asKnownAt,
+      });
 
       const fetchLimit = BigInt(input.limit + 1);
       const traverseResult = await session.run(
@@ -206,17 +224,28 @@ export const ontologyQueryHandler: CapabilityHandler<typeof ontologyQuery> = asy
         // with relTypes so each edge carries its own bi-temporal validity.
         const relTypesAlong = record.get("relTypes") as string[];
         const pathNodeIds = record.get("pathNodeIds") as string[];
-        const relValidFrom = (record.get("relValidFrom") as (string | null)[] | null) ?? [];
-        const relValidTo = (record.get("relValidTo") as (string | null)[] | null) ?? [];
-        const relRecordedAt = (record.get("relRecordedAt") as (string | null)[] | null) ?? [];
-        const relInvalidatedAt = (record.get("relInvalidatedAt") as (string | null)[] | null) ?? [];
+        const relValidFrom =
+          (record.get("relValidFrom") as (string | null)[] | null) ?? [];
+        const relValidTo =
+          (record.get("relValidTo") as (string | null)[] | null) ?? [];
+        const relRecordedAt =
+          (record.get("relRecordedAt") as (string | null)[] | null) ?? [];
+        const relInvalidatedAt =
+          (record.get("relInvalidatedAt") as (string | null)[] | null) ?? [];
         for (let i = 0; i < relTypesAlong.length; i += 1) {
           const a = pathNodeIds[i];
           const b = pathNodeIds[i + 1];
           const edgeType = relTypesAlong[i] as string;
           if (a == null || b == null) continue;
           const [from, to] = input.direction === "in" ? [b, a] : [a, b];
-          if (!edges.some((e) => e.fromNodeId === from && e.toNodeId === to && e.edgeType === edgeType)) {
+          if (
+            !edges.some(
+              (e) =>
+                e.fromNodeId === from &&
+                e.toNodeId === to &&
+                e.edgeType === edgeType,
+            )
+          ) {
             edges.push({
               fromNodeId: from,
               toNodeId: to,
@@ -237,7 +266,9 @@ export const ontologyQueryHandler: CapabilityHandler<typeof ontologyQuery> = asy
   const nodes = [...nodesById.values()];
   // Keep only edges whose endpoints survived the node cap.
   const keptIds = new Set(nodes.map((n) => n.nodeId));
-  const keptEdges = edges.filter((e) => keptIds.has(e.fromNodeId) && keptIds.has(e.toNodeId));
+  const keptEdges = edges.filter(
+    (e) => keptIds.has(e.fromNodeId) && keptIds.has(e.toNodeId),
+  );
 
   logger.info(
     {

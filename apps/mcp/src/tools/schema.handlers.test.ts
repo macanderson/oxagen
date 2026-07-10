@@ -1,5 +1,4 @@
-// schema.handlers.test.ts — handler invocation tests for all schema-domain tools
-// and the renamed relationship tools (graph.relationship.upsert, semantic.relationship.*).
+// schema.handlers.test.ts — handler invocation tests for all schema-domain tools.
 //
 // Pattern: vi.mock the kernel `invoke` and the context seam `buildContext` so
 // that each default-export handler can be called without a live runtime.
@@ -139,7 +138,10 @@ describe("schema.toggle MCP tool", () => {
     await schemaToggleHandler({ schemaName: "crm", enabled: true });
     expect(mocks.invoke).toHaveBeenCalledOnce();
     expect(mocks.invoke.mock.calls[0]?.[0]).toBe("toggle_schema");
-    expect(mocks.invoke.mock.calls[0]?.[1]).toMatchObject({ schemaName: "crm", enabled: true });
+    expect(mocks.invoke.mock.calls[0]?.[1]).toMatchObject({
+      schemaName: "crm",
+      enabled: true,
+    });
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "mcp" });
   });
 });
@@ -163,9 +165,17 @@ describe("schema.label.upsert MCP tool", () => {
   });
 
   it("calls invoke with correct args", async () => {
-    await schemaLabelUpsertHandler({ schemaName: "crm", name: "Contact", displayName: "Contact" } as Parameters<typeof schemaLabelUpsertHandler>[0]);
+    await schemaLabelUpsertHandler({
+      schemaName: "crm",
+      name: "Contact",
+      displayName: "Contact",
+    } as Parameters<typeof schemaLabelUpsertHandler>[0]);
     expect(mocks.invoke.mock.calls[0]?.[0]).toBe("upsert_schema_label");
-    expect(mocks.invoke.mock.calls[0]?.[1]).toMatchObject({ schemaName: "crm", name: "Contact", displayName: "Contact" });
+    expect(mocks.invoke.mock.calls[0]?.[1]).toMatchObject({
+      schemaName: "crm",
+      name: "Contact",
+      displayName: "Contact",
+    });
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "mcp" });
   });
 });
@@ -210,13 +220,23 @@ describe("schema.relationship.upsert MCP tool", () => {
   });
 
   it("metadata name is 'upsert_schema_relationship'", () => {
-    expect(schemaRelationshipUpsertMeta.name).toBe("upsert_schema_relationship");
+    expect(schemaRelationshipUpsertMeta.name).toBe(
+      "upsert_schema_relationship",
+    );
   });
 
   it("calls invoke with correct args", async () => {
-    await schemaRelationshipUpsertHandler({ schemaName: "crm", name: "EMPLOYS", displayName: "Employs" } as Parameters<typeof schemaRelationshipUpsertHandler>[0]);
+    await schemaRelationshipUpsertHandler({
+      schemaName: "crm",
+      name: "EMPLOYS",
+      displayName: "Employs",
+    } as Parameters<typeof schemaRelationshipUpsertHandler>[0]);
     expect(mocks.invoke.mock.calls[0]?.[0]).toBe("upsert_schema_relationship");
-    expect(mocks.invoke.mock.calls[0]?.[1]).toMatchObject({ schemaName: "crm", name: "EMPLOYS", displayName: "Employs" });
+    expect(mocks.invoke.mock.calls[0]?.[1]).toMatchObject({
+      schemaName: "crm",
+      name: "EMPLOYS",
+      displayName: "Employs",
+    });
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "mcp" });
   });
 });
@@ -236,11 +256,16 @@ describe("schema.relationship.delete MCP tool", () => {
   });
 
   it("metadata name is 'delete_schema_relationship'", () => {
-    expect(schemaRelationshipDeleteMeta.name).toBe("delete_schema_relationship");
+    expect(schemaRelationshipDeleteMeta.name).toBe(
+      "delete_schema_relationship",
+    );
   });
 
   it("calls invoke with correct args", async () => {
-    await schemaRelationshipDeleteHandler({ schemaName: "crm", name: "EMPLOYS" });
+    await schemaRelationshipDeleteHandler({
+      schemaName: "crm",
+      name: "EMPLOYS",
+    });
     expect(mocks.invoke.mock.calls[0]?.[0]).toBe("delete_schema_relationship");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "mcp" });
   });
@@ -265,9 +290,19 @@ describe("schema.property.upsert MCP tool", () => {
   });
 
   it("calls invoke with correct args", async () => {
-    await schemaPropertyUpsertHandler({ ownerKind: "node", ownerName: "Contact", key: "email", dataType: "string", required: false } as Parameters<typeof schemaPropertyUpsertHandler>[0]);
+    await schemaPropertyUpsertHandler({
+      ownerKind: "node",
+      ownerName: "Contact",
+      key: "email",
+      dataType: "string",
+      required: false,
+    } as Parameters<typeof schemaPropertyUpsertHandler>[0]);
     expect(mocks.invoke.mock.calls[0]?.[0]).toBe("upsert_schema_property");
-    expect(mocks.invoke.mock.calls[0]?.[1]).toMatchObject({ ownerKind: "node", key: "email", dataType: "string" });
+    expect(mocks.invoke.mock.calls[0]?.[1]).toMatchObject({
+      ownerKind: "node",
+      key: "email",
+      dataType: "string",
+    });
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "mcp" });
   });
 });
@@ -291,7 +326,11 @@ describe("schema.property.delete MCP tool", () => {
   });
 
   it("calls invoke with correct args", async () => {
-    await schemaPropertyDeleteHandler({ ownerKind: "node", ownerName: "Contact", key: "email" });
+    await schemaPropertyDeleteHandler({
+      ownerKind: "node",
+      ownerName: "Contact",
+      key: "email",
+    });
     expect(mocks.invoke.mock.calls[0]?.[0]).toBe("delete_schema_property");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "mcp" });
   });
@@ -316,7 +355,9 @@ describe("schema.version.list MCP tool", () => {
   });
 
   it("calls invoke with 'list_schema_versions' and surface 'mcp'", async () => {
-    await schemaVersionListHandler({} as Parameters<typeof schemaVersionListHandler>[0]);
+    await schemaVersionListHandler(
+      {} as Parameters<typeof schemaVersionListHandler>[0],
+    );
     expect(mocks.invoke.mock.calls[0]?.[0]).toBe("list_schema_versions");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "mcp" });
   });
@@ -330,7 +371,11 @@ import schemaVersionCreateHandler, {
 } from "./schema.version.create";
 
 describe("schema.version.create MCP tool", () => {
-  const fakeOutput = { versionId: "v-1", versionNumber: 1, publishedAt: "2026-01-01" };
+  const fakeOutput = {
+    versionId: "v-1",
+    versionNumber: 1,
+    publishedAt: "2026-01-01",
+  };
 
   beforeEach(() => {
     mocks.invoke.mockResolvedValue(fakeOutput);
@@ -341,7 +386,10 @@ describe("schema.version.create MCP tool", () => {
   });
 
   it("calls invoke with correct args", async () => {
-    await schemaVersionCreateHandler({ label: "v1.0", changeSummary: "Initial" });
+    await schemaVersionCreateHandler({
+      label: "v1.0",
+      changeSummary: "Initial",
+    });
     expect(mocks.invoke.mock.calls[0]?.[0]).toBe("create_schema_version");
     expect(mocks.invoke.mock.calls[0]?.[1]).toMatchObject({ label: "v1.0" });
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "mcp" });
@@ -356,7 +404,13 @@ import schemaValidateNodeHandler, {
 } from "./schema.validate.node";
 
 describe("schema.validate.node MCP tool", () => {
-  const fakeOutput = { valid: true, conformanceScore: 1.0, errors: [], missingRequired: [], outcome: "accepted" as const };
+  const fakeOutput = {
+    valid: true,
+    conformanceScore: 1.0,
+    errors: [],
+    missingRequired: [],
+    outcome: "accepted" as const,
+  };
 
   beforeEach(() => {
     mocks.invoke.mockResolvedValue(fakeOutput);
@@ -367,7 +421,10 @@ describe("schema.validate.node MCP tool", () => {
   });
 
   it("calls invoke with correct args", async () => {
-    await schemaValidateNodeHandler({ label: "Contact", properties: { name: "Alice" } } as unknown as Parameters<typeof schemaValidateNodeHandler>[0]);
+    await schemaValidateNodeHandler({
+      label: "Contact",
+      properties: { name: "Alice" },
+    } as unknown as Parameters<typeof schemaValidateNodeHandler>[0]);
     expect(mocks.invoke.mock.calls[0]?.[0]).toBe("validate_schema_node");
     expect(mocks.invoke.mock.calls[0]?.[1]).toMatchObject({ label: "Contact" });
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "mcp" });
@@ -412,7 +469,17 @@ import schemaReconcileStatusHandler, {
 } from "./schema.reconcile.status";
 
 describe("schema.reconcile.status MCP tool", () => {
-  const fakeOutput = { status: "running" as const, totalNodes: 100, processedNodes: 50, updatedNodes: 30, totalRelationships: 200, processedRelationships: 100, updatedRelationships: 60, prunedNodes: 0, prunedRelationships: 0 };
+  const fakeOutput = {
+    status: "running" as const,
+    totalNodes: 100,
+    processedNodes: 50,
+    updatedNodes: 30,
+    totalRelationships: 200,
+    processedRelationships: 100,
+    updatedRelationships: 60,
+    prunedNodes: 0,
+    prunedRelationships: 0,
+  };
 
   beforeEach(() => {
     mocks.invoke.mockResolvedValue(fakeOutput);
@@ -425,139 +492,9 @@ describe("schema.reconcile.status MCP tool", () => {
   it("calls invoke with correct args", async () => {
     await schemaReconcileStatusHandler({ executionId: "aex-1" });
     expect(mocks.invoke.mock.calls[0]?.[0]).toBe("get_reconcile_status");
-    expect(mocks.invoke.mock.calls[0]?.[1]).toMatchObject({ executionId: "aex-1" });
-    expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "mcp" });
-  });
-});
-
-// ── graph.relationship.upsert ─────────────────────────────────────────────────
-
-import graphRelationshipUpsertHandler, {
-  schema as graphRelationshipUpsertSchema,
-  metadata as graphRelationshipUpsertMeta,
-} from "./graph.relationship.upsert";
-
-describe("graph.relationship.upsert MCP tool", () => {
-  const fakeOutput = { relationshipId: "node-a:EMPLOYS:node-b", created: true };
-
-  beforeEach(() => {
-    mocks.invoke.mockResolvedValue(fakeOutput);
-  });
-
-  it("metadata name is 'upsert_graph_relationship'", () => {
-    expect(graphRelationshipUpsertMeta.name).toBe("upsert_graph_relationship");
-  });
-
-  it("calls invoke with correct args", async () => {
-    await graphRelationshipUpsertHandler({
-      fromNodeId: "node-a",
-      toNodeId: "node-b",
-      relationshipType: "EMPLOYS",
-    } as Parameters<typeof graphRelationshipUpsertHandler>[0]);
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("upsert_graph_relationship");
-    expect(mocks.invoke.mock.calls[0]?.[1]).toMatchObject({ fromNodeId: "node-a", toNodeId: "node-b", relationshipType: "EMPLOYS" });
-    expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "mcp" });
-  });
-});
-
-// ── semantic.relationship.list ────────────────────────────────────────────────
-
-import semanticRelationshipListHandler, {
-  schema as semanticRelationshipListSchema,
-  metadata as semanticRelationshipListMeta,
-} from "./semantic.relationship.list";
-
-describe("semantic.relationship.list MCP tool", () => {
-  const fakeOutput = { edges: [], total: 0, limit: 50, offset: 0 };
-
-  beforeEach(() => {
-    mocks.invoke.mockResolvedValue(fakeOutput);
-  });
-
-  it("metadata name is 'list_semantic_relationships'", () => {
-    expect(semanticRelationshipListMeta.name).toBe("list_semantic_relationships");
-  });
-
-  it("calls invoke with 'list_semantic_relationships' and surface 'mcp'", async () => {
-    await semanticRelationshipListHandler({} as Parameters<typeof semanticRelationshipListHandler>[0]);
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("list_semantic_relationships");
-    expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "mcp" });
-  });
-});
-
-// ── semantic.relationship.approve ─────────────────────────────────────────────
-
-import semanticRelationshipApproveHandler, {
-  schema as semanticRelationshipApproveSchema,
-  metadata as semanticRelationshipApproveMeta,
-} from "./semantic.relationship.approve";
-
-describe("semantic.relationship.approve MCP tool", () => {
-  const fakeOutput = { edgeId: "edge-1", decision: "approve" as const };
-
-  beforeEach(() => {
-    mocks.invoke.mockResolvedValue(fakeOutput);
-  });
-
-  it("metadata name is 'approve_semantic_relationship'", () => {
-    expect(semanticRelationshipApproveMeta.name).toBe("approve_semantic_relationship");
-  });
-
-  it("calls invoke with correct args", async () => {
-    await semanticRelationshipApproveHandler({ edgeId: "edge-1", decision: "approve" } as Parameters<typeof semanticRelationshipApproveHandler>[0]);
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("approve_semantic_relationship");
-    expect(mocks.invoke.mock.calls[0]?.[1]).toMatchObject({ edgeId: "edge-1", decision: "approve" });
-    expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "mcp" });
-  });
-});
-
-// ── semantic.relationship.infer ───────────────────────────────────────────────
-
-import semanticRelationshipInferHandler, {
-  schema as semanticRelationshipInferSchema,
-  metadata as semanticRelationshipInferMeta,
-} from "./semantic.relationship.infer";
-
-describe("semantic.relationship.infer MCP tool", () => {
-  const fakeOutput = { jobId: "job-1", status: "queued" as const, estimatedNodes: 100, dryRun: false };
-
-  beforeEach(() => {
-    mocks.invoke.mockResolvedValue(fakeOutput);
-  });
-
-  it("metadata name is 'infer_semantic_relationships'", () => {
-    expect(semanticRelationshipInferMeta.name).toBe("infer_semantic_relationships");
-  });
-
-  it("calls invoke with correct args", async () => {
-    await semanticRelationshipInferHandler({ semanticEdgePrompt: "Find related entities" } as Parameters<typeof semanticRelationshipInferHandler>[0]);
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("infer_semantic_relationships");
-    expect(mocks.invoke.mock.calls[0]?.[1]).toMatchObject({ semanticEdgePrompt: "Find related entities" });
-    expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "mcp" });
-  });
-});
-
-// ── semantic.relationship.suggest ────────────────────────────────────────────
-
-import semanticRelationshipSuggestHandler, {
-  schema as semanticRelationshipSuggestSchema,
-  metadata as semanticRelationshipSuggestMeta,
-} from "./semantic.relationship.suggest";
-
-describe("semantic.relationship.suggest MCP tool", () => {
-  const fakeOutput = { suggestions: [], total: 0, limit: 50 };
-
-  beforeEach(() => {
-    mocks.invoke.mockResolvedValue(fakeOutput);
-  });
-
-  it("metadata name is 'suggest_semantic_relationships'", () => {
-    expect(semanticRelationshipSuggestMeta.name).toBe("suggest_semantic_relationships");
-  });
-
-  it("calls invoke with 'suggest_semantic_relationships' and surface 'mcp'", async () => {
-    await semanticRelationshipSuggestHandler({} as Parameters<typeof semanticRelationshipSuggestHandler>[0]);
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("suggest_semantic_relationships");
+    expect(mocks.invoke.mock.calls[0]?.[1]).toMatchObject({
+      executionId: "aex-1",
+    });
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "mcp" });
   });
 });

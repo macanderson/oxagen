@@ -1,6 +1,5 @@
 /**
- * Unit tests for schema route handlers (schema.ts) and related routes:
- *   semantic-relationship.ts, graph.relationship.upsert.ts
+ * Unit tests for schema route handlers (schema.ts).
  *
  * Pattern: mock at the adapter seam (@oxagen/auth, @oxagen/oxagen/kernel,
  * @oxagen/billing, @oxagen/handlers, middleware/logger), assert happy path
@@ -47,16 +46,24 @@ vi.mock("@oxagen/billing", async (importOriginal) => {
 vi.mock("@oxagen/handlers", () => ({
   serveFile: vi.fn(),
   FileNotFoundError: class FileNotFoundError extends Error {
-    constructor(msg?: string) { super(msg); this.name = "FileNotFoundError"; }
+    constructor(msg?: string) {
+      super(msg);
+      this.name = "FileNotFoundError";
+    }
   },
   FileForbiddenError: class FileForbiddenError extends Error {
-    constructor(msg?: string) { super(msg); this.name = "FileForbiddenError"; }
+    constructor(msg?: string) {
+      super(msg);
+      this.name = "FileForbiddenError";
+    }
   },
 }));
 
 vi.mock("../middleware/logger", () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
-  requestLogger: vi.fn(async (_c: unknown, next: () => Promise<void>) => next()),
+  requestLogger: vi.fn(async (_c: unknown, next: () => Promise<void>) =>
+    next(),
+  ),
 }));
 
 import { app } from "../app";
@@ -71,31 +78,50 @@ beforeEach(() => {
 });
 
 async function authGet(path: string): Promise<Response> {
-  return app.fetch(makeRequest(`${BASE}${path}`, { headers: { authorization: bearerHeader("oxk_key") } }));
+  return app.fetch(
+    makeRequest(`${BASE}${path}`, {
+      headers: { authorization: bearerHeader("oxk_key") },
+    }),
+  );
 }
 
 async function authPost(path: string, body: unknown): Promise<Response> {
-  return app.fetch(makeRequest(`${BASE}${path}`, {
-    method: "POST",
-    headers: { authorization: bearerHeader("oxk_key"), "content-type": "application/json" },
-    body: JSON.stringify(body),
-  }));
+  return app.fetch(
+    makeRequest(`${BASE}${path}`, {
+      method: "POST",
+      headers: {
+        authorization: bearerHeader("oxk_key"),
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(body),
+    }),
+  );
 }
 
 async function authPut(path: string, body: unknown): Promise<Response> {
-  return app.fetch(makeRequest(`${BASE}${path}`, {
-    method: "PUT",
-    headers: { authorization: bearerHeader("oxk_key"), "content-type": "application/json" },
-    body: JSON.stringify(body),
-  }));
+  return app.fetch(
+    makeRequest(`${BASE}${path}`, {
+      method: "PUT",
+      headers: {
+        authorization: bearerHeader("oxk_key"),
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(body),
+    }),
+  );
 }
 
 async function authDelete(path: string, body?: unknown): Promise<Response> {
-  return app.fetch(makeRequest(`${BASE}${path}`, {
-    method: "DELETE",
-    headers: { authorization: bearerHeader("oxk_key"), "content-type": "application/json" },
-    body: body ? JSON.stringify(body) : undefined,
-  }));
+  return app.fetch(
+    makeRequest(`${BASE}${path}`, {
+      method: "DELETE",
+      headers: {
+        authorization: bearerHeader("oxk_key"),
+        "content-type": "application/json",
+      },
+      body: body ? JSON.stringify(body) : undefined,
+    }),
+  );
 }
 
 // ── schema.registry.get ───────────────────────────────────────────────────────
@@ -137,7 +163,11 @@ describe("schema.registry.config route", () => {
   const PATH = "/schema/registry/config";
 
   it("happy path PUT: returns 200 with invoke result", async () => {
-    const invokeResult = { registryId: "reg-1", enforcementMode: "off", conformanceFloor: 0 };
+    const invokeResult = {
+      registryId: "reg-1",
+      enforcementMode: "off",
+      conformanceFloor: 0,
+    };
     mocks.invoke.mockResolvedValue(invokeResult);
     const res = await authPut(PATH, { enforcementMode: "off" });
     expect(res.status).toBe(200);
@@ -361,9 +391,16 @@ describe("schema.version.create route", () => {
   const PATH = "/schema/versions";
 
   it("happy path POST: returns 201 with invoke result", async () => {
-    const invokeResult = { versionId: "v-1", versionNumber: 1, publishedAt: "2026-01-01" };
+    const invokeResult = {
+      versionId: "v-1",
+      versionNumber: 1,
+      publishedAt: "2026-01-01",
+    };
     mocks.invoke.mockResolvedValue(invokeResult);
-    const res = await authPost(PATH, { label: "v1.0", changeSummary: "Initial release" });
+    const res = await authPost(PATH, {
+      label: "v1.0",
+      changeSummary: "Initial release",
+    });
     expect(res.status).toBe(201);
     expect(await res.json()).toEqual(invokeResult);
   });
@@ -376,7 +413,10 @@ describe("schema.version.create route", () => {
   });
 
   it("passes label and changeSummary to invoke", async () => {
-    await authPost(PATH, { label: "Sales CRM v2", changeSummary: "Added lead scoring" });
+    await authPost(PATH, {
+      label: "Sales CRM v2",
+      changeSummary: "Added lead scoring",
+    });
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.label).toBe("Sales CRM v2");
     expect(body.changeSummary).toBe("Added lead scoring");
@@ -390,7 +430,12 @@ describe("schema.version.pin route", () => {
   const PATH = `/schema/versions/${VERSION_ID}/pin`;
 
   it("happy path POST: returns 200 with invoke result", async () => {
-    const invokeResult = { pinnedVersionId: VERSION_ID, previousVersionId: null, isDowngrade: false, reconcileRecommended: false };
+    const invokeResult = {
+      pinnedVersionId: VERSION_ID,
+      previousVersionId: null,
+      isDowngrade: false,
+      reconcileRecommended: false,
+    };
     mocks.invoke.mockResolvedValue(invokeResult);
     const res = await authPost(PATH, {});
     expect(res.status).toBe(200);
@@ -417,7 +462,19 @@ describe("schema.version.diff route", () => {
   const PATH = "/schema/versions/diff";
 
   it("happy path GET: returns 200 with invoke result", async () => {
-    const invokeResult = { schemasAdded: [], schemasRemoved: [], labelsAdded: [], labelsRemoved: [], labelsChanged: [], relationshipTypesAdded: [], relationshipTypesRemoved: [], relationshipTypesChanged: [], propertiesAdded: [], propertiesRemoved: [], propertiesChanged: [] };
+    const invokeResult = {
+      schemasAdded: [],
+      schemasRemoved: [],
+      labelsAdded: [],
+      labelsRemoved: [],
+      labelsChanged: [],
+      relationshipTypesAdded: [],
+      relationshipTypesRemoved: [],
+      relationshipTypesChanged: [],
+      propertiesAdded: [],
+      propertiesRemoved: [],
+      propertiesChanged: [],
+    };
     mocks.invoke.mockResolvedValue(invokeResult);
     const res = await authGet(`${PATH}?fromVersionId=v1&toVersionId=v2`);
     expect(res.status).toBe(200);
@@ -451,7 +508,12 @@ describe("schema.export route", () => {
   const PATH = "/schema/export";
 
   it("happy path GET: returns 200 with invoke result", async () => {
-    const invokeResult = { assetId: "a-1", serveUrl: "https://example.com/file.zip", versionId: "v-1", versionNumber: 1 };
+    const invokeResult = {
+      assetId: "a-1",
+      serveUrl: "https://example.com/file.zip",
+      versionId: "v-1",
+      versionNumber: 1,
+    };
     mocks.invoke.mockResolvedValue(invokeResult);
     const res = await authGet(PATH);
     expect(res.status).toBe(200);
@@ -479,7 +541,13 @@ describe("schema.validate.node route", () => {
   const VALID_BODY = { label: "Contact", properties: { name: "Alice" } };
 
   it("happy path POST: returns 200 with invoke result", async () => {
-    const invokeResult = { valid: true, conformanceScore: 1.0, errors: [], missingRequired: [], outcome: "accepted" };
+    const invokeResult = {
+      valid: true,
+      conformanceScore: 1.0,
+      errors: [],
+      missingRequired: [],
+      outcome: "accepted",
+    };
     mocks.invoke.mockResolvedValue(invokeResult);
     const res = await authPost(PATH, VALID_BODY);
     expect(res.status).toBe(200);
@@ -548,7 +616,17 @@ describe("schema.reconcile.status route", () => {
   const PATH = "/schema/reconcile/status";
 
   it("happy path GET: returns 200 with invoke result", async () => {
-    const invokeResult = { status: "running", totalNodes: 100, processedNodes: 50, updatedNodes: 30, totalRelationships: 200, processedRelationships: 100, updatedRelationships: 60, prunedNodes: 0, prunedRelationships: 0 };
+    const invokeResult = {
+      status: "running",
+      totalNodes: 100,
+      processedNodes: 50,
+      updatedNodes: 30,
+      totalRelationships: 200,
+      processedRelationships: 100,
+      updatedRelationships: 60,
+      prunedNodes: 0,
+      prunedRelationships: 0,
+    };
     mocks.invoke.mockResolvedValue(invokeResult);
     const res = await authGet(`${PATH}?executionId=aex-123`);
     expect(res.status).toBe(200);
@@ -692,7 +770,12 @@ describe("schema.setup route", () => {
 
 describe("schema.validate.relationship route", () => {
   const PATH = "/schema/validate/relationship";
-  const VALID_BODY = { type: "EMPLOYS", startLabel: "Company", endLabel: "Person", properties: { since: "2024" } };
+  const VALID_BODY = {
+    type: "EMPLOYS",
+    startLabel: "Company",
+    endLabel: "Person",
+    properties: { since: "2024" },
+  };
 
   it("happy path POST: returns 200 with invoke result", async () => {
     const invokeResult = { valid: true, errors: [], outcome: "accepted" };
@@ -705,7 +788,9 @@ describe("schema.validate.relationship route", () => {
   it("calls invoke with 'validate_schema_relationship' and passes fields", async () => {
     await authPost(PATH, VALID_BODY);
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("validate_schema_relationship");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe(
+      "validate_schema_relationship",
+    );
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.type).toBe("EMPLOYS");
@@ -714,7 +799,11 @@ describe("schema.validate.relationship route", () => {
   });
 
   it("missing startLabel → 400, invoke not called", async () => {
-    const res = await authPost(PATH, { type: "EMPLOYS", endLabel: "Person", properties: {} });
+    const res = await authPost(PATH, {
+      type: "EMPLOYS",
+      endLabel: "Person",
+      properties: {},
+    });
     expect(res.status).toBe(400);
     expect(mocks.invoke).not.toHaveBeenCalled();
   });
@@ -726,7 +815,10 @@ describe("schema.chat route", () => {
   const PATH = "/schema/chat";
 
   it("happy path POST: returns 200 with invoke result", async () => {
-    const invokeResult = { assistantMessage: "Added a Contact label.", conversationId: "conv-1" };
+    const invokeResult = {
+      assistantMessage: "Added a Contact label.",
+      conversationId: "conv-1",
+    };
     mocks.invoke.mockResolvedValue(invokeResult);
     const res = await authPost(PATH, { message: "Add a Contact label" });
     expect(res.status).toBe(200);
@@ -741,7 +833,11 @@ describe("schema.chat route", () => {
   });
 
   it("passes message, conversationId and draftVersionId to invoke", async () => {
-    await authPost(PATH, { message: "next turn", conversationId: "conv-9", draftVersionId: "ver-3" });
+    await authPost(PATH, {
+      message: "next turn",
+      conversationId: "conv-9",
+      draftVersionId: "ver-3",
+    });
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.message).toBe("next turn");
     expect(body.conversationId).toBe("conv-9");
@@ -756,169 +852,6 @@ describe("schema.chat route", () => {
 
   it("empty message → 400, invoke not called", async () => {
     const res = await authPost(PATH, { message: "" });
-    expect(res.status).toBe(400);
-    expect(mocks.invoke).not.toHaveBeenCalled();
-  });
-});
-
-// ── graph.relationship.upsert ─────────────────────────────────────────────────
-
-describe("graph.relationship.upsert route", () => {
-  const PATH = "/graph/relationship/upsert";
-  const VALID_BODY = {
-    fromNodeId: "node-a",
-    toNodeId: "node-b",
-    relationshipType: "EMPLOYS",
-  };
-
-  it("happy path POST: returns 201 with invoke result", async () => {
-    const invokeResult = { relationshipId: "node-a:EMPLOYS:node-b", created: true };
-    mocks.invoke.mockResolvedValue(invokeResult);
-    const res = await authPost(PATH, VALID_BODY);
-    expect(res.status).toBe(201);
-    expect(await res.json()).toEqual(invokeResult);
-  });
-
-  it("calls invoke with 'upsert_graph_relationship' and surface 'api'", async () => {
-    await authPost(PATH, VALID_BODY);
-    expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("upsert_graph_relationship");
-    expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
-  });
-
-  it("passes fromNodeId, toNodeId, relationshipType, properties to invoke", async () => {
-    await authPost(PATH, { ...VALID_BODY, properties: { since: "2024" } });
-    const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
-    expect(body.fromNodeId).toBe("node-a");
-    expect(body.toNodeId).toBe("node-b");
-    expect(body.relationshipType).toBe("EMPLOYS");
-    expect(body.properties).toEqual({ since: "2024" });
-  });
-
-  it("invalid relationshipType (lowercase) → 400, invoke not called", async () => {
-    const res = await authPost(PATH, { ...VALID_BODY, relationshipType: "employs" });
-    expect(res.status).toBe(400);
-    expect(mocks.invoke).not.toHaveBeenCalled();
-  });
-
-  it("missing fromNodeId → 400, invoke not called", async () => {
-    const res = await authPost(PATH, { toNodeId: "node-b", relationshipType: "EMPLOYS" });
-    expect(res.status).toBe(400);
-    expect(mocks.invoke).not.toHaveBeenCalled();
-  });
-});
-
-// ── semantic.relationship.list ────────────────────────────────────────────────
-
-describe("semantic.relationship.list route", () => {
-  const PATH = "/semantic-relationships";
-
-  it("happy path GET: returns 200 with invoke result", async () => {
-    const invokeResult = { edges: [], total: 0, limit: 50, offset: 0 };
-    mocks.invoke.mockResolvedValue(invokeResult);
-    const res = await authGet(PATH);
-    expect(res.status).toBe(200);
-    expect(await res.json()).toEqual(invokeResult);
-  });
-
-  it("calls invoke with 'list_semantic_relationships' and surface 'api'", async () => {
-    await authGet(PATH);
-    expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("list_semantic_relationships");
-    expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
-  });
-
-  it("?type=RELATED_TO&confidenceMin=0.5&limit=20&offset=5 → parsed to invoke", async () => {
-    await authGet(`${PATH}?type=RELATED_TO&confidenceMin=0.5&limit=20&offset=5`);
-    const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
-    expect(body.type).toBe("RELATED_TO");
-    expect(body.confidenceMin).toBe(0.5);
-    expect(body.limit).toBe(20);
-    expect(body.offset).toBe(5);
-  });
-});
-
-// ── semantic.relationship.infer ───────────────────────────────────────────────
-
-describe("semantic.relationship.infer route", () => {
-  const PATH = "/semantic-relationships/infer";
-  const VALID_BODY = { semanticEdgePrompt: "Identify entities that are related" };
-
-  it("happy path POST: returns 202 with invoke result", async () => {
-    const invokeResult = { jobId: "job-1", status: "queued", estimatedNodes: 100, dryRun: false };
-    mocks.invoke.mockResolvedValue(invokeResult);
-    const res = await authPost(PATH, VALID_BODY);
-    expect(res.status).toBe(202);
-    expect(await res.json()).toEqual(invokeResult);
-  });
-
-  it("calls invoke with 'infer_semantic_relationships' and surface 'api'", async () => {
-    await authPost(PATH, VALID_BODY);
-    expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("infer_semantic_relationships");
-    expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
-  });
-});
-
-// ── semantic.relationship.suggest ────────────────────────────────────────────
-
-describe("semantic.relationship.suggest route", () => {
-  const PATH = "/semantic-relationships/suggest";
-
-  it("happy path GET: returns 200 with invoke result", async () => {
-    const invokeResult = { suggestions: [], total: 0, limit: 50 };
-    mocks.invoke.mockResolvedValue(invokeResult);
-    const res = await authGet(PATH);
-    expect(res.status).toBe(200);
-    expect(await res.json()).toEqual(invokeResult);
-  });
-
-  it("calls invoke with 'suggest_semantic_relationships' and surface 'api'", async () => {
-    await authGet(PATH);
-    expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("suggest_semantic_relationships");
-    expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
-  });
-
-  it("?confidenceMin=0.3&confidenceMax=0.8 → parsed and passed to invoke", async () => {
-    await authGet(`${PATH}?confidenceMin=0.3&confidenceMax=0.8`);
-    const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
-    expect(body.confidenceMin).toBe(0.3);
-    expect(body.confidenceMax).toBe(0.8);
-  });
-});
-
-// ── semantic.relationship.approve ─────────────────────────────────────────────
-
-describe("semantic.relationship.approve route", () => {
-  const EDGE_ID = "edge-xyz";
-  const PATH = `/semantic-relationships/${EDGE_ID}/decide`;
-
-  it("happy path POST: returns 200 with invoke result", async () => {
-    const invokeResult = { edgeId: EDGE_ID, decision: "approve" };
-    mocks.invoke.mockResolvedValue(invokeResult);
-    const res = await authPost(PATH, { decision: "approve" });
-    expect(res.status).toBe(200);
-    expect(await res.json()).toEqual(invokeResult);
-  });
-
-  it("calls invoke with 'approve_semantic_relationship' and surface 'api'", async () => {
-    await authPost(PATH, { decision: "reject" });
-    expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("approve_semantic_relationship");
-    expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
-  });
-
-  it("passes edgeId from path param and decision from body", async () => {
-    await authPost(PATH, { decision: "approve", comment: "Looks correct" });
-    const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
-    expect(body.edgeId).toBe(EDGE_ID);
-    expect(body.decision).toBe("approve");
-    expect(body.comment).toBe("Looks correct");
-  });
-
-  it("invalid decision → 400, invoke not called", async () => {
-    const res = await authPost(PATH, { decision: "maybe" });
     expect(res.status).toBe(400);
     expect(mocks.invoke).not.toHaveBeenCalled();
   });

@@ -58,6 +58,8 @@ export const baseEnvSchema = z.object({
     .int()
     .positive()
     .default(1),
+  // Per-request timeout for the app MCP OAuth flows (lib/mcp-oauth/safe-fetch.ts).
+  MCP_OAUTH_FETCH_TIMEOUT_MS: z.coerce.number().int().positive().default(10000),
 
   // Distributed rate limiter (apps/api/src/middleware/distributed-rate-limit.ts).
   // Per-workspace (fallback: per-org, then per-IP) fixed-window budgets, in

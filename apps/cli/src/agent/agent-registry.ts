@@ -3,7 +3,7 @@
  * "what is running right now", powering the REPL's `/hud` heads-up display.
  *
  * The CLI has several things that run concurrently and were previously invisible
- * once dispatched: the active REPL turn, background monitors (CI/PR pollers that
+ * once dispatched: the active REPL turn and fleet subagents (CI/PR pollers that
  * fire-and-forget), and fleet subagents. Each producer registers here and gets a
  * {@link AgentHandle} it updates as work progresses; consumers (the HUD) read a
  * {@link snapshot} and subscribe to `change` events for live updates.
@@ -15,7 +15,7 @@
  */
 import { EventEmitter } from "node:events";
 
-export type AgentKind = "turn" | "subagent" | "monitor" | "fleet";
+export type AgentKind = "turn" | "subagent" | "fleet";
 export type AgentStatus = "queued" | "running" | "done" | "failed";
 
 /** A live view of one running (or just-finished) agent. */
@@ -41,7 +41,10 @@ export interface RunningAgent {
 
 /** The mutable fields a producer may patch on its entry. */
 export type AgentPatch = Partial<
-  Pick<RunningAgent, "title" | "model" | "detail" | "status" | "outputTokens" | "costUsd">
+  Pick<
+    RunningAgent,
+    "title" | "model" | "detail" | "status" | "outputTokens" | "costUsd"
+  >
 >;
 
 /** Handle returned to a producer to drive its own entry. */
@@ -73,7 +76,10 @@ export interface AgentSummary {
   failed: number;
 }
 
-const TERMINAL: ReadonlySet<AgentStatus> = new Set<AgentStatus>(["done", "failed"]);
+const TERMINAL: ReadonlySet<AgentStatus> = new Set<AgentStatus>([
+  "done",
+  "failed",
+]);
 
 export interface AgentRegistryOptions {
   /** Injectable clock (ms epoch) for deterministic tests. Default Date.now. */
@@ -145,7 +151,9 @@ export class AgentRegistry {
       const aActive = TERMINAL.has(a.status) ? 1 : 0;
       const bActive = TERMINAL.has(b.status) ? 1 : 0;
       if (aActive !== bActive) return aActive - bActive; // active group first
-      return aActive === 0 ? a.startedAt - b.startedAt : b.updatedAt - a.updatedAt;
+      return aActive === 0
+        ? a.startedAt - b.startedAt
+        : b.updatedAt - a.updatedAt;
     });
   }
 
@@ -204,7 +212,7 @@ export class AgentRegistry {
 
 /**
  * The process-wide singleton every producer and the HUD share. A single
- * instance means the REPL turn, background monitors, and any future in-process
+ * instance means the REPL turn and any future in-process
  * fleet all surface in one `/hud`.
  */
 export const agentRegistry = new AgentRegistry();

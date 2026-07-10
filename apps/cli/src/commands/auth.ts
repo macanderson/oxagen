@@ -138,7 +138,7 @@ export async function runBrowserLogin(
 ): Promise<InteractiveLoginResult> {
   const apiUrl = getApiUrl();
   const appUrl = getAppUrl();
-  const { browserLogin } = await import("../lib/loopback-login.js");
+  const { browserLogin } = await import("../auth/loopback-login.js");
   const { token, orgSlug, workspaceSlug } = await browserLogin({ apiUrl, appUrl, onStatus, signal });
   writeConfig({ token, orgSlug, workspaceSlug, appUrl });
   return { token, orgSlug, workspaceSlug };

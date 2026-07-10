@@ -18,7 +18,7 @@
  * mode renders the human view on stdout; a missing hash is a uniform stderr
  * error line with exit code 1.
  */
-import { readLedger, commitExists, type CommitLedgerEntry } from "../lib/commit-ledger.js";
+import { readLedger, commitExists, type CommitLedgerEntry } from "./commit-ledger.js";
 import { createOutput } from "../lib/output.js";
 import { stdoutWriter, type CommandWriter } from "../lib/capture-writer.js";
 

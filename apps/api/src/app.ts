@@ -263,8 +263,6 @@ import { semanticEdgeRoute } from "./routes/v1/semantic-edge";
 import { repoRoute } from "./routes/v1/repo";
 import { integrationRoute } from "./routes/v1/integration";
 import { schemaRoute } from "./routes/v1/schema";
-import { semanticRelationshipRoute } from "./routes/v1/semantic-relationship";
-import { graphRelationshipUpsertRoute } from "./routes/v1/graph.relationship.upsert";
 import {
   pluginSchemaRoute,
   pluginVersionRoute,
@@ -692,15 +690,6 @@ orgScoped.route("/semantic-edges", semanticEdgeRoute);
 orgScoped.route("/repos", repoRoute);
 orgScoped.route("/integrations", integrationRoute);
 orgScoped.route("/schema", schemaRoute);
-// semantic.relationship.* routes — intended successors to semantic-edge.ts at
-// /semantic-edges, but their 4 capabilities have NO registered handlers yet
-// (see packages/handlers capability-dispatch.probe.test.ts allowlist): every
-// request here throws no_handler at dispatch. /semantic-edges remains the
-// working path until that migration is finished.
-orgScoped.route("/semantic-relationships", semanticRelationshipRoute);
-// graph.relationship.upsert — same status: mounted but handler-less;
-// /graph/edge/upsert (upsert_edge) is the working route.
-orgScoped.route("/graph/relationship/upsert", graphRelationshipUpsertRoute);
 orgScoped.route("/plugin-schema", pluginSchemaRoute);
 orgScoped.route("/plugin-versions", pluginVersionRoute);
 orgScoped.route("/graph/nodes", graphNodeListRoute);

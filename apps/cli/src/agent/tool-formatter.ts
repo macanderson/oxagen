@@ -17,16 +17,16 @@ export const TOOL_EMOJIS: Record<string, string> = {
 
   // Knowledge & graph
   MCP: "🔗",
-  "suggest_semantic_edges": "🧠",
-  "approve_semantic_relationship": "✅",
+  suggest_semantic_edges: "🧠",
+  approve_semantic_edge: "✅",
   "knowledge.query": "🔍",
 
   // LLM & inference
-  "dispatch_subagent": "🚀",
+  dispatch_subagent: "🚀",
 
   // Workflow & process
-  "run_workflow": "▶️",
-  "cancel_workflow": "⏹️",
+  run_workflow: "▶️",
+  cancel_workflow: "⏹️",
 
   // Default — tools without a mapping render with no emoji at all.
   default: "",
@@ -50,7 +50,8 @@ export function getToolAccent(toolName: string): string {
   const n = toolName.toLowerCase();
   if (isSubagentDispatch(toolName)) return "#A78BFA"; // violet — delegation
   if (/(^|[.\-_])(delete|remove|rm|drop)([.\-_]|$)/.test(n)) return "#FB7185"; // red
-  if (/(^|[.\-_])(write|edit|create|update|patch|apply)([.\-_]|$)/.test(n)) return "#34D399"; // green
+  if (/(^|[.\-_])(write|edit|create|update|patch|apply)([.\-_]|$)/.test(n))
+    return "#34D399"; // green
   if (/(bash|shell|exec|command|run|terminal)/.test(n)) return "#FBBF24"; // amber
   return "#7CE8F4"; // cyan — read / search / query
 }
@@ -118,7 +119,11 @@ export function formatToolArgs(toolName: string, input: unknown): string {
 
   // Subagent delegation reads best as `slug → task`, so the transcript shows
   // who was dispatched and to do what — not the raw dispatch payload.
-  if (isSubagentDispatch(toolName) && typeof input === "object" && input !== null) {
+  if (
+    isSubagentDispatch(toolName) &&
+    typeof input === "object" &&
+    input !== null
+  ) {
     const { slug, task } = subagentInfo(input);
     const t = task ? cap(task) : "";
     if (slug && t) return `${slug} → ${t}`;
@@ -133,7 +138,11 @@ export function formatToolArgs(toolName: string, input: unknown): string {
   const obj = input as Record<string, unknown>;
 
   // File operations — show the path.
-  if (/(^|[.\-_])(read|write|edit|create|delete|view|open|cat)([.\-_]|$)/.test(toolLower)) {
+  if (
+    /(^|[.\-_])(read|write|edit|create|delete|view|open|cat)([.\-_]|$)/.test(
+      toolLower,
+    )
+  ) {
     const path = obj.file_path ?? obj.path ?? obj.filename ?? obj.file;
     if (typeof path === "string") return cap(path);
   }
@@ -145,7 +154,8 @@ export function formatToolArgs(toolName: string, input: unknown): string {
   }
 
   // Search/lookup — show the query/pattern.
-  const query = obj.query ?? obj.pattern ?? obj.q ?? obj.search ?? obj.text ?? obj.prompt;
+  const query =
+    obj.query ?? obj.pattern ?? obj.q ?? obj.search ?? obj.text ?? obj.prompt;
   if (typeof query === "string") return cap(query);
 
   // A lone path/name on any other tool is still the most useful summary.

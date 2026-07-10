@@ -33,7 +33,11 @@ describe("createEngram facade", () => {
   describe("remember()", () => {
     it("writes an episodic record and returns a content-addressed ID", async () => {
       const id = await engram.remember(
-        { event: "tool_call", payload: { tool: "grep", query: "foo" }, outcome: "success" },
+        {
+          event: "tool_call",
+          payload: { tool: "grep", query: "foo" },
+          outcome: "success",
+        },
         OPTS,
       );
       expect(id).toHaveLength(64);
@@ -100,7 +104,9 @@ describe("createEngram facade", () => {
     it("writes an edge between two entities", async () => {
       const srcId = await seedEntity("api");
       const tgtId = await seedEntity("database");
-      const id = await engram.relate(srcId, "DEPENDS_ON", tgtId, OPTS, { weight: 0.8 });
+      const id = await engram.relate(srcId, "DEPENDS_ON", tgtId, OPTS, {
+        weight: 0.8,
+      });
       expect(id).toHaveLength(64);
 
       const record = await store.getById(id);
@@ -124,7 +130,12 @@ describe("createEngram facade", () => {
   describe("pin() / unpin()", () => {
     it("pins a procedural rule with salience 1.0", async () => {
       const id = await engram.pin(
-        { rule: "Always validate input", appliesTo: ["api"], successCount: 0, failureCount: 0 },
+        {
+          rule: "Always validate input",
+          appliesTo: ["api"],
+          successCount: 0,
+          failureCount: 0,
+        },
         OPTS,
       );
       const record = await store.getById(id);
@@ -134,14 +145,21 @@ describe("createEngram facade", () => {
 
     it("unpin writes an episodic unpin event referencing the rule", async () => {
       const ruleId = await engram.pin(
-        { rule: "test rule", appliesTo: ["test"], successCount: 0, failureCount: 0 },
+        {
+          rule: "test rule",
+          appliesTo: ["test"],
+          successCount: 0,
+          failureCount: 0,
+        },
         OPTS,
       );
       await engram.unpin(ruleId, OPTS);
 
       const all = await store.query({ namespace: NS, limit: 100 });
       const unpinEvent = all.find(
-        (r) => r.kind === "episodic" && (r.body as { event?: string }).event === "rule_unpinned",
+        (r) =>
+          r.kind === "episodic" &&
+          (r.body as { event?: string }).event === "rule_unpinned",
       );
       expect(unpinEvent).toBeDefined();
       expect(unpinEvent!.causality).toContain(ruleId);
@@ -159,24 +177,18 @@ describe("createEngram facade", () => {
         { namespace: { org: "org-1", workspace: "ws-2" }, provenance: PROV },
       );
 
-      const ws1Records = await store.query({ namespace: { org: "org-1", workspace: "ws-1" }, limit: 100 });
-      const ws2Records = await store.query({ namespace: { org: "org-1", workspace: "ws-2" }, limit: 100 });
+      const ws1Records = await store.query({
+        namespace: { org: "org-1", workspace: "ws-1" },
+        limit: 100,
+      });
+      const ws2Records = await store.query({
+        namespace: { org: "org-1", workspace: "ws-2" },
+        limit: 100,
+      });
 
       expect(ws1Records).toHaveLength(1);
       expect(ws2Records).toHaveLength(1);
       expect(ws1Records[0]!.id).not.toBe(ws2Records[0]!.id);
-    });
-  });
-
-  describe("nodeRef and entityRefs pass-through", () => {
-    it("includes nodeRef and entityRefs in WriteOpts without error", async () => {
-      const id = await engram.remember(
-        { event: "tool_call", payload: { tool: "read" } },
-        { ...OPTS, nodeRef: "file:src/main.ts", entityRefs: ["kn-abc", "kn-def"] },
-      );
-      // The record itself doesn't store nodeRef/entityRefs on the body — they're
-      // for the graph sync layer. But the write should succeed without error.
-      expect(id).toHaveLength(64);
     });
   });
 });

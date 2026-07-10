@@ -47,15 +47,29 @@ export function forkSession(
 
 /**
  * Get the full event history for a session, including inherited prefix
- * from parent (if forked).
+ * from parent (if forked). Resolves the whole ancestor chain, so a fork
+ * of a fork still carries its grandparent's prefix.
  */
 export function getFullHistory(
   session: Session,
   resolveParent: (id: string) => Session | null,
 ): { events: Session["events"]; inherited: number } {
+  return getFullHistoryInner(session, resolveParent, new Set());
+}
+
+function getFullHistoryInner(
+  session: Session,
+  resolveParent: (id: string) => Session | null,
+  visited: Set<string>,
+): { events: Session["events"]; inherited: number } {
   if (!session.parentId || session.forkPoint === undefined) {
     return { events: session.events, inherited: 0 };
   }
+  // Corrupt-data guard: a parentId cycle would otherwise recurse forever.
+  if (visited.has(session.id)) {
+    return { events: session.events, inherited: 0 };
+  }
+  visited.add(session.id);
 
   const parent = resolveParent(session.parentId);
   if (!parent) {
@@ -63,8 +77,19 @@ export function getFullHistory(
     return { events: session.events, inherited: 0 };
   }
 
-  // Get parent's history up to the fork point
-  const parentHistory = parent.events.slice(0, session.forkPoint + 1);
+  // Reconstruct the PARENT's full history first, so the grandparent prefix
+  // survives a multi-generation fork chain (a one-level slice used to drop it).
+  const parentFull = getFullHistoryInner(parent, resolveParent, visited);
+  const parentIsFork =
+    parent.parentId !== undefined && parent.forkPoint !== undefined;
+  // forkPoint indexes the parent's OWN event array. Map it onto the parent's
+  // reconstructed history: a forked parent's events[0] (session_start) is not
+  // part of its history — its own events start at full index `inherited`,
+  // shifted down by one. A root parent's events map 1:1.
+  const cut = parentIsFork
+    ? parentFull.inherited + session.forkPoint
+    : session.forkPoint + 1;
+  const parentHistory = parentFull.events.slice(0, cut);
   // Skip the session_start event from the forked session (it's a duplicate of concept)
   const ownEvents = session.events.slice(1);
 

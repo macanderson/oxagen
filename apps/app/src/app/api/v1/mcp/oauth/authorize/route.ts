@@ -20,7 +20,7 @@ import {
   resolveEndpointRedirects,
 } from "@oxagen/plugins";
 import { getSession } from "@/lib/session";
-import { resolveReturnTo } from "@/lib/mcp-oauth/return-to";
+import { resolveReturnTo } from "@/app/api/v1/mcp/oauth/return-to";
 import { resolveOrg, assertMcpManager } from "@/lib/resolve-org";
 import { authDenialStatus, isNextRedirectError } from "@/lib/auth-denial";
 import { safeFetch } from "@/lib/mcp-oauth/safe-fetch";

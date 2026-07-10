@@ -79,8 +79,6 @@ export async function emitAgentEvent(
         derivedFrom: ctx.messageId ? [ctx.messageId] : [],
         timestamp: Date.now(),
       },
-      nodeRef: emitOpts?.nodeRef,
-      entityRefs: emitOpts?.entityRefs,
     };
 
     const recordId = await engram.remember(event, opts);

@@ -1,6 +1,6 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { graphEdgeDelete } from "@oxagen/oxagen/contracts/graph.edge.delete";
-import { RELATIONSHIP_TYPE_PATTERN } from "@oxagen/oxagen/contracts/graph.relationship.upsert";
+import { RELATIONSHIP_TYPE_PATTERN } from "@oxagen/oxagen/contracts/graph.edge.upsert";
 import { scopedSession } from "@oxagen/ontology/tenant";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { emitGraphDeletionTelemetry } from "./graph.telemetry";
@@ -27,10 +27,9 @@ function buildDeleteQuery(relationshipType: string): string {
           RETURN found > 0 AS wasDeleted`;
 }
 
-export const graphEdgeDeleteHandler: CapabilityHandler<typeof graphEdgeDelete> = async (
-  input,
-  ctx,
-) => {
+export const graphEdgeDeleteHandler: CapabilityHandler<
+  typeof graphEdgeDelete
+> = async (input, ctx) => {
   const { orgId, workspaceId } = ctx;
   const startedAt = Date.now();
 

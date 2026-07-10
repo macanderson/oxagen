@@ -10,7 +10,7 @@
 //
 // STATE, not STRUCTURE: this tool answers "does the change pass?" — a runtime
 // STATE question. It never answers "what tests exercise this symbol?" or "who
-// imports this?" — those are STRUCTURE questions owned by code_graph/code_map.
+// imports this?" — those are STRUCTURE questions owned by code_graph.
 // It only uses import edges to SELECT which existing tests to execute.
 
 import { tool, type Tool } from "ai";
@@ -41,7 +41,11 @@ const MAX_TIMEOUT_MS = 600_000;
 const IMPORTER_GREP_CAP = 200;
 
 /** Per-verbosity ceiling on reported failing assertions (minimal = the default cap). */
-export const TEST_FAILURE_CAPS = { minimal: MAX_TEST_FAILURES, standard: 40, verbose: 80 } as const;
+export const TEST_FAILURE_CAPS = {
+  minimal: MAX_TEST_FAILURES,
+  standard: 40,
+  verbose: 80,
+} as const;
 
 interface StructuredToolDeps {
   signal?: AbortSignal;
@@ -100,7 +104,8 @@ export async function selectTestsForChanges(
       }
       const present = new Set(entries.map((e) => e.replace(/\/$/, "")));
       for (const name of names) {
-        if (present.has(name)) selected.add(dir === "." ? name : `${dir}/${name}`);
+        if (present.has(name))
+          selected.add(dir === "." ? name : `${dir}/${name}`);
       }
     }),
   );
@@ -130,7 +135,8 @@ export function buildVitestCommand(opts: {
   failFast?: boolean;
 }): string {
   const parts: string[] = [];
-  if (opts.pkg) parts.push("pnpm", "--filter", shQuote(opts.pkg), "exec", "vitest", "run");
+  if (opts.pkg)
+    parts.push("pnpm", "--filter", shQuote(opts.pkg), "exec", "vitest", "run");
   else parts.push("pnpm", "exec", "vitest", "run");
   for (const f of opts.files) parts.push(shQuote(f));
   parts.push("--reporter=json", "--no-color");
@@ -138,7 +144,10 @@ export function buildVitestCommand(opts: {
   return parts.join(" ");
 }
 
-export function buildTestUnitRunTool(workspace: Workspace, deps: StructuredToolDeps): Tool {
+export function buildTestUnitRunTool(
+  workspace: Workspace,
+  deps: StructuredToolDeps,
+): Tool {
   return tool({
     description:
       "Run vitest over ONLY the test files implicated by a change and return a typed " +
@@ -165,7 +174,10 @@ export function buildTestUnitRunTool(workspace: Workspace, deps: StructuredToolD
         .describe(
           "Source files you changed; their sibling tests + importing tests are selected and run.",
         ),
-      failFast: z.boolean().optional().describe("Stop at the first failing test (--bail=1)."),
+      failFast: z
+        .boolean()
+        .optional()
+        .describe("Stop at the first failing test (--bail=1)."),
       timeoutMs: z
         .number()
         .int()
@@ -176,7 +188,14 @@ export function buildTestUnitRunTool(workspace: Workspace, deps: StructuredToolD
         `Max failing assertions to report (1–${TEST_FAILURE_CAPS.verbose}). Omit to let verbosity choose.`,
       ),
     }),
-    execute: async ({ scope, changedFiles, failFast, timeoutMs, verbosity, limit }) => {
+    execute: async ({
+      scope,
+      changedFiles,
+      failFast,
+      timeoutMs,
+      verbosity,
+      limit,
+    }) => {
       // Guardrail (ADR-021 §3 / CLAUDE.md "NEVER run all tests"): `all` would
       // mean the whole repo — refuse structurally before any command is built.
       if (scope?.all) {
@@ -195,7 +214,10 @@ export function buildTestUnitRunTool(workspace: Workspace, deps: StructuredToolD
         changedFiles && changedFiles.length > 0
           ? await selectTestsForChanges(workspace, changedFiles)
           : [];
-      const selected = [...new Set([...explicit, ...derived])].slice(0, MAX_SELECTED_TESTS);
+      const selected = [...new Set([...explicit, ...derived])].slice(
+        0,
+        MAX_SELECTED_TESTS,
+      );
 
       // With no files AND no package, running vitest would sweep the whole repo —
       // refuse and hint. A package with no selected files runs that package only.
@@ -208,19 +230,33 @@ export function buildTestUnitRunTool(workspace: Workspace, deps: StructuredToolD
         };
       }
 
-      const maxFailures = resolveLimit((verbosity ?? "minimal") as Verbosity, TEST_FAILURE_CAPS, limit);
+      const maxFailures = resolveLimit(
+        (verbosity ?? "minimal") as Verbosity,
+        TEST_FAILURE_CAPS,
+        limit,
+      );
       const command = buildVitestCommand({ pkg, files: selected, failFast });
       const timeout = Math.min(timeoutMs ?? DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS);
       let result;
       try {
-        result = await workspace.exec(command, { timeoutMs: timeout, signal: deps.signal });
+        result = await workspace.exec(command, {
+          timeoutMs: timeout,
+          signal: deps.signal,
+        });
       } catch (err) {
-        return { selected, error: `Failed to run vitest: ${err instanceof Error ? err.message : String(err)}` };
+        return {
+          selected,
+          error: `Failed to run vitest: ${err instanceof Error ? err.message : String(err)}`,
+        };
       }
       deps.onEvent?.({ type: "command", command, exitCode: result.exitCode });
 
       if (result.timedOut) {
-        return { selected, timedOut: true, hint: `vitest timed out after ${timeout}ms; narrow the selection.` };
+        return {
+          selected,
+          timedOut: true,
+          hint: `vitest timed out after ${timeout}ms; narrow the selection.`,
+        };
       }
 
       const parsed = parseVitestJson(result.stdout, maxFailures);
@@ -228,7 +264,10 @@ export function buildTestUnitRunTool(workspace: Workspace, deps: StructuredToolD
         // Reporter output unparseable → fall back to exit code + a bounded
         // stderr tail (never the whole firehose), flagged so the model knows the
         // summary is degraded rather than a clean pass.
-        const tail = clipStr(result.stderr.slice(-MAX_STDERR_TAIL), MAX_STDERR_TAIL);
+        const tail = clipStr(
+          result.stderr.slice(-MAX_STDERR_TAIL),
+          MAX_STDERR_TAIL,
+        );
         return {
           selected,
           parseError: true,

@@ -26,7 +26,7 @@ import {
   type FixLoopResult,
   type FixPrView,
 } from "../lib/pr-fix.js";
-import { runGh, ghJson } from "../lib/gh.js";
+import { runGh, ghJson } from "./gh.js";
 import { createPrFixRunner } from "../agent/pr-fix-runner.js";
 import { requireSession } from "../lib/session.js";
 

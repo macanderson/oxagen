@@ -56,7 +56,7 @@ import {
 import { loadProjectContext } from "../agent/project-context.js";
 import { loadAndExpand, parseInvocation } from "../slash/expand.js";
 import { buildSlashCatalog, type SlashCatalogEntry } from "../slash/catalog.js";
-import { buildProgram, describeCliCommands, type CliCommandMeta } from "../program.js";
+import { describeCliCommands, type CliCommandMeta } from "../commands/meta.js";
 import {
   isExternalOnlyCliCommand,
   isInlineDispatchableCliCommand,
@@ -206,6 +206,14 @@ export interface ReplOptions {
    * Undefined ⇒ off (unbounded turns), same as `TURN_BUDGET_OFF`.
    */
   budget?: TurnBudgetPolicy;
+  /**
+   * Factory for the full `oxagen` Commander tree — injected by the composition
+   * root (program.tsx) so this module never imports it statically (that import
+   * put the whole 2k-line command tree in the REPL's static graph). When
+   * absent, `launchRepl` lazy-imports the real one; a ReplApp rendered
+   * directly without it (component tests) just gets an empty CLI tier.
+   */
+  buildProgram?: () => import("commander").Command;
 }
 
 /**
@@ -488,7 +496,9 @@ export function ReplApp({
   // the menu; `catalogRef` mirrors it for the synchronous submit handler.
   const cliCommandsRef = useRef<ReadonlyArray<CliCommandMeta> | null>(null);
   if (!cliCommandsRef.current) {
-    cliCommandsRef.current = describeCliCommands(buildProgram());
+    cliCommandsRef.current = options.buildProgram
+      ? describeCliCommands(options.buildProgram())
+      : [];
   }
   const [catalog, setCatalog] = useState<SlashCatalogEntry[]>(() =>
     buildSlashCatalog({ cwd, cliCommands: cliCommandsRef.current ?? [] }),
@@ -2228,7 +2238,11 @@ export function ReplApp({
                   `oxagen ${shellCmd}`,
               );
             } else if (isInlineDispatchableCliCommand(entry.name)) {
-              const result = await runInlineCliCommand(entry.name, invocation?.args ?? "");
+              const result = await runInlineCliCommand(
+                entry.name,
+                invocation?.args ?? "",
+                options.buildProgram,
+              );
               pushAssistant(
                 `📦 oxagen ${shellCmd}\n\n${result.ok ? result.output : `✗ ${result.output}`}`,
               );
@@ -3579,6 +3593,14 @@ export function ReplApp({
 
 export async function launchRepl(options: ReplOptions): Promise<void> {
   const { render: renderInk } = await import("ink");
+  // Resolve the CLI program factory once: injected by program.tsx normally,
+  // lazy-imported here for callers that don't carry one (mission-control).
+  // Dynamic on purpose — a static import would put the whole composition
+  // root back into the REPL's static module graph (the exact coupling this
+  // seam exists to cut).
+  const buildProgram =
+    options.buildProgram ?? (await import("../program.js")).buildProgram;
+  options = { ...options, buildProgram };
   // On a real TTY, take over the alternate screen buffer: ReplApp renders a
   // full-screen dashboard (header/viewport/dock — see the `fullscreen` branch
   // of its render) with its OWN in-app scroll (scroll.ts), so it no longer

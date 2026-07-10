@@ -8,7 +8,7 @@
  */
 import { tool, type ToolSet } from "ai";
 import { z } from "zod";
-import type { Workspace, CodeGraphProvider, CodeMapProvider, CodingEvent } from "./types";
+import type { Workspace, CodeGraphProvider, CodingEvent } from "./types";
 import type { FileLockProvider } from "./ports";
 import { delay } from "./loop-driver";
 import { buildStructuredTools } from "./tools-structured";
@@ -104,13 +104,18 @@ function closestLine(
   let best: { line: number; text: string; score: number } | null = null;
   for (let i = 0; i < lines.length; i++) {
     const score = similarity(lines[i] as string, target);
-    if (!best || score > best.score) best = { line: i + 1, text: lines[i] as string, score };
+    if (!best || score > best.score)
+      best = { line: i + 1, text: lines[i] as string, score };
   }
   return best ? { line: best.line, text: best.text } : null;
 }
 
 /** 1-based line numbers where `oldString` begins, up to `cap` occurrences. */
-function occurrenceLines(content: string, oldString: string, cap: number): number[] {
+function occurrenceLines(
+  content: string,
+  oldString: string,
+  cap: number,
+): number[] {
   if (oldString === "") return [];
   const out: number[] = [];
   let from = 0;
@@ -134,7 +139,10 @@ function occurrenceLines(content: string, oldString: string, cap: number): numbe
  *  - not found  → the closest line by fuzzy similarity + a whitespace hint.
  *  - ambiguous  → the first few matching line numbers + how to disambiguate.
  */
-export function describeEditFailure(content: string, oldString: string): string | null {
+export function describeEditFailure(
+  content: string,
+  oldString: string,
+): string | null {
   const count = oldString === "" ? 0 : content.split(oldString).length - 1;
   if (count === 1) return null;
   if (count === 0) {
@@ -305,7 +313,9 @@ async function withFileLock(
   }
 
   if (lockId === null) {
-    const until = blockedUntil ? new Date(blockedUntil).toISOString() : "shortly";
+    const until = blockedUntil
+      ? new Date(blockedUntil).toISOString()
+      : "shortly";
     return (
       `Blocked: ${path} is currently locked by another agent` +
       (heldBy ? ` (${heldBy})` : "") +
@@ -317,7 +327,9 @@ async function withFileLock(
     return await execute();
   } finally {
     try {
-      await Promise.resolve(fileLock.release({ lockId, agentId: lockContext.agentId }));
+      await Promise.resolve(
+        fileLock.release({ lockId, agentId: lockContext.agentId }),
+      );
     } catch {
       // Release is best-effort — the TTL (default 300s) and the turn-end
       // batch release-by-executionId backstop cover a failed release.
@@ -352,7 +364,6 @@ export function buildWorkspaceTools(
   opts: {
     readOnly?: boolean;
     codeGraph?: CodeGraphProvider;
-    codeMap?: CodeMapProvider;
     onEvent?: (e: CodingEvent) => void;
     /**
      * Turn abort signal, forwarded to `workspace.exec` so an aborted turn kills
@@ -415,16 +426,24 @@ export function buildWorkspaceTools(
         content: z.string(),
       }),
       execute: async ({ path, content }) => {
-        if (forbidTestEdits && isTestPath(path)) return TEST_EDIT_DENIED_MESSAGE;
-        return withFileLock(path, "write", fileLock, lockContext, signal, async () => {
-          try {
-            await workspace.writeFile(path, content);
-            onEvent({ type: "file-edit", path, bytes: content.length });
-            return `Wrote ${content.length} bytes to ${path}`;
-          } catch (err) {
-            return `Error writing ${path}: ${err instanceof Error ? err.message : String(err)}`;
-          }
-        });
+        if (forbidTestEdits && isTestPath(path))
+          return TEST_EDIT_DENIED_MESSAGE;
+        return withFileLock(
+          path,
+          "write",
+          fileLock,
+          lockContext,
+          signal,
+          async () => {
+            try {
+              await workspace.writeFile(path, content);
+              onEvent({ type: "file-edit", path, bytes: content.length });
+              return `Wrote ${content.length} bytes to ${path}`;
+            } catch (err) {
+              return `Error writing ${path}: ${err instanceof Error ? err.message : String(err)}`;
+            }
+          },
+        );
       },
     }),
 
@@ -445,20 +464,33 @@ export function buildWorkspaceTools(
           ),
       }),
       execute: async ({ path, old_string, new_string, replace_all }) => {
-        if (forbidTestEdits && isTestPath(path)) return TEST_EDIT_DENIED_MESSAGE;
-        return withFileLock(path, "write", fileLock, lockContext, signal, async () => {
-          try {
-            const count = await workspace.editFile(path, old_string, new_string, {
-              replaceAll: replace_all,
-            });
-            onEvent({ type: "file-edit", path, bytes: new_string.length });
-            return replace_all
-              ? `Edited ${path} (${count} replacement${count === 1 ? "" : "s"})`
-              : `Edited ${path}`;
-          } catch (err) {
-            return `Error editing ${path}: ${err instanceof Error ? err.message : String(err)}`;
-          }
-        });
+        if (forbidTestEdits && isTestPath(path))
+          return TEST_EDIT_DENIED_MESSAGE;
+        return withFileLock(
+          path,
+          "write",
+          fileLock,
+          lockContext,
+          signal,
+          async () => {
+            try {
+              const count = await workspace.editFile(
+                path,
+                old_string,
+                new_string,
+                {
+                  replaceAll: replace_all,
+                },
+              );
+              onEvent({ type: "file-edit", path, bytes: new_string.length });
+              return replace_all
+                ? `Edited ${path} (${count} replacement${count === 1 ? "" : "s"})`
+                : `Edited ${path}`;
+            } catch (err) {
+              return `Error editing ${path}: ${err instanceof Error ? err.message : String(err)}`;
+            }
+          },
+        );
       },
     }),
 
@@ -525,7 +557,7 @@ export function buildWorkspaceTools(
       description:
         "Query the repository's code graph — a precomputed index of symbols and " +
         "import relationships — for STRUCTURAL answers, instead of guessing paths " +
-        "or grepping. Prefer this over `grep` for \"where is X defined\" and for " +
+        'or grepping. Prefer this over `grep` for "where is X defined" and for ' +
         "impact analysis before a change. Operations: 'search' finds where a " +
         "symbol (function/class/type/interface) is defined by name; 'file_symbols' " +
         "lists the top-level symbols a file defines; 'dependents' lists the files " +
@@ -534,9 +566,7 @@ export function buildWorkspaceTools(
         "conceptually related to a natural-language description (e.g. 'project " +
         "level configuration for the cli app') via embedding similarity, returning " +
         "a flat ranked FILE LIST — use it when 'search' returns nothing because the " +
-        "query names no exact symbol or path. Anti-trigger: for a fuller domain map " +
-        "(those files PLUS their symbols, call edges, and recent commits in one " +
-        "bundle) prefer `code_map`, not this.",
+        "query names no exact symbol or path.",
       inputSchema: z.object({
         operation: z.enum([
           "search",
@@ -568,85 +598,6 @@ export function buildWorkspaceTools(
     });
   }
 
-  // code_map is optional — only added when a CodeMapProvider is injected.
-  if (opts.codeMap) {
-    const codeMapProvider = opts.codeMap;
-    tools.code_map = tool({
-      description:
-        "Return a structured code-map BUNDLE for a conceptual or multi-word query: " +
-        "semantically-matched source files PLUS their symbols (functions/classes/types), " +
-        "inter-symbol call edges, and the recent commits that touched them — everything " +
-        "needed to ORIENT in an unfamiliar domain in one call. Prefer this for questions " +
-        "like 'everything related to payments', 'auth session handling', or 'where does " +
-        "billing live'. Prefer it over `code_graph` semantic_search when you want that " +
-        "fuller picture (symbols + call edges + history), not just a ranked list of files. " +
-        "Anti-triggers: for a single symbol's definition or who-imports-what use " +
-        "`code_graph` (search/file_symbols/dependents); for an exact string use `grep`. " +
-        "Do NOT call it for a precise path you already know.",
-      inputSchema: z.object({
-        query: z
-          .string()
-          .describe(
-            "Natural-language concept query, e.g. 'payments', 'auth session handling', " +
-              "'everything related to billing'.",
-          ),
-        limit: z
-          .number()
-          .int()
-          .optional()
-          .describe("Max source files to return (default 20, max 50)."),
-        domain: z
-          .string()
-          .optional()
-          .describe(
-            "Optional domain filter — only return nodes whose domain property matches " +
-              "(e.g. 'billing', 'auth').",
-          ),
-        kinds: z
-          .array(z.enum(["file", "symbol", "chunk", "commit"]))
-          .optional()
-          .describe("Which result kinds to include. Omit for all."),
-      }),
-      execute: async ({ query, limit, domain, kinds }) => {
-        try {
-          const bundle = await codeMapProvider.query(query, { limit, domain, kinds });
-          // Format as a compact human-readable summary for the context window.
-          const lines: string[] = [];
-          lines.push(`Code map: "${query}" — ${bundle.files.length} file(s), ${bundle.symbols.length} symbol(s)`);
-          if (bundle.files.length > 0) {
-            lines.push("\nFiles:");
-            for (const f of bundle.files) {
-              const dom = f.domain ? ` [${f.domain}]` : "";
-              lines.push(`  ${f.path}${dom}  score=${(f.score * 100).toFixed(0)}%`);
-            }
-          }
-          if (bundle.symbols.length > 0) {
-            lines.push("\nSymbols:");
-            for (const s of bundle.symbols) {
-              lines.push(`  ${s.kind} ${s.name}  (${s.path}:${s.startLine}-${s.endLine})`);
-              if (s.signature) lines.push(`    ${s.signature}`);
-            }
-          }
-          if (bundle.calls.length > 0) {
-            lines.push("\nCall edges:");
-            for (const c of bundle.calls) {
-              lines.push(`  ${c.callerName} → ${c.calleeName}`);
-            }
-          }
-          if (bundle.recentChanges.length > 0) {
-            lines.push("\nRecent changes:");
-            for (const ch of bundle.recentChanges) {
-              lines.push(`  ${ch.commitSha.slice(0, 8)}  ${ch.committedAt.slice(0, 10)}  ${ch.authorName}  ${ch.message.split("\n")[0]?.slice(0, 72) ?? ""}`);
-            }
-          }
-          return clip(lines.join("\n"));
-        } catch (err) {
-          return `code_map error: ${err instanceof Error ? err.message : String(err)}`;
-        }
-      },
-    });
-  }
-
   tools.bash = tool({
     description:
       "Run a shell command in the working directory. Use for builds, tests, git, package managers. Has a timeout.",
@@ -664,8 +615,12 @@ export function buildWorkspaceTools(
         const result = await workspace.exec(command, { timeoutMs, signal });
         onEvent({ type: "command", command, exitCode: result.exitCode });
         if (result.timedOut) return `Command timed out after ${timeoutMs}ms.`;
-        const out = [result.stdout, result.stderr].filter(Boolean).join("\n").trim();
-        if (result.exitCode !== 0) return clip(`Command failed:\n${out || "(no output)"}`);
+        const out = [result.stdout, result.stderr]
+          .filter(Boolean)
+          .join("\n")
+          .trim();
+        if (result.exitCode !== 0)
+          return clip(`Command failed:\n${out || "(no output)"}`);
         return clip(out || "(no output)");
       } catch (err) {
         return `Error running command: ${err instanceof Error ? err.message : String(err)}`;

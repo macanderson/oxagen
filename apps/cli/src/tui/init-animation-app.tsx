@@ -15,7 +15,7 @@ import type { EventEmitter } from "node:events";
 import { theme } from "./theme.js";
 import { InitGameView } from "./init-game-view.js";
 import { InitRevealView } from "./init-reveal-view.js";
-import type { InitProgressEvent } from "../commands/init.js";
+import type { InitProgressEvent } from "../commands/init-engine.js";
 
 const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 const PROGRESS_STEPS = 24; // rendered width of the file-progress bar

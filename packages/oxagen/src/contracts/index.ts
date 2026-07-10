@@ -299,11 +299,6 @@ import { schemaValidateNode } from "./schema.validate.node";
 import { schemaValidateRelationship } from "./schema.validate.relationship";
 import { schemaReconcileDispatch } from "./schema.reconcile.dispatch";
 import { schemaReconcileStatus } from "./schema.reconcile.status";
-import { graphRelationshipUpsert } from "./graph.relationship.upsert";
-import { semanticRelationshipApprove } from "./semantic.relationship.approve";
-import { semanticRelationshipInfer } from "./semantic.relationship.infer";
-import { semanticRelationshipList } from "./semantic.relationship.list";
-import { semanticRelationshipSuggest } from "./semantic.relationship.suggest";
 // Environments + credential vault (Spec: 2026-06-24-credential-vault-…).
 import { environmentCreate } from "./environment.create";
 import { environmentList } from "./environment.list";
@@ -782,11 +777,6 @@ export {
   schemaValidateRelationship,
   schemaReconcileDispatch,
   schemaReconcileStatus,
-  graphRelationshipUpsert,
-  semanticRelationshipApprove,
-  semanticRelationshipInfer,
-  semanticRelationshipList,
-  semanticRelationshipSuggest,
   environmentCreate,
   environmentList,
   environmentGet,
@@ -1122,11 +1112,6 @@ export const contracts = [
   schemaValidateRelationship,
   schemaReconcileDispatch,
   schemaReconcileStatus,
-  graphRelationshipUpsert,
-  semanticRelationshipApprove,
-  semanticRelationshipInfer,
-  semanticRelationshipList,
-  semanticRelationshipSuggest,
   environmentCreate,
   environmentList,
   environmentGet,
