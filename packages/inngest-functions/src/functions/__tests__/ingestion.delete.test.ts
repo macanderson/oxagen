@@ -21,14 +21,19 @@ type HandlerCtx = {
   };
 };
 let capturedHandler: ((ctx: HandlerCtx) => unknown) | null = null;
-// The on-failure companion lives on the config object (1st arg), not the
-// primary handler (3rd arg) — capture it so the failure path can be exercised.
+// The create-function adapter registers the on-failure companion as a SECOND
+// inngest.createFunction call with id `${config.id}.on-failure` (onFailure is
+// stripped from the inngest config) — route captures by id so the companion
+// registration doesn't clobber the primary handler.
 let capturedOnFailure: ((ctx: HandlerCtx) => unknown) | null = null;
 
 mocks.createFunction.mockImplementation(
-  (opts: { onFailure?: (ctx: HandlerCtx) => unknown }, _trigger: unknown, handler: typeof capturedHandler) => {
-    capturedHandler = handler;
-    capturedOnFailure = opts?.onFailure ?? null;
+  (opts: { id?: string }, _trigger: unknown, handler: typeof capturedHandler) => {
+    if (typeof opts?.id === "string" && opts.id.endsWith(".on-failure")) {
+      capturedOnFailure = handler;
+    } else {
+      capturedHandler = handler;
+    }
     return {};
   },
 );

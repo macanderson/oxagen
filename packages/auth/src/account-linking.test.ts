@@ -41,6 +41,13 @@ vi.mock("drizzle-orm", () => ({
   isNotNull: (a: unknown) => ({ isNotNull: a }),
 }));
 
+// The default logger now routes to the structured pino logger + captureError
+// escalation (not console) — keep telemetry inert in unit tests.
+vi.mock("@oxagen/telemetry", () => ({
+  captureError: vi.fn(),
+}));
+
+import { logger as authLogger } from "./logger";
 import {
   isTrustedOAuthProvider,
   shouldRevokeLocalCredentialPassword,
@@ -259,8 +266,8 @@ describe("hardenTrustedProviderLink", () => {
     expect(log.warn).not.toHaveBeenCalled();
   });
 
-  it("uses the default console logger when none is injected", async () => {
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+  it("uses the default structured logger when none is injected", async () => {
+    const warnSpy = vi.spyOn(authLogger, "warn").mockImplementation(() => undefined);
     const { store } = fakeStore({
       loadLinkTargetFacts: async () => ({ userEmailVerified: false, hasLocalPassword: true }),
       clearLocalPassword: async () => 1,
@@ -355,8 +362,8 @@ describe("withTrustedLinkHardening", () => {
     );
   });
 
-  it("logs hardening failures via the default console logger when none injected", async () => {
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+  it("logs hardening failures via the default structured logger when none injected", async () => {
+    const errorSpy = vi.spyOn(authLogger, "error").mockImplementation(() => undefined);
     const base = fakeBaseHooks();
     const store: AccountLinkingStore = {
       loadLinkTargetFacts: async () => {

@@ -183,7 +183,7 @@ function withPolicy(driver: SandboxDriver, policy: SandboxPolicy): SandboxDriver
         return (req: SandboxRequest): AsyncIterable<SandboxStreamChunk> =>
           target.stream(applyPolicy(req, policy));
       }
-      const value = Reflect.get(target, prop, receiver);
+      const value: unknown = Reflect.get(target, prop, receiver);
       // Bind driver methods to the real driver so `this` inside a session /
       // lifecycle method is the driver, never the proxy — the proxy exists
       // only to gate run/stream through the policy. Non-function props (name,

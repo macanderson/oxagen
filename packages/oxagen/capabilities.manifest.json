@@ -226,8 +226,46 @@
       }
     },
     {
+      "name": "revise_agent_def",
+      "file": "agent.definition.revise.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "e2e": false,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
       "name": "suggest_agent_def",
       "file": "agent.definition.suggest.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
+      }
+    },
+    {
+      "name": "summarize_agent_def",
+      "file": "agent.definition.summarize.ts",
       "domain": "agent",
       "mode": "sync",
       "surfaces": [
@@ -350,7 +388,7 @@
         "api": false,
         "mcp": false,
         "unit": false,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -5075,6 +5113,26 @@
       }
     },
     {
+      "name": "revise_skill",
+      "file": "skill.revise.ts",
+      "domain": "skill",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "e2e": false,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
       "name": "activate_skill_version",
       "file": "skill.version.activate.ts",
       "domain": "skill",
@@ -5280,7 +5338,7 @@
       "layers": {
         "schema": true,
         "api": false,
-        "docs": false,
+        "docs": true,
         "mcp": false,
         "unit": false,
         "app": true
@@ -5297,7 +5355,7 @@
       "layers": {
         "schema": true,
         "api": false,
-        "docs": false,
+        "docs": true,
         "unit": false,
         "app": true
       }

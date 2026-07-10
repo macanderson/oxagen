@@ -78,6 +78,6 @@ export interface DaemonConfig {
   maxRssBytes?: number;
 }
 
-export const DEFAULT_DAEMON_CONFIG: Partial<DaemonConfig> = {
+export const DEFAULT_DAEMON_CONFIG: Pick<DaemonConfig, "idleTimeoutMs"> = {
   idleTimeoutMs: 30 * 60 * 1000,
 };

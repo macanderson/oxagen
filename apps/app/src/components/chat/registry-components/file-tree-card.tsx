@@ -348,6 +348,9 @@ function FileRow({
 
   const name = (
     <>
+      {/* eslint-disable-next-line react-hooks/static-components -- fileIconFor
+          returns a static module-level LucideIcon from a lookup table; nothing
+          is created during render, the rule can't see through the lookup. */}
       <FileIcon
         className={cn("size-4 shrink-0", muted ? "text-muted-foreground/50" : "text-muted-foreground")}
         aria-hidden="true"

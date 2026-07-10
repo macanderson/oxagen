@@ -83,8 +83,8 @@ describe("getSandbox() policy seam", () => {
 
     await getSandbox().run(makeReq({ timeoutMs: 999_999, memoryMb: 99_999 }));
 
-    expect(runReqs[0].timeoutMs).toBe(DEFAULT_POLICY.maxTimeoutMs);
-    expect(runReqs[0].memoryMb).toBe(DEFAULT_POLICY.maxMemoryMb);
+    expect(runReqs[0]?.timeoutMs).toBe(DEFAULT_POLICY.maxTimeoutMs);
+    expect(runReqs[0]?.memoryMb).toBe(DEFAULT_POLICY.maxMemoryMb);
   });
 
   it("rejects a request that asks for network when the policy forbids it", async () => {
