@@ -21,10 +21,39 @@ import type { SandboxLogLine } from "@/lib/workbench/sandboxes";
 
 afterEach(cleanup);
 
+// The real `list_sandbox_logs` shape — `line` holds the text (not `text`), and
+// the closing `system` line carries exitCode + durationMs as separate columns.
 const LINES: SandboxLogLine[] = [
-  { stream: "stdout", text: "build succeeded" },
-  { stream: "stderr", text: "warning: deprecated flag" },
-  { stream: "system", text: "$ pnpm build (1.2s)" },
+  {
+    ts: "2026-07-10T00:00:00.000Z",
+    stream: "stdout",
+    level: "normal",
+    command: "pnpm build",
+    seq: 1,
+    line: "build succeeded",
+    exitCode: null,
+    durationMs: null,
+  },
+  {
+    ts: "2026-07-10T00:00:01.000Z",
+    stream: "stderr",
+    level: "normal",
+    command: "pnpm build",
+    seq: 2,
+    line: "warning: deprecated flag",
+    exitCode: null,
+    durationMs: null,
+  },
+  {
+    ts: "2026-07-10T00:00:02.000Z",
+    stream: "system",
+    level: "debug",
+    command: "pnpm build",
+    seq: 3,
+    line: "$ pnpm build",
+    exitCode: 0,
+    durationMs: 1200,
+  },
 ];
 
 // A large poll interval keeps the live-tail timer from firing mid-assertion.
@@ -47,7 +76,12 @@ describe("SandboxLogsConsole", () => {
 
     const rows = await screen.findAllByTestId("sandbox-logs-line");
     expect(rows).toHaveLength(3);
+    // The captured text renders (regression: it was read from a non-existent
+    // `line.text` and every row came out blank).
     expect(screen.getByText("build succeeded")).toBeTruthy();
+    expect(screen.getByText("warning: deprecated flag")).toBeTruthy();
+    // The system line surfaces its exit code + duration instead of dropping them.
+    expect(screen.getByText(/exit 0 · 1\.2s/)).toBeTruthy();
     // Stream tags render for each pipe.
     expect(screen.getByText("[stdout]")).toBeTruthy();
     expect(screen.getByText("[stderr]")).toBeTruthy();

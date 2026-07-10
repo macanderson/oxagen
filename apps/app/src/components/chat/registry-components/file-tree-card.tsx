@@ -140,7 +140,8 @@ export function buildFileTree(entries: FileTreeEntry[]): TreeNode[] {
 }
 
 export function formatBytes(bytes: number | null | undefined): string | null {
-  if (bytes === null || bytes === undefined) return null;
+  // Also reject NaN/Infinity — otherwise a missing size renders as "NaN KB".
+  if (bytes === null || bytes === undefined || !Number.isFinite(bytes)) return null;
   if (bytes < 1024) return `${bytes} B`;
   const units = ["KB", "MB", "GB", "TB"];
   let value = bytes / 1024;
