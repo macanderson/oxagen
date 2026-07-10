@@ -15,14 +15,6 @@ import * as React from "react";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { CapabilityIcon } from "@/components/plugins/capability-icon";
 import { KeyRound, ShieldOff, Trash2 } from "lucide-react";
@@ -282,6 +274,20 @@ export function McpServerList({
                 >
                   <KeyRound className="h-3 w-3" aria-hidden="true" />
                   {display.action}
+                </Button>
+              ) : null}
+              {/* Remove auth — only meaningful while a credential row exists.
+                  Keeps the install; deletes the stored credential. */}
+              {server.credentialStatus !== null ? (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => handleRevoke(server)}
+                  disabled={pendingIds.has(server.id)}
+                  data-testid={`mcp-server-revoke-${server.id}`}
+                >
+                  <ShieldOff className="h-3 w-3" aria-hidden="true" />
+                  Remove auth
                 </Button>
               ) : null}
               <span className="ml-auto max-w-[50%] truncate">
