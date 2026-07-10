@@ -1028,7 +1028,17 @@ export async function POST(request: NextRequest): Promise<Response> {
                 .then((raw) =>
                   governedBudgetFromRead(raw as SavedWorkspaceGovernance),
                 )
-                .catch(() => null),
+                // FAIL-OPEN (see comment above) but never SILENT: a swallowed
+                // governance-read failure (down DB, denied IAM, unregistered
+                // handler) must be observable or a mis-applied budget is
+                // undiagnosable in the field.
+                .catch((err) => {
+                  logger.warn(
+                    { err: String(err), requestId },
+                    "[chat/stream] workspace budget governance read failed — failing open to member policy",
+                  );
+                  return null;
+                }),
             ]),
         );
 
