@@ -144,16 +144,19 @@ export function AgentsGrid({ agents }: { agents: AgentGridRow[] }) {
                 {blurbOf(agent)}
               </p>
 
-              {/* Footer: state badges + version + primary action. */}
+              {/* Footer: state badges + version + primary action. The
+                  deployment badge is labeled by meaning ("Deployed"), not the
+                  raw enum — both fields read "active" on a live agent and the
+                  card would otherwise show two identical "Active" chips. */}
               <div className="mt-auto flex flex-wrap items-center gap-2">
                 <Badge variant={statusVariant(agent.status)} className="text-xs capitalize">
                   {agent.status}
                 </Badge>
                 <Badge
                   variant={agent.deploymentStatus === "active" ? "default" : "secondary"}
-                  className="text-xs capitalize"
+                  className="text-xs"
                 >
-                  {agent.deploymentStatus}
+                  {agent.deploymentStatus === "active" ? "Deployed" : "Not deployed"}
                 </Badge>
                 {agent.latestVersion !== null ? (
                   <span className="text-xs tabular-nums text-muted-foreground">

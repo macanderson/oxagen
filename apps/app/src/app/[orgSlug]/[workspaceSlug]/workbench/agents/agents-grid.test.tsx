@@ -86,6 +86,32 @@ describe("AgentsGrid", () => {
     expect(within(qa).getByTestId("agent-edit-qa-chat")).toBeDefined();
   });
 
+  it("never duplicates 'Active' — deployment renders as Deployed/Not deployed", () => {
+    render(
+      <AgentsGrid
+        agents={[
+          agent({
+            slug: "billing-bot",
+            name: "Billing Bot",
+            status: "active",
+            deploymentStatus: "active",
+          }),
+          agent({ slug: "qa-chat", name: "QA Chat" }), // draft + inactive
+        ]}
+      />,
+    );
+
+    // Regression: status="active" + deploymentStatus="active" used to render
+    // two identical "Active" badges side by side.
+    const billing = screen.getByTestId("agent-row-billing-bot");
+    expect(within(billing).getAllByText(/^active$/i)).toHaveLength(1);
+    expect(within(billing).getByText("Deployed")).toBeDefined();
+
+    const qa = screen.getByTestId("agent-row-qa-chat");
+    expect(within(qa).getByText(/^draft$/i)).toBeDefined();
+    expect(within(qa).getByText("Not deployed")).toBeDefined();
+  });
+
   it("filters cards by search query across name/slug/summary", async () => {
     const user = userEvent.setup();
     render(
