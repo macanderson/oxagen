@@ -198,12 +198,8 @@ const EXT_ICON: Record<string, LucideIcon> = {
   rar: FileArchive, "7z": FileArchive,
 };
 
-/** Extension key into EXT_ICON (case-insensitive); "" when there is no usable
- * extension (or a bare dotfile like ".env"), which falls back to the generic
- * icon at the lookup site. Returning the key (not the component) keeps the
- * icon selection a static-map lookup in render, which react-hooks/
- * static-components can verify never creates a new component. */
-function fileExtKey(name: string): string {
+/** Extension key for a file name (case-insensitive); "" for no ext or a bare dotfile like ".env". */
+function fileExtOf(name: string): string {
   const dot = name.lastIndexOf(".");
   return dot <= 0 ? "" : name.slice(dot + 1).toLowerCase();
 }
@@ -347,7 +343,9 @@ function FileRow({
   const { onFileSelect } = interactions;
   const ignored = node.gitignored || inheritedIgnored;
   const muted = ignored || isHidden(node.name);
-  const FileIcon = EXT_ICON[fileExtKey(node.name)] ?? File;
+  // Static-map lookup (not a call result) so react-hooks/static-components
+  // can see the component identity is stable across renders.
+  const FileIcon = EXT_ICON[fileExtOf(node.name)] ?? File;
 
   const name = (
     <>

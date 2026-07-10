@@ -247,17 +247,67 @@ export function McpServerList({
                   </Badge>
                 </dd>
               </div>
-              <div>
-                <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                  Status
-                </dt>
-                <dd className="mt-0.5 flex items-center gap-2">
-                  <Badge
-                    variant={display.variant}
-                    size="sm"
-                    data-testid={`mcp-server-status-${server.id}`}
-                  >
-                    {display.label}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              <Badge
+                variant={
+                  server.authKind === "oauth"
+                    ? "info"
+                    : server.authKind === "secret"
+                      ? "warning"
+                      : "muted"
+                }
+                size="sm"
+              >
+                {server.authKind}
+              </Badge>
+              <Badge
+                variant={display.variant}
+                size="sm"
+                data-testid={`mcp-server-status-${server.id}`}
+              >
+                {display.label}
+              </Badge>
+              {display.action ? (
+                <Button
+                  size="sm"
+                  variant={display.action === "Authenticate" ? "default" : "ghost"}
+                  render={
+                    <a
+                      href={mcpAuthorizeUrl({
+                        orgSlug,
+                        workspaceSlug,
+                        orgListingId: server.id,
+                        returnTo: `/${orgSlug}/${workspaceSlug}/workbench/tools/mcp`,
+                      })}
+                      data-testid={`mcp-server-authenticate-${server.id}`}
+                    />
+                  }
+                >
+                  <KeyRound className="h-3 w-3" aria-hidden="true" />
+                  {display.action}
+                </Button>
+              ) : null}
+              {/* Remove auth — only meaningful while a credential row exists.
+                  Keeps the install; deletes the stored credential. */}
+              {server.credentialStatus !== null ? (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => handleRevoke(server)}
+                  disabled={pendingIds.has(server.id)}
+                  data-testid={`mcp-server-revoke-${server.id}`}
+                >
+                  <ShieldOff className="h-3 w-3" aria-hidden="true" />
+                  Remove auth
+                </Button>
+              ) : null}
+              <span className="ml-auto max-w-[50%] truncate">
+                {server.endpointUrl || "—"}
+                {server.transport && (
+                  <Badge variant="outline" size="sm" className="ml-2">
+                    {server.transport}
                   </Badge>
                   {display.action ? (
                     <Button
