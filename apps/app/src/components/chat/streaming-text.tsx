@@ -7,8 +7,9 @@
  * string (see `use-tool-stream.ts`). Rendering that string directly snaps in
  * whole chunks whenever the model flushes. This component instead reveals the
  * accumulated text one slice per animation frame, so the response reads as if
- * it is being *written* — with a blinking caret trailing the cursor — even when
- * the underlying deltas arrive in bursts.
+ * it is being *written* even when the underlying deltas arrive in bursts.
+ * Deliberately no caret: a turn renders several text segments interleaved with
+ * tool calls, and a blinking block on each of them reads as noise.
  *
  * Design intent: restrained, not gimmicky motion. The reveal speed scales with
  * how far behind the cursor is, so a fast model never leaves the reader waiting,
@@ -21,7 +22,7 @@
  *
  * Accessibility: under `prefers-reduced-motion` (surfaced via framer-motion's
  * `useReducedMotion`, wired to `reducedMotion="user"` by the app MotionProvider)
- * the full text renders immediately with no caret and no animation frames.
+ * the full text renders immediately with no animation frames.
  */
 
 import * as React from "react";
@@ -32,7 +33,7 @@ import { MarkdownMessage } from "./markdown-message";
 export interface StreamingTextProps {
   /** The full accumulated text so far (grows as deltas arrive). */
   text: string;
-  /** While true, a caret blinks at the cursor even once caught up. */
+  /** While true, markdown is parsed leniently for incomplete blocks. */
   isStreaming?: boolean;
   className?: string;
 }
@@ -41,7 +42,11 @@ export interface StreamingTextProps {
 // (see the loop) so the cursor catches a fast stream within a beat.
 const BASE_CPS = 90;
 
-export function StreamingText({ text, isStreaming = false, className }: StreamingTextProps) {
+export function StreamingText({
+  text,
+  isStreaming = false,
+  className,
+}: StreamingTextProps) {
   const reduceMotion = useReducedMotion();
   const [count, setCount] = React.useState(0);
 
@@ -83,14 +88,12 @@ export function StreamingText({ text, isStreaming = false, className }: Streamin
   // Reduced motion shows everything at once; otherwise reveal up to the cursor.
   // slice() clamps, so a stale `count` never over- or under-reads `text`.
   const displayed = reduceMotion ? text : text.slice(0, count);
-  const caretVisible = !reduceMotion && (isStreaming || count < text.length);
 
   return (
     <div className={cn("relative", className)}>
       <MarkdownMessage streaming={isStreaming || count < text.length}>
         {displayed}
       </MarkdownMessage>
-      {caretVisible ? <span className="stream-caret ml-0.5" aria-hidden="true" /> : null}
     </div>
   );
 }

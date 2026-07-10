@@ -4,8 +4,7 @@
  *
  * Render tests for StreamingText:
  *   - Under reduced motion, renders full text immediately (no animation)
- *   - Shows caret when isStreaming=true
- *   - No caret when isStreaming=false and all text revealed
+ *   - Never renders a caret (removed: one caret per text segment read as noise)
  *   - Renders MarkdownMessage with the displayed text
  */
 
@@ -50,20 +49,18 @@ describe("StreamingText", () => {
     const { StreamingText } = await import("./streaming-text");
     render(<StreamingText text="**Bold text**" />);
     expect(screen.getByTestId("markdown-message")).toBeInTheDocument();
-    expect(screen.getByTestId("markdown-message")).toHaveTextContent("**Bold text**");
+    expect(screen.getByTestId("markdown-message")).toHaveTextContent(
+      "**Bold text**",
+    );
   });
 
-  it("shows stream-caret when isStreaming=true", async () => {
+  it("renders no caret while streaming", async () => {
     const { StreamingText } = await import("./streaming-text");
-    // Under reduced motion, caretVisible = !reduceMotion && (isStreaming || count < text.length)
-    // reduceMotion=true → caretVisible=false regardless
-    // so caret is never shown under reduced motion — verify no caret
     render(<StreamingText text="Streaming" isStreaming={true} />);
-    // Caret is suppressed by reduced motion
     expect(document.querySelector(".stream-caret")).not.toBeInTheDocument();
   });
 
-  it("does not show stream-caret when isStreaming=false (reduced motion)", async () => {
+  it("renders no caret when not streaming", async () => {
     const { StreamingText } = await import("./streaming-text");
     render(<StreamingText text="Static text" isStreaming={false} />);
     expect(document.querySelector(".stream-caret")).not.toBeInTheDocument();
