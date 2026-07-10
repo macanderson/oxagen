@@ -51,15 +51,27 @@ export function connectionDisplay(
 ): ConnectionDisplay {
   if (authKind === "oauth") {
     if (credentialStatus === "active") {
-      return { label: "Connected", variant: "success", action: "Re-authenticate" };
+      return {
+        label: "Connected",
+        variant: "success",
+        action: "Re-authenticate",
+      };
     }
     if (credentialStatus === "needs_reauth") {
-      return { label: "Needs re-auth", variant: "error", action: "Re-authenticate" };
+      return {
+        label: "Needs re-auth",
+        variant: "error",
+        action: "Re-authenticate",
+      };
     }
     if (credentialStatus === "revoked") {
       return { label: "Revoked", variant: "error", action: "Authenticate" };
     }
-    return { label: "Needs authentication", variant: "warning", action: "Authenticate" };
+    return {
+      label: "Needs authentication",
+      variant: "warning",
+      action: "Authenticate",
+    };
   }
   if (authKind === "secret") {
     return credentialStatus === "active"
@@ -121,24 +133,42 @@ export function McpServerList({
   const handleToggle = async (server: McpServerRow, enabled: boolean) => {
     setPendingIds((prev) => new Set(prev).add(server.id));
     setError(server.id, null);
-    setServers((prev) => prev.map((s) => (s.id === server.id ? { ...s, enabled } : s)));
-    const result = await toggleAction({ orgSlug, workspaceSlug, orgListingId: server.id, enabled });
+    setServers((prev) =>
+      prev.map((s) => (s.id === server.id ? { ...s, enabled } : s)),
+    );
+    const result = await toggleAction({
+      orgSlug,
+      workspaceSlug,
+      orgListingId: server.id,
+      enabled,
+    });
     setPendingIds((prev) => {
       const next = new Set(prev);
       next.delete(server.id);
       return next;
     });
     if (!result.ok) {
-      setServers((prev) => prev.map((s) => (s.id === server.id ? { ...s, enabled: !enabled } : s)));
+      setServers((prev) =>
+        prev.map((s) => (s.id === server.id ? { ...s, enabled: !enabled } : s)),
+      );
       setError(server.id, result.error ?? "Update failed");
     }
   };
 
   const handleUninstall = async (server: McpServerRow) => {
-    if (!window.confirm(`Remove "${server.title ?? server.name}" from this workspace?`)) return;
+    if (
+      !window.confirm(
+        `Remove "${server.title ?? server.name}" from this workspace?`,
+      )
+    )
+      return;
     setPendingIds((prev) => new Set(prev).add(server.id));
     setError(server.id, null);
-    const result = await uninstallAction({ orgSlug, workspaceSlug, orgListingId: server.id });
+    const result = await uninstallAction({
+      orgSlug,
+      workspaceSlug,
+      orgListingId: server.id,
+    });
     setPendingIds((prev) => {
       const next = new Set(prev);
       next.delete(server.id);
@@ -160,7 +190,11 @@ export function McpServerList({
       return;
     setPendingIds((prev) => new Set(prev).add(server.id));
     setError(server.id, null);
-    const result = await revokeAction({ orgSlug, workspaceSlug, orgListingId: server.id });
+    const result = await revokeAction({
+      orgSlug,
+      workspaceSlug,
+      orgListingId: server.id,
+    });
     setPendingIds((prev) => {
       const next = new Set(prev);
       next.delete(server.id);
@@ -170,7 +204,9 @@ export function McpServerList({
       setError(server.id, result.error ?? "Remove authentication failed");
     } else {
       setServers((prev) =>
-        prev.map((s) => (s.id === server.id ? { ...s, credentialStatus: null } : s)),
+        prev.map((s) =>
+          s.id === server.id ? { ...s, credentialStatus: null } : s,
+        ),
       );
     }
   };
@@ -192,7 +228,10 @@ export function McpServerList({
   return (
     <ul className="divide-y divide-border/30 overflow-hidden rounded-lg border border-border/40">
       {servers.map((server) => {
-        const display = connectionDisplay(server.authKind, server.credentialStatus);
+        const display = connectionDisplay(
+          server.authKind,
+          server.credentialStatus,
+        );
         return (
           <li
             key={server.id}
@@ -204,7 +243,10 @@ export function McpServerList({
                 <CapabilityIcon iconName="plug" color="#3b82f6" size={24} />
               </span>
               <div className="min-w-0">
-                <p className="font-medium" data-testid={`mcp-server-name-${server.id}`}>
+                <p
+                  className="font-medium"
+                  data-testid={`mcp-server-name-${server.id}`}
+                >
                   {server.title ?? server.name}
                 </p>
                 {server.description && (
@@ -247,72 +289,24 @@ export function McpServerList({
                   </Badge>
                 </dd>
               </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-              <Badge
-                variant={
-                  server.authKind === "oauth"
-                    ? "info"
-                    : server.authKind === "secret"
-                      ? "warning"
-                      : "muted"
-                }
-                size="sm"
-              >
-                {server.authKind}
-              </Badge>
-              <Badge
-                variant={display.variant}
-                size="sm"
-                data-testid={`mcp-server-status-${server.id}`}
-              >
-                {display.label}
-              </Badge>
-              {display.action ? (
-                <Button
-                  size="sm"
-                  variant={display.action === "Authenticate" ? "default" : "ghost"}
-                  render={
-                    <a
-                      href={mcpAuthorizeUrl({
-                        orgSlug,
-                        workspaceSlug,
-                        orgListingId: server.id,
-                        returnTo: `/${orgSlug}/${workspaceSlug}/workbench/tools/mcp`,
-                      })}
-                      data-testid={`mcp-server-authenticate-${server.id}`}
-                    />
-                  }
-                >
-                  <KeyRound className="h-3 w-3" aria-hidden="true" />
-                  {display.action}
-                </Button>
-              ) : null}
-              {/* Remove auth — only meaningful while a credential row exists.
-                  Keeps the install; deletes the stored credential. */}
-              {server.credentialStatus !== null ? (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => handleRevoke(server)}
-                  disabled={pendingIds.has(server.id)}
-                  data-testid={`mcp-server-revoke-${server.id}`}
-                >
-                  <ShieldOff className="h-3 w-3" aria-hidden="true" />
-                  Remove auth
-                </Button>
-              ) : null}
-              <span className="ml-auto max-w-[50%] truncate">
-                {server.endpointUrl || "—"}
-                {server.transport && (
-                  <Badge variant="outline" size="sm" className="ml-2">
-                    {server.transport}
+              <div>
+                <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Status
+                </dt>
+                <dd className="mt-0.5 flex flex-wrap items-center gap-2">
+                  <Badge
+                    variant={display.variant}
+                    size="sm"
+                    data-testid={`mcp-server-status-${server.id}`}
+                  >
+                    {display.label}
                   </Badge>
                   {display.action ? (
                     <Button
                       size="sm"
-                      variant={display.action === "Authenticate" ? "default" : "ghost"}
+                      variant={
+                        display.action === "Authenticate" ? "default" : "ghost"
+                      }
                       render={
                         <a
                           href={mcpAuthorizeUrl({
