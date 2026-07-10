@@ -57,6 +57,49 @@ const externalizeNodeBuiltins = {
   },
 };
 
+/**
+ * Vite plugin that stubs `"use server"` modules for the browser bundle.
+ *
+ * Client components frequently import Server Actions directly (e.g. the schema
+ * builder imports `schemaReconcileDispatchAction` from `reconcile-actions.ts`).
+ * Next.js's RSC compiler rewrites those imports into thin network references,
+ * so the server module's body — and its server-only deps (`@oxagen/handlers`,
+ * `@clickhouse/client`, `neo4j-driver`, …) — never reach the browser. Plain
+ * Vite has no such transform, so the whole server graph gets pulled into the
+ * preview bundle and explodes (e.g. "@clickhouse/client does not provide an
+ * export named 'createClient'").
+ *
+ * This mirrors Next's behaviour: for any module whose first statement is a
+ * `"use server"` directive, replace the body with stub async functions named
+ * after its exports. Every server action in the tree is `export async function`
+ * (type/interface exports are erased by the compiler), so the exported binding
+ * shape is preserved while none of the server code is bundled. The stubs reject
+ * if invoked — Storybook has no backend — but stories never call them on render.
+ */
+const stubUseServerActions = {
+  name: "oxagen-stub-use-server",
+  enforce: "pre" as const,
+  transform(code: string, id: string) {
+    const file = id.split("?")[0];
+    if (!/\.[cm]?tsx?$/.test(file) || !file.includes("/src/")) return null;
+    // Leading BOM, comments, and whitespace may precede the directive.
+    const directive =
+      /^﻿?\s*(?:\/\/[^\n]*\n|\/\*[\s\S]*?\*\/\s*)*["']use server["']\s*;?/;
+    if (!directive.test(code)) return null;
+    const names = new Set<string>();
+    const re = /export\s+async\s+function\s+([A-Za-z0-9_$]+)/g;
+    for (let m = re.exec(code); m; m = re.exec(code)) names.add(m[1]);
+    const stubs = [...names]
+      .map(
+        (n) =>
+          `export async function ${n}() { throw new Error(` +
+          `"[storybook] server action '${n}' is unavailable — Storybook has no backend"); }`,
+      )
+      .join("\n");
+    return { code: stubs || "export {};", map: null };
+  },
+};
+
 const config: StorybookConfig = {
   // Stories for the chat capability render components (the generative-UI layer).
   stories: [
@@ -72,6 +115,22 @@ const config: StorybookConfig = {
       ...(cfg.resolve.alias ?? {}),
       // Mirror the app's tsconfig "@/*" -> "src/*" path alias.
       "@": resolve(root, "../src"),
+    };
+
+    // Force the automatic JSX runtime for every file esbuild transpiles.
+    //
+    // The app's tsconfig sets `"jsx": "preserve"` because Next.js manages its
+    // own JSX transform (SWC, automatic runtime) — so ~114 components across
+    // chat/knowledge/sandbox never `import React`. esbuild has no "preserve"
+    // mode, so it silently falls back to the CLASSIC transform
+    // (`React.createElement`), which needs `React` in scope and throws
+    // "React is not defined" at runtime. Pinning esbuild to the automatic
+    // runtime (`react/jsx-runtime`) mirrors Next's compilation and removes the
+    // `React` dependency entirely, matching how the components run in prod.
+    cfg.esbuild = {
+      ...(typeof cfg.esbuild === "object" && cfg.esbuild ? cfg.esbuild : {}),
+      jsx: "automatic",
+      jsxImportSource: "react",
     };
 
     // The app transitively depends on server-only packages (ClickHouse,
