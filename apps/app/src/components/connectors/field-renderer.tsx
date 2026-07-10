@@ -175,7 +175,12 @@ export function FieldRenderer({ field, namespace = "config", disabled = false }:
   }
 
   // ── textarea ─────────────────────────────────────────────────────────────────
-  if (widget === "textarea") {
+  // ── textarea / code ──────────────────────────────────────────────────────────
+  // "code" is a multi-line monospace variant used for SQL / JSON / payload
+  // config (custom-sql, custom-webhook, google-bigquery). It shares the textarea
+  // input surface but renders larger with a monospace font.
+  if (widget === "textarea" || widget === "code") {
+    const isCode = widget === "code";
     return (
       <FieldWrapper
         id={fieldId}
@@ -191,7 +196,12 @@ export function FieldRenderer({ field, namespace = "config", disabled = false }:
           onBlur={handleBlur}
           placeholder={field.placeholder}
           disabled={disabled}
-          className="resize-y min-h-[80px]"
+          className={
+            isCode
+              ? "resize-y min-h-[140px] font-mono text-xs"
+              : "resize-y min-h-[80px]"
+          }
+          spellCheck={isCode ? false : undefined}
           aria-invalid={Boolean(showError)}
           aria-describedby={ariaDescribedBy}
         />

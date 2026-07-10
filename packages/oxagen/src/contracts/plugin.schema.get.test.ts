@@ -161,6 +161,10 @@ describe("plugin.schema.get capability", () => {
       "secret",
       "number",
       "textarea",
+      // Regression: custom-sql / custom-webhook / google-bigquery ship
+      // `widget: code`; omitting it from the enum failed get_plugin_schema
+      // OUTPUT validation (invalid_output → 500) for those connectors.
+      "code",
       "select",
       "multi-select",
       "tag-input",

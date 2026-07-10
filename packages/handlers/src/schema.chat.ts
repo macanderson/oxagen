@@ -101,7 +101,7 @@ const chatResponseSchema = z.object({
   mutations: z
     .array(
       z.object({
-        capability: z.string().describe("e.g. schema.label.delete, schema.property.upsert, schema.toggle"),
+        capability: z.string().describe("e.g. delete_schema_label, upsert_schema_property, toggle_schema"),
         input: z.record(z.string(), z.unknown()),
       }),
     )

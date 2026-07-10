@@ -464,6 +464,34 @@ export function ConversationFilesList({
         </div>
       ) : (
         <div className="flex flex-col">
+          {/* "Download all" appears only once the conversation has MORE THAN
+              ONE file — a single file's row download already covers it. The
+              anchor hits the archive route, which re-lists via the capability
+              and re-authorises every asset server-side, then streams one ZIP
+              named after the conversation. */}
+          {total > 1 ? (
+            <div className="flex items-center justify-between gap-2 px-3 pb-1 pt-1.5">
+              <span className="text-xs font-medium text-muted-foreground tabular-nums">
+                {total} files
+              </span>
+              <a
+                href={`/api/v1/conversations/${conversationPublicId}/assets/archive`}
+                download
+                className={cn(
+                  "inline-flex min-h-8 items-center gap-1.5 rounded-md px-2 py-1",
+                  "text-xs font-medium text-muted-foreground",
+                  "hover:bg-muted hover:text-foreground",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  "transition-colors",
+                )}
+                aria-label={`Download all ${total} files as a ZIP archive`}
+                title={`Download all ${total} files as a ZIP archive`}
+              >
+                <FileArchive className="size-3.5" aria-hidden="true" />
+                <span>Download all</span>
+              </a>
+            </div>
+          ) : null}
           {assets!.map((item) => (
             <AssetRow key={item.publicId} item={item} onPreview={setPreview} />
           ))}

@@ -48,6 +48,11 @@ export type {
   AssetServePrincipal,
   AssetServeResult,
 } from "./generated-asset.serve";
+export {
+  archiveGeneratedAssets,
+  uniqueZipEntryName,
+} from "./generated-asset.archive";
+export type { ArchiveAssetEntry } from "./generated-asset.archive";
 export { workspaceMemberListHandler } from "./workspace.member.list";
 export { workspaceInviteSendHandler } from "./workspace.invite.send";
 export { skillWorkspaceListHandler } from "./skill.workspace.list";
