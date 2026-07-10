@@ -171,10 +171,15 @@ function withPolicy(driver: SandboxDriver, policy: SandboxPolicy): SandboxDriver
   return new Proxy(driver, {
     get(target, prop, receiver) {
       if (prop === "run") {
-        return (req: SandboxRequest): Promise<SandboxResult> =>
+        // async so a rejected policy surfaces as a rejected promise, never a
+        // synchronous throw — run() must always hand back a Promise.
+        return async (req: SandboxRequest): Promise<SandboxResult> =>
           target.run(applyPolicy(req, policy));
       }
       if (prop === "stream") {
+        // stream() returns an AsyncIterable synchronously; a rejected policy
+        // throws when the stream is opened (before any driver work), which the
+        // `for await` caller surfaces on setup.
         return (req: SandboxRequest): AsyncIterable<SandboxStreamChunk> =>
           target.stream(applyPolicy(req, policy));
       }
