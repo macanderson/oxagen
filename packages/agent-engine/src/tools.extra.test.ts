@@ -513,7 +513,7 @@ describe("buildWorkspaceTools – edit_file replace_all + structured feedback", 
       old_string: "bar",
       new_string: "baz",
     });
-    expect(out).toBe("Edited a.ts");
+    expect(out).toBe("Edited /repo/a.ts");
   });
 
   it("keeps an absolute input path as-is in the edit confirmation", async () => {
