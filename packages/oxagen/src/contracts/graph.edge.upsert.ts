@@ -1,12 +1,17 @@
-// @deprecated Use graph.relationship.upsert instead — one-release alias (removed in v2).
+// STATUS (2026-07-10): this is the LIVE implementation of graph relationship
+// upserts — it has the registered handler, tests, and the app's graph-explorer
+// as a caller. Its intended successor, `graph.relationship.upsert`
+// (upsert_graph_relationship), is declared and mounted on API/MCP but has NO
+// registered handler yet (see packages/handlers capability-dispatch.probe.test.ts
+// allowlist) — calling it throws no_handler at dispatch. Until that migration
+// is finished (or abandoned), do NOT treat this contract as removable.
 //
 // The fixed `GRAPH_EDGE_TYPES` enum is GONE (Workspace Schema Registry §3.2):
 // customers define their own relationship types in the registry, and Cypher
 // safety is enforced by the always-on lexical `RELATIONSHIP_TYPE_PATTERN` guard
-// plus the pinned active-vocabulary allow-list. This contract is kept only as a
-// one-release deprecation alias so existing `graph.edge.upsert` callers keep
-// working; it now mirrors the `graph.relationship.upsert` input shape (a
-// regex-validated `relationshipType`) and no longer references any enum.
+// plus the pinned active-vocabulary allow-list. This contract mirrors the
+// `graph.relationship.upsert` input shape (a regex-validated
+// `relationshipType`) and no longer references any enum.
 import { z } from "zod";
 import { registerCapability } from "../registry";
 import { RELATIONSHIP_TYPE_PATTERN } from "../lib/relationship-type-pattern";
@@ -39,7 +44,9 @@ export const graphEdgeUpsert = registerCapability({
     properties: z
       .record(z.string(), z.string())
       .optional()
-      .describe("Optional string key-value metadata to store on the relationship"),
+      .describe(
+        "Optional string key-value metadata to store on the relationship",
+      ),
     observedAt: observedAtField,
     supersede: supersedeField,
   }),
@@ -47,16 +54,19 @@ export const graphEdgeUpsert = registerCapability({
     edgeId: z
       .string()
       .describe("Composite identifier: fromNodeId:relationshipType:toNodeId"),
-    created: z.boolean().describe("True if the relationship was newly created, false if it existed"),
+    created: z
+      .boolean()
+      .describe(
+        "True if the relationship was newly created, false if it existed",
+      ),
     superseded: z
       .number()
       .default(0)
-      .describe("Count of prior open edges closed by supersession (0 when supersede=false)"),
+      .describe(
+        "Count of prior open edges closed by supersession (0 when supersede=false)",
+      ),
   }),
 });
 
 export type GraphEdgeUpsertInput = z.output<typeof graphEdgeUpsert.input>;
 export type GraphEdgeUpsertOutput = z.output<typeof graphEdgeUpsert.output>;
-
-// @deprecated Use graph.relationship.upsert instead — one-release alias (removed in v2)
-export { graphRelationshipUpsert } from "./graph.relationship.upsert";

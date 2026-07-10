@@ -692,10 +692,14 @@ orgScoped.route("/semantic-edges", semanticEdgeRoute);
 orgScoped.route("/repos", repoRoute);
 orgScoped.route("/integrations", integrationRoute);
 orgScoped.route("/schema", schemaRoute);
-// Canonical semantic.relationship.* routes (semantic-edge.ts at /semantic-edges
-// remains a deprecation alias during the rename window).
+// semantic.relationship.* routes — intended successors to semantic-edge.ts at
+// /semantic-edges, but their 4 capabilities have NO registered handlers yet
+// (see packages/handlers capability-dispatch.probe.test.ts allowlist): every
+// request here throws no_handler at dispatch. /semantic-edges remains the
+// working path until that migration is finished.
 orgScoped.route("/semantic-relationships", semanticRelationshipRoute);
-// graph.relationship.upsert (canonical) — /graph/edge/upsert stays as alias.
+// graph.relationship.upsert — same status: mounted but handler-less;
+// /graph/edge/upsert (upsert_edge) is the working route.
 orgScoped.route("/graph/relationship/upsert", graphRelationshipUpsertRoute);
 orgScoped.route("/plugin-schema", pluginSchemaRoute);
 orgScoped.route("/plugin-versions", pluginVersionRoute);
