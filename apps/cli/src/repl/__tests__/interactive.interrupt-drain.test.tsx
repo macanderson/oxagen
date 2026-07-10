@@ -60,7 +60,12 @@ vi.mock("@oxagen/agent-engine", async (importOriginal) => ({
       pending.push({
         prompt: opts.prompt,
         finish: () =>
-          resolve({ text: `done:${opts.prompt}`, messages: [], usage: {}, trace: {} }),
+          resolve({
+            text: `done:${opts.prompt}`,
+            messages: [],
+            usage: {},
+            trace: {},
+          }),
       });
     }),
 }));
@@ -81,7 +86,11 @@ vi.mock("../../agent/trace-store.js", () => ({
   }),
 }));
 vi.mock("../../agent/fleet/memory.js", () => ({
-  openFleetMemory: () => ({ record: () => {}, recall: () => [], all: () => [] }),
+  openFleetMemory: () => ({
+    record: () => {},
+    recall: () => [],
+    all: () => [],
+  }),
 }));
 vi.mock("../../agent/memory.js", () => ({
   openSessionMemory: async () => ({
@@ -95,8 +104,10 @@ vi.mock("../../agent/project-context.js", () => ({
 }));
 vi.mock("../../agent/model.js", () => ({
   resolveModelId: (override?: string) => override ?? "test/model",
+  explicitModelId: (override?: string) => override ?? undefined,
   resolveEffort: () => undefined,
-  isReasoningEffort: (s: string) => ["low", "medium", "high", "xhigh", "max"].includes(s),
+  isReasoningEffort: (s: string) =>
+    ["low", "medium", "high", "xhigh", "max"].includes(s),
   EFFORT_LEVELS: ["low", "medium", "high", "xhigh", "max"] as const,
 }));
 vi.mock("../../agent/code-graph.js", () => ({
@@ -114,7 +125,8 @@ vi.mock("../plan-turn.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../plan-turn.js")>();
   return {
     ...actual,
-    planReplTurn: async ({ goal }: { goal: string }) => actual.fallbackPlan(goal),
+    planReplTurn: async ({ goal }: { goal: string }) =>
+      actual.fallbackPlan(goal),
   };
 });
 
@@ -141,7 +153,8 @@ const tick = (ms = 15): Promise<void> =>
 async function waitFor(cond: () => boolean, ms = 15_000): Promise<void> {
   const start = Date.now();
   while (!cond()) {
-    if (Date.now() - start > ms) throw new Error("waitFor: condition timed out");
+    if (Date.now() - start > ms)
+      throw new Error("waitFor: condition timed out");
     await tick(10);
   }
 }
@@ -186,7 +199,9 @@ describe("REPL interrupt does not wedge the queue", () => {
     // 4) The queued prompts must now drain oldest-first — "second task" runs
     //    without the interrupted turn ever finishing.
     await waitFor(() => ran("second task"));
-    expect(runTurnSpy.mock.calls.find((c) => c[0].prompt === "second task")).toBeTruthy();
+    expect(
+      runTurnSpy.mock.calls.find((c) => c[0].prompt === "second task"),
+    ).toBeTruthy();
 
     // 5) Finish "second task" → "third task" runs next, preserving order.
     pending.find((p) => p.prompt === "second task")?.finish();
@@ -210,6 +225,8 @@ describe("REPL interrupt does not wedge the queue", () => {
     // "queued" behind the never-settling interrupted turn).
     await submit(stdin, "next task");
     await waitFor(() => ran("next task"));
-    expect(runTurnSpy.mock.calls.find((c) => c[0].prompt === "next task")).toBeTruthy();
+    expect(
+      runTurnSpy.mock.calls.find((c) => c[0].prompt === "next task"),
+    ).toBeTruthy();
   });
 });
