@@ -57,6 +57,9 @@ const EMPTY_TOTALS = {
   promotedRules: 0,
   reinforced: 0,
   evicted: 0,
+  contradictions: 0,
+  decayed: 0,
+  coldTier: 0,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -81,8 +84,28 @@ describe("engramConsolidationRun Inngest handler", () => {
       { org: "o1", workspace: "w2" },
     ]);
     mocks.consolidateWorkspace
-      .mockResolvedValueOnce({ newFacts: 2, boostedFacts: 1, deduped: 1, promotedRules: 1, reinforced: 3, evicted: 4 })
-      .mockResolvedValueOnce({ newFacts: 1, boostedFacts: 0, deduped: 2, promotedRules: 0, reinforced: 1, evicted: 0 });
+      .mockResolvedValueOnce({
+        newFacts: 2,
+        boostedFacts: 1,
+        deduped: 1,
+        promotedRules: 1,
+        reinforced: 3,
+        evicted: 4,
+        contradictions: 1,
+        decayed: 2,
+        coldTier: 1,
+      })
+      .mockResolvedValueOnce({
+        newFacts: 1,
+        boostedFacts: 0,
+        deduped: 2,
+        promotedRules: 0,
+        reinforced: 1,
+        evicted: 0,
+        contradictions: 0,
+        decayed: 1,
+        coldTier: 0,
+      });
 
     const result = await capturedHandler!({ step: makeStep() });
 
@@ -95,6 +118,9 @@ describe("engramConsolidationRun Inngest handler", () => {
       promotedRules: 1,
       reinforced: 4,
       evicted: 4,
+      contradictions: 1,
+      decayed: 3,
+      coldTier: 1,
     });
   });
 
@@ -109,7 +135,9 @@ describe("engramConsolidationRun Inngest handler", () => {
         throw new Error("step failed");
       },
     };
-    await expect(capturedHandler!({ step: throwingStep })).rejects.toThrow("step failed");
+    await expect(capturedHandler!({ step: throwingStep })).rejects.toThrow(
+      "step failed",
+    );
     expect(mocks.storeMock.close).toHaveBeenCalledTimes(1);
   });
 

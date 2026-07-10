@@ -5,6 +5,7 @@
 // publicId in the DenialResponse so the caller can poll / display status.
 
 import { withTenantDb, schema } from "@oxagen/database";
+import { and, eq } from "drizzle-orm";
 import type { CapabilityContext } from "@oxagen/oxagen";
 import type { ResolvedPrincipal } from "@oxagen/oxagen";
 import { logger } from "./logger";
@@ -42,8 +43,33 @@ export async function createAccessRequest(
   const scopeId = scopeKind === "workspace" ? ctx.workspaceId : ctx.orgId;
 
   try {
-    const [row] = await withTenantDb((tx) =>
-      tx
+    return await withTenantDb(async (tx) => {
+      // Idempotency: the kernel calls this on every denied invoke of a
+      // require_approval capability, so a principal that retries (or an agent
+      // that loops) must NOT spam duplicate pending rows. If an identical
+      // pending request already exists for this (org, requester, capability,
+      // scope), return its publicId instead of inserting again. A residual race
+      // remains under truly concurrent denials (no unique index yet); this
+      // covers the realistic sequential-retry case.
+      const existing = await tx
+        .select({ publicId: schema.accessRequests.publicId })
+        .from(schema.accessRequests)
+        .where(
+          and(
+            eq(schema.accessRequests.orgId, ctx.orgId),
+            eq(schema.accessRequests.requesterId, principal.id),
+            eq(schema.accessRequests.capabilityId, capability),
+            eq(schema.accessRequests.scopeKind, scopeKind),
+            eq(schema.accessRequests.scopeId, scopeId),
+            eq(schema.accessRequests.status, "pending"),
+          ),
+        )
+        .limit(1);
+
+      const existingId = existing[0]?.publicId;
+      if (existingId) return existingId;
+
+      const [row] = await tx
         .insert(schema.accessRequests)
         .values({
           orgId: ctx.orgId,
@@ -56,12 +82,15 @@ export async function createAccessRequest(
           createdByUserId: ctx.userId,
           updatedByUserId: ctx.userId,
         })
-        .returning({ publicId: schema.accessRequests.publicId }),
-    );
+        .returning({ publicId: schema.accessRequests.publicId });
 
-    return row?.publicId ?? null;
+      return row?.publicId ?? null;
+    });
   } catch (err) {
-    logger.error({ err, capability, orgId: ctx.orgId }, "[iam:access-request] Failed to create access request");
+    logger.error(
+      { err, capability, orgId: ctx.orgId },
+      "[iam:access-request] Failed to create access request",
+    );
     return null;
   }
 }

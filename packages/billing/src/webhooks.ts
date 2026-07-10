@@ -6,13 +6,24 @@ import { eq } from "drizzle-orm";
 import { billingProvider } from "./client";
 import { syncSubscriptionFromStripe } from "./subscriptions";
 import { syncInvoiceFromStripe } from "./invoices";
-import { grantPlanCreditsForInvoicePaid, grantCreditPackForCheckout } from "./grants";
+import {
+  grantPlanCreditsForInvoicePaid,
+  grantCreditPackForCheckout,
+} from "./grants";
 import { onInvoicePaymentFailed, onInvoiceRecovered } from "./dunning";
-import { onDisputeCreated, onDisputeClosed, onChargeRefunded } from "./disputes";
+import { sendPaymentReceipt } from "./receipts";
+import {
+  onDisputeCreated,
+  onDisputeClosed,
+  onChargeRefunded,
+} from "./disputes";
 import { logger } from "./logger";
 import type { BillingWebhookEvent } from "./provider";
 
-export function verifyStripeSignature(rawBody: string, signature: string): BillingWebhookEvent {
+export function verifyStripeSignature(
+  rawBody: string,
+  signature: string,
+): BillingWebhookEvent {
   return billingProvider().parseWebhookEvent(rawBody, signature);
 }
 
@@ -85,7 +96,14 @@ export async function processStripeEvent(
           set: { processedAt: new Date(), processingError: null },
         });
     });
-    logger.info({ eventId: event.providerEventId, type: event.type, durationMs: Date.now() - start }, "billing: webhook event applied");
+    logger.info(
+      {
+        eventId: event.providerEventId,
+        type: event.type,
+        durationMs: Date.now() - start,
+      },
+      "billing: webhook event applied",
+    );
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     await withSystemDb(async (tx) => {
@@ -97,7 +115,15 @@ export async function processStripeEvent(
           set: { processingError: message },
         });
     });
-    logger.error({ eventId: event.providerEventId, type: event.type, err: message, durationMs: Date.now() - start }, "billing: webhook event dispatch failed");
+    logger.error(
+      {
+        eventId: event.providerEventId,
+        type: event.type,
+        err: message,
+        durationMs: Date.now() - start,
+      },
+      "billing: webhook event dispatch failed",
+    );
     throw err;
   }
 
@@ -135,6 +161,12 @@ async function dispatch(event: BillingWebhookEvent): Promise<void> {
       if (event.type === "invoice.paid") {
         await grantPlanCreditsForInvoicePaid(event.invoice);
         await onInvoiceRecovered(event.invoice);
+        // Email the customer a receipt. Runs last and is best-effort (never
+        // throws), so it cannot trigger a re-dispatch of this event nor fail the
+        // webhook. Event-id dedup (stripe_events + stripe_event_processing) means
+        // a successfully-dispatched invoice.paid never re-runs, so the receipt
+        // sends at most once per invoice payment — no extra guard needed.
+        await sendPaymentReceipt(event.invoice);
       }
       if (event.type === "invoice.payment_failed") {
         await onInvoicePaymentFailed(event.invoice);
@@ -148,7 +180,10 @@ async function dispatch(event: BillingWebhookEvent): Promise<void> {
       if (!event.invoice) return;
       await syncInvoiceFromStripe(event.invoice.providerInvoiceId);
       logger.warn(
-        { invoiceId: event.invoice.providerInvoiceId, orgId: event.invoice.orgId ?? null },
+        {
+          invoiceId: event.invoice.providerInvoiceId,
+          orgId: event.invoice.orgId ?? null,
+        },
         "billing: invoice.payment_action_required — SCA required; notify customer",
       );
       return;
@@ -224,7 +259,10 @@ async function upsertPaymentMethod(
         .update(schema.paymentMethods)
         .set({ deletedAt: new Date() })
         .where(eq(schema.paymentMethods.stripePaymentMethodId, pm.id));
-      logger.info({ customerId: pm.customerId, paymentMethodId: pm.id }, "billing: payment method detached");
+      logger.info(
+        { customerId: pm.customerId, paymentMethodId: pm.id },
+        "billing: payment method detached",
+      );
       return;
     }
 
@@ -251,6 +289,9 @@ async function upsertPaymentMethod(
           updatedAt: new Date(),
         },
       });
-    logger.info({ orgId: sub.orgId, paymentMethodId: pm.id }, "billing: payment method upserted");
+    logger.info(
+      { orgId: sub.orgId, paymentMethodId: pm.id },
+      "billing: payment method upserted",
+    );
   });
 }

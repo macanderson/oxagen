@@ -9,7 +9,10 @@ import { tool, type Tool } from "@oxagen/ai";
 import { z } from "zod";
 import pino from "pino";
 
-const logger = pino({ level: process.env.LOG_LEVEL ?? "info", base: { app: "agent.mcp-client" } });
+const logger = pino({
+  level: process.env.LOG_LEVEL ?? "info",
+  base: { app: "agent.mcp-client" },
+});
 
 export interface McpConnectArgs {
   endpointUrl: string;
@@ -31,10 +34,13 @@ function buildHeaders(args: McpConnectArgs): Record<string, string> {
 }
 
 export async function connectMcp(args: McpConnectArgs): Promise<Client> {
-  const transport = new StreamableHTTPClientTransport(new URL(args.endpointUrl), {
-    authProvider: args.authProvider,
-    requestInit: { headers: buildHeaders(args) },
-  });
+  const transport = new StreamableHTTPClientTransport(
+    new URL(args.endpointUrl),
+    {
+      authProvider: args.authProvider,
+      requestInit: { headers: buildHeaders(args) },
+    },
+  );
   const client = new Client(
     { name: "oxagen-runner", version: "0.1.0" },
     { capabilities: {} },
@@ -82,7 +88,9 @@ function installStdioExitHandler(): void {
   });
 }
 
-export async function connectMcpStdio(args: McpStdioConnectArgs): Promise<Client> {
+export async function connectMcpStdio(
+  args: McpStdioConnectArgs,
+): Promise<Client> {
   const transport = new StdioClientTransport({
     command: args.command,
     args: args.args ?? [],
@@ -148,9 +156,53 @@ export async function listMcpToolDescriptors(
   }));
 }
 
+// A pinned external tool ready for contribution: the descriptor fields come
+// from the PINNED snapshot (never the live listing) while execute still calls
+// the live server. Not an AI SDK Tool — plugin-types/mcp.ts maps this 1:1 to
+// ContributedRawTool and materialize-tools.ts applies the model-facing typing.
+export interface PinnedMcpTool {
+  /** Synthetic tool key: `<prefix>.<toolName>`. */
+  key: string;
+  toolName: string;
+  description: string | null;
+  /** The pinned JSONSchema input contract. */
+  inputSchema: Record<string, unknown>;
+  execute: (input: unknown) => Promise<unknown>;
+}
+
+/**
+ * Build callable tools from PINNED descriptors (descriptor pinning, see
+ * runtime/mcp-snapshots.ts). The live server is only used to execute calls —
+ * every model-visible string (name, description, input schema) comes from the
+ * pin, so a server that rewrites its descriptors post-registration cannot
+ * inject new text into the prompt.
+ */
+export function materializePinnedMcpTools(
+  client: Client,
+  prefix: string,
+  descriptors: McpToolDescriptor[],
+): PinnedMcpTool[] {
+  return descriptors.map((d) => ({
+    key: `${prefix}.${d.name}`,
+    toolName: d.name,
+    description: d.description,
+    inputSchema: d.inputSchema ?? {},
+    execute: async (input: unknown) => {
+      const res = await client.callTool({
+        name: d.name,
+        arguments: input as Record<string, unknown>,
+      });
+      return res.content;
+    },
+  }));
+}
+
 // Wrap each MCP-side tool as an AI SDK Tool. We use z.record(z.string(), z.unknown())
 // because the MCP server's JSONSchema isn't a Zod schema; the remote server
 // re-validates on call. z.record is type-safe while still accepting arbitrary k/v.
+// NOTE: this materializes from the LIVE listing and is only appropriate for the
+// file-based local-config trust model (plugin-types/file-mcp.ts). The DB-backed
+// external-server path must use materializePinnedMcpTools + the snapshot pins.
 export async function materializeMcpTools(
   client: Client,
   prefix: string,
@@ -163,7 +215,10 @@ export async function materializeMcpTools(
       description: t.description ?? `External MCP tool ${t.name}`,
       inputSchema: z.record(z.string(), z.unknown()),
       execute: async (input: unknown) => {
-        const res = await client.callTool({ name: t.name, arguments: input as Record<string, unknown> });
+        const res = await client.callTool({
+          name: t.name,
+          arguments: input as Record<string, unknown>,
+        });
         return res.content;
       },
     });
@@ -188,7 +243,10 @@ export async function healthcheck(args: McpConnectArgs): Promise<{
       descriptors,
     };
   } catch (err) {
-    logger.warn({ endpointUrl: args.endpointUrl, err }, "MCP healthcheck failed; marking unreachable");
+    logger.warn(
+      { endpointUrl: args.endpointUrl, err },
+      "MCP healthcheck failed; marking unreachable",
+    );
     return { status: "unreachable", discoveredTools: [], descriptors: [] };
   }
 }

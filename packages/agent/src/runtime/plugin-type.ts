@@ -17,6 +17,13 @@ export interface ContributedRawTool {
   /** The synthetic capability id, e.g. `mcp.<serverId>.<toolName>`. */
   realName: string;
   description?: string;
+  /**
+   * The tool's JSONSchema input contract. For DB-backed external MCP servers
+   * this is the PINNED schema (descriptor pinning, runtime/mcp-snapshots.ts).
+   * When present, materializeTools presents it to the model via jsonSchema();
+   * absent, the permissive object-schema fallback applies.
+   */
+  inputSchema?: Record<string, unknown>;
   /** The AI SDK execute closure (single-arg or double-arg form). */
   execute: (
     input: unknown,
@@ -33,7 +40,10 @@ export interface PluginContributeOptions {
 
 export interface PluginTypeContributor {
   type: PluginTypeName;
-  contributeTools(ctx: CapabilityContext, options?: PluginContributeOptions): Promise<ContributedRawTool[]>;
+  contributeTools(
+    ctx: CapabilityContext,
+    options?: PluginContributeOptions,
+  ): Promise<ContributedRawTool[]>;
 }
 
 const registry = new Map<PluginTypeName, PluginTypeContributor>();

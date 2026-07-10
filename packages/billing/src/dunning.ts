@@ -1,7 +1,10 @@
 import { withTenantDb, withSystemDb, schema } from "@oxagen/database";
 import type { Tx } from "@oxagen/database";
 import { and, eq, inArray, lt, sql } from "drizzle-orm";
-import { notifyOrgManagers, paymentFailedTemplate } from "@oxagen/notifications";
+import {
+  notifyOrgManagers,
+  paymentFailedTemplate,
+} from "@oxagen/notifications";
 import { logger } from "./logger";
 import type { BillingInvoice } from "./provider";
 
@@ -50,7 +53,9 @@ export interface OrgBillingStatus {
  * Read the org's current billing status from org_billing_settings and active
  * subscription row. The subscription's `past_due` status drives `pastDue`.
  */
-export async function getOrgBillingStatus(orgId: string): Promise<OrgBillingStatus> {
+export async function getOrgBillingStatus(
+  orgId: string,
+): Promise<OrgBillingStatus> {
   const [settings, sub] = await withTenantDb(async (tx) =>
     Promise.all([
       tx.query.orgBillingSettings.findFirst({
@@ -72,7 +77,10 @@ export async function getOrgBillingStatus(orgId: string): Promise<OrgBillingStat
     ]),
   );
 
-  const state = (settings?.dunningState ?? "active") as "active" | "grace" | "suspended";
+  const state = (settings?.dunningState ?? "active") as
+    | "active"
+    | "grace"
+    | "suspended";
   return {
     state,
     delinquentSince: settings?.delinquentSince ?? null,
@@ -105,15 +113,24 @@ export async function assertOrgCanConsume(orgId: string): Promise<void> {
  * Resolve the orgId from an invoice (via orgId field or subscription lookup).
  * Returns null when it cannot be resolved.
  *
+ * Exported so the receipt path (receipts.ts) resolves the org the same way,
+ * rather than duplicating the lookup.
+ *
  * tenancy: system bypass via withSystemDb (resolves org from external Stripe invoice id
  * before a tenant scope exists) — OXA-1515.
  */
-async function resolveOrgFromInvoice(tx: Tx, invoice: BillingInvoice): Promise<string | null> {
+export async function resolveOrgFromInvoice(
+  tx: Tx,
+  invoice: BillingInvoice,
+): Promise<string | null> {
   if (invoice.orgId) return invoice.orgId;
 
   if (invoice.subscriptionId) {
     const row = await tx.query.subscriptions.findFirst({
-      where: eq(schema.subscriptions.stripeSubscriptionId, invoice.subscriptionId),
+      where: eq(
+        schema.subscriptions.stripeSubscriptionId,
+        invoice.subscriptionId,
+      ),
       columns: { orgId: true },
     });
     return row?.orgId ?? null;
@@ -128,7 +145,9 @@ async function resolveOrgFromInvoice(tx: Tx, invoice: BillingInvoice): Promise<s
  * Idempotent: sets dunningState → 'grace', delinquentSince (if not already
  * set), and graceEndsAt = now + DUNNING_GRACE_DAYS.
  */
-export async function onInvoicePaymentFailed(invoice: BillingInvoice): Promise<void> {
+export async function onInvoicePaymentFailed(
+  invoice: BillingInvoice,
+): Promise<void> {
   const start = Date.now();
 
   // Capture the org context resolved inside the transaction so the best-effort
@@ -140,12 +159,17 @@ export async function onInvoicePaymentFailed(invoice: BillingInvoice): Promise<v
     // context; billing is org_only; webhook path with no tenant scope) — OXA-1515
     const orgId = await resolveOrgFromInvoice(tx, invoice);
     if (!orgId) {
-      logger.warn({ invoiceId: invoice.providerInvoiceId }, "billing: dunning — could not resolve orgId from invoice");
+      logger.warn(
+        { invoiceId: invoice.providerInvoiceId },
+        "billing: dunning — could not resolve orgId from invoice",
+      );
       return null;
     }
 
     const now = new Date();
-    const graceEndsAt = new Date(now.getTime() + DUNNING_GRACE_DAYS * 24 * 60 * 60 * 1000);
+    const graceEndsAt = new Date(
+      now.getTime() + DUNNING_GRACE_DAYS * 24 * 60 * 60 * 1000,
+    );
 
     // Upsert settings row: set grace state idempotently. Only set delinquentSince
     // the FIRST time (i.e. if it's already set, preserve the original timestamp).
@@ -206,7 +230,11 @@ export async function onInvoicePaymentFailed(invoice: BillingInvoice): Promise<v
   try {
     const appUrl = process.env["APP_URL"] ?? "https://app.oxagen.sh";
     const billingUrl = `${appUrl}/settings/billing`;
-    const template = paymentFailedTemplate({ orgName, graceDays: DUNNING_GRACE_DAYS, billingUrl });
+    const template = paymentFailedTemplate({
+      orgName,
+      graceDays: DUNNING_GRACE_DAYS,
+      billingUrl,
+    });
     await notifyOrgManagers({
       orgId,
       kind: "system",
@@ -216,7 +244,10 @@ export async function onInvoicePaymentFailed(invoice: BillingInvoice): Promise<v
       deepLink: "/settings/billing",
     });
   } catch (err) {
-    logger.warn({ orgId, err }, "billing: dunning — failed to send payment failure notification");
+    logger.warn(
+      { orgId, err },
+      "billing: dunning — failed to send payment failure notification",
+    );
   }
 }
 
@@ -226,7 +257,9 @@ export async function onInvoicePaymentFailed(invoice: BillingInvoice): Promise<v
  * Resets dunning state to 'active' and clears delinquentSince, graceEndsAt,
  * and suspendedAt — full recovery.
  */
-export async function onInvoiceRecovered(invoice: BillingInvoice): Promise<void> {
+export async function onInvoiceRecovered(
+  invoice: BillingInvoice,
+): Promise<void> {
   const start = Date.now();
 
   await withSystemDb(async (tx) => {
@@ -234,7 +267,10 @@ export async function onInvoiceRecovered(invoice: BillingInvoice): Promise<void>
     // context; billing is org_only; webhook path with no tenant scope) — OXA-1515
     const orgId = await resolveOrgFromInvoice(tx, invoice);
     if (!orgId) {
-      logger.warn({ invoiceId: invoice.providerInvoiceId }, "billing: dunning — could not resolve orgId for recovery");
+      logger.warn(
+        { invoiceId: invoice.providerInvoiceId },
+        "billing: dunning — could not resolve orgId for recovery",
+      );
       return;
     }
 
@@ -247,7 +283,10 @@ export async function onInvoiceRecovered(invoice: BillingInvoice): Promise<void>
 
     // Only bother updating if the org was actually in a non-active state.
     if (!existing || existing.dunningState === "active") {
-      logger.debug({ orgId, invoiceId: invoice.providerInvoiceId }, "billing: dunning — already active, skipping recovery");
+      logger.debug(
+        { orgId, invoiceId: invoice.providerInvoiceId },
+        "billing: dunning — already active, skipping recovery",
+      );
       return;
     }
 
@@ -263,7 +302,11 @@ export async function onInvoiceRecovered(invoice: BillingInvoice): Promise<void>
       .where(eq(schema.orgBillingSettings.orgId, orgId));
 
     logger.info(
-      { orgId, invoiceId: invoice.providerInvoiceId, durationMs: Date.now() - start },
+      {
+        orgId,
+        invoiceId: invoice.providerInvoiceId,
+        durationMs: Date.now() - start,
+      },
       "billing: dunning — recovered to active after invoice paid",
     );
   });
@@ -294,7 +337,10 @@ export async function sweepDunning(): Promise<{ suspended: number }> {
     });
 
     if (toSuspend.length === 0) {
-      logger.info({ durationMs: Date.now() - start }, "billing: dunning sweep — no orgs to suspend");
+      logger.info(
+        { durationMs: Date.now() - start },
+        "billing: dunning sweep — no orgs to suspend",
+      );
       return { suspended: 0 };
     }
 
@@ -305,7 +351,12 @@ export async function sweepDunning(): Promise<{ suspended: number }> {
         suspendedAt: now,
         updatedAt: now,
       })
-      .where(inArray(schema.orgBillingSettings.id, toSuspend.map((r) => r.id)));
+      .where(
+        inArray(
+          schema.orgBillingSettings.id,
+          toSuspend.map((r) => r.id),
+        ),
+      );
     const suspended = toSuspend.length;
     for (const row of toSuspend) {
       logger.warn(
@@ -314,7 +365,10 @@ export async function sweepDunning(): Promise<{ suspended: number }> {
       );
     }
 
-    logger.info({ suspended, durationMs: Date.now() - start }, "billing: dunning sweep complete");
+    logger.info(
+      { suspended, durationMs: Date.now() - start },
+      "billing: dunning sweep complete",
+    );
     return { suspended };
   });
 }
