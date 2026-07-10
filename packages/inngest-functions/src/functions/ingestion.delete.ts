@@ -24,23 +24,78 @@ import { logger } from "../logger";
  * Step 2: delete-neo4j-data    remove :EntityNode nodes + alias promotion (stub)
  * Step 3: delete-postgres      wipe mappings, credentials, webhook subs; mark deleted
  * Step 4: audit-log            write deletion event to ClickHouse
+ * Step 5: finalize-deletion-job  mark the deletion_jobs row completed (progress + completed_at)
+ *
+ * The `deletion_jobs` row is created by connection.delete with status='running'.
+ * This function OWNS the terminal transition: the primary handler marks it
+ * 'completed' on success (Step 5); the on-failure companion marks it 'failed'
+ * (with completed_at + error) once retries are exhausted. Without this, jobs
+ * were stuck at 'running' forever (OXA schema audit O-1).
  */
-export const [ingestionDeleteConnection] = createFunction(
+export const [ingestionDeleteConnection, ingestionDeleteConnectionOnFailure] = createFunction(
   {
     id: "ingestion-delete-connection",
     retries: 2,
     concurrency: { limit: 2, key: "event.data.orgId" },
+    // Terminal-failure handler: fires on `inngest/function.failed` after all
+    // retries are exhausted. Marks the deletion_jobs row 'failed' so the UI
+    // stops showing an eternally-'running' job. Mirrors privacy.erasure.execute.
+    onFailure: async ({ event, step }) => {
+      const failureData = event.data as {
+        event?: {
+          data?: { deletionJobId?: string; orgId?: string; workspaceId?: string };
+        };
+        error?: unknown;
+      };
+      const deletionJobId = failureData.event?.data?.deletionJobId;
+      const orgId = failureData.event?.data?.orgId;
+      const workspaceId = failureData.event?.data?.workspaceId;
+      if (!deletionJobId || !orgId || !workspaceId) return;
+
+      const errorMessage =
+        typeof failureData.error === "object" &&
+        failureData.error !== null &&
+        "message" in failureData.error
+          ? String((failureData.error as { message: unknown }).message)
+          : String(failureData.error ?? "unknown error");
+
+      await step.run("mark-deletion-job-failed", () =>
+        runInTenantScope({ orgId, workspaceId }, () =>
+          withTenantDb((tx) =>
+            tx.execute(sql`
+              UPDATE ingestion.deletion_jobs
+              SET    status       = 'failed',
+                     completed_at = NOW(),
+                     error        = ${errorMessage}
+              WHERE  id     = ${deletionJobId}::uuid
+              AND    org_id = ${orgId}::uuid
+            `),
+          ),
+        ),
+      );
+
+      logger.error(
+        { deletionJobId, orgId, error: errorMessage },
+        "ingestion-delete-connection: marked deletion job failed",
+      );
+    },
   },
   { event: "ingestion/connection.delete" },
   async ({ event, step }) => {
-    const { connectionId, orgId, workspaceId, mode, requestedBy, requestedAt } = event.data as {
-      connectionId: string;
-      orgId: string;
-      workspaceId: string;
-      mode: string;
-      requestedBy: string;
-      requestedAt: string;
-    };
+    const { connectionId, deletionJobId, orgId, workspaceId, mode, requestedBy, requestedAt } =
+      event.data as {
+        connectionId: string;
+        deletionJobId?: string;
+        orgId: string;
+        workspaceId: string;
+        mode: string;
+        requestedBy: string;
+        requestedAt: string;
+      };
+
+    // Rolls up graph-deletion progress for the deletion_jobs finalizer (Step 5).
+    let deletedEntities = 0;
+    let aliasPromotions = 0;
 
     // ── Step 1: Mark connection as 'deleting' ────────────────────────────────
     await step.run("mark-deleting", () =>
@@ -59,7 +114,7 @@ export const [ingestionDeleteConnection] = createFunction(
 
     // ── Step 2: Delete Neo4j entity nodes (when mode includes data) ──────────
     if (mode === "data_only" || mode === "full") {
-      await step.run("delete-neo4j-data", () =>
+      const neo4jResult = (await step.run("delete-neo4j-data", () =>
         runInTenantScope({ orgId, workspaceId }, async () => {
           const session = scopedSession();
 
@@ -211,7 +266,10 @@ export const [ingestionDeleteConnection] = createFunction(
               deletedCount + sourceDeletedCount + inferredDeletedCount + orphanDeletedCount,
           };
         }),
-      );
+      )) as { promoted: number; deleted: number };
+
+      aliasPromotions = neo4jResult.promoted;
+      deletedEntities = neo4jResult.deleted;
     }
 
     // ── Step 3: Delete Postgres records ──────────────────────────────────────
@@ -296,6 +354,30 @@ export const [ingestionDeleteConnection] = createFunction(
         );
       }
     });
+
+    // ── Step 5: Finalize the deletion_jobs row ───────────────────────────────
+    // Mark the tracking row created by connection.delete as terminally
+    // 'completed' with completed_at and the observed graph-deletion progress.
+    // Without this the row sat at status='running' forever (schema audit O-1).
+    // Guarded on deletionJobId so legacy events (sent before the id was wired)
+    // still complete without throwing.
+    if (deletionJobId) {
+      await step.run("finalize-deletion-job", () =>
+        runInTenantScope({ orgId, workspaceId }, () =>
+          withTenantDb((tx) =>
+            tx.execute(sql`
+              UPDATE ingestion.deletion_jobs
+              SET    status           = 'completed',
+                     completed_at     = NOW(),
+                     deleted_entities = ${deletedEntities},
+                     alias_promotions = ${aliasPromotions}
+              WHERE  id     = ${deletionJobId}::uuid
+              AND    org_id = ${orgId}::uuid
+            `),
+          ),
+        ),
+      );
+    }
 
     return { connectionId, mode, deletedAt: new Date().toISOString() };
   },

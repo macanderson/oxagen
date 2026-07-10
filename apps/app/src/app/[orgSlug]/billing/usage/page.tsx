@@ -20,7 +20,7 @@ import { runInTenantScope } from "@oxagen/tenancy";
 import { eq } from "drizzle-orm";
 import { resolveOrg, assertOrgMember, assertBillingManager } from "@/lib/resolve-org";
 import { getSession } from "@/lib/session";
-import { Card, CardHeader, CardTitle, CardDescription, CardPanel } from "@/components/ui/card";
+import { Stat, StatGroup } from "@/components/ui/stat";
 import { logger } from "@oxagen/handlers/logger";
 import { UsageBreakdownView } from "./usage-breakdown-view";
 import { UsageRangePicker } from "./usage-range-picker";
@@ -34,22 +34,6 @@ import {
 
 // Sentinel workspaceId for org-only routes. — OXA-1515
 const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
-
-function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
-  return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardDescription>{label}</CardDescription>
-        <CardTitle className="text-2xl font-bold tabular-nums">{value}</CardTitle>
-      </CardHeader>
-      {sub ? (
-        <CardPanel className="pt-0">
-          <p className="text-xs text-muted-foreground">{sub}</p>
-        </CardPanel>
-      ) : null}
-    </Card>
-  );
-}
 
 const EMPTY: BillingUsageBreakdownOutput = {
   range: { start: "", end: "" },
@@ -157,29 +141,29 @@ export default async function BillingUsagePage({
         </p>
       ) : null}
 
-      {/* KPI row */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard
+      {/* KPI row — shared Stat tiles in a hairline-divided group */}
+      <StatGroup columns={4}>
+        <Stat
           label="Total cost"
           value={formatUsdFromMicros(totals.costMicros)}
-          sub="LLM spend this window"
+          hint="LLM spend this window"
         />
-        <StatCard
+        <Stat
           label="Total tokens"
           value={formatTokens(totalTokens)}
-          sub={`${totals.inputTokens.toLocaleString()} in · ${totals.outputTokens.toLocaleString()} out`}
+          hint={`${totals.inputTokens.toLocaleString()} in · ${totals.outputTokens.toLocaleString()} out`}
         />
-        <StatCard
+        <Stat
           label="Cached tokens"
           value={formatTokens(totals.cachedTokens)}
-          sub="prompt cache hits"
+          hint="prompt cache hits"
         />
-        <StatCard
+        <Stat
           label="LLM calls"
           value={totals.executions.toLocaleString()}
-          sub="metered token_usage rows"
+          hint="metered token_usage rows"
         />
-      </div>
+      </StatGroup>
 
       <UsageBreakdownView
         series={breakdown.series}

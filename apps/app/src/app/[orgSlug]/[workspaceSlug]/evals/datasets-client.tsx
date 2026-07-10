@@ -12,6 +12,11 @@
 
 import { FlaskConical } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { CardGrid } from "@/components/lists/card-grid";
+import { ListToolbar } from "@/components/lists/list-toolbar";
+import { ListPagination } from "@/components/lists/list-pagination";
+import { useListControls, type ListSortOption } from "@/lib/lists/use-list-controls";
+import { toCsv, downloadCsv, type CsvColumn } from "@/lib/lists/csv";
 import type { EvalDatasetListOutput } from "@oxagen/oxagen/contracts/eval.dataset.list";
 
 type Dataset = EvalDatasetListOutput["datasets"][number];
@@ -24,6 +29,24 @@ const SOURCE_LABEL: Record<Dataset["source"], string> = {
   manual: "Manual",
   traces: "From traces",
 };
+
+const SORT_OPTIONS: ListSortOption<Dataset>[] = [
+  {
+    id: "newest",
+    label: "Newest",
+    compare: (a, b) => b.createdAt.localeCompare(a.createdAt),
+  },
+  { id: "name", label: "Name A–Z", compare: (a, b) => a.name.localeCompare(b.name) },
+  { id: "items", label: "Most items", compare: (a, b) => b.itemCount - a.itemCount },
+];
+
+const CSV_COLUMNS: CsvColumn[] = [
+  { key: "name", header: "Name" },
+  { key: "slug", header: "Slug" },
+  { key: "itemCount", header: "Items" },
+  { key: "source", header: "Source" },
+  { key: "createdAt", header: "Created" },
+];
 
 function formatDate(iso: string): string {
   try {
@@ -38,6 +61,12 @@ function formatDate(iso: string): string {
 }
 
 export function DatasetsClient({ datasets }: DatasetsClientProps) {
+  const controls = useListControls(datasets, {
+    searchKeys: ["name", "slug", (d) => d.description ?? ""],
+    sortOptions: SORT_OPTIONS,
+    pageSize: 12,
+  });
+
   if (datasets.length === 0) {
     return (
       <div
@@ -59,52 +88,79 @@ export function DatasetsClient({ datasets }: DatasetsClientProps) {
   }
 
   return (
-    <ul
-      className="divide-y divide-border/50 overflow-hidden rounded-lg border border-border/60"
-      data-testid="evals-datasets-table"
-    >
-      {datasets.map((dataset) => (
-        <li
-          key={dataset.datasetId}
-          className="flex flex-col gap-3 px-4 py-2 transition-colors hover:bg-muted/40 sm:flex-row sm:items-center sm:gap-6"
-        >
-          {/* identity: name + description */}
-          <div className="min-w-0 flex-1">
-            <span className="block truncate font-medium text-foreground" title={dataset.name}>
-              {dataset.name}
-            </span>
-            {dataset.description && (
-              <span className="block truncate text-xs text-muted-foreground" title={dataset.description}>
-                {dataset.description}
-              </span>
-            )}
-          </div>
-          <dl className="flex flex-wrap items-center gap-x-6 gap-y-2">
-            <div>
-              <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Slug</dt>
-              <dd className="mt-0.5 font-mono text-xs text-muted-foreground">{dataset.slug}</dd>
-            </div>
-            <div>
-              <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Items</dt>
-              <dd className="mt-0.5 tabular-nums text-sm text-foreground">{dataset.itemCount}</dd>
-            </div>
-            <div>
-              <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Source</dt>
-              <dd className="mt-0.5">
+    <div className="flex flex-col gap-4" data-testid="evals-datasets-grid">
+      <ListToolbar
+        query={controls.query}
+        onQueryChange={controls.setQuery}
+        searchPlaceholder="Search datasets…"
+        sortOptions={SORT_OPTIONS}
+        sortId={controls.sortId}
+        onSortChange={controls.setSortId}
+        onExport={() =>
+          downloadCsv(
+            "eval-datasets.csv",
+            toCsv(CSV_COLUMNS, controls.allFilteredRows as unknown as Record<string, unknown>[]),
+          )
+        }
+      />
+
+      {controls.filteredTotal === 0 ? (
+        <p className="rounded-md border bg-card py-10 text-center text-sm text-muted-foreground">
+          No datasets match “{controls.query}”.
+        </p>
+      ) : (
+        <CardGrid>
+          {controls.pageRows.map((dataset) => (
+            <article
+              key={dataset.datasetId}
+              className="flex flex-col gap-2 rounded-lg border bg-card p-4"
+              data-testid={`dataset-card-${dataset.slug}`}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <span
+                  className="truncate font-medium text-foreground"
+                  title={dataset.name}
+                >
+                  {dataset.name}
+                </span>
                 <Badge variant="outline" size="sm">
                   {SOURCE_LABEL[dataset.source]}
                 </Badge>
-              </dd>
-            </div>
-            <div>
-              <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Created</dt>
-              <dd className="mt-0.5 whitespace-nowrap text-xs text-muted-foreground">
-                {formatDate(dataset.createdAt)}
-              </dd>
-            </div>
-          </dl>
-        </li>
-      ))}
-    </ul>
+              </div>
+              <span className="truncate font-mono text-xs text-muted-foreground">
+                {dataset.slug}
+              </span>
+              {dataset.description ? (
+                <p
+                  className="line-clamp-2 text-xs text-muted-foreground"
+                  title={dataset.description}
+                >
+                  {dataset.description}
+                </p>
+              ) : null}
+              <div className="mt-auto flex items-center justify-between pt-1 text-xs text-muted-foreground">
+                <span className="tabular-nums">
+                  {dataset.itemCount} item{dataset.itemCount === 1 ? "" : "s"}
+                </span>
+                <span>{formatDate(dataset.createdAt)}</span>
+              </div>
+            </article>
+          ))}
+        </CardGrid>
+      )}
+
+      <div className="flex items-center justify-between gap-4">
+        <p className="text-xs text-muted-foreground">
+          {controls.filteredTotal === controls.total
+            ? `${controls.total} dataset${controls.total === 1 ? "" : "s"}`
+            : `${controls.filteredTotal} of ${controls.total} datasets`}
+        </p>
+        <ListPagination
+          page={controls.page}
+          pageCount={controls.pageCount}
+          onPageChange={controls.setPage}
+        />
+      </div>
+    </div>
   );
 }

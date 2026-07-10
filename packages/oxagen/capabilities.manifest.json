@@ -226,8 +226,46 @@
       }
     },
     {
+      "name": "revise_agent_def",
+      "file": "agent.definition.revise.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "e2e": false,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
       "name": "suggest_agent_def",
       "file": "agent.definition.suggest.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
+      }
+    },
+    {
+      "name": "summarize_agent_def",
+      "file": "agent.definition.summarize.ts",
       "domain": "agent",
       "mode": "sync",
       "surfaces": [
@@ -5071,6 +5109,26 @@
         "api": false,
         "docs": false,
         "mcp": false,
+        "app": true
+      }
+    },
+    {
+      "name": "revise_skill",
+      "file": "skill.revise.ts",
+      "domain": "skill",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "e2e": false,
+        "docs": true,
         "app": true
       }
     },

@@ -94,7 +94,7 @@ describe("downloadCsv", () => {
   });
 
   it("creates a UTF-8-BOM-prefixed text/csv Blob and revokes the object URL", () => {
-    const createObjectURL = vi.fn(() => "blob:mock-url");
+    const createObjectURL = vi.fn((_blob: Blob) => "blob:mock-url");
     const revokeObjectURL = vi.fn();
     vi.stubGlobal("URL", { ...URL, createObjectURL, revokeObjectURL });
     vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
@@ -102,7 +102,7 @@ describe("downloadCsv", () => {
     downloadCsv("report.csv", "a,b\r\n1,2\r\n");
 
     expect(createObjectURL).toHaveBeenCalledTimes(1);
-    const blobArg = createObjectURL.mock.calls[0]?.[0] as Blob;
+    const blobArg = (createObjectURL.mock.calls[0] as unknown[])?.[0] as Blob;
     expect(blobArg).toBeInstanceOf(Blob);
     expect(blobArg.type).toBe("text/csv;charset=utf-8;");
     expect(revokeObjectURL).toHaveBeenCalledWith("blob:mock-url");

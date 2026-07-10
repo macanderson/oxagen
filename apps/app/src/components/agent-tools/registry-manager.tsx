@@ -12,6 +12,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/ui/empty-state";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import {
   Popover,
   PopoverTrigger,
@@ -263,11 +272,12 @@ export function RegistryManager({
       )}
 
       {registries.length === 0 ? (
-        <div className="rounded-lg border border-border/40 bg-muted/20 px-6 py-8 text-center">
-          <p className="text-xs text-muted-foreground">
-            No registries configured. Add a registry to enable marketplace plugin discovery.
-          </p>
-        </div>
+        <EmptyState
+          size="sm"
+          variant="muted"
+          title="No registries configured"
+          description="Add a registry to enable marketplace plugin discovery."
+        />
       ) : (
         <ul className="divide-y divide-border/30 overflow-hidden rounded-lg border border-border/40">
           {registries.map((reg) => (

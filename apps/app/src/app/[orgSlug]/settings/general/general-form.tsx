@@ -2,7 +2,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { Save } from "lucide-react";
-import { AvatarUpload } from "@/components/media/avatar-upload";
+import { AvatarMaker } from "@/components/avatar/avatar-maker";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -195,15 +195,17 @@ export function OrgGeneralForm({
         <div className="flex flex-col gap-1.5">
           <Label>Logo</Label>
           {/*
-            AvatarUpload calls onChange with the blob URL after a successful
-            crop+upload. We mirror that value into the hidden input so the
-            FormData submitted below always includes the latest avatarUrl.
+            AvatarMaker calls onChange with the blob URL (photo path) or the
+            designed-avatar spec string (design path). We mirror that value
+            into the hidden input so the FormData submitted below always
+            includes the latest avatarUrl.
           */}
-          <AvatarUpload
+          <AvatarMaker
             value={avatarUrl || null}
             onChange={setAvatarUrl}
-            fallback={name.charAt(0) || orgSlug.charAt(0)}
+            name={name || orgSlug}
             shape="square"
+            entityLabel="organization"
             disabled={isSaving || !canEdit}
           />
           {/* Hidden input carries the resolved URL into FormData on submit. */}

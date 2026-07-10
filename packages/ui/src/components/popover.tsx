@@ -44,7 +44,7 @@ const PopoverPopup = React.forwardRef<
         ref={ref}
         className={cn(
           "z-50 max-w-sm rounded-xl border border-border bg-card px-4 py-3 text-sm text-foreground shadow-md",
-          "origin-[var(--transform-origin)] transition-[opacity,transform] duration-[var(--motion-overlay)] ease-[var(--ease-entry)] data-[starting-style]:opacity-0 data-[starting-style]:scale-[0.97] data-[ending-style]:opacity-0 data-[ending-style]:scale-[0.97]",
+          "origin-[var(--transform-origin)] transition-[opacity,transform,translate,scale] duration-[var(--motion-overlay)] ease-[var(--ease-entry)] data-[starting-style]:opacity-0 data-[starting-style]:scale-[0.97] data-[ending-style]:opacity-0 data-[ending-style]:scale-[0.97]",
           className,
         )}
         {...props}

@@ -26,6 +26,7 @@ import "@oxagen/agent/register";
 import { withTenantDb, schema } from "@oxagen/database";
 import type { AgentMemoryRecord } from "@oxagen/oxagen/contracts/agent.memory.list";
 import type { AgentMemoryPromotionCandidatesOutput } from "@oxagen/oxagen/contracts/agent.memory_promotion.list";
+import { logger } from "@oxagen/handlers/logger";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
 
@@ -164,6 +165,10 @@ export async function createMemoryAction(input: {
       revalidatePath(`/${orgSlug}/${workspaceSlug}/knowledge/memories`);
       return { ok: true, memory: out.memory };
     } catch (err) {
+      logger.error(
+        { err, orgId: org.id, workspaceId: ws.id },
+        "knowledge.memories: createMemoryAction failed",
+      );
       const message = err instanceof Error ? err.message : "";
       return { ok: false, error: message || "Failed to add memory." };
     }
@@ -228,6 +233,10 @@ export async function updateMemoryAction(input: {
       revalidatePath(`/${orgSlug}/${workspaceSlug}/knowledge/memories`);
       return { ok: true, memory };
     } catch (err) {
+      logger.error(
+        { err, orgId: org.id, workspaceId: ws.id, memoryId },
+        "knowledge.memories: updateMemoryAction failed",
+      );
       const message = err instanceof Error ? err.message : "";
       return { ok: false, error: message || "Failed to update memory." };
     }
@@ -282,6 +291,10 @@ export async function deleteMemoryAction(input: {
       revalidatePath(`/${orgSlug}/${workspaceSlug}/knowledge/memories`);
       return { ok: true };
     } catch (err) {
+      logger.error(
+        { err, orgId: org.id, workspaceId: ws.id, memoryId },
+        "knowledge.memories: deleteMemoryAction failed",
+      );
       const message = err instanceof Error ? err.message : "";
       return { ok: false, error: message || "Failed to delete memory." };
     }
@@ -349,6 +362,10 @@ export async function promoteMemoryAction(input: {
       revalidatePath(`/${orgSlug}/${workspaceSlug}/knowledge/memories`);
       return { ok: true, memory };
     } catch (err) {
+      logger.error(
+        { err, orgId: org.id, workspaceId: ws.id, memoryId, toClass },
+        "knowledge.memories: promoteMemoryAction failed",
+      );
       const message = err instanceof Error ? err.message : "";
       return { ok: false, error: message || "Failed to promote memory." };
     }
@@ -401,6 +418,10 @@ export async function promotionCandidatesAction(input: {
 
       return { ok: true, candidates: out.candidates };
     } catch (err) {
+      logger.error(
+        { err, orgId: org.id, workspaceId: ws.id },
+        "knowledge.memories: promotionCandidatesAction failed",
+      );
       const message = err instanceof Error ? err.message : "";
       return { ok: false, error: message || "Failed to load promotion candidates." };
     }

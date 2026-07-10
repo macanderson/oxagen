@@ -10,7 +10,6 @@
  *   <ListPagination page={controls.page} pageCount={controls.pageCount} onPageChange={controls.setPage} />
  */
 
-import * as React from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";

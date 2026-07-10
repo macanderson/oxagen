@@ -84,6 +84,7 @@ export default async function EditAgentPage({ params }: PageProps) {
         agentKey: agent.agentKey,
         name: agent.name,
         description: agent.description,
+        avatarUrl: agent.avatarUrl,
         agentType: agent.agentType,
         status: agent.status,
         deploymentStatus: agent.deploymentStatus,

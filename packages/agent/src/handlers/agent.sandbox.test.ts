@@ -213,6 +213,7 @@ describe("agent.sandbox.exec handler", () => {
       executionMs: 99,
       timedOut: false,
       restored: false,
+      cwd: null,
     });
     expect(h.driver.execInSession).toHaveBeenCalledWith(
       expect.objectContaining({ sandboxId: "sb-aaa", command: "pnpm build" }),

@@ -3,7 +3,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRegisterFillableForm } from "@/lib/page-context";
 import { FieldFillTransition } from "@/components/ui/field-fill-transition";
-import { AvatarUpload } from "@/components/media/avatar-upload";
+import { AvatarMaker } from "@/components/avatar/avatar-maker";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -144,16 +144,17 @@ export function ProfileForm({
           </FieldFillTransition>
         </div>
 
-        {/* Avatar — upload + crop, falling back to initials. The cropped image
-            is uploaded to blob storage and its URL flows through the same
-            `avatarUrl` state the save action persists (and Ask-to-Fill sets). */}
+        {/* Avatar — photo upload+crop OR a designed emoji/color avatar. Either
+            result flows through the same `avatarUrl` state the save action
+            persists (and Ask-to-Fill sets). */}
         <div className="flex flex-col gap-1.5">
-          <Label>Photo</Label>
-          <AvatarUpload
+          <Label>Avatar</Label>
+          <AvatarMaker
             value={avatarUrl || null}
             onChange={setAvatarUrl}
-            fallback={(displayName || email).charAt(0).toUpperCase()}
+            name={displayName || email}
             shape="circle"
+            entityLabel="profile"
             disabled={isSaving}
           />
         </div>

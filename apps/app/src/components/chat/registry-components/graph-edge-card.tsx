@@ -27,6 +27,12 @@ function parseEdgeId(edgeId: string): { from?: string; type?: string; to?: strin
   return { from: parts[0], type: parts.slice(1, -1).join(":"), to: parts[parts.length - 1] };
 }
 
+// Intentionally local, NOT @oxagen/ui/components/brand's NodeChip: the shared
+// component is a decorative span (kind/id/label, no navigation), while this one
+// must render as an <a href> deep-link to the node detail page via
+// resolveRecordHref — swapping in the shared chip would silently drop
+// click-through navigation. Keep this local until the shared NodeChip grows
+// optional href support.
 function NodeChip({
   id,
   href,
