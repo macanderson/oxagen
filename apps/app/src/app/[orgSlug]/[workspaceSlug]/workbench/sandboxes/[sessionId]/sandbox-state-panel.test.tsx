@@ -17,6 +17,7 @@ function summary(over: Partial<SandboxSummary> = {}): SandboxSummary {
   return {
     sessionId: "sbx_abc123def456",
     sessionKey: null,
+    label: null,
     image: "agent",
     status: "running",
     driver: "modal",

@@ -57,6 +57,13 @@ export interface WorkspaceContextPanelProps {
   path?: string;
   depth?: number;
   title?: string;
+  /**
+   * A monotonically-increasing nonce. Whenever it changes, the tree soft-reloads
+   * (re-fetch without the skeleton flash) — the owning page bumps it after a
+   * terminal command runs so a `mkdir`/`rm`/clone shows up immediately instead
+   * of waiting for a manual refresh. Omit when there's no command surface.
+   */
+  refreshSignal?: number;
 }
 
 interface SandboxFilesListResponse {
@@ -185,6 +192,7 @@ export default function WorkspaceContextPanel({
   path,
   depth,
   title,
+  refreshSignal,
 }: WorkspaceContextPanelProps): ReactElement {
   const scopeBase =
     orgSlug !== "" && workspaceSlug !== "" && sessionId !== ""
