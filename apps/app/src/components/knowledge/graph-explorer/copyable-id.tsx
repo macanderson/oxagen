@@ -11,6 +11,7 @@
 
 import * as React from "react";
 import { Check, Copy } from "lucide-react";
+import { useCopyToClipboard } from "@/components/ui/copy-button";
 import { cn } from "@/lib/utils";
 import { truncate } from "./lib/format";
 
@@ -25,27 +26,8 @@ export interface CopyableIdProps {
 }
 
 export function CopyableId({ value, label, max = 16, className }: CopyableIdProps) {
-  const [copied, setCopied] = React.useState(false);
-  const timer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  React.useEffect(
-    () => () => {
-      if (timer.current) clearTimeout(timer.current);
-    },
-    [],
-  );
-
-  const onCopy = React.useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopied(true);
-      if (timer.current) clearTimeout(timer.current);
-      timer.current = setTimeout(() => setCopied(false), 1400);
-    } catch {
-      // Clipboard denied (insecure context / permissions) — no-op, the value
-      // is still visible and title-selectable.
-    }
-  }, [value]);
+  const { copied, copy } = useCopyToClipboard({ timeout: 1400 });
+  const onCopy = React.useCallback(() => void copy(value), [copy, value]);
 
   return (
     <button
