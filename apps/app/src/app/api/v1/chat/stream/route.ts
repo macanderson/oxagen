@@ -67,6 +67,7 @@ import {
 } from "./recall-context";
 import { createChatMemoryProvider } from "./engine-memory";
 import { buildPageContextMessage } from "./page-context";
+import { evaluateTurnCreditGate } from "./credit-gate";
 import {
   applyAgentBinding,
   type AgentBindingDefinition,
@@ -359,6 +360,28 @@ export async function POST(request: NextRequest): Promise<Response> {
     return NextResponse.json(
       { error: "Org or workspace not found" },
       { status: 404 },
+    );
+  }
+
+  // ── Pre-turn credit admission gate ───────────────────────────────────────────
+  // Run the SAME admission gate (assertCanStartTurn) that already fires on every
+  // scoped contract.invoke() tool call, BEFORE the top-level model turn begins —
+  // the model stream (runCodingAgent → streamAgentReply) is a direct @oxagen/ai
+  // call, not an invoke(), so without this a no-tool-call turn skipped the
+  // balance check and a suspended / zero-balance org got a full model call for
+  // free. Blocks ONLY on the affirmative InsufficientCredits / BillingSuspended
+  // outcomes (every org has a $5 Free signup grant ⇒ zero balance = depleted,
+  // never billing-absent) and fails OPEN on any non-billing error, so a metering
+  // hiccup never blocks a paying customer (credit-gate.ts). Runs inside the
+  // tenant scope the underlying withTenantDb reads require.
+  const creditGate = await runInTenantScope(
+    { orgId: tenant.id, workspaceId: workspace.id },
+    () => evaluateTurnCreditGate(tenant.id),
+  );
+  if (!creditGate.ok) {
+    return NextResponse.json(
+      { error: { code: creditGate.code, message: creditGate.message } },
+      { status: 402 },
     );
   }
 

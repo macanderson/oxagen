@@ -14,6 +14,7 @@ import { and, desc, eq, max, sql } from "drizzle-orm";
 import { withSystemDb, schema } from "@oxagen/database";
 import { resolveOrg, assertOrgMember, getOrgRole, SECURITY_MANAGER_ROLES } from "@/lib/resolve-org";
 import { getSessionOrRedirect } from "@/lib/session";
+import { formatDate } from "@/lib/utils";
 import { ReviewRowActions } from "./_components/review-row-actions";
 
 interface MemberReviewRow {
@@ -73,15 +74,6 @@ const ROLE_VARIANT: Record<string, "default" | "muted" | "outline"> = {
   billing: "muted",
   member: "outline",
 };
-
-function formatDate(d: Date | null): string {
-  if (!d) return "—";
-  return d.toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
 
 export default async function AccessReviewsPage({
   params,

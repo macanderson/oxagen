@@ -1,9 +1,9 @@
-<!-- Generated: 2026-07-06 | Files scanned: 2,799 (ts/tsx, non-test) | Token estimate: ~800 -->
+<!-- Generated: 2026-07-06, corrections applied 2026-07-10 | Files scanned: 3,092 (ts/tsx, non-test) | Token estimate: ~800 -->
 
 # Architecture — Oxagen v2
 
 ## Project Type
-**Monorepo** (pnpm workspaces + Turborepo) — 7 apps, 30 packages, `bench/web` dashboard, 2 tooling packages. See `docs/VISION.md` for product north star: the metered, governed, graph-grounded control plane ("Stripe for agents").
+**Monorepo** (pnpm workspaces + Turborepo) — 7 apps, 31 packages (incl. `@oxagen/bench`), `bench/web` dashboard, 2 tooling packages. See `docs/VISION.md` for product north star: the metered, governed, graph-grounded control plane ("Stripe for agents").
 
 ## System Diagram
 
@@ -15,7 +15,7 @@
                               │       │         │            │
                     ┌─────────▼──┐ ┌──▼─────┐ ┌─▼─────────┐  │
                     │  apps/app  │ │apps/cli│ │ apps/mcp  │  │
-                    │ Next.js 15 │ │  Ink   │ │  xmcp     │  │
+                    │ Next.js 16 │ │  Ink   │ │  xmcp     │  │
                     │  (RSC+SA)  │ │  REPL  │ │ /mcp SSE  │  │
                     └─────┬──────┘ └───┬────┘ └──┬────────┘  │
                           │            │           │          │
@@ -25,7 +25,8 @@
                               │      apps/api        │
                               │   Hono on Node.js    │
                               │   api.oxagen.sh       │
-                              │  (238 route files,    │
+                              │  (271 route files —   │
+                              │   261 under routes/v1;│
                               │   /a2a JSON-RPC + SSE)│
                               └──┬────────────────────┘
                                  │
@@ -34,7 +35,8 @@
     ┌─────────▼──────┐  ┌────────▼──────┐  ┌───────▼────────┐
     │  PostgreSQL     │  │   Neo4j       │  │   Inngest      │
     │  (Neon/local)   │  │  Knowledge    │  │  Background    │
-    │  Drizzle ORM    │  │   Graph       │  │  Jobs (49 fns) │
+    │  Drizzle ORM    │  │   Graph       │  │ Jobs (~48 fns, │
+    │                 │  │               │  │  count drifts) │
     └─────────┬───────┘  └───────────────┘  └────────────────┘
               │
     ┌─────────▼──────────────────────────────────────┐
@@ -49,7 +51,7 @@
 | Service | URL | Stack | Role |
 |---------|-----|-------|------|
 | `apps/api` | api.oxagen.sh | Hono + Node.js | REST API, webhooks, LLM proxy, A2A JSON-RPC |
-| `apps/app` | app.oxagen.sh | Next.js 15 (App Router) | Web UI, Server Actions |
+| `apps/app` | app.oxagen.sh | Next.js 16 (App Router) | Web UI, Server Actions |
 | `apps/mcp` | mcp.oxagen.sh/mcp | xmcp (streamable HTTP) | MCP protocol surface |
 | `apps/cli` | npm: `oxagen` | Ink + Commander | Local agent REPL + fleet orchestration |
 | `apps/docs` | docs.oxagen.sh | Fumadocs (Next.js) | Documentation site |
@@ -60,25 +62,35 @@
 ## Data Flow — Chat / Agent Execution
 
 ```
-User → app/chat → SA: chatMessageSendRoute
-     → POST /v1/:org/:ws/chat/messages
-     → @oxagen/agent runtime
-     → SSE stream back to client
+User → apps/app chat UI → POST /api/v1/chat/stream
+     (Next.js Route Handler, apps/app/src/app/api/v1/chat/stream/route.ts)
+     → calls @oxagen/agent-engine / @oxagen/agent directly in-process
+       (via withTenantDb — no HTTP hop to apps/api)
+     → SSE stream consumed by use-tool-stream.ts
      → Inngest: chat.persist-stream
      → Engram memory consolidation
      → Neo4j graph sync
 ```
 
+The app UI's primary chat path is this in-process Next.js Route Handler, not a
+round trip through apps/api's Hono `/v1/:org/:ws/chat/messages` route — that
+route remains for CLI/MCP/API-key callers (see CLAUDE.md "Main chat path").
+
 ## Data Flow — Background Agent / Fleet
 
 ```
-CLI/MCP/A2A → agent.subagent.dispatch
+CLI/MCP/A2A → dispatch_subagent (file: agent.subagent.dispatch.ts)
             → Inngest: agent.execute-subagent
             → @oxagen/agent-engine pipeline (planner/fork/oracle/evaluate)
             → Tool calls (sandbox/browser/code)
             → agent.sync-execution-to-graph
-            → Neo4j lineage (agent.trace.get / `oxagen trace`)
+            → Neo4j lineage (get_execution_trace, file: agent.trace.get.ts /
+              `oxagen trace`)
 ```
+
+Post-ADR-025, capability *names* are verb-first snake_case
+(`dispatch_subagent`, `get_execution_trace`); the dotted forms above are
+still-current contract/route **file stems**, not registered names.
 
 ## Data Flow — A2A (Agent2Agent) Interop
 
@@ -103,13 +115,13 @@ Hierarchy: **Organization → Workspace → User**
 
 | Package | Role |
 |---------|------|
-| `@oxagen/oxagen` | Contracts (Zod, 319 files), CapabilityContext type, capability kernel |
-| `@oxagen/handlers` | Shared business logic handlers (245 files) |
-| `@oxagen/database` | Drizzle schema + client (37 files, 46 migrations) |
+| `@oxagen/oxagen` | Contracts (Zod; 344 non-test contract files, 311 registered capabilities), CapabilityContext type, capability kernel |
+| `@oxagen/handlers` | Shared business logic handlers (270 non-test files) |
+| `@oxagen/database` | Drizzle schema + client (23 schema files, 55 migrations) |
 | `@oxagen/engram` | Memory system: embed/store/retrieve/sync (63 files) |
-| `@oxagen/agent` | Agent runtime, dispatch, memory adapters (111 files) |
-| `@oxagen/agent-engine` | Pipeline, planner, fork, oracle, evaluator, fleet (39 files) |
+| `@oxagen/agent` | Agent runtime, dispatch, memory adapters (120 files) |
+| `@oxagen/agent-engine` | Pipeline, planner, fork, oracle, evaluator, fleet (43 files) |
 | `@oxagen/iam` | AuthZ, audit, access requests |
 | `@oxagen/auth` | Better Auth, session/API-key resolution |
 | `@oxagen/billing` | Stripe, credits, usage metering |
-| `@oxagen/inngest-functions` | All async background jobs (49 functions) |
+| `@oxagen/inngest-functions` | All async background jobs (~48 functions, count drifts) |

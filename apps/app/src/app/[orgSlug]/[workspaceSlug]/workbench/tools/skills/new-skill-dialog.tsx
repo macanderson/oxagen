@@ -193,12 +193,12 @@ export function NewSkillDialog({
 
   const handleNameChange = (value: string) => {
     setName(value);
-    if (!slugEdited) setSlug(slugify(value));
+    if (!slugEdited) setSlug(slugify(value, 64));
   };
 
   const handleSlugChange = (value: string) => {
     setSlugEdited(true);
-    setSlug(slugify(value));
+    setSlug(slugify(value, 64));
   };
 
   // ── Step 1: describe → draft ────────────────────────────────────────────────

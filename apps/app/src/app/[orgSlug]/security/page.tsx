@@ -16,6 +16,7 @@ import { runInTenantScope } from "@oxagen/tenancy";
 import { resolveOrg } from "@/lib/resolve-org";
 import { getEnterpriseAccess } from "@/lib/enterprise";
 import { EnterpriseUpsell } from "@/components/security/enterprise-upsell";
+import { formatDateTime } from "@/lib/utils";
 import { org } from "@/lib/routes";
 import Link from "next/link";
 import {
@@ -122,16 +123,6 @@ async function loadPosture(orgId: string): Promise<Posture> {
   } catch {
     return EMPTY_POSTURE;
   }
-}
-
-function formatDateTime(d: Date): string {
-  return d.toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
 }
 
 // ---------------------------------------------------------------------------

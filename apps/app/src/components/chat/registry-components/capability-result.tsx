@@ -1,7 +1,7 @@
 "use client";
 import * as React from "react";
 import { ExternalLink, ArrowUpRight, Check, Minus } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, truncate } from "@/lib/utils";
 import { safeHref } from "@/lib/safe-url";
 import { Badge } from "@/components/ui/badge";
 import { TruncatedText } from "@/components/ui/truncated-text";
@@ -38,7 +38,6 @@ export interface CapabilityResultProps {
 }
 
 const MAX_ARRAY_ITEMS = 8;
-const MAX_STRING = 320;
 const MAX_DEPTH = 2;
 
 /** "graph.node.get" → "Graph node get"; "web.search" → "Web search". */
@@ -60,10 +59,6 @@ export function humanizeKey(key: string): string {
 
 export function isHttpUrl(value: string): boolean {
   return /^https?:\/\//i.test(value);
-}
-
-function truncate(value: string, max = MAX_STRING): string {
-  return value.length > max ? `${value.slice(0, max)}…` : value;
 }
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {

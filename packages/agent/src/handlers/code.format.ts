@@ -94,6 +94,10 @@ export async function codeFormatHandler(
     );
   }
 
+  // getSandbox() enforces DEFAULT_POLICY at the dispatch seam. This request's
+  // envelope is fixed and provably within it (python is allowed, 30 s ≤ 30 s,
+  // 256 MB ≤ 512 MB, network deny), so applyPolicy is a guaranteed no-op here —
+  // it can never throw SandboxPolicyError, so no policy-error mapping is needed.
   const sandbox = getSandbox();
   const result = await sandbox.run({
     language: "python",

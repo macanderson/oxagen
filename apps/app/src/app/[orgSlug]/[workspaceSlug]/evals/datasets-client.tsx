@@ -11,6 +11,7 @@
 
 import { FlaskConical } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { formatDate } from "@/lib/utils";
 import type { EvalDatasetListOutput } from "@oxagen/oxagen/contracts/eval.dataset.list";
 
 type Dataset = EvalDatasetListOutput["datasets"][number];
@@ -23,18 +24,6 @@ const SOURCE_LABEL: Record<Dataset["source"], string> = {
   manual: "Manual",
   traces: "From traces",
 };
-
-function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleDateString(undefined, {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
-  } catch {
-    return iso;
-  }
-}
 
 export function DatasetsClient({ datasets }: DatasetsClientProps) {
   if (datasets.length === 0) {

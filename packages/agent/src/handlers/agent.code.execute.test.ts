@@ -21,6 +21,14 @@ const mockDriver: SandboxDriver = {
 vi.mock("@oxagen/sandbox", () => ({
   isSandboxAvailable: vi.fn(() => true),
   getSandbox: vi.fn((): SandboxDriver => mockDriver),
+  // The handler imports DEFAULT_POLICY to build a template-derived effective
+  // policy; mirror the real conservative defaults here.
+  DEFAULT_POLICY: {
+    allowedLanguages: ["node", "python", "shell"],
+    maxTimeoutMs: 30_000,
+    maxMemoryMb: 512,
+    allowNetwork: false,
+  },
 }));
 
 const { mockInsertEvents } = vi.hoisted(() => ({
@@ -375,8 +383,17 @@ describe("agent.code.execute handler — sandbox template", () => {
       CTX,
     );
 
-    // The template's provider selects the driver per run.
-    expect(vi.mocked(getSandbox)).toHaveBeenCalledWith("docker");
+    // The template's provider selects the driver per run, AND its trusted,
+    // contract-bounded resources are threaded in as the effective policy ceiling
+    // so the 4 GB / 120 s / network-allow run is NOT clamped to DEFAULT_POLICY.
+    expect(vi.mocked(getSandbox)).toHaveBeenCalledWith(
+      "docker",
+      expect.objectContaining({
+        maxMemoryMb: 4096,
+        maxTimeoutMs: 120_000,
+        allowNetwork: true,
+      }),
+    );
     expect(mockRun).toHaveBeenCalledWith(
       expect.objectContaining({
         imageRef: "ghcr.io/acme/swe-bench@sha256:abc",
