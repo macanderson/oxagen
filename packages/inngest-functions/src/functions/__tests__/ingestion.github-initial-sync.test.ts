@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // ── Hoisted mocks ─────────────────────────────────────────────────────────────
 const mocks = vi.hoisted(() => ({
@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   fetchMock: vi.fn(),
   loggerInfo: vi.fn(),
   loggerDebug: vi.fn(),
+  loggerWarn: vi.fn(),
 }));
 
 type HandlerCtx = {
@@ -64,7 +65,12 @@ vi.mock("@oxagen/crypto", () => ({
 }));
 
 vi.mock("../../logger", () => ({
-  logger: { info: mocks.loggerInfo, debug: mocks.loggerDebug, error: vi.fn(), warn: vi.fn() },
+  logger: {
+    info: mocks.loggerInfo,
+    debug: mocks.loggerDebug,
+    error: vi.fn(),
+    warn: mocks.loggerWarn,
+  },
 }));
 
 // Capture global.fetch before module import.
@@ -153,6 +159,29 @@ function routedFetch(treeOverride?: unknown) {
   };
 }
 
+/** Generate n synthetic commit records with unique SHAs (prefix-i). */
+function genCommits(n: number, prefix: string): Array<Record<string, unknown>> {
+  return Array.from({ length: n }, (_, i) => ({
+    sha: `${prefix}-${i}`,
+    html_url: `https://github.com/acme/api/commit/${prefix}-${i}`,
+    commit: { message: `msg ${prefix}-${i}`, author: { name: "a", email: "a@x.com", date: "2026-01-01" } },
+  }));
+}
+
+/**
+ * Fetch mock that serves the commits list endpoint page-by-page from `pages`
+ * (1-indexed; missing pages return []) and everything else from routedFetch.
+ */
+function pagedCommitsFetch(pages: Record<number, unknown[]>) {
+  return (url: string) => {
+    if (url.includes("/commits")) {
+      const page = Number(new URL(url).searchParams.get("page") ?? "1");
+      return ok(pages[page] ?? []);
+    }
+    return routedFetch()(url);
+  };
+}
+
 function setupDefaultMocks(): void {
   mocks.resolveIngestionCryptoAdapterForKeyId.mockReturnValue({ keyId: "key-1", adapter: {} });
   mocks.decrypt.mockResolvedValue(Buffer.from("ghp_test_token"));
@@ -194,6 +223,10 @@ describe("ingestion.github-initial-sync Inngest function", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     setupDefaultMocks();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("registers a createFunction with correct id and event trigger", () => {
@@ -388,5 +421,141 @@ describe("ingestion.github-initial-sync Inngest function", () => {
       return Array.isArray(payload) && payload[0]?.name === "ingestion/github.parse-file";
     });
     expect(parseFileBatches).toHaveLength(2); // 75 files / 50 = 2 batches
+  });
+
+  // ── Commit-history backfill: syncDepthDays window, pagination, caps ─────────
+
+  /** All commit-list API calls (GET /repos/{o}/{r}/commits?...) made so far. */
+  function commitListCalls(): string[] {
+    return mocks.fetchMock.mock.calls
+      .map((c) => String(c[0]))
+      .filter((url) => url.includes("/commits?"));
+  }
+
+  it("computes `since` from syncDepthDays and passes it to the commits list API", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-10T12:00:00.000Z"));
+
+    const step = makeStep();
+    await capturedHandler!({ event: { data: { ...BASE_EVENT, syncDepthDays: 30 } }, step });
+
+    const expectedSince = new Date(
+      Date.parse("2026-07-10T12:00:00.000Z") - 30 * 24 * 60 * 60 * 1000,
+    ).toISOString();
+    const calls = commitListCalls();
+    expect(calls).toHaveLength(1); // fixture returns 1 commit → short page → no page 2
+    expect(calls[0]).toContain(`since=${encodeURIComponent(expectedSince)}`);
+    expect(calls[0]).toContain("per_page=100");
+    expect(calls[0]).toContain("page=1");
+    expect(calls[0]).toContain("sha=trunk");
+  });
+
+  it("defaults syncDepthDays to 90 days when absent or invalid", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-10T12:00:00.000Z"));
+    const expectedSince = encodeURIComponent(
+      new Date(Date.parse("2026-07-10T12:00:00.000Z") - 90 * 24 * 60 * 60 * 1000).toISOString(),
+    );
+
+    // Absent → 90-day window.
+    const eventWithoutDepth: Record<string, unknown> = { ...BASE_EVENT };
+    delete eventWithoutDepth["syncDepthDays"];
+    await capturedHandler!({ event: { data: eventWithoutDepth }, step: makeStep() });
+    expect(commitListCalls()[0]).toContain(`since=${expectedSince}`);
+
+    // Invalid (zero) → 90-day window too.
+    mocks.fetchMock.mockClear();
+    await capturedHandler!({
+      event: { data: { ...BASE_EVENT, syncDepthDays: 0 } },
+      step: makeStep(),
+    });
+    expect(commitListCalls()[0]).toContain(`since=${expectedSince}`);
+  });
+
+  it("paginates the commit list past the first page, accumulating all pages", async () => {
+    // Page 1 is full (100) → fetch page 2; page 2 is short (40) → stop.
+    mocks.fetchMock.mockImplementation(
+      pagedCommitsFetch({ 1: genCommits(100, "p1"), 2: genCommits(40, "p2") }),
+    );
+
+    const step = makeStep();
+    const sendEvent = step.sendEvent as ReturnType<typeof vi.fn>;
+    await capturedHandler!({ event: { data: BASE_EVENT }, step });
+
+    const commitEntities = entitiesOfType(sendEvent, "commit");
+    expect(commitEntities).toHaveLength(140);
+    // Every commit still flows through entity.received with the branch injected.
+    expect((commitEntities[0]!.data["payload"] as Record<string, unknown>)["git_branch"]).toBe(
+      "trunk",
+    );
+    expect(commitListCalls()).toHaveLength(2);
+    // No runaway: the short page ended pagination, no warning logged.
+    expect(mocks.loggerWarn).not.toHaveBeenCalled();
+  });
+
+  it("caps the commit backfill at MAX_COMMITS_BACKFILL (500) and logs a warning", async () => {
+    // Six full pages available — only five (500 commits) may be fetched.
+    const pages: Record<number, unknown[]> = {
+      1: genCommits(100, "p1"),
+      2: genCommits(100, "p2"),
+      3: genCommits(100, "p3"),
+      4: genCommits(100, "p4"),
+      5: genCommits(100, "p5"),
+      6: genCommits(100, "p6"),
+    };
+    mocks.fetchMock.mockImplementation(pagedCommitsFetch(pages));
+
+    const step = makeStep();
+    const sendEvent = step.sendEvent as ReturnType<typeof vi.fn>;
+    await capturedHandler!({ event: { data: BASE_EVENT }, step });
+
+    expect(entitiesOfType(sendEvent, "commit")).toHaveLength(500);
+    expect(commitListCalls()).toHaveLength(5); // never asks for page 6
+    expect(mocks.loggerWarn).toHaveBeenCalledWith(
+      expect.objectContaining({ cap: 500, syncDepthDays: 90, owner: "acme", repo: "api" }),
+      expect.stringContaining("commit backfill capped"),
+    );
+  });
+
+  it("fans out one github.commit-files event per backfilled commit (base fixture)", async () => {
+    const step = makeStep();
+    const sendEvent = step.sendEvent as ReturnType<typeof vi.fn>;
+    await capturedHandler!({ event: { data: BASE_EVENT }, step });
+
+    const commitFileEvents = allEventsFrom(sendEvent).filter(
+      (e) => e.name === "ingestion/github.commit-files",
+    );
+    expect(commitFileEvents).toHaveLength(1);
+    expect(commitFileEvents[0]!.data).toMatchObject({
+      connectionId: "conn-gh-1",
+      orgId: "org-gh-1",
+      workspaceId: "ws-gh-1",
+      owner: "acme",
+      repo: "api",
+      sha: "deadbeef",
+    });
+  });
+
+  it("caps the commit-files fan-out at MAX_COMMIT_FILE_SYNC (100) and logs truncation", async () => {
+    // 140 commits backfilled → only the 100 most recent get file-level detail.
+    mocks.fetchMock.mockImplementation(
+      pagedCommitsFetch({ 1: genCommits(100, "p1"), 2: genCommits(40, "p2") }),
+    );
+
+    const step = makeStep();
+    const sendEvent = step.sendEvent as ReturnType<typeof vi.fn>;
+    await capturedHandler!({ event: { data: BASE_EVENT }, step });
+
+    const commitFileEvents = allEventsFrom(sendEvent).filter(
+      (e) => e.name === "ingestion/github.commit-files",
+    );
+    expect(commitFileEvents).toHaveLength(100);
+    // GitHub lists newest first — the fan-out covers the head of the list.
+    expect(commitFileEvents[0]!.data["sha"]).toBe("p1-0");
+    expect(commitFileEvents[99]!.data["sha"]).toBe("p1-99");
+    expect(mocks.loggerInfo).toHaveBeenCalledWith(
+      expect.objectContaining({ total: 140, cap: 100 }),
+      expect.stringContaining("commit-file fan-out capped"),
+    );
   });
 });

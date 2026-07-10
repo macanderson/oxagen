@@ -3,6 +3,7 @@ import { graphNodeList } from "@oxagen/oxagen/contracts/graph.node.list";
 import { scopedSession } from "@oxagen/ontology/tenant";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { logger } from "./logger";
+import { safeParseProperties } from "./lib/graph-properties";
 
 interface ListedNode {
   id: string;
@@ -102,19 +103,21 @@ export const graphNodeListHandler: CapabilityHandler<typeof graphNodeList> = asy
       total = toNumber(countResult.records[0]?.get("total"));
 
       for (const record of pageResult.records) {
-        const rawProperties = record.get("properties") as string | null;
+        const id = record.get("id") as string;
+        const rawProperties = record.get("properties") as unknown;
         const label = record.get("label") as string;
         const sourceId = record.get("sourceId") as string | null;
         const createdAt = record.get("createdAt") as string | null;
 
         nodes.push({
-          id: record.get("id") as string,
+          id,
           // Surface both the base KnowledgeNode label and the domain label,
           // matching the documented shape (e.g. ["Issue", "KnowledgeNode"]).
           labels: ["KnowledgeNode", label],
-          properties: rawProperties
-            ? (JSON.parse(rawProperties) as Record<string, unknown>)
-            : {},
+          // safeParseProperties never throws — a single node with a corrupt
+          // properties blob must not 500 the whole listing (it previously
+          // blanked the entire graph explorer). Absent/unreadable → {}.
+          properties: safeParseProperties(rawProperties, { nodeId: id }),
           displayName: record.get("displayName") as string,
           ...(sourceId != null ? { sourceId } : {}),
           ...(createdAt != null ? { createdAt: String(createdAt) } : {}),
