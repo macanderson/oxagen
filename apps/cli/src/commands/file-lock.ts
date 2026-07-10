@@ -2,12 +2,14 @@
  * `oxagen file-lock` — CLI parity surface for `agent.file.lock.{acquire,
  * release,list}` (docs/specs/agent-file-locking/plan.md §11(d), OXA-2074).
  *
- * The SAME atomic, Neo4j-backed, cross-process lock (HOLDS_LOCK edge via
- * @oxagen/ontology's acquireFileLock) that write_file/edit_file acquire
+ * The SAME atomic, Postgres-lease-backed, cross-process lock
+ * (`packages/agent/src/file-lock/lease.ts`) that write_file/edit_file acquire
  * automatically for every coding-agent turn — exposed here so an operator can
  * hold, list, or force-release a lock directly from the shell, without
- * running a turn. Every subcommand goes through the governed (metered,
- * IAM-gated) /v1 API via lib/api.ts, never the graph directly.
+ * running a turn. The lease is projected asynchronously to the Neo4j lineage
+ * graph for lineage queries (ADR-021 §5), but the lock itself is Postgres,
+ * not Neo4j. Every subcommand goes through the governed (metered, IAM-gated)
+ * /v1 API via lib/api.ts, never the database directly.
  *
  *   oxagen file-lock list [--path p] [--owner o] [--repo r] [--json]
  *   oxagen file-lock acquire <path> [--owner o] [--repo r] [--action read|write]

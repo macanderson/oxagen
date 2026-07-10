@@ -244,6 +244,24 @@
       }
     },
     {
+      "name": "summarize_agent_def",
+      "file": "agent.definition.summarize.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
+      }
+    },
+    {
       "name": "update_agent_def",
       "file": "agent.definition.update.ts",
       "domain": "agent",

@@ -14,7 +14,6 @@ export * from "./components/global-error";
 export * from "./components/input";
 export * from "./components/key-value-list";
 export * from "./components/label";
-export * from "./components/marketing-hero";
 export * from "./components/menu";
 export * from "./components/motion-provider";
 export * from "./components/not-found";

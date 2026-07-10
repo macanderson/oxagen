@@ -28,6 +28,7 @@ export async function compileAgentContext(
       VectorRetrievalEngine,
       GraphRetrievalEngine,
       LexicalRetrievalEngine,
+      emitCompileTelemetry,
     } = await import("@oxagen/engram");
     const { embedText } = await import("@oxagen/ai");
     const { scopedSession, oversampledLimit } = await import("@oxagen/ontology");
@@ -124,6 +125,14 @@ export async function compileAgentContext(
       candidatesPerEngine: 20,
       diversityConstraint: 3,
     });
+
+    // Emit compile telemetry (latency breakdown, cache-hit rate, per-engine
+    // candidate contribution, budget utilisation) to ClickHouse for the Phase D
+    // fusion-weight dashboards. Fire-and-forget: emitCompileTelemetry swallows
+    // sink errors internally so it never throws, and it is not awaited so the
+    // ClickHouse round-trip stays off the compile path. No-ops until a surface
+    // registers a sink via bootstrapEngramRuntime().
+    void emitCompileTelemetry(taskFrame, window);
 
     return window;
   } catch {
