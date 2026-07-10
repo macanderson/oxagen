@@ -3,6 +3,7 @@ import * as React from "react";
 import { useRender } from "@base-ui/react/use-render";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "../lib/utils";
+import { Spinner } from "./spinner";
 import { Tooltip, TooltipTrigger, TooltipPopup } from "./tooltip";
 
 /*
@@ -83,6 +84,12 @@ export interface ButtonProps
    * `<button>` emits no pointer events.
    */
   disabledTooltip?: React.ReactNode;
+  /**
+   * Pending state: swaps the leading icon for a spinner, disables the button
+   * and sets `aria-busy`, while keeping the label visible so the button never
+   * changes width. Use instead of hand-rolling `<Loader2 className="animate-spin" />`.
+   */
+  loading?: boolean;
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
@@ -98,21 +105,27 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       type,
       disabled,
       disabledTooltip,
+      loading,
       ...props
     },
     ref,
   ) => {
+    // While loading the spinner takes the leading-icon slot (replacing any
+    // startIcon) so the label keeps its position and the button keeps its width.
+    const lead = loading ? <Spinner size="sm" label="Loading" /> : startIcon;
+    const isDisabled = disabled || loading;
     const element = useRender({
       render: render ?? <button type={type ?? "button"} />,
       ref,
       props: {
         className: cn(buttonVariants({ variant, size }), className),
-        disabled,
+        disabled: isDisabled,
+        "aria-busy": loading || undefined,
         ...props,
         children:
-          startIcon || endIcon ? (
+          lead || endIcon ? (
             <>
-              {startIcon}
+              {lead}
               {children}
               {endIcon}
             </>
