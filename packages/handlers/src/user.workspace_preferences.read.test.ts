@@ -9,7 +9,9 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   return {
     ...real,
     withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
-      fn({ query: { workspaceUserPreferences: { findFirst: mocks.findFirst } } }),
+      fn({
+        query: { workspaceUserPreferences: { findFirst: mocks.findFirst } },
+      }),
   };
 });
 
@@ -30,7 +32,10 @@ describe("userWorkspacePreferencesReadHandler", () => {
   });
 
   it("throws when there is no workspace context", async () => {
-    const noWs: CapabilityContext = { ...CTX, workspaceId: null as unknown as string };
+    const noWs: CapabilityContext = {
+      ...CTX,
+      workspaceId: null as unknown as string,
+    };
     await expect(userWorkspacePreferencesReadHandler({}, noWs)).rejects.toThrow(
       /workspace context/,
     );
@@ -43,6 +48,7 @@ describe("userWorkspacePreferencesReadHandler", () => {
       defaultRepoConnectionId: null,
       defaultRepoSlug: null,
       defaultEnvironmentId: null,
+      defaultAgentId: null,
       repoDefaultPrompted: false,
     });
   });
@@ -52,6 +58,7 @@ describe("userWorkspacePreferencesReadHandler", () => {
       defaultRepoConnectionId: "con_abc",
       defaultRepoSlug: "acme/api",
       defaultEnvironmentId: "env_prod",
+      defaultAgentId: "agt_qa",
       repoDefaultPromptedAt: new Date("2026-01-01T00:00:00Z"),
     });
     const out = await userWorkspacePreferencesReadHandler({}, CTX);
@@ -59,8 +66,21 @@ describe("userWorkspacePreferencesReadHandler", () => {
       defaultRepoConnectionId: "con_abc",
       defaultRepoSlug: "acme/api",
       defaultEnvironmentId: "env_prod",
+      defaultAgentId: "agt_qa",
       repoDefaultPrompted: true,
     });
+  });
+
+  it("returns a null default agent when none is stored", async () => {
+    mocks.findFirst.mockResolvedValue({
+      defaultRepoConnectionId: "con_abc",
+      defaultRepoSlug: "acme/api",
+      defaultEnvironmentId: null,
+      defaultAgentId: null,
+      repoDefaultPromptedAt: null,
+    });
+    const out = await userWorkspacePreferencesReadHandler({}, CTX);
+    expect(out.defaultAgentId).toBeNull();
   });
 
   it("reports repoDefaultPrompted=false when the timestamp is null", async () => {
@@ -68,6 +88,7 @@ describe("userWorkspacePreferencesReadHandler", () => {
       defaultRepoConnectionId: null,
       defaultRepoSlug: null,
       defaultEnvironmentId: null,
+      defaultAgentId: null,
       repoDefaultPromptedAt: null,
     });
     const out = await userWorkspacePreferencesReadHandler({}, CTX);

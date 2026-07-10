@@ -27,7 +27,9 @@ import { TEST_CTX as CTX } from "./test-utils/fixtures";
 
 /** The captured upsert `set` payload (2nd arg to onConflictDoUpdate). */
 function capturedSet(): Record<string, unknown> {
-  const arg = mocks.onConflict.mock.calls[0]?.[0] as { set: Record<string, unknown> };
+  const arg = mocks.onConflict.mock.calls[0]?.[0] as {
+    set: Record<string, unknown>;
+  };
   return arg.set;
 }
 /** The captured insert `values` payload. */
@@ -39,6 +41,7 @@ const STORED = {
   defaultRepoConnectionId: "con_abc",
   defaultRepoSlug: "acme/api",
   defaultEnvironmentId: "env_prod",
+  defaultAgentId: "agt_qa",
   repoDefaultPromptedAt: new Date("2026-01-01T00:00:00Z"),
 };
 
@@ -48,21 +51,32 @@ describe("userWorkspacePreferencesWriteHandler", () => {
     mocks.onConflict.mockClear();
     mocks.findFirst.mockReset();
     mocks.onConflict.mockResolvedValue([]);
-    mocks.insertValues.mockReturnValue({ onConflictDoUpdate: mocks.onConflict });
+    mocks.insertValues.mockReturnValue({
+      onConflictDoUpdate: mocks.onConflict,
+    });
     mocks.findFirst.mockResolvedValue(STORED);
   });
 
   it("throws when there is no authenticated user", async () => {
     const anon: CapabilityContext = { ...CTX, userId: null };
     await expect(
-      userWorkspacePreferencesWriteHandler({ defaultRepoConnectionId: "con_x" }, anon),
+      userWorkspacePreferencesWriteHandler(
+        { defaultRepoConnectionId: "con_x" },
+        anon,
+      ),
     ).rejects.toThrow(/authenticated user/);
   });
 
   it("throws when there is no workspace context", async () => {
-    const noWs: CapabilityContext = { ...CTX, workspaceId: null as unknown as string };
+    const noWs: CapabilityContext = {
+      ...CTX,
+      workspaceId: null as unknown as string,
+    };
     await expect(
-      userWorkspacePreferencesWriteHandler({ defaultRepoConnectionId: "con_x" }, noWs),
+      userWorkspacePreferencesWriteHandler(
+        { defaultRepoConnectionId: "con_x" },
+        noWs,
+      ),
     ).rejects.toThrow(/workspace context/);
   });
 
@@ -80,10 +94,42 @@ describe("userWorkspacePreferencesWriteHandler", () => {
   });
 
   it("clears a default when explicitly passed null (vs omitting)", async () => {
-    await userWorkspacePreferencesWriteHandler({ defaultRepoConnectionId: null }, CTX);
+    await userWorkspacePreferencesWriteHandler(
+      { defaultRepoConnectionId: null },
+      CTX,
+    );
     const set = capturedSet();
     expect("defaultRepoConnectionId" in set).toBe(true);
     expect(set.defaultRepoConnectionId).toBeNull();
+  });
+
+  it("sets the default agent in the upsert (and insert path)", async () => {
+    await userWorkspacePreferencesWriteHandler(
+      { defaultAgentId: "agt_new" },
+      CTX,
+    );
+    const set = capturedSet();
+    expect(set.defaultAgentId).toBe("agt_new");
+    expect(capturedInsert().defaultAgentId).toBe("agt_new");
+    // Other defaults are untouched by an agent-only write.
+    expect("defaultRepoConnectionId" in set).toBe(false);
+    expect("defaultEnvironmentId" in set).toBe(false);
+  });
+
+  it("clears the default agent when explicitly passed null (vs omitting)", async () => {
+    await userWorkspacePreferencesWriteHandler({ defaultAgentId: null }, CTX);
+    const set = capturedSet();
+    expect("defaultAgentId" in set).toBe(true);
+    expect(set.defaultAgentId).toBeNull();
+  });
+
+  it("leaves the default agent untouched when omitted", async () => {
+    await userWorkspacePreferencesWriteHandler(
+      { defaultEnvironmentId: "env_x" },
+      CTX,
+    );
+    expect("defaultAgentId" in capturedSet()).toBe(false);
+    expect("defaultAgentId" in capturedInsert()).toBe(false);
   });
 
   it("stamps repoDefaultPromptedAt when markRepoPrompted=true", async () => {
@@ -95,12 +141,18 @@ describe("userWorkspacePreferencesWriteHandler", () => {
   });
 
   it("does NOT stamp repoDefaultPromptedAt when markRepoPrompted is absent", async () => {
-    await userWorkspacePreferencesWriteHandler({ defaultEnvironmentId: "env_x" }, CTX);
+    await userWorkspacePreferencesWriteHandler(
+      { defaultEnvironmentId: "env_x" },
+      CTX,
+    );
     expect("repoDefaultPromptedAt" in capturedSet()).toBe(false);
   });
 
   it("carries orgId, workspaceId and userId into the insert values", async () => {
-    await userWorkspacePreferencesWriteHandler({ defaultRepoConnectionId: "con_x" }, CTX);
+    await userWorkspacePreferencesWriteHandler(
+      { defaultRepoConnectionId: "con_x" },
+      CTX,
+    );
     const ins = capturedInsert();
     expect(ins.orgId).toBe(CTX.orgId);
     expect(ins.workspaceId).toBe(CTX.workspaceId);
@@ -116,6 +168,7 @@ describe("userWorkspacePreferencesWriteHandler", () => {
       defaultRepoConnectionId: "con_abc",
       defaultRepoSlug: "acme/api",
       defaultEnvironmentId: "env_prod",
+      defaultAgentId: "agt_qa",
       repoDefaultPrompted: true,
     });
   });
@@ -123,7 +176,10 @@ describe("userWorkspacePreferencesWriteHandler", () => {
   it("throws if the re-read finds no row after upsert", async () => {
     mocks.findFirst.mockResolvedValue(undefined);
     await expect(
-      userWorkspacePreferencesWriteHandler({ defaultRepoConnectionId: "con_x" }, CTX),
+      userWorkspacePreferencesWriteHandler(
+        { defaultRepoConnectionId: "con_x" },
+        CTX,
+      ),
     ).rejects.toThrow(/not found on re-read/);
   });
 });
