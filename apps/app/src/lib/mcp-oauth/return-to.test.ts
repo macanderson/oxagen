@@ -20,12 +20,12 @@ import { resolveReturnTo, defaultMcpReturnTo } from "./return-to";
 
 const ORG = "acme";
 const WS = "main";
-const FALLBACK = "/acme/main/studio/tools/mcp";
+const FALLBACK = "/acme/main/workbench/tools/mcp";
 
 describe("defaultMcpReturnTo", () => {
-  it("points at Studio → Agent Tools → MCP Servers for the given scope", () => {
+  it("points at Workbench → Agent Tools → MCP Servers for the given scope", () => {
     expect(defaultMcpReturnTo(ORG, WS)).toBe(FALLBACK);
-    expect(defaultMcpReturnTo("other", "ws2")).toBe("/other/ws2/studio/tools/mcp");
+    expect(defaultMcpReturnTo("other", "ws2")).toBe("/other/ws2/workbench/tools/mcp");
   });
 });
 
@@ -52,8 +52,8 @@ describe("resolveReturnTo — valid same-org paths pass through", () => {
 
   it("preserves a query string on a same-org path", () => {
     expect(
-      resolveReturnTo("/acme/main/studio/tools/mcp?tab=installed&x=1", ORG, WS),
-    ).toBe("/acme/main/studio/tools/mcp?tab=installed&x=1");
+      resolveReturnTo("/acme/main/workbench/tools/mcp?tab=installed&x=1", ORG, WS),
+    ).toBe("/acme/main/workbench/tools/mcp?tab=installed&x=1");
   });
 
   it("allows the bare /{orgSlug} path exactly", () => {

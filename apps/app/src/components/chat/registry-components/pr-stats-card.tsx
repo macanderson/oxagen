@@ -180,7 +180,7 @@ function CommentEntry({ comment }: { comment: PrComment }): ReactElement {
             ) : null}
           </Badge>
         ) : (
-          <Badge variant="secondary">issue</Badge>
+          <Badge variant="outline">issue</Badge>
         )}
       </div>
       <p className="whitespace-pre-wrap break-words text-xs text-foreground">{comment.body}</p>

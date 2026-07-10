@@ -71,6 +71,14 @@ export const agentSandboxFilesList = registerCapability({
         path: z.string(),
         kind: z.enum(["file", "dir"]),
         sizeBytes: z.number().int().nonnegative(),
+        /**
+         * True when git (inside the sandbox) reports this path as ignored by the
+         * repo's `.gitignore` rules. Absent when the workspace is not a git repo.
+         * Powers the file tree's muted + lock treatment; the client derives
+         * "hidden" (dotfile) itself from the path, so only ignore-status — which
+         * needs git — is resolved server-side.
+         */
+        gitignored: z.boolean().optional(),
       }),
     ),
   }),

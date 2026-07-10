@@ -47,7 +47,11 @@ from pathlib import Path
 # Runs inside the bench venv (uv run --project bench/swe-bench), so harbor and
 # the editable oxagen_terminal_bench adapter are both importable.
 from harbor.environments.definition import environment_content_hash
-from oxagen_terminal_bench.oxagen_agent import _cached_rg_binary
+from oxagen_terminal_bench.oxagen_agent import (
+    _cached_fd_binary,
+    _cached_fzf_binary,
+    _cached_rg_binary,
+)
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parents[1]
@@ -167,15 +171,23 @@ def _stage_overlay_context(bundle: Path, bundle_sha: str, ctx: Path) -> None:
         shutil.copy2(wasm, oxagen_dir / wasm.name)
     (oxagen_dir / ".bundle.sha256").write_text(bundle_sha + "\n")
 
-    # rg is an optimization, never a blocker: rgbin/ may legitimately be empty.
-    rgbin_dir = ctx / "rgbin"
-    rgbin_dir.mkdir()
-    rg = _cached_rg_binary()
-    if rg is not None:
-        shutil.copy2(rg, rgbin_dir / "rg")
-        (rgbin_dir / "rg").chmod(0o755)
-    else:
-        print("    (static ripgrep unavailable on host; baking image without rg)")
+    # Fast-search tools (rg / fd / fzf) are an optimization, never a blocker:
+    # searchbin/ may legitimately be empty (or only partially filled) when a
+    # host can't provision one. The Dockerfile COPYs the whole dir into
+    # /usr/local/bin, so staging each present binary is all that is needed.
+    searchbin_dir = ctx / "searchbin"
+    searchbin_dir.mkdir()
+    for name, cached in (
+        ("rg", _cached_rg_binary()),
+        ("fd", _cached_fd_binary()),
+        ("fzf", _cached_fzf_binary()),
+    ):
+        if cached is not None:
+            dest = searchbin_dir / name
+            shutil.copy2(cached, dest)
+            dest.chmod(0o755)
+        else:
+            print(f"    (static {name} unavailable on host; baking image without {name})")
 
 
 def prewarm_task(

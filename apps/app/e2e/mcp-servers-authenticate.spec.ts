@@ -3,7 +3,7 @@
  *
  * E2E for the MCP server install → authenticate UX:
  *   1. Workspace Settings exposes an "MCP Servers" nav item (the
- *      discoverability path) that lands on Studio → Agent Tools → MCP Servers.
+ *      discoverability path) that lands on Workbench → Agent Tools → MCP Servers.
  *   2. The page renders the catalog search and the "Connect a custom MCP
  *      server" form.
  *   3. Connecting a custom server with auth kind OAuth succeeds and immediately
@@ -58,7 +58,7 @@ test.describe("MCP Servers — install → authenticate UX", () => {
     });
 
     await mcpNavItem.click();
-    await expect(page).toHaveURL(/\/studio\/tools\/mcp$/, { timeout: 20_000 });
+    await expect(page).toHaveURL(/\/workbench\/tools\/mcp$/, { timeout: 20_000 });
 
     // ── 2. Page surfaces: catalog search + custom connect form ──────────────
     await expect(page.getByTestId("mcp-catalog-search-input")).toBeVisible({

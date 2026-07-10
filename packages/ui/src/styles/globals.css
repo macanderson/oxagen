@@ -256,13 +256,13 @@
     --app-link-hover-fg: var(--foreground);
     --app-link-active-fg: var(--primary);
 
-    /* ── Headers. CARD header is a SUBTLE TINT — just a hint of separation from
-     *    the card surface (a touch of gray on the white card in light; one step
-     *    up from the near-black card in dark, re-declared in .dark) — with the
-     *    normal flipping ink (re-declared in .dark so it does not freeze to the
-     *    light value). TABLE header keeps the dramatic dark charcoal bar with
-     *    soft-white ink in both modes. ─────────────────────────────────────── */
-    --card-header-bg: var(--_stone-100);
+    /* ── Headers. CARD header is FLAT — it matches the card surface exactly (no
+     *    shaded band), with just the hairline `border-b` in card.tsx separating
+     *    it from the body. Re-declared in .dark / the dark media-query block so
+     *    it tracks --card there too rather than freezing to the light value.
+     *    TABLE header keeps the dramatic dark charcoal bar with soft-white ink
+     *    in both modes. ─────────────────────────────────────────────────────── */
+    --card-header-bg: var(--card);
     --card-header-fg: var(--foreground);
     --table-header-bg: var(--_header-dark);
     --table-header-fg: var(--_ink-white);
@@ -414,10 +414,10 @@
     --sidebar-border: oklch(0.42 0.006 75 / 0.4);
     --sidebar-ring: var(--ring);
 
-    /* Card header: just a hint above the card surface (stone-900) — subtle, not
-     * a bar. Its ink flips back to the soft white here. Table header keeps the
+    /* Card header: flat — matches the card surface exactly, no shaded band.
+     * Its ink flips back to the soft white here. Table header keeps the
      * elevated charcoal bar. */
-    --card-header-bg: var(--_stone-850);
+    --card-header-bg: var(--card);
     --card-header-fg: var(--foreground);
     --table-header-bg: var(--_stone-800);
 
@@ -529,9 +529,9 @@
       --sidebar-border: oklch(0.42 0.006 75 / 0.4);
       --sidebar-ring: var(--ring);
 
-      /* Card header: a hint above the card surface; ink flips to soft white.
-       * Table header keeps the elevated charcoal bar. */
-      --card-header-bg: var(--_stone-850);
+      /* Card header: flat — matches the card surface exactly, no shaded band.
+       * Ink flips to soft white. Table header keeps the elevated charcoal bar. */
+      --card-header-bg: var(--card);
       --card-header-fg: var(--foreground);
       --table-header-bg: var(--_stone-800);
 

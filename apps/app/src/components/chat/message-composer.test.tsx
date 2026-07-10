@@ -253,6 +253,14 @@ vi.mock("./extract-video-frames", () => ({
   extractVideoFrames: mockExtractVideoFrames,
 }));
 
+// MentionChip reads org/workspace slugs for hover hydration via useParams —
+// give it a stable router context. Spread the real module so sibling imports
+// (useRouter, usePathname, …) keep working (full-replacement mocks drop them).
+vi.mock("next/navigation", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  useParams: () => ({ orgSlug: "acme", workspaceSlug: "default" }),
+}));
+
 // ── helpers ────────────────────────────────────────────────────────────────────
 
 const DEFAULT_MODEL_CONFIG: ResolvedTierCatalog = {
@@ -2941,5 +2949,138 @@ describe("MessageComposer — agent selection gating", () => {
     await waitFor(() => expect(action).toHaveBeenCalled());
     const fd = action.mock.calls[0][0] as FormData;
     expect(fd.get("agentId")).toBe("agt_chat");
+  });
+});
+
+describe("MessageComposer — @-mentions", () => {
+  const FILE_ROW = {
+    type: "file",
+    slug: "apps/app/src/proxy.ts",
+    location: "apps/app/src/proxy.ts",
+    label: "proxy.ts",
+    description: "Source file",
+    properties: { path: "apps/app/src/proxy.ts" },
+  };
+
+  beforeEach(() => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ results: [FILE_ROW] }),
+      }),
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  async function renderMentionComposer(action = makeAction()) {
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={action}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        orgSlug="acme"
+        workspaceSlug="default"
+      />,
+    );
+    return { action, textarea: screen.getByRole("textbox") };
+  }
+
+  it("typing @ opens the type menu and a prefix filters it", async () => {
+    const { textarea } = await renderMentionComposer();
+    await userEvent.type(textarea, "@");
+    expect(screen.getByTestId("mention-menu")).toBeTruthy();
+    expect(screen.getByTestId("mention-type-repository")).toBeTruthy();
+    expect(screen.getByTestId("mention-type-node")).toBeTruthy();
+
+    await userEvent.type(textarea, "cap");
+    expect(screen.getByTestId("mention-type-capability")).toBeTruthy();
+    expect(screen.queryByTestId("mention-type-repository")).toBeNull();
+  });
+
+  it("does not trigger mid-word (email addresses stay plain text)", async () => {
+    const { textarea } = await renderMentionComposer();
+    await userEvent.type(textarea, "mac@ox");
+    expect(screen.queryByTestId("mention-menu")).toBeNull();
+  });
+
+  it("Escape dismisses the menu without inserting anything", async () => {
+    const { textarea } = await renderMentionComposer();
+    await userEvent.type(textarea, "@");
+    expect(screen.getByTestId("mention-menu")).toBeTruthy();
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByTestId("mention-menu")).toBeNull();
+    expect((textarea as HTMLTextAreaElement).value).toBe("@");
+  });
+
+  it("keyboard flow: type filter → Enter → scoped search → Enter inserts placeholder + chip, submit carries the token", async () => {
+    const { action, textarea } = await renderMentionComposer();
+    // "@fil" narrows the type list to Files; Enter enters search stage.
+    await userEvent.type(textarea, "@fil");
+    expect(screen.getByTestId("mention-type-file")).toBeTruthy();
+    await userEvent.keyboard("{Enter}");
+    // The typed filter is reset to a bare "@" and the scoped search runs
+    // (empty-query browse) — the mocked /api/reference-search returns one row.
+    await waitFor(() => expect(screen.getByTestId("mention-result-0")).toBeTruthy(), {
+      timeout: 3_000,
+    });
+    expect(vi.mocked(fetch).mock.calls[0]?.[0]).toBe("/api/reference-search");
+
+    await userEvent.keyboard("{Enter}");
+    expect(screen.queryByTestId("mention-menu")).toBeNull();
+    expect((textarea as HTMLTextAreaElement).value).toBe("@proxy.ts ");
+    expect(screen.getByTestId("mention-strip")).toBeTruthy();
+    expect(screen.getByTestId("mention-chip-file")).toBeTruthy();
+
+    // Submit: the placeholder is swapped for the full reference token and the
+    // pending strip clears.
+    await userEvent.type(textarea, "explain this");
+    await userEvent.click(screen.getByRole("button", { name: "Send message" }));
+    await waitFor(() => expect(action).toHaveBeenCalledTimes(1));
+    const fd = action.mock.calls[0][0] as FormData;
+    expect(fd.get("content")).toBe(
+      "[:file|:apps/app/src/proxy.ts|:apps/app/src/proxy.ts|:proxy.ts] explain this",
+    );
+    await waitFor(() => expect(screen.queryByTestId("mention-strip")).toBeNull());
+  });
+
+  it("arrow keys move the active row", async () => {
+    const { textarea } = await renderMentionComposer();
+    await userEvent.type(textarea, "@");
+    expect(
+      screen.getByTestId("mention-type-repository").getAttribute("aria-selected"),
+    ).toBe("true");
+    await userEvent.keyboard("{ArrowDown}");
+    expect(screen.getByTestId("mention-type-branch").getAttribute("aria-selected")).toBe(
+      "true",
+    );
+    await userEvent.keyboard("{ArrowUp}");
+    expect(
+      screen.getByTestId("mention-type-repository").getAttribute("aria-selected"),
+    ).toBe("true");
+  });
+
+  it("removing a chip detaches the reference — submit keeps the plain text", async () => {
+    const { action, textarea } = await renderMentionComposer();
+    await userEvent.type(textarea, "@fil");
+    await userEvent.keyboard("{Enter}");
+    await waitFor(() => expect(screen.getByTestId("mention-result-0")).toBeTruthy(), {
+      timeout: 3_000,
+    });
+    await userEvent.keyboard("{Enter}");
+    expect(screen.getByTestId("mention-chip-file")).toBeTruthy();
+
+    await userEvent.click(screen.getByRole("button", { name: "Remove mention proxy.ts" }));
+    expect(screen.queryByTestId("mention-strip")).toBeNull();
+
+    await userEvent.click(screen.getByRole("button", { name: "Send message" }));
+    await waitFor(() => expect(action).toHaveBeenCalledTimes(1));
+    const fd = action.mock.calls[0][0] as FormData;
+    expect(fd.get("content")).toBe("@proxy.ts ");
   });
 });

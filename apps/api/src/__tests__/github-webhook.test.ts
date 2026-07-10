@@ -69,6 +69,13 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   return { ...real, withSystemDb: mocks.withSystemDb };
 });
 
+// The github_installations registry upsert has its own dedicated suite
+// (github-installations.test.ts). Stub it to a no-op so these lifecycle tests
+// assert ONLY the connection-pause behavior, not the registry write.
+vi.mock("../routes/v1/github-installations", () => ({
+  upsertGithubInstallation: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock("@oxagen/inngest-functions", () => ({
   inngest: { send: mocks.inngestSend, createFunction: vi.fn() },
   functions: [],

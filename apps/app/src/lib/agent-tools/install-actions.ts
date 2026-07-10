@@ -22,7 +22,7 @@ import { resolveAgentToolsManager } from "./authz";
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function capabilitiesPath(ctx: Required<ScopeContext>): string {
-  return workspace.studio.tools.capabilities(ctx);
+  return workspace.workbench.tools.capabilities(ctx);
 }
 
 // ── installPlugin ─────────────────────────────────────────────────────────────
@@ -82,7 +82,9 @@ export async function installPlugin(
       const slug = parsed.data.catalogServerId ?? parsed.data.pluginId;
       if (!slug) return { ok: false, error: "skill slug is required" };
       await runInTenantScope({ orgId: org.id, workspaceId: ws.id }, () =>
-        invoke("install_skill", { slug, workspace_id: ws.id }, ctx, { surface: "agent" }),
+        // install_skill (skill.workspace.install) is exposed on ["api","mcp"]
+        // only — passing { surface: "agent" } throws surface_denied. Omit it.
+        invoke("install_skill", { slug, workspace_id: ws.id }, ctx),
       );
       const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };
       revalidatePath(capabilitiesPath(routeCtx));
@@ -106,7 +108,7 @@ export async function installPlugin(
     );
     const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };
     revalidatePath(capabilitiesPath(routeCtx));
-    revalidatePath(workspace.studio.tools.mcp(routeCtx));
+    revalidatePath(workspace.workbench.tools.mcp(routeCtx));
 
     const typed = out as { orgListingId: string; authKind?: "oauth" | "secret" | "none" };
     return { ok: true, orgListingId: typed.orgListingId, authKind: typed.authKind };
@@ -175,7 +177,9 @@ export async function installBulkPlugin(
       }
       try {
         await runInTenantScope({ orgId: org.id, workspaceId: ws.id }, () =>
-          invoke("install_skill", { slug, workspace_id: ws.id }, ctx, { surface: "agent" }),
+          // install_skill (skill.workspace.install) is exposed on ["api","mcp"]
+          // only — passing { surface: "agent" } throws surface_denied. Omit it.
+          invoke("install_skill", { slug, workspace_id: ws.id }, ctx),
         );
       } catch (e) {
         failures.push(e instanceof Error ? e.message : "skill install failed");

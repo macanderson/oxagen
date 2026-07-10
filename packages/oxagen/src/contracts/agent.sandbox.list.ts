@@ -55,6 +55,14 @@ export const agentSandboxList = registerCapability({
           .string()
           .nullable()
           .describe("Caller-supplied reuse key, or null for ephemeral sessions."),
+        label: z
+          .string()
+          .nullable()
+          .optional()
+          .describe(
+            "Human-friendly name given when the sandbox was warmed, or null when " +
+              "unnamed. Sourced from the session metadata.",
+          ),
         image: z.enum(["node", "python", "shell", "agent"]),
         status: z.enum(["running", "idle", "stopped", "gone"]),
         driver: z.string().describe("Sandbox driver identifier (e.g. modal)."),
@@ -67,6 +75,55 @@ export const agentSandboxList = registerCapability({
           .nullable()
           .describe("ISO soft-expiry timestamp, or null when the session has no expiry."),
         createdAt: z.string().describe("ISO timestamp the session was created."),
+        // ── Session lifecycle & work-recovery (spec: sandbox-session-lifecycle) ──
+        // All optional so existing callers/parsers are unaffected; the handler
+        // always populates them from the registry row.
+        recoveryStatus: z
+          .string()
+          .optional()
+          .describe(
+            "Work-safety recovery state: none | pending | recovering | recovered | failed.",
+          ),
+        recoveryBranch: z
+          .string()
+          .nullable()
+          .optional()
+          .describe(
+            "Branch the reaper pushed uncommitted work to, or null when none.",
+          ),
+        recoveryCommit: z
+          .string()
+          .nullable()
+          .optional()
+          .describe(
+            "Commit the reaper captured uncommitted work at, or null when none.",
+          ),
+        graceDeadlineAt: z
+          .string()
+          .nullable()
+          .optional()
+          .describe(
+            "ISO reap-eligible instant (last_used_at + grace), or null while a turn is active.",
+          ),
+        dirty: z
+          .boolean()
+          .nullable()
+          .optional()
+          .describe(
+            "Last-observed uncommitted-changes state; null when never checked.",
+          ),
+        flushedAt: z
+          .string()
+          .nullable()
+          .optional()
+          .describe(
+            "ISO timestamp the reaper terminated the sandbox, or null.",
+          ),
+        recoveredAt: z
+          .string()
+          .nullable()
+          .optional()
+          .describe("ISO timestamp work recovery completed, or null."),
       }),
     ),
   }),

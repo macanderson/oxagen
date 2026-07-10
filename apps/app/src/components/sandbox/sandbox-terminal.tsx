@@ -30,6 +30,8 @@ import {
 } from "react";
 import { cn } from "@/lib/utils";
 import { parseAnsiLine } from "@/components/chat/registry-components/terminal-trace-card";
+// Shared GitHub light/dark palette — same surface as the trace card & log console.
+import "@/components/chat/registry-components/code-surface.css";
 
 /** Result of one command, minus the command text (the caller supplies that). */
 export interface SandboxExecResult {
@@ -39,10 +41,24 @@ export interface SandboxExecResult {
   executionMs: number;
   timedOut: boolean;
   restored?: boolean;
+  /**
+   * Working directory AFTER the command ran. The terminal holds this in state
+   * and threads it into the next command so `cd` persists across the session
+   * (cleared only on a full page refresh, which remounts this component).
+   * null/undefined when the runner couldn't report it — the prior cwd is kept.
+   */
+  cwd?: string | null;
 }
 
-/** Injected runner — the page binds this to a `run_sandbox_command` action. */
-export type RunCommandFn = (command: string) => Promise<SandboxExecResult>;
+/**
+ * Injected runner — the page binds this to a `run_sandbox_command` action.
+ * `opts.cwd` carries the prior working directory so the stateless per-command
+ * shell resumes where the last one left off.
+ */
+export type RunCommandFn = (
+  command: string,
+  opts?: { cwd?: string },
+) => Promise<SandboxExecResult>;
 
 /** A completed (or in-flight) scrollback entry. */
 export interface TerminalEntry extends Partial<SandboxExecResult> {
@@ -85,7 +101,7 @@ function AnsiLines({ text }: { text: string }) {
 
 function ExitTag({ entry }: { entry: TerminalEntry }) {
   if (entry.status === "running") {
-    return <span className="text-neutral-500">running…</span>;
+    return <span className="code-fg-muted">running…</span>;
   }
   if (entry.status === "error") {
     return <span className="text-error">error</span>;
@@ -114,6 +130,18 @@ export function SandboxTerminal({
   const [entries, setEntries] = useState<TerminalEntry[]>(initialHistory);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  // Current working directory, reconstructed from each command's result. Held
+  // in component state (not persisted) so it survives command→command but
+  // resets on a full page refresh — exactly the requested lifetime. Seeded from
+  // the last entry that carried a cwd so `initialHistory` warm-ups continue
+  // from where they left off.
+  const [cwd, setCwd] = useState<string | undefined>(() => {
+    for (let i = initialHistory.length - 1; i >= 0; i--) {
+      const c = initialHistory[i]?.cwd;
+      if (c) return c;
+    }
+    return undefined;
+  });
   // Command history navigation (↑/↓), most-recent last.
   const [historyIdx, setHistoryIdx] = useState<number | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -132,18 +160,26 @@ export function SandboxTerminal({
   const submit = useCallback(async () => {
     const command = input.trim();
     if (command.length === 0 || busy || disabled) return;
+    // The directory this command runs in (the previous command's result cwd).
+    // Recorded on the entry so the scrollback prompt shows where it ran, and
+    // passed to the runner so the shell resumes there.
+    const runCwd = cwd;
     setInput("");
     setHistoryIdx(null);
     setBusy(true);
-    setEntries((prev) => [...prev, { command, status: "running" }]);
+    setEntries((prev) => [...prev, { command, status: "running", cwd: runCwd }]);
     try {
-      const result = await runCommand(command);
+      const result = await runCommand(command, { cwd: runCwd });
+      // Advance the working directory for the next command. Ignore a
+      // null/undefined cwd (pre-cwd runner or uncapturable) — keep the prior one.
+      if (result.cwd) setCwd(result.cwd);
       setEntries((prev) => {
         const next = [...prev];
-        // Update the last (running) entry for this command.
+        // Update the last (running) entry for this command. Keep the ran-in cwd
+        // on the entry (its prompt), not the post-command result cwd.
         for (let i = next.length - 1; i >= 0; i--) {
           if (next[i]?.status === "running") {
-            next[i] = { command, status: "done", ...result };
+            next[i] = { command, status: "done", ...result, cwd: runCwd };
             break;
           }
         }
@@ -164,6 +200,7 @@ export function SandboxTerminal({
               exitCode: -1,
               executionMs: 0,
               timedOut: false,
+              cwd: runCwd,
             };
             break;
           }
@@ -173,7 +210,7 @@ export function SandboxTerminal({
     } finally {
       setBusy(false);
     }
-  }, [input, busy, disabled, runCommand]);
+  }, [input, busy, disabled, runCommand, cwd]);
 
   const onKeyDown = useCallback(
     (e: KeyboardEvent<HTMLInputElement>) => {
@@ -214,12 +251,12 @@ export function SandboxTerminal({
   return (
     <div
       className={cn(
-        "flex flex-col overflow-hidden rounded-xl border border-border bg-black/90",
+        "code-surface flex flex-col overflow-hidden rounded-xl border",
         className,
       )}
     >
-      <div className="flex items-center justify-between border-b border-white/10 px-3 py-2">
-        <span className="font-mono text-xs text-neutral-400">
+      <div className="code-border flex items-center justify-between border-b px-3 py-2">
+        <span className="code-fg-muted font-mono text-xs">
           terminal · {shortId}
         </span>
         {busy ? (
@@ -233,16 +270,16 @@ export function SandboxTerminal({
         aria-label="Sandbox terminal output"
         aria-live="polite"
         data-testid="sandbox-terminal-scrollback"
-        className="max-h-[28rem] min-h-[12rem] flex-1 overflow-y-auto overflow-x-auto p-3 font-mono text-xs leading-relaxed text-neutral-200"
+        className="max-h-[28rem] min-h-[12rem] flex-1 overflow-y-auto overflow-x-auto p-3 font-mono text-xs leading-relaxed"
       >
         {welcome ? (
-          <div className="mb-2 whitespace-pre-wrap text-neutral-500">
+          <div className="code-fg-muted mb-2 whitespace-pre-wrap">
             {welcome}
           </div>
         ) : null}
 
         {entries.length === 0 && !welcome ? (
-          <div className="text-neutral-600">
+          <div className="code-fg-faint">
             Type a command and press Enter to run it in this sandbox.
           </div>
         ) : null}
@@ -250,8 +287,16 @@ export function SandboxTerminal({
         {entries.map((entry, i) => (
           <div key={i} className="mb-2">
             <div className="flex items-baseline gap-2">
+              {entry.cwd ? (
+                <span
+                  className="shrink-0 whitespace-pre text-info/80"
+                  title={entry.cwd}
+                >
+                  {entry.cwd}
+                </span>
+              ) : null}
               <span className="shrink-0 text-success">$</span>
-              <span className="whitespace-pre-wrap break-words text-neutral-100">
+              <span className="code-fg whitespace-pre-wrap break-words">
                 {entry.command}
               </span>
             </div>
@@ -268,7 +313,16 @@ export function SandboxTerminal({
         ))}
       </div>
 
-      <div className="flex items-center gap-2 border-t border-white/10 px-3 py-2">
+      <div className="code-border flex items-center gap-2 border-t border-t px-3 py-2">
+        {cwd ? (
+          <span
+            data-testid="sandbox-terminal-cwd"
+            title={cwd}
+            className="shrink-0 max-w-[40%] truncate font-mono text-xs text-info/80"
+          >
+            {cwd}
+          </span>
+        ) : null}
         <span className="shrink-0 font-mono text-xs text-success">$</span>
         <input
           type="text"
@@ -285,7 +339,7 @@ export function SandboxTerminal({
           autoComplete="off"
           autoCapitalize="off"
           className={cn(
-            "flex-1 bg-transparent font-mono text-xs text-neutral-100 placeholder:text-neutral-600",
+            "code-fg flex-1 bg-transparent font-mono text-xs placeholder:text-[color:var(--code-fg-faint)]",
             "focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-60",
           )}
         />

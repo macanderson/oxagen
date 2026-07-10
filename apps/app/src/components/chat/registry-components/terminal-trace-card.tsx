@@ -4,6 +4,8 @@ import { useMemo, useState, type ReactElement } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@/components/ui/tabs";
 import { formatDuration } from "../tool-call-card";
+// Shared GitHub light/dark palette for every code / terminal output panel.
+import "./code-surface.css";
 
 /**
  * terminal-trace-card — long-form scrollback renderer for `agent.sandbox.exec`
@@ -29,23 +31,28 @@ const LINE_COLLAPSE_THRESHOLD = 40;
 
 const ANSI_SEQ_RE = /\x1b\[([0-9;]*)([A-Za-z])/g;
 
+// SGR foreground → class. Red/green/yellow/blue use the semantic design tokens
+// (--error/--success/--warning/--info) which already flip with the theme; the
+// black/gray, magenta, cyan and default-foreground codes use the theme-aware
+// `ansi-*` classes from code-surface.css (the previous text-neutral-*/text-white/
+// text-cyan-400/text-fuchsia-400 were dark-only and vanished in light mode).
 const ANSI_COLOR_CLASS: Readonly<Record<string, string>> = {
-  "30": "text-neutral-500",
+  "30": "ansi-dim",
   "31": "text-error",
   "32": "text-success",
   "33": "text-warning",
   "34": "text-info",
-  "35": "text-fuchsia-400",
-  "36": "text-cyan-400",
-  "37": "text-neutral-200",
-  "90": "text-neutral-500",
+  "35": "ansi-magenta",
+  "36": "ansi-cyan",
+  "37": "ansi-fg",
+  "90": "ansi-dim",
   "91": "text-error",
   "92": "text-success",
   "93": "text-warning",
   "94": "text-info",
-  "95": "text-fuchsia-300",
-  "96": "text-cyan-300",
-  "97": "text-white",
+  "95": "ansi-magenta",
+  "96": "ansi-cyan",
+  "97": "ansi-fg",
 };
 
 export interface AnsiSegment {
@@ -118,7 +125,7 @@ function Scrollback({ text, testId }: { text: string; testId: string }) {
     <div>
       <pre
         data-testid={testId}
-        className="max-h-96 overflow-y-auto overflow-x-auto rounded-lg bg-black/90 p-3 font-mono text-xs leading-relaxed text-neutral-200"
+        className="code-surface max-h-96 overflow-y-auto overflow-x-auto rounded-lg p-3 font-mono text-xs leading-relaxed"
       >
         {visible.map((line, i) => (
           <div key={i} className="whitespace-pre">

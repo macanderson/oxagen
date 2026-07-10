@@ -110,6 +110,37 @@ describe("parseFindOutput", () => {
       { path: "y", kind: "file", sizeBytes: 0 },
     ]);
   });
+
+  it("marks gitignored entries from the tagged `i\\t` section", () => {
+    // `.env` is an ignored file; `node_modules/` is an ignored directory that
+    // git collapses with --directory, so everything under it is ignored too.
+    const out = parseFindOutput(
+      "f\t10\t/work/index.ts\n" +
+        "f\t20\t/work/.env\n" +
+        "d\t0\t/work/node_modules\n" +
+        "f\t30\t/work/node_modules/left-pad/index.js\n" +
+        "i\t.env\n" +
+        "i\tnode_modules/\n",
+    );
+    const byPath = Object.fromEntries(out.map((e) => [e.path, e.gitignored]));
+    expect(byPath["index.ts"]).toBeUndefined(); // not ignored → flag omitted
+    expect(byPath[".env"]).toBe(true);
+    expect(byPath["node_modules"]).toBe(true); // the dir itself
+    expect(byPath["node_modules/left-pad/index.js"]).toBe(true); // under the dir
+  });
+
+  it("does not treat a name-prefix collision as ignored", () => {
+    // `.env` must not mark `.environment`; `src` must not mark `src-old`.
+    const out = parseFindOutput(
+      "f\t1\t/work/.environment\n" +
+        "d\t0\t/work/src-old\n" +
+        "i\t.env\n" +
+        "i\tsrc/\n",
+    );
+    const byPath = Object.fromEntries(out.map((e) => [e.path, e.gitignored]));
+    expect(byPath[".environment"]).toBeUndefined();
+    expect(byPath["src-old"]).toBeUndefined();
+  });
 });
 
 describe("agent.sandbox.files.list handler", () => {

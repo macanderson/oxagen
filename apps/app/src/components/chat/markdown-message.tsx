@@ -23,10 +23,17 @@
  */
 
 import * as React from "react";
-import { Streamdown } from "streamdown";
+import { Streamdown, defaultUrlTransform } from "streamdown";
 import { createCodePlugin } from "@streamdown/code";
 import { createMermaidPlugin } from "@streamdown/mermaid";
+import {
+  MENTION_PROTOCOL,
+  mentionFromHref,
+  parseMentions,
+  textWithMentionLinks,
+} from "@oxagen/ai/mentions";
 import { cn } from "@/lib/utils";
+import { MentionChip } from "./mentions/mention-chip";
 
 // ---------------------------------------------------------------------------
 // Plugin instances — created once at module scope (stateless, shareable).
@@ -56,6 +63,41 @@ const mermaidPlugin = createMermaidPlugin({
 });
 
 // ---------------------------------------------------------------------------
+// @-mention chips
+// ---------------------------------------------------------------------------
+
+/**
+ * Messages may carry structured reference tokens
+ * (`[:type|:slug|:location|:label]` — user @-mentions, or the agent citing a
+ * reference back). Before rendering, tokens become `oxagen-mention://` links
+ * (textWithMentionLinks) so they flow through markdown as inline elements; the
+ * anchor override below turns those links into inspectable MentionChips.
+ */
+function MentionAnchor({
+  href,
+  children,
+  ...rest
+}: React.AnchorHTMLAttributes<HTMLAnchorElement>) {
+  const mention = href ? mentionFromHref(href) : null;
+  if (mention) return <MentionChip mention={mention} />;
+  return (
+    <a href={href} {...rest}>
+      {children}
+    </a>
+  );
+}
+
+const MENTION_COMPONENTS = { a: MentionAnchor };
+
+/** Keep the custom mention protocol through sanitization; everything else
+ * gets the stock transform (http/https/mailto whitelist). */
+const mentionUrlTransform: React.ComponentProps<typeof Streamdown>["urlTransform"] = (
+  url,
+  key,
+  node,
+) => (url.startsWith(MENTION_PROTOCOL) ? url : defaultUrlTransform(url, key, node));
+
+// ---------------------------------------------------------------------------
 // Props
 // ---------------------------------------------------------------------------
 
@@ -77,8 +119,23 @@ export interface MarkdownMessageProps {
 // ---------------------------------------------------------------------------
 
 export function MarkdownMessage({ children, streaming = false, className }: MarkdownMessageProps) {
+  // Mention handling is opt-in per message: the token → link rewrite, the
+  // anchor override, and the protocol-preserving urlTransform are only
+  // applied when the text actually contains a mention token, so ordinary
+  // messages keep Streamdown's stock anchors (incl. the linkSafety modal).
+  const { content, hasMentions } = React.useMemo(() => {
+    // parseMentions is reentrant-safe (it owns the shared regex's state);
+    // never touch MENTION_TOKEN_REGEX here — mutating module state during
+    // render violates react-hooks/immutability.
+    if (parseMentions(children).length === 0) {
+      return { content: children, hasMentions: false };
+    }
+    return { content: textWithMentionLinks(children), hasMentions: true };
+  }, [children]);
   return (
     <Streamdown
+      components={hasMentions ? MENTION_COMPONENTS : undefined}
+      urlTransform={hasMentions ? mentionUrlTransform : undefined}
       /**
        * remend preprocessor: close unterminated markdown blocks so the HAST
        * tree never sees half-open fences, bold markers, etc. during streaming.
@@ -143,7 +200,7 @@ export function MarkdownMessage({ children, streaming = false, className }: Mark
         className,
       )}
     >
-      {children}
+      {content}
     </Streamdown>
   );
 }

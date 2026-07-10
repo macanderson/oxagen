@@ -9,12 +9,37 @@
  *   - Props are forwarded to ConversationList (renders items)
  */
 
-import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, cleanup } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { ConversationNav } from "./conversation-nav";
 import type { ConversationNavActions } from "./types";
 
-afterEach(cleanup);
+// This vitest jsdom env ships without a working `localStorage` (the shared
+// sidebar-context suite is red for the same reason), so stub a minimal in-memory
+// Storage. This keeps the collapse-persistence tests deterministic and asserts
+// the component's best-effort persistence without depending on the env.
+function createMemoryStorage(): Storage {
+  const map = new Map<string, string>();
+  return {
+    get length() {
+      return map.size;
+    },
+    clear: () => map.clear(),
+    getItem: (k: string) => (map.has(k) ? (map.get(k) as string) : null),
+    key: (i: number) => Array.from(map.keys())[i] ?? null,
+    removeItem: (k: string) => void map.delete(k),
+    setItem: (k: string, v: string) => void map.set(k, String(v)),
+  } as Storage;
+}
+
+beforeEach(() => {
+  vi.stubGlobal("localStorage", createMemoryStorage());
+});
+
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
@@ -67,6 +92,50 @@ describe("ConversationNav — mobile trigger", () => {
     // The mobile trigger is a button containing "Conversations"
     const buttons = screen.getAllByRole("button");
     expect(buttons.length).toBeGreaterThan(0);
+  });
+});
+
+describe("ConversationNav — desktop collapse", () => {
+  it("starts expanded (heading + collapse control visible) by default", () => {
+    render(<ConversationNav {...defaultProps} />);
+    expect(screen.getByRole("heading", { name: "Conversations" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /collapse conversations/i }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /show conversations/i })).toBeNull();
+  });
+
+  it("collapses to an icon rail when the collapse control is clicked", () => {
+    render(<ConversationNav {...defaultProps} />);
+    fireEvent.click(screen.getByRole("button", { name: /collapse conversations/i }));
+    // Heading + list gone; the expand affordance takes its place.
+    expect(screen.queryByRole("heading", { name: "Conversations" })).toBeNull();
+    expect(
+      screen.getByRole("button", { name: /show conversations/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("persists the collapsed flag to localStorage", () => {
+    render(<ConversationNav {...defaultProps} />);
+    fireEvent.click(screen.getByRole("button", { name: /collapse conversations/i }));
+    expect(window.localStorage.getItem("oxagen.conversation-nav.collapsed")).toBe("1");
+  });
+
+  it("re-expands from the collapsed rail", () => {
+    render(<ConversationNav {...defaultProps} />);
+    fireEvent.click(screen.getByRole("button", { name: /collapse conversations/i }));
+    fireEvent.click(screen.getByRole("button", { name: /show conversations/i }));
+    expect(screen.getByRole("heading", { name: "Conversations" })).toBeInTheDocument();
+    expect(window.localStorage.getItem("oxagen.conversation-nav.collapsed")).toBe("0");
+  });
+
+  it("initialises collapsed when localStorage already has the flag set", () => {
+    window.localStorage.setItem("oxagen.conversation-nav.collapsed", "1");
+    render(<ConversationNav {...defaultProps} />);
+    expect(screen.queryByRole("heading", { name: "Conversations" })).toBeNull();
+    expect(
+      screen.getByRole("button", { name: /show conversations/i }),
+    ).toBeInTheDocument();
   });
 });
 

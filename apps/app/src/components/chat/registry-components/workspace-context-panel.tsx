@@ -57,6 +57,13 @@ export interface WorkspaceContextPanelProps {
   path?: string;
   depth?: number;
   title?: string;
+  /**
+   * A monotonically-increasing nonce. Whenever it changes, the tree soft-reloads
+   * (re-fetch without the skeleton flash) — the owning page bumps it after a
+   * terminal command runs so a `mkdir`/`rm`/clone shows up immediately instead
+   * of waiting for a manual refresh. Omit when there's no command surface.
+   */
+  refreshSignal?: number;
 }
 
 interface SandboxFilesListResponse {
@@ -185,6 +192,7 @@ export default function WorkspaceContextPanel({
   path,
   depth,
   title,
+  refreshSignal,
 }: WorkspaceContextPanelProps): ReactElement {
   const scopeBase =
     orgSlug !== "" && workspaceSlug !== "" && sessionId !== ""
@@ -323,6 +331,26 @@ export default function WorkspaceContextPanel({
     setError(null);
     setRefreshKey((k) => k + 1);
   }, []);
+
+  // Soft refresh: re-fetch the root listing WITHOUT clearing to the skeleton, so
+  // a post-command reload doesn't flash empty. Lazy-expansion bookkeeping is
+  // reset (deep listings re-fetch on re-expand); the current tree stays visible
+  // until the fresh entries replace it.
+  const softRefresh = useCallback(() => {
+    loadedDirsRef.current = new Set();
+    loadingDirsRef.current = new Set();
+    setLoadingDirs(new Set());
+    setRefreshKey((k) => k + 1);
+  }, []);
+
+  // Drive the soft refresh off the parent's nonce. A ref guards the initial
+  // render so mounting doesn't double-fetch; only genuine changes reload.
+  const prevSignalRef = useRef(refreshSignal);
+  useEffect(() => {
+    if (refreshSignal === undefined || prevSignalRef.current === refreshSignal) return;
+    prevSignalRef.current = refreshSignal;
+    softRefresh();
+  }, [refreshSignal, softRefresh]);
 
   // ── Loading skeleton ──────────────────────────────────────────────────────
 

@@ -1,8 +1,8 @@
 import "server-only";
 import {
-  resolveStudioScope,
-  type ResolvedStudioScope,
-} from "@/lib/studio/scope";
+  resolveWorkbenchScope,
+  type ResolvedWorkbenchScope,
+} from "@/lib/workbench/scope";
 
 /**
  * authz.ts — THE authorization choke point for the agent-tools surface.
@@ -24,7 +24,7 @@ export const AGENT_TOOLS_NOT_AUTHORIZED =
   "Only workspace owners and admins can manage agent tools.";
 
 export type AgentToolsManagerResult =
-  | { ok: true; scope: ResolvedStudioScope }
+  | { ok: true; scope: ResolvedWorkbenchScope }
   | { ok: false; error: string };
 
 /**
@@ -36,7 +36,7 @@ export async function resolveAgentToolsManager(
   orgSlug: string,
   workspaceSlug: string,
 ): Promise<AgentToolsManagerResult> {
-  const scope = await resolveStudioScope(orgSlug, workspaceSlug);
+  const scope = await resolveWorkbenchScope(orgSlug, workspaceSlug);
   if (!scope.canManage) {
     return { ok: false, error: AGENT_TOOLS_NOT_AUTHORIZED };
   }

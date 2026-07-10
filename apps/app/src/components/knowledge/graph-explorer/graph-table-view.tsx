@@ -113,8 +113,8 @@ export function GraphTableView({ tenant, visibleLabels, selectedNodeId, onSelect
           </div>
         )}
         <table className="w-full min-w-[36rem] border-collapse text-sm">
-          <thead className="sticky top-0 z-[1] bg-muted/60 backdrop-blur">
-            <tr className="text-left text-xs uppercase tracking-wide text-muted-foreground">
+          <thead className="sticky top-0 z-[1] bg-card">
+            <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
               <th className="px-4 py-2 font-medium">Name</th>
               <th className="px-4 py-2 font-medium">Type</th>
               <th className="px-4 py-2 font-medium">ID</th>

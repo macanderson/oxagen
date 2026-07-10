@@ -2,15 +2,15 @@
  * agent-tools-hub.spec.ts
  *
  * E2E for the consolidated Agent Tools IA:
- *   1. Studio → Agent Tools hub — the single home for everything an agent can
+ *   1. Workbench → Agent Tools hub — the single home for everything an agent can
  *      be equipped with: All Tools / Skills / MCP Servers / Capabilities tabs.
  *   2. Marketplace is two-sided — Agent Tools + Integrations — and the root
  *      redirects to the Agent Tools side.
- *   3. Legacy URLs (studio/skills, marketplace/{browse,installed,mcp},
+ *   3. Legacy URLs (workbench/skills, marketplace/{browse,installed,mcp},
  *      settings/{plugins,skills}) redirect to their new homes.
  *   4. The Agent Builder's Equip step exposes the inline
  *      "Install more from Marketplace" flow (choke-point-gated installs).
- *   5. Mobile (390px): sidebar bottom bar carries the Studio destinations and
+ *   5. Mobile (390px): sidebar bottom bar carries the Workbench destinations and
  *      the builder's step nav is a thumb-reachable sticky bar.
  *
  * NOTE: needs the full local stack (`pnpm dev`: Postgres :5433 + app server),
@@ -38,7 +38,7 @@ test.describe("Agent Tools consolidated IA", () => {
     const ws = `/${orgSlug}/default`;
 
     // ── 1. Agent Tools hub ───────────────────────────────────────────────────
-    await gotoStable(page, `${ws}/studio/tools`);
+    await gotoStable(page, `${ws}/workbench/tools`);
     await expect(page).not.toHaveURL(/\/login/);
 
     // Sub-tabs of the hub.
@@ -53,7 +53,7 @@ test.describe("Agent Tools consolidated IA", () => {
     });
 
     // Skills tab renders the skills panel (creation lives here now).
-    await gotoStable(page, `${ws}/studio/tools/skills`);
+    await gotoStable(page, `${ws}/workbench/tools/skills`);
     await expect(page.getByTestId("new-skill-btn")).toBeVisible({ timeout: 20_000 });
     await page.screenshot({
       path: path.join(SCREENSHOTS_DIR, "02-agent-tools-skills.png"),
@@ -61,7 +61,7 @@ test.describe("Agent Tools consolidated IA", () => {
     });
 
     // MCP Servers tab renders connect form + external-client snippets.
-    await gotoStable(page, `${ws}/studio/tools/mcp`);
+    await gotoStable(page, `${ws}/workbench/tools/mcp`);
     await expect(page.getByText("Connect a custom MCP server")).toBeVisible({ timeout: 20_000 });
     await page.screenshot({
       path: path.join(SCREENSHOTS_DIR, "03-agent-tools-mcp.png"),
@@ -69,7 +69,7 @@ test.describe("Agent Tools consolidated IA", () => {
     });
 
     // Capabilities tab renders the installed-plugins panel.
-    await gotoStable(page, `${ws}/studio/tools/capabilities`);
+    await gotoStable(page, `${ws}/workbench/tools/capabilities`);
     await expect(page.getByText(/installed plugins/i).first()).toBeVisible({ timeout: 20_000 });
     await page.screenshot({
       path: path.join(SCREENSHOTS_DIR, "04-agent-tools-capabilities.png"),
@@ -105,12 +105,12 @@ test.describe("Agent Tools consolidated IA", () => {
 
     // ── 3. Legacy redirects ─────────────────────────────────────────────────
     const redirects: Array<[string, RegExp]> = [
-      [`${ws}/studio/skills`, /\/studio\/tools\/skills$/],
+      [`${ws}/workbench/skills`, /\/workbench\/tools\/skills$/],
       [`${ws}/marketplace/browse`, /\/marketplace\/agent-tools$/],
-      [`${ws}/marketplace/installed`, /\/studio\/tools\/capabilities$/],
-      [`${ws}/marketplace/mcp`, /\/studio\/tools\/mcp$/],
-      [`${ws}/settings/plugins`, /\/studio\/tools\/capabilities$/],
-      [`${ws}/settings/skills`, /\/studio\/tools\/skills$/],
+      [`${ws}/marketplace/installed`, /\/workbench\/tools\/capabilities$/],
+      [`${ws}/marketplace/mcp`, /\/workbench\/tools\/mcp$/],
+      [`${ws}/settings/plugins`, /\/workbench\/tools\/capabilities$/],
+      [`${ws}/settings/skills`, /\/workbench\/tools\/skills$/],
     ];
     for (const [from, to] of redirects) {
       await page.goto(from);
@@ -124,7 +124,7 @@ test.describe("Agent Tools consolidated IA", () => {
     const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "equip-inline" });
     const ws = `/${orgSlug}/default`;
 
-    await gotoStable(page, `${ws}/studio/agents/new`);
+    await gotoStable(page, `${ws}/workbench/agents/new`);
     await expect(page).not.toHaveURL(/\/login/);
 
     // Jump straight to the Equip step via the step rail.
@@ -155,7 +155,7 @@ test.describe("Agent Tools consolidated IA", () => {
     const ws = `/${orgSlug}/default`;
 
     // Mobile bottom bar shows the primary destinations; Agents is a tab.
-    await gotoStable(page, `${ws}/studio/agents`);
+    await gotoStable(page, `${ws}/workbench/agents`);
     const nav = page.getByRole("navigation", { name: /mobile navigation/i });
     await expect(nav).toBeVisible({ timeout: 20_000 });
     await expect(nav.getByRole("link", { name: "Agents" })).toBeVisible();
@@ -165,7 +165,7 @@ test.describe("Agent Tools consolidated IA", () => {
     });
 
     // Builder: sticky step nav with large touch targets and a step counter.
-    await gotoStable(page, `${ws}/studio/agents/new`);
+    await gotoStable(page, `${ws}/workbench/agents/new`);
     const next = page.getByTestId("builder-next");
     await expect(next).toBeVisible({ timeout: 30_000 });
     const box = await next.boundingBox();

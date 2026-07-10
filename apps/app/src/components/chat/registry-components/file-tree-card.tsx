@@ -1,8 +1,24 @@
 "use client";
 
 import { useEffect, useState, type ReactElement, type ReactNode } from "react";
-import { ChevronRight, File, Folder, GitCompare, Loader2 } from "lucide-react";
+import {
+  ChevronRight,
+  File,
+  FileArchive,
+  FileCode,
+  FileCog,
+  FileImage,
+  FileJson,
+  FileText,
+  Folder,
+  FolderOpen,
+  GitCompare,
+  Loader2,
+  Lock,
+  type LucideIcon,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Tooltip, TooltipTrigger, TooltipPopup } from "@/components/ui/tooltip";
 import { diffAnchorId } from "./diff-anchor";
 
 /**
@@ -33,6 +49,8 @@ export interface FileTreeEntry {
   sizeBytes?: number | null;
   /** True when this file has pending/committed changes in this turn. */
   changed?: boolean;
+  /** True when git (in the sandbox) reports this path as ignored by .gitignore. */
+  gitignored?: boolean;
 }
 
 export interface FileTreeCardProps {
@@ -54,6 +72,7 @@ interface TreeNode {
   kind: "file" | "dir";
   sizeBytes: number | null;
   changed: boolean;
+  gitignored: boolean;
   children: TreeNode[];
 }
 
@@ -94,6 +113,7 @@ export function buildFileTree(entries: FileTreeEntry[]): TreeNode[] {
           kind: isLast ? entry.kind : "dir",
           sizeBytes: null,
           changed: false,
+          gitignored: false,
           children: new Map(),
         };
         level.set(part, node);
@@ -102,6 +122,7 @@ export function buildFileTree(entries: FileTreeEntry[]): TreeNode[] {
         node.kind = entry.kind;
         node.sizeBytes = entry.sizeBytes ?? null;
         node.changed = entry.changed ?? false;
+        node.gitignored = entry.gitignored ?? false;
       }
       level = node.children;
     });
@@ -143,6 +164,47 @@ export function truncateMiddle(name: string, max = 28): string {
   return `${name.slice(0, head)}…${name.slice(name.length - tail)}`;
 }
 
+// A file is "hidden" when its basename starts with a dot (.env, .gitignore).
+// Derived client-side from the name — no backend round-trip needed (unlike
+// gitignore status, which git must resolve).
+function isHidden(name: string): boolean {
+  return name.startsWith(".");
+}
+
+// Per-extension file icon. All icons are rendered MONOCHROMATIC (the caller sets
+// a single muted/foreground tone), so this only picks the glyph, never a colour
+// — a file tree that colour-codes by type reads as noise at a glance.
+const EXT_ICON: Record<string, LucideIcon> = {
+  // code
+  ts: FileCode, tsx: FileCode, js: FileCode, jsx: FileCode, mjs: FileCode,
+  cjs: FileCode, py: FileCode, rb: FileCode, go: FileCode, rs: FileCode,
+  java: FileCode, kt: FileCode, c: FileCode, cc: FileCode, cpp: FileCode,
+  h: FileCode, hpp: FileCode, cs: FileCode, php: FileCode, swift: FileCode,
+  scala: FileCode, sh: FileCode, bash: FileCode, zsh: FileCode, sql: FileCode,
+  vue: FileCode, svelte: FileCode, css: FileCode, scss: FileCode, less: FileCode,
+  html: FileCode,
+  // data
+  json: FileJson, jsonc: FileJson,
+  // prose
+  md: FileText, mdx: FileText, txt: FileText, rst: FileText, adoc: FileText,
+  // config
+  yml: FileCog, yaml: FileCog, toml: FileCog, ini: FileCog, env: FileCog,
+  conf: FileCog, cfg: FileCog, lock: FileCog, xml: FileCog,
+  // images
+  png: FileImage, jpg: FileImage, jpeg: FileImage, gif: FileImage,
+  svg: FileImage, webp: FileImage, ico: FileImage, bmp: FileImage, avif: FileImage,
+  // archives
+  zip: FileArchive, tar: FileArchive, gz: FileArchive, tgz: FileArchive,
+  rar: FileArchive, "7z": FileArchive,
+};
+
+/** Pick a monochromatic icon for a file by extension (case-insensitive). */
+function fileIconFor(name: string): LucideIcon {
+  const dot = name.lastIndexOf(".");
+  if (dot <= 0) return File; // no ext, or a bare dotfile like ".env" → generic
+  return EXT_ICON[name.slice(dot + 1).toLowerCase()] ?? File;
+}
+
 // Compact indentation so deep paths fit phone-width screens; ≥44px touch
 // targets below `md` (Tailwind min-h-11 = 2.75rem = 44px).
 const ROW_CLASS =
@@ -151,14 +213,49 @@ const indent = (depth: number, extra = 0.375): { paddingLeft: string } => ({
   paddingLeft: `${depth * 0.75 + extra}rem`,
 });
 
+/** The lock badge + hover tooltip shown on a gitignored entry. */
+function GitignoreLock() {
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <span className="inline-flex shrink-0" aria-label="Ignored by .gitignore" />
+        }
+      >
+        <Lock className="size-3 text-muted-foreground/70" aria-hidden="true" />
+      </TooltipTrigger>
+      <TooltipPopup>Ignored by .gitignore</TooltipPopup>
+    </Tooltip>
+  );
+}
+
+// The name label: full extension always survives (truncateMiddle keeps the tail;
+// the previous CSS `truncate` clipped it) and long names scroll with the
+// container (`whitespace-nowrap`) instead of being end-ellipsised.
+function NameLabel({ node, muted }: { node: TreeNode; muted: boolean }) {
+  return (
+    <span
+      className={cn(
+        "min-w-0 flex-1 whitespace-nowrap",
+        muted ? "text-muted-foreground" : "text-foreground",
+      )}
+      title={node.path}
+    >
+      {truncateMiddle(node.name, 44)}
+    </span>
+  );
+}
+
 function DirRow({
   node,
   depth,
   interactions,
+  inheritedIgnored,
 }: {
   node: TreeNode;
   depth: number;
   interactions: TreeInteractions;
+  inheritedIgnored: boolean;
 }) {
   const [open, setOpen] = useState(depth < 1);
   const { onDirExpand, loadingDirs } = interactions;
@@ -171,6 +268,9 @@ function DirRow({
   }, [open, node.path, onDirExpand]);
 
   const loading = loadingDirs?.has(node.path) === true;
+  const ignored = node.gitignored || inheritedIgnored;
+  const muted = ignored || isHidden(node.name);
+  const FolderIcon = open ? FolderOpen : Folder;
 
   return (
     <li>
@@ -185,13 +285,18 @@ function DirRow({
         style={indent(depth)}
       >
         <ChevronRight
-          className={cn("size-3.5 shrink-0 text-muted-foreground transition-transform", open && "rotate-90")}
+          className={cn(
+            "size-3.5 shrink-0 text-muted-foreground transition-transform duration-200 ease-out motion-reduce:transition-none",
+            open && "rotate-90",
+          )}
           aria-hidden="true"
         />
-        <Folder className="size-4 shrink-0 text-info" aria-hidden="true" />
-        <span className="truncate" title={node.path}>
-          {truncateMiddle(node.name)}
-        </span>
+        <FolderIcon
+          className={cn("size-4 shrink-0", muted ? "text-muted-foreground/50" : "text-muted-foreground")}
+          aria-hidden="true"
+        />
+        <NameLabel node={node} muted={muted} />
+        {ignored ? <GitignoreLock /> : null}
         {loading ? (
           <Loader2
             className="size-3.5 shrink-0 animate-spin text-muted-foreground"
@@ -199,13 +304,27 @@ function DirRow({
           />
         ) : null}
       </button>
-      {open ? (
-        <ul>
+      {/* Smooth expand/collapse via animatable grid rows (0fr→1fr) — no JS
+          measuring, honours prefers-reduced-motion. Children stay mounted so the
+          height can animate; lazy fetches still key off each dir's own `open`. */}
+      <div
+        className={cn(
+          "grid transition-[grid-template-rows] duration-200 ease-out motion-reduce:transition-none",
+          open ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+        )}
+      >
+        <ul className="overflow-hidden">
           {node.children.map((child) => (
-            <TreeRow key={child.path} node={child} depth={depth + 1} interactions={interactions} />
+            <TreeRow
+              key={child.path}
+              node={child}
+              depth={depth + 1}
+              interactions={interactions}
+              inheritedIgnored={ignored}
+            />
           ))}
         </ul>
-      ) : null}
+      </div>
     </li>
   );
 }
@@ -214,20 +333,27 @@ function FileRow({
   node,
   depth,
   interactions,
+  inheritedIgnored,
 }: {
   node: TreeNode;
   depth: number;
   interactions: TreeInteractions;
+  inheritedIgnored: boolean;
 }) {
   const size = formatBytes(node.sizeBytes);
   const { onFileSelect } = interactions;
+  const ignored = node.gitignored || inheritedIgnored;
+  const muted = ignored || isHidden(node.name);
+  const FileIcon = fileIconFor(node.name);
 
   const name = (
     <>
-      <File className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-      <span className="min-w-0 flex-1 truncate" title={node.path}>
-        {truncateMiddle(node.name)}
-      </span>
+      <FileIcon
+        className={cn("size-4 shrink-0", muted ? "text-muted-foreground/50" : "text-muted-foreground")}
+        aria-hidden="true"
+      />
+      <NameLabel node={node} muted={muted} />
+      {ignored ? <GitignoreLock /> : null}
     </>
   );
 
@@ -269,15 +395,17 @@ function TreeRow({
   node,
   depth,
   interactions,
+  inheritedIgnored = false,
 }: {
   node: TreeNode;
   depth: number;
   interactions: TreeInteractions;
+  inheritedIgnored?: boolean;
 }) {
   return node.kind === "dir" ? (
-    <DirRow node={node} depth={depth} interactions={interactions} />
+    <DirRow node={node} depth={depth} interactions={interactions} inheritedIgnored={inheritedIgnored} />
   ) : (
-    <FileRow node={node} depth={depth} interactions={interactions} />
+    <FileRow node={node} depth={depth} interactions={interactions} inheritedIgnored={inheritedIgnored} />
   );
 }
 

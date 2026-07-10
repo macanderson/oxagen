@@ -31,13 +31,15 @@ export const workspaceSettingsWriteHandler: CapabilityHandler<typeof workspaceSe
   const row = await withTenantDb(async (tx) => {
     const existing = await tx.query.workspaces.findFirst({
       where: eq(schema.workspaces.id, ctx.workspaceId),
-      columns: { name: true, slug: true, settings: true },
+      columns: { name: true, slug: true, avatarUrl: true, settings: true },
     });
     if (!existing) return null;
 
     const updates: Record<string, unknown> = {};
     if (input.name !== undefined) updates.name = input.name;
     if (input.slug !== undefined) updates.slug = input.slug;
+    // avatarUrl is a real column: null clears, a string sets, undefined leaves it.
+    if (input.avatarUrl !== undefined) updates.avatarUrl = input.avatarUrl;
 
     // description is a key inside the settings JSONB bag — merge, don't clobber.
     if (input.description !== undefined) {
@@ -83,7 +85,7 @@ export const workspaceSettingsWriteHandler: CapabilityHandler<typeof workspaceSe
 
     return tx.query.workspaces.findFirst({
       where: eq(schema.workspaces.id, ctx.workspaceId),
-      columns: { name: true, slug: true, settings: true },
+      columns: { name: true, slug: true, avatarUrl: true, settings: true },
     });
   });
 

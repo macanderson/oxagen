@@ -166,6 +166,15 @@ export interface GitHubClient {
   getAuthenticatedUser(): Promise<{ login: string }>;
 
   /**
+   * Return basic repository metadata, including the default branch — the
+   * lookup behind the never-write-to-default-branch guard (OXA-2117).
+   */
+  getRepoInfo(args: {
+    owner: string;
+    repo: string;
+  }): Promise<{ fullName: string; htmlUrl: string; defaultBranch: string }>;
+
+  /**
    * Return the raw UTF-8 content of a file at the given path and optional ref.
    * Returns `null` when the file does not exist (HTTP 404).
    */

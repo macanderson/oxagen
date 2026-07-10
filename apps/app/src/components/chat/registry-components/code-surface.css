@@ -1,0 +1,97 @@
+/**
+ * code-surface — one theme for every code / terminal output panel in the app.
+ *
+ * The terminal emulator, the sandbox log console, the chat terminal-trace card,
+ * and the code-execute stdout/stderr panes all render monospaced program output.
+ * They used to hard-code a dark palette (`bg-black/90`, `text-neutral-200`,
+ * `border-white/10`), which reads as an out-of-place black slab in light mode.
+ *
+ * This gives them ONE surface that dynamically follows the app theme, using the
+ * same GitHub palette as the Shiki-highlighted diff card (`github-light` /
+ * `github-dark`, see diff-syntax.ts) so ALL code renders identically and only
+ * swaps between light and dark. The app toggles the `.dark` class
+ * (`@custom-variant dark (&:is(.dark *))`), so every var below flips with zero JS.
+ *
+ * Two panel variants:
+ *   .code-surface       bg + border + default text colour (terminal, log,
+ *                       scrollback — text that inherits the GitHub ink colour).
+ *   .code-surface-bare  bg + border only, NO colour — for a pane that sets its
+ *                       own text colour (the code-execute stdout/stderr panes
+ *                       are green/red). Keeping colour off this element avoids a
+ *                       cascade fight with the `text-success`/`text-error`
+ *                       utility on the same node, independent of stylesheet load
+ *                       order (so no reliance on @layer here).
+ *
+ * The helper classes (`.code-fg*`, `.ansi-*`, `.code-border`) are only ever
+ * placed on elements that carry no competing Tailwind text-colour utility, so
+ * they resolve cleanly without needing a cascade layer.
+ *
+ * Font family is NOT set here — every consumer uses the shared `font-mono`
+ * (`--font-mono`) utility, so the typeface is already uniform across surfaces.
+ */
+
+.code-surface,
+.code-surface-bare {
+  /* GitHub light (github-light): subtle canvas, ink text, hairline border. */
+  --code-bg: #f6f8fa;
+  --code-fg: #1f2328;
+  --code-fg-muted: #656d76;
+  --code-fg-faint: #8c959f;
+  --code-border: #d0d7de;
+  /* ANSI accents with no semantic-token equivalent (magenta / cyan). Red,
+   * green, yellow and blue map to the theme's --error/--success/--warning/--info
+   * tokens in ANSI_COLOR_CLASS, which already flip; only these two need a var. */
+  --code-ansi-magenta: #8250df;
+  --code-ansi-cyan: #1b7c83;
+
+  background-color: var(--code-bg);
+  border-color: var(--code-border);
+}
+
+.code-surface {
+  color: var(--code-fg);
+}
+
+/* GitHub dark (github-dark) — the same theme the diff card highlights with. */
+.dark .code-surface,
+.dark .code-surface-bare {
+  --code-bg: #0d1117;
+  --code-fg: #e6edf3;
+  --code-fg-muted: #8b949e;
+  --code-fg-faint: #6e7681;
+  --code-border: #30363d;
+  --code-ansi-magenta: #d2a8ff;
+  --code-ansi-cyan: #56d4dd;
+}
+
+/* Text / border roles inside a code surface — resolve against the vars above
+ * (inherited from the nearest surface ancestor) so they follow the theme. */
+.code-fg {
+  color: var(--code-fg);
+}
+.code-fg-muted {
+  color: var(--code-fg-muted);
+}
+.code-fg-faint {
+  color: var(--code-fg-faint);
+}
+.code-border {
+  border-color: var(--code-border);
+}
+
+/* ANSI SGR colours that have no semantic design token. `parseAnsiLine` emits
+ * these class names for the black/gray, magenta, cyan and default-foreground
+ * codes so they stay legible in BOTH themes (the old dark-only Tailwind classes
+ * text-neutral, text-white, text-cyan and text-fuchsia vanished in light mode). */
+.ansi-dim {
+  color: var(--code-fg-faint);
+}
+.ansi-fg {
+  color: var(--code-fg);
+}
+.ansi-magenta {
+  color: var(--code-ansi-magenta);
+}
+.ansi-cyan {
+  color: var(--code-ansi-cyan);
+}

@@ -27,6 +27,7 @@ import { and, desc, eq, isNull } from "drizzle-orm";
 import { runInTenantScope } from "@oxagen/tenancy";
 import type { AppEnv } from "../../app";
 import { requireEnv } from "@oxagen/config/env";
+import { upsertGithubInstallation } from "./github-installations";
 
 /**
  * Authenticated github-oauth sub-routes.
@@ -315,6 +316,50 @@ function buildInstallAuthUrl(
   );
 }
 
+/**
+ * Build the signed GitHub user-authorization URL (`login/oauth/authorize`) — the
+ * IDENTITY leg, and the PRIMARY "Connect GitHub" entry point.
+ *
+ * Why this and not `installations/new`: the install URL only round-trips an OAuth
+ * `code` on the FIRST install of the App on an account. Once the App is already
+ * installed on an org, GitHub degrades to its stateless Setup-URL "update"
+ * redirect, which carries NO `code` and NO signed `state` — so a SECOND Oxagen
+ * tenant (a different org/workspace) can never establish its own token and dead-
+ * ends at "not connected". The bare user-authorization endpoint has no such
+ * dependence: it ALWAYS returns a fresh `code` and echoes our signed `state`,
+ * installed-or-not (and silently round-trips with no prompt if the user already
+ * authorized). That single fresh `code` is exactly what the callback's
+ * oauth_accounts upsert needs, so the second tenant becomes connected and can
+ * then attach to the already-installed org via `/user/installations`.
+ *
+ * GitHub redirects to the App's configured Callback URL (our
+ * `/oauth/github/callback`) — the same endpoint the install leg lands on — so no
+ * `redirect_uri` is passed.
+ */
+function buildIdentityAuthUrl(
+  clientId: string,
+  stateSecret: string,
+  payload: { orgId: string; workspaceId: string; connectionId: string | null; returnTo: GithubConnectReturnTo },
+): string {
+  const stateJson = JSON.stringify({
+    orgId: payload.orgId,
+    workspaceId: payload.workspaceId,
+    connectionId: payload.connectionId,
+    returnTo: payload.returnTo,
+    expiresAt: Date.now() + 10 * 60 * 1000, // 10 minutes
+    nonce: crypto.randomUUID(),
+  } satisfies GithubInstallState);
+
+  const hmac = buildStateHmac(stateJson, stateSecret);
+  const encodedState = encodeState(stateJson);
+
+  return (
+    `https://github.com/login/oauth/authorize` +
+    `?client_id=${encodeURIComponent(clientId)}` +
+    `&state=${encodeURIComponent(`${encodedState}.${hmac}`)}`
+  );
+}
+
 // ── GET /connections/github/auth-url ─────────────────────────────────────────
 
 /**
@@ -332,11 +377,19 @@ function buildInstallAuthUrl(
 githubOauthRoute.get("/auth-url", async (c) => {
   const env = requireEnv([
     "GITHUB_APP_SLUG",
+    "GITHUB_APP_CLIENT_ID",
     "GITHUB_APP_INSTALL_STATE_SECRET",
   ] as const);
 
   const connectionId = c.req.query("connectionId") ?? null;
   const returnTo = parseReturnTo(c.req.query("returnTo"));
+  // "install" (default) → installations/new: installs the App on a NEW org (and,
+  // on a first install, round-trips our signed state to the callback). "identity"
+  // (opt-in via ?mode=identity) → login/oauth/authorize: always returns code+state
+  // EVEN WHEN the App is already installed on the target org, which is what
+  // unblocks a second tenant. The app's primary Connect uses /status.identityUrl,
+  // so /auth-url stays install-by-default for backward compatibility.
+  const mode = c.req.query("mode") === "identity" ? "identity" : "install";
 
   const orgId = c.get("orgId");
   const workspaceId = c.get("workspaceId");
@@ -344,24 +397,29 @@ githubOauthRoute.get("/auth-url", async (c) => {
     return c.json({ error: "Org/workspace scope required" }, 400);
   }
 
-  const appSlug = env.GITHUB_APP_SLUG;
   const stateSecret = env.GITHUB_APP_INSTALL_STATE_SECRET;
-
-  if (!appSlug || !stateSecret) {
+  if (!stateSecret) {
     return c.json(
-      { error: "GitHub App is not configured — GITHUB_APP_SLUG / GITHUB_APP_INSTALL_STATE_SECRET missing" },
+      { error: "GitHub App is not configured — GITHUB_APP_INSTALL_STATE_SECRET missing" },
       503,
     );
   }
 
-  const authUrl = buildInstallAuthUrl(appSlug, stateSecret, {
-    orgId,
-    workspaceId,
-    connectionId,
-    returnTo,
-  });
+  const statePayload = { orgId, workspaceId, connectionId, returnTo };
 
-  return c.json({ authUrl });
+  if (mode === "install") {
+    const appSlug = env.GITHUB_APP_SLUG;
+    if (!appSlug) {
+      return c.json({ error: "GitHub App is not configured — GITHUB_APP_SLUG missing" }, 503);
+    }
+    return c.json({ authUrl: buildInstallAuthUrl(appSlug, stateSecret, statePayload), mode });
+  }
+
+  const clientId = env.GITHUB_APP_CLIENT_ID;
+  if (!clientId) {
+    return c.json({ error: "GitHub App is not configured — GITHUB_APP_CLIENT_ID missing" }, 503);
+  }
+  return c.json({ authUrl: buildIdentityAuthUrl(clientId, stateSecret, statePayload), mode });
 });
 
 // ── GET /connections/github/installations ─────────────────────────────────────
@@ -372,6 +430,8 @@ interface GitHubInstallation {
     login: string;
     type: string;
     avatar_url: string;
+    /** GitHub account numeric id — recorded in the installations registry. */
+    id?: number;
   };
   repository_selection: string;
   /** App-specific page where the user manages this installation's org/repo access. */
@@ -422,6 +482,18 @@ async function fetchAllInstallations(accessToken: string): Promise<FetchInstalla
   return { ok: true, installations: allInstallations };
 }
 
+/** Register a raw GitHub `/user/installations` entry into the platform registry. */
+function registerInstallationFromApi(inst: GitHubInstallation): Promise<void> {
+  return upsertGithubInstallation({
+    installationId: String(inst.id),
+    accountLogin: inst.account?.login ?? null,
+    accountId: inst.account?.id != null ? String(inst.account.id) : null,
+    accountType: inst.account?.type ?? null,
+    appSlug: inst.app_slug ?? null,
+    repositorySelection: inst.repository_selection ?? null,
+  });
+}
+
 /** Project a raw GitHub installation into the client-facing wire shape. */
 function mapInstallation(inst: GitHubInstallation) {
   return {
@@ -470,6 +542,11 @@ githubOauthRoute.get("/installations", async (c) => {
       502,
     );
   }
+
+  // Refresh the platform installations registry from the user's authoritative
+  // view (idempotent). Best-effort via allSettled — a registry write hiccup must
+  // never break the listing the wizard depends on.
+  await Promise.allSettled(fetched.installations.map(registerInstallationFromApi));
 
   const { GITHUB_APP_SLUG } = requireEnv(["GITHUB_APP_SLUG"] as const);
 
@@ -578,7 +655,11 @@ githubOauthRoute.get("/installations/:installationId/repositories", async (c) =>
  *   { connected, installations: [...], manageUrl, installUrl }
  */
 githubOauthRoute.get("/status", async (c) => {
-  const env = requireEnv(["GITHUB_APP_SLUG", "GITHUB_APP_INSTALL_STATE_SECRET"] as const);
+  const env = requireEnv([
+    "GITHUB_APP_SLUG",
+    "GITHUB_APP_CLIENT_ID",
+    "GITHUB_APP_INSTALL_STATE_SECRET",
+  ] as const);
 
   const orgId = c.get("orgId");
   const workspaceId = c.get("workspaceId");
@@ -587,6 +668,7 @@ githubOauthRoute.get("/status", async (c) => {
   }
 
   const appSlug = env.GITHUB_APP_SLUG;
+  const clientId = env.GITHUB_APP_CLIENT_ID;
   const stateSecret = env.GITHUB_APP_INSTALL_STATE_SECRET;
   if (!appSlug || !stateSecret) {
     return c.json(
@@ -595,15 +677,22 @@ githubOauthRoute.get("/status", async (c) => {
     );
   }
 
-  // The connect/install entry point — always returned so the settings UI can
-  // offer "Connect" regardless of current state. returnTo=settings routes the
-  // post-install callback back to the settings surface.
-  const installUrl = buildInstallAuthUrl(appSlug, stateSecret, {
+  const stateArgs = {
     orgId,
     workspaceId,
     connectionId: null,
-    returnTo: "settings",
-  });
+    returnTo: "settings" as const,
+  };
+
+  // installUrl → installations/new (install the App on a NEW org / change repos).
+  const installUrl = buildInstallAuthUrl(appSlug, stateSecret, stateArgs);
+  // identityUrl → login/oauth/authorize: the PRIMARY "Connect GitHub" entry. It
+  // always returns code+state, so it works even when the App is already
+  // installed on the org the user wants (the second-tenant case). Falls back to
+  // installUrl only if the client id is unset. The settings UI should prefer it.
+  const identityUrl = clientId
+    ? buildIdentityAuthUrl(clientId, stateSecret, stateArgs)
+    : installUrl;
 
   // Not-connected shape, reused for "never connected" and "token revoked" so the
   // UI shows the same "Connect" affordance in both cases.
@@ -612,6 +701,7 @@ githubOauthRoute.get("/status", async (c) => {
     installations: [] as ReturnType<typeof mapInstallation>[],
     manageUrl: buildManageInstallationsUrl(appSlug, []),
     installUrl,
+    identityUrl,
   };
 
   const tokenResult = await resolveWorkspaceGithubToken(orgId, workspaceId);
@@ -634,11 +724,15 @@ githubOauthRoute.get("/status", async (c) => {
     );
   }
 
+  // Keep the registry fresh from the user's authoritative view (best-effort).
+  await Promise.allSettled(fetched.installations.map(registerInstallationFromApi));
+
   return c.json({
     connected: true,
     installations: fetched.installations.map(mapInstallation),
     manageUrl: buildManageInstallationsUrl(appSlug, fetched.installations),
     installUrl,
+    identityUrl,
   });
 });
 
@@ -697,6 +791,15 @@ githubOauthCallbackRoute.get("/callback", async (c) => {
   // bare JSON 400.
   if (!rawState) {
     if (installationId || setupAction) {
+      // Direct-from-GitHub install / owner-approval: no signed state → no tenant
+      // context, but the installations registry is platform-scoped, so we still
+      // record the installation id here (the App webhook + the first tenant to
+      // attach enrich + bind it). A completed install means it is live → reactivate.
+      if (installationId) {
+        await upsertGithubInstallation({ installationId, reactivate: true }).catch((err) =>
+          console.warn("github_installations registry upsert failed (no-state install leg)", err),
+        );
+      }
       return c.redirect(`${appBaseUrl}/?github_installed=1`, 302);
     }
     return c.json({ error: "Missing state parameter" }, 400);
@@ -914,6 +1017,16 @@ githubOauthCallbackRoute.get("/callback", async (c) => {
       return c.json({ error: "Failed to store OAuth account" }, 500);
     }
     oauthAccountId = oauthAccount.id;
+  }
+
+  // Register the installation in the platform catalog (idempotent). GitHub's
+  // callback carries only the id (not account details) — the /installations
+  // listing the UI calls next, and the App webhook, enrich it. A completed
+  // install/approval means the installation is live, so reactivate.
+  if (installationId) {
+    await upsertGithubInstallation({ installationId, reactivate: true }).catch((err) =>
+      console.warn("github_installations registry upsert failed (callback install leg)", err),
+    );
   }
 
   // When the connect started from a source_connection (the legacy in-wizard

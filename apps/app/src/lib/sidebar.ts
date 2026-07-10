@@ -75,7 +75,7 @@ export type SidebarConfig = {
 const workspaceConfig: SidebarConfig = {
   mode: "workspace",
   groupLabel: "Workspace",
-  toolsLabel: "Studio",
+  toolsLabel: "Workbench",
   items: [
     {
       id: "ask",
@@ -111,9 +111,9 @@ const workspaceConfig: SidebarConfig = {
           : `/${ctx.orgSlug}`,
       group: "primary",
     },
-    // Studio group — build interactive agents. The Agent Builder is the
+    // Workbench group — build interactive agents. The Agent Builder is the
     // centerpiece. Agent Tools is NOT a primary nav item: it is the second
-    // tab of the Studio surface (studio/layout.tsx), always one click away
+    // tab of the Workbench surface (workbench/layout.tsx), always one click away
     // from Agents, so promoting it here duplicated the destination.
     {
       id: "agents",
@@ -121,7 +121,7 @@ const workspaceConfig: SidebarConfig = {
       icon: Bot,
       href: (ctx) =>
         ctx.workspaceSlug
-          ? workspace.studio.agents(ctx as Required<ScopeContext>)
+          ? workspace.workbench.agents(ctx as Required<ScopeContext>)
           : `/${ctx.orgSlug}`,
       group: "tools",
     },
@@ -130,7 +130,7 @@ const workspaceConfig: SidebarConfig = {
       label: "Marketplace",
       icon: ShoppingBag,
       // Discovery + install surface, two sides: Agent Tools and Integrations.
-      // Managing what is installed lives in Studio → Agent Tools.
+      // Managing what is installed lives in Workbench → Agent Tools.
       href: (ctx) =>
         ctx.workspaceSlug
           ? workspace.marketplace.root(ctx as Required<ScopeContext>)

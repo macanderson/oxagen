@@ -46,6 +46,17 @@ export const agentSandboxStart = registerCapability({
         "Stable key (e.g. conversation or agent-run id) to reuse one durable " +
           "sandbox across turns. Omit to always create a fresh session.",
       ),
+    label: z
+      .string()
+      .trim()
+      .min(1)
+      .max(80)
+      .optional()
+      .describe(
+        "Human-friendly name for this sandbox (e.g. \"acme-api refactor\"), shown " +
+          "in the sandbox list so a person can tell sessions apart. Stored on the " +
+          "session's metadata; does not affect reuse (that's sessionKey).",
+      ),
     memoryMb: z
       .number()
       .int()

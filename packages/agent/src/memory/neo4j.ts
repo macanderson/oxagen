@@ -891,6 +891,55 @@ export async function recordCitation(
   }
 }
 
+/**
+ * Record a :Citation for a deliberate user @-mention of ANY :GraphNode (not
+ * just :AgentMemory) and increment the node's `citation_count` — the same
+ * counter recordCitation maintains, so manual mentions and automatic memory
+ * citations accrue identically. Matches the node by `publicId` (the id
+ * mention tokens carry). :AgentMemory nodes additionally get their
+ * `influence_count` bumped, mirroring recordCitation's DECISIVE semantics —
+ * a user attaching a memory by hand is the strongest influence signal.
+ */
+export async function recordMentionCitation(args: {
+  executionId: string;
+  nodePublicId: string;
+}): Promise<{ citationId: string } | null> {
+  const s = scopedSession();
+  try {
+    const result = await s.run(
+      /* cypher */ `
+        MATCH (e:Execution {id: $executionId, orgId: $orgId, workspaceId: $workspaceId})
+        MATCH (n:GraphNode {publicId: $nodePublicId, orgId: $orgId, workspaceId: $workspaceId})
+        CREATE (c:Citation {
+          id: randomUUID(),
+          orgId: $orgId,
+          workspaceId: $workspaceId,
+          retrieved_at: datetime(),
+          influence: 'DECISIVE',
+          compliance: 'NA',
+          source: 'mention'
+        })
+        CREATE (e)-[:CITED]->(c)
+        CREATE (c)-[:OF]->(n)
+        SET n.citation_count = coalesce(n.citation_count, 0) + 1,
+            n.updatedAt = datetime()
+        FOREACH (_ IN CASE WHEN n:AgentMemory THEN [1] ELSE [] END |
+          SET n.influence_count = coalesce(n.influence_count, 0) + 1
+        )
+        RETURN c.id AS id
+      `,
+      {
+        executionId: args.executionId,
+        nodePublicId: args.nodePublicId,
+      },
+    );
+    const id = result.records[0]?.get("id") as string | undefined;
+    return id ? { citationId: id } : null;
+  } finally {
+    await s.close();
+  }
+}
+
 export interface ExecutionCitation {
   citationId: string;
   memoryId: string;

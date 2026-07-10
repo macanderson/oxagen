@@ -894,3 +894,45 @@ describe("getTree", () => {
     expect(result).toEqual([]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// getRepoInfo
+// ---------------------------------------------------------------------------
+
+describe("getRepoInfo", () => {
+  it("sends GET /repos/{owner}/{repo} and maps the repo fields", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      makeResponse({
+        full_name: "acme/widgets",
+        html_url: "https://github.com/acme/widgets",
+        default_branch: "develop",
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const client = createGitHubClient({ token: "tok" });
+
+    const result = await client.getRepoInfo({ owner: "acme", repo: "widgets" });
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("https://api.github.com/repos/acme/widgets");
+    expect(init.method).toBe("GET");
+    expect(result).toEqual({
+      fullName: "acme/widgets",
+      htmlUrl: "https://github.com/acme/widgets",
+      defaultBranch: "develop",
+    });
+  });
+
+  it("propagates API errors", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(makeResponse({ message: "Not Found" }, 404));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = createGitHubClient({ token: "tok" });
+
+    await expect(
+      client.getRepoInfo({ owner: "acme", repo: "missing" }),
+    ).rejects.toThrow();
+  });
+});

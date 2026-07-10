@@ -34,6 +34,16 @@ export const agentSandboxExec = registerCapability({
       .min(1)
       .max(100_000)
       .describe("Shell command line, run via `sh -c` in the session workspace."),
+    cwd: z
+      .string()
+      .min(1)
+      .max(4_096)
+      .optional()
+      .describe(
+        "Working directory to run the command in. Each exec is a fresh shell, so " +
+          "pass the `cwd` returned by the previous call to make `cd` persist across " +
+          "commands (durable-terminal state). Omit for the image default.",
+      ),
     timeoutMs: z
       .number()
       .int()
@@ -60,6 +70,14 @@ export const agentSandboxExec = registerCapability({
     restored: z
       .boolean()
       .describe("True when the session had been reaped and was restored from a snapshot before running."),
+    cwd: z
+      .string()
+      .nullable()
+      .describe(
+        "The shell's working directory after the command ran. Pass it back as the " +
+          "next call's `cwd` to keep a stateful shell. Null when the runner couldn't " +
+          "capture it (pre-cwd runner, command self-exited, or timed out).",
+      ),
   }),
 });
 

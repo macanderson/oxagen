@@ -108,6 +108,13 @@ export interface SandboxExecRequest {
   timeoutMs: number;
   env?: Record<string, string>;
   stdin?: string;
+  /**
+   * Working directory to run the command in. A fresh `sh -c` per exec resets
+   * cwd to the image default every call, so a stateful caller (the durable
+   * terminal) threads the prior `cwd` here and reads the resulting one back out
+   * of {@link SandboxExecResult.cwd}. Undefined → the image default.
+   */
+  cwd?: string;
 }
 
 export interface SandboxExecResult {
@@ -122,6 +129,12 @@ export interface SandboxExecResult {
    * filesystem snapshot and retries.
    */
   gone: boolean;
+  /**
+   * The shell's working directory AFTER the command ran. Undefined when the
+   * runner couldn't report it (a runner deployed before cwd support, the
+   * command self-`exit`ed, or it timed out) — the caller keeps its prior cwd.
+   */
+  cwd?: string;
 }
 
 export interface SandboxDriver {

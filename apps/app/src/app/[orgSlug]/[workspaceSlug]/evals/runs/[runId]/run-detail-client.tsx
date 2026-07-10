@@ -170,8 +170,8 @@ export function RunDetailClient({ run, results }: RunDetailClientProps) {
       ) : (
         <div className="overflow-x-auto rounded-lg border border-border/60" data-testid="eval-run-results-table">
           <table className="w-full min-w-[720px] border-collapse text-sm">
-            <thead className="bg-muted/60">
-              <tr className="text-left text-xs uppercase tracking-wide text-muted-foreground">
+            <thead>
+              <tr className="border-b border-border/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
                 <th className="px-4 py-2 font-medium">Item</th>
                 <th className="px-4 py-2 font-medium">Score</th>
                 <th className="px-4 py-2 font-medium">Correctness</th>

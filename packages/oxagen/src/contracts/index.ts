@@ -20,6 +20,7 @@ import { agentSandboxSnapshot } from "./agent.sandbox.snapshot";
 import { agentSandboxStop } from "./agent.sandbox.stop";
 import { agentSandboxFilesList } from "./agent.sandbox_file.list";
 import { agentSandboxFileRead } from "./agent.sandbox_file.read";
+import { agentSandboxLogsList } from "./agent.sandbox_log.list";
 import { agentSandboxList } from "./agent.sandbox.list";
 import { browserNavigate } from "./browser.navigate";
 import { browserScreenshot } from "./browser.screenshot";
@@ -35,6 +36,8 @@ import { codeFormat } from "./code.format";
 import { codeMap } from "./code.map";
 import { agentDefinitionCreate } from "./agent.definition.create";
 import { agentDefinitionSuggest } from "./agent.definition.suggest";
+import { agentDefinitionRevise } from "./agent.definition.revise";
+import { agentDefinitionSummarize } from "./agent.definition.summarize";
 import { agentDefinitionUpdate } from "./agent.definition.update";
 import { agentDefinitionPublish } from "./agent.definition.publish";
 import { agentDefinitionGet } from "./agent.definition.get";
@@ -252,8 +255,11 @@ import { workspaceSettingsRead } from "./workspace.settings.read";
 import { workspaceSettingsWrite } from "./workspace.settings.write";
 import { commandMenuSearch } from "./command.menu.search";
 import { commandMenuSuggest } from "./command.menu.suggest";
+import { referenceSearch } from "./reference.search";
+import { referenceCite } from "./reference.cite";
 import { skillAuthor } from "./skill.author";
 import { skillDraft } from "./skill.draft";
+import { skillRevise } from "./skill.revise";
 import { schemaRegistryGet } from "./schema.registry.get";
 import { schemaRegistryConfig } from "./schema.registry.config";
 import { schemaList } from "./schema.list";
@@ -436,6 +442,7 @@ export {
   agentSandboxStop,
   agentSandboxFilesList,
   agentSandboxFileRead,
+  agentSandboxLogsList,
   agentSandboxList,
   browserNavigate,
   browserScreenshot,
@@ -451,10 +458,13 @@ export {
   codeMap,
   agentDefinitionCreate,
   agentDefinitionSuggest,
+  agentDefinitionRevise,
+  agentDefinitionSummarize,
   agentDefinitionUpdate,
   agentDefinitionPublish,
   agentDefinitionGet,
   agentDefinitionList,
+  a2aCardGet,
   agentDeploy,
   agentTriggerCreate,
   agentTriggerUpdate,
@@ -665,8 +675,11 @@ export {
   workspaceSettingsWrite,
   commandMenuSearch,
   commandMenuSuggest,
+  referenceSearch,
+  referenceCite,
   skillAuthor,
   skillDraft,
+  skillRevise,
   schemaRegistryGet,
   schemaRegistryConfig,
   schemaList,
@@ -754,6 +767,7 @@ export const contracts = [
   agentSandboxStop,
   agentSandboxFilesList,
   agentSandboxFileRead,
+  agentSandboxLogsList,
   agentSandboxList,
   browserNavigate,
   browserScreenshot,
@@ -769,6 +783,8 @@ export const contracts = [
   codeMap,
   agentDefinitionCreate,
   agentDefinitionSuggest,
+  agentDefinitionRevise,
+  agentDefinitionSummarize,
   agentDefinitionUpdate,
   agentDefinitionPublish,
   agentDefinitionGet,
@@ -983,8 +999,11 @@ export const contracts = [
   workspaceSettingsWrite,
   commandMenuSearch,
   commandMenuSuggest,
+  referenceSearch,
+  referenceCite,
   skillAuthor,
   skillDraft,
+  skillRevise,
   schemaRegistryGet,
   schemaRegistryConfig,
   schemaList,

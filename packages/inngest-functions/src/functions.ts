@@ -18,6 +18,7 @@ import { agentWorkflowTaskExecute } from "./functions/agent.workflow.task.execut
 import { agentSyncExecutionToGraph } from "./functions/agent.sync-execution-to-graph";
 import { agentProjectFileLockToGraph } from "./functions/agent.project-file-lock-to-graph";
 import { agentLeaseSweep } from "./functions/agent.lease-sweep";
+import { agentSandboxReaper } from "./functions/agent.sandbox-reaper";
 import { contentSyncGeneratedFileToGraph } from "./functions/content.sync-generated-file-to-graph";
 import {
   privacyExportProcess,
@@ -81,6 +82,7 @@ export const functions: any[] = [
   agentSyncExecutionToGraph,
   agentProjectFileLockToGraph,
   agentLeaseSweep,
+  agentSandboxReaper,
   contentSyncGeneratedFileToGraph,
   privacyExportProcess,
   privacyExportProcessOnFailure,
