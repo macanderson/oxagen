@@ -16,6 +16,7 @@ export default async function BillingLayout({
   const tabs = [
     { label: "Subscription", href: org.billing.subscription(ctx) },
     { label: "Usage", href: org.billing.usage(ctx) },
+    { label: "Revenue", href: org.billing.revenue(ctx) },
     { label: "Invoices", href: org.billing.invoices(ctx) },
   ];
 
