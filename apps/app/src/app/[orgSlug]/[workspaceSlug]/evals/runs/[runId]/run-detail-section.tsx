@@ -38,12 +38,16 @@ export async function RunDetailSection({
   let run: EvalRunGetOutput | null = null;
   try {
     run = (await runInTenantScope({ orgId, workspaceId }, () =>
-      invoke("get_eval_run", { runPublicId }, ctx, { surface: "agent" }),
+      // get_eval_run exposes surfaces ["api","mcp","cli"] — passing a surface
+      // opt from the app would throw surface_denied; omit so no allowlist runs.
+      invoke("get_eval_run", { runPublicId }, ctx),
     )) as EvalRunGetOutput;
   } catch (e) {
     console.error("eval.run.get failed:", e);
     // Render empty state on failure — never throw from RSC.
   }
 
-  return <RunDetailClient run={run?.run ?? null} results={run?.results ?? []} />;
+  return (
+    <RunDetailClient run={run?.run ?? null} results={run?.results ?? []} />
+  );
 }

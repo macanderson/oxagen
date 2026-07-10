@@ -19,7 +19,11 @@ interface DatasetsSectionProps {
   userId: string;
 }
 
-export async function DatasetsSection({ orgId, workspaceId, userId }: DatasetsSectionProps) {
+export async function DatasetsSection({
+  orgId,
+  workspaceId,
+  userId,
+}: DatasetsSectionProps) {
   const ctx = {
     orgId,
     workspaceId,
@@ -33,7 +37,9 @@ export async function DatasetsSection({ orgId, workspaceId, userId }: DatasetsSe
   let datasets: EvalDatasetListOutput["datasets"] = [];
   try {
     const result = (await runInTenantScope({ orgId, workspaceId }, () =>
-      invoke("list_datasets", {}, ctx, { surface: "agent" }),
+      // list_datasets exposes surfaces ["api","mcp","cli"] — passing a surface
+      // opt from the app would throw surface_denied; omit so no allowlist runs.
+      invoke("list_datasets", {}, ctx),
     )) as EvalDatasetListOutput;
     datasets = result.datasets;
   } catch (e) {
