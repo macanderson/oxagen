@@ -1,7 +1,11 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
 import { RELATIONSHIP_TYPE_PATTERN } from "../lib/relationship-type-pattern";
-import { asOfField, asKnownAtField, edgeValiditySchema } from "../lib/temporal-query";
+import {
+  asOfField,
+  asKnownAtField,
+  edgeValiditySchema,
+} from "../lib/temporal-query";
 
 /**
  * ontology.neighbors — the one-hop neighborhood of a node. A focused, cheap
@@ -17,19 +21,29 @@ const ontologyDirection = z
       "'in' for sources of incoming edges, 'both' for either.",
   );
 
-const neighborEntry = z.object({
-  nodeId: z.string().describe("publicId of the neighbor node"),
-  label: z.string().describe("Domain label of the neighbor"),
-  displayName: z.string(),
-  description: z.string().nullable(),
-  edgeType: z
-    .string()
-    .regex(RELATIONSHIP_TYPE_PATTERN)
-    .describe("Relationship type connecting the node to this neighbor"),
-  direction: z
-    .enum(["out", "in"])
-    .describe("'out' if the edge points from the node to this neighbor; 'in' if from the neighbor to the node"),
-})
+const neighborEntry = z
+  .object({
+    nodeId: z.string().describe("publicId of the neighbor node"),
+    label: z.string().describe("Domain label of the neighbor"),
+    displayName: z.string(),
+    description: z.string().nullable(),
+    edgeType: z
+      .string()
+      .regex(RELATIONSHIP_TYPE_PATTERN)
+      .describe("Relationship type connecting the node to this neighbor"),
+    direction: z
+      .enum(["out", "in"])
+      .describe(
+        "'out' if the edge points from the node to this neighbor; 'in' if from the neighbor to the node",
+      ),
+    isSystem: z
+      .boolean()
+      .default(false)
+      .describe(
+        "True when the neighbor is product-owned runtime lineage (executions, agents, tools, generated files) " +
+          "rather than customer knowledge — lets callers separate the source-system ontology from agent activity",
+      ),
+  })
   // Bi-temporal validity of the connecting edge, so the citation can show "true as of X".
   .merge(edgeValiditySchema);
 
@@ -54,7 +68,9 @@ export const ontologyNeighbors = registerCapability({
   // the audit row so "who has read node N" is queryable (target_kind/target_id).
   audit: { targetKind: "graph.node", targetIdField: "nodeId" },
   input: z.object({
-    nodeId: z.string().describe("publicId of the node whose neighbors to fetch"),
+    nodeId: z
+      .string()
+      .describe("publicId of the node whose neighbors to fetch"),
     edgeTypes: z
       .array(z.string().regex(RELATIONSHIP_TYPE_PATTERN))
       .optional()
@@ -75,11 +91,15 @@ export const ontologyNeighbors = registerCapability({
   }),
   output: z.object({
     nodeId: z.string().describe("publicId echoed back from the request"),
-    found: z.boolean().describe("True if the node exists in this org + workspace"),
+    found: z
+      .boolean()
+      .describe("True if the node exists in this org + workspace"),
     neighbors: z.array(neighborEntry).describe("Directly connected nodes"),
     truncated: z
       .boolean()
-      .describe("True when the result was capped by `limit` and more neighbors exist"),
+      .describe(
+        "True when the result was capped by `limit` and more neighbors exist",
+      ),
   }),
 });
 

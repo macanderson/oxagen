@@ -134,6 +134,11 @@ async function buildGraph(
       "list_nodes",
       {
         ...(req.labels ? { labels: req.labels } : {}),
+        // Default view = the customer's source-system ontology. Runtime lineage
+        // (executions, agents, tools — is_system nodes) enters the seed only on
+        // explicit opt-in; without this filter every fresh agent run swamps the
+        // createdAt-ordered seed and the explorer shows nothing but agent activity.
+        ...(req.includeSystem ? {} : { isSystem: false }),
         limit: seedLimit,
         offset: 0,
       },
@@ -242,6 +247,9 @@ async function listNodes(
     {
       ...(req.labels ? { labels: req.labels } : {}),
       ...(req.query ? { query: req.query } : {}),
+      // Mirror the graph seed: the table lists the source-system ontology by
+      // default; runtime lineage rows require the same explicit opt-in.
+      ...(req.includeSystem ? {} : { isSystem: false }),
       limit,
       offset,
     },

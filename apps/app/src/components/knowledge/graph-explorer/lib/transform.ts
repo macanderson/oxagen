@@ -29,6 +29,8 @@ export interface NeighborLike {
   description?: string | null;
   edgeType: string;
   direction: "in" | "out";
+  /** True when the neighbor is runtime lineage (is_system), not customer knowledge. */
+  isSystem?: boolean;
 }
 
 /** Minimal shape of a `semantic.edge.list` edge. */
@@ -72,6 +74,10 @@ export function nodeFromNeighbor(raw: NeighborLike): ExplorerNode {
     label: raw.label,
     displayName: raw.displayName,
     description: raw.description ?? null,
+    // Carried so the client can keep lineage stubs hidden while the
+    // "agent activity" visibility toggle is off — seeds are filtered
+    // server-side, but expansion can still pull a system neighbor in.
+    ...(raw.isSystem !== undefined ? { isSystem: raw.isSystem } : {}),
     degree: 0,
     hydrated: false,
   };
@@ -83,9 +89,13 @@ export function edgeId(source: string, target: string, type: string): string {
 }
 
 /** Build confirmed edges from a node's neighbor walk, anchored at `anchorId`. */
-export function edgesFromNeighbors(anchorId: string, neighbors: NeighborLike[]): ExplorerEdge[] {
+export function edgesFromNeighbors(
+  anchorId: string,
+  neighbors: NeighborLike[],
+): ExplorerEdge[] {
   return neighbors.map((n) => {
-    const [source, target] = n.direction === "out" ? [anchorId, n.nodeId] : [n.nodeId, anchorId];
+    const [source, target] =
+      n.direction === "out" ? [anchorId, n.nodeId] : [n.nodeId, anchorId];
     return {
       id: edgeId(source, target, n.edgeType),
       source,
@@ -112,7 +122,10 @@ export function edgeFromSemantic(raw: SemanticEdgeLike): ExplorerEdge {
  * Merge `incoming` nodes into `base`, deduped by id. A hydrated node always
  * wins over a stub so a later detail fetch upgrades an earlier neighbor stub.
  */
-export function mergeNodes(base: ExplorerNode[], incoming: ExplorerNode[]): ExplorerNode[] {
+export function mergeNodes(
+  base: ExplorerNode[],
+  incoming: ExplorerNode[],
+): ExplorerNode[] {
   const byId = new Map<string, ExplorerNode>();
   for (const n of base) byId.set(n.id, n);
   for (const n of incoming) {
@@ -128,7 +141,10 @@ export function mergeNodes(base: ExplorerNode[], incoming: ExplorerNode[]): Expl
 }
 
 /** Merge `incoming` edges into `base`, deduped by synthetic id. */
-export function mergeEdges(base: ExplorerEdge[], incoming: ExplorerEdge[]): ExplorerEdge[] {
+export function mergeEdges(
+  base: ExplorerEdge[],
+  incoming: ExplorerEdge[],
+): ExplorerEdge[] {
   const byId = new Map<string, ExplorerEdge>();
   for (const e of base) byId.set(e.id, e);
   for (const e of incoming) if (!byId.has(e.id)) byId.set(e.id, e);
@@ -145,14 +161,19 @@ export function reconcile(
   edges: ExplorerEdge[],
 ): { nodes: ExplorerNode[]; edges: ExplorerEdge[] } {
   const present = new Set(nodes.map((n) => n.id));
-  const keptEdges = edges.filter((e) => present.has(e.source) && present.has(e.target));
+  const keptEdges = edges.filter(
+    (e) => present.has(e.source) && present.has(e.target),
+  );
 
   const degree = new Map<string, number>();
   for (const e of keptEdges) {
     degree.set(e.source, (degree.get(e.source) ?? 0) + 1);
     degree.set(e.target, (degree.get(e.target) ?? 0) + 1);
   }
-  const degreedNodes = nodes.map((n) => ({ ...n, degree: degree.get(n.id) ?? 0 }));
+  const degreedNodes = nodes.map((n) => ({
+    ...n,
+    degree: degree.get(n.id) ?? 0,
+  }));
   return { nodes: degreedNodes, edges: keptEdges };
 }
 
@@ -167,7 +188,9 @@ export function countEdgesByType(edges: ExplorerEdge[]): TypeCount[] {
 }
 
 /** Convert a `Record<string, number>` (e.g. `graph.stats.nodesByLabel`) → sorted TypeCount[]. */
-export function recordToCounts(record: Record<string, number> | undefined): TypeCount[] {
+export function recordToCounts(
+  record: Record<string, number> | undefined,
+): TypeCount[] {
   if (!record) return [];
   return Object.entries(record)
     .filter(([type]) => type && type !== "KnowledgeNode")
