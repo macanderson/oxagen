@@ -17,6 +17,7 @@ import { billingSubscriptionReadRoute } from "./routes/v1/billing.subscription.r
 import { billingUsageBreakdownRoute } from "./routes/v1/billing.usage.breakdown";
 import { billingSubscriptionUpgradeStartRoute } from "./routes/v1/billing.subscription_upgrade.start";
 import { billingCreditsPurchaseRoute } from "./routes/v1/billing.credits.purchase";
+import { resellerRoute } from "./routes/v1/reseller";
 import { chatMessageSendRoute } from "./routes/v1/chat.message.send";
 import { chatMessageExecutionRoute } from "./routes/v1/chat.message.execution";
 import { chatStreamRoute } from "./routes/v1/chat.stream";
@@ -367,6 +368,7 @@ orgScoped.route(
 );
 orgScoped.route("/billing/credits/purchase", billingCreditsPurchaseRoute);
 orgScoped.route("/billing/usage/breakdown", billingUsageBreakdownRoute);
+orgScoped.route("/billing/revenue", resellerRoute);
 orgScoped.route("/chat/messages", chatMessageSendRoute);
 orgScoped.route("/chat/messages/execution", chatMessageExecutionRoute);
 orgScoped.route("/chat/stream", chatStreamRoute);
@@ -446,7 +448,10 @@ orgScoped.route(
   agentMemoryPromotionCandidatesRoute,
 );
 orgScoped.route("/agent/memory/cite", agentMemoryCiteRoute);
-orgScoped.route("/agent/memory/evidence/attach", agentMemoryEvidenceAttachRoute);
+orgScoped.route(
+  "/agent/memory/evidence/attach",
+  agentMemoryEvidenceAttachRoute,
+);
 orgScoped.route("/agent/memory/citations/list", agentMemoryCitationsListRoute);
 orgScoped.route("/agent/memory", agentMemoryWriteRoute);
 orgScoped.route("/agent/approvals/resolve", agentApprovalResolveRoute);
@@ -525,8 +530,14 @@ orgScoped.route("/org/invitations/decline", orgMemberInviteDeclineRoute);
 orgScoped.route("/workspace/budget-policy", workspaceBudgetPolicyReadRoute);
 orgScoped.route("/workspace/budget-policy", workspaceBudgetPolicyWriteRoute);
 // Per-(user, workspace) coding-agent defaults (org+workspace scoped).
-orgScoped.route("/user/workspace-preferences", userWorkspacePreferencesReadRoute);
-orgScoped.route("/user/workspace-preferences", userWorkspacePreferencesWriteRoute);
+orgScoped.route(
+  "/user/workspace-preferences",
+  userWorkspacePreferencesReadRoute,
+);
+orgScoped.route(
+  "/user/workspace-preferences",
+  userWorkspacePreferencesWriteRoute,
+);
 orgScoped.route("/workspace/model-settings", workspaceModelSettingsReadRoute);
 orgScoped.route("/workspace/model-settings", workspaceModelSettingsWriteRoute);
 orgScoped.route("/workspace/prompt-settings", promptSettingsReadRoute);
@@ -566,7 +577,10 @@ orgScoped.route("/sandbox/template/list", sandboxTemplateListRoute);
 orgScoped.route("/sandbox/template/get", sandboxTemplateGetRoute);
 orgScoped.route("/sandbox/template/update", sandboxTemplateUpdateRoute);
 orgScoped.route("/sandbox/template/delete", sandboxTemplateDeleteRoute);
-orgScoped.route("/sandbox/template/set-default", sandboxTemplateSetDefaultRoute);
+orgScoped.route(
+  "/sandbox/template/set-default",
+  sandboxTemplateSetDefaultRoute,
+);
 orgScoped.route("/sandbox/template/set-tools", sandboxTemplateSetToolsRoute);
 orgScoped.route("/sandbox/template/export", sandboxTemplateExportRoute);
 orgScoped.route("/sandbox/template/import", sandboxTemplateImportRoute);

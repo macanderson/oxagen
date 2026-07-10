@@ -18,6 +18,17 @@ import { isoInstant, resellerRebillPreviewSchema } from "./reseller-shared";
 // One-year ceiling bounds the ClickHouse scan (matches billing.usage.breakdown).
 const MAX_RANGE_MS = 366 * 24 * 60 * 60 * 1000;
 
+// Exported so the xmcp tool can build its arg map — the contract `input` wraps
+// these in `.refine()` (a ZodEffects), which has no `.shape` to spread.
+export const resellerRebillPreviewFields = {
+  start: isoInstant.describe(
+    "ISO-8601 start of the billing period (inclusive)",
+  ),
+  end: isoInstant.describe("ISO-8601 end of the billing period (exclusive)"),
+  /** public id to preview one customer; omit for all active customers. */
+  customerId: z.string().min(1).optional(),
+} as const;
+
 export const resellerRebillPreview = registerCapability({
   name: "preview_reseller_rebill",
   domain: "billing",
@@ -36,16 +47,7 @@ export const resellerRebillPreview = registerCapability({
     workspace: {},
   },
   input: z
-    .object({
-      start: isoInstant.describe(
-        "ISO-8601 start of the billing period (inclusive)",
-      ),
-      end: isoInstant.describe(
-        "ISO-8601 end of the billing period (exclusive)",
-      ),
-      /** public id to preview one customer; omit for all active customers. */
-      customerId: z.string().min(1).optional(),
-    })
+    .object(resellerRebillPreviewFields)
     .refine((v) => new Date(v.end).getTime() > new Date(v.start).getTime(), {
       message: "end must be after start",
       path: ["end"],

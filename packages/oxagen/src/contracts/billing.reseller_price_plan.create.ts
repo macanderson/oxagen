@@ -14,7 +14,9 @@ import {
  * The mode/field cross-check lives in the contract so every surface (API, MCP,
  * app) rejects a plan that names a mode without its required rate.
  */
-const pricePlanFields = {
+// Exported so the xmcp tool can build its arg map — the contract `input` wraps
+// these in `.refine()` (a ZodEffects), which has no `.shape` to spread.
+export const resellerPricePlanCreateFields = {
   name: z.string().min(1).max(200),
   pricingMode: resellerPricingModeSchema,
   /** Basis points of markup over raw cost (required for `markup`). 2000 = +20%. */
@@ -49,7 +51,7 @@ export const resellerPricePlanCreate = registerCapability({
   sensitivity: "medium",
   defaultEffect: "deny",
   defaultRoles: { org: { Owner: "allow", Billing: "allow" }, workspace: {} },
-  input: z.object(pricePlanFields).refine(refinePricingMode, {
+  input: z.object(resellerPricePlanCreateFields).refine(refinePricingMode, {
     message:
       "markup plans require markupBps; per_unit plans require unitPriceCents",
     path: ["pricingMode"],
