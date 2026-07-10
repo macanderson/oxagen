@@ -1,3 +1,48 @@
 {
-    "claudeCodeChat.permissions.yoloMode": true
+  "claudeCodeChat.permissions.yoloMode": true,
+
+  "editor.defaultFormatter": "biomejs.biome",
+  "editor.formatOnSave": true,
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "explicit"
+  },
+
+  "[javascript]": { "editor.defaultFormatter": "biomejs.biome" },
+  "[javascriptreact]": { "editor.defaultFormatter": "biomejs.biome" },
+  "[typescript]": { "editor.defaultFormatter": "biomejs.biome" },
+  "[typescriptreact]": { "editor.defaultFormatter": "biomejs.biome" },
+  "[json]": { "editor.defaultFormatter": "biomejs.biome" },
+  "[jsonc]": { "editor.defaultFormatter": "biomejs.biome" },
+  "[markdown]": { "editor.formatOnSave": false },
+  "[yaml]": { "editor.formatOnSave": false },
+
+  "eslint.validate": [
+    "javascript",
+    "javascriptreact",
+    "typescript",
+    "typescriptreact"
+  ],
+  "eslint.useFlatConfig": true,
+  "eslint.format.enable": false,
+  "eslint.workingDirectories": [{ "mode": "auto" }],
+
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/.next": true,
+    "**/.turbo": true,
+    "**/dist": true,
+    "**/coverage": true,
+    "**/.xmcp": true,
+    "**/.vercel": true
+  },
+  "files.watcherExclude": {
+    "**/node_modules/**": true,
+    "**/.next/**": true,
+    "**/.turbo/**": true,
+    "**/dist/**": true,
+    "**/coverage/**": true,
+    "**/.xmcp/**": true,
+    "**/.vercel/**": true,
+    "**/.git/objects/**": true
+  }
 }

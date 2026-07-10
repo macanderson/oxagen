@@ -29,12 +29,9 @@ import {
   ClipboardCheck,
   ArrowRight,
 } from "lucide-react";
-import {
-  Card,
-  CardPanel,
-} from "@/components/ui/card";
 import { Panel } from "@/components/ui/panel";
 import { Badge } from "@/components/ui/badge";
+import { Stat, StatGroup } from "@/components/ui/stat";
 
 // Org-only route — sentinel workspaceId (no workspace context). — OXA-1515
 const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
@@ -135,58 +132,15 @@ function formatDateTime(d: Date): string {
 }
 
 // ---------------------------------------------------------------------------
-// Stat tile
-// ---------------------------------------------------------------------------
-
-type Tone = "green" | "amber" | "red" | "muted" | "neutral";
-
-const TONE_VALUE: Record<Tone, string> = {
-  green: "text-[hsl(142_71%_45%)]",
-  amber: "text-[hsl(38_92%_50%)]",
-  red: "text-destructive",
-  muted: "text-muted-foreground",
-  neutral: "text-foreground",
-};
-
-function StatTile({
-  icon,
-  label,
-  value,
-  sub,
-  tone = "neutral",
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  sub: string;
-  tone?: Tone;
-}) {
-  return (
-    <Card>
-      <CardPanel className="flex flex-col gap-2 p-4">
-        <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          <span className="text-muted-foreground" aria-hidden="true">
-            {icon}
-          </span>
-          {label}
-        </div>
-        <div className={`text-2xl font-bold tracking-tight ${TONE_VALUE[tone]}`}>{value}</div>
-        <div className="text-xs text-muted-foreground">{sub}</div>
-      </CardPanel>
-    </Card>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // SOC 2 control status (derived from live signals)
 // ---------------------------------------------------------------------------
 
 type ControlState = "active" | "partial" | "open";
 
-const CONTROL_BADGE: Record<ControlState, "success" | "warning" | "error"> = {
-  active: "success",
-  partial: "warning",
-  open: "error",
+const CONTROL_BADGE: Record<ControlState, "success-soft" | "warning-soft" | "error-soft"> = {
+  active: "success-soft",
+  partial: "warning-soft",
+  open: "error-soft",
 };
 const CONTROL_LABEL: Record<ControlState, string> = {
   active: "Active",
@@ -196,9 +150,9 @@ const CONTROL_LABEL: Record<ControlState, string> = {
 
 function ControlIcon({ state }: { state: ControlState }) {
   if (state === "active")
-    return <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[hsl(142_71%_45%)]" aria-hidden="true" />;
+    return <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" aria-hidden="true" />;
   if (state === "partial")
-    return <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[hsl(38_92%_50%)]" aria-hidden="true" />;
+    return <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden="true" />;
   return <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" aria-hidden="true" />;
 }
 
@@ -265,55 +219,51 @@ export default async function SecurityOverviewPage({
         />
       )}
 
-      {/* Live posture tiles */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
-        <StatTile
-          icon={<AlertTriangle className="h-3.5 w-3.5" />}
+      {/* Live posture tiles — shared Stat in a hairline-divided group */}
+      <StatGroup columns={3}>
+        <Stat
+          icon={<AlertTriangle />}
           label="Auth failures (7d)"
           value={posture.authFailures7d.toLocaleString()}
-          sub="Failed sign-ins, last 7 days"
-          tone={posture.authFailures7d > 0 ? "amber" : "green"}
+          hint="Failed sign-ins, last 7 days"
+          tone={posture.authFailures7d > 0 ? "warning" : "success"}
         />
-        <StatTile
-          icon={<Ban className="h-3.5 w-3.5" />}
+        <Stat
+          icon={<Ban />}
           label="Denied invocations (7d)"
           value={posture.deniedInvocations7d.toLocaleString()}
-          sub="Capability authz denials"
-          tone={posture.deniedInvocations7d > 0 ? "amber" : "green"}
+          hint="Capability authz denials"
+          tone={posture.deniedInvocations7d > 0 ? "warning" : "success"}
         />
-        <StatTile
-          icon={<KeyRound className="h-3.5 w-3.5" />}
+        <Stat
+          icon={<KeyRound />}
           label="Active API keys"
           value={posture.activeApiKeys.toLocaleString()}
-          sub="Non-expired, non-revoked"
-          tone="neutral"
+          hint="Non-expired, non-revoked"
         />
-        <StatTile
-          icon={<ScrollText className="h-3.5 w-3.5" />}
+        <Stat
+          icon={<ScrollText />}
           label="Audit events"
           value={posture.totalAuditEvents.toLocaleString()}
-          sub={
+          hint={
             posture.lastEventAt
               ? `Last: ${formatDateTime(posture.lastEventAt)}`
               : "No events yet"
           }
-          tone="neutral"
         />
-        <StatTile
-          icon={<ShieldCheck className="h-3.5 w-3.5" />}
+        <Stat
+          icon={<ShieldCheck />}
           label="MFA enforcement"
           value="—"
-          sub="Org-wide policy coming soon"
-          tone="muted"
+          hint="Org-wide policy coming soon"
         />
-        <StatTile
-          icon={<ShieldCheck className="h-3.5 w-3.5" />}
+        <Stat
+          icon={<ShieldCheck />}
           label="SSO enforcement"
           value="—"
-          sub="SAML / OIDC coming soon"
-          tone="muted"
+          hint="SAML / OIDC coming soon"
         />
-      </div>
+      </StatGroup>
 
       {/* SOC 2 control status */}
       <Panel title="SOC 2 control status">

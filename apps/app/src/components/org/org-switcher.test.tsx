@@ -53,10 +53,11 @@ describe("OrgSwitcher — trigger rendering", () => {
     expect(screen.getByText("Free")).toBeInTheDocument();
   });
 
-  it("renders the org initial when no avatarUrl", () => {
+  it("renders the org initials when no avatarUrl", () => {
     render(<OrgSwitcher current={current} organizations={organizations} />);
-    // OrgAvatar renders the first letter 'A' when there's no image
-    const initials = screen.getAllByText("A");
+    // EntityAvatar renders two-word initials ("Acme Corp" → "AC") when there's
+    // no image or designed avatar value.
+    const initials = screen.getAllByText("AC");
     expect(initials.length).toBeGreaterThanOrEqual(1);
   });
 });

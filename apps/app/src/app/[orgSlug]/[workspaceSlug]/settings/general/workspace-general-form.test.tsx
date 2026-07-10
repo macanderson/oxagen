@@ -106,6 +106,7 @@ const defaultProps = {
   initialName: "Research",
   initialSlug: "research",
   initialDescription: "Main research workspace.",
+  initialAvatarUrl: null,
 };
 
 // ---------------------------------------------------------------------------

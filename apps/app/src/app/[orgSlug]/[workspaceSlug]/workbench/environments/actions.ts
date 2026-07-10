@@ -8,6 +8,8 @@ import { invoke } from "@oxagen/oxagen";
 // Side-effect import: bind every foundation handler (incl. environment.* and
 // secret.*) so invoke() can resolve them.
 import "@oxagen/handlers/register";
+import { logger } from "@oxagen/handlers/logger";
+import { captureError } from "@oxagen/telemetry";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
 import { workspace as routes } from "@/lib/routes";
@@ -101,6 +103,38 @@ function errorMessage(err: unknown, fallback: string): string {
   return err instanceof Error && err.message ? err.message : fallback;
 }
 
+/**
+ * Log a vault-mutation failure server-side before the user-facing ActionResult
+ * is returned. A silent failure here (KMS error, DB constraint, transient
+ * outage) is a live security exposure — a user could believe a secret was
+ * rotated/deleted when the backend silently failed. NEVER logs the secret
+ * value (the identifiers below are ids/keys/slugs only, never plaintext).
+ * `escalate` fires captureError for the destructive secret mutations so a spike
+ * is alertable, matching the billing/actions.ts observability bar.
+ */
+function logVaultFailure(
+  action: string,
+  err: unknown,
+  scope: Scope,
+  fields: Record<string, unknown>,
+  escalate: boolean,
+): void {
+  logger.error(
+    { err, orgId: scope.orgId, workspaceId: scope.workspaceId, ...fields },
+    `environments: ${action} failed`,
+  );
+  if (escalate) {
+    captureError({
+      error: err,
+      source: "app",
+      severity: "error",
+      orgId: scope.orgId,
+      workspaceId: scope.workspaceId,
+      context: `environments: ${action} failed`,
+    });
+  }
+}
+
 // ── Reads (any workspace member) ──────────────────────────────────────────────
 
 export async function readEnvironmentsAction(args: {
@@ -171,6 +205,7 @@ export async function importEnvAction(args: {
       if (out.committed) revalidate(args);
       return { ok: true, rows: out.rows, committed: out.committed };
     } catch (err) {
+      logVaultFailure("importEnvAction", err, scope, { environmentId: args.environmentId ?? null, commit: args.commit }, true);
       return { ok: false, error: errorMessage(err, "Failed to import .env") };
     }
   });
@@ -200,6 +235,7 @@ export async function upsertKeyAction(args: {
       revalidate(args);
       return { ok: true, id: out.id };
     } catch (err) {
+      logVaultFailure("upsertKeyAction", err, scope, { key: args.key, sensitive: args.sensitive }, true);
       return { ok: false, error: errorMessage(err, "Failed to save key") };
     }
   });
@@ -223,6 +259,7 @@ export async function setValueAction(args: {
       revalidate(args);
       return { ok: true };
     } catch (err) {
+      logVaultFailure("setValueAction", err, scope, { keyId: args.keyId, environmentId: args.environmentId }, true);
       return { ok: false, error: errorMessage(err, "Failed to set value") };
     }
   });
@@ -245,6 +282,7 @@ export async function unsetValueAction(args: {
       revalidate(args);
       return { ok: true };
     } catch (err) {
+      logVaultFailure("unsetValueAction", err, scope, { keyId: args.keyId, environmentId: args.environmentId }, true);
       return { ok: false, error: errorMessage(err, "Failed to remove override") };
     }
   });
@@ -263,6 +301,7 @@ export async function deleteKeyAction(args: {
       revalidate(args);
       return { ok: true };
     } catch (err) {
+      logVaultFailure("deleteKeyAction", err, scope, { keyId: args.keyId }, true);
       return { ok: false, error: errorMessage(err, "Failed to delete key") };
     }
   });
@@ -285,6 +324,7 @@ export async function createEnvironmentAction(args: {
       revalidate(args);
       return { ok: true, environment: out.environment };
     } catch (err) {
+      logVaultFailure("createEnvironmentAction", err, scope, { slug: args.slug }, false);
       return { ok: false, error: errorMessage(err, "Failed to create environment") };
     }
   });
@@ -306,6 +346,7 @@ export async function setDefaultEnvironmentAction(args: {
       revalidate(args);
       return { ok: true, environment: out.environment };
     } catch (err) {
+      logVaultFailure("setDefaultEnvironmentAction", err, scope, { environmentId: args.environmentId }, false);
       return { ok: false, error: errorMessage(err, "Failed to set default environment") };
     }
   });

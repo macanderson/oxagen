@@ -60,6 +60,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
 import { CopyableId } from "@/components/knowledge/graph-explorer/copyable-id";
+import { AvatarMaker } from "@/components/avatar/avatar-maker";
 import { workspace } from "@/lib/routes";
 import type { ScopeContext } from "@/lib/scope";
 import { MarketplaceModal } from "@/components/plugins/marketplace-modal";
@@ -99,6 +100,8 @@ export interface InitialAgent {
   agentKey?: string | null;
   name: string;
   description: string | null;
+  /** Avatar value: https URL or designed-avatar spec string. Null when unset. */
+  avatarUrl?: string | null;
   agentType: string;
   status: "draft" | "active" | "archived";
   deploymentStatus: "inactive" | "active";
@@ -220,6 +223,8 @@ export function AgentBuilder({
   const [description, setDescription] = React.useState(
     initialAgent?.description ?? "",
   );
+  // Avatar value (photo URL or designed spec string) — persisted with the draft.
+  const [avatarUrl, setAvatarUrl] = React.useState(initialAgent?.avatarUrl ?? "");
   const [codeFeatures, setCodeFeatures] = React.useState(
     (initialAgent?.agentType ?? DEFAULT_AGENT_TYPE) === CODING_AGENT_TYPE,
   );
@@ -434,6 +439,8 @@ export function AgentBuilder({
         agentId,
         name: name.trim(),
         description: description.trim() || undefined,
+        // null clears a previously-set avatar; a string sets it.
+        avatarUrl: avatarUrl || null,
         agentType: agentType(),
         config,
       });
@@ -449,6 +456,7 @@ export function AgentBuilder({
       slug: slug.trim(),
       name: name.trim(),
       description: description.trim() || undefined,
+      avatarUrl: avatarUrl || undefined,
       agentType: agentType(),
       config,
     });
@@ -742,6 +750,19 @@ export function AgentBuilder({
           {/* ── Identity ─────────────────────────────────────────────────── */}
           {step.key === "identity" ? (
             <div className="flex flex-col gap-5" data-testid="step-identity">
+              {/* Agent avatar — photo or designed emoji/color tile, shown on
+                  the agents card grid and anywhere the agent is cited. */}
+              <div className="space-y-1">
+                <Label>Avatar</Label>
+                <AvatarMaker
+                  value={avatarUrl || null}
+                  onChange={setAvatarUrl}
+                  name={name || slug || "Agent"}
+                  shape="square"
+                  entityLabel="agent"
+                  disabled={disabled}
+                />
+              </div>
               <div className="space-y-1">
                 <Label htmlFor="agent-name">Name</Label>
                 <Input

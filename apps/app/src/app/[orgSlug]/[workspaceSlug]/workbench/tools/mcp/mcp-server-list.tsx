@@ -14,6 +14,7 @@
 import * as React from "react";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Button } from "@/components/ui/button";
 import { CapabilityIcon } from "@/components/plugins/capability-icon";
 import { KeyRound, ShieldOff, Trash2 } from "lucide-react";
@@ -176,154 +177,135 @@ export function McpServerList({
 
   if (servers.length === 0) {
     return (
-      <div className="rounded-lg border border-border/40 bg-muted/20 px-6 py-8 text-center">
-        <p className="text-sm text-muted-foreground">
-          No MCP servers installed yet. Install one from the marketplace below,
-          or connect a custom endpoint manually.
-        </p>
-      </div>
+      <EmptyState
+        size="sm"
+        variant="muted"
+        title="No MCP servers installed yet"
+        description="Install one from the marketplace below, or connect a custom endpoint manually."
+      />
     );
   }
 
+  // Card list (not a table): a workspace connects a handful of servers, and
+  // each row carries interactive controls (toggle, auth, remove) that read
+  // better as a card on every screen size.
   return (
-    <div className="overflow-hidden rounded-lg border border-border/40">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-border/40 text-xs">
-            <th className="px-4 py-2 text-left font-medium">Server</th>
-            <th className="px-4 py-2 text-left font-medium">Endpoint</th>
-            <th className="px-4 py-2 text-left font-medium">Auth</th>
-            <th className="px-4 py-2 text-left font-medium">Status</th>
-            <th className="px-4 py-2 text-left font-medium">Enabled</th>
-            <th className="px-4 py-2" />
-          </tr>
-        </thead>
-        <tbody>
-          {servers.map((server) => (
-            <React.Fragment key={server.id}>
-              <tr className="border-b border-border/30 last:border-0" data-testid={`mcp-server-row-${server.id}`}>
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-2">
-                    <span className="flex h-6 w-6 items-center justify-center rounded bg-muted flex-shrink-0">
-                      <CapabilityIcon iconName="plug" color="#3b82f6" size={24} />
-                    </span>
-                    <div>
-                      <p className="font-medium" data-testid={`mcp-server-name-${server.id}`}>
-                        {server.title ?? server.name}
-                      </p>
-                      {server.description && (
-                        <p className="mt-0.5 text-xs text-muted-foreground line-clamp-1">
-                          {server.description}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </td>
-                <td className="px-4 py-3 max-w-[240px] truncate text-xs text-muted-foreground">
-                  {server.endpointUrl || "—"}
-                  {server.transport && (
-                    <Badge variant="outline" size="sm" className="ml-2">
-                      {server.transport}
-                    </Badge>
+    <ul className="flex flex-col gap-3">
+      {servers.map((server) => {
+        const display = connectionDisplay(server.authKind, server.credentialStatus);
+        return (
+          <li
+            key={server.id}
+            className="flex flex-col gap-3 rounded-lg border border-border/40 bg-card p-4"
+            data-testid={`mcp-server-row-${server.id}`}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-2">
+                <span className="flex h-6 w-6 items-center justify-center rounded bg-muted flex-shrink-0">
+                  <CapabilityIcon iconName="plug" color="#3b82f6" size={24} />
+                </span>
+                <div className="min-w-0">
+                  <p className="font-medium truncate" data-testid={`mcp-server-name-${server.id}`}>
+                    {server.title ?? server.name}
+                  </p>
+                  {server.description && (
+                    <p className="mt-0.5 text-xs text-muted-foreground line-clamp-1">
+                      {server.description}
+                    </p>
                   )}
-                </td>
-                <td className="px-4 py-3">
-                  <Badge
-                    variant={
-                      server.authKind === "oauth"
-                        ? "info"
-                        : server.authKind === "secret"
-                          ? "warning"
-                          : "muted"
-                    }
-                    size="sm"
-                  >
-                    {server.authKind}
+                </div>
+              </div>
+              <div className="flex shrink-0 items-center gap-3">
+                <Switch
+                  checked={server.enabled}
+                  onCheckedChange={(checked) => handleToggle(server, checked)}
+                  disabled={pendingIds.has(server.id)}
+                  aria-label={`${server.enabled ? "Disable" : "Enable"} ${server.title ?? server.name}`}
+                  data-testid={`mcp-server-toggle-${server.id}`}
+                />
+                <button
+                  type="button"
+                  onClick={() => handleUninstall(server)}
+                  disabled={pendingIds.has(server.id)}
+                  className="text-muted-foreground hover:text-destructive transition-colors disabled:opacity-40"
+                  aria-label={`Remove ${server.title ?? server.name} from workspace`}
+                  data-testid={`mcp-server-remove-btn-${server.id}`}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              <Badge
+                variant={
+                  server.authKind === "oauth"
+                    ? "info"
+                    : server.authKind === "secret"
+                      ? "warning"
+                      : "muted"
+                }
+                size="sm"
+              >
+                {server.authKind}
+              </Badge>
+              <Badge
+                variant={display.variant}
+                size="sm"
+                data-testid={`mcp-server-status-${server.id}`}
+              >
+                {display.label}
+              </Badge>
+              {display.action ? (
+                <Button
+                  size="sm"
+                  variant={display.action === "Authenticate" ? "default" : "ghost"}
+                  render={
+                    <a
+                      href={mcpAuthorizeUrl({
+                        orgSlug,
+                        workspaceSlug,
+                        orgListingId: server.id,
+                        returnTo: `/${orgSlug}/${workspaceSlug}/workbench/tools/mcp`,
+                      })}
+                      data-testid={`mcp-server-authenticate-${server.id}`}
+                    />
+                  }
+                >
+                  <KeyRound className="h-3 w-3" aria-hidden="true" />
+                  {display.action}
+                </Button>
+              ) : null}
+              {/* Remove auth — only meaningful while a credential row
+                  exists. Keeps the install; deletes the credential. */}
+              {server.credentialStatus !== null ? (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => handleRevoke(server)}
+                  disabled={pendingIds.has(server.id)}
+                  data-testid={`mcp-server-revoke-${server.id}`}
+                >
+                  <ShieldOff className="h-3 w-3" aria-hidden="true" />
+                  Remove auth
+                </Button>
+              ) : null}
+              <span className="ml-auto max-w-[50%] truncate">
+                {server.endpointUrl || "—"}
+                {server.transport && (
+                  <Badge variant="outline" size="sm" className="ml-2">
+                    {server.transport}
                   </Badge>
-                </td>
-                <td className="px-4 py-3">
-                  {(() => {
-                    const display = connectionDisplay(server.authKind, server.credentialStatus);
-                    return (
-                      <div className="flex items-center gap-2">
-                        <Badge
-                          variant={display.variant}
-                          size="sm"
-                          data-testid={`mcp-server-status-${server.id}`}
-                        >
-                          {display.label}
-                        </Badge>
-                        {display.action ? (
-                          <Button
-                            size="sm"
-                            variant={display.action === "Authenticate" ? "default" : "ghost"}
-                            render={
-                              <a
-                                href={mcpAuthorizeUrl({
-                                  orgSlug,
-                                  workspaceSlug,
-                                  orgListingId: server.id,
-                                  returnTo: `/${orgSlug}/${workspaceSlug}/workbench/tools/mcp`,
-                                })}
-                                data-testid={`mcp-server-authenticate-${server.id}`}
-                              />
-                            }
-                          >
-                            <KeyRound className="h-3 w-3" aria-hidden="true" />
-                            {display.action}
-                          </Button>
-                        ) : null}
-                        {/* Remove auth — only meaningful while a credential row
-                            exists. Keeps the install; deletes the credential. */}
-                        {server.credentialStatus !== null ? (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => handleRevoke(server)}
-                            disabled={pendingIds.has(server.id)}
-                            data-testid={`mcp-server-revoke-${server.id}`}
-                          >
-                            <ShieldOff className="h-3 w-3" aria-hidden="true" />
-                            Remove auth
-                          </Button>
-                        ) : null}
-                      </div>
-                    );
-                  })()}
-                </td>
-                <td className="px-4 py-3">
-                  <Switch
-                    checked={server.enabled}
-                    onCheckedChange={(checked) => handleToggle(server, checked)}
-                    disabled={pendingIds.has(server.id)}
-                    aria-label={`${server.enabled ? "Disable" : "Enable"} ${server.title ?? server.name}`}
-                    data-testid={`mcp-server-toggle-${server.id}`}
-                  />
-                </td>
-                <td className="px-4 py-3 text-right">
-                  <button
-                    type="button"
-                    onClick={() => handleUninstall(server)}
-                    disabled={pendingIds.has(server.id)}
-                    className="text-muted-foreground hover:text-destructive transition-colors disabled:opacity-40"
-                    aria-label={`Remove ${server.title ?? server.name} from workspace`}
-                    data-testid={`mcp-server-remove-btn-${server.id}`}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </td>
-              </tr>
-              {errors[server.id] && (
-                <tr>
-                  <td colSpan={6} className="px-4 pb-2">
-                    <p className="text-xs text-destructive">{errors[server.id]}</p>
-                  </td>
-                </tr>
-              )}
-            </React.Fragment>
-          ))}
-        </tbody>
-      </table>
-    </div>
+                )}
+              </span>
+            </div>
+
+            {errors[server.id] && (
+              <p className="text-xs text-destructive">{errors[server.id]}</p>
+            )}
+          </li>
+        );
+      })}
+    </ul>
   );
 }

@@ -1,6 +1,13 @@
 "use client";
 import { Toast as ToastPrimitive } from "@base-ui/react/toast";
-import { X } from "lucide-react";
+import {
+  CircleAlert,
+  CircleCheck,
+  Info,
+  TriangleAlert,
+  X,
+  type LucideIcon,
+} from "lucide-react";
 import { cn } from "../lib/utils";
 
 /**
@@ -36,19 +43,31 @@ const TOAST_VARIANTS: Record<string, string> = {
 };
 const TOAST_DEFAULT_VARIANT = "border-border bg-background text-foreground";
 
+/** Semantic leading glyph per `type` — the toast reads at a glance. */
+const TOAST_ICONS: Record<string, LucideIcon> = {
+  error: CircleAlert,
+  destructive: CircleAlert,
+  success: CircleCheck,
+  warning: TriangleAlert,
+  info: Info,
+};
+
 function ToastList() {
   const { toasts } = ToastPrimitive.useToastManager();
-  return toasts.map((toast) => (
+  return toasts.map((toast) => {
+    const Icon = toast.type ? TOAST_ICONS[toast.type] : undefined;
+    return (
     <ToastPrimitive.Root
       key={toast.id}
       toast={toast}
       className={cn(
-        "group pointer-events-auto relative flex w-full items-center justify-between gap-2 overflow-hidden rounded-md border p-4 pr-8 shadow-lg",
+        "group pointer-events-auto relative flex w-full items-start gap-3 overflow-hidden rounded-md border p-4 pr-8 shadow-lg",
         (toast.type && TOAST_VARIANTS[toast.type]) ?? TOAST_DEFAULT_VARIANT,
-        "transition-[opacity,transform] duration-[var(--motion-base)] ease-[var(--ease-entry)] data-[starting-style]:opacity-0 data-[starting-style]:translate-x-full data-[ending-style]:opacity-0",
+        "transition-[opacity,transform,translate,scale] duration-[var(--motion-base)] ease-[var(--ease-entry)] data-[starting-style]:opacity-0 data-[starting-style]:translate-x-full data-[ending-style]:opacity-0",
       )}
     >
-      <div className="grid gap-1">
+      {Icon && <Icon aria-hidden="true" className="mt-0.5 size-4 shrink-0" />}
+      <div className="grid flex-1 gap-1">
         <ToastPrimitive.Title className="text-sm font-semibold" />
         <ToastPrimitive.Description className="text-sm opacity-90" />
       </div>
@@ -59,7 +78,8 @@ function ToastList() {
         <X className="h-4 w-4" />
       </ToastPrimitive.Close>
     </ToastPrimitive.Root>
-  ));
+    );
+  });
 }
 
 function ToastViewport({ className }: { className?: string }) {

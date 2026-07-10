@@ -22,6 +22,8 @@ describe("agent.definition.get capability", () => {
       version: 1,
       isPublished: true,
       managed: true,
+      avatarUrl: null,
+      summary: null,
       config: {
         graph: {
           ontologyId: "ont",

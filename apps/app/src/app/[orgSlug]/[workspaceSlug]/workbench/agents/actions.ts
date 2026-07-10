@@ -21,6 +21,7 @@ import {
   agentToolSchema,
   agentTriggerSchema,
 } from "@oxagen/oxagen/agent-schema";
+import { logger } from "@oxagen/handlers/logger";
 import { avatarUrlSchema } from "@oxagen/oxagen/avatar";
 import { workspace } from "@/lib/routes";
 import type { ScopeContext } from "@/lib/scope";
@@ -166,6 +167,10 @@ export async function createAgentAction(
       slug: out.slug,
     };
   } catch (err) {
+    logger.error(
+      { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId, slug },
+      "studio.agents: createAgentAction failed",
+    );
     return {
       ok: false,
       error: err instanceof Error ? err.message : "Failed to create the agent.",
@@ -202,6 +207,10 @@ export async function updateAgentAction(
     revalidateAgents(orgSlug, workspaceSlug);
     return { ok: true, version: out.version, isPublished: out.isPublished };
   } catch (err) {
+    logger.error(
+      { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId, agentId },
+      "studio.agents: updateAgentAction failed",
+    );
     return {
       ok: false,
       error: err instanceof Error ? err.message : "Failed to update the agent.",
@@ -228,6 +237,10 @@ export async function publishAgentAction(
     revalidateAgents(orgSlug, workspaceSlug);
     return { ok: true, version: out.version };
   } catch (err) {
+    logger.error(
+      { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId, agentId },
+      "studio.agents: publishAgentAction failed",
+    );
     return {
       ok: false,
       error: err instanceof Error ? err.message : "Failed to publish the agent.",
@@ -254,6 +267,10 @@ export async function deployAgentAction(
     revalidateAgents(orgSlug, workspaceSlug);
     return { ok: true, deploymentStatus: out.deploymentStatus };
   } catch (err) {
+    logger.error(
+      { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId, agentId, deploymentStatus },
+      "studio.agents: deployAgentAction failed",
+    );
     return {
       ok: false,
       error: err instanceof Error ? err.message : "Failed to deploy the agent.",
@@ -295,6 +312,10 @@ export async function suggestAgentAction(
       recommendations: out.recommendations,
     };
   } catch (err) {
+    logger.error(
+      { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+      "studio.agents: suggestAgentAction failed",
+    );
     return {
       ok: false,
       error:
