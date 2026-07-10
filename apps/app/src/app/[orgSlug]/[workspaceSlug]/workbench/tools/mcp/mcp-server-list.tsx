@@ -12,6 +12,15 @@
 import * as React from "react";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/ui/empty-state";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { CapabilityIcon } from "@/components/plugins/capability-icon";
 import { KeyRound, Trash2 } from "lucide-react";
@@ -144,32 +153,32 @@ export function McpServerList({
 
   if (servers.length === 0) {
     return (
-      <div className="rounded-lg border border-border/40 bg-muted/20 px-6 py-8 text-center">
-        <p className="text-sm text-muted-foreground">
-          No MCP servers connected yet. Use the form above to connect one.
-        </p>
-      </div>
+      <EmptyState
+        size="sm"
+        variant="muted"
+        title="No MCP servers connected yet"
+        description="Use the form above to connect one."
+      />
     );
   }
 
   return (
-    <div className="overflow-hidden rounded-lg border border-border/40">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-border/40 text-xs">
-            <th className="px-4 py-2 text-left font-medium">Server</th>
-            <th className="px-4 py-2 text-left font-medium">Endpoint</th>
-            <th className="px-4 py-2 text-left font-medium">Auth</th>
-            <th className="px-4 py-2 text-left font-medium">Status</th>
-            <th className="px-4 py-2 text-left font-medium">Enabled</th>
-            <th className="px-4 py-2" />
-          </tr>
-        </thead>
-        <tbody>
+    <Table containerClassName="overflow-hidden rounded-lg border border-border/40">
+      <TableHeader>
+        <TableRow>
+          <TableHead>Server</TableHead>
+          <TableHead>Endpoint</TableHead>
+          <TableHead>Auth</TableHead>
+          <TableHead>Status</TableHead>
+          <TableHead>Enabled</TableHead>
+          <TableHead />
+        </TableRow>
+      </TableHeader>
+      <TableBody>
           {servers.map((server) => (
             <React.Fragment key={server.id}>
-              <tr className="border-b border-border/30 last:border-0" data-testid={`mcp-server-row-${server.id}`}>
-                <td className="px-4 py-3">
+              <TableRow data-testid={`mcp-server-row-${server.id}`}>
+                <TableCell>
                   <div className="flex items-center gap-2">
                     <span className="flex h-6 w-6 items-center justify-center rounded bg-muted flex-shrink-0">
                       <CapabilityIcon iconName="plug" color="#3b82f6" size={24} />
@@ -185,16 +194,16 @@ export function McpServerList({
                       )}
                     </div>
                   </div>
-                </td>
-                <td className="px-4 py-3 max-w-[240px] truncate text-xs text-muted-foreground">
+                </TableCell>
+                <TableCell className="max-w-[240px] truncate text-xs text-muted-foreground">
                   {server.endpointUrl || "—"}
                   {server.transport && (
                     <Badge variant="outline" size="sm" className="ml-2">
                       {server.transport}
                     </Badge>
                   )}
-                </td>
-                <td className="px-4 py-3">
+                </TableCell>
+                <TableCell>
                   <Badge
                     variant={
                       server.authKind === "oauth"
@@ -207,8 +216,8 @@ export function McpServerList({
                   >
                     {server.authKind}
                   </Badge>
-                </td>
-                <td className="px-4 py-3">
+                </TableCell>
+                <TableCell>
                   {(() => {
                     const display = connectionDisplay(server.authKind, server.credentialStatus);
                     return (
@@ -243,8 +252,8 @@ export function McpServerList({
                       </div>
                     );
                   })()}
-                </td>
-                <td className="px-4 py-3">
+                </TableCell>
+                <TableCell>
                   <Switch
                     checked={server.enabled}
                     onCheckedChange={(checked) => handleToggle(server, checked)}
@@ -252,8 +261,8 @@ export function McpServerList({
                     aria-label={`${server.enabled ? "Disable" : "Enable"} ${server.title ?? server.name}`}
                     data-testid={`mcp-server-toggle-${server.id}`}
                   />
-                </td>
-                <td className="px-4 py-3 text-right">
+                </TableCell>
+                <TableCell className="text-right">
                   <button
                     type="button"
                     onClick={() => handleUninstall(server)}
@@ -264,19 +273,18 @@ export function McpServerList({
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
               {errors[server.id] && (
-                <tr>
-                  <td colSpan={6} className="px-4 pb-2">
+                <TableRow className="hover:bg-transparent">
+                  <TableCell colSpan={6} className="pb-2 pt-0">
                     <p className="text-xs text-destructive">{errors[server.id]}</p>
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               )}
             </React.Fragment>
           ))}
-        </tbody>
-      </table>
-    </div>
+      </TableBody>
+    </Table>
   );
 }

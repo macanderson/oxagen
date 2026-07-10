@@ -51,17 +51,25 @@ Import from `@oxagen/ui` (barrel) or `@/components/ui/<file>` (app proxy).
 
 | Component | File | Canonical parts | Notes |
 |-----------|------|-----------------|-------|
-| Button | `button.tsx` | `Button` (`render`) | sizes `xs/sm/default/lg/xl` + `icon/icon-sm/icon-lg`; variants incl. `destructive-outline`. coss sizes are compact — use `lg` to match a shadcn `default` (36px). |
-| Badge | `badge.tsx` | `Badge` (`render`) | sizes `sm/default/lg` (`lg` = shadcn fixed size); variants `default/secondary/destructive/outline/muted/info/success/warning/error`. |
+| Button | `button.tsx` | `Button` (`render`) | sizes `xs/sm/default/lg/xl` + `icon/icon-sm/icon-lg`; variants incl. `destructive-outline`; `loading` swaps the leading icon for a spinner + disables + `aria-busy`. coss sizes are compact — use `lg` to match a shadcn `default` (36px). |
+| Badge | `badge.tsx` | `Badge` (`render`) | sizes `sm/default/lg` (`lg` = shadcn fixed size); variants `default/secondary/destructive/outline/muted/info/success/warning/error` + soft tints `info-soft/success-soft/warning-soft/error-soft`; `dot` adds a leading status dot. |
 | Card | `card.tsx` | `Card`, `CardHeader`, `CardTitle`, `CardDescription`, `CardPanel`, `CardFooter` | body wrapper is `CardPanel`. |
 | Dialog | `dialog.tsx` | `Dialog`, `DialogTrigger`, `DialogPopup`, `DialogHeader`, `DialogPanel`, `DialogFooter`, `DialogTitle`, `DialogDescription`, `DialogClose` | `DialogPanel` wraps the body between header & footer. `portalProps` on `DialogPopup`. |
 | Sheet | `sheet.tsx` | `Sheet`, `SheetTrigger`, `SheetPopup`, `SheetHeader`, `SheetPanel`, `SheetFooter`, `SheetTitle`, `SheetDescription`, `SheetClose` | `side` on `SheetPopup` (`top/bottom/left/right`). `portalProps`. |
-| Menu | `menu.tsx` | `Menu`, `MenuTrigger`, `MenuPopup`, `MenuItem`, `MenuCheckboxItem`, `MenuRadioGroup`, `MenuRadioItem`, `MenuGroupLabel`, `MenuSeparator`, `MenuShortcut`, `MenuGroup`, `MenuSub`, `MenuSubTrigger`, `MenuSubPopup` | items use `onClick`; `align/side/sideOffset/portalProps` on `MenuPopup`. |
+| Menu | `menu.tsx` | `Menu`, `MenuTrigger`, `MenuPopup`, `MenuItem`, `MenuCheckboxItem`, `MenuRadioGroup`, `MenuRadioItem`, `MenuGroupLabel`, `MenuSeparator`, `MenuShortcut`, `MenuGroup`, `MenuSub`, `MenuSubTrigger`, `MenuSubPopup` | items use `onClick`; `variant="destructive"` on `MenuItem` for delete actions; `align/side/sideOffset/portalProps` on `MenuPopup`. |
+| Table | `table.tsx` | `Table`, `TableHeader`, `TableBody`, `TableFooter`, `TableRow`, `TableHead`, `TableCell`, `TableCaption`, `TableEmpty` | the ONLY way to render a data table — never hand-roll `<table>`. Auto horizontal-scroll container (`containerClassName`); `density="compact"`; `sticky` on `TableHeader`; `interactive` on `TableRow`; `TableEmpty colSpan={n}` for zero rows. Pair with `<Panel inset>`. |
 | Select | `select.tsx` | `Select`, `SelectTrigger`, `SelectValue`, `SelectPopup`, `SelectGroup`, `SelectLabel`, `SelectItem` | `size` on `SelectTrigger` (`sm/default/lg`); `alignItemWithTrigger`/`portalProps` on `SelectPopup`. For SSR prefer passing an `items` array to `Select`. |
 | Tabs | `tabs.tsx` | `Tabs`, `TabsList`, `TabsTab`, `TabsPanel` | `TabsList` `variant="default" | "underline"`. `value/defaultValue` are strings. |
 | Input | `input.tsx` | `Input` | `size` (`sm/default/lg`; `lg` = shadcn 36px). |
 | Textarea | `textarea.tsx` | `Textarea` | `size` (`sm/default/lg`) — match neighbouring inputs. |
 | Toast | `toast.tsx` | `ToastProvider`, `ToastViewport`, `useToast` | mount `<ToastProvider>` once; enqueue via `useToast().add({ title, description, type })`. |
+| CopyButton | `copy-button.tsx` | `CopyButton`, `useCopyToClipboard` | never hand-roll `navigator.clipboard` + icon swap. `value` (string or lazy fn), `label`/`copiedLabel`, animated Copy→Check. Hook for bespoke chrome. |
+| EmptyState | `empty-state.tsx` | `EmptyState` | `icon/title/description/action`, `size sm/default`, `variant plain/dashed/muted`. The one shape for zero-data moments. |
+| Stat | `stat.tsx` | `Stat`, `StatGroup` | KPI tile: `label/value/delta/trend/intent/hint/icon/tone/loading`. `StatGroup` gives hairline-divided rows (`columns` 1–4). |
+| StatusDot | `status-dot.tsx` | `StatusDot` | `status success/warning/error/info/neutral/primary`, `pulse` for live states, `label`/`srLabel`. |
+| Spinner | `spinner.tsx` | `Spinner` | sizes `xs/sm/default/lg/xl`, currentColor, `role="status"` + sr label. Prefer `Button loading` for buttons. |
+| SearchInput | `search-input.tsx` | `SearchInput` | Input + leading search glyph + optional `onClear` clear button. |
+| KeyValueList | `key-value-list.tsx` | `KeyValueList` | semantic `<dl>` metadata grid; `items[{label,value,key?}]`, `dense`, `stacked`. |
 | Label / Separator / Skeleton | resp. | `Label`, `Separator`, `Skeleton` | unchanged. |
 
 (Brand/marketing helpers — `brand`, `marketing-hero`, `global-error`,
