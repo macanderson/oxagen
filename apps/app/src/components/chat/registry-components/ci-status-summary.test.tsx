@@ -4,7 +4,7 @@
  *
  * Covers:
  *   - formatDuration: sub-minute "1.2s" vs mm:ss
- *   - overall badge label per state (passing/failing/pending/neutral/unknown)
+ *   - overall status label per state (passing/failing/pending/neutral/unknown)
  *   - compact counts line omits zero categories
  *   - runs list renders per-run glyphs (success/failure/in-progress/skipped)
  *   - external links carry href + accessible label
@@ -63,18 +63,20 @@ describe("formatDuration", () => {
   });
 });
 
-describe("CiStatusSummary overall badge", () => {
-  const cases: Array<[CiOverall, string]> = [
-    ["passing", "Passing"],
-    ["failing", "Failing"],
-    ["pending", "Pending"],
-    ["neutral", "Neutral"],
-    ["unknown", "Unknown"],
+describe("CiStatusSummary overall status", () => {
+  const cases: Array<[CiOverall, string, string]> = [
+    ["passing", "Passing", "text-success"],
+    ["failing", "Failing", "text-destructive"],
+    ["pending", "Pending", "text-warning"],
+    ["neutral", "Neutral", "text-muted-foreground"],
+    ["unknown", "Unknown", "text-muted-foreground"],
   ];
 
-  it.each(cases)("renders %s -> %s label", (overall, label) => {
+  it.each(cases)("renders %s -> %s label in the right tone", (overall, label, tone) => {
     render(<CiStatusSummary overall={overall} counts={ZERO_COUNTS} runs={[]} />);
-    expect(screen.getByText(label)).toBeInTheDocument();
+    const status = screen.getByText(label);
+    expect(status).toBeInTheDocument();
+    expect(status.className).toContain(tone);
   });
 });
 
@@ -173,7 +175,7 @@ describe("CiStatusSummary runs list", () => {
     expect(screen.getAllByLabelText("Failure")).toHaveLength(2);
   });
 
-  it("shows a pending spinner in the overall badge", () => {
+  it("shows a pending spinner in the overall status", () => {
     const { container } = render(
       <CiStatusSummary
         overall="pending"
@@ -181,7 +183,7 @@ describe("CiStatusSummary runs list", () => {
         runs={[]}
       />,
     );
-    // Empty runs means the only spinner in the tree is the badge's.
+    // Empty runs means the only spinner in the tree is the overall status's.
     expect(container.querySelector(".animate-spin")).not.toBeNull();
   });
 });

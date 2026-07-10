@@ -75,12 +75,11 @@ apps/app/src/app/[orgSlug]/[workspaceSlug]/layout.tsx → workspace shell
     /                                    → ActivityPage (execution list)
     /[executionId]                       → ExecutionDetailPage (span tree, lineage)
 
-  /workbench                             → WorkbenchPage (agent/skill/tool authoring hub;
-                                            renamed from /studio)
-    /agents                              → AgentsListPage + AgentEditorForm
-    /skills                              → SkillsAuthoringPage
-    /sandboxes                           → SandboxesPage (durable sandbox session list/detail)
-    /tools                               → ToolsPage (also nests /capabilities, /mcp, /skills)
+  /workbench                             → redirects to /workbench/agents
+    /agents                              → WorkbenchAgentsPage + AgentBuilder (new/[agentId])
+    /tools                               → Agent Tools hub (All Tools / Skills / MCP Servers / Capabilities)
+    /environments                        → WorkbenchEnvironmentsPage (EnvironmentsPanel)
+    /sandboxes                           → WorkbenchSandboxesPage (sessions + SandboxTemplatesPanel)
 
   /marketplace                           → MarketplacePage
     /browse                              → BrowseMarketplacePage (plugin/skill catalog)
@@ -104,15 +103,14 @@ apps/app/src/app/[orgSlug]/[workspaceSlug]/layout.tsx → workspace shell
   /settings
     /general                             → WorkspaceGeneralForm
     /budget                              → BudgetPolicyForm (workspace budget policy)
-    /environments                        → EnvironmentsPanel
     /github                              → GithubConnectionSettings
     /knowledge                           → KnowledgeSettingsPage
     /memory                              → MemoryPolicyForm
+    /mcp-server-registries               → RegistryManager (registry admin lives ONLY here)
     /models                              → ModelsForm
-    /plugins                             → WorkspacePluginsPanel + RegistryManager
     /prompts                             → PromptSettingsForm
-    /skills                              → SkillsPanel
     /members                             → MembersPage
+    (/environments, /plugins, /skills    → redirects into Workbench)
 ```
 
 ### Component Hierarchy

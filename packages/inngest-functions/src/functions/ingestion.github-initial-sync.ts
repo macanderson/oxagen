@@ -17,13 +17,25 @@ const ALLOWED_EXTENSIONS = [".ts", ".tsx", ".py", ".md", ".mdx", ".markdown"];
 const MAX_FILES = 500;
 // Maximum events sent per step.sendEvent batch call.
 const BATCH_SIZE = 50;
-// Cap on historical domain records (PRs/issues/releases/commits) pulled per type
-// on the initial backfill, to bound GitHub API + downstream pipeline fan-out.
+// Cap on historical domain records (PRs/issues/releases) pulled per type on the
+// initial backfill, to bound GitHub API + downstream pipeline fan-out. Commits
+// have their own date-bounded, paginated path below (see MAX_COMMITS_BACKFILL).
 const MAX_RECORDS_PER_TYPE = 100;
+// Default commit-history window (days) when the event omits syncDepthDays.
+// Matches the connection.mappings.set handler default and the GitHub connector
+// schema default (packages/ingestion/src/connectors/github/index.ts).
+const DEFAULT_SYNC_DEPTH_DAYS = 90;
+// GitHub's maximum per_page for the list-commits endpoint.
+const COMMITS_PER_PAGE = 100;
+// Hard safety cap on total commits fetched for the date-bounded backfill so a
+// huge or high-velocity repo can't run away. Worst case is
+// MAX_COMMITS_BACKFILL / COMMITS_PER_PAGE = 5 list pages per repo.
+const MAX_COMMITS_BACKFILL = 500;
 // How many of the most recent commits to fan out commit-file detail fetches for.
-// Each commit requires one extra GitHub API call; 20 is conservative relative to
-// the 5000 req/hr OAuth rate limit while still covering several days of history.
-const MAX_COMMIT_FILE_SYNC = 20;
+// Each commit requires one extra GitHub API call; 100 stays conservative
+// relative to the 5000 req/hr OAuth rate limit while covering the backfilled
+// history window far deeper than the previous cap of 20.
+const MAX_COMMIT_FILE_SYNC = 100;
 
 interface GitTreeItem {
   path: string;
@@ -74,9 +86,11 @@ async function ghList(url: string, token: string): Promise<unknown[]> {
  * Triggered by "ingestion/github.initial-sync". For a single repo it:
  *   1. resolves an access token and the repo's real default branch,
  *   2. backfills domain entities — the repository itself plus recent pull
- *      requests, issues, releases, and commits — by emitting one
- *      "ingestion/entity.received" per record (the ingestion pipeline normalizes,
- *      maps, and upserts each into the Neo4j knowledge graph),
+ *      requests, issues, and releases (first page each) and commit history
+ *      date-bounded by syncDepthDays (paginated, hard-capped at
+ *      MAX_COMMITS_BACKFILL) — by emitting one "ingestion/entity.received" per
+ *      record (the ingestion pipeline normalizes, maps, and upserts each into
+ *      the Neo4j knowledge graph),
  *   3. fans out one "ingestion/github.parse-file" per parseable source file,
  *   4. upserts the SourceConnection meta-node and marks the connection connected.
  *
@@ -92,17 +106,26 @@ export const [ingestionGithubInitialSync] = createFunction(
   },
   { event: "ingestion/github.initial-sync" },
   async ({ event, step }) => {
-    const { connectionId, orgId, workspaceId, owner, repo } = event.data as {
-      connectionId: string;
-      orgId: string;
-      workspaceId: string;
-      owner: string;
-      repo: string;
-      // defaultBranch (legacy) is ignored — we resolve the real one below.
-      // syncDepthDays is accepted but the initial backfill is currently bounded by
-      // MAX_RECORDS_PER_TYPE rather than a date window.
-      syncDepthDays?: number;
-    };
+    const { connectionId, orgId, workspaceId, owner, repo, syncDepthDays: syncDepthDaysRaw } =
+      event.data as {
+        connectionId: string;
+        orgId: string;
+        workspaceId: string;
+        owner: string;
+        repo: string;
+        // defaultBranch (legacy) is ignored — we resolve the real one below.
+        // syncDepthDays bounds the commit-history backfill window (the wizard's
+        // "sync history depth" selector); PRs/issues/releases stay bounded by
+        // MAX_RECORDS_PER_TYPE.
+        syncDepthDays?: number;
+      };
+
+    // Honor the wizard's sync-depth selector for commit history; fall back to
+    // the shared 90-day default for legacy events or malformed values.
+    const syncDepthDays =
+      typeof syncDepthDaysRaw === "number" && Number.isFinite(syncDepthDaysRaw) && syncDepthDaysRaw > 0
+        ? syncDepthDaysRaw
+        : DEFAULT_SYNC_DEPTH_DAYS;
 
     // Guard: if owner or repo is empty the GitHub API call is doomed (404).
     // Throw NonRetriableError immediately so we don't burn retries and surface
@@ -216,23 +239,61 @@ export const [ingestionGithubInitialSync] = createFunction(
     );
     await dispatchEntities("releases", "release", releases);
 
-    // ── Step 7: Backfill recent commits on the default branch (inject the
-    //            branch so trigger conditions can match on git_branch) ─────────
-    const commits = await step.run("fetch-commits", () =>
-      ghList(
-        `${repoBase}/commits?sha=${encodeURIComponent(defaultBranch)}&per_page=${MAX_RECORDS_PER_TYPE}`,
-        accessToken,
-      ),
-    );
+    // ── Step 7: Backfill commit history on the default branch, date-bounded by
+    //            syncDepthDays (the wizard's "sync history depth" selector) and
+    //            paginated up to a hard MAX_COMMITS_BACKFILL safety cap. The
+    //            whole loop lives in one step.run so the `since` window and the
+    //            accumulated pages are memoized together — a retry refetches at
+    //            most 5 list pages, and replays reuse the same result. The
+    //            branch is injected so trigger conditions can match on
+    //            git_branch. ─────────────────────────────────────────────────
+    const commitBackfill = await step.run("fetch-commits", async () => {
+      const since = new Date(Date.now() - syncDepthDays * 24 * 60 * 60 * 1000).toISOString();
+      const maxPages = Math.ceil(MAX_COMMITS_BACKFILL / COMMITS_PER_PAGE);
+      const collected: unknown[] = [];
+      let cappedAtMax = false;
+      for (let page = 1; page <= maxPages; page++) {
+        const pageItems = await ghList(
+          `${repoBase}/commits?sha=${encodeURIComponent(defaultBranch)}&since=${encodeURIComponent(since)}&per_page=${COMMITS_PER_PAGE}&page=${page}`,
+          accessToken,
+        );
+        collected.push(...pageItems);
+        // A short page means the window is exhausted; a full final page means
+        // more history exists inside the window beyond the cap.
+        if (pageItems.length < COMMITS_PER_PAGE) break;
+        if (page === maxPages) cappedAtMax = true;
+      }
+      return { commits: collected.slice(0, MAX_COMMITS_BACKFILL), cappedAtMax, since };
+    });
+
+    const commits = commitBackfill.commits;
+    // Never truncate silently — the operator must know the graph holds partial
+    // history for this window.
+    if (commitBackfill.cappedAtMax) {
+      logger.warn(
+        {
+          connectionId,
+          orgId,
+          owner,
+          repo,
+          cap: MAX_COMMITS_BACKFILL,
+          syncDepthDays,
+          since: commitBackfill.since,
+        },
+        "ingestion-github-initial-sync: commit backfill capped at MAX_COMMITS_BACKFILL — older commits inside the sync window were not ingested",
+      );
+    }
     const commitsWithBranch = commits.map((c) => ({ ...asRecord(c), git_branch: defaultBranch }));
     await dispatchEntities("commits", "commit", commitsWithBranch);
 
     // ── Step 7b: Fan out commit-file detail fetches (bounded) ─────────────────
-    // For each of the most recent MAX_COMMIT_FILE_SYNC commits, emit one
+    // For each of the most recent MAX_COMMIT_FILE_SYNC commits from the
+    // backfilled window (GitHub lists newest first), emit one
     // "ingestion/github.commit-files" event so the commit-files function can fetch
     // per-commit file lists and write (:Commit)-[:MODIFIED]->(:SourceFile) edges.
-    // We log (don't silently drop) when the full commit list is capped so the
-    // operator knows partial coverage is intentional.
+    // Each fan-out is its own retryable Inngest event, so a per-commit failure
+    // stays isolated. We log (don't silently drop) when the full commit list is
+    // capped so the operator knows partial coverage is intentional.
     const commitsForFileSyncRaw = commits.slice(0, MAX_COMMIT_FILE_SYNC);
     if (commits.length > MAX_COMMIT_FILE_SYNC) {
       logger.info(

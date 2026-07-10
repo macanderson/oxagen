@@ -201,6 +201,7 @@ import "./contracts/plugin.catalog.browse";
 import "./contracts/plugin.catalog.get";
 import "./contracts/plugin.catalog.sync";
 import "./contracts/plugin.credential.reauth";
+import "./contracts/plugin.credential.revoke";
 import "./contracts/plugin.credential.set_secret";
 import "./contracts/plugin.org.install";
 import "./contracts/plugin.org.install_bulk";

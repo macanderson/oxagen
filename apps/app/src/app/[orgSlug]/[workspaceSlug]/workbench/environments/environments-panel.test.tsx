@@ -149,7 +149,9 @@ vi.mock("@/components/ui/alert", () => ({
   Alert: ({ children }: { children: React.ReactNode }) => (
     <div role="alert">{children}</div>
   ),
-  AlertTitle: ({ children }: { children: React.ReactNode }) => <h5>{children}</h5>,
+  AlertTitle: ({ children }: { children: React.ReactNode }) => (
+    <h5>{children}</h5>
+  ),
   AlertDescription: ({ children }: { children: React.ReactNode }) => (
     <div>{children}</div>
   ),
@@ -222,7 +224,9 @@ import type {
 // Fixture builders
 // ---------------------------------------------------------------------------
 
-function makeEnv(overrides: Partial<EnvironmentSummary> = {}): EnvironmentSummary {
+function makeEnv(
+  overrides: Partial<EnvironmentSummary> = {},
+): EnvironmentSummary {
   return {
     id: "env-1",
     name: "Production",
@@ -273,7 +277,12 @@ function makeDefaultProps(
     environments: [makeEnv()],
     secretKeys: [
       makeKey({ id: "key-1", key: "DATABASE_URL" }),
-      makeKey({ id: "key-2", key: "LOG_LEVEL", sensitive: false, hasDefault: false }),
+      makeKey({
+        id: "key-2",
+        key: "LOG_LEVEL",
+        sensitive: false,
+        hasDefault: false,
+      }),
     ],
     importEnvAction: vi.fn(async () => ({
       ok: true as const,
@@ -317,12 +326,21 @@ describe("EnvironmentsPanel", () => {
     const props = makeDefaultProps({
       environments: [
         makeEnv({ id: "env-1", slug: "production" }),
-        makeEnv({ id: "env-2", name: "Staging", slug: "staging", isDefault: false }),
+        makeEnv({
+          id: "env-2",
+          name: "Staging",
+          slug: "staging",
+          isDefault: false,
+        }),
       ],
     });
     render(<EnvironmentsPanel {...props} />);
-    expect(screen.getByRole("columnheader", { name: "production" })).toBeInTheDocument();
-    expect(screen.getByRole("columnheader", { name: "staging" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("columnheader", { name: "production" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("columnheader", { name: "staging" }),
+    ).toBeInTheDocument();
   });
 
   // (c) canManage:false hides management controls
@@ -342,16 +360,31 @@ describe("EnvironmentsPanel", () => {
     expect(screen.queryByText("+ New environment")).not.toBeInTheDocument();
   });
 
+  // (g) The new-environment dialog derives its slug preview from the shared
+  // @/lib/slug slugify — non-alphanumerics collapse to single hyphens and
+  // edge hyphens are trimmed.
+  it("previews the shared-slugify slug when typing a new environment name", () => {
+    render(<EnvironmentsPanel {...makeDefaultProps()} />);
+    fireEvent.click(screen.getByRole("button", { name: "+ New environment" }));
+    const nameInput = document.getElementById("env-name") as HTMLInputElement;
+    fireEvent.change(nameInput, { target: { value: "Proof Env 42!" } });
+    expect(screen.getByText("proof-env-42")).toBeInTheDocument();
+  });
+
   // (d) Opening "Paste .env" shows the dialog textarea
   it("clicking 'Paste .env' opens the dialog and shows the textarea", () => {
     render(<EnvironmentsPanel {...makeDefaultProps()} />);
     // Dialog not open yet
-    expect(screen.queryByText("Paste .env", { selector: "h2" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Paste .env", { selector: "h2" }),
+    ).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Paste .env" }));
 
     // Dialog title appears
-    expect(screen.getByText("Paste .env", { selector: "h2" })).toBeInTheDocument();
+    expect(
+      screen.getByText("Paste .env", { selector: "h2" }),
+    ).toBeInTheDocument();
     // Textarea is rendered
     expect(screen.getByRole("textbox")).toBeInTheDocument();
   });
@@ -371,7 +404,9 @@ describe("EnvironmentsPanel", () => {
 
     // Type in the textarea
     const textarea = screen.getByRole("textbox");
-    fireEvent.change(textarea, { target: { value: 'NEW_KEY=secret123\nLOG_LEVEL=info' } });
+    fireEvent.change(textarea, {
+      target: { value: "NEW_KEY=secret123\nLOG_LEVEL=info" },
+    });
 
     // Click Preview
     await act(async () => {
@@ -382,7 +417,7 @@ describe("EnvironmentsPanel", () => {
       expect.objectContaining({
         orgSlug: "acme",
         workspaceSlug: "main",
-        text: 'NEW_KEY=secret123\nLOG_LEVEL=info',
+        text: "NEW_KEY=secret123\nLOG_LEVEL=info",
         environmentId: null,
         commit: false,
       }),
@@ -404,7 +439,9 @@ describe("EnvironmentsPanel", () => {
 
     // Type .env text
     const textarea = screen.getByRole("textbox");
-    fireEvent.change(textarea, { target: { value: 'NEW_KEY=val\nLOG_LEVEL=debug' } });
+    fireEvent.change(textarea, {
+      target: { value: "NEW_KEY=val\nLOG_LEVEL=debug" },
+    });
 
     // Click Preview — importEnvAction called with commit:false
     await act(async () => {
@@ -413,7 +450,9 @@ describe("EnvironmentsPanel", () => {
 
     // Wait for preview rows to render and Import button to appear
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /Import.*key/i })).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /Import.*key/i }),
+      ).toBeInTheDocument();
     });
 
     // Click Import
@@ -458,7 +497,9 @@ describe("EnvironmentsPanel", () => {
 
   it("does not render a load-error notice when loadError is false/absent", () => {
     render(<EnvironmentsPanel {...makeDefaultProps()} />);
-    expect(screen.queryByText(/couldn't load environments/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/couldn't load environments/i),
+    ).not.toBeInTheDocument();
   });
 
   // Edge: environments bar shows "No environments yet." when empty

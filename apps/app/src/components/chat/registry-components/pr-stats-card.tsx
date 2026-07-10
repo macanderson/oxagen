@@ -8,7 +8,6 @@ import {
   GitPullRequest,
   MessageSquare,
 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import {
   CiStatusSummary,
@@ -145,20 +144,30 @@ function StateBadge({
 }): ReactElement {
   if (state === "merged") {
     return (
-      <Badge variant="brand" className="inline-flex items-center gap-1">
+      <span className="inline-flex items-center gap-1 text-xs font-medium text-foreground">
         <GitMerge className="size-3" aria-hidden="true" />
         Merged
-      </Badge>
+      </span>
     );
   }
   if (state === "closed") {
-    return <Badge variant="error">Closed</Badge>;
+    return (
+      <span className="inline-flex items-center gap-1 text-xs font-medium text-destructive">
+        Closed
+      </span>
+    );
   }
   // open
   if (draft) {
-    return <Badge variant="muted">Draft</Badge>;
+    return (
+      <span className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground">
+        Draft
+      </span>
+    );
   }
-  return <Badge variant="success">Open</Badge>;
+  return (
+    <span className="inline-flex items-center gap-1 text-xs font-medium text-success">Open</span>
+  );
 }
 
 function CommentEntry({ comment }: { comment: PrComment }): ReactElement {
@@ -173,14 +182,16 @@ function CommentEntry({ comment }: { comment: PrComment }): ReactElement {
         <span className="font-medium text-foreground">{comment.author ?? "unknown"}</span>
         <span className="text-muted-foreground">{relativeTime(comment.createdAt)}</span>
         {comment.kind === "review" ? (
-          <Badge variant="info" className="inline-flex items-center gap-1">
+          <span className="inline-flex items-center gap-1 text-xs font-medium text-info">
             review
             {comment.path ? (
               <span className="font-mono text-[10px]">{comment.path}</span>
             ) : null}
-          </Badge>
+          </span>
         ) : (
-          <Badge variant="outline">issue</Badge>
+          <span className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground">
+            issue
+          </span>
         )}
       </div>
       <p className="whitespace-pre-wrap break-words text-xs text-foreground">{comment.body}</p>

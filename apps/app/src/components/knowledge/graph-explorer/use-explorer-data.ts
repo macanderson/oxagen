@@ -40,7 +40,20 @@ export interface ExplorerGraphState {
 
 const EMPTY_GRAPH: Graph = { nodes: [], edges: [] };
 
-export function useExplorerData(tenant: TenantSlugs): ExplorerGraphState {
+export interface UseExplorerDataOptions {
+  /**
+   * Opt runtime lineage (executions, agents, tools) into the seed. Off by
+   * default — the explorer's purpose is the source-system ontology, and the
+   * lineage nodes are refetched only when the visibility toggle asks for them.
+   */
+  includeSystem?: boolean;
+}
+
+export function useExplorerData(
+  tenant: TenantSlugs,
+  options: UseExplorerDataOptions = {},
+): ExplorerGraphState {
+  const includeSystem = options.includeSystem === true;
   const [graph, setGraph] = React.useState<Graph>(EMPTY_GRAPH);
   const [stats, setStats] = React.useState<ExplorerStats | null>(null);
   const [status, setStatus] = React.useState<LoadStatus>("loading");
@@ -56,7 +69,11 @@ export function useExplorerData(tenant: TenantSlugs): ExplorerGraphState {
     let active = true;
     setStatus("loading");
     setError(null);
-    fetchGraph(tenant, {}, controller.signal)
+    fetchGraph(
+      tenant,
+      includeSystem ? { includeSystem: true } : {},
+      controller.signal,
+    )
       .then((payload) => {
         if (!active) return;
         setGraph({ nodes: payload.nodes, edges: payload.edges });
@@ -73,14 +90,21 @@ export function useExplorerData(tenant: TenantSlugs): ExplorerGraphState {
       active = false;
       controller.abort();
     };
-    // tenant slugs are stable for the page lifetime; reloadKey forces a refetch.
-  }, [tenant, reloadKey]);
+    // tenant slugs are stable for the page lifetime; reloadKey forces a
+    // refetch, and flipping the system-node opt-in reseeds the whole view.
+  }, [tenant, reloadKey, includeSystem]);
 
-  const addSubgraph = React.useCallback((incomingNodes: ExplorerNode[], incomingEdges: ExplorerEdge[]) => {
-    setGraph((prev) =>
-      reconcile(mergeNodes(prev.nodes, incomingNodes), mergeEdges(prev.edges, incomingEdges)),
-    );
-  }, []);
+  const addSubgraph = React.useCallback(
+    (incomingNodes: ExplorerNode[], incomingEdges: ExplorerEdge[]) => {
+      setGraph((prev) =>
+        reconcile(
+          mergeNodes(prev.nodes, incomingNodes),
+          mergeEdges(prev.edges, incomingEdges),
+        ),
+      );
+    },
+    [],
+  );
 
   const expand = React.useCallback(
     async (nodeId: string) => {

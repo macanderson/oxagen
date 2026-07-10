@@ -2,11 +2,11 @@
 /**
  * skills-panel.tsx — Workspace → Workbench → Skills list panel.
  *
- * Renders the installed skills table with name, source/provenance, active
- * version, last updated, last used, and usage count, plus a "+ New skill"
- * action that opens the create dialog. Links through to the per-skill
- * detail view. Adapted from settings/skills/skills-panel.tsx (same table),
- * moved under Workbench and extended with the create flow.
+ * Renders the installed skills as a card grid (small/medium cardinality —
+ * mobile-friendly cards instead of a table) with client-side search, sort,
+ * pagination, and CSV export from the shared list toolkit, plus a
+ * "+ New skill" action that opens the create dialog. Links through to the
+ * per-skill detail view.
  */
 import * as React from "react";
 import Link from "next/link";
@@ -15,7 +15,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDate } from "@/lib/utils";
-import { ExternalLink, Plus, Search, Sparkles } from "lucide-react";
+import { Download, ExternalLink, Plus, Search, Sparkles } from "lucide-react";
+import { CardGrid } from "@/components/lists/card-grid";
+import { ListPagination } from "@/components/lists/list-pagination";
+import { useListControls, type ListSortOption } from "@/lib/lists/use-list-controls";
+import { toCsv, downloadCsv, type CsvColumn } from "@/lib/lists/csv";
 import {
   NewSkillDialog,
   type CreateSkillAction,
@@ -59,6 +63,34 @@ function sourceBadgeVariant(source: string): "default" | "secondary" | "outline"
   return "outline";
 }
 
+const SORT_OPTIONS: ListSortOption<SkillRow>[] = [
+  {
+    id: "name",
+    label: "Name A–Z",
+    compare: (a, b) => (a.name ?? "").localeCompare(b.name ?? ""),
+  },
+  {
+    id: "used",
+    label: "Most used",
+    compare: (a, b) => b.usageCount - a.usageCount,
+  },
+  {
+    id: "updated",
+    label: "Recently updated",
+    compare: (a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""),
+  },
+];
+
+const CSV_COLUMNS: CsvColumn[] = [
+  { key: "name", header: "Name" },
+  { key: "slug", header: "Slug" },
+  { key: "source", header: "Source" },
+  { key: "activeVersion", header: "Version" },
+  { key: "updatedAt", header: "Last updated" },
+  { key: "lastUsedAt", header: "Last used" },
+  { key: "usageCount", header: "Uses" },
+];
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function SkillsPanel({
@@ -69,32 +101,32 @@ export function SkillsPanel({
   createAction,
   draftAction,
 }: SkillsPanelProps) {
-  const [filter, setFilter] = React.useState("");
   const [newSkillOpen, setNewSkillOpen] = React.useState(false);
 
-  const filtered = React.useMemo(() => {
-    const q = filter.toLowerCase();
-    // Null-safe: a single row with a missing name/slug/description must never
-    // throw and blank the entire table (the original bug did exactly that when
-    // the list contract omitted slug — see this route's page.tsx notes).
-    return skills.filter(
-      (s) =>
-        (s.name ?? "").toLowerCase().includes(q) ||
-        (s.slug ?? "").toLowerCase().includes(q) ||
-        (s.description ?? "").toLowerCase().includes(q),
-    );
-  }, [skills, filter]);
+  // Null-safe search keys: a single row with a missing name/slug/description
+  // must never throw and blank the entire list (the original bug did exactly
+  // that when the list contract omitted slug — see this route's page.tsx notes).
+  const controls = useListControls(skills, {
+    searchKeys: [
+      (s) => s.name ?? "",
+      (s) => s.slug ?? "",
+      (s) => s.description ?? "",
+    ],
+    sortOptions: SORT_OPTIONS,
+    pageSize: 12,
+  });
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-2 flex-1 max-w-sm">
+      {/* Header: search + count + export + create */}
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-2 flex-1 max-w-sm min-w-56">
           <Search className="h-4 w-4 text-muted-foreground flex-shrink-0" aria-hidden="true" />
           <Input
+            type="search"
             placeholder="Search skills..."
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
+            value={controls.query}
+            onChange={(e) => controls.setQuery(e.target.value)}
             className="h-8"
             aria-label="Search installed skills"
             data-testid="skills-search-input"
@@ -102,8 +134,24 @@ export function SkillsPanel({
         </div>
         <div className="flex items-center gap-3">
           <div className="text-sm text-muted-foreground">
-            {filtered.length} skill{filtered.length !== 1 ? "s" : ""}
+            {controls.filteredTotal} skill{controls.filteredTotal !== 1 ? "s" : ""}
           </div>
+          <Button
+            variant="outline"
+            size="sm"
+            startIcon={<Download className="h-3.5 w-3.5" aria-hidden="true" />}
+            onClick={() =>
+              downloadCsv(
+                "skills.csv",
+                toCsv(
+                  CSV_COLUMNS,
+                  controls.allFilteredRows as unknown as Record<string, unknown>[],
+                ),
+              )
+            }
+          >
+            Export
+          </Button>
           {canManage && (
             <Button
               size="sm"
@@ -117,92 +165,95 @@ export function SkillsPanel({
         </div>
       </div>
 
-      {/* Table */}
-      {filtered.length === 0 ? (
+      {/* Card grid */}
+      {controls.filteredTotal === 0 ? (
         <div
           className="flex flex-col items-center gap-3 py-12 text-center text-muted-foreground"
           data-testid="skills-empty-state"
         >
           <Sparkles className="h-8 w-8 opacity-40" aria-hidden="true" />
           <p className="text-sm">
-            {filter
+            {controls.query
               ? "No skills match your search."
               : "No skills installed in this workspace yet."}
           </p>
         </div>
       ) : (
-        <div className="rounded-md border bg-card overflow-x-auto" data-testid="skills-table">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b">
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground">Name</th>
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground">Source</th>
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground">Version</th>
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground">
-                  Last Updated
-                </th>
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground">
-                  Last Used
-                </th>
-                <th className="px-4 py-3 text-right font-medium text-muted-foreground">Uses</th>
-                <th className="px-4 py-3" aria-label="Actions" />
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((skill, idx) => (
-                <tr
-                  key={skill.id}
-                  className={`border-b last:border-0 hover:bg-muted/20 transition-colors${idx % 2 === 1 ? " bg-muted/5" : ""}`}
-                  data-testid={`skill-row-${skill.slug}`}
-                >
-                  <td className="px-4 py-3">
-                    <div className="flex flex-col gap-0.5">
-                      <span className="font-medium text-foreground">{skill.name}</span>
-                      <span className="text-xs text-muted-foreground font-mono">{skill.slug}</span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <Badge
-                      variant={sourceBadgeVariant(skill.source)}
-                      className="text-xs"
-                      data-testid={`skill-source-badge-${skill.slug}`}
-                    >
-                      {sourceLabel(skill.source)}
-                    </Badge>
-                  </td>
-                  <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
-                    {skill.activeVersion ?? "—"}
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground text-xs">
-                    {formatDate(skill.updatedAt)}
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground text-xs">
-                    {formatDate(skill.lastUsedAt)}
-                  </td>
-                  <td className="px-4 py-3 text-right tabular-nums text-muted-foreground text-xs">
-                    {skill.usageCount.toLocaleString()}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7"
-                      aria-label={`Manage ${skill.name}`}
-                      data-testid={`skill-detail-link-${skill.slug}`}
-                      render={
-                        <Link
-                          href={`/${orgSlug}/${workspaceSlug}/workbench/tools/skills/${encodeURIComponent(skill.slug)}`}
-                        />
-                      }
-                    >
-                      <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <>
+          <CardGrid data-testid="skills-grid">
+            {controls.pageRows.map((skill) => (
+              <article
+                key={skill.id}
+                className="flex flex-col gap-2 rounded-lg border bg-card p-4"
+                data-testid={`skill-row-${skill.slug}`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <span className="block truncate font-medium text-foreground">
+                      {skill.name}
+                    </span>
+                    <span className="block truncate text-xs text-muted-foreground font-mono">
+                      {skill.slug}
+                    </span>
+                  </div>
+                  <Badge
+                    variant={sourceBadgeVariant(skill.source)}
+                    className="text-xs shrink-0"
+                    data-testid={`skill-source-badge-${skill.slug}`}
+                  >
+                    {sourceLabel(skill.source)}
+                  </Badge>
+                </div>
+                {skill.description ? (
+                  <p className="line-clamp-2 text-xs text-muted-foreground">
+                    {skill.description}
+                  </p>
+                ) : null}
+                <dl className="mt-auto grid grid-cols-2 gap-x-4 gap-y-1 pt-1 text-xs text-muted-foreground">
+                  <div className="flex justify-between gap-2">
+                    <dt>Version</dt>
+                    <dd className="font-mono">{skill.activeVersion ?? "—"}</dd>
+                  </div>
+                  <div className="flex justify-between gap-2">
+                    <dt>Uses</dt>
+                    <dd className="tabular-nums">{skill.usageCount.toLocaleString()}</dd>
+                  </div>
+                  <div className="flex justify-between gap-2">
+                    <dt>Updated</dt>
+                    <dd>{formatDate(skill.updatedAt)}</dd>
+                  </div>
+                  <div className="flex justify-between gap-2">
+                    <dt>Last used</dt>
+                    <dd>{formatDate(skill.lastUsedAt)}</dd>
+                  </div>
+                </dl>
+                <div className="flex justify-end">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7"
+                    aria-label={`Manage ${skill.name}`}
+                    data-testid={`skill-detail-link-${skill.slug}`}
+                    endIcon={<ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />}
+                    render={
+                      <Link
+                        href={`/${orgSlug}/${workspaceSlug}/workbench/tools/skills/${encodeURIComponent(skill.slug)}`}
+                      />
+                    }
+                  >
+                    Manage
+                  </Button>
+                </div>
+              </article>
+            ))}
+          </CardGrid>
+          <ListPagination
+            page={controls.page}
+            pageCount={controls.pageCount}
+            onPageChange={controls.setPage}
+            className="self-end"
+          />
+        </>
       )}
 
       {canManage && (
@@ -227,20 +278,13 @@ export function SkillsPanelSkeleton() {
       <div className="flex items-center gap-2 h-8 max-w-sm">
         <Skeleton className="h-8 w-full" />
       </div>
-      <div className="rounded-md border overflow-hidden">
-        <div className="bg-muted/40 border-b px-4 py-3 flex gap-8">
-          {["Name", "Source", "Version", "Last Updated", "Last Used", "Uses"].map((h) => (
-            <Skeleton key={h} className="h-4 w-20" />
-          ))}
-        </div>
-        {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className="px-4 py-3 border-b last:border-0 flex gap-8 items-center">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="flex flex-col gap-3 rounded-lg border bg-card p-4">
             <Skeleton className="h-4 w-32" />
-            <Skeleton className="h-4 w-16" />
-            <Skeleton className="h-4 w-12" />
-            <Skeleton className="h-4 w-24" />
-            <Skeleton className="h-4 w-24" />
-            <Skeleton className="h-4 w-10" />
+            <Skeleton className="h-3 w-24" />
+            <Skeleton className="h-3 w-full" />
+            <Skeleton className="h-3 w-40" />
           </div>
         ))}
       </div>

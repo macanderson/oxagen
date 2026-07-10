@@ -5,6 +5,7 @@ import {
   publish,
   subscribe,
 } from "./stream-registry";
+import { logger } from "../../middleware/logger";
 
 const STATUS_EVENT = {
   kind: "status-update" as const,

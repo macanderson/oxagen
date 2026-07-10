@@ -21,8 +21,6 @@ import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org
 import { getSessionOrRedirect } from "@/lib/session";
 import { WorkspaceBudgetForm } from "./budget-form";
 
-export const dynamic = "force-dynamic";
-
 export const metadata: Metadata = {
   title: "Budget — Workspace Settings",
 };

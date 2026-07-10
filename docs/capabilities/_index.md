@@ -280,12 +280,13 @@ contract-first design, IAM enforcement, and instrumentation.
 
 - [organization.create](organization.create.md) — Create a new organization with a globally-unique slug
 
-## Plugin (21)
+## Plugin (22)
 
 - [plugin.catalog.browse](plugin.catalog.browse.md) — Search and filter the MCP server catalog by text, category, transport, and auth kind
 - [plugin.catalog.get](plugin.catalog.get.md) — Get full detail for one catalog server entry including README, packages, and transport types
 - [plugin.catalog.sync](plugin.catalog.sync.md) — Trigger an immediate sync of the MCP registry catalog for the workspace, refreshing cached server listings from the upstream registry
 - [plugin.credential.reauth](plugin.credential.reauth.md) — Initiate or complete an OAuth re-authentication flow for an expired plugin token
+- [plugin.credential.revoke](plugin.credential.revoke.md) — Revoke and delete the stored credential for an installed plugin so the workspace must re-authenticate
 - [plugin.credential.set_secret](plugin.credential.set_secret.md) — Store or update an encrypted credential (API key or bearer token) for a plugin server
 - [plugin.denylist.add](plugin.denylist.add.md) — Add a plugin server to the org denylist; immediately disables matching installs
 - [plugin.denylist.remove](plugin.denylist.remove.md) — Remove a plugin server from the org denylist, making it installable again

@@ -41,9 +41,10 @@ const DialogPopup = React.forwardRef<
       className={cn(
         // max-h + overflow-y-auto keep the popup within the viewport and let
         // over-tall content (e.g. the Stripe Payment Element) scroll internally
-        // instead of clipping off the top and bottom edges.
-        "fixed left-1/2 top-1/2 z-50 grid max-h-[calc(100dvh-2rem)] w-full max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto border border-dialog-border bg-dialog-bg p-6 text-dialog-fg sm:rounded-lg",
-        "transition-[opacity,transform] duration-[var(--motion-overlay)] ease-[var(--ease-entry)] data-[starting-style]:opacity-0 data-[starting-style]:scale-[0.98] data-[ending-style]:opacity-0 data-[ending-style]:scale-[0.98]",
+        // instead of clipping off the top and bottom edges. w-[calc(100%-2rem)]
+        // keeps a floating rounded card on mobile, not an edge-to-edge sheet.
+        "fixed left-1/2 top-1/2 z-50 grid max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-lg border border-dialog-border bg-dialog-bg p-6 text-dialog-fg",
+        "transition-[opacity,transform,translate,scale] duration-[var(--motion-overlay)] ease-[var(--ease-entry)] data-[starting-style]:opacity-0 data-[starting-style]:scale-[0.98] data-[ending-style]:opacity-0 data-[ending-style]:scale-[0.98]",
         className,
       )}
       {...props}
@@ -71,7 +72,7 @@ DialogPanel.displayName = "DialogPanel";
 
 const DialogFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
-    className={cn("flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2", className)}
+    className={cn("flex flex-col-reverse gap-2 sm:flex-row sm:justify-end", className)}
     {...props}
   />
 );

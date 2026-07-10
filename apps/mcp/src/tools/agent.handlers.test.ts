@@ -512,6 +512,8 @@ describe("agent.definition.get handler", () => {
       version: 1,
       isPublished: true,
       managed: false,
+      avatarUrl: null,
+      summary: null,
       config: {
         graph: { ontologyId: "o", mode: "read", retrieval: { strategy: "hybrid" }, budget: { maxHops: 1, maxNodes: 1 } },
         agentTools: [],

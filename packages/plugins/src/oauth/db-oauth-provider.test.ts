@@ -4,13 +4,16 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 // We mock workspace-credential and state-store to unit-test the provider
 // without a live DB or encryption keys.
 
-const credStore: Record<string, {
-  authKind: string;
-  oauthClientId?: string | null;
-  oauthClientSecret?: string | null;
-  accessToken?: string | null;
-  refreshToken?: string | null;
-}> = {};
+const credStore: Record<
+  string,
+  {
+    authKind: string;
+    oauthClientId?: string | null;
+    oauthClientSecret?: string | null;
+    accessToken?: string | null;
+    refreshToken?: string | null;
+  }
+> = {};
 
 vi.mock("../credentials/workspace-credential", () => ({
   setWorkspaceSecret: async (input: {
@@ -61,7 +64,10 @@ vi.mock("./state-store", () => ({
     data: Record<string, unknown>,
     now: number,
   ) => {
-    stateStore[state] = { value: JSON.stringify(data), expiresAt: now + 10 * 60 * 1000 };
+    stateStore[state] = {
+      value: JSON.stringify(data),
+      expiresAt: now + 10 * 60 * 1000,
+    };
   },
   loadOAuthState: async (state: string, now: number) => {
     const entry = stateStore[state];
@@ -94,7 +100,11 @@ describe("DbOAuthClientProvider", () => {
   it("saveTokens → tokens round-trip", async () => {
     const { DbOAuthClientProvider } = await import("./db-oauth-provider");
     const provider = new DbOAuthClientProvider(ctx);
-    await provider.saveTokens({ access_token: "at-abc", token_type: "Bearer", refresh_token: "rt-xyz" });
+    await provider.saveTokens({
+      access_token: "at-abc",
+      token_type: "Bearer",
+      refresh_token: "rt-xyz",
+    });
     const loaded = await provider.tokens();
     expect(loaded).not.toBeUndefined();
     expect(loaded?.access_token).toBe("at-abc");
@@ -133,6 +143,73 @@ describe("DbOAuthClientProvider", () => {
     expect(info).toBeUndefined();
   });
 
+  it("clientInformation() falls back to a pre-registered client for the endpoint host", async () => {
+    vi.stubEnv(
+      "MCP_OAUTH_PREREGISTERED_CLIENTS",
+      JSON.stringify({
+        "api.githubcopilot.com": {
+          client_id: "gh-app-id",
+          client_secret: "gh-app-secret",
+        },
+      }),
+    );
+    try {
+      const { DbOAuthClientProvider } = await import("./db-oauth-provider");
+      const provider = new DbOAuthClientProvider({
+        ...ctx,
+        serverUrl: "https://api.githubcopilot.com/mcp/",
+      });
+      const info = await provider.clientInformation();
+      expect(info).toEqual({
+        client_id: "gh-app-id",
+        client_secret: "gh-app-secret",
+      });
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("a stored DCR client takes precedence over the pre-registered fallback", async () => {
+    vi.stubEnv(
+      "MCP_OAUTH_PREREGISTERED_CLIENTS",
+      JSON.stringify({ "api.githubcopilot.com": { client_id: "env-client" } }),
+    );
+    try {
+      const { DbOAuthClientProvider } = await import("./db-oauth-provider");
+      const provider = new DbOAuthClientProvider({
+        ...ctx,
+        serverUrl: "https://api.githubcopilot.com/mcp/",
+      });
+      await provider.saveClientInformation({
+        client_id: "dcr-client",
+        redirect_uris: [ctx.redirectUrl],
+      });
+      // Fresh instance so the in-session cache doesn't mask the DB read.
+      const fresh = new DbOAuthClientProvider({
+        ...ctx,
+        serverUrl: "https://api.githubcopilot.com/mcp/",
+      });
+      const info = await fresh.clientInformation();
+      expect(info?.client_id).toBe("dcr-client");
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("clientInformation() stays undefined without serverUrl even when env is set", async () => {
+    vi.stubEnv(
+      "MCP_OAUTH_PREREGISTERED_CLIENTS",
+      JSON.stringify({ "api.githubcopilot.com": { client_id: "env-client" } }),
+    );
+    try {
+      const { DbOAuthClientProvider } = await import("./db-oauth-provider");
+      const provider = new DbOAuthClientProvider(ctx);
+      await expect(provider.clientInformation()).resolves.toBeUndefined();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it("saveCodeVerifier → codeVerifier via state store", async () => {
     const { DbOAuthClientProvider } = await import("./db-oauth-provider");
     const provider = new DbOAuthClientProvider(ctx);
@@ -149,7 +226,9 @@ describe("DbOAuthClientProvider", () => {
   it("codeVerifier() throws when state is missing", async () => {
     const { DbOAuthClientProvider } = await import("./db-oauth-provider");
     const provider = new DbOAuthClientProvider(ctx);
-    await expect(provider.codeVerifier()).rejects.toThrow("code verifier expired or missing");
+    await expect(provider.codeVerifier()).rejects.toThrow(
+      "code verifier expired or missing",
+    );
   });
 
   it("redirectToAuthorization sets pendingRedirect", async () => {

@@ -29,6 +29,7 @@ The one-hop neighborhood of a node — a focused, cheap traversal primitive (dep
 | `neighbors` | object[] | Directly connected nodes |
 | `neighbors[].edgeType` | string | Relationship type connecting the node to this neighbor |
 | `neighbors[].direction` | `"out" \| "in"` | `out` if the edge points from the node to the neighbor; `in` otherwise |
+| `neighbors[].isSystem` | boolean | True when the neighbor is product-owned runtime lineage (executions, agents, tools, generated files) rather than customer knowledge — lets callers separate the source-system ontology from agent activity |
 | `neighbors[].validFrom` / `.validTo` | string \| null | **Valid time** of the connecting edge (`validTo` null ⇒ still true) |
 | `neighbors[].recordedAt` / `.invalidatedAt` | string \| null | **Transaction time** of the connecting edge (`invalidatedAt` null ⇒ still known) |
 | `truncated` | boolean | True when the result was capped by `limit` and more neighbors exist |
@@ -47,7 +48,7 @@ POST /v1/ontology/neighbors
   "nodeId": "node_abc",
   "found": true,
   "neighbors": [
-    { "nodeId": "node_def", "label": "Topic", "displayName": "Auth", "description": null, "edgeType": "RELATED_TO", "direction": "out" }
+    { "nodeId": "node_def", "label": "Topic", "displayName": "Auth", "description": null, "edgeType": "RELATED_TO", "direction": "out", "isSystem": false }
   ],
   "truncated": false
 }

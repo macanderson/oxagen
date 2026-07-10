@@ -85,7 +85,14 @@ interface Props {
 }
 
 export function EnvironmentsPanel(props: Props) {
-  const { orgSlug, workspaceSlug, canManage, environments, secretKeys, loadError } = props;
+  const {
+    orgSlug,
+    workspaceSlug,
+    canManage,
+    environments,
+    secretKeys,
+    loadError,
+  } = props;
   const scope = { orgSlug, workspaceSlug };
   const [pending, startTransition] = useTransition();
 
@@ -95,8 +102,9 @@ export function EnvironmentsPanel(props: Props) {
         <Alert variant="error">
           <AlertTitle>Couldn&apos;t load environments &amp; secrets</AlertTitle>
           <AlertDescription>
-            We hit an error reading this workspace&apos;s environments and secrets, so the grid
-            below may be incomplete. Reload the page to try again — nothing has been deleted.
+            We hit an error reading this workspace&apos;s environments and
+            secrets, so the grid below may be incomplete. Reload the page to try
+            again — nothing has been deleted.
           </AlertDescription>
         </Alert>
       )}
@@ -104,8 +112,9 @@ export function EnvironmentsPanel(props: Props) {
       <div>
         <h2 className="text-base font-medium">Environments &amp; Secrets</h2>
         <p className="text-sm text-muted-foreground">
-          Workspace-root secret keys with per-environment overrides. Sensitive values are
-          encrypted at rest. Paste a <code>.env</code> file to bulk-import.
+          Workspace-root secret keys with per-environment overrides. Sensitive
+          values are encrypted at rest. Paste a <code>.env</code> file to
+          bulk-import.
         </p>
       </div>
 
@@ -177,7 +186,9 @@ function EnvironmentsBar({
       </div>
       <div className="flex flex-wrap items-center gap-2">
         {environments.length === 0 && (
-          <span className="text-sm text-muted-foreground">No environments yet.</span>
+          <span className="text-sm text-muted-foreground">
+            No environments yet.
+          </span>
         )}
         {environments.map((env) => (
           <div
@@ -199,7 +210,10 @@ function EnvironmentsBar({
                   disabled={pending}
                   onClick={() =>
                     start(async () => {
-                      await setDefaultEnvironmentAction({ ...scope, environmentId: env.id });
+                      await setDefaultEnvironmentAction({
+                        ...scope,
+                        environmentId: env.id,
+                      });
                     })
                   }
                 >
@@ -216,8 +230,8 @@ function EnvironmentsBar({
           <DialogHeader>
             <DialogTitle>New environment</DialogTitle>
             <DialogDescription>
-              A named runtime scope (e.g. production, preview). Secrets can override per
-              environment.
+              A named runtime scope (e.g. production, preview). Secrets can
+              override per environment.
             </DialogDescription>
           </DialogHeader>
           <DialogPanel className="flex flex-col gap-3">
@@ -239,7 +253,11 @@ function EnvironmentsBar({
             {error && <p className="text-xs text-destructive">{error}</p>}
           </DialogPanel>
           <DialogFooter className="flex-wrap">
-            <Button variant="outline" className="max-md:h-11" onClick={() => setOpen(false)}>
+            <Button
+              variant="outline"
+              className="max-md:h-11"
+              onClick={() => setOpen(false)}
+            >
               Cancel
             </Button>
             <Button
@@ -301,7 +319,9 @@ function SecretsSection({
   const [pasteOpen, setPasteOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   // Inline value editor: { keyId, env: "default" | environmentId }.
-  const [editing, setEditing] = useState<{ keyId: string; env: string } | null>(null);
+  const [editing, setEditing] = useState<{ keyId: string; env: string } | null>(
+    null,
+  );
   const [editValue, setEditValue] = useState("");
 
   return (
@@ -319,7 +339,12 @@ function SecretsSection({
             >
               + Add key
             </Button>
-            <Button size="sm" className="max-md:h-11" disabled={pending} onClick={() => setPasteOpen(true)}>
+            <Button
+              size="sm"
+              className="max-md:h-11"
+              disabled={pending}
+              onClick={() => setPasteOpen(true)}
+            >
               Paste .env
             </Button>
           </div>
@@ -349,16 +374,21 @@ function SecretsSection({
                   colSpan={5 + environments.length}
                   className="px-3 py-6 text-center text-muted-foreground"
                 >
-                  No secrets yet. Click <strong>Paste .env</strong> to bulk-import, or{" "}
-                  <strong>Add key</strong>.
+                  No secrets yet. Click <strong>Paste .env</strong> to
+                  bulk-import, or <strong>Add key</strong>.
                 </td>
               </tr>
             )}
             {secretKeys.map((k) => (
-              <tr key={k.id} className="border-b border-border/30 last:border-0">
+              <tr
+                key={k.id}
+                className="border-b border-border/30 last:border-0"
+              >
                 <td className="px-3 py-2 font-mono text-xs">{k.key}</td>
                 <td className="px-2 py-2">{k.sensitive ? "●" : "○"}</td>
-                <td className="px-3 py-2 text-muted-foreground">{k.memo ?? ""}</td>
+                <td className="px-3 py-2 text-muted-foreground">
+                  {k.memo ?? ""}
+                </td>
                 <Cell
                   present={k.hasDefault}
                   sensitive={k.sensitive}
@@ -391,7 +421,9 @@ function SecretsSection({
                       present={has}
                       sensitive={k.sensitive}
                       canManage={canManage}
-                      editing={editing?.keyId === k.id && editing.env === env.id}
+                      editing={
+                        editing?.keyId === k.id && editing.env === env.id
+                      }
                       editValue={editValue}
                       setEditValue={setEditValue}
                       inherit={!has}
@@ -450,8 +482,9 @@ function SecretsSection({
         </table>
       </div>
       <p className="text-xs text-muted-foreground">
-        ● sensitive (encrypted) · ○ plain config · ‹inherit› falls back to the Default value.
-        Reveal/export a plaintext value via the API or <code>oxagen secret reveal</code> (audited).
+        ● sensitive (encrypted) · ○ plain config · ‹inherit› falls back to the
+        Default value. Reveal/export a plaintext value via the API or{" "}
+        <code>oxagen secret reveal</code> (audited).
       </p>
 
       {canManage && (
@@ -513,10 +546,20 @@ function Cell({
             onChange={(e) => setEditValue(e.target.value)}
             className="h-7 w-36 max-md:h-11"
           />
-          <Button variant="ghost" size="xs" className="max-md:h-11" onClick={onSave}>
+          <Button
+            variant="ghost"
+            size="xs"
+            className="max-md:h-11"
+            onClick={onSave}
+          >
             Save
           </Button>
-          <Button variant="ghost" size="xs" className="max-md:h-11" onClick={onCancel}>
+          <Button
+            variant="ghost"
+            size="xs"
+            className="max-md:h-11"
+            onClick={onCancel}
+          >
             ✕
           </Button>
         </div>
@@ -527,9 +570,13 @@ function Cell({
     <td className="px-3 py-2">
       <div className="flex flex-wrap items-center gap-2">
         {present ? (
-          <span className="font-mono text-xs">{sensitive ? "••••••" : "set"}</span>
+          <span className="font-mono text-xs">
+            {sensitive ? "••••••" : "set"}
+          </span>
         ) : (
-          <span className="text-xs text-muted-foreground">{inherit ? "‹inherit›" : "—"}</span>
+          <span className="text-xs text-muted-foreground">
+            {inherit ? "‹inherit›" : "—"}
+          </span>
         )}
         {canManage && (
           <button
@@ -587,7 +634,12 @@ function PasteEnvDialog({
   const runImport = (commit: boolean) =>
     startTransition(async () => {
       setError(null);
-      const res = await importEnvAction({ ...scope, text, environmentId, commit });
+      const res = await importEnvAction({
+        ...scope,
+        text,
+        environmentId,
+        commit,
+      });
       if (!res.ok) {
         setError(res.error);
         return;
@@ -612,9 +664,9 @@ function PasteEnvDialog({
         <DialogHeader>
           <DialogTitle>Paste .env</DialogTitle>
           <DialogDescription>
-            Paste the contents of a <code>.env</code> file. Comments and <code>export </code>{" "}
-            are ignored, surrounding quotes stripped. New keys are stored encrypted. Review the
-            preview before importing.
+            Paste the contents of a <code>.env</code> file. Comments and{" "}
+            <code>export </code> are ignored, surrounding quotes stripped. New
+            keys are stored encrypted. Review the preview before importing.
           </DialogDescription>
         </DialogHeader>
         <DialogPanel className="flex flex-col gap-3">
@@ -642,7 +694,9 @@ function PasteEnvDialog({
               setText(e.target.value);
               setPreview(null);
             }}
-            placeholder={'# paste here\nDATABASE_URL="postgres://…"\nexport OPENAI_API_KEY=sk-…\nLOG_LEVEL=info'}
+            placeholder={
+              '# paste here\nDATABASE_URL="postgres://…"\nexport OPENAI_API_KEY=sk-…\nLOG_LEVEL=info'
+            }
             rows={8}
             className="font-mono text-xs"
           />
@@ -650,30 +704,48 @@ function PasteEnvDialog({
           {preview && (
             <div className="rounded-md border border-border/40">
               <div className="border-b border-border/40 px-3 py-1.5 text-xs text-muted-foreground">
-                {preview.length} parsed · {preview.filter((r) => r.isNewKey).length} new ·{" "}
+                {preview.length} parsed ·{" "}
+                {preview.filter((r) => r.isNewKey).length} new ·{" "}
                 {preview.filter((r) => !r.isNewKey).length} existing
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
                   <tbody>
                     {preview.map((r) => (
-                      <tr key={r.key} className="border-b border-border/20 last:border-0">
+                      <tr
+                        key={r.key}
+                        className="border-b border-border/20 last:border-0"
+                      >
                         <td className="px-3 py-1 font-mono">
-                          <span className={r.isNewKey ? "text-success" : "text-muted-foreground"}>
+                          <span
+                            className={
+                              r.isNewKey
+                                ? "text-success"
+                                : "text-muted-foreground"
+                            }
+                          >
                             {r.isNewKey ? "+ " : "~ "}
                           </span>
                           {r.key}
                         </td>
                         <td className="px-2 py-1">{r.sensitive ? "●" : "○"}</td>
-                        <td className="px-2 py-1 text-muted-foreground">{r.target}</td>
+                        <td className="px-2 py-1 text-muted-foreground">
+                          {r.target}
+                        </td>
                         <td className="px-3 py-1 text-muted-foreground">
-                          {r.isNewKey ? "new" : r.willOverride ? "override" : "set"}
+                          {r.isNewKey
+                            ? "new"
+                            : r.willOverride
+                              ? "override"
+                              : "set"}
                         </td>
                       </tr>
                     ))}
                     {preview.length === 0 && (
                       <tr>
-                        <td className="px-3 py-2 text-muted-foreground">No valid keys parsed.</td>
+                        <td className="px-3 py-2 text-muted-foreground">
+                          No valid keys parsed.
+                        </td>
                       </tr>
                     )}
                   </tbody>
@@ -683,11 +755,19 @@ function PasteEnvDialog({
           )}
         </DialogPanel>
         <DialogFooter className="flex-wrap">
-          <Button variant="outline" className="max-md:h-11" onClick={() => setOpen(false)}>
+          <Button
+            variant="outline"
+            className="max-md:h-11"
+            onClick={() => setOpen(false)}
+          >
             Cancel
           </Button>
           {!preview ? (
-            <Button className="max-md:h-11" disabled={pending || !text.trim()} onClick={() => runImport(false)}>
+            <Button
+              className="max-md:h-11"
+              disabled={pending || !text.trim()}
+              onClick={() => runImport(false)}
+            >
               Preview
             </Button>
           ) : (
@@ -745,7 +825,8 @@ function AddKeyDialog({
         <DialogHeader>
           <DialogTitle>Add secret key</DialogTitle>
           <DialogDescription>
-            A workspace-root key with a default value. Sensitive keys are encrypted at rest.
+            A workspace-root key with a default value. Sensitive keys are
+            encrypted at rest.
           </DialogDescription>
         </DialogHeader>
         <DialogPanel className="flex flex-col gap-3">
@@ -775,7 +856,11 @@ function AddKeyDialog({
           {error && <p className="text-xs text-destructive">{error}</p>}
         </DialogPanel>
         <DialogFooter className="flex-wrap">
-          <Button variant="outline" className="max-md:h-11" onClick={() => setOpen(false)}>
+          <Button
+            variant="outline"
+            className="max-md:h-11"
+            onClick={() => setOpen(false)}
+          >
             Cancel
           </Button>
           <Button

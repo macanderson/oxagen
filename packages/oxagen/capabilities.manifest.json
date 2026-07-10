@@ -3535,6 +3535,23 @@
       }
     },
     {
+      "name": "revoke_plugin_credential",
+      "file": "plugin.credential.revoke.ts",
+      "domain": "plugin",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "api": false,
+        "docs": false,
+        "mcp": false,
+        "unit": false
+      }
+    },
+    {
       "name": "set_plugin_secret",
       "file": "plugin.credential.set_secret.ts",
       "domain": "plugin",

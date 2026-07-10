@@ -21,9 +21,8 @@ import "@oxagen/handlers/register";
 import type { ConversationExportOutput } from "@oxagen/oxagen/contracts/conversation.export";
 import { getSession } from "@/lib/session";
 
-// Node runtime: uses crypto + DB + pdf-lib.
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
+// Default Node.js runtime: uses crypto + DB + pdf-lib — never move to edge. No
+// `export const runtime` (incompatible with cacheComponents; Node is default).
 
 export async function GET(
   req: Request,

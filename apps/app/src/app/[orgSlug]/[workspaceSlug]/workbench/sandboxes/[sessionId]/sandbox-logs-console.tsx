@@ -61,9 +61,29 @@ const STREAM_TAG_CLASS: Record<Stream, string> = {
   system: "code-fg-faint",
 };
 
+/** Compact, NaN-safe ms formatter for the system-line duration suffix. */
+function formatMs(ms: number | null): string {
+  if (ms === null || !Number.isFinite(ms)) return "";
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
+  return `${Math.floor(ms / 60_000)}m ${Math.floor((ms % 60_000) / 1000)}s`;
+}
+
 function LogLine({ line }: { line: SandboxLogLine }) {
   const stream = normStream(line.stream);
-  const text = typeof line.text === "string" ? line.text : String(line.text ?? "");
+  // The captured text is `line.line` (the previous `line.text` never existed at
+  // runtime, so every row rendered blank).
+  const text = typeof line.line === "string" ? line.line : "";
+  // The `system` line that closes a command carries its exit code + duration as
+  // separate columns — surface them as a compact suffix instead of dropping
+  // them, and never render a bare NaN when a field is absent.
+  const dur = formatMs(line.durationMs);
+  const meta =
+    stream === "system"
+      ? [line.exitCode != null ? `exit ${line.exitCode}` : "", dur]
+          .filter(Boolean)
+          .join(" · ")
+      : "";
   return (
     <div
       data-testid="sandbox-logs-line"
@@ -83,6 +103,9 @@ function LogLine({ line }: { line: SandboxLogLine }) {
           </span>
         ))}
       </span>
+      {meta ? (
+        <span className="code-fg-faint shrink-0 select-none tabular-nums">{meta}</span>
+      ) : null}
     </div>
   );
 }

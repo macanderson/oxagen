@@ -60,7 +60,7 @@ beforeEach(() => {
 describe("dispatchExplore — graph", () => {
   it("assembles seed nodes, confirmed + inferred edges, and stats", async () => {
     routeInvoke({
-      "get_graph_stats": () => ({
+      get_graph_stats: () => ({
         nodeCount: 3,
         edgeCount: 2,
         inferredEdgeCount: 1,
@@ -68,31 +68,58 @@ describe("dispatchExplore — graph", () => {
         edgesByType: { REL: 2 },
         lastModifiedAt: "",
       }),
-      "list_nodes": () => ({
+      list_nodes: () => ({
         nodes: [
-          { id: "a", labels: ["KnowledgeNode", "Issue"], displayName: "A", properties: {} },
-          { id: "b", labels: ["KnowledgeNode", "Topic"], displayName: "B", properties: {} },
+          {
+            id: "a",
+            labels: ["KnowledgeNode", "Issue"],
+            displayName: "A",
+            properties: {},
+          },
+          {
+            id: "b",
+            labels: ["KnowledgeNode", "Topic"],
+            displayName: "B",
+            properties: {},
+          },
         ],
         total: 3,
         hasMore: true,
         limit: 60,
         offset: 0,
       }),
-      "list_semantic_edges": () => ({
+      list_semantic_edges: () => ({
         edges: [
-          { id: "s1", sourceNodeId: "a", targetNodeId: "b", type: "CAUSES", confidence: 0.8, source: { connectorId: "c", sourceId: "s" }, inferredAt: "" },
+          {
+            id: "s1",
+            sourceNodeId: "a",
+            targetNodeId: "b",
+            type: "CAUSES",
+            confidence: 0.8,
+            source: { connectorId: "c", sourceId: "s" },
+            inferredAt: "",
+          },
         ],
         total: 1,
         limit: 120,
         offset: 0,
       }),
-      "get_ontology_neighbors": (input) => {
+      get_ontology_neighbors: (input) => {
         const nodeId = (input as { nodeId: string }).nodeId;
         if (nodeId === "a") {
           return {
             nodeId: "a",
             found: true,
-            neighbors: [{ nodeId: "b", label: "Topic", displayName: "B", description: null, edgeType: "REL", direction: "out" }],
+            neighbors: [
+              {
+                nodeId: "b",
+                label: "Topic",
+                displayName: "B",
+                description: null,
+                edgeType: "REL",
+                direction: "out",
+              },
+            ],
             truncated: false,
           };
         }
@@ -100,29 +127,128 @@ describe("dispatchExplore — graph", () => {
       },
     });
 
-    const result = (await dispatchExplore({ op: "graph", ...tenant }, ctx)) as ExplorerGraphPayload;
+    const result = (await dispatchExplore(
+      { op: "graph", ...tenant },
+      ctx,
+    )) as ExplorerGraphPayload;
 
     expect(result.nodes.map((n) => n.id).sort()).toEqual(["a", "b"]);
     // Confirmed edge from the neighbor walk + inferred edge from semantic.
-    expect(result.edges.find((e) => e.type === "REL" && !e.inferred)).toBeTruthy();
+    expect(
+      result.edges.find((e) => e.type === "REL" && !e.inferred),
+    ).toBeTruthy();
     const inferred = result.edges.find((e) => e.inferred);
-    expect(inferred).toMatchObject({ source: "a", target: "b", confidence: 0.8 });
-    expect(result.stats).toMatchObject({ nodeCount: 3, edgeCount: 2, inferredEdgeCount: 1 });
-    expect(result.stats.nodesByLabel).toContainEqual({ type: "Issue", count: 2 });
+    expect(inferred).toMatchObject({
+      source: "a",
+      target: "b",
+      confidence: 0.8,
+    });
+    expect(result.stats).toMatchObject({
+      nodeCount: 3,
+      edgeCount: 2,
+      inferredEdgeCount: 1,
+    });
+    expect(result.stats.nodesByLabel).toContainEqual({
+      type: "Issue",
+      count: 2,
+    });
     expect(result.truncated).toBe(true); // 3 total > 2 in view
+  });
+
+  it("excludes runtime lineage (isSystem:false) from the seed by default", async () => {
+    routeInvoke({
+      get_graph_stats: () => ({
+        nodeCount: 0,
+        edgeCount: 0,
+        inferredEdgeCount: 0,
+        nodesByLabel: {},
+        edgesByType: {},
+        lastModifiedAt: "",
+      }),
+      list_nodes: () => ({
+        nodes: [],
+        total: 0,
+        hasMore: false,
+        limit: 60,
+        offset: 0,
+      }),
+      list_semantic_edges: () => ({
+        edges: [],
+        total: 0,
+        limit: 120,
+        offset: 0,
+      }),
+    });
+
+    await dispatchExplore({ op: "graph", ...tenant }, ctx);
+    const listCall = invokeMock.mock.calls.find((c) => c[0] === "list_nodes");
+    expect(listCall?.[1]).toMatchObject({ isSystem: false });
+  });
+
+  it("seeds lineage nodes too when includeSystem is set", async () => {
+    routeInvoke({
+      get_graph_stats: () => ({
+        nodeCount: 0,
+        edgeCount: 0,
+        inferredEdgeCount: 0,
+        nodesByLabel: {},
+        edgesByType: {},
+        lastModifiedAt: "",
+      }),
+      list_nodes: () => ({
+        nodes: [],
+        total: 0,
+        hasMore: false,
+        limit: 60,
+        offset: 0,
+      }),
+      list_semantic_edges: () => ({
+        edges: [],
+        total: 0,
+        limit: 120,
+        offset: 0,
+      }),
+    });
+
+    await dispatchExplore({ op: "graph", ...tenant, includeSystem: true }, ctx);
+    const listCall = invokeMock.mock.calls.find((c) => c[0] === "list_nodes");
+    expect(listCall?.[1]).not.toHaveProperty("isSystem");
   });
 
   it("tolerates a failing semantic.edge.list", async () => {
     routeInvoke({
-      "get_graph_stats": () => ({ nodeCount: 1, edgeCount: 0, inferredEdgeCount: 0, nodesByLabel: {}, edgesByType: {}, lastModifiedAt: "" }),
-      "list_nodes": () => ({ nodes: [{ id: "a", labels: ["Issue"], displayName: "A", properties: {} }], total: 1, hasMore: false, limit: 60, offset: 0 }),
-      "list_semantic_edges": () => {
+      get_graph_stats: () => ({
+        nodeCount: 1,
+        edgeCount: 0,
+        inferredEdgeCount: 0,
+        nodesByLabel: {},
+        edgesByType: {},
+        lastModifiedAt: "",
+      }),
+      list_nodes: () => ({
+        nodes: [
+          { id: "a", labels: ["Issue"], displayName: "A", properties: {} },
+        ],
+        total: 1,
+        hasMore: false,
+        limit: 60,
+        offset: 0,
+      }),
+      list_semantic_edges: () => {
         throw new Error("boom");
       },
-      "get_ontology_neighbors": () => ({ nodeId: "a", found: true, neighbors: [], truncated: false }),
+      get_ontology_neighbors: () => ({
+        nodeId: "a",
+        found: true,
+        neighbors: [],
+        truncated: false,
+      }),
     });
 
-    const result = (await dispatchExplore({ op: "graph", ...tenant }, ctx)) as ExplorerGraphPayload;
+    const result = (await dispatchExplore(
+      { op: "graph", ...tenant },
+      ctx,
+    )) as ExplorerGraphPayload;
     expect(result.nodes).toHaveLength(1);
     expect(result.edges).toHaveLength(0);
   });
@@ -131,26 +257,91 @@ describe("dispatchExplore — graph", () => {
 describe("dispatchExplore — expand", () => {
   it("returns the node's neighborhood as nodes + edges", async () => {
     routeInvoke({
-      "get_ontology_neighbors": () => ({
+      get_ontology_neighbors: () => ({
         nodeId: "a",
         found: true,
-        neighbors: [{ nodeId: "b", label: "Topic", displayName: "B", description: null, edgeType: "REL", direction: "in" }],
+        neighbors: [
+          {
+            nodeId: "b",
+            label: "Topic",
+            displayName: "B",
+            description: null,
+            edgeType: "REL",
+            direction: "in",
+          },
+        ],
         truncated: false,
       }),
     });
 
-    const result = (await dispatchExplore({ op: "expand", ...tenant, nodeId: "a" }, ctx)) as ExplorerExpandPayload;
+    const result = (await dispatchExplore(
+      { op: "expand", ...tenant, nodeId: "a" },
+      ctx,
+    )) as ExplorerExpandPayload;
     expect(result.found).toBe(true);
     expect(result.nodes[0]).toMatchObject({ id: "b", hydrated: false });
-    expect(result.edges[0]).toMatchObject({ source: "b", target: "a", type: "REL" });
+    expect(result.edges[0]).toMatchObject({
+      source: "b",
+      target: "a",
+      type: "REL",
+    });
+  });
+
+  it("carries the neighbor's isSystem flag so the client can keep lineage hidden", async () => {
+    routeInvoke({
+      get_ontology_neighbors: () => ({
+        nodeId: "a",
+        found: true,
+        neighbors: [
+          {
+            nodeId: "exec",
+            label: "Execution",
+            displayName: "run",
+            description: null,
+            edgeType: "EXECUTED",
+            direction: "in",
+            isSystem: true,
+          },
+          {
+            nodeId: "b",
+            label: "Topic",
+            displayName: "B",
+            description: null,
+            edgeType: "REL",
+            direction: "out",
+            isSystem: false,
+          },
+        ],
+        truncated: false,
+      }),
+    });
+
+    const result = (await dispatchExplore(
+      { op: "expand", ...tenant, nodeId: "a" },
+      ctx,
+    )) as ExplorerExpandPayload;
+    expect(result.nodes.find((n) => n.id === "exec")).toMatchObject({
+      isSystem: true,
+    });
+    expect(result.nodes.find((n) => n.id === "b")).toMatchObject({
+      isSystem: false,
+    });
   });
 });
 
 describe("dispatchExplore — nodes", () => {
   it("maps the paginated list", async () => {
     routeInvoke({
-      "list_nodes": () => ({
-        nodes: [{ id: "a", labels: ["KnowledgeNode", "Issue"], displayName: "A", properties: {}, createdAt: "2026-01-01" }],
+      list_nodes: () => ({
+        nodes: [
+          {
+            id: "a",
+            labels: ["KnowledgeNode", "Issue"],
+            displayName: "A",
+            properties: {},
+            createdAt: "2026-01-01",
+          },
+        ],
         total: 42,
         hasMore: true,
         limit: 25,
@@ -158,50 +349,141 @@ describe("dispatchExplore — nodes", () => {
       }),
     });
 
-    const result = (await dispatchExplore({ op: "nodes", ...tenant, limit: 25, offset: 0 }, ctx)) as ExplorerNodesPayload;
-    expect(result).toMatchObject({ total: 42, hasMore: true, limit: 25, offset: 0 });
-    expect(result.nodes[0]).toMatchObject({ id: "a", label: "Issue", hydrated: true });
+    const result = (await dispatchExplore(
+      { op: "nodes", ...tenant, limit: 25, offset: 0 },
+      ctx,
+    )) as ExplorerNodesPayload;
+    expect(result).toMatchObject({
+      total: 42,
+      hasMore: true,
+      limit: 25,
+      offset: 0,
+    });
+    expect(result.nodes[0]).toMatchObject({
+      id: "a",
+      label: "Issue",
+      hydrated: true,
+    });
+    // The table mirrors the graph seed: customer data only unless opted in.
+    expect(
+      invokeMock.mock.calls.find((c) => c[0] === "list_nodes")?.[1],
+    ).toMatchObject({ isSystem: false });
+  });
+
+  it("lists lineage rows when includeSystem is set", async () => {
+    routeInvoke({
+      list_nodes: () => ({
+        nodes: [],
+        total: 0,
+        hasMore: false,
+        limit: 25,
+        offset: 0,
+      }),
+    });
+
+    await dispatchExplore(
+      { op: "nodes", ...tenant, limit: 25, offset: 0, includeSystem: true },
+      ctx,
+    );
+    expect(
+      invokeMock.mock.calls.find((c) => c[0] === "list_nodes")?.[1],
+    ).not.toHaveProperty("isSystem");
   });
 });
 
 describe("dispatchExplore — search", () => {
   it("maps search hits to stub nodes", async () => {
     routeInvoke({
-      "search_nodes": () => ({ nodes: [{ nodeId: "x", label: "Issue", displayName: "X", description: "d", score: 1 }] }),
+      search_nodes: () => ({
+        nodes: [
+          {
+            nodeId: "x",
+            label: "Issue",
+            displayName: "X",
+            description: "d",
+            score: 1,
+          },
+        ],
+      }),
     });
 
-    const result = (await dispatchExplore({ op: "search", ...tenant, query: "x" }, ctx)) as ExplorerSearchPayload;
-    expect(result.nodes[0]).toMatchObject({ id: "x", label: "Issue", displayName: "X", hydrated: false });
+    const result = (await dispatchExplore(
+      { op: "search", ...tenant, query: "x" },
+      ctx,
+    )) as ExplorerSearchPayload;
+    expect(result.nodes[0]).toMatchObject({
+      id: "x",
+      label: "Issue",
+      displayName: "X",
+      hydrated: false,
+    });
   });
 });
 
 describe("dispatchExplore — node detail", () => {
   it("returns the node with properties and neighbors", async () => {
     routeInvoke({
-      "get_node": () => ({
-        node: { nodeId: "a", label: "Issue", displayName: "A", description: null, properties: { p: 1 }, createdAt: "", updatedAt: null },
+      get_node: () => ({
+        node: {
+          nodeId: "a",
+          label: "Issue",
+          displayName: "A",
+          description: null,
+          properties: { p: 1 },
+          createdAt: "",
+          updatedAt: null,
+        },
       }),
-      "get_ontology_neighbors": () => ({
+      get_ontology_neighbors: () => ({
         nodeId: "a",
         found: true,
-        neighbors: [{ nodeId: "b", label: "Topic", displayName: "B", description: null, edgeType: "REL", direction: "out" }],
+        neighbors: [
+          {
+            nodeId: "b",
+            label: "Topic",
+            displayName: "B",
+            description: null,
+            edgeType: "REL",
+            direction: "out",
+          },
+        ],
         truncated: false,
       }),
     });
 
-    const result = (await dispatchExplore({ op: "node", ...tenant, nodeId: "a" }, ctx)) as ExplorerNodeDetailPayload;
-    expect(result.node).toMatchObject({ id: "a", label: "Issue", hydrated: true, degree: 1 });
+    const result = (await dispatchExplore(
+      { op: "node", ...tenant, nodeId: "a" },
+      ctx,
+    )) as ExplorerNodeDetailPayload;
+    expect(result.node).toMatchObject({
+      id: "a",
+      label: "Issue",
+      hydrated: true,
+      degree: 1,
+    });
     expect(result.node?.properties).toEqual({ p: 1 });
-    expect(result.neighbors[0]).toMatchObject({ nodeId: "b", edgeType: "REL", direction: "out" });
+    expect(result.neighbors[0]).toMatchObject({
+      nodeId: "b",
+      edgeType: "REL",
+      direction: "out",
+    });
   });
 
   it("returns null node when the node is missing", async () => {
     routeInvoke({
-      "get_node": () => ({ node: null }),
-      "get_ontology_neighbors": () => ({ nodeId: "a", found: false, neighbors: [], truncated: false }),
+      get_node: () => ({ node: null }),
+      get_ontology_neighbors: () => ({
+        nodeId: "a",
+        found: false,
+        neighbors: [],
+        truncated: false,
+      }),
     });
 
-    const result = (await dispatchExplore({ op: "node", ...tenant, nodeId: "a" }, ctx)) as ExplorerNodeDetailPayload;
+    const result = (await dispatchExplore(
+      { op: "node", ...tenant, nodeId: "a" },
+      ctx,
+    )) as ExplorerNodeDetailPayload;
     expect(result.node).toBeNull();
     expect(result.neighbors).toEqual([]);
   });

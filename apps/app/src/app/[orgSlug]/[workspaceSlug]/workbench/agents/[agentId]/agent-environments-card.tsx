@@ -85,99 +85,95 @@ export function AgentEnvironmentsCard(props: Props) {
         </Alert>
       )}
 
-      <div className="overflow-x-auto rounded-md border border-border/40">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border/40 text-xs text-muted-foreground">
-              <th className="px-3 py-2 text-left font-medium">Environment</th>
-              <th className="px-3 py-2 text-left font-medium">Template</th>
-              <th className="px-3 py-2 text-left font-medium">Primary</th>
-              {canManage && <th className="px-2 py-2" />}
-            </tr>
-          </thead>
-          <tbody>
-            {bindings.length === 0 && (
-              <tr>
-                <td
-                  colSpan={canManage ? 4 : 3}
-                  className="px-3 py-4 text-center text-muted-foreground"
-                >
-                  No bindings — this agent uses the workspace default environment and template.
-                </td>
-              </tr>
-            )}
-            {bindings.map((b) => (
-              <tr
-                key={b.id}
-                className="border-b border-border/30 last:border-0"
-                data-testid={`agent-binding-row-${b.environmentSlug}`}
-              >
-                <td className="px-3 py-2">
-                  <span className="font-medium">{b.environmentName}</span>{" "}
-                  <span className="text-xs text-muted-foreground">{b.environmentSlug}</span>
-                </td>
-                <td className="px-3 py-2 text-xs">
-                  {b.sandboxTemplateName ?? (
-                    <span className="text-muted-foreground">environment default</span>
-                  )}
-                </td>
-                <td className="px-3 py-2">
-                  {b.isPrimary ? (
-                    <Badge variant="secondary" size="sm">
-                      ★ primary
-                    </Badge>
-                  ) : canManage ? (
-                    <Button
-                      variant="ghost"
-                      size="xs"
-                      className="max-md:h-11"
-                      disabled={pending}
-                      onClick={() =>
-                        run(() =>
-                          props.bindAction({
-                            ...scope,
-                            agentId,
-                            environmentId: b.environmentId,
-                            sandboxTemplateId: b.sandboxTemplateId,
-                            isPrimary: true,
-                          }),
-                        )
-                      }
-                      data-testid={`agent-binding-primary-${b.environmentSlug}`}
-                    >
-                      Make primary
-                    </Button>
-                  ) : (
-                    <span className="text-xs text-muted-foreground">—</span>
-                  )}
-                </td>
-                {canManage && (
-                  <td className="px-2 py-2 text-right">
-                    <Button
-                      variant="ghost"
-                      size="xs"
-                      className="max-md:h-11 text-destructive"
-                      disabled={pending}
-                      onClick={() =>
-                        run(() =>
-                          props.unbindAction({
-                            ...scope,
-                            agentId,
-                            environmentId: b.environmentId,
-                          }),
-                        )
-                      }
-                      data-testid={`agent-binding-unbind-${b.environmentSlug}`}
-                    >
-                      Unbind
-                    </Button>
-                  </td>
-                )}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {bindings.length === 0 ? (
+        <p className="rounded-md border border-border/40 px-3 py-4 text-center text-sm text-muted-foreground">
+          No bindings — this agent uses the workspace default environment and template.
+        </p>
+      ) : (
+        <ul className="divide-y divide-border/30 overflow-hidden rounded-md border border-border/40 text-sm">
+          {bindings.map((b) => (
+            <li
+              key={b.id}
+              className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:gap-6"
+              data-testid={`agent-binding-row-${b.environmentSlug}`}
+            >
+              <div className="min-w-0 flex-1">
+                <span className="font-medium">{b.environmentName}</span>{" "}
+                <span className="text-xs text-muted-foreground">{b.environmentSlug}</span>
+              </div>
+              <dl className="flex flex-wrap items-center gap-x-6 gap-y-2">
+                <div>
+                  <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                    Template
+                  </dt>
+                  <dd className="mt-0.5 text-xs">
+                    {b.sandboxTemplateName ?? (
+                      <span className="text-muted-foreground">environment default</span>
+                    )}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                    Primary
+                  </dt>
+                  <dd className="mt-0.5">
+                    {b.isPrimary ? (
+                      <Badge variant="secondary" size="sm">
+                        ★ primary
+                      </Badge>
+                    ) : canManage ? (
+                      <Button
+                        variant="ghost"
+                        size="xs"
+                        className="max-md:h-11"
+                        disabled={pending}
+                        onClick={() =>
+                          run(() =>
+                            props.bindAction({
+                              ...scope,
+                              agentId,
+                              environmentId: b.environmentId,
+                              sandboxTemplateId: b.sandboxTemplateId,
+                              isPrimary: true,
+                            }),
+                          )
+                        }
+                        data-testid={`agent-binding-primary-${b.environmentSlug}`}
+                      >
+                        Make primary
+                      </Button>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
+                  </dd>
+                </div>
+              </dl>
+              {canManage && (
+                <div className="flex shrink-0 items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    className="max-md:h-11 text-destructive"
+                    disabled={pending}
+                    onClick={() =>
+                      run(() =>
+                        props.unbindAction({
+                          ...scope,
+                          agentId,
+                          environmentId: b.environmentId,
+                        }),
+                      )
+                    }
+                    data-testid={`agent-binding-unbind-${b.environmentSlug}`}
+                  >
+                    Unbind
+                  </Button>
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
 
       {canManage && (
         <div className="flex flex-col gap-2 rounded-md border border-border/40 p-3">

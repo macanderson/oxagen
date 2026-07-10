@@ -1,0 +1,37 @@
+/**
+ * mcp-oauth-result-toast.test.ts — unit tests for the pure reason-code →
+ * user-facing copy mapping. The component itself is covered by the MCP page
+ * e2e flow; this pins the copy contract with the authorize route's
+ * classifyAuthError codes.
+ */
+import { describe, expect, it } from "vitest";
+import { oauthErrorDescription } from "./mcp-oauth-result-toast";
+
+describe("oauthErrorDescription", () => {
+  it("explains dcr_unsupported with the pre-registered-client remedy", () => {
+    const msg = oauthErrorDescription("dcr_unsupported", "GitHub MCP");
+    expect(msg).toContain("GitHub MCP");
+    expect(msg).toContain("automatic client registration");
+    expect(msg).toContain("MCP_OAUTH_PREREGISTERED_CLIENTS");
+  });
+
+  it("points provider_error at the endpoint URL", () => {
+    const msg = oauthErrorDescription("provider_error", "Acme MCP");
+    expect(msg).toContain("Acme MCP");
+    expect(msg).toContain("endpoint URL");
+  });
+
+  it("explains no_redirect", () => {
+    const msg = oauthErrorDescription("no_redirect", "Acme MCP");
+    expect(msg).toContain("did not provide a sign-in page");
+  });
+
+  it("falls back to the generic retry copy for unknown or missing reasons", () => {
+    expect(oauthErrorDescription(null, "Acme MCP")).toBe(
+      "Acme MCP could not be connected. Try authenticating again.",
+    );
+    expect(oauthErrorDescription("something_new", "Acme MCP")).toBe(
+      "Acme MCP could not be connected. Try authenticating again.",
+    );
+  });
+});

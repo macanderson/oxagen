@@ -1,5 +1,6 @@
 import { PageHeader } from "@/components/ui/page-header";
 import { PageTabs } from "@/components/ui/page-tabs";
+import { MobileSettingsNav } from "@/components/ui/settings-nav";
 import { org } from "@/lib/routes";
 
 export default async function SecurityLayout({
@@ -26,8 +27,9 @@ export default async function SecurityLayout({
         title="Security"
         description="MFA, audit, compliance, and trust."
       />
-      <PageTabs tabs={tabs} className="mb-6" />
+      <PageTabs tabs={tabs} className="mb-6 max-md:hidden" />
       {children}
+      <MobileSettingsNav items={tabs} label="Security" />
     </div>
   );
 }

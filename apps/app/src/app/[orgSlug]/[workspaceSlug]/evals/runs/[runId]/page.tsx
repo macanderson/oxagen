@@ -18,8 +18,6 @@ import { TableSkeleton } from "@/components/loading";
 import { workspace } from "@/lib/routes";
 import { RunDetailSection } from "./run-detail-section";
 
-export const dynamic = "force-dynamic";
-
 interface PageProps {
   params: Promise<{ orgSlug: string; workspaceSlug: string; runId: string }>;
 }

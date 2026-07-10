@@ -140,7 +140,8 @@ export function buildFileTree(entries: FileTreeEntry[]): TreeNode[] {
 }
 
 export function formatBytes(bytes: number | null | undefined): string | null {
-  if (bytes === null || bytes === undefined) return null;
+  // Also reject NaN/Infinity — otherwise a missing size renders as "NaN KB".
+  if (bytes === null || bytes === undefined || !Number.isFinite(bytes)) return null;
   if (bytes < 1024) return `${bytes} B`;
   const units = ["KB", "MB", "GB", "TB"];
   let value = bytes / 1024;
@@ -198,11 +199,10 @@ const EXT_ICON: Record<string, LucideIcon> = {
   rar: FileArchive, "7z": FileArchive,
 };
 
-/** Pick a monochromatic icon for a file by extension (case-insensitive). */
-function fileIconFor(name: string): LucideIcon {
+/** Extension key for a file name (case-insensitive); "" for no ext or a bare dotfile like ".env". */
+function fileExtOf(name: string): string {
   const dot = name.lastIndexOf(".");
-  if (dot <= 0) return File; // no ext, or a bare dotfile like ".env" → generic
-  return EXT_ICON[name.slice(dot + 1).toLowerCase()] ?? File;
+  return dot <= 0 ? "" : name.slice(dot + 1).toLowerCase();
 }
 
 // Compact indentation so deep paths fit phone-width screens; ≥44px touch
@@ -344,7 +344,9 @@ function FileRow({
   const { onFileSelect } = interactions;
   const ignored = node.gitignored || inheritedIgnored;
   const muted = ignored || isHidden(node.name);
-  const FileIcon = fileIconFor(node.name);
+  // Static-map lookup (not a call result) so react-hooks/static-components
+  // can see the component identity is stable across renders.
+  const FileIcon = EXT_ICON[fileExtOf(node.name)] ?? File;
 
   const name = (
     <>

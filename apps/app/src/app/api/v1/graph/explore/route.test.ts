@@ -37,7 +37,9 @@ const {
   mockLoggerError: vi.fn(),
 }));
 
-vi.mock("@/lib/session", () => ({ getSessionOrRedirect: mockGetSessionOrRedirect }));
+vi.mock("@/lib/session", () => ({
+  getSessionOrRedirect: mockGetSessionOrRedirect,
+}));
 vi.mock("@/lib/resolve-org", () => ({
   resolveOrg: mockResolveOrg,
   resolveWorkspace: mockResolveWorkspace,
@@ -95,7 +97,10 @@ describe("POST /api/v1/graph/explore — schema accepts every op the client send
         properties: { email: "mac@oxagen.ai" },
       },
     },
-    { name: "deleteNode", body: { ...TENANT, op: "deleteNode", nodeId: "node-1" } },
+    {
+      name: "deleteNode",
+      body: { ...TENANT, op: "deleteNode", nodeId: "node-1" },
+    },
     {
       name: "upsertEdge",
       body: {
@@ -119,32 +124,44 @@ describe("POST /api/v1/graph/explore — schema accepts every op the client send
     },
     // Pre-existing read ops must keep working too.
     { name: "graph", body: { ...TENANT, op: "graph", limit: 50 } },
-    { name: "nodes", body: { ...TENANT, op: "nodes", labels: ["Person"], limit: 25 } },
+    // The runtime-lineage opt-in must round-trip on both seeded ops.
+    {
+      name: "graph+includeSystem",
+      body: { ...TENANT, op: "graph", limit: 50, includeSystem: true },
+    },
+    {
+      name: "nodes",
+      body: { ...TENANT, op: "nodes", labels: ["Person"], limit: 25 },
+    },
+    {
+      name: "nodes+includeSystem",
+      body: { ...TENANT, op: "nodes", limit: 25, includeSystem: true },
+    },
     { name: "search", body: { ...TENANT, op: "search", query: "mac" } },
     { name: "node", body: { ...TENANT, op: "node", nodeId: "node-1" } },
     { name: "expand", body: { ...TENANT, op: "expand", nodeId: "node-1" } },
   ];
 
-  it.each(ACCEPTED_OPS)("accepts op=$name and dispatches it (not a 400)", async ({
-    body,
-  }: {
-    name: string;
-    body: Record<string, unknown>;
-  }) => {
-    const res = await POST(req(body) as never);
+  it.each(ACCEPTED_OPS)(
+    "accepts op=$name and dispatches it (not a 400)",
+    async ({ body }: { name: string; body: Record<string, unknown> }) => {
+      const res = await POST(req(body) as never);
 
-    expect(res.status).toBe(200);
-    expect(mockDispatchExplore).toHaveBeenCalledTimes(1);
-    // The parsed body (op + payload) is forwarded verbatim to the service.
-    expect(mockDispatchExplore.mock.calls[0]![0]).toMatchObject({ op: body.op });
-    // ...scoped to the resolved tenant, never the raw slugs.
-    expect(mockDispatchExplore.mock.calls[0]![1]).toMatchObject({
-      orgId: ORG.id,
-      workspaceId: WORKSPACE.id,
-      userId: SESSION.user.id,
-      surface: "app",
-    });
-  });
+      expect(res.status).toBe(200);
+      expect(mockDispatchExplore).toHaveBeenCalledTimes(1);
+      // The parsed body (op + payload) is forwarded verbatim to the service.
+      expect(mockDispatchExplore.mock.calls[0]![0]).toMatchObject({
+        op: body.op,
+      });
+      // ...scoped to the resolved tenant, never the raw slugs.
+      expect(mockDispatchExplore.mock.calls[0]![1]).toMatchObject({
+        orgId: ORG.id,
+        workspaceId: WORKSPACE.id,
+        userId: SESSION.user.id,
+        surface: "app",
+      });
+    },
+  );
 });
 
 describe("POST /api/v1/graph/explore — validation and auth", () => {

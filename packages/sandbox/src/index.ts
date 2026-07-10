@@ -67,7 +67,9 @@ export function isSandboxAvailable(): boolean {
 
   if (explicit === "modal") {
     // Modal sandbox: requires both URL and auth token.
-    return Boolean(process.env.MODAL_RUNNER_URL && process.env.MODAL_RUNNER_TOKEN);
+    return Boolean(
+      process.env.MODAL_RUNNER_URL && process.env.MODAL_RUNNER_TOKEN,
+    );
   }
 
   if (explicit === "docker") {
@@ -167,7 +169,10 @@ function createDefaultDriver(): SandboxDriver {
 // may legitimately exceed the conservative DEFAULT_POLICY. Callers thread the
 // template's limits in as the effective `policy` so those requests are NOT
 // clamped down to defaults; with no `policy` argument, DEFAULT_POLICY applies.
-function withPolicy(driver: SandboxDriver, policy: SandboxPolicy): SandboxDriver {
+function withPolicy(
+  driver: SandboxDriver,
+  policy: SandboxPolicy,
+): SandboxDriver {
   return new Proxy(driver, {
     get(target, prop, receiver) {
       if (prop === "run") {

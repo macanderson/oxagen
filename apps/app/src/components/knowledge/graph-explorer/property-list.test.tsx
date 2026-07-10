@@ -66,6 +66,26 @@ describe("PropertyList — typed value rendering", () => {
     render(<PropertyList properties={{ description: null }} />);
     expect(screen.getByText("—")).toBeInTheDocument();
   });
+
+  it("renders an array value as a readable comma-joined string", () => {
+    render(<PropertyList properties={{ tags: ["auth", "billing", 3] }} />);
+    expect(screen.getByText("Tags")).toBeInTheDocument();
+    expect(screen.getByText("auth, billing, 3")).toBeInTheDocument();
+    expect(screen.queryByText(/\[object Object\]/)).not.toBeInTheDocument();
+  });
+
+  it("renders a nested-object value as compact JSON, not '[object Object]'", () => {
+    render(<PropertyList properties={{ meta: { status: "open", count: 2 } }} />);
+    expect(screen.getByText("Meta")).toBeInTheDocument();
+    expect(screen.getByText('{"status":"open","count":2}')).toBeInTheDocument();
+    expect(screen.queryByText(/\[object Object\]/)).not.toBeInTheDocument();
+  });
+
+  it("renders an array of objects as JSON items, not '[object Object]'", () => {
+    render(<PropertyList properties={{ items: [{ id: 1 }, { id: 2 }] }} />);
+    expect(screen.getByText('{"id":1}, {"id":2}')).toBeInTheDocument();
+    expect(screen.queryByText(/\[object Object\]/)).not.toBeInTheDocument();
+  });
 });
 
 describe("PropertyList — omit prop", () => {

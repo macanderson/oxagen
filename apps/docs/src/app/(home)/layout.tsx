@@ -11,6 +11,17 @@ import { OxagenLockup, OxagenLogomark } from "@oxagen/ui";
 
 const APP_URL = "https://app.oxagen.sh";
 
+/**
+ * The copyright year is isolated behind a `use cache` boundary. Cache Components
+ * forbid reading the current time in a Server Component during prerender (the
+ * output would freeze at build time); inside a cache scope the value is allowed
+ * and evaluated once at build/revalidate — exactly right for a copyright year.
+ */
+async function CopyrightYear() {
+  "use cache";
+  return <>{new Date().getFullYear()}</>;
+}
+
 const NAV = [
   { label: "Docs", href: "/docs" },
   { label: "Install", href: "/install" },
@@ -120,7 +131,7 @@ export default function HomeLayout({ children }: { children: ReactNode }) {
         </div>
         <div className="border-t border-border/60">
           <div className="mx-auto flex w-full max-w-7xl flex-col items-center justify-between gap-3 px-6 py-6 text-xs text-muted-foreground sm:flex-row">
-            <span>© {new Date().getFullYear()} Oxagen. All rights reserved.</span>
+            <span>© <CopyrightYear /> Oxagen. All rights reserved.</span>
             <span className="font-mono">app.oxagen.sh · api.oxagen.sh · mcp.oxagen.sh</span>
           </div>
         </div>

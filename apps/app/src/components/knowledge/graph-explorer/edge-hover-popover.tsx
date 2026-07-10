@@ -12,8 +12,7 @@
 import * as React from "react";
 import { Badge } from "@/components/ui/badge";
 import type { ExplorerEdge, ExplorerNode } from "./types";
-import { formatConfidence } from "./lib/format";
-import { truncate } from "./lib/format";
+import { formatConfidence, formatPropertyValue, truncate } from "./lib/format";
 
 export interface EdgeHoverPopoverProps {
   edge: ExplorerEdge;
@@ -79,7 +78,10 @@ export function EdgeHoverPopover({ edge, pos, sourceNode, targetNode }: EdgeHove
                 .slice(0, 3)
                 .map(([k, v]) => (
                   <p key={k} className="truncate text-foreground/70">
-                    <span className="font-mono text-muted-foreground">{k}:</span> {String(v).substring(0, 20)}
+                    {/* formatPropertyValue, not String(v) — nested values would
+                        render as "[object Object]" otherwise. */}
+                    <span className="font-mono text-muted-foreground">{k}:</span>{" "}
+                    {truncate(formatPropertyValue(v), 20)}
                   </p>
                 ))}
             </div>
@@ -91,7 +93,8 @@ export function EdgeHoverPopover({ edge, pos, sourceNode, targetNode }: EdgeHove
                 .slice(0, 3)
                 .map(([k, v]) => (
                   <p key={k} className="truncate text-foreground/70">
-                    <span className="font-mono text-muted-foreground">{k}:</span> {String(v).substring(0, 20)}
+                    <span className="font-mono text-muted-foreground">{k}:</span>{" "}
+                    {truncate(formatPropertyValue(v), 20)}
                   </p>
                 ))}
             </div>

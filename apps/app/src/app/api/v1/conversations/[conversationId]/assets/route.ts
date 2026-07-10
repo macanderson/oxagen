@@ -26,9 +26,8 @@ import { getSession } from "@/lib/session";
 // (conversation-files.tsx) keep a single source of truth.
 export type { ConversationAssetItem };
 
-// Node runtime: uses crypto + DB.
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
+// Default Node.js runtime: uses crypto + DB — never move to edge. No
+// `export const runtime` (incompatible with cacheComponents; Node is default).
 
 export async function GET(
   _req: Request,

@@ -89,7 +89,10 @@ describe("ontologyNeighborsHandler", () => {
 
   it("scopes both queries by orgId and workspaceId (tenant-isolation guard)", async () => {
     mocks.run.mockResolvedValueOnce(EXISTS).mockResolvedValueOnce(makeRows([]));
-    await ontologyNeighborsHandler({ nodeId: "n-1", direction: "both", limit: 100 }, CTX);
+    await ontologyNeighborsHandler(
+      { nodeId: "n-1", direction: "both", limit: 100 },
+      CTX,
+    );
     const existsCypher = mocks.run.mock.calls[0]?.[0] as string;
     const neighborCypher = mocks.run.mock.calls[1]?.[0] as string;
     expect(existsCypher).toContain("orgId: $orgId");
@@ -124,6 +127,8 @@ describe("ontologyNeighborsHandler", () => {
         description: "area",
         edgeType: "RELATED_TO",
         direction: "out",
+        // Ownership defaults to customer data when is_system is absent (null row).
+        isSystem: false,
         // Bi-temporal validity — all-null for an unstamped edge (mock returns null).
         validFrom: null,
         validTo: null,
@@ -133,14 +138,43 @@ describe("ontologyNeighborsHandler", () => {
     ]);
   });
 
+  it("projects is_system ownership so callers can separate lineage from knowledge", async () => {
+    mocks.run.mockResolvedValueOnce(EXISTS).mockResolvedValueOnce(
+      makeRows([
+        {
+          nodeId: "exec-1",
+          label: "Execution",
+          displayName: "chat execution",
+          description: null,
+          edgeType: "EXECUTED",
+          direction: "in",
+          isSystem: true,
+        },
+      ]),
+    );
+    const result = await ontologyNeighborsHandler(
+      { nodeId: "n-1", direction: "both", limit: 100 },
+      CTX,
+    );
+    const cypher = mocks.run.mock.calls[1]?.[0] as string;
+    expect(cypher).toContain("coalesce(m.is_system, false) AS isSystem");
+    expect(result.neighbors[0]?.isSystem).toBe(true);
+  });
+
   it("applies the direction filter for 'out' and omits it for 'both'", async () => {
     mocks.run.mockResolvedValueOnce(EXISTS).mockResolvedValueOnce(makeRows([]));
-    await ontologyNeighborsHandler({ nodeId: "n-1", direction: "out", limit: 10 }, CTX);
+    await ontologyNeighborsHandler(
+      { nodeId: "n-1", direction: "out", limit: 10 },
+      CTX,
+    );
     expect(mocks.run.mock.calls[1]?.[0]).toContain("startNode(r) = n");
 
     vi.clearAllMocks();
     mocks.run.mockResolvedValueOnce(EXISTS).mockResolvedValueOnce(makeRows([]));
-    await ontologyNeighborsHandler({ nodeId: "n-1", direction: "both", limit: 10 }, CTX);
+    await ontologyNeighborsHandler(
+      { nodeId: "n-1", direction: "both", limit: 10 },
+      CTX,
+    );
     const bothCypher = mocks.run.mock.calls[1]?.[0] as string;
     expect(bothCypher).not.toContain("startNode(r) = n\n");
   });
@@ -177,7 +211,10 @@ describe("ontologyNeighborsHandler", () => {
   it("closes the session even when a query throws", async () => {
     mocks.run.mockRejectedValueOnce(new Error("Neo4j down"));
     await expect(
-      ontologyNeighborsHandler({ nodeId: "n-1", direction: "both", limit: 100 }, CTX),
+      ontologyNeighborsHandler(
+        { nodeId: "n-1", direction: "both", limit: 100 },
+        CTX,
+      ),
     ).rejects.toThrow("Neo4j down");
     expect(mocks.close).toHaveBeenCalled();
   });
@@ -188,7 +225,12 @@ describe("ontologyNeighborsHandler — §3.2 Cypher-injection + active-vocabular
     await expect(
       ontologyNeighborsHandler(
         // The classic Cypher-injection payload: break out of the rel-type list.
-        { nodeId: "n-1", edgeTypes: ["`]->()-[:x"], direction: "both", limit: 100 },
+        {
+          nodeId: "n-1",
+          edgeTypes: ["`]->()-[:x"],
+          direction: "both",
+          limit: 100,
+        },
         CTX,
       ),
     ).rejects.toThrow(/lexical guard/);
@@ -197,7 +239,9 @@ describe("ontologyNeighborsHandler — §3.2 Cypher-injection + active-vocabular
   });
 
   it("rejects a relationship type absent from the pinned active vocabulary", async () => {
-    mocks.getPinnedSchema.mockResolvedValue(pinnedWith(["EMPLOYS", "SIGNED_CONTRACT"]));
+    mocks.getPinnedSchema.mockResolvedValue(
+      pinnedWith(["EMPLOYS", "SIGNED_CONTRACT"]),
+    );
     await expect(
       ontologyNeighborsHandler(
         { nodeId: "n-1", edgeTypes: ["KNOWS"], direction: "both", limit: 100 },
@@ -215,23 +259,37 @@ describe("ontologyNeighborsHandler — §3.2 Cypher-injection + active-vocabular
       CTX,
     );
     const neighborCypher = mocks.run.mock.calls[1]?.[0] as string;
-    const neighborParams = mocks.run.mock.calls[1]?.[1] as Record<string, unknown>;
+    const neighborParams = mocks.run.mock.calls[1]?.[1] as Record<
+      string,
+      unknown
+    >;
     // The relationship type is filtered via a PARAMETER, never concatenated.
     expect(neighborCypher).toContain("type(r) IN $edgeTypes");
     expect(neighborParams["edgeTypes"]).toEqual(["EMPLOYS"]);
   });
 
   it("defaults the omitted filter to the pinned active vocabulary, not a static list", async () => {
-    mocks.getPinnedSchema.mockResolvedValue(pinnedWith(["EMPLOYS", "SIGNED_CONTRACT"]));
+    mocks.getPinnedSchema.mockResolvedValue(
+      pinnedWith(["EMPLOYS", "SIGNED_CONTRACT"]),
+    );
     mocks.run.mockResolvedValueOnce(EXISTS).mockResolvedValueOnce(makeRows([]));
-    await ontologyNeighborsHandler({ nodeId: "n-1", direction: "both", limit: 100 }, CTX);
-    const neighborParams = mocks.run.mock.calls[1]?.[1] as Record<string, unknown>;
+    await ontologyNeighborsHandler(
+      { nodeId: "n-1", direction: "both", limit: 100 },
+      CTX,
+    );
+    const neighborParams = mocks.run.mock.calls[1]?.[1] as Record<
+      string,
+      unknown
+    >;
     expect(neighborParams["edgeTypes"]).toEqual(["EMPLOYS", "SIGNED_CONTRACT"]);
   });
 
   it("traverses unconstrained (no rel-type clause) when nothing pinned and no filter", async () => {
     mocks.run.mockResolvedValueOnce(EXISTS).mockResolvedValueOnce(makeRows([]));
-    await ontologyNeighborsHandler({ nodeId: "n-1", direction: "both", limit: 100 }, CTX);
+    await ontologyNeighborsHandler(
+      { nodeId: "n-1", direction: "both", limit: 100 },
+      CTX,
+    );
     const neighborCypher = mocks.run.mock.calls[1]?.[0] as string;
     expect(neighborCypher).not.toContain("type(r) IN $edgeTypes");
   });
@@ -242,13 +300,24 @@ describe("ontologyNeighborsHandler — §3.2 Cypher-injection + active-vocabular
 describe("ontologyNeighborsHandler — asOf / asKnownAt validity filter", () => {
   it("applies the validity filter and projects validity columns by default", async () => {
     mocks.run.mockResolvedValueOnce(EXISTS).mockResolvedValueOnce(makeRows([]));
-    await ontologyNeighborsHandler({ nodeId: "n-1", direction: "both", limit: 100 }, CTX);
+    await ontologyNeighborsHandler(
+      { nodeId: "n-1", direction: "both", limit: 100 },
+      CTX,
+    );
     const cypher = mocks.run.mock.calls[1]?.[0] as string;
     // Filter present (both time axes), null-safe for unstamped legacy edges.
-    expect(cypher).toContain("r.validFrom IS NULL OR r.validFrom <= datetime($asOf)");
-    expect(cypher).toContain("r.validTo IS NULL OR r.validTo > datetime($asOf)");
-    expect(cypher).toContain("r.recordedAt IS NULL OR r.recordedAt <= datetime($asKnownAt)");
-    expect(cypher).toContain("r.invalidatedAt IS NULL OR r.invalidatedAt > datetime($asKnownAt)");
+    expect(cypher).toContain(
+      "r.validFrom IS NULL OR r.validFrom <= datetime($asOf)",
+    );
+    expect(cypher).toContain(
+      "r.validTo IS NULL OR r.validTo > datetime($asOf)",
+    );
+    expect(cypher).toContain(
+      "r.recordedAt IS NULL OR r.recordedAt <= datetime($asKnownAt)",
+    );
+    expect(cypher).toContain(
+      "r.invalidatedAt IS NULL OR r.invalidatedAt > datetime($asKnownAt)",
+    );
     // Validity projected back for citation.
     expect(cypher).toContain("toString(r.validFrom) AS validFrom");
   });
@@ -256,10 +325,17 @@ describe("ontologyNeighborsHandler — asOf / asKnownAt validity filter", () => 
   it("defaults asOf / asKnownAt params to ~now when omitted", async () => {
     const before = Date.now();
     mocks.run.mockResolvedValueOnce(EXISTS).mockResolvedValueOnce(makeRows([]));
-    await ontologyNeighborsHandler({ nodeId: "n-1", direction: "both", limit: 100 }, CTX);
+    await ontologyNeighborsHandler(
+      { nodeId: "n-1", direction: "both", limit: 100 },
+      CTX,
+    );
     const params = mocks.run.mock.calls[1]?.[1] as Record<string, string>;
-    expect(new Date(String(params.asOf)).getTime()).toBeGreaterThanOrEqual(before - 1000);
-    expect(new Date(String(params.asKnownAt)).getTime()).toBeGreaterThanOrEqual(before - 1000);
+    expect(new Date(String(params.asOf)).getTime()).toBeGreaterThanOrEqual(
+      before - 1000,
+    );
+    expect(new Date(String(params.asKnownAt)).getTime()).toBeGreaterThanOrEqual(
+      before - 1000,
+    );
   });
 
   it("threads explicit asOf / asKnownAt through as params", async () => {

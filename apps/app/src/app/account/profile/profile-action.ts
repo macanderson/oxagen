@@ -2,6 +2,7 @@
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { avatarUrlSchema } from "@oxagen/oxagen/avatar";
 import { withSystemDb, schema } from "@oxagen/database";
 // tenancy: unscoped seam (auth.users is a global identity table managed by
 // Better Auth with no org_id/workspace_id columns; RLS is not applied to it
@@ -10,7 +11,8 @@ import { getSessionOrRedirect } from "@/lib/session";
 
 const ProfileSchema = z.object({
   displayName: z.string().min(1).max(120).trim(),
-  avatarUrl: z.string().url().max(2048).optional().or(z.literal("")),
+  // https URL or designed-avatar spec string — the canonical avatar validator.
+  avatarUrl: avatarUrlSchema.optional().or(z.literal("")),
 });
 
 export type ProfileInput = z.infer<typeof ProfileSchema>;
