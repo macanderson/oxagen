@@ -141,7 +141,7 @@ export const BUILT_IN_TEMPLATES: PromptTemplateInput[] = [
         "required": true
       }
     ],
-    "body": "Find the playbook that spawned run {{run_id}} and show me a link to open it in the\nStudio editor so I can review or modify its definition.\n"
+    "body": "Find the playbook that spawned run {{run_id}} and show me a link to open it in the\nWorkbench editor so I can review or modify its definition.\n"
   },
   {
     "id": "run-this-playbook",

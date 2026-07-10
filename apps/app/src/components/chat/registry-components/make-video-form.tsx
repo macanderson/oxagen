@@ -20,7 +20,6 @@
 
 import * as React from "react";
 import { Film, Clock, LayoutTemplate, Wand2, CheckCircle2 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
@@ -165,9 +164,7 @@ export default function MakeVideoForm({
           aria-hidden="true"
         />
         <span className="text-sm font-semibold text-foreground">Generate video</span>
-        <Badge variant="muted" className="ml-auto text-xs">
-          Preview
-        </Badge>
+        <span className="ml-auto text-xs font-medium text-muted-foreground">Preview</span>
       </div>
 
       {/* Prompt */}

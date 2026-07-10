@@ -14,10 +14,12 @@ import {
   ArrowLeft,
   BookOpen,
   Bot,
+  Box,
   Building2,
   CreditCard,
   FlaskConical,
   KeyRound,
+  Layers,
   LayoutGrid,
   Lock,
   MessageSquare,
@@ -28,6 +30,7 @@ import {
   Terminal,
   User,
   Users,
+  Wrench,
   type LucideIcon,
 } from "lucide-react";
 
@@ -112,10 +115,12 @@ const workspaceConfig: SidebarConfig = {
           : `/${ctx.orgSlug}`,
       group: "primary",
     },
-    // Workbench group — build interactive agents. The Agent Builder is the
-    // centerpiece. Agent Tools is NOT a primary nav item: it is the second
-    // tab of the Workbench surface (workbench/layout.tsx), always one click away
-    // from Agents, so promoting it here duplicated the destination.
+    // Workbench group — everything about building with agents. All four are
+    // first-class sidebar destinations (there is deliberately NO Workbench
+    // secondary nav): Agents (the builder), Agent Tools (the equip hub with
+    // its own All Tools / Skills / MCP Servers / Capabilities sections),
+    // Environments (env vars + secrets), and Sandboxes (durable code
+    // sandboxes + their templates).
     {
       id: "agents",
       label: "Agents",
@@ -136,16 +141,47 @@ const workspaceConfig: SidebarConfig = {
       // links) despite being fully built. group: "primary" places it right
       // after Activity in the desktop sidebar (group-filtered render, see
       // sidebar.tsx) since both surfaces read from the same execution
-      // history; it is declared here (after the "agents"/tools-group entry
-      // in raw array order) so the mobile bottom bar's unfiltered first-4
-      // cut (MAX_BAR_ITEMS, mobile-bottom-bar.tsx) is unaffected — Evals
-      // overflows into the mobile "More" sheet alongside Marketplace/Settings
+      // history; it is declared here (after the "agents" entry, ahead of the
+      // tools-group items below, in raw array order) so the mobile bottom
+      // bar's unfiltered first-4 cut (MAX_BAR_ITEMS, mobile-bottom-bar.tsx)
+      // is unaffected — Evals overflows into the mobile "More" sheet
+      // alongside Agent Tools/Environments/Sandboxes/Marketplace/Settings
       // rather than displacing Agents from the visible bar.
       href: (ctx) =>
         ctx.workspaceSlug
           ? workspace.evals.root(ctx as Required<ScopeContext>)
           : `/${ctx.orgSlug}`,
       group: "primary",
+    },
+    {
+      id: "agent-tools",
+      label: "Agent Tools",
+      icon: Wrench,
+      href: (ctx) =>
+        ctx.workspaceSlug
+          ? workspace.workbench.tools.root(ctx as Required<ScopeContext>)
+          : `/${ctx.orgSlug}`,
+      group: "tools",
+    },
+    {
+      id: "environments",
+      label: "Environments",
+      icon: Layers,
+      href: (ctx) =>
+        ctx.workspaceSlug
+          ? workspace.workbench.environments(ctx as Required<ScopeContext>)
+          : `/${ctx.orgSlug}`,
+      group: "tools",
+    },
+    {
+      id: "sandboxes",
+      label: "Sandboxes",
+      icon: Box,
+      href: (ctx) =>
+        ctx.workspaceSlug
+          ? workspace.workbench.sandboxes(ctx as Required<ScopeContext>)
+          : `/${ctx.orgSlug}`,
+      group: "tools",
     },
     {
       id: "marketplace",
@@ -462,6 +498,43 @@ export function enumerateNavTargets(
       parent: "settings",
     });
 
+    // Workbench destinations — all four are first-class sidebar items.
+    targets.push({
+      label: "Agents",
+      href: workspace.workbench.agents(wsCtx),
+      parent: "agents",
+    });
+    targets.push({
+      label: "Agent Tools",
+      href: workspace.workbench.tools.root(wsCtx),
+      parent: "agent-tools",
+    });
+    targets.push({
+      label: "Agent Tools · Skills",
+      href: workspace.workbench.tools.skills(wsCtx),
+      parent: "agent-tools",
+    });
+    targets.push({
+      label: "Agent Tools · MCP Servers",
+      href: workspace.workbench.tools.mcp(wsCtx),
+      parent: "agent-tools",
+    });
+    targets.push({
+      label: "Agent Tools · Capabilities",
+      href: workspace.workbench.tools.capabilities(wsCtx),
+      parent: "agent-tools",
+    });
+    targets.push({
+      label: "Environments",
+      href: workspace.workbench.environments(wsCtx),
+      parent: "environments",
+    });
+    targets.push({
+      label: "Sandboxes",
+      href: workspace.workbench.sandboxes(wsCtx),
+      parent: "sandboxes",
+    });
+
     // Knowledge tabs
     targets.push({
       label: "Knowledge · Repos",
@@ -498,6 +571,11 @@ export function enumerateNavTargets(
     targets.push({
       label: "Settings · Models",
       href: workspace.settings.models(wsCtx),
+      parent: "settings",
+    });
+    targets.push({
+      label: "Settings · MCP Registries",
+      href: workspace.settings.mcpServerRegistries(wsCtx),
       parent: "settings",
     });
   }

@@ -17,7 +17,8 @@ const SheetOverlay = React.forwardRef<
   <DialogPrimitive.Backdrop
     ref={ref}
     className={cn(
-      "fixed inset-0 z-50 bg-black/80 transition-opacity duration-300 ease-[var(--ease-entry)] data-[starting-style]:opacity-0 data-[ending-style]:opacity-0",
+      // Token-driven scrim (matches DialogOverlay) — never a raw palette color.
+      "fixed inset-0 z-50 bg-overlay-scrim transition-opacity duration-300 ease-[var(--ease-entry)] data-[starting-style]:opacity-0 data-[ending-style]:opacity-0",
       className,
     )}
     {...props}
@@ -79,7 +80,7 @@ SheetPanel.displayName = "SheetPanel";
 
 const SheetFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
-    className={cn("flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2", className)}
+    className={cn("flex flex-col-reverse gap-2 sm:flex-row sm:justify-end", className)}
     {...props}
   />
 );

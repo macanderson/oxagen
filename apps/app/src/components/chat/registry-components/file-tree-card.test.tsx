@@ -125,9 +125,13 @@ describe("FileTreeCard", () => {
     render(<FileTreeCard entries={[{ path: "src/nested/file.ts", kind: "file" }]} />);
     // "src" (depth 0) is open by default, revealing "nested" (depth 1).
     expect(screen.getByText("nested")).toBeInTheDocument();
-    // "nested" itself is collapsed by default — its child isn't shown yet.
-    expect(screen.queryByText("file.ts")).not.toBeInTheDocument();
-    await userEvent.click(screen.getByText("nested"));
+    // "nested" itself is collapsed by default. Children stay MOUNTED (the
+    // 0fr→1fr grid-rows animation needs them in the DOM), so collapse state
+    // is asserted via the dir row's aria-expanded, not DOM absence.
+    const nestedRow = screen.getByRole("button", { name: /nested/ });
+    expect(nestedRow).toHaveAttribute("aria-expanded", "false");
+    await userEvent.click(nestedRow);
+    expect(nestedRow).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByText("file.ts")).toBeInTheDocument();
   });
 
@@ -205,7 +209,11 @@ describe("FileTreeCard", () => {
         ]}
       />,
     );
-    const truncated = truncateMiddle("extremely-long-component-file-name-for-mobile.tsx");
+    // NameLabel renders with max=44 (wider than the 28 default) so mirror it.
+    const truncated = truncateMiddle(
+      "extremely-long-component-file-name-for-mobile.tsx",
+      44,
+    );
     expect(truncated).toContain("…");
     expect(truncated.endsWith(".tsx")).toBe(true);
     expect(screen.getByText(truncated)).toBeInTheDocument();

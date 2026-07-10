@@ -16,10 +16,6 @@ import {
 // Node runtime: the storage adapter uses Node.js crypto + the Vercel Blob SDK.
 export const runtime = "nodejs";
 
-// Never cache: every response is access-controlled; a stale cache entry could
-// serve one user's private asset to another session.
-export const dynamic = "force-dynamic";
-
 export async function GET(
   _req: Request,
   ctx: { params: Promise<{ assetId: string }> },

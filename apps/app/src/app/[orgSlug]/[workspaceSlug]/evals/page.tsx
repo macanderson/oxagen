@@ -19,8 +19,6 @@ import { PageHeader } from "@/components/ui/page-header";
 import { TableSkeleton } from "@/components/loading";
 import { DatasetsSection } from "./datasets-section";
 
-export const dynamic = "force-dynamic";
-
 interface PageProps {
   params: Promise<{ orgSlug: string; workspaceSlug: string }>;
 }

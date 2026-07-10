@@ -23,12 +23,12 @@ import {
   type SandboxTemplateManifest,
   type SandboxTemplateTool,
 } from "@oxagen/oxagen/contracts/sandbox-template-manifest";
-import type { EnvironmentSummary, SecretKeySummary } from "./actions";
+import type { EnvironmentSummary, SecretKeySummary } from "../environments/actions";
 import type {
   ActionResult,
   SandboxTemplateSummary,
   ToolSourceOption,
-} from "./sandbox-actions";
+} from "./sandbox-template-actions";
 
 // ── Network-mode metadata (four modes are declared but not yet provisionable) ─
 
@@ -229,137 +229,141 @@ export function SandboxTemplatesPanel(props: Props) {
             {list.length === 0 ? (
               <p className="text-xs text-muted-foreground">No templates in this environment yet.</p>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-border/40 text-xs text-muted-foreground">
-                      <th className="px-2 py-1.5 text-left font-medium">Name</th>
-                      <th className="px-2 py-1.5 text-left font-medium">Provider</th>
-                      <th className="px-2 py-1.5 text-left font-medium">Network</th>
-                      <th className="px-2 py-1.5 text-left font-medium">Tools</th>
-                      <th className="px-2 py-1.5 text-left font-medium">Status</th>
-                      {canManage && <th className="px-2 py-1.5" />}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {list.map((t) => (
-                      <tr
-                        key={t.id}
-                        className="border-b border-border/30 last:border-0"
-                        data-testid={`sandbox-template-row-${t.slug}`}
-                      >
-                        <td className="px-2 py-1.5">
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium">{t.name}</span>
-                            {t.isDefault && (
-                              <Badge variant="outline" size="sm">
-                                ★ default
-                              </Badge>
-                            )}
-                          </div>
-                          <div className="font-mono text-xs text-muted-foreground">{t.slug}</div>
-                        </td>
-                        <td className="px-2 py-1.5">{t.provider}</td>
-                        <td className="px-2 py-1.5 text-xs">{t.network.mode}</td>
-                        <td className="px-2 py-1.5 text-xs text-muted-foreground">
-                          {t.tools.length}
-                        </td>
-                        <td className="px-2 py-1.5 text-xs">
+              <ul className="divide-y divide-border/30 overflow-hidden rounded-md border border-border/40 text-sm">
+                {list.map((t) => (
+                  <li
+                    key={t.id}
+                    className="flex flex-col gap-3 px-2 py-1.5 sm:flex-row sm:items-center sm:gap-6"
+                    data-testid={`sandbox-template-row-${t.slug}`}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">{t.name}</span>
+                        {t.isDefault && (
+                          <Badge variant="outline" size="sm">
+                            ★ default
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="font-mono text-xs text-muted-foreground">{t.slug}</div>
+                    </div>
+                    <dl className="flex flex-wrap items-center gap-x-6 gap-y-2">
+                      <div>
+                        <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                          Provider
+                        </dt>
+                        <dd className="mt-0.5 text-sm">{t.provider}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                          Network
+                        </dt>
+                        <dd className="mt-0.5 text-xs">{t.network.mode}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                          Tools
+                        </dt>
+                        <dd className="mt-0.5 text-xs text-muted-foreground">{t.tools.length}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                          Status
+                        </dt>
+                        <dd className="mt-0.5 text-xs">
                           {t.isActive ? (
                             <span className="text-success">active</span>
                           ) : (
                             <span className="text-muted-foreground">inactive</span>
                           )}
-                        </td>
-                        {canManage && (
-                          <td className="px-2 py-1.5">
-                            <div className="flex flex-wrap items-center justify-end gap-1">
-                              <Button
-                                variant="ghost"
-                                size="xs"
-                                className="max-md:h-11"
-                                disabled={pending}
-                                onClick={() => setEditTemplate(t)}
-                                data-testid={`sandbox-template-edit-${t.slug}`}
-                              >
-                                Edit
-                              </Button>
-                              {!t.isDefault && (
-                                <Button
-                                  variant="ghost"
-                                  size="xs"
-                                  className="max-md:h-11"
-                                  disabled={pending}
-                                  onClick={() =>
-                                    start(async () => {
-                                      setError(null);
-                                      const res = await props.setDefaultTemplateAction({
-                                        ...scope,
-                                        templateId: t.id,
-                                      });
-                                      if (!res.ok) setError(res.error);
-                                    })
-                                  }
-                                  data-testid={`sandbox-template-setdefault-${t.slug}`}
-                                >
-                                  Set default
-                                </Button>
-                              )}
-                              <Button
-                                variant="ghost"
-                                size="xs"
-                                className="max-md:h-11"
-                                disabled={pending}
-                                onClick={() =>
-                                  start(async () => {
-                                    setError(null);
-                                    const res = await props.exportTemplateAction({
-                                      ...scope,
-                                      templateId: t.id,
-                                    });
-                                    if (res.ok) download(res.manifest, t.slug);
-                                    else setError(res.error);
-                                  })
-                                }
-                                data-testid={`sandbox-template-export-${t.slug}`}
-                              >
-                                Export
-                              </Button>
-                              {/* Promote-first guard: a default template cannot be
-                                  deleted — promote another first. Mirror the
-                                  environments drawer's disabled+tooltip pattern. */}
-                              <Button
-                                variant="ghost"
-                                size="xs"
-                                className="max-md:h-11 text-destructive"
-                                disabled={pending || t.isDefault}
-                                title={
-                                  t.isDefault
-                                    ? "Promote another template to default before deleting this one."
-                                    : undefined
-                                }
-                                onClick={() =>
-                                  start(async () => {
-                                    setError(null);
-                                    const res = await props.deleteTemplateAction({
-                                      ...scope,
-                                      templateId: t.id,
-                                    });
-                                    if (!res.ok) setError(res.error);
-                                  })
-                                }
-                                data-testid={`sandbox-template-delete-${t.slug}`}
-                              >
-                                Delete
-                              </Button>
-                            </div>
-                          </td>
+                        </dd>
+                      </div>
+                    </dl>
+                    {canManage && (
+                      <div className="flex shrink-0 flex-wrap items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="xs"
+                          className="max-md:h-11"
+                          disabled={pending}
+                          onClick={() => setEditTemplate(t)}
+                          data-testid={`sandbox-template-edit-${t.slug}`}
+                        >
+                          Edit
+                        </Button>
+                        {!t.isDefault && (
+                          <Button
+                            variant="ghost"
+                            size="xs"
+                            className="max-md:h-11"
+                            disabled={pending}
+                            onClick={() =>
+                              start(async () => {
+                                setError(null);
+                                const res = await props.setDefaultTemplateAction({
+                                  ...scope,
+                                  templateId: t.id,
+                                });
+                                if (!res.ok) setError(res.error);
+                              })
+                            }
+                            data-testid={`sandbox-template-setdefault-${t.slug}`}
+                          >
+                            Set default
+                          </Button>
                         )}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                        <Button
+                          variant="ghost"
+                          size="xs"
+                          className="max-md:h-11"
+                          disabled={pending}
+                          onClick={() =>
+                            start(async () => {
+                              setError(null);
+                              const res = await props.exportTemplateAction({
+                                ...scope,
+                                templateId: t.id,
+                              });
+                              if (res.ok) download(res.manifest, t.slug);
+                              else setError(res.error);
+                            })
+                          }
+                          data-testid={`sandbox-template-export-${t.slug}`}
+                        >
+                          Export
+                        </Button>
+                        {/* Promote-first guard: a default template cannot be
+                            deleted — promote another first. Mirror the
+                            environments drawer's disabled+tooltip pattern. */}
+                        <Button
+                          variant="ghost"
+                          size="xs"
+                          className="max-md:h-11 text-destructive"
+                          disabled={pending || t.isDefault}
+                          title={
+                            t.isDefault
+                              ? "Promote another template to default before deleting this one."
+                              : undefined
+                          }
+                          onClick={() =>
+                            start(async () => {
+                              setError(null);
+                              const res = await props.deleteTemplateAction({
+                                ...scope,
+                                templateId: t.id,
+                              });
+                              if (!res.ok) setError(res.error);
+                            })
+                          }
+                          data-testid={`sandbox-template-delete-${t.slug}`}
+                        >
+                          Delete
+                        </Button>
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
             )}
           </div>
         );

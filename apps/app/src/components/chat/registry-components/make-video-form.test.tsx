@@ -40,10 +40,6 @@ vi.mock("@/components/ui/button", () => ({
   ),
 }));
 
-vi.mock("@/components/ui/badge", () => ({
-  Badge: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
-}));
-
 vi.mock("@/components/ui/label", () => ({
   Label: ({ children, htmlFor }: { children: React.ReactNode; htmlFor?: string }) => (
     <label htmlFor={htmlFor}>{children}</label>

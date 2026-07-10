@@ -2,12 +2,10 @@ import type { Metadata } from "next";
 import { eq, and, isNull } from "drizzle-orm";
 import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
-import { invoke } from "@oxagen/oxagen";
 import { logger } from "@oxagen/handlers/logger";
 import "@oxagen/handlers/register";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
-import { docsUrl } from "@/lib/docs-url";
 import { WorkspacePluginsPanel } from "@/components/agent-tools/workspace-plugins-panel";
 import { shapeInstalledPlugins } from "@/components/agent-tools/plugin-shape";
 import {
@@ -15,15 +13,11 @@ import {
   installBulkPlugin,
   togglePlugin,
   uninstallPlugin,
-  addRegistry,
-  removeRegistry,
 } from "@/lib/agent-tools/install-actions";
 
 export const metadata: Metadata = {
   title: "Capabilities | Agent Tools",
 };
-
-export const dynamic = "force-dynamic";
 
 interface PageProps {
   params: Promise<{ orgSlug: string; workspaceSlug: string }>;
@@ -31,10 +25,11 @@ interface PageProps {
 
 /**
  * Workbench → Agent Tools → Capabilities — installed plugin listings
- * (enable/disable, uninstall) plus the plugin-registry manager. Descended
- * from Settings → Plugins → Marketplace → Installed; both old routes now
- * redirect here. All server actions flow through the single install choke
- * point in @/lib/agent-tools/install-actions.
+ * (enable/disable, uninstall). Descended from Settings → Plugins →
+ * Marketplace → Installed; both old routes now redirect here. Registry
+ * administration lives in Settings → MCP Server Registries. All server
+ * actions flow through the single install choke point in
+ * @/lib/agent-tools/install-actions.
  */
 export default async function AgentToolsCapabilitiesPage({ params }: PageProps) {
   const { orgSlug, workspaceSlug } = await params;
@@ -78,36 +73,6 @@ export default async function AgentToolsCapabilitiesPage({ params }: PageProps) 
   const installedPlugins = installedPluginsRead.data;
   const pluginsLoadError = installedPluginsRead.failed;
 
-  // Fetch workspace-scoped registries via contract.
-  const ctx = {
-    orgId: org.id,
-    workspaceId: ws.id,
-    userId: session.user.id,
-    apiKeyId: null as string | null,
-    requestId: crypto.randomUUID(),
-    surface: "app" as const,
-    messageId: null as string | null,
-  };
-
-  let initialRegistries: Array<{
-    id: string;
-    name: string;
-    baseUrl: string;
-    enabled: boolean;
-    isDefault: boolean;
-  }> = [];
-  try {
-    const result = await invoke("list_plugin_registries", {}, ctx, { surface: "agent" });
-    const typed = result as typeof initialRegistries extends Array<infer T> ? { registries: T[] } : never;
-    initialRegistries = typed.registries;
-  } catch (err) {
-    // Non-fatal: registry list degrades to empty — but never silently.
-    logger.error(
-      { err, orgSlug, workspaceSlug },
-      "agent-tools/capabilities: plugin.registry.list failed — rendering empty registry list",
-    );
-  }
-
   const initialPlugins = shapeInstalledPlugins(installedPlugins);
 
   return (
@@ -117,15 +82,11 @@ export default async function AgentToolsCapabilitiesPage({ params }: PageProps) 
       orgId={org.id}
       workspaceId={ws.id}
       initialPlugins={initialPlugins}
-      initialRegistries={initialRegistries}
       loadError={pluginsLoadError}
-      docsBaseUrl={docsUrl()}
       installAction={installPlugin}
       installBulkAction={installBulkPlugin}
       toggleAction={togglePlugin}
       uninstallAction={uninstallPlugin}
-      addRegistryAction={addRegistry}
-      removeRegistryAction={removeRegistry}
     />
   );
 }

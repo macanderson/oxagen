@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, afterEach, vi } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
 import GraphNodeListCard from "./graph-node-list-card";
 
@@ -12,10 +12,6 @@ if (typeof globalThis.ResizeObserver === "undefined") {
     disconnect() {}
   };
 }
-
-vi.mock("@/components/ui/badge", () => ({
-  Badge: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
-}));
 
 afterEach(cleanup);
 

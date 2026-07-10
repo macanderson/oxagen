@@ -12,6 +12,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/ui/empty-state";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import {
   Popover,
   PopoverTrigger,
@@ -186,9 +195,10 @@ export function RegistryManager({
     <div className="rounded-xl border border-border/60 bg-card p-6">
       <div className="mb-4 flex items-center justify-between">
         <div>
-          <h3 className="text-sm font-semibold text-foreground">Plugin Registries</h3>
+          <h3 className="text-sm font-semibold text-foreground">MCP Server Registries</h3>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Registries are sources Oxagen discovers and installs plugins from.
+            Registries are the catalog sources Oxagen discovers and installs MCP
+            servers and plugins from.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -263,68 +273,69 @@ export function RegistryManager({
       )}
 
       {registries.length === 0 ? (
-        <div className="rounded-lg border border-border/40 bg-muted/20 px-6 py-8 text-center">
-          <p className="text-xs text-muted-foreground">
-            No registries configured. Add a registry to enable marketplace plugin discovery.
-          </p>
-        </div>
+        <EmptyState
+          size="sm"
+          variant="muted"
+          title="No registries configured"
+          description="Add a registry to enable marketplace plugin discovery."
+        />
       ) : (
-        <div className="overflow-hidden rounded-lg border border-border/40">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border/40 text-xs">
-                <th className="px-4 py-2 text-left font-medium">Name</th>
-                <th className="px-4 py-2 text-left font-medium">URL</th>
-                <th className="px-4 py-2 text-left font-medium">Status</th>
-                <th className="px-4 py-2" />
-              </tr>
-            </thead>
-            <tbody>
-              {registries.map((reg) => (
-                <tr
-                  key={reg.id}
-                  className="border-b border-border/30 last:border-0"
-                  data-testid={`registry-row-${reg.id}`}
-                >
-                  <td className="px-4 py-3 font-medium">
-                    <span className="flex items-center gap-2">
-                      <Globe className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
-                      {reg.name}
-                      {reg.isDefault && (
-                        <Badge variant="muted" size="sm" data-testid={`registry-default-badge-${reg.id}`}>
-                          Default
-                        </Badge>
-                      )}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 max-w-[240px] truncate text-xs text-muted-foreground">
+        <ul className="divide-y divide-border/30 overflow-hidden rounded-lg border border-border/40">
+          {registries.map((reg) => (
+            <li
+              key={reg.id}
+              className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:gap-6"
+              data-testid={`registry-row-${reg.id}`}
+            >
+              <div className="flex min-w-0 flex-1 items-center gap-2 font-medium">
+                <Globe className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                <span className="truncate">{reg.name}</span>
+                {reg.isDefault && (
+                  <Badge variant="muted" size="sm" data-testid={`registry-default-badge-${reg.id}`}>
+                    Default
+                  </Badge>
+                )}
+              </div>
+
+              <dl className="flex flex-wrap items-center gap-x-6 gap-y-2">
+                <div className="min-w-0">
+                  <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                    URL
+                  </dt>
+                  <dd className="mt-0.5 max-w-[240px] truncate text-xs text-muted-foreground">
                     {reg.baseUrl}
-                  </td>
-                  <td className="px-4 py-3">
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                    Status
+                  </dt>
+                  <dd className="mt-0.5 text-sm">
                     <Badge variant={reg.enabled ? "success" : "muted"} size="sm">
                       {reg.enabled ? "Enabled" : "Disabled"}
                     </Badge>
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    {/* Hide remove for the last remaining registry (single-default rule) */}
-                    {!isSingleRegistry && (
-                      <button
-                        type="button"
-                        onClick={() => handleRemove(reg)}
-                        disabled={removingId === reg.id}
-                        className="text-muted-foreground hover:text-destructive transition-colors disabled:opacity-40"
-                        aria-label={`Remove ${reg.name} registry`}
-                        data-testid={`registry-remove-btn-${reg.id}`}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                  </dd>
+                </div>
+              </dl>
+
+              <div className="flex shrink-0 items-center gap-1">
+                {/* Hide remove for the last remaining registry (single-default rule) */}
+                {!isSingleRegistry && (
+                  <button
+                    type="button"
+                    onClick={() => handleRemove(reg)}
+                    disabled={removingId === reg.id}
+                    className="text-muted-foreground hover:text-destructive transition-colors disabled:opacity-40"
+                    aria-label={`Remove ${reg.name} registry`}
+                    data-testid={`registry-remove-btn-${reg.id}`}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
       )}
 
       {/* Error outside the form (from remove actions) */}

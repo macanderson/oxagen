@@ -16,8 +16,6 @@ import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
 import { GithubConnectionSettings } from "./github-connection-settings";
 
-export const dynamic = "force-dynamic";
-
 export default async function SettingsGithubPage({
   params,
 }: {

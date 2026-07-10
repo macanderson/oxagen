@@ -13,8 +13,6 @@ import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org
 import { TableSkeleton } from "@/components/loading";
 import { ConnectionsSection } from "./connections-section";
 
-export const dynamic = "force-dynamic";
-
 interface PageProps {
   params: Promise<{ orgSlug: string; workspaceSlug: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;

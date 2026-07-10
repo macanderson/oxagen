@@ -295,3 +295,52 @@ describe("Button — render", () => {
     expect(btn.closest("[data-base-ui-tooltip-trigger]")).toBeNull();
   });
 });
+
+describe("Button — loading state", () => {
+  it("shows a spinner, disables the button, and sets aria-busy", () => {
+    const { getByRole } = render(<Button loading>Save</Button>);
+    const btn = getByRole("button", { name: /Save/ });
+    expect(btn).toBeDisabled();
+    expect(btn.getAttribute("aria-busy")).toBe("true");
+    expect(btn.querySelector(".animate-spin")).not.toBeNull();
+  });
+
+  it("keeps the label visible while loading", () => {
+    const { getByText } = render(<Button loading>Save</Button>);
+    expect(getByText("Save")).toBeInTheDocument();
+  });
+
+  it("replaces startIcon with the spinner while loading", () => {
+    const { getByRole, rerender } = render(
+      <Button startIcon={<svg data-testid="start" />}>Go</Button>,
+    );
+    expect(getByRole("button").querySelector("[data-testid=start]")).not.toBeNull();
+    rerender(
+      <Button loading startIcon={<svg data-testid="start" />}>
+        Go
+      </Button>,
+    );
+    const btn = getByRole("button");
+    expect(btn.querySelector("[data-testid=start]")).toBeNull();
+    expect(btn.querySelector(".animate-spin")).not.toBeNull();
+  });
+
+  it("does not fire onClick while loading", async () => {
+    const user = userEvent.setup();
+    const onClick = vi.fn();
+    const { getByRole } = render(
+      <Button loading onClick={onClick}>
+        Save
+      </Button>,
+    );
+    await user.click(getByRole("button", { name: /Save/ })).catch(() => {});
+    expect(onClick).not.toHaveBeenCalled();
+  });
+
+  it("no aria-busy or spinner at rest", () => {
+    const { getByRole } = render(<Button>Save</Button>);
+    const btn = getByRole("button");
+    expect(btn.getAttribute("aria-busy")).toBeNull();
+    expect(btn.querySelector(".animate-spin")).toBeNull();
+  });
+});
