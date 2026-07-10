@@ -29,10 +29,20 @@ if [ "${VERCEL_ENV:-}" != "production" ]; then
   exit 0
 fi
 
-if [ -z "${DATABASE_URL:-}" ]; then
-  echo "[vercel-migrate] WARNING: DATABASE_URL is not set in the build environment — cannot migrate. Deploying anyway (code may be ahead of schema)." >&2
+# Prefer the owner-level PRODUCTION_DATABASE_URL over the app-role
+# DATABASE_URL: the app role can only CREATE in schemas it created itself, so
+# DDL against pre-existing schemas fails 42501 ("permission denied for schema
+# billing" broke every prod API deploy on 2026-07-10). Values stored in Vercel
+# env sometimes carry literal surrounding quotes — strip them before use.
+MIGRATE_URL="${PRODUCTION_DATABASE_URL:-${DATABASE_URL:-}}"
+MIGRATE_URL="${MIGRATE_URL#\"}"
+MIGRATE_URL="${MIGRATE_URL%\"}"
+if [ -z "$MIGRATE_URL" ]; then
+  echo "[vercel-migrate] WARNING: neither PRODUCTION_DATABASE_URL nor DATABASE_URL is set in the build environment — cannot migrate. Deploying anyway (code may be ahead of schema)." >&2
   exit 0
 fi
+# env "ci" in atlas.hcl resolves getenv("DATABASE_URL") — hand it the chosen URL.
+export DATABASE_URL="$MIGRATE_URL"
 
 # Keep in sync with ATLAS_VERSION in .github/workflows/pipeline.yml.
 ATLAS_VERSION="${ATLAS_VERSION:-v1.2.2}"
