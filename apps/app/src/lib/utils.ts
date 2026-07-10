@@ -51,6 +51,8 @@ export function formatDateTimeWithSeconds(d: Date | string | null | undefined): 
 
 /** Human-readable byte count (B / KB / MB / GB), one decimal place. */
 export function formatBytes(bytes: number): string {
+  // A missing/NaN/Infinity size must never render as "NaN GB".
+  if (!Number.isFinite(bytes)) return "—";
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
@@ -72,6 +74,10 @@ export function truncate(value: string, max: number): string {
  * ci-status-summary.tsx (mm:ss clock style).
  */
 export function formatDuration(ms: number): string {
+  // A missing/NaN/Infinity duration must never render as the literal "NaNm NaNs"
+  // (the callers guard with `!= null`, which does NOT catch NaN, and a sandbox
+  // command with no recorded duration reaches here as NaN).
+  if (!Number.isFinite(ms)) return "—";
   if (ms < 1000) return `${ms}ms`;
   if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
   const mins = Math.floor(ms / 60_000);
