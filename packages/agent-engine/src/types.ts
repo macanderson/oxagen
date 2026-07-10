@@ -137,7 +137,13 @@ export type CodingEvent =
       /** False when the tool reported an error. */
       ok: boolean;
     }
-  | { type: "file-edit"; path: string; bytes: number }
+  | {
+      type: "file-edit";
+      path: string;
+      bytes: number;
+      /** Whether the write created the file or updated an existing one. */
+      kind: "create" | "update";
+    }
   | { type: "command"; command: string; exitCode: number }
   | { type: "final-diff"; diff: string; changedFiles: string[] };
 

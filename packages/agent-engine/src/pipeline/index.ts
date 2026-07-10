@@ -334,6 +334,17 @@ export interface RunTurnOptions {
    * changes (syntax-highlighted diff) as they land.
    */
   onFileChange?: (diff: string, changedFiles: string[]) => void;
+  /**
+   * Fired the moment a write_file/edit_file lands on disk, with whether the
+   * write created the file or updated an existing one. Unlike `onFileChange`
+   * (end-of-round cumulative diff) this is per-edit, so a UI can render each
+   * file's diff as soon as the agent touches it.
+   */
+  onFileEdit?: (e: {
+    path: string;
+    kind: "create" | "update";
+    bytes: number;
+  }) => void;
 }
 
 export interface RunTurnResult {
@@ -748,6 +759,8 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
             tracker.observe({ command, exitCode: e.ok ? 0 : 1 });
           }
         }
+        if (e.type === "file-edit")
+          opts.onFileEdit?.({ path: e.path, kind: e.kind, bytes: e.bytes });
         if (e.type === "final-diff")
           opts.onFileChange?.(e.diff, e.changedFiles);
         captureToolEvent(e, toolEvents, opts.verbose);
@@ -1443,6 +1456,8 @@ async function runBare(
           ok: e.ok,
           durationMs: e.durationMs,
         });
+      if (e.type === "file-edit")
+        opts.onFileEdit?.({ path: e.path, kind: e.kind, bytes: e.bytes });
       if (e.type === "final-diff") opts.onFileChange?.(e.diff, e.changedFiles);
       captureToolEvent(e, toolEvents, opts.verbose);
     },

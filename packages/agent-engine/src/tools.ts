@@ -543,9 +543,23 @@ export function buildWorkspaceTools(
           signal,
           async () => {
             try {
+              // Probe existence BEFORE the write (under the same file lock) so
+              // the emitted event can say whether this created the file or
+              // overwrote an existing one — UIs use it to badge C vs U.
+              let existed = true;
+              try {
+                await workspace.readFile(path, { offset: 1, limit: 1 });
+              } catch {
+                existed = false;
+              }
               await workspace.writeFile(path, content);
-              onEvent({ type: "file-edit", path, bytes: content.length });
-              return `Wrote ${content.length} bytes to ${resolveDisplayPath(workspace.root, path)}`;
+              onEvent({
+                type: "file-edit",
+                path,
+                bytes: content.length,
+                kind: existed ? "update" : "create",
+              });
+              return `Wrote ${content.length} bytes to ${path}`;
             } catch (err) {
               return `Error writing ${path}: ${err instanceof Error ? err.message : String(err)}`;
             }
@@ -591,8 +605,12 @@ export function buildWorkspaceTools(
                   replaceAll: replace_all,
                 },
               );
-              onEvent({ type: "file-edit", path, bytes: new_string.length });
-              const shown = resolveDisplayPath(workspace.root, path);
+              onEvent({
+                type: "file-edit",
+                path,
+                bytes: new_string.length,
+                kind: "update",
+              });
               return replace_all
                 ? `Edited ${shown} (${count} replacement${count === 1 ? "" : "s"})`
                 : `Edited ${shown}`;
