@@ -31,7 +31,11 @@ afterEach(cleanup);
 
 // ── mocks ──────────────────────────────────────────────────────────────────────
 
-vi.mock("@/lib/utils", () => ({
+// Spread the real module so every other util (truncate, formatBytes, …) the
+// composer tree calls stays intact — a full-replacement mock silently drops
+// them and throws "No X export is defined on the mock" at render time.
+vi.mock("@/lib/utils", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/utils")>()),
   cn: (...args: unknown[]) => args.filter(Boolean).join(" "),
 }));
 

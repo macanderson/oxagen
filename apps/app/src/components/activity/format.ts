@@ -18,7 +18,9 @@ export type RunStatus =
  * this surface shows 2-decimal seconds and accepts null latencies.
  */
 export function formatDuration(ms: number | null): string {
-  if (ms === null || ms === undefined) return "—";
+  // `!Number.isFinite` also catches NaN — `ms === null` alone lets a NaN latency
+  // through to render as "NaNms".
+  if (ms === null || !Number.isFinite(ms)) return "—";
   if (ms < 1000) return `${ms}ms`;
   if (ms < 60_000) return `${(ms / 1000).toFixed(2)}s`;
   const mins = Math.floor(ms / 60_000);

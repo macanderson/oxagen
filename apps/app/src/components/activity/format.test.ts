@@ -12,6 +12,10 @@ describe("formatDuration", () => {
   it("returns em-dash for null", () => {
     expect(formatDuration(null)).toBe("—");
   });
+  it("returns em-dash for NaN/Infinity (not 'NaNms')", () => {
+    expect(formatDuration(NaN)).toBe("—");
+    expect(formatDuration(Infinity)).toBe("—");
+  });
   it("formats sub-second as ms", () => {
     expect(formatDuration(800)).toBe("800ms");
   });

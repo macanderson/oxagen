@@ -211,14 +211,24 @@ describe("listSandboxLogsAction", () => {
 
   it("returns lines and forwards the requested level", async () => {
     resolveWorkbenchScope.mockResolvedValue(scope(true));
-    listSandboxLogs.mockResolvedValue([{ stream: "stdout", text: "hi" }]);
+    const line = {
+      ts: "2026-07-10T00:00:00.000Z",
+      stream: "stdout" as const,
+      level: "normal" as const,
+      command: "echo hi",
+      seq: 1,
+      line: "hi",
+      exitCode: null,
+      durationMs: null,
+    };
+    listSandboxLogs.mockResolvedValue([line]);
     const res = await listSandboxLogsAction({
       ...SCOPE,
       sessionId: "sbx_1",
       level: "normal",
     });
     expect(res.ok).toBe(true);
-    if (res.ok) expect(res.lines).toEqual([{ stream: "stdout", text: "hi" }]);
+    if (res.ok) expect(res.lines).toEqual([line]);
     const [, arg] = listSandboxLogs.mock.calls[0] as [
       unknown,
       { sessionId: string; level?: string },
