@@ -1933,8 +1933,9 @@ export function MemoriesClient({
 
   return (
     <div className="flex flex-col gap-5">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-3">
+      {/* Header — stacks below `sm` so the action buttons never crush the
+          title/description column into a one-word-per-line sliver. */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-start gap-3">
           <BrainCircuit
             className="mt-0.5 h-5 w-5 flex-shrink-0 text-muted-foreground"

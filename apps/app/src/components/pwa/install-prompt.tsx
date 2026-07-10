@@ -78,7 +78,9 @@ function isMobileDevice(): boolean {
 
   // Fallback: UA sniff for known phone/tablet platforms.
   const ua = navigator.userAgent;
-  if (/android|iphone|ipad|ipod|iemobile|blackberry|opera mini|mobile/i.test(ua)) {
+  if (
+    /android|iphone|ipad|ipod|iemobile|blackberry|opera mini|mobile/i.test(ua)
+  ) {
     return true;
   }
 
@@ -164,6 +166,7 @@ export function InstallPrompt() {
       role="region"
       aria-label="Install Oxagen"
       aria-live="polite"
+      data-pwa-install-prompt=""
       style={bannerStyles.root}
     >
       <div style={bannerStyles.inner}>
@@ -195,7 +198,10 @@ export function InstallPrompt() {
           <>
             <p style={bannerStyles.text}>
               Install Oxagen: tap{" "}
-              <ShareIcon label="Share icon" style={{ verticalAlign: "middle" }} />{" "}
+              <ShareIcon
+                label="Share icon"
+                style={{ verticalAlign: "middle" }}
+              />{" "}
               then <strong>Add to Home Screen</strong>.
             </p>
             <button
@@ -215,7 +221,13 @@ export function InstallPrompt() {
 
 // ── Share icon (inline SVG — no icon-lib dep) ─────────────────────────────────
 
-function ShareIcon({ label, style }: { label?: string; style?: React.CSSProperties }) {
+function ShareIcon({
+  label,
+  style,
+}: {
+  label?: string;
+  style?: React.CSSProperties;
+}) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -243,7 +255,10 @@ function ShareIcon({ label, style }: { label?: string; style?: React.CSSProperti
 const bannerStyles = {
   root: {
     position: "fixed",
-    bottom: "env(safe-area-inset-bottom, 0px)",
+    // Sits at the safe-area edge by default; when the shell's mobile bottom
+    // nav is mounted, globals.css raises `--pwa-toast-bottom` so the banner
+    // clears the bar instead of covering its tabs.
+    bottom: "var(--pwa-toast-bottom, env(safe-area-inset-bottom, 0px))",
     left: 0,
     right: 0,
     zIndex: 9998,
@@ -280,12 +295,14 @@ const bannerStyles = {
     color: "#101319",
     border: "none",
     borderRadius: 8,
-    padding: "7px 16px",
+    padding: "12px 16px",
     fontSize: 14,
     fontWeight: 600,
     cursor: "pointer",
     lineHeight: 1,
   } satisfies React.CSSProperties,
+  // ≥44px hit area (Apple HIG touch minimum) — the glyph stays small; the
+  // padding-box carries the target size.
   dismissBtn: {
     background: "transparent",
     border: "none",
@@ -293,7 +310,11 @@ const bannerStyles = {
     cursor: "pointer",
     fontSize: 20,
     lineHeight: 1,
-    padding: "4px 6px",
+    minWidth: 44,
+    minHeight: 44,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
     borderRadius: 4,
     opacity: 0.6,
   } satisfies React.CSSProperties,

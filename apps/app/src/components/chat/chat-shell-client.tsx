@@ -1187,93 +1187,120 @@ export function ChatShellClient({
           </div>
         ) : null}
 
-        <div
-          ref={scrollContainerRef}
-          // `relative` is load-bearing: it makes this scroll container the
-          // containing block for its absolutely-positioned descendants (e.g. the
-          // `.sr-only` labels inside message-footer icon buttons). Without it
-          // those abs elements anchor to the initial containing block, escape this
-          // container's `overflow` clipping, and inflate the document height —
-          // letting the whole page scroll past the composer on mobile and desktop.
-          className="relative min-h-0 flex-1 overflow-y-auto pr-2"
-          onScroll={handleScroll}
-        >
-          {messages.length === 0 && !hasLiveContent ? (
-            <div className="flex h-full flex-col items-center justify-center gap-4 text-center text-sm text-muted-foreground">
-              <div>
-                <p className="font-medium">Start a conversation.</p>
-                <p>Send a message below to begin.</p>
+        {/* The wrapper (not the scroll container) is the anchor for the mobile
+            Activity trigger below: an `absolute` child of the scroll container
+            would scroll away with the messages, and the old `fixed` placement
+            floated the pill over the composer's Send button on phones. */}
+        <div className="relative min-h-0 flex-1">
+          <div
+            ref={scrollContainerRef}
+            // `relative` is load-bearing: it makes this scroll container the
+            // containing block for its absolutely-positioned descendants (e.g. the
+            // `.sr-only` labels inside message-footer icon buttons). Without it
+            // those abs elements anchor to the initial containing block, escape this
+            // container's `overflow` clipping, and inflate the document height —
+            // letting the whole page scroll past the composer on mobile and desktop.
+            className="relative h-full overflow-y-auto pr-2"
+            onScroll={handleScroll}
+          >
+            {messages.length === 0 && !hasLiveContent ? (
+              <div className="flex h-full flex-col items-center justify-center gap-4 text-center text-sm text-muted-foreground">
+                <div>
+                  <p className="font-medium">Start a conversation.</p>
+                  <p>Send a message below to begin.</p>
+                </div>
+                {/* Suggested chips in empty state */}
+                <SuggestedPromptChips
+                  action={wrappedSendAction}
+                  conversationId={conversationId}
+                  parentMessageId={activeLeafMessageId}
+                />
               </div>
-              {/* Suggested chips in empty state */}
-              <SuggestedPromptChips
-                action={wrappedSendAction}
-                conversationId={conversationId}
-                parentMessageId={activeLeafMessageId}
-              />
-            </div>
-          ) : (
-            <div className="flex flex-col gap-4">
-              <MessageTree
-                messages={messages}
-                callbacks={callbacks}
-                orgSlug={orgSlug}
-                workspaceSlug={workspaceSlug}
-              />
-              {/* Live turn: the ordered chain of thought/action, rendered as a
+            ) : (
+              <div className="flex flex-col gap-4">
+                <MessageTree
+                  messages={messages}
+                  callbacks={callbacks}
+                  orgSlug={orgSlug}
+                  workspaceSlug={workspaceSlug}
+                />
+                {/* Live turn: the ordered chain of thought/action, rendered as a
                 connected timeline before the RSC revalidate replaces it with
                 the persisted message. */}
-              {hasLiveContent ? (
-                <div data-live-turn>
-                  <ActivityTimeline>
-                    {/* Show the thinking bubble when streaming has started but no
+                {hasLiveContent ? (
+                  <div data-live-turn>
+                    <ActivityTimeline>
+                      {/* Show the thinking bubble when streaming has started but no
                       timeline entries have arrived yet — covers the gap between
                       the user submitting and the first SSE event landing. */}
-                    {isStreaming && timelineEntries.length === 0 ? (
-                      <TimelineItem
-                        key="thinking-bubble"
-                        tone="thinking"
-                        isActive={true}
-                        isLast={true}
-                      >
-                        <ThinkingBubble />
-                      </TimelineItem>
+                      {isStreaming && timelineEntries.length === 0 ? (
+                        <TimelineItem
+                          key="thinking-bubble"
+                          tone="thinking"
+                          isActive={true}
+                          isLast={true}
+                        >
+                          <ThinkingBubble />
+                        </TimelineItem>
+                      ) : null}
+                      {timelineEntries.map((entry, i) => (
+                        <TimelineItem
+                          key={entry.key}
+                          // Anchor id for the coding-trace-panel rail's deep links
+                          // (`#turn-entry-<key>`) — see chat-component-registry's
+                          // sibling `coding-trace-panel.tsx`.
+                          id={`turn-entry-${entry.key}`}
+                          tone={entry.rendered.tone}
+                          // The pulsing ring only animates an in-flight node while the
+                          // turn is actually streaming.
+                          isActive={entry.rendered.active && isStreaming}
+                          isLast={
+                            i === timelineEntries.length - 1 &&
+                            turnUsage === undefined
+                          }
+                        >
+                          {entry.rendered.node}
+                        </TimelineItem>
+                      ))}
+                    </ActivityTimeline>
+                    {turnUsage !== undefined ? (
+                      <div id="turn-result">
+                        <MessageFooter
+                          text={Object.values(textSegments)
+                            .map((s) => s.text)
+                            .join("")}
+                          usage={turnUsage}
+                          orgSlug={orgSlug}
+                          workspaceSlug={workspaceSlug}
+                        />
+                      </div>
                     ) : null}
-                    {timelineEntries.map((entry, i) => (
-                      <TimelineItem
-                        key={entry.key}
-                        // Anchor id for the coding-trace-panel rail's deep links
-                        // (`#turn-entry-<key>`) — see chat-component-registry's
-                        // sibling `coding-trace-panel.tsx`.
-                        id={`turn-entry-${entry.key}`}
-                        tone={entry.rendered.tone}
-                        // The pulsing ring only animates an in-flight node while the
-                        // turn is actually streaming.
-                        isActive={entry.rendered.active && isStreaming}
-                        isLast={
-                          i === timelineEntries.length - 1 &&
-                          turnUsage === undefined
-                        }
-                      >
-                        {entry.rendered.node}
-                      </TimelineItem>
-                    ))}
-                  </ActivityTimeline>
-                  {turnUsage !== undefined ? (
-                    <div id="turn-result">
-                      <MessageFooter
-                        text={Object.values(textSegments)
-                          .map((s) => s.text)
-                          .join("")}
-                        usage={turnUsage}
-                        orgSlug={orgSlug}
-                        workspaceSlug={workspaceSlug}
-                      />
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
-            </div>
-          )}
+                  </div>
+                ) : null}
+              </div>
+            )}
+          </div>
+          {/* Below lg the trace rail lives in a bottom sheet (ADR-026 mobile
+            parity); this floating trigger sits inside the message viewport —
+            always above the composer, never over its Send/collapse controls. */}
+          {showFiles ? (
+            <button
+              type="button"
+              data-testid="chat-mobile-rail-trigger"
+              aria-haspopup="dialog"
+              aria-expanded={mobileRailOpen}
+              onClick={() => setMobileRailOpen(true)}
+              className={cn(
+                "absolute bottom-3 right-3 z-20 flex h-11 items-center gap-1.5 rounded-full border border-border/60",
+                "bg-background/95 px-4 text-xs font-medium text-muted-foreground shadow-sm backdrop-blur",
+                "lg:hidden",
+                "hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              )}
+            >
+              <PanelRight className="size-4" aria-hidden="true" />
+              Activity
+            </button>
+          ) : null}
         </div>
         {/* Suggested prompt chips — shown above the composer once there are messages
           (empty state renders its own chips above; this avoids duplication). */}
@@ -1348,27 +1375,11 @@ export function ChatShellClient({
         </aside>
       ) : null}
 
-      {/* Below lg the rail reflows into a bottom sheet (ADR-026 mobile parity):
-          a floating thumb-reachable trigger above the mobile bottom bar opens
-          the identical trace + workspace panels. */}
+      {/* Below lg the rail reflows into a bottom sheet (ADR-026 mobile parity);
+          its floating trigger lives inside the message viewport above (anchored
+          to the scroll-area wrapper, so it can't cover the composer). */}
       {showFiles ? (
         <div className="lg:hidden">
-          <button
-            type="button"
-            data-testid="chat-mobile-rail-trigger"
-            aria-haspopup="dialog"
-            aria-expanded={mobileRailOpen}
-            onClick={() => setMobileRailOpen(true)}
-            className={cn(
-              "fixed right-3 z-20 flex h-11 items-center gap-1.5 rounded-full border border-border/60",
-              "bg-background/95 px-4 text-xs font-medium text-muted-foreground shadow-sm backdrop-blur",
-              "bottom-[calc(var(--bottom-bar-h)+var(--bottom-bar-gap,0px)+env(safe-area-inset-bottom)+0.75rem)] md:bottom-3",
-              "hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-            )}
-          >
-            <PanelRight className="size-4" aria-hidden="true" />
-            Activity
-          </button>
           <Sheet open={mobileRailOpen} onOpenChange={setMobileRailOpen}>
             <SheetPopup
               side="bottom"

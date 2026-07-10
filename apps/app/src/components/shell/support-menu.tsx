@@ -57,7 +57,7 @@ export function SupportMenu({ orgSlug, workspaceSlug }: SupportMenuProps) {
             variant="ghost"
             size="icon"
             aria-label="Help and support"
-            className="text-app-link-fg hover:text-app-link-hover-fg"
+            className="text-app-link-fg hover:text-app-link-hover-fg max-md:size-11"
           />
         }
       >
