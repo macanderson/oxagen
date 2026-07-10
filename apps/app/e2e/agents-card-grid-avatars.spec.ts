@@ -58,7 +58,9 @@ test("agents card grid: designed avatar, blurb, search/sort/export controls; pro
 
   // ── 1. Create an agent with a designed avatar ──────────────────────────────
   await page.goto(`/${user.orgSlug}/default/workbench/agents/new`);
-  await expect(page.getByTestId("step-describe")).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByTestId("step-describe")).toBeVisible({
+    timeout: 20_000,
+  });
   await page.getByTestId("agent-describe-skip").click();
   await expect(page.getByTestId("step-identity")).toBeVisible();
 
@@ -76,15 +78,22 @@ test("agents card grid: designed avatar, blurb, search/sort/export controls; pro
 
   // ── 2. The list is a card grid with toolbar controls ──────────────────────
   await page.goto(`/${user.orgSlug}/default/workbench/agents`);
-  await expect(page.getByTestId("agents-grid")).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByTestId("agents-grid")).toBeVisible({
+    timeout: 20_000,
+  });
   // No table remains on this page.
   expect(await page.locator("table").count()).toBe(0);
 
   const card = page.getByTestId(`agent-row-${slug}`);
   await expect(card).toBeVisible();
   await expect(card.getByText(/draft/i).first()).toBeVisible();
-  // Blurb: no summary/description yet → honest placeholder.
-  await expect(card.getByText("No description yet.")).toBeVisible();
+  // Blurb: the save path infers an LLM summary from the identity fields even
+  // when the Describe step is skipped, so the exact text is non-deterministic —
+  // assert the blurb line is present and non-empty (AI summary or the honest
+  // "No description yet." placeholder when inference is unavailable).
+  const blurb = card.getByTestId(`agent-blurb-${slug}`);
+  await expect(blurb).toBeVisible();
+  await expect(blurb).not.toHaveText(/^\s*$/);
 
   // Toolbar: search box + CSV export are present.
   await expect(page.getByRole("searchbox")).toBeVisible();

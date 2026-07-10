@@ -43,12 +43,17 @@ test("Marketplace → Integrations links to the in-app connector setup wizard", 
 test("Connector setup wizard renders the schema-driven form and installs the connector", async ({
   page,
 }) => {
+  test.setTimeout(120_000);
   const user = await signUpFreshUser(page);
 
+  // Short timeout: the schema is normally SSR-prefetched so this request never
+  // fires — with the default 30s the await below burned half the test budget
+  // before the form assertions even started.
   const schemaResponse = page.waitForResponse(
     (res) =>
       res.url().includes("/plugin-schema/google-drive") &&
       res.request().method() === "GET",
+    { timeout: 5_000 },
   );
   await page.goto(
     `/${user.orgSlug}/default/marketplace/integrations/google-drive`,
