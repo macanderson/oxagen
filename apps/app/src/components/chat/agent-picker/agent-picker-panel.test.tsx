@@ -218,6 +218,17 @@ describe("AgentPickerPanel — default star", () => {
       screen.queryByRole("button", { name: /as default assistant/ }),
     ).not.toBeInTheDocument();
   });
+
+  it("surfaces the workspace default agent first in the list", () => {
+    // CHATTER is second in `agents`, but as the default it sorts to the top.
+    renderPanel({ defaultAgentId: "agt_chat" });
+    const options = screen
+      .getAllByRole("option")
+      .map((el) => el.getAttribute("aria-label") ?? el.textContent ?? "");
+    // Row 0 is the Default assistant; the workspace default agent leads the rest.
+    const firstAgentRow = options[1] ?? "";
+    expect(firstAgentRow).toContain("Chatter");
+  });
 });
 
 describe("AgentPickerPanel — keyboard", () => {

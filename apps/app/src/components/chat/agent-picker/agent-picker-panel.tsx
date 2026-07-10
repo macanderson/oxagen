@@ -123,10 +123,18 @@ export function AgentPickerPanel({
   const [setupRepoKey, setSetupRepoKey] = React.useState<string | null>(null);
   const [setupEnvId, setSetupEnvId] = React.useState<string | null>(null);
 
-  const filtered = React.useMemo(
-    () => agents.filter((a) => agentMatches(a, query)),
-    [agents, query],
-  );
+  // The workspace default agent surfaces first (right after the Default
+  // assistant row), so a user's preferred agent leads the list; the filled star
+  // + "Default" label on its row carries the visual distinction.
+  const filtered = React.useMemo(() => {
+    const matched = agents.filter((a) => agentMatches(a, query));
+    if (!defaultAgentId) return matched;
+    return [...matched].sort((a, b) => {
+      if (a.agentId === defaultAgentId) return -1;
+      if (b.agentId === defaultAgentId) return 1;
+      return 0;
+    });
+  }, [agents, query, defaultAgentId]);
 
   // Roving focus over the rows (index 0 = Default assistant, 1..N = agents).
   const rowRefs = React.useRef<Array<HTMLButtonElement | null>>([]);
