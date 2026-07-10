@@ -67,6 +67,7 @@ vi.mock("../../agent/project-context.js", () => ({
 }));
 vi.mock("../../agent/model.js", () => ({
   resolveModelId: (override?: string) => override ?? "test/model",
+  explicitModelId: (override?: string) => override ?? undefined,
   resolveEffort: () => undefined,
   isReasoningEffort: (s: string) =>
     ["low", "medium", "high", "xhigh", "max"].includes(s),

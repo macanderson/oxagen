@@ -630,6 +630,7 @@ export function buildWorkspaceTools(
                 bytes: new_string.length,
                 kind: "update",
               });
+              const shown = resolveDisplayPath(workspace.root, path);
               return replace_all
                 ? `Edited ${shown} (${count} replacement${count === 1 ? "" : "s"})`
                 : `Edited ${shown}`;

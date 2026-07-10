@@ -57,15 +57,21 @@ vi.mock("../../agent/trace-store.js", () => ({
   }),
 }));
 vi.mock("../../agent/fleet/memory.js", () => ({
-  openFleetMemory: () => ({ record: () => {}, recall: () => [], all: () => [] }),
+  openFleetMemory: () => ({
+    record: () => {},
+    recall: () => [],
+    all: () => [],
+  }),
 }));
 vi.mock("../../agent/project-context.js", () => ({
   loadProjectContext: () => ({ text: "", sources: [] }),
 }));
 vi.mock("../../agent/model.js", () => ({
   resolveModelId: (override?: string) => override ?? "test/model",
+  explicitModelId: (override?: string) => override ?? undefined,
   resolveEffort: () => undefined,
-  isReasoningEffort: (s: string) => ["low", "medium", "high", "xhigh", "max"].includes(s),
+  isReasoningEffort: (s: string) =>
+    ["low", "medium", "high", "xhigh", "max"].includes(s),
   EFFORT_LEVELS: ["low", "medium", "high", "xhigh", "max"] as const,
 }));
 

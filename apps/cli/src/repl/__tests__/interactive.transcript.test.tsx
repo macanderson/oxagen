@@ -72,7 +72,11 @@ vi.mock("../../agent/trace-store.js", () => ({
 }));
 
 vi.mock("../../agent/fleet/memory.js", () => ({
-  openFleetMemory: () => ({ record: () => {}, recall: () => [], all: () => [] }),
+  openFleetMemory: () => ({
+    record: () => {},
+    recall: () => [],
+    all: () => [],
+  }),
 }));
 
 vi.mock("../../agent/memory.js", () => ({
@@ -89,8 +93,10 @@ vi.mock("../../agent/project-context.js", () => ({
 
 vi.mock("../../agent/model.js", () => ({
   resolveModelId: (override?: string) => override ?? "test/model",
+  explicitModelId: (override?: string) => override ?? undefined,
   resolveEffort: () => undefined,
-  isReasoningEffort: (s: string) => ["low", "medium", "high", "xhigh", "max"].includes(s),
+  isReasoningEffort: (s: string) =>
+    ["low", "medium", "high", "xhigh", "max"].includes(s),
   EFFORT_LEVELS: ["low", "medium", "high", "xhigh", "max"] as const,
 }));
 
@@ -109,7 +115,8 @@ vi.mock("../plan-turn.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../plan-turn.js")>();
   return {
     ...actual,
-    planReplTurn: async ({ goal }: { goal: string }) => actual.fallbackPlan(goal),
+    planReplTurn: async ({ goal }: { goal: string }) =>
+      actual.fallbackPlan(goal),
   };
 });
 
@@ -135,7 +142,8 @@ const tick = (ms = 20): Promise<void> =>
 async function waitFor(cond: () => boolean, ms = 3000): Promise<void> {
   const start = Date.now();
   while (!cond()) {
-    if (Date.now() - start > ms) throw new Error("waitFor: condition timed out");
+    if (Date.now() - start > ms)
+      throw new Error("waitFor: condition timed out");
     await tick(10);
   }
 }
