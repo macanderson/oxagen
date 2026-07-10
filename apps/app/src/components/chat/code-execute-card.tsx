@@ -133,9 +133,7 @@ export function CodeExecuteCard({
         {open ? (
           <motion.div
             key="code-execute-body"
-            initial={
-              reducedMotion ? { opacity: 0 } : { height: 0, opacity: 0 }
-            }
+            initial={reducedMotion ? { opacity: 0 } : { height: 0, opacity: 0 }}
             animate={
               reducedMotion ? { opacity: 1 } : { height: "auto", opacity: 1 }
             }

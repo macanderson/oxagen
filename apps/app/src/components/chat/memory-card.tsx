@@ -217,7 +217,9 @@ export function MemoryCard({
                           // variant + a stable testid for assertions (the shared
                           // component itself emits no data attributes).
                           data-testid="badge"
-                          data-variant={CLASS_VARIANT[m.memoryClass] ?? "default"}
+                          data-variant={
+                            CLASS_VARIANT[m.memoryClass] ?? "default"
+                          }
                           className="uppercase"
                         >
                           {m.memoryClass}

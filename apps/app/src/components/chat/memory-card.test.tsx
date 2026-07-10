@@ -125,7 +125,12 @@ const makeMemory = (
     nodeRef?: string;
     confidenceScore?: number;
     enforcementScore?: number | null;
-    node?: { id: string | null; label: string; displayName: string; properties: Record<string, unknown> };
+    node?: {
+      id: string | null;
+      label: string;
+      displayName: string;
+      properties: Record<string, unknown>;
+    };
   } = {},
 ) => ({
   id,
@@ -133,13 +138,15 @@ const makeMemory = (
   memoryClass,
   memoryKind: "constraint",
   confidenceScore: opts.confidenceScore ?? 80,
-  enforcementScore: opts.enforcementScore === undefined ? null : opts.enforcementScore,
+  enforcementScore:
+    opts.enforcementScore === undefined ? null : opts.enforcementScore,
   score,
   nodeRef: opts.nodeRef,
   node: opts.node,
 });
 
-const expand = () => fireEvent.click(screen.getByRole("button", { name: /show citations/i }));
+const expand = () =>
+  fireEvent.click(screen.getByRole("button", { name: /show citations/i }));
 
 describe("MemoryCard — collapsed summary sentence", () => {
   it("renders null when memories list is empty", () => {
@@ -149,12 +156,22 @@ describe("MemoryCard — collapsed summary sentence", () => {
 
   it("summarizes unique grounding nodes grouped by type, pluralized, deduped by id", () => {
     const memories = [
-      makeMemory("m1", "L1", "FACT", 0.9, { node: makeNode("f1", "Feature", "Billing") }),
-      makeMemory("m2", "L2", "FACT", 0.8, { node: makeNode("f2", "Feature", "Metering") }),
+      makeMemory("m1", "L1", "FACT", 0.9, {
+        node: makeNode("f1", "Feature", "Billing"),
+      }),
+      makeMemory("m2", "L2", "FACT", 0.8, {
+        node: makeNode("f2", "Feature", "Metering"),
+      }),
       // Same node id as m1 — must dedupe, not count a third Feature.
-      makeMemory("m3", "L3", "RULE", 0.7, { node: makeNode("f1", "Feature", "Billing") }),
-      makeMemory("m4", "L4", "FACT", 0.6, { node: makeNode("r1", "Repository", "oxagen-platform") }),
-      makeMemory("m5", "L5", "OBSERVATION", 0.5, { node: makeNode("p1", "Person", "Ada") }),
+      makeMemory("m3", "L3", "RULE", 0.7, {
+        node: makeNode("f1", "Feature", "Billing"),
+      }),
+      makeMemory("m4", "L4", "FACT", 0.6, {
+        node: makeNode("r1", "Repository", "oxagen-platform"),
+      }),
+      makeMemory("m5", "L5", "OBSERVATION", 0.5, {
+        node: makeNode("p1", "Person", "Ada"),
+      }),
     ];
     render(<MemoryCard queryId="q1" memories={memories} />);
     expect(
@@ -164,17 +181,27 @@ describe("MemoryCard — collapsed summary sentence", () => {
 
   it("joins exactly two type clauses with 'and' (no comma)", () => {
     const memories = [
-      makeMemory("m1", "L1", "FACT", 0.9, { node: makeNode("f1", "Feature", "Billing") }),
-      makeMemory("m2", "L2", "FACT", 0.8, { node: makeNode("p1", "Person", "Ada") }),
+      makeMemory("m1", "L1", "FACT", 0.9, {
+        node: makeNode("f1", "Feature", "Billing"),
+      }),
+      makeMemory("m2", "L2", "FACT", 0.8, {
+        node: makeNode("p1", "Person", "Ada"),
+      }),
     ];
     render(<MemoryCard queryId="q1" memories={memories} />);
-    expect(screen.getByText("Grounded in 1 Feature and 1 Person.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Grounded in 1 Feature and 1 Person."),
+    ).toBeInTheDocument();
   });
 
   it("does not append 's' to a label that already ends in 's'", () => {
     const memories = [
-      makeMemory("m1", "L1", "FACT", 0.9, { node: makeNode("s1", "Series", "A") }),
-      makeMemory("m2", "L2", "FACT", 0.8, { node: makeNode("s2", "Series", "B") }),
+      makeMemory("m1", "L1", "FACT", 0.9, {
+        node: makeNode("s1", "Series", "A"),
+      }),
+      makeMemory("m2", "L2", "FACT", 0.8, {
+        node: makeNode("s2", "Series", "B"),
+      }),
     ];
     render(<MemoryCard queryId="q1" memories={memories} />);
     expect(screen.getByText("Grounded in 2 Series.")).toBeInTheDocument();
@@ -182,8 +209,12 @@ describe("MemoryCard — collapsed summary sentence", () => {
 
   it("counts unmaterialised nodes (id null) individually — no dedupe without an id", () => {
     const memories = [
-      makeMemory("m1", "L1", "OBSERVATION", 0.4, { node: makeNode(null, "Feature", "Pending A") }),
-      makeMemory("m2", "L2", "OBSERVATION", 0.3, { node: makeNode(null, "Feature", "Pending B") }),
+      makeMemory("m1", "L1", "OBSERVATION", 0.4, {
+        node: makeNode(null, "Feature", "Pending A"),
+      }),
+      makeMemory("m2", "L2", "OBSERVATION", 0.3, {
+        node: makeNode(null, "Feature", "Pending B"),
+      }),
     ];
     render(<MemoryCard queryId="q1" memories={memories} />);
     expect(screen.getByText("Grounded in 2 Features.")).toBeInTheDocument();
@@ -207,7 +238,9 @@ describe("MemoryCard — collapsed summary sentence", () => {
       makeMemory("m2", "L2", "RULE", 0.7),
     ];
     render(<MemoryCard queryId="q1" memories={memories} />);
-    expect(screen.getByText("Grounded in 1 Feature, plus 1 uncited memory.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Grounded in 1 Feature, plus 1 uncited memory."),
+    ).toBeInTheDocument();
   });
 
   it("falls back to a recalled-memories count when no memory resolved a node", () => {
@@ -217,13 +250,17 @@ describe("MemoryCard — collapsed summary sentence", () => {
       makeMemory("m3", "L3", "OBSERVATION", 0.5),
     ];
     render(<MemoryCard queryId="q1" memories={memories} />);
-    expect(screen.getByText("Grounded in 3 recalled memories.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Grounded in 3 recalled memories."),
+    ).toBeInTheDocument();
   });
 
   it("uses the singular fallback for a single uncited memory", () => {
     const memories = [makeMemory("m1", "L1", "FACT", 0.9)];
     render(<MemoryCard queryId="q1" memories={memories} />);
-    expect(screen.getByText("Grounded in 1 recalled memory.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Grounded in 1 recalled memory."),
+    ).toBeInTheDocument();
   });
 
   it("uses the 'Remembered' verb for the write variant (memwrite confirmation)", () => {
@@ -240,9 +277,13 @@ describe("MemoryCard — collapsed summary sentence", () => {
 
   it("keeps the Brain icon and memory-card chrome", () => {
     const memories = [makeMemory("m1", "L1", "FACT", 0.9)];
-    const { container } = render(<MemoryCard queryId="q1" memories={memories} />);
+    const { container } = render(
+      <MemoryCard queryId="q1" memories={memories} />,
+    );
     expect(screen.getByTestId("brain-icon")).toBeInTheDocument();
-    expect(container.querySelector("[data-component='memory-card']")).not.toBeNull();
+    expect(
+      container.querySelector("[data-component='memory-card']"),
+    ).not.toBeNull();
   });
 });
 
@@ -267,10 +308,9 @@ describe("MemoryCard — expand/collapse", () => {
     const toggle = screen.getByRole("button", { name: "Hide citations" });
     expect(toggle).toHaveAttribute("aria-expanded", "true");
     fireEvent.click(toggle);
-    expect(screen.getByRole("button", { name: "Show citations" })).toHaveAttribute(
-      "aria-expanded",
-      "false",
-    );
+    expect(
+      screen.getByRole("button", { name: "Show citations" }),
+    ).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryByTestId("node-ref")).not.toBeInTheDocument();
   });
 
@@ -285,9 +325,15 @@ describe("MemoryCard — expand/collapse", () => {
 
   it("expanding reveals one NodeRef chip per unique grounding node (deduped by id)", () => {
     const memories = [
-      makeMemory("m1", "L1", "FACT", 0.9, { node: makeNode("f1", "Feature", "Billing") }),
-      makeMemory("m2", "L2", "RULE", 0.8, { node: makeNode("f1", "Feature", "Billing") }),
-      makeMemory("m3", "L3", "FACT", 0.7, { node: makeNode("p1", "Person", "Ada") }),
+      makeMemory("m1", "L1", "FACT", 0.9, {
+        node: makeNode("f1", "Feature", "Billing"),
+      }),
+      makeMemory("m2", "L2", "RULE", 0.8, {
+        node: makeNode("f1", "Feature", "Billing"),
+      }),
+      makeMemory("m3", "L3", "FACT", 0.7, {
+        node: makeNode("p1", "Person", "Ada"),
+      }),
     ];
     render(<MemoryCard queryId="q1" memories={memories} />);
     expand();
@@ -315,7 +361,9 @@ describe("MemoryCard — expand/collapse", () => {
     // Only one enforcement line rendered (the FACT has none).
     expect(screen.getAllByText(/enforcement /)).toHaveLength(1);
     const badges = screen.getAllByTestId("badge");
-    expect(badges.map((b) => b.textContent)).toEqual(expect.arrayContaining(["FACT", "RULE"]));
+    expect(badges.map((b) => b.textContent)).toEqual(
+      expect.arrayContaining(["FACT", "RULE"]),
+    );
   });
 
   it("limits detail rows to topN (default 5)", () => {
@@ -364,16 +412,26 @@ describe("MemoryCard — expand/collapse", () => {
       makeMemory("m2", "L2", "RULE", 0.7),
       makeMemory("m3", "L3", "OBSERVATION", 0.3),
     ];
-    const { container } = render(<MemoryCard queryId="q1" memories={memories} />);
+    const { container } = render(
+      <MemoryCard queryId="q1" memories={memories} />,
+    );
     expand();
-    expect(container.querySelector("[data-variant='success']")?.textContent).toBe("FACT");
-    expect(container.querySelector("[data-variant='warning']")?.textContent).toBe("RULE");
-    expect(container.querySelector("[data-variant='muted']")?.textContent).toBe("OBSERVATION");
+    expect(
+      container.querySelector("[data-variant='success']")?.textContent,
+    ).toBe("FACT");
+    expect(
+      container.querySelector("[data-variant='warning']")?.textContent,
+    ).toBe("RULE");
+    expect(container.querySelector("[data-variant='muted']")?.textContent).toBe(
+      "OBSERVATION",
+    );
   });
 
   it("renders the lesson body through TruncatedText, not a raw <p> element", () => {
     const memories = [makeMemory("m1", "A recalled lesson.", "FACT", 0.9)];
-    const { container } = render(<MemoryCard queryId="q1" memories={memories} />);
+    const { container } = render(
+      <MemoryCard queryId="q1" memories={memories} />,
+    );
     expand();
     // The old plain-text renderer used <p className="whitespace-pre-wrap ...">
     // directly; TruncatedText replaces it with a clamped <span> preview.
@@ -385,7 +443,9 @@ describe("MemoryCard — expand/collapse", () => {
 describe("MemoryCard — grounding-node citations", () => {
   it("cites the grounding node via NodeRef when the memory resolves a graph node", () => {
     const memories = [
-      makeMemory("m1", "Usage rolls up to Stripe", "FACT", 0.9, { node: withNode }),
+      makeMemory("m1", "Usage rolls up to Stripe", "FACT", 0.9, {
+        node: withNode,
+      }),
     ];
     render(
       <TenantProvider value={TENANT}>
@@ -429,7 +489,9 @@ describe("MemoryCard — grounding-node citations", () => {
     );
     expand();
     expect(
-      screen.getAllByRole("link", { name: /view metered billing in the knowledge graph/i }),
+      screen.getAllByRole("link", {
+        name: /view metered billing in the knowledge graph/i,
+      }),
     ).toHaveLength(1);
   });
 

@@ -41,7 +41,8 @@ export const MultipleFiles: Story = {
         ].join("\n"),
       },
     ],
-    summary: "Renamed the greeting copy and updated the matching test expectation.",
+    summary:
+      "Renamed the greeting copy and updated the matching test expectation.",
   },
 };
 
@@ -50,10 +51,7 @@ export const NoPatchAvailable: Story = {
     // agent.repo.edit's contract output carries changed file PATHS only, not
     // patch bodies — this is the real-world shape resolveRenderDirective
     // produces for that capability today.
-    files: [
-      { path: "src/index.ts" },
-      { path: "src/routes/health.ts" },
-    ],
+    files: [{ path: "src/index.ts" }, { path: "src/routes/health.ts" }],
     summary: "Wired up the health-check route.",
     externalUrl: "https://github.com/acme/repo/pull/42",
     externalLabel: "PR #42",
