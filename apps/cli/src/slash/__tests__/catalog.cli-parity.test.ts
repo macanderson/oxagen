@@ -19,7 +19,8 @@
  * correctly, subcommands and collisions included.
  */
 import { describe, it, expect } from "vitest";
-import { buildProgram, describeCliCommands } from "../../program.js";
+import { buildProgram } from "../../program.js";
+import { describeCliCommands } from "../../commands/meta.js";
 import { buildSlashCatalog, CLI_DISAMBIGUATION_PREFIX, BUILTIN_SLASH_NAMES } from "../catalog.js";
 
 describe("describeCliCommands — recursive subcommand discovery", () => {

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { buildProgram, describeCliCommands } from "../program.js";
+import { buildProgram } from "../program.js";
+import { describeCliCommands } from "../commands/meta.js";
 
 describe("buildProgram", () => {
   it("builds the oxagen command tree with no side effects", () => {

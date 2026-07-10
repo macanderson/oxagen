@@ -75,6 +75,11 @@ vi.mock("../../agent/code-graph.js", () => ({
 }));
 
 const { ReplApp } = await import("../interactive.js");
+// The REAL command tree: ReplApp no longer imports the composition root
+// itself (ReplOptions.buildProgram is injected by program.tsx in production),
+// so this test — which exists to drive the real catalog — injects it the
+// same way.
+const { buildProgram } = await import("../../program.js");
 
 const TEST_SESSION = {
   token: "test-token",
@@ -123,7 +128,7 @@ describe("REPL /cost — inline CLI-command execution (no shell dead-end, no raw
   });
 
   it("runs /cost inline and folds its output into an assistant message", async () => {
-    const { stdin, lastFrame } = render(<ReplApp options={{ session: TEST_SESSION }} />);
+    const { stdin, lastFrame } = render(<ReplApp options={{ session: TEST_SESSION, buildProgram }} />);
     await tick();
 
     await submit(stdin, "/cost");
@@ -138,7 +143,7 @@ describe("REPL /cost — inline CLI-command execution (no shell dead-end, no raw
   });
 
   it("never calls the real process.stdout.write or console.log while running /cost", async () => {
-    const { stdin, lastFrame } = render(<ReplApp options={{ session: TEST_SESSION }} />);
+    const { stdin, lastFrame } = render(<ReplApp options={{ session: TEST_SESSION, buildProgram }} />);
     await tick();
 
     stdoutSpy.mockClear();
@@ -152,7 +157,7 @@ describe("REPL /cost — inline CLI-command execution (no shell dead-end, no raw
   });
 
   it("runs /cost --rates inline and shows the baked-in rate card", async () => {
-    const { stdin, lastFrame } = render(<ReplApp options={{ session: TEST_SESSION }} />);
+    const { stdin, lastFrame } = render(<ReplApp options={{ session: TEST_SESSION, buildProgram }} />);
     await tick();
 
     await submit(stdin, "/cost --rates");

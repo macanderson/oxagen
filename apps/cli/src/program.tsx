@@ -3,10 +3,12 @@
  *
  * Extracted from index.tsx so the exact same command set that drives
  * `oxagen --help` is the single source of truth for the REPL's slash-command
- * menu (see slash/catalog.ts → describeCliCommands). Building the program has no
- * side effects — every handler is a dynamic `import()` inside its action — so the
- * REPL can construct it purely to introspect command names + descriptions
- * without running anything.
+ * menu (see slash/catalog.ts + commands/meta.ts describeCliCommands). Building
+ * the program has no side effects — every handler is a dynamic `import()`
+ * inside its action — so the REPL can construct it purely to introspect
+ * command names + descriptions without running anything. Command-tree
+ * introspection helpers live in commands/meta.ts so leaf modules never need
+ * to import this composition root.
  */
 import { Command } from "commander";
 import pkg from "../package.json" with { type: "json" };
@@ -15,54 +17,6 @@ import { parseModeArg, type PermissionMode } from "./agent/permissions.js";
 const { version } = pkg;
 
 const collect = (val: string, prev: string[]): string[] => prev.concat([val]);
-
-/** Metadata for one CLI command, surfaced in the REPL slash-command menu. */
-export interface CliCommandMeta {
-  /** Command name as typed (e.g. "graph", "cost"). */
-  name: string;
-  /** One-line description (the same string `--help` prints). */
-  description: string;
-  /** Argument hint derived from the command's declared arguments, e.g. "<query> [focus]". */
-  argumentHint?: string;
-}
-
-/** Join a command path the same way everywhere — the REPL dispatcher (see
- * repl/cli-bridge.ts) splits back on ":" to recover the path segments. */
-export function joinCliCommandPath(pathParts: readonly string[]): string {
-  return pathParts.join(":");
-}
-
-/**
- * Read every command's name + description + argument shape straight from the
- * Commander tree — top-level AND every nested subcommand (`graph search`,
- * `mcp add`, `secret set`, …), walked recursively. This is what makes the
- * slash menu and `--help` stay in lockstep: there is no second list to drift.
- *
- * A subcommand's catalog `name` is its full path colon-joined (e.g.
- * "graph:search") so it is a single unambiguous token the REPL can parse with
- * a plain `parseInvocation` (which only splits on the first whitespace) —
- * `/graph:search -q foo` unambiguously names the "graph search" leaf command
- * with `-q foo` as its arguments. Top-level commands are unaffected (a
- * one-segment path colon-joins to itself), so every existing catalog entry
- * keeps its exact former name.
- */
-export function describeCliCommands(program: Command): CliCommandMeta[] {
-  const out: CliCommandMeta[] = [];
-  const walk = (cmd: Command, parentPath: readonly string[]): void => {
-    const path = [...parentPath, cmd.name()];
-    const hint = cmd.registeredArguments
-      .map((arg) => (arg.required ? `<${arg.name()}>` : `[${arg.name()}]`))
-      .join(" ");
-    out.push({
-      name: joinCliCommandPath(path),
-      description: cmd.description(),
-      argumentHint: hint || undefined,
-    });
-    for (const sub of cmd.commands) walk(sub, path);
-  };
-  for (const cmd of program.commands) walk(cmd, []);
-  return out;
-}
 
 /**
  * Commander reducer for a repeatable option: accumulate each occurrence into an
@@ -267,7 +221,9 @@ export function buildProgram(): Command {
         } else if (process.stdout.isTTY) {
           // Interactive REPL mode
           const { launchRepl } = await import("./repl/interactive.js");
-          await launchRepl(runOpts);
+          // Inject the program factory: the REPL introspects/dispatches CLI
+          // commands through it without ever importing this composition root.
+          await launchRepl({ ...runOpts, buildProgram });
         } else {
           // Piped input — read from stdin
           const { runFromStdin } = await import("./repl/one-shot.js");
