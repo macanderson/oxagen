@@ -35,23 +35,28 @@ export interface ComplianceControl {
  * Derive live SOC 2 control statuses from the provided signals.
  * All logic is pure — no DB, no I/O.
  */
-export function deriveComplianceControls(signals: ControlSignals): ComplianceControl[] {
-  const { auditEventCount, mfaRequired, rlsEnforced, oldestActiveApiKeyDays } = signals;
+export function deriveComplianceControls(
+  signals: ControlSignals,
+): ComplianceControl[] {
+  const { auditEventCount, mfaRequired, rlsEnforced, oldestActiveApiKeyDays } =
+    signals;
 
   const auditLive = auditEventCount > 0;
   // CC6.1: Logical access controls. Active when RLS enforced + MFA required.
   // Partial when RLS is enforced but MFA is not yet required.
-  const cc61Status: ControlStatus = rlsEnforced && mfaRequired
-    ? "active"
-    : rlsEnforced
-      ? "partial"
-      : "not_started";
+  const cc61Status: ControlStatus =
+    rlsEnforced && mfaRequired
+      ? "active"
+      : rlsEnforced
+        ? "partial"
+        : "not_started";
 
-  const cc61Rationale = rlsEnforced && mfaRequired
-    ? "Row-level security enforced org-wide and org-wide MFA is required."
-    : rlsEnforced
-      ? "Postgres RLS enforced platform-wide. Org-wide MFA enforcement not yet enabled (configure on the MFA tab)."
-      : "Row-level security not yet enforced. Configure RLS and MFA enforcement.";
+  const cc61Rationale =
+    rlsEnforced && mfaRequired
+      ? "Row-level security enforced org-wide and org-wide MFA is required."
+      : rlsEnforced
+        ? "Postgres RLS enforced platform-wide. Org-wide MFA enforcement not yet enabled (configure on the MFA tab)."
+        : "Row-level security not yet enforced. Configure RLS and MFA enforcement.";
 
   // CC6.2: Authentication & credential management.
   const cc62Status: ControlStatus = mfaRequired ? "active" : "partial";
@@ -79,7 +84,9 @@ export function deriveComplianceControls(signals: ControlSignals): ComplianceCon
 
   // API key rotation check — heuristic: active keys older than 180 days is a gap.
   const apiKeyStatus: ControlStatus =
-    oldestActiveApiKeyDays === null || oldestActiveApiKeyDays <= 180 ? "active" : "partial";
+    oldestActiveApiKeyDays === null || oldestActiveApiKeyDays <= 180
+      ? "active"
+      : "partial";
   const apiKeyRationale =
     oldestActiveApiKeyDays === null
       ? "No active API keys."

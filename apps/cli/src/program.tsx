@@ -36,18 +36,32 @@ export function buildProgram(): Command {
 
   program
     .name("oxagen")
-    .description("Agentic coding assistant — powered by the Oxagen context engine")
+    .description(
+      "Agentic coding assistant — powered by the Oxagen context engine",
+    )
     .version(version)
     .argument("[prompt...]", "One-shot prompt (runs and exits)")
-    .option("-m, --model <slug>", "Worker (executor) model slug (overrides config/default)")
-    .option("--worker-model <slug>", "Worker (executor) model slug — alias for --model")
+    .option(
+      "-m, --model <slug>",
+      "Worker (executor) model slug (overrides config/default)",
+    )
+    .option(
+      "--worker-model <slug>",
+      "Worker (executor) model slug — alias for --model",
+    )
     .option("--judge-model <slug>", "Judge (completeness advisor) model slug")
-    .option("--triage-model <slug>", "Triage/coordinator (planner + evaluator) model slug")
+    .option(
+      "--triage-model <slug>",
+      "Triage/coordinator (planner + evaluator) model slug",
+    )
     .option(
       "--effort <level>",
       "Reasoning effort for models that support it: low | medium | high | xhigh | max (omit = model default / adaptive)",
     )
-    .option("--agent <name>", "Run the one-shot prompt as a named agent definition")
+    .option(
+      "--agent <name>",
+      "Run the one-shot prompt as a named agent definition",
+    )
     .option(
       "--readonly",
       "Read-only mode: read/search/explain only — no file edits or commands",
@@ -146,7 +160,7 @@ export function buildProgram(): Command {
         // platform persistence — the CLI runs BYOK/offline). Dynamic import so
         // @oxagen/billing only loads when the flag is actually used, matching
         // this file's "no side effects until an action runs" contract.
-        let budget: import("@oxagen/billing").TurnBudgetPolicy | undefined;
+        let budget: import("@oxagen/billing/turn-budget").TurnBudgetPolicy | undefined;
         if (opts.budget !== undefined) {
           const { resolveBudgetFlags } = await import("./agent/budget.js");
           const resolved = resolveBudgetFlags(opts.budget, opts.budgetMode);
@@ -190,7 +204,9 @@ export function buildProgram(): Command {
         // right here from data already destructured above, so record them
         // directly rather than re-deriving them generically at the exit hook.
         {
-          const { markPipelineUsed, setByok } = await import("./telemetry/usage.js");
+          const { markPipelineUsed, setByok } = await import(
+            "./telemetry/usage.js"
+          );
           markPipelineUsed(!runOpts.bare);
           setByok(session.orgSlug === "local");
         }
@@ -198,7 +214,9 @@ export function buildProgram(): Command {
         // --agent: run the prompt as a named agent (its prompt, tools, model).
         if (opts.agent) {
           if (!prompt) {
-            process.stderr.write("Error: --agent requires a prompt, e.g. `oxagen --agent reviewer \"…\"`.\n");
+            process.stderr.write(
+              'Error: --agent requires a prompt, e.g. `oxagen --agent reviewer "…"`.\n',
+            );
             process.exitCode = 1;
             return;
           }
@@ -246,9 +264,16 @@ export function buildProgram(): Command {
 
   program
     .command("agents")
-    .description("Launch the agents screen — plan a goal, dispatch a fleet, watch it work")
+    .description(
+      "Launch the agents screen — plan a goal, dispatch a fleet, watch it work",
+    )
     .argument("[goal...]", "Goal to plan into tasks and run immediately")
-    .option("--concurrency <n>", "Max agents running at once", (v) => parseInt(v, 10), 4)
+    .option(
+      "--concurrency <n>",
+      "Max agents running at once",
+      (v) => parseInt(v, 10),
+      4,
+    )
     .option(
       "--readonly",
       "Read-only agents: read/search/explain only — no file edits or commands",
@@ -258,11 +283,20 @@ export function buildProgram(): Command {
       "--no-isolate",
       "Run all agents directly against the working tree instead of one git worktree per task (default: isolated, commit + merge back)",
     )
-    .option("--json", "Headless: stream JSONL task events instead of the live view", false)
+    .option(
+      "--json",
+      "Headless: stream JSONL task events instead of the live view",
+      false,
+    )
     .action(
       async (
         goal: string[],
-        opts: { concurrency: number; readonly: boolean; isolate: boolean; json: boolean },
+        opts: {
+          concurrency: number;
+          readonly: boolean;
+          isolate: boolean;
+          json: boolean;
+        },
       ) => {
         const { launchFleetView } = await import("./tui/fleet-view/index.js");
         const snap = await launchFleetView({
@@ -282,15 +316,31 @@ export function buildProgram(): Command {
 
   program
     .command("solve")
-    .description("Solve a task best-of-N — run N candidates in parallel, keep the winner")
+    .description(
+      "Solve a task best-of-N — run N candidates in parallel, keep the winner",
+    )
     .argument("<prompt...>", "The task to solve")
-    .option("-n, --candidates <n>", "How many candidates to run (default 3, max 10)", (v) => parseInt(v, 10))
-    .option("--verify <cmd>", "Command run in each candidate; its output decides the winner (e.g. 'pnpm test:unit')")
-    .option("--models <slugs>", "Comma-separated gateway slugs cycled across candidates for diversity")
+    .option(
+      "-n, --candidates <n>",
+      "How many candidates to run (default 3, max 10)",
+      (v) => parseInt(v, 10),
+    )
+    .option(
+      "--verify <cmd>",
+      "Command run in each candidate; its output decides the winner (e.g. 'pnpm test:unit')",
+    )
+    .option(
+      "--models <slugs>",
+      "Comma-separated gateway slugs cycled across candidates for diversity",
+    )
     .option("--selector <slug>", "Model that picks the winning candidate")
     .option("-m, --model <slug>", "Pin every candidate to one model")
     .option("--readonly", "Read-only candidates: do not apply a winner", false)
-    .option("--json", "Headless: stream JSONL events instead of the live view", false)
+    .option(
+      "--json",
+      "Headless: stream JSONL events instead of the live view",
+      false,
+    )
     .option(
       "--pipeline",
       "Run each candidate through the full evaluate/enhance/judge/revise pipeline, not just bare " +
@@ -319,7 +369,9 @@ export function buildProgram(): Command {
       ) => {
         const prompt = promptWords.join(" ").trim();
         if (!prompt) {
-          process.stderr.write("Error: solve requires a task, e.g. `oxagen solve \"fix the failing test\"`.\n");
+          process.stderr.write(
+            'Error: solve requires a task, e.g. `oxagen solve "fix the failing test"`.\n',
+          );
           process.exitCode = 1;
           return;
         }
@@ -383,20 +435,30 @@ export function buildProgram(): Command {
     .argument("<sessionId>", "Session ID to fork from")
     .argument("<forkPoint>", "Event index to fork at (integer)")
     .option("--json", "Output JSON", false)
-    .action(async (sessionId: string, forkPointArg: string, opts: { json: boolean }) => {
-      const forkPoint = parseInt(forkPointArg, 10);
-      if (Number.isNaN(forkPoint)) {
-        process.stderr.write(`Invalid fork point "${forkPointArg}". Use an integer event index.\n`);
-        process.exitCode = 1;
-        return;
-      }
-      const { sessionFork } = await import("./daemon/lifecycle.js");
-      await sessionFork(sessionId, forkPoint, opts);
-    });
+    .action(
+      async (
+        sessionId: string,
+        forkPointArg: string,
+        opts: { json: boolean },
+      ) => {
+        const forkPoint = parseInt(forkPointArg, 10);
+        if (Number.isNaN(forkPoint)) {
+          process.stderr.write(
+            `Invalid fork point "${forkPointArg}". Use an integer event index.\n`,
+          );
+          process.exitCode = 1;
+          return;
+        }
+        const { sessionFork } = await import("./daemon/lifecycle.js");
+        await sessionFork(sessionId, forkPoint, opts);
+      },
+    );
 
   daemonSession
     .command("replay")
-    .description("Check a recorded session's determinism and print its per-turn metrics")
+    .description(
+      "Check a recorded session's determinism and print its per-turn metrics",
+    )
     .argument("<sessionId>", "Session ID to replay")
     .option("--json", "Output JSON", false)
     .action(async (sessionId: string, opts: { json: boolean }) => {
@@ -408,8 +470,13 @@ export function buildProgram(): Command {
 
   program
     .command("replay")
-    .description("Show how a past turn was handled (prompt, scores, context, model, judge)")
-    .argument("[turn]", "Turn index (1 = most recent) or id; omit for the latest")
+    .description(
+      "Show how a past turn was handled (prompt, scores, context, model, judge)",
+    )
+    .argument(
+      "[turn]",
+      "Turn index (1 = most recent) or id; omit for the latest",
+    )
     .option("--list", "List recent turns instead of replaying one", false)
     .action(async (turn: string | undefined, opts: { list?: boolean }) => {
       const { handleReplay } = await import("./commands/replay.js");
@@ -419,23 +486,39 @@ export function buildProgram(): Command {
   // ── pr: watch a PR's CI, report, merge when green ───────────────────────────
 
   {
-    const pr = program.command("pr").description("Watch a pull request's CI and merge it when green");
-    pr
-      .command("status")
-      .description("One-shot CI verdict for a PR (exit 0 green / 1 failing / 2 pending)")
+    const pr = program
+      .command("pr")
+      .description("Watch a pull request's CI and merge it when green");
+    pr.command("status")
+      .description(
+        "One-shot CI verdict for a PR (exit 0 green / 1 failing / 2 pending)",
+      )
       .argument("[number]", "PR number; omit for the current branch's PR")
       .option("--json", "Output JSON", false)
       .action(async (number: string | undefined, opts: { json?: boolean }) => {
         const { handlePrStatus } = await import("./commands/pr.js");
         await handlePrStatus(number, opts);
       });
-    pr
-      .command("watch")
-      .description("Stream a PR's CI until green or failing; offer to merge when green")
+    pr.command("watch")
+      .description(
+        "Stream a PR's CI until green or failing; offer to merge when green",
+      )
       .argument("[number]", "PR number; omit for the current branch's PR")
-      .option("--merge", "Squash-merge automatically the moment it's green", false)
-      .option("--interval <seconds>", "Poll interval seconds (default 30)", (v) => parseInt(v, 10))
-      .option("--timeout <minutes>", "Give up after this many minutes (default 60)", (v) => parseInt(v, 10))
+      .option(
+        "--merge",
+        "Squash-merge automatically the moment it's green",
+        false,
+      )
+      .option(
+        "--interval <seconds>",
+        "Poll interval seconds (default 30)",
+        (v) => parseInt(v, 10),
+      )
+      .option(
+        "--timeout <minutes>",
+        "Give up after this many minutes (default 60)",
+        (v) => parseInt(v, 10),
+      )
       .action(
         async (
           number: string | undefined,
@@ -445,17 +528,22 @@ export function buildProgram(): Command {
           await handlePrWatch(number, opts);
         },
       );
-    pr
-      .command("fix")
+    pr.command("fix")
       // The root's global `-m, --model` is reused (commander binds it to the
       // parent), so the action reads merged opts via optsWithGlobals().
       .description(
         "Actively fix a failing PR: diagnose, patch, push, repeat until green — then ask before merging",
       )
       .argument("[number]", "PR number; omit for the current branch's PR")
-      .option("--max-rounds <n>", "Max fix attempts before giving up (default 3)", (v) => parseInt(v, 10))
-      .option("--interval <seconds>", "Poll interval seconds while waiting on checks (default 30)", (v) =>
-        parseInt(v, 10),
+      .option(
+        "--max-rounds <n>",
+        "Max fix attempts before giving up (default 3)",
+        (v) => parseInt(v, 10),
+      )
+      .option(
+        "--interval <seconds>",
+        "Poll interval seconds while waiting on checks (default 30)",
+        (v) => parseInt(v, 10),
       )
       .option(
         "--timeout <minutes>",
@@ -481,13 +569,21 @@ export function buildProgram(): Command {
   program
     .command("recover")
     .description("List or restore recorded agent commits (never lose work)")
-    .argument("[hash]", "A commit hash to show restore instructions for; omit to list")
+    .argument(
+      "[hash]",
+      "A commit hash to show restore instructions for; omit to list",
+    )
     .option("--all", "List across all repos, not just this one", false)
     .option("--json", "Output JSON", false)
-    .action(async (hash: string | undefined, opts: { all?: boolean; json?: boolean }) => {
-      const { handleRecover } = await import("./commands/recover.js");
-      await handleRecover(hash, opts);
-    });
+    .action(
+      async (
+        hash: string | undefined,
+        opts: { all?: boolean; json?: boolean },
+      ) => {
+        const { handleRecover } = await import("./commands/recover.js");
+        await handleRecover(hash, opts);
+      },
+    );
 
   // ── cost: project + report model cost from the baked-in rate card ───────────
 
@@ -495,11 +591,21 @@ export function buildProgram(): Command {
     .command("cost")
     // The root's global `-m, --model` is reused (commander binds it to the parent),
     // so the action reads merged opts via optsWithGlobals() to see --model here.
-    .description("Project model cost from the baked-in rate card, or roll up this project's spend")
-    .option("--in <tokens>", "Input token count to price", (v) => parseInt(v, 10))
-    .option("--out <tokens>", "Output token count to price", (v) => parseInt(v, 10))
+    .description(
+      "Project model cost from the baked-in rate card, or roll up this project's spend",
+    )
+    .option("--in <tokens>", "Input token count to price", (v) =>
+      parseInt(v, 10),
+    )
+    .option("--out <tokens>", "Output token count to price", (v) =>
+      parseInt(v, 10),
+    )
     .option("--rates", "Print the baked-in rate card", false)
-    .option("--session", "Roll up what this project's recorded turns actually cost, by model", false)
+    .option(
+      "--session",
+      "Roll up what this project's recorded turns actually cost, by model",
+      false,
+    )
     .option("--json", "Output JSON", false)
     .action(async (_opts, command: Command) => {
       const merged = command.optsWithGlobals() as {
@@ -517,7 +623,9 @@ export function buildProgram(): Command {
   program
     .command("trace")
     .argument("<executionId>", "Public ID (aex_…) or UUID of the execution")
-    .description("Show an agent run as a span tree: steps, tool calls, and child executions")
+    .description(
+      "Show an agent run as a span tree: steps, tool calls, and child executions",
+    )
     .option("--json", "Output the raw trace as JSON", false)
     .action(async (executionId: string, opts: { json?: boolean }) => {
       const { handleTrace } = await import("./commands/trace.js");
@@ -531,7 +639,9 @@ export function buildProgram(): Command {
     .description("Inspect and manage the model runtime (on-device + cloud)");
   models
     .command("list")
-    .description("Show the registry, capability scores, and what fits this device")
+    .description(
+      "Show the registry, capability scores, and what fits this device",
+    )
     .option("--json", "Output JSON", false)
     .action(async (opts: { json?: boolean }) => {
       const { handleModelsList } = await import("./commands/models.js");
@@ -539,7 +649,9 @@ export function buildProgram(): Command {
     });
   models
     .command("active")
-    .description("Show the current coordinator model and its kind (on-device | cloud)")
+    .description(
+      "Show the current coordinator model and its kind (on-device | cloud)",
+    )
     .option("--json", "Output JSON", false)
     .action(async (opts: { json?: boolean }) => {
       const { handleModelsActive } = await import("./commands/models.js");
@@ -571,20 +683,34 @@ export function buildProgram(): Command {
 
   // ── graph: knowledge-graph search + pull + status ───────────────────────────
 
-  const graph = program.command("graph").description("Query the knowledge graph");
+  const graph = program
+    .command("graph")
+    .description("Query the knowledge graph");
   graph
     .command("search")
-    .description("Unified semantic (vector) search across the entire knowledge graph")
-    .requiredOption("-q, --query <text>", "Natural-language query to search by vector similarity")
+    .description(
+      "Unified semantic (vector) search across the entire knowledge graph",
+    )
+    .requiredOption(
+      "-q, --query <text>",
+      "Natural-language query to search by vector similarity",
+    )
     .option(
       "-k, --kinds <kinds>",
       "Comma-separated node kinds (entity,file,symbol,chunk,memory,execution,document,message)",
     )
-    .option("-l, --labels <labels>", "Comma-separated domain labels (e.g. Person,SourceFile)")
+    .option(
+      "-l, --labels <labels>",
+      "Comma-separated domain labels (e.g. Person,SourceFile)",
+    )
     .option("-n, --limit <n>", "Maximum number of results (1–50)", "10")
     .option("--system", "Only return product-owned (system) nodes")
     .option("--no-system", "Only return customer nodes (exclude system nodes)")
-    .option("--json", "One machine JSON line (also the default when stdout is piped)", false)
+    .option(
+      "--json",
+      "One machine JSON line (also the default when stdout is piped)",
+      false,
+    )
     .option("--quiet", "Suppress progress chrome (stderr)", false)
     .action(
       async (opts: {
@@ -594,7 +720,9 @@ export function buildProgram(): Command {
         limit?: string;
         system?: boolean;
       }) => {
-        const { handleGraphSearch } = await import("./commands/graph.search.js");
+        const { handleGraphSearch } = await import(
+          "./commands/graph.search.js"
+        );
         await handleGraphSearch(opts);
       },
     );
@@ -604,7 +732,11 @@ export function buildProgram(): Command {
     .description(
       "Download an incremental snapshot of the workspace graph into a local DuckDB replica",
     )
-    .option("--full", "Ignore the saved cursor and re-pull the entire graph", false)
+    .option(
+      "--full",
+      "Ignore the saved cursor and re-pull the entire graph",
+      false,
+    )
     .option(
       "-l, --labels <csv>",
       "Comma-separated domain labels to filter (e.g. Person,SourceFile)",
@@ -642,12 +774,20 @@ export function buildProgram(): Command {
     .description(
       "Compute a git code delta and push it to the workspace knowledge graph (ADR-018 up-sync)",
     )
-    .option("--full", "Ignore the saved cursor and push all tracked source files", false)
+    .option(
+      "--full",
+      "Ignore the saved cursor and push all tracked source files",
+      false,
+    )
     .option("--repo <id>", "Override the repo identifier")
     .option("--json", "Output summary as JSON")
     .action(async (opts: { full?: boolean; repo?: string; json?: boolean }) => {
       const { handleGraphPush } = await import("./commands/graph.push.js");
-      await handleGraphPush({ full: opts.full, repo: opts.repo, json: opts.json });
+      await handleGraphPush({
+        full: opts.full,
+        repo: opts.repo,
+        json: opts.json,
+      });
     });
 
   graph
@@ -661,7 +801,9 @@ export function buildProgram(): Command {
     )
     .option("--json", "Output summary as JSON")
     .action(async (opts: { repo?: string; json?: boolean }) => {
-      const { handleGraphLineage } = await import("./commands/graph.lineage.js");
+      const { handleGraphLineage } = await import(
+        "./commands/graph.lineage.js"
+      );
       await handleGraphLineage({ repo: opts.repo, json: opts.json });
     });
 
@@ -688,13 +830,23 @@ export function buildProgram(): Command {
     );
   fileLock
     .command("list")
-    .description("List every currently-live file lock in the workspace, optionally filtered to one file")
+    .description(
+      "List every currently-live file lock in the workspace, optionally filtered to one file",
+    )
     .option("--path <path>", "File path (or naturalKey) to filter to")
-    .option("--owner <owner>", "GitHub owner — combined with --repo + --path to derive the naturalKey filter")
+    .option(
+      "--owner <owner>",
+      "GitHub owner — combined with --repo + --path to derive the naturalKey filter",
+    )
     .option("--repo <repo>", "GitHub repo — see --owner")
     .option("--json", "Output as JSON")
     .action(
-      async (opts: { path?: string; owner?: string; repo?: string; json?: boolean }) => {
+      async (opts: {
+        path?: string;
+        owner?: string;
+        repo?: string;
+        json?: boolean;
+      }) => {
         const { handleFileLockList } = await import("./commands/file-lock.js");
         await handleFileLockList(opts);
       },
@@ -704,12 +856,27 @@ export function buildProgram(): Command {
     .description(
       "Acquire (or renew) an exclusive, TTL-bounded lock on a file so no two agents edit it concurrently",
     )
-    .option("--owner <owner>", "GitHub owner — combined with --repo to derive the naturalKey")
+    .option(
+      "--owner <owner>",
+      "GitHub owner — combined with --repo to derive the naturalKey",
+    )
     .option("--repo <repo>", "GitHub repo — see --owner")
-    .option("--action <action>", "Free-text action label stored on the lock edge: read|write (default write)")
-    .option("--ttl-ms <n>", "Lease length in ms (default 300000 = 5 minutes; capped at 1 hour)")
-    .option("--agent-id <id>", "Identity to hold the lock as (default: the calling user/api-key id)")
-    .option("--execution-id <id>", "Correlates this lock for a later batch/manual release")
+    .option(
+      "--action <action>",
+      "Free-text action label stored on the lock edge: read|write (default write)",
+    )
+    .option(
+      "--ttl-ms <n>",
+      "Lease length in ms (default 300000 = 5 minutes; capped at 1 hour)",
+    )
+    .option(
+      "--agent-id <id>",
+      "Identity to hold the lock as (default: the calling user/api-key id)",
+    )
+    .option(
+      "--execution-id <id>",
+      "Correlates this lock for a later batch/manual release",
+    )
     .option("--json", "Output as JSON")
     .action(
       async (
@@ -724,7 +891,9 @@ export function buildProgram(): Command {
           json?: boolean;
         },
       ) => {
-        const { handleFileLockAcquire } = await import("./commands/file-lock.js");
+        const { handleFileLockAcquire } = await import(
+          "./commands/file-lock.js"
+        );
         await handleFileLockAcquire(path, opts);
       },
     );
@@ -748,15 +917,29 @@ export function buildProgram(): Command {
     );
   memory
     .command("list")
-    .description("List the workspace's memories, sorted by recency or citation count")
-    .option("--class <memoryClass>", "Filter by epistemic class (OBSERVATION|RULE|FACT)")
+    .description(
+      "List the workspace's memories, sorted by recency or citation count",
+    )
+    .option(
+      "--class <memoryClass>",
+      "Filter by epistemic class (OBSERVATION|RULE|FACT)",
+    )
     .option(
       "--kind <kind>",
       "Filter by content-domain kind (e.g. FEEDBACK, PERFORMANCE, constraint, gotcha)",
     )
-    .option("--min-enforcement <n>", "Only rules at or above this enforcement score (1-100)")
-    .option("--min-citations <n>", "Only memories cited at least this many times")
-    .option("--sort <axis>", "Sort by 'createdAt' (recency, default) or 'citations'")
+    .option(
+      "--min-enforcement <n>",
+      "Only rules at or above this enforcement score (1-100)",
+    )
+    .option(
+      "--min-citations <n>",
+      "Only memories cited at least this many times",
+    )
+    .option(
+      "--sort <axis>",
+      "Sort by 'createdAt' (recency, default) or 'citations'",
+    )
     .option("--node <ref>", "Scope to memories anchored on a graph node ref")
     .option("--limit <n>", "Max rows (default 100)")
     .option("--offset <n>", "Skip N rows (paging)")
@@ -795,7 +978,12 @@ export function buildProgram(): Command {
     .action(
       async (
         id: string,
-        opts: { lesson?: string; kind?: string; source?: string; json?: boolean },
+        opts: {
+          lesson?: string;
+          kind?: string;
+          source?: string;
+          json?: boolean;
+        },
       ) => {
         const { handleMemoryEdit } = await import("./commands/memory.js");
         await handleMemoryEdit(id, opts);
@@ -808,12 +996,20 @@ export function buildProgram(): Command {
     )
     .option("--confidence <n>", "Numeric confidence 0–100")
     .option("--enforcement <n>", "Numeric enforcement 1–100 (for a RULE)")
-    .option("--status <status>", "Lifecycle status (ACTIVE|SUPERSEDED|RETRACTED|ARCHIVED)")
+    .option(
+      "--status <status>",
+      "Lifecycle status (ACTIVE|SUPERSEDED|RETRACTED|ARCHIVED)",
+    )
     .option("--json", "Output JSON")
     .action(
       async (
         id: string,
-        opts: { confidence?: string; enforcement?: string; status?: string; json?: boolean },
+        opts: {
+          confidence?: string;
+          enforcement?: string;
+          status?: string;
+          json?: boolean;
+        },
       ) => {
         const { handleMemorySalience } = await import("./commands/memory.js");
         await handleMemorySalience(id, opts);
@@ -825,13 +1021,21 @@ export function buildProgram(): Command {
       "Promote a memory to RULE or FACT, recording an auditable promotion event (FACT requires human confirmation)",
     )
     .requiredOption("--to <class>", "Target class: rule|fact")
-    .option("--enforcement <n>", "Enforcement 1–100 to set for a RULE (ignored for FACT, forced 100)")
+    .option(
+      "--enforcement <n>",
+      "Enforcement 1–100 to set for a RULE (ignored for FACT, forced 100)",
+    )
     .requiredOption("--rationale <text>", "Why this memory is being promoted")
     .option("--json", "Output JSON")
     .action(
       async (
         id: string,
-        opts: { to?: string; enforcement?: string; rationale?: string; json?: boolean },
+        opts: {
+          to?: string;
+          enforcement?: string;
+          rationale?: string;
+          json?: boolean;
+        },
       ) => {
         const { handleMemoryPromote } = await import("./commands/memory.js");
         await handleMemoryPromote(id, opts);
@@ -839,7 +1043,9 @@ export function buildProgram(): Command {
     );
   memory
     .command("candidates")
-    .description("List the top OBSERVATION memories by citation pressure ripe for promotion")
+    .description(
+      "List the top OBSERVATION memories by citation pressure ripe for promotion",
+    )
     .option("--limit <n>", "Max candidates (default 3)")
     .option("--json", "Output JSON")
     .action(async (opts: { limit?: string; json?: boolean }) => {
@@ -878,15 +1084,27 @@ export function buildProgram(): Command {
     .description(
       "Capture a memory — infers its class + kind and saves it to the workspace graph",
     )
-    .option("--class <memoryClass>", "Pin the epistemic class (OBSERVATION|RULE|FACT) instead of inferring it")
-    .option("--kind <kind>", "Pin the content-domain kind instead of inferring it")
+    .option(
+      "--class <memoryClass>",
+      "Pin the epistemic class (OBSERVATION|RULE|FACT) instead of inferring it",
+    )
+    .option(
+      "--kind <kind>",
+      "Pin the content-domain kind instead of inferring it",
+    )
     .option("--enforcement <n>", "Enforcement 1–100 when --class is RULE")
     .option("--node <ref>", "Anchor the memory on a graph node ref")
     .option("--json", "Output JSON")
     .action(
       async (
         text: string[],
-        opts: { class?: string; kind?: string; enforcement?: string; node?: string; json?: boolean },
+        opts: {
+          class?: string;
+          kind?: string;
+          enforcement?: string;
+          node?: string;
+          json?: boolean;
+        },
       ) => {
         const { handleRemember } = await import("./commands/memory.js");
         await handleRemember(text.join(" "), opts);
@@ -897,7 +1115,9 @@ export function buildProgram(): Command {
 
   const code = program
     .command("code")
-    .description("Code utilities: semantic code-map retrieval, diff, patch, format");
+    .description(
+      "Code utilities: semantic code-map retrieval, diff, patch, format",
+    );
 
   code
     .command("map <query>")
@@ -906,23 +1126,42 @@ export function buildProgram(): Command {
         "symbols, call edges, and recent commits. Faster than grep for conceptual queries.",
     )
     .option("-l, --limit <n>", "Max files to return (default 20)")
-    .option("--kinds <list>", "Comma-separated result kinds: file,symbol,chunk,commit")
+    .option(
+      "--kinds <list>",
+      "Comma-separated result kinds: file,symbol,chunk,commit",
+    )
     .option("--domain <domain>", "Filter by domain label (e.g. billing, auth)")
     .option("--json", "Emit raw JSON output")
-    .action(async (query: string, opts: { limit?: string; kinds?: string; domain?: string; json?: boolean }) => {
-      const { handleCodeMap } = await import("./commands/code.js");
-      await handleCodeMap(query, opts);
-    });
+    .action(
+      async (
+        query: string,
+        opts: {
+          limit?: string;
+          kinds?: string;
+          domain?: string;
+          json?: boolean;
+        },
+      ) => {
+        const { handleCodeMap } = await import("./commands/code.js");
+        await handleCodeMap(query, opts);
+      },
+    );
 
   code
     .command("diff <before> <after>")
     .description("Produce a unified diff between two files")
     .option("--path <path>", "Path used in diff headers")
     .option("--context <n>", "Context lines (default 3)")
-    .action(async (before: string, after: string, opts: { path?: string; context?: string }) => {
-      const { handleCodeDiff } = await import("./commands/code.js");
-      await handleCodeDiff(before, after, opts);
-    });
+    .action(
+      async (
+        before: string,
+        after: string,
+        opts: { path?: string; context?: string },
+      ) => {
+        const { handleCodeDiff } = await import("./commands/code.js");
+        await handleCodeDiff(before, after, opts);
+      },
+    );
 
   code
     .command("format <file>")
@@ -930,20 +1169,27 @@ export function buildProgram(): Command {
     .option("--language <lang>", "Language (json, python)")
     .option("--indent <n>", "Indent size")
     .option("-w, --write", "Write formatted output back to file")
-    .action(async (file: string, opts: { language?: string; indent?: string; write?: boolean }) => {
-      const { handleCodeFormat } = await import("./commands/code.js");
-      await handleCodeFormat(file, opts);
-    });
+    .action(
+      async (
+        file: string,
+        opts: { language?: string; indent?: string; write?: boolean },
+      ) => {
+        const { handleCodeFormat } = await import("./commands/code.js");
+        await handleCodeFormat(file, opts);
+      },
+    );
 
   code
     .command("patch <diff-file>")
     .description("Apply a unified diff to a local workspace")
     .option("--dir <dir>", "Workspace root (default .)")
     .option("-w, --write", "Write patched files (dry-run without this flag)")
-    .action(async (diffFile: string, opts: { dir?: string; write?: boolean }) => {
-      const { handleCodePatch } = await import("./commands/code.js");
-      await handleCodePatch(diffFile, opts);
-    });
+    .action(
+      async (diffFile: string, opts: { dir?: string; write?: boolean }) => {
+        const { handleCodePatch } = await import("./commands/code.js");
+        await handleCodePatch(diffFile, opts);
+      },
+    );
 
   // ── asset: ingest a binary asset from a URL into object storage ──────────────
 
@@ -957,14 +1203,25 @@ export function buildProgram(): Command {
       "Ingest an asset from a public URL. With --conversation, records it as a " +
         "private chat attachment linked to that conversation.",
     )
-    .option("--kind <kind>", "Asset kind: avatar|image|document|video (default image)")
+    .option(
+      "--kind <kind>",
+      "Asset kind: avatar|image|document|video (default image)",
+    )
     .option("--filename <name>", "Original filename (display only)")
-    .option("--conversation <id>", "Attach to a conversation (implies a user_upload)")
+    .option(
+      "--conversation <id>",
+      "Attach to a conversation (implies a user_upload)",
+    )
     .option("--json", "Emit raw JSON output")
     .action(
       async (
         url: string,
-        opts: { kind?: string; filename?: string; conversation?: string; json?: boolean },
+        opts: {
+          kind?: string;
+          filename?: string;
+          conversation?: string;
+          json?: boolean;
+        },
       ) => {
         const { handleAssetUpload } = await import("./commands/asset.js");
         await handleAssetUpload(url, opts);
@@ -984,14 +1241,19 @@ export function buildProgram(): Command {
         "formatted PDF (stored privately; prints the serve URL).",
     )
     .option("--format <format>", "Export format: md|markdown|pdf (default md)")
-    .option("-o, --output <file>", "Write markdown output to a file instead of stdout")
+    .option(
+      "-o, --output <file>",
+      "Write markdown output to a file instead of stdout",
+    )
     .option("--json", "Emit raw JSON output")
     .action(
       async (
         id: string,
         opts: { format?: string; output?: string; json?: boolean },
       ) => {
-        const { handleConversationExport } = await import("./commands/conversation.js");
+        const { handleConversationExport } = await import(
+          "./commands/conversation.js"
+        );
         await handleConversationExport(id, opts);
       },
     );
@@ -1005,7 +1267,10 @@ export function buildProgram(): Command {
   sandbox
     .command("list")
     .description("List the durable sandbox sessions in the active workspace")
-    .option("--status <status>", "Filter by lifecycle status: running | idle | stopped | gone")
+    .option(
+      "--status <status>",
+      "Filter by lifecycle status: running | idle | stopped | gone",
+    )
     .option("--limit <n>", "Max sessions to return (1-100, default 50)")
     .option("--json", "Emit raw JSON output")
     .action(
@@ -1020,7 +1285,10 @@ export function buildProgram(): Command {
     .description(
       "List files/directories inside a durable sandbox session's workspace",
     )
-    .option("--path <path>", "Workspace-relative directory to list (default root)")
+    .option(
+      "--path <path>",
+      "Workspace-relative directory to list (default root)",
+    )
     .option("--depth <n>", "Max recursion depth 1-5 (default 2)")
     .option("--json", "Emit raw JSON output")
     .action(
@@ -1076,44 +1344,79 @@ export function buildProgram(): Command {
 
   const sandboxTemplate = sandbox
     .command("template")
-    .description("Manage portable sandbox templates (config + tools + secret key names)");
+    .description(
+      "Manage portable sandbox templates (config + tools + secret key names)",
+    );
 
   sandboxTemplate
     .command("list")
-    .description("List sandbox templates, optionally filtered to one environment")
+    .description(
+      "List sandbox templates, optionally filtered to one environment",
+    )
     .option("--env <slug>", "Filter to one environment (slug or env_ id)")
     .option("--json", "Emit raw JSON output")
     .action(async (opts: { env?: string; json?: boolean }) => {
-      const { handleTemplateList } = await import("./commands/sandbox-template.js");
+      const { handleTemplateList } = await import(
+        "./commands/sandbox-template.js"
+      );
       await handleTemplateList(opts);
     });
 
   sandboxTemplate
     .command("get <slug-or-id>")
-    .description("Show one sandbox template with its resources, network, and tools")
-    .option("--env <slug>", "Environment to disambiguate a slug (slug or env_ id)")
+    .description(
+      "Show one sandbox template with its resources, network, and tools",
+    )
+    .option(
+      "--env <slug>",
+      "Environment to disambiguate a slug (slug or env_ id)",
+    )
     .option("--json", "Emit raw JSON output")
-    .action(async (slugOrId: string, opts: { env?: string; json?: boolean }) => {
-      const { handleTemplateGet } = await import("./commands/sandbox-template.js");
-      await handleTemplateGet(slugOrId, opts);
-    });
+    .action(
+      async (slugOrId: string, opts: { env?: string; json?: boolean }) => {
+        const { handleTemplateGet } = await import(
+          "./commands/sandbox-template.js"
+        );
+        await handleTemplateGet(slugOrId, opts);
+      },
+    );
 
   sandboxTemplate
     .command("create")
     .description("Create a sandbox template under an environment")
-    .requiredOption("--env <slug>", "Environment to create it in (slug or env_ id)")
+    .requiredOption(
+      "--env <slug>",
+      "Environment to create it in (slug or env_ id)",
+    )
     .requiredOption("--name <name>", "Human-readable template name")
-    .requiredOption("--slug <slug>", "Workspace-unique handle (e.g. swe-bench-prewarmed)")
+    .requiredOption(
+      "--slug <slug>",
+      "Workspace-unique handle (e.g. swe-bench-prewarmed)",
+    )
     .option("--description <text>", "Optional description")
     .option("--provider <provider>", "modal | vercel | docker (default modal)")
-    .option("--runtime <ref>", "Image ref (digest-pinned encouraged) or language tag")
+    .option(
+      "--runtime <ref>",
+      "Image ref (digest-pinned encouraged) or language tag",
+    )
     .option("--vcpu <n>", "vCPU count (1-4)")
     .option("--memory-mb <n>", "Memory in MiB (≤8192)")
     .option("--timeout-ms <n>", "Run timeout in ms (≤300000)")
     .option("--disk-mb <n>", "Disk in MiB (≤20480)")
-    .option("--network-mode <mode>", "public | static_egress | aws_privatelink | gcp_psc | reverse_tunnel | ssh_bastion")
-    .option("--env-var <KEY=value>", "Non-sensitive literal env var (repeatable, NEVER secrets)", collectPair, [])
-    .option("--set-default", "Promote this template to its environment's default")
+    .option(
+      "--network-mode <mode>",
+      "public | static_egress | aws_privatelink | gcp_psc | reverse_tunnel | ssh_bastion",
+    )
+    .option(
+      "--env-var <KEY=value>",
+      "Non-sensitive literal env var (repeatable, NEVER secrets)",
+      collectPair,
+      [],
+    )
+    .option(
+      "--set-default",
+      "Promote this template to its environment's default",
+    )
     .option("--json", "Emit raw JSON output")
     .action(
       async (opts: {
@@ -1132,50 +1435,96 @@ export function buildProgram(): Command {
         setDefault?: boolean;
         json?: boolean;
       }) => {
-        const { handleTemplateCreate } = await import("./commands/sandbox-template.js");
+        const { handleTemplateCreate } = await import(
+          "./commands/sandbox-template.js"
+        );
         await handleTemplateCreate(opts);
       },
     );
 
   sandboxTemplate
     .command("rm <slug-or-id>")
-    .description("Soft-delete a sandbox template (promote another default first) — needs --yes")
-    .option("--env <slug>", "Environment to disambiguate a slug (slug or env_ id)")
+    .description(
+      "Soft-delete a sandbox template (promote another default first) — needs --yes",
+    )
+    .option(
+      "--env <slug>",
+      "Environment to disambiguate a slug (slug or env_ id)",
+    )
     .option("--yes", "Confirm the deletion")
     .option("--json", "Emit raw JSON output")
-    .action(async (slugOrId: string, opts: { env?: string; yes?: boolean; json?: boolean }) => {
-      const { handleTemplateRemove } = await import("./commands/sandbox-template.js");
-      await handleTemplateRemove(slugOrId, opts);
-    });
+    .action(
+      async (
+        slugOrId: string,
+        opts: { env?: string; yes?: boolean; json?: boolean },
+      ) => {
+        const { handleTemplateRemove } = await import(
+          "./commands/sandbox-template.js"
+        );
+        await handleTemplateRemove(slugOrId, opts);
+      },
+    );
 
   sandboxTemplate
     .command("set-default <slug-or-id>")
-    .description("Promote a template to its environment's default (atomic swap)")
-    .option("--env <slug>", "Environment to disambiguate a slug (slug or env_ id)")
+    .description(
+      "Promote a template to its environment's default (atomic swap)",
+    )
+    .option(
+      "--env <slug>",
+      "Environment to disambiguate a slug (slug or env_ id)",
+    )
     .option("--json", "Emit raw JSON output")
-    .action(async (slugOrId: string, opts: { env?: string; json?: boolean }) => {
-      const { handleTemplateSetDefault } = await import("./commands/sandbox-template.js");
-      await handleTemplateSetDefault(slugOrId, opts);
-    });
+    .action(
+      async (slugOrId: string, opts: { env?: string; json?: boolean }) => {
+        const { handleTemplateSetDefault } = await import(
+          "./commands/sandbox-template.js"
+        );
+        await handleTemplateSetDefault(slugOrId, opts);
+      },
+    );
 
   sandboxTemplate
     .command("export <slug-or-id>")
-    .description("Export a template as a portable v1 manifest (secret NAMES only) — stdout, or -o file")
-    .option("--env <slug>", "Environment to disambiguate a slug (slug or env_ id)")
-    .option("-o, --out <file>", "Write the manifest to a file instead of stdout")
+    .description(
+      "Export a template as a portable v1 manifest (secret NAMES only) — stdout, or -o file",
+    )
+    .option(
+      "--env <slug>",
+      "Environment to disambiguate a slug (slug or env_ id)",
+    )
+    .option(
+      "-o, --out <file>",
+      "Write the manifest to a file instead of stdout",
+    )
     .option("--json", "Emit raw JSON output (same manifest)")
-    .action(async (slugOrId: string, opts: { env?: string; out?: string; json?: boolean }) => {
-      const { handleTemplateExport } = await import("./commands/sandbox-template.js");
-      await handleTemplateExport(slugOrId, opts);
-    });
+    .action(
+      async (
+        slugOrId: string,
+        opts: { env?: string; out?: string; json?: boolean },
+      ) => {
+        const { handleTemplateExport } = await import(
+          "./commands/sandbox-template.js"
+        );
+        await handleTemplateExport(slugOrId, opts);
+      },
+    );
 
   sandboxTemplate
     .command("import")
-    .description("Import a manifest into an environment — previews first, needs --yes to write")
-    .requiredOption("--env <slug>", "Environment to import into (slug or env_ id)")
+    .description(
+      "Import a manifest into an environment — previews first, needs --yes to write",
+    )
+    .requiredOption(
+      "--env <slug>",
+      "Environment to import into (slug or env_ id)",
+    )
     .option("-f, --file <file>", "Manifest JSON file (defaults to stdin)")
     .option("--slug <slug>", "Override the manifest slug (resolve a collision)")
-    .option("--set-default", "Promote the imported template to the environment's default")
+    .option(
+      "--set-default",
+      "Promote the imported template to the environment's default",
+    )
     .option("--yes", "Apply the import (without it, only a preview is shown)")
     .option("--json", "Emit raw JSON output")
     .action(
@@ -1187,7 +1536,9 @@ export function buildProgram(): Command {
         yes?: boolean;
         json?: boolean;
       }) => {
-        const { handleTemplateImport } = await import("./commands/sandbox-template.js");
+        const { handleTemplateImport } = await import(
+          "./commands/sandbox-template.js"
+        );
         await handleTemplateImport(opts);
       },
     );
@@ -1233,15 +1584,22 @@ export function buildProgram(): Command {
 
   config
     .command("init")
-    .description("Write a starter workspace config file (default: workspace scope)")
-    .option("--scope <scope>", "org | user | workspace | repo (default: workspace)")
+    .description(
+      "Write a starter workspace config file (default: workspace scope)",
+    )
+    .option(
+      "--scope <scope>",
+      "org | user | workspace | repo (default: workspace)",
+    )
     .action(async (opts: { scope?: string }) => {
       const { configInit } = await import("./commands/config.js");
       configInit(opts.scope);
     });
   config
     .command("get")
-    .description("Print the merged value at a dotted path (e.g. vision.statement, commands.dev)")
+    .description(
+      "Print the merged value at a dotted path (e.g. vision.statement, commands.dev)",
+    )
     .argument("<path>", "Dotted config path")
     .action(async (path: string) => {
       const { configGet } = await import("./commands/config.js");
@@ -1259,7 +1617,9 @@ export function buildProgram(): Command {
     });
   config
     .command("add")
-    .description("Add a rule/preference/policy/convention/reference for a language")
+    .description(
+      "Add a rule/preference/policy/convention/reference for a language",
+    )
     .argument("<lang>", 'Language key, e.g. "typescript", "english"')
     .argument("<kind>", "rule | preference | policy | convention | reference")
     .argument("<text>", "Inline item text")
@@ -1267,7 +1627,10 @@ export function buildProgram(): Command {
     .option("--id <id>", "Stable id (default: slugified from <text>)")
     .option("--doc <path>", "Path/URL to a doc with the full detail")
     .option("--enforced", "Surface in the agent's hard-rules section")
-    .option("--locked", "Cannot be overridden or removed by a less-authoritative scope")
+    .option(
+      "--locked",
+      "Cannot be overridden or removed by a less-authoritative scope",
+    )
     .option("--source <source>", "File path / URL this item was derived from")
     .option("--confidence <n>", "0–1 confidence score (origin: research)")
     .action(
@@ -1308,30 +1671,44 @@ export function buildProgram(): Command {
     });
   config
     .command("build")
-    .description("Scan sources (workspace + user) and write the consolidated capability index")
-    .option("--live-mcp", "Best-effort live-connect to MCP servers to list their tools (slower, network-dependent)")
-    .option("--json", "Print the consolidated index as JSON instead of a summary")
+    .description(
+      "Scan sources (workspace + user) and write the consolidated capability index",
+    )
+    .option(
+      "--live-mcp",
+      "Best-effort live-connect to MCP servers to list their tools (slower, network-dependent)",
+    )
+    .option(
+      "--json",
+      "Print the consolidated index as JSON instead of a summary",
+    )
     .action(async (opts: { liveMcp?: boolean; json?: boolean }) => {
       const { configBuild } = await import("./commands/config.js");
       await configBuild(opts);
     });
   config
     .command("lint")
-    .description("Validate every scope file against the schema and report consolidated-index drift")
+    .description(
+      "Validate every scope file against the schema and report consolidated-index drift",
+    )
     .action(async () => {
       const { configLint } = await import("./commands/config.js");
       await configLint();
     });
   config
     .command("doctor")
-    .description("Scan the config tiers (repo ▸ workspace ▸ user ▸ org managed) for problems and recommendations")
+    .description(
+      "Scan the config tiers (repo ▸ workspace ▸ user ▸ org managed) for problems and recommendations",
+    )
     .action(async () => {
       const { configDoctor } = await import("./commands/config.js");
       await configDoctor();
     });
   config
     .command("pull")
-    .description("Sync user.json (and org-provisioned managed.json) from the platform")
+    .description(
+      "Sync user.json (and org-provisioned managed.json) from the platform",
+    )
     .action(async () => {
       const { configPull } = await import("./commands/config.js");
       await configPull();
@@ -1389,12 +1766,20 @@ export function buildProgram(): Command {
     .description(
       "Authenticate the CLI — opens a browser by default (interactive). Use --token for CI/headless.",
     )
-    .option("--token <token>", "Platform API token — skips browser login (CI/headless)")
+    .option(
+      "--token <token>",
+      "Platform API token — skips browser login (CI/headless)",
+    )
     .option("--org <slug>", "Organization slug (required with --token)")
     .option("--workspace <slug>", "Workspace slug (required with --token)")
     .option("--no-browser", "Prompt for token instead of opening the browser")
     .action(
-      async (opts: { token?: string; org?: string; workspace?: string; browser?: boolean }) => {
+      async (opts: {
+        token?: string;
+        org?: string;
+        workspace?: string;
+        browser?: boolean;
+      }) => {
         const { handleLogin } = await import("./commands/auth.js");
         await handleLogin(opts);
       },
@@ -1402,7 +1787,9 @@ export function buildProgram(): Command {
 
   program
     .command("logout")
-    .description("Clear the stored Oxagen session from ~/.config/oxagen/config.json.")
+    .description(
+      "Clear the stored Oxagen session from ~/.config/oxagen/config.json.",
+    )
     .action(async () => {
       const { handleLogout } = await import("./commands/auth.js");
       handleLogout();
@@ -1412,7 +1799,9 @@ export function buildProgram(): Command {
 
   const settings = program
     .command("settings")
-    .description("Inspect and edit the unified settings.json (model, env, permissions, hooks, MCP)")
+    .description(
+      "Inspect and edit the unified settings.json (model, env, permissions, hooks, MCP)",
+    )
     .action(async () => {
       const { settingsShow } = await import("./commands/settings.js");
       settingsShow();
@@ -1426,7 +1815,9 @@ export function buildProgram(): Command {
     });
   settings
     .command("path")
-    .description("List the three scope files (user / project / local) and their status")
+    .description(
+      "List the three scope files (user / project / local) and their status",
+    )
     .action(async () => {
       const { settingsPath } = await import("./commands/settings.js");
       settingsPath();
@@ -1458,7 +1849,9 @@ export function buildProgram(): Command {
     });
   settings
     .command("init")
-    .description("Write a documented starter settings.json (default: project scope)")
+    .description(
+      "Write a documented starter settings.json (default: project scope)",
+    )
     .option("--scope <scope>", "user | project | local (default: project)")
     .action(async (opts: { scope?: string }) => {
       const { settingsInit } = await import("./commands/settings.js");
@@ -1469,7 +1862,9 @@ export function buildProgram(): Command {
 
   const agent = program
     .command("agent")
-    .description("Manage named agent definitions (run one with `oxagen --agent <name> \"…\"`)");
+    .description(
+      'Manage named agent definitions (run one with `oxagen --agent <name> "…"`)',
+    );
   agent
     .command("list")
     .description("List available agents")
@@ -1502,19 +1897,34 @@ export function buildProgram(): Command {
 
   const agentEnv = agent
     .command("env")
-    .description("Bind an agent to an environment (and optionally a sandbox template within it)");
+    .description(
+      "Bind an agent to an environment (and optionally a sandbox template within it)",
+    );
 
   agentEnv
     .command("bind <agent>")
-    .description("Bind an agent to an environment (promotes to primary if it is the agent's first)")
+    .description(
+      "Bind an agent to an environment (promotes to primary if it is the agent's first)",
+    )
     .requiredOption("--env <slug>", "Environment to bind (slug or env_ id)")
-    .option("--template <slug>", "Pin a specific sandbox template (slug or sbx_ id) within the environment")
-    .option("--primary", "Make this the agent's primary binding (atomically demotes the previous)")
+    .option(
+      "--template <slug>",
+      "Pin a specific sandbox template (slug or sbx_ id) within the environment",
+    )
+    .option(
+      "--primary",
+      "Make this the agent's primary binding (atomically demotes the previous)",
+    )
     .option("--json", "Emit raw JSON output")
     .action(
       async (
         agentHandle: string,
-        opts: { env?: string; template?: string; primary?: boolean; json?: boolean },
+        opts: {
+          env?: string;
+          template?: string;
+          primary?: boolean;
+          json?: boolean;
+        },
       ) => {
         const { handleAgentEnvBind } = await import("./commands/agent-env.js");
         await handleAgentEnvBind(agentHandle, opts);
@@ -1526,14 +1936,20 @@ export function buildProgram(): Command {
     .description("Remove an agent's binding to an environment")
     .requiredOption("--env <slug>", "Environment to unbind (slug or env_ id)")
     .option("--json", "Emit raw JSON output")
-    .action(async (agentHandle: string, opts: { env?: string; json?: boolean }) => {
-      const { handleAgentEnvUnbind } = await import("./commands/agent-env.js");
-      await handleAgentEnvUnbind(agentHandle, opts);
-    });
+    .action(
+      async (agentHandle: string, opts: { env?: string; json?: boolean }) => {
+        const { handleAgentEnvUnbind } = await import(
+          "./commands/agent-env.js"
+        );
+        await handleAgentEnvUnbind(agentHandle, opts);
+      },
+    );
 
   agentEnv
     .command("list <agent>")
-    .description("List an agent's environment bindings with each resolved template")
+    .description(
+      "List an agent's environment bindings with each resolved template",
+    )
     .option("--json", "Emit raw JSON output")
     .action(async (agentHandle: string, opts: { json?: boolean }) => {
       const { handleAgentEnvList } = await import("./commands/agent-env.js");
@@ -1544,7 +1960,9 @@ export function buildProgram(): Command {
 
   const command = program
     .command("command")
-    .description("Manage user-defined slash commands (invoke as `/name` in the REPL)");
+    .description(
+      "Manage user-defined slash commands (invoke as `/name` in the REPL)",
+    );
   command
     .command("list")
     .description("List available slash commands")
@@ -1570,7 +1988,9 @@ export function buildProgram(): Command {
     });
   command
     .command("run")
-    .description("Expand a slash command's template with args and run it as a turn")
+    .description(
+      "Expand a slash command's template with args and run it as a turn",
+    )
     .argument("<name>", "Command name")
     .argument("[args...]", "Arguments substituted into the template")
     .action(async (name: string, args: string[]) => {
@@ -1610,9 +2030,14 @@ export function buildProgram(): Command {
     });
   rules
     .command("check")
-    .description("Dry-run a proposed tool call against the guards (bash|edit|write|read)")
+    .description(
+      "Dry-run a proposed tool call against the guards (bash|edit|write|read)",
+    )
     .argument("<tool>", "bash | edit | write | read")
-    .argument("<subject>", "The command (bash) or path (edit/write/read) to test")
+    .argument(
+      "<subject>",
+      "The command (bash) or path (edit/write/read) to test",
+    )
     .action(async (tool: string, subject: string) => {
       const { rulesCheck } = await import("./commands/rules.js");
       rulesCheck(tool, subject);
@@ -1633,7 +2058,10 @@ export function buildProgram(): Command {
     .description(
       "Promote a mined candidate (from `rules candidates`) to an enforced .oxagen/rules/<id>.md — never writes without --yes",
     )
-    .option("-y, --yes", "Write the rule (default previews only — never auto-writes)")
+    .option(
+      "-y, --yes",
+      "Write the rule (default previews only — never auto-writes)",
+    )
     .option("--json", "Output JSON")
     .action(async (id: string, opts: { yes?: boolean; json?: boolean }) => {
       const { rulesPromote } = await import("./commands/rules.js");
@@ -1647,15 +2075,30 @@ export function buildProgram(): Command {
     .description("Manage external MCP servers the agent loop connects to");
   mcp
     .command("add")
-    .description("Add an MCP server (stdio via --command, or http/sse/websocket via --url)")
+    .description(
+      "Add an MCP server (stdio via --command, or http/sse/websocket via --url)",
+    )
     .argument("<name>", "Server name (used in tool names: mcp__<name>__<tool>)")
     .option("--command <command>", "stdio: the command to spawn (e.g. npx)")
-    .option("--arg <arg>", "stdio: a command argument (repeatable)", collect, [])
+    .option(
+      "--arg <arg>",
+      "stdio: a command argument (repeatable)",
+      collect,
+      [],
+    )
     .option("--url <url>", "http/sse/websocket: the server URL")
-    .option("--transport <transport>", "streamable-http | sse | websocket (default streamable-http)")
+    .option(
+      "--transport <transport>",
+      "streamable-http | sse | websocket (default streamable-http)",
+    )
     .option("--auth <auth>", "none | bearer | header (default none)")
     .option("--env-token <VAR>", "Env var holding the bearer token")
-    .option("--header <KEY=VALUE>", "Static header for header auth (repeatable)", collect, [])
+    .option(
+      "--header <KEY=VALUE>",
+      "Static header for header auth (repeatable)",
+      collect,
+      [],
+    )
     .option("--scope <scope>", "user | project | local (default project)")
     .action(async (name: string, opts: Record<string, unknown>) => {
       const { mcpAdd } = await import("./commands/mcp.js");
@@ -1706,7 +2149,9 @@ export function buildProgram(): Command {
     });
   mcp
     .command("check")
-    .description("Connect to a server (or all enabled) and preview the tools it exposes")
+    .description(
+      "Connect to a server (or all enabled) and preview the tools it exposes",
+    )
     .argument("[name]", "Server name (omit to check all enabled)")
     .action(async (name: string | undefined) => {
       const { mcpCheck } = await import("./commands/mcp.js");
@@ -1715,7 +2160,9 @@ export function buildProgram(): Command {
 
   // ── env: workspace environments ─────────────────────────────────────────────
 
-  const env = program.command("env").description("Manage workspace environments");
+  const env = program
+    .command("env")
+    .description("Manage workspace environments");
   env
     .command("list")
     .description("List environments in the active workspace")
@@ -1738,10 +2185,12 @@ export function buildProgram(): Command {
     .argument("<name>", "Display name")
     .option("--slug <slug>", "Slug (defaults to a slugified name)")
     .option("--description <text>", "Description")
-    .action(async (name: string, opts: { slug?: string; description?: string }) => {
-      const { handleEnvCreate } = await import("./commands/env.js");
-      await handleEnvCreate(name, opts);
-    });
+    .action(
+      async (name: string, opts: { slug?: string; description?: string }) => {
+        const { handleEnvCreate } = await import("./commands/env.js");
+        await handleEnvCreate(name, opts);
+      },
+    );
   env
     .command("update")
     .description("Update an environment")
@@ -1754,7 +2203,13 @@ export function buildProgram(): Command {
     .action(
       async (
         idOrSlug: string,
-        opts: { name?: string; slug?: string; description?: string; active?: boolean; inactive?: boolean },
+        opts: {
+          name?: string;
+          slug?: string;
+          description?: string;
+          active?: boolean;
+          inactive?: boolean;
+        },
       ) => {
         const { handleEnvUpdate } = await import("./commands/env.js");
         const active = opts.active ? true : opts.inactive ? false : undefined;
@@ -1801,10 +2256,16 @@ export function buildProgram(): Command {
     .command("dataset <id>")
     .description("Show one eval dataset and a page of its items")
     .option("--limit <n>", "Page size (1-200, default 50)")
-    .option("--cursor <cursor>", "Opaque cursor from a previous page's nextCursor")
+    .option(
+      "--cursor <cursor>",
+      "Opaque cursor from a previous page's nextCursor",
+    )
     .option("--json", "Output JSON")
     .action(
-      async (id: string, opts: { limit?: string; cursor?: string; json?: boolean }) => {
+      async (
+        id: string,
+        opts: { limit?: string; cursor?: string; json?: boolean },
+      ) => {
         const { evalDatasetGet } = await import("./commands/eval.js");
         await evalDatasetGet(id, {
           limit: opts.limit ? Number(opts.limit) : undefined,
@@ -1858,8 +2319,14 @@ export function buildProgram(): Command {
     )
     .option("--slug <slug>", "Slug (defaults to a slugified name)")
     .option("--description <text>", "Description")
-    .option("--capability <name>", "Only sample runs whose metered capability matches (e.g. chat.message.send)")
-    .option("--since-hours <n>", "Lookback window over metered traces (default 168 = 7 days)")
+    .option(
+      "--capability <name>",
+      "Only sample runs whose metered capability matches (e.g. chat.message.send)",
+    )
+    .option(
+      "--since-hours <n>",
+      "Lookback window over metered traces (default 168 = 7 days)",
+    )
     .option("--limit <n>", "Cap on captured cases (default 50, max 500)")
     .option("--json", "Output JSON")
     .action(
@@ -1887,14 +2354,34 @@ export function buildProgram(): Command {
     );
   evalCmd
     .command("run <datasetId>")
-    .description("Start an eval run against a dataset (async — poll run-status/run-get for results)")
-    .option("--model <slug>", "Gateway model slug for the target (omit for the default tier)")
-    .option("--system-prompt <text>", "System prompt prepended to each item's input")
-    .option("--agent <slug>", "Evaluate a workspace agent instead of a bare model")
-    .option("--judge-model <slug>", "Gateway model slug for the judge (omit for the precise tier)")
+    .description(
+      "Start an eval run against a dataset (async — poll run-status/run-get for results)",
+    )
+    .option(
+      "--model <slug>",
+      "Gateway model slug for the target (omit for the default tier)",
+    )
+    .option(
+      "--system-prompt <text>",
+      "System prompt prepended to each item's input",
+    )
+    .option(
+      "--agent <slug>",
+      "Evaluate a workspace agent instead of a bare model",
+    )
+    .option(
+      "--judge-model <slug>",
+      "Gateway model slug for the judge (omit for the precise tier)",
+    )
     .option("--name <text>", "Optional label for the run")
-    .option("--pass-threshold <n>", "Overall judge score (0-1) at/above which an item passes (default 0.7)")
-    .option("--max-items <n>", "Cap items evaluated this run (cost control); omit for all items")
+    .option(
+      "--pass-threshold <n>",
+      "Overall judge score (0-1) at/above which an item passes (default 0.7)",
+    )
+    .option(
+      "--max-items <n>",
+      "Cap items evaluated this run (cost control); omit for all items",
+    )
     .option("--json", "Output JSON")
     .action(
       async (
@@ -1917,7 +2404,9 @@ export function buildProgram(): Command {
           agent: opts.agent,
           judgeModel: opts.judgeModel,
           name: opts.name,
-          passThreshold: opts.passThreshold ? Number(opts.passThreshold) : undefined,
+          passThreshold: opts.passThreshold
+            ? Number(opts.passThreshold)
+            : undefined,
           maxItems: opts.maxItems ? Number(opts.maxItems) : undefined,
           json: opts.json,
         });
@@ -1925,7 +2414,9 @@ export function buildProgram(): Command {
     );
   evalCmd
     .command("run-status <runId>")
-    .description("Poll an eval run's lifecycle: status, progress counts, and mean score")
+    .description(
+      "Poll an eval run's lifecycle: status, progress counts, and mean score",
+    )
     .option("--json", "Output JSON")
     .action(async (runId: string, opts: { json?: boolean }) => {
       const { evalRunStatus } = await import("./commands/eval.js");
@@ -1942,7 +2433,9 @@ export function buildProgram(): Command {
 
   // ── secret: credential vault ────────────────────────────────────────────────
 
-  const secret = program.command("secret").description("Manage the workspace credential vault");
+  const secret = program
+    .command("secret")
+    .description("Manage the workspace credential vault");
   secret
     .command("list")
     .description("List vault keys (masked metadata)")
@@ -1956,12 +2449,24 @@ export function buildProgram(): Command {
     .description("Set a secret's default value, or an override with --env")
     .argument("<key>", "Secret key name")
     .argument("<value>", "Value")
-    .option("--env <slug>", "Target environment (override); omit for the default value")
-    .option("--no-sensitive", "Store as plaintext config (default: sensitive/encrypted)")
-    .action(async (key: string, value: string, opts: { env?: string; sensitive?: boolean }) => {
-      const { handleSecretSet } = await import("./commands/secret.js");
-      await handleSecretSet(key, value, opts);
-    });
+    .option(
+      "--env <slug>",
+      "Target environment (override); omit for the default value",
+    )
+    .option(
+      "--no-sensitive",
+      "Store as plaintext config (default: sensitive/encrypted)",
+    )
+    .action(
+      async (
+        key: string,
+        value: string,
+        opts: { env?: string; sensitive?: boolean },
+      ) => {
+        const { handleSecretSet } = await import("./commands/secret.js");
+        await handleSecretSet(key, value, opts);
+      },
+    );
   secret
     .command("rm")
     .description("Delete a key, or just an environment override with --env")
@@ -1973,7 +2478,9 @@ export function buildProgram(): Command {
     });
   secret
     .command("reveal")
-    .description("Reveal a secret's plaintext value (recorded to the access log)")
+    .description(
+      "Reveal a secret's plaintext value (recorded to the access log)",
+    )
     .argument("<key>", "Secret key name")
     .option("--env <slug>", "Resolve for this environment")
     .action(async (key: string, opts: { env?: string }) => {
@@ -1983,7 +2490,10 @@ export function buildProgram(): Command {
   secret
     .command("import")
     .description("Import .env text (preview unless --yes)")
-    .option("--env <slug>", "Target environment overrides; omit for default values")
+    .option(
+      "--env <slug>",
+      "Target environment overrides; omit for default values",
+    )
     .option("-f, --file <path>", "Read from a file (else stdin)")
     .option("--yes", "Commit (otherwise preview only)")
     .action(async (opts: { env?: string; file?: string; yes?: boolean }) => {
@@ -2017,8 +2527,16 @@ export function buildProgram(): Command {
       "Mission Control for many agent sessions (piped: streams the fleet as NDJSON). " +
         "--json and --quiet here apply to every fleet subcommand.",
     )
-    .option("--json", "Machine output for any fleet subcommand (NDJSON for streams)", false)
-    .option("--quiet", "Suppress progress chrome (stderr); data still emits", false)
+    .option(
+      "--json",
+      "Machine output for any fleet subcommand (NDJSON for streams)",
+      false,
+    )
+    .option(
+      "--quiet",
+      "Suppress progress chrome (stderr); data still emits",
+      false,
+    )
     .action(async (_opts: unknown, command: Command) => {
       const { handleFleetRoot } = await import("./commands/fleet.js");
       await handleFleetRoot(command.optsWithGlobals());
@@ -2027,11 +2545,22 @@ export function buildProgram(): Command {
   fleet
     .command("dispatch")
     .description("Start a detached session, print its sid, exit")
-    .argument("[prompt...]", 'The task ("-" or empty with piped stdin reads the prompt from stdin)')
+    .argument(
+      "[prompt...]",
+      'The task ("-" or empty with piped stdin reads the prompt from stdin)',
+    )
     .option("-m, --model <slug>", "Gateway model slug for the session")
     .option("--agent <name>", "Run the session as a named agent definition")
-    .option("--once", "End after the first turn (default: a conversation session)", false)
-    .option("--follow", "Stream the session's events to completion; exit code is its fate", false)
+    .option(
+      "--once",
+      "End after the first turn (default: a conversation session)",
+      false,
+    )
+    .option(
+      "--follow",
+      "Stream the session's events to completion; exit code is its fate",
+      false,
+    )
     .action(async (promptWords: string[], _opts: unknown, command: Command) => {
       // The worker this spawns runs the engine — gate on an account (BYOK
       // auto-applies), exactly like the root one-shot action.
@@ -2060,7 +2589,9 @@ export function buildProgram(): Command {
 
   fleet
     .command("attach")
-    .description("Mission Control focused on one session (TTY), or its NDJSON from the start plus live follow")
+    .description(
+      "Mission Control focused on one session (TTY), or its NDJSON from the start plus live follow",
+    )
     .argument("<sid>", "Session id (full, short tail, or unique prefix)")
     .action(async (sid: string, _opts: unknown, command: Command) => {
       const { handleFleetAttach } = await import("./commands/fleet.js");
@@ -2072,20 +2603,29 @@ export function buildProgram(): Command {
     .description("Append a follow-up message to a session's inbox")
     .argument("<sid>", "Session id (full, short tail, or unique prefix)")
     .argument("<message...>", 'The follow-up turn ("-" reads from stdin)')
-    .action(async (sid: string, messageWords: string[], _opts: unknown, command: Command) => {
-      const { handleFleetSend } = await import("./commands/fleet.js");
-      await handleFleetSend(sid, messageWords, command.optsWithGlobals());
-    });
+    .action(
+      async (
+        sid: string,
+        messageWords: string[],
+        _opts: unknown,
+        command: Command,
+      ) => {
+        const { handleFleetSend } = await import("./commands/fleet.js");
+        await handleFleetSend(sid, messageWords, command.optsWithGlobals());
+      },
+    );
 
   fleet
     .command("cancel")
     .description("Cancel a session, or all of them")
     .argument("[sid]", "Session id to cancel; omit with --all")
     .option("--all", "Cancel every non-terminal session", false)
-    .action(async (sid: string | undefined, _opts: unknown, command: Command) => {
-      const { handleFleetCancel } = await import("./commands/fleet.js");
-      await handleFleetCancel(sid, command.optsWithGlobals());
-    });
+    .action(
+      async (sid: string | undefined, _opts: unknown, command: Command) => {
+        const { handleFleetCancel } = await import("./commands/fleet.js");
+        await handleFleetCancel(sid, command.optsWithGlobals());
+      },
+    );
 
   fleet
     .command("logs")
@@ -2101,7 +2641,11 @@ export function buildProgram(): Command {
   fleet
     .command("clean")
     .description("Prune terminal sessions")
-    .option("--older-than <age>", "Age cutoff: days (7) or a duration (1d, 12h) — default 7", "7")
+    .option(
+      "--older-than <age>",
+      "Age cutoff: days (7) or a duration (1d, 12h) — default 7",
+      "7",
+    )
     .option("--all", "Prune every terminal session regardless of age", false)
     .action(async (_opts: unknown, command: Command) => {
       const { handleFleetClean } = await import("./commands/fleet.js");
@@ -2110,7 +2654,9 @@ export function buildProgram(): Command {
 
   fleet
     .command("worker <sid>", { hidden: true })
-    .description("[internal] Run a detached session worker (spawned by dispatch)")
+    .description(
+      "[internal] Run a detached session worker (spawned by dispatch)",
+    )
     .action(async (sid: string) => {
       // The worker is what actually needs credentials — gate it like dispatch.
       const { requireSession } = await import("./lib/session.js");

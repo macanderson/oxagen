@@ -4,8 +4,31 @@ import {
   rewriteCommandForWorktree,
   looksTruncatedCommand,
   routeSelection,
+  forkTailModel,
 } from "./best-of-n.js";
+import { DEFAULT_CODING_MODEL } from "./model-catalog.js";
 import type { Candidate, SelectionDecision } from "@oxagen/agent-engine";
+
+describe("forkTailModel", () => {
+  it("pins the CLI default coding model when --models is unset", () => {
+    expect(forkTailModel(undefined, 0)).toBe(DEFAULT_CODING_MODEL);
+    expect(forkTailModel([], 2)).toBe(DEFAULT_CODING_MODEL);
+  });
+
+  it("rotates through an explicit model list", () => {
+    const models = ["anthropic/claude-fable-5", "openai/gpt-5.5-pro"];
+    expect(forkTailModel(models, 0)).toBe("anthropic/claude-fable-5");
+    expect(forkTailModel(models, 1)).toBe("openai/gpt-5.5-pro");
+    expect(forkTailModel(models, 2)).toBe("anthropic/claude-fable-5");
+  });
+
+  it("never returns undefined (would fall through to the engine frontier fallback)", () => {
+    // A sparse entry must still resolve to the default, not undefined.
+    expect(forkTailModel([undefined as unknown as string], 0)).toBe(
+      DEFAULT_CODING_MODEL,
+    );
+  });
+});
 
 describe("resolveBestOfNMode", () => {
   const originalEnv = process.env.OXAGEN_BEST_OF_N_MODE;
@@ -55,26 +78,42 @@ describe("rewriteCommandForWorktree", () => {
   const wt = "/tmp/oxagen-bestof-abc/candidate-1";
 
   it("rewrites a `cd <repoRoot>` prefix so the replay stays inside the worktree", () => {
-    expect(rewriteCommandForWorktree("cd /testbed && python -m pytest -q", "/testbed", wt)).toBe(
-      `cd ${wt} && python -m pytest -q`,
-    );
+    expect(
+      rewriteCommandForWorktree(
+        "cd /testbed && python -m pytest -q",
+        "/testbed",
+        wt,
+      ),
+    ).toBe(`cd ${wt} && python -m pytest -q`);
   });
 
   it("rewrites a `cd <repoRoot>/<sub>` prefix into the worktree's subdir", () => {
-    expect(rewriteCommandForWorktree("cd /testbed/tests && pytest .", "/testbed", wt)).toBe(
-      `cd ${wt}/tests && pytest .`,
-    );
+    expect(
+      rewriteCommandForWorktree(
+        "cd /testbed/tests && pytest .",
+        "/testbed",
+        wt,
+      ),
+    ).toBe(`cd ${wt}/tests && pytest .`);
   });
 
   it("rewrites mid-string absolute paths into the repo", () => {
     expect(
-      rewriteCommandForWorktree("python -m pytest /testbed/tests/test_x.py -x", "/testbed", wt),
+      rewriteCommandForWorktree(
+        "python -m pytest /testbed/tests/test_x.py -x",
+        "/testbed",
+        wt,
+      ),
     ).toBe(`python -m pytest ${wt}/tests/test_x.py -x`);
   });
 
   it("rewrites every occurrence, including after `=` and inside quotes", () => {
     expect(
-      rewriteCommandForWorktree('pytest --rootdir=/testbed "/testbed/tests"', "/testbed", wt),
+      rewriteCommandForWorktree(
+        'pytest --rootdir=/testbed "/testbed/tests"',
+        "/testbed",
+        wt,
+      ),
     ).toBe(`pytest --rootdir=${wt} "${wt}/tests"`);
   });
 
@@ -96,35 +135,49 @@ describe("rewriteCommandForWorktree", () => {
   });
 
   it("returns the command unchanged when the repo root never appears", () => {
-    expect(rewriteCommandForWorktree("pytest -q", "/testbed", wt)).toBe("pytest -q");
+    expect(rewriteCommandForWorktree("pytest -q", "/testbed", wt)).toBe(
+      "pytest -q",
+    );
   });
 
   it("tolerates a trailing slash on the repo root", () => {
-    expect(rewriteCommandForWorktree("cd /testbed && pytest", "/testbed/", wt)).toBe(
-      `cd ${wt} && pytest`,
-    );
+    expect(
+      rewriteCommandForWorktree("cd /testbed && pytest", "/testbed/", wt),
+    ).toBe(`cd ${wt} && pytest`);
   });
 
   it("never rewrites for a degenerate root of '/' or empty string", () => {
-    expect(rewriteCommandForWorktree("cd /x && pytest", "/", wt)).toBe("cd /x && pytest");
-    expect(rewriteCommandForWorktree("cd /x && pytest", "", wt)).toBe("cd /x && pytest");
+    expect(rewriteCommandForWorktree("cd /x && pytest", "/", wt)).toBe(
+      "cd /x && pytest",
+    );
+    expect(rewriteCommandForWorktree("cd /x && pytest", "", wt)).toBe(
+      "cd /x && pytest",
+    );
   });
 
   it("escapes regex metacharacters in the repo root path", () => {
-    expect(rewriteCommandForWorktree("cd /repo (main) && pytest", "/repo (main)", wt)).toBe(
-      `cd ${wt} && pytest`,
-    );
+    expect(
+      rewriteCommandForWorktree(
+        "cd /repo (main) && pytest",
+        "/repo (main)",
+        wt,
+      ),
+    ).toBe(`cd ${wt} && pytest`);
   });
 });
 
 describe("looksTruncatedCommand", () => {
   it("flags the engine's 120-char-capped `…` suffix", () => {
-    expect(looksTruncatedCommand("python -m pytest tests/some/very/long/path…")).toBe(true);
+    expect(
+      looksTruncatedCommand("python -m pytest tests/some/very/long/path…"),
+    ).toBe(true);
   });
 
   it("accepts full commands, including ones legitimately longer than the cap", () => {
     expect(looksTruncatedCommand("pytest -q")).toBe(false);
-    expect(looksTruncatedCommand(`python -m pytest ${"tests/x ".repeat(30)}-x`)).toBe(false);
+    expect(
+      looksTruncatedCommand(`python -m pytest ${"tests/x ".repeat(30)}-x`),
+    ).toBe(false);
   });
 });
 
@@ -140,8 +193,15 @@ describe("routeSelection", () => {
   });
 
   it("routes selector-needed decisions to the selector with the passing subset", () => {
-    const cands = [candidate("candidate-1"), candidate("candidate-2"), candidate("candidate-3")];
-    const decision: SelectionDecision = { method: "selector-needed", candidates: [0, 2] };
+    const cands = [
+      candidate("candidate-1"),
+      candidate("candidate-2"),
+      candidate("candidate-3"),
+    ];
+    const decision: SelectionDecision = {
+      method: "selector-needed",
+      candidates: [0, 2],
+    };
     const route = routeSelection(decision, cands, true);
     expect(route.useSelector).toBe(true);
     expect(route.pool.map((c) => c.id)).toEqual(["candidate-1", "candidate-3"]);
@@ -174,7 +234,10 @@ describe("routeSelection", () => {
   });
 
   it("keeps the heuristic when fewer than 2 candidates are comparable (nothing for a selector to compare)", () => {
-    const cands = [candidate("candidate-1"), candidate("candidate-2", { diff: "" })];
+    const cands = [
+      candidate("candidate-1"),
+      candidate("candidate-2", { diff: "" }),
+    ];
     const decision: SelectionDecision = { method: "best-effort", winner: 0 };
     expect(routeSelection(decision, cands, true).useSelector).toBe(false);
   });
@@ -201,7 +264,11 @@ describe("routeSelection", () => {
       candidate("candidate-1", { testsPassed: true }),
       candidate("candidate-2", { testsPassed: true }),
     ];
-    const consensus: SelectionDecision = { method: "consensus", winner: 0, cluster: [0, 1] };
+    const consensus: SelectionDecision = {
+      method: "consensus",
+      winner: 0,
+      cluster: [0, 1],
+    };
     expect(routeSelection(consensus, cands, true).useSelector).toBe(false);
     const single: SelectionDecision = { method: "single-passing", winner: 1 };
     expect(routeSelection(single, cands, true).useSelector).toBe(false);

@@ -23,7 +23,10 @@ import { McpServerList, type McpServerRow } from "./mcp-server-list";
 // Developer → MCP (apps/app/src/app/[orgSlug]/developer/mcp/) rather than
 // re-implemented, since it's a pure props-in component with no org-page
 // server logic baked in.
-import { McpInstallTabs, type McpTabEntry } from "../../../../developer/mcp/mcp-install-tabs";
+import {
+  McpInstallTabs,
+  type McpTabEntry,
+} from "../../../../developer/mcp/mcp-install-tabs";
 
 export const metadata: Metadata = {
   title: "MCP Servers | Agent Tools",
@@ -39,7 +42,9 @@ const MCP_URL = "https://mcp.oxagen.sh/mcp";
 const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
 
 /** Build the install snippets with a real (or placeholder) API key. */
-function buildSnippets(apiKey: string): Array<Omit<McpTabEntry, "highlightedHtml">> {
+function buildSnippets(
+  apiKey: string,
+): Array<Omit<McpTabEntry, "highlightedHtml">> {
   return [
     {
       key: "claude_code",
@@ -88,7 +93,10 @@ async function highlight(code: string, lang: string): Promise<string> {
     const { codeToHtml } = await import("shiki");
     return await codeToHtml(code, { lang, theme: "one-dark-pro" });
   } catch {
-    const escaped = code.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const escaped = code
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
     return `<pre><code>${escaped}</code></pre>`;
   }
 }
@@ -115,21 +123,23 @@ export default async function AgentToolsMcpPage({ params }: PageProps) {
   const { org, ws } = await resolveWorkbenchScope(orgSlug, workspaceSlug);
 
   // (b) Installed mcp_server plugins for this workspace.
-  const rows = await runInTenantScope({ orgId: org.id, workspaceId: ws.id }, () =>
-    withTenantDb((tx) =>
-      tx
-        .select()
-        .from(schema.pluginInstalledPlugins)
-        .where(
-          and(
-            eq(schema.pluginInstalledPlugins.orgId, org.id),
-            eq(schema.pluginInstalledPlugins.workspaceId, ws.id),
-            eq(schema.pluginInstalledPlugins.pluginType, "mcp_server"),
-            isNull(schema.pluginInstalledPlugins.deletedAt),
-          ),
-        )
-        .orderBy(schema.pluginInstalledPlugins.name),
-    ),
+  const rows = await runInTenantScope(
+    { orgId: org.id, workspaceId: ws.id },
+    () =>
+      withTenantDb((tx) =>
+        tx
+          .select()
+          .from(schema.pluginInstalledPlugins)
+          .where(
+            and(
+              eq(schema.pluginInstalledPlugins.orgId, org.id),
+              eq(schema.pluginInstalledPlugins.workspaceId, ws.id),
+              eq(schema.pluginInstalledPlugins.pluginType, "mcp_server"),
+              isNull(schema.pluginInstalledPlugins.deletedAt),
+            ),
+          )
+          .orderBy(schema.pluginInstalledPlugins.name),
+      ),
   ).catch((e: unknown) => {
     console.error("installed MCP server query failed:", e);
     return [] as (typeof schema.pluginInstalledPlugins.$inferSelect)[];
@@ -169,15 +179,20 @@ export default async function AgentToolsMcpPage({ params }: PageProps) {
   // (c) Read the org's first active API key to inject into external-client snippets.
   let firstKey: string | null = null;
   try {
-    const keys = await runInTenantScope({ orgId: org.id, workspaceId: ORG_ONLY_WS }, () =>
-      withTenantDb((tx) =>
-        tx
-          .select({ keyPrefix: schema.apiKeys.keyPrefix, expiresAt: schema.apiKeys.expiresAt })
-          .from(schema.apiKeys)
-          .where(eq(schema.apiKeys.orgId, org.id))
-          .orderBy(desc(schema.apiKeys.createdAt))
-          .limit(10),
-      ),
+    const keys = await runInTenantScope(
+      { orgId: org.id, workspaceId: ORG_ONLY_WS },
+      () =>
+        withTenantDb((tx) =>
+          tx
+            .select({
+              keyPrefix: schema.apiKeys.keyPrefix,
+              expiresAt: schema.apiKeys.expiresAt,
+            })
+            .from(schema.apiKeys)
+            .where(eq(schema.apiKeys.orgId, org.id))
+            .orderBy(desc(schema.apiKeys.createdAt))
+            .limit(10),
+        ),
     );
     const active = keys.filter((k) => !k.expiresAt || k.expiresAt > new Date());
     if (active[0]) {
@@ -193,7 +208,10 @@ export default async function AgentToolsMcpPage({ params }: PageProps) {
   const entries: McpTabEntry[] = await Promise.all(
     snippetDefs.map(async (s) => ({
       ...s,
-      highlightedHtml: await highlight(s.raw, s.key === "claude_code" ? "bash" : "json"),
+      highlightedHtml: await highlight(
+        s.raw,
+        s.key === "claude_code" ? "bash" : "json",
+      ),
     })),
   );
 
@@ -208,7 +226,9 @@ export default async function AgentToolsMcpPage({ params }: PageProps) {
       {/* ── Installed MCP servers ────────────────────────────────────────────── */}
       <div className="rounded-xl border border-border/60 bg-card p-6">
         <div className="mb-4">
-          <h2 className="text-sm font-semibold text-foreground">Installed MCP servers</h2>
+          <h2 className="text-sm font-semibold text-foreground">
+            Installed MCP servers
+          </h2>
           <p className="mt-0.5 text-xs text-muted-foreground">
             Servers this workspace can use. Authenticate or reconnect when a
             credential expires, remove authentication to force a fresh sign-in,
@@ -228,13 +248,19 @@ export default async function AgentToolsMcpPage({ params }: PageProps) {
       {/* ── Install from the marketplace ─────────────────────────────────────── */}
       <div className="rounded-xl border border-border/60 bg-card p-6">
         <div className="mb-4">
-          <h2 className="text-sm font-semibold text-foreground">Install from the marketplace</h2>
+          <h2 className="text-sm font-semibold text-foreground">
+            Install from the marketplace
+          </h2>
           <p className="mt-0.5 text-xs text-muted-foreground">
             Search the marketplace catalog and install hosted servers into this
             workspace. OAuth-protected servers (Stripe, GitHub, …) prompt you to
-            authenticate right after install. Catalog sources are administered in{" "}
+            authenticate right after install. Catalog sources are administered
+            in{" "}
             <a
-              href={workspace.settings.mcpServerRegistries({ orgSlug, workspaceSlug })}
+              href={workspace.settings.mcpServerRegistries({
+                orgSlug,
+                workspaceSlug,
+              })}
               className="font-medium underline underline-offset-2 hover:no-underline"
             >
               Settings → MCP Server Registries
@@ -252,7 +278,9 @@ export default async function AgentToolsMcpPage({ params }: PageProps) {
       {/* ── Connect a custom MCP server ─────────────────────────────────────── */}
       <div className="rounded-xl border border-border/60 bg-card p-6">
         <div className="mb-4">
-          <h2 className="text-sm font-semibold text-foreground">Connect manually</h2>
+          <h2 className="text-sm font-semibold text-foreground">
+            Connect manually
+          </h2>
           <p className="mt-0.5 text-xs text-muted-foreground">
             Point this workspace at any MCP-compatible server by endpoint URL.
           </p>
@@ -267,16 +295,21 @@ export default async function AgentToolsMcpPage({ params }: PageProps) {
       {/* ── Connect an external MCP client to Oxagen ─────────────────────────── */}
       <div className="rounded-xl border border-border/60 bg-card p-6">
         <div className="mb-4 flex flex-col gap-1">
-          <h2 className="text-sm font-semibold text-foreground">Connect an external client</h2>
+          <h2 className="text-sm font-semibold text-foreground">
+            Connect an external client
+          </h2>
           <p className="text-xs text-muted-foreground">
-            Point Claude Code, Claude Desktop, Cursor, or any other MCP client at your Oxagen
-            workspace.
+            Point Claude Code, Claude Desktop, Cursor, or any other MCP client
+            at your Oxagen workspace.
           </p>
         </div>
 
         <div className="flex flex-col gap-4">
           <div className="flex items-start gap-2 rounded-xl border border-border/40 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
-            <ExternalLink className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+            <ExternalLink
+              className="mt-0.5 h-4 w-4 shrink-0"
+              aria-hidden="true"
+            />
             <span>
               The MCP endpoint is live at{" "}
               <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs text-foreground">
@@ -288,15 +321,22 @@ export default async function AgentToolsMcpPage({ params }: PageProps) {
 
           {firstKey ? (
             <div className="flex items-start gap-2 rounded-xl border border-border/40 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
-              <KeySquare className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              <KeySquare
+                className="mt-0.5 h-4 w-4 shrink-0"
+                aria-hidden="true"
+              />
               <span>
-                The snippets below use your org&apos;s first active API token (prefix shown).
-                Replace with the full token value you saved when the key was created.
+                The snippets below use your org&apos;s first active API token
+                (prefix shown). Replace with the full token value you saved when
+                the key was created.
               </span>
             </div>
           ) : (
             <div className="flex items-start gap-2 rounded-xl border border-warning/40 bg-warning/12 px-4 py-3 text-sm text-warning">
-              <KeySquare className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              <KeySquare
+                className="mt-0.5 h-4 w-4 shrink-0"
+                aria-hidden="true"
+              />
               <span>
                 No active API token found. Create one on the{" "}
                 <a
@@ -306,8 +346,8 @@ export default async function AgentToolsMcpPage({ params }: PageProps) {
                   Tokens
                 </a>{" "}
                 tab, then replace{" "}
-                <code className="font-mono text-xs">$OXAGEN_API_KEY</code> in the snippets below
-                with your key value.
+                <code className="font-mono text-xs">$OXAGEN_API_KEY</code> in
+                the snippets below with your key value.
               </span>
             </div>
           )}

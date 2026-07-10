@@ -192,6 +192,16 @@ export interface StreamAgentReplyArgs {
    */
   abortSignal?: AbortSignal;
   /**
+   * SDK-internal retry count, forwarded verbatim to `streamText`. Pass 0 when
+   * an OUTER system owns retries — the agent-engine step loop already runs a
+   * classified retry policy (retryable-only, fatal fast-fail, jittered
+   * backoff), so leaving the SDK default (2) underneath it multiplies upstream
+   * attempts on a flaky provider and blocks abort during the inner retries.
+   * Same treatment the generateObject path already gets. Omit on surfaces with
+   * no outer retry loop (chat, A2A, the LLM proxy) to keep the SDK default.
+   */
+  maxRetries?: number;
+  /**
    * Required for OXA-1351 instrumentation. The caller's CapabilityContext
    * carries `orgId`, `workspaceId`, and `surface`; pass them through so
    * every LLM call lands in `token_usage` with provider, duration_ms,
@@ -300,6 +310,7 @@ export function streamAgentReply(args: StreamAgentReplyArgs): StreamTextResult<T
     ...(rc.providerOptions ? { providerOptions: rc.providerOptions } : {}),
     ...(args.stopWhen !== undefined ? { stopWhen: args.stopWhen } : {}),
     ...(args.onError !== undefined ? { onError: args.onError } : {}),
+    ...(args.maxRetries !== undefined ? { maxRetries: args.maxRetries } : {}),
     ...(args.maxOutputTokens !== undefined
       ? { maxOutputTokens: args.maxOutputTokens }
       : {}),

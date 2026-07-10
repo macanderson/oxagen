@@ -138,7 +138,9 @@ describe("readWorkspaceLink — corrupt file handling", () => {
   });
 
   it("returns null and warns on corrupt JSON", async () => {
-    const { mkdirSync: mkdir, writeFileSync: writeFile } = await import("node:fs");
+    const { mkdirSync: mkdir, writeFileSync: writeFile } = await import(
+      "node:fs"
+    );
     const { join: j } = await import("node:path");
     mkdir(j(tmp, ".oxagen"), { recursive: true });
     writeFile(j(tmp, ".oxagen", "workspace.json"), "{{not json}}", "utf8");

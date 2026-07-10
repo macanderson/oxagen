@@ -36,7 +36,10 @@ export function seatAlert(usage: OrgSeatUsage, orgSlug: string): SeatAlert {
       variant: "error",
       title: "You have more members than licenses",
       body: `Your org has ${used} members but only ${licenses} license${licenses === 1 ? "" : "s"}. Remove members or add more licenses to resolve this.`,
-      cta: { label: "Manage licenses", href: `/${orgSlug}/billing/subscription` },
+      cta: {
+        label: "Manage licenses",
+        href: `/${orgSlug}/billing/subscription`,
+      },
     };
   }
 
@@ -51,7 +54,10 @@ export function seatAlert(usage: OrgSeatUsage, orgSlug: string): SeatAlert {
       body: isSingleLicense
         ? "Increase your licenses on Billing to invite teammates."
         : `You are using all ${licenses} licenses. Add more seats to invite additional teammates.`,
-      cta: { label: "Increase licenses", href: `/${orgSlug}/billing/subscription` },
+      cta: {
+        label: "Increase licenses",
+        href: `/${orgSlug}/billing/subscription`,
+      },
     };
   }
 

@@ -31,7 +31,9 @@ import { execFileSync } from "node:child_process";
 
 const [, , repoRoot, srcRootRel, aliasArg, movesFile, dryFlag] = process.argv;
 if (!repoRoot || !srcRootRel || !aliasArg || !movesFile) {
-  console.error("usage: relocate-lib-squatters.mjs <repoRoot> <srcRootRel> <alias|-> <moves.json> [--dry]");
+  console.error(
+    "usage: relocate-lib-squatters.mjs <repoRoot> <srcRootRel> <alias|-> <moves.json> [--dry]",
+  );
   process.exit(1);
 }
 const DRY = dryFlag === "--dry";
@@ -54,10 +56,14 @@ for (const { from, to } of mainMoves) {
   const toDir = path.dirname(to);
   for (const ext of EXTS) {
     const co = path.join(fromDir, `${stem}.test${ext}`);
-    if (fs.existsSync(abs(co))) moveMap.set(abs(co), abs(path.join(toDir, `${stem}.test${ext}`)));
+    if (fs.existsSync(abs(co)))
+      moveMap.set(abs(co), abs(path.join(toDir, `${stem}.test${ext}`)));
     const under = path.join(fromDir, "__tests__", `${stem}.test${ext}`);
     if (fs.existsSync(abs(under)))
-      moveMap.set(abs(under), abs(path.join(toDir, "__tests__", `${stem}.test${ext}`)));
+      moveMap.set(
+        abs(under),
+        abs(path.join(toDir, "__tests__", `${stem}.test${ext}`)),
+      );
   }
 }
 
@@ -83,10 +89,21 @@ function resolveSpec(fromFile, spec) {
   if (!base) return null;
   const m = base.match(/\.(m|c)?jsx?$/);
   const stem = m ? base.slice(0, -m[0].length) : base;
-  const candidates = [base, stem + ".ts", stem + ".tsx", base + ".ts", base + ".tsx",
-    path.join(base, "index.ts"), path.join(base, "index.tsx")];
+  const candidates = [
+    base,
+    stem + ".ts",
+    stem + ".tsx",
+    base + ".ts",
+    base + ".tsx",
+    path.join(base, "index.ts"),
+    path.join(base, "index.tsx"),
+  ];
   for (const c of candidates) {
-    try { if (fs.statSync(c).isFile()) return c; } catch { /* try next */ }
+    try {
+      if (fs.statSync(c).isFile()) return c;
+    } catch {
+      /* try next */
+    }
   }
   return null;
 }
@@ -98,10 +115,17 @@ function newSpecifier(newImporter, newTarget, oldSpec) {
     const noExt = (p) => p.replace(/\.(ts|tsx)$/, "");
     if (path.dirname(newTarget) === path.dirname(newImporter))
       return "./" + noExt(path.basename(newTarget));
-    return alias + "/" + noExt(path.relative(srcRoot, newTarget)).split(path.sep).join("/");
+    return (
+      alias +
+      "/" +
+      noExt(path.relative(srcRoot, newTarget)).split(path.sep).join("/")
+    );
   }
   // apps/cli convention: relative ESM specifiers with a ".js" suffix.
-  let r = path.relative(path.dirname(newImporter), newTarget).split(path.sep).join("/");
+  let r = path
+    .relative(path.dirname(newImporter), newTarget)
+    .split(path.sep)
+    .join("/");
   r = r.replace(/\.(ts|tsx)$/, ".js");
   if (!r.startsWith(".")) r = "./" + r;
   // preserve extensionless style if the original specifier had no extension
@@ -132,7 +156,8 @@ for (const f of files) {
 }
 
 // ── execute ──────────────────────────────────────────────────────────────────
-for (const [from, to] of moveMap.entries()) mapReport.push({ from: rel(from), to: rel(to) });
+for (const [from, to] of moveMap.entries())
+  mapReport.push({ from: rel(from), to: rel(to) });
 console.log(DRY ? "── DRY RUN — planned moves:" : "── moves:");
 for (const m of mapReport) console.log(`  ${m.from}  →  ${m.to}`);
 console.log(`── files with rewritten specifiers: ${rewrites.length}`);
@@ -144,5 +169,7 @@ if (!DRY) {
     fs.mkdirSync(path.dirname(to), { recursive: true });
     execFileSync("git", ["mv", rel(from), rel(to)], { cwd: repoRoot });
   }
-  console.log("── done. Verify with the package's typecheck + the moved test files only.");
+  console.log(
+    "── done. Verify with the package's typecheck + the moved test files only.",
+  );
 }

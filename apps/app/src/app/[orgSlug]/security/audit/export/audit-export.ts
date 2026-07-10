@@ -26,7 +26,9 @@ export const AUDIT_EXPORT_COLUMNS = [
   "request_id",
 ] as const;
 
-function rowValues(r: AuditEventRow): Record<(typeof AUDIT_EXPORT_COLUMNS)[number], string> {
+function rowValues(
+  r: AuditEventRow,
+): Record<(typeof AUDIT_EXPORT_COLUMNS)[number], string> {
   return {
     id: r.id,
     occurred_at: r.occurredAt.toISOString(),
@@ -60,10 +62,16 @@ export function toCSV(rows: AuditEventRow[]): string {
 }
 
 export function toNDJSON(rows: AuditEventRow[]): string {
-  return rows.map((r) => JSON.stringify(rowValues(r))).join("\n") + (rows.length ? "\n" : "");
+  return (
+    rows.map((r) => JSON.stringify(rowValues(r))).join("\n") +
+    (rows.length ? "\n" : "")
+  );
 }
 
-export function serializeAuditExport(rows: AuditEventRow[], format: AuditExportFormat): string {
+export function serializeAuditExport(
+  rows: AuditEventRow[],
+  format: AuditExportFormat,
+): string {
   return format === "csv" ? toCSV(rows) : toNDJSON(rows);
 }
 
@@ -75,7 +83,11 @@ export function signAuditExport(body: string, secret: string): string {
 }
 
 /** Constant-time verification helper (used by tests and any verifier). */
-export function verifyAuditExport(body: string, secret: string, signature: string): boolean {
+export function verifyAuditExport(
+  body: string,
+  secret: string,
+  signature: string,
+): boolean {
   const expected = signAuditExport(body, secret);
   const a = Buffer.from(expected, "hex");
   const b = Buffer.from(signature, "hex");
@@ -84,10 +96,15 @@ export function verifyAuditExport(body: string, secret: string, signature: strin
 }
 
 export function exportContentType(format: AuditExportFormat): string {
-  return format === "csv" ? "text/csv; charset=utf-8" : "application/x-ndjson; charset=utf-8";
+  return format === "csv"
+    ? "text/csv; charset=utf-8"
+    : "application/x-ndjson; charset=utf-8";
 }
 
-export function exportFilename(format: AuditExportFormat, isoStamp: string): string {
+export function exportFilename(
+  format: AuditExportFormat,
+  isoStamp: string,
+): string {
   const safe = isoStamp.replace(/[:.]/g, "-");
   return `audit-export-${safe}.${format === "csv" ? "csv" : "ndjson"}`;
 }

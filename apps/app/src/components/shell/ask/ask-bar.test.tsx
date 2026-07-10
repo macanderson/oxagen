@@ -1,6 +1,12 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
+import {
+  render,
+  screen,
+  cleanup,
+  fireEvent,
+  waitFor,
+} from "@testing-library/react";
 import * as React from "react";
 
 vi.mock("next/navigation", () => ({
@@ -10,7 +16,12 @@ vi.mock("next/navigation", () => ({
 const mockPageCtx = {
   openCommand: vi.fn(),
   openAsk: vi.fn(),
-  fillableForm: null as null | { formId: string; title: string; fields: unknown[]; apply: ReturnType<typeof vi.fn> },
+  fillableForm: null as null | {
+    formId: string;
+    title: string;
+    fields: unknown[];
+    apply: ReturnType<typeof vi.fn>;
+  },
   entity: null as null | { summary: string },
   _setIsFilling: vi.fn(),
   _setFillResult: vi.fn(),
@@ -49,7 +60,9 @@ vi.mock("lucide-react", () => ({
 // ScopeContext type for the test
 import { AskBar } from "./ask-bar";
 
-const mockCtx = { orgSlug: "acme", workspaceSlug: "prod" } as Parameters<typeof AskBar>[0]["ctx"];
+const mockCtx = { orgSlug: "acme", workspaceSlug: "prod" } as Parameters<
+  typeof AskBar
+>[0]["ctx"];
 
 afterEach(cleanup);
 
@@ -92,7 +105,10 @@ describe("AskBar", () => {
 
   it("pressing Enter with a value calls classifyIntent and routes", async () => {
     const { classifyIntent } = await import("@/lib/command-menu/intent-router");
-    vi.mocked(classifyIntent).mockReturnValue({ type: "ask", query: "hello world" });
+    vi.mocked(classifyIntent).mockReturnValue({
+      type: "ask",
+      query: "hello world",
+    });
 
     render(<AskBar ctx={mockCtx} />);
     const input = screen.getByRole("combobox") as HTMLInputElement;

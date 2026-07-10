@@ -88,16 +88,16 @@ vi.mock("@/components/ui/badge", () => ({
 
 vi.mock("@/components/plugins/marketplace-modal", () => ({
   MarketplaceModal: ({ open }: { open: boolean }) =>
-    open ? (
-      <div data-testid="marketplace-modal">Marketplace</div>
-    ) : null,
+    open ? <div data-testid="marketplace-modal">Marketplace</div> : null,
 }));
 
 vi.mock("@/components/ui/alert", () => ({
   Alert: ({ children }: { children: React.ReactNode }) => (
     <div role="alert">{children}</div>
   ),
-  AlertTitle: ({ children }: { children: React.ReactNode }) => <h5>{children}</h5>,
+  AlertTitle: ({ children }: { children: React.ReactNode }) => (
+    <h5>{children}</h5>
+  ),
   AlertDescription: ({ children }: { children: React.ReactNode }) => (
     <div>{children}</div>
   ),
@@ -108,10 +108,17 @@ vi.mock("./plugin-icon", () => ({
     typeof url === "string" && url.startsWith("https://"),
 }));
 
-vi.mock("lucide-react", () => new Proxy({} as Record<string | symbol, unknown>, {
-  get: (_t, prop) => (prop === "then" ? undefined : () => <svg aria-hidden="true" data-icon={String(prop)} />),
-  has: (_t, prop) => prop !== "then",
-}));
+vi.mock(
+  "lucide-react",
+  () =>
+    new Proxy({} as Record<string | symbol, unknown>, {
+      get: (_t, prop) =>
+        prop === "then"
+          ? undefined
+          : () => <svg aria-hidden="true" data-icon={String(prop)} />,
+      has: (_t, prop) => prop !== "then",
+    }),
+);
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -174,10 +181,16 @@ type InstallBulkInput = {
   }>;
 };
 
-function makeActions(overrides: {
-  toggleAction?: (input: ToggleInput) => Promise<{ ok: boolean; error?: string }>;
-  uninstallAction?: (input: UninstallInput) => Promise<{ ok: boolean; error?: string }>;
-} = {}) {
+function makeActions(
+  overrides: {
+    toggleAction?: (
+      input: ToggleInput,
+    ) => Promise<{ ok: boolean; error?: string }>;
+    uninstallAction?: (
+      input: UninstallInput,
+    ) => Promise<{ ok: boolean; error?: string }>;
+  } = {},
+) {
   return {
     installAction: vi.fn((_input: InstallInput) =>
       Promise.resolve({ ok: true as const, orgListingId: "new-listing" }),
@@ -223,9 +236,7 @@ describe("WorkspacePluginsPanel — empty state", () => {
   it("renders 'No plugins installed' message and empty-state marketplace button when initialPlugins is empty", () => {
     renderPanel([], makeActions());
 
-    expect(
-      screen.getByText(/no plugins installed/i),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/no plugins installed/i)).toBeInTheDocument();
 
     expect(
       screen.getByTestId("ws-browse-marketplace-empty-btn"),
@@ -237,12 +248,16 @@ describe("WorkspacePluginsPanel — load-error notice", () => {
   it("renders a load-error notice when loadError is true", () => {
     renderPanel([], makeActions(), true);
     expect(screen.getByRole("alert")).toBeInTheDocument();
-    expect(screen.getByText(/couldn't load installed plugins/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/couldn't load installed plugins/i),
+    ).toBeInTheDocument();
   });
 
   it("does not render the load-error notice when loadError is false", () => {
     renderPanel([PLUGIN], makeActions(), false);
-    expect(screen.queryByText(/couldn't load installed plugins/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/couldn't load installed plugins/i),
+    ).not.toBeInTheDocument();
   });
 });
 
@@ -255,8 +270,12 @@ describe("WorkspacePluginsPanel — plugins list", () => {
 
     renderPanel(plugins, makeActions());
 
-    expect(screen.getByTestId("ws-plugin-name-p1")).toHaveTextContent("Plugin One");
-    expect(screen.getByTestId("ws-plugin-name-p2")).toHaveTextContent("Plugin Two");
+    expect(screen.getByTestId("ws-plugin-name-p1")).toHaveTextContent(
+      "Plugin One",
+    );
+    expect(screen.getByTestId("ws-plugin-name-p2")).toHaveTextContent(
+      "Plugin Two",
+    );
     expect(screen.getByTestId("ws-plugin-row-p1")).toBeInTheDocument();
     expect(screen.getByTestId("ws-plugin-row-p2")).toBeInTheDocument();
   });

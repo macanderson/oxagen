@@ -12,7 +12,9 @@ const { mockRows, mockWithSystemDb } = vi.hoisted(() => {
   const mockFrom = vi.fn(() => ({ where: mockWhere }));
   const mockSelect = vi.fn(() => ({ from: mockFrom }));
   const mockTx = { select: mockSelect };
-  const mockWithSystemDb = vi.fn((fn: (tx: unknown) => Promise<unknown>) => fn(mockTx));
+  const mockWithSystemDb = vi.fn((fn: (tx: unknown) => Promise<unknown>) =>
+    fn(mockTx),
+  );
   return { mockRows, mockWithSystemDb };
 });
 
@@ -25,8 +27,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  withSystemDb: mockWithSystemDb,
-
+    withSystemDb: mockWithSystemDb,
   };
 });
 

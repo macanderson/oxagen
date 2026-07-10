@@ -13,8 +13,18 @@ function ordinal(n: number): string {
 }
 
 const MONTH_NAMES = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
 ] as const;
 
 /** Format a Date as "Month Dth, YYYY", e.g. "June 7th, 2026". */
@@ -56,8 +66,16 @@ export function formatRelativeRenewal(
   const verb = opts?.cancel ? "cancels" : "renews";
 
   // Truncate both to UTC midnight for whole-day arithmetic.
-  const nowMidnight = Date.UTC(nowDate.getUTCFullYear(), nowDate.getUTCMonth(), nowDate.getUTCDate());
-  const endMidnight = Date.UTC(endDate.getUTCFullYear(), endDate.getUTCMonth(), endDate.getUTCDate());
+  const nowMidnight = Date.UTC(
+    nowDate.getUTCFullYear(),
+    nowDate.getUTCMonth(),
+    nowDate.getUTCDate(),
+  );
+  const endMidnight = Date.UTC(
+    endDate.getUTCFullYear(),
+    endDate.getUTCMonth(),
+    endDate.getUTCDate(),
+  );
 
   const diffMs = endMidnight - nowMidnight;
   const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));

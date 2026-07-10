@@ -11,7 +11,11 @@ import { notificationsMark } from "@oxagen/oxagen/contracts/notification.mark";
 import type { NotificationsListOutput } from "@oxagen/oxagen/contracts/notification.list";
 import type { NotificationsMarkOutput } from "@oxagen/oxagen/contracts/notification.mark";
 import { getSessionOrRedirect } from "@/lib/session";
-import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
+import {
+  resolveOrg,
+  resolveWorkspace,
+  assertOrgMember,
+} from "@/lib/resolve-org";
 
 /**
  * Build a CapabilityContext from the current Next.js server context.
@@ -43,7 +47,9 @@ export async function listNotificationsAction(
     unreadOnly: opts.unreadOnly ?? false,
     limit: opts.limit ?? 50,
   });
-  const out = await invoke(notificationsList.name, input, ctx, { surface: "agent" });
+  const out = await invoke(notificationsList.name, input, ctx, {
+    surface: "agent",
+  });
   return notificationsList.output.parse(out);
 }
 
@@ -55,6 +61,8 @@ export async function markNotificationAction(
 ): Promise<NotificationsMarkOutput> {
   const ctx = await buildNotificationCtx(orgSlug, workspaceSlug);
   const input = notificationsMark.input.parse({ id, ...opts });
-  const out = await invoke(notificationsMark.name, input, ctx, { surface: "agent" });
+  const out = await invoke(notificationsMark.name, input, ctx, {
+    surface: "agent",
+  });
   return notificationsMark.output.parse(out);
 }

@@ -12,7 +12,9 @@
  * Every surface that renders a listing icon must therefore gate next/image on
  * a real URL and fall back to a glyph otherwise.
  */
-export function isRenderableImageUrl(value: string | null | undefined): value is string {
+export function isRenderableImageUrl(
+  value: string | null | undefined,
+): value is string {
   if (!value) return false;
   return /^https?:\/\//.test(value) || value.startsWith("/");
 }

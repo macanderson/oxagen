@@ -5,6 +5,7 @@ export {
   buildWorkspaceTools,
   formatWithLineNumbers,
   describeEditFailure,
+  clipMiddle,
 } from "./tools";
 // LocalWorkspace is a CLI adapter (Stage B), not engine code — see ADR-019.
 export {

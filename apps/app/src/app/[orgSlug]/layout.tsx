@@ -203,7 +203,10 @@ export default async function OrgLayout({
       runInTenantScope({ orgId: org.id, workspaceId: ORG_ONLY_WS }, () =>
         isLowBalance(org.id),
       ).catch((err) => {
-        logger.warn({ err, orgId: org.id }, "shell: isLowBalance failed — hiding credit pill");
+        logger.warn(
+          { err, orgId: org.id },
+          "shell: isLowBalance failed — hiding credit pill",
+        );
         return null;
       }),
     ]);

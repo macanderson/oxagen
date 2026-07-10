@@ -25,7 +25,9 @@ const FALLBACK = "/acme/main/workbench/tools/mcp";
 describe("defaultMcpReturnTo", () => {
   it("points at Workbench → Agent Tools → MCP Servers for the given scope", () => {
     expect(defaultMcpReturnTo(ORG, WS)).toBe(FALLBACK);
-    expect(defaultMcpReturnTo("other", "ws2")).toBe("/other/ws2/workbench/tools/mcp");
+    expect(defaultMcpReturnTo("other", "ws2")).toBe(
+      "/other/ws2/workbench/tools/mcp",
+    );
   });
 });
 
@@ -52,7 +54,11 @@ describe("resolveReturnTo — valid same-org paths pass through", () => {
 
   it("preserves a query string on a same-org path", () => {
     expect(
-      resolveReturnTo("/acme/main/workbench/tools/mcp?tab=installed&x=1", ORG, WS),
+      resolveReturnTo(
+        "/acme/main/workbench/tools/mcp?tab=installed&x=1",
+        ORG,
+        WS,
+      ),
     ).toBe("/acme/main/workbench/tools/mcp?tab=installed&x=1");
   });
 
@@ -78,7 +84,9 @@ describe("resolveReturnTo — open-redirect vectors are rejected", () => {
 
   it("rejects absolute URLs", () => {
     expect(resolveReturnTo("https://evil.com", ORG, WS)).toBe(FALLBACK);
-    expect(resolveReturnTo("https://evil.com/acme/main", ORG, WS)).toBe(FALLBACK);
+    expect(resolveReturnTo("https://evil.com/acme/main", ORG, WS)).toBe(
+      FALLBACK,
+    );
     expect(resolveReturnTo("http://evil.com/", ORG, WS)).toBe(FALLBACK);
   });
 

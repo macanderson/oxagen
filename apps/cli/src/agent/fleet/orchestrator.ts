@@ -241,7 +241,8 @@ export class Fleet extends EventEmitter {
   drain(): Promise<void> {
     this.draining = true;
     for (const task of this.tasks.values()) {
-      if (task.status === "queued") this.update(task.id, { status: "cancelled", finishedAt: Date.now() });
+      if (task.status === "queued")
+        this.update(task.id, { status: "cancelled", finishedAt: Date.now() });
     }
     if (this.tasks.size === 0) return Promise.resolve(); // nothing was ever loaded
     if (!this.donePromise) {
@@ -268,7 +269,9 @@ export class Fleet extends EventEmitter {
       queuedCount: agents.filter((a) => a.status === "queued").length,
       runningCount: agents.filter((a) => a.status === "running").length,
       doneCount: agents.filter((a) => a.status === "done").length,
-      failedCount: agents.filter((a) => a.status === "failed" || a.status === "blocked").length,
+      failedCount: agents.filter(
+        (a) => a.status === "failed" || a.status === "blocked",
+      ).length,
       totals,
       concurrency: this.concurrency,
     };
@@ -289,7 +292,15 @@ export class Fleet extends EventEmitter {
       for (const task of this.tasks.values()) {
         if (task.status !== "queued") continue;
         const deps = task.dependsOn.map((d) => this.tasks.get(d));
-        if (deps.some((d) => d && (d.status === "failed" || d.status === "blocked" || d.status === "cancelled"))) {
+        if (
+          deps.some(
+            (d) =>
+              d &&
+              (d.status === "failed" ||
+                d.status === "blocked" ||
+                d.status === "cancelled"),
+          )
+        ) {
           this.update(task.id, { status: "blocked" });
           changed = true;
         }
@@ -315,12 +326,15 @@ export class Fleet extends EventEmitter {
     }
     for (const task of this.tasks.values()) {
       if (task.status !== "queued") continue;
-      const depsDone = task.dependsOn.every((d) => this.tasks.get(d)?.status === "done");
+      const depsDone = task.dependsOn.every(
+        (d) => this.tasks.get(d)?.status === "done",
+      );
       if (!depsDone) continue;
       // With isolation, overlapping files are safe (each agent has its own
       // worktree; collisions become merge conflicts, surfaced at integration).
       // Without it, serialize tasks that would fight over the same file.
-      if (!this.isolation && task.files.some((f) => lockedFiles.has(f))) continue;
+      if (!this.isolation && task.files.some((f) => lockedFiles.has(f)))
+        continue;
       return task;
     }
     return undefined;
@@ -396,11 +410,21 @@ export class Fleet extends EventEmitter {
       // Commit the agent's work atomically (pinned, so it can never be lost),
       // then merge it back. A conflict is surfaced — never a corrupt tree.
       if (this.isolation && !this.readOnly && !controller.signal.aborted) {
-        await this.isolation.checkpoint(task.id, `fleet(${task.id}): ${task.title}`);
-        conflict = await this.isolation.integrate(task.id, `fleet(${task.id}): ${task.title}`);
+        await this.isolation.checkpoint(
+          task.id,
+          `fleet(${task.id}): ${task.title}`,
+        );
+        conflict = await this.isolation.integrate(
+          task.id,
+          `fleet(${task.id}): ${task.title}`,
+        );
         if (!conflict.ok) {
           const files = (conflict.conflicts ?? []).join(", ");
-          summary = `⚠ integration conflict in ${conflict.conflicts?.length ?? 0} file(s): ${files}`.slice(0, 280);
+          summary =
+            `⚠ integration conflict in ${conflict.conflicts?.length ?? 0} file(s): ${files}`.slice(
+              0,
+              280,
+            );
           this.emit("conflict", { taskId: task.id, ...conflict });
         }
       }
@@ -422,7 +446,11 @@ export class Fleet extends EventEmitter {
         this.update(task.id, { status: "cancelled", finishedAt: Date.now() });
       } else {
         const message = err instanceof Error ? err.message : String(err);
-        this.update(task.id, { status: "failed", finishedAt: Date.now(), error: message });
+        this.update(task.id, {
+          status: "failed",
+          finishedAt: Date.now(),
+          error: message,
+        });
         this.recordFailure(task, message);
       }
     } finally {
@@ -430,7 +458,9 @@ export class Fleet extends EventEmitter {
       // or human can finish the merge in place. The pinned commits survive
       // either way, so the agent's work is never lost.
       if (this.isolation && !this.readOnly) {
-        await this.isolation.dispose(task.id, { keep: conflict ? !conflict.ok : false });
+        await this.isolation.dispose(task.id, {
+          keep: conflict ? !conflict.ok : false,
+        });
       }
       this.running.delete(task.id);
       this.controllers.delete(task.id);
@@ -442,7 +472,9 @@ export class Fleet extends EventEmitter {
   // ── Memory ──────────────────────────────────────────────────────────────────
 
   private recordSuccess(task: Task, summary: string): void {
-    const isFix = /\b(fix|bug|broken|regression|repair|error)\b/i.test(task.title + " " + task.description);
+    const isFix = /\b(fix|bug|broken|regression|repair|error)\b/i.test(
+      task.title + " " + task.description,
+    );
     const kind = isFix ? "bug-root-cause" : "routine-change";
     const lesson = summary || task.title;
     this.memory?.record({
@@ -491,10 +523,14 @@ export class Fleet extends EventEmitter {
     };
   }
 
-  private update(id: string, patch: Partial<Task> & Partial<AgentSnapshot>): void {
+  private update(
+    id: string,
+    patch: Partial<Task> & Partial<AgentSnapshot>,
+  ): void {
     const task = this.tasks.get(id);
     if (!task) return;
-    const statusChanged = patch.status !== undefined && patch.status !== task.status;
+    const statusChanged =
+      patch.status !== undefined && patch.status !== task.status;
     // Apply task-level fields.
     if (patch.status !== undefined) task.status = patch.status;
     if (patch.startedAt !== undefined) task.startedAt = patch.startedAt;
@@ -545,10 +581,14 @@ export class Fleet extends EventEmitter {
 
   private checkDone(): void {
     if (!this.settle) return;
-    const allTerminal = [...this.tasks.values()].every((t) => TERMINAL.has(t.status));
+    const allTerminal = [...this.tasks.values()].every((t) =>
+      TERMINAL.has(t.status),
+    );
     if (allTerminal && this.tasks.size > 0) {
       if (this.planId && this.store) {
-        const anyFailed = [...this.tasks.values()].some((t) => t.status === "failed");
+        const anyFailed = [...this.tasks.values()].some(
+          (t) => t.status === "failed",
+        );
         this.store.setStatus(this.planId, anyFailed ? "failed" : "completed");
       }
       const settle = this.settle;

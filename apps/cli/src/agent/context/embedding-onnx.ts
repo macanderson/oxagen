@@ -57,7 +57,10 @@ interface FastEmbedModelInfo {
 
 interface FlagEmbeddingInstance {
   queryEmbed(query: string): Promise<number[]>;
-  passageEmbed(texts: string[], batchSize?: number): AsyncGenerator<number[][], void, unknown>;
+  passageEmbed(
+    texts: string[],
+    batchSize?: number,
+  ): AsyncGenerator<number[][], void, unknown>;
   listSupportedModels(): FastEmbedModelInfo[];
 }
 
@@ -75,7 +78,10 @@ interface FastEmbedModule {
 function isFastEmbedModule(mod: unknown): mod is FastEmbedModule {
   if (!mod || typeof mod !== "object") return false;
   const m = mod as Partial<FastEmbedModule>;
-  return typeof m.FlagEmbedding?.init === "function" && typeof m.EmbeddingModel === "object";
+  return (
+    typeof m.FlagEmbedding?.init === "function" &&
+    typeof m.EmbeddingModel === "object"
+  );
 }
 
 /** The real dynamic import, hidden behind a non-literal specifier (see file header). */
@@ -94,7 +100,9 @@ function defaultCacheDir(): string {
  * module-load check — no network call, no model download — so it is safe to
  * use as a cheap `auto`-mode candidacy test.
  */
-export async function isOnnxAvailable(loader: () => Promise<unknown> = defaultLoader): Promise<boolean> {
+export async function isOnnxAvailable(
+  loader: () => Promise<unknown> = defaultLoader,
+): Promise<boolean> {
   try {
     const mod = await loader();
     return isFastEmbedModule(mod);
@@ -103,7 +111,11 @@ export async function isOnnxAvailable(loader: () => Promise<unknown> = defaultLo
   }
 }
 
-function adaptFastEmbed(instance: FlagEmbeddingInstance, modelId: string, dimensions: number): EmbeddingClient {
+function adaptFastEmbed(
+  instance: FlagEmbeddingInstance,
+  modelId: string,
+  dimensions: number,
+): EmbeddingClient {
   return {
     providerId: `${ONNX_PROVIDER_PREFIX}${modelId.replace(/^fast-/, "")}`,
     dimensions,
@@ -111,7 +123,8 @@ function adaptFastEmbed(instance: FlagEmbeddingInstance, modelId: string, dimens
     async embedBatch(texts: string[]): Promise<number[][]> {
       if (texts.length === 0) return [];
       const out: number[][] = [];
-      for await (const batch of instance.passageEmbed(texts, ONNX_BATCH_SIZE)) out.push(...batch);
+      for await (const batch of instance.passageEmbed(texts, ONNX_BATCH_SIZE))
+        out.push(...batch);
       return out;
     },
   };
@@ -162,7 +175,9 @@ export async function createOnnxEmbeddingClient(
       // model fetch still completes, just silently.
       showDownloadProgress: false,
     });
-    const dims = instance.listSupportedModels().find((m) => m.model === modelId)?.dim ?? FALLBACK_DIM;
+    const dims =
+      instance.listSupportedModels().find((m) => m.model === modelId)?.dim ??
+      FALLBACK_DIM;
     return adaptFastEmbed(instance, modelId, dims);
   } catch {
     return null;

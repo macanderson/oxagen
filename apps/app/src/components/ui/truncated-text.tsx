@@ -20,11 +20,7 @@
 
 import * as React from "react";
 
-import {
-  Popover,
-  PopoverPopup,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import { Popover, PopoverPopup, PopoverTrigger } from "@/components/ui/popover";
 import { MarkdownContent } from "@/components/ui/markdown-content";
 import { markdownToPlainText } from "./markdown-preview";
 import { cn } from "@/lib/utils";

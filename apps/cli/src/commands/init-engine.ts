@@ -98,11 +98,20 @@ export interface InitOptions {
 export type InitProgressEvent =
   | { phase: "settings"; status: "start" | "done" }
   | { phase: "graph"; status: "start" }
-  | { phase: "graph"; status: "progress"; filesDone: number; filesTotal: number }
+  | {
+      phase: "graph";
+      status: "progress";
+      filesDone: number;
+      filesTotal: number;
+    }
   | { phase: "graph"; status: "done"; stats: InitGraphStats }
   | { phase: "domains"; status: "start"; totalFiles: number }
   | { phase: "domains"; status: "skipped" }
-  | { phase: "domains"; status: "done"; domains: Array<{ name: string; files: number }> }
+  | {
+      phase: "domains";
+      status: "done";
+      domains: Array<{ name: string; files: number }>;
+    }
   | { phase: "link"; status: "start" };
 
 export interface InitGraphStats {
@@ -226,7 +235,11 @@ function computeGraphStats(
 function openUrlInBrowser(url: string): void {
   const platform = process.platform;
   const cmd =
-    platform === "darwin" ? "open" : platform === "win32" ? "start" : "xdg-open";
+    platform === "darwin"
+      ? "open"
+      : platform === "win32"
+        ? "start"
+        : "xdg-open";
   try {
     spawn(cmd, [url], { detached: true, stdio: "ignore" }).unref();
   } catch {
@@ -288,10 +301,9 @@ interface GitHubRepository {
  * Uses GET /v1/:org/:ws/connections?connectorId=github.
  */
 async function findGitHubConnection(): Promise<ConnectionListItem | null> {
-  const { connections } = await apiGetOrThrow<{ connections: ConnectionListItem[] }>(
-    "connections",
-    { connectorId: "github" },
-  );
+  const { connections } = await apiGetOrThrow<{
+    connections: ConnectionListItem[];
+  }>("connections", { connectorId: "github" });
   const connected = connections.find(
     (c) => c.connectorId === "github" && c.status === "connected",
   );
@@ -336,9 +348,10 @@ async function pollConnectionStatus(
  *
  * Any error is caught by the caller — this function itself never throws.
  */
-async function connectGitHub(): Promise<
-  Array<{ provider: "github"; fullName: string }> | null
-> {
+async function connectGitHub(): Promise<Array<{
+  provider: "github";
+  fullName: string;
+}> | null> {
   // 1. Create a pending_setup connection.
   process.stdout.write(`\nCreating GitHub connection...\n`);
   let connection: ConnectionCreateResult;
@@ -379,7 +392,9 @@ async function connectGitHub(): Promise<
   openUrlInBrowser(authUrl);
 
   // 4. Poll for connected status (up to 3 minutes).
-  process.stdout.write(`\nWaiting for GitHub authorization (timeout: 3 min)...\n`);
+  process.stdout.write(
+    `\nWaiting for GitHub authorization (timeout: 3 min)...\n`,
+  );
   const pollResult = await pollConnectionStatus(connection.publicId, {
     intervalMs: 5_000,
     timeoutMs: 3 * 60 * 1_000,
@@ -405,7 +420,9 @@ async function connectGitHub(): Promise<
   try {
     const { installations } = await apiGetOrThrow<{
       installations: GitHubInstallation[];
-    }>(`connections/github/installations`, { connectionId: connection.publicId });
+    }>(`connections/github/installations`, {
+      connectionId: connection.publicId,
+    });
 
     for (const inst of installations) {
       try {
@@ -451,7 +468,9 @@ async function connectGitHub(): Promise<
  * .oxagen/workspace.json. Then check for / offer to create a GitHub connection.
  * Best-effort: any error is returned in the result, never thrown.
  */
-async function runWorkspaceLinker(cwd: string): Promise<InitWorkspaceLinkResult> {
+async function runWorkspaceLinker(
+  cwd: string,
+): Promise<InitWorkspaceLinkResult> {
   const token = getToken();
   if (!token) {
     return {
@@ -526,9 +545,7 @@ async function runWorkspaceLinker(cwd: string): Promise<InitWorkspaceLinkResult>
       // users can re-run init to pick them up after a full sync.
     } else if (isTTY) {
       // Offer the GitHub connect flow.
-      process.stdout.write(
-        `\nNo GitHub connection found in this workspace.\n`,
-      );
+      process.stdout.write(`\nNo GitHub connection found in this workspace.\n`);
       process.stdout.write(
         `  Connect GitHub to let Oxagen index your repositories.\n`,
       );
@@ -539,7 +556,9 @@ async function runWorkspaceLinker(cwd: string): Promise<InitWorkspaceLinkResult>
       });
       let answer: string;
       try {
-        answer = (await rl.question("  Connect GitHub now? [y/N]: ")).trim().toLowerCase();
+        answer = (await rl.question("  Connect GitHub now? [y/N]: "))
+          .trim()
+          .toLowerCase();
       } finally {
         rl.close();
       }
@@ -648,7 +667,9 @@ export function formatInitSummary(result: InitResult): string {
   } else {
     lines.push("Domains:");
     for (const d of result.domains) {
-      const bar = "█".repeat(Math.max(1, Math.round((d.files / result.graph.files) * 20)));
+      const bar = "█".repeat(
+        Math.max(1, Math.round((d.files / result.graph.files) * 20)),
+      );
       lines.push(
         `  ${d.name.padEnd(22)} ${String(d.files).padStart(4)} file${d.files === 1 ? " " : "s"}  ${bar}`,
       );
@@ -665,7 +686,10 @@ export function formatInitSummary(result: InitResult): string {
       );
       if (wl.repos && wl.repos.length > 0) {
         lines.push(
-          `  Repos:   ${wl.repos.map((r) => r.fullName).slice(0, 5).join(", ")}` +
+          `  Repos:   ${wl.repos
+            .map((r) => r.fullName)
+            .slice(0, 5)
+            .join(", ")}` +
             (wl.repos.length > 5 ? ` … +${wl.repos.length - 5} more` : ""),
         );
       }
@@ -713,7 +737,12 @@ export async function runInit(opts: InitOptions): Promise<InitResult> {
   let indexed = 0;
   let skipped = 0;
   const onFileProgress = (done: number, total: number): void => {
-    void emit({ phase: "graph", status: "progress", filesDone: done, filesTotal: total });
+    void emit({
+      phase: "graph",
+      status: "progress",
+      filesDone: done,
+      filesTotal: total,
+    });
   };
 
   await emit({ phase: "graph", status: "start" });
@@ -730,7 +759,11 @@ export async function runInit(opts: InitOptions): Promise<InitResult> {
   try {
     store = createCodeGraphStore({ duckdbPath });
     await store.whenReady();
-    const buildResult = await buildAndPersistCodeGraph(cwd, store, onFileProgress);
+    const buildResult = await buildAndPersistCodeGraph(
+      cwd,
+      store,
+      onFileProgress,
+    );
     indexed = buildResult.indexed;
     skipped = buildResult.skipped;
     graph = await store.loadGraph(cwd);
@@ -767,18 +800,29 @@ export async function runInit(opts: InitOptions): Promise<InitResult> {
   let domainsSkipped = false;
 
   const credential = resolveAiCredential(cwd);
-  if (!credential || !credentialSupportsModel(credential, modelForTier("fast"))) {
+  if (
+    !credential ||
+    !credentialSupportsModel(credential, modelForTier("fast"))
+  ) {
     domainsSkipped = true;
     await emit({ phase: "domains", status: "skipped" });
   } else {
     try {
       const allFiles = await listSourceFiles(cwd);
-      await emit({ phase: "domains", status: "start", totalFiles: allFiles.length });
+      await emit({
+        phase: "domains",
+        status: "start",
+        totalFiles: allFiles.length,
+      });
       const domainModel = modelForTier("fast"); // Haiku-class — cheap classification
       const domainAI: DomainAI = {
-        generateObject: (args) => generateObject({ model: domainModel, ...args }),
+        generateObject: (args) =>
+          generateObject({ model: domainModel, ...args }),
       };
-      const domainMap: DomainMap = await inferDomains({ files: allFiles }, domainAI);
+      const domainMap: DomainMap = await inferDomains(
+        { files: allFiles },
+        domainAI,
+      );
 
       // Aggregate per-domain file counts
       const counts = new Map<string, number>();

@@ -8,7 +8,11 @@
  */
 import { describe, it, expect } from "vitest";
 import { createHash } from "node:crypto";
-import { generateCodeVerifier, codeChallengeS256, generateState } from "../pkce";
+import {
+  generateCodeVerifier,
+  codeChallengeS256,
+  generateState,
+} from "../pkce";
 
 const RFC_VERIFIER = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk";
 const RFC_CHALLENGE = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
@@ -20,7 +24,9 @@ describe("codeChallengeS256", () => {
 
   it("is BASE64URL(SHA256(ASCII(verifier)))", () => {
     const v = generateCodeVerifier();
-    const expected = createHash("sha256").update(v, "ascii").digest("base64url");
+    const expected = createHash("sha256")
+      .update(v, "ascii")
+      .digest("base64url");
     expect(codeChallengeS256(v)).toBe(expected);
   });
 });

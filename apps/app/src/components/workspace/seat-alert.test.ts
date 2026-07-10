@@ -84,7 +84,10 @@ describe("seatAlert", () => {
   // ── Edge ──────────────────────────────────────────────────────────────────────
 
   it("uses correct orgSlug in CTA href", () => {
-    const alert = seatAlert({ licenses: 1, used: 1, available: 0 }, "my-company");
+    const alert = seatAlert(
+      { licenses: 1, used: 1, available: 0 },
+      "my-company",
+    );
     expect(alert.cta?.href).toContain("my-company");
   });
 });

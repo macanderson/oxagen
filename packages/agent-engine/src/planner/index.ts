@@ -24,7 +24,11 @@ import type { AgentDefinition, Plan, Task } from "../fleet/types";
 
 export type { Plan, Task };
 
-const TIER_RANK: Record<ModelTier, number> = { fast: 0, balanced: 1, precise: 2 };
+const TIER_RANK: Record<ModelTier, number> = {
+  fast: 0,
+  balanced: 1,
+  precise: 2,
+};
 
 /** The more capable of two tiers (never under-spend on a risky task). */
 function maxTier(a: ModelTier, b: ModelTier): ModelTier {
@@ -37,7 +41,9 @@ const planSchema = z.object({
       z.object({
         id: z
           .string()
-          .describe("Short kebab-case id, unique within the plan (e.g. 'add-route')."),
+          .describe(
+            "Short kebab-case id, unique within the plan (e.g. 'add-route').",
+          ),
         title: z.string().describe("Imperative one-line title."),
         description: z
           .string()
@@ -47,10 +53,14 @@ const planSchema = z.object({
           ),
         dependsOn: z
           .array(z.string())
-          .describe("ids of tasks that must finish first (empty if independent)."),
+          .describe(
+            "ids of tasks that must finish first (empty if independent).",
+          ),
         files: z
           .array(z.string())
-          .describe("Relative paths this task will create or edit, as best you can predict."),
+          .describe(
+            "Relative paths this task will create or edit, as best you can predict.",
+          ),
         tier: z
           .enum(["fast", "balanced", "precise"])
           .describe(
@@ -72,6 +82,16 @@ const planSchema = z.object({
 
 export interface PlanOptions {
   goal: string;
+  /**
+   * Conversational context for reference resolution ONLY — e.g. a digest of the
+   * recent turns so a follow-up like "now do the same for the API" resolves
+   * "the same". It is NEVER part of the goal: it must not be concatenated into
+   * `goal`, and it deliberately does not influence the single-task heuristic
+   * ({@link isSingleTaskGoal}), so a trivial goal still takes the fast path even
+   * on a history-bearing turn. When the model planner runs, it is rendered as its
+   * own labeled block ahead of the goal.
+   */
+  context?: string;
   /** Injected AI port — BYOK in the CLI, metered on the platform. */
   ai: AgentAi;
   /** Override the planning model slug (otherwise a balanced-tier model). */
@@ -127,9 +147,15 @@ export function isSingleTaskGoal(goal: string): boolean {
   // Enumeration / clause separators.
   if (/[,;&]/.test(g)) return false;
   // Coordinating conjunctions and sequencing words join multiple actions.
-  if (/\b(and|then|also|plus|next|afterwards?|finally|as well as|followed by)\b/i.test(g)) return false;
+  if (
+    /\b(and|then|also|plus|next|afterwards?|finally|as well as|followed by)\b/i.test(
+      g,
+    )
+  )
+    return false;
   // Explicit multiplicity.
-  if (/\b(both|each|every|all of|multiple|several|various)\b/i.test(g)) return false;
+  if (/\b(both|each|every|all of|multiple|several|various)\b/i.test(g))
+    return false;
   return true;
 }
 
@@ -161,7 +187,13 @@ export async function planTasks(opts: PlanOptions): Promise<Plan> {
       createdAt: now,
       usage: emptyUsage(),
     };
-    return { id: newPlanId(), goal: opts.goal, createdAt: now, tasks: [task], status: "draft" };
+    return {
+      id: newPlanId(),
+      goal: opts.goal,
+      createdAt: now,
+      tasks: [task],
+      status: "draft",
+    };
   }
 
   // Enhance the goal so the planner sees the real code involved.
@@ -186,12 +218,17 @@ export async function planTasks(opts: PlanOptions): Promise<Plan> {
   // per-task tiers are still reconciled up by `classifyTier` below, so a fast
   // planner never under-tiers the WORKERS — only its own decomposition call.
   const plannerTier = classifyTier({ text: opts.goal }).tier;
-  const model = opts.model ?? modelForTier(plannerTier === "precise" ? "precise" : "fast");
+  const model =
+    opts.model ?? modelForTier(plannerTier === "precise" ? "precise" : "fast");
+  // Conversational context (reference resolution) leads, then the enhanced goal.
+  // The enhance call above operates on the RAW goal; context is a separate block
+  // so it informs decomposition without ever becoming part of the goal.
+  const contextBlock = opts.context ? `${opts.context}\n\n` : "";
   const { object } = await opts.ai.generateObject({
     model,
     schema: planSchema,
     system: PLANNER_SYSTEM,
-    prompt: `Goal:\n${enhanced.prompt}${rosterBlock}`,
+    prompt: `${contextBlock}Goal:\n${enhanced.prompt}${rosterBlock}`,
     abortSignal: opts.signal,
   });
 
@@ -228,7 +265,8 @@ export async function planTasks(opts: PlanOptions): Promise<Plan> {
 
   // Drop dependencies that point at ids no task actually has (model hallucination).
   const ids = new Set(tasks.map((t) => t.id));
-  for (const t of tasks) t.dependsOn = t.dependsOn.filter((d) => ids.has(d) && d !== t.id);
+  for (const t of tasks)
+    t.dependsOn = t.dependsOn.filter((d) => ids.has(d) && d !== t.id);
 
   return {
     id: newPlanId(),

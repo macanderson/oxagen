@@ -79,7 +79,8 @@ export async function fetchPr(number?: string): Promise<PrView | null> {
     return await ghJson<PrView>(args);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    if (/no pull requests found|no default remote|could not resolve/i.test(msg)) return null;
+    if (/no pull requests found|no default remote|could not resolve/i.test(msg))
+      return null;
     throw e;
   }
 }
@@ -95,33 +96,46 @@ function exitCodeFor(summary: ChecksSummary): number {
   return 2;
 }
 
-export async function handlePrStatus(number: string | undefined, opts: PrOptions): Promise<void> {
+export async function handlePrStatus(
+  number: string | undefined,
+  opts: PrOptions,
+): Promise<void> {
   const pr = await fetchPr(number);
   if (!pr) {
-    err("No pull request found for this branch. Open one, or pass a PR number.");
+    err(
+      "No pull request found for this branch. Open one, or pass a PR number.",
+    );
     process.exitCode = 1;
     return;
   }
   const summary = summaryOf(pr);
   if (opts.json) {
-    out(JSON.stringify({ number: pr.number, url: pr.url, ...summary }, null, 2));
+    out(
+      JSON.stringify({ number: pr.number, url: pr.url, ...summary }, null, 2),
+    );
   } else {
     out(`PR #${pr.number} ${pr.title}`);
     out(`  ${formatSummary(summary)}`);
     if (summary.failing.length > 0) {
-      for (const f of summary.failing) out(`    ✗ ${f.name}${f.url ? `  ${f.url}` : ""}`);
+      for (const f of summary.failing)
+        out(`    ✗ ${f.name}${f.url ? `  ${f.url}` : ""}`);
     }
   }
   process.exitCode = exitCodeFor(summary);
 }
 
-export async function handlePrWatch(number: string | undefined, opts: PrOptions): Promise<void> {
+export async function handlePrWatch(
+  number: string | undefined,
+  opts: PrOptions,
+): Promise<void> {
   const intervalMs = Math.max(5, opts.interval ?? 30) * 1000;
   const deadline = Date.now() + Math.max(1, opts.timeout ?? 60) * 60_000;
 
   let pr = await fetchPr(number);
   if (!pr) {
-    err("No pull request found for this branch. Open one, or pass a PR number.");
+    err(
+      "No pull request found for this branch. Open one, or pass a PR number.",
+    );
     process.exitCode = 1;
     return;
   }
@@ -150,12 +164,17 @@ export async function handlePrWatch(number: string | undefined, opts: PrOptions)
             process.exitCode = 1;
           }
         } else {
-          out(`Merge it with:  oxagen pr watch ${pr.number} --merge   (or: gh pr merge ${pr.number} --squash)`);
+          out(
+            `Merge it with:  oxagen pr watch ${pr.number} --merge   (or: gh pr merge ${pr.number} --squash)`,
+          );
           process.exitCode = 0;
         }
       } else if (summary.state === "failing") {
-        out(`PR #${pr.number} is FAILING: ${summary.failing.map((f) => f.name).join(", ")}`);
-        for (const f of summary.failing) if (f.url) out(`  ${f.name}: ${f.url}`);
+        out(
+          `PR #${pr.number} is FAILING: ${summary.failing.map((f) => f.name).join(", ")}`,
+        );
+        for (const f of summary.failing)
+          if (f.url) out(`  ${f.name}: ${f.url}`);
         process.exitCode = 1;
       } else {
         out(`PR #${pr.number} has no checks to wait on.`);
@@ -189,7 +208,9 @@ function sleep(ms: number): Promise<void> {
 // ── pr fix: the active fix-to-green loop ────────────────────────────────────
 
 /** Parse a GitHub Actions job's run+job id out of its details URL (…/actions/runs/<run>/job/<job>). */
-function parseRunAndJob(url: string | undefined): { runId: string; jobId: string } | null {
+function parseRunAndJob(
+  url: string | undefined,
+): { runId: string; jobId: string } | null {
   if (!url) return null;
   const m = /\/actions\/runs\/(\d+)\/job\/(\d+)/.exec(url);
   return m ? { runId: m[1] as string, jobId: m[2] as string } : null;
@@ -199,7 +220,10 @@ function parseRunAndJob(url: string | undefined): { runId: string; jobId: string
 function truncateLog(log: string, maxLines = 200): string {
   const lines = log.split("\n");
   if (lines.length <= maxLines) return log;
-  return `… (truncated, showing last ${maxLines} of ${lines.length} lines)\n` + lines.slice(-maxLines).join("\n");
+  return (
+    `… (truncated, showing last ${maxLines} of ${lines.length} lines)\n` +
+    lines.slice(-maxLines).join("\n")
+  );
 }
 
 interface CheckAnnotation {
@@ -215,7 +239,10 @@ interface CheckAnnotation {
  * be fetched is simply omitted; an empty overall result tells the fix loop
  * there's nothing concrete to diagnose (its infra-flake / give-up signal).
  */
-async function fetchFailingContext(pr: FixPrView, failing: ChecksSummary["failing"]): Promise<string> {
+async function fetchFailingContext(
+  pr: FixPrView,
+  failing: ChecksSummary["failing"],
+): Promise<string> {
   const repoMatch = /github\.com\/([^/]+)\/([^/]+)\/pull\//.exec(pr.url);
   if (!repoMatch) return "";
   const [, owner, repo] = repoMatch;
@@ -232,16 +259,22 @@ async function fetchFailingContext(pr: FixPrView, failing: ChecksSummary["failin
         `repos/${owner}/${repo}/check-runs/${ids.jobId}/annotations`,
       ]);
       for (const a of annotations.slice(0, 20)) {
-        if (a.message) lines.push(`- ${a.path ? `${a.path}:${a.start_line ?? "?"}: ` : ""}${a.message}`);
+        if (a.message)
+          lines.push(
+            `- ${a.path ? `${a.path}:${a.start_line ?? "?"}: ` : ""}${a.message}`,
+          );
       }
     } catch {
       // best-effort — annotations aren't always populated
     }
 
     try {
-      const { stdout } = await runGh(["run", "view", ids.runId, "-j", ids.jobId, "--log-failed"], {
-        maxBuffer: 4 * 1024 * 1024,
-      });
+      const { stdout } = await runGh(
+        ["run", "view", ids.runId, "-j", ids.jobId, "--log-failed"],
+        {
+          maxBuffer: 4 * 1024 * 1024,
+        },
+      );
       if (stdout.trim()) lines.push("", truncateLog(stdout));
     } catch {
       // best-effort — logs can be unavailable (expired artifact, cancelled run)
@@ -254,7 +287,9 @@ async function fetchFailingContext(pr: FixPrView, failing: ChecksSummary["failin
 
 /** `git status --porcelain` in `cwd`, parsed into relative paths (renames resolve to the new path). */
 async function gitChangedFiles(cwd: string): Promise<string[]> {
-  const { stdout } = await execFileAsync("git", ["status", "--porcelain"], { cwd });
+  const { stdout } = await execFileAsync("git", ["status", "--porcelain"], {
+    cwd,
+  });
   return stdout
     .split("\n")
     .map((l) => l.trimEnd())
@@ -272,23 +307,36 @@ async function gitChangedFiles(cwd: string): Promise<string[]> {
  * both: this is an unattended loop and must not wedge on a local hook (CI is
  * the real gate — that's what the surrounding loop is watching).
  */
-async function commitAndPush(cwd: string, files: string[], message: string): Promise<void> {
+async function commitAndPush(
+  cwd: string,
+  files: string[],
+  message: string,
+): Promise<void> {
   await execFileAsync("git", ["add", "--", ...files], { cwd });
   await execFileAsync("git", ["commit", "--no-verify", "-m", message], { cwd });
   await execFileAsync("git", ["push", "--no-verify"], { cwd });
 }
 
 async function currentGitBranch(cwd: string): Promise<string> {
-  const { stdout } = await execFileAsync("git", ["rev-parse", "--abbrev-ref", "HEAD"], { cwd });
+  const { stdout } = await execFileAsync(
+    "git",
+    ["rev-parse", "--abbrev-ref", "HEAD"],
+    { cwd },
+  );
   return stdout.trim();
 }
 
 /** y/N prompt before merging. Resolves `false` (never merge) when there's nobody to ask. */
 async function confirmMerge(pr: FixPrView): Promise<boolean> {
   if (!process.stdin.isTTY || !process.stdout.isTTY) return false;
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
   try {
-    const answer = (await rl.question(`Merge PR #${pr.number} now? [y/N] `)).trim().toLowerCase();
+    const answer = (await rl.question(`Merge PR #${pr.number} now? [y/N] `))
+      .trim()
+      .toLowerCase();
     return answer === "y" || answer === "yes";
   } finally {
     rl.close();
@@ -313,15 +361,21 @@ function reportFixResult(result: FixLoopResult): void {
       process.exitCode = 1;
       return;
     case "no-change":
-      err(`${label}: a fix round made no changes — stopping rather than loop forever.`);
+      err(
+        `${label}: a fix round made no changes — stopping rather than loop forever.`,
+      );
       process.exitCode = 1;
       return;
     case "unfixable":
-      err(`${label}: couldn't fetch concrete failure context (looks like an infra flake) — stopping.`);
+      err(
+        `${label}: couldn't fetch concrete failure context (looks like an infra flake) — stopping.`,
+      );
       process.exitCode = 1;
       return;
     case "max-rounds":
-      err(`${label}: still failing after ${result.rounds.length} fix round(s) — giving up.`);
+      err(
+        `${label}: still failing after ${result.rounds.length} fix round(s) — giving up.`,
+      );
       process.exitCode = 1;
       return;
     case "timed-out":
@@ -333,7 +387,9 @@ function reportFixResult(result: FixLoopResult): void {
       process.exitCode = 0;
       return;
     case "no-pr":
-      err("No pull request found for this branch. Open one, or pass a PR number.");
+      err(
+        "No pull request found for this branch. Open one, or pass a PR number.",
+      );
       process.exitCode = 1;
       return;
   }
@@ -345,13 +401,18 @@ function reportFixResult(result: FixLoopResult): void {
  * Requires a session (it runs the engine agent); requires the current
  * checkout to actually be the PR's branch (this loop commits to `cwd`).
  */
-export async function handlePrFix(number: string | undefined, opts: PrFixOptions): Promise<void> {
+export async function handlePrFix(
+  number: string | undefined,
+  opts: PrFixOptions,
+): Promise<void> {
   const session = requireSession();
   const cwd = process.cwd();
 
   const pr0 = await fetchPr(number);
   if (!pr0) {
-    err("No pull request found for this branch. Open one, or pass a PR number.");
+    err(
+      "No pull request found for this branch. Open one, or pass a PR number.",
+    );
     process.exitCode = 1;
     return;
   }
@@ -390,28 +451,42 @@ export async function handlePrFix(number: string | undefined, opts: PrFixOptions
       onRound: (round) => {
         out(`\nRound ${round.round}: fixing ${round.failing.join(", ")}`);
         const diagnosis = round.diagnosis.trim();
-        out(diagnosis ? diagnosis.replace(/^/gm, "  ") : "  (no diagnosis text)");
-        out(round.filesChanged.length ? `  changed: ${round.filesChanged.join(", ")}` : "  no files changed");
+        out(
+          diagnosis ? diagnosis.replace(/^/gm, "  ") : "  (no diagnosis text)",
+        );
+        out(
+          round.filesChanged.length
+            ? `  changed: ${round.filesChanged.join(", ")}`
+            : "  no files changed",
+        );
       },
     },
     {
       number: String(pr0.number),
       maxRounds: opts.maxRounds,
-      pollIntervalMs: opts.interval ? Math.max(5, opts.interval) * 1000 : undefined,
-      pollTimeoutMs: opts.timeout ? Math.max(1, opts.timeout) * 60_000 : undefined,
+      pollIntervalMs: opts.interval
+        ? Math.max(5, opts.interval) * 1000
+        : undefined,
+      pollTimeoutMs: opts.timeout
+        ? Math.max(1, opts.timeout) * 60_000
+        : undefined,
     },
   );
 
   // Mirror a lesson about the outcome — the same "wire memory in, mirror it
   // out" convention every other CLI agent path follows.
   const allFiles = [...new Set(result.rounds.flatMap((r) => r.filesChanged))];
-  const lastDiagnosis = result.rounds.at(-1)?.diagnosis.trim().slice(0, 400) ?? "";
+  const lastDiagnosis =
+    result.rounds.at(-1)?.diagnosis.trim().slice(0, 400) ?? "";
   if (result.outcome === "merged") {
     runner.rememberOutcome("bug-root-cause", {
       lesson: `oxagen pr fix resolved PR #${pr0.number}'s CI failures in ${result.rounds.length} round(s): ${lastDiagnosis}`,
       files: allFiles,
     });
-  } else if (result.outcome === "max-rounds" || result.outcome === "unfixable") {
+  } else if (
+    result.outcome === "max-rounds" ||
+    result.outcome === "unfixable"
+  ) {
     runner.rememberOutcome("gotcha", {
       lesson: `oxagen pr fix could not get PR #${pr0.number} green (${result.outcome}) after ${result.rounds.length} round(s): ${lastDiagnosis}`,
       files: allFiles,

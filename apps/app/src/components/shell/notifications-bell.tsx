@@ -16,7 +16,10 @@ import {
 import { cn } from "@/lib/utils";
 import { safeHref } from "@/lib/safe-url";
 import { Tooltip, TooltipTrigger, TooltipPopup } from "@/components/ui/tooltip";
-import { listNotificationsAction, markNotificationAction } from "./notifications";
+import {
+  listNotificationsAction,
+  markNotificationAction,
+} from "./notifications";
 import { useParams } from "next/navigation";
 
 interface Notification {
@@ -72,11 +75,18 @@ export function NotificationsBell() {
     if (!notification.unread) return;
     // Optimistic update.
     setNotifications((prev) =>
-      prev.map((n) => (n.publicId === notification.publicId ? { ...n, unread: false } : n)),
+      prev.map((n) =>
+        n.publicId === notification.publicId ? { ...n, unread: false } : n,
+      ),
     );
     setUnreadCount((c) => Math.max(0, c - 1));
     try {
-      await markNotificationAction(orgSlug, workspaceSlug, notification.publicId, { read: true });
+      await markNotificationAction(
+        orgSlug,
+        workspaceSlug,
+        notification.publicId,
+        { read: true },
+      );
     } catch {
       // Revert on failure.
       void load();
@@ -84,10 +94,17 @@ export function NotificationsBell() {
   };
 
   const handleArchive = async (notification: Notification) => {
-    setNotifications((prev) => prev.filter((n) => n.publicId !== notification.publicId));
+    setNotifications((prev) =>
+      prev.filter((n) => n.publicId !== notification.publicId),
+    );
     if (notification.unread) setUnreadCount((c) => Math.max(0, c - 1));
     try {
-      await markNotificationAction(orgSlug, workspaceSlug, notification.publicId, { archived: true });
+      await markNotificationAction(
+        orgSlug,
+        workspaceSlug,
+        notification.publicId,
+        { archived: true },
+      );
     } catch {
       void load();
     }
@@ -100,7 +117,11 @@ export function NotificationsBell() {
           render={
             <button
               type="button"
-              aria-label={unreadCount > 0 ? `Open notifications (${unreadCount} unread)` : "Open notifications"}
+              aria-label={
+                unreadCount > 0
+                  ? `Open notifications (${unreadCount} unread)`
+                  : "Open notifications"
+              }
               aria-haspopup="dialog"
               onClick={() => setOpen(true)}
               className={cn(
@@ -148,8 +169,13 @@ export function NotificationsBell() {
               </div>
             ) : notifications.length === 0 ? (
               <div className="flex flex-col items-center justify-center gap-3 px-6 py-12 text-center">
-                <Bell className="h-8 w-8 text-muted-foreground/30" aria-hidden="true" />
-                <p className="text-sm text-muted-foreground">No notifications yet</p>
+                <Bell
+                  className="h-8 w-8 text-muted-foreground/30"
+                  aria-hidden="true"
+                />
+                <p className="text-sm text-muted-foreground">
+                  No notifications yet
+                </p>
                 <p className="text-xs text-muted-foreground/60">
                   Agent completions, approvals, and alerts will appear here.
                 </p>
@@ -180,7 +206,9 @@ export function NotificationsBell() {
                       <p
                         className={cn(
                           "text-xs leading-snug",
-                          n.unread ? "font-medium text-foreground" : "text-muted-foreground",
+                          n.unread
+                            ? "font-medium text-foreground"
+                            : "text-muted-foreground",
                         )}
                       >
                         {n.title}

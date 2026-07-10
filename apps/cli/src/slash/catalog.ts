@@ -46,17 +46,43 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<
   { name: "help", description: "List the slash commands" },
 
   // Session
-  { name: "login", description: "Show the current session (run `oxagen login` to sign in)" },
-  { name: "logout", description: "Clear the stored session — token, org, workspace" },
+  {
+    name: "login",
+    description: "Show the current session (run `oxagen login` to sign in)",
+  },
+  {
+    name: "logout",
+    description: "Clear the stored session — token, org, workspace",
+  },
 
   // Project
-  { name: "init", description: "Scaffold .oxagen/ and build the local code graph" },
+  {
+    name: "init",
+    description: "Scaffold .oxagen/ and build the local code graph",
+  },
 
   // Turn configuration
-  { name: "model", description: "Show or set the WORKER model (alias for /worker-model)", argumentHint: "[slug]" },
-  { name: "worker-model", description: "Show or set the worker (executor) model", argumentHint: "[slug]" },
-  { name: "judge-model", description: "Show or set the judge (completeness advisor) model", argumentHint: "[slug]" },
-  { name: "triage-model", description: "Show or set the triage/coordinator (planner + evaluator) model", argumentHint: "[slug]" },
+  {
+    name: "model",
+    description: "Show or set the WORKER model (alias for /worker-model)",
+    argumentHint: "[slug]",
+  },
+  {
+    name: "worker-model",
+    description: "Show or set the worker (executor) model",
+    argumentHint: "[slug]",
+  },
+  {
+    name: "judge-model",
+    description: "Show or set the judge (completeness advisor) model",
+    argumentHint: "[slug]",
+  },
+  {
+    name: "triage-model",
+    description:
+      "Show or set the triage/coordinator (planner + evaluator) model",
+    argumentHint: "[slug]",
+  },
   {
     name: "coordinator",
     description: "Run turns on the remote gateway or a local on-device model",
@@ -69,36 +95,71 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<
   },
   {
     name: "budget",
-    description: "Show or set a per-turn dollar budget (grace | prompt | enforce)",
+    description:
+      "Show or set a per-turn dollar budget (grace | prompt | enforce)",
     argumentHint: "off | <usd> [grace|prompt|enforce] | mode <mode> | status",
   },
-  { name: "mode", description: "Show or set the tool-permission mode", argumentHint: "[ask|auto-edit|bypass|readonly]" },
-  { name: "pipeline", description: "Toggle prompt evaluation, context injection, and judging", argumentHint: "[on|off]" },
+  {
+    name: "mode",
+    description: "Show or set the tool-permission mode",
+    argumentHint: "[ask|auto-edit|bypass|readonly]",
+  },
+  {
+    name: "pipeline",
+    description: "Toggle prompt evaluation, context injection, and judging",
+    argumentHint: "[on|off]",
+  },
   {
     name: "config",
-    description: "Browse and edit tiered config (repo ▸ workspace ▸ user ▸ org) — `doctor` scans it",
+    description:
+      "Browse and edit tiered config (repo ▸ workspace ▸ user ▸ org) — `doctor` scans it",
     argumentHint: "[doctor]",
   },
-  { name: "verbose", description: "Toggle per-phase timing, token/cost, and tool telemetry", argumentHint: "[on|off]" },
+  {
+    name: "verbose",
+    description: "Toggle per-phase timing, token/cost, and tool telemetry",
+    argumentHint: "[on|off]",
+  },
 
   // Memory
-  { name: "remember", description: "Save a memory to the workspace (kind + weight inferred)", argumentHint: "<text>" },
-  { name: "memories", description: "Browse saved memories, optionally by kind", argumentHint: "[kind]" },
-  { name: "forget", description: "Delete a memory by id", argumentHint: "<id>" },
+  {
+    name: "remember",
+    description: "Save a memory to the workspace (kind + weight inferred)",
+    argumentHint: "<text>",
+  },
+  {
+    name: "memories",
+    description: "Browse saved memories, optionally by kind",
+    argumentHint: "[kind]",
+  },
+  {
+    name: "forget",
+    description: "Delete a memory by id",
+    argumentHint: "<id>",
+  },
 
   // History
-  { name: "replay", description: "Replay how a past turn was handled", argumentHint: "[n|id]" },
+  {
+    name: "replay",
+    description: "Replay how a past turn was handled",
+    argumentHint: "[n|id]",
+  },
   { name: "traces", description: "List recent turns you can /replay" },
 
   // Interface
   {
     name: "diff",
-    description: "Review working-tree changes — pick a changed file, view its diff",
+    description:
+      "Review working-tree changes — pick a changed file, view its diff",
     argumentHint: "[path]",
   },
   { name: "hud", description: "Toggle the running-agents heads-up display" },
   { name: "panel", description: "Toggle the Agent Team + Task side panel" },
-  { name: "mouse", description: "Toggle mouse-wheel scroll (off by default so native copy/paste works)" },
+  {
+    name: "mouse",
+    description:
+      "Toggle mouse-wheel scroll (off by default so native copy/paste works)",
+  },
   {
     name: "motion",
     description:
@@ -117,7 +178,11 @@ export const BUILTIN_SLASH_NAMES: ReadonlySet<string> = new Set(
   BUILTIN_SLASH_COMMANDS.map((c) => c.name),
 );
 
-const SOURCE_RANK: Record<SlashSource, number> = { builtin: 0, cli: 1, custom: 2 };
+const SOURCE_RANK: Record<SlashSource, number> = {
+  builtin: 0,
+  cli: 1,
+  custom: 2,
+};
 
 /**
  * Prefix used to disambiguate a CLI command whose bare name is shadowed by a
@@ -139,7 +204,9 @@ export interface BuildCatalogOptions extends LoadCommandsOptions {
  * built-ins keep their grouped BUILTIN_SLASH_COMMANDS order, CLI keep program
  * order, custom keep load order — no alphabetical reshuffle.
  */
-export function buildSlashCatalog(opts: BuildCatalogOptions): SlashCatalogEntry[] {
+export function buildSlashCatalog(
+  opts: BuildCatalogOptions,
+): SlashCatalogEntry[] {
   const byName = new Map<string, SlashCatalogEntry>();
 
   for (const c of BUILTIN_SLASH_COMMANDS) {
@@ -185,7 +252,9 @@ export function buildSlashCatalog(opts: BuildCatalogOptions): SlashCatalogEntry[
     });
   }
 
-  return [...byName.values()].sort((a, b) => SOURCE_RANK[a.source] - SOURCE_RANK[b.source]);
+  return [...byName.values()].sort(
+    (a, b) => SOURCE_RANK[a.source] - SOURCE_RANK[b.source],
+  );
 }
 
 /**
@@ -244,7 +313,11 @@ export function filterSlashCatalog(
 ): SlashCatalogEntry[] {
   if (query === "") return [...catalog];
   const scored = catalog
-    .map((entry, index) => ({ entry, index, score: matchScore(entry.name.toLowerCase(), query) }))
+    .map((entry, index) => ({
+      entry,
+      index,
+      score: matchScore(entry.name.toLowerCase(), query),
+    }))
     .filter((s) => s.score > 0);
   scored.sort((a, b) => b.score - a.score || a.index - b.index);
   return scored.map((s) => s.entry);

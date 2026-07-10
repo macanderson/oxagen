@@ -31,7 +31,9 @@ const ConnectCustomMcpSchema = z.object({
   workspaceSlug: z.string().min(1),
   name: z.string().min(1).max(120),
   endpointUrl: z.string().url(),
-  transport: z.enum(["streamable-http", "sse", "stdio"]).default("streamable-http"),
+  transport: z
+    .enum(["streamable-http", "sse", "stdio"])
+    .default("streamable-http"),
   authKind: z.enum(["oauth", "secret", "none"]).default("none"),
 });
 
@@ -47,28 +49,41 @@ export async function connectCustomMcpServer(
   const parsed = ConnectCustomMcpSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Invalid input" };
 
-  const { orgSlug, workspaceSlug, name, endpointUrl, transport, authKind } = parsed.data;
+  const { orgSlug, workspaceSlug, name, endpointUrl, transport, authKind } =
+    parsed.data;
   const auth = await resolveAgentToolsManager(orgSlug, workspaceSlug);
   if (!auth.ok) return { ok: false, error: auth.error };
   const { org, ws, ctx } = auth.scope;
 
   try {
-    const out = await runInTenantScope({ orgId: org.id, workspaceId: ws.id }, () =>
-      invoke(
-        "install_plugin",
-        {
-          pluginType: "mcp_server" as const,
-          custom: { name, endpointUrl, transport, authKind },
-        },
-        ctx,
-        { surface: "agent" },
-      ),
+    const out = await runInTenantScope(
+      { orgId: org.id, workspaceId: ws.id },
+      () =>
+        invoke(
+          "install_plugin",
+          {
+            pluginType: "mcp_server" as const,
+            custom: { name, endpointUrl, transport, authKind },
+          },
+          ctx,
+          { surface: "agent" },
+        ),
     );
     revalidatePath(workspace.marketplace.mcp({ orgSlug, workspaceSlug }));
-    const typed = out as { orgListingId: string; authKind?: "oauth" | "secret" | "none" };
-    return { ok: true, orgListingId: typed.orgListingId, authKind: typed.authKind };
+    const typed = out as {
+      orgListingId: string;
+      authKind?: "oauth" | "secret" | "none";
+    };
+    return {
+      ok: true,
+      orgListingId: typed.orgListingId,
+      authKind: typed.authKind,
+    };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Connect failed" };
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Connect failed",
+    };
   }
 }
 
@@ -96,13 +111,20 @@ export async function revokeMcpCredential(
   const { org, ws, ctx } = auth.scope;
 
   try {
-    const out = await runInTenantScope({ orgId: org.id, workspaceId: ws.id }, () =>
-      invoke("revoke_plugin_credential", { orgListingId }, ctx, { surface: "agent" }),
+    const out = await runInTenantScope(
+      { orgId: org.id, workspaceId: ws.id },
+      () =>
+        invoke("revoke_plugin_credential", { orgListingId }, ctx, {
+          surface: "agent",
+        }),
     );
     revalidatePath(workspace.workbench.tools.mcp({ orgSlug, workspaceSlug }));
     const typed = out as { revoked: boolean };
     return { ok: true, revoked: typed.revoked };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Revoke failed" };
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Revoke failed",
+    };
   }
 }

@@ -11,8 +11,12 @@ describe("markdownToPlainText", () => {
   });
 
   it("keeps fenced code content but drops the fences and language hint", () => {
-    expect(markdownToPlainText("```ts\nconst a = 1;\n```")).toContain("const a = 1;");
-    expect(markdownToPlainText("```ts\nconst a = 1;\n```")).not.toContain("```");
+    expect(markdownToPlainText("```ts\nconst a = 1;\n```")).toContain(
+      "const a = 1;",
+    );
+    expect(markdownToPlainText("```ts\nconst a = 1;\n```")).not.toContain(
+      "```",
+    );
   });
 
   it("unwraps inline code", () => {
@@ -24,7 +28,9 @@ describe("markdownToPlainText", () => {
   });
 
   it("reduces links to their text", () => {
-    expect(markdownToPlainText("see [the docs](https://x.y)")).toBe("see the docs");
+    expect(markdownToPlainText("see [the docs](https://x.y)")).toBe(
+      "see the docs",
+    );
   });
 
   it("strips blockquote and list markers", () => {

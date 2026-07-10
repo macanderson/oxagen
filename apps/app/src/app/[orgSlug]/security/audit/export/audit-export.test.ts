@@ -91,7 +91,11 @@ describe("response helpers", () => {
   it("maps format to content type + filename", () => {
     expect(exportContentType("csv")).toContain("text/csv");
     expect(exportContentType("ndjson")).toContain("ndjson");
-    expect(exportFilename("csv", "2026-06-01T03:00:00.000Z")).toMatch(/^audit-export-.*\.csv$/);
-    expect(exportFilename("ndjson", "2026-06-01T03:00:00.000Z")).not.toContain(":");
+    expect(exportFilename("csv", "2026-06-01T03:00:00.000Z")).toMatch(
+      /^audit-export-.*\.csv$/,
+    );
+    expect(exportFilename("ndjson", "2026-06-01T03:00:00.000Z")).not.toContain(
+      ":",
+    );
   });
 });

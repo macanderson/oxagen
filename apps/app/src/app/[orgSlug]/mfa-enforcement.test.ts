@@ -61,7 +61,11 @@ describe("evaluateMfaGate", () => {
     expect(
       evaluateMfaGate(
         input({
-          policy: { mfaRequired: false, mfaGraceHours: 48, updatedAt: LONG_AGO },
+          policy: {
+            mfaRequired: false,
+            mfaGraceHours: 48,
+            updatedAt: LONG_AGO,
+          },
         }),
       ),
     ).toEqual({ action: "allow" });

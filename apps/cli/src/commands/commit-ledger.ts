@@ -42,7 +42,10 @@ export interface CommitLedgerEntry {
 
 /** Resolve the ledger path. `OXAGEN_COMMIT_LEDGER` overrides (used by tests). */
 export function ledgerPath(): string {
-  return process.env["OXAGEN_COMMIT_LEDGER"] ?? join(homedir(), ".oxagen", "commit-ledger.jsonl");
+  return (
+    process.env["OXAGEN_COMMIT_LEDGER"] ??
+    join(homedir(), ".oxagen", "commit-ledger.jsonl")
+  );
 }
 
 /** Run a git command, returning trimmed stdout ("" on failure — never throws). */
@@ -133,11 +136,17 @@ export function commitWork(
 
   git(["add", "-A"], cwd);
   // --no-verify: skip hooks; frequent checkpoints must be cheap.
-  execFileSync("git", ["commit", "--no-verify", "-m", message], { cwd, encoding: "utf-8" });
+  execFileSync("git", ["commit", "--no-verify", "-m", message], {
+    cwd,
+    encoding: "utf-8",
+  });
 
   const hash = git(["rev-parse", "HEAD"], cwd);
   const branch = git(["rev-parse", "--abbrev-ref", "HEAD"], cwd);
-  const files = git(["diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD"], cwd)
+  const files = git(
+    ["diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD"],
+    cwd,
+  )
     .split("\n")
     .map((s) => s.trim())
     .filter(Boolean);

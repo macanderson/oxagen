@@ -27,7 +27,8 @@ export default async function NewTenantPage() {
         className="w-full max-w-3xl border-border/60 bg-card/80 shadow-xl backdrop-blur-xl"
       >
         <p className="mb-4 text-sm text-muted-foreground">
-          Organizations own billing and member access. A default workspace is created for you.
+          Organizations own billing and member access. A default workspace is
+          created for you.
         </p>
         <NewOrgForm action={createOrgAction} prefill={prefill} />
       </Panel>

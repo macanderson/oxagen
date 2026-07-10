@@ -22,13 +22,23 @@ vi.mock("@/lib/agent-tools/authz", () => ({
 vi.mock("@/lib/routes", () => ({
   workspace: {
     marketplace: {
-      mcp: ({ orgSlug, workspaceSlug }: { orgSlug: string; workspaceSlug: string }) =>
-        `/${orgSlug}/${workspaceSlug}/marketplace/mcp`,
+      mcp: ({
+        orgSlug,
+        workspaceSlug,
+      }: {
+        orgSlug: string;
+        workspaceSlug: string;
+      }) => `/${orgSlug}/${workspaceSlug}/marketplace/mcp`,
     },
     workbench: {
       tools: {
-        mcp: ({ orgSlug, workspaceSlug }: { orgSlug: string; workspaceSlug: string }) =>
-          `/${orgSlug}/${workspaceSlug}/workbench/tools/mcp`,
+        mcp: ({
+          orgSlug,
+          workspaceSlug,
+        }: {
+          orgSlug: string;
+          workspaceSlug: string;
+        }) => `/${orgSlug}/${workspaceSlug}/workbench/tools/mcp`,
       },
     },
   },
@@ -65,14 +75,20 @@ beforeEach(() => {
 
 describe("connectCustomMcpServer", () => {
   it("returns ok:false on invalid input without resolving auth", async () => {
-    const result = await connectCustomMcpServer({ ...VALID_INPUT, endpointUrl: "not-a-url" });
+    const result = await connectCustomMcpServer({
+      ...VALID_INPUT,
+      endpointUrl: "not-a-url",
+    });
 
     expect(result).toEqual({ ok: false, error: "Invalid input" });
     expect(mockResolveManager).not.toHaveBeenCalled();
   });
 
   it("passes through the auth-denial error", async () => {
-    mockResolveManager.mockResolvedValue({ ok: false, error: "Only workspace owners and admins can manage agent tools." });
+    mockResolveManager.mockResolvedValue({
+      ok: false,
+      error: "Only workspace owners and admins can manage agent tools.",
+    });
 
     const result = await connectCustomMcpServer(VALID_INPUT);
 
@@ -103,8 +119,14 @@ describe("connectCustomMcpServer", () => {
       AUTHORIZED_SCOPE.ctx,
       { surface: "agent" },
     );
-    expect(mockRevalidatePath).toHaveBeenCalledWith("/acme/main/marketplace/mcp");
-    expect(result).toEqual({ ok: true, orgListingId: "orl_1", authKind: "none" });
+    expect(mockRevalidatePath).toHaveBeenCalledWith(
+      "/acme/main/marketplace/mcp",
+    );
+    expect(result).toEqual({
+      ok: true,
+      orgListingId: "orl_1",
+      authKind: "none",
+    });
   });
 
   it("returns a clean error when install_plugin rejects", async () => {
@@ -134,14 +156,20 @@ const VALID_REVOKE_INPUT = {
 
 describe("revokeMcpCredential", () => {
   it("returns ok:false on invalid input without resolving auth", async () => {
-    const result = await revokeMcpCredential({ ...VALID_REVOKE_INPUT, orgListingId: "" });
+    const result = await revokeMcpCredential({
+      ...VALID_REVOKE_INPUT,
+      orgListingId: "",
+    });
 
     expect(result).toEqual({ ok: false, error: "Invalid input" });
     expect(mockResolveManager).not.toHaveBeenCalled();
   });
 
   it("passes through the auth-denial error", async () => {
-    mockResolveManager.mockResolvedValue({ ok: false, error: "Only workspace owners and admins can manage agent tools." });
+    mockResolveManager.mockResolvedValue({
+      ok: false,
+      error: "Only workspace owners and admins can manage agent tools.",
+    });
 
     const result = await revokeMcpCredential(VALID_REVOKE_INPUT);
 
@@ -164,7 +192,9 @@ describe("revokeMcpCredential", () => {
       AUTHORIZED_SCOPE.ctx,
       { surface: "agent" },
     );
-    expect(mockRevalidatePath).toHaveBeenCalledWith("/acme/main/workbench/tools/mcp");
+    expect(mockRevalidatePath).toHaveBeenCalledWith(
+      "/acme/main/workbench/tools/mcp",
+    );
     expect(result).toEqual({ ok: true, revoked: true });
   });
 
@@ -179,7 +209,9 @@ describe("revokeMcpCredential", () => {
 
   it("returns a clean error when revoke_plugin_credential rejects", async () => {
     mockResolveManager.mockResolvedValue({ ok: true, scope: AUTHORIZED_SCOPE });
-    mockInvoke.mockRejectedValue(new Error("Installed plugin not found or deleted: orl_1"));
+    mockInvoke.mockRejectedValue(
+      new Error("Installed plugin not found or deleted: orl_1"),
+    );
 
     const result = await revokeMcpCredential(VALID_REVOKE_INPUT);
 

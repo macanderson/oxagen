@@ -11,7 +11,10 @@
  */
 
 /** Default landing page for the flow: Workbench → Agent Tools → MCP Servers. */
-export function defaultMcpReturnTo(orgSlug: string, workspaceSlug: string): string {
+export function defaultMcpReturnTo(
+  orgSlug: string,
+  workspaceSlug: string,
+): string {
   return `/${orgSlug}/${workspaceSlug}/workbench/tools/mcp`;
 }
 

@@ -13,7 +13,10 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { sidebarItemAffordance, type SidebarItemAffordance } from "./sidebar-item-affordance";
+import {
+  sidebarItemAffordance,
+  type SidebarItemAffordance,
+} from "./sidebar-item-affordance";
 
 describe("sidebarItemAffordance", () => {
   it("returns 'none' when no flags are set", () => {
@@ -22,7 +25,9 @@ describe("sidebarItemAffordance", () => {
   });
 
   it("returns 'none' when both flags are explicitly false", () => {
-    expect(sidebarItemAffordance({ external: false, isReturn: false })).toBe("none");
+    expect(sidebarItemAffordance({ external: false, isReturn: false })).toBe(
+      "none",
+    );
   });
 
   it("returns 'external' when external is true and isReturn is absent", () => {
@@ -30,7 +35,9 @@ describe("sidebarItemAffordance", () => {
   });
 
   it("returns 'external' when external is true and isReturn is false", () => {
-    expect(sidebarItemAffordance({ external: true, isReturn: false })).toBe("external");
+    expect(sidebarItemAffordance({ external: true, isReturn: false })).toBe(
+      "external",
+    );
   });
 
   it("returns 'return' when isReturn is true", () => {
@@ -40,6 +47,8 @@ describe("sidebarItemAffordance", () => {
   it("isReturn takes precedence over external when both are true", () => {
     // The 'back to app' item is isReturn AND could theoretically be external;
     // isReturn is the stronger semantic signal and wins.
-    expect(sidebarItemAffordance({ external: true, isReturn: true })).toBe("return");
+    expect(sidebarItemAffordance({ external: true, isReturn: true })).toBe(
+      "return",
+    );
   });
 });

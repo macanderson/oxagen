@@ -35,7 +35,9 @@ export {
 } from "./config-schema.js";
 
 /** Accepted spellings that map onto a canonical {@link EmbedProviderMode}. */
-const EMBED_PROVIDER_ALIASES: Record<string, EmbedProviderMode> = { local: "onnx" };
+const EMBED_PROVIDER_ALIASES: Record<string, EmbedProviderMode> = {
+  local: "onnx",
+};
 
 /**
  * Parse a user-supplied provider-mode string (env var or config.json value).
@@ -44,10 +46,13 @@ const EMBED_PROVIDER_ALIASES: Record<string, EmbedProviderMode> = { local: "onnx
  * `OXAGEN_ROUTING_*` env vars, so a typo degrades safely instead of crashing
  * the CLI.
  */
-export function parseEmbedProviderMode(raw: string | undefined | null): EmbedProviderMode | undefined {
+export function parseEmbedProviderMode(
+  raw: string | undefined | null,
+): EmbedProviderMode | undefined {
   if (!raw) return undefined;
   const normalized = raw.trim().toLowerCase();
-  if (normalized in EMBED_PROVIDER_ALIASES) return EMBED_PROVIDER_ALIASES[normalized];
+  if (normalized in EMBED_PROVIDER_ALIASES)
+    return EMBED_PROVIDER_ALIASES[normalized];
   return (EMBED_PROVIDER_MODES as readonly string[]).includes(normalized)
     ? (normalized as EmbedProviderMode)
     : undefined;
@@ -73,9 +78,14 @@ export const MIN_COVERAGE = 0.15;
 export function mergeGraphConfig(patch?: GraphConfigPatch): GraphConfig {
   const d = DEFAULT_GRAPH_CONFIG;
   const enabledEnv = process.env["OXAGEN_GRAPH_DISABLED"];
-  const enabled = enabledEnv === "1" || enabledEnv === "true" ? false : patch?.enabled ?? d.enabled;
+  const enabled =
+    enabledEnv === "1" || enabledEnv === "true"
+      ? false
+      : (patch?.enabled ?? d.enabled);
   const embedProvider =
-    parseEmbedProviderMode(process.env["OXAGEN_EMBED_PROVIDER"]) ?? patch?.embedProvider ?? d.embedProvider;
+    parseEmbedProviderMode(process.env["OXAGEN_EMBED_PROVIDER"]) ??
+    patch?.embedProvider ??
+    d.embedProvider;
   return {
     enabled,
     endpoint: patch?.endpoint ?? d.endpoint,

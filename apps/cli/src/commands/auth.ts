@@ -139,7 +139,12 @@ export async function runBrowserLogin(
   const apiUrl = getApiUrl();
   const appUrl = getAppUrl();
   const { browserLogin } = await import("../auth/loopback-login.js");
-  const { token, orgSlug, workspaceSlug } = await browserLogin({ apiUrl, appUrl, onStatus, signal });
+  const { token, orgSlug, workspaceSlug } = await browserLogin({
+    apiUrl,
+    appUrl,
+    onStatus,
+    signal,
+  });
   writeConfig({ token, orgSlug, workspaceSlug, appUrl });
   return { token, orgSlug, workspaceSlug };
 }
@@ -267,7 +272,11 @@ export async function handleLogin(opts: LoginOptions): Promise<void> {
     workspaceSlug = account.workspaceSlug;
   } catch (err) {
     // Picker failures must not leave a partial config (token but no scope).
-    writeConfig({ token: undefined, orgSlug: undefined, workspaceSlug: undefined });
+    writeConfig({
+      token: undefined,
+      orgSlug: undefined,
+      workspaceSlug: undefined,
+    });
     // The token already validated — surface the real picker error rather than
     // a misleading "token invalid" message.
     process.stderr.write(

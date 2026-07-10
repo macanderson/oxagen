@@ -18,7 +18,11 @@
  * mode renders the human view on stdout; a missing hash is a uniform stderr
  * error line with exit code 1.
  */
-import { readLedger, commitExists, type CommitLedgerEntry } from "./commit-ledger.js";
+import {
+  readLedger,
+  commitExists,
+  type CommitLedgerEntry,
+} from "./commit-ledger.js";
 import { createOutput } from "../lib/output.js";
 import { stdoutWriter, type CommandWriter } from "../lib/capture-writer.js";
 
@@ -37,7 +41,9 @@ export async function handleRecover(
   const cwd = process.cwd();
 
   if (hash) {
-    const entry = readLedger().find((e) => e.hash === hash || e.hash.startsWith(hash));
+    const entry = readLedger().find(
+      (e) => e.hash === hash || e.hash.startsWith(hash),
+    );
     if (!entry) {
       out.error(
         `No ledger entry for commit ${hash}. Run \`oxagen recover\` to list what's recorded.`,
@@ -46,7 +52,9 @@ export async function handleRecover(
       return;
     }
     const exists = commitExists(entry.hash, entry.cwd);
-    out.data({ ...entry, commitExists: exists }, () => prettyEntry(entry, exists));
+    out.data({ ...entry, commitExists: exists }, () =>
+      prettyEntry(entry, exists),
+    );
     return;
   }
 
@@ -67,14 +75,22 @@ function prettyEntry(entry: CommitLedgerEntry, exists: boolean): string {
   if (entry.taskId) lines.push(`  task:    ${entry.taskId}`);
   if (entry.traceId) lines.push(`  trace:   ${entry.traceId}`);
   lines.push(`  message: ${entry.message}`);
-  lines.push(`  files:   ${entry.files.length ? entry.files.join(", ") : "(none recorded)"}`);
+  lines.push(
+    `  files:   ${entry.files.length ? entry.files.join(", ") : "(none recorded)"}`,
+  );
   lines.push("");
   lines.push("Restore into a fresh worktree (non-destructive):");
-  lines.push(`  git -C ${entry.cwd} worktree add ../recovered-${entry.hash.slice(0, 8)} ${entry.hash}`);
+  lines.push(
+    `  git -C ${entry.cwd} worktree add ../recovered-${entry.hash.slice(0, 8)} ${entry.hash}`,
+  );
   return lines.join("\n");
 }
 
-function prettyList(entries: CommitLedgerEntry[], all: boolean, cwd: string): string {
+function prettyList(
+  entries: CommitLedgerEntry[],
+  all: boolean,
+  cwd: string,
+): string {
   if (entries.length === 0) {
     return all
       ? "Commit ledger is empty. Agent commits will be recorded here as they happen."

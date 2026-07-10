@@ -70,8 +70,14 @@ export function AskBar({ ctx, className }: AskBarProps) {
     () => {
       // `navigator.userAgentData` is a Chromium-only API not in lib.dom.d.ts,
       // so it is read through a narrowed cast that falls back to `platform`.
-      const nav = navigator as Navigator & { userAgentData?: { platform?: string } };
-      const platform = (nav.userAgentData?.platform ?? navigator.platform ?? "").toLowerCase();
+      const nav = navigator as Navigator & {
+        userAgentData?: { platform?: string };
+      };
+      const platform = (
+        nav.userAgentData?.platform ??
+        navigator.platform ??
+        ""
+      ).toLowerCase();
       return platform.includes("mac") ? "⌘K" : "Ctrl+K";
     },
     () => "⌘K",
@@ -83,23 +89,34 @@ export function AskBar({ ctx, className }: AskBarProps) {
   const pushRecentRef = React.useRef(pushRecent);
   const routerRef = React.useRef(router);
   const toastRef = React.useRef(toast);
-  React.useEffect(() => { toastRef.current = toast; }, [toast]);
-  React.useEffect(() => { pageCtxRef.current = pageCtx; }, [pageCtx]);
+  React.useEffect(() => {
+    toastRef.current = toast;
+  }, [toast]);
+  React.useEffect(() => {
+    pageCtxRef.current = pageCtx;
+  }, [pageCtx]);
   // Depend on primitives (orgSlug, workspaceSlug) rather than the ctx object
   // reference. ShellFrame creates a new ctx object on every re-render (e.g.
   // after the sidebar collapses from localStorage), so the object-identity dep
   // fires the effect on every shell re-render even though the values are
   // identical. Using primitives limits the effect to genuine scope changes.
-  React.useEffect(() => { ctxRef.current = ctx; }, [ctx.orgSlug, ctx.workspaceSlug]); // eslint-disable-line react-hooks/exhaustive-deps
-  React.useEffect(() => { pushRecentRef.current = pushRecent; }, [pushRecent]);
-  React.useEffect(() => { routerRef.current = router; }, [router]);
+  React.useEffect(() => {
+    ctxRef.current = ctx;
+  }, [ctx.orgSlug, ctx.workspaceSlug]); // eslint-disable-line react-hooks/exhaustive-deps
+  React.useEffect(() => {
+    pushRecentRef.current = pushRecent;
+  }, [pushRecent]);
+  React.useEffect(() => {
+    routerRef.current = router;
+  }, [router]);
 
   // Global "/" shortcut — focus the bar.
   React.useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
       const tag = target.tagName.toLowerCase();
-      if (tag === "input" || tag === "textarea" || target.isContentEditable) return;
+      if (tag === "input" || tag === "textarea" || target.isContentEditable)
+        return;
       if (e.key === "/" && !e.metaKey && !e.ctrlKey && !e.altKey) {
         e.preventDefault();
         inputRef.current?.focus();
@@ -160,7 +177,8 @@ export function AskBar({ ctx, className }: AskBarProps) {
             context: {
               orgSlug: c.orgSlug,
               workspaceSlug: c.workspaceSlug,
-              route: typeof window !== "undefined" ? window.location.pathname : "",
+              route:
+                typeof window !== "undefined" ? window.location.pathname : "",
               entitySummary: pc.entity?.summary,
             },
           });
@@ -215,14 +233,8 @@ export function AskBar({ ctx, className }: AskBarProps) {
     [handleSubmit],
   );
 
-
   return (
-    <div
-      className={cn(
-        "relative flex h-9 w-full items-center",
-        className,
-      )}
-    >
+    <div className={cn("relative flex h-9 w-full items-center", className)}>
       {/* Search icon */}
       <Search
         className={cn(

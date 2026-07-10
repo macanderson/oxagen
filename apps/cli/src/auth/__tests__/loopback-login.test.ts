@@ -131,7 +131,10 @@ describe("browserLogin", () => {
     const state = stateFromAuthorizeUrl(authorizeUrl);
     const redirectUri = redirectUriFromAuthorizeUrl(authorizeUrl);
 
-    const query = new URLSearchParams({ code: "authcode_xyz", state }).toString();
+    const query = new URLSearchParams({
+      code: "authcode_xyz",
+      state,
+    }).toString();
     await sendCallback(port, query);
 
     const result = await loginPromise;
@@ -181,7 +184,9 @@ describe("browserLogin", () => {
     // Awaiting sendCallback after reject() fires causes an "unhandled rejection"
     // warning because there is a brief gap before rejects.toThrow() registers.
     void sendCallback(port, query);
-    await expect(loginPromise).rejects.toThrow("state mismatch (possible CSRF)");
+    await expect(loginPromise).rejects.toThrow(
+      "state mismatch (possible CSRF)",
+    );
 
     // fetch should NOT have been called (exchange must not happen on bad state)
     expect(mockFetch).not.toHaveBeenCalled();
@@ -228,7 +233,10 @@ describe("browserLogin", () => {
     const port = portFromAuthorizeUrl(authorizeUrl);
     const state = stateFromAuthorizeUrl(authorizeUrl);
 
-    const query = new URLSearchParams({ code: "reused_code", state }).toString();
+    const query = new URLSearchParams({
+      code: "reused_code",
+      state,
+    }).toString();
 
     void sendCallback(port, query);
     await expect(loginPromise).rejects.toThrow(

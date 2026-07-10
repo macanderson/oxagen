@@ -12,7 +12,11 @@
 // The body is signed with HMAC-SHA256 and the signature + algorithm are returned
 // in headers so an auditor can verify integrity of the downloaded file.
 
-import { resolveOrg, getOrgRole, SECURITY_MANAGER_ROLES } from "@/lib/resolve-org";
+import {
+  resolveOrg,
+  getOrgRole,
+  SECURITY_MANAGER_ROLES,
+} from "@/lib/resolve-org";
 import { getSession } from "@/lib/session";
 import { assertEnterprise } from "@/lib/enterprise";
 import { isTierDenied } from "@oxagen/billing";
@@ -60,7 +64,9 @@ export async function GET(
 
   // 3. Role.
   if (!SECURITY_MANAGER_ROLES.has(role)) {
-    return new Response("Forbidden: owner or admin role required", { status: 403 });
+    return new Response("Forbidden: owner or admin role required", {
+      status: 403,
+    });
   }
 
   // 4. Enterprise plan.
@@ -68,9 +74,12 @@ export async function GET(
     await assertEnterprise(tenant.id, "audit-export");
   } catch (err) {
     if (isTierDenied(err)) {
-      return new Response("Payment required: SOC 2 audit export is an Enterprise feature", {
-        status: 402,
-      });
+      return new Response(
+        "Payment required: SOC 2 audit export is an Enterprise feature",
+        {
+          status: 402,
+        },
+      );
     }
     throw err;
   }
@@ -96,7 +105,10 @@ export async function GET(
   try {
     rows = await queryAuditForExport(tenant.id, filter);
   } catch (err) {
-    logger.error({ err, orgId: tenant.id }, "audit-export: query failed; refusing partial export");
+    logger.error(
+      { err, orgId: tenant.id },
+      "audit-export: query failed; refusing partial export",
+    );
     return new Response("Internal error: audit export failed", { status: 500 });
   }
   const body = serializeAuditExport(rows, format);

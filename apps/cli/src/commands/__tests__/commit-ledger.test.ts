@@ -6,7 +6,13 @@
  */
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, writeFileSync, rmSync, readFileSync, existsSync } from "node:fs";
+import {
+  mkdtempSync,
+  writeFileSync,
+  rmSync,
+  readFileSync,
+  existsSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -52,7 +58,10 @@ describe("ledgerPath", () => {
 describe("commitWork", () => {
   it("commits with --no-verify, returns the hash, and records a ledger entry", () => {
     writeFileSync(join(repo, "a.py"), "print(1)\n");
-    const res = commitWork(repo, "add a.py", { taskId: "T1", traceId: "turn_x" });
+    const res = commitWork(repo, "add a.py", {
+      taskId: "T1",
+      traceId: "turn_x",
+    });
 
     expect(res.hash).toMatch(/^[0-9a-f]{40}$/);
     expect(res.recorded).toBe(true);
@@ -81,7 +90,9 @@ describe("commitWork", () => {
 
   it("skips hooks (commits even when a failing pre-commit hook is installed)", () => {
     const hookDir = join(repo, ".git", "hooks");
-    writeFileSync(join(hookDir, "pre-commit"), "#!/bin/sh\nexit 1\n", { mode: 0o755 });
+    writeFileSync(join(hookDir, "pre-commit"), "#!/bin/sh\nexit 1\n", {
+      mode: 0o755,
+    });
     writeFileSync(join(repo, "b.py"), "print(2)\n");
     const res = commitWork(repo, "add b despite failing hook");
     expect(res.hash).toMatch(/^[0-9a-f]{40}$/); // --no-verify bypassed the hook
@@ -90,9 +101,33 @@ describe("commitWork", () => {
 
 describe("readLedger", () => {
   it("returns entries newest-first and filters by cwd/task", () => {
-    recordCommit({ hash: "h1", branch: "b", cwd: "/repoA", message: "one", files: [], at: "2026-01-01T00:00:00Z", taskId: "A" });
-    recordCommit({ hash: "h2", branch: "b", cwd: "/repoB", message: "two", files: [], at: "2026-01-02T00:00:00Z", taskId: "B" });
-    recordCommit({ hash: "h3", branch: "b", cwd: "/repoA", message: "three", files: [], at: "2026-01-03T00:00:00Z", taskId: "A" });
+    recordCommit({
+      hash: "h1",
+      branch: "b",
+      cwd: "/repoA",
+      message: "one",
+      files: [],
+      at: "2026-01-01T00:00:00Z",
+      taskId: "A",
+    });
+    recordCommit({
+      hash: "h2",
+      branch: "b",
+      cwd: "/repoB",
+      message: "two",
+      files: [],
+      at: "2026-01-02T00:00:00Z",
+      taskId: "B",
+    });
+    recordCommit({
+      hash: "h3",
+      branch: "b",
+      cwd: "/repoA",
+      message: "three",
+      files: [],
+      at: "2026-01-03T00:00:00Z",
+      taskId: "A",
+    });
 
     const all = readLedger();
     expect(all.map((e) => e.hash)).toEqual(["h3", "h2", "h1"]); // newest first
@@ -104,16 +139,29 @@ describe("readLedger", () => {
   });
 
   it("skips malformed lines instead of losing the whole ledger", () => {
-    recordCommit({ hash: "good", branch: "", cwd: "/r", message: "ok", files: [], at: "2026-01-01T00:00:00Z" });
+    recordCommit({
+      hash: "good",
+      branch: "",
+      cwd: "/r",
+      message: "ok",
+      files: [],
+      at: "2026-01-01T00:00:00Z",
+    });
     // Corrupt append.
-    execFileSync("sh", ["-c", `printf 'not json\\n{bad\\n' >> ${JSON.stringify(ledger)}`]);
+    execFileSync("sh", [
+      "-c",
+      `printf 'not json\\n{bad\\n' >> ${JSON.stringify(ledger)}`,
+    ]);
     const entries = readLedger();
     expect(entries.map((e) => e.hash)).toContain("good");
     expect(entries).toHaveLength(1);
   });
 
   it("returns [] when the ledger does not exist", () => {
-    process.env["OXAGEN_COMMIT_LEDGER"] = join(tmpdir(), "definitely-missing-ledger-xyz.jsonl");
+    process.env["OXAGEN_COMMIT_LEDGER"] = join(
+      tmpdir(),
+      "definitely-missing-ledger-xyz.jsonl",
+    );
     expect(existsSync(process.env["OXAGEN_COMMIT_LEDGER"])).toBe(false);
     expect(readLedger()).toEqual([]);
   });
@@ -126,7 +174,9 @@ describe("commitExists", () => {
     writeFileSync(join(repo, "c.py"), "3");
     const r2 = commitWork(repo, "c", {});
     expect(commitExists(r2.hash as string, repo)).toBe(true);
-    expect(commitExists("0000000000000000000000000000000000000000", repo)).toBe(false);
+    expect(commitExists("0000000000000000000000000000000000000000", repo)).toBe(
+      false,
+    );
     // ledger recorded both, newest first
     expect(readLedger().map((e) => e.hash)).toEqual([r2.hash, res.hash]);
   });

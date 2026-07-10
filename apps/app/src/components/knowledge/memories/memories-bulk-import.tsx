@@ -288,7 +288,10 @@ function SelectStage({
                     className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground"
                     aria-hidden="true"
                   />
-                  <span className="flex-1 truncate text-xs text-foreground" title={f.filename}>
+                  <span
+                    className="flex-1 truncate text-xs text-foreground"
+                    title={f.filename}
+                  >
                     {f.filename}
                   </span>
                   <span
@@ -364,7 +367,10 @@ function SelectStage({
         >
           {isPending ? (
             <>
-              <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" aria-hidden="true" />
+              <Loader2
+                className="h-3.5 w-3.5 mr-1.5 animate-spin"
+                aria-hidden="true"
+              />
               Parsing…
             </>
           ) : (
@@ -374,7 +380,12 @@ function SelectStage({
             </>
           )}
         </Button>
-        <Button size="sm" variant="ghost" onClick={onClose} disabled={isPending}>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={onClose}
+          disabled={isPending}
+        >
           Cancel
         </Button>
       </div>
@@ -429,7 +440,10 @@ function ReviewStage({
           </p>
           <ul className="mt-1 flex flex-col gap-0.5">
             {skipped.map((s) => (
-              <li key={s.filename} className="text-[10px] text-muted-foreground">
+              <li
+                key={s.filename}
+                className="text-[10px] text-muted-foreground"
+              >
                 <span className="font-mono">{s.filename}</span> — {s.reason}
               </li>
             ))}
@@ -439,7 +453,10 @@ function ReviewStage({
 
       {drafts.length === 0 ? (
         <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-border/60 py-10 text-center">
-          <FileText className="h-7 w-7 text-muted-foreground/50" aria-hidden="true" />
+          <FileText
+            className="h-7 w-7 text-muted-foreground/50"
+            aria-hidden="true"
+          />
           <p className="text-sm font-medium text-muted-foreground">
             No memories were extracted
           </p>
@@ -494,7 +511,9 @@ function ReviewStage({
                         type="checkbox"
                         checked={draft.include}
                         aria-label={`Include draft ${i + 1}`}
-                        onChange={(e) => patch(i, { include: e.target.checked })}
+                        onChange={(e) =>
+                          patch(i, { include: e.target.checked })
+                        }
                         className="h-3.5 w-3.5 accent-primary"
                       />
                     </div>
@@ -531,7 +550,10 @@ function ReviewStage({
                         maxLength={64}
                         disabled={isPending}
                         onChange={(e) =>
-                          patch(i, { memoryKind: e.target.value, classified: false })
+                          patch(i, {
+                            memoryKind: e.target.value,
+                            classified: false,
+                          })
                         }
                         className={FIELD_CLS}
                       />
@@ -623,7 +645,10 @@ function ReviewStage({
         >
           {isPending ? (
             <>
-              <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" aria-hidden="true" />
+              <Loader2
+                className="h-3.5 w-3.5 mr-1.5 animate-spin"
+                aria-hidden="true"
+              />
               Importing…
             </>
           ) : (
@@ -657,7 +682,10 @@ function ResultStage({
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-4 rounded-lg border border-border/60 px-4 py-3">
         <div className="flex items-center gap-2">
-          <CheckCircle2 className="h-5 w-5 text-emerald-500" aria-hidden="true" />
+          <CheckCircle2
+            className="h-5 w-5 text-emerald-500"
+            aria-hidden="true"
+          />
           <div className="flex flex-col">
             <span className="text-lg font-semibold tabular-nums text-foreground">
               {imported}
@@ -667,7 +695,10 @@ function ResultStage({
         </div>
         {failed > 0 && (
           <div className="flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5 text-destructive" aria-hidden="true" />
+            <AlertTriangle
+              className="h-5 w-5 text-destructive"
+              aria-hidden="true"
+            />
             <div className="flex flex-col">
               <span className="text-lg font-semibold tabular-nums text-foreground">
                 {failed}
@@ -689,7 +720,10 @@ function ResultStage({
                 key={i}
                 className="rounded-md border border-destructive/30 bg-destructive/5 px-2.5 py-1.5"
               >
-                <p className="line-clamp-1 text-xs text-foreground" title={f.lesson}>
+                <p
+                  className="line-clamp-1 text-xs text-foreground"
+                  title={f.lesson}
+                >
                   {f.lesson}
                 </p>
                 <p className="text-[10px] text-destructive">
@@ -735,7 +769,9 @@ export function MemoriesBulkImport({
   const [defaultNodeRef, setDefaultNodeRef] = React.useState("");
   const [drafts, setDrafts] = React.useState<EditableDraft[]>([]);
   const [skipped, setSkipped] = React.useState<SkippedDocument[]>([]);
-  const [commitResults, setCommitResults] = React.useState<CommitItemResult[]>([]);
+  const [commitResults, setCommitResults] = React.useState<CommitItemResult[]>(
+    [],
+  );
   const [imported, setImported] = React.useState(0);
   const [failed, setFailed] = React.useState(0);
   const [isPending, startTransition] = React.useTransition();
@@ -753,7 +789,9 @@ export function MemoriesBulkImport({
           filename: f.filename,
           content: f.content,
         })),
-        ...(defaultNodeRef.trim() ? { defaultNodeRef: defaultNodeRef.trim() } : {}),
+        ...(defaultNodeRef.trim()
+          ? { defaultNodeRef: defaultNodeRef.trim() }
+          : {}),
       });
       if (result.ok) {
         setDrafts(result.drafts.map((d) => ({ ...d, include: true })));
@@ -774,7 +812,9 @@ export function MemoriesBulkImport({
         lesson: d.lesson,
         memoryClass: d.memoryClass,
         memoryKind: d.memoryKind,
-        ...(d.memoryClass === "RULE" ? { enforcementScore: d.enforcementScore ?? 50 } : {}),
+        ...(d.memoryClass === "RULE"
+          ? { enforcementScore: d.enforcementScore ?? 50 }
+          : {}),
         source: d.source,
         nodeRef: d.nodeRef,
         sourceDocument: d.sourceDocument,

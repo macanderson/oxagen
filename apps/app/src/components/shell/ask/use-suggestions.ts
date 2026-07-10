@@ -48,11 +48,17 @@ interface UseSuggestionsResult {
 }
 
 /** 5-minute in-memory client cache. Maps a cache key → { items, fetchedAt }. */
-const CLIENT_CACHE = new Map<string, { items: SuggestionItem[]; fetchedAt: number }>();
+const CLIENT_CACHE = new Map<
+  string,
+  { items: SuggestionItem[]; fetchedAt: number }
+>();
 const CLIENT_TTL_MS = 5 * 60 * 1000;
 
 /** Derive a stable cache key from the route + page entity id (not session). */
-function clientCacheKey(pathname: string, entityId: string | undefined): string {
+function clientCacheKey(
+  pathname: string,
+  entityId: string | undefined,
+): string {
   return `${pathname}::${entityId ?? "none"}`;
 }
 
@@ -147,7 +153,15 @@ export function useSuggestions({
       cancelled = true;
       clearTimeout(timeoutId);
     };
-  }, [isOpen, cacheKey, orgSlug, workspaceSlug, pathname, pageEntity, recentLabels]);
+  }, [
+    isOpen,
+    cacheKey,
+    orgSlug,
+    workspaceSlug,
+    pathname,
+    pageEntity,
+    recentLabels,
+  ]);
 
   return { suggestions, loading };
 }

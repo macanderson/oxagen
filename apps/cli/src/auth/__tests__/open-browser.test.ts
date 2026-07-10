@@ -20,7 +20,8 @@ import { spawn } from "node:child_process";
 const mockSpawn = vi.mocked(spawn);
 
 /** Minimal fake ChildProcess returned by our spawn mock. */
-const fakeChild = (): ChildProcess => ({ unref: vi.fn() }) as unknown as ChildProcess;
+const fakeChild = (): ChildProcess =>
+  ({ unref: vi.fn() }) as unknown as ChildProcess;
 
 beforeEach(() => {
   mockSpawn.mockReturnValue(fakeChild());
