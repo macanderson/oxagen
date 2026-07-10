@@ -5,7 +5,8 @@ import { registerCapability } from "../registry";
 // Gated to Owner/Admin ONLY (unlike acquire, which workspace Members can
 // also call) — this is deliberately the debug/operator path for clearing a
 // lock a crashed agent left behind before its TTL lapses, so it force-releases
-// by lockId alone (@oxagen/ontology's forceReleaseFileLock), without needing
+// by lockId alone (the Postgres lease release path — `releaseFileLease` in
+// packages/agent/src/file-lock/lease.ts, per ADR-021 §5), without needing
 // the original holder's internal agentId.
 export const agentFileLockRelease = registerCapability({
   name: "release_file_lock",

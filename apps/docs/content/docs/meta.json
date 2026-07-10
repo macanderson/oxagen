@@ -7,11 +7,13 @@
     "configuration",
     "connections",
     "security",
+    "privacy",
     "governance",
     "enterprise",
     "api",
     "mcp",
     "a2a",
+    "capabilities",
     "agent",
     "plugins",
     "specs-and-plans"
