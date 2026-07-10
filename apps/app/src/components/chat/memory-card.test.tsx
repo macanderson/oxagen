@@ -17,6 +17,37 @@ import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { TenantProvider, type ActiveTenant } from "@/lib/tenant/tenant-context";
 import { MemoryCard } from "./memory-card";
 
+// Mock motion/react (the codebase test convention): motion.div → plain div,
+// AnimatePresence → passthrough, reduced-motion on. This makes the expanded
+// body mount/unmount synchronously with the `expanded` flag (no exit-hold), so
+// the collapse assertions below don't race the height animation.
+vi.mock("motion/react", () => ({
+  motion: {
+    div: ({
+      children,
+      initial: _initial,
+      animate: _animate,
+      exit: _exit,
+      transition: _transition,
+      style,
+      ...rest
+    }: React.HTMLAttributes<HTMLDivElement> & {
+      initial?: unknown;
+      animate?: unknown;
+      exit?: unknown;
+      transition?: unknown;
+    }) => (
+      <div style={style} {...rest}>
+        {children}
+      </div>
+    ),
+  },
+  AnimatePresence: ({ children }: { children: React.ReactNode }) => (
+    <>{children}</>
+  ),
+  useReducedMotion: () => true,
+}));
+
 // Stub NodeRef (it has its own tests) so these assertions target MemoryCard's
 // wiring — that it cites the grounding node and links into the graph explorer.
 vi.mock("@/components/knowledge/graph/node-ref", () => ({
