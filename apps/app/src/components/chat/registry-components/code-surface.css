@@ -81,8 +81,8 @@
 
 /* ANSI SGR colours that have no semantic design token. `parseAnsiLine` emits
  * these class names for the black/gray, magenta, cyan and default-foreground
- * codes so they stay legible in BOTH themes (the old text-neutral-*/text-white/
- * text-cyan-400/text-fuchsia-400 classes were dark-only). */
+ * codes so they stay legible in BOTH themes (the old dark-only Tailwind classes
+ * text-neutral, text-white, text-cyan and text-fuchsia vanished in light mode). */
 .ansi-dim {
   color: var(--code-fg-faint);
 }
