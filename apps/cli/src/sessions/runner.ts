@@ -46,7 +46,7 @@ import {
   TURN_BUDGET_MODES,
   type TurnBudgetPolicy,
   type TurnBudgetVerdict,
-} from "@oxagen/billing";
+} from "@oxagen/billing/turn-budget";
 import type { ModelMessage } from "ai";
 import {
   EVENT_SCHEMA_VERSION,

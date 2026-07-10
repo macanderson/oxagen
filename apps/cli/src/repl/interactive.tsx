@@ -192,6 +192,9 @@ import {
   type PermissionMode,
 } from "../agent/permissions.js";
 import { loadSettings } from "../settings/resolve.js";
+// Subpath import, NOT the @oxagen/billing barrel: the barrel eagerly loads
+// Stripe + drizzle + the whole billing surface (~400 ms measured), which would
+// sit on the REPL's first-paint critical path for four small helpers.
 import {
   createTurnBudgetGuard,
   formatBudgetUsd,
@@ -199,7 +202,7 @@ import {
   TURN_BUDGET_OFF,
   type TurnBudgetPolicy,
   type TurnBudgetVerdict,
-} from "@oxagen/billing";
+} from "@oxagen/billing/turn-budget";
 import { parseBudgetCommand, describeBudgetModes } from "../agent/budget.js";
 import pkg from "../../package.json" with { type: "json" };
 
