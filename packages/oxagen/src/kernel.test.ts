@@ -8,13 +8,16 @@ import {
   authorizeExternalCapability,
   capabilitiesForSurface,
   clearHandlersForTests,
+  clearKernelAccessRequestCreator,
   clearKernelIAMRuntime,
   clearSecurityEventEmitter,
   hasHandler,
   invoke,
   registerHandler,
+  setKernelAccessRequestCreator,
   setKernelIAMRuntime,
   setSecurityEventEmitter,
+  type KernelAccessRequestArgs,
   type KernelIAMCheckFn,
   type KernelSecurityEvent,
 } from "./kernel";
@@ -418,6 +421,166 @@ describe("invoke() IAM check throw — fail closed regardless of enforcement", (
     expect(events.some((e) => e.outcome === "deny" && e.errorCode === "authz_denied")).toBe(
       true,
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// invoke() IAM enforcement — deny vs. JIT pending_approval (access requests)
+// ---------------------------------------------------------------------------
+
+describe("invoke() IAM enforcement — deny + pending_approval", () => {
+  const denyFn: KernelIAMCheckFn = async () => ({
+    outcome: "deny",
+    reason: "no_grant",
+    principal: null,
+  });
+
+  const PENDING_PRINCIPAL = {
+    id: "00000000-0000-0000-0000-0000000000a1",
+    kind: "human" as const,
+    orgId: ctx.orgId,
+    workspaceId: ctx.workspaceId,
+  };
+  const pendingFn: KernelIAMCheckFn = async () => ({
+    outcome: "pending_approval",
+    principal: PENDING_PRINCIPAL,
+  });
+
+  afterEach(() => {
+    clearRegistryForTests();
+    clearHandlersForTests();
+    clearKernelIAMRuntime();
+    clearKernelAccessRequestCreator();
+    clearSecurityEventEmitter();
+  });
+
+  it("a hard deny throws authz_denied, never runs the handler, and mints no access request", async () => {
+    setKernelIAMRuntime(denyFn, true);
+    const creator = vi.fn(async () => "arq_should_not_happen");
+    setKernelAccessRequestCreator(creator);
+    echoCap();
+    let handlerRan = false;
+    registerHandler("test.echo", async () => async (input) => {
+      handlerRan = true;
+      return input;
+    });
+
+    await expect(invoke("test.echo", { value: "x" }, ctx)).rejects.toMatchObject({
+      code: "authz_denied",
+    });
+    expect(handlerRan).toBe(false);
+    // A hard deny is not pollable — the creator is never invoked.
+    expect(creator).not.toHaveBeenCalled();
+  });
+
+  it("pending_approval mints a JIT access request, denies now, and carries the pollable id", async () => {
+    setKernelIAMRuntime(pendingFn, true);
+    const creator = vi.fn(async (_args: KernelAccessRequestArgs) => "arq_pending_1");
+    setKernelAccessRequestCreator(creator);
+    const emitter = vi.fn();
+    setSecurityEventEmitter(emitter);
+    echoCap();
+    let handlerRan = false;
+    registerHandler("test.echo", async () => async (input) => {
+      handlerRan = true;
+      return input;
+    });
+
+    let thrown: unknown;
+    try {
+      await invoke("test.echo", { value: "x" }, ctx);
+    } catch (err) {
+      thrown = err;
+    }
+
+    // SECURITY INVARIANT: the action is denied now — the handler never ran.
+    expect(handlerRan).toBe(false);
+    expect(thrown).toBeInstanceOf(CapabilityError);
+    expect(thrown).toMatchObject({
+      code: "pending_approval",
+      accessRequestId: "arq_pending_1",
+    });
+
+    // The creator is called with the resolved principal + canonical capability.
+    expect(creator).toHaveBeenCalledTimes(1);
+    expect(creator).toHaveBeenCalledWith(
+      expect.objectContaining({
+        capability: "test.echo",
+        principal: PENDING_PRINCIPAL,
+      }),
+    );
+
+    // The security stream still records a deny.
+    expect(emitter).toHaveBeenCalledWith(
+      expect.objectContaining({ outcome: "deny", errorCode: "authz_denied" }),
+    );
+  });
+
+  it("pending_approval still denies when no access-request creator is registered (id absent)", async () => {
+    setKernelIAMRuntime(pendingFn, true);
+    // No setKernelAccessRequestCreator — mirrors a surface that never bootstrapped it.
+    echoCap();
+    let handlerRan = false;
+    registerHandler("test.echo", async () => async (input) => {
+      handlerRan = true;
+      return input;
+    });
+
+    let thrown: unknown;
+    try {
+      await invoke("test.echo", { value: "x" }, ctx);
+    } catch (err) {
+      thrown = err;
+    }
+
+    expect(handlerRan).toBe(false);
+    expect(thrown).toBeInstanceOf(CapabilityError);
+    expect((thrown as CapabilityError).code).toBe("pending_approval");
+    expect((thrown as CapabilityError).accessRequestId).toBeUndefined();
+  });
+
+  it("a throwing creator never turns pending_approval into an allow", async () => {
+    setKernelIAMRuntime(pendingFn, true);
+    const creator = vi.fn(async () => {
+      throw new Error("access_requests table missing");
+    });
+    setKernelAccessRequestCreator(creator);
+    echoCap();
+    let handlerRan = false;
+    registerHandler("test.echo", async () => async (input) => {
+      handlerRan = true;
+      return input;
+    });
+
+    let thrown: unknown;
+    try {
+      await invoke("test.echo", { value: "x" }, ctx);
+    } catch (err) {
+      thrown = err;
+    }
+
+    // The creator threw, but the decision is unchanged: denied, no pollable id.
+    expect(handlerRan).toBe(false);
+    expect((thrown as CapabilityError).code).toBe("pending_approval");
+    expect((thrown as CapabilityError).accessRequestId).toBeUndefined();
+  });
+
+  it("with enforcement OFF, pending_approval logs would-deny and runs the handler (no request minted)", async () => {
+    setKernelIAMRuntime(pendingFn, false);
+    const creator = vi.fn(async () => "arq_should_not_happen");
+    setKernelAccessRequestCreator(creator);
+    echoCap();
+    let handlerRan = false;
+    registerHandler("test.echo", async () => async (input) => {
+      handlerRan = true;
+      return input;
+    });
+
+    const out = await invoke("test.echo", { value: "x" }, ctx);
+    expect(out).toEqual({ value: "x" });
+    expect(handlerRan).toBe(true);
+    // Enforcement off proceeds — no access request is created.
+    expect(creator).not.toHaveBeenCalled();
   });
 });
 
