@@ -48,7 +48,7 @@ const ACTIONS = new Set([
   "create", "update", "write", "upsert", "add", "put", "record", "author",
   "compose", "generate", "render", "remember", "cite", "attach", "import",
   "ingest", "commit", "publish", "snapshot", "fork", "rename", "edit", "export",
-  "save", "post", "draft",
+  "save", "post", "draft", "revise",
   // delete / lifecycle
   "delete", "remove", "purge", "erase", "archive", "cancel", "stop", "start",
   "run", "execute", "exec", "deploy", "resume", "pause", "trigger", "dispatch",

@@ -77,10 +77,11 @@ describe("stream-registry", () => {
     expect(_hasEntryForTest("a2a_partial")).toBe(true);
   });
 
-  it("a listener that throws does not prevent delivery to other listeners", () => {
-    // Listener failures are surfaced through the structured API logger
-    // (pino signature: (context, message)), not a bare console.error.
-    const errSpy = vi.spyOn(logger, "warn").mockImplementation(() => undefined);
+  it("a listener that throws does not prevent delivery to other listeners", async () => {
+    // Listener failures now go through the structured pino logger (not
+    // console.error) so they land in the queryable log stream.
+    const { logger } = await import("../../middleware/logger");
+    const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => undefined);
     const received: unknown[] = [];
     const unsubBad = subscribe("a2a_throws", () => {
       throw new Error("listener boom");
@@ -88,9 +89,9 @@ describe("stream-registry", () => {
     const unsubGood = subscribe("a2a_throws", (e) => received.push(e));
     expect(() => publish("a2a_throws", STATUS_EVENT)).not.toThrow();
     expect(received).toEqual([STATUS_EVENT]);
-    expect(errSpy).toHaveBeenCalled();
+    expect(warnSpy).toHaveBeenCalled();
     unsubBad();
     unsubGood();
-    errSpy.mockRestore();
+    warnSpy.mockRestore();
   });
 });

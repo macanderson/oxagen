@@ -21,11 +21,10 @@ type HandlerCtx = {
   };
 };
 let capturedHandler: ((ctx: HandlerCtx) => unknown) | null = null;
-// The create-function adapter registers TWO Inngest functions per durable
-// definition: the primary (config.id) and, when onFailure is declared, a
-// companion whose id is `${config.id}.on-failure` with the failure handler
-// as its own 3rd arg. Route the capture by id so the companion registration
-// never overwrites the primary handler.
+// The create-function adapter registers the on-failure companion as a SECOND
+// inngest.createFunction call with id `${config.id}.on-failure` (onFailure is
+// stripped from the inngest config) — route captures by id so the companion
+// registration doesn't clobber the primary handler.
 let capturedOnFailure: ((ctx: HandlerCtx) => unknown) | null = null;
 
 // The create-function adapter registers TWO Inngest functions when a config
@@ -35,12 +34,8 @@ let capturedOnFailure: ((ctx: HandlerCtx) => unknown) | null = null;
 // by id; capturing `opts.onFailure` (the old shape) left capturedOnFailure null
 // and let the companion registration overwrite capturedHandler.
 mocks.createFunction.mockImplementation(
-  (
-    opts: { id?: string },
-    _trigger: unknown,
-    handler: typeof capturedHandler,
-  ) => {
-    if (opts?.id?.endsWith(".on-failure")) {
+  (opts: { id?: string }, _trigger: unknown, handler: typeof capturedHandler) => {
+    if (typeof opts?.id === "string" && opts.id.endsWith(".on-failure")) {
       capturedOnFailure = handler;
     } else {
       capturedHandler = handler;
