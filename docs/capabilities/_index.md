@@ -115,12 +115,27 @@ contract-first design, IAM enforcement, and instrumentation.
 | ----------------- | ----------------------------------------------------------------------------- |
 | `audit.log.query` | Query security + automation audit spines (org-scoped); admin-only, read-only. |
 
-## Billing (3)
+## Billing (18)
 
 - [billing.credits.purchase](billing.credits.purchase.md) — Initiate a dynamic usage-credit purchase via Stripe Checkout with automatic volume discount
 - [billing.subscription.read](billing.subscription.read.md) — Return the active subscription, plan slug, current period bounds, and available credits
 - [billing.subscription.upgrade.start](billing.subscription.upgrade.start.md) — Begin a plan change via Stripe Checkout; returns a URL for the user to complete
 - [billing.usage.breakdown](billing.usage.breakdown.md) — Aggregated usage (tokens, cost, calls) for a window, broken down by model, surface, and workspace, plus a daily time series
+- [billing.reseller_customer.create](billing.reseller_customer.create.md) — Create a reseller end-customer account
+- [billing.reseller_customer.list](billing.reseller_customer.list.md) — List the org's reseller end-customer accounts (metadata only
+- [billing.reseller_customer.update](billing.reseller_customer.update.md) — Edit a customer account: rename, re-tag its external ref, assign/clear a price plan, or pause it (paused accounts are excluded from bulk pushes)
+- [billing.reseller_customer.archive](billing.reseller_customer.archive.md) — Soft-delete a customer account. Historical re-bill runs keep a resolvable name; the account drops out of lists and future pushes
+- [billing.reseller_price_plan.create](billing.reseller_price_plan.create.md) — Create a price plan: a markup over raw metered cost (basis points) or a flat per-unit price (cents). The margin layer applied to attributed usage
+- [billing.reseller_price_plan.list](billing.reseller_price_plan.list.md) — List the org's reseller price plans
+- [billing.reseller_price_plan.update](billing.reseller_price_plan.update.md) — Update a price plan's name, mode, or rate. The mode↔rate invariant is enforced (markup→markupBps, per_unit→unitPriceCents)
+- [billing.reseller_attribution_rule.save](billing.reseller_attribution_rule.save.md) — Upsert a rule mapping a slice of observed usage (by workspace, acting principal, or capability) to a customer
+- [billing.reseller_attribution_rule.list](billing.reseller_attribution_rule.list.md) — List the org's attribution rules in evaluation order (priority ascending), each resolved to its customer name
+- [billing.reseller_attribution_rule.delete](billing.reseller_attribution_rule.delete.md) — Delete an attribution rule (soft). Usage it matched becomes unattributed until another rule covers it
+- [billing.reseller_rebill.preview](billing.reseller_rebill.preview.md) — Compute per-customer re-bill line items for a period: attribute the period's observed usage to customers via the attribution rules (over disjoint workspace×principal×capability slices), then price each slice with the customer's plan. Does NOT touch Stripe. Read-only, `noBillingGate`
+- [billing.reseller_rebill.push](billing.reseller_rebill.push.md) — Push a customer's priced usage for a period to the reseller's OWN Stripe account as an invoice, recording the run. Idempotent per (customer, period): a re-push updates the run and reuses the same invoice, never duplicating it. Returns `needsStripeConnection` when no key is connected (nothing pushed)
+- [billing.reseller_rebill.list_runs](billing.reseller_rebill.list_runs.md) — List past re-bill runs (period, subtotal, billed total, Stripe invoice, status, line items), most recent first
+- [billing.reseller_stripe.configure](billing.reseller_stripe.configure.md) — Store the reseller's own Stripe secret key (envelope-encrypted at rest via @oxagen/crypto) so re-bill pushes invoice from their account, not the platform's. Returns only a last-4 fingerprint, never the key. Highest sensitivity
+- [billing.reseller_stripe.status](billing.reseller_stripe.status.md) — Report whether a reseller Stripe key is connected for the org, with its label and last-4 fingerprint. Drives the connect-your-account empty state. Never returns the key
 
 ## Browser (7)
 
