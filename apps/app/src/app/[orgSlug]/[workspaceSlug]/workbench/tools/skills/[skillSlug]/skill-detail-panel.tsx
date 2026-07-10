@@ -267,77 +267,73 @@ export function SkillDetailPanel({
         {versions.length === 0 ? (
           <p className="text-sm text-muted-foreground">No versions found.</p>
         ) : (
-          <div className="rounded-md border overflow-hidden" data-testid="skill-versions-table">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b">
-                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Version</th>
-                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Message</th>
-                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Created</th>
-                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Author</th>
-                  <th className="px-4 py-3 text-right font-medium text-muted-foreground">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {versions.map((v) => (
-                  <tr
-                    key={v.id}
-                    className="border-b last:border-0 hover:bg-muted/20"
-                    data-testid={`skill-version-row-${v.id}`}
-                  >
-                    <td className="px-4 py-3 font-mono text-xs">
-                      <div className="flex items-center gap-2">
-                        {v.version}
-                        {v.isActive && (
-                          <Badge variant="default" className="text-xs px-1.5 py-0">
-                            active
-                          </Badge>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground text-xs max-w-[240px] truncate">
-                      {v.commitMessage ?? "—"}
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">
+          <ul className="divide-y overflow-hidden rounded-md border" data-testid="skill-versions-table">
+            {versions.map((v) => (
+              <li
+                key={v.id}
+                className="flex flex-col gap-3 px-4 py-3 hover:bg-muted/20 sm:flex-row sm:items-center sm:gap-6"
+                data-testid={`skill-version-row-${v.id}`}
+              >
+                {/* identity: version + commit message */}
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 font-mono text-xs">
+                    {v.version}
+                    {v.isActive && (
+                      <Badge variant="default" className="text-xs px-1.5 py-0">
+                        active
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="mt-0.5 max-w-[240px] truncate text-xs text-muted-foreground">
+                    {v.commitMessage ?? "—"}
+                  </p>
+                </div>
+                <dl className="flex flex-wrap items-center gap-x-6 gap-y-2">
+                  <div>
+                    <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                      Created
+                    </dt>
+                    <dd className="mt-0.5 whitespace-nowrap text-xs text-muted-foreground">
                       {formatDate(v.createdAt)}
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground text-xs">
-                      {v.createdByEmail ?? "—"}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 text-xs"
-                          onClick={() => handleDownload(v.id)}
-                          aria-label={`Download version ${v.version}`}
-                          data-testid={`skill-version-download-${v.id}`}
-                        >
-                          <Download className="h-3 w-3 mr-1" aria-hidden="true" />
-                          Download
-                        </Button>
-                        {canManage && !v.isActive && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 text-xs"
-                            onClick={() => handleActivate(v.id)}
-                            disabled={activating === v.id}
-                            aria-label={`Activate version ${v.version}`}
-                            data-testid={`skill-version-activate-${v.id}`}
-                          >
-                            <CheckCircle className="h-3 w-3 mr-1" aria-hidden="true" />
-                            {activating === v.id ? "Activating…" : "Activate"}
-                          </Button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                      Author
+                    </dt>
+                    <dd className="mt-0.5 text-xs text-muted-foreground">{v.createdByEmail ?? "—"}</dd>
+                  </div>
+                </dl>
+                <div className="flex shrink-0 items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={() => handleDownload(v.id)}
+                    aria-label={`Download version ${v.version}`}
+                    data-testid={`skill-version-download-${v.id}`}
+                  >
+                    <Download className="h-3 w-3 mr-1" aria-hidden="true" />
+                    Download
+                  </Button>
+                  {canManage && !v.isActive && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={() => handleActivate(v.id)}
+                      disabled={activating === v.id}
+                      aria-label={`Activate version ${v.version}`}
+                      data-testid={`skill-version-activate-${v.id}`}
+                    >
+                      <CheckCircle className="h-3 w-3 mr-1" aria-hidden="true" />
+                      {activating === v.id ? "Activating…" : "Activate"}
+                    </Button>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
         )}
       </div>
     </div>

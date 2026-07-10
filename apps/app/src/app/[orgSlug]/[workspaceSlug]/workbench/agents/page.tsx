@@ -74,77 +74,68 @@ export default async function WorkbenchAgentsPage({ params }: PageProps) {
           ) : null}
         </div>
       ) : (
-        <div
-          className="rounded-md border bg-card overflow-x-auto"
+        <ul
+          className="divide-y divide-border rounded-md border bg-card"
           data-testid="agents-table"
         >
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b">
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground">
-                  Name
-                </th>
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground">
-                  Status
-                </th>
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground">
-                  Deployment
-                </th>
-                <th className="px-4 py-3 text-right font-medium text-muted-foreground">
-                  Version
-                </th>
-                <th className="px-4 py-3" aria-label="Actions" />
-              </tr>
-            </thead>
-            <tbody>
-              {agents.map((agent, idx) => {
-                const launchable = agent.deploymentStatus === "active";
-                return (
-                  <tr
-                    key={agent.agentId}
-                    className={`border-b last:border-0 hover:bg-muted/20 transition-colors${idx % 2 === 1 ? " bg-muted/5" : ""}`}
-                    data-testid={`agent-row-${agent.slug}`}
+          {agents.map((agent) => {
+            const launchable = agent.deploymentStatus === "active";
+            return (
+              <li
+                key={agent.agentId}
+                className="flex flex-col gap-3 px-4 py-3 transition-colors hover:bg-muted/20 sm:flex-row sm:items-center sm:gap-6"
+                data-testid={`agent-row-${agent.slug}`}
+              >
+                <div className="min-w-0 flex-1">
+                  <Link
+                    href={workspace.workbench.agent(routeCtx, agent.publicId)}
+                    className="flex flex-col gap-0.5"
+                    data-testid={`agent-link-${agent.slug}`}
                   >
-                    <td className="px-4 py-3">
-                      <Link
-                        href={workspace.workbench.agent(routeCtx, agent.publicId)}
-                        className="flex flex-col gap-0.5"
-                        data-testid={`agent-link-${agent.slug}`}
-                      >
-                        <span className="font-medium text-foreground inline-flex items-center gap-2">
-                          {agent.name}
-                          {agent.managed ? (
-                            <Badge variant="outline" className="text-[10px]">
-                              Managed
-                            </Badge>
-                          ) : null}
-                        </span>
-                        <span className="text-xs text-muted-foreground font-mono">
-                          {agent.slug}
-                        </span>
-                      </Link>
-                      {/* Globally-unique agent key — copyable for API calls and
-                          A2A routing. Rendered outside the row Link so the copy
-                          button isn't a nested interactive control. */}
-                      {agent.agentKey ? (
-                        <div className="mt-1.5">
-                          <CopyableId
-                            value={agent.agentKey}
-                            label="key"
-                            max={40}
-                          />
-                        </div>
+                    <span className="font-medium text-foreground inline-flex items-center gap-2">
+                      {agent.name}
+                      {agent.managed ? (
+                        <Badge variant="outline" className="text-[10px]">
+                          Managed
+                        </Badge>
                       ) : null}
-                    </td>
-                    <td className="px-4 py-3">
+                    </span>
+                    <span className="text-xs text-muted-foreground font-mono">
+                      {agent.slug}
+                    </span>
+                  </Link>
+                  {/* Globally-unique agent key — copyable for API calls and
+                      A2A routing. Rendered outside the row Link so the copy
+                      button isn't a nested interactive control. */}
+                  {agent.agentKey ? (
+                    <div className="mt-1.5">
+                      <CopyableId
+                        value={agent.agentKey}
+                        label="key"
+                        max={40}
+                      />
+                    </div>
+                  ) : null}
+                </div>
+                <dl className="flex flex-wrap items-center gap-x-6 gap-y-2">
+                  <div>
+                    <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                      Status
+                    </dt>
+                    <dd className="mt-0.5 text-sm">
                       <Badge
                         variant={statusVariant(agent.status)}
                         className="text-xs capitalize"
                       >
                         {agent.status}
                       </Badge>
-                    </td>
-                    <td className="px-4 py-3">
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                      Deployment
+                    </dt>
+                    <dd className="mt-0.5 text-sm">
                       <Badge
                         variant={
                           agent.deploymentStatus === "active"
@@ -155,53 +146,58 @@ export default async function WorkbenchAgentsPage({ params }: PageProps) {
                       >
                         {agent.deploymentStatus}
                       </Badge>
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums text-muted-foreground text-xs">
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                      Version
+                    </dt>
+                    <dd className="mt-0.5 tabular-nums text-xs text-muted-foreground">
                       {agent.latestVersion ?? "—"}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      {launchable ? (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7"
-                          endIcon={
-                            <Rocket className="h-3.5 w-3.5" aria-hidden="true" />
-                          }
-                          data-testid={`agent-launch-${agent.slug}`}
-                          render={
-                            <Link
-                              href={`${workspace.ask(routeCtx)}?agent=${encodeURIComponent(agent.publicId)}`}
-                            />
-                          }
-                        >
-                          Launch
-                        </Button>
-                      ) : (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7"
-                          data-testid={`agent-edit-${agent.slug}`}
-                          render={
-                            <Link
-                              href={workspace.workbench.agent(
-                                routeCtx,
-                                agent.publicId,
-                              )}
-                            />
-                          }
-                        >
-                          {agent.managed ? "View" : "Edit"}
-                        </Button>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                    </dd>
+                  </div>
+                </dl>
+                <div className="flex shrink-0 items-center sm:ml-auto">
+                  {launchable ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7"
+                      endIcon={
+                        <Rocket className="h-3.5 w-3.5" aria-hidden="true" />
+                      }
+                      data-testid={`agent-launch-${agent.slug}`}
+                      render={
+                        <Link
+                          href={`${workspace.ask(routeCtx)}?agent=${encodeURIComponent(agent.publicId)}`}
+                        />
+                      }
+                    >
+                      Launch
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7"
+                      data-testid={`agent-edit-${agent.slug}`}
+                      render={
+                        <Link
+                          href={workspace.workbench.agent(
+                            routeCtx,
+                            agent.publicId,
+                          )}
+                        />
+                      }
+                    >
+                      {agent.managed ? "View" : "Edit"}
+                    </Button>
+                  )}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
       )}
     </div>
   );

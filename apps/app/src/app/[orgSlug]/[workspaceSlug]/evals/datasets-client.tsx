@@ -1,7 +1,8 @@
 "use client";
 
 /**
- * datasets-client.tsx — renders the workspace's eval datasets as a table.
+ * datasets-client.tsx — renders the workspace's eval datasets as a definition-list-based
+ * item list (each dataset is an independent entity read across, not compared down columns).
  *
  * Read-only v1: no create/delete affordances yet (those are
  * eval.dataset.create / eval.dataset.from_traces, not wired to this UI).
@@ -58,47 +59,52 @@ export function DatasetsClient({ datasets }: DatasetsClientProps) {
   }
 
   return (
-    <div className="rounded-lg border border-border/60" data-testid="evals-datasets-table">
-      <table className="w-full border-collapse text-sm">
-        <thead>
-          <tr className="border-b border-border/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
-            <th className="px-4 py-2 font-medium">Name</th>
-            <th className="px-4 py-2 font-medium">Slug</th>
-            <th className="px-4 py-2 font-medium">Items</th>
-            <th className="px-4 py-2 font-medium">Source</th>
-            <th className="px-4 py-2 font-medium">Created</th>
-          </tr>
-        </thead>
-        <tbody>
-          {datasets.map((dataset) => (
-            <tr
-              key={dataset.datasetId}
-              className="border-b border-border/50 last:border-b-0 transition-colors hover:bg-muted/40"
-            >
-              <td className="max-w-xs px-4 py-2">
-                <span className="block truncate font-medium text-foreground" title={dataset.name}>
-                  {dataset.name}
-                </span>
-                {dataset.description && (
-                  <span className="block truncate text-xs text-muted-foreground" title={dataset.description}>
-                    {dataset.description}
-                  </span>
-                )}
-              </td>
-              <td className="px-4 py-2 font-mono text-xs text-muted-foreground">{dataset.slug}</td>
-              <td className="px-4 py-2 tabular-nums text-foreground">{dataset.itemCount}</td>
-              <td className="px-4 py-2">
+    <ul
+      className="divide-y divide-border/50 overflow-hidden rounded-lg border border-border/60"
+      data-testid="evals-datasets-table"
+    >
+      {datasets.map((dataset) => (
+        <li
+          key={dataset.datasetId}
+          className="flex flex-col gap-3 px-4 py-2 transition-colors hover:bg-muted/40 sm:flex-row sm:items-center sm:gap-6"
+        >
+          {/* identity: name + description */}
+          <div className="min-w-0 flex-1">
+            <span className="block truncate font-medium text-foreground" title={dataset.name}>
+              {dataset.name}
+            </span>
+            {dataset.description && (
+              <span className="block truncate text-xs text-muted-foreground" title={dataset.description}>
+                {dataset.description}
+              </span>
+            )}
+          </div>
+          <dl className="flex flex-wrap items-center gap-x-6 gap-y-2">
+            <div>
+              <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Slug</dt>
+              <dd className="mt-0.5 font-mono text-xs text-muted-foreground">{dataset.slug}</dd>
+            </div>
+            <div>
+              <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Items</dt>
+              <dd className="mt-0.5 tabular-nums text-sm text-foreground">{dataset.itemCount}</dd>
+            </div>
+            <div>
+              <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Source</dt>
+              <dd className="mt-0.5">
                 <Badge variant="outline" size="sm">
                   {SOURCE_LABEL[dataset.source]}
                 </Badge>
-              </td>
-              <td className="whitespace-nowrap px-4 py-2 text-xs text-muted-foreground">
+              </dd>
+            </div>
+            <div>
+              <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Created</dt>
+              <dd className="mt-0.5 whitespace-nowrap text-xs text-muted-foreground">
                 {formatDate(dataset.createdAt)}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+              </dd>
+            </div>
+          </dl>
+        </li>
+      ))}
+    </ul>
   );
 }
