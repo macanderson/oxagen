@@ -72,7 +72,6 @@ export const GITIGNORE_SECTIONS: Record<string, GitignoreSection> = {
       "htmlcov/",
       ".tox/",
       ".ipynb_checkpoints/",
-      ".python-version",
     ].join("\n"),
   },
   node: {
