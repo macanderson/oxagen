@@ -78,6 +78,32 @@ describe("parseAnsiLine", () => {
     expect(segments[0]?.className).toContain("text-error");
     expect(segments[0]?.className).toContain("font-semibold");
   });
+
+  // Light-mode regression: the black/gray, magenta, cyan and default-foreground
+  // codes must map to the theme-aware `ansi-*` classes (code-surface.css), NOT
+  // the old dark-only text-neutral-*/text-white/text-cyan-400/text-fuchsia-400
+  // which were invisible or mistuned on a GitHub-light background.
+  it("maps non-semantic SGR codes to theme-aware ansi-* classes", async () => {
+    const { parseAnsiLine } = await import("./terminal-trace-card");
+    const cases: Array<[string, string]> = [
+      ["\x1b[30mx", "ansi-dim"],
+      ["\x1b[90mx", "ansi-dim"],
+      ["\x1b[35mx", "ansi-magenta"],
+      ["\x1b[95mx", "ansi-magenta"],
+      ["\x1b[36mx", "ansi-cyan"],
+      ["\x1b[96mx", "ansi-cyan"],
+      ["\x1b[37mx", "ansi-fg"],
+      ["\x1b[97mx", "ansi-fg"],
+    ];
+    for (const [input, expected] of cases) {
+      expect(parseAnsiLine(input)[0]?.className).toBe(expected);
+    }
+    // No dark-only Tailwind colour class survives in the map.
+    for (const [input] of cases) {
+      const cls = parseAnsiLine(input)[0]?.className ?? "";
+      expect(cls).not.toMatch(/text-(neutral|white|cyan|fuchsia)/);
+    }
+  });
 });
 
 describe("TerminalTraceCard", () => {
