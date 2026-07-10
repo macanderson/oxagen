@@ -11,6 +11,7 @@ export * from "./workflow";
 export * from "./chat";
 export * from "./content";
 export * from "./billing";
+export * from "./reseller";
 export * from "./security";
 export * from "./iam";
 export * from "./mcp";

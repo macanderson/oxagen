@@ -325,6 +325,9 @@ export const baseEnvSchema = z.object({
   INGESTION_CRYPTO_PROVIDER: z.enum(["env", "kms"]).default("env").optional(),
   AWS_KMS_INGESTION_KEY_ARN: z.string().min(1).optional(),
   INGESTION_ENCRYPTION_KEY: z.string().min(1).optional(),
+  // Base64 master key for encrypting per-org reseller Stripe keys (reseller
+  // revenue). Optional: reseller-secret.ts falls back to INGESTION_ENCRYPTION_KEY.
+  BILLING_ENCRYPTION_KEY: z.string().min(1).optional(),
   // "1" routes GitHub feature inference through the Anthropic Message Batches
   // API (async, half price); unset = synchronous per-file calls.
   INGESTION_FEATURE_BATCH: z.string().optional(),

@@ -60,6 +60,7 @@ export const org = {
       `/${ctx.orgSlug}/billing/subscription`,
     usage: (ctx: ScopeContext): string => `/${ctx.orgSlug}/billing/usage`,
     invoices: (ctx: ScopeContext): string => `/${ctx.orgSlug}/billing/invoices`,
+    revenue: (ctx: ScopeContext): string => `/${ctx.orgSlug}/billing/revenue`,
   },
 
   // Developer portal (wired tabs only: mcp, tokens)

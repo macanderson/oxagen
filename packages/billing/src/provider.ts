@@ -65,7 +65,10 @@ export interface BillingSubscriptionUpdateInput {
  * - 'none': no proration at all, change takes effect at the next cycle
  *   (used for plan downgrades that keep current access until renewal).
  */
-export type BillingProrationBehavior = "always_invoice" | "create_prorations" | "none";
+export type BillingProrationBehavior =
+  | "always_invoice"
+  | "create_prorations"
+  | "none";
 
 export interface BillingSubscriptionUpgradeInput {
   /** New price id to switch to (provider-native id). */
@@ -188,7 +191,12 @@ export interface BillingDispute {
 
 // ── Invoice domain types ─────────────────────────────────────────────────────
 
-export type BillingInvoiceStatus = "draft" | "open" | "paid" | "void" | "uncollectible";
+export type BillingInvoiceStatus =
+  | "draft"
+  | "open"
+  | "paid"
+  | "void"
+  | "uncollectible";
 
 export interface BillingInvoiceLineItem {
   description: string;
@@ -222,6 +230,37 @@ export interface BillingInvoice {
   /** Reason this invoice was created ("subscription_create", "subscription_cycle", etc.). */
   billingReason: string | null;
   lineItems: BillingInvoiceLineItem[];
+}
+
+// ── External (reseller re-bill) invoice ──────────────────────────────────────
+
+export interface BillingExternalInvoiceLine {
+  description: string;
+  /** Total amount for this line, in cents. */
+  amountCents: number;
+  /** Metered quantity behind the line — informational; amountCents is the total. */
+  quantity: number;
+  metadata: Record<string, string>;
+}
+
+export interface BillingExternalInvoiceInput {
+  /** Existing provider customer id to reuse; when null, one is created. */
+  customerId: string | null;
+  /** Used to create the customer when customerId is null. */
+  customerName: string;
+  customerMetadata: Record<string, string>;
+  currency: string;
+  lines: BillingExternalInvoiceLine[];
+  metadata: Record<string, string>;
+  /** Finalize (open) the invoice immediately; false leaves it a provider draft. */
+  finalize: boolean;
+  /** Idempotency root so a retried push reuses the same customer, items, and invoice. */
+  idempotencyKey: string;
+}
+
+export interface BillingExternalInvoiceResult {
+  providerCustomerId: string;
+  invoice: BillingInvoice;
 }
 
 // ── Checkout domain types ────────────────────────────────────────────────────
@@ -322,12 +361,12 @@ export interface BillingWebhookEvent {
   rawPayload: Record<string, unknown>;
 
   // Typed data unions — exactly one will be set based on `type`.
-  subscriptionId?: string;        // subscription.* events (incl. trial_will_end)
-  invoice?: BillingInvoice;       // invoice.* events
-  checkoutSession?: BillingCheckoutSession;  // checkout.session.completed
-  paymentMethod?: BillingPaymentMethod;      // payment_method.* events
-  dispute?: BillingDispute;       // dispute.* events
-  refundedCharge?: BillingRefundedCharge;   // charge.refunded events
+  subscriptionId?: string; // subscription.* events (incl. trial_will_end)
+  invoice?: BillingInvoice; // invoice.* events
+  checkoutSession?: BillingCheckoutSession; // checkout.session.completed
+  paymentMethod?: BillingPaymentMethod; // payment_method.* events
+  dispute?: BillingDispute; // dispute.* events
+  refundedCharge?: BillingRefundedCharge; // charge.refunded events
 }
 
 export interface BillingCheckoutSession {
@@ -346,7 +385,9 @@ export interface BillingProvider {
   // ── Customer ────────────────────────────────────────────────────────────────
 
   /** Search for an existing customer by metadata. Returns null when none found. */
-  findCustomerByOrgId(orgId: string): Promise<BillingCustomerSearchResult | null>;
+  findCustomerByOrgId(
+    orgId: string,
+  ): Promise<BillingCustomerSearchResult | null>;
 
   /** Create a new customer. Returns the provider customer id. */
   createCustomer(input: BillingCustomerCreateInput): Promise<string>;
@@ -404,7 +445,10 @@ export interface BillingProvider {
   getDefaultPaymentMethodId(customerId: string): Promise<string | null>;
 
   /** Set the customer's default invoice payment method. */
-  setDefaultPaymentMethod(customerId: string, paymentMethodId: string): Promise<void>;
+  setDefaultPaymentMethod(
+    customerId: string,
+    paymentMethodId: string,
+  ): Promise<void>;
 
   /** Detach (remove) a saved payment method from the customer. */
   detachPaymentMethod(paymentMethodId: string): Promise<void>;
@@ -416,12 +460,24 @@ export interface BillingProvider {
   createSetupIntent(customerId: string): Promise<BillingSetupIntent>;
 
   /** Charge a saved card off-session (used by credit auto-reload). */
-  chargeOffSession(input: BillingOffSessionChargeInput): Promise<BillingOffSessionChargeResult>;
+  chargeOffSession(
+    input: BillingOffSessionChargeInput,
+  ): Promise<BillingOffSessionChargeResult>;
 
   // ── Invoice ─────────────────────────────────────────────────────────────────
 
   /** Retrieve a full invoice including line items. */
   getInvoice(invoiceId: string): Promise<BillingInvoice>;
+
+  /**
+   * Create (and optionally finalize) an invoice with arbitrary line items for an
+   * external customer — the reseller re-bill primitive. When customerId is null a
+   * customer is created from customerName/customerMetadata first. Idempotent via
+   * idempotencyKey so a retried push reuses the same customer, items, and invoice.
+   */
+  createExternalInvoice(
+    input: BillingExternalInvoiceInput,
+  ): Promise<BillingExternalInvoiceResult>;
 
   // ── Checkout ─────────────────────────────────────────────────────────────────
 

@@ -128,7 +128,9 @@ export async function readUsageBreakdown(args: {
 }): Promise<UsageBreakdown> {
   const ch = clickhouse();
 
-  const wsFilter = args.workspaceId ? "AND workspace_id = {workspaceId:UUID}" : "";
+  const wsFilter = args.workspaceId
+    ? "AND workspace_id = {workspaceId:UUID}"
+    : "";
   const params: Record<string, unknown> = {
     orgId: args.orgId,
     // ClickHouse's best_effort parser accepts the ISO `T` but chokes on the
@@ -148,7 +150,10 @@ export async function readUsageBreakdown(args: {
   // `extraSelect` is an aggregate projection (e.g. `any(provider)`) that must NOT
   // appear in GROUP BY — the grouping is on `group_key` alone. A model maps 1:1 to
   // a provider, so `any(provider)` is exact per group.
-  async function runGrouped(keyExpr: string, extraSelect = ""): Promise<GroupedRaw[]> {
+  async function runGrouped(
+    keyExpr: string,
+    extraSelect = "",
+  ): Promise<GroupedRaw[]> {
     const result = await ch.query({
       query: `
         SELECT ${keyExpr} AS group_key${extraSelect ? `, ${extraSelect}` : ""},
@@ -182,18 +187,24 @@ export async function readUsageBreakdown(args: {
     return rows.map((r) => ({ day: r.day, ...toTotals(r) }));
   })();
 
-  const [seriesRows, modelRows, surfaceRows, workspaceRows, capabilityRows, principalRows] =
-    await Promise.all([
-      seriesPromise,
-      // `any(provider)` is exact here: a given model id maps to exactly one provider.
-      runGrouped("model", "any(provider) AS provider"),
-      runGrouped("surface"),
-      runGrouped("workspace_id"),
-      runGrouped("capability_name"),
-      // principal_kind rides along like provider does for models: a principal
-      // uuid maps to exactly one kind, so `any()` is exact per group.
-      runGrouped("toString(principal_id)", "any(principal_kind) AS provider"),
-    ]);
+  const [
+    seriesRows,
+    modelRows,
+    surfaceRows,
+    workspaceRows,
+    capabilityRows,
+    principalRows,
+  ] = await Promise.all([
+    seriesPromise,
+    // `any(provider)` is exact here: a given model id maps to exactly one provider.
+    runGrouped("model", "any(provider) AS provider"),
+    runGrouped("surface"),
+    runGrouped("workspace_id"),
+    runGrouped("capability_name"),
+    // principal_kind rides along like provider does for models: a principal
+    // uuid maps to exactly one kind, so `any()` is exact per group.
+    runGrouped("toString(principal_id)", "any(principal_kind) AS provider"),
+  ]);
 
   const byModel: UsageBreakdownRow[] = modelRows.map((r) => ({
     key: r.group_key,
@@ -241,4 +252,88 @@ export async function readUsageBreakdown(args: {
     byCapability,
     byPrincipal,
   };
+}
+
+/**
+ * One DISJOINT slice of an org's usage for reseller attribution — the joint
+ * (workspace, principal, capability) grouping, so the slices sum to the org's
+ * total exactly once. The per-dimension breakdowns above are each a MARGINAL
+ * projection of the same usage and overlap, so summing across them would
+ * multi-count; attribution must run over disjoint slices instead.
+ */
+export interface ResellerUsageSlice {
+  /** workspace_id uuid as a string. */
+  workspaceId: string;
+  /** acting principal_id uuid as a string (nil uuid = unattributed legacy/system). */
+  principalId: string;
+  /** "human" | "agent" | "service", or "" for unattributed rows. */
+  principalKind: string;
+  /** capability name, or "" for pre-spine rows. */
+  capabilityName: string;
+  /** Raw metered cost for the slice, in micro-USD. */
+  costMicros: number;
+  /** Metered executions (token_usage rows) in the slice — the per_unit quantity. */
+  executions: number;
+}
+
+/**
+ * Aggregate `token_usage` for one org over `[start, end)` grouped by the joint
+ * (workspace, principal, capability) key. Each returned row is a disjoint slice
+ * of total spend, so a reseller can attribute every dollar to exactly one
+ * customer via priority-ordered rules with no double counting.
+ *
+ * Mirrors readUsageBreakdown's tenant/param conventions (mandatory org filter,
+ * half-open window, `Z`-stripped DateTime64 params). `principal_kind` rides
+ * along via `any()` — a principal maps 1:1 to a kind, so it is exact per group
+ * and must NOT appear in GROUP BY.
+ */
+export async function readResellerUsageAttribution(args: {
+  orgId: string;
+  start: Date;
+  end: Date;
+}): Promise<ResellerUsageSlice[]> {
+  const ch = clickhouse();
+  const params: Record<string, unknown> = {
+    orgId: args.orgId,
+    start: args.start.toISOString().replace("Z", ""),
+    end: args.end.toISOString().replace("Z", ""),
+  };
+
+  const result = await ch.query({
+    query: `
+      SELECT
+        toString(workspace_id)  AS workspace_id,
+        toString(principal_id)  AS principal_id,
+        any(principal_kind)     AS principal_kind,
+        capability_name         AS capability_name,
+        sum(cost_usd_micros)    AS cost_micros,
+        count()                 AS executions
+      FROM token_usage
+      WHERE org_id = {orgId:UUID}
+        AND created_at >= {start:DateTime64(3)}
+        AND created_at <  {end:DateTime64(3)}
+      GROUP BY workspace_id, principal_id, capability_name
+      ORDER BY cost_micros DESC
+    `,
+    query_params: params,
+    format: "JSONEachRow",
+  });
+
+  const rows = (await result.json()) as Array<{
+    workspace_id: string;
+    principal_id: string;
+    principal_kind: string;
+    capability_name: string;
+    cost_micros: string;
+    executions: string;
+  }>;
+
+  return rows.map((r) => ({
+    workspaceId: r.workspace_id,
+    principalId: r.principal_id,
+    principalKind: r.principal_kind ?? "",
+    capabilityName: r.capability_name ?? "",
+    costMicros: Number(r.cost_micros),
+    executions: Number(r.executions),
+  }));
 }

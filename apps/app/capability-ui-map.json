@@ -549,6 +549,141 @@
       "proof": "apps/app/e2e/sandbox-templates.spec.ts",
       "verifiedAt": "2026-07-08",
       "verifiedBy": "session_01NwQYbMXBT77CTwujnPHRH7"
+    },
+    "create_reseller_customer": {
+      "route": "/[orgSlug]/billing/revenue",
+      "page": "apps/app/src/app/[orgSlug]/billing/revenue/page.tsx",
+      "entry": "\"Add customer\" inline form → createCustomerAction",
+      "testid": "add-customer",
+      "proof": "apps/app/e2e/billing-revenue.spec.ts",
+      "verifiedAt": "2026-07-10",
+      "verifiedBy": "session_01Hi2b4PCDZG2LrYumbaqPwX"
+    },
+    "list_reseller_customers": {
+      "route": "/[orgSlug]/billing/revenue",
+      "page": "apps/app/src/app/[orgSlug]/billing/revenue/page.tsx",
+      "entry": "Customer accounts table (server read on page load)",
+      "testid": "customers-card",
+      "proof": "apps/app/e2e/billing-revenue.spec.ts",
+      "verifiedAt": "2026-07-10",
+      "verifiedBy": "session_01Hi2b4PCDZG2LrYumbaqPwX"
+    },
+    "update_reseller_customer": {
+      "route": "/[orgSlug]/billing/revenue",
+      "page": "apps/app/src/app/[orgSlug]/billing/revenue/page.tsx",
+      "entry": "Edit / Pause per customer row → updateCustomerAction",
+      "testid": "customer-row",
+      "proof": "apps/app/e2e/billing-revenue.spec.ts",
+      "verifiedAt": "2026-07-10",
+      "verifiedBy": "session_01Hi2b4PCDZG2LrYumbaqPwX"
+    },
+    "archive_reseller_customer": {
+      "route": "/[orgSlug]/billing/revenue",
+      "page": "apps/app/src/app/[orgSlug]/billing/revenue/page.tsx",
+      "entry": "\"Archive\" per customer row → archiveCustomerAction",
+      "testid": "customer-row",
+      "proof": "apps/app/e2e/billing-revenue.spec.ts",
+      "verifiedAt": "2026-07-10",
+      "verifiedBy": "session_01Hi2b4PCDZG2LrYumbaqPwX"
+    },
+    "create_reseller_price_plan": {
+      "route": "/[orgSlug]/billing/revenue",
+      "page": "apps/app/src/app/[orgSlug]/billing/revenue/page.tsx",
+      "entry": "\"Add plan\" inline form → createPricePlanAction",
+      "testid": "add-plan",
+      "proof": "apps/app/e2e/billing-revenue.spec.ts",
+      "verifiedAt": "2026-07-10",
+      "verifiedBy": "session_01Hi2b4PCDZG2LrYumbaqPwX"
+    },
+    "list_reseller_price_plans": {
+      "route": "/[orgSlug]/billing/revenue",
+      "page": "apps/app/src/app/[orgSlug]/billing/revenue/page.tsx",
+      "entry": "Price plans table (server read on page load)",
+      "testid": "price-plans-card",
+      "proof": "apps/app/e2e/billing-revenue.spec.ts",
+      "verifiedAt": "2026-07-10",
+      "verifiedBy": "session_01Hi2b4PCDZG2LrYumbaqPwX"
+    },
+    "update_reseller_price_plan": {
+      "route": "/[orgSlug]/billing/revenue",
+      "page": "apps/app/src/app/[orgSlug]/billing/revenue/page.tsx",
+      "entry": "\"Edit\" per plan row → updatePricePlanAction",
+      "testid": "price-plans-card",
+      "proof": "apps/app/e2e/billing-revenue.spec.ts",
+      "verifiedAt": "2026-07-10",
+      "verifiedBy": "session_01Hi2b4PCDZG2LrYumbaqPwX"
+    },
+    "save_reseller_attribution_rule": {
+      "route": "/[orgSlug]/billing/revenue",
+      "page": "apps/app/src/app/[orgSlug]/billing/revenue/page.tsx",
+      "entry": "\"Add rule\" / row Edit inline form → saveAttributionRuleAction",
+      "testid": "add-rule",
+      "proof": "apps/app/e2e/billing-revenue.spec.ts",
+      "verifiedAt": "2026-07-10",
+      "verifiedBy": "session_01Hi2b4PCDZG2LrYumbaqPwX"
+    },
+    "list_reseller_attribution_rules": {
+      "route": "/[orgSlug]/billing/revenue",
+      "page": "apps/app/src/app/[orgSlug]/billing/revenue/page.tsx",
+      "entry": "Attribution rules table (server read on page load)",
+      "testid": "rules-card",
+      "proof": "apps/app/e2e/billing-revenue.spec.ts",
+      "verifiedAt": "2026-07-10",
+      "verifiedBy": "session_01Hi2b4PCDZG2LrYumbaqPwX"
+    },
+    "delete_reseller_attribution_rule": {
+      "route": "/[orgSlug]/billing/revenue",
+      "page": "apps/app/src/app/[orgSlug]/billing/revenue/page.tsx",
+      "entry": "\"Delete\" per rule row → deleteAttributionRuleAction",
+      "testid": "rules-card",
+      "proof": "apps/app/e2e/billing-revenue.spec.ts",
+      "verifiedAt": "2026-07-10",
+      "verifiedBy": "session_01Hi2b4PCDZG2LrYumbaqPwX"
+    },
+    "preview_reseller_rebill": {
+      "route": "/[orgSlug]/billing/revenue",
+      "page": "apps/app/src/app/[orgSlug]/billing/revenue/page.tsx",
+      "entry": "Usage cost + projected revenue columns from current-period preview (server read)",
+      "testid": "customers-card",
+      "proof": "apps/app/e2e/billing-revenue.spec.ts",
+      "verifiedAt": "2026-07-10",
+      "verifiedBy": "session_01Hi2b4PCDZG2LrYumbaqPwX"
+    },
+    "push_reseller_rebill": {
+      "route": "/[orgSlug]/billing/revenue",
+      "page": "apps/app/src/app/[orgSlug]/billing/revenue/page.tsx",
+      "entry": "\"Push\" per customer row → pushRebillAction",
+      "testid": "push-customer",
+      "proof": "apps/app/e2e/billing-revenue.spec.ts",
+      "verifiedAt": "2026-07-10",
+      "verifiedBy": "session_01Hi2b4PCDZG2LrYumbaqPwX"
+    },
+    "list_reseller_rebill_runs": {
+      "route": "/[orgSlug]/billing/revenue",
+      "page": "apps/app/src/app/[orgSlug]/billing/revenue/page.tsx",
+      "entry": "Re-bill history table (server read on page load)",
+      "testid": "runs-card",
+      "proof": "apps/app/e2e/billing-revenue.spec.ts",
+      "verifiedAt": "2026-07-10",
+      "verifiedBy": "session_01Hi2b4PCDZG2LrYumbaqPwX"
+    },
+    "configure_reseller_stripe": {
+      "route": "/[orgSlug]/billing/revenue",
+      "page": "apps/app/src/app/[orgSlug]/billing/revenue/page.tsx",
+      "entry": "Connect / Replace Stripe key form → configureStripeAction",
+      "testid": "stripe-save",
+      "proof": "apps/app/e2e/billing-revenue.spec.ts",
+      "verifiedAt": "2026-07-10",
+      "verifiedBy": "session_01Hi2b4PCDZG2LrYumbaqPwX"
+    },
+    "get_reseller_stripe_status": {
+      "route": "/[orgSlug]/billing/revenue",
+      "page": "apps/app/src/app/[orgSlug]/billing/revenue/page.tsx",
+      "entry": "Stripe account connection card (server read on page load)",
+      "testid": "stripe-connect-card",
+      "proof": "apps/app/e2e/billing-revenue.spec.ts",
+      "verifiedAt": "2026-07-10",
+      "verifiedBy": "session_01Hi2b4PCDZG2LrYumbaqPwX"
     }
   }
 }
