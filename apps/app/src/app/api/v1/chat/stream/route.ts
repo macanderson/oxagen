@@ -58,14 +58,25 @@ import {
 import { streamMediaGeneration } from "./media-generation";
 import { createTurnTranslator, emitUsageEvent } from "./translate-stream";
 import { formatStreamError } from "./stream-parts";
-import { buildHistoryMessages, collectRecentAttachmentPublicIds } from "./history";
-import { resolveAttachmentImages, resolveAttachmentMediaDetailed } from "./attachments";
+import {
+  buildHistoryMessages,
+  collectRecentAttachmentPublicIds,
+} from "./history";
+import {
+  resolveAttachmentImages,
+  resolveAttachmentMediaDetailed,
+} from "./attachments";
 import { decideAttachmentRouting } from "./attachment-routing";
 import {
   recallWorkspaceMemoryDetailed,
   resolveGroundingCitations,
 } from "./recall-context";
 import { createChatMemoryProvider } from "./engine-memory";
+import {
+  createChatEngramOnEvent,
+  emitChatTurnMemory,
+  type AgentEventContext,
+} from "./memory-capture";
 import { buildPageContextMessage } from "./page-context";
 import { evaluateTurnCreditGate } from "./credit-gate";
 import {
@@ -267,7 +278,11 @@ const HISTORY_LIMIT = 50;
 // platform default), then fast, then precise — every default OXAGEN_LLM_*
 // tier is normally vision-capable, so this only matters for an
 // unusually-configured workspace.
-const ATTACHMENT_VISION_TIER_FALLBACK = ["balanced", "fast", "precise"] as const;
+const ATTACHMENT_VISION_TIER_FALLBACK = [
+  "balanced",
+  "fast",
+  "precise",
+] as const;
 
 // Runaway backstop for the agentic tool loop, NOT a functional limit. A turn
 // ends naturally the moment the model returns a step with no tool call (its
@@ -477,10 +492,11 @@ export async function POST(request: NextRequest): Promise<Response> {
   let videoAttachments: Array<{ data: Buffer; mediaType: string }> = [];
   if (attachments.length > 0) {
     const publicIds = attachments.map((a) => a.publicId);
-    const { resolved, notFound, fetchFailed } = await resolveAttachmentMediaDetailed(
-      publicIds,
-      { orgId: tenant.id, workspaceId: workspace.id },
-    );
+    const { resolved, notFound, fetchFailed } =
+      await resolveAttachmentMediaDetailed(publicIds, {
+        orgId: tenant.id,
+        workspaceId: workspace.id,
+      });
     // A genuinely missing row is user-fixable (unknown/foreign/not-ready/
     // deleted) → 422 with the "re-attach" guidance. A row that EXISTS but whose
     // bytes momentarily failed to fetch is NOT the user's fault → retryable 502.
@@ -518,13 +534,16 @@ export async function POST(request: NextRequest): Promise<Response> {
     // only affecting which images are dropped when a video rides as a file part.
     const imageRefs = attachments
       .filter((a) => resolved.get(a.publicId)!.kind === "image")
-      .map((a) => ({ publicId: a.publicId, keyframeForVideo: a.keyframeForVideo }));
+      .map((a) => ({
+        publicId: a.publicId,
+        keyframeForVideo: a.keyframeForVideo,
+      }));
     const videoRefs = attachments
       .filter((a) => resolved.get(a.publicId)!.kind === "video")
       .map((a) => ({ publicId: a.publicId }));
 
-    const upgradeCandidates = ATTACHMENT_VISION_TIER_FALLBACK.map((fallbackTier) =>
-      modelIdOf(selectModel({ tier: fallbackTier })),
+    const upgradeCandidates = ATTACHMENT_VISION_TIER_FALLBACK.map(
+      (fallbackTier) => modelIdOf(selectModel({ tier: fallbackTier })),
     );
     const decision = decideAttachmentRouting({
       model: modelIdOf(turnModel),
@@ -698,6 +717,12 @@ export async function POST(request: NextRequest): Promise<Response> {
       // down. Null unless the turn is a code-mode turn with a configured driver.
       let codeWorkspace: ModalSandboxWorkspace | null = null;
 
+      // Agent memory capture (Engram episodic events, memory-capture.ts).
+      // Declared here (not inside the try) so the catch can still emit a
+      // turn-level failure event — null until the try block resolves the
+      // tenant-scoped ids it needs (never emitted with partial/ambient state).
+      let memoryCtx: AgentEventContext | null = null;
+
       // Persist the assistant reply so it survives a refresh and is included in
       // the next turn's history (OXA-1509). Best-effort: a DB failure here must
       // NOT corrupt the SSE response the client already consumed, and must not
@@ -790,6 +815,20 @@ export async function POST(request: NextRequest): Promise<Response> {
           clientIp,
         };
 
+        // Agent memory capture (memory-capture.ts wraps @oxagen/agent/runtime/
+        // engram-writer): rides the SAME tenant-asserted org/workspace ids as
+        // every other capability call in this turn — never ambient state, so
+        // this request can only ever write into ITS OWN namespace. Wired into
+        // the engine's onEvent (per-tool-call) below and a turn-level summary
+        // once the turn resolves. Fire-and-forget everywhere it's used.
+        memoryCtx = {
+          orgId: tenant.id,
+          workspaceId: workspace.id,
+          sessionId: conversationId ?? undefined,
+          agentId: agentId ?? undefined,
+          messageId: capCtx.messageId,
+        };
+
         // ── Optional agent binding (launch a published agent into this session) ─
         // When the request carries an `agentId`, load that agent's definition ONCE
         // and merge its config into THIS turn BEFORE tools + prompt are assembled:
@@ -824,14 +863,13 @@ export async function POST(request: NextRequest): Promise<Response> {
             const def = await runInTenantScope(
               { orgId: tenant.id, workspaceId: workspace.id },
               () =>
-                invoke(
-                  "get_agent_def",
-                  { agentId },
-                  capCtx,
-                  { surface: "agent" },
-                ),
+                invoke("get_agent_def", { agentId }, capCtx, {
+                  surface: "agent",
+                }),
             );
-            agentIsCode = isCodeAgentType((def as AgentBindingDefinition).agentType);
+            agentIsCode = isCodeAgentType(
+              (def as AgentBindingDefinition).agentType,
+            );
             const binding = applyAgentBinding({
               def: def as AgentBindingDefinition,
               skills: pinnedSkillSlugs,
@@ -962,7 +1000,9 @@ export async function POST(request: NextRequest): Promise<Response> {
               // read degrades to TURN_BUDGET_OFF so a broken preferences row
               // never blocks a turn from running.
               requestBudget
-                ? Promise.resolve(resolveTurnBudgetPolicy(requestBudget, TURN_BUDGET_OFF))
+                ? Promise.resolve(
+                    resolveTurnBudgetPolicy(requestBudget, TURN_BUDGET_OFF),
+                  )
                 : budgetPolicyReadHandler({}, capCtx)
                     .then(turnBudgetPolicyFromSaved)
                     .catch(() => TURN_BUDGET_OFF),
@@ -985,7 +1025,9 @@ export async function POST(request: NextRequest): Promise<Response> {
               // governance row must never block a turn from running, exactly
               // like the TURN_BUDGET_OFF fallback above.
               invoke("get_budget_policy", {}, capCtx, { surface: "agent" })
-                .then((raw) => governedBudgetFromRead(raw as SavedWorkspaceGovernance))
+                .then((raw) =>
+                  governedBudgetFromRead(raw as SavedWorkspaceGovernance),
+                )
                 .catch(() => null),
             ]),
         );
@@ -1038,7 +1080,8 @@ export async function POST(request: NextRequest): Promise<Response> {
         let pageFormFillTool: ToolSet | undefined;
 
         if (pageContext?.fillableForm) {
-          const { route: pcRoute, entitySummary: pcEntitySummary } = pageContext;
+          const { route: pcRoute, entitySummary: pcEntitySummary } =
+            pageContext;
           const { fields: pcFields } = pageContext.fillableForm;
           pageFormFillTool = {
             page_form_fill: tool({
@@ -1119,72 +1162,78 @@ export async function POST(request: NextRequest): Promise<Response> {
         // governance, resolved above via resolveEffectiveTurnBudget), not the
         // raw member policy — a workspace ceiling must bind even when the
         // member never configured (or tried to loosen) their own budget.
-        const budgetGuard = createTurnBudgetGuard(effectiveTurnBudgetPolicy, modelId, {
-          // grace mode: informational, non-blocking — the turn keeps running
-          // past its base limit but inside the grace cushion.
-          onWithinGrace: (verdict) => {
-            emit({
-              type: "budget-notice",
-              state: "within_grace",
-              costUsd: verdict.costUsd,
-              limitUsd: verdict.limitUsd,
-              mode: verdict.mode,
-            });
+        const budgetGuard = createTurnBudgetGuard(
+          effectiveTurnBudgetPolicy,
+          modelId,
+          {
+            // grace mode: informational, non-blocking — the turn keeps running
+            // past its base limit but inside the grace cushion.
+            onWithinGrace: (verdict) => {
+              emit({
+                type: "budget-notice",
+                state: "within_grace",
+                costUsd: verdict.costUsd,
+                limitUsd: verdict.limitUsd,
+                mode: verdict.mode,
+              });
+            },
+            // enforce mode, or a grace cushion exhausted, or a denied/expired
+            // prompt-mode pause (below): the turn ends here with
+            // `stopReason: "budget"` on the engine result.
+            onStop: (verdict) => {
+              emit({
+                type: "budget-notice",
+                state: "stopped",
+                costUsd: verdict.costUsd,
+                limitUsd: verdict.limitUsd,
+                mode: verdict.mode,
+              });
+            },
+            // prompt mode: reuse the EXISTING tool-approval machinery verbatim
+            // (packages/agent/src/runtime/approval.ts + the approval-required /
+            // approval-resolved SSE events + the client's approval-waiter in
+            // use-tool-stream.ts) rather than inventing a second pause protocol.
+            // createApprovalRequest/waitForApproval read/write via withTenantDb,
+            // which needs an active ALS tenant scope — this hook runs from
+            // INSIDE the engine's step loop, OUTSIDE the runInTenantScope that
+            // wrapped materializeTools above, so re-enter scope here exactly
+            // like the tool-approval execute() closure does.
+            onPause: async (verdict) => {
+              const costLabel = formatBudgetUsd(verdict.costUsd);
+              const limitLabel = formatBudgetUsd(verdict.limitUsd);
+              const inputPreview = {
+                costUsd: verdict.costUsd,
+                limitUsd: verdict.limitUsd,
+                message: `Per-turn budget reached: ${costLabel} of ${limitLabel}. Approve to continue for another ${limitLabel}.`,
+              };
+              const { approvalId } = await runInTenantScope(
+                { orgId: tenant.id, workspaceId: workspace.id },
+                () =>
+                  createApprovalRequest({
+                    orgId: tenant.id,
+                    workspaceId: workspace.id,
+                    messageId: capCtx.messageId,
+                    capabilityName: "budget.turn.continue",
+                    inputPreview,
+                    riskLevel: "low",
+                  }),
+              );
+              const expiresAt = new Date(
+                Date.now() + 5 * 60 * 1000,
+              ).toISOString();
+              emit({
+                type: "approval-required",
+                approvalId,
+                capability: "budget.turn.continue",
+                inputPreview,
+                riskLevel: "low",
+                expiresAt,
+              });
+              const resolution = await waitForApproval(approvalId);
+              return resolution.resolution === "approved";
+            },
           },
-          // enforce mode, or a grace cushion exhausted, or a denied/expired
-          // prompt-mode pause (below): the turn ends here with
-          // `stopReason: "budget"` on the engine result.
-          onStop: (verdict) => {
-            emit({
-              type: "budget-notice",
-              state: "stopped",
-              costUsd: verdict.costUsd,
-              limitUsd: verdict.limitUsd,
-              mode: verdict.mode,
-            });
-          },
-          // prompt mode: reuse the EXISTING tool-approval machinery verbatim
-          // (packages/agent/src/runtime/approval.ts + the approval-required /
-          // approval-resolved SSE events + the client's approval-waiter in
-          // use-tool-stream.ts) rather than inventing a second pause protocol.
-          // createApprovalRequest/waitForApproval read/write via withTenantDb,
-          // which needs an active ALS tenant scope — this hook runs from
-          // INSIDE the engine's step loop, OUTSIDE the runInTenantScope that
-          // wrapped materializeTools above, so re-enter scope here exactly
-          // like the tool-approval execute() closure does.
-          onPause: async (verdict) => {
-            const costLabel = formatBudgetUsd(verdict.costUsd);
-            const limitLabel = formatBudgetUsd(verdict.limitUsd);
-            const inputPreview = {
-              costUsd: verdict.costUsd,
-              limitUsd: verdict.limitUsd,
-              message: `Per-turn budget reached: ${costLabel} of ${limitLabel}. Approve to continue for another ${limitLabel}.`,
-            };
-            const { approvalId } = await runInTenantScope(
-              { orgId: tenant.id, workspaceId: workspace.id },
-              () =>
-                createApprovalRequest({
-                  orgId: tenant.id,
-                  workspaceId: workspace.id,
-                  messageId: capCtx.messageId,
-                  capabilityName: "budget.turn.continue",
-                  inputPreview,
-                  riskLevel: "low",
-                }),
-            );
-            const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
-            emit({
-              type: "approval-required",
-              approvalId,
-              capability: "budget.turn.continue",
-              inputPreview,
-              riskLevel: "low",
-              expiresAt,
-            });
-            const resolution = await waitForApproval(approvalId);
-            return resolution.resolution === "approved";
-          },
-        });
+        );
 
         // ── Code mode: bind the durable sandbox workspace + code graph ────────
         // When the composer selected a repo + environment, run the coding engine
@@ -1227,7 +1276,12 @@ export async function POST(request: NextRequest): Promise<Response> {
               // one conversation reuses ONE warm sandbox across turns.
               sessionKey: `chat:${workspace.id}:${conversationId ?? requestId}:${codeMode.connectionId}`,
               environmentId: codeMode.environmentId,
-              repo: { owner: codeMode.owner, repo: codeMode.name, ref: branch, token },
+              repo: {
+                owner: codeMode.owner,
+                repo: codeMode.name,
+                ref: branch,
+                token,
+              },
             });
             codeGraphForTurn = createNeo4jCodeGraphProvider();
           }
@@ -1245,7 +1299,8 @@ export async function POST(request: NextRequest): Promise<Response> {
         ) {
           const lines: string[] = ["## Pinned chat context"];
           if (pinnedContext.repo) {
-            const branch = pinnedContext.repo.defaultBranch ?? "the default branch";
+            const branch =
+              pinnedContext.repo.defaultBranch ?? "the default branch";
             lines.push(
               `Repository: ${pinnedContext.repo.owner}/${pinnedContext.repo.name} (default branch ${branch})`,
             );
@@ -1318,7 +1373,9 @@ export async function POST(request: NextRequest): Promise<Response> {
             );
             if (row && Object.keys(row.properties).length > 0) {
               const json = JSON.stringify(row.properties);
-              lines.push(`  properties: ${json.length > 600 ? `${json.slice(0, 600)}…` : json}`);
+              lines.push(
+                `  properties: ${json.length > 600 ? `${json.slice(0, 600)}…` : json}`,
+              );
             }
             // A repository mention doubles as repo context when nothing is
             // pinned and code mode is off — same guidance the pinned-context
@@ -1340,19 +1397,27 @@ export async function POST(request: NextRequest): Promise<Response> {
               );
             }
           }
-          referencesContextMessage = { role: "user", content: lines.join("\n") };
+          referencesContextMessage = {
+            role: "user",
+            content: lines.join("\n"),
+          };
 
           const nodeReferences = uniqueMentions
             .filter((m) => m.type === "node")
             .map((m) => ({ nodeId: m.slug }));
           if (nodeReferences.length > 0) {
-            void runInTenantScope({ orgId: tenant.id, workspaceId: workspace.id }, () =>
-              invoke(
-                "cite_reference",
-                { executionRef: capCtx.messageId ?? requestId, references: nodeReferences },
-                capCtx,
-                { surface: "agent" },
-              ),
+            void runInTenantScope(
+              { orgId: tenant.id, workspaceId: workspace.id },
+              () =>
+                invoke(
+                  "cite_reference",
+                  {
+                    executionRef: capCtx.messageId ?? requestId,
+                    references: nodeReferences,
+                  },
+                  capCtx,
+                  { surface: "agent" },
+                ),
             ).catch((err: unknown) => {
               logger.warn(
                 { err, orgId: tenant.id, workspaceId: workspace.id },
@@ -1459,6 +1524,10 @@ export async function POST(request: NextRequest): Promise<Response> {
           // through the metered AI port's streamAgentReply.
           signal: request.signal,
           onStreamPart: (part) => translator?.onPart(part),
+          // Agent memory capture: fires emitToolCall (memory-capture.ts) for
+          // every completed tool call this turn, so consolidation has real
+          // episodic events from the chat surface to distill/reinforce/decay.
+          onEvent: createChatEngramOnEvent(memoryCtx),
           // Per-turn dollar budget (OXA — turn-budget). undefined when the
           // resolved policy is off — an unbudgeted turn runs exactly as
           // before this feature.
@@ -1466,6 +1535,18 @@ export async function POST(request: NextRequest): Promise<Response> {
         });
 
         const { assistantText, persistedBlocks } = translator.finish();
+
+        // Turn-level memory capture (memory-capture.ts): ONE episodic event
+        // summarizing the whole turn, so a tool-free Q&A turn still populates
+        // agent memory (the per-tool-call events above only fire when the
+        // turn actually calls a tool). Fire-and-forget.
+        emitChatTurnMemory(memoryCtx, {
+          instruction: content,
+          responseLength: assistantText.length,
+          changedFiles: result.changedFiles,
+          steps: result.steps,
+          outcome: "success",
+        });
 
         // ── Per-turn next-step suggestions ─────────────────────────────────
         // Kick off conversation-aware suggestion generation NOW — the moment the
@@ -1555,9 +1636,25 @@ export async function POST(request: NextRequest): Promise<Response> {
         // abort (where today an error PART did not throw). Flush + persist the
         // partial turn BEFORE emitting the error so a refresh still shows what
         // streamed, matching the old behaviour.
+        let partialAssistantText = "";
         if (translator) {
           const { assistantText, persistedBlocks } = translator.finish();
+          partialAssistantText = assistantText;
           await persistAssistantTurn(assistantText, persistedBlocks);
+        }
+        // Agent memory capture: a failed turn is a real outcome the nightly
+        // consolidation reinforcement step should learn from too, not only
+        // successful ones. Only fires once tenant ids were resolved — a
+        // failure before capCtx/memoryCtx were set has no tenant-scoped
+        // namespace to attribute the event to.
+        if (memoryCtx) {
+          emitChatTurnMemory(memoryCtx, {
+            instruction: content,
+            responseLength: partialAssistantText.length,
+            changedFiles: [],
+            steps: 0,
+            outcome: "failure",
+          });
         }
         // Surface stream errors as a structured `error` event so the client can
         // show a readable toast. `formatStreamError` unwraps an API error
