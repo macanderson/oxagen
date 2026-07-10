@@ -136,62 +136,62 @@ const BUILD_SUGGESTION_BANK: readonly SuggestedPrompt[] = [
   {
     label: "Turn Into An Agent",
     prompt:
-      "Create a reusable Oxagen agent that does what we just worked through, and equip it with the tools and skills it needs.",
+      "Create a reusable Oxagen agent that performs the task from this conversation end to end. Derive its instructions from the exact approach we used, equip it with the specific tools and skills it needs, then run it once against a real example and show me the output so we can verify it matches what we produced here.",
   },
   {
     label: "Automate This",
     prompt:
-      "Design an automation or workflow that runs this for me end to end on a schedule or trigger.",
+      "Design an automation that runs the work from this conversation end to end without me. Pick the right trigger (schedule, webhook, or event), wire in the concrete inputs we used, define what a failed run looks like and how I get notified, then do a dry run and show me the result.",
   },
   {
     label: "Add To Knowledge Graph",
     prompt:
-      "Wire the key facts from our conversation into the workspace knowledge graph so future agents can cite them.",
+      "Extract the concrete facts, entities, and relationships established in this conversation and write them into the workspace knowledge graph with the correct labels and properties. When done, run a graph query that retrieves what you added and show me the cited nodes so I can confirm future agents will find them.",
   },
   {
     label: "Expose As MCP Tool",
     prompt:
-      "Turn this into an MCP tool I can call from my other agents and IDE — define the contract, inputs, and output.",
+      "Turn the capability from this conversation into an MCP tool I can call from my IDE and other agents. Define the contract — name, input schema, output shape, and error cases — using the real inputs and outputs we worked with here, wire it up, then invoke it once and show me the round-trip.",
   },
   {
     label: "Set Up An Eval",
     prompt:
-      "Create an eval suite that checks the quality of what we just produced, with a few concrete test cases.",
+      "Create an eval suite that scores the quality of what we produced in this conversation. Derive 3–5 concrete test cases from the actual inputs and expected outputs discussed here, define pass criteria, run the suite once, and report the scores with anything that failed.",
   },
   {
     label: "Meter And Bill It",
     prompt:
-      "Set up a usage meter for this so I can track consumption and bill customers for it.",
+      "Set up a usage meter for the capability we built in this conversation so consumption is tracked per customer. Choose the billable unit that matches how it is actually invoked, set an initial price, wire it into the billing loop, then simulate a few invocations and show me the metered events that land.",
   },
   {
     label: "Connect A Data Source",
     prompt:
-      "Recommend and connect a data source that would make this better, and map it into the knowledge graph.",
+      "Identify the single data source that would most improve the work in this conversation, then connect it and map its entities into the knowledge graph. Explain the mapping choices, run the initial sync, and show me a graph query over the newly ingested data proving it landed.",
   },
   {
     label: "Query The Graph",
     prompt:
-      "Explore the knowledge graph for entities and relationships related to what we just discussed.",
+      "Query the knowledge graph for entities and relationships connected to the specific topics of this conversation. Show me what exists, flag what is missing or stale relative to what we discussed, and propose the concrete writes that would close those gaps.",
   },
   {
     label: "Draft A Skill",
     prompt:
-      "Package the approach we just took into a reusable agent skill I can share with my team.",
+      "Package the approach we used in this conversation into a reusable agent skill: name it, write the instructions capturing each step and decision we made, declare when it should trigger, and register it in the workspace. Then show me the skill definition so I can review before my team starts using it.",
   },
   {
     label: "Publish To Marketplace",
     prompt:
-      "Help me package and publish what we built as a listing in the Oxagen marketplace.",
+      "Prepare what we built in this conversation for an Oxagen marketplace listing: write the listing description from its real capabilities, declare the tools and permissions it needs, set pricing, and walk me through the publish flow stopping before the final submit so I can review.",
   },
   {
     label: "Wire Up An API Route",
     prompt:
-      "Expose this capability as a REST API endpoint I can call from my app, with the request and response shape.",
+      "Expose the capability from this conversation as a REST endpoint. Define the request and response shapes from the real data we handled, wire the route through the capability contract so it is governed and metered, then call it once with a sample payload and show me the response.",
   },
   {
     label: "Scale With A Fleet",
     prompt:
-      "Show me how to run this across many inputs at once using a fleet of subagents, then aggregate the results.",
+      "Take the task we just did once and run it across many inputs with a fleet of subagents. Define the input list from the context of this conversation, dispatch the fan-out, aggregate the results into a single table, and flag any items that failed so I can rerun just those.",
   },
 ];
 
@@ -352,12 +352,14 @@ export function deriveSuggestions(ctx: SuggestionCtx): SuggestedPrompt[] {
 
     case "conversation":
       suggestions.push({
-        label: "Continue Last Thread",
-        prompt: "Pick up where we left off in this conversation and continue the work.",
+        label: "Continue The Thread",
+        prompt:
+          "Pick up exactly where this conversation left off: restate the current goal in one line, then execute the next concrete step of the work and show me the result.",
       });
       suggestions.push({
-        label: "Summarize Conversation",
-        prompt: "Summarize this conversation so far, highlighting key decisions, action items, and open questions.",
+        label: "Verify The Work",
+        prompt:
+          "Take the most recent thing we produced in this conversation and verify it holds up: check it against the original requirements, probe the likely edge cases, and report anything broken along with a proposed fix.",
       });
       break;
 
