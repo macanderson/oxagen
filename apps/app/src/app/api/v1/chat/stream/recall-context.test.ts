@@ -13,8 +13,13 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
+
+vi.mock("@oxagen/handlers/logger", () => ({
+  logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() },
+}));
 import type { CapabilityContext } from "@oxagen/oxagen";
 import { agentMemoryRecall } from "@oxagen/oxagen/contracts/agent.memory.recall";
+import { logger } from "@oxagen/handlers/logger";
 import { graphNodeGet } from "@oxagen/oxagen/contracts/graph.node.get";
 import {
   formatRecalledMemories,
@@ -54,7 +59,6 @@ const CTX: CapabilityContext = {
   clientIp: null,
 } as CapabilityContext;
 
-
 describe("formatRecalledMemories", () => {
   it("returns null when there are no memories (no empty section)", () => {
     expect(formatRecalledMemories([])).toBeNull();
@@ -71,9 +75,16 @@ describe("formatRecalledMemories", () => {
 
   it("annotates RULE memories with their enforcement score", () => {
     const body = formatRecalledMemories([
-      memory({ memoryClass: "RULE", memoryKind: "convention", lesson: "Use withTenantDb", enforcementScore: 90 }),
+      memory({
+        memoryClass: "RULE",
+        memoryKind: "convention",
+        lesson: "Use withTenantDb",
+        enforcementScore: 90,
+      }),
     ]);
-    expect(body).toContain("- [RULE·convention] Use withTenantDb (enforcement 90)");
+    expect(body).toContain(
+      "- [RULE·convention] Use withTenantDb (enforcement 90)",
+    );
   });
 
   it("collapses whitespace in multi-line lessons onto one bullet", () => {
@@ -87,7 +98,9 @@ describe("formatRecalledMemories", () => {
 
 describe("stripRecalledMemoryHeading", () => {
   it("drops the leading ## heading and following blank lines, keeps the preamble", () => {
-    const body = formatRecalledMemories([memory({ lesson: "use strict types" })]);
+    const body = formatRecalledMemories([
+      memory({ lesson: "use strict types" }),
+    ]);
     expect(body).not.toBeNull();
     const stripped = stripRecalledMemoryHeading(body as string);
     // The engine adds its own heading, so ours must be gone…
@@ -99,7 +112,9 @@ describe("stripRecalledMemoryHeading", () => {
   });
 
   it("returns the body unchanged when there is no leading heading", () => {
-    expect(stripRecalledMemoryHeading("- just a bullet")).toBe("- just a bullet");
+    expect(stripRecalledMemoryHeading("- just a bullet")).toBe(
+      "- just a bullet",
+    );
   });
 });
 
@@ -118,7 +133,9 @@ describe("buildRecalledMemoryMessage", () => {
 
 describe("recallWorkspaceMemory", () => {
   it("invokes agent.memory.recall with the latest user text, a bounded limit, and executionRef", async () => {
-    const invokeFn = vi.fn().mockResolvedValue({ memories: [memory({ lesson: "Prior lesson" })] });
+    const invokeFn = vi
+      .fn()
+      .mockResolvedValue({ memories: [memory({ lesson: "Prior lesson" })] });
 
     const msg = await recallWorkspaceMemory({
       query: "why did the deploy fail?",
@@ -154,7 +171,8 @@ describe("recallWorkspaceMemory", () => {
     expect(input.query).toHaveLength(500);
   });
 
-  it("returns null (turn untouched) when recall throws", async () => {
+  it("returns null (turn untouched) AND logs a breadcrumb when recall throws", async () => {
+    vi.mocked(logger.warn).mockClear();
     const invokeFn = vi.fn().mockRejectedValue(new Error("neo4j down"));
     const msg = await recallWorkspaceMemory({
       query: "anything",
@@ -163,6 +181,13 @@ describe("recallWorkspaceMemory", () => {
       invokeFn,
     });
     expect(msg).toBeNull();
+    // Fault must be observable, not silently swallowed.
+    expect(logger.warn).toHaveBeenCalled();
+    const [, warnMsg] = vi.mocked(logger.warn).mock.calls[0] as [
+      unknown,
+      string,
+    ];
+    expect(warnMsg).toContain("recall failed");
   });
 
   it("returns null when recall yields no memories", async () => {
@@ -206,7 +231,9 @@ describe("recallWorkspaceMemoryDetailed", () => {
   it("returns both the volatile message and the raw memories on success", async () => {
     const invokeFn = vi
       .fn()
-      .mockResolvedValue({ memories: [memory({ id: "m-9", lesson: "Detailed lesson" })] });
+      .mockResolvedValue({
+        memories: [memory({ id: "m-9", lesson: "Detailed lesson" })],
+      });
 
     const { message, memories } = await recallWorkspaceMemoryDetailed({
       query: "how does billing work?",
@@ -246,7 +273,9 @@ describe("recallWorkspaceMemoryDetailed", () => {
 });
 
 describe("resolveGroundingCitations", () => {
-  const nodeOutput = (over: Partial<{ nodeId: string; label: string; displayName: string }> = {}) => ({
+  const nodeOutput = (
+    over: Partial<{ nodeId: string; label: string; displayName: string }> = {},
+  ) => ({
     node: {
       nodeId: over.nodeId ?? "node-1",
       label: over.label ?? "Feature",
@@ -260,15 +289,23 @@ describe("resolveGroundingCitations", () => {
 
   it("returns [] for no memories and never invokes the graph", async () => {
     const invokeFn = vi.fn();
-    const hits = await resolveGroundingCitations({ memories: [], ctx: CTX, invokeFn });
+    const hits = await resolveGroundingCitations({
+      memories: [],
+      ctx: CTX,
+      invokeFn,
+    });
     expect(hits).toEqual([]);
     expect(invokeFn).not.toHaveBeenCalled();
   });
 
   it("resolves each memory's grounding node via graph.node.get and attaches a KnowledgeNodeRef", async () => {
-    const invokeFn = vi.fn().mockResolvedValue(nodeOutput({ nodeId: "node-1" }));
+    const invokeFn = vi
+      .fn()
+      .mockResolvedValue(nodeOutput({ nodeId: "node-1" }));
     const hits = await resolveGroundingCitations({
-      memories: [memory({ id: "m-1", nodeRef: "node-1", lesson: "Grounded fact" })],
+      memories: [
+        memory({ id: "m-1", nodeRef: "node-1", lesson: "Grounded fact" }),
+      ],
       ctx: CTX,
       invokeFn,
     });
@@ -295,7 +332,9 @@ describe("resolveGroundingCitations", () => {
   });
 
   it("dedups repeated nodeRefs to a single graph lookup", async () => {
-    const invokeFn = vi.fn().mockResolvedValue(nodeOutput({ nodeId: "node-1" }));
+    const invokeFn = vi
+      .fn()
+      .mockResolvedValue(nodeOutput({ nodeId: "node-1" }));
     const hits = await resolveGroundingCitations({
       memories: [
         memory({ id: "m-1", nodeRef: "node-1" }),
@@ -346,4 +385,3 @@ describe("resolveGroundingCitations", () => {
     expect(hits[0]!.node).toBeUndefined();
   });
 });
-

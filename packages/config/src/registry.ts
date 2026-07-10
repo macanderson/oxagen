@@ -261,6 +261,20 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "manual",
     placeholder: "30000",
   },
+  MCP_OAUTH_FETCH_TIMEOUT_MS: {
+    group: "MCP",
+    description:
+      "Per-request timeout (ms) for the app MCP OAuth authorize/callback flows " +
+      "when the MCP SDK fetches a third-party authorization server well-known / " +
+      "token endpoints. Bounds a hung server so it cannot stall the serverless " +
+      "function. Optional — defaults to 10000 in lib/mcp-oauth/safe-fetch.ts.",
+    secret: false,
+    clientExposed: false,
+    services: ["app"],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "10000",
+  },
   CIRCUIT_BREAKER_SUCCESS_THRESHOLD: {
     group: "Circuit breaker",
     description:
