@@ -60,7 +60,7 @@ import {
   readWorkspaceLink,
   writeWorkspaceLink,
   type WorkspaceLink,
-} from "../lib/workspace-link.js";
+} from "./workspace-link.js";
 import { apiPostOrThrow, apiGetOrThrow } from "../lib/api.js";
 
 // ---------------------------------------------------------------------------

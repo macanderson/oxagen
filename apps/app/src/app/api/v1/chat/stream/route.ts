@@ -82,7 +82,7 @@ import { evaluateTurnCreditGate } from "./credit-gate";
 import {
   applyAgentBinding,
   type AgentBindingDefinition,
-} from "@/lib/chat/apply-agent-binding";
+} from "./apply-agent-binding";
 // Per-turn dollar budget (OXA — turn-budget). The gate itself (policy shape,
 // modes, the pure evaluator, createTurnBudgetGuard) lives in @oxagen/billing —
 // this route only resolves the effective policy and wires the three hooks to

@@ -32,7 +32,7 @@ vi.mock("../../lib/linker.js", () => ({
 // exercise only its own persistence contract, never the real HTTP
 // server/browser-open side effects (those are lib/loopback-login.ts's own
 // unit tests).
-vi.mock("../../lib/loopback-login.js", () => ({
+vi.mock("../../auth/loopback-login.js", () => ({
   browserLogin: vi.fn(),
 }));
 
@@ -50,7 +50,7 @@ import {
   clearConfig,
 } from "../../lib/config.js";
 import { resolveLinkedAccount } from "../../lib/linker.js";
-import { browserLogin } from "../../lib/loopback-login.js";
+import { browserLogin } from "../../auth/loopback-login.js";
 import { handleLogin, handleLogout, validatePlatformToken, runBrowserLogin } from "../auth.js";
 
 const mockBrowserLogin = browserLogin as ReturnType<typeof vi.fn>;

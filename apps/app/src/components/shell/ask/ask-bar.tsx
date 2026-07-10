@@ -28,7 +28,7 @@ import { cn } from "@/lib/utils";
 import { usePageContext } from "@/lib/page-context";
 import { classifyIntent } from "@/lib/command-menu/intent-router";
 import { useRecent } from "@/lib/command-menu/use-recent";
-import { fillFormAction } from "@/lib/ask/fill-action";
+import { fillFormAction } from "./fill-action";
 import { useToast } from "@/components/ui/toast";
 import type { ScopeContext } from "@/lib/scope";
 

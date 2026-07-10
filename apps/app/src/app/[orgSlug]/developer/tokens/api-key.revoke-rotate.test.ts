@@ -33,7 +33,7 @@ import { revalidatePath } from "next/cache";
 import { invoke } from "@oxagen/oxagen";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, assertOrgAdmin } from "@/lib/resolve-org";
-import { revokeApiKeyAction, rotateApiKeyAction } from "./api-key";
+import { revokeApiKeyAction, rotateApiKeyAction } from "@/app/[orgSlug]/developer/tokens/api-key";
 
 const mockInvoke = vi.mocked(invoke);
 const mockRevalidatePath = vi.mocked(revalidatePath);

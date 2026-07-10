@@ -1,7 +1,7 @@
 import { Panel } from "@/components/ui/panel";
 import { NewOrgForm } from "@/components/org/new-organization-form";
 import { getSessionOrRedirect } from "@/lib/session";
-import { getLinkedSocialProvider } from "@/lib/linked-provider";
+import { getLinkedSocialProvider } from "./linked-provider";
 import { buildOrgSignupPrefill } from "@/lib/oauth-prefill";
 import { createOrgAction } from "./actions";
 

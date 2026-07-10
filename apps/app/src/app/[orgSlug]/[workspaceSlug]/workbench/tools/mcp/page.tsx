@@ -12,7 +12,7 @@ import {
   togglePlugin,
   uninstallPlugin,
 } from "@/lib/agent-tools/install-actions";
-import { connectCustomMcpServer, revokeMcpCredential } from "@/lib/agent-tools/mcp-actions";
+import { connectCustomMcpServer, revokeMcpCredential } from "./mcp-actions";
 import { workspace } from "@/lib/routes";
 import { ConnectMcpForm } from "./connect-mcp-form";
 import { McpCatalogSearch } from "./mcp-catalog-search";
