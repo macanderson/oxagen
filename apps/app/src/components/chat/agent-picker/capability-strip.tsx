@@ -64,7 +64,7 @@ export function prettifyRef(ref: string): string {
   if (!words) return ref;
   return words
     .split(/\s+/)
-    .map((w) => (w.length <= 3 ? w : w.charAt(0).toUpperCase() + w.slice(1)))
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join(" ");
 }
 
