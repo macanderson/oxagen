@@ -82,6 +82,15 @@ export interface SystemPromptOptions {
    * byte-stable (cache-warm) for every run without a localization map.
    */
   hasLocalization?: boolean;
+  /**
+   * Whether the interactive `ask_user` clarification tool is wired for this run
+   * (an `askUser` callback was supplied — an interactive surface with a human).
+   * Adds ONE rule telling the model to ask a structured question only when
+   * requirements are genuinely ambiguous and guessing wrong is costly. Off by
+   * default so the system prompt stays byte-stable (cache-warm) for every
+   * headless / one-shot / chat run, where the tool is never advertised.
+   */
+  hasAskUser?: boolean;
   profile?: "interactive" | "headless";
 }
 
@@ -159,6 +168,19 @@ export function buildSystemPrompt(opts: SystemPromptOptions): string {
     "  created), you MUST pass ABSOLUTE paths to every file tool — a relative path will",
     "  silently write under the original cwd, and your bash checks there will see no change.",
     "- Keep changes minimal and consistent with the surrounding code's style and conventions.",
+    // Interactive clarification: present ONLY when the `ask_user` tool is wired
+    // for this run (an interactive surface with a human to answer). Byte-stable
+    // by omission for every headless/one-shot/chat run, where it isn't wired.
+    ...(opts.hasAskUser
+      ? [
+          "- ASK WHEN TRULY AMBIGUOUS: if the requirements are genuinely ambiguous AND the",
+          "  cost of guessing wrong is high (an irreversible or wide-blast-radius choice, or",
+          "  a fork the user clearly cares about), call `ask_user` with a single question and",
+          "  2-5 concrete, mutually-exclusive options — the user can also type their own",
+          "  answer. Never use it for a choice with an obvious convention or a safe default,",
+          "  and never call it more than twice per task.",
+        ]
+      : []),
     "- Cross-agent interop (A2A): the platform also exposes deployed agents over the",
     "  Agent2Agent (A2A) JSON-RPC protocol. An external caller addresses a specific agent by",
     "  its slug via `message.metadata.skillId` (unknown/inactive slugs fall back to the",

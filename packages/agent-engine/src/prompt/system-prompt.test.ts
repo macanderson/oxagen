@@ -195,3 +195,27 @@ describe("buildSystemPrompt — F1 localization trust-but-verify rule", () => {
     expect(prompt).toContain("Verification protocol");
   });
 });
+
+describe("buildSystemPrompt — ask_user clarification rule", () => {
+  it("adds the ambiguity rule only when the ask_user tool is wired", () => {
+    const prompt = buildSystemPrompt({ ...base, hasAskUser: true });
+    expect(prompt).toContain("ASK WHEN TRULY AMBIGUOUS");
+    expect(prompt).toContain("`ask_user`");
+    expect(prompt).toContain("2-5 concrete, mutually-exclusive options");
+    expect(prompt).toContain("never call it more than twice per task");
+  });
+
+  it("omits the rule by default — an unwired tool is never mentioned", () => {
+    const prompt = buildSystemPrompt(base);
+    expect(prompt).not.toContain("ASK WHEN TRULY AMBIGUOUS");
+    expect(prompt).not.toContain("ask_user");
+  });
+
+  it("keeps the default (unwired) prompt byte-for-byte stable for prompt caching", () => {
+    // hasAskUser defaults false, so passing it explicitly false must render the
+    // exact same string as omitting it — no cache-busting drift.
+    expect(buildSystemPrompt({ ...base, hasAskUser: false })).toBe(
+      buildSystemPrompt(base),
+    );
+  });
+});

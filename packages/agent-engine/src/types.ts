@@ -154,6 +154,35 @@ export interface CodeGraphProvider {
   ): Promise<string>;
 }
 
+/** The user's reply to an {@link AskUserCallback} clarification question. */
+export interface AskUserResponse {
+  /**
+   * The answer text the model receives — either the exact text of a chosen
+   * option, or whatever the user typed when they picked the free-text path.
+   */
+  answer: string;
+  /** True when the user typed their own answer instead of picking an option. */
+  wasFreeText: boolean;
+}
+
+/**
+ * Interactive clarification callback. Supplied ONLY by a surface that actually
+ * has a human to ask (the REPL). When present, `buildWorkspaceTools` registers
+ * the `ask_user` tool so the agent can pause and pose a single structured
+ * multiple-choice question; when absent — every headless/one-shot/chat surface
+ * — the tool is never advertised, so the model cannot call a tool that would
+ * block forever with nobody to answer it. Mirrors {@link CodeGraphProvider}:
+ * the presence of the capability, not a surface flag, gates the tool.
+ *
+ * The callback resolves with the user's {@link AskUserResponse}. It MAY block
+ * for as long as the human takes to decide — the caller (the REPL overlay) is
+ * responsible for eventually resolving it (on choose, submit, or dismiss).
+ */
+export type AskUserCallback = (question: {
+  question: string;
+  options: string[];
+}) => Promise<AskUserResponse>;
+
 export interface RunCodingAgentOptions {
   /**
    * The checked-out filesystem the coding loop reads and edits. OPTIONAL: a
@@ -200,6 +229,15 @@ export interface RunCodingAgentOptions {
   compactionThreshold?: number;
   readOnly?: boolean;
   codeGraph?: CodeGraphProvider;
+  /**
+   * Interactive clarification callback. Supplied ONLY by a surface with a human
+   * to ask (the REPL); when present the `ask_user` tool is registered so the
+   * agent can pose a structured multiple-choice question, and the system prompt
+   * gains the "ask when truly ambiguous" rule. Omitted on every headless /
+   * one-shot / chat surface — the tool is then never advertised. Requires a
+   * `workspace` (the tool lives in the workspace tool set).
+   */
+  askUser?: AskUserCallback;
   memory?: MemoryProvider;
   trace?: TraceStore;
   /**

@@ -8,7 +8,12 @@
  */
 import { tool, type ToolSet } from "ai";
 import { z } from "zod";
-import type { Workspace, CodeGraphProvider, CodingEvent } from "./types";
+import type {
+  Workspace,
+  CodeGraphProvider,
+  CodingEvent,
+  AskUserCallback,
+} from "./types";
 import type { FileLockProvider } from "./ports";
 import { delay } from "./loop-driver";
 import { buildStructuredTools } from "./tools-structured";
@@ -215,6 +220,13 @@ const BASH_DEFAULT_TIMEOUT_MS = 120_000;
 const BASH_MAX_TIMEOUT_MS = 600_000;
 /** Backstop margin above the tool's own timeout. */
 const TOOL_TIMEOUT_GRACE_MS = 30_000;
+/**
+ * `ask_user` legitimately blocks on a HUMAN, so the 60s read/search bound would
+ * cut off someone still deciding. Its real bound is the person (or a turn abort,
+ * which the REPL overlay resolves by dismissing) — this generous ceiling is only
+ * a safety net for a caller whose callback never resolves.
+ */
+const ASK_USER_BACKSTOP_MS = 30 * 60_000;
 
 /** Backstop deadline for one call, honoring bash's declared `timeout_ms`. */
 export function toolBackstopMs(name: string, input: unknown): number {
@@ -228,6 +240,7 @@ export function toolBackstopMs(name: string, input: unknown): number {
     );
     return own + TOOL_TIMEOUT_GRACE_MS;
   }
+  if (name === "ask_user") return ASK_USER_BACKSTOP_MS;
   return TOOL_TIMEOUT_MS;
 }
 
@@ -397,6 +410,12 @@ export function buildWorkspaceTools(
     fileLock?: FileLockProvider | null;
     /** Identity `fileLock` acquires/releases under. Required when `fileLock` is supplied. */
     lockContext?: { agentId: string; executionId: string };
+    /**
+     * Interactive clarification callback. When supplied, the `ask_user` tool is
+     * registered (mirrors `codeGraph` gating); when omitted — every headless /
+     * one-shot surface with nobody to ask — the tool is never advertised.
+     */
+    askUser?: AskUserCallback;
   } = {},
 ): ToolSet {
   const onEvent = opts.onEvent ?? (() => undefined);
@@ -616,6 +635,68 @@ export function buildWorkspaceTools(
           return clip(await codeGraph.query(operation, query, limit));
         } catch (err) {
           return `code_graph error: ${err instanceof Error ? err.message : String(err)}`;
+        }
+      },
+    });
+  }
+
+  // ask_user is optional — only added when an interactive surface supplies a
+  // human-in-the-loop callback (mirrors code_graph gating above). A headless /
+  // one-shot run has nobody to answer, so it never gets the tool and the model
+  // cannot call one that would block the loop forever.
+  if (opts.askUser) {
+    const askUser = opts.askUser;
+    tools.ask_user = tool({
+      description:
+        "Ask the human ONE structured clarification question — use it only when " +
+        "the requirements are genuinely ambiguous AND guessing wrong is costly " +
+        "(an irreversible or wide-blast-radius choice, or a fork the user clearly " +
+        "cares about). Provide 2-5 short, concrete, mutually-exclusive options; " +
+        "the user can always type their own answer instead. Do NOT use it for a " +
+        "choice with an obvious convention or a safe default, and never ask more " +
+        "than twice in one task. Returns the user's answer as plain text.",
+      inputSchema: z.object({
+        question: z
+          .string()
+          .describe("The single question to ask — one concrete sentence."),
+        options: z
+          .array(z.string())
+          .describe("2-5 short, distinct candidate answers to offer."),
+      }),
+      execute: async ({ question, options }) => {
+        const q = question.trim();
+        if (q === "")
+          return "ask_user error: question must not be empty. Re-ask with a concrete question.";
+        // De-dupe (case-insensitively) and drop blanks, preserving order, then
+        // validate the DISTINCT count — the requirement is 2-5 distinct options.
+        const cleaned: string[] = [];
+        const seen = new Set<string>();
+        for (const raw of options) {
+          const t = raw.trim();
+          if (t === "") continue;
+          const key = t.toLowerCase();
+          if (seen.has(key)) continue;
+          seen.add(key);
+          cleaned.push(t);
+        }
+        if (cleaned.length < 2 || cleaned.length > 5)
+          return (
+            `ask_user error: provide between 2 and 5 distinct, non-empty options ` +
+            `(got ${cleaned.length}). Re-ask with 2-5 concrete choices, or just ` +
+            `proceed with your best judgment and state the assumption.`
+          );
+        // Respect a turn already aborted before we surface the prompt — don't
+        // pop a question the user can no longer answer.
+        if (signal?.aborted)
+          return "ask_user: the turn was aborted before the user answered — proceed with your best judgment and state the assumption.";
+        try {
+          const { answer, wasFreeText } = await askUser({
+            question: q,
+            options: cleaned,
+          });
+          return `${wasFreeText ? "[user wrote]" : "[user chose]"} ${answer}`;
+        } catch (err) {
+          return `ask_user error: ${err instanceof Error ? err.message : String(err)}`;
         }
       },
     });
