@@ -1028,7 +1028,17 @@ export async function POST(request: NextRequest): Promise<Response> {
                 .then((raw) =>
                   governedBudgetFromRead(raw as SavedWorkspaceGovernance),
                 )
-                .catch(() => null),
+                // FAIL-OPEN (see comment above) but never SILENT: a swallowed
+                // governance-read failure (down DB, denied IAM, unregistered
+                // handler) must be observable, or a mis-applied budget is
+                // undiagnosable in the field.
+                .catch((err) => {
+                  logger.warn(
+                    { err: String(err), requestId },
+                    "[chat/stream] workspace budget governance read failed — failing open to member policy",
+                  );
+                  return null;
+                }),
             ]),
         );
 
@@ -1269,7 +1279,16 @@ export async function POST(request: NextRequest): Promise<Response> {
             const token = await runInTenantScope(
               { orgId: tenant.id, workspaceId: workspace.id },
               () => resolveGitHubToken(capCtx),
-            ).catch(() => undefined);
+            ).catch((err) => {
+              // Best-effort: the sandbox still boots without a token (private
+              // repos just fail to clone downstream). Log so a missing token is
+              // diagnosable rather than a silent, confusing clone failure.
+              logger.warn(
+                { err: String(err), requestId },
+                "[chat/stream] GitHub token resolution failed — sandbox will run unauthenticated",
+              );
+              return undefined;
+            });
             codeWorkspace = new ModalSandboxWorkspace({
               ctx: capCtx,
               // Stable per-(workspace, conversation, repo) key so every turn of
