@@ -56,6 +56,7 @@ vi.mock("@oxagen/plugins", async (importOriginal) => {
 });
 
 import { agentCodeExecuteHandler } from "./agent.code.execute";
+import { CapabilityError } from "@oxagen/oxagen/kernel";
 import { isSandboxAvailable, getSandbox } from "@oxagen/sandbox";
 import type { ResolvedSandboxTemplate, SandboxTemplateSummary } from "@oxagen/plugins";
 
@@ -147,6 +148,39 @@ describe("agent.code.execute handler", () => {
         CTX,
       ),
     ).rejects.toThrow("Code execution is not available");
+  });
+
+  it("maps a SandboxPolicyError from the seam to an invalid_input CapabilityError", async () => {
+    // The dispatch seam throws SandboxPolicyError on a hard boundary (disallowed
+    // language / network). The handler must re-surface it as a structured
+    // capability error (→ 400) rather than let it leak as an unclassified 500.
+    class SandboxPolicyError extends Error {
+      readonly code = "sandbox_policy_violation";
+      constructor(message: string) {
+        super(message);
+        this.name = "SandboxPolicyError";
+      }
+    }
+    mockRun.mockRejectedValueOnce(
+      new SandboxPolicyError("network access not allowed by policy"),
+    );
+
+    const promise = agentCodeExecuteHandler(
+      {
+        language: "node",
+        code: "fetch('http://x')",
+        timeoutMs: 5_000,
+        memoryMb: 128,
+        network: "allow",
+      },
+      CTX,
+    );
+
+    await expect(promise).rejects.toBeInstanceOf(CapabilityError);
+    await expect(promise).rejects.toMatchObject({
+      code: "invalid_input",
+      message: "network access not allowed by policy",
+    });
   });
 
   it("passes env vars and stdin to sandbox", async () => {
