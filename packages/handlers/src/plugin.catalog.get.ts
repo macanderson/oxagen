@@ -7,8 +7,35 @@ import {
   getServerVersion,
   deriveTransportTypes,
   deriveAuthKind,
+  fetchAndRenderReadme,
+  isReadmeFresh,
 } from "@oxagen/plugins/registry";
+import type { Repository } from "@oxagen/plugins/registry";
 import { logger } from "./logger";
+
+/**
+ * Resolve README HTML for a server's repository, fail-safe: any error is
+ * logged and swallowed so a broken/unreachable README never fails the whole
+ * catalog.get call. This live-lookup path (unlike the periodic
+ * mcp.catalog_servers sync job) has no persistent cache, so there is no
+ * fetchedAt to check — isReadmeFresh(null, …) always reports "stale," i.e.
+ * always fetch. The check is kept so the caching contract is honored if a
+ * persistent cache is added to this path later.
+ */
+async function resolveReadmeHtml(
+  repository: Repository | null | undefined,
+  name: string,
+  version: string,
+): Promise<string | null> {
+  if (!repository) return null;
+  if (isReadmeFresh(null, Date.now())) return null;
+  try {
+    return await fetchAndRenderReadme(repository);
+  } catch (err) {
+    logger.warn({ err, name, version }, "plugin.catalog.get: readme fetch failed, returning without readme");
+    return null;
+  }
+}
 
 export const handler: CapabilityHandlerFn = async (input, ctx) => {
   const { name, version = "latest" } = input as { name: string; version?: string };
@@ -38,6 +65,8 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
       transportTypes: [],
       authKind: "none",
       categories: [manifest.category],
+      // First-party packs have no repository to source a README from.
+      readmeHtml: null,
     };
   }
 
@@ -94,6 +123,7 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
           categories: (meta as Record<string, unknown> | undefined)?.categories
             ? (meta as Record<string, unknown>).categories as string[]
             : [],
+          readmeHtml: await resolveReadmeHtml(sd.repository, name, sd.version),
         };
       } else {
         const s = await getServerVersion(reg.baseUrl, name, version);
@@ -112,6 +142,7 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
           transportTypes: deriveTransportTypes(sd),
           authKind: deriveAuthKind(sd),
           categories: [],
+          readmeHtml: await resolveReadmeHtml(sd.repository, name, sd.version),
         };
       }
     } catch (err) {

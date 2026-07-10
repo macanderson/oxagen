@@ -2,10 +2,13 @@
  * mcp-servers-authenticate.spec.ts
  *
  * E2E for the MCP server install → authenticate UX:
- *   1. Workspace Settings exposes an "MCP Servers" nav item (the
- *      discoverability path) that lands on Workbench → Agent Tools → MCP Servers.
- *   2. The page renders the catalog search and the "Connect a custom MCP
- *      server" form.
+ *   1. Workspace Settings exposes an "MCP Registries" nav item that lands on
+ *      Settings → MCP Server Registries (registry administration lives ONLY
+ *      there). The MCP Servers page itself is a Workbench → Agent Tools
+ *      section reached from the sidebar.
+ *   2. The MCP Servers page renders the installed list, the marketplace
+ *      catalog search, and the "Connect manually" form — and NO registry
+ *      administration.
  *   3. Connecting a custom server with auth kind OAuth succeeds and immediately
  *      opens the post-install AuthenticateDialog ("Authentication required") —
  *      the server is installed but unusable until the OAuth consent flow runs.
@@ -37,7 +40,7 @@ test.beforeAll(async () => {
 });
 
 test.describe("MCP Servers — install → authenticate UX", () => {
-  test("settings nav → connect OAuth server → authenticate dialog → Later → Needs authentication row", async ({
+  test("registries in settings → connect OAuth server → authenticate dialog → Later → Needs authentication row", async ({
     page,
   }) => {
     test.setTimeout(180_000);
@@ -45,26 +48,31 @@ test.describe("MCP Servers — install → authenticate UX", () => {
     const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "mcp-auth" });
     const ws = `/${orgSlug}/default`;
 
-    // ── 1. Workspace settings → "MCP Servers" nav item ──────────────────────
+    // ── 1. Workspace settings → "MCP Registries" (registry admin lives here) ─
     await gotoStable(page, `${ws}/settings/general`);
     await expect(page).not.toHaveURL(/\/login/);
 
     const settingsNav = page.getByRole("navigation", { name: "Settings" });
-    const mcpNavItem = settingsNav.getByRole("link", { name: "MCP Servers" });
-    await expect(mcpNavItem).toBeVisible({ timeout: 20_000 });
+    const registriesNavItem = settingsNav.getByRole("link", { name: "MCP Registries" });
+    await expect(registriesNavItem).toBeVisible({ timeout: 20_000 });
+    await registriesNavItem.click();
+    await expect(page).toHaveURL(/\/settings\/mcp-server-registries$/, {
+      timeout: 20_000,
+    });
+    await expect(page.getByTestId("add-registry-btn")).toBeVisible({ timeout: 20_000 });
     await page.screenshot({
-      path: path.join(SCREENSHOTS_DIR, "01-settings-nav-mcp-servers.png"),
+      path: path.join(SCREENSHOTS_DIR, "01-settings-mcp-registries.png"),
       fullPage: true,
     });
 
-    await mcpNavItem.click();
-    await expect(page).toHaveURL(/\/workbench\/tools\/mcp$/, { timeout: 20_000 });
-
-    // ── 2. Page surfaces: catalog search + custom connect form ──────────────
+    // ── 2. MCP Servers page: installed + marketplace + manual, NO registries ─
+    await gotoStable(page, `${ws}/workbench/tools/mcp`);
     await expect(page.getByTestId("mcp-catalog-search-input")).toBeVisible({
       timeout: 20_000,
     });
-    await expect(page.getByText("Connect a custom MCP server")).toBeVisible();
+    await expect(page.getByText("Installed MCP servers")).toBeVisible();
+    await expect(page.getByText("Connect manually")).toBeVisible();
+    await expect(page.getByTestId("add-registry-btn")).toHaveCount(0);
     await page.screenshot({
       path: path.join(SCREENSHOTS_DIR, "02-mcp-servers-page.png"),
       fullPage: true,

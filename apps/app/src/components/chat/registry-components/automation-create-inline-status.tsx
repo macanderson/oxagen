@@ -9,7 +9,6 @@
 
 import * as React from "react";
 import { CheckCircle2 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { AutomationCreateOutput } from "@oxagen/oxagen/contracts/automation.create";
@@ -51,9 +50,9 @@ export function CreatedState({
               : ""}
           </p>
         </div>
-        <Badge variant="muted" className="shrink-0 text-xs">
+        <span className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-muted-foreground">
           Disabled
-        </Badge>
+        </span>
       </div>
 
       <p className="text-xs text-muted-foreground">
@@ -124,9 +123,9 @@ export function EnabledState({
             {createdAutomation?.name ?? fallbackName} is now live
           </p>
         </div>
-        <Badge variant="success" className="ml-auto shrink-0 text-xs">
+        <span className="ml-auto inline-flex shrink-0 items-center gap-1 text-xs font-medium text-success">
           Active
-        </Badge>
+        </span>
       </div>
     </div>
   );

@@ -14,7 +14,7 @@
  */
 
 import * as React from "react";
-import Image from "next/image";
+import { EntityAvatar } from "@/components/avatar/entity-avatar";
 import { useRouter } from "next/navigation";
 import { User, LogOut, Settings, Shield, ChevronsUpDown, Monitor, Moon, Sun } from "lucide-react";
 import { signOut } from "@oxagen/auth/client";
@@ -52,19 +52,6 @@ export interface UserSwitcherProps {
   className?: string;
 }
 
-function initials(name: string | null, email: string): string {
-  if (name) {
-    const parts = name.trim().split(/\s+/);
-    if (parts.length >= 2) {
-      const first = parts[0]?.[0] ?? "";
-      const last = parts[parts.length - 1]?.[0] ?? "";
-      return `${first}${last}`.toUpperCase();
-    }
-    return (parts[0]?.[0] ?? "").toUpperCase();
-  }
-  return (email[0] ?? "").toUpperCase();
-}
-
 const THEME_OPTIONS = [
   { value: "light", label: "Light", icon: Sun },
   { value: "dark", label: "Dark", icon: Moon },
@@ -92,20 +79,11 @@ export function UserSwitcher({ user, variant = "full", className }: UserSwitcher
 
   const displayName = user.name ?? user.email;
 
-  // The avatar circle is shared by both trigger shapes.
+  // The avatar circle is shared by both trigger shapes. EntityAvatar handles
+  // all three value kinds: photo URL, designed avatar:v1: spec, and the
+  // initials fallback.
   const avatar = (
-    <span
-      className={cn(
-        "flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full",
-        "bg-muted text-xs font-semibold text-muted-foreground",
-      )}
-    >
-      {user.image ? (
-        <Image src={user.image} alt={displayName} width={32} height={32} className="h-full w-full object-cover" />
-      ) : (
-        <span aria-hidden="true">{initials(user.name, user.email)}</span>
-      )}
-    </span>
+    <EntityAvatar value={user.image} name={displayName} shape="circle" size="md" />
   );
 
   return (

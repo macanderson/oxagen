@@ -49,6 +49,8 @@
 
 import { and, eq, isNotNull } from "drizzle-orm";
 import { schema, withSystemDb } from "@oxagen/database";
+import { captureError } from "@oxagen/telemetry";
+import { logger } from "./logger";
 
 /**
  * Providers whose returned email we treat as proof of ownership. MUST stay in
@@ -117,8 +119,20 @@ export interface AccountLinkingLogger {
 }
 
 const defaultLogger: AccountLinkingLogger = {
-  warn: (message, context) => console.warn(message, context ?? {}),
-  error: (message, context) => console.error(message, context ?? {}),
+  warn: (message, context) => logger.warn(context ?? {}, message),
+  error: (message, context) => {
+    // Structured log for triage, plus captureError escalation so a spike in
+    // failed credential-revocation hooks (the pre-hijacking mitigation) is
+    // alertable — never re-throws, so a failure can never turn a successful
+    // OAuth sign-in into a 500.
+    logger.error(context ?? {}, message);
+    captureError({
+      error: context && "err" in context ? context.err : new Error(message),
+      source: "app",
+      severity: "warn",
+      context: message,
+    });
+  },
 };
 
 /**

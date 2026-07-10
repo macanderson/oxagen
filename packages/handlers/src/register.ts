@@ -301,6 +301,16 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./conversation.attachment.add"))
         .conversationAttachmentAddHandler as CapabilityHandlerFn,
   );
+  registerHandler("export_data",
+    async () =>
+      (await import("./privacy.data.export"))
+        .privacyDataExportHandler as CapabilityHandlerFn,
+  );
+  registerHandler("erase_data",
+    async () =>
+      (await import("./privacy.data.erase"))
+        .privacyDataEraseHandler as CapabilityHandlerFn,
+  );
   registerHandler("list_plugin_registries",
     async () =>
       (await import("./plugin.registry.list")).handler as CapabilityHandlerFn,
@@ -356,6 +366,11 @@ registerHandlersOnce("@oxagen/handlers", () => {
   registerHandler("reauth_plugin_credential",
     async () =>
       (await import("./plugin.credential.reauth"))
+        .handler as CapabilityHandlerFn,
+  );
+  registerHandler("revoke_plugin_credential",
+    async () =>
+      (await import("./plugin.credential.revoke"))
         .handler as CapabilityHandlerFn,
   );
   registerHandler("list_notifications",

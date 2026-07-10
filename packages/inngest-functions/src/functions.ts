@@ -30,7 +30,10 @@ import {
 } from "./functions/privacy.erasure.execute";
 import { authSessionExpiryAudit } from "./functions/auth.session-expiry-audit";
 import { ingestionPipeline } from "./functions/ingestion.pipeline";
-import { ingestionDeleteConnection } from "./functions/ingestion.delete";
+import {
+  ingestionDeleteConnection,
+  ingestionDeleteConnectionOnFailure,
+} from "./functions/ingestion.delete";
 import { ingestionOauthRefresh } from "./functions/ingestion.oauth-refresh";
 import { ingestionGithubInitialSync } from "./functions/ingestion.github-initial-sync";
 import { ingestionGithubCommitFiles } from "./functions/ingestion.github-commit-files";
@@ -88,6 +91,7 @@ export const functions: any[] = [
   authSessionExpiryAudit,
   ingestionPipeline,
   ingestionDeleteConnection,
+  ingestionDeleteConnectionOnFailure,
   ingestionOauthRefresh,
   ingestionGithubInitialSync,
   ingestionGithubCommitFiles,

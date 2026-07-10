@@ -22,8 +22,10 @@
     "@oxagen/crypto": "workspace:*",
     "@oxagen/database": "workspace:*",
     "@oxagen/notifications": "workspace:*",
+    "@oxagen/telemetry": "workspace:*",
     "better-auth": "1.6.11",
-    "drizzle-orm": "0.45.2"
+    "drizzle-orm": "0.45.2",
+    "pino": "9.14.0"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "2.1.9",

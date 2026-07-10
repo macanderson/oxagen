@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { workspace } from "@/lib/routes";
 
-/** Workbench root redirects to the first tab (Agents), per the defaultTab map. */
+/** Workbench root redirects to Agents — the section's front door (defaultTab map). */
 export default async function WorkbenchPage({
   params,
 }: {

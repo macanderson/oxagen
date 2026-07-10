@@ -23,7 +23,9 @@ import { authDenialStatus, isNextRedirectError } from '@/lib/auth-denial';
 import { logger } from '@oxagen/handlers/logger';
 import type { FetchLike } from '@modelcontextprotocol/sdk/shared/transport.js';
 
-export const runtime = 'nodejs'; // MCP SDK auth uses Node crypto — edge-unsafe.
+// Runs on the default Node.js runtime — MCP SDK auth uses Node crypto, so this
+// route must never move to edge. No `export const runtime`: the segment config
+// is incompatible with cacheComponents (Node is the framework default).
 
 /**
  * Fetch wrapper for mcpAuth that works around two Next.js patched-fetch

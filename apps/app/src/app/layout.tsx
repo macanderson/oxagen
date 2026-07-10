@@ -23,11 +23,15 @@ import { AppearanceBootstrap } from "@/components/appearance-bootstrap";
 import { PwaSplash } from "@/components/pwa/pwa-splash";
 import { InstallPrompt } from "@/components/pwa/install-prompt";
 import { RouteTransitionLoader } from "@/components/pwa/route-transition-loader";
+import { SwRegister } from "@/components/pwa/sw-register";
 
 export const metadata: Metadata = {
   title: "Oxagen",
   description: "Enterprise agent ontologies as a service",
-  manifest: "/pwa/manifest.json",
+  // No explicit `manifest` string here — apps/app/src/app/manifest.ts (Next's
+  // native metadata-route convention) is auto-detected and linked at
+  // /manifest.webmanifest. The old static apps/app/public/pwa/manifest.json
+  // stays on disk, unreferenced, for backward compatibility only.
   icons: {
     icon: [
       { url: "/favicon/favicon.svg", type: "image/svg+xml" },
@@ -160,6 +164,11 @@ export default function RootLayout({
              * dismissed.
              */}
             <InstallPrompt />
+            {/*
+             * Service worker: app-shell/static-asset caching only (never
+             * offline mode — see sw.js). Production only; renders nothing.
+             */}
+            <SwRegister />
           </MotionProvider>
         </ThemeProvider>
       </body>

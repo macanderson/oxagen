@@ -21,10 +21,14 @@ type HandlerCtx = {
   };
 };
 let capturedHandler: ((ctx: HandlerCtx) => unknown) | null = null;
+// The on-failure companion lives on the config object (1st arg), not the
+// primary handler (3rd arg) — capture it so the failure path can be exercised.
+let capturedOnFailure: ((ctx: HandlerCtx) => unknown) | null = null;
 
 mocks.createFunction.mockImplementation(
-  (_opts: unknown, _trigger: unknown, handler: typeof capturedHandler) => {
+  (opts: { onFailure?: (ctx: HandlerCtx) => unknown }, _trigger: unknown, handler: typeof capturedHandler) => {
     capturedHandler = handler;
+    capturedOnFailure = opts?.onFailure ?? null;
     return {};
   },
 );
@@ -76,6 +80,7 @@ await import("../ingestion.delete");
 
 const BASE_EVENT = {
   connectionId: "conn-delete-1",
+  deletionJobId: "djob-del-1",
   orgId: "org-del",
   workspaceId: "ws-del",
   requestedBy: "user-123",
@@ -279,6 +284,117 @@ describe("ingestion.delete-connection Inngest function", () => {
         expect.objectContaining({ connectionId: "conn-delete-1", mode: "connection_only" }),
         expect.stringContaining("ClickHouse audit event write failed"),
       );
+    });
+  });
+
+  // Extracts the static SQL text (literal chunks) from a drizzle `sql` object so
+  // a test can assert WHICH table/status a statement targets. Bound params
+  // (e.g. ${deletionJobId}) are separate chunks and intentionally excluded;
+  // literals like 'completed' / 'failed' are part of the static text.
+  function sqlText(arg: unknown): string {
+    const chunks = (arg as { queryChunks?: unknown[] })?.queryChunks;
+    if (!Array.isArray(chunks)) return String(arg);
+    return chunks
+      .map((c) => {
+        const v = (c as { value?: unknown }).value;
+        return Array.isArray(v) ? v.join("") : typeof v === "string" ? v : "";
+      })
+      .join(" ");
+  }
+
+  describe("deletion_jobs finalization (O-1)", () => {
+    it("marks the deletion_jobs row 'completed' with completed_at on success", async () => {
+      const mockExecute = vi.fn().mockResolvedValue([]);
+      setupTenantDb(mockExecute);
+      const step = makeStep();
+
+      await capturedHandler!({
+        event: { data: { ...BASE_EVENT, mode: "full" } },
+        step,
+      });
+
+      const stepNames: string[] = (step.run as ReturnType<typeof vi.fn>).mock.calls.map(
+        (c) => c[0] as string,
+      );
+      expect(stepNames).toContain("finalize-deletion-job");
+
+      const finalizeSql = mockExecute.mock.calls
+        .map(([arg]) => sqlText(arg))
+        .find((t) => t.includes("ingestion.deletion_jobs"));
+      expect(finalizeSql).toBeDefined();
+      expect(finalizeSql).toContain("status");
+      expect(finalizeSql).toContain("'completed'");
+      expect(finalizeSql).toContain("completed_at");
+    });
+
+    it("does NOT finalize when the event carries no deletionJobId (legacy event)", async () => {
+      const mockExecute = vi.fn().mockResolvedValue([]);
+      setupTenantDb(mockExecute);
+      const step = makeStep();
+
+      const { deletionJobId: _omit, ...legacyEvent } = BASE_EVENT;
+      await capturedHandler!({
+        event: { data: { ...legacyEvent, mode: "connection_only" } },
+        step,
+      });
+
+      const stepNames: string[] = (step.run as ReturnType<typeof vi.fn>).mock.calls.map(
+        (c) => c[0] as string,
+      );
+      expect(stepNames).not.toContain("finalize-deletion-job");
+      const finalizeSql = mockExecute.mock.calls
+        .map(([arg]) => sqlText(arg))
+        .find((t) => t.includes("ingestion.deletion_jobs"));
+      expect(finalizeSql).toBeUndefined();
+    });
+
+    it("on-failure companion marks the deletion_jobs row 'failed' with the error", async () => {
+      const mockExecute = vi.fn().mockResolvedValue([]);
+      setupTenantDb(mockExecute);
+      const step = makeStep();
+
+      expect(capturedOnFailure).toBeTypeOf("function");
+      await capturedOnFailure!({
+        event: {
+          data: {
+            event: {
+              data: { deletionJobId: "djob-del-1", orgId: "org-del", workspaceId: "ws-del" },
+            },
+            error: { message: "neo4j unreachable" },
+          },
+        },
+        step,
+      });
+
+      const stepNames: string[] = (step.run as ReturnType<typeof vi.fn>).mock.calls.map(
+        (c) => c[0] as string,
+      );
+      expect(stepNames).toContain("mark-deletion-job-failed");
+
+      const failSql = mockExecute.mock.calls
+        .map(([arg]) => sqlText(arg))
+        .find((t) => t.includes("ingestion.deletion_jobs"));
+      expect(failSql).toBeDefined();
+      expect(failSql).toContain("'failed'");
+      expect(failSql).toContain("completed_at");
+      expect(mocks.loggerError).toHaveBeenCalledWith(
+        expect.objectContaining({ deletionJobId: "djob-del-1" }),
+        expect.stringContaining("marked deletion job failed"),
+      );
+    });
+
+    it("on-failure companion is a no-op when the failure envelope lacks ids", async () => {
+      const mockExecute = vi.fn().mockResolvedValue([]);
+      setupTenantDb(mockExecute);
+      const step = makeStep();
+
+      await capturedOnFailure!({
+        event: { data: { event: { data: {} }, error: { message: "x" } } },
+        step,
+      });
+
+      expect((step.run as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
+      expect(mockExecute).not.toHaveBeenCalled();
     });
   });
 

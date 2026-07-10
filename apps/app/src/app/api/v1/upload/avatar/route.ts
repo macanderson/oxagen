@@ -7,9 +7,10 @@ import {
 } from "@oxagen/storage";
 import { getSession } from "@/lib/session";
 
-// Avatar upload runs on the Node runtime (the storage adapter uses Node crypto
-// and the Vercel Blob SDK) and must never be cached.
-export const runtime = "nodejs";
+// Avatar upload runs on the default Node.js runtime (the storage adapter uses
+// Node crypto and the Vercel Blob SDK) and must never move to edge. No
+// `export const runtime` — the segment config is incompatible with
+// cacheComponents; Node is the framework default.
 
 /**
  * POST /api/v1/upload/avatar

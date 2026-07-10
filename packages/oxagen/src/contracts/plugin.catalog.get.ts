@@ -32,5 +32,7 @@ export const pluginCatalogGet = registerCapability({
     transportTypes: z.array(z.string()),
     authKind: z.string(),
     categories: z.array(z.string()),
+    /** Sanitized README HTML (rehype-sanitize'd), when a GitHub repository is resolvable. */
+    readmeHtml: z.string().nullable().optional(),
   }),
 });

@@ -5,22 +5,6 @@ import { CreatedState, EnabledState } from "./automation-create-inline-status";
 
 vi.mock("@oxagen/oxagen/contracts/automation.create", () => ({}));
 
-vi.mock("@/components/ui/badge", () => ({
-  Badge: ({
-    children,
-    variant,
-    className,
-  }: {
-    children: React.ReactNode;
-    variant?: string;
-    className?: string;
-  }) => (
-    <span data-testid={`badge-${variant ?? "default"}`} className={className}>
-      {children}
-    </span>
-  ),
-}));
-
 vi.mock("@/components/ui/button", () => ({
   Button: ({
     children,
@@ -120,9 +104,11 @@ describe("CreatedState", () => {
     expect(screen.getByText("My Automation")).toBeInTheDocument();
   });
 
-  it("shows 'Disabled' badge", () => {
+  it("shows a muted 'Disabled' status", () => {
     render(<CreatedState {...baseProps} />);
-    expect(screen.getByTestId("badge-muted")).toHaveTextContent("Disabled");
+    const status = screen.getByText("Disabled");
+    expect(status).toBeInTheDocument();
+    expect(status.className).toContain("text-muted-foreground");
   });
 
   it("calls onEnable when enable button is clicked", () => {
@@ -175,9 +161,11 @@ describe("EnabledState", () => {
     expect(screen.getByText("Automation enabled")).toBeInTheDocument();
   });
 
-  it("shows 'Active' badge", () => {
+  it("shows a success-toned 'Active' status", () => {
     render(<EnabledState {...baseProps} />);
-    expect(screen.getByTestId("badge-success")).toHaveTextContent("Active");
+    const status = screen.getByText("Active");
+    expect(status).toBeInTheDocument();
+    expect(status.className).toContain("text-success");
   });
 
   it("shows automation name when createdAutomation has name", () => {
