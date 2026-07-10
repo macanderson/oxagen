@@ -33,8 +33,6 @@ import {
   type ToolSourceOption,
 } from "./sandbox-actions";
 
-export const dynamic = "force-dynamic";
-
 export default async function EnvironmentsSettingsPage({
   params,
 }: {

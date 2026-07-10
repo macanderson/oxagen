@@ -19,8 +19,6 @@ import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org
 import { workspace } from "@/lib/routes";
 import { Badge } from "@/components/ui/badge";
 
-export const dynamic = "force-dynamic";
-
 interface PageProps {
   params: Promise<{ orgSlug: string; workspaceSlug: string; nodeId: string }>;
 }

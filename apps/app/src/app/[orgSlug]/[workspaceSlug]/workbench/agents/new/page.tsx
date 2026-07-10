@@ -6,8 +6,6 @@ import { loadEquipSources } from "@/lib/workbench/equip-sources";
 import { AgentBuilder } from "../agent-builder";
 import { installPlugin, installBulkPlugin } from "@/lib/agent-tools/install-actions";
 
-export const dynamic = "force-dynamic";
-
 interface PageProps {
   params: Promise<{ orgSlug: string; workspaceSlug: string }>;
 }

@@ -8,8 +8,6 @@ import type { ScopeContext } from "@/lib/scope";
 import { resolveWorkbenchScope } from "@/lib/workbench/scope";
 import { listAgents, type AgentListRow } from "@/lib/workbench/agents";
 
-export const dynamic = "force-dynamic";
-
 interface PageProps {
   params: Promise<{ orgSlug: string; workspaceSlug: string }>;
 }

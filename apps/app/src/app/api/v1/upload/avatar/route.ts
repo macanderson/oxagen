@@ -10,7 +10,6 @@ import { getSession } from "@/lib/session";
 // Avatar upload runs on the Node runtime (the storage adapter uses Node crypto
 // and the Vercel Blob SDK) and must never be cached.
 export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
 
 /**
  * POST /api/v1/upload/avatar

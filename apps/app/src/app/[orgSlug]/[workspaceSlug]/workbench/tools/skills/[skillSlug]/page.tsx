@@ -24,8 +24,6 @@ import { SkillDetailPanel } from "./skill-detail-panel";
 import type { SkillDetailData, SkillVersion } from "./skill-detail-panel";
 import { editSkill, activateVersion, exportSkill } from "../skill-actions";
 
-export const dynamic = "force-dynamic";
-
 export async function generateMetadata({
   params,
 }: {

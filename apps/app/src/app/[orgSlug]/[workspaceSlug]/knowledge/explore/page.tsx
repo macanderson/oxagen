@@ -8,8 +8,6 @@
  */
 import { GraphExplorer } from "@/components/knowledge/graph-explorer";
 
-export const dynamic = "force-dynamic";
-
 export default async function ExplorePage({
   searchParams,
 }: {

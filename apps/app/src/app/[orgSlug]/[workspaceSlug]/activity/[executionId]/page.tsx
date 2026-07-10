@@ -16,8 +16,6 @@ import { workspace } from "@/lib/routes";
 import { TraceSection } from "./trace-section";
 import { LineageSection } from "./lineage-section";
 
-export const dynamic = "force-dynamic";
-
 interface PageProps {
   params: Promise<{
     orgSlug: string;

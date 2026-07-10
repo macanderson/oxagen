@@ -16,8 +16,6 @@ import {
   type TemplateOption,
 } from "./environments-actions";
 
-export const dynamic = "force-dynamic";
-
 interface PageProps {
   params: Promise<{
     orgSlug: string;

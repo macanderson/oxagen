@@ -20,8 +20,6 @@ import { GraphStatsSection } from "./_sections/graph-stats-section";
 import { PendingInferencesSection } from "./_sections/pending-inferences-section";
 import { ApprovedEdgesSection } from "./_sections/approved-edges-section";
 
-export const dynamic = "force-dynamic";
-
 interface PageProps {
   params: Promise<{ orgSlug: string; workspaceSlug: string }>;
 }
