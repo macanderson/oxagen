@@ -46,7 +46,11 @@ export const SUCCESSFUL_REPEAT_THRESHOLD = 3;
  * The corrective message injected when the model repeats an identical failing
  * call `LOOP_NUDGE_THRESHOLD` times. Exported for tests.
  */
-export function loopNudgeMessage(name: string, count: number, lastError: string): string {
+export function loopNudgeMessage(
+  name: string,
+  count: number,
+  lastError: string,
+): string {
   return (
     `You have called \`${name}\` with the same arguments ${count} times and it ` +
     `keeps failing: ${lastError.slice(0, 400)}. Stop repeating this exact call — ` +
@@ -60,7 +64,10 @@ export function loopNudgeMessage(name: string, count: number, lastError: string)
  * bash/tool call `SUCCESSFUL_REPEAT_THRESHOLD` times. The result will not change;
  * re-running it only burns tokens. Exported for tests.
  */
-export function successfulRepeatNudgeMessage(name: string, count: number): string {
+export function successfulRepeatNudgeMessage(
+  name: string,
+  count: number,
+): string {
   return (
     `You have successfully run \`${name}\` with the same arguments ${count} times ` +
     `and received the same result each time. The result will not change — do not ` +
@@ -145,7 +152,13 @@ export function contextWindowFor(model: string): number {
   const m = model.toLowerCase();
   if (m.includes("claude")) return 200_000;
   if (m.includes("gemini")) return 1_000_000;
-  if (m.includes("gpt-4.1") || m.includes("gpt-5") || m.includes("o3") || m.includes("o4")) return 400_000;
+  if (
+    m.includes("gpt-4.1") ||
+    m.includes("gpt-5") ||
+    m.includes("o3") ||
+    m.includes("o4")
+  )
+    return 400_000;
   if (m.includes("gpt-4o") || m.includes("gpt-4")) return 128_000;
   return 128_000;
 }
@@ -159,14 +172,46 @@ export interface CompactionOptions {
   contentCap: number;
 }
 
-const COMPACTION_MARKER = "\n… [older content elided to fit context — re-read the file/command if still needed]";
+const COMPACTION_MARKER =
+  "\n… [older content elided to fit context — re-read the file/command if still needed]";
 
 /**
- * Structurally compact a transcript: keep the first user message (the task) and
- * the last `keepLastN` messages verbatim; truncate the bulky content of
- * everything in between (old tool results, large reads). Deterministic and
- * free — no LLM summary call — which is exactly what you want on the recovery
- * path. Returns a NEW array; never mutates the input. Exported for tests.
+ * Replacement for an EARLIER tool-result whose exact content recurs later in the
+ * transcript. The later identical copy is kept full, so this earlier one carries
+ * zero additional information — eliding it is lossless. Unlike
+ * {@link COMPACTION_MARKER}, it does NOT tell the model to re-read (that would
+ * re-inflate the very content we just proved is still present downstream).
+ */
+const DUP_ELISION_MARKER =
+  "[duplicate tool output elided — identical content appears later in the conversation]";
+
+/**
+ * Minimum extracted content length (chars) for the content-identity dedup to
+ * bother eliding an earlier duplicate. Small outputs (a `Wrote 12 bytes` ack, a
+ * one-line grep hit) cost ~nothing to keep and their repetition is often
+ * meaningful signal; only large repeated blobs (duplicate file reads, re-run
+ * command dumps) are worth collapsing. ~500 chars ≈ 125 tokens.
+ */
+const DEDUP_MIN_CHARS = 500;
+
+/**
+ * Structurally compact a transcript in two passes:
+ *
+ *   1. Content-identity dedup — an EARLIER tool-result whose exact content
+ *      recurs later (e.g. the same file read twice) is replaced by a one-line
+ *      marker, keeping the LAST identical copy full. This is lossless (the
+ *      content is still present downstream) and, unlike positional truncation,
+ *      it reaches even into the protected tail — a duplicate is worth eliding
+ *      wherever it sits. The first user message (the task) is never touched.
+ *   2. Positional truncation — keep the first user message and the last
+ *      `keepLastN` messages verbatim; clip the bulky content of everything in
+ *      between (old tool results, large reads) to `contentCap`.
+ *
+ * Both passes are deterministic and free — no LLM summary call — which is
+ * exactly what you want on the recovery path, and (critically) they only ever
+ * run at a compaction moment so the prompt-cache prefix is invalidated once,
+ * not incrementally. Returns a NEW array; never mutates the input. Exported for
+ * tests.
  */
 export function compactMessages(
   messages: ModelMessage[],
@@ -178,17 +223,106 @@ export function compactMessages(
   // Protect the first user message (the task) and the last keepLastN messages.
   const firstUserIdx = messages.findIndex((m) => m.role === "user");
   const protectedFrom = n - opts.keepLastN;
-  let compacted = false;
 
-  const out = messages.map((msg, i) => {
+  // Pass 1: dedup identical tool outputs (ignores keepLastN; spares first user).
+  const dedup = dedupeToolOutputs(messages, firstUserIdx, DEDUP_MIN_CHARS);
+
+  // Pass 2: positional truncation over the (possibly deduped) messages. A dedup
+  // that already shrank a middle message below the cap simply leaves nothing for
+  // truncation to do there; protected messages keep whatever pass 1 produced.
+  let truncatedAny = false;
+  const out = dedup.messages.map((msg, i) => {
     const isProtected = i === firstUserIdx || i >= protectedFrom;
     if (isProtected) return msg;
     const truncated = truncateContent(msg.content, opts.contentCap);
-    if (truncated.changed) compacted = true;
+    if (truncated.changed) truncatedAny = true;
     return { ...msg, content: truncated.content } as ModelMessage;
   });
 
-  return { messages: out, compacted };
+  return { messages: out, compacted: dedup.deduped > 0 || truncatedAny };
+}
+
+/**
+ * Extract the plain-text payload of a tool-result `output`, across the shapes
+ * ai@6 uses: a bare string, `{ type, value }`, or `{ type, text }`. Returns
+ * `null` for any non-text output (e.g. a structured JSON blob with neither a
+ * `value` nor `text` string). The single source of truth for "what text does
+ * this tool output carry" — shared by dedup and {@link truncateToolOutput}.
+ */
+function toolResultText(output: unknown): string | null {
+  if (typeof output === "string") return output;
+  if (output && typeof output === "object") {
+    const o = output as Record<string, unknown>;
+    if (typeof o["value"] === "string") return o["value"];
+    if (typeof o["text"] === "string") return o["text"];
+  }
+  return null;
+}
+
+/**
+ * Rebuild a tool-result `output` with `replacement` swapped in for its text
+ * payload, preserving the original shape (bare string / `{ value }` / `{ text }`).
+ * Inverse of {@link toolResultText}.
+ */
+function replaceToolResultText(output: unknown, replacement: string): unknown {
+  if (typeof output === "string") return replacement;
+  if (output && typeof output === "object") {
+    const o = output as Record<string, unknown>;
+    if (typeof o["value"] === "string") return { ...o, value: replacement };
+    if (typeof o["text"] === "string") return { ...o, text: replacement };
+  }
+  return output;
+}
+
+/**
+ * Content-identity dedup: replace every EARLIER tool-result whose extracted text
+ * (≥ `minChars`) exactly equals a LATER tool-result's text with
+ * {@link DUP_ELISION_MARKER}, keeping the last identical copy full. Reaches into
+ * the protected tail (a duplicate is lossless to elide anywhere) but never
+ * touches the message at `firstUserIdx`. Returns a NEW array; never mutates the
+ * input. `deduped` counts the tool-results elided.
+ */
+function dedupeToolOutputs(
+  messages: ModelMessage[],
+  firstUserIdx: number,
+  minChars: number,
+): { messages: ModelMessage[]; deduped: number } {
+  // Pass A: record, for each qualifying extracted text, the LAST (message,part)
+  // location it appears at. That location is the copy we keep full.
+  const lastLocation = new Map<string, { mi: number; pi: number }>();
+  messages.forEach((msg, mi) => {
+    if (mi === firstUserIdx || !Array.isArray(msg.content)) return;
+    msg.content.forEach((part: unknown, pi: number) => {
+      if (!part || typeof part !== "object" || !("output" in part)) return;
+      const text = toolResultText((part as Record<string, unknown>)["output"]);
+      if (text != null && text.length >= minChars)
+        lastLocation.set(text, { mi, pi });
+    });
+  });
+
+  // Nothing recurs? Return the input untouched (identity preserved).
+  let deduped = 0;
+  const out = messages.map((msg, mi) => {
+    if (mi === firstUserIdx || !Array.isArray(msg.content)) return msg;
+    let changed = false;
+    const parts = msg.content.map((part: unknown, pi: number) => {
+      if (!part || typeof part !== "object" || !("output" in part)) return part;
+      const p = part as Record<string, unknown>;
+      const text = toolResultText(p["output"]);
+      if (text == null || text.length < minChars) return part;
+      const last = lastLocation.get(text)!;
+      if (last.mi === mi && last.pi === pi) return part; // the kept copy
+      changed = true;
+      deduped++;
+      return {
+        ...p,
+        output: replaceToolResultText(p["output"], DUP_ELISION_MARKER),
+      };
+    });
+    return changed ? ({ ...msg, content: parts } as ModelMessage) : msg;
+  });
+
+  return { messages: out, deduped };
 }
 
 /** Truncate the textual payload of a message's content to `cap` chars. */
@@ -198,7 +332,10 @@ function truncateContent(
 ): { content: unknown; changed: boolean } {
   if (typeof content === "string") {
     if (content.length <= cap) return { content, changed: false };
-    return { content: content.slice(0, cap) + COMPACTION_MARKER, changed: true };
+    return {
+      content: content.slice(0, cap) + COMPACTION_MARKER,
+      changed: true,
+    };
   }
   if (Array.isArray(content)) {
     let changed = false;
@@ -206,9 +343,15 @@ function truncateContent(
       if (part && typeof part === "object") {
         const p = part as Record<string, unknown>;
         // Assistant text part: { type: "text", text }
-        if (typeof p["text"] === "string" && (p["text"] as string).length > cap) {
+        if (
+          typeof p["text"] === "string" &&
+          (p["text"] as string).length > cap
+        ) {
           changed = true;
-          return { ...p, text: (p["text"] as string).slice(0, cap) + COMPACTION_MARKER };
+          return {
+            ...p,
+            text: (p["text"] as string).slice(0, cap) + COMPACTION_MARKER,
+          };
         }
         // Tool-result part: { type: "tool-result", output } — output may be a
         // string, or { type: "text"|"json", value } in ai@6.
@@ -227,27 +370,19 @@ function truncateContent(
   return { content, changed: false };
 }
 
-function truncateToolOutput(output: unknown, cap: number): { output: unknown; changed: boolean } {
-  if (typeof output === "string") {
-    if (output.length <= cap) return { output, changed: false };
-    return { output: output.slice(0, cap) + COMPACTION_MARKER, changed: true };
-  }
-  if (output && typeof output === "object") {
-    const o = output as Record<string, unknown>;
-    if (typeof o["value"] === "string" && (o["value"] as string).length > cap) {
-      return {
-        output: { ...o, value: (o["value"] as string).slice(0, cap) + COMPACTION_MARKER },
-        changed: true,
-      };
-    }
-    if (typeof o["text"] === "string" && (o["text"] as string).length > cap) {
-      return {
-        output: { ...o, text: (o["text"] as string).slice(0, cap) + COMPACTION_MARKER },
-        changed: true,
-      };
-    }
-  }
-  return { output, changed: false };
+function truncateToolOutput(
+  output: unknown,
+  cap: number,
+): { output: unknown; changed: boolean } {
+  const text = toolResultText(output);
+  if (text == null || text.length <= cap) return { output, changed: false };
+  return {
+    output: replaceToolResultText(
+      output,
+      text.slice(0, cap) + COMPACTION_MARKER,
+    ),
+    changed: true,
+  };
 }
 
 // ── Error classification ───────────────────────────────────────────────────────
@@ -333,7 +468,9 @@ export function delay(ms: number, signal?: AbortSignal | null): Promise<void> {
   // caller's catch/break could fire. Both callers (engine.ts retry backoff,
   // tools.ts file-lock acquire retry) already break on this rejection.
   if (signal?.aborted) {
-    return Promise.reject(new DOMException("Aborted before backoff.", "AbortError"));
+    return Promise.reject(
+      new DOMException("Aborted before backoff.", "AbortError"),
+    );
   }
   if (ms <= 0) return Promise.resolve();
   return new Promise<void>((resolve, reject) => {

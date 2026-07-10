@@ -4,18 +4,30 @@
  */
 import { describe, it, expect } from "vitest";
 import { MemoryWorkspace } from "./workspaces/memory";
-import { buildWorkspaceTools, formatWithLineNumbers, describeEditFailure, clip } from "./tools";
+import {
+  buildWorkspaceTools,
+  formatWithLineNumbers,
+  describeEditFailure,
+  clip,
+  clipMiddle,
+  readFileTruncationMarker,
+} from "./tools";
 import type { CodingEvent } from "./types";
 
 async function run(tool: unknown, input: unknown): Promise<string> {
-  return (tool as { execute: (i: unknown, o: unknown) => Promise<string> }).execute(input, {});
+  return (
+    tool as { execute: (i: unknown, o: unknown) => Promise<string> }
+  ).execute(input, {});
 }
 
 describe("buildWorkspaceTools – write_file", () => {
   it("creates a new file and returns a byte-count confirmation", async () => {
     const ws = new MemoryWorkspace({});
     const tools = buildWorkspaceTools(ws);
-    const result = await run(tools.write_file, { path: "new.ts", content: "hello" });
+    const result = await run(tools.write_file, {
+      path: "new.ts",
+      content: "hello",
+    });
     expect(result).toContain("5");
     expect(result).toContain("new.ts");
     expect(await ws.readFile("new.ts")).toBe("hello");
@@ -26,15 +38,22 @@ describe("buildWorkspaceTools – write_file", () => {
     const events: CodingEvent[] = [];
     const tools = buildWorkspaceTools(ws, { onEvent: (e) => events.push(e) });
     await run(tools.write_file, { path: "x.ts", content: "abc" });
-    expect(events.some((e) => e.type === "file-edit" && e.path === "x.ts")).toBe(true);
+    expect(
+      events.some((e) => e.type === "file-edit" && e.path === "x.ts"),
+    ).toBe(true);
   });
 
   it("returns an error string when write fails", async () => {
     const ws = new MemoryWorkspace({});
     // Simulate writeFile throwing
-    ws.writeFile = async () => { throw new Error("disk full"); };
+    ws.writeFile = async () => {
+      throw new Error("disk full");
+    };
     const tools = buildWorkspaceTools(ws);
-    const result = await run(tools.write_file, { path: "fail.ts", content: "x" });
+    const result = await run(tools.write_file, {
+      path: "fail.ts",
+      content: "x",
+    });
     expect(result).toContain("Error writing");
     expect(result).toContain("disk full");
   });
@@ -42,7 +61,11 @@ describe("buildWorkspaceTools – write_file", () => {
 
 describe("buildWorkspaceTools – list_dir", () => {
   it("returns entries of a directory", async () => {
-    const ws = new MemoryWorkspace({ "src/a.ts": "", "src/b.ts": "", "src/sub/c.ts": "" });
+    const ws = new MemoryWorkspace({
+      "src/a.ts": "",
+      "src/b.ts": "",
+      "src/sub/c.ts": "",
+    });
     const tools = buildWorkspaceTools(ws);
     const result = await run(tools.list_dir, { path: "src" });
     expect(result).toContain("a.ts");
@@ -59,7 +82,9 @@ describe("buildWorkspaceTools – list_dir", () => {
 
   it("returns an error string when list fails", async () => {
     const ws = new MemoryWorkspace({});
-    ws.list = async () => { throw new Error("permission denied"); };
+    ws.list = async () => {
+      throw new Error("permission denied");
+    };
     const tools = buildWorkspaceTools(ws);
     const result = await run(tools.list_dir, { path: "restricted" });
     expect(result).toContain("Error listing");
@@ -69,7 +94,11 @@ describe("buildWorkspaceTools – list_dir", () => {
 
 describe("buildWorkspaceTools – glob", () => {
   it("returns sorted matches for a glob pattern", async () => {
-    const ws = new MemoryWorkspace({ "src/a.ts": "", "src/b.ts": "", "lib/c.js": "" });
+    const ws = new MemoryWorkspace({
+      "src/a.ts": "",
+      "src/b.ts": "",
+      "lib/c.js": "",
+    });
     const tools = buildWorkspaceTools(ws);
     const result = await run(tools.glob, { pattern: "src/*.ts" });
     expect(result).toContain("src/a.ts");
@@ -86,7 +115,9 @@ describe("buildWorkspaceTools – glob", () => {
 
   it("returns an error string when glob fails", async () => {
     const ws = new MemoryWorkspace({});
-    ws.glob = async () => { throw new Error("invalid pattern"); };
+    ws.glob = async () => {
+      throw new Error("invalid pattern");
+    };
     const tools = buildWorkspaceTools(ws);
     const result = await run(tools.glob, { pattern: "[bad" });
     expect(result).toContain("Error globbing");
@@ -111,7 +142,9 @@ describe("buildWorkspaceTools – grep", () => {
 
   it("returns an error string when grep fails", async () => {
     const ws = new MemoryWorkspace({});
-    ws.grep = async () => { throw new Error("regex error"); };
+    ws.grep = async () => {
+      throw new Error("regex error");
+    };
     const tools = buildWorkspaceTools(ws);
     const result = await run(tools.grep, { pattern: "(?bad" });
     expect(result).toContain("Error grepping");
@@ -133,7 +166,11 @@ describe("buildWorkspaceTools – edit_file error path", () => {
   it("returns an error string when old_string is not found", async () => {
     const ws = new MemoryWorkspace({ "a.ts": "hello" });
     const tools = buildWorkspaceTools(ws);
-    const result = await run(tools.edit_file, { path: "a.ts", old_string: "zzz", new_string: "x" });
+    const result = await run(tools.edit_file, {
+      path: "a.ts",
+      old_string: "zzz",
+      new_string: "x",
+    });
     expect(result).toContain("Error editing a.ts");
     expect(result).toContain("not found");
   });
@@ -144,15 +181,25 @@ describe("buildWorkspaceTools – code_graph execute", () => {
     const ws = new MemoryWorkspace({});
     const codeGraph = { query: async () => "symbol found at src/x.ts:10" };
     const tools = buildWorkspaceTools(ws, { codeGraph });
-    const result = await run(tools.code_graph, { operation: "search", query: "myFn" });
+    const result = await run(tools.code_graph, {
+      operation: "search",
+      query: "myFn",
+    });
     expect(result).toBe("symbol found at src/x.ts:10");
   });
 
   it("returns a code_graph error string when provider throws", async () => {
     const ws = new MemoryWorkspace({});
-    const codeGraph = { query: async (): Promise<string> => { throw new Error("index not ready"); } };
+    const codeGraph = {
+      query: async (): Promise<string> => {
+        throw new Error("index not ready");
+      },
+    };
     const tools = buildWorkspaceTools(ws, { codeGraph });
-    const result = await run(tools.code_graph, { operation: "file_symbols", query: "src/x.ts" });
+    const result = await run(tools.code_graph, {
+      operation: "file_symbols",
+      query: "src/x.ts",
+    });
     expect(result).toContain("code_graph error");
     expect(result).toContain("index not ready");
   });
@@ -161,10 +208,18 @@ describe("buildWorkspaceTools – code_graph execute", () => {
 describe("buildWorkspaceTools – bash error paths", () => {
   it("returns a timed-out message when exec timedOut is true", async () => {
     const ws = new MemoryWorkspace({});
-    ws.onExec(() => ({ exitCode: 124, stdout: "", stderr: "", timedOut: true }));
+    ws.onExec(() => ({
+      exitCode: 124,
+      stdout: "",
+      stderr: "",
+      timedOut: true,
+    }));
     const events: CodingEvent[] = [];
     const tools = buildWorkspaceTools(ws, { onEvent: (e) => events.push(e) });
-    const result = await run(tools.bash, { command: "sleep 9999", timeout_ms: 100 });
+    const result = await run(tools.bash, {
+      command: "sleep 9999",
+      timeout_ms: 100,
+    });
     expect(result).toContain("timed out");
     // event is still emitted before the timedOut check
     expect(events.some((e) => e.type === "command")).toBe(true);
@@ -172,7 +227,12 @@ describe("buildWorkspaceTools – bash error paths", () => {
 
   it("returns a failure message when exit code is non-zero", async () => {
     const ws = new MemoryWorkspace({});
-    ws.onExec(() => ({ exitCode: 1, stdout: "", stderr: "build failed", timedOut: false }));
+    ws.onExec(() => ({
+      exitCode: 1,
+      stdout: "",
+      stderr: "build failed",
+      timedOut: false,
+    }));
     const tools = buildWorkspaceTools(ws);
     const result = await run(tools.bash, { command: "pnpm build" });
     expect(result).toContain("Command failed");
@@ -181,7 +241,9 @@ describe("buildWorkspaceTools – bash error paths", () => {
 
   it("returns an error string when exec throws", async () => {
     const ws = new MemoryWorkspace({});
-    ws.exec = async () => { throw new Error("spawn failed"); };
+    ws.exec = async () => {
+      throw new Error("spawn failed");
+    };
     const tools = buildWorkspaceTools(ws);
     const result = await run(tools.bash, { command: "bad-cmd" });
     expect(result).toContain("Error running command");
@@ -256,16 +318,73 @@ describe("buildWorkspaceTools – read_file line numbers", () => {
   it("numbers lines with their true file line number when offset is given", async () => {
     const ws = new MemoryWorkspace({ "n.txt": "l1\nl2\nl3\nl4\nl5" });
     const tools = buildWorkspaceTools(ws);
-    const out = await run(tools.read_file, { path: "n.txt", offset: 2, limit: 2 });
+    const out = await run(tools.read_file, {
+      path: "n.txt",
+      offset: 2,
+      limit: 2,
+    });
     expect(out).toBe("2\tl2\n3\tl3");
   });
 
-  it("still clips output over the 30k cap (middle-out)", async () => {
-    const ws = new MemoryWorkspace({ "big.txt": "x".repeat(40_000) });
+  it("gives an actionable, line-aware truncation hint for an over-cap whole-file read", async () => {
+    // A large MULTI-LINE file: the model should learn the total line count and
+    // the exact offset/limit to fetch the elided middle it can't see.
+    const lines = Array.from(
+      { length: 5000 },
+      (_, i) => `line ${i + 1}: ${"x".repeat(20)}`,
+    );
+    const ws = new MemoryWorkspace({ "big.txt": lines.join("\n") });
     const tools = buildWorkspaceTools(ws);
     const out = await run(tools.read_file, { path: "big.txt" });
-    expect(out).toContain("truncated from the middle");
+    expect(out).toContain("5000 lines total");
+    expect(out).toMatch(/offset:\d+/);
+    expect(out).toMatch(/limit:\d+/);
+    // Still capped like every other over-cap tool output.
     expect(out.length).toBeLessThan(31_000);
+  });
+
+  it("keeps the generic middle-out marker for a RANGE read that overflows the cap", async () => {
+    // offset/limit were supplied, so the model already chose a span — no
+    // line-aware recovery hint, just the generic char-count note.
+    const lines = Array.from(
+      { length: 5000 },
+      (_, i) => `line ${i + 1}: ${"x".repeat(20)}`,
+    );
+    const ws = new MemoryWorkspace({ "big.txt": lines.join("\n") });
+    const tools = buildWorkspaceTools(ws);
+    const out = await run(tools.read_file, {
+      path: "big.txt",
+      offset: 1,
+      limit: 5000,
+    });
+    expect(out).toContain("truncated from the middle");
+    expect(out).not.toContain("lines total");
+    expect(out.length).toBeLessThan(31_000);
+  });
+});
+
+describe("readFileTruncationMarker", () => {
+  it("emits a concrete offset/limit hint when a middle span of lines is elided", () => {
+    const marker = readFileTruncationMarker(5000);
+    const msg = marker({
+      dropped: 120_000,
+      head: Array.from({ length: 900 }, () => "h").join("\n"), // 900 head lines
+      tail: Array.from({ length: 600 }, () => "t").join("\n"), // 600 tail lines
+    });
+    expect(msg).toContain("5000 lines total");
+    expect(msg).toContain("offset:900");
+    expect(msg).toContain("limit:3500"); // 5000 - 900 - 600
+  });
+
+  it("falls back to a char-oriented note for a single over-cap line (no line range)", () => {
+    const marker = readFileTruncationMarker(1);
+    const msg = marker({
+      dropped: 10_000,
+      head: "h".repeat(18_000),
+      tail: "t".repeat(12_000),
+    });
+    expect(msg).toContain("1 line(s)");
+    expect(msg).not.toContain("offset:");
   });
 });
 
@@ -286,13 +405,48 @@ describe("clip (middle-out truncation)", () => {
   });
 });
 
+describe("clipMiddle (parameterized middle-out truncation)", () => {
+  it("returns text at or under the cap unchanged", () => {
+    expect(clipMiddle("small", 10_000)).toBe("small");
+    expect(clipMiddle("x".repeat(100), 100)).toBe("x".repeat(100));
+  });
+
+  it("clips to an arbitrary cap with a char-count marker, keeping head + tail", () => {
+    const text = "HEAD" + "z".repeat(20_000) + "TAIL";
+    const out = clipMiddle(text, 5_000);
+    expect(out.startsWith("HEAD")).toBe(true);
+    expect(out.endsWith("TAIL")).toBe(true);
+    expect(out).toContain("truncated from the middle");
+    // head (⌊0.6·5000⌋=3000) + tail (2000) + short marker → bounded near the cap.
+    expect(out.length).toBeLessThan(5_200);
+    // Marker reports the exact elided count: 20008 total − 5000 kept = 15008.
+    expect(out).toContain(`${text.length - 5_000} chars truncated`);
+  });
+
+  it("applies the tighter 10k stderr budget the exec envelope uses", () => {
+    const out = clipMiddle("e".repeat(50_000), 10_000);
+    expect(out).toContain("truncated from the middle");
+    expect(out.length).toBeLessThan(10_500);
+  });
+
+  it("honors a custom head fraction", () => {
+    const text = "A".repeat(1_000) + "B".repeat(1_000);
+    const out = clipMiddle(text, 100, 0.5);
+    expect(out.startsWith("A".repeat(50))).toBe(true); // head = 50% of 100
+    expect(out.endsWith("B".repeat(50))).toBe(true); // tail = the remaining 50
+  });
+});
+
 describe("describeEditFailure", () => {
   it("returns null when old_string appears exactly once", () => {
     expect(describeEditFailure("a\nunique\nb", "unique")).toBeNull();
   });
 
   it("names the closest line and hints at whitespace when not found", () => {
-    const msg = describeEditFailure("const foo = 1;\nconst bar = 2;", "const fooo = 1;");
+    const msg = describeEditFailure(
+      "const foo = 1;\nconst bar = 2;",
+      "const fooo = 1;",
+    );
     expect(msg).toContain("not found");
     expect(msg).toContain("Closest match at line 1");
     expect(msg).toContain("const foo = 1;");
@@ -324,7 +478,11 @@ describe("buildWorkspaceTools – edit_file replace_all + structured feedback", 
   it("leaves the single-match success message unchanged", async () => {
     const ws = new MemoryWorkspace({ "a.ts": "foo bar" });
     const tools = buildWorkspaceTools(ws);
-    const out = await run(tools.edit_file, { path: "a.ts", old_string: "bar", new_string: "baz" });
+    const out = await run(tools.edit_file, {
+      path: "a.ts",
+      old_string: "bar",
+      new_string: "baz",
+    });
     expect(out).toBe("Edited a.ts");
   });
 
@@ -343,7 +501,11 @@ describe("buildWorkspaceTools – edit_file replace_all + structured feedback", 
   it("lists lines and suggests replace_all on an ambiguous match, without mutating", async () => {
     const ws = new MemoryWorkspace({ "a.ts": "x\nx\nx" });
     const tools = buildWorkspaceTools(ws);
-    const out = await run(tools.edit_file, { path: "a.ts", old_string: "x", new_string: "y" });
+    const out = await run(tools.edit_file, {
+      path: "a.ts",
+      old_string: "x",
+      new_string: "y",
+    });
     expect(out).toContain("appears 3 times");
     expect(out).toContain("replace_all");
     expect(await ws.readFile("a.ts")).toBe("x\nx\nx");
