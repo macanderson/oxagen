@@ -26,12 +26,6 @@ export interface CliConfig {
   verbose?: boolean;
   /** Model-runtime settings */
   runtime?: RuntimeConfig;
-  /**
-   * Background-monitor settings (Group 5: ask-before-monitoring, dispatch
-   * triggers, poll cadence). A partial override layered over the defaults;
-   * read through the typed accessors in `monitors/config.ts`.
-   */
-  monitors?: import("../monitors/config.js").MonitorsConfigPatch;
   /** Graph tool settings */
   graph?: import("../agent/context/config.js").GraphConfigPatch;
   /** Anonymous usage-telemetry preferences (apps/cli/src/telemetry/usage.ts). */
@@ -90,7 +84,9 @@ export type MotionMode = "full" | "reduced" | "off";
 const MOTION_MODES: readonly string[] = ["full", "reduced", "off"];
 
 function asMotionMode(value: string | undefined): MotionMode | undefined {
-  return value !== undefined && MOTION_MODES.includes(value) ? (value as MotionMode) : undefined;
+  return value !== undefined && MOTION_MODES.includes(value)
+    ? (value as MotionMode)
+    : undefined;
 }
 
 const CONFIG_DIR = join(homedir(), ".config", "oxagen");

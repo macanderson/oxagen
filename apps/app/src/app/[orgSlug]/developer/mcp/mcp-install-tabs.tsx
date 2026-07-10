@@ -9,9 +9,15 @@
  * bundle lands in the client chunk.
  */
 
-import * as React from "react";
 import { Check, Copy } from "lucide-react";
-import { Tabs, TabsList, TabsTab, TabsPanel, TabsIndicator } from "@/components/ui/tabs";
+import { useCopyToClipboard } from "@/components/ui/copy-button";
+import {
+  Tabs,
+  TabsList,
+  TabsTab,
+  TabsPanel,
+  TabsIndicator,
+} from "@/components/ui/tabs";
 
 export interface McpTabEntry {
   /** Display label shown in the tab strip (e.g. "Claude Code"). */
@@ -29,22 +35,12 @@ export interface McpTabEntry {
 // ---------------------------------------------------------------------------
 
 function CopyButton({ text, label }: { text: string; label: string }) {
-  const [copied, setCopied] = React.useState(false);
-
-  const handleCopy = React.useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Clipboard access denied — fail silently.
-    }
-  }, [text]);
+  const { copied, copy } = useCopyToClipboard({ timeout: 2000 });
 
   return (
     <button
       type="button"
-      onClick={handleCopy}
+      onClick={() => void copy(text)}
       aria-label={copied ? `${label} copied` : `Copy ${label}`}
       className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-medium text-white/60 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
@@ -89,7 +85,7 @@ export function McpInstallTabs({ entries }: McpInstallTabsProps) {
   if (entries.length === 0) return null;
 
   // Safe: length guard above ensures at least one entry exists.
-   
+
   const firstKey = entries[0]!.key;
 
   return (
@@ -143,7 +139,6 @@ export function McpInstallTabs({ entries }: McpInstallTabsProps) {
             <div
               data-mcp-code
               aria-label={`${entry.client} install command`}
-               
               dangerouslySetInnerHTML={{ __html: entry.highlightedHtml }}
               className="[&_pre]:!bg-transparent [&_pre]:overflow-x-auto [&_pre]:px-4 [&_pre]:py-3.5 [&_code]:text-[13px] [&_code]:font-mono [&_code]:leading-relaxed"
             />

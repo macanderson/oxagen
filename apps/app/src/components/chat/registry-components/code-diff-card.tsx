@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type ReactElement } from "react";
+import { useEffect, useMemo, useState, type ReactElement } from "react";
 import { Check, Copy, ExternalLink, FileDiff } from "lucide-react";
+import { useCopyToClipboard } from "@/components/ui/copy-button";
 import { cn } from "@/lib/utils";
 import { diffAnchorId } from "./diff-anchor";
 import { highlightLine, inferLang, type HighlightedToken } from "./diff-syntax";
@@ -97,10 +98,20 @@ export function parseUnifiedDiff(patch: string): DiffHunk[] {
     if (!current) continue; // pre-hunk file headers (---/+++) — skip
     if (raw.startsWith("\\")) continue; // "\ No newline at end of file"
     if (raw.startsWith("+")) {
-      current.lines.push({ type: "add", content: raw.slice(1), oldLine: null, newLine });
+      current.lines.push({
+        type: "add",
+        content: raw.slice(1),
+        oldLine: null,
+        newLine,
+      });
       newLine += 1;
     } else if (raw.startsWith("-")) {
-      current.lines.push({ type: "del", content: raw.slice(1), oldLine, newLine: null });
+      current.lines.push({
+        type: "del",
+        content: raw.slice(1),
+        oldLine,
+        newLine: null,
+      });
       oldLine += 1;
     } else {
       const content = raw.startsWith(" ") ? raw.slice(1) : raw;
@@ -113,7 +124,10 @@ export function parseUnifiedDiff(patch: string): DiffHunk[] {
 }
 
 /** Count added/removed lines across all hunks of a patch. */
-export function countDiffStats(hunks: DiffHunk[]): { additions: number; deletions: number } {
+export function countDiffStats(hunks: DiffHunk[]): {
+  additions: number;
+  deletions: number;
+} {
   let additions = 0;
   let deletions = 0;
   for (const hunk of hunks) {
@@ -126,22 +140,12 @@ export function countDiffStats(hunks: DiffHunk[]): { additions: number; deletion
 }
 
 function CopyButton({ text, label }: { text: string; label: string }) {
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Clipboard access denied — fail silently.
-    }
-  }, [text]);
+  const { copied, copy } = useCopyToClipboard({ timeout: 2000 });
 
   return (
     <button
       type="button"
-      onClick={handleCopy}
+      onClick={() => void copy(text)}
       aria-label={copied ? `${label} copied` : `Copy ${label}`}
       className="flex-shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
@@ -160,7 +164,13 @@ function CopyButton({ text, label }: { text: string; label: string }) {
  * The add/del row tint and the `+`/`-`/` ` marker are always applied — token
  * colours sit ON TOP of the row background, exactly like a coding-agent UI.
  */
-function DiffLineRow({ line, tokens }: { line: DiffLine; tokens?: HighlightedToken[] }) {
+function DiffLineRow({
+  line,
+  tokens,
+}: {
+  line: DiffLine;
+  tokens?: HighlightedToken[];
+}) {
   const marker = line.type === "add" ? "+" : line.type === "del" ? "-" : " ";
   return (
     <div
@@ -189,13 +199,20 @@ function DiffLineRow({ line, tokens }: { line: DiffLine; tokens?: HighlightedTok
         </span>
         {tokens && tokens.length > 0 ? (
           tokens.map((t, i) => (
-            <span key={i} className="diff-token" style={parseTokenStyle(t.style)}>
+            <span
+              key={i}
+              className="diff-token"
+              style={parseTokenStyle(t.style)}
+            >
               {t.content}
             </span>
           ))
         ) : (
           <span
-            className={cn(line.type === "add" && "text-success", line.type === "del" && "text-error")}
+            className={cn(
+              line.type === "add" && "text-success",
+              line.type === "del" && "text-error",
+            )}
           >
             {line.content}
           </span>
@@ -211,7 +228,9 @@ function DiffLineRow({ line, tokens }: { line: DiffLine; tokens?: HighlightedTok
  * a keyed object, preserving the `--shiki-dark` custom property the `.dark`
  * rule in diff-token.css reads.
  */
-export function parseTokenStyle(style: string | undefined): React.CSSProperties | undefined {
+export function parseTokenStyle(
+  style: string | undefined,
+): React.CSSProperties | undefined {
   if (!style) return undefined;
   const out: Record<string, string> = {};
   for (const decl of style.split(";")) {
@@ -236,11 +255,17 @@ export function parseTokenStyle(style: string | undefined): React.CSSProperties 
  * upgrades to syntax colours when highlighting resolves — never blocking paint
  * and never throwing (highlightLine degrades to plain text on any failure).
  */
-function useHighlightedHunks(path: string, hunks: DiffHunk[]): Map<string, HighlightedToken[]> {
-  const [map, setMap] = useState<Map<string, HighlightedToken[]>>(() => new Map());
+function useHighlightedHunks(
+  path: string,
+  hunks: DiffHunk[],
+): Map<string, HighlightedToken[]> {
+  const [map, setMap] = useState<Map<string, HighlightedToken[]>>(
+    () => new Map(),
+  );
   // Stable dependency: the concatenated code content + path (language source).
   const signature = useMemo(
-    () => `${path}\u0000${hunks.map((h) => h.lines.map((l) => l.content).join("\n")).join("\u0001")}`,
+    () =>
+      `${path}\u0000${hunks.map((h) => h.lines.map((l) => l.content).join("\n")).join("\u0001")}`,
     [path, hunks],
   );
 
@@ -273,8 +298,17 @@ function useHighlightedHunks(path: string, hunks: DiffHunk[]): Map<string, Highl
   return map;
 }
 
-function FileSection({ file, defaultOpen }: { file: CodeDiffFile; defaultOpen: boolean }) {
-  const hunks = useMemo(() => (file.patch ? parseUnifiedDiff(file.patch) : []), [file.patch]);
+function FileSection({
+  file,
+  defaultOpen,
+}: {
+  file: CodeDiffFile;
+  defaultOpen: boolean;
+}) {
+  const hunks = useMemo(
+    () => (file.patch ? parseUnifiedDiff(file.patch) : []),
+    [file.patch],
+  );
   const highlighted = useHighlightedHunks(file.path, hunks);
   const computed = hunks.length > 0 ? countDiffStats(hunks) : null;
   const additions = file.additions ?? computed?.additions ?? 0;
@@ -288,13 +322,21 @@ function FileSection({ file, defaultOpen }: { file: CodeDiffFile; defaultOpen: b
       data-file-path={file.path}
     >
       <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 hover:bg-muted/50 [&::-webkit-details-marker]:hidden">
-        <FileDiff className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-        <span className="min-w-0 flex-1 truncate font-mono text-xs" title={file.path}>
+        <FileDiff
+          className="size-4 shrink-0 text-muted-foreground"
+          aria-hidden="true"
+        />
+        <span
+          className="min-w-0 flex-1 truncate font-mono text-xs"
+          title={file.path}
+        >
           {file.path}
         </span>
         {(additions > 0 || deletions > 0) && (
           <span className="flex shrink-0 items-center gap-1.5 font-mono text-xs tabular-nums">
-            {additions > 0 && <span className="text-success">+{additions}</span>}
+            {additions > 0 && (
+              <span className="text-success">+{additions}</span>
+            )}
             {deletions > 0 && <span className="text-error">-{deletions}</span>}
           </span>
         )}
@@ -313,7 +355,11 @@ function FileSection({ file, defaultOpen }: { file: CodeDiffFile; defaultOpen: b
                 {hunk.header}
               </div>
               {hunk.lines.map((line, li) => (
-                <DiffLineRow key={li} line={line} tokens={highlighted.get(`${hi}:${li}`)} />
+                <DiffLineRow
+                  key={li}
+                  line={line}
+                  tokens={highlighted.get(`${hi}:${li}`)}
+                />
               ))}
             </div>
           ))}
@@ -366,8 +412,12 @@ export default function CodeDiffCard({
         </span>
         {(totals.additions > 0 || totals.deletions > 0) && (
           <span className="flex items-center gap-1.5 font-mono text-xs tabular-nums">
-            {totals.additions > 0 && <span className="text-success">+{totals.additions}</span>}
-            {totals.deletions > 0 && <span className="text-error">-{totals.deletions}</span>}
+            {totals.additions > 0 && (
+              <span className="text-success">+{totals.additions}</span>
+            )}
+            {totals.deletions > 0 && (
+              <span className="text-error">-{totals.deletions}</span>
+            )}
           </span>
         )}
         {externalUrl ? (
@@ -384,12 +434,18 @@ export default function CodeDiffCard({
       </div>
 
       {summary ? (
-        <p className="border-b border-border/60 px-4 py-2 text-sm text-foreground">{summary}</p>
+        <p className="border-b border-border/60 px-4 py-2 text-sm text-foreground">
+          {summary}
+        </p>
       ) : null}
 
       <div>
         {files.map((file, i) => (
-          <FileSection key={file.path} file={file} defaultOpen={files.length === 1 || i === 0} />
+          <FileSection
+            key={file.path}
+            file={file}
+            defaultOpen={files.length === 1 || i === 0}
+          />
         ))}
       </div>
     </div>

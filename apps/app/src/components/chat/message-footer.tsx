@@ -14,11 +14,15 @@
 import * as React from "react";
 import { useState, useCallback } from "react";
 import { Copy, Check, BookOpen, Brain } from "lucide-react";
+import { useCopyToClipboard } from "@/components/ui/copy-button";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipTrigger, TooltipPopup } from "@/components/ui/tooltip";
 import { useToast } from "@/components/ui/toast";
 import type { TurnUsage } from "./stream-event-types";
-import { saveAsKnowledgeAction, saveAsMemoryAction } from "./message-footer-actions";
+import {
+  saveAsKnowledgeAction,
+  saveAsMemoryAction,
+} from "./message-footer-actions";
 import { PromptCacheBar } from "./prompt-cache-bar";
 
 export interface MessageFooterProps {
@@ -71,7 +75,11 @@ function ActionButton({
           />
         }
       >
-        {done ? (successIcon ?? <Check className="size-3.5 text-foreground" aria-hidden="true" />) : icon}
+        {done
+          ? (successIcon ?? (
+              <Check className="size-3.5 text-foreground" aria-hidden="true" />
+            ))
+          : icon}
         <span className="sr-only">{label}</span>
       </TooltipTrigger>
       <TooltipPopup>{done ? `${label} — done` : label}</TooltipPopup>
@@ -86,6 +94,7 @@ export function MessageFooter({
   workspaceSlug,
 }: MessageFooterProps) {
   const { add: addToast } = useToast();
+  const { copy } = useCopyToClipboard();
   const [done, setDone] = useState<Set<ButtonId>>(new Set());
   const [loading, setLoading] = useState<ButtonId | null>(null);
 
@@ -106,25 +115,49 @@ export function MessageFooter({
       setLoading(id);
       try {
         if (id === "copy") {
-          await navigator.clipboard.writeText(text);
+          // useCopyToClipboard's own `copied` flag is unused here — this
+          // footer's `done`/markDone Set already generalizes the "flip to a
+          // check icon" behavior across copy/knowledge/memory, so `copy` is
+          // used only for its shared, guarded clipboard write. A `false`
+          // return (write failed) falls through to the catch below via the
+          // thrown error, preserving the existing "Action failed" toast.
+          if (!(await copy(text))) throw new Error("clipboard write failed");
           markDone("copy");
         } else if (id === "knowledge") {
-          const result = await saveAsKnowledgeAction({ orgSlug, workspaceSlug }, text);
+          const result = await saveAsKnowledgeAction(
+            { orgSlug, workspaceSlug },
+            text,
+          );
           if (result.ok) {
             markDone("knowledge");
           } else {
-            addToast({ title: "Could not save knowledge", description: result.error, type: "error" });
+            addToast({
+              title: "Could not save knowledge",
+              description: result.error,
+              type: "error",
+            });
           }
         } else if (id === "memory") {
-          const result = await saveAsMemoryAction({ orgSlug, workspaceSlug }, text);
+          const result = await saveAsMemoryAction(
+            { orgSlug, workspaceSlug },
+            text,
+          );
           if (result.ok) {
             markDone("memory");
           } else {
-            addToast({ title: "Could not save memory", description: result.error, type: "error" });
+            addToast({
+              title: "Could not save memory",
+              description: result.error,
+              type: "error",
+            });
           }
         }
       } catch {
-        addToast({ title: "Action failed", description: "Please try again.", type: "error" });
+        addToast({
+          title: "Action failed",
+          description: "Please try again.",
+          type: "error",
+        });
       } finally {
         setLoading(null);
       }

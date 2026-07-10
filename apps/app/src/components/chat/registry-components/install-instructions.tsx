@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useCallback } from "react";
 import { Copy, Check, Terminal } from "lucide-react";
+import { useCopyToClipboard } from "@/components/ui/copy-button";
 
 interface InstallStep {
   label: string;
@@ -29,22 +29,12 @@ interface CopyButtonProps {
 }
 
 function CopyButton({ text, label }: CopyButtonProps) {
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Clipboard access denied — fail silently.
-    }
-  }, [text]);
+  const { copied, copy } = useCopyToClipboard({ timeout: 2000 });
 
   return (
     <button
       type="button"
-      onClick={handleCopy}
+      onClick={() => void copy(text)}
       aria-label={copied ? `${label} copied` : `Copy ${label}`}
       className="flex-shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
@@ -77,7 +67,10 @@ export default function InstallInstructions({
       {/* Header */}
       <div className="flex items-center gap-2.5 px-4 py-3 border-b border-border bg-muted/40 dark:bg-muted/20">
         <div className="rounded-md bg-muted p-1.5">
-          <Terminal className="size-4 text-muted-foreground" aria-hidden="true" />
+          <Terminal
+            className="size-4 text-muted-foreground"
+            aria-hidden="true"
+          />
         </div>
         <div>
           <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground">
@@ -101,7 +94,9 @@ export default function InstallInstructions({
               >
                 {index + 1}
               </span>
-              <p className="text-sm text-foreground leading-snug">{step.label}</p>
+              <p className="text-sm text-foreground leading-snug">
+                {step.label}
+              </p>
             </div>
 
             {/* Command block — only rendered when a command is present */}
@@ -110,7 +105,10 @@ export default function InstallInstructions({
                 <pre className="flex-1 text-xs font-mono text-foreground whitespace-pre-wrap break-all leading-relaxed overflow-x-auto">
                   {step.command}
                 </pre>
-                <CopyButton text={step.command} label={`step ${index + 1} command`} />
+                <CopyButton
+                  text={step.command}
+                  label={`step ${index + 1} command`}
+                />
               </div>
             )}
           </li>

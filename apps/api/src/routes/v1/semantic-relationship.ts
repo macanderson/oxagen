@@ -1,5 +1,5 @@
 /**
- * semantic-relationship.ts — Hono routes for the canonical semantic.relationship.* capabilities.
+ * semantic-relationship.ts — Hono routes for the semantic.relationship.* capabilities.
  *
  * Capabilities covered:
  *   semantic.relationship.list    GET  /semantic-relationships
@@ -7,13 +7,13 @@
  *   semantic.relationship.approve POST /semantic-relationships/:edgeId/decide
  *   semantic.relationship.infer   POST /semantic-relationships/infer
  *
- * This capability is reachable at BOTH paths, via two files:
- *   /v1/:org/:ws/semantic-relationships   (canonical — served by this file)
- *   /v1/:org/:ws/semantic-edges           (deprecated alias — served by the sibling semantic-edge.ts)
- *
- * semantic-edge.ts imports from the semantic.edge.* contracts, which are now
- * deprecation re-exports of semantic.relationship.*. This file directly
- * imports the canonical contracts.
+ * STATUS (2026-07-10): these 4 capabilities have NO registered handlers —
+ * every request through this file throws no_handler at dispatch (allowlisted
+ * as known gaps in packages/handlers capability-dispatch.probe.test.ts). The
+ * WORKING routes are /v1/:org/:ws/semantic-edges (sibling semantic-edge.ts),
+ * whose semantic.edge.* contracts are independent contracts (own names, own
+ * registered handlers) — NOT re-exports of these. Finish wiring handlers here
+ * before pointing any caller at /semantic-relationships.
  */
 
 import { Hono } from "hono";
@@ -32,7 +32,9 @@ export const semanticRelationshipRoute = new Hono<AppEnv>();
 semanticRelationshipRoute.post("/infer", async (c) => {
   const body = semanticRelationshipInfer.input.parse(await c.req.json());
   const ctx = capabilityContext(c);
-  const out = await invoke(semanticRelationshipInfer.name, body, ctx, { surface: "api" });
+  const out = await invoke(semanticRelationshipInfer.name, body, ctx, {
+    surface: "api",
+  });
   return c.json(out, 202);
 });
 
@@ -41,21 +43,34 @@ semanticRelationshipRoute.post("/infer", async (c) => {
 semanticRelationshipRoute.get("/suggest", async (c) => {
   const query = c.req.query();
   const body = semanticRelationshipSuggest.input.parse({
-    confidenceMin: query.confidenceMin !== undefined ? Number(query.confidenceMin) : undefined,
-    confidenceMax: query.confidenceMax !== undefined ? Number(query.confidenceMax) : undefined,
+    confidenceMin:
+      query.confidenceMin !== undefined
+        ? Number(query.confidenceMin)
+        : undefined,
+    confidenceMax:
+      query.confidenceMax !== undefined
+        ? Number(query.confidenceMax)
+        : undefined,
     limit: query.limit !== undefined ? Number(query.limit) : undefined,
   });
   const ctx = capabilityContext(c);
-  const out = await invoke(semanticRelationshipSuggest.name, body, ctx, { surface: "api" });
+  const out = await invoke(semanticRelationshipSuggest.name, body, ctx, {
+    surface: "api",
+  });
   return c.json(out, 200);
 });
 
 // POST /semantic-relationships/:edgeId/decide — approve or reject a pending relationship
 semanticRelationshipRoute.post("/:edgeId/decide", async (c) => {
   const edgeId = c.req.param("edgeId");
-  const body = semanticRelationshipApprove.input.parse({ edgeId, ...(await c.req.json()) });
+  const body = semanticRelationshipApprove.input.parse({
+    edgeId,
+    ...(await c.req.json()),
+  });
   const ctx = capabilityContext(c);
-  const out = await invoke(semanticRelationshipApprove.name, body, ctx, { surface: "api" });
+  const out = await invoke(semanticRelationshipApprove.name, body, ctx, {
+    surface: "api",
+  });
   return c.json(out, 200);
 });
 
@@ -65,12 +80,20 @@ semanticRelationshipRoute.get("/", async (c) => {
   const body = semanticRelationshipList.input.parse({
     type: query.type,
     sourceId: query.sourceId,
-    confidenceMin: query.confidenceMin !== undefined ? Number(query.confidenceMin) : undefined,
-    confidenceMax: query.confidenceMax !== undefined ? Number(query.confidenceMax) : undefined,
+    confidenceMin:
+      query.confidenceMin !== undefined
+        ? Number(query.confidenceMin)
+        : undefined,
+    confidenceMax:
+      query.confidenceMax !== undefined
+        ? Number(query.confidenceMax)
+        : undefined,
     limit: query.limit !== undefined ? Number(query.limit) : undefined,
     offset: query.offset !== undefined ? Number(query.offset) : undefined,
   });
   const ctx = capabilityContext(c);
-  const out = await invoke(semanticRelationshipList.name, body, ctx, { surface: "api" });
+  const out = await invoke(semanticRelationshipList.name, body, ctx, {
+    surface: "api",
+  });
   return c.json(out, 200);
 });

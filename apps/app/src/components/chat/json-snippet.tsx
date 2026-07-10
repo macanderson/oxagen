@@ -16,6 +16,7 @@
  */
 import * as React from "react";
 import { Check, ChevronDown, ChevronUp, Copy } from "lucide-react";
+import { useCopyToClipboard } from "@/components/ui/copy-button";
 import { cn } from "@/lib/utils";
 import {
   highlightLine,
@@ -47,7 +48,11 @@ export interface JsonSnippetProps {
  * A clipped, syntax-highlighted, pretty-printed JSON snippet with a copy icon
  * button. The standard presentation for large machine-shaped tool results.
  */
-export function JsonSnippet({ value, clipLines = DEFAULT_CLIP_LINES, className }: JsonSnippetProps) {
+export function JsonSnippet({
+  value,
+  clipLines = DEFAULT_CLIP_LINES,
+  className,
+}: JsonSnippetProps) {
   const json = React.useMemo(() => toPrettyJson(value), [value]);
   const lines = React.useMemo(() => json.split("\n"), [json]);
   const clippable = lines.length > clipLines;
@@ -58,31 +63,25 @@ export function JsonSnippet({ value, clipLines = DEFAULT_CLIP_LINES, className }
   const [tokens, setTokens] = React.useState<HighlightedToken[][] | null>(null);
   React.useEffect(() => {
     let cancelled = false;
-    void Promise.all(lines.map((line) => highlightLine(line, "json"))).then((rows) => {
-      if (!cancelled) setTokens(rows);
-    });
+    void Promise.all(lines.map((line) => highlightLine(line, "json"))).then(
+      (rows) => {
+        if (!cancelled) setTokens(rows);
+      },
+    );
     return () => {
       cancelled = true;
     };
   }, [lines]);
 
-  const [copied, setCopied] = React.useState(false);
-  const timer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-  React.useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
-  const onCopy = React.useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(json);
-      setCopied(true);
-      if (timer.current) clearTimeout(timer.current);
-      timer.current = setTimeout(() => setCopied(false), 1400);
-    } catch {
-      // Clipboard unavailable (insecure context) — no-op.
-    }
-  }, [json]);
+  const { copied, copy } = useCopyToClipboard({ timeout: 1400 });
+  const onCopy = React.useCallback(() => void copy(json), [copy, json]);
 
   return (
     <div
-      className={cn("group/snippet relative rounded-lg border border-border/60 bg-muted/30", className)}
+      className={cn(
+        "group/snippet relative rounded-lg border border-border/60 bg-muted/30",
+        className,
+      )}
       data-component="json-snippet"
     >
       <button
@@ -101,19 +100,21 @@ export function JsonSnippet({ value, clipLines = DEFAULT_CLIP_LINES, className }
       <pre className="overflow-x-auto px-3 py-2.5 font-mono text-xs leading-relaxed text-foreground">
         {visible.map((line, i) => (
           <div key={i}>
-            {tokens?.[i] ? (
-              tokens[i].map((t, j) =>
-                t.style ? (
-                  <span key={j} className="diff-token" style={parseStyle(t.style)}>
-                    {t.content}
-                  </span>
-                ) : (
-                  <span key={j}>{t.content}</span>
-                ),
-              )
-            ) : (
-              line || " "
-            )}
+            {tokens?.[i]
+              ? tokens[i].map((t, j) =>
+                  t.style ? (
+                    <span
+                      key={j}
+                      className="diff-token"
+                      style={parseStyle(t.style)}
+                    >
+                      {t.content}
+                    </span>
+                  ) : (
+                    <span key={j}>{t.content}</span>
+                  ),
+                )
+              : line || " "}
           </div>
         ))}
       </pre>
@@ -154,7 +155,11 @@ function parseStyle(style: string): React.CSSProperties {
     const val = decl.slice(idx + 1).trim();
     if (!prop || !val) continue;
     // CSS custom properties keep their literal name; standard props camelCase.
-    out[prop.startsWith("--") ? prop : prop.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase())] = val;
+    out[
+      prop.startsWith("--")
+        ? prop
+        : prop.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase())
+    ] = val;
   }
   return out as React.CSSProperties;
 }

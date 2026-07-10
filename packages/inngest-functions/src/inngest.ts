@@ -434,7 +434,7 @@ type Events = {
   // truth; graph edges are best-effort with 24 h retry.
   "engram/memory.graph-sync": {
     data: {
-      /** Content-addressed record ID (blake3 hex). */
+      /** Content-addressed record ID (sha256 hex). */
       recordId: string;
       orgId: string;
       workspaceId: string;

@@ -15,12 +15,7 @@ import type {
   RetrievalEngine,
   RetrievalQuery,
 } from "./types";
-
-/** Estimate token cost from body size (rough: 1 token ≈ 4 chars). */
-function estimateTokens(body: unknown): number {
-  const str = typeof body === "string" ? body : JSON.stringify(body ?? {});
-  return Math.max(1, Math.ceil(str.length / 4));
-}
+import { estimateTokens } from "./types";
 
 export class TemporalRetrievalEngine implements RetrievalEngine {
   readonly name = "temporal";

@@ -1,8 +1,8 @@
 /**
  * write.ts — Scaffold a new agent definition file for `oxagen agent new`.
  */
-import { writeFileSync, existsSync, mkdirSync } from "node:fs";
-import { join, dirname } from "node:path";
+import { join } from "node:path";
+import { scaffoldMarkdownFile } from "../lib/markdown-registry.js";
 import { DEFAULT_CODING_MODEL } from "../agent/model-catalog.js";
 
 const TEMPLATE = (name: string) => `---
@@ -19,14 +19,14 @@ This whole body becomes the agent's system prompt.
 `;
 
 /** Write a starter agent markdown file to `.oxagen/agents/<name>.md`. */
-export function scaffoldAgent(opts: { name: string; cwd?: string; dir?: string }): {
+export function scaffoldAgent(opts: {
+  name: string;
+  cwd?: string;
+  dir?: string;
+}): {
   path: string;
   created: boolean;
 } {
   const dir = opts.dir ?? join(opts.cwd ?? process.cwd(), ".oxagen", "agents");
-  const path = join(dir, `${opts.name}.md`);
-  if (existsSync(path)) return { path, created: false };
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, TEMPLATE(opts.name), "utf8");
-  return { path, created: true };
+  return scaffoldMarkdownFile({ dir, name: opts.name, template: TEMPLATE });
 }

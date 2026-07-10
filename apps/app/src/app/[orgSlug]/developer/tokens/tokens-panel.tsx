@@ -11,6 +11,7 @@ import {
   Layers,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { useCopyToClipboard } from "@/components/ui/copy-button";
 import { Panel } from "@/components/ui/panel";
 import { formatDate } from "@/lib/utils";
 import {
@@ -121,12 +122,10 @@ function CreateKeyDialog({
 // ── Raw key display (shown once after creation/rotation) ──────────────────────
 
 function RawKeyBanner({ rawKey, label }: { rawKey: string; label: string }) {
-  const [copied, setCopied] = useState(false);
+  const { copied, copy } = useCopyToClipboard({ timeout: 2000 });
 
   function copyKey() {
-    navigator.clipboard.writeText(rawKey);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    void copy(rawKey);
   }
 
   return (

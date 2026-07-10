@@ -35,13 +35,11 @@ import { DOCK_PANEL_HEIGHT } from "./mouse-select.js";
 const AMBER = "#FBBF24";
 const GREEN = "#34D399";
 
-/** `HH:MM:SS`, 24h, zero-padded — locale-independent so the header clock never
- *  reflows width or switches to AM/PM depending on the user's system locale. */
-export function formatClock(epochMs: number): string {
-  const d = new Date(epochMs);
-  const pad = (n: number): string => n.toString().padStart(2, "0");
-  return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-}
+// `HH:MM:SS`, 24h, zero-padded — the single shared implementation lives in
+// mission-control/lib.ts; imported for the header clock and re-exported for
+// this file's existing test/consumers.
+import { formatClock } from "../tui/mission-control/lib.js";
+export { formatClock };
 
 /** Compact elapsed duration: `12s` under a minute, `1m04s` at/above. */
 export function formatElapsed(ms: number): string {
@@ -168,12 +166,18 @@ export function TranscriptViewport({
   //    both edges of an overflow-hidden Box, so scrolling is line-exact even
   //    through a message taller than the whole viewport.
   const bottomWindow = computeBottomWindow(rowHeights, contentHeight);
-  const scrolledWindow = computeVisibleWindow(rowHeights, offset, contentHeight);
+  const scrolledWindow = computeVisibleWindow(
+    rowHeights,
+    offset,
+    contentHeight,
+  );
   const hiddenRows = scrolledWindow.hiddenAbove + scrolledWindow.clipTop;
   const visible = atBottom
     ? all.slice(bottomWindow.startIndex)
     : all.slice(scrolledWindow.startIndex, scrolledWindow.endIndex);
-  const firstVisibleIndex = atBottom ? bottomWindow.startIndex : scrolledWindow.startIndex;
+  const firstVisibleIndex = atBottom
+    ? bottomWindow.startIndex
+    : scrolledWindow.startIndex;
 
   return (
     <Box flexDirection="column" height={height} overflow="hidden">
@@ -195,11 +199,21 @@ export function TranscriptViewport({
         flexDirection="column"
         height={contentHeight}
         overflow="hidden"
-        justifyContent={atBottom && bottomWindow.anchorBottom ? "flex-end" : "flex-start"}
+        justifyContent={
+          atBottom && bottomWindow.anchorBottom ? "flex-end" : "flex-start"
+        }
       >
-        <Box flexDirection="column" flexShrink={0} marginTop={atBottom ? 0 : -scrolledWindow.clipTop}>
+        <Box
+          flexDirection="column"
+          flexShrink={0}
+          marginTop={atBottom ? 0 : -scrolledWindow.clipTop}
+        >
           {visible.map((msg, i) => (
-            <MessageView key={firstVisibleIndex + i} msg={msg} diffTheme={diffTheme} />
+            <MessageView
+              key={firstVisibleIndex + i}
+              msg={msg}
+              diffTheme={diffTheme}
+            />
           ))}
         </Box>
       </Box>
@@ -327,7 +341,9 @@ const DOCK_PANEL_GAP = 1;
 export function dockPanelWidth(cols: number): number {
   return Math.max(
     4,
-    Math.floor((cols - DOCK_PANEL_GAP * (DOCK_PANEL_COUNT - 1)) / DOCK_PANEL_COUNT),
+    Math.floor(
+      (cols - DOCK_PANEL_GAP * (DOCK_PANEL_COUNT - 1)) / DOCK_PANEL_COUNT,
+    ),
   );
 }
 
@@ -393,7 +409,9 @@ export function TelemetryDock({
       <DockPanel title="TURN" {...span(1)} width={panelWidth}>
         <Text wrap="truncate-end">
           {label("phase", 7)}
-          <Text color={theme.cyan}>{PHASE_TITLE[turn.phase] ?? turn.phase}</Text>
+          <Text color={theme.cyan}>
+            {PHASE_TITLE[turn.phase] ?? turn.phase}
+          </Text>
         </Text>
         <Text wrap="truncate-end">
           {label("step", 7)}
@@ -404,16 +422,23 @@ export function TelemetryDock({
         <Text wrap="truncate-end">
           {label("round", 7)}
           <Text dimColor>
-            {turn.reviseRound} · {turn.turnStartedAt != null ? formatElapsed(elapsedMs) : "—"}
+            {turn.reviseRound} ·{" "}
+            {turn.turnStartedAt != null ? formatElapsed(elapsedMs) : "—"}
           </Text>
         </Text>
       </DockPanel>
 
       <DockPanel title="TOKENS" {...span(2)} width={panelWidth}>
         <Text wrap="truncate-end">
-          <Text color={theme.cyan}>{"↑"}{humanizeTokens(metrics.sessionTokensIn)}</Text>
+          <Text color={theme.cyan}>
+            {"↑"}
+            {humanizeTokens(metrics.sessionTokensIn)}
+          </Text>
           {"  "}
-          <Text color={GREEN}>{"↓"}{humanizeTokens(metrics.sessionTokensOut + metrics.streamTokensOut)}</Text>
+          <Text color={GREEN}>
+            {"↓"}
+            {humanizeTokens(metrics.sessionTokensOut + metrics.streamTokensOut)}
+          </Text>
         </Text>
         <Text wrap="truncate-end">
           <Text dimColor>cache </Text>
@@ -427,13 +452,13 @@ export function TelemetryDock({
 
       <DockPanel title="TOOLS" {...span(3)} width={panelWidth}>
         <Text wrap="truncate-end" dimColor>
-          {toolCell(TRACKED_TOOLS[0])}  {toolCell(TRACKED_TOOLS[1])}
+          {toolCell(TRACKED_TOOLS[0])} {toolCell(TRACKED_TOOLS[1])}
         </Text>
         <Text wrap="truncate-end" dimColor>
-          {toolCell(TRACKED_TOOLS[2])}  {toolCell(TRACKED_TOOLS[3])}
+          {toolCell(TRACKED_TOOLS[2])} {toolCell(TRACKED_TOOLS[3])}
         </Text>
         <Text wrap="truncate-end" dimColor>
-          {toolCell(TRACKED_TOOLS[4])}  {toolCell(TRACKED_TOOLS[5])}
+          {toolCell(TRACKED_TOOLS[4])} {toolCell(TRACKED_TOOLS[5])}
         </Text>
       </DockPanel>
 

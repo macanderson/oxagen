@@ -26,7 +26,7 @@ import { emitGraphSync, emitEmbedEvent } from "@oxagen/engram";
 
 /**
  * Lazily-initialized Engram instance. The first write triggers a dynamic
- * import of the store modules (blake3, duckdb/clickhouse) so we don't
+ * import of the store modules (duckdb/clickhouse) so we don't
  * pay the cost at process startup.
  */
 let _engram: Engram | null = null;

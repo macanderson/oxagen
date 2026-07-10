@@ -8,22 +8,22 @@
  * For ClickHouse, uses tokenbf_v1 indexing.
  */
 import type { EpisodicStore } from "../store/episodic";
-import type { RetrievalCandidate, RetrievalEngine, RetrievalQuery } from "./types";
-
-/** Estimate token cost from body size. */
-function estimateTokens(body: unknown): number {
-  const str = typeof body === "string" ? body : JSON.stringify(body ?? {});
-  return Math.max(1, Math.ceil(str.length / 4));
-}
+import type {
+  RetrievalCandidate,
+  RetrievalEngine,
+  RetrievalQuery,
+} from "./types";
+import { estimateTokens } from "./types";
 
 /**
  * Full-text search function — injected so this engine works with both
  * DuckDB FTS and ClickHouse tokenbf adapters.
  */
 export interface LexicalSearchFn {
-  (query: string, opts: { orgId: string; workspaceId: string; limit: number }): Promise<
-    Array<{ recordId: string; score: number }>
-  >;
+  (
+    query: string,
+    opts: { orgId: string; workspaceId: string; limit: number },
+  ): Promise<Array<{ recordId: string; score: number }>>;
 }
 
 export class LexicalRetrievalEngine implements RetrievalEngine {
