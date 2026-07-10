@@ -24,7 +24,8 @@ vi.mock("@oxagen/database", async (importOriginal) => {
     db: mocks.dbFn,
     // withTenantDb: pass-through — invokes the callback with the same fake tx
     // the handler expects. No scope GUC overhead in unit tests (OXA-1515).
-    withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => fn(mocks.dbFn()),
+    withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn(mocks.dbFn()),
   };
 });
 
@@ -69,7 +70,10 @@ describe("createAccessRequest()", () => {
     vi.clearAllMocks();
     // Default: no existing pending request → the insert path runs.
     stubExistingPending([]);
-    mocks.dbFn.mockReturnValue({ select: mocks.selectFn, insert: mocks.insertFn });
+    mocks.dbFn.mockReturnValue({
+      select: mocks.selectFn,
+      insert: mocks.insertFn,
+    });
   });
 
   // ── null principal → null ────────────────────────────────────────────────
@@ -218,7 +222,10 @@ describe("createAccessRequest()", () => {
     });
 
     // TypeScript's CapabilityContext types workspaceId as string | null.
-    const ctxNullWs: CapabilityContext = { ...CTX, workspaceId: null as unknown as string };
+    const ctxNullWs: CapabilityContext = {
+      ...CTX,
+      workspaceId: null as unknown as string,
+    };
 
     await createAccessRequest({
       capability: "send_message",

@@ -21,7 +21,9 @@ describe("workspace.settings.read capability", () => {
   });
 
   it("rejects a missing slug", () => {
-    expect(() => workspaceSettingsRead.output.parse({ name: "W", description: null })).toThrow();
+    expect(() =>
+      workspaceSettingsRead.output.parse({ name: "W", description: null }),
+    ).toThrow();
   });
 
   it("is registered in the capability registry", () => {

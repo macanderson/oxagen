@@ -1,0 +1,182 @@
+// distributed-rate-limit.test.ts
+//
+// Unit tests for the Postgres-backed distributed rate limiter. Only
+// withSystemDb is mocked (spread over the real @oxagen/database so sibling
+// exports survive — full-replacement would drop them); it invokes the
+// middleware's callback against a scripted fake tx whose execute() resolves to
+// a queued { count } row. This exercises the real increment / 429 / fail-open /
+// key-derivation branches without a live database, so it runs in CI.
+
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
+import type { Context } from "hono";
+import type { AppEnv } from "../app";
+
+const mocks = vi.hoisted(() => ({ withSystemDb: vi.fn() }));
+
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@oxagen/database")>();
+  return { ...actual, withSystemDb: mocks.withSystemDb };
+});
+
+import {
+  distributedRateLimiter,
+  deriveBucketKey,
+} from "./distributed-rate-limit";
+
+type FakeContextOpts = {
+  method?: string;
+  vars?: Partial<{ workspaceId: string; orgId: string }>;
+  headers?: Record<string, string>;
+};
+
+function fakeContext(opts: FakeContextOpts = {}): Context<AppEnv> {
+  const vars = (opts.vars ?? {}) as Record<string, unknown>;
+  const responseHeaders: Record<string, string> = {};
+  return {
+    req: {
+      method: opts.method ?? "POST",
+      header: (name: string) => opts.headers?.[name.toLowerCase()],
+    },
+    get: (key: string) => vars[key] ?? null,
+    header: (name: string, value: string) => {
+      responseHeaders[name] = value;
+    },
+    json: vi.fn((body: unknown, status: number) => ({ body, status })),
+    // Exposed for assertions without widening the real Context type.
+    __responseHeaders: responseHeaders,
+  } as unknown as Context<AppEnv>;
+}
+
+function responseHeadersOf(c: Context<AppEnv>): Record<string, string> {
+  return (c as unknown as { __responseHeaders: Record<string, string> })
+    .__responseHeaders;
+}
+
+/** Make withSystemDb run the middleware's callback against a tx returning `count`. */
+function scriptCount(count: number): void {
+  mocks.withSystemDb.mockImplementation(
+    async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({ execute: vi.fn().mockResolvedValue([{ count }]) }),
+  );
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  // Keep the opportunistic cleanup (Math.random < 0.01) from firing so
+  // withSystemDb is called exactly once per counted request.
+  vi.spyOn(Math, "random").mockReturnValue(0.5);
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+describe("deriveBucketKey", () => {
+  it("prefers workspace scope when a workspaceId is present", () => {
+    const c = fakeContext({ vars: { workspaceId: "ws_1", orgId: "org_1" } });
+    expect(deriveBucketKey(c, "chat")).toBe("chat:ws:ws_1");
+  });
+
+  it("falls back to org scope when there is no workspaceId", () => {
+    const c = fakeContext({ vars: { orgId: "org_1" } });
+    expect(deriveBucketKey(c, "chat")).toBe("chat:org:org_1");
+  });
+
+  it("falls back to the client IP when neither workspace nor org is set", () => {
+    const c = fakeContext({
+      headers: { "x-forwarded-for": "203.0.113.7, 10.0.0.1" },
+    });
+    expect(deriveBucketKey(c, "agent")).toBe("agent:ip:203.0.113.7");
+  });
+
+  it('uses x-real-ip, then "unknown", when x-forwarded-for is absent', () => {
+    expect(
+      deriveBucketKey(
+        fakeContext({ headers: { "x-real-ip": "198.51.100.9" } }),
+        "a2a",
+      ),
+    ).toBe("a2a:ip:198.51.100.9");
+    expect(deriveBucketKey(fakeContext(), "a2a")).toBe("a2a:ip:unknown");
+  });
+});
+
+describe("distributedRateLimiter", () => {
+  it("increments the window and sets X-RateLimit headers when under the limit", async () => {
+    scriptCount(1);
+    const mw = distributedRateLimiter({ keyPrefix: "chat", max: 60 });
+    const next = vi.fn().mockResolvedValue(undefined);
+    const c = fakeContext({ vars: { workspaceId: "ws_1" } });
+
+    const result = await mw(c, next);
+
+    expect(mocks.withSystemDb).toHaveBeenCalledTimes(1);
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(result).toBeUndefined();
+    const headers = responseHeadersOf(c);
+    expect(headers["X-RateLimit-Limit"]).toBe("60");
+    expect(headers["X-RateLimit-Remaining"]).toBe("59");
+    expect(Number(headers["X-RateLimit-Reset"])).toBeGreaterThan(0);
+  });
+
+  it("rejects with 429 + Retry-After once the count exceeds max", async () => {
+    scriptCount(61); // one past a max of 60
+    const mw = distributedRateLimiter({ keyPrefix: "chat", max: 60 });
+    const next = vi.fn().mockResolvedValue(undefined);
+    const c = fakeContext({ vars: { workspaceId: "ws_1" } });
+
+    const result = (await mw(c, next)) as
+      | { body: unknown; status: number }
+      | undefined;
+
+    expect(next).not.toHaveBeenCalled();
+    expect(result?.status).toBe(429);
+    expect(result?.body).toEqual({ error: "rate_limited" });
+    const headers = responseHeadersOf(c);
+    expect(headers["X-RateLimit-Remaining"]).toBe("0");
+    expect(Number(headers["Retry-After"])).toBeGreaterThan(0);
+    expect(headers["X-RateLimit-Reset"]).toBeDefined();
+  });
+
+  it("allows exactly `max` requests before rejecting the next", async () => {
+    const mw = distributedRateLimiter({ keyPrefix: "agent", max: 30 });
+    const next = vi.fn().mockResolvedValue(undefined);
+
+    scriptCount(30); // the 30th request — still allowed (remaining 0)
+    const c30 = fakeContext({ vars: { orgId: "org_1" } });
+    const atLimit = await mw(c30, next);
+    expect(atLimit).toBeUndefined();
+    expect(responseHeadersOf(c30)["X-RateLimit-Remaining"]).toBe("0");
+
+    scriptCount(31); // the 31st — rejected
+    const over = (await mw(fakeContext({ vars: { orgId: "org_1" } }), next)) as
+      | { status: number }
+      | undefined;
+    expect(over?.status).toBe(429);
+  });
+
+  it("FAILS OPEN — a store error allows the request instead of throwing", async () => {
+    mocks.withSystemDb.mockRejectedValue(new Error("db unreachable"));
+    const mw = distributedRateLimiter({ keyPrefix: "chat", max: 60 });
+    const next = vi.fn().mockResolvedValue(undefined);
+    const c = fakeContext({ vars: { workspaceId: "ws_1" } });
+
+    const result = await mw(c, next);
+
+    expect(result).toBeUndefined();
+    expect(next).toHaveBeenCalledTimes(1); // request allowed despite the store failure
+  });
+
+  it("does not count (or touch the store for) methods outside the limited set", async () => {
+    scriptCount(1);
+    const mw = distributedRateLimiter({ keyPrefix: "agent", max: 30 }); // default: POST only
+    const next = vi.fn().mockResolvedValue(undefined);
+    const c = fakeContext({ method: "GET", vars: { workspaceId: "ws_1" } });
+
+    const result = await mw(c, next);
+
+    expect(result).toBeUndefined();
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(mocks.withSystemDb).not.toHaveBeenCalled();
+    expect(responseHeadersOf(c)["X-RateLimit-Limit"]).toBeUndefined();
+  });
+});

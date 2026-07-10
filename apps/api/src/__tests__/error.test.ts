@@ -18,7 +18,9 @@ vi.mock("../middleware/logger", () => ({
     error: vi.fn(),
     info: vi.fn(),
   },
-  requestLogger: vi.fn(async (_c: unknown, next: () => Promise<void>) => next()),
+  requestLogger: vi.fn(async (_c: unknown, next: () => Promise<void>) =>
+    next(),
+  ),
 }));
 
 // Mock all auth resolvers before importing app
@@ -52,10 +54,16 @@ vi.mock("@oxagen/billing", async (importOriginal) => {
 vi.mock("@oxagen/handlers", () => ({
   serveFile: vi.fn(),
   FileNotFoundError: class FileNotFoundError extends Error {
-    constructor(msg?: string) { super(msg); this.name = "FileNotFoundError"; }
+    constructor(msg?: string) {
+      super(msg);
+      this.name = "FileNotFoundError";
+    }
   },
   FileForbiddenError: class FileForbiddenError extends Error {
-    constructor(msg?: string) { super(msg); this.name = "FileForbiddenError"; }
+    constructor(msg?: string) {
+      super(msg);
+      this.name = "FileForbiddenError";
+    }
   },
 }));
 
@@ -73,7 +81,9 @@ import { ZodError, z } from "zod";
  * Mount a one-shot test route that throws the given error, fetch it,
  * and return the parsed JSON response + status.
  */
-async function triggerError(err: unknown): Promise<{ status: number; body: unknown }> {
+async function triggerError(
+  err: unknown,
+): Promise<{ status: number; body: unknown }> {
   // Build a minimal Hono app with just error middleware for isolation
   const { Hono } = await import("hono");
   const { errorMiddleware } = await import("../middleware/error");
@@ -93,61 +103,99 @@ async function triggerError(err: unknown): Promise<{ status: number; body: unkno
 
 describe("errorCode() via HTTPException", () => {
   it("401 → unauthorized", async () => {
-    const { body } = await triggerError(new HTTPException(401, { message: "Unauthorized" }));
-    expect((body as { error: { code: string } }).error.code).toBe("unauthorized");
+    const { body } = await triggerError(
+      new HTTPException(401, { message: "Unauthorized" }),
+    );
+    expect((body as { error: { code: string } }).error.code).toBe(
+      "unauthorized",
+    );
   });
 
   it("403 → forbidden", async () => {
-    const { body } = await triggerError(new HTTPException(403, { message: "Forbidden" }));
+    const { body } = await triggerError(
+      new HTTPException(403, { message: "Forbidden" }),
+    );
     expect((body as { error: { code: string } }).error.code).toBe("forbidden");
   });
 
   it("404 → not_found", async () => {
-    const { body } = await triggerError(new HTTPException(404, { message: "Not found" }));
+    const { body } = await triggerError(
+      new HTTPException(404, { message: "Not found" }),
+    );
     expect((body as { error: { code: string } }).error.code).toBe("not_found");
   });
 
   it("409 → conflict", async () => {
-    const { body } = await triggerError(new HTTPException(409, { message: "Conflict" }));
+    const { body } = await triggerError(
+      new HTTPException(409, { message: "Conflict" }),
+    );
     expect((body as { error: { code: string } }).error.code).toBe("conflict");
   });
 
   it("429 → rate_limited", async () => {
-    const { body } = await triggerError(new HTTPException(429, { message: "Too many" }));
-    expect((body as { error: { code: string } }).error.code).toBe("rate_limited");
+    const { body } = await triggerError(
+      new HTTPException(429, { message: "Too many" }),
+    );
+    expect((body as { error: { code: string } }).error.code).toBe(
+      "rate_limited",
+    );
   });
 
   it("500 → internal_error", async () => {
-    const { body } = await triggerError(new HTTPException(500, { message: "Server error" }));
-    expect((body as { error: { code: string } }).error.code).toBe("internal_error");
+    const { body } = await triggerError(
+      new HTTPException(500, { message: "Server error" }),
+    );
+    expect((body as { error: { code: string } }).error.code).toBe(
+      "internal_error",
+    );
   });
 
   it("503 (>=500) → internal_error", async () => {
-    const { body } = await triggerError(new HTTPException(503, { message: "Service unavailable" }));
-    expect((body as { error: { code: string } }).error.code).toBe("internal_error");
+    const { body } = await triggerError(
+      new HTTPException(503, { message: "Service unavailable" }),
+    );
+    expect((body as { error: { code: string } }).error.code).toBe(
+      "internal_error",
+    );
   });
 
   it("422 → bad_request (catch-all for 4xx not mapped above)", async () => {
-    const { body } = await triggerError(new HTTPException(422, { message: "Unprocessable" }));
-    expect((body as { error: { code: string } }).error.code).toBe("bad_request");
+    const { body } = await triggerError(
+      new HTTPException(422, { message: "Unprocessable" }),
+    );
+    expect((body as { error: { code: string } }).error.code).toBe(
+      "bad_request",
+    );
   });
 
   it("418 → bad_request (catch-all for unmapped 4xx)", async () => {
     // 499/599 are not valid Hono ContentfulStatusCode; use 418 (teapot) to
     // exercise the same bad_request catch-all branch in errorCode().
-    const { body } = await triggerError(new HTTPException(418, { message: "I'm a teapot" }));
-    expect((body as { error: { code: string } }).error.code).toBe("bad_request");
+    const { body } = await triggerError(
+      new HTTPException(418, { message: "I'm a teapot" }),
+    );
+    expect((body as { error: { code: string } }).error.code).toBe(
+      "bad_request",
+    );
   });
 
   it("400 → bad_request", async () => {
-    const { body } = await triggerError(new HTTPException(400, { message: "Bad" }));
-    expect((body as { error: { code: string } }).error.code).toBe("bad_request");
+    const { body } = await triggerError(
+      new HTTPException(400, { message: "Bad" }),
+    );
+    expect((body as { error: { code: string } }).error.code).toBe(
+      "bad_request",
+    );
   });
 
   it("504 → internal_error (>=500 catch-all)", async () => {
     // Tests the `status >= 500` branch in errorCode() using a valid Hono status code.
-    const { body } = await triggerError(new HTTPException(504, { message: "Gateway timeout" }));
-    expect((body as { error: { code: string } }).error.code).toBe("internal_error");
+    const { body } = await triggerError(
+      new HTTPException(504, { message: "Gateway timeout" }),
+    );
+    expect((body as { error: { code: string } }).error.code).toBe(
+      "internal_error",
+    );
   });
 });
 
@@ -155,13 +203,17 @@ describe("errorCode() via HTTPException", () => {
 
 describe("errorMiddleware HTTPException shape", () => {
   it("returns error.message matching the thrown exception message", async () => {
-    const { body } = await triggerError(new HTTPException(401, { message: "Custom message" }));
+    const { body } = await triggerError(
+      new HTTPException(401, { message: "Custom message" }),
+    );
     const b = body as { error: { message: string }; requestId: string };
     expect(b.error.message).toBe("Custom message");
   });
 
   it("always includes requestId (UUID-shaped or 'unknown' fallback)", async () => {
-    const { body } = await triggerError(new HTTPException(401, { message: "x" }));
+    const { body } = await triggerError(
+      new HTTPException(401, { message: "x" }),
+    );
     const b = body as { requestId: string };
     // errorMiddleware falls back to "unknown" when requestId is not in context
     expect(typeof b.requestId).toBe("string");
@@ -169,7 +221,9 @@ describe("errorMiddleware HTTPException shape", () => {
   });
 
   it("returns the correct HTTP status code", async () => {
-    const { status } = await triggerError(new HTTPException(404, { message: "gone" }));
+    const { status } = await triggerError(
+      new HTTPException(404, { message: "gone" }),
+    );
     expect(status).toBe(404);
   });
 });
@@ -188,7 +242,9 @@ describe("errorMiddleware ZodError", () => {
 
     const { status, body } = await triggerError(zodErr!);
     expect(status).toBe(400);
-    expect((body as { error: { code: string } }).error.code).toBe("validation_error");
+    expect((body as { error: { code: string } }).error.code).toBe(
+      "validation_error",
+    );
   });
 
   it("includes error.details with Zod issues array", async () => {
@@ -209,7 +265,11 @@ describe("errorMiddleware ZodError", () => {
   it("always includes requestId", async () => {
     const schema = z.object({ n: z.string() });
     let zodErr: ZodError | null = null;
-    try { schema.parse({}); } catch (e) { zodErr = e as ZodError; }
+    try {
+      schema.parse({});
+    } catch (e) {
+      zodErr = e as ZodError;
+    }
     const { body } = await triggerError(zodErr!);
     expect(typeof (body as { requestId: string }).requestId).toBe("string");
   });
@@ -219,9 +279,13 @@ describe("errorMiddleware ZodError", () => {
 
 describe("errorMiddleware unknown error", () => {
   it("returns 500 with code 'internal_error'", async () => {
-    const { status, body } = await triggerError(new Error("secret DB password"));
+    const { status, body } = await triggerError(
+      new Error("secret DB password"),
+    );
     expect(status).toBe(500);
-    expect((body as { error: { code: string } }).error.code).toBe("internal_error");
+    expect((body as { error: { code: string } }).error.code).toBe(
+      "internal_error",
+    );
   });
 
   it("does NOT include the raw error message in the response body", async () => {
@@ -232,15 +296,21 @@ describe("errorMiddleware unknown error", () => {
 
   it("returns a generic safe message", async () => {
     const { body } = await triggerError(new Error("leak me"));
-    expect((body as { error: { message: string } }).error.message).toBe("Unexpected server error");
+    expect((body as { error: { message: string } }).error.message).toBe(
+      "Unexpected server error",
+    );
   });
 
   it("handles non-Error object throws without leaking", async () => {
     // Hono's onError only fires for actual Error instances or HTTPException —
     // wrap in an Error to simulate an unusual but catchable error object.
-    const { status, body } = await triggerError(Object.assign(new Error("wrapper"), { code: "internal_leak" }));
+    const { status, body } = await triggerError(
+      Object.assign(new Error("wrapper"), { code: "internal_leak" }),
+    );
     expect(status).toBe(500);
-    expect((body as { error: { code: string } }).error.code).toBe("internal_error");
+    expect((body as { error: { code: string } }).error.code).toBe(
+      "internal_error",
+    );
   });
 
   it("always includes requestId even for unknown errors", async () => {
@@ -286,16 +356,26 @@ describe("errorMiddleware CapabilityError", () => {
       new CapabilityError("test.cap", "invalid_input", "bad input"),
     );
     expect(status).toBe(400);
-    expect((body as { error: { code: string } }).error.code).toBe("bad_request");
+    expect((body as { error: { code: string } }).error.code).toBe(
+      "bad_request",
+    );
   });
 
   it("pending_approval → 403 with code 'pending_approval' and the pollable accessRequestId", async () => {
     const { CapabilityError } = await import("@oxagen/oxagen/kernel");
     const { status, body } = await triggerError(
-      new CapabilityError("test.cap", "pending_approval", "denied pending approval", "arq_abc123"),
+      new CapabilityError(
+        "test.cap",
+        "pending_approval",
+        "denied pending approval",
+        "arq_abc123",
+      ),
     );
     expect(status).toBe(403);
-    const b = body as { error: { code: string; accessRequestId?: string }; requestId: string };
+    const b = body as {
+      error: { code: string; accessRequestId?: string };
+      requestId: string;
+    };
     expect(b.error.code).toBe("pending_approval");
     // The access-request id is surfaced under a field distinct from the
     // envelope's request-correlation id so the client can poll for approval.
@@ -305,7 +385,11 @@ describe("errorMiddleware CapabilityError", () => {
   it("pending_approval without an accessRequestId omits the field but still 403s", async () => {
     const { CapabilityError } = await import("@oxagen/oxagen/kernel");
     const { status, body } = await triggerError(
-      new CapabilityError("test.cap", "pending_approval", "denied pending approval"),
+      new CapabilityError(
+        "test.cap",
+        "pending_approval",
+        "denied pending approval",
+      ),
     );
     expect(status).toBe(403);
     const b = body as { error: { code: string; accessRequestId?: string } };
@@ -318,17 +402,25 @@ describe("errorMiddleware CapabilityError", () => {
 
 describe("errorMiddleware billing errors", () => {
   it("InsufficientCreditsError → 402", async () => {
-    const err = Object.assign(new Error("no credits"), { code: "insufficient_credits" });
+    const err = Object.assign(new Error("no credits"), {
+      code: "insufficient_credits",
+    });
     const { status, body } = await triggerError(err);
     expect(status).toBe(402);
-    expect((body as { error: { code: string } }).error.code).toBe("insufficient_credits");
+    expect((body as { error: { code: string } }).error.code).toBe(
+      "insufficient_credits",
+    );
   });
 
   it("BillingSuspendedError → 402", async () => {
-    const err = Object.assign(new Error("suspended"), { code: "billing_suspended" });
+    const err = Object.assign(new Error("suspended"), {
+      code: "billing_suspended",
+    });
     const { status, body } = await triggerError(err);
     expect(status).toBe(402);
-    expect((body as { error: { code: string } }).error.code).toBe("billing_suspended");
+    expect((body as { error: { code: string } }).error.code).toBe(
+      "billing_suspended",
+    );
   });
 });
 
@@ -341,7 +433,7 @@ describe("error middleware via app.fetch (requestId from logger)", () => {
 
   it("requestId on a real 404 (no auth) is UUID-shaped when logger middleware runs", async () => {
     const res = await app.fetch(makeRequest("/v1/no-such-route-xyz"));
-    const body = await res.json() as { requestId?: string };
+    const body = (await res.json()) as { requestId?: string };
     // The route 404s at Hono routing level — error middleware may or may not set requestId.
     // What we assert: if requestId is present it is a non-empty string.
     if (body.requestId !== undefined) {

@@ -17,13 +17,19 @@ import { AgentsGrid, type AgentGridRow } from "./agents-grid";
 afterEach(cleanup);
 
 vi.mock("@/components/ui/select", () => ({
-  Select: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  Select: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
   SelectTrigger: ({ children }: { children: React.ReactNode }) => (
     <button type="button">{children}</button>
   ),
   SelectValue: () => <span />,
-  SelectPopup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  SelectItem: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  SelectPopup: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  SelectItem: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
 }));
 
 const downloadCsv = vi.hoisted(() => vi.fn());
@@ -32,7 +38,9 @@ vi.mock("@/lib/lists/csv", async (importOriginal) => {
   return { ...actual, downloadCsv };
 });
 
-function agent(overrides: Partial<AgentGridRow> & { slug: string }): AgentGridRow {
+function agent(
+  overrides: Partial<AgentGridRow> & { slug: string },
+): AgentGridRow {
   return {
     agentId: `id-${overrides.slug}`,
     publicId: `agt_${overrides.slug}`,
@@ -64,7 +72,11 @@ describe("AgentsGrid", () => {
             deploymentStatus: "active",
             launchHref: "/acme/default/ask?agent=agt_billing-bot",
           }),
-          agent({ slug: "qa-chat", name: "QA Chat", description: "Manual QA helper." }),
+          agent({
+            slug: "qa-chat",
+            name: "QA Chat",
+            description: "Manual QA helper.",
+          }),
         ]}
       />,
     );
@@ -78,7 +90,9 @@ describe("AgentsGrid", () => {
     expect(links[0]?.getAttribute("href")).toBe(
       "/acme/default/workbench/agents/agt_billing-bot",
     );
-    expect(within(billing).getByTestId("agent-launch-billing-bot")).toBeDefined();
+    expect(
+      within(billing).getByTestId("agent-launch-billing-bot"),
+    ).toBeDefined();
 
     // Description falls back when no summary exists yet.
     const qa = screen.getByTestId("agent-row-qa-chat");
@@ -148,7 +162,11 @@ describe("AgentsGrid", () => {
     render(
       <AgentsGrid
         agents={[
-          agent({ slug: "billing-bot", name: "Billing Bot", summary: "Bills." }),
+          agent({
+            slug: "billing-bot",
+            name: "Billing Bot",
+            summary: "Bills.",
+          }),
           agent({ slug: "qa-chat", name: "QA Chat" }),
         ]}
       />,

@@ -69,7 +69,9 @@ describe("capability kernel", () => {
 
   it("rejects a capability with no registered handler", async () => {
     echoCap();
-    await expect(invoke("test.echo", { value: "x" }, ctx)).rejects.toMatchObject({
+    await expect(
+      invoke("test.echo", { value: "x" }, ctx),
+    ).rejects.toMatchObject({
       code: "no_handler",
     });
   });
@@ -77,18 +79,22 @@ describe("capability kernel", () => {
   it("rejects input that fails the contract schema", async () => {
     echoCap();
     registerHandler("test.echo", async () => async (input) => input);
-    await expect(invoke("test.echo", { value: 42 }, ctx)).rejects.toBeInstanceOf(
-      CapabilityError,
+    await expect(
+      invoke("test.echo", { value: 42 }, ctx),
+    ).rejects.toBeInstanceOf(CapabilityError);
+    await expect(invoke("test.echo", { value: 42 }, ctx)).rejects.toMatchObject(
+      {
+        code: "invalid_input",
+      },
     );
-    await expect(invoke("test.echo", { value: 42 }, ctx)).rejects.toMatchObject({
-      code: "invalid_input",
-    });
   });
 
   it("rejects handler output that violates the contract schema", async () => {
     echoCap();
     registerHandler("test.echo", async () => async () => ({ wrong: true }));
-    await expect(invoke("test.echo", { value: "x" }, ctx)).rejects.toMatchObject({
+    await expect(
+      invoke("test.echo", { value: "x" }, ctx),
+    ).rejects.toMatchObject({
       code: "invalid_output",
     });
   });
@@ -103,9 +109,9 @@ describe("capability kernel", () => {
 
   it("throws on duplicate handler registration", () => {
     registerHandler("test.dup", async () => async (i) => i);
-    expect(() => registerHandler("test.dup", async () => async (i) => i)).toThrow(
-      /already registered/,
-    );
+    expect(() =>
+      registerHandler("test.dup", async () => async (i) => i),
+    ).toThrow(/already registered/);
   });
 
   it("assertHandlersComplete flags a capability with no handler", () => {
@@ -117,8 +123,12 @@ describe("capability kernel", () => {
 
   it("capabilitiesForSurface filters by the contract surface list", () => {
     echoCap();
-    expect(capabilitiesForSurface("mcp").map((c) => c.name)).toContain("test.echo");
-    expect(capabilitiesForSurface("agent").map((c) => c.name)).not.toContain("test.echo");
+    expect(capabilitiesForSurface("mcp").map((c) => c.name)).toContain(
+      "test.echo",
+    );
+    expect(capabilitiesForSurface("agent").map((c) => c.name)).not.toContain(
+      "test.echo",
+    );
   });
 
   it("tracks handler registration", () => {
@@ -230,9 +240,11 @@ describe("kernel security event emitter", () => {
     echoCap();
     registerHandler("test.echo", async () => async (input) => input);
 
-    await expect(invoke("test.echo", { value: 42 }, ctx)).rejects.toMatchObject({
-      code: "invalid_input",
-    });
+    await expect(invoke("test.echo", { value: 42 }, ctx)).rejects.toMatchObject(
+      {
+        code: "invalid_input",
+      },
+    );
 
     expect(emitter).toHaveBeenCalledOnce();
     expect(emitter).toHaveBeenCalledWith(
@@ -248,7 +260,9 @@ describe("kernel security event emitter", () => {
     setSecurityEventEmitter(emitter);
     echoCap();
 
-    await expect(invoke("test.echo", { value: "x" }, ctx)).rejects.toMatchObject({
+    await expect(
+      invoke("test.echo", { value: "x" }, ctx),
+    ).rejects.toMatchObject({
       code: "no_handler",
     });
 
@@ -265,7 +279,9 @@ describe("kernel security event emitter", () => {
     // No setSecurityEventEmitter call — should not throw.
     echoCap();
     registerHandler("test.echo", async () => async (input) => input);
-    await expect(invoke("test.echo", { value: "hi" }, ctx)).resolves.toEqual({ value: "hi" });
+    await expect(invoke("test.echo", { value: "hi" }, ctx)).resolves.toEqual({
+      value: "hi",
+    });
   });
 
   it("does not crash when the emitter throws synchronously", async () => {
@@ -276,7 +292,9 @@ describe("kernel security event emitter", () => {
     registerHandler("test.echo", async () => async (input) => input);
 
     // The capability should still succeed even though the emitter threw.
-    await expect(invoke("test.echo", { value: "hi" }, ctx)).resolves.toEqual({ value: "hi" });
+    await expect(invoke("test.echo", { value: "hi" }, ctx)).resolves.toEqual({
+      value: "hi",
+    });
   });
 });
 
@@ -292,7 +310,10 @@ describe("authorizeExternalCapability", () => {
     clearSecurityEventEmitter();
   });
 
-  const allowFn: KernelIAMCheckFn = async () => ({ outcome: "allow", principal: null });
+  const allowFn: KernelIAMCheckFn = async () => ({
+    outcome: "allow",
+    principal: null,
+  });
   const denyFn: KernelIAMCheckFn = async () => ({
     outcome: "deny",
     reason: "policy_block",
@@ -306,7 +327,11 @@ describe("authorizeExternalCapability", () => {
     const events: KernelSecurityEvent[] = [];
     setSecurityEventEmitter((e) => events.push(e));
 
-    const res = await authorizeExternalCapability("mcp.github.list", extCtx, "deny");
+    const res = await authorizeExternalCapability(
+      "mcp.github.list",
+      extCtx,
+      "deny",
+    );
 
     expect(res).toEqual({ allowed: true, outcome: "allow", reason: null });
     expect(events).toHaveLength(0);
@@ -317,11 +342,19 @@ describe("authorizeExternalCapability", () => {
     setSecurityEventEmitter((e) => events.push(e));
     setKernelIAMRuntime(allowFn, true);
 
-    const res = await authorizeExternalCapability("mcp.github.list", extCtx, "deny");
+    const res = await authorizeExternalCapability(
+      "mcp.github.list",
+      extCtx,
+      "deny",
+    );
 
     expect(res).toEqual({ allowed: true, outcome: "allow", reason: null });
     expect(events).toHaveLength(1);
-    expect(events[0]).toMatchObject({ outcome: "allow", errorCode: null, capability: "mcp.github.list" });
+    expect(events[0]).toMatchObject({
+      outcome: "allow",
+      errorCode: null,
+      capability: "mcp.github.list",
+    });
   });
 
   it("blocks (fail-closed) and emits a deny event when the resolver denies AND enforcement is on", async () => {
@@ -329,10 +362,21 @@ describe("authorizeExternalCapability", () => {
     setSecurityEventEmitter((e) => events.push(e));
     setKernelIAMRuntime(denyFn, true);
 
-    const res = await authorizeExternalCapability("mcp.github.delete", extCtx, "deny");
+    const res = await authorizeExternalCapability(
+      "mcp.github.delete",
+      extCtx,
+      "deny",
+    );
 
-    expect(res).toEqual({ allowed: false, outcome: "deny", reason: "policy_block" });
-    expect(events[0]).toMatchObject({ outcome: "deny", errorCode: "authz_denied" });
+    expect(res).toEqual({
+      allowed: false,
+      outcome: "deny",
+      reason: "policy_block",
+    });
+    expect(events[0]).toMatchObject({
+      outcome: "deny",
+      errorCode: "authz_denied",
+    });
   });
 
   it("allows (fail-open) but still emits a deny event when the resolver denies AND enforcement is off", async () => {
@@ -340,7 +384,11 @@ describe("authorizeExternalCapability", () => {
     setSecurityEventEmitter((e) => events.push(e));
     setKernelIAMRuntime(denyFn, false);
 
-    const res = await authorizeExternalCapability("mcp.github.delete", extCtx, "deny");
+    const res = await authorizeExternalCapability(
+      "mcp.github.delete",
+      extCtx,
+      "deny",
+    );
 
     // Would-deny is logged-and-allowed when the enforcement flag is off.
     expect(res.allowed).toBe(true);
@@ -353,10 +401,21 @@ describe("authorizeExternalCapability", () => {
     setSecurityEventEmitter((e) => events.push(e));
     setKernelIAMRuntime(throwFn, true);
 
-    const res = await authorizeExternalCapability("mcp.github.delete", extCtx, "deny");
+    const res = await authorizeExternalCapability(
+      "mcp.github.delete",
+      extCtx,
+      "deny",
+    );
 
-    expect(res).toEqual({ allowed: false, outcome: "deny", reason: "iam_check_error" });
-    expect(events[0]).toMatchObject({ outcome: "deny", errorCode: "authz_denied" });
+    expect(res).toEqual({
+      allowed: false,
+      outcome: "deny",
+      reason: "iam_check_error",
+    });
+    expect(events[0]).toMatchObject({
+      outcome: "deny",
+      errorCode: "authz_denied",
+    });
   });
 
   it("fails closed (deny + emit) when the resolver throws AND enforcement is off (OXA-2056)", async () => {
@@ -370,10 +429,21 @@ describe("authorizeExternalCapability", () => {
     setSecurityEventEmitter((e) => events.push(e));
     setKernelIAMRuntime(throwFn, false);
 
-    const res = await authorizeExternalCapability("mcp.github.delete", extCtx, "deny");
+    const res = await authorizeExternalCapability(
+      "mcp.github.delete",
+      extCtx,
+      "deny",
+    );
 
-    expect(res).toEqual({ allowed: false, outcome: "deny", reason: "iam_check_error" });
-    expect(events[0]).toMatchObject({ outcome: "deny", errorCode: "authz_denied" });
+    expect(res).toEqual({
+      allowed: false,
+      outcome: "deny",
+      reason: "iam_check_error",
+    });
+    expect(events[0]).toMatchObject({
+      outcome: "deny",
+      errorCode: "authz_denied",
+    });
   });
 });
 
@@ -398,7 +468,9 @@ describe("invoke() IAM check throw — fail closed regardless of enforcement", (
     echoCap();
     registerHandler("test.echo", async () => async (input) => input);
 
-    await expect(invoke("test.echo", { value: "hi" }, ctx)).rejects.toMatchObject({
+    await expect(
+      invoke("test.echo", { value: "hi" }, ctx),
+    ).rejects.toMatchObject({
       code: "authz_denied",
     });
   });
@@ -415,12 +487,16 @@ describe("invoke() IAM check throw — fail closed regardless of enforcement", (
     echoCap();
     registerHandler("test.echo", async () => async (input) => input);
 
-    await expect(invoke("test.echo", { value: "hi" }, ctx)).rejects.toMatchObject({
+    await expect(
+      invoke("test.echo", { value: "hi" }, ctx),
+    ).rejects.toMatchObject({
       code: "authz_denied",
     });
-    expect(events.some((e) => e.outcome === "deny" && e.errorCode === "authz_denied")).toBe(
-      true,
-    );
+    expect(
+      events.some(
+        (e) => e.outcome === "deny" && e.errorCode === "authz_denied",
+      ),
+    ).toBe(true);
   });
 });
 
@@ -465,7 +541,9 @@ describe("invoke() IAM enforcement — deny + pending_approval", () => {
       return input;
     });
 
-    await expect(invoke("test.echo", { value: "x" }, ctx)).rejects.toMatchObject({
+    await expect(
+      invoke("test.echo", { value: "x" }, ctx),
+    ).rejects.toMatchObject({
       code: "authz_denied",
     });
     expect(handlerRan).toBe(false);
@@ -475,7 +553,9 @@ describe("invoke() IAM enforcement — deny + pending_approval", () => {
 
   it("pending_approval mints a JIT access request, denies now, and carries the pollable id", async () => {
     setKernelIAMRuntime(pendingFn, true);
-    const creator = vi.fn(async (_args: KernelAccessRequestArgs) => "arq_pending_1");
+    const creator = vi.fn(
+      async (_args: KernelAccessRequestArgs) => "arq_pending_1",
+    );
     setKernelAccessRequestCreator(creator);
     const emitter = vi.fn();
     setSecurityEventEmitter(emitter);
@@ -729,7 +809,9 @@ describe("invoke() principal spine", () => {
       input: z.object({ nodeId: z.string().optional() }),
       output: z.object({ ok: z.boolean() }),
     });
-    registerHandler("test.target.optional", async () => async () => ({ ok: true }));
+    registerHandler("test.target.optional", async () => async () => ({
+      ok: true,
+    }));
 
     // Field absent → the declared target must degrade to null, not throw or
     // fabricate a junk id.

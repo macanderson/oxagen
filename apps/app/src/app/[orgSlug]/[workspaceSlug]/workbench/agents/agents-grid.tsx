@@ -21,7 +21,10 @@ import { EntityAvatar } from "@/components/avatar/entity-avatar";
 import { CardGrid } from "@/components/lists/card-grid";
 import { ListToolbar } from "@/components/lists/list-toolbar";
 import { ListPagination } from "@/components/lists/list-pagination";
-import { useListControls, type ListSortOption } from "@/lib/lists/use-list-controls";
+import {
+  useListControls,
+  type ListSortOption,
+} from "@/lib/lists/use-list-controls";
 import { toCsv, downloadCsv, type CsvColumn } from "@/lib/lists/csv";
 import type { AgentListRow } from "@/lib/workbench/agents";
 
@@ -34,13 +37,21 @@ export type AgentGridRow = AgentListRow & {
 };
 
 const SORT_OPTIONS: ListSortOption<AgentGridRow>[] = [
-  { id: "name", label: "Name A–Z", compare: (a, b) => a.name.localeCompare(b.name) },
+  {
+    id: "name",
+    label: "Name A–Z",
+    compare: (a, b) => a.name.localeCompare(b.name),
+  },
   {
     id: "version",
     label: "Most iterated",
     compare: (a, b) => (b.latestVersion ?? 0) - (a.latestVersion ?? 0),
   },
-  { id: "status", label: "Status", compare: (a, b) => a.status.localeCompare(b.status) },
+  {
+    id: "status",
+    label: "Status",
+    compare: (a, b) => a.status.localeCompare(b.status),
+  },
 ];
 
 const CSV_COLUMNS: CsvColumn[] = [
@@ -69,7 +80,12 @@ function blurbOf(agent: AgentGridRow): string {
 
 export function AgentsGrid({ agents }: { agents: AgentGridRow[] }) {
   const controls = useListControls(agents, {
-    searchKeys: ["name", "slug", (row) => blurbOf(row), (row) => row.agentKey ?? ""],
+    searchKeys: [
+      "name",
+      "slug",
+      (row) => blurbOf(row),
+      (row) => row.agentKey ?? "",
+    ],
     sortOptions: SORT_OPTIONS,
     pageSize: 12,
   });
@@ -77,7 +93,10 @@ export function AgentsGrid({ agents }: { agents: AgentGridRow[] }) {
   const handleExport = React.useCallback(() => {
     downloadCsv(
       "agents.csv",
-      toCsv(CSV_COLUMNS, controls.allFilteredRows as unknown as Record<string, unknown>[]),
+      toCsv(
+        CSV_COLUMNS,
+        controls.allFilteredRows as unknown as Record<string, unknown>[],
+      ),
     );
   }, [controls.allFilteredRows]);
 
@@ -149,14 +168,23 @@ export function AgentsGrid({ agents }: { agents: AgentGridRow[] }) {
                   raw enum — both fields read "active" on a live agent and the
                   card would otherwise show two identical "Active" chips. */}
               <div className="mt-auto flex flex-wrap items-center gap-2">
-                <Badge variant={statusVariant(agent.status)} className="text-xs capitalize">
+                <Badge
+                  variant={statusVariant(agent.status)}
+                  className="text-xs capitalize"
+                >
                   {agent.status}
                 </Badge>
                 <Badge
-                  variant={agent.deploymentStatus === "active" ? "default" : "secondary"}
+                  variant={
+                    agent.deploymentStatus === "active"
+                      ? "default"
+                      : "secondary"
+                  }
                   className="text-xs"
                 >
-                  {agent.deploymentStatus === "active" ? "Deployed" : "Not deployed"}
+                  {agent.deploymentStatus === "active"
+                    ? "Deployed"
+                    : "Not deployed"}
                 </Badge>
                 {agent.latestVersion !== null ? (
                   <span className="text-xs tabular-nums text-muted-foreground">
@@ -169,7 +197,9 @@ export function AgentsGrid({ agents }: { agents: AgentGridRow[] }) {
                     variant="ghost"
                     size="sm"
                     className="h-7"
-                    endIcon={<Rocket className="h-3.5 w-3.5" aria-hidden="true" />}
+                    endIcon={
+                      <Rocket className="h-3.5 w-3.5" aria-hidden="true" />
+                    }
                     data-testid={`agent-launch-${agent.slug}`}
                     render={<Link href={agent.launchHref} />}
                   >
