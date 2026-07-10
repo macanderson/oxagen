@@ -43,6 +43,7 @@
     "@oxagen/inngest-functions": "workspace:*",
     "@oxagen/ingestion": "workspace:*",
     "@oxagen/notifications": "workspace:*",
+    "@oxagen/ontology": "workspace:*",
     "@oxagen/oxagen": "workspace:*",
     "@oxagen/plugins": "workspace:*",
     "@oxagen/prompt-templates": "workspace:*",

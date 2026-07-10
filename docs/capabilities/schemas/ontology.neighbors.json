@@ -126,6 +126,11 @@
                 "in"
               ],
               "description": "'out' if the edge points from the node to this neighbor; 'in' if from the neighbor to the node"
+            },
+            "isSystem": {
+              "type": "boolean",
+              "default": false,
+              "description": "True when the neighbor is product-owned runtime lineage (executions, agents, tools, generated files) rather than customer knowledge — lets callers separate the source-system ontology from agent activity"
             }
           },
           "required": [

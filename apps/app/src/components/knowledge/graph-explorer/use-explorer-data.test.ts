@@ -80,6 +80,32 @@ describe("useExplorerData — initial load", () => {
   });
 });
 
+describe("useExplorerData — system-node opt-in", () => {
+  it("omits includeSystem by default (source ontology only)", async () => {
+    const { result } = renderHook(() => useExplorerData(tenant));
+    await waitFor(() => expect(result.current.status).toBe("ready"));
+    expect(mockFetchGraph).toHaveBeenCalledWith(tenant, {}, expect.anything());
+  });
+
+  it("reseeds with includeSystem:true when the option flips on", async () => {
+    const { result, rerender } = renderHook(
+      ({ includeSystem }: { includeSystem: boolean }) =>
+        useExplorerData(tenant, { includeSystem }),
+      { initialProps: { includeSystem: false } },
+    );
+    await waitFor(() => expect(result.current.status).toBe("ready"));
+    expect(mockFetchGraph).toHaveBeenCalledTimes(1);
+
+    rerender({ includeSystem: true });
+    await waitFor(() => expect(mockFetchGraph).toHaveBeenCalledTimes(2));
+    expect(mockFetchGraph).toHaveBeenLastCalledWith(
+      tenant,
+      { includeSystem: true },
+      expect.anything(),
+    );
+  });
+});
+
 describe("useExplorerData — error state", () => {
   it("transitions to error status when fetchGraph rejects", async () => {
     mockFetchGraph.mockRejectedValue(new Error("Network down"));
@@ -93,9 +119,23 @@ describe("useExplorerData — expand", () => {
   it("merges new nodes returned by expandNode", async () => {
     mockExpandNode.mockResolvedValue({
       found: true,
-      nodes: [{ id: "b", label: "Topic", displayName: "B", degree: 0, hydrated: true }],
+      nodes: [
+        {
+          id: "b",
+          label: "Topic",
+          displayName: "B",
+          degree: 0,
+          hydrated: true,
+        },
+      ],
       edges: [
-        { id: "a->b:REL", source: "a", target: "b", type: "REL", inferred: false },
+        {
+          id: "a->b:REL",
+          source: "a",
+          target: "b",
+          type: "REL",
+          inferred: false,
+        },
       ],
     });
 
@@ -113,9 +153,23 @@ describe("useExplorerData — expand", () => {
   it("merges new edges returned by expandNode", async () => {
     mockExpandNode.mockResolvedValue({
       found: true,
-      nodes: [{ id: "b", label: "Topic", displayName: "B", degree: 0, hydrated: true }],
+      nodes: [
+        {
+          id: "b",
+          label: "Topic",
+          displayName: "B",
+          degree: 0,
+          hydrated: true,
+        },
+      ],
       edges: [
-        { id: "a->b:REL", source: "a", target: "b", type: "REL", inferred: false },
+        {
+          id: "a->b:REL",
+          source: "a",
+          target: "b",
+          type: "REL",
+          inferred: false,
+        },
       ],
     });
 
@@ -133,9 +187,23 @@ describe("useExplorerData — expand", () => {
   it("recomputes degrees after expand (node 'a' has degree 1 after edge a->b)", async () => {
     mockExpandNode.mockResolvedValue({
       found: true,
-      nodes: [{ id: "b", label: "Topic", displayName: "B", degree: 0, hydrated: true }],
+      nodes: [
+        {
+          id: "b",
+          label: "Topic",
+          displayName: "B",
+          degree: 0,
+          hydrated: true,
+        },
+      ],
       edges: [
-        { id: "a->b:REL", source: "a", target: "b", type: "REL", inferred: false },
+        {
+          id: "a->b:REL",
+          source: "a",
+          target: "b",
+          type: "REL",
+          inferred: false,
+        },
       ],
     });
 
@@ -213,7 +281,15 @@ describe("useExplorerData — addSubgraph", () => {
 
     act(() => {
       result.current.addSubgraph(
-        [{ id: "c", label: "Doc", displayName: "C", degree: 0, hydrated: true }],
+        [
+          {
+            id: "c",
+            label: "Doc",
+            displayName: "C",
+            degree: 0,
+            hydrated: true,
+          },
+        ],
         [],
       );
     });
@@ -228,7 +304,15 @@ describe("useExplorerData — addSubgraph", () => {
 
     act(() => {
       result.current.addSubgraph(
-        [{ id: "a", label: "Issue", displayName: "A", degree: 0, hydrated: true }],
+        [
+          {
+            id: "a",
+            label: "Issue",
+            displayName: "A",
+            degree: 0,
+            hydrated: true,
+          },
+        ],
         [],
       );
     });

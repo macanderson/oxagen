@@ -13,7 +13,11 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getSessionOrRedirect } from "@/lib/session";
-import { resolveOrg, resolveWorkspace, assertWorkspaceMember } from "@/lib/resolve-org";
+import {
+  resolveOrg,
+  resolveWorkspace,
+  assertWorkspaceMember,
+} from "@/lib/resolve-org";
 import { logger } from "@oxagen/handlers/logger";
 import { dispatchExplore } from "@/components/knowledge/graph-explorer/explore-service";
 import type { ExploreRequest } from "@/components/knowledge/graph-explorer/types";
@@ -38,6 +42,9 @@ const BodySchema = z.discriminatedUnion("op", [
     op: z.literal("graph"),
     labels: z.array(z.string().min(1)).max(50).optional(),
     limit: z.number().int().min(1).max(250).optional(),
+    // Opt-in to runtime lineage (is_system) nodes. Absent/false = the default
+    // explore view: only the customer's source-system ontology is seeded.
+    includeSystem: z.boolean().optional(),
   }),
   z.object({
     ...TenantFields,
@@ -51,6 +58,7 @@ const BodySchema = z.discriminatedUnion("op", [
     query: z.string().max(500).optional(),
     limit: z.number().int().min(1).max(250).optional(),
     offset: z.number().int().min(0).optional(),
+    includeSystem: z.boolean().optional(),
   }),
   z.object({
     ...TenantFields,
@@ -160,7 +168,13 @@ export async function POST(request: NextRequest): Promise<Response> {
     });
     return NextResponse.json(result);
   } catch (err) {
-    logger.error({ err, op: body.op, orgId, workspaceId }, "[graph/explore] op failed");
-    return NextResponse.json({ error: "Graph explore failed" }, { status: 500 });
+    logger.error(
+      { err, op: body.op, orgId, workspaceId },
+      "[graph/explore] op failed",
+    );
+    return NextResponse.json(
+      { error: "Graph explore failed" },
+      { status: 500 },
+    );
   }
 }

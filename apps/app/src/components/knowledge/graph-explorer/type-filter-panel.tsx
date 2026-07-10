@@ -13,7 +13,11 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { TypeCount } from "./types";
-import { colorForLabel, CONFIRMED_EDGE_COLOR, INFERRED_EDGE_COLOR } from "./lib/colors";
+import {
+  colorForLabel,
+  CONFIRMED_EDGE_COLOR,
+  INFERRED_EDGE_COLOR,
+} from "./lib/colors";
 
 export interface TypeFilterPanelProps {
   nodeCounts: TypeCount[];
@@ -22,10 +26,12 @@ export interface TypeFilterPanelProps {
   hiddenEdgeTypes: Set<string>;
   /** True when inferred edges are currently hidden. */
   inferredHidden: boolean;
-  /** True when system nodes are currently hidden. */
+  /** True when agent-activity (system/lineage) nodes are currently hidden. */
   systemHidden: boolean;
   inferredCount: number;
   confirmedCount: number;
+  /** Agent-activity nodes currently in view (0 while the toggle is off). */
+  systemCount: number;
   onToggleNodeType: (type: string) => void;
   onToggleEdgeType: (type: string) => void;
   onToggleInferred: () => void;
@@ -39,23 +45,36 @@ export function TypeFilterPanel(props: TypeFilterPanelProps) {
     <div className="flex h-full flex-col gap-5 overflow-y-auto p-4">
       <section aria-labelledby="node-types-heading">
         <div className="mb-2 flex items-center justify-between">
-          <h3 id="node-types-heading" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <h3
+            id="node-types-heading"
+            className="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+          >
             Node types
           </h3>
           <div className="flex items-center gap-1 text-[11px]">
-            <button type="button" onClick={props.onShowAllNodeTypes} className="text-muted-foreground hover:text-foreground">
+            <button
+              type="button"
+              onClick={props.onShowAllNodeTypes}
+              className="text-muted-foreground hover:text-foreground"
+            >
               All
             </button>
             <span className="text-border" aria-hidden="true">
               /
             </span>
-            <button type="button" onClick={props.onHideAllNodeTypes} className="text-muted-foreground hover:text-foreground">
+            <button
+              type="button"
+              onClick={props.onHideAllNodeTypes}
+              className="text-muted-foreground hover:text-foreground"
+            >
               None
             </button>
           </div>
         </div>
         <ul className="flex flex-col gap-0.5">
-          {props.nodeCounts.length === 0 && <li className="text-xs text-muted-foreground">No nodes in view.</li>}
+          {props.nodeCounts.length === 0 && (
+            <li className="text-xs text-muted-foreground">No nodes in view.</li>
+          )}
           {props.nodeCounts.map((tc) => (
             <FilterRow
               key={tc.type}
@@ -70,13 +89,19 @@ export function TypeFilterPanel(props: TypeFilterPanelProps) {
       </section>
 
       <section aria-labelledby="visibility-heading">
-        <h3 id="visibility-heading" className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <h3
+          id="visibility-heading"
+          className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+        >
           Visibility
         </h3>
         <ul className="flex flex-col gap-0.5">
+          {/* Agent runtime lineage (executions, agents, tools). Off by default:
+              explore is for the source-system ontology; toggling on reseeds
+              the graph with is_system nodes included. */}
           <FilterRow
-            label="System nodes"
-            count={0}
+            label="Agent activity"
+            count={props.systemCount}
             color="#6b7280"
             checked={!props.systemHidden}
             onToggle={props.onToggleSystem}
@@ -102,11 +127,18 @@ export function TypeFilterPanel(props: TypeFilterPanelProps) {
       </section>
 
       <section aria-labelledby="edge-types-heading">
-        <h3 id="edge-types-heading" className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <h3
+          id="edge-types-heading"
+          className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+        >
           Relationship types
         </h3>
         <ul className="flex flex-col gap-0.5">
-          {props.edgeCounts.length === 0 && <li className="text-xs text-muted-foreground">No relationships in view.</li>}
+          {props.edgeCounts.length === 0 && (
+            <li className="text-xs text-muted-foreground">
+              No relationships in view.
+            </li>
+          )}
           {props.edgeCounts.map((tc) => (
             <FilterRow
               key={tc.type}
@@ -134,7 +166,15 @@ interface FilterRowProps {
   onToggle: () => void;
 }
 
-function FilterRow({ label, count, color, checked, disabled, squareSwatch, onToggle }: FilterRowProps) {
+function FilterRow({
+  label,
+  count,
+  color,
+  checked,
+  disabled,
+  squareSwatch,
+  onToggle,
+}: FilterRowProps) {
   return (
     <li>
       <label
@@ -143,16 +183,25 @@ function FilterRow({ label, count, color, checked, disabled, squareSwatch, onTog
           disabled && "cursor-default opacity-70 hover:bg-transparent",
         )}
       >
-        <Checkbox checked={checked} disabled={disabled} onCheckedChange={() => onToggle()} />
+        <Checkbox
+          checked={checked}
+          disabled={disabled}
+          onCheckedChange={() => onToggle()}
+        />
         <span
-          className={cn("size-2.5 shrink-0", squareSwatch ? "rounded-[2px]" : "rounded-full")}
+          className={cn(
+            "size-2.5 shrink-0",
+            squareSwatch ? "rounded-[2px]" : "rounded-full",
+          )}
           style={{ backgroundColor: color }}
           aria-hidden="true"
         />
         <span className="min-w-0 flex-1 truncate text-foreground" title={label}>
           {label}
         </span>
-        <span className="shrink-0 tabular-nums text-xs text-muted-foreground">{count.toLocaleString()}</span>
+        <span className="shrink-0 tabular-nums text-xs text-muted-foreground">
+          {count.toLocaleString()}
+        </span>
       </label>
     </li>
   );
