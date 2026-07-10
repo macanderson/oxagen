@@ -1,6 +1,6 @@
 /**
  * utils.test.ts — unit tests for cn, formatCents, formatDate, formatDateTime,
- * formatDateTimeWithSeconds, formatBytes, truncate.
+ * formatDateTimeWithSeconds, formatBytes, truncate, formatDuration.
  */
 import { describe, it, expect } from "vitest";
 import {
@@ -11,6 +11,7 @@ import {
   formatDateTimeWithSeconds,
   formatBytes,
   truncate,
+  formatDuration,
 } from "./utils";
 
 // ---------------------------------------------------------------------------
@@ -202,5 +203,26 @@ describe("truncate", () => {
     const out = truncate("abcdefghij", 5);
     expect(out).toBe("abcd…");
     expect(out.length).toBe(5);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// formatDuration — human duration from milliseconds
+// ---------------------------------------------------------------------------
+
+describe("formatDuration", () => {
+  it("formats sub-second durations with 'ms' suffix", () => {
+    expect(formatDuration(0)).toBe("0ms");
+    expect(formatDuration(999)).toBe("999ms");
+  });
+
+  it("formats seconds with one decimal", () => {
+    expect(formatDuration(1000)).toBe("1.0s");
+    expect(formatDuration(1500)).toBe("1.5s");
+  });
+
+  it("formats minutes + floored seconds", () => {
+    expect(formatDuration(60_000)).toBe("1m 0s");
+    expect(formatDuration(90_000)).toBe("1m 30s");
   });
 });

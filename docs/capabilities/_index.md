@@ -4,7 +4,7 @@ Reference for all declared capabilities across the Oxagen platform.
 Each capability is implemented across API, MCP, and agent surfaces with
 contract-first design, IAM enforcement, and instrumentation.
 
-## Agent (68)
+## Agent (75, count drifts)
 
 - [agent.approval.resolve](agent.approval.resolve.md) — Approve or deny a pending tool-call approval request; resolution ends the tool-call wait and streams the next step
 - [agent.code.execute](agent.code.execute.md) — Execute a code snippet in an isolated sandbox and return the exit code, stdout, stderr, and execution time
@@ -18,9 +18,9 @@ contract-first design, IAM enforcement, and instrumentation.
 - [agent.definition.update](agent.definition.update.md) — Update an agent definition by snapshotting a new unpublished version with the updated config; the version number is bumped
 - [revise_agent_def](revise_agent_def.md) — AI-driven edit of an existing agent definition from a plain-language prompt; the model designs the revised config grounded in the workspace and a new unpublished version is bumped (slug immutable, publish stays separate)
 - [agent.deploy](agent.deploy.md) — Set an agent's deployment posture; activating requires a published active version, deactivating makes its triggers dormant
-- [bind_agent_environment](bind_agent_environment.md) — Bind an agent to an environment (and optionally a specific sandbox template within it); promoting one to primary atomically demotes the agent's previous primary
-- [list_agent_environments](list_agent_environments.md) — List an agent's environment bindings, with each binding's resolved sandbox template name
-- [unbind_agent_environment](unbind_agent_environment.md) — Remove an agent's binding to an environment; falls back to the workspace default environment and template when the removed binding was primary
+- [bind_agent_environment](agent.environment.bind.md) — Bind an agent to an environment (and optionally a specific sandbox template within it); promoting one to primary atomically demotes the agent's previous primary
+- [list_agent_environments](agent.environment.list.md) — List an agent's environment bindings, with each binding's resolved sandbox template name
+- [unbind_agent_environment](agent.environment.unbind.md) — Remove an agent's binding to an environment; falls back to the workspace default environment and template when the removed binding was primary
 - [agent.execution.record](agent.execution.record.md) — Persist a complete agent execution record including steps, tool calls, and result summary for observability and audit
 - [agent.feature.verify](agent.feature.verify.md) — Independent cross-LLM judge: a DIFFERENT vision model than the builder reads screenshots of a feature and returns a pass/fail verdict against the stated requirement. The proof-of-done gate.
 - [agent.file.lock.acquire](agent.file.lock.acquire.md) — Acquire (or renew) an exclusive, TTL-bounded lock on a file so no two agents edit it concurrently; fails with granted:false when a different agent already holds a live lock
@@ -72,6 +72,7 @@ contract-first design, IAM enforcement, and instrumentation.
 - [agent.task.background.read](agent.task.background.read.md) — Read the current status, progress markers, and final result of a background task
 - [agent.task.background.start](agent.task.background.start.md) — Dispatch a long-running task as a durable Inngest job; the chat stream polls for status
 - [agent.execution.list](agent.execution.list.md) — List recent top-level agent runs for the workspace, newest first, with keyset pagination — each row's status, origin, duration, and token/cost figures
+- [get_execution_lineage](get_execution_lineage.md) — Get one agent execution's file-level lineage as a graph: the execution node plus every source file it touched via TOUCHED_FILE edges, resolved to citable KnowledgeNodeRefs
 - [agent.tool.list](agent.tool.list.md) — List the capabilities surfaced as agent tools for the active workspace, filtered by role, entitlements, and denylist
 - [agent.trace.get](agent.trace.get.md) — Fetch one agent execution as a collapsible span tree: the run, its ordered steps, each step's tool calls with durations/tokens/cost/status, and child executions (subagent/A2A lineage)
 - [agent.debug.trace](agent.debug.trace.md) — Diagnose why an agent execution failed as a structured failure frame: failing step, error class, parsed top stack frames, related spans, and deterministically-ranked suspect files (optional LLM diagnosis via summarize)
@@ -340,15 +341,15 @@ contract-first design, IAM enforcement, and instrumentation.
 
 ## Sandbox (9)
 
-- [create_sandbox_template](create_sandbox_template.md) — Create a portable sandbox template under an environment: provider, runtime image, resources, network posture, selected vault keys, literal config, and preloaded tools
-- [list_sandbox_templates](list_sandbox_templates.md) — List sandbox templates in the active workspace, optionally filtered to one environment
-- [get_sandbox_template](get_sandbox_template.md) — Fetch a single sandbox template (with its tools) by its public id
-- [update_sandbox_template](update_sandbox_template.md) — Update a sandbox template's metadata, provider, runtime, resources, network, secret selection, literal config, or active state
-- [delete_sandbox_template](delete_sandbox_template.md) — Soft-delete a sandbox template; a default template cannot be deleted until another is promoted
-- [set_default_sandbox_template](set_default_sandbox_template.md) — Promote a sandbox template to its environment's default via an atomic swap
-- [set_sandbox_template_tools](set_sandbox_template_tools.md) — Replace the full set of preloaded tools on a sandbox template (replace-set semantics)
-- [export_sandbox_template](export_sandbox_template.md) — Export a sandbox template as a portable v1 manifest (config, tools, and required secret key NAMES — never secret values)
-- [import_sandbox_template](import_sandbox_template.md) — Import a portable sandbox-template manifest into an environment; creates the template, its tools, and upserts missing secret keys (no values)
+- [create_sandbox_template](sandbox.template.create.md) — Create a portable sandbox template under an environment: provider, runtime image, resources, network posture, selected vault keys, literal config, and preloaded tools
+- [list_sandbox_templates](sandbox.template.list.md) — List sandbox templates in the active workspace, optionally filtered to one environment
+- [get_sandbox_template](sandbox.template.get.md) — Fetch a single sandbox template (with its tools) by its public id
+- [update_sandbox_template](sandbox.template.update.md) — Update a sandbox template's metadata, provider, runtime, resources, network, secret selection, literal config, or active state
+- [delete_sandbox_template](sandbox.template.delete.md) — Soft-delete a sandbox template; a default template cannot be deleted until another is promoted
+- [set_default_sandbox_template](sandbox.template.set_default.md) — Promote a sandbox template to its environment's default via an atomic swap
+- [set_sandbox_template_tools](sandbox.template.set_tools.md) — Replace the full set of preloaded tools on a sandbox template (replace-set semantics)
+- [export_sandbox_template](sandbox.template.export.md) — Export a sandbox template as a portable v1 manifest (config, tools, and required secret key NAMES — never secret values)
+- [import_sandbox_template](sandbox.template.import.md) — Import a portable sandbox-template manifest into an environment; creates the template, its tools, and upserts missing secret keys (no values)
 
 ## Schema (23)
 
@@ -427,10 +428,12 @@ contract-first design, IAM enforcement, and instrumentation.
 
 - [telemetry.error.cluster](telemetry.error.cluster.md) — Cluster recent captured errors by fingerprint to see which error classes are recurring and how often across the org — the triage overview
 
-## User (2)
+## User (4)
 
 - [user.preferences.read](user.preferences.read.md) — Read the calling user's UI and model preferences
 - [user.preferences.write](user.preferences.write.md) — Update the calling user's UI and model preferences (partial update)
+- [get_workspace_user_preferences](get_workspace_user_preferences.md) — Read the calling user's per-workspace coding-agent defaults: default repo connection/slug, default environment, and whether the one-time repo-default prompt has been shown
+- [update_workspace_user_preferences](update_workspace_user_preferences.md) — Update the calling user's per-workspace coding-agent defaults (partial update); app-only surface
 
 ## Video (1)
 

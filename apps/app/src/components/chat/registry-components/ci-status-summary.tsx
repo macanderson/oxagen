@@ -70,6 +70,9 @@ export interface CiStatusSummaryProps {
 /**
  * Format a run duration as `mm:ss` for a minute or more, or `1.2s` below a
  * minute. Self-contained — no date library is pulled into this lazy chunk.
+ *
+ * Intentionally distinct from the canonical `formatDuration` in `@/lib/utils`:
+ * CI runs read as clock time ("12:34"), not "12m 34s".
  */
 export function formatDuration(durationMs: number): string {
   if (durationMs < 0) return "0.0s";
