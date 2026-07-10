@@ -39,16 +39,27 @@ import {
   securityEvents,
   creditBalances,
 } from "../schema/index";
-import { flattenCheckSql, sqlColumnNames, type DrizzleCheck } from "./_test-helpers";
+import {
+  flattenCheckSql,
+  sqlColumnNames,
+  type DrizzleCheck,
+} from "./_test-helpers";
 
 // ---------------------------------------------------------------------------
 // 1. Append-only tables: must have no updated_at or deleted_at columns
 // ---------------------------------------------------------------------------
 
-const FORBIDDEN_COLS = ["updated_at", "deleted_at", "updated_by_user_id", "deleted_by_user_id"];
+const FORBIDDEN_COLS = [
+  "updated_at",
+  "deleted_at",
+  "updated_by_user_id",
+  "deleted_by_user_id",
+];
 
 describe("append-only tables: forbidden mutation columns", () => {
-  const appendOnlyTables: Array<[string, Parameters<typeof getTableConfig>[0]]> = [
+  const appendOnlyTables: Array<
+    [string, Parameters<typeof getTableConfig>[0]]
+  > = [
     ["usage_records", usageRecords],
     ["credit_ledger", creditLedger],
     ["stripe_events", stripeEvents],
@@ -59,9 +70,10 @@ describe("append-only tables: forbidden mutation columns", () => {
     it(`${tableName} has no updated_at or deleted_at column`, () => {
       const cols = sqlColumnNames(table);
       for (const forbidden of FORBIDDEN_COLS) {
-        expect(cols, `${tableName} must not have SQL column "${forbidden}"`).not.toContain(
-          forbidden,
-        );
+        expect(
+          cols,
+          `${tableName} must not have SQL column "${forbidden}"`,
+        ).not.toContain(forbidden);
       }
     });
   }
@@ -187,7 +199,9 @@ describe("security_events event_type CHECK constraint — billing.* types presen
   const cfg = getTableConfig(securityEvents);
   const checks = cfg.checks as DrizzleCheck[];
 
-  const eventTypeCheck = checks.find((c) => c.name.includes("event_type_check"));
+  const eventTypeCheck = checks.find((c) =>
+    c.name.includes("event_type_check"),
+  );
 
   it("has an event_type_check constraint", () => {
     expect(
@@ -198,14 +212,21 @@ describe("security_events event_type CHECK constraint — billing.* types presen
 
   it("CHECK SQL includes all billing.* values from the TS union", () => {
     const sql = flattenCheckSql(eventTypeCheck!);
-    const billingTypes = SECURITY_EVENT_TYPES.filter((t) => t.startsWith("billing."));
+    const billingTypes = SECURITY_EVENT_TYPES.filter((t) =>
+      t.startsWith("billing."),
+    );
     for (const t of billingTypes) {
-      expect(sql, `CHECK SQL missing billing type "${t}": got "${sql}"`).toContain(t);
+      expect(
+        sql,
+        `CHECK SQL missing billing type "${t}": got "${sql}"`,
+      ).toContain(t);
     }
   });
 
   it("SECURITY_EVENT_TYPES includes exactly the expected billing.* event types", () => {
-    const billingTypes = SECURITY_EVENT_TYPES.filter((t) => t.startsWith("billing."));
+    const billingTypes = SECURITY_EVENT_TYPES.filter((t) =>
+      t.startsWith("billing."),
+    );
     const expected = [
       "billing.access_denied",
       "billing.auto_reload_updated",
@@ -218,6 +239,11 @@ describe("security_events event_type CHECK constraint — billing.* types presen
       "billing.seats_changed",
       "billing.subscription_canceled",
       "billing.subscription_reactivated",
+      "billing.reseller_customer_changed",
+      "billing.reseller_price_plan_changed",
+      "billing.reseller_attribution_rule_changed",
+      "billing.reseller_stripe_configured",
+      "billing.reseller_rebill_pushed",
     ];
     expect(billingTypes.sort()).toEqual(expected.sort());
   });
