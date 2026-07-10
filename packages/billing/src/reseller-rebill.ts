@@ -91,8 +91,10 @@ interface AccumulatedLine {
  * Attribute the disjoint usage slices to the target customers via the rules,
  * then price each customer's aggregated lines under its plan. Pure over its
  * inputs (no I/O) so preview and push share one, testable, attribution+pricing path.
+ *
+ * Exported for unit tests — this is the heart of the loop (attribution + money).
  */
-function buildPreviews(
+export function buildPreviews(
   targetCustomers: readonly CustomerRow[],
   plansByInternalId: Map<string, ResolvedPlan>,
   rules: readonly RuleWithLabel[],
