@@ -9,12 +9,12 @@
  * ink's render is mocked (same pattern as
  * repl/__tests__/interactive.launch.test.tsx), so this exercises only
  * init-animation.tsx's own sequencing — not a real Ink render, which
- * init-animation-app.test.tsx already covers. commands/init.js's runInit is
+ * init-animation-app.test.tsx already covers. The init engine's runInit is
  * mocked too, so this never touches the filesystem/duckdb/AI —
  * commands/__tests__/init.test.ts covers runInit itself.
  */
 import { describe, it, expect, vi, afterEach } from "vitest";
-import type { InitOptions, InitResult } from "../../commands/init.js";
+import type { InitOptions, InitResult } from "../../commands/init-engine.js";
 
 const { runInitMock, renderSpy, unmountMock, waitUntilExitMock } = vi.hoisted(() => ({
   runInitMock: vi.fn(),
@@ -23,7 +23,7 @@ const { runInitMock, renderSpy, unmountMock, waitUntilExitMock } = vi.hoisted(()
   waitUntilExitMock: vi.fn(async () => undefined),
 }));
 
-vi.mock("../../commands/init.js", () => ({ runInit: runInitMock }));
+vi.mock("../../commands/init-engine.js", () => ({ runInit: runInitMock }));
 vi.mock("ink", () => ({
   render: (node: unknown) => {
     renderSpy(node);

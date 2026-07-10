@@ -19,7 +19,7 @@ import {
   type InitOptions,
   type InitResult,
   type InitProgressEvent,
-} from "../commands/init.js";
+} from "../commands/init-engine.js";
 import { InitAnimationApp } from "./init-animation-app.js";
 import { getMotionMode } from "../lib/config.js";
 
