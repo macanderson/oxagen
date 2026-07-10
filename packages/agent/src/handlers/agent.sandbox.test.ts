@@ -20,6 +20,7 @@ const h = vi.hoisted(() => {
   };
   return {
     driver,
+    getSandbox: vi.fn((_provider?: string) => driver),
     isSandboxAvailable: vi.fn(() => true),
     isDurableSandboxDriver: vi.fn(() => true),
     insertEvents: vi.fn(async (..._args: unknown[]) => undefined),
@@ -27,7 +28,7 @@ const h = vi.hoisted(() => {
 });
 
 vi.mock("@oxagen/sandbox", () => ({
-  getSandbox: () => h.driver,
+  getSandbox: h.getSandbox,
   isSandboxAvailable: h.isSandboxAvailable,
   isDurableSandboxDriver: h.isDurableSandboxDriver,
 }));
@@ -60,6 +61,7 @@ const ROW = {
 
 beforeEach(() => {
   fake.reset();
+  h.getSandbox.mockClear();
   h.isSandboxAvailable.mockReturnValue(true);
   h.isDurableSandboxDriver.mockReturnValue(true);
   for (const fn of [
@@ -320,5 +322,29 @@ describe("agent.sandbox.stop handler", () => {
 
     const out = await agentSandboxStopHandler({ sessionId: "sbx_1" }, CTX);
     expect(out.stopped).toBe(true);
+  });
+
+  it("retires the row without a provider call when no durable driver is available", async () => {
+    fake.enqueue([{ ...ROW }]);
+    // No sandbox driver configured → resolveSessionDriver returns null.
+    h.isSandboxAvailable.mockReturnValue(false);
+
+    const out = await agentSandboxStopHandler({ sessionId: "sbx_1" }, CTX);
+
+    expect(out.stopped).toBe(true);
+    expect(h.driver.stopSession).not.toHaveBeenCalled();
+    // The registry row is still retired — markSessionStatus issues one update.
+    expect(fake.mutations.update).toBe(1);
+  });
+
+  it("resolves the driver from the session's own driver column", async () => {
+    fake.enqueue([{ ...ROW, driver: "vercel" }]);
+    h.driver.stopSession.mockResolvedValue(undefined);
+
+    await agentSandboxStopHandler({ sessionId: "sbx_1" }, CTX);
+
+    // Vendor neutrality: the session's provider is torn down, not the default.
+    expect(h.getSandbox).toHaveBeenCalledWith("vercel");
+    expect(h.driver.stopSession).toHaveBeenCalledWith("sb-aaa");
   });
 });

@@ -11,9 +11,40 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   };
 });
 
+// Controllable sandbox driver for the live-reconcile path. isSandboxAvailable
+// defaults to false so the reconcile is skipped and the pure-DB-read tests below
+// are unaffected; reconcile tests flip it to true.
+const sb = vi.hoisted(() => {
+  const driver = {
+    name: "modal",
+    supportsSessions: true,
+    run: vi.fn(),
+    stream: vi.fn(),
+    createSession: vi.fn(),
+    execInSession: vi.fn(),
+    snapshotSession: vi.fn(),
+    restoreSession: vi.fn(),
+    stopSession: vi.fn(),
+    sessionStatus: vi.fn(),
+  };
+  return {
+    driver,
+    getSandbox: vi.fn((_provider?: string) => driver),
+    isSandboxAvailable: vi.fn(() => false),
+    isDurableSandboxDriver: vi.fn(() => true),
+  };
+});
+vi.mock("@oxagen/sandbox", () => ({
+  getSandbox: sb.getSandbox,
+  isSandboxAvailable: sb.isSandboxAvailable,
+  isDurableSandboxDriver: sb.isDurableSandboxDriver,
+}));
+
 import { agentSandboxListHandler } from "./agent.sandbox.list";
 
 const ROW = {
+  id: "uuid-1",
+  sandboxId: "sb-aaa",
   publicId: "sbx_1",
   sessionKey: "conv_42",
   metadata: {} as unknown,
@@ -34,13 +65,17 @@ const ROW = {
 
 beforeEach(() => {
   fake.reset();
+  sb.getSandbox.mockClear();
+  sb.driver.sessionStatus.mockReset();
+  sb.isSandboxAvailable.mockReturnValue(false);
+  sb.isDurableSandboxDriver.mockReturnValue(true);
 });
 
 describe("agent.sandbox.list handler", () => {
   it("maps registry rows to the output shape with ISO timestamps", async () => {
     fake.enqueue([{ ...ROW }]);
 
-    const out = await agentSandboxListHandler({ limit: 50 }, CTX);
+    const out = await agentSandboxListHandler({ limit: 50, activeOnly: false }, CTX);
 
     expect(out.sandboxes).toEqual([
       {
@@ -71,7 +106,7 @@ describe("agent.sandbox.list handler", () => {
       { ...ROW, publicId: "sbx_3", metadata: { label: "   " } },
     ]);
 
-    const out = await agentSandboxListHandler({ limit: 50 }, CTX);
+    const out = await agentSandboxListHandler({ limit: 50, activeOnly: false }, CTX);
 
     // Present, non-blank label surfaces verbatim; a missing or whitespace-only
     // label degrades to null (never leaks the raw metadata bag).
@@ -97,7 +132,7 @@ describe("agent.sandbox.list handler", () => {
       },
     ]);
 
-    const out = await agentSandboxListHandler({ limit: 50 }, CTX);
+    const out = await agentSandboxListHandler({ limit: 50, activeOnly: false }, CTX);
 
     expect(out.sandboxes[0]).toMatchObject({
       recoveryStatus: "recovered",
@@ -120,7 +155,7 @@ describe("agent.sandbox.list handler", () => {
       },
     ]);
 
-    const out = await agentSandboxListHandler({ limit: 50 }, CTX);
+    const out = await agentSandboxListHandler({ limit: 50, activeOnly: false }, CTX);
 
     expect(out.sandboxes[0]).toMatchObject({
       sessionKey: null,
@@ -133,7 +168,7 @@ describe("agent.sandbox.list handler", () => {
   it("returns an empty array when the workspace has no sessions", async () => {
     fake.enqueue([]);
 
-    const out = await agentSandboxListHandler({ limit: 50 }, CTX);
+    const out = await agentSandboxListHandler({ limit: 50, activeOnly: false }, CTX);
 
     expect(out.sandboxes).toEqual([]);
   });
@@ -141,9 +176,100 @@ describe("agent.sandbox.list handler", () => {
   it("passes an optional status filter through without error", async () => {
     fake.enqueue([{ ...ROW, status: "idle" }]);
 
-    const out = await agentSandboxListHandler({ status: "idle", limit: 10 }, CTX);
+    const out = await agentSandboxListHandler(
+      { status: "idle", limit: 10, activeOnly: false },
+      CTX,
+    );
 
     expect(out.sandboxes).toHaveLength(1);
     expect(out.sandboxes[0]!.status).toBe("idle");
+  });
+
+  it("passes repos through from session metadata (omitted when absent)", async () => {
+    fake.enqueue([
+      {
+        ...ROW,
+        metadata: {
+          repos: [
+            { owner: "acme", repo: "api", branch: "main" },
+            { owner: "acme", repo: "web" },
+          ],
+        },
+      },
+      { ...ROW, publicId: "sbx_2", metadata: {} },
+    ]);
+
+    const out = await agentSandboxListHandler({ limit: 50, activeOnly: false }, CTX);
+
+    expect(out.sandboxes[0]!.repos).toEqual([
+      { owner: "acme", repo: "api", branch: "main" },
+      { owner: "acme", repo: "web" },
+    ]);
+    // No repos key at all when the session was started without any.
+    expect(out.sandboxes[1]!.repos).toBeUndefined();
+  });
+});
+
+describe("agent.sandbox.list live reconcile", () => {
+  it("corrects a provider-dead running row to stopped and persists it", async () => {
+    fake.enqueue([{ ...ROW, status: "running" }]);
+    sb.isSandboxAvailable.mockReturnValue(true);
+    sb.driver.sessionStatus.mockResolvedValue("gone");
+
+    const out = await agentSandboxListHandler({ limit: 50, activeOnly: false }, CTX);
+
+    expect(sb.driver.sessionStatus).toHaveBeenCalledWith("sb-aaa");
+    expect(out.sandboxes[0]!.status).toBe("stopped");
+    // The correction is persisted (markSessionStatus issues one update).
+    expect(fake.mutations.update).toBe(1);
+  });
+
+  it("resolves each session's own driver (vendor-neutral) during reconcile", async () => {
+    fake.enqueue([{ ...ROW, status: "running", driver: "vercel" }]);
+    sb.isSandboxAvailable.mockReturnValue(true);
+    sb.driver.sessionStatus.mockResolvedValue("running");
+
+    await agentSandboxListHandler({ limit: 50, activeOnly: false }, CTX);
+
+    expect(sb.getSandbox).toHaveBeenCalledWith("vercel");
+  });
+
+  it("activeOnly drops a row the provider reports gone, keeps the live one", async () => {
+    fake.enqueue([
+      { ...ROW, publicId: "sbx_live", sandboxId: "sb-live", status: "running" },
+      { ...ROW, publicId: "sbx_dead", sandboxId: "sb-dead", status: "idle" },
+    ]);
+    sb.isSandboxAvailable.mockReturnValue(true);
+    sb.driver.sessionStatus.mockImplementation(async (id: string) =>
+      id === "sb-dead" ? "gone" : "running",
+    );
+
+    const out = await agentSandboxListHandler(
+      { activeOnly: true, limit: 50 },
+      CTX,
+    );
+
+    expect(out.sandboxes.map((s) => s.sessionId)).toEqual(["sbx_live"]);
+  });
+
+  it("tolerates a driver error and leaves the row's status untouched", async () => {
+    fake.enqueue([{ ...ROW, status: "running" }]);
+    sb.isSandboxAvailable.mockReturnValue(true);
+    sb.driver.sessionStatus.mockRejectedValue(new Error("provider down"));
+
+    const out = await agentSandboxListHandler({ limit: 50, activeOnly: false }, CTX);
+
+    expect(out.sandboxes[0]!.status).toBe("running");
+    expect(fake.mutations.update).toBe(0); // no correction persisted
+  });
+
+  it("skips reconcile entirely when no durable driver is available", async () => {
+    fake.enqueue([{ ...ROW, status: "running" }]);
+    sb.isSandboxAvailable.mockReturnValue(false);
+
+    const out = await agentSandboxListHandler({ limit: 50, activeOnly: false }, CTX);
+
+    expect(out.sandboxes[0]!.status).toBe("running");
+    expect(sb.driver.sessionStatus).not.toHaveBeenCalled();
   });
 });

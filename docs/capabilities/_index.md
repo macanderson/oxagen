@@ -58,6 +58,7 @@ contract-first design, IAM enforcement, and instrumentation.
 - [agent.sandbox.snapshot](agent.sandbox.snapshot.md) — Capture a filesystem snapshot of a durable sandbox session so it can be restored after an idle reap or the 24h lifetime ceiling
 - [agent.sandbox.start](agent.sandbox.start.md) — Provision or reconnect to a durable code-agent sandbox that persists across turns; pass a stable sessionKey to reuse one warm sandbox
 - [agent.sandbox.stop](agent.sandbox.stop.md) — Terminate a durable sandbox session and release its resources; call when the work is finished
+- [rename_sandbox](rename-sandbox.md) — Rename a durable sandbox session — set its human-friendly display label (metadata-only; does not affect reuse or the running container)
 - [agent.skill.list](agent.skill.list.md) — List skills available in the active workspace including built-in filesystem and dynamic marketplace-installed skills
 - [agent.skill.load](agent.skill.load.md) — Load and register a workspace skill at runtime, resolving the requested version and parsing its configuration
 - [agent.subagent.aggregate](agent.subagent.aggregate.md) — Wait for all child runs in a subagent fanout to complete and return merged results, conflict list, and execution timeline

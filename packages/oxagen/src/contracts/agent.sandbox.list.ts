@@ -5,14 +5,21 @@ import { registerCapability } from "../registry";
 // workspace (rows in `sandbox_sessions`, created by `agent.sandbox.start`), so
 // the app's "sandbox detail" page — plus CLI/MCP/agent callers — can show which
 // sessions exist, their lifecycle status, and when each was last used, without
-// probing every session id individually. Read-only: it never touches a live
-// driver (unlike the other `agent.sandbox.*` capabilities, it only reads the
-// Postgres registry), so it works regardless of whether a durable driver is
-// configured and consumes no AI tokens — hence `noBillingGate: true`.
+// probing every session id individually.
+//
+// The registry read is followed by a BOUNDED live reconcile: each running|idle
+// row is checked against its own driver's sessionStatus (≤25 calls, per-row
+// errors tolerated, skipped entirely when no durable driver is configured) so
+// the list never reports a session as running/idle that the provider has
+// already terminated — a dead session is corrected to `stopped` and the fix
+// persisted. When no driver is available the reconcile is a no-op and the raw
+// Postgres view is returned, so the capability still works with no sandbox
+// backend and consumes no AI tokens — hence `noBillingGate: true`.
 //
 // Scoped by org + workspace via the capability context (no org/ws in the
 // input). Ordered most-recently-used first so the newest activity surfaces at
-// the top of the list.
+// the top of the list. `activeOnly` narrows to genuinely-live sessions after
+// reconcile.
 export const agentSandboxList = registerCapability({
   name: "list_sandboxes",
   domain: "agent",
@@ -36,6 +43,15 @@ export const agentSandboxList = registerCapability({
       .optional()
       .describe(
         "Filter to sessions in this lifecycle status. Omit to include every non-deleted session.",
+      ),
+    activeOnly: z
+      .boolean()
+      .default(false)
+      .describe(
+        "When true, return only sessions that are running or idle AFTER live " +
+          "reconciliation against the driver — sessions the provider has already " +
+          "terminated are corrected to stopped and dropped. Default false " +
+          "preserves the full non-deleted listing.",
       ),
     limit: z
       .number()
@@ -66,6 +82,20 @@ export const agentSandboxList = registerCapability({
         image: z.enum(["node", "python", "shell", "agent"]),
         status: z.enum(["running", "idle", "stopped", "gone"]),
         driver: z.string().describe("Sandbox driver identifier (e.g. modal)."),
+        repos: z
+          .array(
+            z.object({
+              owner: z.string(),
+              repo: z.string(),
+              branch: z.string().optional(),
+            }),
+          )
+          .optional()
+          .describe(
+            "Repositories provisioned into this sandbox at start time (from the " +
+              "session metadata `repos` key). Omitted when the session was started " +
+              "without any repos.",
+          ),
         lastUsedAt: z
           .string()
           .nullable()

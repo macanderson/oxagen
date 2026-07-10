@@ -1,6 +1,14 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
 
+// GitHub owner / repo segments: the safe path charset GitHub itself permits.
+const SANDBOX_REPO_SEGMENT = /^[A-Za-z0-9_.-]+$/;
+// Branch names: printable, no whitespace, and none of the shell metacharacters
+// that could break out of the single-quoted context the server-composed clone
+// script wraps every value in. C0 control chars are rejected on purpose.
+// eslint-disable-next-line no-control-regex -- rejecting C0 control chars in a branch name is the intent
+const SANDBOX_REPO_BRANCH = /^[^\s\x00-\x1f`$;&|<>"'\\]+$/;
+
 // ── Durable sandbox sessions ─────────────────────────────────────────────────
 // `agent.sandbox.start` provisions (or reconnects to) a LONG-LIVED sandbox that
 // survives between agent turns, so a code agent can clone a repo, build a
@@ -102,6 +110,56 @@ export const agentSandboxStart = registerCapability({
           "e.g. a GITHUB_TOKEN vault secret: `git clone https://x-access-token:$GITHUB_TOKEN@github.com/org/repo`. " +
           "Git prompts are disabled (GIT_TERMINAL_PROMPT=0); an unauthenticated private " +
           "clone fails fast with a clear error instead of hanging.",
+      ),
+    repos: z
+      .array(
+        z.object({
+          owner: z
+            .string()
+            .min(1)
+            .max(100)
+            .regex(
+              SANDBOX_REPO_SEGMENT,
+              "owner may contain only letters, digits, '.', '_' and '-'",
+            )
+            .refine((s) => s !== "." && s !== "..", {
+              message: "owner may not be '.' or '..'",
+            }),
+          repo: z
+            .string()
+            .min(1)
+            .max(200)
+            .regex(
+              SANDBOX_REPO_SEGMENT,
+              "repo may contain only letters, digits, '.', '_' and '-'",
+            )
+            .refine((s) => s !== "." && s !== "..", {
+              message: "repo may not be '.' or '..' (path traversal)",
+            }),
+          branch: z
+            .string()
+            .min(1)
+            .max(200)
+            .regex(
+              SANDBOX_REPO_BRANCH,
+              "branch may not contain whitespace or shell metacharacters",
+            )
+            .refine((b) => !b.startsWith("-"), {
+              message: "branch may not start with '-'",
+            })
+            .optional(),
+        }),
+      )
+      .max(8)
+      .optional()
+      .describe(
+        "GitHub repositories to clone into /workspace at provision time. Each is " +
+          "cloned (full history) into /workspace/<repo> — a name collision gets an " +
+          "-<owner> suffix — using the workspace's GitHub connection token when one " +
+          "resolves (private repos) or an anonymous HTTPS clone (public repos). Pin " +
+          "a branch per repo with `branch` (git clone --branch --single-branch). Max " +
+          "8. The generated clone script is prepended (via &&) to any `setupCmd`; a " +
+          "failed clone fails provisioning (runner 422) rather than half-provisioning.",
       ),
     environmentId: z
       .string()

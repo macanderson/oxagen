@@ -3,13 +3,15 @@
  * capabilities (`agent.sandbox.*`).
  *
  * The Workbench → Sandboxes surface lets a human list a workspace's durable
- * sandbox sessions, warm a new one (`start_sandbox` + a one-time setupCmd),
- * drive a terminal against it (`run_sandbox_command`), inspect its files
- * (`agent.sandbox_file.*`, via the WorkspaceContextPanel's own API fetch), and
- * stop it. These contracts declare surfaces ["api","mcp","agent"] — NOT "app" —
- * so we invoke with the `{ surface: "agent" }` call-option, exactly like the
- * environment and secret server actions. The kernel still scopes every call to
- * org+workspace from ctx; apps/app supplies the IAM gate at the action layer.
+ * sandbox sessions (optionally `activeOnly` for a live-reconciled, truthful
+ * view), warm a new one (`start_sandbox` + a one-time setupCmd and/or repos to
+ * clone), drive a terminal against it (`run_sandbox_command`), inspect its
+ * files (`agent.sandbox_file.*`, via the WorkspaceContextPanel's own API
+ * fetch), rename it (`rename_sandbox`), and stop it. These contracts declare
+ * surfaces ["api","mcp","agent"] — NOT "app" — so we invoke with the
+ * `{ surface: "agent" }` call-option, exactly like the environment and secret
+ * server actions. The kernel still scopes every call to org+workspace from
+ * ctx; apps/app supplies the IAM gate at the action layer.
  *
  * Server-only. Never import from a "use client" module.
  */
@@ -50,6 +52,19 @@ export interface SandboxSummary {
   flushedAt?: string | null;
   /** ISO time the session's work was recovered to a branch. */
   recoveredAt?: string | null;
+  /**
+   * Repos cloned into `/workspace/<repo>` at warm time, when any were
+   * requested. Absent until the sibling repo-aware warm-flow change starts
+   * returning it — the UI treats a missing/empty array as "no repos".
+   */
+  repos?: Array<{ owner: string; repo: string; branch?: string }>;
+}
+
+/** A repo to clone into a sandbox at create time — `POST start_sandbox` input shape. */
+export interface SandboxRepoRef {
+  owner: string;
+  repo: string;
+  branch?: string;
 }
 
 /**
@@ -108,7 +123,18 @@ export function isSandboxUnavailable(err: unknown): boolean {
 
 export async function listSandboxes(
   ctx: WorkbenchCtx,
-  opts: { status?: SandboxStatus; limit?: number } = {},
+  opts: {
+    status?: SandboxStatus;
+    limit?: number;
+    /**
+     * When true, restrict to running|idle sessions AND live-reconcile each
+     * against the provider so a session the driver already tore down is
+     * excluded/corrected rather than trusted at its last-known Postgres
+     * status. The list UI defaults to this so a stopped/reaped sandbox never
+     * reads as "running".
+     */
+    activeOnly?: boolean;
+  } = {},
 ): Promise<SandboxSummary[]> {
   const out = (await invoke("list_sandboxes", opts, ctx, {
     surface: "agent",
@@ -153,6 +179,12 @@ export async function startSandbox(
     sandboxTemplateId?: string;
     /** Workspace environment (env_…) whose vault secrets bind to the session. */
     environmentId?: string;
+    /**
+     * Repos to clone into `/workspace/<repo>` during provisioning (max 8,
+     * enforced by the action's zod schema). Each entry's `branch` defaults to
+     * the repo's default branch server-side when omitted.
+     */
+    repos?: SandboxRepoRef[];
   },
 ): Promise<SandboxStartResult> {
   return (await invoke("start_sandbox", input, ctx, {
@@ -160,9 +192,30 @@ export async function startSandbox(
   })) as SandboxStartResult;
 }
 
+/** Result of `rename_sandbox` — the session's new persisted label. */
+export interface SandboxRenameResult {
+  sessionId: string;
+  label: string;
+}
+
+/** Rename a sandbox session's human-friendly label (the list's primary identifier). */
+export async function renameSandbox(
+  ctx: WorkbenchCtx,
+  input: { sessionId: string; label: string },
+): Promise<SandboxRenameResult> {
+  return (await invoke("rename_sandbox", input, ctx, {
+    surface: "agent",
+  })) as SandboxRenameResult;
+}
+
 export async function runSandboxCommand(
   ctx: WorkbenchCtx,
-  input: { sessionId: string; command: string; cwd?: string; timeoutMs?: number },
+  input: {
+    sessionId: string;
+    command: string;
+    cwd?: string;
+    timeoutMs?: number;
+  },
 ): Promise<SandboxExecResult> {
   return (await invoke("run_sandbox_command", input, ctx, {
     surface: "agent",
