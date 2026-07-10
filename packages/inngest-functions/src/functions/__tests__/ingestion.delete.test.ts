@@ -21,6 +21,11 @@ type HandlerCtx = {
   };
 };
 let capturedHandler: ((ctx: HandlerCtx) => unknown) | null = null;
+// The create-function adapter registers TWO Inngest functions per durable
+// definition: the primary (config.id) and, when onFailure is declared, a
+// companion whose id is `${config.id}.on-failure` with the failure handler
+// as its own 3rd arg. Route the capture by id so the companion registration
+// never overwrites the primary handler.
 let capturedOnFailure: ((ctx: HandlerCtx) => unknown) | null = null;
 
 // The create-function adapter registers TWO Inngest functions when a config
@@ -30,8 +35,12 @@ let capturedOnFailure: ((ctx: HandlerCtx) => unknown) | null = null;
 // by id; capturing `opts.onFailure` (the old shape) left capturedOnFailure null
 // and let the companion registration overwrite capturedHandler.
 mocks.createFunction.mockImplementation(
-  (opts: { id?: string }, _trigger: unknown, handler: typeof capturedHandler) => {
-    if (typeof opts?.id === "string" && opts.id.endsWith(".on-failure")) {
+  (
+    opts: { id?: string },
+    _trigger: unknown,
+    handler: typeof capturedHandler,
+  ) => {
+    if (opts?.id?.endsWith(".on-failure")) {
       capturedOnFailure = handler;
     } else {
       capturedHandler = handler;
@@ -263,7 +272,10 @@ describe("ingestion.delete-connection Inngest function", () => {
       expect(typeof row.event_id).toBe("string");
       expect(typeof row.emitted_at).toBe("string");
       // Deletion detail travels in the JSON payload.
-      const payload = JSON.parse(row.payload as string) as Record<string, unknown>;
+      const payload = JSON.parse(row.payload as string) as Record<
+        string,
+        unknown
+      >;
       expect(payload).toEqual({
         connectionId: "conn-delete-1",
         mode: "full",
@@ -273,7 +285,9 @@ describe("ingestion.delete-connection Inngest function", () => {
     });
 
     it("logs (does NOT throw) when the ClickHouse write fails, so deletion still succeeds", async () => {
-      mocks.insertEvents.mockRejectedValueOnce(new Error("clickhouse unreachable"));
+      mocks.insertEvents.mockRejectedValueOnce(
+        new Error("clickhouse unreachable"),
+      );
       const step = makeStep();
 
       const result = await capturedHandler!({
@@ -288,7 +302,10 @@ describe("ingestion.delete-connection Inngest function", () => {
         deletedAt: expect.any(String),
       });
       expect(mocks.loggerError).toHaveBeenCalledWith(
-        expect.objectContaining({ connectionId: "conn-delete-1", mode: "connection_only" }),
+        expect.objectContaining({
+          connectionId: "conn-delete-1",
+          mode: "connection_only",
+        }),
         expect.stringContaining("ClickHouse audit event write failed"),
       );
     });
@@ -320,9 +337,9 @@ describe("ingestion.delete-connection Inngest function", () => {
         step,
       });
 
-      const stepNames: string[] = (step.run as ReturnType<typeof vi.fn>).mock.calls.map(
-        (c) => c[0] as string,
-      );
+      const stepNames: string[] = (
+        step.run as ReturnType<typeof vi.fn>
+      ).mock.calls.map((c) => c[0] as string);
       expect(stepNames).toContain("finalize-deletion-job");
 
       const finalizeSql = mockExecute.mock.calls
@@ -345,9 +362,9 @@ describe("ingestion.delete-connection Inngest function", () => {
         step,
       });
 
-      const stepNames: string[] = (step.run as ReturnType<typeof vi.fn>).mock.calls.map(
-        (c) => c[0] as string,
-      );
+      const stepNames: string[] = (
+        step.run as ReturnType<typeof vi.fn>
+      ).mock.calls.map((c) => c[0] as string);
       expect(stepNames).not.toContain("finalize-deletion-job");
       const finalizeSql = mockExecute.mock.calls
         .map(([arg]) => sqlText(arg))
@@ -365,7 +382,11 @@ describe("ingestion.delete-connection Inngest function", () => {
         event: {
           data: {
             event: {
-              data: { deletionJobId: "djob-del-1", orgId: "org-del", workspaceId: "ws-del" },
+              data: {
+                deletionJobId: "djob-del-1",
+                orgId: "org-del",
+                workspaceId: "ws-del",
+              },
             },
             error: { message: "neo4j unreachable" },
           },
@@ -373,9 +394,9 @@ describe("ingestion.delete-connection Inngest function", () => {
         step,
       });
 
-      const stepNames: string[] = (step.run as ReturnType<typeof vi.fn>).mock.calls.map(
-        (c) => c[0] as string,
-      );
+      const stepNames: string[] = (
+        step.run as ReturnType<typeof vi.fn>
+      ).mock.calls.map((c) => c[0] as string);
       expect(stepNames).toContain("mark-deletion-job-failed");
 
       const failSql = mockExecute.mock.calls
@@ -420,7 +441,9 @@ describe("ingestion.delete-connection Inngest function", () => {
         });
 
         const stepRun = step.run as ReturnType<typeof vi.fn>;
-        const stepNames: string[] = stepRun.mock.calls.map((c) => c[0] as string);
+        const stepNames: string[] = stepRun.mock.calls.map(
+          (c) => c[0] as string,
+        );
         expect(stepNames[0]).toBe("mark-deleting");
       }
     });

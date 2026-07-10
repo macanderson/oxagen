@@ -57,8 +57,8 @@ export const APPEARANCE_BOOTSTRAP_SCRIPT =
 export function AppearanceBootstrap() {
   return (
     <script
-      // deliberate: pre-paint appearance bootstrap must be a classic inline
-      // script (see docblock).
+      // Deliberate dangerouslySetInnerHTML: the pre-paint appearance
+      // bootstrap must be a classic inline script (see docblock).
       dangerouslySetInnerHTML={{ __html: APPEARANCE_BOOTSTRAP_SCRIPT }}
     />
   );

@@ -293,7 +293,7 @@ export function McpServerList({
                 <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                   Status
                 </dt>
-                <dd className="mt-0.5 flex items-center gap-2">
+                <dd className="mt-0.5 flex flex-wrap items-center gap-2">
                   <Badge
                     variant={display.variant}
                     size="sm"
