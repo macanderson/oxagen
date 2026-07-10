@@ -141,6 +141,7 @@ import { pluginOrgUninstallRoute } from "./routes/v1/plugin.org.uninstall";
 import { pluginSetEnabledRoute } from "./routes/v1/plugin.set_enabled";
 import { pluginCredentialSetSecretRoute } from "./routes/v1/plugin.credential.set_secret";
 import { pluginCredentialReauthRoute } from "./routes/v1/plugin.credential.reauth";
+import { pluginCredentialRevokeRoute } from "./routes/v1/plugin.credential.revoke";
 // Environments + credential vault (Spec: 2026-06-24-credential-vault-…).
 import { environmentCreateRoute } from "./routes/v1/environment.create";
 import { environmentListRoute } from "./routes/v1/environment.list";
@@ -551,6 +552,7 @@ orgScoped.route(
   pluginCredentialSetSecretRoute,
 );
 orgScoped.route("/plugin/credential/reauth", pluginCredentialReauthRoute);
+orgScoped.route("/plugin/credential/revoke", pluginCredentialRevokeRoute);
 // Environments + credential vault.
 orgScoped.route("/environment/create", environmentCreateRoute);
 orgScoped.route("/environment/list", environmentListRoute);

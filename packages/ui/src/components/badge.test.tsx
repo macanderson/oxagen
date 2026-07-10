@@ -12,8 +12,15 @@ import { Badge, badgeVariants } from "./badge";
 // ── Variant map ─────────────────────────────────────────────────────────────
 
 describe("badgeVariants — class map", () => {
-  it("default variant includes bg-primary", () => {
-    expect(badgeVariants({})).toContain("bg-primary");
+  it("default variant is the outlined ink chip (border-current, transparent bg)", () => {
+    const cls = badgeVariants({});
+    expect(cls).toContain("border-current");
+    expect(cls).toContain("bg-transparent");
+    expect(cls).toContain("text-foreground");
+    // Never a filled primary/secondary surface, never monospace.
+    expect(cls).not.toContain("bg-primary");
+    expect(cls).not.toContain("bg-secondary");
+    expect(cls).not.toContain("font-mono");
   });
   it("secondary variant includes bg-secondary", () => {
     expect(badgeVariants({ variant: "secondary" })).toContain("bg-secondary");
@@ -21,11 +28,11 @@ describe("badgeVariants — class map", () => {
   it("destructive variant includes bg-destructive", () => {
     expect(badgeVariants({ variant: "destructive" })).toContain("bg-destructive");
   });
-  it("outline variant is the token-driven surface chip (badge-bg/fg/border)", () => {
+  it("outline variant aliases the default outlined ink chip", () => {
     const cls = badgeVariants({ variant: "outline" });
-    expect(cls).toContain("bg-badge-bg");
-    expect(cls).toContain("text-badge-fg");
-    expect(cls).toContain("border-badge-border");
+    expect(cls).toContain("border-current");
+    expect(cls).toContain("bg-transparent");
+    expect(cls).toContain("text-foreground");
   });
   it("muted variant includes bg-muted", () => {
     expect(badgeVariants({ variant: "muted" })).toContain("bg-muted");
@@ -41,6 +48,17 @@ describe("badgeVariants — class map", () => {
   });
   it("error variant maps to the bg-error status token", () => {
     expect(badgeVariants({ variant: "error" })).toContain("bg-error");
+  });
+  it("soft status variants use tinted fills with status ink", () => {
+    const cls = badgeVariants({ variant: "success-soft" });
+    expect(cls).toContain("bg-success/10");
+    expect(cls).toContain("text-success");
+    expect(badgeVariants({ variant: "warning-soft" })).toContain("text-warning");
+    expect(badgeVariants({ variant: "error-soft" })).toContain("text-error");
+    expect(badgeVariants({ variant: "info-soft" })).toContain("text-info");
+  });
+  it("base classes size embedded icons", () => {
+    expect(badgeVariants({})).toContain("[&_svg]:size-3");
   });
 
   it("sm size includes text-[10px]", () => {
@@ -65,7 +83,7 @@ describe("Badge — render", () => {
   });
 
   it("applies variant class", () => {
-    render(<Badge variant="outline">Beta</Badge>);
+    render(<Badge variant="secondary">Beta</Badge>);
     const el = screen.getByText("Beta");
     expect(el.className).toContain("bg-secondary");
   });
@@ -82,6 +100,22 @@ describe("Badge — render", () => {
     expect(el.className).toContain("my-badge");
   });
 
+  it("dot renders a leading currentColor dot", () => {
+    render(
+      <Badge variant="success-soft" dot>
+        Active
+      </Badge>,
+    );
+    const badge = screen.getByText("Active").closest("span");
+    expect(badge?.querySelector(".rounded-full.bg-current")).not.toBeNull();
+  });
+
+  it("no dot by default", () => {
+    render(<Badge>Plain</Badge>);
+    const badge = screen.getByText("Plain");
+    expect(badge.querySelector(".bg-current")).toBeNull();
+  });
+
   it("render-prop forwards children through a custom element", () => {
     render(
       <Badge render={<button type="button" />}>Action</Badge>
@@ -89,6 +123,6 @@ describe("Badge — render", () => {
     const btn = screen.getByRole("button", { name: "Action" });
     expect(btn).toBeInTheDocument();
     // Variant classes forwarded to the rendered element
-    expect(btn.className).toContain("bg-primary");
+    expect(btn.className).toContain("border-current");
   });
 });

@@ -119,7 +119,7 @@ describe("updateWorkspaceGeneralAction", () => {
     expect(mockInvoke).toHaveBeenCalledTimes(1);
     expect(mockInvoke).toHaveBeenCalledWith(
       "update_workspace_settings",
-      { name: "Research Renamed", slug: "research", description: "team space" },
+      { name: "Research Renamed", slug: "research", description: "team space", avatarUrl: null },
       expect.objectContaining({ orgId: "org-1", workspaceId: "ws-1", userId: "user-1" }),
       { surface: "agent" },
     );
@@ -189,7 +189,7 @@ describe("updateWorkspaceGeneralAction", () => {
 
     expect(mockInvoke).toHaveBeenCalledWith(
       "update_workspace_settings",
-      { name: "Research", slug: "research", description: null },
+      { name: "Research", slug: "research", description: null, avatarUrl: null },
       expect.anything(),
       { surface: "agent" },
     );
@@ -200,7 +200,7 @@ describe("updateWorkspaceGeneralAction", () => {
 
     expect(mockInvoke).toHaveBeenCalledWith(
       "update_workspace_settings",
-      { name: "Research", slug: "research", description: null },
+      { name: "Research", slug: "research", description: null, avatarUrl: null },
       expect.anything(),
       { surface: "agent" },
     );

@@ -138,7 +138,7 @@ vi.mock("lucide-react", () => ({
 import { ShellFrame } from "./shell-frame";
 
 const org = { id: "org-id-1", slug: "acme", name: "Acme Corp", publicId: "org_1" };
-const workspace = { id: "ws-id-1", orgId: "org-id-1", slug: "prod", name: "Production", publicId: "ws_1", description: "" };
+const workspace = { id: "ws-id-1", orgId: "org-id-1", slug: "prod", name: "Production", publicId: "ws_1", description: "", avatarUrl: null };
 const user = { id: "u1", name: "Alice", email: "alice@example.com", image: null };
 const navDataPromise: Promise<ShellNavData> = Promise.resolve({ availableOrgs: [], availableWorkspaces: [], balance: null });
 

@@ -3,7 +3,6 @@
 import * as React from "react";
 import { CreditCard, CheckCircle2, ArrowUpRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { changePlanAction } from "@/app/[orgSlug]/billing/actions";
 import { cn } from "@/lib/utils";
 
@@ -102,7 +101,7 @@ export default function BillingUpgradeInline({
           >
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium text-foreground">{plan.label}</span>
-              <Badge variant="muted" className="text-xs">{plan.price}</Badge>
+              <span className="text-xs font-medium text-muted-foreground">{plan.price}</span>
             </div>
             <p className="mt-0.5 text-xs text-muted-foreground">{plan.description}</p>
           </button>

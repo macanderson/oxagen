@@ -9,7 +9,6 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
 import { TruncatedText } from "@/components/ui/truncated-text";
 import { StructuredValue } from "../structured-value";
 
@@ -124,9 +123,7 @@ function StepRow({ step, index }: { step: ChainStep; index: number }): React.Rea
             <span className="w-3.5 shrink-0" />
           )}
           <span className="text-xs text-muted-foreground tabular-nums">{index + 1}.</span>
-          <Badge variant="outline" className="font-mono text-[10px]">
-            {step.capability}
-          </Badge>
+          <span className="text-xs text-muted-foreground">{step.capability}</span>
           {step.durationMs > 0 ? (
             <span className="ml-auto shrink-0 text-[10px] text-muted-foreground tabular-nums">
               {step.durationMs}ms
@@ -186,9 +183,9 @@ export default function CapabilityChainCard(
       <div className="flex items-center gap-2 border-b border-border/60 px-4 py-2.5">
         <Workflow className="size-4 shrink-0 text-primary" aria-hidden="true" />
         <span className="text-sm font-semibold">Composed chain</span>
-        <Badge variant="outline" className="ml-auto shrink-0">
+        <span className="ml-auto shrink-0 text-xs text-muted-foreground">
           {chain.executed ? `${succeeded}/${chain.steps.length} ran` : "Plan only"}
-        </Badge>
+        </span>
       </div>
 
       <div className="space-y-3 px-4 py-3">

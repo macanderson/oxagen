@@ -17,10 +17,6 @@ import CodingTracePanel from "./coding-trace-panel";
 
 afterEach(cleanup);
 
-vi.mock("@/components/ui/badge", () => ({
-  Badge: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
-}));
-
 vi.mock("@/components/ui/tabs", () => ({
   Tabs: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   TabsList: ({ children }: { children: React.ReactNode }) => <div role="tablist">{children}</div>,

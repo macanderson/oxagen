@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, afterEach, vi } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
 import GraphNodeCard from "./graph-node-card";
 
@@ -12,10 +12,6 @@ if (typeof globalThis.ResizeObserver === "undefined") {
     disconnect() {}
   };
 }
-
-vi.mock("@/components/ui/badge", () => ({
-  Badge: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
-}));
 
 afterEach(cleanup);
 
@@ -43,9 +39,11 @@ describe("GraphNodeCard", () => {
     expect(open?.getAttribute("href")).toBe("/acme/ws/knowledge/nodes/n_7");
   });
 
-  it("renders a graph.node.upsert result with a New badge", () => {
+  it("renders a graph.node.upsert result with a success-toned New label", () => {
     render(<GraphNodeCard output={{ nodeId: "n_9", created: true }} links={[]} />);
-    expect(screen.getByText("New")).toBeTruthy();
+    const newLabel = screen.getByText("New");
+    expect(newLabel).toBeTruthy();
+    expect(newLabel.className).toContain("text-success");
     expect(screen.getByText("n_9")).toBeTruthy();
   });
 

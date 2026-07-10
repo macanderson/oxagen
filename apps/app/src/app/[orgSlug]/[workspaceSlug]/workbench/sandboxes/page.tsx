@@ -1,14 +1,19 @@
 /**
- * page.tsx — Workspace → Workbench → Sandboxes (list).
+ * page.tsx — Workspace → Workbench → Sandboxes (first-class page).
  *
- * Lists the workspace's durable sandbox sessions (`list_sandboxes`) and hosts
- * the "warm a sandbox" panel. Data loads server-side via resolveWorkbenchScope +
- * listSandboxes; the client panel owns the template picker, start action, and
- * navigation to a session's detail page. Listing is a pure Postgres read and
- * works even when the durable driver is unconfigured — only warming/running
- * needs SANDBOX_ENABLED, which the client surfaces as a soft warning.
+ * Lists the workspace's durable sandbox sessions (`list_sandboxes`), hosts
+ * the "warm a sandbox" panel, and owns sandbox template configuration
+ * (moved here from workspace settings — sandbox config is a Workbench
+ * concern, not a settings one). Data loads server-side via
+ * resolveWorkbenchScope + listSandboxes; the client panel owns the template
+ * picker, start action, and navigation to a session's detail page. Listing
+ * is a pure Postgres read and works even when the durable driver is
+ * unconfigured — only warming/running needs SANDBOX_ENABLED, which the
+ * client surfaces as a soft warning.
  */
 import type { Metadata } from "next";
+import { logger } from "@oxagen/handlers/logger";
+import { PageHeader } from "@/components/ui/page-header";
 import { resolveWorkbenchScope } from "@/lib/workbench/scope";
 import {
   listSandboxes,
@@ -16,6 +21,26 @@ import {
   type SandboxSummary,
 } from "@/lib/workbench/sandboxes";
 import { SandboxesClient } from "./sandboxes-client";
+import { SandboxTemplatesPanel } from "./sandbox-templates-panel";
+import {
+  readEnvironmentsAction,
+  readSecretKeysAction,
+  type EnvironmentSummary,
+  type SecretKeySummary,
+} from "../environments/actions";
+import {
+  readTemplatesAction,
+  readToolSourcesAction,
+  createTemplateAction,
+  updateTemplateAction,
+  setTemplateToolsAction,
+  setDefaultTemplateAction,
+  deleteTemplateAction,
+  exportTemplateAction,
+  importTemplateAction,
+  type SandboxTemplateSummary,
+  type ToolSourceOption,
+} from "./sandbox-template-actions";
 
 export const metadata: Metadata = {
   title: "Sandboxes | Workbench",
@@ -43,21 +68,78 @@ export default async function WorkbenchSandboxesPage({ params }: PageProps) {
     sandboxes = [];
   }
 
+  // Environments + secret keys feed the template editor's binding pickers.
+  // Masked reads — values never cross to the client. Each read degrades to
+  // empty (logged) so a failure never blanks the sessions list above.
+  const scope = { orgSlug, workspaceSlug };
+  const [environments, secretKeys, templates, toolSources] = await Promise.all([
+    readEnvironmentsAction(scope).then(
+      (d) => d,
+      (err) => {
+        logger.error(
+          { err, orgSlug, workspaceSlug },
+          "sandboxes: readEnvironmentsAction failed — rendering empty environment options",
+        );
+        return [] as EnvironmentSummary[];
+      },
+    ),
+    readSecretKeysAction(scope).then(
+      (d) => d,
+      (err) => {
+        logger.error(
+          { err, orgSlug, workspaceSlug },
+          "sandboxes: readSecretKeysAction failed — rendering empty secret options",
+        );
+        return [] as SecretKeySummary[];
+      },
+    ),
+    readTemplatesAction(scope).then(
+      (d) => d,
+      (err) => {
+        logger.error(
+          { err, orgSlug, workspaceSlug },
+          "sandboxes: readTemplatesAction failed — rendering empty templates section",
+        );
+        return [] as SandboxTemplateSummary[];
+      },
+    ),
+    readToolSourcesAction(scope).then(
+      (d) => d,
+      () => [] as ToolSourceOption[],
+    ),
+  ]);
+
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-1">
-        <h2 className="text-lg font-semibold">Sandboxes</h2>
-        <p className="text-sm text-muted-foreground">
-          Durable code sandboxes agents build in — warm one from a template,
-          drive its terminal, and inspect its files.
-        </p>
+    <div className="flex flex-col gap-10">
+      <div className="flex flex-col gap-6">
+        <PageHeader
+          title="Sandboxes"
+          description="Durable code sandboxes agents build in — warm one from a template, drive its terminal, and inspect its files."
+          className="pb-0"
+        />
+        <SandboxesClient
+          orgSlug={orgSlug}
+          workspaceSlug={workspaceSlug}
+          initialSandboxes={sandboxes}
+          canManage={canManage}
+          unavailable={unavailable}
+        />
       </div>
-      <SandboxesClient
+      <SandboxTemplatesPanel
         orgSlug={orgSlug}
         workspaceSlug={workspaceSlug}
-        initialSandboxes={sandboxes}
         canManage={canManage}
-        unavailable={unavailable}
+        environments={environments}
+        secretKeys={secretKeys}
+        templates={templates}
+        toolSources={toolSources}
+        createTemplateAction={createTemplateAction}
+        updateTemplateAction={updateTemplateAction}
+        setTemplateToolsAction={setTemplateToolsAction}
+        setDefaultTemplateAction={setDefaultTemplateAction}
+        deleteTemplateAction={deleteTemplateAction}
+        exportTemplateAction={exportTemplateAction}
+        importTemplateAction={importTemplateAction}
       />
     </div>
   );

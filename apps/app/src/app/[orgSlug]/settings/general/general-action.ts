@@ -2,6 +2,7 @@
 import { z } from "zod";
 import { eq, and } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { avatarUrlSchema } from "@oxagen/oxagen/avatar";
 import { withTenantDb } from "@oxagen/database";
 import { schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
@@ -31,7 +32,8 @@ const OrgGeneralSchema = z.object({
       /^[a-z0-9]+(?:-[a-z0-9]+)*$/,
       "Slug must be lowercase letters, numbers, and single hyphens",
     ),
-  avatarUrl: z.string().url().max(2048).optional().or(z.literal("")),
+  // https URL or designed-avatar spec string — the canonical avatar validator.
+  avatarUrl: avatarUrlSchema.optional().or(z.literal("")),
 });
 
 // ---------------------------------------------------------------------------

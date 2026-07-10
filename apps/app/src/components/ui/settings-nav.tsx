@@ -85,11 +85,17 @@ export interface MobileSettingsNavProps {
 }
 
 /**
- * MobileSettingsNav — sub-md section switcher for settings pages.
+ * MobileSettingsNav — sub-md section switcher for settings-style pages.
  *
- * Sticky wrapper pinned above the fixed MobileBottomBar (same offset math as
- * the agent-builder step nav); `-mx-4 px-4` bleeds across the shell <main>'s
- * mobile `p-4` padding so the bar spans the full viewport width.
+ * FIXED to the viewport, docked flush on top of the MobileBottomBar — never
+ * sticky. Sticky positioning had two failure modes: on short pages the
+ * switcher floated mid-screen right after the content, and on long pages it
+ * hovered a bottom-bar-gap above the bar with content scrolling through the
+ * gap (the "margin below the nav" bug). Fixed positioning also makes DOM
+ * order irrelevant, so layouts can render this anywhere. An in-flow spacer
+ * reserves the switcher's height at the component's DOM position (render it
+ * after the page content) so the last content row is never hidden behind
+ * the fixed bar.
  */
 export function MobileSettingsNav({ items, label, className }: MobileSettingsNavProps) {
   const [open, setOpen] = React.useState(false);
@@ -101,10 +107,12 @@ export function MobileSettingsNav({ items, label, className }: MobileSettingsNav
 
   return (
     <>
+      {/* Spacer matching the switcher height (py-2 ×2 + h-11 button + border). */}
+      <div className="h-[3.8125rem] md:hidden" aria-hidden="true" />
       <div
         className={cn(
-          "sticky bottom-[calc(var(--bottom-bar-h)+var(--bottom-bar-gap,0px)+env(safe-area-inset-bottom))] z-10",
-          "-mx-4 mt-6 border-t border-border/60 bg-background/95 px-4 py-2 backdrop-blur md:hidden",
+          "fixed inset-x-0 bottom-[calc(var(--bottom-bar-h)+env(safe-area-inset-bottom))] z-30 md:hidden",
+          "border-t border-border/60 bg-background/95 px-4 py-2 backdrop-blur",
           className,
         )}
       >

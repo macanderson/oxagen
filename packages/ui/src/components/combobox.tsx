@@ -161,7 +161,7 @@ function ComboboxPopup({
         <ComboboxPrimitive.Popup
           className={cn(
             "relative z-50 w-[var(--anchor-width)] min-w-[8rem] overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md",
-            "origin-[var(--transform-origin)] transition-[opacity,transform] duration-[var(--motion-overlay)] ease-[var(--ease-entry)]",
+            "origin-[var(--transform-origin)] transition-[opacity,transform,translate,scale] duration-[var(--motion-overlay)] ease-[var(--ease-entry)]",
             "data-[starting-style]:opacity-0 data-[starting-style]:scale-[0.98] data-[starting-style]:-translate-y-1",
             "data-[ending-style]:opacity-0 data-[ending-style]:scale-[0.98] data-[ending-style]:-translate-y-1",
             className,

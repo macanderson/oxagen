@@ -82,8 +82,8 @@ vi.mock("@/components/ui/label", () => ({
   }) => <label htmlFor={htmlFor}>{children}</label>,
 }));
 
-vi.mock("@/components/media/avatar-upload", () => ({
-  AvatarUpload: ({
+vi.mock("@/components/avatar/avatar-maker", () => ({
+  AvatarMaker: ({
     value,
     onChange,
     disabled,
@@ -91,8 +91,9 @@ vi.mock("@/components/media/avatar-upload", () => ({
     value: string | null;
     onChange: (url: string) => void;
     disabled?: boolean;
-    fallback?: string;
+    name?: string;
     shape?: string;
+    entityLabel?: string;
   }) => (
     <button
       type="button"

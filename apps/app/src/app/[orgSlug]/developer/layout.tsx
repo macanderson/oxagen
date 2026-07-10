@@ -1,5 +1,6 @@
 import { PageHeader } from "@/components/ui/page-header";
 import { PageTabs } from "@/components/ui/page-tabs";
+import { MobileSettingsNav } from "@/components/ui/settings-nav";
 import { org } from "@/lib/routes";
 
 export default async function DeveloperLayout({
@@ -23,8 +24,9 @@ export default async function DeveloperLayout({
         title="Developer"
         description="MCP servers and access tokens."
       />
-      <PageTabs tabs={tabs} className="mb-6" />
+      <PageTabs tabs={tabs} className="mb-6 max-md:hidden" />
       {children}
+      <MobileSettingsNav items={tabs} label="Developer" />
     </div>
   );
 }

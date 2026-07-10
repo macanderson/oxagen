@@ -3,7 +3,6 @@ import * as React from "react";
 import { Radar, Loader2, CheckCircle2, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { safeHref } from "@/lib/safe-url";
-import { Badge } from "@/components/ui/badge";
 import { TruncatedText } from "@/components/ui/truncated-text";
 
 /**
@@ -102,22 +101,22 @@ function readSwarm(output: unknown): SwarmShape {
 function StatusBadge({ status }: { status: string }): React.ReactElement {
   if (status === "complete") {
     return (
-      <Badge variant="outline" className="gap-1 text-success">
+      <span className="inline-flex items-center gap-1 text-xs font-medium text-success">
         <CheckCircle2 className="size-3" aria-hidden="true" /> Complete
-      </Badge>
+      </span>
     );
   }
   if (status === "failed") {
     return (
-      <Badge variant="outline" className="gap-1 text-error">
+      <span className="inline-flex items-center gap-1 text-xs font-medium text-destructive">
         <XCircle className="size-3" aria-hidden="true" /> Failed
-      </Badge>
+      </span>
     );
   }
   return (
-    <Badge variant="outline" className="gap-1 text-muted-foreground">
+    <span className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground">
       <Loader2 className="size-3 animate-spin" aria-hidden="true" /> Running
-    </Badge>
+    </span>
   );
 }
 
