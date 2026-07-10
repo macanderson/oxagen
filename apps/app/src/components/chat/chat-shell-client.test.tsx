@@ -69,6 +69,12 @@ vi.mock("./message-composer", () => ({
 
 // ── UI/component stubs ───────────────────────────────────────────────────────
 vi.mock("./message-tree", () => ({ MessageTree: () => null }));
+// Stub the empty-state gallery: its real import chain (agent-picker-panel →
+// motion/react, lucide-react, @oxagen/ui) takes ~19s to load under vitest,
+// which pushes the file's first test past the 20s timeout.
+vi.mock("./agent-picker/agent-gallery", () => ({
+  AgentGallery: () => <div data-testid="agent-gallery" />,
+}));
 vi.mock("./suggested-prompt-chips", () => ({ SuggestedPromptChips: () => null }));
 vi.mock("./coding-trace-panel", () => ({
   CodingTracePanel: () => <div data-testid="coding-trace-panel" />,
