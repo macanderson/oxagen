@@ -1,8 +1,8 @@
 /**
  * write.ts — Scaffold a new slash command for `oxagen command new`.
  */
-import { writeFileSync, existsSync, mkdirSync } from "node:fs";
-import { join, dirname } from "node:path";
+import { join } from "node:path";
+import { scaffoldMarkdownFile } from "../lib/markdown-registry.js";
 
 const TEMPLATE = (name: string) => `---
 description: Describe what /${name} does.
@@ -16,14 +16,15 @@ all arguments, or $1, $2, … for positional ones.
 `;
 
 /** Write a starter slash command to `.oxagen/commands/<name>.md`. */
-export function scaffoldCommand(opts: { name: string; cwd?: string; dir?: string }): {
+export function scaffoldCommand(opts: {
+  name: string;
+  cwd?: string;
+  dir?: string;
+}): {
   path: string;
   created: boolean;
 } {
-  const dir = opts.dir ?? join(opts.cwd ?? process.cwd(), ".oxagen", "commands");
-  const path = join(dir, `${opts.name}.md`);
-  if (existsSync(path)) return { path, created: false };
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, TEMPLATE(opts.name), "utf8");
-  return { path, created: true };
+  const dir =
+    opts.dir ?? join(opts.cwd ?? process.cwd(), ".oxagen", "commands");
+  return scaffoldMarkdownFile({ dir, name: opts.name, template: TEMPLATE });
 }

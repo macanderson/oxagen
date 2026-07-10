@@ -7,12 +7,14 @@
  *   3. <project>/.oxagen/rules/*.md  (oxagen project rules)
  *
  * Frontmatter keys: description, guard-tool, guard-deny-path, guard-deny-command.
- * The body is the rule text. Reuses the agent loader's frontmatter parser.
+ * The body is the rule text. Reuses the shared markdown-registry frontmatter parser.
  */
-import { readdirSync, existsSync, readFileSync } from "node:fs";
 import { join, basename } from "node:path";
 import { homedir } from "node:os";
-import { parseFrontmatter } from "../agents/loader.js";
+import {
+  loadMarkdownRegistry,
+  readMarkdownFile,
+} from "../lib/markdown-registry.js";
 import type { Rule, RuleGuard } from "./types.js";
 
 export interface LoadRulesOptions {
@@ -34,46 +36,32 @@ function guardFrom(data: Record<string, string>): RuleGuard | undefined {
   return guard;
 }
 
-function ruleFromFile(path: string): Rule | null {
-  let raw: string;
-  try {
-    raw = readFileSync(path, "utf8");
-  } catch {
-    return null;
-  }
-  const { data, body } = parseFrontmatter(raw);
+function ruleFromFile(path: string): { key: string; value: Rule } | null {
+  const fm = readMarkdownFile(path);
+  if (!fm) return null;
+  const { data, body } = fm;
   const id = data["name"] || basename(path).replace(/\.md$/, "");
   if (!id || !body.trim()) return null; // a rule needs a name and a statement
   return {
-    id,
-    description: data["description"] ?? "",
-    text: body.trim(),
-    guard: guardFrom(data),
-    source: path,
+    key: id,
+    value: {
+      id,
+      description: data["description"] ?? "",
+      text: body.trim(),
+      guard: guardFrom(data),
+      source: path,
+    },
   };
-}
-
-function loadDir(dir: string, into: Map<string, Rule>): void {
-  if (!existsSync(dir)) return;
-  let files: string[];
-  try {
-    files = readdirSync(dir).filter((f) => f.endsWith(".md"));
-  } catch {
-    return;
-  }
-  for (const file of files.sort()) {
-    const rule = ruleFromFile(join(dir, file));
-    if (rule) into.set(rule.id, rule);
-  }
 }
 
 /** Load every workspace rule visible from `cwd`, merged by name across sources. */
 export function loadRules(opts: LoadRulesOptions = {}): Rule[] {
   const cwd = opts.cwd ?? process.cwd();
-  const userDir = opts.userRulesDir ?? join(homedir(), ".config", "oxagen", "rules");
-  const registry = new Map<string, Rule>();
-  loadDir(userDir, registry);
-  loadDir(join(cwd, ".claude", "rules"), registry);
-  loadDir(join(cwd, ".oxagen", "rules"), registry);
+  const userDir =
+    opts.userRulesDir ?? join(homedir(), ".config", "oxagen", "rules");
+  const registry = loadMarkdownRegistry(
+    [userDir, join(cwd, ".claude", "rules"), join(cwd, ".oxagen", "rules")],
+    ruleFromFile,
+  );
   return [...registry.values()];
 }
