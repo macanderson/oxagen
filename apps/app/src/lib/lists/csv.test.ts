@@ -104,7 +104,7 @@ describe("downloadCsv", () => {
     expect(createObjectURL).toHaveBeenCalledTimes(1);
     const blobArg = (createObjectURL.mock.calls[0] as unknown[])?.[0] as Blob;
     expect(blobArg).toBeInstanceOf(Blob);
-    expect(blobArg.type).toBe("text/csv;charset=utf-8;");
+    expect(blobArg?.type).toBe("text/csv;charset=utf-8;");
     expect(revokeObjectURL).toHaveBeenCalledWith("blob:mock-url");
   });
 
