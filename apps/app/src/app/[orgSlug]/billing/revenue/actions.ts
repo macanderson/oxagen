@@ -60,8 +60,11 @@ async function invokeReseller<T>(
     surface: "app" as const,
     messageId: null as string | null,
   };
+  // No opts.surface: the reseller contracts expose ["api","mcp"], and claiming
+  // "agent" from the app made the kernel surface-deny every mutation on this
+  // page (the equip-sources pattern — app-side invokes omit the surface claim).
   return runInTenantScope({ orgId, workspaceId: ORG_ONLY_WS }, () =>
-    invoke(name, input, ctx, { surface: "agent" }),
+    invoke(name, input, ctx),
   ) as Promise<T>;
 }
 

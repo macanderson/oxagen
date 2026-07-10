@@ -159,7 +159,10 @@ export function AgentsGrid({ agents }: { agents: AgentGridRow[] }) {
 
               {/* LLM-inferred summary (≤256 chars server-side); clamped so
                   cards stay even in the grid. */}
-              <p className="line-clamp-3 min-h-10 text-sm text-muted-foreground">
+              <p
+                className="line-clamp-3 min-h-10 text-sm text-muted-foreground"
+                data-testid={`agent-blurb-${agent.slug}`}
+              >
                 {blurbOf(agent)}
               </p>
 

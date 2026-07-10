@@ -43,12 +43,17 @@ test("Marketplace → Integrations links to the in-app connector setup wizard", 
 test("Connector setup wizard renders the schema-driven form and installs the connector", async ({
   page,
 }) => {
+  test.setTimeout(120_000);
   const user = await signUpFreshUser(page);
 
+  // Short timeout: the schema is normally SSR-prefetched so this request never
+  // fires — with the default 30s the await below burned half the test budget
+  // before the form assertions even started.
   const schemaResponse = page.waitForResponse(
     (res) =>
       res.url().includes("/plugin-schema/google-drive") &&
       res.request().method() === "GET",
+    { timeout: 5_000 },
   );
   await page.goto(
     `/${user.orgSlug}/default/marketplace/integrations/google-drive`,
@@ -71,9 +76,16 @@ test("Connector setup wizard renders the schema-driven form and installs the con
   }
 
   // Schema-driven config fields render (no OAuth auth fields — see file header).
-  const sharedDrivesToggle = page.getByLabel("Shared Drives Only");
+  // getByRole("switch"), not getByLabel: the Base UI Switch renders BOTH a
+  // role=switch span and a hidden native checkbox associated with the same
+  // label, so getByLabel resolves to 2 elements and trips strict mode.
+  const sharedDrivesToggle = page.getByRole("switch", {
+    name: "Shared Drives Only",
+  });
   await expect(sharedDrivesToggle).toBeVisible();
-  await expect(page.getByLabel("Exclude Trashed Files")).toBeChecked();
+  await expect(
+    page.getByRole("switch", { name: "Exclude Trashed Files" }),
+  ).toBeChecked();
 
   // Form interaction: toggle a config field and confirm the control reflects it.
   await sharedDrivesToggle.click();
