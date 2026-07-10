@@ -4,7 +4,7 @@ import { Bot, ChevronDown, Code2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverTrigger, PopoverPopup } from "@/components/ui/popover";
-import { EntityAvatar } from "@/components/avatar/entity-avatar";
+import { AgentAvatar } from "./agent-avatar";
 import { AgentPickerPanel } from "./agent-picker-panel";
 import type { RepoOption } from "../repo-selector";
 import type { EnvironmentOption } from "../environment-selector";
@@ -73,10 +73,11 @@ export function AgentContextChip({
         }
       >
         {selected ? (
-          <EntityAvatar
-            value={selected.avatarUrl}
+          <AgentAvatar
+            avatarUrl={selected.avatarUrl}
             name={selected.name}
-            size="xs"
+            slug={selected.slug}
+            size="sm"
             shape="square"
           />
         ) : (

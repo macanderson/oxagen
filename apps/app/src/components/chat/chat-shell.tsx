@@ -5,11 +5,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ChatShellClient } from "./chat-shell-client";
 import { BackgroundTaskTray } from "./background-task-tray";
 import { resolvedTierCatalog } from "@oxagen/ai";
-import type { ComposerModelState, WorkspaceBudgetGovernance } from "./model-picker";
+import type {
+  ComposerModelState,
+  WorkspaceBudgetGovernance,
+} from "./model-picker";
 import type { McpServerSummary } from "./mcp-types";
 import type { RepoOption } from "./repo-selector";
 import type { EnvironmentOption } from "./environment-selector";
-import type { AgentOption } from "./agent-selector";
+import type { AgentOption } from "./agent-picker/agent-picker-types";
 
 export { type ChatMessage, type MessageAttachment } from "./message-bubble";
 // The prop contract lives in chat-shell-props.ts (a type-only leaf) so
@@ -44,9 +47,13 @@ export function ChatShell({
   availableRepos,
   availableEnvironments,
   availableAgents,
+  defaultAgentId,
+  defaultRepoConnectionId,
+  defaultRepoSlug,
+  defaultEnvironmentId,
+  setDefaultAgentAction,
   workspaceBudgetGovernance,
   agentId,
-  boundAgentName,
 }: ChatShellProps) {
   return (
     <>
@@ -70,9 +77,13 @@ export function ChatShell({
           availableRepos={availableRepos}
           availableEnvironments={availableEnvironments}
           availableAgents={availableAgents}
+          defaultAgentId={defaultAgentId}
+          defaultRepoConnectionId={defaultRepoConnectionId}
+          defaultRepoSlug={defaultRepoSlug}
+          defaultEnvironmentId={defaultEnvironmentId}
+          setDefaultAgentAction={setDefaultAgentAction}
           workspaceBudgetGovernance={workspaceBudgetGovernance}
           agentId={agentId}
-          boundAgentName={boundAgentName}
         />
       </Suspense>
       <BackgroundTaskTray
@@ -103,9 +114,13 @@ async function AsyncShell({
   availableRepos,
   availableEnvironments,
   availableAgents,
+  defaultAgentId,
+  defaultRepoConnectionId,
+  defaultRepoSlug,
+  defaultEnvironmentId,
+  setDefaultAgentAction,
   workspaceBudgetGovernance,
   agentId,
-  boundAgentName,
 }: {
   promise: Promise<ChatMessage[]>;
   conversationId: string | null;
@@ -125,9 +140,15 @@ async function AsyncShell({
   availableRepos?: RepoOption[];
   availableEnvironments?: EnvironmentOption[];
   availableAgents?: AgentOption[];
+  defaultAgentId?: string | null;
+  defaultRepoConnectionId?: string | null;
+  defaultRepoSlug?: string | null;
+  defaultEnvironmentId?: string | null;
+  setDefaultAgentAction?: (
+    agentId: string | null,
+  ) => Promise<{ ok: boolean; error?: string }>;
   workspaceBudgetGovernance?: WorkspaceBudgetGovernance | null;
   agentId?: string | null;
-  boundAgentName?: string | null;
 }) {
   const messages = await promise;
   const modelConfig = resolvedTierCatalog();
@@ -152,9 +173,13 @@ async function AsyncShell({
       availableRepos={availableRepos}
       availableEnvironments={availableEnvironments}
       availableAgents={availableAgents}
+      defaultAgentId={defaultAgentId}
+      defaultRepoConnectionId={defaultRepoConnectionId}
+      defaultRepoSlug={defaultRepoSlug}
+      defaultEnvironmentId={defaultEnvironmentId}
+      setDefaultAgentAction={setDefaultAgentAction}
       workspaceBudgetGovernance={workspaceBudgetGovernance}
       agentId={agentId}
-      boundAgentName={boundAgentName}
     />
   );
 }

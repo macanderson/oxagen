@@ -14,7 +14,7 @@ import { fadeInUp, staggerContainer, transition } from "@oxagen/ui/lib/motion";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { SearchInput } from "@/components/ui/search-input";
-import { EntityAvatar } from "@/components/avatar/entity-avatar";
+import { AgentAvatar } from "./agent-avatar";
 import { RepoSelector, type RepoOption } from "../repo-selector";
 import {
   EnvironmentSelector,
@@ -218,10 +218,11 @@ export function AgentPickerPanel({
                 <ArrowLeft className="size-4" />
               </Button>
               <div className="flex min-w-0 items-center gap-2">
-                <EntityAvatar
-                  value={setupAgent.avatarUrl}
+                <AgentAvatar
+                  avatarUrl={setupAgent.avatarUrl}
                   name={setupAgent.name}
-                  size="sm"
+                  slug={setupAgent.slug}
+                  size="md"
                   shape="square"
                 />
                 <span className="truncate text-sm font-medium">
@@ -231,8 +232,11 @@ export function AgentPickerPanel({
               </div>
             </div>
             <p className="text-xs text-muted-foreground">
-              Where should this agent work? Pick the repository and environment
-              for this session.
+              Where should{" "}
+              <span className="font-medium text-foreground">
+                {setupAgent.name}
+              </span>{" "}
+              work? Pick the repository and environment for this session.
             </p>
             <div className="flex flex-col gap-2">
               <RepoSelector
@@ -322,10 +326,11 @@ export function AgentPickerPanel({
                     }}
                     reduce={reduce}
                     avatar={
-                      <EntityAvatar
-                        value={agent.avatarUrl}
+                      <AgentAvatar
+                        avatarUrl={agent.avatarUrl}
                         name={agent.name}
-                        size="md"
+                        slug={agent.slug}
+                        size={variant === "gallery" ? "md" : "sm"}
                         shape="square"
                       />
                     }

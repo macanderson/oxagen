@@ -2,17 +2,17 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 import { AgentPickerPanel } from "./agent-picker-panel";
+import { useComposerSelectionState } from "./chat-selection-context";
 import type { RepoOption } from "../repo-selector";
 import type { EnvironmentOption } from "../environment-selector";
 import type { AgentOption } from "./agent-picker-types";
-import type { AgentSelectionApply } from "./chat-selection-context";
 
 /**
  * agent-gallery.tsx — the new-conversation empty-state hero. Presents the same
  * `AgentPickerPanel` as a welcoming "Choose your assistant" gallery so a fresh
- * chat starts by picking who to talk to. Pure controlled: selection + apply
- * flow through props (chat-shell-client reads the shared store), and the
- * gallery collapses away once the first message sends.
+ * chat starts by picking who to talk to. Reads the shared selection store (the
+ * same one the composer chip drives) and applies picks to it; the parent
+ * collapses the gallery away once the first message sends.
  */
 export interface AgentGalleryProps {
   agents: AgentOption[];
@@ -22,10 +22,6 @@ export interface AgentGalleryProps {
   defaultEnvId: string | null;
   defaultAgentId: string | null;
   onSetDefaultAgent?: (agentId: string | null) => void;
-  selectedAgentId: string | null;
-  selectedRepoKey: string | null;
-  selectedEnvId: string | null;
-  onApply: (sel: AgentSelectionApply) => void;
   className?: string;
 }
 
@@ -37,12 +33,15 @@ export function AgentGallery({
   defaultEnvId,
   defaultAgentId,
   onSetDefaultAgent,
-  selectedAgentId,
-  selectedRepoKey,
-  selectedEnvId,
-  onApply,
   className,
 }: AgentGalleryProps) {
+  const {
+    selectedAgentId,
+    selectedRepoKey,
+    selectedEnvId,
+    applyAgentSelection,
+  } = useComposerSelectionState();
+
   // A workspace with no agents keeps the plain empty state — nothing to pick.
   if (agents.length === 0) return null;
 
@@ -74,7 +73,7 @@ export function AgentGallery({
         selectedAgentId={selectedAgentId}
         selectedRepoKey={selectedRepoKey}
         selectedEnvId={selectedEnvId}
-        onApply={onApply}
+        onApply={applyAgentSelection}
       />
     </div>
   );
