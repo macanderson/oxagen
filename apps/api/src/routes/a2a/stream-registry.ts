@@ -1,3 +1,4 @@
+import { logger } from "../../middleware/logger";
 import type { A2AArtifactUpdateEvent, A2AStatusUpdateEvent } from "./protocol";
 
 type A2AStreamEvent = A2AStatusUpdateEvent | A2AArtifactUpdateEvent;
@@ -33,10 +34,7 @@ export function publish(taskId: string, event: A2AStreamEvent): void {
     } catch (err) {
       // A misbehaving listener must never break delivery to the others, or
       // corrupt the publisher's (bridge.ts) own execution flow.
-      console.error(
-        "[a2a.stream-registry] listener threw:",
-        err instanceof Error ? err.message : String(err),
-      );
+      logger.warn({ err, taskId }, "[a2a.stream-registry] listener threw");
     }
   }
 }

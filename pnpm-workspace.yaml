@@ -8,7 +8,7 @@ packages:
   # the @oxagen/bench-web dashboard launched via `pnpm eval:app`.
   - "bench/*"
 
-# pnpm 10 reads these settings from pnpm-workspace.yaml only — the
+# pnpm 11 reads these settings from pnpm-workspace.yaml only — the
 # package.json#pnpm field is ignored (pnpm warns on every install).
 overrides:
   drizzle-orm: 0.45.2

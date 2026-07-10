@@ -38,7 +38,16 @@ function logTelemetry(hookInput: HookInput) {
   try {
     fs.appendFileSync(TELEMETRY_LOG, JSON.stringify(entry) + '\n');
   } catch (error) {
-    // Silently fail to not disrupt the user's workflow
+    // Best-effort local telemetry log — a write failure must never disrupt the
+    // user's workflow, but leave an OXAGEN_DEBUG-gated breadcrumb (house style)
+    // so the drop is diagnosable when debugging the hook itself.
+    if (process.env['OXAGEN_DEBUG']) {
+      process.stderr.write(
+        `[claude-telemetry-logger] appendFileSync failed: ${
+          error instanceof Error ? error.message : String(error)
+        }\n`,
+      );
+    }
   }
 }
 

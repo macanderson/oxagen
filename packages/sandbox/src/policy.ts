@@ -17,6 +17,12 @@ export const DEFAULT_POLICY: SandboxPolicy = {
 };
 
 export class SandboxPolicyError extends Error {
+  // Stable, message-independent code so the capability layer can duck-type this
+  // low-level infra error and re-surface it as a structured, user-visible
+  // capability error (→ 400 invalid_input) instead of a leaked 500 — mirroring
+  // how the sibling sandbox handlers carry a stable `code`. See the mapping in
+  // packages/agent/src/handlers/agent.code.execute.ts.
+  readonly code = "sandbox_policy_violation" as const;
   constructor(message: string) {
     super(message);
     this.name = "SandboxPolicyError";

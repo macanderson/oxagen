@@ -37,8 +37,9 @@
  * CURRENT SKIN: "Oxagen Tangerine" — split-hue neutrals (warm off-white surfaces
  * in light, cool narwhal near-black surfaces in dark), tuned for DRAMATIC
  * contrast: warm paper + crisp white panels in light, narwhal (#0B0D16) page +
- * stepped inky-blue panels in dark. Card and table HEADERS are dark bars in both
- * modes. Colour is concentrated in the tangerine primary (#FD9A4B — the mark
+ * stepped inky-blue panels in dark. Card and table HEADERS are flat — they sit
+ * on the surface with hairline borders, never shaded bars. Colour is
+ * concentrated in the tangerine primary (#FD9A4B — the mark
  * start, CTAs, focus rings, the active-tab underline, default badges), a rose
  * secondary (#EB5C5E — secondary buttons/badges, the mark end), and a teak accent
  * (#794036 — hover/selected) — never smeared across every surface. Errors use a
@@ -76,9 +77,6 @@
     --_paper: oklch(0.981 0.0015 264);   /* clean cool off-white (was warm #F8F6F1) */
     --_ink: oklch(0.182 0.019 266.5);    /* #101319 — cool near-black ink (hsl 222 30% 8%) */
     --_ink-white: oklch(0.948 0.006 67.8); /* #F1EEEA — warm soft white (hsl 30 20% 93%) */
-
-    /* Header bar — dark in light mode (re-declared to a stepped charcoal in .dark). */
-    --_header-dark: oklch(0.214 0.022 267.8);  /* #16181F — narwhal charcoal header bar (light) */
 
     /* Named brand swatches. Tangerine is the primary accent; rose the secondary;
        ox-indigo* the cool link accent. --ox-rust is retained (name stability) and
@@ -260,12 +258,9 @@
      *    shaded band), with just the hairline `border-b` in card.tsx separating
      *    it from the body. Re-declared in .dark / the dark media-query block so
      *    it tracks --card there too rather than freezing to the light value.
-     *    TABLE header keeps the dramatic dark charcoal bar with soft-white ink
-     *    in both modes. ─────────────────────────────────────────────────────── */
+     *    TABLE headers are flat too: transparent, muted ink, no bar. ────────── */
     --card-header-bg: var(--card);
     --card-header-fg: var(--foreground);
-    --table-header-bg: var(--_header-dark);
-    --table-header-fg: var(--_ink-white);
 
     /* ── Tabs (keep a constant rest border so the active underline never shifts
      *    layout — only the COLOR changes between states). ──────────────────── */
@@ -415,11 +410,9 @@
     --sidebar-ring: var(--ring);
 
     /* Card header: flat — matches the card surface exactly, no shaded band.
-     * Its ink flips back to the soft white here. Table header keeps the
-     * elevated charcoal bar. */
+     * Its ink flips back to the soft white here. */
     --card-header-bg: var(--card);
     --card-header-fg: var(--foreground);
-    --table-header-bg: var(--_stone-800);
 
     --overlay-scrim: oklch(0 0 0 / 0.6);
 
@@ -530,10 +523,9 @@
       --sidebar-ring: var(--ring);
 
       /* Card header: flat — matches the card surface exactly, no shaded band.
-       * Ink flips to soft white. Table header keeps the elevated charcoal bar. */
+       * Ink flips to soft white. */
       --card-header-bg: var(--card);
       --card-header-fg: var(--foreground);
-      --table-header-bg: var(--_stone-800);
 
       --overlay-scrim: oklch(0 0 0 / 0.6);
 
@@ -683,11 +675,9 @@
   --color-app-link-hover-fg: var(--app-link-hover-fg);
   --color-app-link-active-fg: var(--app-link-active-fg);
 
-  /* Headers (card + table) */
+  /* Headers (card) */
   --color-card-header-bg: var(--card-header-bg);
   --color-card-header-fg: var(--card-header-fg);
-  --color-table-header-bg: var(--table-header-bg);
-  --color-table-header-fg: var(--table-header-fg);
 
   /* Tabs */
   --color-tab-fg: var(--tab-fg);
@@ -860,22 +850,16 @@
   }
 
   /*
-   * Tables — dark header bar by default. Graphite gives every plain <table> a
-   * charcoal header in light mode and an elevated charcoal in dark mode, with no
-   * per-table classes. :where() keeps ZERO specificity so a one-off table can
-   * still override via utilities; cell padding/alignment stay each table's own
-   * utilities — only the header COLOR is themed here. (Any table that set its
-   * own header bg/fg utilities must drop them so these tokens show through.)
+   * Tables — flat, quiet headers by default: no background bar, muted ink, a
+   * medium weight. :where() keeps ZERO specificity so any table can override
+   * via utilities; cell padding/alignment stay each table's own utilities —
+   * only the header ink + rhythm are themed here.
    */
-  :where(table) thead {
-    background-color: var(--table-header-bg);
-    color: var(--table-header-fg);
-  }
   :where(table) thead :where(th) {
-    color: var(--table-header-fg);
-    font-weight: 600;
+    color: var(--muted-foreground);
+    font-weight: 500;
     /* Baseline vertical rhythm so even bare tables (header cells with only
-       padding-bottom) read as a balanced dark bar. Tables that set their own
+       padding-bottom) keep a balanced header row. Tables that set their own
        py-* utility win (longhand > this shorthand's matching side). */
     padding-block: 0.5rem;
   }

@@ -51,7 +51,7 @@ jobs:
         working-directory: packages/database
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install Atlas
         uses: ariga/setup-atlas@v0

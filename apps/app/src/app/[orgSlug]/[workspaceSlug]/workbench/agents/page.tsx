@@ -3,7 +3,6 @@ import Link from "next/link";
 import { Bot, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
-// import { CopyableId } from "@/components/knowledge/graph-explorer/copyable-id";
 import { workspace } from "@/lib/routes";
 import type { ScopeContext } from "@/lib/scope";
 import { resolveWorkbenchScope } from "@/lib/workbench/scope";

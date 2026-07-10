@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { slugify } from "@/lib/slug";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -157,9 +158,6 @@ function EnvironmentsBar({
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
-
-  const slugify = (n: string) =>
-    n.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 
   return (
     <section className="flex flex-col gap-2">

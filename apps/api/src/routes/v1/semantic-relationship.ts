@@ -7,12 +7,12 @@
  *   semantic.relationship.approve POST /semantic-relationships/:edgeId/decide
  *   semantic.relationship.infer   POST /semantic-relationships/infer
  *
- * This file is mounted at BOTH:
- *   /v1/:org/:ws/semantic-relationships   (canonical new path)
- *   /v1/:org/:ws/semantic-edges           (deprecated alias — kept during alias window)
+ * This capability is reachable at BOTH paths, via two files:
+ *   /v1/:org/:ws/semantic-relationships   (canonical — served by this file)
+ *   /v1/:org/:ws/semantic-edges           (deprecated alias — served by the sibling semantic-edge.ts)
  *
- * The old semantic-edge.ts route imports from semantic.edge.* contracts which
- * are now deprecation re-exports to semantic.relationship.*. This file directly
+ * semantic-edge.ts imports from the semantic.edge.* contracts, which are now
+ * deprecation re-exports of semantic.relationship.*. This file directly
  * imports the canonical contracts.
  */
 

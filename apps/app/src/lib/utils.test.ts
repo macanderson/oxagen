@@ -1,8 +1,18 @@
 /**
- * utils.test.ts — unit tests for cn, formatCents, formatDate.
+ * utils.test.ts — unit tests for cn, formatCents, formatDate, formatDateTime,
+ * formatDateTimeWithSeconds, formatBytes, truncate, formatDuration.
  */
 import { describe, it, expect } from "vitest";
-import { cn, formatCents, formatDate } from "./utils";
+import {
+  cn,
+  formatCents,
+  formatDate,
+  formatDateTime,
+  formatDateTimeWithSeconds,
+  formatBytes,
+  truncate,
+  formatDuration,
+} from "./utils";
 
 // ---------------------------------------------------------------------------
 // cn — className merger
@@ -109,5 +119,110 @@ describe("formatDate", () => {
     const result = formatDate("2026-12-25");
     expect(result).toMatch(/Dec/);
     expect(result).toMatch(/2026/);
+  });
+
+  it("returns the original string for an unparseable date string", () => {
+    expect(formatDate("not-a-date")).toBe("not-a-date");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// formatDateTime — date + hour:minute
+// ---------------------------------------------------------------------------
+
+describe("formatDateTime", () => {
+  it("returns '—' for null/undefined", () => {
+    expect(formatDateTime(null)).toBe("—");
+    expect(formatDateTime(undefined)).toBe("—");
+  });
+
+  it("formats date + time with 2-digit hour/minute", () => {
+    const result = formatDateTime(new Date("2026-01-05T14:03:00.000Z"));
+    expect(result).toMatch(/Jan 5, 2026/);
+    expect(result).toMatch(/\d{2}:\d{2}/);
+  });
+
+  it("returns the original string for an unparseable date string", () => {
+    expect(formatDateTime("garbage")).toBe("garbage");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// formatDateTimeWithSeconds — date + hour:minute:second
+// ---------------------------------------------------------------------------
+
+describe("formatDateTimeWithSeconds", () => {
+  it("returns '—' for null/undefined", () => {
+    expect(formatDateTimeWithSeconds(null)).toBe("—");
+    expect(formatDateTimeWithSeconds(undefined)).toBe("—");
+  });
+
+  it("formats date + time + seconds", () => {
+    const result = formatDateTimeWithSeconds(new Date("2026-01-05T14:03:07.000Z"));
+    expect(result).toMatch(/Jan 5, 2026/);
+    expect(result).toMatch(/\d{2}:\d{2}:\d{2}/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// formatBytes — human-readable byte formatting
+// ---------------------------------------------------------------------------
+
+describe("formatBytes", () => {
+  it("formats bytes below 1 KB", () => {
+    expect(formatBytes(512)).toBe("512 B");
+  });
+
+  it("formats 0 bytes", () => {
+    expect(formatBytes(0)).toBe("0 B");
+  });
+
+  it("formats KB range with one decimal", () => {
+    expect(formatBytes(1536)).toBe("1.5 KB");
+  });
+
+  it("formats MB range with one decimal", () => {
+    expect(formatBytes(2.5 * 1024 * 1024)).toBe("2.5 MB");
+  });
+
+  it("formats GB range with one decimal", () => {
+    expect(formatBytes(1.5 * 1024 * 1024 * 1024)).toBe("1.5 GB");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// truncate — ellipsis truncation
+// ---------------------------------------------------------------------------
+
+describe("truncate", () => {
+  it("returns the string unchanged when at or under max", () => {
+    expect(truncate("short", 40)).toBe("short");
+  });
+
+  it("truncates long strings, keeping total length at max", () => {
+    const out = truncate("abcdefghij", 5);
+    expect(out).toBe("abcd…");
+    expect(out.length).toBe(5);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// formatDuration — human duration from milliseconds
+// ---------------------------------------------------------------------------
+
+describe("formatDuration", () => {
+  it("formats sub-second durations with 'ms' suffix", () => {
+    expect(formatDuration(0)).toBe("0ms");
+    expect(formatDuration(999)).toBe("999ms");
+  });
+
+  it("formats seconds with one decimal", () => {
+    expect(formatDuration(1000)).toBe("1.0s");
+    expect(formatDuration(1500)).toBe("1.5s");
+  });
+
+  it("formats minutes + floored seconds", () => {
+    expect(formatDuration(60_000)).toBe("1m 0s");
+    expect(formatDuration(90_000)).toBe("1m 30s");
   });
 });

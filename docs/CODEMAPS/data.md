@@ -1,4 +1,4 @@
-<!-- Generated: 2026-07-06 | Files scanned: 37 (database pkg), 46 migrations | Token estimate: ~900 -->
+<!-- Generated: 2026-07-06, corrections applied 2026-07-10 | Files scanned: 23 (database pkg schema/), 55 migrations | Token estimate: ~900 -->
 
 # Data Architecture
 
@@ -19,6 +19,8 @@ verifications       identifier, value, expiresAt
 rateLimitTable      key, count, lastRequest
 twoFactorTable      userId, secret, backupCodes
 userPreferences     userId, theme, locale, notifications, ...
+workspaceUserPreferences userId, workspaceId, coding-agent defaults (JSON) — per
+                    (user, workspace) preferences (get/update_workspace_user_preferences)
 ```
 
 ### Schema: org.ts
@@ -115,6 +117,8 @@ entityTypeMappings  entityTypeId, targetSchema
 setupSuggestions    connectionId, suggestions (JSON)
 deletionJobs        id, connectionId, status
 connectorSchemas    connectorId, schema (JSON)
+githubInstallations id, orgId, installationId, accountLogin, accountType — GitHub
+                    App installation registry (multi-tenant connect, ADR-027)
 ```
 
 ### Schema: mcp.ts
@@ -167,10 +171,19 @@ environments        id, orgId, workspaceId, name, isDefault
 secretKeys          id, environmentId, name, description
 secretValues        keyId, environmentId, encryptedValue
 secretAccessLog     keyId, userId, accessedAt, action
+sandboxTemplates    id, environmentId, provider, runtimeImage, resources (JSON),
+                    network posture, isDefault — portable sandbox templates
+                    (create/list/get/update/delete/set_default/set_tools/export/import)
+sandboxTemplateTools templateId, tool, config (JSON) — preloaded tools per template
 ```
 
 ### Schema: Other
 ```
+-- cms.ts (marketing-site lead gate, unauthenticated /v1/cms surface)
+leads               id, email, companySize, referralSource, createdAt
+bookEditions        id, slug, title — ebook editions (field-manual/page-flip-reader)
+bookAccessCodes     id, editionId, code, status (active|consumed|revoked)
+
 -- content.ts
 generatedAssets     id, orgId, workspaceId, type, url, metadata (JSON)
 documents           id, orgId, workspaceId, title, content, format
@@ -198,7 +211,8 @@ Database: NEO4J_DATABASE
 Usage:
   - Knowledge graph nodes + relationships
   - Agent execution lineage (subagent fan-out AND A2A-originated runs —
-    both show up in agent.trace.get / `oxagen trace` the same way)
+    both show up via get_execution_trace / `oxagen trace` the same way;
+    contract/route file stem is still agent.trace.get.ts post-ADR-025)
   - Memory nodes (synced from Engram)
   - Semantic edges / ontology
   - Code graph (packages/code-graph/)
@@ -237,7 +251,7 @@ Package: packages/telemetry/src/ (migrate.ts runs schema.sql then every
 
 ## Storage — Vercel Blob
 ```
-VERCEL_BLOB_READ_WRITE_TOKEN (env)
+BLOB_READ_WRITE_TOKEN (env)
 Package: packages/storage/src/
 Usage: avatar uploads, generated assets, skill exports, archives
 ```
@@ -246,7 +260,8 @@ Usage: avatar uploads, generated assets, skill exports, archives
 ```
 Location: packages/database/atlas/migrations/
 Tool:     Atlas (pnpm migrate in database package)
-Count:    46 SQL files tracked (latest: 20260708130000_agent_file_locks.sql)
+Count:    55 SQL files tracked (latest: 20260721120000_source_connections_poll_due_partial_idx.sql)
+          — count drifts fast; verify via `ls packages/database/atlas/migrations/*.sql | wc -l`
 Checksum: atlas.sum — regenerate via `atlas migrate hash --dir "file://atlas/migrations"`
           from packages/database after adding/renaming a migration; never hand-edit.
 ```

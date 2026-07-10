@@ -7,9 +7,9 @@
 
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
+import { StatusDot, statusDotVariants } from "./status-dot";
 
 afterEach(cleanup);
-import { StatusDot, statusDotVariants } from "./status-dot";
 
 describe("statusDotVariants — class map", () => {
   it("success maps to text-success", () => {

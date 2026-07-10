@@ -1,8 +1,8 @@
-<!-- Generated: 2026-07-06 | Files scanned: 634 (app) + 492 (cli) | Token estimate: ~950 -->
+<!-- Generated: 2026-07-06, corrections applied 2026-07-10 | Files scanned: 634 (app) + 492 (cli) | Token estimate: ~950 -->
 
 # Frontend Architecture
 
-## apps/app — Next.js 15 Web Application
+## apps/app — Next.js 16 Web Application (16.2.10)
 
 ### Entry Points
 ```
@@ -85,6 +85,8 @@ apps/app/src/app/[orgSlug]/[workspaceSlug]/layout.tsx → workspace shell
     /browse                              → BrowseMarketplacePage (plugin/skill catalog)
     /installed                           → InstalledMarketplacePage
     /mcp                                 → McpMarketplacePage
+    /integrations                        → MarketplaceIntegrationsPage
+    /agent-tools                         → MarketplaceAgentToolsPage
 
   /evals                                 → EvalsPage (datasets + runs, LLM-as-judge)
     /runs                                → EvalRunsListPage
@@ -191,11 +193,15 @@ apps/cli/src/program.tsx        → CLI program definition
 ### Command Structure
 ```
 oxagen                          → interactive REPL (default)
-oxagen ask "<prompt>"           → one-shot mode
+oxagen "<prompt>"               → one-shot mode (root positional argument;
+                                    there is no separate `ask` subcommand —
+                                    program.tsx `.argument("[prompt...]")`)
 oxagen init                     → project init
 oxagen fleet                    → multi-agent fleet view
 oxagen trace                    → agent execution lineage viewer (incl. A2A runs)
 ```
+`apps/cli/src/commands/` has 35 command modules (count drifts — don't hard-code
+it; regenerate via `find apps/cli/src/commands -maxdepth 1 -type f | wc -l`).
 
 ### Agent Loop
 ```

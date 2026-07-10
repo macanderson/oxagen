@@ -54,6 +54,12 @@ export const sourceConnections = ingestionSchema.table(
     oauthAccountIdx: index("source_connections_oauth_account_idx").on(t.oauthAccountId),
     // Poll-scheduler due-work scan: order live connections by next_poll_at.
     nextPollDueIdx: index("source_connections_next_poll_due_idx").on(t.nextPollAt),
+    // Partial variant confined to poll-eligible rows — matches the scheduler's
+    // WHERE status = 'connected' AND deleted_at IS NULL predicate exactly, so
+    // the due-work scan never touches deleted/paused/errored rows.
+    pollDuePartialIdx: index("source_connections_poll_due_partial_idx")
+      .on(t.nextPollAt)
+      .where(sql`status = 'connected' AND deleted_at IS NULL`),
     // 'deleting' is set synchronously by connection.delete; 'deleted' is the
     // terminal state written by the async purge job (ingestion.delete). Both
     // were missing here, so any delete violated this CHECK → 500 (OXA-1751).

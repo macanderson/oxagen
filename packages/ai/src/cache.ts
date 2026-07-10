@@ -246,7 +246,9 @@ export async function readCache<T>(
       });
 
       if (exact) {
-        await bumpHit(exact.id, ctx).catch(() => {});
+        await bumpHit(exact.id, ctx).catch((err: unknown) =>
+          logger.debug({ err, cacheId: exact.id }, "cache: bumpHit failed (non-fatal)"),
+        );
         const usage = toUsage(exact.usage);
         emitCacheEvent(ctx, "hit", { semantic: false, similarity: 1, saved: usage });
         return {
@@ -317,7 +319,9 @@ export async function readCache<T>(
       }
 
       if (best) {
-        await bumpHit(best.row.id, ctx).catch(() => {});
+        await bumpHit(best.row.id, ctx).catch((err: unknown) =>
+          logger.debug({ err, cacheId: best.row.id }, "cache: bumpHit failed (non-fatal)"),
+        );
         const usage = toUsage(best.row.usage);
         emitCacheEvent(ctx, "hit", { semantic: true, similarity: best.similarity, saved: usage });
         return {

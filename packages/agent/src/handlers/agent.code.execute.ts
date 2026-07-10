@@ -1,7 +1,15 @@
 import pino from "pino";
-import { getSandbox, isSandboxAvailable } from "@oxagen/sandbox";
+import {
+  getSandbox,
+  isSandboxAvailable,
+  DEFAULT_POLICY,
+  type SandboxPolicy,
+  type SandboxResult,
+} from "@oxagen/sandbox";
 import { validateWorkspaceFiles } from "@oxagen/sandbox/workspace";
 import { insertEvents } from "@oxagen/telemetry";
+import { CapabilityError } from "@oxagen/oxagen/kernel";
+import { agentCodeExecute } from "@oxagen/oxagen/contracts/agent.code.execute";
 import type { CapabilityContext } from "../types";
 
 const logger = pino({
@@ -67,25 +75,62 @@ export async function agentCodeExecuteHandler(
   }
   const files = input.files ? validateWorkspaceFiles(input.files) : undefined;
 
+  // Effective sandbox policy for this run. The model-supplied language / network
+  // / timeout / memory fields are untrusted, so the request is validated and
+  // clamped at the dispatch seam (getSandbox → applyPolicy) before any driver
+  // sees it. A template is trusted, workspace-governed config whose declared
+  // resources are contract-bounded (≤8 GB / ≤300 s) and may legitimately exceed
+  // DEFAULT_POLICY, so when one is present we thread its limits in as the
+  // effective ceiling instead of clamping to the conservative defaults. Absent a
+  // template, DEFAULT_POLICY applies (30 s / 512 MB / no network / node·python·shell)
+  // — a model that asks for egress with no governing template is refused, not
+  // silently granted network access.
+  const effectivePolicy: SandboxPolicy | undefined = template
+    ? {
+        allowedLanguages: DEFAULT_POLICY.allowedLanguages,
+        maxTimeoutMs: template.resources.timeoutMs ?? DEFAULT_POLICY.maxTimeoutMs,
+        maxMemoryMb: template.resources.memoryMb ?? DEFAULT_POLICY.maxMemoryMb,
+        allowNetwork: network === "allow",
+      }
+    : undefined;
+
   // Template resources override the request defaults where set; the template's
   // provider selects the driver per run (SANDBOX_DRIVER stays the fallback), and
   // its runtime becomes the custom image ref.
-  const sandbox = getSandbox(template?.provider);
-  const result = await sandbox.run({
-    language: input.language,
-    code: input.code,
-    stdin: input.stdin,
-    env,
-    files,
-    timeoutMs: template?.resources.timeoutMs ?? input.timeoutMs,
-    memoryMb: template?.resources.memoryMb ?? input.memoryMb,
-    network,
-    ...(template?.runtime ? { imageRef: template.runtime } : {}),
-    ...(template?.resources.vcpu !== undefined ? { vcpu: template.resources.vcpu } : {}),
-    ...(template?.resources.diskMb !== undefined ? { diskMb: template.resources.diskMb } : {}),
-    orgId: ctx.orgId,
-    workspaceId: ctx.workspaceId,
-  });
+  const sandbox = getSandbox(template?.provider, effectivePolicy);
+  let result: SandboxResult;
+  try {
+    result = await sandbox.run({
+      language: input.language,
+      code: input.code,
+      stdin: input.stdin,
+      env,
+      files,
+      timeoutMs: template?.resources.timeoutMs ?? input.timeoutMs,
+      memoryMb: template?.resources.memoryMb ?? input.memoryMb,
+      network,
+      ...(template?.runtime ? { imageRef: template.runtime } : {}),
+      ...(template?.resources.vcpu !== undefined ? { vcpu: template.resources.vcpu } : {}),
+      ...(template?.resources.diskMb !== undefined ? { diskMb: template.resources.diskMb } : {}),
+      orgId: ctx.orgId,
+      workspaceId: ctx.workspaceId,
+    });
+  } catch (err) {
+    // A hard policy boundary (disallowed language / network) throws
+    // SandboxPolicyError at the seam. Re-surface it as a structured capability
+    // error (→ 400 invalid_input via the API error middleware) rather than a
+    // leaked 500, matching how the sibling sandbox handlers turn low-level
+    // failures into typed, user-visible errors. Over-ceiling resources are
+    // clamped silently by applyPolicy and never reach here. Duck-typed on the
+    // stable `code` so we never value-import the infra error class.
+    if (
+      err instanceof Error &&
+      (err as { code?: unknown }).code === "sandbox_policy_violation"
+    ) {
+      throw new CapabilityError(agentCodeExecute.name, "invalid_input", err.message);
+    }
+    throw err;
+  }
 
   // Meter sandbox runtime cost → ClickHouse (shared analytics package). Sandbox
   // execution does NOT pass through the @oxagen/ai metering chokepoint, so
