@@ -40,9 +40,8 @@ import { GraphTableView } from "./graph-table-view";
 import { NodeDetailPanel } from "./node-detail-panel";
 import { EdgeDetailPanel } from "./edge-detail-panel";
 import { EdgeHoverPopover } from "./edge-hover-popover";
-import { CreateNodeDialog } from "./create-node-dialog";
+import { NodeDialog } from "./node-dialog";
 import { CreateEdgeDialog } from "./create-edge-dialog";
-import { EditNodeDialog } from "./edit-node-dialog";
 import { EditEdgeDialog } from "./edit-edge-dialog";
 import { searchNodes, fetchVocab } from "./api-client";
 import { countEdgesByType, countNodesByLabel } from "./lib/transform";
@@ -524,12 +523,12 @@ export function GraphExplorer({ focusNodeId }: GraphExplorerProps = {}) {
       )}
 
       {/* CRUD Dialogs */}
-      <CreateNodeDialog
+      <NodeDialog
         open={createNodeOpen}
         onOpenChange={setCreateNodeOpen}
         tenant={slugs}
         labels={vocab.labels}
-        onCreated={() => data.reload()}
+        onSaved={() => data.reload()}
       />
       <CreateEdgeDialog
         open={createEdgeOpen}
@@ -539,7 +538,7 @@ export function GraphExplorer({ focusNodeId }: GraphExplorerProps = {}) {
         onCreated={() => data.reload()}
       />
       {editingNode && (
-        <EditNodeDialog
+        <NodeDialog
           open={!!editingNode}
           onOpenChange={(open) => {
             if (!open) setEditingNode(null);
@@ -547,7 +546,7 @@ export function GraphExplorer({ focusNodeId }: GraphExplorerProps = {}) {
           tenant={slugs}
           node={editingNode}
           labels={vocab.labels}
-          onUpdated={() => data.reload()}
+          onSaved={() => data.reload()}
         />
       )}
       {editingEdge && (
