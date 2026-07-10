@@ -223,6 +223,13 @@ describe("SandboxTerminal", () => {
   it("queues a command entered while one is running and runs them FIFO", async () => {
     const calls: string[] = [];
     const resolvers: Array<(r: SandboxExecResult) => void> = [];
+    // Resolve the oldest in-flight command (FIFO), asserting one is pending so
+    // the test fails loudly rather than tripping noUncheckedIndexedAccess.
+    const finishNext = (r: SandboxExecResult) => {
+      const resolve = resolvers.shift();
+      if (!resolve) throw new Error("no pending command to finish");
+      resolve(r);
+    };
     const runCommand = vi.fn((command: string) => {
       calls.push(command);
       return new Promise<SandboxExecResult>((r) => resolvers.push(r));
@@ -248,11 +255,11 @@ describe("SandboxTerminal", () => {
     expect(runCommand).toHaveBeenCalledTimes(1);
 
     // Finish the first → the queued command now runs, in order.
-    resolvers[0](ok({ stdout: "1" }));
+    finishNext(ok({ stdout: "1" }));
     await waitFor(() => expect(runCommand).toHaveBeenCalledTimes(2));
     expect(calls).toEqual(["first", "second"]);
 
-    resolvers[1](ok({ stdout: "2" }));
+    finishNext(ok({ stdout: "2" }));
     await waitFor(() => expect(screen.getAllByText(/exit 0/).length).toBe(2));
   });
 
