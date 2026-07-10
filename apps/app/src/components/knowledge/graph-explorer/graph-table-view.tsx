@@ -27,6 +27,8 @@ export interface GraphTableViewProps {
   tenant: TenantSlugs;
   /** Visible node labels — when set (and not all), filters the server query. */
   visibleLabels?: string[];
+  /** Include agent runtime lineage (is_system) rows. Defaults to customer data only. */
+  includeSystem?: boolean;
   selectedNodeId: string | null;
   onSelectNode: (nodeId: string) => void;
 }
@@ -38,11 +40,22 @@ interface TableState {
   hasMore: boolean;
 }
 
-export function GraphTableView({ tenant, visibleLabels, selectedNodeId, onSelectNode }: GraphTableViewProps) {
+export function GraphTableView({
+  tenant,
+  visibleLabels,
+  includeSystem,
+  selectedNodeId,
+  onSelectNode,
+}: GraphTableViewProps) {
   const [rawQuery, setRawQuery] = React.useState("");
   const [query, setQuery] = React.useState("");
   const [offset, setOffset] = React.useState(0);
-  const [state, setState] = React.useState<TableState>({ status: "loading", nodes: [], total: 0, hasMore: false });
+  const [state, setState] = React.useState<TableState>({
+    status: "loading",
+    nodes: [],
+    total: 0,
+    hasMore: false,
+  });
 
   // Debounce the search box so each keystroke does not fire a request.
   React.useEffect(() => {
@@ -63,7 +76,10 @@ export function GraphTableView({ tenant, visibleLabels, selectedNodeId, onSelect
       tenant,
       {
         ...(query ? { query } : {}),
-        ...(visibleLabels && visibleLabels.length > 0 ? { labels: visibleLabels } : {}),
+        ...(visibleLabels && visibleLabels.length > 0
+          ? { labels: visibleLabels }
+          : {}),
+        ...(includeSystem ? { includeSystem: true } : {}),
         limit: PAGE_SIZE,
         offset,
       },
@@ -71,7 +87,12 @@ export function GraphTableView({ tenant, visibleLabels, selectedNodeId, onSelect
     )
       .then((payload) => {
         if (!active) return;
-        setState({ status: "ready", nodes: payload.nodes, total: payload.total, hasMore: payload.hasMore });
+        setState({
+          status: "ready",
+          nodes: payload.nodes,
+          total: payload.total,
+          hasMore: payload.hasMore,
+        });
       })
       .catch(() => {
         if (!active || controller.signal.aborted) return;
@@ -81,7 +102,7 @@ export function GraphTableView({ tenant, visibleLabels, selectedNodeId, onSelect
       active = false;
       controller.abort();
     };
-  }, [tenant, query, offset, labelsKey, visibleLabels]);
+  }, [tenant, query, offset, labelsKey, visibleLabels, includeSystem]);
 
   const page = Math.floor(offset / PAGE_SIZE) + 1;
   const pageCount = Math.max(1, Math.ceil(state.total / PAGE_SIZE));
@@ -90,7 +111,10 @@ export function GraphTableView({ tenant, visibleLabels, selectedNodeId, onSelect
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-2 border-b border-border px-4 py-3">
         <div className="relative max-w-sm flex-1">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+          <Search
+            className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+            aria-hidden="true"
+          />
           <Input
             value={rawQuery}
             onChange={(e) => setRawQuery(e.target.value)}
@@ -109,7 +133,10 @@ export function GraphTableView({ tenant, visibleLabels, selectedNodeId, onSelect
       <div className="relative min-h-0 flex-1 overflow-auto overscroll-x-contain">
         {state.status === "loading" && (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/60">
-            <Loader2 className="size-5 animate-spin text-muted-foreground" aria-hidden="true" />
+            <Loader2
+              className="size-5 animate-spin text-muted-foreground"
+              aria-hidden="true"
+            />
           </div>
         )}
         <table className="w-full min-w-[36rem] border-collapse text-sm">
@@ -124,18 +151,26 @@ export function GraphTableView({ tenant, visibleLabels, selectedNodeId, onSelect
           <tbody>
             {state.status === "error" && (
               <tr>
-                <td colSpan={4} className="px-4 py-8 text-center text-sm text-destructive">
+                <td
+                  colSpan={4}
+                  className="px-4 py-8 text-center text-sm text-destructive"
+                >
                   Failed to load nodes.
                 </td>
               </tr>
             )}
-            {state.status !== "error" && state.nodes.length === 0 && state.status === "ready" && (
-              <tr>
-                <td colSpan={4} className="px-4 py-8 text-center text-sm text-muted-foreground">
-                  No nodes match.
-                </td>
-              </tr>
-            )}
+            {state.status !== "error" &&
+              state.nodes.length === 0 &&
+              state.status === "ready" && (
+                <tr>
+                  <td
+                    colSpan={4}
+                    className="px-4 py-8 text-center text-sm text-muted-foreground"
+                  >
+                    No nodes match.
+                  </td>
+                </tr>
+              )}
             {state.nodes.map((n) => (
               <tr
                 key={n.id}
@@ -144,13 +179,20 @@ export function GraphTableView({ tenant, visibleLabels, selectedNodeId, onSelect
                 className="cursor-pointer border-b border-border/50 transition-colors hover:bg-muted/40 aria-selected:bg-primary/5"
               >
                 <td className="max-w-xs px-4 py-2">
-                  <span className="block truncate font-medium text-foreground" title={n.displayName}>
+                  <span
+                    className="block truncate font-medium text-foreground"
+                    title={n.displayName}
+                  >
                     {n.displayName}
                   </span>
                 </td>
                 <td className="px-4 py-2">
                   <Badge variant="outline" size="sm" className="gap-1">
-                    <span className="size-2 rounded-full" style={{ backgroundColor: colorForLabel(n.label) }} aria-hidden="true" />
+                    <span
+                      className="size-2 rounded-full"
+                      style={{ backgroundColor: colorForLabel(n.label) }}
+                      aria-hidden="true"
+                    />
                     {n.label}
                   </Badge>
                 </td>

@@ -225,6 +225,9 @@ importers:
       '@oxagen/notifications':
         specifier: workspace:*
         version: link:../../packages/notifications
+      '@oxagen/ontology':
+        specifier: workspace:*
+        version: link:../../packages/ontology
       '@oxagen/oxagen':
         specifier: workspace:*
         version: link:../../packages/oxagen
