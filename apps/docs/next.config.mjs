@@ -4,6 +4,12 @@ const withMDX = createMDX();
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Cache Components (Next 16): `use cache` + cacheLife/cacheTag with Partial
+  // Prerendering as the default. The docs site is fully static (MDX +
+  // generateStaticParams), so pages prerender into the static shell; the model
+  // enforces at build time that any future runtime data access is explicitly
+  // wrapped in <Suspense> or cached.
+  cacheComponents: true,
   reactStrictMode: true,
   transpilePackages: ["@oxagen/ui"],
   // Builds on Turbopack (Next 16 default); fumadocs-mdx integrates via

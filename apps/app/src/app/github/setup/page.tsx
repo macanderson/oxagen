@@ -8,9 +8,6 @@ import {
   type GithubSetupQueries,
 } from "./resolve-target";
 
-// Reads the session (headers) + query params → must run per-request.
-export const dynamic = "force-dynamic";
-
 type GithubSetupSearchParams = {
   installation_id?: string;
   setup_action?: string;

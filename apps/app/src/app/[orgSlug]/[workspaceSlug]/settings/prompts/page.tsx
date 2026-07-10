@@ -19,8 +19,6 @@ import { PromptSettingsForm } from "./prompt-settings-form";
 import { SystemPromptReadonly } from "./system-prompt-readonly";
 import type { PromptSettingsReadOutput } from "./prompt-settings-action";
 
-export const dynamic = "force-dynamic";
-
 export const metadata: Metadata = {
   title: "Prompt Settings — Workspace Settings",
 };

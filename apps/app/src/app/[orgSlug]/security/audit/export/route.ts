@@ -31,7 +31,6 @@ import {
 
 // Node runtime: node:crypto HMAC + DB access. Never cache (access-controlled).
 export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
 
 function signingSecret(): string {
   // A dedicated key is preferred; fall back to the always-present auth secret so

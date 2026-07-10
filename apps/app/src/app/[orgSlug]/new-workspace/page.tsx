@@ -4,8 +4,6 @@ import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, assertOrgMember } from "@/lib/resolve-org";
 import { createWorkspaceAction } from "./actions";
 
-export const dynamic = "force-dynamic";
-
 export default async function NewWorkspacePage({
   params,
 }: {

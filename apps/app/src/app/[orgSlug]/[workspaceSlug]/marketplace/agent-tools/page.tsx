@@ -11,8 +11,6 @@ export const metadata: Metadata = {
   title: "Agent Tools | Marketplace",
 };
 
-export const dynamic = "force-dynamic";
-
 interface PageProps {
   params: Promise<{ orgSlug: string; workspaceSlug: string }>;
 }

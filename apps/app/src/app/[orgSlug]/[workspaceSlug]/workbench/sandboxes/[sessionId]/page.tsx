@@ -18,8 +18,6 @@ export const metadata: Metadata = {
   title: "Sandbox | Workbench",
 };
 
-export const dynamic = "force-dynamic";
-
 interface PageProps {
   params: Promise<{
     orgSlug: string;

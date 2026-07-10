@@ -10,6 +10,7 @@
  * On AUTHORIZED (already connected): redirects to the workspace integrations page.
  */
 import { NextResponse, type NextRequest } from 'next/server';
+import { unstable_rethrow } from 'next/navigation';
 import { randomUUID } from 'node:crypto';
 import { auth as mcpAuth } from '@modelcontextprotocol/sdk/client/auth.js';
 import { and, eq } from 'drizzle-orm';
@@ -81,6 +82,12 @@ export async function GET(req: NextRequest): Promise<Response> {
         { status: denialStatus },
       );
     }
+    // Cache Components: the build-time prerender bails out of this GET by
+    // THROWING on the first request-data access (getSession/req.url), which
+    // happens inside the try above. Rethrow Next-internal errors so the
+    // bail-out escapes instead of being logged and baked into static output
+    // as a 500. (Redirect/notFound sentinels are already handled above.)
+    unstable_rethrow(err);
     logger.error(
       {
         err: String(err),
