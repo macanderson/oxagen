@@ -99,6 +99,21 @@ import { billingCreditsPurchase } from "./billing.credits.purchase";
 import { billingSubscriptionRead } from "./billing.subscription.read";
 import { billingSubscriptionUpgradeStart } from "./billing.subscription_upgrade.start";
 import { billingUsageBreakdown } from "./billing.usage.breakdown";
+import { resellerCustomerCreate } from "./billing.reseller_customer.create";
+import { resellerCustomerList } from "./billing.reseller_customer.list";
+import { resellerCustomerUpdate } from "./billing.reseller_customer.update";
+import { resellerCustomerArchive } from "./billing.reseller_customer.archive";
+import { resellerPricePlanCreate } from "./billing.reseller_price_plan.create";
+import { resellerPricePlanList } from "./billing.reseller_price_plan.list";
+import { resellerPricePlanUpdate } from "./billing.reseller_price_plan.update";
+import { resellerAttributionRuleSave } from "./billing.reseller_attribution_rule.save";
+import { resellerAttributionRuleList } from "./billing.reseller_attribution_rule.list";
+import { resellerAttributionRuleDelete } from "./billing.reseller_attribution_rule.delete";
+import { resellerRebillPreview } from "./billing.reseller_rebill.preview";
+import { resellerRebillPush } from "./billing.reseller_rebill.push";
+import { resellerRebillListRuns } from "./billing.reseller_rebill.list_runs";
+import { resellerStripeConfigure } from "./billing.reseller_stripe.configure";
+import { resellerStripeStatus } from "./billing.reseller_stripe.status";
 import { chatMessageExecution } from "./chat.message.execution";
 import { chatMessageSend } from "./chat.message.send";
 import { conversationArchive } from "./conversation.archive";
@@ -354,14 +369,26 @@ export type { FieldError, DataType, PropertyInput } from "./schema.types";
 // the named block below; here we expose the shared schema and TS types.
 export { memoryPolicySchema } from "./agent.memory_policy.read";
 export type { AgentMemoryPolicyReadOutput } from "./agent.memory_policy.read";
-export type { AgentMemoryPolicyWriteInput, AgentMemoryPolicyWriteOutput } from "./agent.memory_policy.write";
+export type {
+  AgentMemoryPolicyWriteInput,
+  AgentMemoryPolicyWriteOutput,
+} from "./agent.memory_policy.write";
 // Bulk memory import: shared draft schema/types + per-contract IO types. The
 // shared file is not a capability, so it is exported here to satisfy the
 // check-contracts file-coverage guard (same reason as schema.shared above).
 export { memoryImportDraftSchema } from "./agent.memory_import.shared";
-export type { MemoryImportDraft, MemoryImportDraftInput } from "./agent.memory_import.shared";
-export type { AgentMemoryImportParseInput, AgentMemoryImportParseOutput } from "./agent.memory_import.parse";
-export type { AgentMemoryImportCommitInput, AgentMemoryImportCommitOutput } from "./agent.memory_import.commit";
+export type {
+  MemoryImportDraft,
+  MemoryImportDraftInput,
+} from "./agent.memory_import.shared";
+export type {
+  AgentMemoryImportParseInput,
+  AgentMemoryImportParseOutput,
+} from "./agent.memory_import.parse";
+export type {
+  AgentMemoryImportCommitInput,
+  AgentMemoryImportCommitOutput,
+} from "./agent.memory_import.commit";
 // Two-axis memory model — shared enums, record schema, and invariant helpers.
 // Not a capability, so exported here to satisfy the file-coverage guard.
 export {
@@ -386,12 +413,18 @@ export type {
   Compliance,
   EvidenceSourceKind,
 } from "./agent.memory.model";
-export type { AgentMemoryPromoteInput, AgentMemoryPromoteOutput } from "./agent.memory.promote";
+export type {
+  AgentMemoryPromoteInput,
+  AgentMemoryPromoteOutput,
+} from "./agent.memory.promote";
 export type {
   AgentMemoryPromotionCandidatesInput,
   AgentMemoryPromotionCandidatesOutput,
 } from "./agent.memory_promotion.list";
-export type { AgentMemoryCiteInput, AgentMemoryCiteOutput } from "./agent.memory.cite";
+export type {
+  AgentMemoryCiteInput,
+  AgentMemoryCiteOutput,
+} from "./agent.memory.cite";
 export type {
   AgentMemoryEvidenceAttachInput,
   AgentMemoryEvidenceAttachOutput,
@@ -429,6 +462,35 @@ export type {
   SandboxTemplateManifest,
   SandboxTemplateManifestInput,
 } from "./sandbox-template-manifest";
+
+// Shared reseller-revenue wire schemas (not capabilities themselves) — re-exported
+// so surfaces and the app import one canonical shape, and so the contracts guard
+// sees this sibling module referenced.
+export {
+  resellerCustomerStatusSchema,
+  resellerPricingModeSchema,
+  resellerMatchKindSchema,
+  resellerRebillStatusSchema,
+  resellerCustomerSchema,
+  resellerPricePlanSchema,
+  resellerAttributionRuleSchema,
+  resellerRebillLineItemSchema,
+  resellerRebillPreviewSchema,
+  resellerRebillRunSchema,
+  isoInstant,
+} from "./reseller-shared";
+export type {
+  ResellerCustomerStatus,
+  ResellerPricingMode,
+  ResellerMatchKind,
+  ResellerRebillStatus,
+  ResellerCustomer,
+  ResellerPricePlan,
+  ResellerAttributionRule,
+  ResellerRebillLineItem,
+  ResellerRebillPreview,
+  ResellerRebillRun,
+} from "./reseller-shared";
 
 export {
   apiKeyCreate,
@@ -520,6 +582,21 @@ export {
   billingSubscriptionRead,
   billingSubscriptionUpgradeStart,
   billingUsageBreakdown,
+  resellerCustomerCreate,
+  resellerCustomerList,
+  resellerCustomerUpdate,
+  resellerCustomerArchive,
+  resellerPricePlanCreate,
+  resellerPricePlanList,
+  resellerPricePlanUpdate,
+  resellerAttributionRuleSave,
+  resellerAttributionRuleList,
+  resellerAttributionRuleDelete,
+  resellerRebillPreview,
+  resellerRebillPush,
+  resellerRebillListRuns,
+  resellerStripeConfigure,
+  resellerStripeStatus,
   chatMessageExecution,
   chatMessageSend,
   conversationArchive,
@@ -843,6 +920,21 @@ export const contracts = [
   billingSubscriptionRead,
   billingSubscriptionUpgradeStart,
   billingUsageBreakdown,
+  resellerCustomerCreate,
+  resellerCustomerList,
+  resellerCustomerUpdate,
+  resellerCustomerArchive,
+  resellerPricePlanCreate,
+  resellerPricePlanList,
+  resellerPricePlanUpdate,
+  resellerAttributionRuleSave,
+  resellerAttributionRuleList,
+  resellerAttributionRuleDelete,
+  resellerRebillPreview,
+  resellerRebillPush,
+  resellerRebillListRuns,
+  resellerStripeConfigure,
+  resellerStripeStatus,
   chatMessageExecution,
   chatMessageSend,
   conversationArchive,
