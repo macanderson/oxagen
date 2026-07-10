@@ -150,7 +150,7 @@ export function buildSystemPrompt(opts: SystemPromptOptions): string {
       : []),
     "- Act, don't narrate intentions at length. Read before you edit, and edit precisely.",
     "- BATCH INDEPENDENT TOOL CALLS. When your next actions do not depend on each other's",
-    "  results — several `read_file`s, `grep`s, `code_graph` queries, independent checks —",
+    `  results — several \`read_file\`s, \`grep\`s${hasCodeGraph ? ", `code_graph` queries" : ""}, independent checks —`,
     "  issue them together in ONE message so they execute concurrently instead of paying a",
     "  full model round-trip per call. Serialize only when a call genuinely needs an earlier",
     "  call's output. File EDITS stay sequential.",
