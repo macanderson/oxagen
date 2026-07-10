@@ -31,6 +31,20 @@ export function resolveModelId(override?: string): string {
   );
 }
 
+/**
+ * The worker model the USER explicitly chose (`--model` / `/worker-model` →
+ * opts, `OXAGEN_MODEL` env — which settings.json's `workerModel` projects
+ * into at boot — or `oxagen config model`), or undefined when they chose
+ * nothing. Same chain as {@link resolveModelId} MINUS the default: callers use
+ * undefined to mean "auto" and let the engine's per-turn router pick the tier
+ * (cheapest sufficient tier, with the precise safety floor for auth/billing/
+ * security/migration/architecture work) instead of collapsing "no choice"
+ * into a pinned default that defeats routing.
+ */
+export function explicitModelId(override?: string): string | undefined {
+  return override ?? process.env["OXAGEN_MODEL"] ?? readConfig().model ?? undefined;
+}
+
 export interface ModelMask {
   /** The value that actually wins at runtime (differs from what the caller is about to set). */
   value: string;

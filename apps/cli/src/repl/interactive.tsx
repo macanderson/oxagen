@@ -57,6 +57,7 @@ import { queryCodeGraph, warmCodeGraph } from "../agent/code-graph.js";
 import type { Session } from "../lib/session.js";
 import {
   resolveModelId,
+  explicitModelId,
   resolveEffort,
   isReasoningEffort,
   EFFORT_LEVELS,
@@ -345,7 +346,14 @@ export function ReplApp({
   const [ctrlCArmed, setCtrlCArmed] = useState(false);
   const lastCtrlCRef = useRef<number | null>(null);
   const ctrlCHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [model, setModel] = useState<string>(resolveModelId(options.model));
+  // WORKER model: null = "auto" — the engine's per-turn router picks the
+  // cheapest sufficient tier (evaluator recommendation + the precise safety
+  // floor for auth/billing/security/migration/architecture work). A non-null
+  // slug is an explicit user pin (--model, OXAGEN_MODEL, `oxagen config
+  // model`, or /worker-model) and is passed through verbatim — pinned wins.
+  const [model, setModel] = useState<string | null>(
+    explicitModelId(options.model) ?? null,
+  );
   // Per-function model overrides (undefined ⇒ the engine's own default for that
   // role: advisor tier for judge, local heuristic / OXAGEN_LLM_EVALUATOR for
   // triage). Driven by /judge-model and /triage-model; threaded per turn.
@@ -811,7 +819,7 @@ export function ReplApp({
     INITIAL_TELEMETRY_STATE,
     (initial) => ({
       ...initial,
-      models: resolveModelRoles(resolveModelId(options.model), {
+      models: resolveModelRoles(explicitModelId(options.model) ?? "auto", {
         triage: options.triageModel,
         judge: options.judgeModel,
       }),
@@ -1984,7 +1992,7 @@ export function ReplApp({
           // Persistence is best-effort — the in-session change still applies.
         }
         // Compute the readout with the just-changed role plus the current others.
-        const worker = role === "worker" ? slug : modelRef.current;
+        const worker = role === "worker" ? slug : (modelRef.current ?? "auto");
         const triage = role === "triage" ? slug : triageModelRef.current;
         const judge = role === "judge" ? slug : judgeModelRef.current;
         dispatchTelemetry({
@@ -1996,10 +2004,38 @@ export function ReplApp({
             (saved ? " (saved to .oxagen/settings.local.json)." : "."),
         );
       };
+      // Shared by /worker-model and /model: "auto" unpins (per-turn routing),
+      // a slug pins, bare prints the current state.
+      const workerModelReadout = (): string =>
+        modelRef.current ??
+        `auto — routed per turn: cheapest sufficient tier, ` +
+          `${resolveModelId()} default, precise tier for auth/billing/security/migrations. ` +
+          `Pin with /worker-model <slug>.`;
+      const handleWorkerModelCommand = (slug: string): void => {
+        if (!slug) {
+          pushAssistant(`Current worker model: ${workerModelReadout()}`);
+          return;
+        }
+        if (slug === "auto" || slug === "default") {
+          setModel(null);
+          dispatchTelemetry({
+            type: "seed-models",
+            models: resolveModelRoles("auto", {
+              triage: triageModelRef.current,
+              judge: judgeModelRef.current,
+            }),
+          });
+          pushAssistant(
+            "Worker model set to auto — each turn routes to the cheapest sufficient tier " +
+              "(precise tier for high-stakes work). Session-only: a persisted pin " +
+              "(settings workerModel, OXAGEN_MODEL, or `oxagen config model`) re-applies on restart.",
+          );
+          return;
+        }
+        applyRoleModel("worker", slug);
+      };
       if (cmd === "/worker-model") {
-        const slug = text.slice("/worker-model".length).trim();
-        if (slug) applyRoleModel("worker", slug);
-        else pushAssistant(`Current worker model: ${modelRef.current}`);
+        handleWorkerModelCommand(text.slice("/worker-model".length).trim());
         return;
       }
       if (cmd === "/judge-model") {
@@ -2022,9 +2058,7 @@ export function ReplApp({
       }
       if (cmd === "/model") {
         // Alias for /worker-model — sets and persists the executor model.
-        const slug = text.slice("/model".length).trim();
-        if (slug) applyRoleModel("worker", slug);
-        else pushAssistant(`Current model: ${modelRef.current}`);
+        handleWorkerModelCommand(text.slice("/model".length).trim());
         return;
       }
       if (cmd === "/coordinator") {
@@ -2051,7 +2085,7 @@ export function ReplApp({
           setCoordinator("haiku");
           pushAssistant(
             "Coordinator set to REMOTE — turns run on the metered platform gateway " +
-              `(${modelRef.current}). /coordinator local to run fully on-device.`,
+              `(${modelRef.current ?? "auto-routed"}). /coordinator local to run fully on-device.`,
           );
           return;
         }
@@ -2698,14 +2732,14 @@ export function ReplApp({
         void debugLog("turn", "turn.start", {
           mode: "repl",
           readOnly: modeRef.current === "readonly",
-          model: modelRef.current,
+          model: modelRef.current ?? "auto",
           prompt: submission,
         });
         // Surface this turn in the `/hud` heads-up display for its whole life.
         hudHandle = agentRegistry.register({
           kind: "turn",
           title: submission,
-          model: modelRef.current,
+          model: modelRef.current ?? "auto",
         });
 
         // Resolve this turn's pasted image attachments (Ctrl-V) into bytes.
@@ -2955,7 +2989,10 @@ export function ReplApp({
         let budgetGraceWarned = false;
         const budgetGuard = createTurnBudgetGuard(
           budgetRef.current,
-          modelRef.current,
+          // Auto-routed turns are priced at the default (balanced) rate — the
+          // routed model isn't known until the pipeline's ROUTE stage. Same
+          // assumption the one-shot path makes (one-shot.ts buildBudgetGuard).
+          modelRef.current ?? resolveModelId(),
           {
             // "grace" mode: at most once per turn is plenty of noise.
             onWithinGrace: (verdict: TurnBudgetVerdict) => {
@@ -3005,7 +3042,11 @@ export function ReplApp({
             brokerRef.current ?? undefined,
           ),
           ai: activeAiRef.current,
-          model: modelRef.current,
+          // null ⇒ auto: the pipeline's selectModel routes this turn to the
+          // cheapest sufficient tier, with the precise safety floor for
+          // auth/billing/security/migration work. The scope card shows the
+          // routed model + rationale. An explicit pin passes through verbatim.
+          model: modelRef.current ?? undefined,
           // Per-function overrides (undefined ⇒ engine default for that role).
           // Judge takes a panel-shaped list; a single slug is a one-judge panel.
           judgeModels: judgeModelRef.current
@@ -3635,7 +3676,7 @@ export function ReplApp({
         <LiveClock
           render={(now) => (
             <HeaderBar
-              model={model}
+              model={model ?? "auto"}
               version={pkg.version}
               scope={`${session.orgSlug}/${session.workspaceSlug}`}
               branch={repoInfo.branch}
@@ -4027,7 +4068,7 @@ export function ReplApp({
           <Box marginBottom={1} flexShrink={0} flexDirection="column">
             {motion === "full" ? <SpaceInvaders active={isStreaming} /> : null}
             <StatusLine
-              model={model}
+              model={model ?? "auto"}
               branch={branchRef.current}
               // Tokens + cost + cache all come from the live metrics bus (every
               // model call — evaluator, worker per-step, judge — contributes), so
