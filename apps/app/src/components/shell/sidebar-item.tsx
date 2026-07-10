@@ -25,11 +25,11 @@ import Link from "next/link";
 import { ArrowUpRight, ArrowLeft, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipTrigger, TooltipPopup } from "@/components/ui/tooltip";
-import { sidebarItemAffordance } from "@/lib/sidebar-item-affordance";
+import { sidebarItemAffordance } from "./sidebar-item-affordance";
 
 // Re-export types so callers can import from one place
-export type { SidebarItemAffordance } from "@/lib/sidebar-item-affordance";
-export { sidebarItemAffordance } from "@/lib/sidebar-item-affordance";
+export type { SidebarItemAffordance } from "./sidebar-item-affordance";
+export { sidebarItemAffordance } from "./sidebar-item-affordance";
 
 // ---------------------------------------------------------------------------
 // Component

@@ -3,10 +3,7 @@ import { type ChatMessage } from "./message-bubble";
 import { type ComposerAction } from "./message-composer";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChatShellClient } from "./chat-shell-client";
-import {
-  BackgroundTaskTray,
-  type BackgroundTaskSnapshot,
-} from "./background-task-tray";
+import { BackgroundTaskTray } from "./background-task-tray";
 import { resolvedTierCatalog } from "@oxagen/ai";
 import type { ComposerModelState, WorkspaceBudgetGovernance } from "./model-picker";
 import type { McpServerSummary } from "./mcp-types";
@@ -15,60 +12,11 @@ import type { EnvironmentOption } from "./environment-selector";
 import type { AgentOption } from "./agent-selector";
 
 export { type ChatMessage, type MessageAttachment } from "./message-bubble";
-
-export interface ChatShellProps {
-  conversationId: string | null;
-  /** Public id (e.g. "conv_…") used to fetch conversation assets. */
-  conversationPublicId?: string | null;
-  activeLeafMessageId: string | null;
-  messagesPromise: Promise<ChatMessage[]>;
-  sendAction: ComposerAction;
-  resolveApprovalAction: (
-    approvalId: string,
-    decision: "approved" | "denied",
-  ) => Promise<{ ok: boolean; error?: string }>;
-  resolveConsentAction: (
-    approvalId: string,
-    decision: "granted" | "denied",
-    grantAllTools: boolean,
-  ) => Promise<{ ok: boolean; error?: string }>;
-  resolvePlanAction: (
-    planId: string,
-    decision: "approved" | "denied" | "amended",
-    amendedSteps?: import("./stream-event-types").PlanStep[],
-  ) => Promise<{ ok: boolean; error?: string }>;
-  fetchBackgroundTask: (taskId: string) => Promise<BackgroundTaskSnapshot>;
-  cancelBackgroundTask?: (taskId: string) => Promise<{ ok: boolean; error?: string }>;
-  initialBackgroundTaskIds?: string[];
-  agentCapabilities?: readonly import("./plan-card").AgentCapability[];
-  /** Slug values forwarded to ChatShellClient for /api/v1/chat/stream requests. */
-  orgSlug: string;
-  workspaceSlug: string;
-  /** User preference: submit on Enter. Passed through to the composer. */
-  enterToSubmit?: boolean;
-  /** User preference: what to do on concurrent submit. Passed to composer. */
-  pendingPromptBehavior?: "queue" | "interrupt";
-  /** Effective model defaults from server (workspace > user > system). */
-  initialModelState?: ComposerModelState;
-  /** Available MCP servers for the per-turn activation picker. */
-  availableMcpServers?: McpServerSummary[];
-  /** GitHub repos usable as the code-mode target (see _shared/code-mode-data.ts). */
-  availableRepos?: RepoOption[];
-  /** Workspace environments usable as the code-mode target. */
-  availableEnvironments?: EnvironmentOption[];
-  /** Selectable agents for the composer's agent picker (see _shared/agent-options-data.ts). */
-  availableAgents?: AgentOption[];
-  /** Workspace-level per-turn budget governance (OXA-2081). Null/omitted ⇒
-   * no governance active for this workspace. */
-  workspaceBudgetGovernance?: WorkspaceBudgetGovernance | null;
-  /** Bound published agent's public id (from the Ask page's ?agent=… param).
-   * Forwarded verbatim in each /api/v1/chat/stream request body as `agentId`.
-   * Null/omitted ⇒ normal unbound chat. */
-  agentId?: string | null;
-  /** Human name of the bound agent, resolved server-side — shown as the
-   * "Session bound to: <name>" indicator. Null when unbound or unresolved. */
-  boundAgentName?: string | null;
-}
+// The prop contract lives in chat-shell-props.ts (a type-only leaf) so
+// chat-shell-client.tsx can type it without importing this server module,
+// which value-imports the client back. Re-exported for existing consumers.
+export type { ChatShellProps } from "./chat-shell-props";
+import type { ChatShellProps } from "./chat-shell-props";
 
 // RSC streaming: the messages promise resolves inside a Suspense boundary
 // so the composer paints immediately and the active-leaf path streams in

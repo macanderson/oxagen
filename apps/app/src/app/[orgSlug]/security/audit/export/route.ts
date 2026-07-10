@@ -27,7 +27,7 @@ import {
   exportFilename,
   AUDIT_EXPORT_HMAC_ALGO,
   type AuditExportFormat,
-} from "@/lib/audit-export";
+} from "./audit-export";
 
 // Default Node.js runtime: node:crypto HMAC + DB access — never move to edge. No
 // `export const runtime` (incompatible with cacheComponents; Node is default).

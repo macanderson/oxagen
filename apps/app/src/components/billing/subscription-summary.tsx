@@ -20,7 +20,7 @@ import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/components/ui/toast";
 import { AlertCircle, CreditCard } from "lucide-react";
 import { formatDate, formatCents } from "@/lib/utils";
-import { formatRelativeRenewal } from "@/lib/billing-format";
+import { formatRelativeRenewal } from "./billing-format";
 import {
   cancelSubscriptionAction,
   reactivateSubscriptionAction,

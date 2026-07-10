@@ -16,7 +16,7 @@ import {
 import { cn } from "@/lib/utils";
 import { safeHref } from "@/lib/safe-url";
 import { Tooltip, TooltipTrigger, TooltipPopup } from "@/components/ui/tooltip";
-import { listNotificationsAction, markNotificationAction } from "@/lib/actions/notifications";
+import { listNotificationsAction, markNotificationAction } from "./notifications";
 import { useParams } from "next/navigation";
 
 interface Notification {

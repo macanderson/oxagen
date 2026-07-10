@@ -27,7 +27,7 @@ import {
   SUPPORT_EMAIL,
   COMPANY_NAME,
   COMPANY_ADDRESS,
-} from "@/lib/support";
+} from "./support";
 
 export interface SupportMenuProps {
   /** Current org slug, when inside an org — drives the AI-assistant route. */

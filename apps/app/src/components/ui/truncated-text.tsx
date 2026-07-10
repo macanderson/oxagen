@@ -26,7 +26,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { MarkdownContent } from "@/components/ui/markdown-content";
-import { markdownToPlainText } from "@/lib/markdown-preview";
+import { markdownToPlainText } from "./markdown-preview";
 import { cn } from "@/lib/utils";
 
 export interface TruncatedTextProps {

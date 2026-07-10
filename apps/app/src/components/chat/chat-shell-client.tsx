@@ -19,7 +19,7 @@ import { StreamingText } from "./streaming-text";
 import { ReasoningCard } from "./reasoning-card";
 import { ActivityTimeline, TimelineItem } from "./activity-timeline";
 import { useToolStream } from "./use-tool-stream";
-import type { ChatShellProps } from "./chat-shell";
+import type { ChatShellProps } from "./chat-shell-props";
 import type { StreamEvent } from "./stream-event-types";
 import type { ResolvedTierCatalog } from "@oxagen/ai/catalog";
 import type { ComposerModelState, WorkspaceBudgetGovernance } from "./model-picker";

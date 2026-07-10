@@ -27,7 +27,7 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 import { useToast } from "@/components/ui/toast";
-import { seatAlert } from "@/lib/seat-alert";
+import { seatAlert } from "./seat-alert";
 import { formatDate } from "@/lib/utils";
 import { inviteMemberAction, declineInvitationAction } from "@/app/[orgSlug]/members/actions";
 import { removeMemberAction, changeMemberRoleAction } from "@/app/[orgSlug]/members/member-actions";

@@ -8,13 +8,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import type { CommandWriter } from "../../lib/capture-writer.js";
 
-vi.mock("../../lib/commit-ledger.js", () => ({
+vi.mock("../commit-ledger.js", () => ({
   readLedger: vi.fn(),
   commitExists: vi.fn(),
 }));
 
 import { handleRecover } from "../recover.js";
-import { readLedger, commitExists } from "../../lib/commit-ledger.js";
+import { readLedger, commitExists } from "../commit-ledger.js";
 
 const mockRead = readLedger as unknown as Mock;
 const mockExists = commitExists as unknown as Mock;

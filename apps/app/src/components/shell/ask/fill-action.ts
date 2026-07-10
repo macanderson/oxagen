@@ -5,7 +5,7 @@ import { resolveOrg, resolveWorkspace, getOrgRole } from "@/lib/resolve-org";
 import { invoke } from "@oxagen/oxagen";
 import { formFill, type FormFillOutput } from "@oxagen/oxagen/contracts/form.fill";
 import { logger } from "@oxagen/handlers/logger";
-import type { FillableFormSpec, FormFillResult } from "./fill-types";
+import type { FillableFormSpec, FormFillResult } from "@/lib/ask/fill-types";
 
 export interface FillFormActionInput {
   spec: FillableFormSpec;

@@ -33,7 +33,7 @@ const { listNotificationsActionMock, markNotificationActionMock } = vi.hoisted((
   markNotificationActionMock: vi.fn(),
 }));
 
-vi.mock("@/lib/actions/notifications", () => ({
+vi.mock("./notifications", () => ({
   listNotificationsAction: listNotificationsActionMock,
   markNotificationAction: markNotificationActionMock,
 }));

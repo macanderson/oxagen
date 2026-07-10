@@ -12,7 +12,16 @@
  * timing. Constants live here; components stay in their own files.
  */
 import type { ComponentType } from "react";
-import { RefreshCw, Lock, Bug, AlertTriangle, Zap } from "lucide-react";
+import {
+  RefreshCw,
+  Lock,
+  Bug,
+  AlertTriangle,
+  Zap,
+  BadgeCheck,
+  Eye,
+  ShieldAlert,
+} from "lucide-react";
 
 export type MemoryWeight = "low" | "high" | "critical";
 export type MemoryKind =
@@ -82,3 +91,51 @@ export const WEIGHT_CONFIG: Record<
     color: "bg-red-500/15 text-red-700 dark:text-red-400",
   },
 };
+
+// ---------------------------------------------------------------------------
+// Class (epistemic status) taxonomy — the primary axis of the memory model.
+// Lives here (not in memories-client) for the same reason as the kinds above:
+// memories-bulk-import needs it, and reaching back into memories-client for
+// constants made the two components a circular import.
+// ---------------------------------------------------------------------------
+
+export type MemoryClass = "OBSERVATION" | "RULE" | "FACT";
+
+export const ALL_CLASSES: MemoryClass[] = ["OBSERVATION", "RULE", "FACT"];
+
+export const CLASS_CONFIG: Record<
+  MemoryClass,
+  { label: string; icon: ComponentType<{ className?: string }>; color: string }
+> = {
+  OBSERVATION: {
+    label: "Observation",
+    icon: Eye,
+    color: "bg-zinc-400/20 text-zinc-600 dark:text-zinc-400",
+  },
+  RULE: {
+    label: "Rule",
+    icon: ShieldAlert,
+    color: "bg-amber-500/15 text-amber-700 dark:text-amber-400",
+  },
+  FACT: {
+    label: "Fact",
+    icon: BadgeCheck,
+    color: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
+  },
+};
+
+// Canonical content-domain kinds (agent.memory.model#RECOMMENDED_MEMORY_KINDS).
+// memoryKind is an open string — these are suggestions, not a closed enum.
+export const RECOMMENDED_MEMORY_KINDS = [
+  "FEEDBACK",
+  "PERFORMANCE",
+  "STYLE",
+  "PREFERENCE",
+  "VOICE",
+  "PROSE",
+  "routine-change",
+  "constraint",
+  "bug-root-cause",
+  "convention-deviation",
+  "gotcha",
+] as const;

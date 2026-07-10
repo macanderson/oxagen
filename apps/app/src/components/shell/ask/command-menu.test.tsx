@@ -44,14 +44,14 @@ vi.mock("@/lib/command-menu/use-recent", () => ({
 // entity-prefix matcher — default: no match (vi.fn typed via mockReturnValue at test time)
 const mockMatchEntityPrefix = vi.fn() as ReturnType<typeof vi.fn>;
 mockMatchEntityPrefix.mockReturnValue(null);
-vi.mock("@/lib/command-menu/entity-prefix", () => ({
+vi.mock("./entity-prefix", () => ({
   matchEntityPrefix: (q: string) => mockMatchEntityPrefix(q) as { kind: string; queryRemainder: string } | null,
 }));
 
 // useSuggestions — default: no suggestions, not loading
 const mockUseSuggestions = vi.fn() as ReturnType<typeof vi.fn>;
 mockUseSuggestions.mockReturnValue({ suggestions: [], loading: false });
-vi.mock("@/lib/command-menu/use-suggestions", () => ({
+vi.mock("./use-suggestions", () => ({
   useSuggestions: (args: unknown) => mockUseSuggestions(args) as { suggestions: Array<{ text: string; category: string; confidence: number }>; loading: boolean },
 }));
 

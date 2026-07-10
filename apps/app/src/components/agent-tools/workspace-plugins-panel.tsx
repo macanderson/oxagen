@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { MarketplaceModal } from "@/components/plugins/marketplace-modal";
 import { CapabilityIcon } from "@/components/plugins/capability-icon";
-import { isRenderableImageUrl } from "@/lib/plugin-icon";
+import { isRenderableImageUrl } from "./plugin-icon";
 import { ShoppingBag, Trash2 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────

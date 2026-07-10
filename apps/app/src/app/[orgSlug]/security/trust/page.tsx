@@ -19,7 +19,7 @@ import {
   SUB_PROCESSORS,
   TRUST_SIGNALS,
   type SubProcessor,
-} from "@/lib/trust-content";
+} from "./trust-content";
 
 // ---------------------------------------------------------------------------
 // Sub-processor card

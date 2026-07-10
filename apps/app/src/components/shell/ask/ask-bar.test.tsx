@@ -29,7 +29,7 @@ vi.mock("@/lib/command-menu/use-recent", () => ({
   useRecent: () => ({ recent: [], push: vi.fn() }),
 }));
 
-vi.mock("@/lib/ask/fill-action", () => ({
+vi.mock("./fill-action", () => ({
   fillFormAction: vi.fn(),
 }));
 

@@ -16,7 +16,7 @@
  * and never shipped to the server — the server re-embeds instead, which is
  * the accepted, opt-in cost of running local embeddings (see embedding.ts).
  */
-import type { EmbeddingClient } from "./embedding.js";
+import type { EmbeddingClient } from "./embedding-types.js";
 
 /** Prefix on every Ollama-produced `providerId`, e.g. "ollama:nomic-embed-text". */
 export const OLLAMA_PROVIDER_PREFIX = "ollama:";

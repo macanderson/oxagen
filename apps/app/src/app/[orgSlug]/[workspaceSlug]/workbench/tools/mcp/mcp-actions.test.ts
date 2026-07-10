@@ -16,7 +16,7 @@ vi.mock("@oxagen/tenancy", () => ({
   runInTenantScope: (_scope: unknown, fn: () => unknown) => fn(),
 }));
 vi.mock("@oxagen/oxagen", () => ({ invoke: vi.fn() }));
-vi.mock("./authz", () => ({
+vi.mock("@/lib/agent-tools/authz", () => ({
   resolveAgentToolsManager: vi.fn(),
 }));
 vi.mock("@/lib/routes", () => ({
@@ -36,7 +36,7 @@ vi.mock("@/lib/routes", () => ({
 
 import { revalidatePath } from "next/cache";
 import { invoke } from "@oxagen/oxagen";
-import { resolveAgentToolsManager } from "./authz";
+import { resolveAgentToolsManager } from "@/lib/agent-tools/authz";
 import { connectCustomMcpServer, revokeMcpCredential } from "./mcp-actions";
 import type { ResolvedWorkbenchScope } from "@/lib/workbench/scope";
 

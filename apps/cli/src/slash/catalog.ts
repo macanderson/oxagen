@@ -15,7 +15,7 @@
  * wins over a same-named CLI or user command.
  */
 import { loadCommands, type LoadCommandsOptions } from "./loader.js";
-import type { CliCommandMeta } from "../program.js";
+import type { CliCommandMeta } from "../commands/meta.js";
 
 /** Where a catalog entry originates. */
 export type SlashSource = "builtin" | "cli" | "custom";
