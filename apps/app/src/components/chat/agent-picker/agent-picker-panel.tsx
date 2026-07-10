@@ -166,6 +166,9 @@ export function AgentPickerPanel({
       repoKey: setupRepoKey,
       envId: setupEnvId,
     });
+    // Return to the list (the popover also closes via onDismiss); the gallery
+    // has no dismiss, so without this it would stay stuck on the setup step.
+    setSetupAgent(null);
     onDismiss?.();
   }, [setupAgent, setupRepoKey, setupEnvId, onApply, onDismiss]);
 
