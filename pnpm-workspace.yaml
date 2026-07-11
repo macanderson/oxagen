@@ -10,6 +10,12 @@ packages:
 
 # pnpm 11 reads these settings from pnpm-workspace.yaml only — the
 # package.json#pnpm field is ignored (pnpm warns on every install).
+
+# Never prompt before recreating node_modules: non-TTY contexts (background
+# agents, CI, pnpm dev's deps check) abort with
+# ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY instead of installing.
+confirmModulesPurge: false
+
 overrides:
   drizzle-orm: 0.45.2
   typescript: 6.0.3

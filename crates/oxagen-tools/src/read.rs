@@ -50,12 +50,14 @@ impl Tool for ReadFile {
             .map(|n| n as usize)
             .unwrap_or(MAX_LINES);
 
-        let full_path = root.join(path);
-        if !full_path.starts_with(root) {
-            return ToolOutput::Error {
-                message: format!("path `{path}` escapes workspace root"),
-            };
-        }
+        let full_path = match crate::resolve_within_root(root, path) {
+            Some(p) => p,
+            None => {
+                return ToolOutput::Error {
+                    message: format!("path `{path}` escapes workspace root"),
+                };
+            }
+        };
 
         match tokio::fs::read_to_string(&full_path).await {
             Ok(content) => {
