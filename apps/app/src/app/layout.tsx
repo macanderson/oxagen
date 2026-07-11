@@ -167,9 +167,13 @@ export default function RootLayout({
             {/*
              * Install prompt: deferred install CTA for Chrome/Android; manual
              * instructions for iOS. Never shown when already installed or
-             * dismissed.
+             * dismissed. Suspense: reads usePathname() (route suppression),
+             * which is uncached request data under cacheComponents — same
+             * boundary requirement as RouteTransitionLoader above.
              */}
-            <InstallPrompt />
+            <Suspense fallback={null}>
+              <InstallPrompt />
+            </Suspense>
             {/*
              * Service worker: app-shell/static-asset caching only (never
              * offline mode — see sw.js). Production only; renders nothing.
