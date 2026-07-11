@@ -115,7 +115,9 @@ async fn post_envelope(
     }
 
     response.json::<Envelope>().await.map_err(|e| {
-        HostError::Wire(format!("provider {id} returned a non-envelope HTTP body: {e}"))
+        HostError::Wire(format!(
+            "provider {id} returned a non-envelope HTTP body: {e}"
+        ))
     })
 }
 

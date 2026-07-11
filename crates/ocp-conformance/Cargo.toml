@@ -19,5 +19,15 @@ async-trait.workspace = true
 clap.workspace = true
 colored.workspace = true
 
+[[bin]]
+name = "ocp-inspect"
+path = "src/bin/ocp-inspect.rs"
+
+# Also the child-process test fixture for both crates' integration tests,
+# located via env!("CARGO_BIN_EXE_ocp-example-docs").
+[[bin]]
+name = "ocp-example-docs"
+path = "src/bin/ocp-example-docs.rs"
+
 [dev-dependencies]
 tempfile.workspace = true

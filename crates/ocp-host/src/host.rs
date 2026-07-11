@@ -194,27 +194,26 @@ impl Host {
             };
         }
 
-        let result = match tokio::time::timeout(self.per_provider_timeout, provider.query(query))
-            .await
-        {
-            Ok(Ok(result)) => result,
-            Ok(Err(error)) => {
-                return ProviderOutcome {
-                    provider_id: id,
-                    result: ProviderResult::Failed(error),
-                };
-            }
-            Err(_) => {
-                let error = HostError::Timeout {
-                    id: id.clone(),
-                    timeout_ms: self.per_provider_timeout.as_millis() as u64,
-                };
-                return ProviderOutcome {
-                    provider_id: id,
-                    result: ProviderResult::Failed(error),
-                };
-            }
-        };
+        let result =
+            match tokio::time::timeout(self.per_provider_timeout, provider.query(query)).await {
+                Ok(Ok(result)) => result,
+                Ok(Err(error)) => {
+                    return ProviderOutcome {
+                        provider_id: id,
+                        result: ProviderResult::Failed(error),
+                    };
+                }
+                Err(_) => {
+                    let error = HostError::Timeout {
+                        id: id.clone(),
+                        timeout_ms: self.per_provider_timeout.as_millis() as u64,
+                    };
+                    return ProviderOutcome {
+                        provider_id: id,
+                        result: ProviderResult::Failed(error),
+                    };
+                }
+            };
 
         // Budget honesty: frames that sum above the query budget are a lie
         // about `token_cost`. Drop them, report loudly (§3.3).

@@ -355,7 +355,10 @@ mod tests {
     /// `read`/`printf` are builtins, so it works under the scrubbed env
     /// (only PATH/HOME forwarded).
     fn bash_provider(script: &str) -> (String, Vec<String>) {
-        ("bash".to_string(), vec!["-c".to_string(), script.to_string()])
+        (
+            "bash".to_string(),
+            vec!["-c".to_string(), script.to_string()],
+        )
     }
 
     fn ack_line(version: &str) -> String {
@@ -462,7 +465,10 @@ mod tests {
     #[tokio::test]
     async fn a_child_dying_after_handshake_surfaces_as_provider_crashed() {
         // Acks the handshake, then exits before the query — the crash path.
-        let script = format!("read h; printf '%s\\n' '{}'; exit 0", ack_line(PROTOCOL_VERSION));
+        let script = format!(
+            "read h; printf '%s\\n' '{}'; exit 0",
+            ack_line(PROTOCOL_VERSION)
+        );
         let (program, args) = bash_provider(&script);
         let provider = StdioProvider::spawn("docs", &program, &args)
             .await
