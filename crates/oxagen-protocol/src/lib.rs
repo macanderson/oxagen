@@ -18,6 +18,6 @@ pub use completion::{
     ReasoningEffort,
 };
 pub use error::ProviderError;
-pub use event::{AgentEvent, StageKind};
+pub use event::{AgentEvent, BudgetMode, StageKind};
 pub use role::{ModelRef, Role};
 pub use tool::{ToolCall, ToolOutput, ToolResult};

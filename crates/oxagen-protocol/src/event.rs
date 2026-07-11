@@ -31,6 +31,17 @@ pub enum StageKind {
     Complete,
 }
 
+/// Budget enforcement mode (`07-model-matrix.md` §6): `off` (no metering),
+/// `observed` (meter + warn), `enforced` (hard stop with a clean turn
+/// abort — never a mid-tool kill).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BudgetMode {
+    Off,
+    Observed,
+    Enforced,
+}
+
 /// One event in the turn's stream. Every stage boundary emits an event;
 /// nothing user-visible is derived from internal state that isn't also in
 /// this stream.
