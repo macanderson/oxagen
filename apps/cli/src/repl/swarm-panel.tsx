@@ -56,7 +56,9 @@ export function agentStatusStyle(status: AgentStatus): {
     case "failed":
       return { glyph: "✗", color: theme.red };
     case "killed":
-      return { glyph: "⊘", color: theme.red };
+      // ◼ (stop square) + red = a deliberate user kill, distinct from ✗ failed —
+      // matches the canonical convention in tui/activity.ts + agent-sidebar.tsx.
+      return { glyph: "◼", color: theme.red };
   }
 }
 
