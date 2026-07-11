@@ -8,8 +8,17 @@
 import { EventEmitter } from "node:events";
 import { describe, expect, it } from "vitest";
 import { runFleetTurn, summarizeFleetRun } from "../fleet-turn.js";
-import type { Fleet, FleetOptions, FleetTaskEvent } from "../../agent/fleet/orchestrator.js";
-import { emptyUsage, type FleetSnapshot, type Plan, type Task } from "../../agent/fleet/types.js";
+import type {
+  Fleet,
+  FleetOptions,
+  FleetTaskEvent,
+} from "../../agent/fleet/orchestrator.js";
+import {
+  emptyUsage,
+  type FleetSnapshot,
+  type Plan,
+  type Task,
+} from "../../agent/fleet/types.js";
 
 function makeTask(id: string, overrides: Partial<Task> = {}): Task {
   return {
@@ -37,7 +46,9 @@ function makeSnapshot(agents: FleetSnapshot["agents"]): FleetSnapshot {
     queuedCount: agents.filter((a) => a.status === "queued").length,
     runningCount: agents.filter((a) => a.status === "running").length,
     doneCount: agents.filter((a) => a.status === "done").length,
-    failedCount: agents.filter((a) => a.status === "failed" || a.status === "blocked").length,
+    failedCount: agents.filter(
+      (a) => a.status === "failed" || a.status === "blocked",
+    ).length,
     totals: agents.reduce(
       (acc, a) => ({
         inputTokens: acc.inputTokens + a.usage.inputTokens,
@@ -196,6 +207,60 @@ describe("runFleetTurn", () => {
       isolationFactory: async () => null,
     });
     expect(saved).toEqual([plan]);
+  });
+
+  it("leaves the planner's per-task tier/model alone when no worker pin is set", async () => {
+    const plan = makePlan([
+      makeTask("a", { model: "fast-model", tier: "fast" }),
+      makeTask("b", { model: "precise-model", tier: "precise" }),
+    ]);
+    const fake = new FakeFleet(() => {});
+    await runFleetTurn({
+      plan,
+      cwd: "/tmp/repo",
+      fleetFactory: () => fake as unknown as Fleet,
+      isolationFactory: async () => null,
+    });
+    expect(fake.loadedPlan).toBe(plan);
+    expect(fake.loadedPlan?.tasks.map((t) => t.model)).toEqual([
+      "fast-model",
+      "precise-model",
+    ]);
+  });
+
+  it("overrides every task's model/tier with an explicit worker-model pin", async () => {
+    // A pin is a deliberate, explicit choice — it must win for EVERY fanned-out
+    // task, not just the single-task main loop. Regression test for the bug
+    // where /worker-model silently stopped applying once a prompt decomposed
+    // into more than one task (the fleet path bypassed the pin entirely and
+    // fell back to the planner's own per-task tier-derived model).
+    const plan = makePlan([
+      makeTask("a", { model: "router-fast-model", tier: "fast" }),
+      makeTask("b", { model: "router-precise-model", tier: "precise" }),
+    ]);
+    const saved: Plan[] = [];
+    const fake = new FakeFleet(() => {});
+    await runFleetTurn({
+      plan,
+      cwd: "/tmp/repo",
+      workerModel: "zai/glm-5.2",
+      store: { save: (p: Plan) => void saved.push(p) } as never,
+      fleetFactory: () => fake as unknown as Fleet,
+      isolationFactory: async () => null,
+    });
+
+    // The caller's original plan/tasks are untouched (Task Progress checklist
+    // etc. still reflect the planner's original assignment)...
+    expect(plan.tasks.map((t) => t.model)).toEqual([
+      "router-fast-model",
+      "router-precise-model",
+    ]);
+    // ...but every task the fleet actually loaded and persisted was pinned.
+    expect(fake.loadedPlan).not.toBe(plan);
+    expect(fake.loadedPlan?.tasks.every((t) => t.model === "zai/glm-5.2")).toBe(
+      true,
+    );
+    expect(saved[0]?.tasks.every((t) => t.model === "zai/glm-5.2")).toBe(true);
   });
 });
 
