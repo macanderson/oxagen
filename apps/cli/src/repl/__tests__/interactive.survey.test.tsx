@@ -130,9 +130,18 @@ describe("REPL ask_user survey wiring", () => {
     expect(lastFrame()).toContain("Postgres");
     expect(lastFrame()).toContain("SQLite");
 
-    // Enter selects the highlighted first option.
-    stdin.write("\r");
-    await until(() => lastAnswer !== null);
+    // Enter selects the highlighted first option. The overlay paints one
+    // commit BEFORE its useInput subscribes (Ink writes frames at commit;
+    // useInput attaches in a passive effect), so a single keypress fired the
+    // instant the question becomes visible can land in that gap and be
+    // dropped — ink-testing-library's stdin does not buffer. Re-press each
+    // poll until the resolver fires, like a real user would; at most one
+    // press lands because pressing stops the moment lastAnswer is set, and
+    // until()'s deadline still bounds the whole wait.
+    await until(() => {
+      if (lastAnswer === null) stdin.write("\r");
+      return lastAnswer !== null;
+    });
     expect(lastAnswer).toEqual({ answer: "Postgres", wasFreeText: false });
 
     // Overlay cleared; the turn completed with the answer folded in.
