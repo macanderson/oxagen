@@ -2,19 +2,31 @@
 /**
  * tools-catalog.tsx — Workbench → Tools catalog panel.
  *
- * Read-only card catalog over the workspace's agent tools (from
- * `agent.tool.list`, wrapped by `listAgentTools`). Supports client-side
- * search (name/domain) plus domain and risk-level filters, and opens a Sheet
- * with the full tool detail on row click. No mutations — equipping tools
- * happens in the Agent Builder, installing new ones happens in the
- * Marketplace, and grants live under Access → Roles.
+ * Read-only catalog over the workspace's agent tools (from `agent.tool.list`,
+ * wrapped by `listAgentTools`). Supports client-side search (name/domain/
+ * category/description) plus domain and risk-level filters, a grid⇄list
+ * density toggle, and a Sheet with the full tool detail on row click. No
+ * mutations — equipping tools happens in the Agent Builder, installing new
+ * ones happens in the Marketplace, and grants live under Access → Roles.
  */
 import * as React from "react";
 import Link from "next/link";
-import { Search, Flag, ExternalLink, Wrench, Download } from "lucide-react";
+import {
+  Flag,
+  ExternalLink,
+  Wrench,
+  Download,
+  LayoutGrid,
+  Rows3,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { EmptyState } from "@/components/ui/empty-state";
+import { SearchInput } from "@/components/ui/search-input";
+import {
+  SegmentedControl,
+  SegmentedControlItem,
+} from "@/components/ui/segmented-control";
 import {
   Select,
   SelectTrigger,
@@ -39,6 +51,7 @@ import type { AgentToolRow } from "@/lib/workbench/tools";
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export type RiskFilter = "all" | AgentToolRow["riskLevel"];
+type ViewMode = "grid" | "list";
 
 interface ToolsCatalogProps {
   tools: AgentToolRow[];
@@ -50,7 +63,9 @@ interface ToolsCatalogProps {
 
 const ALL_DOMAINS = "all";
 
-function riskBadgeVariant(risk: AgentToolRow["riskLevel"]): "outline" | "warning" | "error" {
+function riskBadgeVariant(
+  risk: AgentToolRow["riskLevel"],
+): "outline" | "warning" | "error" {
   if (risk === "high") return "error";
   if (risk === "medium") return "warning";
   return "outline";
@@ -82,7 +97,9 @@ export function filterTools(
 }
 
 function uniqueDomains(tools: AgentToolRow[]): string[] {
-  return Array.from(new Set(tools.map((t) => t.domain))).sort((a, b) => a.localeCompare(b));
+  return Array.from(new Set(tools.map((t) => t.domain))).sort((a, b) =>
+    a.localeCompare(b),
+  );
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -103,6 +120,7 @@ export function ToolsCatalog({ tools, marketplaceHref }: ToolsCatalogProps) {
   const [query, setQuery] = React.useState("");
   const [domain, setDomain] = React.useState<string>(ALL_DOMAINS);
   const [risk, setRisk] = React.useState<RiskFilter>("all");
+  const [view, setView] = React.useState<ViewMode>("grid");
   const [selected, setSelected] = React.useState<AgentToolRow | null>(null);
   const [page, setPage] = React.useState(1);
 
@@ -112,8 +130,8 @@ export function ToolsCatalog({ tools, marketplaceHref }: ToolsCatalogProps) {
     [tools, query, domain, risk],
   );
 
-  // The catalog can hold hundreds of tools — paginate the card grid so first
-  // paint stays cheap. Page resets whenever the filter set changes.
+  // The catalog can hold hundreds of tools — paginate so first paint stays
+  // cheap. Page resets whenever the filter set changes.
   const pageCount = Math.max(1, Math.ceil(filtered.length / TOOLS_PAGE_SIZE));
   const clampedPage = Math.min(page, pageCount);
   const pageRows = filtered.slice(
@@ -124,79 +142,129 @@ export function ToolsCatalog({ tools, marketplaceHref }: ToolsCatalogProps) {
     setPage(1);
   }, [query, domain, risk]);
 
+  const hasFilter =
+    query.trim().length > 0 || domain !== ALL_DOMAINS || risk !== "all";
+
   return (
     <div className="flex flex-col gap-4" data-testid="tools-catalog">
-      {/* Filters */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-2 w-full max-w-xs">
-            <Search className="h-4 w-4 text-muted-foreground flex-shrink-0" aria-hidden="true" />
-            <Input
-              placeholder="Search tools..."
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              className="h-8"
-              aria-label="Search agent tools"
-              data-testid="tools-search-input"
-            />
+      {/* Filter bar — search grows to full width on mobile; the domain/risk
+          selects wrap below it; the count + view toggle + actions sit on their
+          own right-aligned row so nothing collides at 390px. */}
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <SearchInput
+            placeholder="Search tools…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onClear={() => setQuery("")}
+            aria-label="Search agent tools"
+            data-testid="tools-search-input"
+            containerClassName="w-full sm:max-w-xs"
+          />
+          <div className="flex items-center gap-2">
+            <Select
+              value={domain}
+              onValueChange={(v) => setDomain(v ?? ALL_DOMAINS)}
+            >
+              <SelectTrigger
+                size="sm"
+                className="w-full min-w-0 sm:w-40"
+                aria-label="Filter by domain"
+              >
+                <SelectValue placeholder="All domains" />
+              </SelectTrigger>
+              <SelectPopup>
+                <SelectItem value={ALL_DOMAINS}>All domains</SelectItem>
+                {domains.map((d) => (
+                  <SelectItem key={d} value={d}>
+                    {d}
+                  </SelectItem>
+                ))}
+              </SelectPopup>
+            </Select>
+
+            <Select
+              value={risk}
+              onValueChange={(v) => setRisk((v ?? "all") as RiskFilter)}
+            >
+              <SelectTrigger
+                size="sm"
+                className="w-full min-w-0 sm:w-36"
+                aria-label="Filter by risk level"
+              >
+                <SelectValue placeholder="All risk levels" />
+              </SelectTrigger>
+              <SelectPopup>
+                <SelectItem value="all">All risk</SelectItem>
+                <SelectItem value="low">Low</SelectItem>
+                <SelectItem value="medium">Medium</SelectItem>
+                <SelectItem value="high">High</SelectItem>
+              </SelectPopup>
+            </Select>
           </div>
-
-          <Select value={domain} onValueChange={(v) => setDomain(v ?? ALL_DOMAINS)}>
-            <SelectTrigger size="sm" className="w-40" aria-label="Filter by domain">
-              <SelectValue placeholder="All domains" />
-            </SelectTrigger>
-            <SelectPopup>
-              <SelectItem value={ALL_DOMAINS}>All domains</SelectItem>
-              {domains.map((d) => (
-                <SelectItem key={d} value={d}>
-                  {d}
-                </SelectItem>
-              ))}
-            </SelectPopup>
-          </Select>
-
-          <Select value={risk} onValueChange={(v) => setRisk((v ?? "all") as RiskFilter)}>
-            <SelectTrigger size="sm" className="w-36" aria-label="Filter by risk level">
-              <SelectValue placeholder="All risk levels" />
-            </SelectTrigger>
-            <SelectPopup>
-              <SelectItem value="all">All risk</SelectItem>
-              <SelectItem value="low">Low</SelectItem>
-              <SelectItem value="medium">Medium</SelectItem>
-              <SelectItem value="high">High</SelectItem>
-            </SelectPopup>
-          </Select>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="text-sm text-muted-foreground whitespace-nowrap">
-            {filtered.length} tool{filtered.length !== 1 ? "s" : ""}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm text-muted-foreground">
+            <span className="font-medium text-foreground tabular-nums">
+              {filtered.length}
+            </span>{" "}
+            {filtered.length === 1 ? "tool" : "tools"}
+            {hasFilter ? (
+              <span className="text-muted-foreground/70">
+                {" "}
+                of {tools.length}
+              </span>
+            ) : null}
+          </span>
+
+          <div className="ml-auto flex items-center gap-2">
+            {/* Density toggle — icon-only, hidden below sm where a single
+                column is denser than any toggle could make it. */}
+            <SegmentedControl
+              value={view}
+              onValueChange={(v) => setView(v as ViewMode)}
+              aria-label="Catalog layout"
+              className="hidden sm:inline-flex"
+            >
+              <SegmentedControlItem value="grid" aria-label="Grid view">
+                <LayoutGrid className="h-3.5 w-3.5" aria-hidden="true" />
+              </SegmentedControlItem>
+              <SegmentedControlItem value="list" aria-label="List view">
+                <Rows3 className="h-3.5 w-3.5" aria-hidden="true" />
+              </SegmentedControlItem>
+            </SegmentedControl>
+
+            <Button
+              variant="outline"
+              size="sm"
+              startIcon={<Download className="h-3.5 w-3.5" aria-hidden="true" />}
+              onClick={() =>
+                downloadCsv(
+                  "agent-tools.csv",
+                  toCsv(
+                    TOOLS_CSV_COLUMNS,
+                    filtered as unknown as Record<string, unknown>[],
+                  ),
+                )
+              }
+            >
+              Export
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              render={<Link href={marketplaceHref} />}
+              data-testid="tools-install-more-button"
+            >
+              <span className="hidden sm:inline">Install more in Marketplace</span>
+              <span className="sm:hidden">Install</span>
+            </Button>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            startIcon={<Download className="h-3.5 w-3.5" aria-hidden="true" />}
-            onClick={() =>
-              downloadCsv(
-                "agent-tools.csv",
-                toCsv(TOOLS_CSV_COLUMNS, filtered as unknown as Record<string, unknown>[]),
-              )
-            }
-          >
-            Export
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            render={<Link href={marketplaceHref} />}
-            data-testid="tools-install-more-button"
-          >
-            Install more in Marketplace
-          </Button>
         </div>
       </div>
 
-      {/* Table */}
+      {/* Results */}
       {tools.length === 0 ? (
         <ToolsCatalogEmptyState
           message="No agent tools are available in this workspace yet."
@@ -206,55 +274,110 @@ export function ToolsCatalog({ tools, marketplaceHref }: ToolsCatalogProps) {
         <ToolsCatalogEmptyState message="No tools match your search or filters." />
       ) : (
         <>
-          <CardGrid data-testid="tools-grid">
-            {pageRows.map((tool) => (
-              <button
-                key={tool.name}
-                type="button"
-                onClick={() => setSelected(tool)}
-                className="flex flex-col gap-2 rounded-lg border bg-card p-4 text-left transition-colors hover:border-border/80"
-                data-testid={`tool-row-${tool.name}`}
-              >
-                <span className="font-medium text-foreground font-mono text-xs break-all">
-                  {tool.name}
-                </span>
-                <span className="line-clamp-2 text-xs text-muted-foreground">
-                  {tool.description}
-                </span>
-                <span className="mt-auto flex flex-wrap items-center gap-1.5 pt-1">
-                  <Badge variant="outline" className="text-xs">
-                    {tool.domain}
-                  </Badge>
-                  {tool.category ? (
-                    <Badge variant="outline" className="text-xs">
-                      {tool.category}
-                    </Badge>
-                  ) : null}
-                  <Badge
-                    variant={riskBadgeVariant(tool.riskLevel)}
-                    className="text-xs"
-                    data-testid={`tool-risk-badge-${tool.name}`}
+          {/* On mobile the grid collapses to one column, which reads exactly
+              like the list; the list view is a ≥sm density affordance. */}
+          {view === "list" ? (
+            <ul
+              className="flex flex-col divide-y divide-border/60 overflow-hidden rounded-xl border"
+              data-testid="tools-grid"
+            >
+              {pageRows.map((tool) => (
+                <li key={tool.name}>
+                  <button
+                    type="button"
+                    onClick={() => setSelected(tool)}
+                    className="flex w-full items-center gap-3 bg-card px-3 py-2.5 text-left transition-colors hover:bg-muted/40"
+                    data-testid={`tool-row-${tool.name}`}
                   >
-                    {riskLabel(tool.riskLevel)}
-                  </Badge>
-                  {tool.requiresApproval ? (
-                    <Flag
-                      className="h-3.5 w-3.5 text-warning-foreground"
-                      aria-label="Requires approval"
-                      data-testid={`tool-approval-flag-${tool.name}`}
-                    />
-                  ) : null}
-                  {tool.external ? (
-                    <ExternalLink
-                      className="h-3.5 w-3.5 text-muted-foreground"
-                      aria-label="External tool"
-                      data-testid={`tool-external-icon-${tool.name}`}
-                    />
-                  ) : null}
-                </span>
-              </button>
-            ))}
-          </CardGrid>
+                    <span className="min-w-0 flex-1">
+                      <span className="block break-all font-mono text-xs font-medium text-foreground">
+                        {tool.name}
+                      </span>
+                      <span className="line-clamp-1 text-xs text-muted-foreground">
+                        {tool.description}
+                      </span>
+                    </span>
+                    <span className="hidden shrink-0 items-center gap-1.5 sm:flex">
+                      <Badge variant="outline" className="text-[10px]">
+                        {tool.domain}
+                      </Badge>
+                      <Badge
+                        variant={riskBadgeVariant(tool.riskLevel)}
+                        className="text-[10px]"
+                        data-testid={`tool-risk-badge-${tool.name}`}
+                      >
+                        {riskLabel(tool.riskLevel)}
+                      </Badge>
+                      {tool.requiresApproval ? (
+                        <Flag
+                          className="h-3.5 w-3.5 text-warning-foreground"
+                          aria-label="Requires approval"
+                          data-testid={`tool-approval-flag-${tool.name}`}
+                        />
+                      ) : null}
+                      {tool.external ? (
+                        <ExternalLink
+                          className="h-3.5 w-3.5 text-muted-foreground"
+                          aria-label="External tool"
+                          data-testid={`tool-external-icon-${tool.name}`}
+                        />
+                      ) : null}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <CardGrid data-testid="tools-grid">
+              {pageRows.map((tool) => (
+                <button
+                  key={tool.name}
+                  type="button"
+                  onClick={() => setSelected(tool)}
+                  className="flex flex-col gap-2 rounded-xl border bg-card p-4 text-left transition-all hover:border-border hover:shadow-sm"
+                  data-testid={`tool-row-${tool.name}`}
+                >
+                  <span className="break-all font-mono text-xs font-medium text-foreground">
+                    {tool.name}
+                  </span>
+                  <span className="line-clamp-2 text-xs text-muted-foreground">
+                    {tool.description}
+                  </span>
+                  <span className="mt-auto flex flex-wrap items-center gap-1.5 pt-1">
+                    <Badge variant="outline" className="text-xs">
+                      {tool.domain}
+                    </Badge>
+                    {tool.category ? (
+                      <Badge variant="outline" className="text-xs">
+                        {tool.category}
+                      </Badge>
+                    ) : null}
+                    <Badge
+                      variant={riskBadgeVariant(tool.riskLevel)}
+                      className="text-xs"
+                      data-testid={`tool-risk-badge-${tool.name}`}
+                    >
+                      {riskLabel(tool.riskLevel)}
+                    </Badge>
+                    {tool.requiresApproval ? (
+                      <Flag
+                        className="h-3.5 w-3.5 text-warning-foreground"
+                        aria-label="Requires approval"
+                        data-testid={`tool-approval-flag-${tool.name}`}
+                      />
+                    ) : null}
+                    {tool.external ? (
+                      <ExternalLink
+                        className="h-3.5 w-3.5 text-muted-foreground"
+                        aria-label="External tool"
+                        data-testid={`tool-external-icon-${tool.name}`}
+                      />
+                    ) : null}
+                  </span>
+                </button>
+              ))}
+            </CardGrid>
+          )}
           <ListPagination
             page={clampedPage}
             pageCount={pageCount}
@@ -275,23 +398,32 @@ export function ToolsCatalog({ tools, marketplaceHref }: ToolsCatalogProps) {
           {selected ? (
             <>
               <SheetHeader>
-                <SheetTitle className="font-mono text-base">{selected.name}</SheetTitle>
+                <SheetTitle className="break-all font-mono text-base">
+                  {selected.name}
+                </SheetTitle>
                 <SheetDescription>{selected.description}</SheetDescription>
               </SheetHeader>
               <SheetPanel>
                 <dl className="flex flex-col gap-3 text-sm">
                   <div className="flex items-center justify-between gap-4">
                     <dt className="text-muted-foreground">Domain</dt>
-                    <dd className="font-medium text-foreground">{selected.domain}</dd>
+                    <dd className="font-medium text-foreground">
+                      {selected.domain}
+                    </dd>
                   </div>
                   <div className="flex items-center justify-between gap-4">
                     <dt className="text-muted-foreground">Category</dt>
-                    <dd className="font-medium text-foreground">{selected.category ?? "—"}</dd>
+                    <dd className="font-medium text-foreground">
+                      {selected.category ?? "—"}
+                    </dd>
                   </div>
                   <div className="flex items-center justify-between gap-4">
                     <dt className="text-muted-foreground">Risk level</dt>
                     <dd>
-                      <Badge variant={riskBadgeVariant(selected.riskLevel)} className="text-xs">
+                      <Badge
+                        variant={riskBadgeVariant(selected.riskLevel)}
+                        className="text-xs"
+                      >
                         {riskLabel(selected.riskLevel)}
                       </Badge>
                     </dd>
@@ -309,8 +441,9 @@ export function ToolsCatalog({ tools, marketplaceHref }: ToolsCatalogProps) {
                     </dd>
                   </div>
                 </dl>
-                <p className="mt-6 text-xs text-muted-foreground border-t pt-4">
-                  Equip this in the Agent Builder · manage grants in Access → Roles.
+                <p className="mt-6 border-t pt-4 text-xs text-muted-foreground">
+                  Equip this in the Agent Builder · manage grants in Access →
+                  Roles.
                 </p>
               </SheetPanel>
             </>
@@ -331,23 +464,24 @@ function ToolsCatalogEmptyState({
   marketplaceHref?: string;
 }) {
   return (
-    <div
-      className="flex flex-col items-center gap-3 py-12 text-center text-muted-foreground"
+    <EmptyState
+      variant="dashed"
+      icon={<Wrench />}
+      title={message}
       data-testid="tools-empty-state"
-    >
-      <Wrench className="h-8 w-8 opacity-40" aria-hidden="true" />
-      <p className="text-sm">{message}</p>
-      {marketplaceHref ? (
-        <Button
-          variant="outline"
-          size="sm"
-          render={<Link href={marketplaceHref} />}
-          data-testid="tools-empty-install-button"
-        >
-          Install more in Marketplace
-        </Button>
-      ) : null}
-    </div>
+      action={
+        marketplaceHref ? (
+          <Button
+            variant="outline"
+            size="sm"
+            render={<Link href={marketplaceHref} />}
+            data-testid="tools-empty-install-button"
+          >
+            Install more in Marketplace
+          </Button>
+        ) : undefined
+      }
+    />
   );
 }
 
@@ -356,26 +490,25 @@ function ToolsCatalogEmptyState({
 export function ToolsCatalogSkeleton() {
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center gap-2 h-8 max-w-xs">
+      <div className="flex h-8 max-w-xs items-center gap-2">
         <Skeleton className="h-8 w-full" />
       </div>
-      <div className="rounded-md border overflow-hidden">
-        <div className="bg-muted/40 border-b px-4 py-3 flex gap-8">
-          {["Tool name", "Domain", "Category", "Risk", "Approval", "External"].map((h) => (
-            <Skeleton key={h} className="h-4 w-20" />
-          ))}
-        </div>
+      <CardGrid>
         {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="px-4 py-3 border-b last:border-0 flex gap-8 items-center">
-            <Skeleton className="h-4 w-40" />
-            <Skeleton className="h-4 w-20" />
-            <Skeleton className="h-4 w-20" />
-            <Skeleton className="h-4 w-14" />
-            <Skeleton className="h-4 w-10" />
-            <Skeleton className="h-4 w-10" />
+          <div
+            key={i}
+            className="flex flex-col gap-2 rounded-xl border bg-card p-4"
+          >
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="h-3 w-full" />
+            <Skeleton className="h-3 w-3/4" />
+            <div className="mt-1 flex gap-1.5">
+              <Skeleton className="h-4 w-14" />
+              <Skeleton className="h-4 w-12" />
+            </div>
           </div>
         ))}
-      </div>
+      </CardGrid>
     </div>
   );
 }
