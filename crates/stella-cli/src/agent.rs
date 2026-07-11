@@ -21,6 +21,10 @@ use stella_protocol::{AgentEvent, CompletionMessage, ToolOutput};
 use stella_tools::ToolRegistry;
 use tokio::sync::mpsc;
 
+use std::sync::Arc;
+
+use stella_store::{Store, TelemetryRow};
+
 use crate::config::Config;
 use crate::tui;
 
@@ -129,6 +133,7 @@ pub async fn run_one_shot(
     let provider = build_provider(cfg)?;
     let registry = ToolRegistry::new(cfg.workspace_root.clone());
     let mut budget = build_budget_guard(budget_limit);
+    let store = open_store(&cfg.workspace_root);
 
     tui::section_header("Stella");
     println!("  {}\n", prompt.dimmed());
@@ -138,7 +143,17 @@ pub async fn run_one_shot(
         CompletionMessage::user(prompt),
     ];
 
-    run_turn(&*provider, &registry, &mut messages, &mut budget, cfg).await
+    run_turn(
+        &*provider,
+        &registry,
+        &mut messages,
+        &mut budget,
+        cfg,
+        &store,
+        "run",
+        prompt,
+    )
+    .await
 }
 
 /// Run a one-shot goal loop (non-interactive): work in rounds until a
@@ -154,6 +169,7 @@ pub async fn run_goal_cmd(
     let provider = build_provider(cfg)?;
     let registry = ToolRegistry::new(cfg.workspace_root.clone());
     let mut budget = build_budget_guard(budget_limit);
+    let store = open_store(&cfg.workspace_root);
 
     tui::section_header("Stella — goal mode");
     println!("  {}\n", goal.dimmed());
@@ -161,7 +177,16 @@ pub async fn run_goal_cmd(
     let mut messages = vec![CompletionMessage::system(build_system_prompt(
         &cfg.workspace_root,
     ))];
-    run_goal_turn(&*provider, &registry, &mut messages, &mut budget, cfg, goal).await
+    run_goal_turn(
+        &*provider,
+        &registry,
+        &mut messages,
+        &mut budget,
+        cfg,
+        &store,
+        goal,
+    )
+    .await
 }
 
 /// Run an interactive REPL session. `budget_limit` is per-session: the
@@ -172,6 +197,7 @@ pub async fn run_interactive(cfg: &Config, budget_limit: Option<f64>) -> Result<
     let provider = build_provider(cfg)?;
     let registry = ToolRegistry::new(cfg.workspace_root.clone());
     let mut budget = build_budget_guard(budget_limit);
+    let store = open_store(&cfg.workspace_root);
 
     tui::welcome_banner(
         cfg.provider.id,
@@ -230,11 +256,42 @@ pub async fn run_interactive(cfg: &Config, budget_limit: Option<f64>) -> Result<
                 continue;
             }
             println!();
-            if let Err(e) =
-                run_goal_turn(&*provider, &registry, &mut messages, &mut budget, cfg, goal).await
+            if let Err(e) = run_goal_turn(
+                &*provider,
+                &registry,
+                &mut messages,
+                &mut budget,
+                cfg,
+                &store,
+                goal,
+            )
+            .await
             {
                 eprintln!("  {} {}\n", "Error:".red().bold(), e);
             }
+            continue;
+        }
+        if let Some(title) = input.strip_prefix("/rename ") {
+            tui::rename_tab(title.trim());
+            println!(
+                "  {}\n",
+                format!("tab renamed to `{}`", title.trim()).dimmed()
+            );
+            continue;
+        }
+        if let Some(color) = input.strip_prefix("/color ") {
+            if tui::set_accent(color.trim()) {
+                tui::welcome_banner(
+                    cfg.provider.id,
+                    &cfg.model_id,
+                    &cfg.workspace_root.display().to_string(),
+                );
+            }
+            continue;
+        }
+        if input == "/files" {
+            tui::files_touched_panel(&registry.files_touched());
+            println!();
             continue;
         }
         if input == "/goal" {
@@ -248,7 +305,18 @@ pub async fn run_interactive(cfg: &Config, budget_limit: Option<f64>) -> Result<
         messages.push(CompletionMessage::user(input));
         println!();
 
-        if let Err(e) = run_turn(&*provider, &registry, &mut messages, &mut budget, cfg).await {
+        if let Err(e) = run_turn(
+            &*provider,
+            &registry,
+            &mut messages,
+            &mut budget,
+            cfg,
+            &store,
+            "chat",
+            input,
+        )
+        .await
+        {
             eprintln!("  {} {}\n", "Error:".red().bold(), e);
         }
     }
@@ -271,36 +339,84 @@ fn build_budget_guard(budget_limit: Option<f64>) -> BudgetGuard {
     }
 }
 
+/// Open the workspace DuckDB store (`.stella/stella.duckdb`). Persistence
+/// is observability, not a work dependency: a store that won't open warns
+/// once and the session runs on without it — never a startup failure.
+fn open_store(workspace_root: &std::path::Path) -> Option<Arc<Store>> {
+    match Store::open(workspace_root) {
+        Ok(store) => Some(Arc::new(store)),
+        Err(e) => {
+            eprintln!(
+                "  {} local store unavailable ({e}) — executions/telemetry will not be persisted \
+                 this session",
+                "⚠".yellow()
+            );
+            None
+        }
+    }
+}
+
+/// Begin an execution record; a failure degrades to "no persistence for
+/// this execution" rather than blocking the work.
+fn begin_execution(
+    store: &Option<Arc<Store>>,
+    kind: &str,
+    prompt: &str,
+    cfg: &Config,
+) -> Option<(Arc<Store>, i64)> {
+    let store = store.as_ref()?;
+    match store.begin_execution(kind, prompt, cfg.provider.id, &cfg.model_id) {
+        Ok(id) => Some((store.clone(), id)),
+        Err(_) => None,
+    }
+}
+
 /// Run one full turn through `stella_core::Engine`, rendering its
 /// `AgentEvent` stream live via a spawned draining task running
 /// concurrently with the engine (the channel is unbounded and `send` never
 /// blocks, so events reach the renderer as soon as an `.await` point in
 /// `run_turn` yields — same live-feeling output the old inline-print loop
 /// had, just sourced from the event stream instead of direct calls).
+#[allow(clippy::too_many_arguments)]
 async fn run_turn(
     provider: &dyn Provider,
     registry: &ToolRegistry,
     messages: &mut Vec<CompletionMessage>,
     budget: &mut BudgetGuard,
     cfg: &Config,
+    store: &Option<Arc<Store>>,
+    kind: &str,
+    prompt: &str,
 ) -> Result<(), String> {
     budget.begin_turn();
     let turn_start = Instant::now();
+    let execution = begin_execution(store, kind, prompt, cfg);
 
     let engine = Engine::new(provider, registry, EngineConfig::default());
     let (tx, rx) = mpsc::unbounded_channel::<AgentEvent>();
-    let renderer = spawn_renderer(rx);
+    let renderer = spawn_renderer(rx, execution.clone(), cfg.provider.id.to_string());
 
     let outcome = engine.run_turn(messages, budget, &tx).await;
     // Dropping the sender closes the channel, ending the renderer's
     // `recv()` loop; awaiting it ensures every already-queued event has
-    // actually printed before this function returns (no events lost to a
-    // detached task racing process exit).
+    // actually printed AND persisted before this function returns (no
+    // events lost to a detached task racing process exit).
     drop(tx);
     let _ = renderer.await;
 
+    let files = registry.files_touched();
+    if let Some((store, id)) = &execution {
+        let _ = store.record_files_touched(*id, &files);
+        let (outcome_label, cost) = match &outcome {
+            TurnOutcome::Completed { cost_usd, .. } => ("completed", *cost_usd),
+            TurnOutcome::Aborted { .. } => ("aborted", 0.0),
+        };
+        let _ = store.finish_execution(*id, outcome_label, cost);
+    }
+
     match outcome {
         TurnOutcome::Completed { cost_usd, .. } => {
+            tui::files_touched_panel(&files);
             tui::cost_summary(
                 cost_usd,
                 &format!("{}/{}", cfg.provider.id, cfg.model_id),
@@ -317,19 +433,22 @@ async fn run_turn(
 /// turns interleaved with judge assessments until the judge passes it (or
 /// a backstop — rounds, budget, abort — ends it with a named reason). The
 /// judge is the same provider in v1; see `run_goal_cmd`'s doc.
+#[allow(clippy::too_many_arguments)]
 async fn run_goal_turn(
     provider: &dyn Provider,
     registry: &ToolRegistry,
     messages: &mut Vec<CompletionMessage>,
     budget: &mut BudgetGuard,
     cfg: &Config,
+    store: &Option<Arc<Store>>,
     goal: &str,
 ) -> Result<(), String> {
     let turn_start = Instant::now();
+    let execution = begin_execution(store, "goal", goal, cfg);
 
     let engine = Engine::new(provider, registry, EngineConfig::default());
     let (tx, rx) = mpsc::unbounded_channel::<AgentEvent>();
-    let renderer = spawn_renderer(rx);
+    let renderer = spawn_renderer(rx, execution.clone(), cfg.provider.id.to_string());
 
     let outcome = engine
         .run_goal(
@@ -343,6 +462,17 @@ async fn run_goal_turn(
         .await;
     drop(tx);
     let _ = renderer.await;
+
+    let files = registry.files_touched();
+    if let Some((store, id)) = &execution {
+        let _ = store.record_files_touched(*id, &files);
+        let (outcome_label, cost) = match &outcome {
+            GoalOutcome::Met { cost_usd, .. } => ("goal_met", *cost_usd),
+            GoalOutcome::Unmet { cost_usd, .. } => ("goal_unmet", *cost_usd),
+        };
+        let _ = store.finish_execution(*id, outcome_label, cost);
+    }
+    tui::files_touched_panel(&files);
 
     match outcome {
         GoalOutcome::Met {
@@ -386,10 +516,62 @@ async fn run_goal_turn(
 /// rather than inside that generic dispatcher). With parallel tool
 /// execution, results may arrive out of call order — the map keys results
 /// back to the right name regardless.
-fn spawn_renderer(mut rx: mpsc::UnboundedReceiver<AgentEvent>) -> tokio::task::JoinHandle<()> {
+/// Also persists as it renders: every event is appended to the execution's
+/// stream (chain-of-thought `Reasoning` deltas included) and each
+/// `StepUsage` becomes a telemetry row. Store failures degrade to a single
+/// warning — rendering never stops for persistence.
+fn spawn_renderer(
+    mut rx: mpsc::UnboundedReceiver<AgentEvent>,
+    execution: Option<(Arc<Store>, i64)>,
+    provider_id: String,
+) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         let mut tool_names: HashMap<String, String> = HashMap::new();
+        let mut seq = 0u64;
+        let mut store_warned = false;
         while let Some(event) = rx.recv().await {
+            if let Some((store, id)) = &execution {
+                if store.record_event(*id, seq, &event).is_err() && !store_warned {
+                    eprintln!(
+                        "  {} store write failed — telemetry for this execution is incomplete",
+                        "⚠".yellow()
+                    );
+                    store_warned = true;
+                }
+                seq += 1;
+                if let AgentEvent::StepUsage {
+                    step,
+                    model,
+                    input_tokens,
+                    output_tokens,
+                    cached_input_tokens,
+                    cost_usd,
+                    duration_ms,
+                    retries,
+                    tool_calls,
+                } = &event
+                {
+                    let _ = store.record_telemetry(
+                        *id,
+                        &TelemetryRow {
+                            step: *step as u64,
+                            provider: provider_id.clone(),
+                            model: model.clone(),
+                            input_tokens: *input_tokens,
+                            output_tokens: *output_tokens,
+                            cache_read_tokens: *cached_input_tokens,
+                            cache_miss_tokens: input_tokens.saturating_sub(*cached_input_tokens),
+                            // Populated once the usage envelope carries
+                            // cache-write counts (staged follow-up).
+                            cache_write_tokens: 0,
+                            cost_usd: *cost_usd,
+                            duration_ms: *duration_ms,
+                            retries: *retries,
+                            tool_calls: *tool_calls as u64,
+                        },
+                    );
+                }
+            }
             match &event {
                 AgentEvent::ToolStart { call } => {
                     tool_names.insert(call.call_id.clone(), call.name.clone());
@@ -481,6 +663,18 @@ fn print_help() {
     println!(
         "  {}  Work in judged rounds until a judge model confirms the goal is met",
         "/goal <text>".bright_blue()
+    );
+    println!(
+        "  {}       Show files touched this session",
+        "/files".bright_blue()
+    );
+    println!(
+        "  {} Rename this terminal tab",
+        "/rename <name>".bright_blue()
+    );
+    println!(
+        "  {}  Change the accent color (multi-window)",
+        "/color <name>".bright_blue()
     );
     println!("  {}          Show this help", "/help".bright_blue());
     println!("  {}          Exit Stella", "/exit".bright_blue());

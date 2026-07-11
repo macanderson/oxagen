@@ -49,8 +49,145 @@ fn fmt_tokens(tokens: u64) -> String {
     }
 }
 
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+use colored::Color;
+
+/// Selectable accent palette — `/color` switches the session's accent so
+/// multiple terminal windows running stella are visually distinct at a
+/// glance.
+const PALETTE: [(&str, Color); 6] = [
+    ("magenta", Color::Magenta),
+    ("cyan", Color::Cyan),
+    ("green", Color::Green),
+    ("yellow", Color::Yellow),
+    ("blue", Color::Blue),
+    ("red", Color::Red),
+];
+
+static ACCENT: AtomicUsize = AtomicUsize::new(0);
+
+/// The session accent color (default magenta).
+pub fn accent() -> Color {
+    PALETTE[ACCENT.load(Ordering::Relaxed) % PALETTE.len()].1
+}
+
+/// Set the accent by name; returns false (and prints the options) on an
+/// unknown name.
+pub fn set_accent(name: &str) -> bool {
+    if let Some(index) = PALETTE.iter().position(|(n, _)| *n == name.to_lowercase()) {
+        ACCENT.store(index, Ordering::Relaxed);
+        true
+    } else {
+        let names: Vec<&str> = PALETTE.iter().map(|(n, _)| *n).collect();
+        println!(
+            "  unknown color `{name}` — pick one of: {}",
+            names.join(", ")
+        );
+        false
+    }
+}
+
+/// Rename the terminal tab/window via the OSC 0 escape — running several
+/// stella windows side by side, each can carry its own title.
+pub fn rename_tab(title: &str) {
+    print!("\x1b]0;{title}\x07");
+    let _ = io::stdout().flush();
+}
+
+/// Render the Files Touched panel: one `[C|R|U|D]` badge per file, in
+/// first-touch order, sourced from the registry's CRUD ledger.
+pub fn files_touched_panel(entries: &[(String, String)]) {
+    if entries.is_empty() {
+        return;
+    }
+    println!(
+        "\n  {} {}",
+        "─".repeat(3).dimmed(),
+        "Files Touched".color(accent()).bold()
+    );
+    let width = entries.iter().map(|(_, ops)| ops.len()).max().unwrap_or(1);
+    for (path, ops) in entries {
+        let colored_ops: String = ops
+            .chars()
+            .map(|op| match op {
+                'C' => "C".green().to_string(),
+                'R' => "R".blue().to_string(),
+                'U' => "U".yellow().to_string(),
+                'D' => "D".red().to_string(),
+                other => other.to_string(),
+            })
+            .collect();
+        println!(
+            "  [{colored_ops}]{} {}",
+            " ".repeat(width - ops.len()),
+            path
+        );
+    }
+}
+
+/// Pretty per-verb rendering for the CRUD file tools; everything else gets
+/// the generic key=value card.
+fn file_tool_card(name: &str, input: &serde_json::Value) -> bool {
+    let Some(path) = input.get("path").and_then(|v| v.as_str()) else {
+        return false;
+    };
+    match name {
+        "read_file" => {
+            let range = match (
+                input.get("offset").and_then(|v| v.as_u64()),
+                input.get("limit").and_then(|v| v.as_u64()),
+            ) {
+                (Some(offset), Some(limit)) => format!(" [{offset}..+{limit}]"),
+                (Some(offset), None) => format!(" [{offset}..]"),
+                _ => String::new(),
+            };
+            println!(
+                "  {} {} {}{}",
+                "▷".blue(),
+                "read".blue(),
+                path,
+                range.dimmed()
+            );
+        }
+        "write_file" => {
+            let lines = input
+                .get("content")
+                .and_then(|v| v.as_str())
+                .map(|content| content.lines().count())
+                .unwrap_or(0);
+            println!(
+                "  {} {} {} {}",
+                "✚".green(),
+                "write".green(),
+                path,
+                format!("({lines} lines)").dimmed()
+            );
+        }
+        "edit_file" => {
+            println!("  {} {} {}", "±".yellow(), "edit".yellow(), path);
+            if let Some(old) = input.get("old_string").and_then(|v| v.as_str()) {
+                let old_line = truncate_with_ellipsis(old.lines().next().unwrap_or(""), 70);
+                println!("    {} {}", "-".red(), old_line.red().dimmed());
+            }
+            if let Some(new) = input.get("new_string").and_then(|v| v.as_str()) {
+                let new_line = truncate_with_ellipsis(new.lines().next().unwrap_or(""), 70);
+                println!("    {} {}", "+".green(), new_line.green());
+            }
+        }
+        "delete_file" => {
+            println!("  {} {} {}", "✖".red(), "delete".red(), path);
+        }
+        _ => return false,
+    }
+    true
+}
+
 /// Print a tool-call card: name, input summary, status.
 pub fn tool_call_card(name: &str, input: &serde_json::Value, status: &str) {
+    if status == "running" && file_tool_card(name, input) {
+        return;
+    }
     let icon = match status {
         "running" => "▶".cyan(),
         "ok" => "✓".green(),
@@ -116,7 +253,11 @@ pub fn print_delta(text: &str) {
 
 /// Print a section header.
 pub fn section_header(title: &str) {
-    println!("\n{} {}", "─".dimmed().repeat(3), title.cyan().bold());
+    println!(
+        "\n{} {}",
+        "─".dimmed().repeat(3),
+        title.color(accent()).bold()
+    );
 }
 
 /// Print the assistant's complete response (after streaming).
@@ -151,7 +292,7 @@ pub fn welcome_banner(provider: &str, model: &str, workspace: &str) {
    ___) | | | | \__ \ |_ \ V  V / (_| | | |  __/
   |____/|_| |_|_|___/_|__\_/\_/ \__,_|_|  \___|
 "#;
-    println!("{}", stella.bright_magenta());
+    println!("{}", stella.color(accent()));
     println!(
         "  {} {} · {} · {}",
         "◆".cyan(),

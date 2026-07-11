@@ -5,6 +5,7 @@ members = [
   "ocp-types",
   "stella-core",
   "stella-model",
+  "stella-store",
   "stella-tools",
   "stella-cli",
 ]

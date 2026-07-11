@@ -72,6 +72,12 @@ enum Command {
         goal: String,
     },
 
+    /// Watch CI for a branch/PR and fix failures until it is fully green
+    Monitor {
+        /// Branch name or PR number (default: main)
+        target: Option<String>,
+    },
+
     /// Start an interactive REPL session
     Chat,
 
@@ -138,6 +144,22 @@ fn run(cli: Cli) -> Result<(), String> {
             rt.block_on(agent::run_one_shot(&cfg, &prompt, cli.budget))?;
         }
         Command::Goal { goal } => {
+            let rt = tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .build()
+                .map_err(|e| format!("failed to start runtime: {e}"))?;
+            rt.block_on(agent::run_goal_cmd(&cfg, &goal, cli.budget))?;
+        }
+        Command::Monitor { target } => {
+            let target = target.unwrap_or_else(|| "main".to_string());
+            // Monitoring IS a goal: the judge (who can call ci_status
+            // itself) ends the loop only on a fully green latest run.
+            let goal = format!(
+                "Drive CI for `{target}` to fully green. Use ci_status (wait: true) to watch \
+                 the latest runs, read the failure logs it returns, fix each root cause in the \
+                 code, commit and push the fix, then re-check. The goal is met only when the \
+                 latest CI run for `{target}` has completed with every check successful."
+            );
             let rt = tokio::runtime::Builder::new_multi_thread()
                 .enable_all()
                 .build()
