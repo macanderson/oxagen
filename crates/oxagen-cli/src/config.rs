@@ -19,9 +19,16 @@ pub struct ProviderConfig {
     pub display_name: &'static str,
     pub default_model: &'static str,
     pub base_url: &'static str,
-    /// Whether this provider speaks the OpenAI-compatible chat/completions
-    /// dialect (true for Z.ai, OpenAI, xAI, DeepSeek, OpenRouter, any
-    /// OpenAI-compatible gateway). False for Anthropic (Messages API).
+    /// Whether this provider speaks the OpenAI-*compatible* chat/completions
+    /// dialect (true for Z.ai, xAI, DeepSeek, Gemini's OpenAI-compat shim,
+    /// OpenRouter, any generic OpenAI-compatible gateway). False for
+    /// Anthropic (Messages API). Real OpenAI (`id == "openai"`) is `true`
+    /// here too for backwards compatibility with anything still matching on
+    /// this flag, but `build_provider` (`agent.rs`) special-cases
+    /// `id == "openai"` ahead of this flag and routes it through the real
+    /// Responses API adapter (`oxagen_model::openai`) instead — OpenAI's own
+    /// API is not the same wire shape as the "OpenAI-compatible" gateways
+    /// this flag is actually describing.
     pub openai_compatible: bool,
 }
 
@@ -296,7 +303,9 @@ impl Config {
         println!("  Workspace:  {}", self.workspace_root.display());
         println!(
             "  Dialect:    {}",
-            if self.provider.openai_compatible {
+            if self.provider.id == "openai" {
+                "OpenAI Responses"
+            } else if self.provider.openai_compatible {
                 "OpenAI-compatible"
             } else {
                 "Anthropic Messages"

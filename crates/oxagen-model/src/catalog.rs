@@ -19,6 +19,16 @@ use oxagen_protocol::ProviderError;
 pub enum ToolDialect {
     AnthropicTools,
     OpenaiJson,
+    /// OpenAI's own Responses API (`oxagen_model::openai::OpenAiProvider`).
+    /// Structurally distinct from `OpenaiJson` (Chat Completions and every
+    /// OpenAI-*compatible* gateway: Z.ai, xAI, DeepSeek, OpenRouter, local)
+    /// despite the name overlap: item-based `input`/`output` arrays with
+    /// `function_call`/`function_call_output` items, not a `messages` array
+    /// with an accumulating `tool_calls` delta array. Real OpenAI models
+    /// (the `gpt-5.5` row below) get this variant now that the real
+    /// adapter exists; `OpenaiJson` stays the dialect name for everything
+    /// that actually speaks the Chat Completions wire shape.
+    OpenaiResponses,
 }
 
 /// One catalog row — provider-native slug, verified against the provider's
@@ -66,7 +76,13 @@ impl Catalog {
                     provider: "openai",
                     family: "gpt",
                     context_window: 400_000,
-                    tool_dialect: ToolDialect::OpenaiJson,
+                    // Real adapter now exists (oxagen_model::openai) —
+                    // this used to be OpenaiJson, which was wrong: OpenAI
+                    // was never routed through Chat Completions, only
+                    // through the generic ZaiProvider pointed at OpenAI's
+                    // base URL as a stand-in until the Responses API
+                    // adapter landed.
+                    tool_dialect: ToolDialect::OpenaiResponses,
                 },
                 CatalogEntry {
                     id: "grok-4",

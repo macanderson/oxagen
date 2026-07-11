@@ -255,6 +255,15 @@ async fn run_turn(
 /// call (`07-model-matrix.md` §3, L-M1/L-M2: this hard-error rule existed in
 /// `oxagen_model::catalog` since Phase 0 but was never actually called from
 /// the request path, so it was unenforced in practice).
+///
+/// OpenAI gets its own arm ahead of the `openai_compatible` bool: real
+/// OpenAI speaks the Responses API (`oxagen_model::openai`), a wire shape
+/// (and tool-call dialect, see `catalog.rs`'s `ToolDialect::OpenaiResponses`)
+/// genuinely distinct from the Chat Completions shape every other
+/// `openai_compatible` row (Z.ai, xAI, DeepSeek, Gemini's OpenAI-compat
+/// shim, OpenRouter) actually speaks — see `openai.rs`'s module doc for why
+/// reusing `ZaiProvider` for OpenAI was wrong even though it happened to
+/// work.
 fn build_provider(cfg: &Config) -> Result<Box<dyn Provider>, String> {
     oxagen_model::catalog::Catalog::seed()
         .resolve(&cfg.model_id)
@@ -262,9 +271,14 @@ fn build_provider(cfg: &Config) -> Result<Box<dyn Provider>, String> {
 
     let api_key = ApiKey::new(cfg.api_key.clone());
 
-    if cfg.provider.openai_compatible {
-        // Z.ai, OpenAI, xAI, DeepSeek, Gemini (OpenAI-compat), OpenRouter
-        // all use the same adapter shape — only the base URL differs.
+    if cfg.provider.id == "openai" {
+        let provider = oxagen_model::openai::OpenAiProvider::new(api_key, cfg.model_id.clone())
+            .with_base_url(cfg.provider.base_url.to_string());
+        Ok(Box::new(provider))
+    } else if cfg.provider.openai_compatible {
+        // Z.ai, xAI, DeepSeek, Gemini (OpenAI-compat shim), OpenRouter all
+        // use the same Chat Completions adapter shape — only the base URL
+        // differs.
         let provider = oxagen_model::zai::ZaiProvider::new(api_key, cfg.model_id.clone())
             .with_base_url(cfg.provider.base_url.to_string());
         Ok(Box::new(provider))
