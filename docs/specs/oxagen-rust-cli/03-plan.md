@@ -121,8 +121,10 @@ cited in a real turn; kill-signal during indexing leaves a consistent store
 
 1. `oxagen-pipeline`: evaluate→enhance→route→execute→judge→revise; triage
    fast paths (simple-prompt classification skips planner+judge — L-E2);
-   scope-review gate; evidence-based judge (judge≠worker, cross-family when
-   available); best-of-N generation + selection.
+   scope-review gate; spec-first flip oracle + deterministic verification
+   ladder (submit-fast judge-skip on executed evidence — L-E11);
+   evidence-based judge (judge≠worker, cross-family when available);
+   best-of-N generation + selection.
 2. `oxagen-mcp`: MCP client (stdio + streamable http), tool registration
    alongside native tools.
 3. Golden-trajectory conformance harness: record TS-engine trajectories on

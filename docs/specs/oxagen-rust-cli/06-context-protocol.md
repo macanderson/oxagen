@@ -83,6 +83,11 @@ missing one.
    event reports the mix (which providers, how many tokens) so the TUI and
    trace can show *why the agent knew that*.
 
+A **coverage gate** keeps the plane honest: when graph/vector coverage of the
+goal falls below a threshold, the plane falls back to bounded lexical search
+and labels those frames as lexical fallback rather than serving weak graph
+frames as grounding (`09-lessons-learned.md` L-C6).
+
 Latency budget: p95 < 100ms for the full pipeline on a 100k-chunk index
 (`01-product-spec.md` §6) — retrieval must be cheap enough to run **every
 turn** without the user noticing.

@@ -168,6 +168,28 @@ engine and one stage vocabulary** — the TS era's duplicated `StageKind`
 (engine copy + CLI `trace.ts` copy) is the canonical example of the defect
 class principle #7 exists to prevent (`09-lessons-learned.md` L-E1).
 
+**Port map from the TS engine (the executable spec).** `packages/agent-engine`
+is *already* platform-free — its only runtime deps are the AI SDK and zod;
+every platform concern is injected through `ports.ts`. The Rust trait
+boundary mirrors those exact seams:
+
+| TS port (`ports.ts` et al.) | Rust home |
+|---|---|
+| `AgentAi` (model transport) | `Provider` (`oxagen-model`) |
+| `Workspace` | `Workspace` (`oxagen-tools`) |
+| `MemoryProvider`, `CodeGraphProvider` | context-plane providers behind `ContextPlane` (`oxagen-context`) |
+| `TraceStore` | `Trace` (`oxagen-core::trace`) |
+| `GraphSyncProvider` (lineage write-back) | context write-back (`ContextPlane::upsert`) |
+| `FileLockProvider` | `oxagen-fleet` file-ownership serialization |
+| `budgetGuard` callback | `oxagen-core` budget hook (`BudgetTick`) |
+
+The TS CLI's adapter set (Node-fs workspace, BYOK gateway `AgentAi`,
+on-device GGUF `AgentAi`, local memory/code-graph/file-lock) already drives
+the identical engine with **zero** platform services — it is the closest
+existing reference implementation for this port. (Unrelated prior art:
+`packages/engram/rust-spec/` is a NAPI accelerator spec for the memory
+subsystem only — different scope, not this project.)
+
 ## 4. Event vocabulary (protocol)
 
 Events are plain Rust enum variants flowing over a `tokio::sync::mpsc`
@@ -217,7 +239,11 @@ user prompt
   → scope review gate (interactive only, above thresholds)     [ScopeReview]
   → execute loop: model step ↔ tool calls                      [ToolStart/…]
       bash / fs tools / mcp tools / media tools / context tools
-  → judge (judge role, judge≠worker; skipped on fast paths)    [JudgeVerdict]
+  → deterministic verification ladder: flip-oracle (fail→pass
+    of the same normalized test command) + touched-tests-green
+    + diff budget → submit-fast (judge skipped) | revise | fork  [JudgeVerdict]
+  → model judge only on inconclusive evidence (judge role,
+    judge≠worker, cross-family when available)                  [JudgeVerdict]
   → context write-back: episode summary, extracted facts,
     file-symbol touch counts → knowledge graph                 [ContextWrite]
   → complete                                                    [Complete]
