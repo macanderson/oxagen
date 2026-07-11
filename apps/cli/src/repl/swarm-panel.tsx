@@ -55,6 +55,8 @@ export function agentStatusStyle(status: AgentStatus): {
       return { glyph: "✓", color: theme.green };
     case "failed":
       return { glyph: "✗", color: theme.red };
+    case "killed":
+      return { glyph: "⊘", color: theme.red };
   }
 }
 

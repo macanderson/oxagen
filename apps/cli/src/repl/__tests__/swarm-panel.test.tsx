@@ -88,6 +88,7 @@ describe("agentStatusStyle", () => {
     expect(agentStatusStyle("queued").glyph).toBe("⧗");
     expect(agentStatusStyle("done").glyph).toBe("✓");
     expect(agentStatusStyle("failed").glyph).toBe("✗");
+    expect(agentStatusStyle("killed").glyph).toBe("⊘");
   });
 });
 
