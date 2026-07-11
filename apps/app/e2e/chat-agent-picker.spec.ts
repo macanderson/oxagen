@@ -30,8 +30,10 @@ const SCREENSHOT_DIR = path.join(
 /**
  * Create an agent through the builder deterministically: skip the AI describe
  * step (no LLM), fill identity, optionally flip on "Code features" (persists
- * agentType "code" → isCode), then save the draft. Mirrors the proven flow in
- * agents-card-grid-avatars.spec.ts.
+ * agentType "code" → isCode), step through to Review with builder-next (the
+ * wizard has no single "jump to review" control — only Back/Next over the
+ * identity → prompt → equip → ground → triggers → review steps), then save
+ * the draft.
  */
 async function createAgent(
   page: Page,
@@ -50,7 +52,12 @@ async function createAgent(
     // "Code features" switch (Identity step) → agentType "code".
     await page.getByTestId("agent-code-features-switch").click();
   }
-  await page.getByTestId("builder-step-review").click();
+  // Bounded so a stalled step fails fast with a clear error instead of the
+  // outer test timeout.
+  for (let i = 0; i < 10; i++) {
+    if (await page.getByTestId("step-review").isVisible()) break;
+    await page.getByTestId("builder-next").click();
+  }
   await expect(page.getByTestId("step-review")).toBeVisible();
   await page.getByTestId("agent-save-draft").click();
   await expect(page.getByText(/draft saved/i)).toBeVisible({ timeout: 20_000 });
@@ -70,12 +77,10 @@ test.describe("chat.agent-picker", () => {
     const { orgSlug } = await signUpFreshUser(page, {
       orgPrefix: "agent-picker",
     });
-    // "chat-" (5) + an 8-char base36 timestamp = 13 chars, safely under
-    // create_agent_def's 18-char slug cap. The previous "chat-helper-" prefix
-    // (12 chars) pushed the generated slug to 20 chars — over the cap — so
-    // every create_agent_def call failed zod validation ("too_big") and the
-    // draft was never persisted, deterministically timing out the "draft
-    // saved" toast wait below.
+    // Agent slugs are capped at 18 chars (agent.definition.create — the global
+    // key org_ns.workspace_ns.slug must fit ≤32); "chat-helper-" + an 8-char
+    // base36 timestamp is 20 chars and fails create_agent_def validation
+    // silently (the "draft saved" wait then times out) — keep this short.
     const slug = `chat-${Date.now().toString(36)}`;
     await createAgent(page, orgSlug, { name: "Chat Helper", slug });
 

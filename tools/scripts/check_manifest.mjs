@@ -74,15 +74,21 @@ function writeContractBarrel(files) {
  * @param {string} layer - the layer name from the contract's layers[]
  * @param {string} capName - the capability name (e.g. "org.create")
  * @param {string[]} capSurfaces - the capability's surfaces[] array
+ * @param {string} fileStem - the contract's own filename stem (e.g.
+ *   "telemetry.error.cluster"). ADR-025 renamed capability NAMES to verb-first
+ *   snake_case but the FILES kept their legacy dotted stems, so evidence files
+ *   (api route, mcp tool, unit test, docs page) may be named by either — a
+ *   capability whose surfaces all exist must never be reported as a gap just
+ *   because the checker only tried the snake name (fix-the-checker rule).
  */
-function layerSatisfied(layer, capName, capSurfaces) {
+function layerSatisfied(layer, capName, capSurfaces, fileStem) {
   const slug = slugify(capName);
+  const stems = fileStem && fileStem !== capName ? [capName, fileStem] : [capName];
   // The mcp layer is satisfied when the capability declares "mcp" in surfaces[]
   // AND a tool file exists at apps/mcp/src/tools/<capability>.ts (xmcp registration).
   if (layer === "mcp") {
     if (!capSurfaces.includes("mcp")) return false;
-    const toolFile = join(ROOT, `apps/mcp/src/tools/${capName}.ts`);
-    return existsSync(toolFile);
+    return stems.some((s) => existsSync(join(ROOT, `apps/mcp/src/tools/${s}.ts`)));
   }
   // The "app" layer (human-operable UI in apps/app) is not a file-existence
   // check — it is a route-binding + runtime-proof promise owned by a dedicated
@@ -92,10 +98,10 @@ function layerSatisfied(layer, capName, capSurfaces) {
   if (layer === "app") return true;
   const candidates = {
     schema: [join(ROOT, "packages/database/src/schema")],
-    api: [join(ROOT, `apps/api/src/routes/v1/${capName}.ts`)],
-    unit: [join(CAP_DIR, `${capName}.test.ts`)],
+    api: stems.map((s) => join(ROOT, `apps/api/src/routes/v1/${s}.ts`)),
+    unit: stems.map((s) => join(CAP_DIR, `${s}.test.ts`)),
     e2e: [join(ROOT, `apps/app/e2e/${slug}.spec.ts`)],
-    docs: [join(ROOT, `docs/capabilities/${capName}.md`)],
+    docs: stems.map((s) => join(ROOT, `docs/capabilities/${s}.md`)),
     marketing: [join(ROOT, "apps/website")],
   };
   const paths = candidates[layer] ?? [];
@@ -190,7 +196,12 @@ function main() {
   for (const cap of caps) {
     const layerStatus = {};
     for (const layer of cap.layers) {
-      const ok = layerSatisfied(layer, cap.name, cap.surfaces);
+      const ok = layerSatisfied(
+        layer,
+        cap.name,
+        cap.surfaces,
+        cap.file.replace(/\.ts$/, ""),
+      );
       layerStatus[layer] = ok;
       if (!ok) (gapsByCap[cap.name] ??= []).push(layer);
     }

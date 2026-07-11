@@ -1,22 +1,40 @@
 /**
  * chat.code-mode — e2e spec.
  *
- * Signs up a fresh user and exercises the chat composer's "Code" mode gate:
- *   - With no GitHub repos configured, the Code toggle is disabled.
- *   - After seeding a `connected` GitHub connection (seed-code-repo.ts) and a
- *     reload, the toggle is enabled; turning code mode on auto-selects the
- *     workspace's seeded "Default" environment but leaves the repo unpicked —
- *     send stays BLOCKED with the "Select a repository and environment…" hint.
- *   - Selecting the repo opens the gate.
- *   - Submitting the turn POSTs /api/v1/chat/stream with a `code` field
+ * Code mode no longer has a manual toggle — it derives SOLELY from the
+ * selected agent's definition (`selectedAgent.isCode`, see
+ * message-composer.tsx). Picking a code agent through the picker (gallery /
+ * composer chip) always forces the inline repo + environment setup step
+ * before applying (see agent-picker-panel.tsx's `applyAgent`/`confirmSetup`),
+ * so the composer's own send-gate (`codeGateBlocked` / the
+ * `code-mode-gate-hint` testid) is unreachable through that path — the
+ * picker itself won't let you finish selecting a code agent without both.
+ *
+ * The gate IS reachable through the other documented way to enter code mode:
+ * a `?agent=<publicId>` URL binding (see ask/page.tsx, "binds this session to
+ * a published agent"). That path seeds `selectedAgentId` directly, so code
+ * mode turns on with only the environment auto-defaulted (workspace default)
+ * — the repo stays unpicked whenever there is more than one candidate (see
+ * message-composer.tsx's auto-fill effect, which only auto-picks a *sole*
+ * repo). This spec exercises exactly that:
+ *
+ *   - Deep-linking `?agent=<codeAgentId>` with two seeded repos and no
+ *     workspace-default repo preference: send stays BLOCKED with the
+ *     "Select a repository and environment…" hint until a repo is picked.
+ *   - Submitting the first turn POSTs /api/v1/chat/stream with a `code` field
  *     carrying { connectionId, owner, name, defaultBranch, environmentId,
- *     sandboxSessionId: null } that matches the seeded connection — asserted
- *     by intercepting the outgoing request (no real sandbox execution).
+ *     sandboxSessionId: null } matching the selected repo — asserted by
+ *     intercepting the outgoing request (no real sandbox execution).
+ *   - After that first send, the conversation's coding target LOCKS: the
+ *     repo/environment selectors render disabled inside a
+ *     `locked-context-control` wrapper (`composer-context-controls`'s
+ *     `data-locked="true"`), and the agent chip swaps to its read-only
+ *     `agent-context-chip-locked` variant.
  *
  * Screenshots go to apps/app/e2e/screenshots/ (gitignored).
  */
 
-import { test, expect, type Route } from "@playwright/test";
+import { test, expect, type Page, type Route } from "@playwright/test";
 import { signUpFreshUser } from "./helpers/signup";
 import { interceptAgentStream } from "./helpers/agent-stream-mock";
 import { seedConnectedGithubRepo } from "./helpers/seed-code-repo";
@@ -26,6 +44,48 @@ import { fileURLToPath } from "node:url";
 
 const SCREENSHOT_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "screenshots");
 
+/**
+ * Create a code agent through the builder deterministically: skip the AI
+ * describe step (no LLM), fill identity, flip on "Code features" (persists
+ * agentType "code" → isCode), step through to Review with builder-next (there
+ * is no single "jump to review" control), then save the draft. Returns the
+ * created agent's public id (`agt_…`), read back from the URL — saving a new
+ * draft moves the browser onto the durable edit route
+ * (`/workbench/agents/{agentId}`) via `router.replace` (see
+ * agent-builder.tsx's `persistDraft`).
+ */
+async function createCodeAgent(
+  page: Page,
+  orgSlug: string,
+  opts: { name: string; slug: string },
+): Promise<string> {
+  await page.goto(`/${orgSlug}/default/workbench/agents/new`);
+  await expect(page.getByTestId("step-describe")).toBeVisible({ timeout: 20_000 });
+  await page.getByTestId("agent-describe-skip").click();
+  await expect(page.getByTestId("step-identity")).toBeVisible();
+  await page.getByTestId("agent-name-input").fill(opts.name);
+  await page.getByTestId("agent-slug-input").fill(opts.slug);
+  await page.getByTestId("agent-code-features-switch").click();
+
+  // Identity → Prompt → Equip → Ground → Triggers → Review: click Next until
+  // Review is visible (bounded so a stalled step fails fast with a clear
+  // error instead of the outer test timeout).
+  for (let i = 0; i < 10; i++) {
+    if (await page.getByTestId("step-review").isVisible()) break;
+    await page.getByTestId("builder-next").click();
+  }
+  await expect(page.getByTestId("step-review")).toBeVisible();
+  await page.getByTestId("agent-save-draft").click();
+  await expect(page.getByText(/draft saved/i)).toBeVisible({ timeout: 20_000 });
+
+  const segments = new URL(page.url()).pathname.split("/").filter(Boolean);
+  const agentId = segments[segments.length - 1];
+  if (!agentId || agentId === "new") {
+    throw new Error(`createCodeAgent: could not resolve the agent id from URL "${page.url()}"`);
+  }
+  return agentId;
+}
+
 test.describe("chat.code-mode", () => {
   test.beforeEach(() => {
     if (fs.existsSync(SCREENSHOT_DIR)) {
@@ -34,32 +94,45 @@ test.describe("chat.code-mode", () => {
     fs.mkdirSync(SCREENSHOT_DIR, { recursive: true });
   });
 
-  test("blocks send until a repo + environment are selected, then sends the code payload", async ({
+  test("blocks send until a repo is selected, sends the code payload, then locks the coding target", async ({
     page,
   }) => {
+    test.setTimeout(180_000);
     const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "code-mode" });
 
-    await page.goto(`/${orgSlug}/default/chat`);
-    const composer = page.getByPlaceholder(/send a message/i);
-    await expect(composer).toBeVisible({ timeout: 10_000 });
-
-    const codeToggle = page.getByRole("button", { name: "Toggle code mode" });
-    await expect(codeToggle).toBeVisible();
-
-    // No GitHub connections exist yet for this fresh org — the toggle is
-    // disabled (see message-composer.tsx's `!hasRepos && !codeMode` guard).
-    await expect(codeToggle).toBeDisabled();
-    await page.screenshot({ path: path.join(SCREENSHOT_DIR, "code-mode-toggle-disabled.png") });
-
-    // Seed a `connected` GitHub connection with a resolvable owner/repo, then
-    // reload so the RSC (_shared/code-mode-data.ts) re-fetches the repo list.
-    const seeded = await seedConnectedGithubRepo({ orgSlug });
+    // Two repos on two distinct connections — with no workspace-default repo
+    // preference set, resolveDefaultRepoKey() returns null and the
+    // composer's auto-fill effect only auto-picks a *sole* repo (see
+    // message-composer.tsx). With two candidates the repo stays unpicked, so
+    // the send gate is genuinely observable rather than resolving on mount.
+    const repoA = await seedConnectedGithubRepo({
+      orgSlug,
+      owner: "oxageninc",
+      repo: "e2e-fixture-repo-a",
+    });
+    const repoB = await seedConnectedGithubRepo({
+      orgSlug,
+      owner: "oxageninc",
+      repo: "e2e-fixture-repo-b",
+    });
     try {
-      await page.reload();
-      await expect(composer).toBeVisible({ timeout: 10_000 });
-      await expect(codeToggle).toBeEnabled();
+      const slug = `coder-${Date.now().toString(36)}`;
+      const agentId = await createCodeAgent(page, orgSlug, {
+        name: "Repo Coder",
+        slug,
+      });
 
-      await codeToggle.click();
+      // `?agent=<publicId>` binds the session directly (ask/page.tsx) — the
+      // one path that turns code mode on WITHOUT going through the picker's
+      // own repo+environment setup step, so the composer's own gate is
+      // exercised.
+      await page.goto(`/${orgSlug}/default/ask?agent=${agentId}`);
+
+      const composer = page.getByPlaceholder(/send a message/i);
+      await expect(composer).toBeVisible({ timeout: 10_000 });
+
+      const chip = page.getByRole("button", { name: "Agent: Repo Coder" });
+      await expect(chip).toBeVisible();
 
       const repoTrigger = page.getByRole("combobox", { name: "Select repository" });
       const envTrigger = page.getByRole("combobox", { name: "Select environment" });
@@ -69,15 +142,18 @@ test.describe("chat.code-mode", () => {
       const sendBtn = page.getByRole("button", { name: /send message/i });
       const gateHint = page.getByTestId("code-mode-gate-hint");
 
-      // Environment auto-defaults to the workspace's seeded "Default", but the
-      // repo is still unpicked — send stays gated.
+      // Environment auto-defaults to the workspace's seeded "Default"; with
+      // TWO candidate repos there is no sole option to auto-select, so the
+      // repo stays unpicked and send stays gated.
       await expect(sendBtn).toBeDisabled();
       await expect(gateHint).toContainText("Select a repository and environment to start coding.");
       await page.screenshot({ path: path.join(SCREENSHOT_DIR, "code-mode-gate-blocked.png") });
 
-      // Select the seeded repo.
+      // Select repo A.
       await repoTrigger.click();
-      await page.getByRole("option", { name: `${seeded.owner}/${seeded.repo}` }).click();
+      await page
+        .getByRole("option", { name: `${repoA.owner}/${repoA.repo}`, exact: true })
+        .click();
 
       await expect(sendBtn).toBeEnabled();
       await expect(gateHint).toHaveCount(0);
@@ -103,17 +179,34 @@ test.describe("chat.code-mode", () => {
       await expect.poll(() => capturedBody).not.toBeNull();
       const body = capturedBody as unknown as { code: Record<string, unknown> };
       expect(body.code).toMatchObject({
-        connectionId: seeded.connectionId,
-        owner: seeded.owner,
-        name: seeded.repo,
-        defaultBranch: seeded.defaultBranch,
-        environmentId: seeded.environmentId,
+        connectionId: repoA.connectionId,
+        owner: repoA.owner,
+        name: repoA.repo,
+        defaultBranch: repoA.defaultBranch,
+        environmentId: repoA.environmentId,
         sandboxSessionId: null,
       });
-
       await page.screenshot({ path: path.join(SCREENSHOT_DIR, "code-mode-sent.png") });
+
+      // The conversation's coding target is now LOCKED for its lifetime
+      // (lockSelection() fires synchronously in onSubmit — no reload
+      // needed): the repo/environment selectors render disabled inside a
+      // `locked-context-control` wrapper, and the agent chip swaps to its
+      // read-only locked variant.
+      const contextControls = page.getByTestId("composer-context-controls");
+      await expect(contextControls).toHaveAttribute("data-locked", "true");
+      await expect(repoTrigger).toBeDisabled();
+      await expect(envTrigger).toBeDisabled();
+      await expect(page.getByTestId("locked-context-control")).toHaveCount(2);
+
+      const lockedChip = page.getByTestId("agent-context-chip-locked");
+      await expect(lockedChip).toBeVisible();
+      await expect(lockedChip).toHaveAttribute("aria-label", "Agent locked: Repo Coder");
+      await expect(chip).toHaveCount(0);
+      await page.screenshot({ path: path.join(SCREENSHOT_DIR, "code-mode-locked.png") });
     } finally {
-      await seeded.cleanup();
+      await repoA.cleanup();
+      await repoB.cleanup();
     }
   });
 
