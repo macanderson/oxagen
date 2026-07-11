@@ -43,7 +43,7 @@ describe("rateLimiter", () => {
 
     await middleware(c, next);
     await middleware(c, next);
-    const third = await middleware(c, next) as { status: number } | undefined;
+    const third = (await middleware(c, next)) as { status: number } | undefined;
 
     expect(next).toHaveBeenCalledTimes(2); // the 3rd call never reaches next()
     expect(third?.status).toBe(429);
@@ -57,8 +57,9 @@ describe("rateLimiter", () => {
     await middleware(c, next);
     await middleware(c, next);
 
-    const responseHeaders = (c as unknown as { __responseHeaders: Record<string, string> })
-      .__responseHeaders;
+    const responseHeaders = (
+      c as unknown as { __responseHeaders: Record<string, string> }
+    ).__responseHeaders;
     expect(responseHeaders["Retry-After"]).toBeDefined();
     expect(Number(responseHeaders["Retry-After"])).toBeGreaterThan(0);
   });
@@ -71,7 +72,9 @@ describe("rateLimiter", () => {
 
     await middleware(cA, next); // A's 1st — allowed
     const bFirst = await middleware(cB, next); // B's 1st — allowed, independent of A
-    const aSecond = (await middleware(cA, next)) as { status: number } | undefined; // A's 2nd — rejected
+    const aSecond = (await middleware(cA, next)) as
+      | { status: number }
+      | undefined; // A's 2nd — rejected
 
     expect(bFirst).toBeUndefined();
     expect(aSecond?.status).toBe(429);
@@ -85,7 +88,9 @@ describe("rateLimiter", () => {
       const c = fakeContext({ "x-forwarded-for": "203.0.113.6" });
 
       await middleware(c, next); // 1st — allowed
-      const rejected = (await middleware(c, next)) as { status: number } | undefined; // 2nd — rejected
+      const rejected = (await middleware(c, next)) as
+        | { status: number }
+        | undefined; // 2nd — rejected
       expect(rejected?.status).toBe(429);
 
       vi.advanceTimersByTime(1_001);
@@ -97,7 +102,7 @@ describe("rateLimiter", () => {
     }
   });
 
-  it("falls back to x-real-ip, then \"unknown\", when x-forwarded-for is absent", async () => {
+  it('falls back to x-real-ip, then "unknown", when x-forwarded-for is absent', async () => {
     const middleware = rateLimiter({ windowMs: 60_000, max: 1 });
     const next = vi.fn().mockResolvedValue(undefined);
     const withRealIp = fakeContext({ "x-real-ip": "203.0.113.7" });
@@ -119,14 +124,41 @@ describe("rateLimiter", () => {
     const next = vi.fn().mockResolvedValue(undefined);
 
     await middleware(fakeContext({ "x-forwarded-for": "203.0.113.8" }), next);
-    const rejected = (await middleware(fakeContext({ "x-forwarded-for": "203.0.113.9" }), next)) as
-      | { status: number }
-      | undefined;
+    const rejected = (await middleware(
+      fakeContext({ "x-forwarded-for": "203.0.113.9" }),
+      next,
+    )) as { status: number } | undefined;
 
     // Different IPs, same custom key — the second call is still rejected.
     expect(rejected?.status).toBe(429);
   });
 
+  it("opportunistically sweeps expired buckets once tracked keys exceed the threshold", async () => {
+    // SWEEP_THRESHOLD is 10_000 — a distinct key per call grows the bucket map
+    // past it, which fires the internal sweepExpired() pass on the next
+    // request. The threshold check runs on bucket size BEFORE the current
+    // call's own insert, so it takes one extra call past the threshold to
+    // actually flip it true (the 10_001st insert brings size to 10_001; only
+    // the 10_002nd call observes size > 10_000 and fires the sweep).
+    vi.useFakeTimers();
+    try {
+      let counter = 0;
+      const middleware = rateLimiter({
+        windowMs: 1,
+        max: 1,
+        keyFn: () => `sweep-key-${counter++}`,
+      });
+      const next = vi.fn().mockResolvedValue(undefined);
+
+      for (let i = 0; i < 10_001; i++) {
+        await middleware(fakeContext(), next);
+      }
+      // Every bucket created so far is now past its 1ms window — the sweep's
+      // delete branch (not just the "still fresh, skip" branch) actually runs.
+      vi.advanceTimersByTime(2);
+      await middleware(fakeContext(), next);
+
+      expect(next).toHaveBeenCalledTimes(10_002);
   it("opportunistically sweeps expired buckets once the tracked-key count crosses the threshold", async () => {
     // The limiter only sweeps expired buckets when its map grows past
     // SWEEP_THRESHOLD (10_000 keys). Fill it past that with distinct keys, let
