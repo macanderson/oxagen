@@ -55,7 +55,12 @@ const ROW = {
   snapshotId: null as string | null,
   image: "agent",
   status: "running",
-  metadata: { memoryMb: 2048, ttlSeconds: 86_400, idleTimeoutSeconds: 1_200, network: "allow" },
+  metadata: {
+    memoryMb: 2048,
+    ttlSeconds: 86_400,
+    idleTimeoutSeconds: 1_200,
+    network: "allow",
+  },
 };
 
 const okExec = (stdout: string, exitCode = 0) => ({
@@ -161,7 +166,9 @@ describe("agent.sandbox_file.read handler", () => {
       sizeBytes: 16,
       truncated: false,
     });
-    const call = h.driver.execInSession.mock.calls[0]![0] as { command: string };
+    const call = h.driver.execInSession.mock.calls[0]![0] as {
+      command: string;
+    };
     // Quoted absolute target under the workspace root, bounded by maxBytes.
     expect(call.command).toContain("'/work/src/index.ts'");
     expect(call.command).toContain(`head -c ${MAX}`);
@@ -214,6 +221,7 @@ describe("agent.sandbox_file.read handler", () => {
   });
 
   it("throws when no durable driver is available (fails closed)", async () => {
+    fake.enqueue([{ ...ROW }]); // getSessionByPublicId — driver is resolved per-row
     h.isDurableSandboxDriver.mockReturnValue(false);
     await expect(
       agentSandboxFileReadHandler(
@@ -294,7 +302,10 @@ describe("agent.sandbox_file.read handler", () => {
     );
 
     expect(out.content).toBe("hi");
-    expect(h.driver.restoreSession).toHaveBeenCalledWith("img-7", expect.any(Object));
+    expect(h.driver.restoreSession).toHaveBeenCalledWith(
+      "img-7",
+      expect.any(Object),
+    );
     expect(h.driver.execInSession).toHaveBeenCalledTimes(2);
   });
 
@@ -314,14 +325,18 @@ describe("agent.sandbox_file.read handler", () => {
   it("shell-quotes a path containing a single quote", async () => {
     fake.enqueue([{ ...ROW }]);
     fake.enqueue([]);
-    h.driver.execInSession.mockResolvedValue(okExec(readStdout(Buffer.from("x"))));
+    h.driver.execInSession.mockResolvedValue(
+      okExec(readStdout(Buffer.from("x"))),
+    );
 
     await agentSandboxFileReadHandler(
       { sessionId: "sbx_1", path: "it's.txt", maxBytes: MAX },
       CTX,
     );
 
-    const call = h.driver.execInSession.mock.calls[0]![0] as { command: string };
+    const call = h.driver.execInSession.mock.calls[0]![0] as {
+      command: string;
+    };
     expect(call.command).toContain(`'/work/it'\\''s.txt'`);
   });
 });
