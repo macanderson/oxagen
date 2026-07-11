@@ -13,6 +13,7 @@ import {
   deriveTaskClass,
   resolveEffectiveRoutingPolicy,
   normalizeRoutingPolicy,
+  summarizeRoutingStats,
   ROUTING_POLICY_OFF,
   type MarketRoutingPolicy,
   type RoutingStatRow,
@@ -275,6 +276,31 @@ describe("decideMarketRoute", () => {
     expect(d.source).toBe("market");
     expect(d.model).toBe(HAIKU);
     expect(d.policySnapshot.successThreshold).toBe(0.85);
+  });
+});
+
+describe("summarizeRoutingStats", () => {
+  it("reports the cheapest eligible model per class and null when none clears", () => {
+    const stats = [
+      row({ model: HAIKU, taskClass: "auth/single", avgCostUsdMicros: 500, verifiedRate: 0.6, samples: 100 }),
+      row({ model: SONNET, taskClass: "auth/single", avgCostUsdMicros: 3000, verifiedRate: 0.97, samples: 100 }),
+      row({ model: FABLE, taskClass: "auth/single", avgCostUsdMicros: 9000, verifiedRate: 0.99, samples: 100 }),
+      // A class where nothing clears the bar.
+      row({ model: HAIKU, taskClass: "trivial/single", avgCostUsdMicros: 300, verifiedRate: 0.5, samples: 100 }),
+    ];
+    const summary = summarizeRoutingStats(stats, ENFORCE);
+    expect(summary).toHaveLength(2);
+    const auth = summary.find((s) => s.taskClass === "auth/single")!;
+    expect(auth.cheapestEligibleModel).toBe(SONNET); // cheapest of the two ≥95%
+    expect(auth.candidateCount).toBe(3);
+    expect(auth.eligibleCount).toBe(2);
+    const trivial = summary.find((s) => s.taskClass === "trivial/single")!;
+    expect(trivial.cheapestEligibleModel).toBeNull();
+    expect(trivial.eligibleCount).toBe(0);
+  });
+
+  it("returns an empty array for empty stats", () => {
+    expect(summarizeRoutingStats([], ENFORCE)).toEqual([]);
   });
 });
 

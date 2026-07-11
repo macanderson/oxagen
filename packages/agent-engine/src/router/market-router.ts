@@ -263,6 +263,64 @@ export function decideMarketRoute(
   };
 }
 
+/** A per-task-class summary of what the market currently clears — the Pareto read's headline. */
+export interface RoutingClassSummary {
+  taskClass: string;
+  /** The cheapest model clearing the bar for this class, or null when none does. */
+  cheapestEligibleModel: string | null;
+  /** The winner's verified rate, or null when none is eligible. */
+  verifiedRate: number | null;
+  /** The winner's average observed cost (micro-USD), or null when none is eligible. */
+  avgCostUsdMicros: number | null;
+  /** How many (class, model) groups exist for this class. */
+  candidateCount: number;
+  /** How many of them are eligible under the policy. */
+  eligibleCount: number;
+}
+
+/**
+ * Summarize a stats snapshot into one row per task class: the cheapest model
+ * currently clearing the verified-success bar (or null when none does), plus
+ * candidate/eligible counts. Uses the SAME eligibility test as
+ * {@link decideMarketRoute}, so the summary and the live decision never disagree.
+ * Ordered by task class for a stable render.
+ */
+export function summarizeRoutingStats(
+  stats: RoutingStatRow[],
+  policy: MarketRoutingPolicy,
+): RoutingClassSummary[] {
+  const byClass = new Map<string, RoutingStatRow[]>();
+  for (const r of stats) {
+    const arr = byClass.get(r.taskClass);
+    if (arr) arr.push(r);
+    else byClass.set(r.taskClass, [r]);
+  }
+
+  const summaries: RoutingClassSummary[] = [];
+  for (const [taskClass, rows] of byClass) {
+    const eligible = rows.filter(
+      (r) =>
+        r.samples >= policy.minSamples &&
+        r.verifiedRate >= policy.successThreshold,
+    );
+    const cheapest =
+      eligible.length > 0
+        ? [...eligible].sort(
+            (a, b) => a.avgCostUsdMicros - b.avgCostUsdMicros,
+          )[0]!
+        : null;
+    summaries.push({
+      taskClass,
+      cheapestEligibleModel: cheapest?.model ?? null,
+      verifiedRate: cheapest?.verifiedRate ?? null,
+      avgCostUsdMicros: cheapest?.avgCostUsdMicros ?? null,
+      candidateCount: rows.length,
+      eligibleCount: eligible.length,
+    });
+  }
+  return summaries.sort((a, b) => a.taskClass.localeCompare(b.taskClass));
+}
+
 /**
  * Escalate a tier one step: fast → balanced → precise. `precise` is the ceiling
  * and stays `precise`. Used to spend up on the next revision round when the judge
