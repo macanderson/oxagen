@@ -8,7 +8,6 @@
 //      last filesystem snapshot. DB work is deliberately split into small
 //      `withTenantDb` calls so no transaction is held open across a multi-second
 //      Modal exec/HTTP round-trip.
-import pino from "pino";
 import { withTenantDb, schema } from "@oxagen/database";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import {
@@ -21,11 +20,6 @@ import {
 } from "@oxagen/sandbox";
 import type { SecretSelection } from "@oxagen/plugins";
 import type { CapabilityContext } from "../types";
-
-const logger = pino({
-  level: process.env.LOG_LEVEL ?? "info",
-  base: { app: "agent.sandbox-session" },
-});
 
 export class DurableSandboxUnavailableError extends Error {
   readonly code = "durable_sandbox_unavailable";
