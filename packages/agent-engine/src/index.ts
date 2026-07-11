@@ -57,3 +57,8 @@ export * from "./oracle/hypotheses";
 // and patch-scoped mutation scoring (layer 2). Exported so external harnesses
 // (CI jobs, evals) can run the same gate the pipeline enforces per turn.
 export * from "./verify";
+
+// Speculative tool execution (ADR-030) — prefetch the model's likely next
+// reads while it thinks; read-only allowlist, whole-cache invalidation on
+// any mutation. Exported so surfaces can inject predictors / observe stats.
+export * from "./speculate/index";

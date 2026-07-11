@@ -1,7 +1,7 @@
 # Mutation verifier ship-note deck
 
 Self-contained HTML slide deck for **engineering and product**: the mutation
-verifier shipped in `@oxagen/agent-engine` (ADR-028). Covers the false-green
+verifier shipped in `@oxagen/agent-engine` (ADR-029). Covers the false-green
 failure class, the shadow-revert witness gate, opt-in mutation scoring, why it
 matters to the accountability chain, the competitive read, and the V2 roadmap
 (LLM-guided mutants, snapshot shadows, CI merge gates, evals feedback loop).

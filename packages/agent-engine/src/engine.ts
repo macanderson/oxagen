@@ -1,5 +1,6 @@
 import { stepCountIs, type ModelMessage, type ToolSet } from "ai";
 import { buildWorkspaceTools } from "./tools";
+import { wrapToolsWithSpeculation } from "./speculate/index";
 import { buildCodingCorePrompt } from "./prompt/system-prompt";
 import type { RunCodingAgentOptions, RunCodingAgentResult } from "./types";
 import {
@@ -115,6 +116,20 @@ export async function runCodingAgent(
   // what lets a SINGLE loop replace the old duplicate legacy loop: every entry
   // point injects its safety wiring here instead of maintaining a second engine.
   if (opts.extraTools) tools = { ...tools, ...opts.extraTools };
+  // Speculative tool execution (ADR-030): prefetch likely next reads into a
+  // per-turn cache. Wrapped AFTER extraTools so a mutating MCP tool also
+  // invalidates the cache, and BEFORE wrapTools so the caller's permission
+  // gate still sees every real call. Workspace-gated: no filesystem, nothing
+  // to speculate. Default ON; option wins over the env kill switch.
+  const speculativeEnabled =
+    opts.speculativeTools ??
+    (process.env["OXAGEN_SPECULATIVE_TOOLS"] !== "0" &&
+      process.env["OXAGEN_SPECULATIVE_TOOLS"] !== "false");
+  if (opts.workspace && speculativeEnabled) {
+    tools = wrapToolsWithSpeculation(tools, {
+      onStats: opts.onSpeculationStats,
+    });
+  }
   if (opts.wrapTools) tools = opts.wrapTools(tools);
 
   // A recall failure must NEVER kill the turn — but silently losing all recalled
