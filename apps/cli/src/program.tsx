@@ -2476,6 +2476,114 @@ export function buildProgram(): Command {
       await evalRunGet(runId, opts);
     });
 
+  // ── router: Verified-Outcome Market Router ──────────────────────────────────
+
+  const routerCmd = program
+    .command("router")
+    .description(
+      "Verified-Outcome Market Router — learned, economic model routing",
+    );
+  routerCmd
+    .command("stats")
+    .description(
+      "Observed outcomes per (task class, model) + cheapest-clearing model per class",
+    )
+    .option("--task-class <class>", "Restrict to one task class")
+    .option("--window <days>", "Trailing window in days")
+    .option("--min-samples <n>", "Minimum samples per (class, model)")
+    .option("--json", "Output JSON")
+    .action(
+      async (opts: {
+        taskClass?: string;
+        window?: string;
+        minSamples?: string;
+        json?: boolean;
+      }) => {
+        const { routerStats } = await import("./commands/router.js");
+        await routerStats({
+          taskClass: opts.taskClass,
+          window: opts.window ? Number(opts.window) : undefined,
+          minSamples: opts.minSamples ? Number(opts.minSamples) : undefined,
+          json: opts.json,
+        });
+      },
+    );
+  routerCmd
+    .command("preview <prompt>")
+    .description("Dry-run the routing decision for a prompt (changes nothing)")
+    .option("--files <n>", "Expected number of files touched")
+    .option("--cross-package", "The task crosses package boundaries")
+    .option("--task-class <class>", "Override the derived task class")
+    .option("--json", "Output JSON")
+    .action(
+      async (
+        prompt: string,
+        opts: {
+          files?: string;
+          crossPackage?: boolean;
+          taskClass?: string;
+          json?: boolean;
+        },
+      ) => {
+        const { routerPreview } = await import("./commands/router.js");
+        await routerPreview(prompt, {
+          files: opts.files ? Number(opts.files) : undefined,
+          crossPackage: opts.crossPackage,
+          taskClass: opts.taskClass,
+          json: opts.json,
+        });
+      },
+    );
+  const routerPolicyCmd = routerCmd
+    .command("policy")
+    .description("Get or set the governed market-router policy");
+  routerPolicyCmd
+    .command("get")
+    .description("Show the effective policy and its provenance")
+    .option("--json", "Output JSON")
+    .action(async (opts: { json?: boolean }) => {
+      const { routerPolicyGet } = await import("./commands/router.js");
+      await routerPolicyGet(opts);
+    });
+  routerPolicyCmd
+    .command("set")
+    .description("Update the policy (org Owner/Admin) — changes spend behavior")
+    .option("--scope <scope>", "org | workspace (default workspace)")
+    .option("--mode <mode>", "off | shadow | enforce")
+    .option("--threshold <n>", "Verified-success threshold 0..1 (e.g. 0.95)")
+    .option("--min-samples <n>", "Minimum samples before a model is trusted")
+    .option("--window <days>", "Trailing stats window in days")
+    .option("--escalate <bool>", "Escalate a tier on judge rejection (true/false)")
+    .option("--json", "Output JSON")
+    .action(
+      async (opts: {
+        scope?: string;
+        mode?: string;
+        threshold?: string;
+        minSamples?: string;
+        window?: string;
+        escalate?: string;
+        json?: boolean;
+      }) => {
+        const { routerPolicySet } = await import("./commands/router.js");
+        await routerPolicySet({
+          scope: opts.scope === "org" ? "org" : opts.scope === "workspace" ? "workspace" : undefined,
+          mode:
+            opts.mode === "off" || opts.mode === "shadow" || opts.mode === "enforce"
+              ? opts.mode
+              : undefined,
+          threshold: opts.threshold ? Number(opts.threshold) : undefined,
+          minSamples: opts.minSamples ? Number(opts.minSamples) : undefined,
+          window: opts.window ? Number(opts.window) : undefined,
+          escalate:
+            opts.escalate === undefined
+              ? undefined
+              : opts.escalate === "true" || opts.escalate === "yes",
+          json: opts.json,
+        });
+      },
+    );
+
   // ── secret: credential vault ────────────────────────────────────────────────
 
   const secret = program
