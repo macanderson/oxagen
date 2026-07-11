@@ -239,6 +239,10 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // Per-turn budget governance (OXA-2081). org_id + workspace_id both NOT NULL
   // → standard tenant_isolation RLS.
   { table: "workspace.workspace_budget_policy", policyClass: "standard" },
+  // Verified-Outcome Market Router governance. org_id NOT NULL, workspace_id
+  // NULLABLE (a NULL row is the org-level default routing policy for every
+  // workspace) → workspace_nullable tenant_isolation RLS.
+  { table: "workspace.routing_policy", policyClass: "workspace_nullable" },
 
   // ── environments.* — Agent Environments & Credential Vault (Phase 0, Spec §5).
   //   All four carry org_id + workspace_id NOT NULL → standard tenant_isolation.

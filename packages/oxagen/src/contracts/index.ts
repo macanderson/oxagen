@@ -338,6 +338,22 @@ import { evalDatasetFromTraces } from "./eval.dataset.from_traces";
 import { evalRunStart } from "./eval.run.start";
 import { evalRunStatus } from "./eval.run.status";
 import { evalRunGet } from "./eval.run.get";
+import { routerPolicyGet } from "./router.policy.get";
+import { routerPolicySet } from "./router.policy.set";
+import { routerStatsList } from "./router.stats.list";
+import { routerDecisionPreview } from "./router.decision.preview";
+
+// Shared router.* schemas (not capabilities themselves) — re-exported so the
+// contracts array guard sees router-schema.ts referenced, mirroring eval-schema.
+export {
+  routingModeSchema,
+  routingPolicySourceSchema,
+  routingPolicyScopeSchema,
+  marketRouteSourceSchema,
+  routingPolicySchema,
+  routingStatRowSchema,
+  marketCandidateSchema,
+} from "./router-schema";
 
 // Shared eval.* schemas (not capabilities themselves) — re-exported so the
 // contracts array guard sees eval-schema.ts referenced, mirroring agent-schema.
@@ -815,6 +831,10 @@ export {
   evalRunStart,
   evalRunStatus,
   evalRunGet,
+  routerPolicyGet,
+  routerPolicySet,
+  routerStatsList,
+  routerDecisionPreview,
 };
 
 /**
@@ -1152,4 +1172,8 @@ export const contracts = [
   evalRunStart,
   evalRunStatus,
   evalRunGet,
+  routerPolicyGet,
+  routerPolicySet,
+  routerStatsList,
+  routerDecisionPreview,
 ] as const;
