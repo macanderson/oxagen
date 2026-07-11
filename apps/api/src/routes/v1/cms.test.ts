@@ -218,6 +218,20 @@ describe("POST /v1/cms/book/redeem", () => {
     expect(res.status).toBe(400);
     expect(mocks.redeemAndRotate).not.toHaveBeenCalled();
   });
+
+  it("rejects a non-JSON body with 400 before touching the access layer", async () => {
+    const res = await post("/book/redeem", "{not json");
+    expect(res.status).toBe(400);
+    expect(mocks.redeemAndRotate).not.toHaveBeenCalled();
+  });
+
+  it("maps an access-layer failure to a 500 without leaking the error", async () => {
+    mocks.redeemAndRotate.mockRejectedValue(new Error("neo4j down at 10.0.0.1"));
+    const res = await post("/book/redeem", { edition: "page-flip-reader", code: "abc" });
+    expect(res.status).toBe(500);
+    const body = (await res.json()) as { message: string };
+    expect(body.message).not.toContain("10.0.0.1");
+  });
 });
 
 describe("POST /v1/cms/book/resend", () => {
@@ -242,5 +256,19 @@ describe("POST /v1/cms/book/resend", () => {
   it("rejects an invalid email with 400", async () => {
     const res = await post("/book/resend", { email: "not-an-email" });
     expect(res.status).toBe(400);
+  });
+
+  it("rejects a non-JSON body with 400 before any lookup", async () => {
+    const res = await post("/book/resend", "{not json");
+    expect(res.status).toBe(400);
+    expect(mocks.findLeadByEmail).not.toHaveBeenCalled();
+  });
+
+  it("maps a lookup failure to a 500 without leaking the error", async () => {
+    mocks.findLeadByEmail.mockRejectedValue(new Error("postgres down at 10.0.0.2"));
+    const res = await post("/book/resend", { email: "ada@example.com" });
+    expect(res.status).toBe(500);
+    const body = (await res.json()) as { message: string };
+    expect(body.message).not.toContain("10.0.0.2");
   });
 });

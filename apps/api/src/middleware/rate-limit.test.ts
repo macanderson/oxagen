@@ -126,4 +126,42 @@ describe("rateLimiter", () => {
     // Different IPs, same custom key — the second call is still rejected.
     expect(rejected?.status).toBe(429);
   });
+
+  it("opportunistically sweeps expired buckets once the tracked-key count crosses the threshold", async () => {
+    // The limiter only sweeps expired buckets when its map grows past
+    // SWEEP_THRESHOLD (10_000 keys). Fill it past that with distinct keys, let
+    // the window elapse so every bucket is stale, then drive one more request:
+    // the sweep runs, drops the dead buckets, and the limiter keeps working.
+    vi.useFakeTimers();
+    try {
+      let keyCounter = 0;
+      const middleware = rateLimiter({
+        windowMs: 1_000,
+        max: 1,
+        keyFn: () => `k${keyCounter}`,
+      });
+      const next = vi.fn().mockResolvedValue(undefined);
+
+      // 10_001 distinct keys → map size exceeds the 10_000 sweep threshold.
+      for (keyCounter = 0; keyCounter <= 10_000; keyCounter++) {
+        await middleware(fakeContext(), next);
+      }
+      // Every bucket is now expired.
+      vi.advanceTimersByTime(2_000);
+
+      // A fresh key triggers the size>threshold sweep at the top of the handler,
+      // deleting the 10_001 stale buckets before this request is counted.
+      keyCounter = 999_999;
+      const swept = await middleware(fakeContext(), next);
+      expect(swept).toBeUndefined(); // allowed (fresh key, first hit)
+
+      // The limiter still enforces its limit for that key after the sweep.
+      const rejected = (await middleware(fakeContext(), next)) as
+        | { status: number }
+        | undefined;
+      expect(rejected?.status).toBe(429);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
