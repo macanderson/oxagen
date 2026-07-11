@@ -2,7 +2,7 @@
 //
 // A conversation's coding target (repo + environment + code agent) is chosen
 // once, on its FIRST code-mode turn, persisted on chat.conversations
-// (code_binding jsonb, migration 20260729120000_conversations_code_binding),
+// (code_binding jsonb, migration 20260731140000_conversations_code_binding),
 // and never changes for the conversation's lifetime — mirroring the CLI,
 // where the repo is the launch cwd and is pinned for the whole session.
 // Every later turn resolves the effective agent + code payload from the
@@ -50,9 +50,7 @@ export interface RequestedCodePayload {
  * behaves as unbound) rather than throwing — a corrupt binding must never
  * brick a conversation.
  */
-export function parseStoredCodeBinding(
-  raw: unknown,
-): StoredCodeBinding | null {
+export function parseStoredCodeBinding(raw: unknown): StoredCodeBinding | null {
   if (raw === null || raw === undefined) return null;
   const parsed = storedCodeBindingSchema.safeParse(raw);
   return parsed.success ? parsed.data : null;
