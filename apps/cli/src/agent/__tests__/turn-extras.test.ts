@@ -39,9 +39,17 @@ describe("buildTurnExtras", () => {
   });
 
   it("adds no MCP tools when no servers are configured", async () => {
-    const extras = await buildTurnExtras({ cwd: "/tmp/x", settings: emptySettings, rules: [] });
+    // skills injected empty: the DEFAULT loader also reads user-level dirs
+    // (~/.claude/skills), which would make this hermetic assertion
+    // machine-dependent.
+    const extras = await buildTurnExtras({
+      cwd: "/tmp/x",
+      settings: emptySettings,
+      rules: [],
+      skills: [],
+    });
     expect(extras.extraTools).toBeUndefined();
-    // Empty rules ⇒ empty systemAppend.
+    // Empty rules + no skills ⇒ empty systemAppend.
     expect(extras.systemAppend).toBe("");
   });
 
@@ -97,5 +105,88 @@ describe("buildTurnExtras", () => {
     const bashExec = (wrapped["bash"] as { execute: (i: unknown, o: unknown) => Promise<unknown> }).execute;
     const out = await bashExec({ command: "ls" }, {});
     expect(String(out)).toMatch(/den|not allowed|blocked/i);
+  });
+});
+
+describe("buildTurnExtras — skills injection", () => {
+  const skills = [
+    {
+      name: "deploy",
+      description: "Deploy the app safely",
+      body: "## Steps\nRun deploy.sh with the staging flag first.",
+      path: "/x/deploy/SKILL.md",
+      source: "test",
+    },
+    {
+      name: "review",
+      description: "Review code for defects",
+      body: "The full review protocol lives here.",
+      path: "/x/review/SKILL.md",
+      source: "test",
+    },
+  ];
+
+  it("lists every discovered skill compactly without a selection (no bodies)", async () => {
+    const extras = await buildTurnExtras({
+      cwd: "/tmp/x",
+      settings: emptySettings,
+      rules: [],
+      skills,
+    });
+    expect(extras.systemAppend).toContain("deploy");
+    expect(extras.systemAppend).toContain("Deploy the app safely");
+    expect(extras.systemAppend).toContain("Review code for defects");
+    // Progressive disclosure: bodies stay OUT of the prompt until selected.
+    expect(extras.systemAppend).not.toContain("Run deploy.sh");
+    expect(extras.systemAppend).not.toContain("full review protocol");
+  });
+
+  it("injects FULL bodies only for the agent's declared skills", async () => {
+    const extras = await buildTurnExtras({
+      cwd: "/tmp/x",
+      settings: emptySettings,
+      rules: [],
+      skills,
+      agentSkills: ["deploy"],
+    });
+    expect(extras.systemAppend).toContain("Run deploy.sh with the staging flag");
+    expect(extras.systemAppend).not.toContain("full review protocol");
+  });
+});
+
+describe("buildTurnExtras — per-agent MCP-server selection", () => {
+  it("an empty agentMcpServers list connects to NOTHING even when servers are configured", async () => {
+    const settings = {
+      mcpServers: {
+        github: { command: "definitely-not-a-real-binary", args: [] },
+      },
+    } as unknown as OxagenSettings;
+    // [] narrows the configured map to zero servers, so loadMcpTools is never
+    // invoked at all — no connection attempt, no extraTools.
+    const extras = await buildTurnExtras({
+      cwd: "/tmp/x",
+      settings,
+      rules: [],
+      skills: [],
+      agentMcpServers: [],
+    });
+    expect(extras.extraTools).toBeUndefined();
+  });
+
+  it("read-only mode still withholds MCP regardless of selection", async () => {
+    const settings = {
+      mcpServers: {
+        github: { command: "definitely-not-a-real-binary", args: [] },
+      },
+    } as unknown as OxagenSettings;
+    const extras = await buildTurnExtras({
+      cwd: "/tmp/x",
+      settings,
+      rules: [],
+      skills: [],
+      readOnly: true,
+      agentMcpServers: ["github"],
+    });
+    expect(extras.extraTools).toBeUndefined();
   });
 });

@@ -65,12 +65,14 @@ vi.mock("@oxagen/agent-engine", async (importOriginal) => ({
 }));
 
 // Controllable triage verdict — the REAL module never gets a model call here.
-const triageDecision = vi.fn(async () => ({
-  route: "queue" as "queue" | "background" | "clarify",
-  reason: "test default",
-}));
+const triageDecision = vi.fn(
+  async (_opts: unknown): Promise<{ route: string; reason: string }> => ({
+    route: "queue",
+    reason: "test default",
+  }),
+);
 vi.mock("../triage.js", () => ({
-  triagePrompt: (opts: unknown) => triageDecision(opts as never),
+  triagePrompt: (opts: unknown) => triageDecision(opts),
 }));
 
 // Detached-worker dispatch — never spawn a real process in tests.
