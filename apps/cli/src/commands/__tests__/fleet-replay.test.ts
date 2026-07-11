@@ -108,6 +108,8 @@ interface SeedOptions {
   turns?: number;
   /** Append an envelope `error` event (feeds the distilled item's metadata). */
   errorMessage?: string;
+  /** Record no git baseline (run.meta without gitHead) — restore must refuse. */
+  withoutGitHead?: boolean;
 }
 
 /** Seed one session (meta + envelope) AND its ADR-028 record sidecar. */
@@ -140,7 +142,7 @@ async function seedRecordedRun(over: SeedOptions): Promise<RecordStore> {
     prompt: "seeded prompt",
     model: "anthropic/claude-haiku-4-5",
     cliVersion: "1.0.0",
-    gitHead: "a".repeat(40),
+    ...(over.withoutGitHead ? {} : { gitHead: "a".repeat(40) }),
   });
   const baseline = await recordStore.putBlob("0");
   writer.append({
@@ -730,6 +732,71 @@ describe("fleet replay — pretty mode", () => {
     expect(text).toContain("changed: state.txt");
     expect(text).toContain("verify: ok");
     expect(process.exitCode).toBe(savedExit);
+  });
+});
+
+// ── integrity + restore preconditions ────────────────────────────────────────
+
+describe("fleet replay --verify — corruption", () => {
+  it("fails verification (exit 1) when a blob no longer hashes to its ref", async () => {
+    const recordStore = await seedRecordedRun({
+      sid: "s-hhh-0001",
+      state: "done",
+    });
+    // Corrupt one payload in place: content no longer matches its sha256 name.
+    const toolIo = (await recordStore.readRecords()).find(
+      (r) => r.t === "tool.io",
+    );
+    if (toolIo?.t !== "tool.io")
+      throw new Error("seed lost its tool.io record");
+    const { writeFile } = await import("node:fs/promises");
+    await writeFile(
+      join(recordStore.rootDir, "blobs", toolIo.inputRef),
+      "tampered",
+    );
+
+    const { writer, out } = memoryWriter();
+    await handleFleetReplay(
+      "s-hhh-0001",
+      { json: true, verify: true, cwd: projectCwd },
+      writer,
+    );
+    const view = JSON.parse(out.join("")) as {
+      verify: { ok: boolean; issues: string[] };
+    };
+    expect(view.verify.ok).toBe(false);
+    expect(view.verify.issues.join("\n")).toContain("corrupt");
+    expect(process.exitCode).toBe(1);
+  });
+});
+
+describe("restore preconditions", () => {
+  it("bisect refuses a run recorded without a git baseline", async () => {
+    await seedRecordedRun({
+      sid: "s-hhh-0002",
+      state: "failed",
+      withoutGitHead: true,
+    });
+    const { writer, err } = memoryWriter();
+    await handleFleetBisect(
+      "s-hhh-0002",
+      { json: true, cmd: "true", cwd: projectCwd },
+      writer,
+    );
+    expect(err.join("\n")).toContain("no git baseline");
+    expect(process.exitCode).toBe(1);
+  });
+
+  it("resume rejects --turn beyond the last settled turn (usage, exit 2)", async () => {
+    await seedRecordedRun({ sid: "s-hhh-0003", state: "done", turns: 2 });
+    const { writer, err } = memoryWriter();
+    await handleFleetResume(
+      "s-hhh-0003",
+      { json: true, turn: "7", cwd: projectCwd },
+      writer,
+    );
+    expect(err.join("\n")).toContain("0..2");
+    expect(process.exitCode).toBe(2);
   });
 });
 
