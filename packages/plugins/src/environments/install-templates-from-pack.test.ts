@@ -280,6 +280,95 @@ describe("installTemplatesFromPack — slug collision with an unrelated template
   });
 });
 
+describe("installTemplatesFromPack — re-install onto an already-prefixed slug", () => {
+  it("finds and updates the pack's own prior namespaced-slug install (byPrefixed match)", async () => {
+    vaultMocks.listSecretKeys.mockResolvedValue([
+      { id: "k1", key: "AI_GATEWAY_API_KEY", sensitive: true, memo: null },
+    ]);
+    // A prior install already claimed the pack-namespaced slug directly
+    // (e.g. because the bare slug collided with an unrelated template last
+    // time) — a re-install must find THAT row via the prefixed match, not
+    // treat it as a fresh bare-slug install.
+    state.selectQueue = [
+      DEFAULT_ENV,
+      [
+        {
+          id: "sbx-prefixed",
+          publicId: "sbx-prefixed-pub",
+          slug: "swe-bench-evals-swe-bench-prewarmed",
+          environmentId: "env-default",
+        },
+      ],
+    ];
+
+    const result = await installTemplatesFromPack(actor, {
+      packId: PACK_ID,
+      templates: [templateManifest],
+    });
+
+    expect(result.installed).toEqual([
+      { slug: "swe-bench-evals-swe-bench-prewarmed", templateId: "sbx-prefixed-pub", created: false },
+    ]);
+    expect(templateInserts()).toHaveLength(0);
+    const tplUpdates = state.updates.filter((u) => u.table === schema.sandboxTemplates);
+    expect(tplUpdates).toHaveLength(1);
+  });
+});
+
+describe("installTemplatesFromPack — explicit secretSelection (not 'all')", () => {
+  it("resolves required key NAMES to this workspace's key ids in the per-template loop", async () => {
+    const manifestWithSelection: SandboxTemplateManifest = {
+      ...templateManifest,
+      secretSelection: { keyPublicIds: ["remote-kp"] },
+    };
+    vaultMocks.listSecretKeys.mockResolvedValue([
+      { id: "local-kp", key: "AI_GATEWAY_API_KEY", sensitive: true, memo: null },
+    ]);
+    state.selectQueue = [DEFAULT_ENV, []];
+    state.insertReturning = [[{ id: "sbx-int", publicId: "sbx-pub" }]];
+
+    await installTemplatesFromPack(actor, {
+      packId: PACK_ID,
+      templates: [manifestWithSelection],
+    });
+
+    const values = templateInserts()[0]!.values as Record<string, unknown>;
+    expect(values.secretSelection).toEqual({ keyPublicIds: ["local-kp"] });
+  });
+
+  it("falls back to 'all' when no required key name resolves locally", async () => {
+    const manifestWithSelection: SandboxTemplateManifest = {
+      ...templateManifest,
+      secretSelection: { keyPublicIds: ["remote-kp"] },
+      secretKeys: [{ key: "MISSING_KEY", sensitive: true, required: true, memo: null }],
+    };
+    vaultMocks.listSecretKeys.mockResolvedValue([]);
+    state.selectQueue = [DEFAULT_ENV, []];
+    state.insertReturning = [[{ id: "sbx-int", publicId: "sbx-pub" }]];
+
+    await installTemplatesFromPack(actor, {
+      packId: PACK_ID,
+      templates: [manifestWithSelection],
+    });
+
+    const values = templateInserts()[0]!.values as Record<string, unknown>;
+    expect(values.secretSelection).toBe("all");
+  });
+});
+
+describe("installTemplatesFromPack — invalid template slug", () => {
+  it("throws a clear error before writing anything", async () => {
+    vaultMocks.listSecretKeys.mockResolvedValue([]);
+    const badManifest: SandboxTemplateManifest = { ...templateManifest, slug: "Bad Slug!" };
+    state.selectQueue = [DEFAULT_ENV];
+
+    await expect(
+      installTemplatesFromPack(actor, { packId: PACK_ID, templates: [badManifest] }),
+    ).rejects.toThrow(/invalid slug/i);
+    expect(templateInserts()).toHaveLength(0);
+  });
+});
+
 describe("installTemplatesFromPack — edge cases", () => {
   it("returns empty for a pack with no templates without touching the DB", async () => {
     const result = await installTemplatesFromPack(actor, { packId: PACK_ID, templates: [] });

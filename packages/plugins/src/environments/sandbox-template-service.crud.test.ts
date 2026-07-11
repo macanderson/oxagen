@@ -36,6 +36,7 @@ interface UpdateCall {
 interface State {
   selectQueue: unknown[][];
   insertReturning: unknown[][];
+  updateReturning: unknown[][];
   inserts: InsertCall[];
   updates: UpdateCall[];
   deletes: unknown[];
@@ -44,6 +45,7 @@ interface State {
 const state: State = {
   selectQueue: [],
   insertReturning: [],
+  updateReturning: [],
   inserts: [],
   updates: [],
   deletes: [],
@@ -52,6 +54,7 @@ const state: State = {
 function resetState() {
   state.selectQueue = [];
   state.insertReturning = [];
+  state.updateReturning = [];
   state.inserts = [];
   state.updates = [];
   state.deletes = [];
@@ -90,7 +93,15 @@ function makeTx() {
     update: (table: unknown) => ({
       set: (set: Record<string, unknown>) => {
         state.updates.push({ table, set });
-        return { where: () => Promise.resolve(undefined) };
+        return {
+          where: () => ({
+            returning: async () => state.updateReturning.shift() ?? [],
+            // Most update() calls in this service are awaited directly (no
+            // .returning()) — keep that thenable path working too.
+            then: (res: (v: unknown) => unknown, rej: (e: unknown) => unknown) =>
+              Promise.resolve(undefined).then(res, rej),
+          }),
+        };
       },
     }),
     delete: (table: unknown) => ({
@@ -500,6 +511,43 @@ describe("importTemplate — secretSelection round-trip", () => {
       importTemplate(actor, { environmentId: "env-pub", manifest: IMPORT_MANIFEST }),
     ).rejects.toThrow(/already exists/i);
   });
+
+  it("replace-sets the manifest's tools and promotes to default when setAsDefault is true", async () => {
+    vaultMocks.listSecretKeys.mockResolvedValue([
+      { id: "local-99", key: "AWS_KEY", sensitive: true, memo: null, hasDefault: false, overrideEnvironmentIds: [] },
+    ]);
+    const manifestWithTools: SandboxTemplateManifest = {
+      ...IMPORT_MANIFEST,
+      tools: [{ kind: "capability", ref: "execute_code" }],
+    };
+    state.selectQueue = [
+      [envRow()],
+      [] /* no slug collision */,
+      [tplRow({ id: "new-int", publicId: "new-pub" })],
+      [toolSelectRow({ sandboxTemplateId: "new-int", publicId: "tool-new" })],
+    ];
+    state.insertReturning = [[{ id: "new-int", publicId: "new-pub" }]];
+
+    const { template, warnings } = await importTemplate(actor, {
+      environmentId: "env-pub",
+      manifest: manifestWithTools,
+      setAsDefault: true,
+    });
+
+    expect(template.id).toBe("new-pub");
+    expect(warnings).toEqual([
+      expect.stringContaining('tool "capability:execute_code" is referenced by the manifest'),
+    ]);
+    // Replace-set: old rows cleared, new rows inserted.
+    expect(state.deletes).toContain(schema.sandboxTemplateTools);
+    expect(toolInserts()).toHaveLength(1);
+    // clearEnvDefaultTx demotes the env's current default, THEN promotes this one.
+    const ups = templateUpdates();
+    expect(ups).toHaveLength(2);
+    expect(ups[0]!.set.isDefault).toBe(false);
+    expect(ups[1]!.set.isDefault).toBe(true);
+    expect(ups[1]!.set.isActive).toBe(true);
+  });
 });
 
 // ── agent-environment bindings ──────────────────────────────────────────────────
@@ -583,6 +631,56 @@ describe("bindAgentEnvironment", () => {
     );
     expect(demote).toBeDefined();
     expect(result.isPrimary).toBe(true);
+  });
+
+  it("accepts a sandboxTemplateId that matches the bound environment and resolves its name in the summary", async () => {
+    state.selectQueue = [
+      [envRow()], // loadEnvironment
+      [tplRow()], // loadTemplateRow (sandboxTemplateId check, same environment)
+      [] /* existingForAgent: none */,
+      [bindingRow({ publicId: "bind-pub-new", sandboxTemplateInternalId: "sbx-int", isPrimary: true })],
+      [envSummaryRow()],
+      [{ publicId: "sbx-pub", name: "Base Runner" }], // bindingSummary's template lookup
+    ];
+    state.insertReturning = [[{ publicId: "bind-pub-new" }]];
+
+    const result = await bindAgentEnvironment(actor, {
+      agentId: "11111111-1111-4111-8111-111111111111",
+      environmentId: "env-pub",
+      sandboxTemplateId: "sbx-pub",
+    });
+
+    expect(result.sandboxTemplateId).toBe("sbx-pub");
+    expect(result.sandboxTemplateName).toBe("Base Runner");
+    expect(result.isPrimary).toBe(true);
+  });
+
+  it("rebinds an existing (agent, environment) pair by updating it in place (no duplicate insert)", async () => {
+    state.selectQueue = [
+      [envRow()], // loadEnvironment
+      [{ id: "bind-int-1", environmentInternalId: "env-int", isPrimary: true }] /* existingForAgent */,
+      [bindingRow({ publicId: "bind-pub-rebind", sandboxTemplateInternalId: null, isPrimary: false })],
+      [envSummaryRow()],
+    ];
+    state.updateReturning = [[{ publicId: "bind-pub-rebind" }]];
+
+    const result = await bindAgentEnvironment(actor, {
+      agentId: "11111111-1111-4111-8111-111111111111",
+      environmentId: "env-pub",
+      // Agent already has a primary binding elsewhere, and doesn't ask to
+      // become primary here — desiredPrimary resolves to false, so this
+      // exercises the update-in-place branch without the demote step.
+    });
+
+    expect(result.id).toBe("bind-pub-rebind");
+    expect(result.isPrimary).toBe(false);
+    // Updated in place, not inserted.
+    const bindingUpdates = state.updates.filter(
+      (u) => u.table === schema.agentEnvironmentBindings,
+    );
+    expect(bindingUpdates).toHaveLength(1);
+    const inserted = state.inserts.find((i) => i.table === schema.agentEnvironmentBindings);
+    expect(inserted).toBeUndefined();
   });
 
   it("rejects a template that belongs to a different environment", async () => {

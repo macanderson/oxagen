@@ -4,8 +4,9 @@
  * Covers the explicit-template branch of resolveSandboxTemplateForRun (Spec §12,
  * provisioning integration §5): when a run pins a `sandboxTemplateId`, that exact
  * template and its OWN environment are resolved, and both must be active. The
- * env→binding→default chain has its own coverage; here we prove the short-circuit
- * and its active-preflight errors.
+ * env→binding→default chain is covered separately in
+ * resolve-sandbox-template-chain.test.ts; here we prove the short-circuit and
+ * its active-preflight errors.
  *
  * @oxagen/database withTenantDb runs the callback against a queue-driven fake tx;
  * the vault service is mocked since this branch never touches it.
