@@ -65,6 +65,27 @@ struct ZaiRequest<'a> {
 struct ZaiMessage {
     role: &'static str,
     content: String,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    tool_calls: Vec<ZaiOutboundToolCall>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tool_call_id: Option<String>,
+}
+
+/// An assistant-authored tool call echoed back in conversation history
+/// (OpenAI-compatible dialect requires the assistant message to carry the
+/// calls its tool results answer).
+#[derive(Serialize)]
+struct ZaiOutboundToolCall {
+    id: String,
+    #[serde(rename = "type")]
+    kind: &'static str,
+    function: ZaiOutboundFunction,
+}
+
+#[derive(Serialize)]
+struct ZaiOutboundFunction {
+    name: String,
+    arguments: String,
 }
 
 #[derive(Serialize)]
@@ -132,23 +153,59 @@ struct ZaiUsage {
 }
 
 fn to_zai_messages(messages: &[CompletionMessage]) -> Vec<ZaiMessage> {
-    messages
-        .iter()
-        .filter_map(|message| {
-            let role = match message.role {
-                MessageRole::System => "system",
-                MessageRole::User => "user",
-                MessageRole::Assistant => "assistant",
-                // Tool-result framing arrives with the full dialect
-                // translator in Phase 2.
-                MessageRole::Tool => return None,
-            };
-            Some(ZaiMessage {
-                role,
+    let mut out = Vec::new();
+    for message in messages {
+        match message.role {
+            MessageRole::System => out.push(ZaiMessage {
+                role: "system",
                 content: message.content.clone(),
-            })
-        })
-        .collect()
+                tool_calls: Vec::new(),
+                tool_call_id: None,
+            }),
+            MessageRole::User => out.push(ZaiMessage {
+                role: "user",
+                content: message.content.clone(),
+                tool_calls: Vec::new(),
+                tool_call_id: None,
+            }),
+            MessageRole::Assistant => out.push(ZaiMessage {
+                role: "assistant",
+                content: message.content.clone(),
+                tool_calls: message
+                    .tool_calls
+                    .iter()
+                    .map(|call| ZaiOutboundToolCall {
+                        id: call.call_id.clone(),
+                        kind: "function",
+                        function: ZaiOutboundFunction {
+                            name: call.name.clone(),
+                            arguments: call.input.to_string(),
+                        },
+                    })
+                    .collect(),
+                tool_call_id: None,
+            }),
+            // OpenAI-compatible dialect: one `role: "tool"` message per
+            // result, each carrying the `tool_call_id` it answers.
+            MessageRole::Tool => {
+                for result in &message.tool_results {
+                    let content = match &result.output {
+                        oxagen_protocol::ToolOutput::Ok { content } => content.clone(),
+                        oxagen_protocol::ToolOutput::Error { message } => {
+                            format!("ERROR: {message}")
+                        }
+                    };
+                    out.push(ZaiMessage {
+                        role: "tool",
+                        content,
+                        tool_calls: Vec::new(),
+                        tool_call_id: Some(result.call_id.clone()),
+                    });
+                }
+            }
+        }
+    }
+    out
 }
 
 fn to_zai_tools(tools: &[oxagen_protocol::tool::ToolSchema]) -> Vec<ZaiToolSchema> {
@@ -301,7 +358,7 @@ mod tests {
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     #[test]
-    fn to_zai_messages_drops_tool_role_and_maps_the_rest() {
+    fn to_zai_messages_maps_all_roles() {
         let messages = vec![
             CompletionMessage::system("sys"),
             CompletionMessage::user("hi"),
@@ -310,6 +367,60 @@ mod tests {
         assert_eq!(mapped.len(), 2);
         assert_eq!(mapped[0].role, "system");
         assert_eq!(mapped[1].role, "user");
+    }
+
+    #[test]
+    fn to_zai_messages_frames_tool_results_with_call_ids() {
+        use oxagen_protocol::{ToolOutput, ToolResult};
+        let messages = vec![
+            CompletionMessage {
+                role: MessageRole::Assistant,
+                content: String::new(),
+                tool_calls: vec![oxagen_protocol::ToolCall {
+                    call_id: "call_9".into(),
+                    name: "read_file".into(),
+                    input: serde_json::json!({"path": "a.rs"}),
+                }],
+                tool_results: vec![],
+            },
+            CompletionMessage {
+                role: MessageRole::Tool,
+                content: String::new(),
+                tool_calls: vec![],
+                tool_results: vec![ToolResult {
+                    call_id: "call_9".into(),
+                    output: ToolOutput::Ok {
+                        content: "fn main(){}".into(),
+                    },
+                }],
+            },
+        ];
+        let mapped = to_zai_messages(&messages);
+        assert_eq!(mapped.len(), 2);
+        assert_eq!(mapped[0].role, "assistant");
+        assert_eq!(mapped[0].tool_calls.len(), 1);
+        assert_eq!(mapped[1].role, "tool");
+        assert_eq!(mapped[1].tool_call_id.as_deref(), Some("call_9"));
+        assert_eq!(mapped[1].content, "fn main(){}");
+    }
+
+    #[test]
+    fn to_zai_messages_marks_error_results_loudly() {
+        use oxagen_protocol::{ToolOutput, ToolResult};
+        let messages = vec![CompletionMessage {
+            role: MessageRole::Tool,
+            content: String::new(),
+            tool_calls: vec![],
+            tool_results: vec![ToolResult {
+                call_id: "call_1".into(),
+                output: ToolOutput::Error {
+                    message: "no such file".into(),
+                },
+            }],
+        }];
+        let mapped = to_zai_messages(&messages);
+        assert_eq!(mapped.len(), 1);
+        assert!(mapped[0].content.starts_with("ERROR:"));
     }
 
     #[tokio::test]

@@ -1,16 +1,15 @@
 //! Configuration: provider/model resolution, BYOK credential lookup.
 //!
 //! Resolution order per 01-product-spec.md §4: CLI flag -> env var ->
-//! config file (TOML, future) -> interactive prompt (future).
-//!
-//! Phase 0/1 implements the env-var step. The user sets one or more of:
-//!   ZAI_API_KEY, ANTHROPIC_API_KEY, OPENAI_API_KEY, XAI_API_KEY,
-//!   DEEPSEEK_API_KEY, GEMINI_API_KEY, OPENROUTER_API_KEY
-//! ...and stella picks the first available provider, or uses --model to pin.
+//! `~/.config/oxagen/credentials.toml` -> interactive prompt on first use.
+//! The full chain lives in `oxagen_model::credential::ApiKey::resolve`; this
+//! module's job is picking WHICH provider (from `--model`, or the first one
+//! with a resolvable credential) and then running that chain for it.
 
 use std::env;
 
 use colored::Colorize;
+use oxagen_model::credential::{ApiKey, CredentialsFile};
 
 /// One provider's config: id, env var name, display name, default model.
 #[derive(Debug, Clone)]
@@ -20,9 +19,16 @@ pub struct ProviderConfig {
     pub display_name: &'static str,
     pub default_model: &'static str,
     pub base_url: &'static str,
-    /// Whether this provider speaks the OpenAI-compatible chat/completions
-    /// dialect (true for Z.ai, OpenAI, xAI, DeepSeek, OpenRouter, any
-    /// OpenAI-compatible gateway). False for Anthropic (Messages API).
+    /// Whether this provider speaks the OpenAI-*compatible* chat/completions
+    /// dialect (true for Z.ai, xAI, DeepSeek, Gemini's OpenAI-compat shim,
+    /// OpenRouter, any generic OpenAI-compatible gateway). False for
+    /// Anthropic (Messages API). Real OpenAI (`id == "openai"`) is `true`
+    /// here too for backwards compatibility with anything still matching on
+    /// this flag, but `build_provider` (`agent.rs`) special-cases
+    /// `id == "openai"` ahead of this flag and routes it through the real
+    /// Responses API adapter (`oxagen_model::openai`) instead — OpenAI's own
+    /// API is not the same wire shape as the "OpenAI-compatible" gateways
+    /// this flag is actually describing.
     pub openai_compatible: bool,
 }
 
@@ -73,7 +79,16 @@ pub static PROVIDERS: &[ProviderConfig] = &[
         env_var: "GEMINI_API_KEY",
         display_name: "Google Gemini",
         default_model: "gemini-3-pro",
-        base_url: "https://generativelanguage.googleapis.com/v1beta",
+        // NOTE: this is Google's OpenAI-compatibility shim
+        // (`/v1beta/openai/...`), not Gemini's native `generateContent`
+        // wire shape — the two are NOT interchangeable and the base URL
+        // must include the `/openai` segment or every request 404s. A
+        // native "Gemini direct" adapter (07-model-matrix.md §2: thinking
+        // support, Imagen/Veo, native multimodal) is real follow-up work,
+        // deferred because it can't be verified without a live
+        // GEMINI_API_KEY in this environment (same reasoning as Bedrock/
+        // Vertex/local-GGUF — see the Phase 2 PR description).
+        base_url: "https://generativelanguage.googleapis.com/v1beta/openai",
         openai_compatible: true,
     },
     ProviderConfig {
@@ -96,13 +111,24 @@ pub struct Config {
 }
 
 impl Config {
-    /// Load config: resolve provider from --model flag or first available
-    /// key in env. Errors if no key is found at all.
-    pub fn load(model_override: Option<&str>) -> Result<Self, String> {
+    /// Load config: resolve provider from `--model` flag or the first one
+    /// with a resolvable credential, then run the full chain (CLI flag ->
+    /// env var -> credentials file -> interactive prompt) for it.
+    /// `api_key_override` is `--api-key`, threaded straight into the chain's
+    /// first (highest-precedence) step. Errors if no key is found at all.
+    pub fn load(
+        model_override: Option<&str>,
+        api_key_override: Option<&str>,
+    ) -> Result<Self, String> {
         let workspace_root =
             env::current_dir().map_err(|e| format!("cannot determine workspace root: {e}"))?;
+        let mut credentials_file = CredentialsFile::load_default().map_err(|e| {
+            format!("~/.config/oxagen/credentials.toml exists but could not be read: {e}")
+        })?;
 
-        // If --model provider/model_id was given, resolve that provider.
+        // If --model provider/model_id was given, resolve that provider —
+        // interactively prompting if nothing else resolves it, since the
+        // user has told us unambiguously which provider they want.
         if let Some(model_spec) = model_override {
             let (provider_id, model_id) = match model_spec.split_once('/') {
                 Some((p, m)) => (p, m.to_string()),
@@ -117,7 +143,14 @@ impl Config {
                                 { let v: Vec<&str> = PROVIDERS.iter().map(|p| p.id).collect(); v.join(", ") }
                             )
                         })?;
-                    return Self::resolve(provider, model_id_override(model_spec), &workspace_root);
+                    return Self::resolve(
+                        provider,
+                        model_id_override(model_spec),
+                        api_key_override,
+                        &mut credentials_file,
+                        &workspace_root,
+                        true,
+                    );
                 }
             };
 
@@ -131,24 +164,44 @@ impl Config {
                     })
                 })?;
 
-            return Self::resolve(provider, model_id, &workspace_root);
+            return Self::resolve(
+                provider,
+                model_id,
+                api_key_override,
+                &mut credentials_file,
+                &workspace_root,
+                true,
+            );
         }
 
-        // No --model: pick first provider with a key in env.
+        // No --model: pick the first provider with a resolvable credential
+        // (env var or credentials file — never prompts here, since prompting
+        // needs a specific provider in mind and the user hasn't named one).
         for provider in PROVIDERS {
-            if let Ok(key) = env::var(provider.env_var)
-                && !key.is_empty()
+            if ApiKey::resolve(
+                provider.id,
+                provider.env_var,
+                api_key_override,
+                Some(&credentials_file),
+                false,
+            )
+            .is_ok()
             {
                 return Self::resolve(
                     provider,
                     provider.default_model.to_string(),
+                    api_key_override,
+                    &mut credentials_file,
                     &workspace_root,
+                    false,
                 );
             }
         }
 
         Err(format!(
-            "no API key found. Set one of: {}\n\nExample: export ZAI_API_KEY=your_key_here",
+            "no API key found. Set one of: {}\n\nExample: export ZAI_API_KEY=your_key_here\n\
+             (or add it to ~/.config/oxagen/credentials.toml, or pass --model provider/model \
+             to be prompted interactively)",
             PROVIDERS
                 .iter()
                 .map(|p| format!("{} ({})", p.env_var, p.display_name))
@@ -157,19 +210,44 @@ impl Config {
         ))
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn resolve(
         provider: &ProviderConfig,
         model_id: String,
+        api_key_override: Option<&str>,
+        credentials_file: &mut CredentialsFile,
         workspace_root: &std::path::Path,
+        interactive: bool,
     ) -> Result<Self, String> {
-        let api_key = env::var(provider.env_var).map_err(|_| {
+        let (key, source) = ApiKey::resolve(
+            provider.id,
+            provider.env_var,
+            api_key_override,
+            Some(credentials_file),
+            interactive,
+        )
+        .map_err(|e| {
             format!(
-                "{} is not set — set it to use {} as the model provider",
-                provider.env_var, provider.display_name
+                "could not resolve a credential for {}: {e}",
+                provider.display_name
             )
         })?;
-        if api_key.is_empty() {
-            return Err(format!("{} is set but empty", provider.env_var));
+        let api_key = key.reveal().to_string();
+
+        // "Interactive prompt on first use" (01-product-spec.md §4) implies
+        // exactly that — first use. Persist so next invocation resolves via
+        // the config-file step instead of prompting again. Best-effort: a
+        // save failure (e.g. read-only home dir) shouldn't fail the command
+        // the user actually asked for, just warn so it isn't silent.
+        if source == oxagen_model::credential::CredentialSource::Interactive {
+            credentials_file.set(provider.id, &api_key);
+            if let Err(e) = credentials_file.save() {
+                eprintln!(
+                    "  {} could not save the credential to ~/.config/oxagen/credentials.toml \
+                     ({e}) — you'll be prompted again next time",
+                    "warning:".yellow()
+                );
+            }
         }
 
         Ok(Self {
@@ -225,7 +303,9 @@ impl Config {
         println!("  Workspace:  {}", self.workspace_root.display());
         println!(
             "  Dialect:    {}",
-            if self.provider.openai_compatible {
+            if self.provider.id == "openai" {
+                "OpenAI Responses"
+            } else if self.provider.openai_compatible {
                 "OpenAI-compatible"
             } else {
                 "Anthropic Messages"
@@ -263,4 +343,37 @@ impl Config {
 
 fn model_id_override(slug: &str) -> String {
     slug.to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Regression test for the bug fixed alongside this test: every
+    /// provider's `default_model` here must resolve against
+    /// `oxagen_model::catalog::Catalog::seed()`, or `build_provider`'s
+    /// catalog check (`agent.rs`) would hard-error on first use of a
+    /// provider whose default was never added to the seed — exactly what
+    /// happened for 5 of these 7 rows before the catalog was completed.
+    #[test]
+    fn every_provider_default_model_resolves_against_the_catalog_seed() {
+        let catalog = oxagen_model::catalog::Catalog::seed();
+        for provider in PROVIDERS {
+            catalog.resolve(provider.default_model).unwrap_or_else(|e| {
+                panic!(
+                    "provider `{}`'s default_model `{}` is not in the catalog seed: {e}",
+                    provider.id, provider.default_model
+                )
+            });
+        }
+    }
+
+    #[test]
+    fn provider_ids_are_unique() {
+        let mut ids: Vec<&str> = PROVIDERS.iter().map(|p| p.id).collect();
+        let before = ids.len();
+        ids.sort_unstable();
+        ids.dedup();
+        assert_eq!(ids.len(), before, "duplicate provider id in PROVIDERS");
+    }
 }

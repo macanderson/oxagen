@@ -1,24 +1,26 @@
-//! The agent loop — ties providers, tools, and TUI together.
+//! The agent loop — ties providers, tools, the step-driver, and TUI
+//! together.
 //!
-//! Flow per turn:
-//! 1. Build messages (system prompt + conversation history + user prompt)
-//! 2. Call provider.complete() with tool schemas
-//! 3. If the model returned tool calls, execute them, feed results back,
-//!    and loop (up to a max-iterations cap)
-//! 4. If the model returned text, stream it to the user and done
-//!
-//! This is the Phase 0/1 simplified loop — the full step-driver with
-//! triage/plan/judge stages, compaction, and budget eviction is Phase 2+
-//! per 03-plan.md.
+//! `run_turn` drives `oxagen_core::Engine::run_turn` (the step-driver: one
+//! model call per step, retry+backoff, compaction, loop detection, budget
+//! checks — see `crates/oxagen-core/src/driver.rs`) and renders its
+//! `AgentEvent` stream live via a spawned draining task. This replaces the
+//! Phase 0/1 ad-hoc loop that lived here directly (no retry, no
+//! compaction, no budget, a flat iteration cap instead of real loop
+//! detection) — see `03-plan.md` Phase 2.
 
+use std::collections::HashMap;
 use std::io::Write;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use colored::Colorize;
+use oxagen_core::{BudgetGuard, Engine, EngineConfig, TurnOutcome};
 use oxagen_model::credential::ApiKey;
 use oxagen_model::provider::Provider;
-use oxagen_protocol::{CompletionMessage, CompletionRequest, MessageRole, ToolOutput, ToolResult};
+use oxagen_protocol::event::BudgetMode;
+use oxagen_protocol::{AgentEvent, CompletionMessage, ToolOutput};
 use oxagen_tools::ToolRegistry;
+use tokio::sync::mpsc;
 
 use crate::config::Config;
 use crate::tui;
@@ -40,12 +42,17 @@ Rules:
 - Be concise in your responses. Show the user what you changed and why.
 - If a task requires multiple steps, work through them systematically."#;
 
-const MAX_TOOL_ITERATIONS: usize = 20;
-
-/// Run a one-shot prompt (non-interactive).
-pub async fn run_one_shot(cfg: &Config, prompt: &str) -> Result<(), String> {
+/// Run a one-shot prompt (non-interactive). `budget_limit` is `--budget`
+/// (`main.rs`): `Some(n)` enforces a hard per-turn USD cap, `None` meters
+/// spend for the cost summary without ever blocking.
+pub async fn run_one_shot(
+    cfg: &Config,
+    prompt: &str,
+    budget_limit: Option<f64>,
+) -> Result<(), String> {
     let provider = build_provider(cfg)?;
     let registry = ToolRegistry::new(cfg.workspace_root.clone());
+    let mut budget = build_budget_guard(budget_limit);
 
     tui::section_header("Stella");
     println!("  {}\n", prompt.dimmed());
@@ -55,13 +62,17 @@ pub async fn run_one_shot(cfg: &Config, prompt: &str) -> Result<(), String> {
         CompletionMessage::user(prompt),
     ];
 
-    run_turn(&*provider, &registry, &mut messages, cfg).await
+    run_turn(&*provider, &registry, &mut messages, &mut budget, cfg).await
 }
 
-/// Run an interactive REPL session.
-pub async fn run_interactive(cfg: &Config) -> Result<(), String> {
+/// Run an interactive REPL session. `budget_limit` is per-session: the
+/// `BudgetGuard`'s session-scoped total accumulates across every turn in
+/// the conversation, while `BudgetGuard::begin_turn` resets only the
+/// turn-scoped counter at the start of each one.
+pub async fn run_interactive(cfg: &Config, budget_limit: Option<f64>) -> Result<(), String> {
     let provider = build_provider(cfg)?;
     let registry = ToolRegistry::new(cfg.workspace_root.clone());
+    let mut budget = build_budget_guard(budget_limit);
 
     tui::welcome_banner(
         cfg.provider.id,
@@ -111,7 +122,7 @@ pub async fn run_interactive(cfg: &Config) -> Result<(), String> {
         messages.push(CompletionMessage::user(input));
         println!();
 
-        if let Err(e) = run_turn(&*provider, &registry, &mut messages, cfg).await {
+        if let Err(e) = run_turn(&*provider, &registry, &mut messages, &mut budget, cfg).await {
             eprintln!("  {} {}\n", "Error:".red().bold(), e);
         }
     }
@@ -120,142 +131,124 @@ pub async fn run_interactive(cfg: &Config) -> Result<(), String> {
     Ok(())
 }
 
-/// Run one full turn: model call → tool execution → loop until text response.
+/// Construct the turn/session budget guard from `--budget`. No limit at
+/// all still meters spend (`BudgetMode::Observed`) so the cost summary and
+/// `BudgetTick` events stay meaningful even when nothing is enforced.
+fn build_budget_guard(budget_limit: Option<f64>) -> BudgetGuard {
+    match budget_limit {
+        Some(limit) => BudgetGuard::new(BudgetMode::Enforced, Some(limit), None),
+        None => BudgetGuard::new(BudgetMode::Observed, None, None),
+    }
+}
+
+/// Run one full turn through `oxagen_core::Engine`, rendering its
+/// `AgentEvent` stream live via a spawned draining task running
+/// concurrently with the engine (the channel is unbounded and `send` never
+/// blocks, so events reach the renderer as soon as an `.await` point in
+/// `run_turn` yields — same live-feeling output the old inline-print loop
+/// had, just sourced from the event stream instead of direct calls).
 async fn run_turn(
     provider: &dyn Provider,
     registry: &ToolRegistry,
     messages: &mut Vec<CompletionMessage>,
+    budget: &mut BudgetGuard,
     cfg: &Config,
 ) -> Result<(), String> {
-    let tools = registry.schemas();
-    let mut total_input = 0u64;
-    let mut total_output = 0u64;
-    let mut total_cost = 0.0f64;
+    budget.begin_turn();
     let turn_start = Instant::now();
 
-    for iteration in 0..MAX_TOOL_ITERATIONS {
-        let spinner = tui::Spinner::new(if iteration == 0 {
-            "thinking".to_string()
-        } else {
-            format!("thinking (step {})", iteration + 1)
-        });
+    let engine = Engine::new(provider, registry, EngineConfig::default());
+    let (tx, mut rx) = mpsc::unbounded_channel::<AgentEvent>();
 
-        // Animate spinner briefly while waiting
-        let spinner_handle = {
-            let spinner = spinner;
-            for i in 0..3 {
-                spinner.tick(i);
-                tokio::time::sleep(std::time::Duration::from_millis(80)).await;
-            }
-            spinner
-        };
-
-        let req = CompletionRequest {
-            messages: messages.clone(),
-            max_output_tokens: Some(8192),
-            temperature: Some(0.0),
-            effort: None,
-            tools: tools.clone(),
-        };
-
-        let result = provider.complete(req).await.map_err(|e| e.to_string())?;
-        drop(spinner_handle);
-
-        total_input += result.usage.input_tokens;
-        total_output += result.usage.output_tokens;
-        total_cost += result.cost_usd;
-
-        // If the model returned tool calls, execute them
-        if !result.tool_calls.is_empty() {
-            // Add the assistant's message (with tool calls) to history
-            messages.push(CompletionMessage {
-                role: MessageRole::Assistant,
-                content: result.text.clone(),
-                tool_calls: result.tool_calls.clone(),
-                tool_results: vec![],
-            });
-
-            // Execute each tool call
-            let mut tool_results = Vec::new();
-            for call in &result.tool_calls {
-                tui::tool_call_card(&call.name, &call.input, "running");
-
-                let tool_start = Instant::now();
-                let output = registry.execute(&call.name, &call.input).await;
-                let duration = tool_start.elapsed();
-
-                let output_str = match &output {
-                    ToolOutput::Ok { content } => content.clone(),
-                    ToolOutput::Error { message } => message.clone(),
-                };
-                tui::tool_result_card(&call.name, &output_str, output.is_error(), duration);
-
-                tool_results.push(ToolResult {
-                    call_id: call.call_id.clone(),
+    let renderer = tokio::spawn(async move {
+        // ToolResult only carries call_id, not the tool's name — tracked
+        // here so the result card can still show it (see tui::render_event's
+        // doc comment for why this pair is handled inline rather than
+        // inside that generic dispatcher).
+        let mut tool_names: HashMap<String, String> = HashMap::new();
+        while let Some(event) = rx.recv().await {
+            match &event {
+                AgentEvent::ToolStart { call } => {
+                    tool_names.insert(call.call_id.clone(), call.name.clone());
+                    tui::tool_call_card(&call.name, &call.input, "running");
+                }
+                AgentEvent::ToolResult {
+                    call_id,
                     output,
-                });
+                    duration_ms,
+                } => {
+                    let name = tool_names
+                        .get(call_id)
+                        .map(String::as_str)
+                        .unwrap_or("tool");
+                    let content = match output {
+                        ToolOutput::Ok { content } => content.clone(),
+                        ToolOutput::Error { message } => message.clone(),
+                    };
+                    tui::tool_result_card(
+                        name,
+                        &content,
+                        output.is_error(),
+                        Duration::from_millis(*duration_ms),
+                    );
+                }
+                other => tui::render_event(other),
             }
-
-            // Feed tool results back as a tool message
-            let tool_message = CompletionMessage {
-                role: MessageRole::Tool,
-                content: String::new(),
-                tool_calls: vec![],
-                tool_results,
-            };
-            messages.push(tool_message);
-
-            // If the model also produced text, show it
-            if !result.text.is_empty() {
-                tui::assistant_response(&result.text);
-            }
-
-            continue; // Loop back for the next model call
         }
+    });
 
-        // No tool calls — this is the final text response
-        tui::assistant_response(&result.text);
+    let outcome = engine.run_turn(messages, budget, &tx).await;
+    // Dropping the sender closes the channel, ending the renderer's
+    // `recv()` loop; awaiting it ensures every already-queued event has
+    // actually printed before this function returns (no events lost to a
+    // detached task racing process exit).
+    drop(tx);
+    let _ = renderer.await;
 
-        // Add the assistant response to history
-        messages.push(CompletionMessage {
-            role: MessageRole::Assistant,
-            content: result.text.clone(),
-            tool_calls: vec![],
-            tool_results: vec![],
-        });
-
-        // Print cost summary
-        tui::cost_summary(
-            total_input,
-            total_output,
-            total_cost,
-            &format!("{}/{}", cfg.provider.id, cfg.model_id),
-        );
-        let elapsed = turn_start.elapsed();
-        println!(
-            "  {} turn completed in {:.1}s\n",
-            "◆".dimmed(),
-            elapsed.as_secs_f64()
-        );
-
-        return Ok(());
+    match outcome {
+        TurnOutcome::Completed { cost_usd, .. } => {
+            tui::cost_summary(
+                cost_usd,
+                &format!("{}/{}", cfg.provider.id, cfg.model_id),
+                turn_start.elapsed(),
+            );
+            println!();
+            Ok(())
+        }
+        TurnOutcome::Aborted { reason } => Err(reason),
     }
-
-    eprintln!(
-        "  {} reached max tool iterations ({}) — stopping",
-        "!".yellow().bold(),
-        MAX_TOOL_ITERATIONS
-    );
-    Ok(())
 }
 
-/// Build the provider adapter from config.
+/// Build the provider adapter from config. Consults the catalog first so an
+/// unrecognized model slug is a hard, immediate, named error — never a
+/// silent construction of a provider that will simply fail its first live
+/// call (`07-model-matrix.md` §3, L-M1/L-M2: this hard-error rule existed in
+/// `oxagen_model::catalog` since Phase 0 but was never actually called from
+/// the request path, so it was unenforced in practice).
+///
+/// OpenAI gets its own arm ahead of the `openai_compatible` bool: real
+/// OpenAI speaks the Responses API (`oxagen_model::openai`), a wire shape
+/// (and tool-call dialect, see `catalog.rs`'s `ToolDialect::OpenaiResponses`)
+/// genuinely distinct from the Chat Completions shape every other
+/// `openai_compatible` row (Z.ai, xAI, DeepSeek, Gemini's OpenAI-compat
+/// shim, OpenRouter) actually speaks — see `openai.rs`'s module doc for why
+/// reusing `ZaiProvider` for OpenAI was wrong even though it happened to
+/// work.
 fn build_provider(cfg: &Config) -> Result<Box<dyn Provider>, String> {
+    oxagen_model::catalog::Catalog::seed()
+        .resolve(&cfg.model_id)
+        .map_err(|e| e.to_string())?;
+
     let api_key = ApiKey::new(cfg.api_key.clone());
 
-    if cfg.provider.openai_compatible {
-        // Z.ai, OpenAI, xAI, DeepSeek, Gemini (OpenAI-compat), OpenRouter
-        // all use the same adapter shape — only the base URL differs.
+    if cfg.provider.id == "openai" {
+        let provider = oxagen_model::openai::OpenAiProvider::new(api_key, cfg.model_id.clone())
+            .with_base_url(cfg.provider.base_url.to_string());
+        Ok(Box::new(provider))
+    } else if cfg.provider.openai_compatible {
+        // Z.ai, xAI, DeepSeek, Gemini (OpenAI-compat shim), OpenRouter all
+        // use the same Chat Completions adapter shape — only the base URL
+        // differs.
         let provider = oxagen_model::zai::ZaiProvider::new(api_key, cfg.model_id.clone())
             .with_base_url(cfg.provider.base_url.to_string());
         Ok(Box::new(provider))

@@ -1,10 +1,15 @@
-//! Model catalog skeleton. Binding rule from
+//! Model catalog. Binding rule from
 //! `docs/specs/oxagen-rust-cli/07-model-matrix.md` §3: **a slug not present
 //! in the catalog is a hard, immediate, named error, never a silent
 //! fallback** (the TS-era phantom `glm-5.2-turbo` slug and gateway
-//! slug-drift lessons, L-M1/L-M2). Phase 0 ships a curated in-binary seed
-//! for the two spiked providers; `oxagen models refresh` (a real network
-//! call against each provider's `/models` endpoint) is Phase 1+ scope.
+//! slug-drift lessons, L-M1/L-M2). The seed below covers every provider
+//! `crates/oxagen-cli/src/config.rs`'s `PROVIDERS` table can select — the
+//! two used to be all that existed, which meant the hard-error rule above
+//! was silently unenforced for 5 of 7 configured providers (any of their
+//! default models would fail this lookup were it ever wired in). `oxagen
+//! models refresh` (a real network call against each provider's `/models`
+//! endpoint that grows this catalog with live data) is future work; the
+//! shape does not change, only the row count.
 
 use oxagen_protocol::ProviderError;
 
@@ -14,6 +19,16 @@ use oxagen_protocol::ProviderError;
 pub enum ToolDialect {
     AnthropicTools,
     OpenaiJson,
+    /// OpenAI's own Responses API (`oxagen_model::openai::OpenAiProvider`).
+    /// Structurally distinct from `OpenaiJson` (Chat Completions and every
+    /// OpenAI-*compatible* gateway: Z.ai, xAI, DeepSeek, OpenRouter, local)
+    /// despite the name overlap: item-based `input`/`output` arrays with
+    /// `function_call`/`function_call_output` items, not a `messages` array
+    /// with an accumulating `tool_calls` delta array. Real OpenAI models
+    /// (the `gpt-5.5` row below) get this variant now that the real
+    /// adapter exists; `OpenaiJson` stays the dialect name for everything
+    /// that actually speaks the Chat Completions wire shape.
+    OpenaiResponses,
 }
 
 /// One catalog row — provider-native slug, verified against the provider's
@@ -35,9 +50,10 @@ pub struct Catalog {
 }
 
 impl Catalog {
-    /// Phase 0 seed: exactly the two spiked providers/models. Later phases
-    /// grow this via `oxagen models refresh` merging in live `/models`
-    /// data; the shape does not change, only the row count.
+    /// The in-binary seed: one row per provider `config.rs::PROVIDERS` can
+    /// select, keyed to that table's `default_model`. `oxagen models
+    /// refresh` (future work) grows this with live `/models` data; the
+    /// shape does not change, only the row count.
     pub fn seed() -> Self {
         Self {
             entries: vec![
@@ -54,6 +70,58 @@ impl Catalog {
                     family: "claude",
                     context_window: 200_000,
                     tool_dialect: ToolDialect::AnthropicTools,
+                },
+                CatalogEntry {
+                    id: "gpt-5.5",
+                    provider: "openai",
+                    family: "gpt",
+                    context_window: 400_000,
+                    // Real adapter now exists (oxagen_model::openai) —
+                    // this used to be OpenaiJson, which was wrong: OpenAI
+                    // was never routed through Chat Completions, only
+                    // through the generic ZaiProvider pointed at OpenAI's
+                    // base URL as a stand-in until the Responses API
+                    // adapter landed.
+                    tool_dialect: ToolDialect::OpenaiResponses,
+                },
+                CatalogEntry {
+                    id: "grok-4",
+                    provider: "xai",
+                    family: "grok",
+                    context_window: 256_000,
+                    tool_dialect: ToolDialect::OpenaiJson,
+                },
+                CatalogEntry {
+                    id: "deepseek-chat",
+                    provider: "deepseek",
+                    family: "deepseek",
+                    context_window: 128_000,
+                    tool_dialect: ToolDialect::OpenaiJson,
+                },
+                CatalogEntry {
+                    id: "gemini-3-pro",
+                    provider: "gemini",
+                    family: "gemini",
+                    context_window: 1_000_000,
+                    // Routed through Google's OpenAI-compatibility shim
+                    // today (config.rs base_url has the `/openai` suffix);
+                    // a native Gemini adapter would use its own
+                    // GeminiFunctions dialect once built (deferred — see
+                    // config.rs and the Phase 2 PR description).
+                    tool_dialect: ToolDialect::OpenaiJson,
+                },
+                CatalogEntry {
+                    id: "auto",
+                    provider: "openrouter",
+                    family: "openrouter",
+                    // OpenRouter's own meta-routing model — a real,
+                    // provider-native catalog entry, not our internal
+                    // `Option<ModelRef>` "auto" sentinel (L-M3 is about
+                    // OUR resolver never using a string for "no pin"; this
+                    // is a third party's own product feature we pass
+                    // through verbatim).
+                    context_window: 128_000,
+                    tool_dialect: ToolDialect::OpenaiJson,
                 },
             ],
         }
@@ -110,5 +178,29 @@ mod tests {
             before,
             "catalog seed must not contain duplicate slugs"
         );
+    }
+
+    #[test]
+    fn seed_covers_every_provider_oxagen_cli_can_select() {
+        // oxagen-cli/src/config.rs::PROVIDERS lists 7 providers; this test
+        // doesn't import that crate (oxagen-cli depends on oxagen-model,
+        // not the reverse) but pins the provider id set here so the two
+        // can't silently drift apart again — the actual cross-check lives
+        // in oxagen-cli's own test suite (config::tests).
+        let catalog = Catalog::seed();
+        for provider in [
+            "zai",
+            "anthropic",
+            "openai",
+            "xai",
+            "deepseek",
+            "gemini",
+            "openrouter",
+        ] {
+            assert!(
+                catalog.entries().iter().any(|e| e.provider == provider),
+                "no catalog entry for provider `{provider}`"
+            );
+        }
     }
 }

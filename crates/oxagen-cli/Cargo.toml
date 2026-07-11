@@ -14,11 +14,12 @@ path = "src/main.rs"
 
 [dependencies]
 oxagen-protocol = { path = "../oxagen-protocol" }
+oxagen-core = { path = "../oxagen-core" }
 oxagen-model = { path = "../oxagen-model" }
 oxagen-tools = { path = "../oxagen-tools" }
 serde.workspace = true
 serde_json.workspace = true
-tokio.workspace = true
+tokio = { workspace = true, features = ["sync"] }
 clap.workspace = true
 colored.workspace = true
 indicatif.workspace = true

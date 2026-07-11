@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use oxagen_core::ports::ToolExecutor;
 use oxagen_protocol::tool::{ToolOutput, ToolSchema};
 use serde_json::Value;
 
@@ -72,6 +73,20 @@ impl ToolRegistry {
 
     pub fn root(&self) -> &PathBuf {
         &self.root
+    }
+}
+
+/// `ToolRegistry` is the production implementation of `oxagen-core`'s
+/// `ToolExecutor` port — the engine drives every tool call through this
+/// impl, never through `oxagen-tools` types directly.
+#[async_trait]
+impl ToolExecutor for ToolRegistry {
+    fn schemas(&self) -> Vec<ToolSchema> {
+        ToolRegistry::schemas(self)
+    }
+
+    async fn execute(&self, name: &str, input: &Value) -> ToolOutput {
+        ToolRegistry::execute(self, name, input).await
     }
 }
 

@@ -35,9 +35,24 @@ struct Cli {
     #[arg(long, env = "STELLA_MODEL")]
     model: Option<String>,
 
+    /// API key for the selected provider, highest-precedence step of the
+    /// credential chain (CLI flag -> env var -> credentials file ->
+    /// interactive prompt, 01-product-spec.md §4). Prefer an env var or
+    /// ~/.config/oxagen/credentials.toml for anything long-lived — a flag
+    /// value is visible in shell history and `ps`.
+    #[arg(long)]
+    api_key: Option<String>,
+
     /// Output format: text (default, interactive) or json (headless)
     #[arg(long, env = "STELLA_OUTPUT_FORMAT", default_value = "text")]
     output_format: String,
+
+    /// Hard per-turn USD spend limit — enforced mode (07-model-matrix.md
+    /// §6): the turn aborts cleanly (never mid-tool) once spend exceeds
+    /// this. Omit to meter spend for the cost summary without ever
+    /// blocking (observed mode).
+    #[arg(long, env = "STELLA_BUDGET")]
+    budget: Option<f64>,
 
     #[command(subcommand)]
     command: Option<Command>,
@@ -91,7 +106,7 @@ fn run(cli: Cli) -> Result<(), String> {
     }
 
     // Run/Chat/Config need a resolved config (which requires an API key).
-    let cfg = config::Config::load(cli.model.as_deref())?;
+    let cfg = config::Config::load(cli.model.as_deref(), cli.api_key.as_deref())?;
 
     match cli.command.unwrap_or(Command::Chat) {
         Command::Run { prompt } => {
@@ -99,14 +114,14 @@ fn run(cli: Cli) -> Result<(), String> {
                 .enable_all()
                 .build()
                 .map_err(|e| format!("failed to start runtime: {e}"))?;
-            rt.block_on(agent::run_one_shot(&cfg, &prompt))?;
+            rt.block_on(agent::run_one_shot(&cfg, &prompt, cli.budget))?;
         }
         Command::Chat => {
             let rt = tokio::runtime::Builder::new_multi_thread()
                 .enable_all()
                 .build()
                 .map_err(|e| format!("failed to start runtime: {e}"))?;
-            rt.block_on(agent::run_interactive(&cfg))?;
+            rt.block_on(agent::run_interactive(&cfg, cli.budget))?;
         }
         Command::Models => {
             cfg.print_models();

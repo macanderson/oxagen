@@ -10,6 +10,7 @@
 pub mod completion;
 pub mod error;
 pub mod event;
+pub mod provider;
 pub mod role;
 pub mod tool;
 
@@ -18,6 +19,7 @@ pub use completion::{
     ReasoningEffort,
 };
 pub use error::ProviderError;
-pub use event::{AgentEvent, StageKind};
+pub use event::{AgentEvent, BudgetMode, StageKind};
+pub use provider::Provider;
 pub use role::{ModelRef, Role};
-pub use tool::{ToolCall, ToolOutput, ToolResult};
+pub use tool::{ToolCall, ToolOutput, ToolResult, ToolSchema};
