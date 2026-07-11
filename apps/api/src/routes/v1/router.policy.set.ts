@@ -12,6 +12,8 @@ routerPolicySetRoute.post("/", async (c) => {
     await c.req.json().catch(() => ({})),
   );
   const ctx = capabilityContext(c);
-  const out = await invoke(routerPolicySet.name, input, ctx, { surface: "api" });
+  const out = await invoke(routerPolicySet.name, input, ctx, {
+    surface: "api",
+  });
   return c.json(out);
 });
