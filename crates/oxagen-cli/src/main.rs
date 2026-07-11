@@ -2,8 +2,9 @@
 //!
 //! Built on the `oxagen-*` crate stack: `oxagen-model` for provider
 //! abstraction (Z.ai/GLM 5.2, Anthropic, OpenAI, xAI, DeepSeek, Gemini —
-//! any OpenAI-compatible endpoint), `oxagen-tools` for the built-in tool
-//! set, and `oxagen-protocol` for the shared types.
+//! any OpenAI-compatible endpoint), `oxagen-core` for the step-driver
+//! engine, `oxagen-tools` for the built-in tool set, and `oxagen-protocol`
+//! for the shared types.
 //!
 //! Design goals (per docs/specs/oxagen-rust-cli/01-product-spec.md):
 //! - No phone-home requirement — works with zero network calls other than
@@ -11,17 +12,31 @@
 //! - BYOK: any provider key, any combination, no account.
 //! - Speed: streaming first, prompt-cache-aware system prefix, minimal
 //!   overhead between model turns.
-//! - Engaging TUI: live spinner, streaming text, tool-call cards, cost
-//!   tracking.
+//! - Headless-capable throughout: `--output-format text|json|stream-json`.
 
 mod agent;
 mod config;
+mod domains;
+mod interactive;
 mod tui;
 
 use std::process::ExitCode;
 
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 use colored::Colorize;
+
+/// How turn output reaches the caller (`01-product-spec.md`,
+/// `02-architecture.md` §4: stream-json is a line-per-`AgentEvent`
+/// serialization of the exact protocol enum — a stable machine interface).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum OutputFormat {
+    /// Human-oriented interactive rendering (default).
+    Text,
+    /// One final JSON object summarizing the turn (headless).
+    Json,
+    /// One JSON line per AgentEvent as it happens (headless streaming).
+    StreamJson,
+}
 
 #[derive(Parser)]
 #[command(
@@ -43,9 +58,10 @@ struct Cli {
     #[arg(long)]
     api_key: Option<String>,
 
-    /// Output format: text (default, interactive) or json (headless)
-    #[arg(long, env = "STELLA_OUTPUT_FORMAT", default_value = "text")]
-    output_format: String,
+    /// Output format: text (interactive), json (one final object), or
+    /// stream-json (one line per agent event)
+    #[arg(long, env = "STELLA_OUTPUT_FORMAT", value_enum, default_value = "text")]
+    output_format: OutputFormat,
 
     /// Hard per-turn USD spend limit — enforced mode (07-model-matrix.md
     /// §6): the turn aborts cleanly (never mid-tool) once spend exceeds
@@ -68,6 +84,11 @@ enum Command {
 
     /// Start an interactive REPL session
     Chat,
+
+    /// Analyze this workspace and infer its domain taxonomy
+    /// (.oxagen/domains.toml) — the tagging vocabulary for memories,
+    /// reflections, and every code-graph node/edge
+    Init,
 
     /// List configured providers and available models
     Models,
@@ -105,24 +126,38 @@ fn run(cli: Cli) -> Result<(), String> {
         _ => {}
     }
 
+    let rt = || {
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .map_err(|e| format!("failed to start runtime: {e}"))
+    };
+
+    // `init` works offline (heuristic fallback), so config resolution
+    // failure downgrades rather than aborting.
+    if let Some(Command::Init) = cli.command {
+        return rt()?.block_on(agent::run_init(
+            cli.model.as_deref(),
+            cli.api_key.as_deref(),
+        ));
+    }
+
     // Run/Chat/Config need a resolved config (which requires an API key).
     let cfg = config::Config::load(cli.model.as_deref(), cli.api_key.as_deref())?;
 
     match cli.command.unwrap_or(Command::Chat) {
         Command::Run { prompt } => {
-            let rt = tokio::runtime::Builder::new_multi_thread()
-                .enable_all()
-                .build()
-                .map_err(|e| format!("failed to start runtime: {e}"))?;
-            rt.block_on(agent::run_one_shot(&cfg, &prompt, cli.budget))?;
+            rt()?.block_on(agent::run_one_shot(
+                &cfg,
+                &prompt,
+                cli.budget,
+                cli.output_format,
+            ))?;
         }
         Command::Chat => {
-            let rt = tokio::runtime::Builder::new_multi_thread()
-                .enable_all()
-                .build()
-                .map_err(|e| format!("failed to start runtime: {e}"))?;
-            rt.block_on(agent::run_interactive(&cfg, cli.budget))?;
+            rt()?.block_on(agent::run_interactive(&cfg, cli.budget))?;
         }
+        Command::Init => unreachable!("handled above"),
         Command::Models => {
             cfg.print_models();
         }

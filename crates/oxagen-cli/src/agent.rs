@@ -22,7 +22,10 @@ use oxagen_protocol::{AgentEvent, CompletionMessage, ToolOutput};
 use oxagen_tools::ToolRegistry;
 use tokio::sync::mpsc;
 
+use crate::OutputFormat;
 use crate::config::Config;
+use crate::domains::{heuristic_domains, infer_domains};
+use crate::interactive::{InteractiveToolSet, default_ask_io};
 use crate::tui;
 
 const SYSTEM_PROMPT: &str = r#"You are Stella, a fast terminal coding agent. You help the user with software engineering tasks by reading files, writing code, running commands, and searching the codebase.
@@ -34,35 +37,51 @@ You have these tools available:
 - bash: Run a shell command in the workspace root (with timeout)
 - grep: Search file contents with regex (shells to ripgrep)
 - glob: Find files matching a glob pattern
+- ask_user: Ask the user a multiple-choice question when a decision is genuinely theirs to make (2-6 options; the UI always adds a free-text option automatically — never add an "Other" option yourself)
 
 Rules:
 - Always read a file before editing it — never edit blind.
 - Make minimal, surgical edits. Use edit_file, not write_file, for changes to existing files.
 - Run tests after making changes to verify they pass.
 - Be concise in your responses. Show the user what you changed and why.
-- If a task requires multiple steps, work through them systematically."#;
+- If a task requires multiple steps, work through them systematically.
+- When a choice is ambiguous AND getting it wrong would be costly, use ask_user rather than guessing; otherwise proceed with your best judgment."#;
 
-/// Run a one-shot prompt (non-interactive). `budget_limit` is `--budget`
-/// (`main.rs`): `Some(n)` enforces a hard per-turn USD cap, `None` meters
-/// spend for the cost summary without ever blocking.
+/// Run a one-shot prompt. `budget_limit` is `--budget` (`main.rs`):
+/// `Some(n)` enforces a hard per-turn USD cap, `None` meters spend for the
+/// cost summary without ever blocking. `format` selects human rendering vs
+/// the two headless modes (json / stream-json) — headless runs also get the
+/// headless `ask_user` io, which fails the tool with a named error instead
+/// of waiting on stdin.
 pub async fn run_one_shot(
     cfg: &Config,
     prompt: &str,
     budget_limit: Option<f64>,
+    format: OutputFormat,
 ) -> Result<(), String> {
     let provider = build_provider(cfg)?;
     let registry = ToolRegistry::new(cfg.workspace_root.clone());
     let mut budget = build_budget_guard(budget_limit);
 
-    tui::section_header("Stella");
-    println!("  {}\n", prompt.dimmed());
+    if format == OutputFormat::Text {
+        tui::section_header("Stella");
+        println!("  {}\n", prompt.dimmed());
+    }
 
     let mut messages = vec![
         CompletionMessage::system(SYSTEM_PROMPT),
         CompletionMessage::user(prompt),
     ];
 
-    run_turn(&*provider, &registry, &mut messages, &mut budget, cfg).await
+    run_turn(
+        &*provider,
+        &registry,
+        &mut messages,
+        &mut budget,
+        cfg,
+        format,
+    )
+    .await
 }
 
 /// Run an interactive REPL session. `budget_limit` is per-session: the
@@ -122,12 +141,81 @@ pub async fn run_interactive(cfg: &Config, budget_limit: Option<f64>) -> Result<
         messages.push(CompletionMessage::user(input));
         println!();
 
-        if let Err(e) = run_turn(&*provider, &registry, &mut messages, &mut budget, cfg).await {
+        if let Err(e) = run_turn(
+            &*provider,
+            &registry,
+            &mut messages,
+            &mut budget,
+            cfg,
+            OutputFormat::Text,
+        )
+        .await
+        {
             eprintln!("  {} {}\n", "Error:".red().bold(), e);
         }
     }
 
     println!("\n  {}", "Goodbye! ✦".magenta());
+    Ok(())
+}
+
+/// `stella init` — infer the workspace's domain taxonomy and write
+/// `.oxagen/domains.toml` (see `crate::domains`). Model-assisted when a
+/// provider resolves; deterministic directory heuristic otherwise, so init
+/// always succeeds — offline included.
+pub async fn run_init(
+    model_override: Option<&str>,
+    api_key_override: Option<&str>,
+) -> Result<(), String> {
+    let workspace_root =
+        std::env::current_dir().map_err(|e| format!("cannot determine workspace root: {e}"))?;
+
+    tui::section_header("Stella init");
+
+    let domains = match Config::load(model_override, api_key_override) {
+        Ok(cfg) => {
+            let provider = build_provider(&cfg)?;
+            println!(
+                "  {} inferring domains with {}/{}…",
+                "◈".cyan(),
+                cfg.provider.id,
+                cfg.model_id
+            );
+            infer_domains(&*provider, &workspace_root).await
+        }
+        Err(_) => {
+            println!(
+                "  {} no provider configured — using the directory heuristic \
+                 (re-run `stella init` with a key for a better taxonomy)",
+                "!".yellow()
+            );
+            heuristic_domains(&workspace_root)
+        }
+    };
+
+    let path = domains.save(&workspace_root)?;
+    println!(
+        "  {} {} domains ({}) → {}",
+        "✓".green(),
+        domains.domains.len(),
+        domains.inferred_by,
+        path.display()
+    );
+    for domain in &domains.domains {
+        println!(
+            "    {} {} — {} [{}]",
+            "·".dimmed(),
+            domain.name.bright_blue(),
+            domain.description.dimmed(),
+            domain.paths.join(", ").dimmed()
+        );
+    }
+    println!(
+        "\n  {}",
+        "Domains tag memories, reflections, and every code-graph node/edge; recall uses them \
+         for relevance."
+            .dimmed()
+    );
     Ok(())
 }
 
@@ -153,11 +241,11 @@ async fn run_turn(
     messages: &mut Vec<CompletionMessage>,
     budget: &mut BudgetGuard,
     cfg: &Config,
+    format: OutputFormat,
 ) -> Result<(), String> {
     budget.begin_turn();
     let turn_start = Instant::now();
 
-    let engine = Engine::new(provider, registry, EngineConfig::default());
     let (tx, mut rx) = mpsc::unbounded_channel::<AgentEvent>();
 
     let renderer = tokio::spawn(async move {
@@ -166,53 +254,113 @@ async fn run_turn(
         // doc comment for why this pair is handled inline rather than
         // inside that generic dispatcher).
         let mut tool_names: HashMap<String, String> = HashMap::new();
+        let mut collected: Vec<AgentEvent> = Vec::new();
         while let Some(event) = rx.recv().await {
-            match &event {
-                AgentEvent::ToolStart { call } => {
-                    tool_names.insert(call.call_id.clone(), call.name.clone());
-                    tui::tool_call_card(&call.name, &call.input, "running");
+            match format {
+                OutputFormat::StreamJson => {
+                    // One line per event — the stable machine interface
+                    // (02-architecture.md §4). Serialization of a protocol
+                    // enum never fails; if it somehow does, surface it on
+                    // stderr rather than silently dropping the event.
+                    match serde_json::to_string(&event) {
+                        Ok(line) => println!("{line}"),
+                        Err(e) => {
+                            eprintln!("{{\"type\":\"error\",\"message\":\"serialize: {e}\"}}")
+                        }
+                    }
                 }
-                AgentEvent::ToolResult {
-                    call_id,
-                    output,
-                    duration_ms,
-                } => {
-                    let name = tool_names
-                        .get(call_id)
-                        .map(String::as_str)
-                        .unwrap_or("tool");
-                    let content = match output {
-                        ToolOutput::Ok { content } => content.clone(),
-                        ToolOutput::Error { message } => message.clone(),
-                    };
-                    tui::tool_result_card(
-                        name,
-                        &content,
-                        output.is_error(),
-                        Duration::from_millis(*duration_ms),
-                    );
-                }
-                other => tui::render_event(other),
+                OutputFormat::Json => collected.push(event),
+                OutputFormat::Text => match &event {
+                    AgentEvent::ToolStart { call } => {
+                        tool_names.insert(call.call_id.clone(), call.name.clone());
+                        tui::tool_call_card(&call.name, &call.input, "running");
+                    }
+                    AgentEvent::ToolResult {
+                        call_id,
+                        output,
+                        duration_ms,
+                    } => {
+                        let name = tool_names
+                            .get(call_id)
+                            .map(String::as_str)
+                            .unwrap_or("tool");
+                        let content = match output {
+                            ToolOutput::Ok { content } => content.clone(),
+                            ToolOutput::Error { message } => message.clone(),
+                        };
+                        tui::tool_result_card(
+                            name,
+                            &content,
+                            output.is_error(),
+                            Duration::from_millis(*duration_ms),
+                        );
+                    }
+                    other => tui::render_event(other),
+                },
             }
         }
+        collected
     });
 
-    let outcome = engine.run_turn(messages, budget, &tx).await;
-    // Dropping the sender closes the channel, ending the renderer's
+    // The tool set holds a tx clone (for AskUser events), so it must drop
+    // before the renderer is awaited — the channel only closes once EVERY
+    // sender is gone, and awaiting the renderer with a live sender would
+    // deadlock. The inner scope makes the drop order structural.
+    let outcome = {
+        // ask_user rides on top of the native tools; headless formats get
+        // the io that fails the tool loudly instead of waiting on stdin
+        // that will never answer (see interactive.rs).
+        let tools = InteractiveToolSet::new(
+            registry,
+            tx.clone(),
+            default_ask_io(format == OutputFormat::Text),
+        );
+        let engine = Engine::new(provider, &tools, EngineConfig::default());
+        engine.run_turn(messages, budget, &tx).await
+    };
+    // Dropping the last sender closes the channel, ending the renderer's
     // `recv()` loop; awaiting it ensures every already-queued event has
     // actually printed before this function returns (no events lost to a
     // detached task racing process exit).
     drop(tx);
-    let _ = renderer.await;
+    let collected = renderer.await.unwrap_or_default();
+
+    if format == OutputFormat::Json {
+        // One final JSON object: the outcome summary plus the full event
+        // log (the same objects stream-json would have emitted line by
+        // line).
+        let (status, text, cost_usd, reason) = match &outcome {
+            TurnOutcome::Completed { text, cost_usd } => {
+                ("completed", Some(text.clone()), Some(*cost_usd), None)
+            }
+            TurnOutcome::Aborted { reason } => ("aborted", None, None, Some(reason.clone())),
+        };
+        let summary = serde_json::json!({
+            "status": status,
+            "text": text,
+            "cost_usd": cost_usd,
+            "reason": reason,
+            "model": format!("{}/{}", cfg.provider.id, cfg.model_id),
+            "events": collected,
+        });
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&summary).unwrap_or_else(|e| format!(
+                "{{\"status\":\"error\",\"reason\":\"serialize: {e}\"}}"
+            ))
+        );
+    }
 
     match outcome {
         TurnOutcome::Completed { cost_usd, .. } => {
-            tui::cost_summary(
-                cost_usd,
-                &format!("{}/{}", cfg.provider.id, cfg.model_id),
-                turn_start.elapsed(),
-            );
-            println!();
+            if format == OutputFormat::Text {
+                tui::cost_summary(
+                    cost_usd,
+                    &format!("{}/{}", cfg.provider.id, cfg.model_id),
+                    turn_start.elapsed(),
+                );
+                println!();
+            }
             Ok(())
         }
         TurnOutcome::Aborted { reason } => Err(reason),

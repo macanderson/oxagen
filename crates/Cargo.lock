@@ -1195,6 +1195,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "futures-util",
+ "libc",
  "ocp-types",
  "reqwest",
  "serde",
@@ -1229,6 +1230,7 @@ checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 name = "oxagen-cli"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "clap",
  "colored",
  "indicatif",
@@ -1239,6 +1241,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+ "toml",
 ]
 
 [[package]]
@@ -1277,8 +1280,10 @@ name = "oxagen-fleet"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "futures-util",
  "oxagen-core",
  "oxagen-protocol",
+ "proptest",
  "rusqlite",
  "serde",
  "serde_json",
@@ -1322,6 +1327,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tokio",
+ "toml",
  "wiremock",
 ]
 
