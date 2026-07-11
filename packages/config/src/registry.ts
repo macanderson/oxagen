@@ -1834,6 +1834,23 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
   },
+  OXAGEN_SPECULATIVE_TOOLS: {
+    group: "CLI",
+    description:
+      "Speculative tool execution kill switch (ADR-030 — ON by default). After every " +
+      "read-tool result the engine predicts the model's likely next reads (truncation-marker " +
+      "follow-ups, top grep hit files, first glob entries) and executes them early into a " +
+      "per-turn promise cache; a matching real call awaits the same promise instead of " +
+      "re-doing the I/O. Read-only allowlist (read_file/grep/glob/list_dir); ANY other tool " +
+      "call invalidates the whole cache. Set to '0'/'false' to disable. The " +
+      "RunCodingAgentOptions.speculativeTools option wins over this var.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "1",
+  },
   OXAGEN_ALLOW_STDIO_MCP: {
     group: "CLI",
     description:

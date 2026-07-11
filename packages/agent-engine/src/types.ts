@@ -259,6 +259,26 @@ export interface RunCodingAgentOptions {
   readOnly?: boolean;
   codeGraph?: CodeGraphProvider;
   /**
+   * Speculative tool execution (ADR-030): prefetch the model's likely next
+   * reads (read_file/grep/glob follow-ups) into a per-turn promise cache while
+   * the model thinks. Read-only allowlist; any other tool call invalidates the
+   * cache. Default ON; this option wins over the OXAGEN_SPECULATIVE_TOOLS kill
+   * switch (env value "0"/"false" disables). Requires a `workspace`.
+   */
+  speculativeTools?: boolean;
+  /**
+   * Observer for speculation cache stats (predicted/hits/misses/wasted/
+   * invalidations), fired with a snapshot after every cache event. For trace
+   * and eval wiring; omitted ⇒ no observation overhead.
+   */
+  onSpeculationStats?: (stats: {
+    predicted: number;
+    hits: number;
+    misses: number;
+    wasted: number;
+    invalidations: number;
+  }) => void;
+  /**
    * Interactive clarification callback. Supplied ONLY by a surface with a human
    * to ask (the REPL); when present the `ask_user` tool is registered so the
    * agent can pose a structured multiple-choice question, and the system prompt

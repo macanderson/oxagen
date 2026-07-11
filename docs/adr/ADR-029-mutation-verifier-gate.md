@@ -1,4 +1,4 @@
-# ADR-028: The mutation verifier gate — every green turn must prove its tests witness the fix
+# ADR-029: The mutation verifier gate — every green turn must prove its tests witness the fix
 
 - **Status:** Accepted
 - **Date:** 2026-07-10

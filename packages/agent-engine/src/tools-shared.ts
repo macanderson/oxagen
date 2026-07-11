@@ -77,6 +77,7 @@ export function isTestPath(relPath: string): boolean {
 /** The deterministic structured tools this engine advertises, canonical form. */
 export const CANONICAL_TOOL_NAMES = [
   "test.unit.run",
+  "test.trace.run",
   "build.package.run",
   "git.diff.summarize",
   "workspace.health.check",

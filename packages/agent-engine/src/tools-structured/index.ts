@@ -16,6 +16,7 @@
 import type { ToolSet } from "ai";
 import type { Workspace, CodingEvent } from "../types";
 import { buildTestUnitRunTool } from "./test-unit-run";
+import { buildTestTraceRunTool } from "./test-trace-run";
 import { buildBuildPackageRunTool } from "./build-package-run";
 import { buildGitDiffSummarizeTool } from "./git-diff-summarize";
 import { buildWorkspaceHealthCheckTool } from "./workspace-health-check";
@@ -28,9 +29,10 @@ export interface StructuredToolOptions {
 }
 
 /**
- * Build the deterministic structured tools bound to `workspace`. All four are
- * read-oriented diagnostics (they run tests/typecheck/diff/status but never
- * mutate files), so they are advertised in both read-write and read-only modes.
+ * Build the deterministic structured tools bound to `workspace`. All five are
+ * read-oriented diagnostics (they run tests/typecheck/diff/status/trace but
+ * never mutate files), so they are advertised in both read-write and read-only
+ * modes.
  */
 export function buildStructuredTools(
   workspace: Workspace,
@@ -41,6 +43,7 @@ export function buildStructuredTools(
   // underscores; see CANONICAL_TOOL_NAMES / modelToolName in ../tools-shared).
   return {
     test_unit_run: buildTestUnitRunTool(workspace, deps),
+    test_trace_run: buildTestTraceRunTool(workspace, deps),
     build_package_run: buildBuildPackageRunTool(workspace, deps),
     git_diff_summarize: buildGitDiffSummarizeTool(workspace, deps),
     workspace_health_check: buildWorkspaceHealthCheckTool(workspace, deps),
@@ -50,6 +53,13 @@ export function buildStructuredTools(
 // Re-export the pure parsers/selectors so the unit tests exercise them directly.
 export * from "./parse";
 export { selectTestsForChanges, buildVitestCommand, TEST_FAILURE_CAPS } from "./test-unit-run";
+export {
+  buildTraceCommand,
+  buildTraceSummarizeCommand,
+  parseTraceSummary,
+  TRACE_FILE_CAPS,
+  type ExecutedFile,
+} from "./test-trace-run";
 export { buildCompileCommand, BUILD_ERROR_CAPS } from "./build-package-run";
 export { buildDiffCommands, DIFF_FILE_CAPS } from "./git-diff-summarize";
 export { parseEslintJson, HEALTH_SAMPLE_CAPS } from "./workspace-health-check";

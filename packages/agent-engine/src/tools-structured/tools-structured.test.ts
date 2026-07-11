@@ -18,11 +18,12 @@ const PASSING_VITEST = JSON.stringify({
 });
 
 describe("buildStructuredTools", () => {
-  it("exposes exactly the four model-facing tool names", () => {
+  it("exposes exactly the five model-facing tool names", () => {
     const tools = buildStructuredTools(new MemoryWorkspace({}));
     expect(Object.keys(tools).sort()).toEqual([
       "build_package_run",
       "git_diff_summarize",
+      "test_trace_run",
       "test_unit_run",
       "workspace_health_check",
     ]);
