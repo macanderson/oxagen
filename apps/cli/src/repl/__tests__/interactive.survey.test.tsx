@@ -84,6 +84,19 @@ vi.mock("../../agent/code-graph.js", () => ({
   warmCodeGraph: () => {},
 }));
 
+// Planning fires a REAL structured-output LLM call (and the memory recall
+// before it) on every turn — a unit test must never drive that. Degrade to
+// the same synchronous fallback plan a planner failure produces, which keeps
+// the single-task -> runTurn flow this test asserts on.
+vi.mock("../plan-turn.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../plan-turn.js")>();
+  return {
+    ...actual,
+    planReplTurn: async ({ goal }: { goal: string }) =>
+      actual.fallbackPlan(goal),
+  };
+});
+
 const { ReplApp } = await import("../interactive.js");
 const { buildProgram } = await import("../../program.js");
 
@@ -130,7 +143,12 @@ describe("REPL ask_user survey wiring", () => {
     expect(lastFrame()).toContain("Postgres");
     expect(lastFrame()).toContain("SQLite");
 
-    // Enter selects the highlighted first option.
+    // Enter selects the highlighted first option. A tick lets the overlay's
+    // own useInput hook finish mounting/activating before the keypress lands
+    // — without it the keystroke can arrive one render too early and get
+    // dropped (same settling beat the initial submission already gets via the
+    // tick() after typing the prompt).
+    await tick();
     stdin.write("\r");
     await until(() => lastAnswer !== null);
     expect(lastAnswer).toEqual({ answer: "Postgres", wasFreeText: false });
