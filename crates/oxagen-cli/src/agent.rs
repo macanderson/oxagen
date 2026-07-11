@@ -29,6 +29,7 @@ use crate::OutputFormat;
 use crate::config::Config;
 use crate::domains::{heuristic_domains, infer_domains};
 use crate::interactive::{InteractiveToolSet, default_ask_io};
+use crate::memory::{SessionMemory, inject_recall_block};
 use crate::tui;
 
 const SYSTEM_PROMPT: &str = r#"You are Stella, a fast terminal coding agent. You help the user with software engineering tasks by reading files, writing code, running commands, and searching the codebase.
@@ -83,6 +84,13 @@ pub async fn run_one_shot(
         CompletionMessage::user(prompt),
     ];
 
+    // The self-improvement loop (memory.rs): recall relevant memories +
+    // skills into a volatile block after the stable system prefix (L-E8)…
+    let mut memory = SessionMemory::open(&cfg.workspace_root, format == OutputFormat::Text);
+    if let Some(m) = &memory {
+        inject_recall_block(&mut messages, m.recall_block(prompt).await);
+    }
+
     let outcome = run_turn(
         &*provider,
         base_tools,
@@ -93,6 +101,15 @@ pub async fn run_one_shot(
         format,
     )
     .await;
+    // …and reflect on the completed turn, recording domain-tagged lessons
+    // (recurring ones auto-promote to SKILL.md files). Best-effort: never
+    // fails or slows the turn that just ran.
+    if outcome.is_ok()
+        && let Some(m) = &mut memory
+    {
+        m.reflect_and_record(&*provider, &messages, format != OutputFormat::Text)
+            .await;
+    }
     if let Some(set) = &mcp {
         set.close_all().await;
     }
@@ -122,6 +139,7 @@ pub async fn run_interactive(cfg: &Config, budget_limit: Option<f64>) -> Result<
     );
 
     let mut messages = vec![CompletionMessage::system(SYSTEM_PROMPT)];
+    let mut memory = SessionMemory::open(&cfg.workspace_root, true);
 
     loop {
         // Read user input
@@ -163,6 +181,11 @@ pub async fn run_interactive(cfg: &Config, budget_limit: Option<f64>) -> Result<
         messages.push(CompletionMessage::user(input));
         println!();
 
+        if let Some(m) = &memory {
+            let block = m.recall_block(input).await;
+            inject_recall_block(&mut messages, block);
+        }
+
         if let Err(e) = run_turn(
             &*provider,
             base_tools,
@@ -175,6 +198,8 @@ pub async fn run_interactive(cfg: &Config, budget_limit: Option<f64>) -> Result<
         .await
         {
             eprintln!("  {} {}\n", "Error:".red().bold(), e);
+        } else if let Some(m) = &mut memory {
+            m.reflect_and_record(&*provider, &messages, false).await;
         }
     }
 

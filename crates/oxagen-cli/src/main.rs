@@ -19,6 +19,7 @@ mod agent;
 mod config;
 mod domains;
 mod interactive;
+mod memory;
 mod tui;
 
 use std::process::ExitCode;
