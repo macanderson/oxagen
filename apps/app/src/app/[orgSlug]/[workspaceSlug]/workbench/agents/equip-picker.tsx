@@ -285,7 +285,7 @@ export function EquipPicker({
             type="button"
             variant="outline"
             size="sm"
-            className="max-lg:h-11 max-lg:w-full"
+            className="max-md:h-11 max-md:w-full"
             onClick={onBrowseMarketplace}
             startIcon={<ShoppingBag className="h-3.5 w-3.5" aria-hidden="true" />}
             data-testid="equip-browse-marketplace"
