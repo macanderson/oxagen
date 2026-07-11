@@ -53,6 +53,18 @@ const SCREENSHOT_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "
  * draft moves the browser onto the durable edit route
  * (`/workbench/agents/{agentId}`) via `router.replace` (see
  * agent-builder.tsx's `persistDraft`).
+ *
+ * The "Draft saved" toast is raised from local component state the instant
+ * `createAgentAction` resolves — it does NOT mean the browser has landed on
+ * the durable edit route yet. `persistDraft()` fires `router.replace()`
+ * synchronously in that same tick, but the App Router still has to fetch and
+ * render `/workbench/agents/{agentId}` (getAgent + loadEquipSources + agent
+ * environment bindings — several DB round trips, one guarded by an 8s
+ * timeout) before committing the new URL. A bare `page.url()` read right
+ * after the toast races that navigation and can still observe
+ * `.../agents/new` under load — explicitly wait for the URL to settle first
+ * (mirrors the same client-side-navigation-isn't-directly-observable gotcha
+ * documented in `helpers/signup.ts`).
  */
 async function createCodeAgent(
   page: Page,
@@ -77,6 +89,18 @@ async function createCodeAgent(
   await expect(page.getByTestId("step-review")).toBeVisible();
   await page.getByTestId("agent-save-draft").click();
   await expect(page.getByText(/draft saved/i)).toBeVisible({ timeout: 20_000 });
+
+  // Wait for the actual navigation to land — see the note above. Generous
+  // timeout: the destination route's server render can legitimately take
+  // several seconds under load (multiple DB round trips, one 8s-guarded).
+  await page.waitForURL(
+    (url) => {
+      const segs = url.pathname.split("/").filter(Boolean);
+      const last = segs[segs.length - 1];
+      return Boolean(last) && last !== "new";
+    },
+    { timeout: 20_000 },
+  );
 
   const segments = new URL(page.url()).pathname.split("/").filter(Boolean);
   const agentId = segments[segments.length - 1];
