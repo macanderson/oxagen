@@ -83,12 +83,22 @@ pub async fn run_interactive(cfg: &Config, budget_limit: Option<f64>) -> Result<
     let mut messages = vec![CompletionMessage::system(SYSTEM_PROMPT)];
 
     loop {
-        // Read user input
+        // The rocket-vs-UFO duel animates one line above the prompt while
+        // the REPL waits for input (TTY only; STELLA_FUN=0 opts out), and is
+        // stopped the moment a line arrives so nothing ever animates while a
+        // turn's event stream is printing — see tui.rs's module doc for why
+        // that boundary matters.
+        let duel = tui::PromptDuel::start();
+
         print!("{} ", ">".bright_cyan().bold());
         std::io::stdout().flush().map_err(|e| e.to_string())?;
 
         let mut input = String::new();
-        match std::io::stdin().read_line(&mut input) {
+        let read = std::io::stdin().read_line(&mut input);
+        if let Some(duel) = duel {
+            duel.stop();
+        }
+        match read {
             Ok(0) => break, // EOF (Ctrl+D)
             Ok(_) => {}
             Err(e) => return Err(format!("read error: {e}")),
