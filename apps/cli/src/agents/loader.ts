@@ -62,6 +62,10 @@ function agentFromMarkdown(
       systemPrompt: body,
       tools: parseToolList(data["tools"]),
       model: data["model"] || undefined,
+      // `skills` / `mcpServers` use the same comma-or-bracket list syntax as
+      // `tools`, so the same parser applies.
+      skills: parseToolList(data["skills"]),
+      mcpServers: parseToolList(data["mcpServers"]),
       source: path,
     },
   };
@@ -97,6 +101,8 @@ export function loadAgents(
         prompt?: string;
         tools?: string[];
         model?: string;
+        skills?: string[];
+        mcpServers?: string[];
       };
       if (!v.prompt) continue;
       registry.set(name, {
@@ -106,6 +112,12 @@ export function loadAgents(
         tools:
           Array.isArray(v.tools) && v.tools.length > 0 ? v.tools : undefined,
         model: v.model,
+        skills:
+          Array.isArray(v.skills) && v.skills.length > 0 ? v.skills : undefined,
+        mcpServers:
+          Array.isArray(v.mcpServers) && v.mcpServers.length > 0
+            ? v.mcpServers
+            : undefined,
         source: "settings.json",
       });
     }

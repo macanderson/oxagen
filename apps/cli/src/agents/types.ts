@@ -22,6 +22,17 @@ export interface AgentDefinition {
   tools?: string[];
   /** Gateway model slug override for this agent. */
   model?: string;
+  /**
+   * Skill names this agent should have loaded (matched against the skills
+   * discovered by `loadSkills`). `undefined` means no skills are pre-selected.
+   */
+  skills?: string[];
+  /**
+   * Keys into the global `mcpServers` map in settings.json — the MCP servers
+   * this agent connects to. `undefined` means inherit the session's default
+   * server set.
+   */
+  mcpServers?: string[];
   /** Where the definition came from (file path or "settings.json"). */
   source: string;
 }

@@ -10,6 +10,8 @@ name: ${name}
 description: Describe when this agent should be used (the planner reads this).
 tools: Read, Grep, Glob, Bash
 model: ${DEFAULT_CODING_MODEL}
+# skills: reviewer, deploy         # skill names to pre-load (see \`oxagen skill list\`)
+# mcpServers: github, linear       # keys into settings.json \`mcpServers\`
 ---
 
 You are the ${name} agent.
