@@ -19,6 +19,7 @@
  */
 import { EventEmitter } from "node:events";
 import type { MemoryProvider, FileLockProvider } from "@oxagen/agent-engine";
+import { debugLog } from "../../lib/debug-log.js";
 import { createEngineRunner } from "../engine-runner.js";
 import { createLocalFileLockProvider } from "./local-file-lock.js";
 import {
@@ -73,8 +74,17 @@ export interface FleetTaskEvent {
 
 export interface FleetOptions {
   cwd: string;
-  /** Max subagents running at once (default 4). */
+  /** Max subagents running at once (default 4). Also the ceiling any {@link concurrencyProvider} clamps under. */
   concurrency?: number;
+  /**
+   * Dynamic concurrency cap consulted on every slot refill (ADR-030 §resource).
+   * Lets a resource monitor scale the fleet down under machine pressure and back
+   * up when it eases — WITHOUT restarting the fleet. Its value is clamped to
+   * `[1, concurrency]`: a provider can never push above the configured ceiling,
+   * and never below 1. Omitted ⇒ the fixed `concurrency` (steady behaviour).
+   * Lowering it mid-run stops NEW dispatches; already-running tasks finish.
+   */
+  concurrencyProvider?: () => number;
   memory?: FleetMemory | null;
   /**
    * Platform memory handle shared across all tasks. When present (CLI is
@@ -115,6 +125,7 @@ const TERMINAL = new Set(["done", "failed", "cancelled", "blocked"]);
 export class Fleet extends EventEmitter {
   private readonly cwd: string;
   private readonly concurrency: number;
+  private readonly concurrencyProvider: () => number;
   private readonly memory: FleetMemory | null;
   private readonly serverMemory: ServerMemory | null;
   private readonly store: PlanStore | null;
@@ -141,6 +152,7 @@ export class Fleet extends EventEmitter {
     super();
     this.cwd = opts.cwd;
     this.concurrency = Math.max(1, opts.concurrency ?? 4);
+    this.concurrencyProvider = opts.concurrencyProvider ?? (() => this.concurrency);
     this.memory = opts.memory ?? null;
     this.serverMemory = opts.serverMemory ?? null;
     this.store = opts.store ?? null;
@@ -311,11 +323,52 @@ export class Fleet extends EventEmitter {
     // alone so they finish naturally (see drain()).
     if (this.draining) return;
 
-    while (this.running.size < this.concurrency) {
+    // The effective cap is consulted on every refill, so a resource monitor can
+    // shrink or grow the fleet mid-run. Clamped to [1, concurrency]: a provider
+    // never pushes past the configured ceiling, and a bad/NaN value degrades to
+    // the fixed ceiling rather than wedging dispatch.
+    while (this.running.size < this.currentConcurrency()) {
       const next = this.pickReady();
       if (!next) break;
       void this.run(next);
     }
+  }
+
+  /** The live cap: the provider's value, floored to an int and clamped to [1, concurrency]. */
+  private currentConcurrency(): number {
+    const raw = this.concurrencyProvider();
+    const n = Number.isFinite(raw) ? Math.floor(raw) : this.concurrency;
+    return Math.max(1, Math.min(this.concurrency, n));
+  }
+
+  /**
+   * Run {@link pump} + {@link checkDone} such that a throw in either can NEVER
+   * wedge slot refilling. The scheduler is re-driven from every task's
+   * completion; if one such re-drive threw unguarded it would strand the fleet
+   * with a freed slot but nothing dispatched into it. Errors are reported
+   * through the "scheduler-error" channel and swallowed here so the loop lives.
+   */
+  private pumpSafely(): void {
+    try {
+      this.pump();
+    } catch (err) {
+      this.reportSchedulerError("pump", err);
+    }
+    try {
+      this.checkDone();
+    } catch (err) {
+      this.reportSchedulerError("checkDone", err);
+    }
+  }
+
+  /** Surface a scheduler-internal error without crashing the runtime. */
+  private reportSchedulerError(phase: string, err: unknown): void {
+    const message = err instanceof Error ? err.message : String(err);
+    // A dedicated, non-"error" event name: an unhandled "error" on an
+    // EventEmitter with no listener THROWS, which is exactly the wedge we're
+    // guarding against — so this channel is safe even with zero subscribers.
+    this.emit("scheduler-error", { phase, message });
+    void debugLog("error", "fleet.scheduler-error", { phase, message });
   }
 
   /** The next queued task whose deps are all done and whose files are free. */
@@ -456,16 +509,24 @@ export class Fleet extends EventEmitter {
     } finally {
       // Tear down the worktree — but keep it on a conflict so a resolver agent
       // or human can finish the merge in place. The pinned commits survive
-      // either way, so the agent's work is never lost.
+      // either way, so the agent's work is never lost. A dispose() throw MUST
+      // NOT skip the slot cleanup below (it runs first in this finally): if it
+      // did, `running` would never release this task's slot and the fleet would
+      // wedge with a phantom occupant. So it is caught and reported, never
+      // rethrown.
       if (this.isolation && !this.readOnly) {
-        await this.isolation.dispose(task.id, {
-          keep: conflict ? !conflict.ok : false,
-        });
+        try {
+          await this.isolation.dispose(task.id, {
+            keep: conflict ? !conflict.ok : false,
+          });
+        } catch (err) {
+          this.reportSchedulerError("dispose", err);
+        }
       }
       this.running.delete(task.id);
       this.controllers.delete(task.id);
-      this.pump();
-      this.checkDone();
+      // Guarded: a throw here must never strand the freed slot (see pumpSafely).
+      this.pumpSafely();
     }
   }
 
@@ -589,7 +650,14 @@ export class Fleet extends EventEmitter {
         const anyFailed = [...this.tasks.values()].some(
           (t) => t.status === "failed",
         );
-        this.store.setStatus(this.planId, anyFailed ? "failed" : "completed");
+        // Persisting the final plan status must never block settling — a store
+        // write failure is reported, not allowed to leave `start()`/`drain()`
+        // hanging forever on an unresolved donePromise.
+        try {
+          this.store.setStatus(this.planId, anyFailed ? "failed" : "completed");
+        } catch (err) {
+          this.reportSchedulerError("store.setStatus", err);
+        }
       }
       const settle = this.settle;
       this.settle = null;
