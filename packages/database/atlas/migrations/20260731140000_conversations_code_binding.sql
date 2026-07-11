@@ -4,4 +4,9 @@
 -- (UPDATE … WHERE code_binding IS NULL) and every later turn resolves the
 -- coding target from the stored value, so the repo/environment/agent can
 -- never drift mid-conversation.
-ALTER TABLE "chat"."conversations" ADD COLUMN "code_binding" jsonb;
+-- IF NOT EXISTS: the preview DB already has this column from the migration's
+-- pre-resequence identity (20260729120000, applied there under NON_LINEAR exec
+-- order before the rename landed), so a plain ADD COLUMN would fail on preview
+-- with "column already exists" while prod (which never applied either version)
+-- needs the ADD to run.
+ALTER TABLE "chat"."conversations" ADD COLUMN IF NOT EXISTS "code_binding" jsonb;
