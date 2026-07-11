@@ -252,12 +252,18 @@ jobs:
       - name: Build and unit tests
         run: |
           set -f  # keep the unquoted ...[origin/main] filter literal (no globbing)
-          pnpm turbo run build test:unit $TURBO_FILTER
+          # --concurrency=3: same fix as the `checks` job's lint/typecheck step —
+          # turbo's default (10) runs that many build/test tasks in parallel,
+          # several of which set their own large NODE_OPTIONS
+          # --max-old-space-size, exceeding this runner's available RAM (shared
+          # with the Postgres/ClickHouse/Neo4j service containers) and causing
+          # either a kernel OOM-kill or severe memory-pressure slowdown.
+          pnpm turbo run build test:unit --concurrency=3 $TURBO_FILTER
 
       - name: Coverage thresholds
         run: |
           set -f
-          pnpm turbo run test:coverage $TURBO_FILTER
+          pnpm turbo run test:coverage --concurrency=3 $TURBO_FILTER
 
   e2e:
     if: github.event_name != 'workflow_dispatch'
@@ -372,7 +378,14 @@ jobs:
       - name: Build
         run: |
           set -f  # keep the unquoted ...[origin/main] filter literal (no globbing)
-          pnpm turbo run build $TURBO_FILTER
+          # --concurrency=3: same fix as the `checks` job's lint/typecheck step
+          # (see below) — turbo's default (10) runs that many packages' build
+          # scripts in parallel, several of which set their own large
+          # NODE_OPTIONS --max-old-space-size, far exceeding this runner's
+          # available RAM (shared with the Postgres/ClickHouse/Neo4j service
+          # containers) and triggering a kernel OOM-kill (exit 137) rather
+          # than a graceful per-task heap error.
+          pnpm turbo run build --concurrency=3 $TURBO_FILTER
 
       # Chromium + OS deps are baked into oxagen-ci-e2e at apps/app's pinned
       # @playwright/test version; this is a no-op unless the pin drifted ahead
