@@ -72,7 +72,7 @@ describe("runCodingAgent", () => {
   });
 
   it("injects recalled context into the system prompt and fires memory/trace hooks", async () => {
-    const ws = new MemoryWorkspace({ "x.ts": "old" });
+    const ws = new MemoryWorkspace({ "x.ts": "old_value" });
 
     const recallContext = vi.fn().mockResolvedValue("- [constraint] use strict types");
     const remember = vi.fn().mockResolvedValue(undefined);
@@ -93,7 +93,7 @@ describe("runCodingAgent", () => {
             const edit = args.tools.edit_file as {
               execute: (i: unknown, o: unknown) => Promise<unknown>;
             };
-            await edit.execute({ path: "x.ts", old_string: "old", new_string: "new" }, {});
+            await edit.execute({ path: "x.ts", old_string: "old_value", new_string: "fresh_value" }, {});
             yield { type: "text-delta", text: "ok" };
           })(),
           steps: Promise.resolve([{}]),

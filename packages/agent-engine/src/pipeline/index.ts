@@ -356,6 +356,16 @@ export interface RunTurnOptions {
     path: string;
     kind: "create" | "update";
     bytes: number;
+    /** Content-hash anchor before the edit (absent for a create). */
+    beforeHash?: string;
+    /** Content-hash anchor after the edit. */
+    afterHash?: string;
+    /** New syntax/type diagnostics shipped (non-zero only under declared breakage). */
+    newDiagnostics?: number;
+    /** True when the edit declared intentional mid-refactor breakage. */
+    declaredBreaking?: boolean;
+    /** Substring occurrences replaced (edit_file); absent for write_file. */
+    replacements?: number;
   }) => void;
 }
 
@@ -773,7 +783,16 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
           }
         }
         if (e.type === "file-edit")
-          opts.onFileEdit?.({ path: e.path, kind: e.kind, bytes: e.bytes });
+          opts.onFileEdit?.({
+            path: e.path,
+            kind: e.kind,
+            bytes: e.bytes,
+            beforeHash: e.beforeHash,
+            afterHash: e.afterHash,
+            newDiagnostics: e.newDiagnostics,
+            declaredBreaking: e.declaredBreaking,
+            replacements: e.replacements,
+          });
         if (e.type === "final-diff")
           opts.onFileChange?.(e.diff, e.changedFiles);
         captureToolEvent(e, toolEvents, opts.verbose);
@@ -1471,7 +1490,16 @@ async function runBare(
           durationMs: e.durationMs,
         });
       if (e.type === "file-edit")
-        opts.onFileEdit?.({ path: e.path, kind: e.kind, bytes: e.bytes });
+        opts.onFileEdit?.({
+          path: e.path,
+          kind: e.kind,
+          bytes: e.bytes,
+          beforeHash: e.beforeHash,
+          afterHash: e.afterHash,
+          newDiagnostics: e.newDiagnostics,
+          declaredBreaking: e.declaredBreaking,
+          replacements: e.replacements,
+        });
       if (e.type === "final-diff") opts.onFileChange?.(e.diff, e.changedFiles);
       captureToolEvent(e, toolEvents, opts.verbose);
     },

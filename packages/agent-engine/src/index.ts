@@ -7,6 +7,14 @@ export {
   describeEditFailure,
   clipMiddle,
 } from "./tools";
+// Edit integrity — hash-anchored, syntax-gated, audited file edits.
+export {
+  hashContent,
+  checkSyntax,
+  newSyntaxErrors,
+  EditIntegrityLedger,
+} from "./edit-integrity";
+export type { SyntaxCheckResult } from "./edit-integrity";
 // LocalWorkspace is a CLI adapter (Stage B), not engine code — see ADR-019.
 export {
   runCodingAgent,
