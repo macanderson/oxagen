@@ -107,6 +107,18 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "billing.org_billing_profiles", policyClass: "org_only" },
   { table: "billing.org_billing_settings", policyClass: "org_only" },
   { table: "billing.billing_disputes", policyClass: "org_only" },
+  // Reseller revenue tables (20260725120000_reseller_revenue.sql). All six
+  // carry org_id NOT NULL, no workspace_id → org_only. The migration created
+  // ENABLE/FORCE RLS + tenant_isolation inline with the identical org_only
+  // shape; these entries bring the manifest (the gen-rls-migration source of
+  // truth) in sync so a future re-baseline regenerates their policies and
+  // manifest-coverage stops failing.
+  { table: "billing.reseller_price_plans", policyClass: "org_only" },
+  { table: "billing.reseller_customers", policyClass: "org_only" },
+  { table: "billing.reseller_attribution_rules", policyClass: "org_only" },
+  { table: "billing.reseller_rebill_runs", policyClass: "org_only" },
+  { table: "billing.reseller_rebill_line_items", policyClass: "org_only" },
+  { table: "billing.reseller_settings", policyClass: "org_only" },
 
   // ── chat.* / content.* (orgScopeMixin) ───────────────────────────────────
   { table: "chat.conversations", policyClass: "standard" },

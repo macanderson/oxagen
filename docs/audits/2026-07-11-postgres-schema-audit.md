@@ -81,6 +81,9 @@ tables (`reseller_price_plans`, `reseller_customers`,
 
 **Fix (safe to land immediately, manifest-only, no DDL diff):** add all six as
 `{ policyClass: "org_only" }` under the existing `billing.*` block.
+**Status: FIXED in this PR** — manifest entries added and the manifest-length
+ratchet bumped 89 → 95; this CI failure was observed live on this PR's first
+run (`rls-integration`, run 29138191860) exactly as predicted.
 
 ### 1.3 IAM hot path: `iam.principals` has no `(org_id, parent_user_id)` index — and no uniqueness
 
