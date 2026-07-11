@@ -35,8 +35,15 @@ env "local" {
   dev = "postgres://oxagen:oxagen@localhost:5433/atlas_dev?sslmode=disable"
   url = "postgres://oxagen:oxagen@localhost:5433/oxagen?sslmode=disable"
   migration {
-    dir    = "file://atlas/migrations"
-    format = atlas
+    dir        = "file://atlas/migrations"
+    format     = atlas
+    # Parallel agent sessions cut migrations against different bases, so a
+    # persistent DB (preview/prod/shared-local) routinely sees a new file whose
+    # timestamp sorts below an already-applied version. Linear order would wedge
+    # every subsequent apply (atlasgo.io/versioned/apply#non-linear-error);
+    # non-linear applies pending files in version order and no-ops when history
+    # is already linear.
+    exec_order = NON_LINEAR
   }
   # Exclude Atlas's own revision-tracking table and the old custom runner table.
   exclude = ["atlas_schema_revisions", "_migrations"]
@@ -46,8 +53,10 @@ env "ci" {
   # CI only runs `atlas migrate apply` — no diff generation, no dev DB needed.
   url = getenv("DATABASE_URL")
   migration {
-    dir    = "file://atlas/migrations"
-    format = atlas
+    dir        = "file://atlas/migrations"
+    format     = atlas
+    # See env "local" for why exec_order is NON_LINEAR everywhere.
+    exec_order = NON_LINEAR
   }
   exclude = ["atlas_schema_revisions", "_migrations"]
 }
@@ -55,8 +64,10 @@ env "ci" {
 env "prod" {
   url = getenv("PRODUCTION_DATABASE_URL")
   migration {
-    dir    = "file://atlas/migrations"
-    format = atlas
+    dir        = "file://atlas/migrations"
+    format     = atlas
+    # See env "local" for why exec_order is NON_LINEAR everywhere.
+    exec_order = NON_LINEAR
   }
   exclude = ["atlas_schema_revisions", "_migrations"]
 }
@@ -64,8 +75,10 @@ env "prod" {
 env "preview" {
   url = getenv("PREVIEW_DATABASE_URL")
   migration {
-    dir    = "file://atlas/migrations"
-    format = atlas
+    dir        = "file://atlas/migrations"
+    format     = atlas
+    # See env "local" for why exec_order is NON_LINEAR everywhere.
+    exec_order = NON_LINEAR
   }
   exclude = ["atlas_schema_revisions", "_migrations"]
 }
