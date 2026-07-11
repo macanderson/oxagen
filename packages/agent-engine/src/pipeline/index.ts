@@ -40,6 +40,12 @@ import {
 import { enhancePrompt } from "../evaluate/prompt-enhancer";
 import { createSpecTestTracker } from "../oracle/spec-test";
 import {
+  runMutationGate,
+  applyGateToVerdict,
+  resolveMutationVerifyEnabled,
+  type MutationGateResult,
+} from "../verify";
+import {
   specGateInstruction,
   shouldInjectSpecGate,
   buildLadderSignals,
@@ -273,6 +279,22 @@ export interface RunTurnOptions {
    * on incomplete work; worth it for a bench push.
    */
   judgeModels?: string[];
+  /**
+   * Mutation gate (layer 1): after a judged-complete round, revert the fix in
+   * a shadow (test files stay put), re-run the agent's own witness test
+   * command, and demand a failure — a test that still passes without the fix
+   * witnesses nothing, and the verdict is overridden back into the revise
+   * loop. ON by default (`OXAGEN_MUTATION_VERIFY=0` disables); this explicit
+   * option wins over the env var. Deterministic — zero model calls.
+   */
+  mutationVerify?: boolean;
+  /**
+   * Mutation gate layer 2: when the witness check passes, additionally apply
+   * deterministic one-line mutants to the fix's added lines and measure the
+   * kill rate (how many mutants the tests catch). Each mutant costs one
+   * witness-command run, so this is opt-in (or `OXAGEN_MUTATION_SCORE=1`).
+   */
+  mutationScore?: boolean;
   /**
    * TRIAGE / coordinator model — drives the pre-execution EVALUATE stage
    * (`evaluatePrompt`). Set via `/triage-model`. When set, the evaluator runs
@@ -598,6 +620,9 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
     opts.maxReviseRounds ?? envMaxReviseRounds ?? 1,
   );
   const judgeRounds: JudgeVerdict[] = [];
+  // One entry per judged-complete round the mutation gate examined (usually
+  // exactly one — the loop breaks after a complete verdict survives the gate).
+  const mutationGates: MutationGateResult[] = [];
   let history = opts.history ?? [];
   let prompt = enhanced.prompt;
 
@@ -1177,6 +1202,70 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
       });
     }
 
+    // ── 5b. MUTATION GATE (deterministic, zero model calls) ──
+    // A judged-complete coding turn must prove its tests witness the fix:
+    // revert the fix in a shadow (tests stay put), re-run the agent's own
+    // passing test command, and demand a failure. Still green without the
+    // fix ⇒ the green is false — override the verdict so the EXISTING revise
+    // loop sends the agent back before the user ever sees it. Fail-open: any
+    // condition the gate can't check faithfully yields "skipped", and the
+    // shadow is always restored (a failed restore throws — loudly).
+    if (
+      verdict.complete &&
+      !opts.readOnly &&
+      !opts.signal?.aborted &&
+      resolveMutationVerifyEnabled(process.env, opts.mutationVerify) &&
+      result.diff.trim() !== ""
+    ) {
+      const gateStart = Date.now();
+      const timeoutEnv = Number(process.env["OXAGEN_MUTATION_TIMEOUT_MS"]);
+      const gate = await runMutationGate(
+        opts.workspace,
+        result.diff,
+        { lastOutcomes: tracker.lastOutcomes(), flippedBy: tracker.flippedBy() },
+        {
+          score:
+            opts.mutationScore ??
+            Boolean(process.env["OXAGEN_MUTATION_SCORE"]),
+          ...(Number.isFinite(timeoutEnv) && timeoutEnv > 0
+            ? { timeoutMsPerCommand: timeoutEnv }
+            : {}),
+          ...(opts.signal ? { signal: opts.signal } : {}),
+          onStart: ({ commands }) =>
+            opts.onStage?.({
+              kind: "judge",
+              label: "mutation gate: reverting fix to prove the tests witness it",
+              ...(commands[0] ? { detail: commands[0] } : {}),
+            }),
+        },
+      );
+      mutationGates.push(gate);
+      if (gate.status !== "skipped") {
+        opts.onStage?.({
+          kind: "judge",
+          label:
+            gate.status === "witnessed"
+              ? "mutation gate: tests fail without the fix — the green is real"
+              : "mutation gate: VACUOUS — tests still pass without the fix",
+          detail:
+            `${gate.runs.length} witness run(s) · ${gate.durationMs}ms` +
+            (gate.score
+              ? ` · mutant kill rate ${Math.round(gate.score.killRate * 100)}%`
+              : ""),
+        });
+        phases.push(
+          phaseStat(
+            "judge",
+            round,
+            gateStart,
+            "deterministic/mutation-gate",
+            emptyUsage(),
+          ),
+        );
+      }
+      verdict = applyGateToVerdict(verdict, gate);
+    }
+
     phases.push(
       phaseStat("judge", round, judgeStart, verdict.model, verdict.usage),
     );
@@ -1308,6 +1397,7 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
     phases,
     toolEvents,
     thinkingLog,
+    mutationGates,
   });
 
   // ── Graph sync: always-on, fire-and-forget, non-blocking. ──
@@ -1608,6 +1698,7 @@ interface AssembleArgs {
   phases?: PhaseStat[];
   toolEvents?: ToolEvent[];
   thinkingLog?: Array<{ round: number; text: string }>;
+  mutationGates?: MutationGateResult[];
 }
 
 function assembleTrace(a: AssembleArgs): TurnTrace {
@@ -1647,6 +1738,9 @@ function assembleTrace(a: AssembleArgs): TurnTrace {
     steps: a.steps,
     usage: a.usage,
     durationMs: Date.now() - a.startedAt,
+    ...(a.mutationGates && a.mutationGates.length > 0
+      ? { mutationGates: a.mutationGates }
+      : {}),
     ...(thinking.length > 0 ? { thinkingLog: thinking } : {}),
     ...(a.verbose
       ? {
