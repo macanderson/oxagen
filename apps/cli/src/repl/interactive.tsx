@@ -84,6 +84,22 @@ import { openFleetMemory } from "../agent/fleet/memory.js";
 import { openPlanStore } from "../agent/fleet/store.js";
 import { loadAgents } from "../agents/loader.js";
 import { planReplTurn, fallbackPlan } from "./plan-turn.js";
+import { decideDispatch } from "./dispatch-mode.js";
+import {
+  createBackgroundTracker,
+  type BackgroundTracker,
+  type BackgroundRow,
+} from "./background-tracker.js";
+import { BackgroundPanel } from "./background-panel.js";
+import {
+  loadDispatchSettings,
+  persistDispatchMode,
+  persistDispatchCap,
+  type DispatchSettings,
+} from "./dispatch-settings.js";
+import { openFleetStore } from "../sessions/store.js";
+import { fleetRoot } from "../sessions/paths.js";
+import { shortSid } from "../sessions/ids.js";
 import { runFleetTurn } from "./fleet-turn.js";
 import { agentRegistry, type AgentHandle } from "../agent/agent-registry.js";
 import { taskRegistry } from "../agent/task-registry.js";
@@ -673,6 +689,29 @@ export function ReplApp({
   // closure.
   const [hudVisible, setHudVisible] = useState(false);
   const hudVisibleRef = useRef(false);
+  // ── Dispatch mode (docs/specs/repl-async-dispatch.md) ──────────────────────
+  // When ON, a "task"-classified prompt is handed to a detached background
+  // worker (composer frees immediately) instead of running inline; "simple"
+  // lookups still answer inline. Seeded from the persisted settings tier once at
+  // mount. The ref mirrors the state so the synchronous submit path reads it
+  // without a stale closure.
+  const dispatchInitRef = useRef<DispatchSettings | null>(null);
+  if (dispatchInitRef.current === null) {
+    dispatchInitRef.current = loadDispatchSettings(cwd);
+  }
+  const [dispatchMode, setDispatchMode] = useState<boolean>(
+    dispatchInitRef.current.mode,
+  );
+  const dispatchModeRef = useRef(dispatchMode);
+  dispatchModeRef.current = dispatchMode;
+  const dispatchCapRef = useRef<number>(dispatchInitRef.current.maxConcurrent);
+  // Observer for the dispatches this REPL spawned (fold-back + concurrency cap).
+  const trackerRef = useRef<BackgroundTracker | null>(null);
+  // Prompts waiting for a background slot when the cap is hit (local queue, so
+  // we never spawn unbounded workers). Drained as dispatches complete.
+  const dispatchQueueRef = useRef<string[]>([]);
+  const drainRef = useRef<() => void>(() => {});
+  const [backgroundRows, setBackgroundRows] = useState<BackgroundRow[]>([]);
   // The /config panel — takes over the input row while open (same pattern as
   // ApprovalPrompt) and owns the keyboard via its own useInput; the central
   // handler below yields to it through this ref (read synchronously, so no
@@ -1810,6 +1849,64 @@ export function ReplApp({
     }
   });
 
+  // ── Background dispatch (docs/specs/repl-async-dispatch.md §3.4) ────────────
+  // Spawn a detached worker for `prompt` and register it with the tracker so its
+  // progress + completion fold back into the transcript. `reserved` says a
+  // concurrency slot was already claimed for this dispatch (so a spawn failure
+  // must release it). Returns after the <50 ms spawn — the composer is free.
+  const dispatchOne = useCallback(
+    async (prompt: string, reserved: boolean): Promise<void> => {
+      try {
+        const { dispatchDetachedSession } = await import(
+          "../sessions/dispatch.js"
+        );
+        const { sid, title } = await dispatchDetachedSession({ cwd, prompt });
+        trackerRef.current?.add(sid, title);
+        pushAssistant(
+          `◇ dispatched ${shortSid(sid)} · "${title}" — running in the background; ` +
+            `\`oxagen fleet send ${shortSid(sid)} "…"\` to follow up.`,
+        );
+      } catch (err) {
+        if (reserved) trackerRef.current?.release();
+        pushAssistant(
+          `Fleet dispatch failed: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    },
+    [cwd, pushAssistant],
+  );
+
+  // Route a prompt to the background, honoring the concurrency cap: claim a slot
+  // if one is free, otherwise queue locally (never spawn unbounded workers).
+  const dispatchToBackground = useCallback(
+    (prompt: string): void => {
+      const tracker = trackerRef.current;
+      if (tracker && !tracker.reserve()) {
+        dispatchQueueRef.current = [...dispatchQueueRef.current, prompt];
+        pushAssistant(
+          `⧗ dispatch queued (${tracker.maxConcurrent()} already running) — ` +
+            `starts when a background slot frees.`,
+        );
+        return;
+      }
+      void dispatchOne(prompt, tracker !== null);
+    },
+    [dispatchOne, pushAssistant],
+  );
+
+  // Drain the local dispatch queue as slots free (called by the tracker on every
+  // completion). Reserves atomically per prompt so the cap is never exceeded.
+  const drainDispatchQueue = useCallback((): void => {
+    const tracker = trackerRef.current;
+    if (!tracker) return;
+    while (dispatchQueueRef.current.length > 0 && tracker.reserve()) {
+      const next = dispatchQueueRef.current[0] as string;
+      dispatchQueueRef.current = dispatchQueueRef.current.slice(1);
+      void dispatchOne(next, true);
+    }
+  }, [dispatchOne]);
+  drainRef.current = drainDispatchQueue;
+
   const handleSubmit = useCallback(
     async (text: string, paste?: PasteSubmission) => {
       // `!cmd` is intercepted synchronously in handleUserSubmit (it runs
@@ -1821,34 +1918,23 @@ export function ReplApp({
         return;
       }
 
-      // ── Trailing ` &`: background the prompt into the fleet (ADR-023) ──
-      // Shell-familiar: `fix the login bug &` dispatches a detached fleet
-      // session immediately and the composer stays free for the next thought.
+      // ── Background dispatch routing (docs/specs/repl-async-dispatch.md) ──
+      // A trailing ` &` (either mode) or a "task"-classified prompt while
+      // Dispatch mode is ON goes to a detached worker; the composer frees
+      // immediately (dispatch is <50 ms). Slash/shell commands and forced-inline
+      // `=`/`>` prompts never dispatch — they fall through to the inline path.
+      // `decideDispatch` returns the prompt with the routing markers stripped.
       {
-        const { parseAmpersandDispatch } = await import(
-          "../sessions/dispatch.js"
-        );
-        const fleetPrompt = parseAmpersandDispatch(text);
-        if (fleetPrompt !== null) {
-          try {
-            const { dispatchDetachedSession } = await import(
-              "../sessions/dispatch.js"
-            );
-            const { sid } = await dispatchDetachedSession({
-              cwd,
-              prompt: fleetPrompt,
-            });
-            pushAssistant(
-              `◇ dispatched ${sid} to the fleet — \`oxagen fleet\` to watch it work, ` +
-                `\`oxagen fleet send ${sid} "…"\` to follow up.`,
-            );
-          } catch (err) {
-            pushAssistant(
-              `Fleet dispatch failed: ${err instanceof Error ? err.message : String(err)}`,
-            );
-          }
+        const decision = decideDispatch(text, {
+          mode: dispatchModeRef.current,
+        });
+        if (decision.kind === "background") {
+          dispatchToBackground(decision.prompt);
           return;
         }
+        // Inline: run today's turn on the marker-stripped prompt (a forced-inline
+        // `=`/`>` prefix is removed; every other case is unchanged).
+        text = decision.prompt;
       }
 
       // ── Slash commands ──
@@ -1889,6 +1975,69 @@ export function ReplApp({
         const next = !hudVisibleRef.current;
         hudVisibleRef.current = next;
         setHudVisible(next);
+        return;
+      }
+      if (cmd === "/dispatch") {
+        // Dispatch mode: `on` | `off` | (bare toggles) | `cap <n>` | `status`.
+        // Persisted in the local settings tier so it survives restarts.
+        const arg = text.slice("/dispatch".length).trim().toLowerCase();
+        const applyMode = (next: boolean): void => {
+          setDispatchMode(next);
+          dispatchModeRef.current = next;
+          try {
+            persistDispatchMode(next, cwd);
+          } catch {
+            // A settings-write failure must not break the toggle for THIS
+            // session — the ref/state already changed; it just won't persist.
+          }
+          pushAssistant(
+            next
+              ? `⇉ Dispatch mode ON — task prompts run in the background (cap ${dispatchCapRef.current}); ` +
+                  `lookups still answer inline. Prefix a prompt with \`=\` to force it inline, ` +
+                  `or suffix \` &\` to force background. \`/dispatch off\` to stop.`
+              : "⇉ Dispatch mode OFF — prompts run inline again (` &` still backgrounds explicitly).",
+          );
+        };
+        if (arg === "" ) {
+          applyMode(!dispatchModeRef.current);
+          return;
+        }
+        if (arg === "on") {
+          applyMode(true);
+          return;
+        }
+        if (arg === "off") {
+          applyMode(false);
+          return;
+        }
+        if (arg === "status") {
+          pushAssistant(
+            `⇉ Dispatch mode ${dispatchModeRef.current ? "ON" : "OFF"} · ` +
+              `cap ${dispatchCapRef.current} · ${trackerRef.current?.runningCount() ?? 0} running · ` +
+              `${dispatchQueueRef.current.length} queued.`,
+          );
+          return;
+        }
+        if (arg.startsWith("cap")) {
+          const n = Number.parseInt(arg.slice("cap".length).trim(), 10);
+          if (!Number.isFinite(n) || n < 1) {
+            pushAssistant("Usage: /dispatch cap <n> — max concurrent background dispatches (≥ 1).");
+            return;
+          }
+          dispatchCapRef.current = n;
+          trackerRef.current?.setMaxConcurrent(n);
+          try {
+            persistDispatchCap(n, cwd);
+          } catch {
+            // Non-fatal — the live cap already changed.
+          }
+          pushAssistant(`⇉ Dispatch concurrency cap set to ${n}.`);
+          return;
+        }
+        pushAssistant(
+          "Usage: /dispatch [on|off] — toggle async dispatch mode · " +
+            "/dispatch cap <n> — set the concurrency cap · /dispatch status.",
+        );
         return;
       }
       if (cmd === "/config") {
@@ -3440,6 +3589,26 @@ export function ReplApp({
   const handleSubmitRef = useRef(handleSubmit);
   handleSubmitRef.current = handleSubmit;
 
+  // ── Background-dispatch observer (docs/specs/repl-async-dispatch.md §3.5) ───
+  // Mount once: watch the fleet store for the sessions THIS REPL spawned, fold
+  // their completions into the transcript, and enforce the concurrency cap.
+  // Reuses the ADR-023 session envelope — no second transport. `drainRef`
+  // decouples the (stable) tracker from the per-render drain callback.
+  useEffect(() => {
+    const tracker = createBackgroundTracker({
+      store: openFleetStore(fleetRoot(cwd)),
+      maxConcurrent: dispatchCapRef.current,
+      onNotify: (line) => pushAssistant(line),
+      onRoster: (rows) => setBackgroundRows(rows),
+      onSlotFree: () => drainRef.current(),
+    });
+    trackerRef.current = tracker;
+    return () => {
+      tracker.dispose();
+      trackerRef.current = null;
+    };
+  }, [cwd, pushAssistant]);
+
   // Single sequential consumer: drains the queue one prompt at a time, awaiting
   // each turn before starting the next. Re-entrancy is guarded so submissions
   // that arrive mid-drain just extend the queue the running pump is reading.
@@ -3651,6 +3820,7 @@ export function ReplApp({
               sessionLabel={repoInfo.root.split("/").pop() || "session"}
               sessionCostUsd={metrics.sessionCostUsd}
               now={now}
+              dispatchMode={dispatchMode}
             />
           )}
         />
@@ -3716,6 +3886,7 @@ export function ReplApp({
         )}
 
         {hudVisible && <HudPanel />}
+        <BackgroundPanel rows={backgroundRows} />
         {focusedAgentId && <AgentFocusView agentId={focusedAgentId} />}
         {editingTaskId && (
           <Box paddingX={1}>
@@ -3921,6 +4092,18 @@ export function ReplApp({
 
         {/* Transient notices, then the input row, then the status line. */}
 
+        {/* Dispatch-mode indicator (inline branch — the full-screen HeaderBar
+          shows its own). Present whenever the async autopilot is on, even with
+          nothing dispatched yet, so the mode is never invisible. */}
+        {dispatchMode && (
+          <Box paddingX={1}>
+            <Text color={theme.violet} bold>
+              {"⇉ dispatch"}
+            </Text>
+            <Text dimColor>{` · task prompts run in the background (cap ${dispatchCapRef.current})`}</Text>
+          </Box>
+        )}
+
         {/* Queued prompts (submitted while a turn is running) */}
         {queued.length > 0 && (
           <Box flexDirection="column" paddingX={1}>
@@ -3971,6 +4154,7 @@ export function ReplApp({
         {/* Heads-up display — every agent running this session. Toggled by /hud
           (and closed by Esc); sits just above the input as a live status overlay. */}
         {hudVisible && <HudPanel />}
+        <BackgroundPanel rows={backgroundRows} />
 
         {/* Drilled-in agent log — opened with Ctrl-E on an Agent Team row. It sits
           directly above the prompt bar (the bar is cleared and re-focused when

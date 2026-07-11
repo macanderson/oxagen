@@ -196,6 +196,19 @@ export const oxagenSettingsSchema = z
      * cancel before any work runs. Default false (turns run immediately).
      */
     confirmScope: z.boolean().optional(),
+    /**
+     * When true, the interactive REPL runs "task"-classified prompts as detached
+     * background fleet dispatches (the composer frees immediately) instead of
+     * inline turns; conversational lookups still answer inline. Toggle live with
+     * `/dispatch`. Default false. See docs/specs/repl-async-dispatch.md.
+     */
+    dispatchMode: z.boolean().optional(),
+    /**
+     * Max concurrent background dispatches the REPL runs before queueing further
+     * ones locally (never spawning unbounded workers). Default 4. Set with
+     * `/dispatch cap <n>`.
+     */
+    dispatchMaxConcurrent: z.number().int().positive().optional(),
   })
   // Forward-compatible: sections that land in later PRs (agents, commands,
   // skills) may already be present in a user's file; pass them through rather
