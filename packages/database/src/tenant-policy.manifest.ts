@@ -107,20 +107,13 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "billing.org_billing_profiles", policyClass: "org_only" },
   { table: "billing.org_billing_settings", policyClass: "org_only" },
   { table: "billing.billing_disputes", policyClass: "org_only" },
-  // Reseller Revenue — org-only tenant_isolation RLS created in
-  // 20260725120000_reseller_revenue.sql (Stripe-for-agents re-bill loop).
-  { table: "billing.reseller_price_plans", policyClass: "org_only" },
-  { table: "billing.reseller_customers", policyClass: "org_only" },
-  { table: "billing.reseller_attribution_rules", policyClass: "org_only" },
-  { table: "billing.reseller_rebill_runs", policyClass: "org_only" },
-  { table: "billing.reseller_rebill_line_items", policyClass: "org_only" },
-  { table: "billing.reseller_settings", policyClass: "org_only" },
-  // Reseller revenue tables (20260725120000_reseller_revenue.sql). All six
-  // carry org_id NOT NULL, no workspace_id → org_only. The migration created
-  // ENABLE/FORCE RLS + tenant_isolation inline with the identical org_only
-  // shape; these entries bring the manifest (the gen-rls-migration source of
-  // truth) in sync so a future re-baseline regenerates their policies and
-  // manifest-coverage stops failing.
+  // Reseller Revenue (20260725120000_reseller_revenue.sql, Stripe-for-agents
+  // re-bill loop). All six carry org_id NOT NULL, no workspace_id → org_only.
+  // The migration created ENABLE/FORCE RLS + tenant_isolation inline with the
+  // identical org_only shape; these entries keep the manifest (the
+  // gen-rls-migration source of truth) in sync so a future re-baseline
+  // regenerates their policies. (Two concurrent fix PRs — #899/#902 — each
+  // appended this block; deduped to one.)
   { table: "billing.reseller_price_plans", policyClass: "org_only" },
   { table: "billing.reseller_customers", policyClass: "org_only" },
   { table: "billing.reseller_attribution_rules", policyClass: "org_only" },
