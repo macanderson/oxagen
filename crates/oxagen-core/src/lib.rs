@@ -8,8 +8,11 @@
 //! synchronous functions over owned data — easy to property-test
 //! (`02-architecture.md` §1.3).
 
+pub mod budget;
 pub mod compaction;
 pub mod estimator;
+pub mod loop_detect;
 pub mod ports;
 
+pub use budget::{BudgetGuard, BudgetOutcome};
 pub use ports::{Clock, ToolExecutor};
