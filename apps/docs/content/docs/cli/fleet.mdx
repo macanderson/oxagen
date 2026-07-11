@@ -98,6 +98,11 @@ Every subcommand is also a headless entry point. In a terminal you get pretty ou
 | `oxagen fleet cancel <sid>` \| `--all` | Cancel a session, or all of them. |
 | `oxagen fleet logs <sid>` | Dump a session's raw `events.ndjson`. |
 | `oxagen fleet clean` | Prune terminal sessions. |
+| `oxagen fleet replay <sid>` | Time-travel view of a recorded session; `--turn N` shows full tool I/O, `--verify` checks integrity. |
+| `oxagen fleet bisect <sid> --cmd <shell>` | Binary-search the first bad turn by restoring the tree and probing it. |
+| `oxagen fleet resume <sid> --turn N` | Fork a new session from the state after turn N. |
+| `oxagen fleet feedback <sid> up\|down` | Record a human verdict on a finished session. |
+| `oxagen fleet distill <sid>` | Turn a recorded run into an eval dataset item; `--push` sends it to the platform. |
 
 ### dispatch
 
@@ -198,6 +203,34 @@ oxagen fleet clean --all                 # prune all terminal sessions
 <Callout type="info">
 `oxagen fleet worker <sid>` is an internal command — the detached worker that `dispatch` spawns to run a session out of process. You never run it directly, but you may see it in a process list.
 </Callout>
+
+### Time travel — replay, bisect, resume, feedback, distill
+
+Every fleet session also writes a deterministic sidecar record (`record/record.ndjson` plus a content-addressed blob store) with what the bounded event log cannot hold: **full** tool inputs and outputs, the full model history after each turn, and filesystem snapshots of every changed file. Recording is on by default; set `OXAGEN_FLEET_RECORD=0` to disable it. The record never leaves your machine except the distilled eval item, and only when you `--push` it.
+
+```bash
+oxagen fleet replay s-k3x                    # per-turn prompts, tool calls, diffs, usage
+oxagen fleet replay s-k3x --turn 3           # turn 3's FULL tool inputs/outputs
+oxagen fleet replay s-k3x --verify           # integrity check; exit 1 on corruption
+
+# "which turn doomed this run?" — restores the recorded tree at each probed
+# turn into a scratch worktree and runs your predicate there (exit 0 = good).
+# Assumes monotonic badness, exactly like git bisect.
+oxagen fleet bisect s-k3x --cmd "pnpm -s typecheck"
+
+# Fork a session from the state after turn 2 — restored tree + reconstructed
+# history — optionally on a different model or with a different prompt.
+oxagen fleet resume s-k3x --turn 2 --model anthropic/claude-sonnet-4-5
+
+# Human verdicts land on the record; a thumbs-down auto-distills the run.
+oxagen fleet feedback s-k3x down -m "wrong file, wrong fix"
+
+# Failed (or thumbs-downed) runs become eval dataset items. Local always
+# (record/distilled.json); --push adds it to the platform dataset.
+oxagen fleet distill s-k3x --push
+```
+
+A session that ends `failed` distills itself automatically, so every production failure is already an eval case by the time you look at it.
 
 ## The cross-terminal story
 

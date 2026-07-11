@@ -113,6 +113,26 @@ export interface GraphSyncProvider {
   recordLineage(args: { executionId: string; touchedFiles: string[] }): void | Promise<void>;
 }
 
+/**
+ * Optional project-diagnostics provider (e.g. an incremental tsserver / LSP).
+ * When wired, edit gating compares its before/after output on the edited file —
+ * in addition to the engine's built-in single-file syntax check — and blocks a
+ * write that would introduce NEW diagnostics (unless the edit declares the
+ * breakage via `expect_errors`). The two sources are unioned: a diagnostic
+ * reported by either the built-in check or this provider counts.
+ *
+ * No implementation ships in-engine — this is the SEAM, mirroring
+ * {@link FileLockProvider}. CLI: unwired (undefined) — the built-in syntactic
+ * check is the only gate, single-process with no project server. Platform: MAY
+ * inject a tsserver/LSP-backed adapter so the gate also catches cross-file type
+ * breakage the single-file syntactic check cannot see. A provider failure MUST
+ * degrade to the built-in check alone (fail-open on the optional source) — a
+ * broken diagnostics server never wedges an edit.
+ */
+export interface DiagnosticsProvider {
+  diagnostics(path: string, content: string): Promise<{ errors: string[] }>;
+}
+
 /** Result of a single acquire attempt (mirrors the Postgres lease service's `AcquiredLease`). */
 export interface FileLockGrant {
   granted: boolean;

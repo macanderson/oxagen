@@ -160,7 +160,9 @@ export function buildProgram(): Command {
         // platform persistence — the CLI runs BYOK/offline). Dynamic import so
         // @oxagen/billing only loads when the flag is actually used, matching
         // this file's "no side effects until an action runs" contract.
-        let budget: import("@oxagen/billing/turn-budget").TurnBudgetPolicy | undefined;
+        let budget:
+          | import("@oxagen/billing/turn-budget").TurnBudgetPolicy
+          | undefined;
         if (opts.budget !== undefined) {
           const { resolveBudgetFlags } = await import("./agent/budget.js");
           const resolved = resolveBudgetFlags(opts.budget, opts.budgetMode);
@@ -2476,6 +2478,114 @@ export function buildProgram(): Command {
       await evalRunGet(runId, opts);
     });
 
+  // ── router: Verified-Outcome Market Router ──────────────────────────────────
+
+  const routerCmd = program
+    .command("router")
+    .description(
+      "Verified-Outcome Market Router — learned, economic model routing",
+    );
+  routerCmd
+    .command("stats")
+    .description(
+      "Observed outcomes per (task class, model) + cheapest-clearing model per class",
+    )
+    .option("--task-class <class>", "Restrict to one task class")
+    .option("--window <days>", "Trailing window in days")
+    .option("--min-samples <n>", "Minimum samples per (class, model)")
+    .option("--json", "Output JSON")
+    .action(
+      async (opts: {
+        taskClass?: string;
+        window?: string;
+        minSamples?: string;
+        json?: boolean;
+      }) => {
+        const { routerStats } = await import("./commands/router.js");
+        await routerStats({
+          taskClass: opts.taskClass,
+          window: opts.window ? Number(opts.window) : undefined,
+          minSamples: opts.minSamples ? Number(opts.minSamples) : undefined,
+          json: opts.json,
+        });
+      },
+    );
+  routerCmd
+    .command("preview <prompt>")
+    .description("Dry-run the routing decision for a prompt (changes nothing)")
+    .option("--files <n>", "Expected number of files touched")
+    .option("--cross-package", "The task crosses package boundaries")
+    .option("--task-class <class>", "Override the derived task class")
+    .option("--json", "Output JSON")
+    .action(
+      async (
+        prompt: string,
+        opts: {
+          files?: string;
+          crossPackage?: boolean;
+          taskClass?: string;
+          json?: boolean;
+        },
+      ) => {
+        const { routerPreview } = await import("./commands/router.js");
+        await routerPreview(prompt, {
+          files: opts.files ? Number(opts.files) : undefined,
+          crossPackage: opts.crossPackage,
+          taskClass: opts.taskClass,
+          json: opts.json,
+        });
+      },
+    );
+  const routerPolicyCmd = routerCmd
+    .command("policy")
+    .description("Get or set the governed market-router policy");
+  routerPolicyCmd
+    .command("get")
+    .description("Show the effective policy and its provenance")
+    .option("--json", "Output JSON")
+    .action(async (opts: { json?: boolean }) => {
+      const { routerPolicyGet } = await import("./commands/router.js");
+      await routerPolicyGet(opts);
+    });
+  routerPolicyCmd
+    .command("set")
+    .description("Update the policy (org Owner/Admin) — changes spend behavior")
+    .option("--scope <scope>", "org | workspace (default workspace)")
+    .option("--mode <mode>", "off | shadow | enforce")
+    .option("--threshold <n>", "Verified-success threshold 0..1 (e.g. 0.95)")
+    .option("--min-samples <n>", "Minimum samples before a model is trusted")
+    .option("--window <days>", "Trailing stats window in days")
+    .option("--escalate <bool>", "Escalate a tier on judge rejection (true/false)")
+    .option("--json", "Output JSON")
+    .action(
+      async (opts: {
+        scope?: string;
+        mode?: string;
+        threshold?: string;
+        minSamples?: string;
+        window?: string;
+        escalate?: string;
+        json?: boolean;
+      }) => {
+        const { routerPolicySet } = await import("./commands/router.js");
+        await routerPolicySet({
+          scope: opts.scope === "org" ? "org" : opts.scope === "workspace" ? "workspace" : undefined,
+          mode:
+            opts.mode === "off" || opts.mode === "shadow" || opts.mode === "enforce"
+              ? opts.mode
+              : undefined,
+          threshold: opts.threshold ? Number(opts.threshold) : undefined,
+          minSamples: opts.minSamples ? Number(opts.minSamples) : undefined,
+          window: opts.window ? Number(opts.window) : undefined,
+          escalate:
+            opts.escalate === undefined
+              ? undefined
+              : opts.escalate === "true" || opts.escalate === "yes",
+          json: opts.json,
+        });
+      },
+    );
+
   // ── secret: credential vault ────────────────────────────────────────────────
 
   const secret = program
@@ -2695,6 +2805,125 @@ export function buildProgram(): Command {
     .action(async (_opts: unknown, command: Command) => {
       const { handleFleetClean } = await import("./commands/fleet.js");
       await handleFleetClean(command.optsWithGlobals());
+    });
+
+  fleet
+    .command("replay")
+    .description(
+      "Time-travel view of a recorded session (ADR-028): per-turn prompts, tool calls, diffs, usage",
+    )
+    .argument("<sid>", "Session id (full, short tail, or unique prefix)")
+    .option("--turn <n>", "Show this turn's FULL tool input/output payloads")
+    .option(
+      "--verify",
+      "Check record integrity (refs resolve + hash clean); exit 1 on failure",
+      false,
+    )
+    .action(async (sid: string, _opts: unknown, command: Command) => {
+      const { handleFleetReplay } = await import("./commands/fleet.js");
+      await handleFleetReplay(sid, command.optsWithGlobals());
+    });
+
+  fleet
+    .command("bisect")
+    .description(
+      "Binary-search the first bad turn of a recorded session by restoring the tree " +
+        "at each probed turn and running --cmd there (exit 0 = good). Assumes monotonic " +
+        "badness — once a turn dooms the run, later turns stay bad (like git bisect).",
+    )
+    .argument("<sid>", "Session id (full, short tail, or unique prefix)")
+    .requiredOption(
+      "--cmd <shell>",
+      "Predicate run via sh -c in the restored tree",
+    )
+    .option("--good <n>", "Known-good turn (default 0 = session start)")
+    .option("--bad <n>", "Known-bad turn (default: the last settled turn)")
+    .action(async (sid: string, _opts: unknown, command: Command) => {
+      const { handleFleetBisect } = await import("./commands/fleet.js");
+      await handleFleetBisect(sid, command.optsWithGlobals());
+    });
+
+  fleet
+    .command("resume")
+    .description(
+      "Fork a recorded session from the state after --turn N: restored scratch worktree + " +
+        "reconstructed history, dispatched as a new detached session",
+    )
+    .argument("<sid>", "Session id (full, short tail, or unique prefix)")
+    .requiredOption(
+      "--turn <n>",
+      "Fork point: resume from the state AFTER this turn (0 = start)",
+    )
+    .option(
+      "-m, --model <slug>",
+      "Model for the fork (default: the source run's)",
+    )
+    .option(
+      "-p, --prompt <text>",
+      "Prompt for the fork (default: the source's next-turn prompt)",
+    )
+    .action(async (sid: string, _opts: unknown, command: Command) => {
+      // The fork spawns a detached worker running the engine — gate like dispatch.
+      const { requireSession } = await import("./lib/session.js");
+      requireSession();
+      const { handleFleetResume } = await import("./commands/fleet.js");
+      await handleFleetResume(sid, command.optsWithGlobals());
+    });
+
+  fleet
+    .command("feedback")
+    .description(
+      "Record a human verdict on a finished session (thumbs-down auto-distills it to an eval item)",
+    )
+    .argument("<sid>", "Session id (full, short tail, or unique prefix)")
+    .argument("<verdict>", '"up" or "down"')
+    .option(
+      "-m, --message <comment>",
+      "Optional comment attached to the verdict",
+    )
+    .action(
+      async (
+        sid: string,
+        verdict: string,
+        _opts: unknown,
+        command: Command,
+      ) => {
+        const merged = command.optsWithGlobals<{
+          message?: string;
+          model?: unknown;
+        }>();
+        // The root program's global `-m, --model` claims `-m` before this
+        // subcommand can (commander parses ancestor options non-positionally —
+        // the same gotcha the fleet parent documents for --json). Feedback has
+        // no model semantics, so a swallowed `-m` value was meant as the
+        // message; `--message` always wins when both are present.
+        if (merged.message === undefined && typeof merged.model === "string") {
+          merged.message = merged.model;
+        }
+        const { handleFleetFeedback } = await import("./commands/fleet.js");
+        await handleFleetFeedback(sid, verdict, merged);
+      },
+    );
+
+  fleet
+    .command("distill")
+    .description(
+      "Distill a recorded session into an evals-v1 dataset item (local record/distilled.json; " +
+        "--push adds it to the platform dataset)",
+    )
+    .argument("<sid>", "Session id (full, short tail, or unique prefix)")
+    .option(
+      "--push",
+      "Push the item to the platform via the eval.* capabilities",
+      false,
+    )
+    .option(
+      "--dataset <slug>",
+      "Target dataset slug (default: fleet-distilled-failures, created on demand)",
+    )
+    .action(async (sid: string, _opts: unknown, command: Command) => {
+      const { handleFleetDistill } = await import("./commands/fleet.js");
+      await handleFleetDistill(sid, command.optsWithGlobals());
     });
 
   fleet

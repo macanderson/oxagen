@@ -3,6 +3,12 @@ import { agentRepoEdit } from "@oxagen/oxagen/contracts/agent.repo.edit";
 import { createGitHubClient, GitHubWorkspace } from "@oxagen/github";
 import { isSandboxAvailable } from "@oxagen/sandbox";
 import { runTurn } from "@oxagen/agent-engine";
+import type {
+  MarketRoutingPolicy,
+  RoutingStatRow,
+} from "@oxagen/agent-engine";
+import { readRoutingStats, recordRouterOutcome } from "@oxagen/telemetry";
+import { runInTenantScope } from "@oxagen/tenancy";
 import {
   createNeo4jCodeGraphProvider,
   createPlatformMemoryProvider,
@@ -13,6 +19,7 @@ import {
   ModalSandboxWorkspace,
 } from "@oxagen/agent/adapters";
 import { resolveGitHubToken } from "./lib/github-token";
+import { loadEffectiveRoutingPolicy } from "./lib/routing-policy";
 import { diffFileContents, splitCombinedDiff, type FileDiff } from "./lib/unified-diff";
 import { logger } from "./logger";
 
@@ -56,6 +63,31 @@ export const agentRepoEditHandler: CapabilityHandler<typeof agentRepoEdit> = asy
   // 4. Create the metered, telemetry-instrumented AI port.
   //    messageId is the ClickHouse execution_step_id correlation key.
   const ai = createPlatformAgentAi(ctx, ctx.messageId ?? ctx.requestId);
+
+  // 4b. Verified-Outcome Market Router (flag-gated). Resolve the governed policy
+  //     and, only when the router will actually consult them, a stats snapshot.
+  //     Off by default ⇒ mode "off" ⇒ the engine keeps today's deterministic
+  //     routing. Any failure here MUST NOT block a turn — fall back to no policy.
+  let routingPolicy: MarketRoutingPolicy | undefined;
+  let routingStats: RoutingStatRow[] | undefined;
+  try {
+    const resolved = await loadEffectiveRoutingPolicy(ctx);
+    routingPolicy = resolved.policy;
+    if (resolved.policy.mode !== "off") {
+      routingStats = await readRoutingStats({
+        windowDays: resolved.policy.windowDays,
+        minSamples: resolved.policy.minSamples,
+      });
+    }
+  } catch (err) {
+    logger.warn(
+      { err, orgId: ctx.orgId },
+      "routing policy/stats fetch failed — falling back to deterministic routing",
+    );
+  }
+  const orgId = ctx.orgId;
+  const workspaceId = ctx.workspaceId;
+  const executionId = ctx.messageId ?? ctx.requestId;
 
   // 5. Run the full 6-stage pipeline (evaluate → enhance → route → execute →
   //    judge → revise) via runTurn from @oxagen/agent-engine.
@@ -113,6 +145,31 @@ export const agentRepoEditHandler: CapabilityHandler<typeof agentRepoEdit> = asy
     // engine-level failure that reaches the injected sink.
     onError: ({ phase, error }) =>
       logger.error({ err: error, phase, orgId: ctx.orgId }, "agent-engine non-fatal error"),
+    // Market-router policy + pre-fetched stats (flag-gated; undefined ⇒ off).
+    routingPolicy,
+    routingStats,
+    // Record each round's outcome so the router learns this task class's live
+    // cost/accuracy curve. Fire-and-forget: re-enter the tenant scope explicitly
+    // (the engine defers the hook, and chInsert needs an active scope), and
+    // never let a telemetry failure surface into the turn.
+    onRouteOutcome: (outcome) => {
+      void runInTenantScope({ orgId, workspaceId }, () =>
+        recordRouterOutcome({
+          execution_id: executionId,
+          task_class: outcome.taskClass,
+          signature_hash: outcome.signatureHash,
+          model: outcome.model,
+          tier: outcome.tier,
+          verified: outcome.verified ? 1 : 0,
+          verification_source: outcome.verificationSource,
+          score: outcome.score,
+          cost_usd_micros: outcome.costUsdMicros,
+          latency_ms: outcome.latencyMs,
+          surface: "agent",
+          routing_mode: outcome.routingMode,
+        }),
+      ).catch(() => {});
+    },
   });
 
   // 6. Collect the changed files. The sandbox reads them back from the real git

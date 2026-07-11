@@ -29,7 +29,18 @@ export interface DispatchDetachedOptions {
   agent?: string;
   /** Default "conversation": the worker stays alive for follow-ups via `fleet send`. */
   mode?: SessionMeta["mode"];
-  /** Injectable store (defaults to the fleet store for `cwd`). */
+  /** Fork provenance (ADR-028): resume from this session's state after `turn`. */
+  resumeOf?: SessionMeta["resumeOf"];
+  /**
+   * Directory whose fleet this session joins AND where the worker process is
+   * spawned; defaults to `cwd`. `fleet resume` (ADR-028) needs the split: the
+   * agent edits a restored scratch worktree (`cwd`), but the worker must
+   * resolve the SOURCE project's fleet root to find its own session meta and
+   * the source session's replay record — a scratch worktree hashes to a
+   * different fleet (see paths.ts), which would strand both.
+   */
+  fleetCwd?: string;
+  /** Injectable store (defaults to the fleet store for `fleetCwd ?? cwd`). */
   store?: SessionStore;
   /** Injectable spawner for tests. Must mirror child_process.spawn's shape. */
   spawnImpl?: (
@@ -74,7 +85,8 @@ export async function dispatchDetachedSession(
     throw new Error("cannot locate the oxagen entry script to spawn a worker");
   }
 
-  const store = opts.store ?? new SessionStore({ root: fleetRoot(opts.cwd) });
+  const fleetCwd = opts.fleetCwd ?? opts.cwd;
+  const store = opts.store ?? new SessionStore({ root: fleetRoot(fleetCwd) });
   const sid = newSessionId();
   const title = titleFromPrompt(prompt);
   await store.createSession({
@@ -87,13 +99,14 @@ export async function dispatchDetachedSession(
     mode: opts.mode ?? "conversation",
     ...(opts.model !== undefined ? { model: opts.model } : {}),
     ...(opts.agent !== undefined ? { agent: opts.agent } : {}),
+    ...(opts.resumeOf !== undefined ? { resumeOf: opts.resumeOf } : {}),
   });
 
   const spawnImpl = opts.spawnImpl ?? spawn;
   const child = spawnImpl(
     process.execPath,
     [...process.execArgv, entry as string, "fleet", "worker", sid],
-    { cwd: opts.cwd, detached: true, stdio: "ignore" },
+    { cwd: fleetCwd, detached: true, stdio: "ignore" },
   );
   child.unref();
   return { sid, title };

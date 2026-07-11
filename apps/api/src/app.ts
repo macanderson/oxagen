@@ -233,6 +233,10 @@ import { evalDatasetFromTracesRoute } from "./routes/v1/eval.dataset.from_traces
 import { evalRunStartRoute } from "./routes/v1/eval.run.start";
 import { evalRunStatusRoute } from "./routes/v1/eval.run.status";
 import { evalRunGetRoute } from "./routes/v1/eval.run.get";
+import { routerPolicyGetRoute } from "./routes/v1/router.policy.get";
+import { routerPolicySetRoute } from "./routes/v1/router.policy.set";
+import { routerStatsListRoute } from "./routes/v1/router.stats.list";
+import { routerDecisionPreviewRoute } from "./routes/v1/router.decision.preview";
 import { agentDeployRoute } from "./routes/v1/agent.deploy";
 import { agentTriggerCreateRoute } from "./routes/v1/agent.trigger.create";
 import { agentTriggerUpdateRoute } from "./routes/v1/agent.trigger.update";
@@ -546,6 +550,11 @@ orgScoped.route("/eval/datasets", evalDatasetListRoute);
 orgScoped.route("/eval/runs/status", evalRunStatusRoute);
 orgScoped.route("/eval/runs/get", evalRunGetRoute);
 orgScoped.route("/eval/runs", evalRunStartRoute);
+// Verified-Outcome Market Router governance + inspection.
+orgScoped.route("/router/policy/set", routerPolicySetRoute);
+orgScoped.route("/router/policy", routerPolicyGetRoute);
+orgScoped.route("/router/stats", routerStatsListRoute);
+orgScoped.route("/router/preview", routerDecisionPreviewRoute);
 orgScoped.route("/forms/fill", formFillRoute);
 orgScoped.route("/command/menu/search", commandMenuSearchRoute);
 orgScoped.route("/command/menu/suggest", commandMenuSuggestRoute);

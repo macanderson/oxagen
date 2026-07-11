@@ -26,12 +26,18 @@ import {
   type TailHandle,
 } from "../store.js";
 
-const tick = (ms = 10): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+const tick = (ms = 10): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms));
 
-async function until(cond: () => boolean, timeoutMs = 4000, stepMs = 10): Promise<void> {
+async function until(
+  cond: () => boolean,
+  timeoutMs = 4000,
+  stepMs = 10,
+): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (!cond()) {
-    if (Date.now() - deadline > 0) throw new Error("until(): condition not met before deadline");
+    if (Date.now() - deadline > 0)
+      throw new Error("until(): condition not met before deadline");
     await tick(stepMs);
   }
 }
@@ -47,7 +53,9 @@ function track<T extends TailHandle>(handle: T): T {
 }
 
 /** Create a session with sane defaults; overrides win. */
-function makeSession(overrides: Partial<CreateSessionInit> = {}): Promise<SessionMeta> {
+function makeSession(
+  overrides: Partial<CreateSessionInit> = {},
+): Promise<SessionMeta> {
   const init: CreateSessionInit = {
     sid: newSessionId(),
     title: "test session",
@@ -60,9 +68,12 @@ function makeSession(overrides: Partial<CreateSessionInit> = {}): Promise<Sessio
   return store.createSession({ ...init, ...overrides });
 }
 
-const metaPath = (sid: string): string => join(sessionDir(root, sid), "meta.json");
-const eventsPath = (sid: string): string => join(sessionDir(root, sid), "events.ndjson");
-const inboxPath = (sid: string): string => join(sessionDir(root, sid), "inbox.ndjson");
+const metaPath = (sid: string): string =>
+  join(sessionDir(root, sid), "meta.json");
+const eventsPath = (sid: string): string =>
+  join(sessionDir(root, sid), "events.ndjson");
+const inboxPath = (sid: string): string =>
+  join(sessionDir(root, sid), "inbox.ndjson");
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), "oxa-fleet-store-"));
@@ -95,6 +106,32 @@ describe("createSession", () => {
     expect(view.alive).toBe(true);
     expect(view.derivedState).toBe("queued");
   });
+
+  it("round-trips resumeOf fork provenance (ADR-028) — and stays absent when omitted", async () => {
+    const sid = newSessionId();
+    const meta = await makeSession({
+      sid,
+      resumeOf: { sid: "s-source-abcd", turn: 3 },
+    });
+    expect(meta.resumeOf).toEqual({ sid: "s-source-abcd", turn: 3 });
+
+    // On-disk meta parses back with the same provenance.
+    const parsed = sessionMetaSchema.parse(
+      JSON.parse(await readFile(metaPath(sid), "utf8")),
+    );
+    expect(parsed.resumeOf).toEqual({ sid: "s-source-abcd", turn: 3 });
+    const view = await store.readMeta(sid);
+    expect(view?.resumeOf).toEqual({ sid: "s-source-abcd", turn: 3 });
+
+    // Additive: a plain session has no resumeOf key at all (pre-ADR-028 shape).
+    const plainSid = newSessionId();
+    await makeSession({ sid: plainSid });
+    const plain = JSON.parse(
+      await readFile(metaPath(plainSid), "utf8"),
+    ) as Record<string, unknown>;
+    expect("resumeOf" in plain).toBe(false);
+    expect(sessionMetaSchema.parse(plain).resumeOf).toBeUndefined();
+  });
 });
 
 describe("openWriter", () => {
@@ -110,7 +147,9 @@ describe("openWriter", () => {
     await writer.flush();
 
     expect((await store.readEvents(sid)).map((e) => e.seq)).toEqual([1, 2, 3]);
-    expect((await store.readEvents(sid, { fromSeq: 3 })).map((e) => e.seq)).toEqual([3]);
+    expect(
+      (await store.readEvents(sid, { fromSeq: 3 })).map((e) => e.seq),
+    ).toEqual([3]);
 
     const view = await store.readMeta(sid);
     if (!view) throw new Error("readMeta returned null");
@@ -121,7 +160,8 @@ describe("openWriter", () => {
     const sid = newSessionId();
     const meta = await makeSession({ sid });
     const writer = store.openWriter(meta);
-    for (let i = 0; i < 200; i++) writer.append({ type: "message.delta", text: `x${i}`, turn: 1 });
+    for (let i = 0; i < 200; i++)
+      writer.append({ type: "message.delta", text: `x${i}`, turn: 1 });
     await writer.flush();
 
     const raw = await readFile(eventsPath(sid), "utf8");
@@ -218,11 +258,17 @@ describe("tailEvents", () => {
     const sid = newSessionId();
     const meta = await makeSession({ sid });
     const writer = store.openWriter(meta);
-    for (let i = 0; i < 3; i++) writer.append({ type: "message.delta", text: `${i}`, turn: 1 });
+    for (let i = 0; i < 3; i++)
+      writer.append({ type: "message.delta", text: `${i}`, turn: 1 });
     await writer.flush();
 
     const seen: number[] = [];
-    track(store.tailEvents(sid, (e) => seen.push(e.seq), { fromSeq: 2, intervalMs: 20 }));
+    track(
+      store.tailEvents(sid, (e) => seen.push(e.seq), {
+        fromSeq: 2,
+        intervalMs: 20,
+      }),
+    );
     await until(() => seen.length >= 2);
     expect(seen).toEqual([2, 3]); // seq 1 filtered out
   });
@@ -235,7 +281,9 @@ describe("tailEvents", () => {
     await writer.flush();
 
     const seen: number[] = [];
-    const handle = track(store.tailEvents(sid, (e) => seen.push(e.seq), { intervalMs: 20 }));
+    const handle = track(
+      store.tailEvents(sid, (e) => seen.push(e.seq), { intervalMs: 20 }),
+    );
     await until(() => seen.includes(1));
     handle.stop();
     const countAtStop = seen.length;
@@ -279,9 +327,12 @@ describe("watchSessions", () => {
 
     let last: SessionMetaView[] = [];
     track(
-      store.watchSessions((sessions) => {
-        last = sessions;
-      }, { intervalMs: 30 }),
+      store.watchSessions(
+        (sessions) => {
+          last = sessions;
+        },
+        { intervalMs: 30 },
+      ),
     );
     await until(() => last.length === 1);
 
