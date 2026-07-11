@@ -58,6 +58,21 @@ export interface FleetTurnOptions {
   readOnly?: boolean;
   /** Max subagents in flight at once (Fleet default when omitted). */
   concurrency?: number;
+  /**
+   * Dynamic ceiling consulted at every slot refill (resource-aware swarm
+   * sizing — see repl/resource-monitor.ts). Clamped to [1, concurrency] by
+   * the orchestrator; omitted ⇒ the fixed `concurrency` cap.
+   */
+  concurrencyProvider?: () => number;
+  /**
+   * Fired with the live fleet's cancel surface right after construction —
+   * lets the caller wire per-task kill affordances (the swarm panel / global
+   * Ctrl-X route through agent-registry abort handles to `cancelTask`).
+   */
+  onFleet?: (fleet: {
+    cancelTask: (id: string) => void;
+    cancelAll: () => void;
+  }) => void;
   /** Per-task git worktree isolation (default on inside a git repo). */
   isolate?: boolean;
   /** The turn signal — aborting cancels every queued and running task. */
@@ -152,6 +167,7 @@ export async function runFleetTurn(
   const fleetOptions: FleetOptions = {
     cwd: opts.cwd,
     concurrency: opts.concurrency,
+    concurrencyProvider: opts.concurrencyProvider,
     memory: opts.memory ?? null,
     serverMemory: opts.serverMemory ?? null,
     store: opts.store ?? null,
@@ -164,6 +180,7 @@ export async function runFleetTurn(
   const fleet = opts.fleetFactory
     ? opts.fleetFactory(fleetOptions)
     : new Fleet(fleetOptions);
+  opts.onFleet?.(fleet);
 
   if (opts.onTask) fleet.on("task", opts.onTask);
   if (opts.onUpdate) fleet.on("update", opts.onUpdate);

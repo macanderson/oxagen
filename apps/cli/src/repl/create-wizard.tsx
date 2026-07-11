@@ -1,6 +1,7 @@
 /**
  * create-wizard.tsx — the scaffolding wizard behind `/create-command`,
- * `/create-agent`, and `/create-skill` (one component, selected by `kind`).
+ * `/create-agent`, `/create-skill`, and `/create-prompt` (one component,
+ * selected by `kind`).
  *
  * A two-step takeover flow:
  *   1. name — a single-line input for the new artifact's name, validated as
@@ -20,8 +21,8 @@ import { Box, Text, useInput } from "ink";
 import React, { useState } from "react";
 import { theme } from "../tui/theme.js";
 
-/** The three artifacts the wizard can scaffold. */
-export type CreateKind = "command" | "agent" | "skill";
+/** The artifacts the wizard can scaffold. */
+export type CreateKind = "command" | "agent" | "skill" | "prompt";
 
 /** The outcome of a scaffold call: where it lives, and whether it was new. */
 export interface ScaffoldResult {
@@ -47,6 +48,8 @@ function kindLabel(kind: CreateKind): string {
       return "agent";
     case "skill":
       return "skill";
+    case "prompt":
+      return "saved prompt";
   }
 }
 

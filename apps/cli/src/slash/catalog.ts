@@ -172,6 +172,42 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<
   },
   { name: "hud", description: "Toggle the running-agents heads-up display" },
   {
+    name: "tasks",
+    description:
+      "Planner task inspector — the current turn's task plan, live (Ctrl+T)",
+  },
+  {
+    name: "swarm",
+    description:
+      "Agent swarm view — every live agent; Ctrl+X twice kills one (Ctrl+S)",
+  },
+  {
+    name: "marketplace",
+    description:
+      "Browse & install skills, MCP servers, agents, knowledge sources, integrations",
+  },
+  {
+    name: "prompts",
+    description:
+      "Saved prompts (.oxagen/prompts) — pick one to insert into the composer",
+  },
+  {
+    name: "create-command",
+    description: "Scaffold a custom slash command (.oxagen/commands/<name>.md)",
+  },
+  {
+    name: "create-agent",
+    description: "Scaffold a named agent definition (.oxagen/agents/<name>.md)",
+  },
+  {
+    name: "create-skill",
+    description: "Scaffold a skill (.oxagen/skills/<name>/SKILL.md)",
+  },
+  {
+    name: "create-prompt",
+    description: "Scaffold a saved prompt (.oxagen/prompts/<name>.md)",
+  },
+  {
     name: "dispatch",
     description:
       "Async dispatch mode — background task prompts to the fleet (` &` forces bg, `=` forces inline)",
