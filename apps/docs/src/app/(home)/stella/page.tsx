@@ -1,7 +1,8 @@
+import type { CSSProperties, ReactNode } from "react";
 import type { Metadata } from "next";
-import type { ReactNode } from "react";
 import Link from "next/link";
 import { CopyCommand } from "@/components/landing/copy-command";
+import { StellaLogomark } from "@/components/landing/stella-logomark";
 import { StellaTerminal } from "@/components/landing/stella-terminal";
 import { HexField } from "@/components/ui/hex-field";
 
@@ -67,9 +68,18 @@ const CRATES = [
   ["ocp-types", "Open Context Protocol wire types"],
 ];
 
+/* Stella's official brand palette (crates/site brand assets: accent #FFAC26).
+   The landing lp-* classes read the --_ember-* custom properties, so scoping
+   the override here re-skins every gradient, orb, and caret on this page only. */
+const STELLA_BRAND = {
+  "--_ember-gold": "#ffc763",
+  "--_ember-flame": "#ffac26",
+  "--_ember-crimson": "#e08700",
+} as CSSProperties;
+
 export default function StellaPage(): ReactNode {
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col" style={STELLA_BRAND}>
       {/* ── Hero ──────────────────────────────────────────────────────────── */}
       <section className="relative isolate overflow-hidden border-b border-border">
         <div aria-hidden="true" className="lp-grid pointer-events-none absolute inset-0 -z-10" />
@@ -79,7 +89,7 @@ export default function StellaPage(): ReactNode {
         <div className="relative z-10 mx-auto grid w-full max-w-7xl items-center gap-12 px-6 py-20 lg:grid-cols-[1.05fr_1fr] lg:py-28">
           <div className="flex flex-col items-start text-left">
             <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card/60 px-3 py-1 text-xs font-medium text-muted-foreground backdrop-blur">
-              <span aria-hidden="true" className="text-[var(--_ember-flame,#F07650)]">✦</span>
+              <StellaLogomark className="size-3.5 text-foreground" />
               <span className="ox-eyebrow !text-[11px] !tracking-[0.14em]">Stella · open source · from the makers of Oxagen</span>
             </span>
 
@@ -98,7 +108,7 @@ export default function StellaPage(): ReactNode {
             <div className="mt-8 flex flex-wrap items-center gap-3">
               <Link
                 href="/docs/stella"
-                className="lp-grad-surface inline-flex h-11 items-center rounded-lg px-6 text-sm font-semibold text-white shadow-sm transition-transform hover:scale-[1.02] active:scale-100"
+                className="lp-grad-surface inline-flex h-11 items-center rounded-lg px-6 text-sm font-semibold text-[#1a1406] shadow-sm transition-transform hover:scale-[1.02] active:scale-100"
               >
                 Get started
               </Link>
@@ -287,7 +297,7 @@ export default function StellaPage(): ReactNode {
         <div aria-hidden="true" className="lp-orb pointer-events-none absolute bottom-[-40%] left-1/2 -z-10 h-[480px] w-[760px] -translate-x-1/2 opacity-60" />
         <HexField className="pointer-events-none absolute inset-0 -z-10 h-full w-full text-foreground opacity-40" />
         <div className="relative z-10 mx-auto flex w-full max-w-3xl flex-col items-center px-6 py-24 text-center">
-          <span aria-hidden="true" className="text-4xl text-[var(--_ember-flame,#F07650)]">✦</span>
+          <StellaLogomark className="size-12 text-foreground" />
           <h2 className="mt-6 text-3xl font-semibold tracking-tight sm:text-4xl">
             Point it at a bug <span className="lp-grad-text">tonight</span>.
           </h2>
@@ -301,7 +311,7 @@ export default function StellaPage(): ReactNode {
           <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
             <Link
               href="/docs/stella"
-              className="lp-grad-surface inline-flex h-11 items-center rounded-lg px-6 text-sm font-semibold text-white shadow-sm transition-transform hover:scale-[1.02] active:scale-100"
+              className="lp-grad-surface inline-flex h-11 items-center rounded-lg px-6 text-sm font-semibold text-[#1a1406] shadow-sm transition-transform hover:scale-[1.02] active:scale-100"
             >
               Get started
             </Link>
