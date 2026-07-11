@@ -35,6 +35,14 @@ struct Cli {
     #[arg(long, env = "STELLA_MODEL")]
     model: Option<String>,
 
+    /// API key for the selected provider, highest-precedence step of the
+    /// credential chain (CLI flag -> env var -> credentials file ->
+    /// interactive prompt, 01-product-spec.md §4). Prefer an env var or
+    /// ~/.config/oxagen/credentials.toml for anything long-lived — a flag
+    /// value is visible in shell history and `ps`.
+    #[arg(long)]
+    api_key: Option<String>,
+
     /// Output format: text (default, interactive) or json (headless)
     #[arg(long, env = "STELLA_OUTPUT_FORMAT", default_value = "text")]
     output_format: String,
@@ -91,7 +99,7 @@ fn run(cli: Cli) -> Result<(), String> {
     }
 
     // Run/Chat/Config need a resolved config (which requires an API key).
-    let cfg = config::Config::load(cli.model.as_deref())?;
+    let cfg = config::Config::load(cli.model.as_deref(), cli.api_key.as_deref())?;
 
     match cli.command.unwrap_or(Command::Chat) {
         Command::Run { prompt } => {

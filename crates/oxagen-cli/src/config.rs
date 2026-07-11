@@ -1,16 +1,15 @@
 //! Configuration: provider/model resolution, BYOK credential lookup.
 //!
 //! Resolution order per 01-product-spec.md §4: CLI flag -> env var ->
-//! config file (TOML, future) -> interactive prompt (future).
-//!
-//! Phase 0/1 implements the env-var step. The user sets one or more of:
-//!   ZAI_API_KEY, ANTHROPIC_API_KEY, OPENAI_API_KEY, XAI_API_KEY,
-//!   DEEPSEEK_API_KEY, GEMINI_API_KEY, OPENROUTER_API_KEY
-//! ...and stella picks the first available provider, or uses --model to pin.
+//! `~/.config/oxagen/credentials.toml` -> interactive prompt on first use.
+//! The full chain lives in `oxagen_model::credential::ApiKey::resolve`; this
+//! module's job is picking WHICH provider (from `--model`, or the first one
+//! with a resolvable credential) and then running that chain for it.
 
 use std::env;
 
 use colored::Colorize;
+use oxagen_model::credential::{ApiKey, CredentialsFile};
 
 /// One provider's config: id, env var name, display name, default model.
 #[derive(Debug, Clone)]
@@ -105,13 +104,24 @@ pub struct Config {
 }
 
 impl Config {
-    /// Load config: resolve provider from --model flag or first available
-    /// key in env. Errors if no key is found at all.
-    pub fn load(model_override: Option<&str>) -> Result<Self, String> {
+    /// Load config: resolve provider from `--model` flag or the first one
+    /// with a resolvable credential, then run the full chain (CLI flag ->
+    /// env var -> credentials file -> interactive prompt) for it.
+    /// `api_key_override` is `--api-key`, threaded straight into the chain's
+    /// first (highest-precedence) step. Errors if no key is found at all.
+    pub fn load(
+        model_override: Option<&str>,
+        api_key_override: Option<&str>,
+    ) -> Result<Self, String> {
         let workspace_root =
             env::current_dir().map_err(|e| format!("cannot determine workspace root: {e}"))?;
+        let mut credentials_file = CredentialsFile::load_default().map_err(|e| {
+            format!("~/.config/oxagen/credentials.toml exists but could not be read: {e}")
+        })?;
 
-        // If --model provider/model_id was given, resolve that provider.
+        // If --model provider/model_id was given, resolve that provider —
+        // interactively prompting if nothing else resolves it, since the
+        // user has told us unambiguously which provider they want.
         if let Some(model_spec) = model_override {
             let (provider_id, model_id) = match model_spec.split_once('/') {
                 Some((p, m)) => (p, m.to_string()),
@@ -126,7 +136,14 @@ impl Config {
                                 { let v: Vec<&str> = PROVIDERS.iter().map(|p| p.id).collect(); v.join(", ") }
                             )
                         })?;
-                    return Self::resolve(provider, model_id_override(model_spec), &workspace_root);
+                    return Self::resolve(
+                        provider,
+                        model_id_override(model_spec),
+                        api_key_override,
+                        &mut credentials_file,
+                        &workspace_root,
+                        true,
+                    );
                 }
             };
 
@@ -140,24 +157,44 @@ impl Config {
                     })
                 })?;
 
-            return Self::resolve(provider, model_id, &workspace_root);
+            return Self::resolve(
+                provider,
+                model_id,
+                api_key_override,
+                &mut credentials_file,
+                &workspace_root,
+                true,
+            );
         }
 
-        // No --model: pick first provider with a key in env.
+        // No --model: pick the first provider with a resolvable credential
+        // (env var or credentials file — never prompts here, since prompting
+        // needs a specific provider in mind and the user hasn't named one).
         for provider in PROVIDERS {
-            if let Ok(key) = env::var(provider.env_var)
-                && !key.is_empty()
+            if ApiKey::resolve(
+                provider.id,
+                provider.env_var,
+                api_key_override,
+                Some(&credentials_file),
+                false,
+            )
+            .is_ok()
             {
                 return Self::resolve(
                     provider,
                     provider.default_model.to_string(),
+                    api_key_override,
+                    &mut credentials_file,
                     &workspace_root,
+                    false,
                 );
             }
         }
 
         Err(format!(
-            "no API key found. Set one of: {}\n\nExample: export ZAI_API_KEY=your_key_here",
+            "no API key found. Set one of: {}\n\nExample: export ZAI_API_KEY=your_key_here\n\
+             (or add it to ~/.config/oxagen/credentials.toml, or pass --model provider/model \
+             to be prompted interactively)",
             PROVIDERS
                 .iter()
                 .map(|p| format!("{} ({})", p.env_var, p.display_name))
@@ -166,19 +203,44 @@ impl Config {
         ))
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn resolve(
         provider: &ProviderConfig,
         model_id: String,
+        api_key_override: Option<&str>,
+        credentials_file: &mut CredentialsFile,
         workspace_root: &std::path::Path,
+        interactive: bool,
     ) -> Result<Self, String> {
-        let api_key = env::var(provider.env_var).map_err(|_| {
+        let (key, source) = ApiKey::resolve(
+            provider.id,
+            provider.env_var,
+            api_key_override,
+            Some(credentials_file),
+            interactive,
+        )
+        .map_err(|e| {
             format!(
-                "{} is not set — set it to use {} as the model provider",
-                provider.env_var, provider.display_name
+                "could not resolve a credential for {}: {e}",
+                provider.display_name
             )
         })?;
-        if api_key.is_empty() {
-            return Err(format!("{} is set but empty", provider.env_var));
+        let api_key = key.reveal().to_string();
+
+        // "Interactive prompt on first use" (01-product-spec.md §4) implies
+        // exactly that — first use. Persist so next invocation resolves via
+        // the config-file step instead of prompting again. Best-effort: a
+        // save failure (e.g. read-only home dir) shouldn't fail the command
+        // the user actually asked for, just warn so it isn't silent.
+        if source == oxagen_model::credential::CredentialSource::Interactive {
+            credentials_file.set(provider.id, &api_key);
+            if let Err(e) = credentials_file.save() {
+                eprintln!(
+                    "  {} could not save the credential to ~/.config/oxagen/credentials.toml \
+                     ({e}) — you'll be prompted again next time",
+                    "warning:".yellow()
+                );
+            }
         }
 
         Ok(Self {
