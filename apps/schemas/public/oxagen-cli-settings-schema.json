@@ -490,6 +490,13 @@
         },
         "confirmScope": {
           "type": "boolean"
+        },
+        "dispatchMode": {
+          "type": "boolean"
+        },
+        "dispatchMaxConcurrent": {
+          "type": "integer",
+          "exclusiveMinimum": 0
         }
       },
       "additionalProperties": true
