@@ -140,7 +140,10 @@ async function dumpDiagnostics(states: ContainerState[]): Promise<void> {
 
 async function waitForHealthy(): Promise<void> {
   console.log(kleur.cyan("[dev] waiting for containers to report healthy"));
-  const deadline = Date.now() + 60_000;
+  // Neo4j's first boot on a fresh volume (APOC install + store init) takes
+  // 60–90s, so the deadline must comfortably exceed that; crash-looping
+  // containers still bail out early below rather than waiting this long.
+  const deadline = Date.now() + 180_000;
   while (Date.now() < deadline) {
     const states = await readContainerStates();
     // A container stuck in restarting/exited will never become healthy — bail
