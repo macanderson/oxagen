@@ -355,6 +355,13 @@ contract-first design, IAM enforcement, and instrumentation.
 - [research.swarm.start](research.swarm.start.md) — Fan out parallel web searches for a topic with diverse query variations; returns a swarmId to poll
 - [research.swarm.status](research.swarm.status.md) — Poll the status of a running research swarm; returns task progress and partial results
 
+## Router (4)
+
+- [get_routing_policy](router.policy.get.md) — Read the effective market-router policy for the current scope (mode, threshold, samples, window, escalation) plus its provenance (workspace / org / default)
+- [set_routing_policy](router.policy.set.md) — Set the market-router policy for this org or workspace (partial update) — mode, thresholds, and tier-escalation; changes model spend behavior, Owner/Admin only
+- [list_routing_stats](router.stats.list.md) — List observed outcomes per (task class, model) — samples, verified rate, cost, latency — plus the cheapest model currently clearing the bar per class
+- [preview_routing_decision](router.decision.preview.md) — Dry-run the market router for a prompt: task class, observed outcomes, and the full decision (chosen model + candidate audit trail); changes nothing
+
 ## Sandbox (9)
 
 - [create_sandbox_template](sandbox.template.create.md) — Create a portable sandbox template under an environment: provider, runtime image, resources, network posture, selected vault keys, literal config, and preloaded tools

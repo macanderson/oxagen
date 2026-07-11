@@ -53,6 +53,10 @@ const nextConfig = {
         destination: "/decks/mutation-verifier/index.html",
       },
       {
+        source: "/decks/verified-outcome-router",
+        destination: "/decks/verified-outcome-router/index.html",
+      },
+      {
         source: "/decks/agentic-cli-roadmap",
         destination: "/decks/agentic-cli-roadmap/index.html",
       },

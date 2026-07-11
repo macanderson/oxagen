@@ -2198,6 +2198,19 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
   },
+  OXAGEN_FLEET_RECORD: {
+    group: "CLI",
+    description:
+      "Toggles the ADR-028 time-travel sidecar record (`record/record.ndjson` + blob store) " +
+      "written by every `oxagen fleet` session. Recording is default-ON; set to `0` or `off` " +
+      "to disable. CLI-local only; never set in deployed environments.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "off",
+  },
   INGESTION_CRYPTO_PROVIDER: {
     group: "Ingestion",
     description:
