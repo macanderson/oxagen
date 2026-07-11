@@ -86,12 +86,12 @@ export const viewport: Viewport = {
   // edge-to-edge rendering. Pair with CSS `env(safe-area-inset-*)` in layouts
   // that need to respect device insets.
   viewportFit: "cover",
-  // Match the browser/OS chrome to the active theme: deep-space ink on dark,
-  // clean white on light. (Manifest theme_color is a single value for the
-  // standalone PWA toolbar — kept on the deep-space ink.)
+  // Match the browser/OS chrome to the active theme: warm charcoal on dark,
+  // ivory paper on light. (Manifest theme_color is a single value for the
+  // standalone PWA toolbar — kept on the charcoal.)
   themeColor: [
-    { media: "(prefers-color-scheme: dark)", color: "#0B0D16" },
-    { media: "(prefers-color-scheme: light)", color: "#F8F6F1" },
+    { media: "(prefers-color-scheme: dark)", color: "#1E1D1B" },
+    { media: "(prefers-color-scheme: light)", color: "#FAF9F5" },
   ],
 };
 
