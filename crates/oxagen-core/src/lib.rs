@@ -12,14 +12,22 @@ pub mod budget;
 pub mod compaction;
 pub mod driver;
 pub mod estimator;
+mod glob;
+pub mod hooks;
 pub mod loop_detect;
 pub mod ports;
 pub mod retry;
 pub mod router;
+pub mod rules;
 
 pub use budget::{BudgetGuard, BudgetOutcome};
 pub use driver::{Engine, EngineConfig, TurnOutcome};
+pub use hooks::{HookEvent, HookPayload, HookRunOutcome, HookRunner, Hooks, run_hooks};
 pub use loop_detect::{LoopDetectionConfig, LoopVerdict, detect_loop};
 pub use ports::{Clock, ToolExecutor};
 pub use retry::{RetryOutcome, RetryPolicy, retry_with_backoff};
 pub use router::{RoleTable, Router};
+pub use rules::{
+    GuardCheck, LoadRulesOptions, ProposedAction, Rule, RuleGuard, RuleSource, evaluate_guards,
+    load_rules,
+};

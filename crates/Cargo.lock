@@ -844,6 +844,7 @@ dependencies = [
  "clap",
  "colored",
  "indicatif",
+ "oxagen-core",
  "oxagen-model",
  "oxagen-protocol",
  "oxagen-tools",

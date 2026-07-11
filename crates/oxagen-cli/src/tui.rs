@@ -1,62 +1,27 @@
-//! Terminal UI — streaming text, tool-call cards, spinner, cost tracking.
+//! Terminal UI — streaming text, tool-call cards, cost tracking.
 //!
-//! Designed for speed and engagement: the user sees the model's text
-//! streaming in real time, tool calls appear as cards with status, and a
-//! spinner runs while waiting for the model to respond.
+//! Designed for speed and engagement: tool calls appear as cards with
+//! status, and the model's response prints as soon as it's ready.
+//!
+//! `render_event` is the TUI's one entry point onto `oxagen_core::Engine`'s
+//! event stream (`02-architecture.md` §4, L-T1: the TUI renders exclusively
+//! from `AgentEvent`s — no panel owns state that isn't reconstructible by
+//! replaying the event log). It's deliberately a thin dispatcher onto the
+//! existing per-kind print helpers below, not a rewrite of them.
+//!
+//! There is deliberately no animated "thinking" spinner: the Phase 0/1
+//! version had one, but it only ticked a fixed 3 frames *before* dispatching
+//! the network call, then froze for the entire real wait — a decorative
+//! pre-roll, not a live indicator. A correct live spinner would need its own
+//! concurrent task racing the event-draining task below, both writing to the
+//! terminal — real interleaving risk for a cosmetic win. `Stage::Execute`
+//! below gives one clean, immediate "thinking" line instead.
 
 use std::io::{self, Write};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use colored::Colorize;
-
-/// Spinner frames for the "thinking" indicator.
-const SPINNER: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-
-/// A simple live spinner that runs on the terminal until dropped.
-pub struct Spinner {
-    start: Instant,
-    message: String,
-    active: bool,
-}
-
-impl Spinner {
-    pub fn new(message: impl Into<String>) -> Self {
-        Self {
-            start: Instant::now(),
-            message: message.into(),
-            active: true,
-        }
-    }
-
-    pub fn tick(&self, frame_idx: usize) {
-        let frame = SPINNER[frame_idx % SPINNER.len()];
-        let elapsed = self.start.elapsed();
-        eprint!(
-            "\r{} {} {}     ",
-            frame.cyan(),
-            self.message.dimmed(),
-            format!("({:.1}s)", elapsed.as_secs_f64()).dimmed()
-        );
-        let _ = io::stderr().flush();
-    }
-
-    pub fn finish(&mut self, final_msg: &str) {
-        if self.active {
-            eprint!("\r{}\r", " ".repeat(80));
-            let _ = io::stderr().flush();
-            if !final_msg.is_empty() {
-                eprintln!("  {}", final_msg.dimmed());
-            }
-            self.active = false;
-        }
-    }
-}
-
-impl Drop for Spinner {
-    fn drop(&mut self) {
-        self.finish("");
-    }
-}
+use oxagen_protocol::AgentEvent;
 
 /// Print a tool-call card: name, input summary, status.
 pub fn tool_call_card(name: &str, input: &serde_json::Value, status: &str) {
@@ -143,17 +108,19 @@ pub fn assistant_response(text: &str) {
     }
 }
 
-/// Print cost + token summary for a turn.
-pub fn cost_summary(input_tokens: u64, output_tokens: u64, cost_usd: f64, model: &str) {
-    let total = input_tokens + output_tokens;
+/// Print a cost summary for a turn. `AgentEvent::Complete` (the source of
+/// this data under `oxagen_core::Engine`) carries `model`/`cost_usd` only —
+/// no per-turn token breakdown, unlike the old ad-hoc loop's manual
+/// accumulation — so this is deliberately narrower than the Phase 0/1
+/// version. Real per-role token/cost accounting lives in `BudgetTick`
+/// (`render_event` below), which fires after every call, not just at
+/// turn-end.
+pub fn cost_summary(cost_usd: f64, model: &str, elapsed: Duration) {
     println!(
-        "\n  {} {} tokens ({} in / {} out) · {} · {:.4}s",
+        "\n  {} {} · ${cost_usd:.4} · {:.1}s",
         "◆".dimmed(),
-        format!("{total}").bright_white(),
-        input_tokens,
-        output_tokens,
         model.bright_blue(),
-        cost_usd,
+        elapsed.as_secs_f64(),
     );
 }
 
@@ -175,4 +142,73 @@ pub fn welcome_banner(provider: &str, model: &str, workspace: &str) {
         "type your prompt, Ctrl+D to exit".dimmed(),
     );
     println!("  {}\n", "─".repeat(60).dimmed());
+}
+
+/// Render one `AgentEvent` from `oxagen_core::Engine::run_turn`'s stream.
+/// `ToolStart`/`ToolResult` are intentionally a no-op here: `ToolResult`
+/// doesn't carry the tool's name (only `call_id`), so the call site keeps a
+/// small `call_id -> name` map and calls `tool_call_card`/`tool_result_card`
+/// directly instead of routing those two through this function — see
+/// `agent.rs`'s event-draining task. Every other event kind (including
+/// `Text` — the engine emits one per step, not just at turn-end, since a
+/// step with tool calls can still carry commentary text) is rendered here.
+pub fn render_event(event: &AgentEvent) {
+    match event {
+        AgentEvent::Stage {
+            name: oxagen_protocol::StageKind::Execute,
+        } => {
+            println!("  {}", "thinking…".dimmed());
+        }
+        AgentEvent::Stage { .. } | AgentEvent::ToolStart { .. } | AgentEvent::ToolResult { .. } => {
+            // Complete-stage and ToolStart/ToolResult: handled inline at the
+            // call site or by a more specific event (see the module doc).
+        }
+        AgentEvent::Text { delta } => assistant_response(delta),
+        AgentEvent::Reasoning { .. } => {}
+        AgentEvent::Retry { attempt, reason } => {
+            println!("  {} retry #{attempt}: {}", "↻".yellow(), reason.dimmed());
+        }
+        AgentEvent::Compaction {
+            before_tokens,
+            after_tokens,
+            evicted,
+            deduped,
+        } => {
+            println!(
+                "  {} compacted context: {before_tokens} → {after_tokens} tokens ({evicted} evicted, {deduped} deduped)",
+                "⤵".cyan(),
+            );
+        }
+        AgentEvent::BudgetTick {
+            spent_usd,
+            limit_usd,
+            mode,
+        } => {
+            if matches!(mode, oxagen_protocol::BudgetMode::Off) {
+                return;
+            }
+            match limit_usd {
+                Some(limit) => println!("  {} spend: ${spent_usd:.4} / ${limit:.2}", "$".dimmed()),
+                None => println!("  {} spend: ${spent_usd:.4}", "$".dimmed()),
+            }
+        }
+        AgentEvent::ProviderFallback { from, to, reason } => {
+            println!(
+                "  {} provider fallback {} → {}: {}",
+                "⚠".yellow().bold(),
+                from.bright_yellow(),
+                to.bright_green(),
+                reason.dimmed()
+            );
+        }
+        AgentEvent::Error { message, retryable } => {
+            let label = if *retryable { "warning" } else { "error" };
+            eprintln!("  {} {}: {}", "✗".red(), label.red().bold(), message);
+        }
+        AgentEvent::Complete { .. } => {
+            // The call site prints `cost_summary` from `TurnOutcome`
+            // directly (it has the same model/cost_usd this event carries,
+            // plus wall-clock elapsed time this event doesn't).
+        }
+    }
 }

@@ -47,6 +47,13 @@ struct Cli {
     #[arg(long, env = "STELLA_OUTPUT_FORMAT", default_value = "text")]
     output_format: String,
 
+    /// Hard per-turn USD spend limit — enforced mode (07-model-matrix.md
+    /// §6): the turn aborts cleanly (never mid-tool) once spend exceeds
+    /// this. Omit to meter spend for the cost summary without ever
+    /// blocking (observed mode).
+    #[arg(long, env = "STELLA_BUDGET")]
+    budget: Option<f64>,
+
     #[command(subcommand)]
     command: Option<Command>,
 }
@@ -107,14 +114,14 @@ fn run(cli: Cli) -> Result<(), String> {
                 .enable_all()
                 .build()
                 .map_err(|e| format!("failed to start runtime: {e}"))?;
-            rt.block_on(agent::run_one_shot(&cfg, &prompt))?;
+            rt.block_on(agent::run_one_shot(&cfg, &prompt, cli.budget))?;
         }
         Command::Chat => {
             let rt = tokio::runtime::Builder::new_multi_thread()
                 .enable_all()
                 .build()
                 .map_err(|e| format!("failed to start runtime: {e}"))?;
-            rt.block_on(agent::run_interactive(&cfg))?;
+            rt.block_on(agent::run_interactive(&cfg, cli.budget))?;
         }
         Command::Models => {
             cfg.print_models();
