@@ -4,25 +4,32 @@
 
 1. **Ports, not concretions.** The engine (`oxagen-core`) never imports a
    provider SDK, a filesystem call, or a terminal library directly. It drives
-   through traits (`Provider`, `Workspace`, `Memory`, `Trace`, `CodeGraph`) —
-   the same seam discipline as the TS engine's `ports.ts`, carried over
-   directly (see `packages/agent-engine/src/ports.ts` for the shape being
-   ported).
+   through traits (`Provider`, `Workspace`, `ContextPlane`, `Trace`) — the
+   same seam discipline as the TS engine's `ports.ts`, carried over directly
+   (see `packages/agent-engine/src/ports.ts` for the shape being ported).
 2. **No `unsafe` outside FFI boundaries** (the local-model `llama.cpp`
-   binding is the one legitimate exception; isolate it behind a narrow,
-   fully-tested wrapper crate/module and document every `unsafe` block).
+   binding and the ONNX-runtime embedding binding are the two legitimate
+   exceptions; isolate each behind a narrow, fully-tested wrapper and
+   document every `unsafe` block).
 3. **Async everywhere I/O happens** (`tokio`), sync/pure everywhere logic
    happens (the step-driver's decision logic, compaction, budget eviction,
-   loop detection are plain synchronous functions over owned data — easy to
-   property-test, no `Send`/`Sync` ceremony needed).
+   loop detection, graph traversal, and context-frame assembly are plain
+   synchronous functions over owned data — easy to property-test).
 4. **Serde-first.** Every cross-boundary type (provider request/response,
-   tool call/result, trace event, protocol message) derives
+   tool call/result, trace event, context frame, OCP message) derives
    `Serialize`/`Deserialize` and is versioned. This is what makes golden-
-   trajectory replay and future protocol stability possible.
+   trajectory replay and protocol stability possible.
 5. **Fail loud, recover gracefully.** Provider errors, tool errors, and
    malformed model output are typed (`thiserror`), never `panic!` in the hot
-   path; the step-driver treats retryable vs. terminal errors distinctly
-   (mirrors TS Phase-1 retry/backoff design in `docs/specs/cli-swe-bench/03-plan.md`).
+   path; the step-driver treats retryable vs. terminal errors distinctly.
+6. **One storage engine.** Everything persistent (knowledge graph, vectors,
+   memory, fleet ledger, trace index) lives in embedded SQLite (`rusqlite`,
+   bundled) — one WAL, one backup story, one file format to document, one
+   teardown path to get right on signal exit (`09-lessons-learned.md` L-L1).
+   No DuckDB, no second embedded database, ever, without an ADR.
+7. **Protocols outlive internals.** Anything a third party can integrate with
+   (OCP, MCP, `--output-format stream-json`, trace JSONL) is versioned and
+   conformance-tested; internal crate APIs may churn freely behind them.
 
 ## 2. Crate layout (Cargo workspace)
 
@@ -32,62 +39,81 @@ crates/
 │                        # schemas, trace records, provider request/response
 │                        # envelopes. Zero logic, zero I/O. The stability
 │                        # contract of the whole workspace.
+├── ocp-types/           # Open Context Protocol wire types (context frames,
+│                        # queries, capabilities, provenance). MIT, published
+│                        # to crates.io independently — other tools depend on
+│                        # this WITHOUT taking any oxagen code. Zero deps
+│                        # beyond serde. See 06-context-protocol.md.
+├── ocp-host/            # OCP host runtime: provider discovery, stdio/http
+│                        # transports, capability negotiation, routing,
+│                        # budget accounting, consent gating for remote
+│                        # providers. Used by oxagen-context; usable by any
+│                        # other Rust agent that wants OCP support.
+├── ocp-conformance/     # Public conformance suite (host- and provider-side)
+│                        # + a `ocp-inspect` debugging binary, analogous to
+│                        # MCP's inspector.
 ├── oxagen-core/         # The step-driver: one model call per step, message
 │                        # accumulation, retry+backoff, context compaction,
 │                        # tool-output budget+eviction, loop detection,
-│                        # malformed-call repair, rules engine, hooks engine,
-│                        # local SQLite-backed memory. NO I/O of its own —
-│                        # drives entirely through the `Provider`/`Workspace`/
-│                        # `Memory`/`Trace` traits from oxagen-protocol.
+│                        # malformed-call repair, rules engine, hooks engine.
+│                        # NO I/O of its own — drives through traits.
 ├── oxagen-tools/        # Workspace trait impl: fs (read/write/edit with
-│                        # fuzzy-match diagnostics), ripgrep-backed grep/glob
-│                        # (shells to `rg` if present, falls back to an
-│                        # in-process `grep` crate walk), diff (`similar` or
-│                        # `git2`), process exec with real process-group
-│                        # signal handling (`nix` + `tokio::process`).
-├── oxagen-model/        # Provider trait + concrete adapters: Anthropic,
-│                        # OpenAI, Bedrock (aws-sdk-bedrockruntime), Vertex
-│                        # (hand-rolled REST client over `reqwest`+`hyper`,
-│                        # or `google-cloud-rust` if mature enough at build
-│                        # time), OpenRouter, generic OpenAI-compatible
-│                        # (covers Ollama/vLLM/LM Studio), local GGUF via
+│                        # fuzzy-match diagnostics), ripgrep-backed grep/glob,
+│                        # diff, process exec with real process-group signal
+│                        # handling (`nix` + `tokio::process`).
+├── oxagen-model/        # Provider trait + adapters: Z.ai (GLM 5.2 — chat,
+│                        # embeddings, CogView, CogVideoX), Anthropic, OpenAI
+│                        # (chat, gpt-image, Sora), Gemini direct (chat,
+│                        # Imagen, Veo), xAI, Bedrock, Vertex, OpenRouter,
+│                        # generic OpenAI-compatible, local GGUF via
 │                        # llama.cpp FFI. Owns per-vendor streaming/SSE
-│                        # parsing, tool-call schema translation, reasoning-
-│                        # effort mapping, retry-on-transport-error.
-├── oxagen-graph/        # Code-graph context engine: tree-sitter parsers
-│                        # (native crate per language, not WASM), symbol +
-│                        # import-edge index, local embedding + vector index
-│                        # (candle or ONNX Runtime for embeddings; `hnsw_rs`/
-│                        # `usearch` for the vector index), persisted to a
-│                        # local SQLite/DuckDB file per workspace (no server).
+│                        # parsing, tool-call dialect translation, reasoning-
+│                        # effort mapping, model-catalog refresh, retry
+│                        # classification. See 07-model-matrix.md.
+├── oxagen-context/      # THE CONTEXT PLANE. Knowledge graph (bi-temporal
+│                        # property graph), embedding index, episodic memory,
+│                        # hybrid retrieval (vector + graph expansion),
+│                        # context-frame assembly + token budgeting. Embeds
+│                        # ocp-host and exposes every source — built-in or
+│                        # external — through one uniform interface.
+│                        # See 06-context-protocol.md.
+├── oxagen-graph/        # Code-graph indexer: tree-sitter parsers (native,
+│                        # not WASM), symbol + import-edge extraction,
+│                        # incremental re-index on file change. Implemented
+│                        # AS a built-in OCP provider feeding oxagen-context
+│                        # — the protocol's first proof of non-triviality.
+├── oxagen-media/        # Multimodal generation: image, SVG (generate →
+│                        # validate → repair → optimize → preview), video
+│                        # (async job polling), terminal preview (kitty/
+│                        # iTerm2/sixel), cost gates. See 08-multimodal.md.
 ├── oxagen-pipeline/     # evaluate → enhance → route → execute → judge →
 │                        # revise orchestration; verifyWork evidence gate;
 │                        # best-of-N candidate generation + selection.
 ├── oxagen-fleet/        # Multi-agent: planner DAG, git-worktree isolation,
-│                        # commit ledger (SQLite), PR/CI monitor (shells to
-│                        # `gh` or hits GitHub REST via `octocrab`).
-├── oxagen-mcp/          # MCP *client* — connect to external MCP servers
-│                        # (stdio + streamable-http transports) and expose
-│                        # their tools into the engine's tool registry.
-├── oxagen-tui/          # ratatui-based interactive REPL: streaming render,
-│                        # diff view, slash-command menu, HUD, mouse
-│                        # selection — maps 1:1 onto oxagen-protocol's event
-│                        # vocabulary so it never touches the engine directly.
-└── oxagen-cli/          # `clap`-based command tree; the actual `oxagen`
-                         # binary. Wires config, credential resolution, one-
-                         # shot / interactive / fleet entrypoints, `--output-
-                         # format text|json|stream-json`, init/scaffolding.
+│                        # commit ledger (SQLite), PR/CI monitor.
+├── oxagen-mcp/          # MCP *client* — external MCP servers' tools into
+│                        # the engine's tool registry (stdio + streamable
+│                        # http).
+├── oxagen-tui/          # ratatui REPL: event-log rendering, diff view,
+│                        # slash menu, HUD, panels. Maps 1:1 onto
+│                        # oxagen-protocol's event vocabulary — never touches
+│                        # the engine directly. TUI behavior requirements
+│                        # (mouse-off default for native copy, paste chips,
+│                        # line-exact scroll clipping) are binding via
+│                        # 09-lessons-learned.md L-T*.
+└── oxagen-cli/          # `clap` command tree; the actual `oxagen` binary.
+                         # run / gen / graph / models / config / init /
+                         # fleet / mcp / context, `--output-format
+                         # text|json|stream-json`.
 ```
 
-Each crate publishes independently to crates.io once stable (`oxagen-core`
-and `oxagen-tools` are useful standalone to other Rust agent projects — this
-is deliberate, matches non-negotiable #3 in the product spec about library
-usability).
+Each crate publishes independently to crates.io once stable. `ocp-types` /
+`ocp-host` / `ocp-conformance` are the industry-facing artifacts and follow
+their own (stricter) semver discipline from the first public release.
 
 ## 3. Core traits (the port boundary)
 
-Sketch (final signatures land during Phase 1 implementation; this fixes the
-*shape*, ported directly from `packages/agent-engine/src/ports.ts`):
+Sketch (final signatures land during Phase 1; this fixes the *shape*):
 
 ```rust
 // oxagen-protocol
@@ -106,13 +132,26 @@ pub trait Workspace: Send + Sync {
     async fn diff(&self) -> Result<String, ToolError>;
 }
 
-pub trait Memory: Send + Sync {
-    async fn recall_context(&self) -> Result<String, MemoryError>;
-    async fn remember(&self, kind: &str, content: serde_json::Value, status: Option<&str>) -> Result<(), MemoryError>;
+// The context plane — one trait, many sources behind it (06-context-protocol.md)
+pub trait ContextPlane: Send + Sync {
+    /// Hybrid retrieval: returns budgeted, provenance-carrying frames.
+    async fn query(&self, q: ContextQuery) -> Result<Vec<ContextFrame>, ContextError>;
+    /// Writes: episodic memory, extracted facts, graph mutations.
+    async fn upsert(&self, delta: ContextDelta) -> Result<UpsertReceipt, ContextError>;
+    /// Direct graph access for graph-shaped questions (neighbors, paths).
+    async fn graph(&self, q: GraphQuery) -> Result<GraphResult, ContextError>;
 }
 
-pub trait CodeGraph: Send + Sync {
-    async fn query(&self, req: GraphQuery) -> Result<GraphResult, GraphError>;
+pub trait Embedder: Send + Sync {
+    fn fingerprint(&self) -> EmbedderFingerprint; // model id + revision + dims + normalization
+    async fn embed(&self, texts: &[String]) -> Result<Vec<Embedding>, EmbedError>;
+}
+
+pub trait MediaProvider: Send + Sync {
+    fn capabilities(&self) -> MediaCapabilities; // image? video? edit? sizes? cost table?
+    async fn generate_image(&self, req: ImageRequest) -> Result<MediaArtifact, MediaError>;
+    async fn generate_video(&self, req: VideoRequest) -> Result<MediaJob, MediaError>; // async job
+    async fn poll_video(&self, job: &MediaJob) -> Result<MediaJobStatus, MediaError>;
 }
 
 pub trait Trace: Send + Sync {
@@ -120,32 +159,62 @@ pub trait Trace: Send + Sync {
 }
 ```
 
-`oxagen-core::Engine::run_turn(providers: &dyn Provider, workspace: &dyn
-Workspace, memory: &dyn Memory, graph: &dyn CodeGraph, trace: &dyn Trace, ...)`
-is the single entrypoint every caller (one-shot CLI, interactive TUI, fleet
-worker, library consumer) drives through. This is the direct Rust analog of
-`runTurn`/`runCodingAgent` in `packages/agent-engine/src/pipeline/index.ts`.
+`oxagen-core::Engine::run_turn(...)` drives through `&dyn Provider`,
+`&dyn Workspace`, `&dyn ContextPlane`, `&dyn Trace` and is the single
+entrypoint every caller (one-shot CLI, interactive TUI, fleet worker, library
+consumer) uses. This is the direct Rust analog of `runTurn`/`runCodingAgent`
+in `packages/agent-engine/src/pipeline/index.ts`. **There is exactly one
+engine and one stage vocabulary** — the TS era's duplicated `StageKind`
+(engine copy + CLI `trace.ts` copy) is the canonical example of the defect
+class principle #7 exists to prevent (`09-lessons-learned.md` L-E1).
+
+**Port map from the TS engine (the executable spec).** `packages/agent-engine`
+is *already* platform-free — its only runtime deps are the AI SDK and zod;
+every platform concern is injected through `ports.ts`. The Rust trait
+boundary mirrors those exact seams:
+
+| TS port (`ports.ts` et al.) | Rust home |
+|---|---|
+| `AgentAi` (model transport) | `Provider` (`oxagen-model`) |
+| `Workspace` | `Workspace` (`oxagen-tools`) |
+| `MemoryProvider`, `CodeGraphProvider` | context-plane providers behind `ContextPlane` (`oxagen-context`) |
+| `TraceStore` | `Trace` (`oxagen-core::trace`) |
+| `GraphSyncProvider` (lineage write-back) | context write-back (`ContextPlane::upsert`) |
+| `FileLockProvider` | `oxagen-fleet` file-ownership serialization |
+| `budgetGuard` callback | `oxagen-core` budget hook (`BudgetTick`) |
+
+The TS CLI's adapter set (Node-fs workspace, BYOK gateway `AgentAi`,
+on-device GGUF `AgentAi`, local memory/code-graph/file-lock) already drives
+the identical engine with **zero** platform services — it is the closest
+existing reference implementation for this port. (Unrelated prior art:
+`packages/engram/rust-spec/` is a NAPI accelerator spec for the memory
+subsystem only — different scope, not this project.)
 
 ## 4. Event vocabulary (protocol)
 
-Ported from the existing boundary spec (`docs/specs/cli-swe-bench/04-rust-port.md`
-§"Boundary"), now internal trait-boundary events rather than a cross-process
-JSON-over-stdio protocol (that transport was a *migration-period* device; the
-shipped product is a single process, so events are plain Rust enum variants
-flowing over a `tokio::sync::mpsc` channel from `oxagen-core` to whichever
-renderer (`oxagen-tui` or the JSON serializer in `oxagen-cli`) is listening):
+Events are plain Rust enum variants flowing over a `tokio::sync::mpsc`
+channel from `oxagen-core` to whichever renderer (`oxagen-tui` or the JSON
+serializer in `oxagen-cli`) is listening. `--output-format stream-json` is a
+`serde_json` serialization of this exact enum, one line per event — a stable,
+versioned machine interface.
 
 ```rust
 pub enum AgentEvent {
-    Stage { name: String },
+    Stage { name: StageKind },
     Text { delta: String },
     Reasoning { delta: String },
     ToolStart { call_id: String, name: String, input: serde_json::Value },
     ToolResult { call_id: String, output: ToolOutput, duration_ms: u64 },
-    FileChange { path: PathBuf, kind: FileChangeKind },
+    FileChange { path: PathBuf, kind: FileChangeKind, diff: Option<UnifiedDiff> },
+    ContextRecall { frames: Vec<ContextFrameRef>, provider_mix: Vec<ProviderShare>, tokens: u32 },
+    ContextWrite { receipt: UpsertReceipt },
+    MediaProgress { artifact_id: String, kind: MediaKind, state: MediaJobState },
+    MediaComplete { artifact: MediaArtifactRef },
     Retry { attempt: u32, reason: String },
     Compaction { before_tokens: u64, after_tokens: u64 },
+    BudgetTick { spent_usd: f64, limit_usd: Option<f64>, mode: BudgetMode },
     JudgeVerdict { passed: bool, evidence: JudgeEvidence },
+    ScopeReview { proposal: ScopeProposal }, // interactive gate before large plans execute
     Commit { sha: String, message: String },
     Pr { url: String, status: PrStatus },
     Complete { result: TurnResult },
@@ -153,62 +222,134 @@ pub enum AgentEvent {
 }
 ```
 
-`--output-format stream-json` is a `serde_json` serialization of this exact
-enum, one line per event — giving external tooling (CI scripts, dashboards,
-the `bench/swe-bench` harness) a stable, versioned machine interface for free.
+`FileChange` carries the diff so the TUI's files-touched panel renders
+per-edit diffs without a second data path (`09-lessons-learned.md` L-T5:
+in TS, the `onFileEdit` callback had to be patched into two pipeline
+switches — here there is one emission point by construction).
 
-## 5. On-disk layout
+## 5. Data flow of one turn
+
+```
+user prompt
+  → triage (oxagen-model, triage role): task class, single-task fast path?
+  → context recall (oxagen-context): hybrid retrieval across built-in
+    providers (code graph, memory, git history) + external OCP providers,
+    assembled into budgeted ContextFrames with provenance      [ContextRecall]
+  → plan (worker role; SKIPPED on classified simple prompts)   [Stage]
+  → scope review gate (interactive only, above thresholds)     [ScopeReview]
+  → execute loop: model step ↔ tool calls                      [ToolStart/…]
+      bash / fs tools / mcp tools / media tools / context tools
+  → deterministic verification ladder: flip-oracle (fail→pass
+    of the same normalized test command) + touched-tests-green
+    + diff budget → submit-fast (judge skipped) | revise | fork  [JudgeVerdict]
+  → model judge only on inconclusive evidence (judge role,
+    judge≠worker, cross-family when available)                  [JudgeVerdict]
+  → context write-back: episode summary, extracted facts,
+    file-symbol touch counts → knowledge graph                 [ContextWrite]
+  → complete                                                    [Complete]
+```
+
+Every stage boundary emits an event; the budget meter ticks on every
+provider/media call; nothing user-visible is derived from internal state that
+isn't also in the event stream (that discipline is what makes headless mode,
+`stream-json`, replay, and the TUI provably equivalent).
+
+## 6. On-disk layout
 
 ```
 ~/.config/oxagen/
-├── config.toml           # provider defaults, model aliases, telemetry opt-in flag
-└── credentials.toml       # optional: provider keys (mode 0600), only if the user
-                            #   chooses file storage over env vars / native chains
+├── config.toml            # provider defaults, model role assignments,
+│                           # media defaults, telemetry opt-in flag
+├── credentials.toml        # optional provider keys (0600), if the user
+│                           # prefers file storage over env vars
+└── catalog/                # cached provider model catalogs (refreshable,
+                            # checked into neither git nor backups)
+
+~/.cache/oxagen/
+└── models/                 # embedding model weights (ONNX), checksum-pinned,
+                            # fetched on first use — never bundled in binary
 
 <workspace>/.oxagen/
-├── rules/                 # Tier-1/Tier-2 workspace rules (.md), unchanged format
-├── skills/                # skill.md files, unchanged format (ADR-008)
-├── memory.db               # SQLite: episodic memory, salience, rule-promotion candidates
-├── graph.db                 # SQLite/DuckDB: code-graph symbol/edge/embedding index
+├── rules/                  # Tier-1/Tier-2 workspace rules (.md)
+├── skills/                 # skill.md files (ADR-008 filesystem-first)
+├── ocp.toml                # external context providers for this workspace
+├── context.db              # SQLite: knowledge graph (nodes/edges, bi-temporal),
+│                           #   embedding index (sqlite-vec), episodic memory,
+│                           #   code-graph symbols — ONE file, ONE engine
 ├── trace/*.jsonl           # per-run trajectory logs
-└── ledger.db                # SQLite: fleet commit ledger (hash/branch/task/trace/files)
+├── artifacts/              # generated media (images/svg/video) + manifest
+└── ledger.db               # SQLite: fleet commit ledger
 ```
 
-No global daemon, no background network listener. The code-graph "daemon"
-concept (`ADR-016`) becomes an in-process incremental indexer with an
-optional filesystem-watch task (`notify` crate) for interactive sessions —
-started and stopped with the CLI process, not a persistent system service.
+Storage decisions, binding:
 
-## 6. Security model
+- **SQLite everywhere** (`rusqlite` with the bundled feature; statically
+  linked). Vectors via **`sqlite-vec`** statically linked; an in-memory HNSW
+  accelerator (`usearch` or `hnsw_rs`) may be built at load time for indexes
+  past a size threshold, but the durable format is the SQLite file.
+- **The embedding index is fingerprinted** (`EmbedderFingerprint`: model id,
+  revision, dimensions, normalization). Retrieval never mixes fingerprints;
+  changing the embedder invalidates incrementally (re-embed on next touch),
+  and byte-identical content under the same fingerprint is never re-embedded
+  (`09-lessons-learned.md` L-C2 — the TS code-graph's byte-compat skip).
+- **Bi-temporal facts:** graph fact edges carry `valid_from/valid_to` and
+  `recorded_at/superseded_at`; supersession closes intervals, never deletes
+  (`09-lessons-learned.md` L-C3).
+- No global daemon, no background network listener. The code-graph watcher is
+  an in-process `notify` task alive only while a session runs.
 
-- Credentials never logged, never included in trace/trajectory JSONL (redact
-  by type, not by best-effort string matching — the credential resolver
-  returns a `SecretString`-wrapped value that intentionally has no `Display`).
+## 7. The context plane (summary — full spec in 06-context-protocol.md)
+
+`oxagen-context` is the single door between the engine and *everything the
+agent knows that isn't in the prompt*: code structure, prior episodes,
+extracted facts, git history, and any external source. Internally it hosts
+N providers — built-ins linked into the binary (code graph, memory, git) and
+externals spoken to over OCP (stdio child processes or remote HTTP) — and
+does four jobs the providers themselves never do:
+
+1. **Routing & fusion:** fan a `ContextQuery` to capability-matching
+   providers, fuse results (reciprocal-rank fusion over vector similarity +
+   graph proximity + recency), dedup by content hash.
+2. **Budgeting:** every frame carries `token_cost`; assembly packs to the
+   caller's budget and reports what was dropped — silent truncation is
+   banned (the engine's compaction lesson applied to retrieval).
+3. **Provenance:** every frame that reaches a prompt carries its source
+   chain; every citation the model emits can be traced to a frame. UI-facing
+   identifiers are human labels, never raw ids.
+4. **Consent & isolation:** external providers declare data-flow direction
+   (`read`, `write`, `egress`) at install; a provider that could send
+   workspace content off-machine requires explicit one-time consent naming
+   what leaves. Providers run as child processes with no inherited
+   credentials and no ambient workspace filesystem access — they receive
+   only what the query hands them.
+
+## 8. Security model
+
+- Credentials never logged, never in trace JSONL, never forwarded to OCP/MCP
+  child processes (redact by type: the credential resolver returns a
+  `SecretString` with no `Display`).
 - `edit_file`/`write_file`/`exec` respect a workspace-root jail by default
-  (no path traversal outside the initialized project root without an explicit
-  `--unsafe-full-fs` escape hatch, off by default) — this is *new* relative to
-  the TS CLI and should be flagged in the risk register as a behavior change
-  worth a migration note.
-- `exec` timeout + process-group kill is native (`nix::sys::signal::killpg`
-  and Windows job objects via `windows-sys` where applicable) — closes the
-  TS CLI's documented bash-process-group leak on abort (`GAPS.md`/`01-gap-audit.md` P1).
-- Dependency policy: `cargo deny` in CI enforces license allowlist (no GPL/
-  AGPL/SSPL transitively) and a security-advisory check (`cargo audit`/
-  `RustSec`) on every push.
+  (no traversal outside the project root without `--unsafe-full-fs`).
+  **File tools resolve against the session's pinned workspace root, and a
+  `bash cd` or worktree switch cannot silently diverge the two** — the TS
+  CLI shipped that bug twice (`09-lessons-learned.md` L-S2).
+- `exec` timeout + process-group kill is native (`killpg` / job objects).
+- **Signal exit is orderly:** signal handlers request cancellation, drain the
+  event channel, close SQLite/ONNX/llama.cpp handles, *then* exit. Calling
+  `process::exit` from a handler while native libraries hold locks aborted
+  the TS CLI (`09-lessons-learned.md` L-L1); the Rust design makes it
+  structurally hard by owning all native handles in a single shutdown-aware
+  runtime struct.
+- Media artifacts are written under `.oxagen/artifacts/` with a manifest;
+  the agent cannot overwrite arbitrary paths via a generation tool.
+- Dependency policy: `cargo deny` (license allowlist, no GPL/AGPL/SSPL
+  transitively) + `cargo audit` on every push.
 
-## 7. Why this repo, then a mirror (not day-one public repo)
+## 9. Why this repo, then a mirror (unchanged from rev 1)
 
-Building inside `oxagen-platform/crates/oxagen-cli` first — not a brand-new
-public repo — because: (a) the existing `bench/swe-bench` + `bench/terminal-
-bench` Harbor harness, CI, and ClickHouse eval dashboard already exist here
-and are the fastest way to get a real resolve-rate number during
-development; (b) the golden-trajectory oracle is the TS engine already in
-this tree; (c) it keeps one CI, one review process, one place Mac's other
-sessions can see the work in flight (per this repo's own operating-mode
-rules). Once Phase 3 exit criteria are met (native bench parity, own CI
-green, no dependency on the TS bench harness for day-to-day dev), a one-way
-export script (`tools/scripts/export-oxagen-cli.sh`) splits `crates/
-oxagen-cli/` history into the public `oxagen-cli` GitHub repo via `git
-subtree split` (preserves commit history for the OSS project), and that
-public repo becomes the source of truth going forward — the monorepo copy
-is deleted, not kept as a second copy to maintain.
+Building inside `oxagen-platform/crates/` first — the existing
+`bench/swe-bench` Harbor harness, CI, and the TS golden-trajectory oracle
+live here and are the fastest path to real resolve-rate numbers. Once Phase 3
+exit criteria are met, a one-way `git subtree split` export creates the
+public repo, which becomes the source of truth; the monorepo copy is deleted
+(see `03-plan.md`).

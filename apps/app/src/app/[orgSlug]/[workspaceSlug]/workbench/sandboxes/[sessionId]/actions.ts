@@ -21,6 +21,7 @@
  * HTTP hop with a DIRECT capability invoke inside the app's own tenant scope.
  */
 import "@oxagen/handlers/register";
+import "@oxagen/agent/register";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { invoke } from "@oxagen/oxagen";

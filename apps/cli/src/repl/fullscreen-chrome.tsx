@@ -59,6 +59,7 @@ export function HeaderBar({
   now,
   version,
   scope,
+  dispatchMode = false,
 }: {
   model: string;
   branch?: string;
@@ -70,6 +71,8 @@ export function HeaderBar({
   version?: string;
   /** Connected org/workspace scope, e.g. "acme/prod". */
   scope?: string;
+  /** When true, show the async Dispatch-mode indicator (`⇉ dispatch`). */
+  dispatchMode?: boolean;
 }): React.ReactElement {
   return (
     <Box justifyContent="space-between" paddingX={1}>
@@ -94,6 +97,14 @@ export function HeaderBar({
         ) : null}
       </Box>
       <Box gap={1}>
+        {dispatchMode ? (
+          <>
+            <Text color={theme.violet} bold>
+              {"⇉ dispatch"}
+            </Text>
+            <Text dimColor>·</Text>
+          </>
+        ) : null}
         <Text color={theme.violet} bold>
           {model.split("/").pop()}
         </Text>

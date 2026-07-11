@@ -16,6 +16,7 @@
  * Server-only. Never import from a "use client" module.
  */
 import "@oxagen/handlers/register";
+import "@oxagen/agent/register";
 import { invoke } from "@oxagen/oxagen";
 import type { WorkbenchCtx } from "./scope";
 import type { SandboxImage } from "@/components/sandbox/warm-up-templates";

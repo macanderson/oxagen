@@ -51,9 +51,9 @@ A prompt ending in ` &` is dispatched to a **detached worker process** and the c
 - `taskRegistry` (`apps/cli/src/agent/task-registry.ts:171`) — in-process Task Progress checklist. Same scope.
 - The **daemon** (`apps/cli/src/daemon/server.ts:1-8`) is a code-graph / context warm-index service, **not** a turn runner. Background turns outlive the REPL via the detached **worker** (§1.2), not the daemon. No change needed here.
 
-### 1.5 The local-triage primitive already exists
+### 1.5 The local-triage primitive was removed — v1 routing is deterministic
 
-`classifyPromptIntent(prompt)` (`apps/cli/src/repl/prompt-intent.ts:50+`) is a **zero-cost, no-LLM heuristic** that returns `"simple"` (informational lookup) vs `"task"` (imperative / delegated mutation), conservative toward `"task"`. Already used for the fast path at `interactive.tsx:2662-2670`. This is exactly the triage signal Dispatch mode keys off — no new classifier needed for v1.
+This spec originally keyed mode-ON routing off `classifyPromptIntent` (`prompt-intent.ts`), the zero-cost word-match "simple" vs "task" heuristic. That module was **deliberately deleted from the REPL** (PR #893, determinism-only policy: no word-match heuristics in the harness). v1 therefore ships with **no intent triage at all**: mode ON dispatches every plain prompt, and the user keeps per-prompt inline control via the explicit `=`/`>` prefix (§2.1). An LLM triager remains a possible v2.
 
 ### 1.6 Session-observation plumbing already exists
 
@@ -73,12 +73,12 @@ Add **Dispatch mode** (async autopilot). One toggle, three ways to act:
 | Input | Behavior |
 |---|---|
 | `/dispatch on` \| `off` \| (bare toggles) | Turns Dispatch mode on/off; persisted in tiered config. Header shows a `⇉ dispatch` indicator when on. |
-| Plain prompt, **mode ON** | Local `classifyPromptIntent` triage. `"simple"` → answered **inline** (instant, no dispatch). `"task"` → **background dispatch**, composer frees immediately. |
+| Plain prompt, **mode ON** | **Background dispatch**, composer frees immediately. Deterministic — no intent triage (§1.5); force a prompt inline with a leading `=`/`>`. |
 | Plain prompt, **mode OFF** | Unchanged — runs the inline turn (today's behavior). |
 | Trailing ` &` (either mode) | Always background dispatch — the existing explicit primitive, now with transcript feedback (§2.3). |
 | Leading `/` or `!` | Unchanged — slash/shell commands never dispatch. |
 
-**Why triage instead of "dispatch literally everything":** the user still wants a quick answer to "what's the command to add an MCP server?" without spawning a worker and context-switching to a panel. `classifyPromptIntent` is conservative toward `"task"`, so the failure mode is "a lookup got dispatched" (visible, cancelable), never "a real task blocked the composer". A false `"simple"` just answers inline — the same cost as today.
+**Why "dispatch literally everything" instead of triage:** the original design triaged with `classifyPromptIntent` so quick lookups answered inline, but that word-match heuristic was removed from the REPL (PR #893, determinism-only policy). Deterministic routing means the mode does exactly one predictable thing; a user who wants a quick inline answer types a leading `=` (or turns the mode off). The failure mode — "a lookup got dispatched" — stays visible and cancelable, never "a real task blocked the composer".
 
 **Escape hatches:** in Dispatch mode, a leading `=` (or `> `) on a prompt forces it **inline** ("do this one right here, I'll wait"); ` &` forces it **background**. Both are pure prefix checks, no config.
 
@@ -115,7 +115,7 @@ Numbered edits. Files marked **[lead]** are in `interactive.tsx` (owned by the s
 
 1. **New file `apps/cli/src/repl/dispatch-mode.ts`** — pure policy + state, no React:
    - `type DispatchDecision = { kind: "inline" } | { kind: "background"; prompt: string }`.
-   - `decideDispatch(text, { mode }): DispatchDecision` — returns `background` when: `parseAmpersandDispatch(text) !== null`, OR (`mode` on AND not slash/shell AND not `=`/`>`-forced-inline AND `classifyPromptIntent(text) === "task"`). Otherwise `inline`. Strip the ` &` / prefix markers in the returned `prompt`. Pure, unit-testable.
+   - `decideDispatch(text, { mode }): DispatchDecision` — returns `background` when: `parseAmpersandDispatch(text) !== null`, OR (`mode` on AND not slash/shell AND not `=`/`>`-forced-inline). Otherwise `inline`. Strip the ` &` / prefix markers in the returned `prompt`. Pure, unit-testable.
    - Co-locate `dispatch-mode.test.ts` (truth table over the matrix in §2.1).
 
 2. **New file `apps/cli/src/repl/background-tracker.ts`** — owns observation of *our* dispatches:
@@ -176,17 +176,17 @@ Track only **our** sids (§3 step 2) so `watchSessions` never surfaces a strange
 - **No second transport / store.** Reuse the ADR-023 session envelope and `SessionStore.watch*` (`events.ts`, `store.ts`). Do not invent a REPL↔worker channel.
 - **No fleet-of-fleets by default.** A detached worker runs one `runTurn` conversation (`runner.ts`); it can already use subagent tools internally. Nesting a `Fleet` inside every worker is out of scope.
 - **No daemon-hosted scheduler.** The daemon stays a code-graph/context index (`daemon/server.ts:1-8`). Dispatch mode is process-spawn + store-watch, nothing central.
-- **No removal of the synchronous inline turn.** Dispatch mode is additive and default-off; `"simple"` lookups and forced-`=` prompts stay inline. Some work is genuinely "do it now while I watch."
+- **No removal of the synchronous inline turn.** Dispatch mode is additive and default-off; forced-`=` prompts stay inline. Some work is genuinely "do it now while I watch."
 - **No distributed/cross-machine locking.** The on-machine `local-file-lock` (`local-file-lock.ts`) is the ceiling; parallel dispatch is single-machine.
 - **No auto-merge of conflicting worktrees** (§4.1) and **no attempt to make background permission prompts interactive** (§4.2).
-- **No new LLM triage call.** v1 uses the existing zero-cost `classifyPromptIntent` heuristic (`prompt-intent.ts`). An LLM triager is a possible v2, not a v1 dependency.
+- **No triage call at all.** v1 routing is deterministic (§1.5) — the word-match heuristic was removed in PR #893 and an LLM triager is a possible v2, not a v1 dependency.
 
 ---
 
 ## 6. Definition of done (v1)
 
-- `/dispatch on` + a `"task"` prompt frees the composer in <100 ms (dispatch is <50 ms per `sessions/dispatch.ts:64`), and the Background panel shows the running dispatch.
-- A `"simple"` prompt in Dispatch mode still answers inline.
+- `/dispatch on` + a plain prompt frees the composer in <100 ms (dispatch is <50 ms per `sessions/dispatch.ts:64`), and the Background panel shows the running dispatch.
+- A `=`-prefixed prompt in Dispatch mode still answers inline.
 - Completed/failed dispatches fold an attributed one-liner into the transcript without moving the cursor.
 - The concurrency cap holds: submitting more than `dispatchMaxConcurrent` tasks queues locally rather than spawning unbounded workers.
 - `dispatch-mode.test.ts` and `background-tracker.test.ts` pass (narrow, co-located runs only — never the full suite).
