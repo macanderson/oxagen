@@ -1235,6 +1235,7 @@ dependencies = [
  "colored",
  "indicatif",
  "oxagen-core",
+ "oxagen-mcp",
  "oxagen-model",
  "oxagen-protocol",
  "oxagen-tools",

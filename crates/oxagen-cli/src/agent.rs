@@ -14,7 +14,9 @@ use std::io::Write;
 use std::time::{Duration, Instant};
 
 use colored::Colorize;
+use oxagen_core::ports::ToolExecutor;
 use oxagen_core::{BudgetGuard, Engine, EngineConfig, TurnOutcome};
+use oxagen_mcp::{McpConfig, McpToolSet};
 use oxagen_model::credential::ApiKey;
 use oxagen_model::provider::Provider;
 use oxagen_protocol::event::BudgetMode;
@@ -61,7 +63,13 @@ pub async fn run_one_shot(
     format: OutputFormat,
 ) -> Result<(), String> {
     let provider = build_provider(cfg)?;
-    let registry = ToolRegistry::new(cfg.workspace_root.clone());
+    let registry: std::sync::Arc<dyn ToolExecutor> =
+        std::sync::Arc::new(ToolRegistry::new(cfg.workspace_root.clone()));
+    let mcp = connect_mcp(cfg, registry.clone(), format == OutputFormat::Text).await;
+    let base_tools: &dyn ToolExecutor = match &mcp {
+        Some(set) => set,
+        None => &*registry,
+    };
     let custom_tools = discover_custom_tools(cfg, format == OutputFormat::Text);
     let mut budget = build_budget_guard(budget_limit);
 
@@ -75,16 +83,20 @@ pub async fn run_one_shot(
         CompletionMessage::user(prompt),
     ];
 
-    run_turn(
+    let outcome = run_turn(
         &*provider,
-        &registry,
+        base_tools,
         &custom_tools,
         &mut messages,
         &mut budget,
         cfg,
         format,
     )
-    .await
+    .await;
+    if let Some(set) = &mcp {
+        set.close_all().await;
+    }
+    outcome
 }
 
 /// Run an interactive REPL session. `budget_limit` is per-session: the
@@ -93,7 +105,13 @@ pub async fn run_one_shot(
 /// turn-scoped counter at the start of each one.
 pub async fn run_interactive(cfg: &Config, budget_limit: Option<f64>) -> Result<(), String> {
     let provider = build_provider(cfg)?;
-    let registry = ToolRegistry::new(cfg.workspace_root.clone());
+    let registry: std::sync::Arc<dyn ToolExecutor> =
+        std::sync::Arc::new(ToolRegistry::new(cfg.workspace_root.clone()));
+    let mcp = connect_mcp(cfg, registry.clone(), true).await;
+    let base_tools: &dyn ToolExecutor = match &mcp {
+        Some(set) => set,
+        None => &*registry,
+    };
     let custom_tools = discover_custom_tools(cfg, true);
     let mut budget = build_budget_guard(budget_limit);
 
@@ -147,7 +165,7 @@ pub async fn run_interactive(cfg: &Config, budget_limit: Option<f64>) -> Result<
 
         if let Err(e) = run_turn(
             &*provider,
-            &registry,
+            base_tools,
             &custom_tools,
             &mut messages,
             &mut budget,
@@ -160,6 +178,9 @@ pub async fn run_interactive(cfg: &Config, budget_limit: Option<f64>) -> Result<
         }
     }
 
+    if let Some(set) = &mcp {
+        set.close_all().await;
+    }
     println!("\n  {}", "Goodbye! ✦".magenta());
     Ok(())
 }
@@ -222,6 +243,56 @@ pub async fn run_init(
             .dimmed()
     );
     Ok(())
+}
+
+/// Connect the workspace's MCP servers (.oxagen/mcp.toml), wrapping the
+/// native registry so their tools merge into the agent's set under
+/// mcp__<server>__<tool> names. Absent config -> None (zero overhead).
+/// Connection is best-effort per server (oxagen-mcp isolates failures);
+/// failed servers are reported once in text mode, never fatal.
+async fn connect_mcp(
+    cfg: &Config,
+    native: std::sync::Arc<dyn ToolExecutor>,
+    print_diagnostics: bool,
+) -> Option<McpToolSet> {
+    let path = cfg.workspace_root.join(".oxagen").join("mcp.toml");
+    let text = std::fs::read_to_string(&path).ok()?;
+    let parsed = match McpConfig::from_toml_str(&text) {
+        Ok(parsed) => parsed,
+        Err(e) => {
+            if print_diagnostics {
+                eprintln!(
+                    "  {} {} is invalid: {e} — MCP servers disabled this session",
+                    "!".yellow(),
+                    path.display()
+                );
+            }
+            return None;
+        }
+    };
+    let servers = parsed.into_servers();
+    if servers.is_empty() {
+        return None;
+    }
+    let set = McpToolSet::connect(&servers, std::time::Duration::from_secs(10))
+        .await
+        .wrapping(native);
+    if print_diagnostics {
+        for (name, reason) in set.failed_servers() {
+            eprintln!(
+                "  {} MCP server `{name}` unavailable: {reason}",
+                "!".yellow()
+            );
+        }
+        if set.connected_count() > 0 {
+            println!(
+                "  {} {} MCP server(s) connected",
+                "◆".cyan(),
+                set.connected_count()
+            );
+        }
+    }
+    Some(set)
 }
 
 /// Discover developer-defined custom script tools (.oxagen/tools/*.toml,
@@ -315,7 +386,7 @@ fn build_budget_guard(budget_limit: Option<f64>) -> BudgetGuard {
 /// had, just sourced from the event stream instead of direct calls).
 async fn run_turn(
     provider: &dyn Provider,
-    registry: &ToolRegistry,
+    base_tools: &dyn ToolExecutor,
     custom_tools: &[CustomTool],
     messages: &mut Vec<CompletionMessage>,
     budget: &mut BudgetGuard,
@@ -391,8 +462,11 @@ async fn run_turn(
         // ask_user (interactive.rs). Headless formats get the io that
         // fails ask_user loudly instead of waiting on stdin that will
         // never answer.
-        let customs =
-            CustomToolSet::new(registry, custom_tools.to_vec(), cfg.workspace_root.clone());
+        let customs = CustomToolSet::new(
+            base_tools,
+            custom_tools.to_vec(),
+            cfg.workspace_root.clone(),
+        );
         let tools = InteractiveToolSet::new(
             &customs,
             tx.clone(),
