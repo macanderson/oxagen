@@ -641,10 +641,8 @@ fn common_dir_prefix(paths: &[String]) -> Option<String> {
     let mut prefix = dirs[0].to_string();
     for d in &dirs[1..] {
         while !d.starts_with(prefix.as_str()) {
-            match prefix.rfind('/') {
-                Some(cut) => prefix.truncate(cut),
-                None => return None,
-            }
+            let cut = prefix.rfind('/')?;
+            prefix.truncate(cut);
         }
     }
     if prefix.is_empty() {
