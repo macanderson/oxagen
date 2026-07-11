@@ -243,7 +243,10 @@ fn serialize_element(node: Node, removed: &mut Vec<String>, is_root: bool) -> St
     }
 
     // Backfill a viewBox on the root from width/height when absent.
-    if is_root && !has_viewbox && let (Some(w), Some(h)) = (width, height) {
+    if is_root
+        && !has_viewbox
+        && let (Some(w), Some(h)) = (width, height)
+    {
         out.push_str(&format!(" viewBox=\"0 0 {} {}\"", fmt_num(w), fmt_num(h)));
     }
 
