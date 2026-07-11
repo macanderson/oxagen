@@ -3,8 +3,10 @@
 // When a chat turn carries an `agentId`, the stream route loads that agent's
 // definition (agent.definition.get) and merges its config into the turn: the
 // agent's instructions ride the system prompt, its equipped skills + MCP
-// servers extend what the model can reach, and a `coding` agent forces code
-// mode. This module is the SINGLE pure seam that computes the merged values so
+// servers extend what the model can reach, and a `code` agent — and ONLY a
+// code agent — puts the turn in coding flow (the agent definition is the
+// sole gate; the request cannot force code mode on its own). This module is
+// the SINGLE pure seam that computes the merged values so
 // it can be unit-tested in isolation — the route only does the async load, the
 // try/catch, and the wiring of these outputs into resolvePrompt/materializeTools.
 //
@@ -35,8 +37,6 @@ export interface AgentBindingInput {
   skills: string[];
   /** Per-turn MCP server allowlist the request already set (activeServerIds). */
   serverAllowlist: string[];
-  /** True when the request itself put the turn in code mode (body.code present). */
-  codeMode: boolean;
 }
 
 export interface AgentBindingResult {
@@ -49,10 +49,12 @@ export interface AgentBindingResult {
   skills: string[];
   /** Merged, de-duplicated MCP server allowlist (body ∪ agent mcp_servers). */
   serverAllowlist: string[];
-  /** True when the turn should run in code mode (request code mode OR a coding
-   *  agent). The route still only attaches the sandbox when the request carried
-   *  the repo/env inputs — a forced coding agent with no repo degrades to the
-   *  code-mode PROMPT with no filesystem tools. */
+  /** True when the turn should run in code mode — i.e. the bound agent's
+   *  definition marks it a code agent. The agent definition is the ONLY gate:
+   *  a request `code` payload without a code agent never enters coding flow.
+   *  The route still only attaches the sandbox when a repo/env is bound — a
+   *  code agent with no repo degrades to the code-mode PROMPT with no
+   *  filesystem tools. */
   codeMode: boolean;
 }
 
@@ -80,7 +82,7 @@ function unionOrdered(base: string[], extra: string[]): string[] {
 export function applyAgentBinding(
   input: AgentBindingInput,
 ): AgentBindingResult {
-  const { def, skills, serverAllowlist, codeMode } = input;
+  const { def, skills, serverAllowlist } = input;
   const agentTools = def.config.agentTools ?? [];
 
   const skillRefs = agentTools
@@ -98,9 +100,9 @@ export function applyAgentBinding(
     // the request schema does, so a skill-heavy agent can't blow the budget.
     skills: unionOrdered(skills, skillRefs).slice(0, MAX_PINNED_SKILLS),
     serverAllowlist: unionOrdered(serverAllowlist, serverRefs),
-    // A code agent forces code mode even if the request didn't ask for it.
-    // Read-tolerant of the earlier "coding" spelling; "code" is the convention.
-    codeMode:
-      codeMode || def.agentType === "code" || def.agentType === "coding",
+    // Coding flow derives from the agent DEFINITION alone — the request can
+    // never force it. Read-tolerant of the earlier "coding" spelling; "code"
+    // is the convention.
+    codeMode: def.agentType === "code" || def.agentType === "coding",
   };
 }
