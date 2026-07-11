@@ -91,17 +91,24 @@ vi.mock("./agent-picker/agent-context-chip", () => ({
   AgentContextChip: ({
     agents,
     onApply,
+    locked,
   }: {
     agents: Array<{ agentId: string; isCode: boolean }>;
     onApply: (sel: { agentId: string | null }) => void;
+    locked?: boolean;
   }) =>
     agents.length === 0 ? null : (
-      <div data-testid="agent-selector" data-count={agents.length}>
+      <div
+        data-testid="agent-selector"
+        data-count={agents.length}
+        data-locked={locked ? "true" : undefined}
+      >
         {agents.map((a) => (
           <button
             key={a.agentId}
             type="button"
             data-testid={`pick-${a.agentId}`}
+            disabled={locked}
             onClick={() => onApply({ agentId: a.agentId })}
           >
             pick {a.agentId}
@@ -110,6 +117,7 @@ vi.mock("./agent-picker/agent-context-chip", () => ({
         <button
           type="button"
           data-testid="pick-default"
+          disabled={locked}
           onClick={() => onApply({ agentId: null })}
         >
           pick default
@@ -2493,8 +2501,45 @@ const CODE_ENV_DEFAULT = {
   isDefault: true,
 };
 
-describe("MessageComposer — code mode", () => {
-  it("does not render the agent toolbar until code mode is toggled on", async () => {
+// Code mode is governed SOLELY by the selected agent's identity — there is no
+// manual toggle. These fixtures drive it via the stubbed AgentContextChip's
+// `pick-agt_code` / `pick-agt_chat` buttons (see the mock at the top).
+const CODE_AGENT = {
+  agentId: "agt_code",
+  slug: "coder",
+  name: "Coder",
+  description: null,
+  agentType: "code",
+  isCode: true,
+  avatarUrl: null,
+  summary: null,
+  managed: false,
+  toolRefs: [],
+};
+const CHAT_AGENT = {
+  agentId: "agt_chat",
+  slug: "chatter",
+  name: "Chatter",
+  description: null,
+  agentType: "custom",
+  isCode: false,
+  avatarUrl: null,
+  summary: null,
+  managed: false,
+  toolRefs: [],
+};
+// A second repo used to prove the "exactly one obvious default" auto-fill rule:
+// with >1 repo and no default, code mode must NOT auto-pick a repo.
+const CODE_REPO_2 = {
+  key: "second",
+  connectionId: "con_2",
+  owner: "acme",
+  name: "docs",
+  defaultBranch: "main",
+};
+
+describe("MessageComposer — code mode (agent-governed)", () => {
+  it("keeps code-mode pickers hidden for a chat agent (pin mode, not code)", async () => {
     const { MessageComposer } = await import("./message-composer");
     const { container } = render(
       <MessageComposer
@@ -2502,19 +2547,24 @@ describe("MessageComposer — code mode", () => {
         parentMessageId={null}
         action={makeAction()}
         modelConfig={DEFAULT_MODEL_CONFIG}
+        availableAgents={[CODE_AGENT, CHAT_AGENT]}
         availableRepos={[CODE_REPO]}
         availableEnvironments={[CODE_ENV_DEFAULT]}
       />,
     );
+    fireEvent.click(screen.getByTestId("pick-agt_chat"));
+    // A chat agent forces code mode off — the compact controls stay in pin mode
+    // (the code-mode "Select repository" label must not appear).
+    expect(screen.getByTestId("composer-context-controls")).toHaveAttribute(
+      "data-mode",
+      "pin",
+    );
     expect(
       container.querySelector('[aria-label="Select repository"]'),
     ).toBeNull();
-    expect(
-      container.querySelector('[aria-label="Select environment"]'),
-    ).toBeNull();
   });
 
-  it("toggling code mode on reveals the repo + environment pickers", async () => {
+  it("selecting a code agent reveals the repo + environment pickers with code labels", async () => {
     const { MessageComposer } = await import("./message-composer");
     const { container } = render(
       <MessageComposer
@@ -2522,86 +2572,44 @@ describe("MessageComposer — code mode", () => {
         parentMessageId={null}
         action={makeAction()}
         modelConfig={DEFAULT_MODEL_CONFIG}
+        availableAgents={[CODE_AGENT]}
         availableRepos={[CODE_REPO]}
         availableEnvironments={[CODE_ENV_DEFAULT]}
       />,
     );
-    await userEvent.click(
-      screen.getByRole("button", { name: "Toggle code mode" }),
+    fireEvent.click(screen.getByTestId("pick-agt_code"));
+    await waitFor(() =>
+      expect(
+        container.querySelector('[aria-label="Select repository"]'),
+      ).not.toBeNull(),
     );
-    expect(
-      container.querySelector('[aria-label="Select repository"]'),
-    ).not.toBeNull();
     expect(
       container.querySelector('[aria-label="Select environment"]'),
     ).not.toBeNull();
-  });
-
-  it("the code toggle is disabled when there are no available repos", async () => {
-    const { MessageComposer } = await import("./message-composer");
-    render(
-      <MessageComposer
-        conversationId={null}
-        parentMessageId={null}
-        action={makeAction()}
-        modelConfig={DEFAULT_MODEL_CONFIG}
-      />,
-    );
-    expect(
-      screen.getByRole("button", { name: "Toggle code mode" }),
-    ).toBeDisabled();
-  });
-
-  it("blocks send with a hint until both a repo and environment are selected", async () => {
-    const { MessageComposer } = await import("./message-composer");
-    render(
-      <MessageComposer
-        conversationId={null}
-        parentMessageId={null}
-        action={makeAction()}
-        modelConfig={DEFAULT_MODEL_CONFIG}
-        availableRepos={[CODE_REPO]}
-        availableEnvironments={[]}
-      />,
-    );
-    await userEvent.type(screen.getByRole("textbox"), "fix the bug");
-    await userEvent.click(
-      screen.getByRole("button", { name: "Toggle code mode" }),
-    );
-    // No environments supplied, so isDefault auto-select has nothing to pick —
-    // the gate stays blocked with neither repo nor environment chosen.
-    expect(screen.getByRole("button", { name: "Send message" })).toBeDisabled();
-    expect(screen.getByTestId("code-mode-gate-hint")).toHaveTextContent(
-      "Select a repository and environment to start coding.",
+    expect(screen.getByTestId("composer-context-controls")).toHaveAttribute(
+      "data-mode",
+      "code",
     );
   });
 
-  it("auto-selects the workspace default environment when code mode turns on", async () => {
+  it("auto-fills the sole repo + default environment and opens the send gate for a code agent", async () => {
     const action = makeAction();
     const { MessageComposer } = await import("./message-composer");
-    const { container } = render(
+    render(
       <MessageComposer
         conversationId={null}
         parentMessageId={null}
         action={action}
         modelConfig={DEFAULT_MODEL_CONFIG}
+        availableAgents={[CODE_AGENT]}
         availableRepos={[CODE_REPO]}
         availableEnvironments={[CODE_ENV_DEFAULT]}
       />,
     );
     await userEvent.type(screen.getByRole("textbox"), "fix the bug");
-    await userEvent.click(
-      screen.getByRole("button", { name: "Toggle code mode" }),
-    );
-    // Environment auto-defaults, but the repo still isn't picked — gate stays shut.
-    expect(screen.getByRole("button", { name: "Send message" })).toBeDisabled();
-
-    // Selecting the repo (via the shared Select mock's fixed "high" value,
-    // matching CODE_REPO.key) opens the gate.
-    const repoSelect = container.querySelector('[data-testid="select"]');
-    expect(repoSelect).not.toBeNull();
-    fireEvent.click(repoSelect!);
-
+    fireEvent.click(screen.getByTestId("pick-agt_code"));
+    // The sole repo + the isDefault environment both auto-fill, so the gate
+    // opens without any manual selection — the user just SEES the target.
     await waitFor(() =>
       expect(
         screen.getByRole("button", { name: "Send message" }),
@@ -2612,15 +2620,7 @@ describe("MessageComposer — code mode", () => {
     await userEvent.click(screen.getByRole("button", { name: "Send message" }));
     await waitFor(() => expect(action).toHaveBeenCalledTimes(1));
     const fd = action.mock.calls[0][0] as FormData;
-    const code = JSON.parse(fd.get("code") as string) as {
-      connectionId: string;
-      owner: string;
-      name: string;
-      defaultBranch: string | null;
-      environmentId: string;
-      environmentName: string | null;
-      sandboxSessionId: string | null;
-    };
+    const code = JSON.parse(fd.get("code") as string) as Record<string, unknown>;
     expect(code).toEqual({
       connectionId: "con_1",
       owner: "acme",
@@ -2630,9 +2630,63 @@ describe("MessageComposer — code mode", () => {
       environmentName: "Default",
       sandboxSessionId: null,
     });
+    // The bound agent id rides along too.
+    expect(fd.get("agentId")).toBe("agt_code");
   });
 
-  it("does NOT encode a code field when code mode is off", async () => {
+  it("does NOT auto-fill a repo when there is more than one and no default (gate stays blocked)", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        availableAgents={[CODE_AGENT]}
+        availableRepos={[CODE_REPO, CODE_REPO_2]}
+        availableEnvironments={[CODE_ENV_DEFAULT]}
+      />,
+    );
+    await userEvent.type(screen.getByRole("textbox"), "fix the bug");
+    fireEvent.click(screen.getByTestId("pick-agt_code"));
+    // Environment auto-fills (isDefault) but the repo is ambiguous (2 options,
+    // no default) — the gate stays blocked until the user picks a repo.
+    await waitFor(() =>
+      expect(
+        screen.getByTestId("code-mode-gate-hint"),
+      ).toHaveTextContent("Select a repository and environment to start coding."),
+    );
+    expect(screen.getByRole("button", { name: "Send message" })).toBeDisabled();
+  });
+
+  it("blocks send with a hint for a code agent when no environment is available", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        availableAgents={[CODE_AGENT]}
+        availableRepos={[CODE_REPO]}
+        availableEnvironments={[]}
+      />,
+    );
+    await userEvent.type(screen.getByRole("textbox"), "fix the bug");
+    fireEvent.click(screen.getByTestId("pick-agt_code"));
+    // The sole repo auto-fills, but there is no environment to pick — the gate
+    // stays blocked. A coding agent REQUIRES both a repo and an environment.
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Send message" }),
+      ).toBeDisabled(),
+    );
+    expect(screen.getByTestId("code-mode-gate-hint")).toHaveTextContent(
+      "Select a repository and environment to start coding.",
+    );
+  });
+
+  it("does NOT encode a code field for a chat agent (code mode off)", async () => {
     const action = makeAction();
     const { MessageComposer } = await import("./message-composer");
     render(
@@ -2641,15 +2695,60 @@ describe("MessageComposer — code mode", () => {
         parentMessageId={null}
         action={action}
         modelConfig={DEFAULT_MODEL_CONFIG}
+        availableAgents={[CODE_AGENT, CHAT_AGENT]}
         availableRepos={[CODE_REPO]}
         availableEnvironments={[CODE_ENV_DEFAULT]}
       />,
     );
+    fireEvent.click(screen.getByTestId("pick-agt_chat"));
     await userEvent.type(screen.getByRole("textbox"), "hello");
     await userEvent.click(screen.getByRole("button", { name: "Send message" }));
     await waitFor(() => expect(action).toHaveBeenCalled());
     const fd = action.mock.calls[0][0] as FormData;
     expect(fd.get("code")).toBeNull();
+  });
+
+  it("locks the agent + repo + environment pickers after a code turn is sent", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    const { container } = render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        availableAgents={[CODE_AGENT]}
+        availableRepos={[CODE_REPO]}
+        availableEnvironments={[CODE_ENV_DEFAULT]}
+      />,
+    );
+    fireEvent.click(screen.getByTestId("pick-agt_code"));
+    await userEvent.type(screen.getByRole("textbox"), "fix the bug");
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Send message" }),
+      ).not.toBeDisabled(),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Send message" }));
+
+    // After the first code turn the pickers lock: the composer passes locked=true
+    // down to the agent chip (mocked here → data-locked) and to the context
+    // controls (real → data-locked + a locked wrapper on each selector).
+    await waitFor(() =>
+      expect(screen.getByTestId("agent-selector")).toHaveAttribute(
+        "data-locked",
+        "true",
+      ),
+    );
+    expect(screen.getByTestId("composer-context-controls")).toHaveAttribute(
+      "data-locked",
+      "true",
+    );
+    // The repo/env selectors are wrapped with the locked hint affordance.
+    expect(
+      screen.getAllByTestId("locked-context-control").length,
+    ).toBeGreaterThan(0);
+    const lockedRepo = container.querySelector('[aria-label="Select repository"]');
+    expect(lockedRepo).not.toBeNull();
   });
 });
 
@@ -2803,16 +2902,17 @@ describe("MessageComposer — collapsible composer", () => {
         parentMessageId={null}
         action={makeAction()}
         modelConfig={DEFAULT_MODEL_CONFIG}
+        availableAgents={[CODE_AGENT]}
         availableRepos={[CODE_REPO]}
         availableEnvironments={[]}
       />,
     );
-    await userEvent.click(
-      screen.getByRole("button", { name: "Toggle code mode" }),
+    fireEvent.click(screen.getByTestId("pick-agt_code"));
+    await waitFor(() =>
+      expect(
+        container.querySelector('[aria-label="Select repository"]'),
+      ).not.toBeNull(),
     );
-    expect(
-      container.querySelector('[aria-label="Select repository"]'),
-    ).not.toBeNull();
     expect(screen.getByTestId("code-mode-gate-hint")).toBeInTheDocument();
 
     await userEvent.click(screen.getByTestId("composer-collapse-toggle"));
@@ -2832,13 +2932,12 @@ describe("MessageComposer — compact context controls in code mode", () => {
         parentMessageId={null}
         action={makeAction()}
         modelConfig={DEFAULT_MODEL_CONFIG}
+        availableAgents={[CODE_AGENT]}
         availableRepos={[CODE_REPO]}
         availableEnvironments={[CODE_ENV_DEFAULT]}
       />,
     );
-    await userEvent.click(
-      screen.getByRole("button", { name: "Toggle code mode" }),
-    );
+    fireEvent.click(screen.getByTestId("pick-agt_code"));
     const controls = screen.getByTestId("composer-context-controls");
     expect(controls).toHaveAttribute("data-mode", "code");
     // Code mode uses the default "Select …" labels for the compact selectors.
@@ -2876,13 +2975,14 @@ describe("MessageComposer — mobile toolbar", () => {
         workspaceSlug="main"
       />,
     );
-    // Essentials inline:
+    // Essentials inline (there is no manual code toggle anymore — code mode is
+    // agent-governed):
     expect(
       screen.getByRole("button", { name: "Attach image or video" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Toggle code mode" }),
-    ).toBeInTheDocument();
+      screen.queryByRole("button", { name: "Toggle code mode" }),
+    ).toBeNull();
     expect(
       screen.getByRole("button", { name: "Send message" }),
     ).toBeInTheDocument();
@@ -2955,9 +3055,6 @@ describe("MessageComposer — mobile toolbar", () => {
     expect(
       screen.getByRole("button", { name: "Attach image or video" }).className,
     ).toContain("h-11");
-    expect(
-      screen.getByRole("button", { name: "Toggle code mode" }).className,
-    ).toContain("h-11");
   });
 
   it("keeps a 3-row textarea and the full inline control row on desktop", async () => {
@@ -3021,7 +3118,7 @@ describe("MessageComposer — pin context & slash commands", () => {
     expect(screen.getByTestId("pin-to-chat")).toBeInTheDocument();
   });
 
-  it("switches the controls from pin mode to code mode once code mode is on", async () => {
+  it("switches the controls from pin mode to code mode once a code agent is selected", async () => {
     const { MessageComposer } = await import("./message-composer");
     const { container } = render(
       <MessageComposer
@@ -3029,6 +3126,7 @@ describe("MessageComposer — pin context & slash commands", () => {
         parentMessageId={null}
         action={makeAction()}
         modelConfig={DEFAULT_MODEL_CONFIG}
+        availableAgents={[CODE_AGENT]}
         availableRepos={[CODE_REPO]}
         availableEnvironments={[CODE_ENV_DEFAULT]}
       />,
@@ -3038,14 +3136,14 @@ describe("MessageComposer — pin context & slash commands", () => {
       "pin",
     );
 
-    await userEvent.click(
-      screen.getByRole("button", { name: "Toggle code mode" }),
-    );
+    fireEvent.click(screen.getByTestId("pick-agt_code"));
 
     // Same single control row, now in code mode (default "Select …" labels, no pin).
-    expect(screen.getByTestId("composer-context-controls")).toHaveAttribute(
-      "data-mode",
-      "code",
+    await waitFor(() =>
+      expect(screen.getByTestId("composer-context-controls")).toHaveAttribute(
+        "data-mode",
+        "code",
+      ),
     );
     expect(
       container.querySelector('[aria-label="Select repository"]'),
@@ -3201,49 +3299,32 @@ describe("MessageComposer — pin context & slash commands", () => {
 });
 
 describe("MessageComposer — agent selection gating", () => {
-  const CODE_AGENT = {
-    agentId: "agt_code",
-    slug: "coder",
-    name: "Coder",
-    description: null,
-    agentType: "code",
-    isCode: true,
-    avatarUrl: null,
-    summary: null,
-    managed: false,
-    toolRefs: [],
-  };
-  const CHAT_AGENT = {
-    agentId: "agt_chat",
-    slug: "chatter",
-    name: "Chatter",
-    description: null,
-    agentType: "custom",
-    isCode: false,
-    avatarUrl: null,
-    summary: null,
-    managed: false,
-    toolRefs: [],
-  };
-
-  it("shows the manual code toggle and no agent selector when no agents exist", async () => {
+  it("shows no agent selector and no code toggle when no agents exist", async () => {
     const { MessageComposer } = await import("./message-composer");
-    render(
+    const { container } = render(
       <MessageComposer
         conversationId={null}
         parentMessageId={null}
         action={makeAction()}
         modelConfig={DEFAULT_MODEL_CONFIG}
         availableAgents={[]}
+        availableRepos={[CODE_REPO]}
+        availableEnvironments={[CODE_ENV_DEFAULT]}
       />,
     );
+    // The manual code toggle is gone entirely — code mode is agent-governed, and
+    // an agentless workspace can never enter it.
     expect(
-      screen.getByRole("button", { name: "Toggle code mode" }),
-    ).toBeInTheDocument();
+      screen.queryByRole("button", { name: "Toggle code mode" }),
+    ).not.toBeInTheDocument();
     expect(screen.queryByTestId("agent-selector")).not.toBeInTheDocument();
+    // With no code agent, the compact controls stay in pin mode (no code labels).
+    expect(
+      container.querySelector('[aria-label="Select repository"]'),
+    ).toBeNull();
   });
 
-  it("renders the agent selector and keeps the manual toggle at the default (no agent governs)", async () => {
+  it("renders the agent selector (and no manual toggle) when agents exist", async () => {
     const { MessageComposer } = await import("./message-composer");
     render(
       <MessageComposer
@@ -3256,45 +3337,59 @@ describe("MessageComposer — agent selection gating", () => {
     );
     expect(screen.getByTestId("agent-selector")).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Toggle code mode" }),
-    ).toBeInTheDocument();
-  });
-
-  it("hides the manual toggle once a code agent governs code mode", async () => {
-    const { MessageComposer } = await import("./message-composer");
-    render(
-      <MessageComposer
-        conversationId={null}
-        parentMessageId={null}
-        action={makeAction()}
-        modelConfig={DEFAULT_MODEL_CONFIG}
-        availableAgents={[CODE_AGENT, CHAT_AGENT]}
-      />,
-    );
-    fireEvent.click(screen.getByTestId("pick-agt_code"));
-    expect(
       screen.queryByRole("button", { name: "Toggle code mode" }),
     ).not.toBeInTheDocument();
   });
 
-  it("also hides the manual toggle for a chat agent (its identity governs)", async () => {
+  it("selecting a code agent turns code mode ON (code pickers appear)", async () => {
     const { MessageComposer } = await import("./message-composer");
-    render(
+    const { container } = render(
       <MessageComposer
         conversationId={null}
         parentMessageId={null}
         action={makeAction()}
         modelConfig={DEFAULT_MODEL_CONFIG}
         availableAgents={[CODE_AGENT, CHAT_AGENT]}
+        availableRepos={[CODE_REPO]}
+        availableEnvironments={[CODE_ENV_DEFAULT]}
+      />,
+    );
+    fireEvent.click(screen.getByTestId("pick-agt_code"));
+    await waitFor(() =>
+      expect(screen.getByTestId("composer-context-controls")).toHaveAttribute(
+        "data-mode",
+        "code",
+      ),
+    );
+    expect(
+      container.querySelector('[aria-label="Select repository"]'),
+    ).not.toBeNull();
+  });
+
+  it("selecting a chat agent keeps code mode OFF (pin mode)", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    const { container } = render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        availableAgents={[CODE_AGENT, CHAT_AGENT]}
+        availableRepos={[CODE_REPO]}
+        availableEnvironments={[CODE_ENV_DEFAULT]}
       />,
     );
     fireEvent.click(screen.getByTestId("pick-agt_chat"));
+    expect(screen.getByTestId("composer-context-controls")).toHaveAttribute(
+      "data-mode",
+      "pin",
+    );
     expect(
-      screen.queryByRole("button", { name: "Toggle code mode" }),
-    ).not.toBeInTheDocument();
+      container.querySelector('[aria-label="Select repository"]'),
+    ).toBeNull();
   });
 
-  it("restores the manual toggle when the default (no agent) is re-selected", async () => {
+  it("re-selecting the default (no agent) turns code mode OFF again", async () => {
     const { MessageComposer } = await import("./message-composer");
     render(
       <MessageComposer
@@ -3303,13 +3398,24 @@ describe("MessageComposer — agent selection gating", () => {
         action={makeAction()}
         modelConfig={DEFAULT_MODEL_CONFIG}
         availableAgents={[CODE_AGENT, CHAT_AGENT]}
+        availableRepos={[CODE_REPO]}
+        availableEnvironments={[CODE_ENV_DEFAULT]}
       />,
     );
     fireEvent.click(screen.getByTestId("pick-agt_code"));
+    await waitFor(() =>
+      expect(screen.getByTestId("composer-context-controls")).toHaveAttribute(
+        "data-mode",
+        "code",
+      ),
+    );
     fireEvent.click(screen.getByTestId("pick-default"));
-    expect(
-      screen.getByRole("button", { name: "Toggle code mode" }),
-    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByTestId("composer-context-controls")).toHaveAttribute(
+        "data-mode",
+        "pin",
+      ),
+    );
   });
 
   it("forwards the selected agentId in the submit payload", async () => {

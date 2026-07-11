@@ -208,4 +208,51 @@ describe("ComposerContextControls", () => {
     await userEvent.click(screen.getAllByTestId("select")[0]!);
     expect(onSelectRepo).toHaveBeenCalledWith(REPO);
   });
+
+  it("locked: disables both selectors, wraps them with the lock hint, and hides the pin", () => {
+    render(<ComposerContextControls {...base()} mode="code" locked />);
+    const controls = screen.getByTestId("composer-context-controls");
+    expect(controls).toHaveAttribute("data-locked", "true");
+
+    // Both selectors (repo + env) are wrapped with the lock-hint affordance.
+    const wrappers = screen.getAllByTestId("locked-context-control");
+    expect(wrappers).toHaveLength(2);
+    for (const w of wrappers) {
+      expect(w.getAttribute("title")).toContain("Locked for this conversation");
+    }
+
+    // The underlying Selects are disabled (isLoading → disabled).
+    for (const s of screen.getAllByTestId("select")) {
+      expect(s).toHaveAttribute("data-disabled", "true");
+    }
+  });
+
+  it("locked in pin mode still hides the pin toggle", () => {
+    render(
+      <ComposerContextControls
+        {...base()}
+        selectedRepoKey="acme/widgets"
+        mode="pin"
+        isPinned={false}
+        onTogglePin={vi.fn()}
+        locked
+      />,
+    );
+    expect(screen.queryByTestId("pin-to-chat")).toBeNull();
+  });
+
+  it("locked: a locked selector does not fire onSelect on click", async () => {
+    const onSelectRepo = vi.fn();
+    render(
+      <ComposerContextControls
+        {...base()}
+        onSelectRepo={onSelectRepo}
+        mode="code"
+        locked
+      />,
+    );
+    // The mock Select ignores clicks while disabled — no selection escapes.
+    await userEvent.click(screen.getAllByTestId("select")[0]!);
+    expect(onSelectRepo).not.toHaveBeenCalled();
+  });
 });
