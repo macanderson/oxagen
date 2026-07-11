@@ -27,6 +27,11 @@ pub enum StageKind {
     Execute,
     Verify,
     Judge,
+    /// Post-turn self-reflection: the agent reviews its own performance on
+    /// the completed turn and records improvement memories into the context
+    /// plane, tagged with the workspace's inferred domains, for recall on
+    /// future relevant turns.
+    Reflect,
     ContextWrite,
     Complete,
 }
@@ -147,6 +152,21 @@ pub enum AgentEvent {
     /// thresholds; headless requires a flag to bypass.
     ScopeReview {
         proposal: ScopeProposal,
+    },
+    /// The agent asked the user a multiple-choice question (the `ask_user`
+    /// tool). BINDING renderer contract: present the structured `options`
+    /// AND always exactly one additional free-text option — the user can
+    /// always answer in their own words, on every question, without the
+    /// model having to list that affordance itself. The answer returns as
+    /// the tool call's ordinary `ToolResult`; there is no separate answer
+    /// event. Headless runs fail this tool with a named error instead of
+    /// hanging on input that will never arrive.
+    AskUser {
+        /// Correlates the eventual answer (the ToolResult's `call_id`)
+        /// back to this question.
+        id: String,
+        question: String,
+        options: Vec<String>,
     },
     /// A commit landed (fleet ledger / pipeline execute stage).
     Commit {
@@ -415,6 +435,22 @@ mod tests {
         let back: AgentEvent = serde_json::from_str(&json).unwrap();
         match back {
             AgentEvent::JudgeVerdict { evidence, .. } => assert!(evidence.deterministic),
+            other => panic!("unexpected variant: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn ask_user_roundtrips_and_carries_structured_options() {
+        let event = AgentEvent::AskUser {
+            id: "call_q1".into(),
+            question: "Which database should the migration target?".into(),
+            options: vec!["local (5433)".into(), "staging".into()],
+        };
+        let json = serde_json::to_string(&event).unwrap();
+        assert!(json.contains("\"type\":\"ask_user\""), "{json}");
+        let back: AgentEvent = serde_json::from_str(&json).unwrap();
+        match back {
+            AgentEvent::AskUser { options, .. } => assert_eq!(options.len(), 2),
             other => panic!("unexpected variant: {other:?}"),
         }
     }

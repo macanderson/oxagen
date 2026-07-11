@@ -285,6 +285,20 @@ pub fn render_event(event: &AgentEvent) {
                     .unwrap_or_default()
             );
         }
+        AgentEvent::AskUser {
+            question, options, ..
+        } => {
+            // The interactive ask_user tool prints the numbered options and
+            // collects the answer itself (it owns stdin while the turn is
+            // in flight); this render arm exists for replay/stream-json
+            // consumers of the event log. The binding free-text contract
+            // (every question always offers a type-your-own option) is
+            // enforced at the prompt site, not here.
+            println!("  {} {}", "?".yellow().bold(), question.bold());
+            for (i, option) in options.iter().enumerate() {
+                println!("    {} {}", format!("{})", i + 1).dimmed(), option);
+            }
+        }
         AgentEvent::Commit { sha, message } => {
             let short = sha.get(..8).unwrap_or(sha.as_str());
             println!("  {} committed {short} {}", "●".green(), message.dimmed());
