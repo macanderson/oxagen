@@ -1351,29 +1351,7 @@ export function ChatShellClient({
               </div>
             )}
           </div>
-          {/* Below lg the trace rail lives in a bottom sheet (ADR-026 mobile
-            parity); this floating trigger sits inside the message viewport —
-            always above the composer, never over its Send/collapse controls. */}
-          {showFiles ? (
-            <button
-              type="button"
-              data-testid="chat-mobile-rail-trigger"
-              aria-haspopup="dialog"
-              aria-expanded={mobileRailOpen}
-              onClick={() => setMobileRailOpen(true)}
-              className={cn(
-                "absolute bottom-3 right-3 z-20 flex h-11 items-center gap-1.5 rounded-full border border-border/60",
-                "bg-background/95 px-4 text-xs font-medium text-muted-foreground shadow-sm backdrop-blur",
-                "lg:hidden",
-                "hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-              )}
-            >
-              <PanelRight className="size-4" aria-hidden="true" />
-              Activity
-            </button>
-          ) : null}
-        </div>
-        {/* Suggested prompt chips — shown above the composer once there are messages
+          {/* Suggested prompt chips — shown above the composer once there are messages
           (empty state renders its own chips above; this avoids duplication). */}
           {messages.length > 0 || hasLiveContent ? (
             <SuggestedPromptChips
