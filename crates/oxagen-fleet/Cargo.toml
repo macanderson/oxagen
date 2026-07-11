@@ -17,6 +17,8 @@ thiserror.workspace = true
 tokio.workspace = true
 async-trait.workspace = true
 rusqlite.workspace = true
+futures-util.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
+proptest.workspace = true
