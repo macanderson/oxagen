@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='512' height='512' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='104' fill='%230A0C14'/%3E%3Cg transform='translate(256.0,256.0) scale(1.72)'%3E%3Cpath d='M 58.66 -20.17 L 100.00 0.00 L 58.66 20.17' fill='none' stroke='%23FFAC26' stroke-width='15.0' stroke-linecap='round' stroke-linejoin='miter' stroke-miterlimit='6'/%3E%3Cpath d='M 20.17 58.66 L 0.00 100.00 L -20.17 58.66' fill='none' stroke='%23EDF0F7' stroke-width='15.0' stroke-linecap='round' stroke-linejoin='miter' stroke-miterlimit='6'/%3E%3Cpath d='M -58.66 20.17 L -100.00 0.00 L -58.66 -20.17' fill='none' stroke='%23EDF0F7' stroke-width='15.0' stroke-linecap='round' stroke-linejoin='miter' stroke-miterlimit='6'/%3E%3Cpath d='M -20.17 -58.66 L -0.00 -100.00 L 20.17 -58.66' fill='none' stroke='%23EDF0F7' stroke-width='15.0' stroke-linecap='round' stroke-linejoin='miter' stroke-miterlimit='6'/%3E%3Cpath d='M 37.67 17.83 L 48.08 48.08 L 17.83 37.67' fill='none' stroke='%23EDF0F7' stroke-width='12.0' stroke-linecap='round' stroke-linejoin='miter' stroke-miterlimit='6'/%3E%3Cpath d='M -17.83 37.67 L -48.08 48.08 L -37.67 17.83' fill='none' stroke='%23EDF0F7' stroke-width='12.0' stroke-linecap='round' stroke-linejoin='miter' stroke-miterlimit='6'/%3E%3Cpath d='M -37.67 -17.83 L -48.08 -48.08 L -17.83 -37.67' fill='none' stroke='%23EDF0F7' stroke-width='12.0' stroke-linecap='round' stroke-linejoin='miter' stroke-miterlimit='6'/%3E%3Cpath d='M 17.83 -37.67 L 48.08 -48.08 L 37.67 -17.83' fill='none' stroke='%23EDF0F7' stroke-width='12.0' stroke-linecap='round' stroke-linejoin='miter' stroke-miterlimit='6'/%3E%3Ccircle cx='0' cy='0' r='10.50' fill='%23FFAC26'/%3E%3C/g%3E%3C/svg%3E">
 <meta name="description" content="Stella is a fast, BYOK, model-agnostic terminal coding agent. See every step, control every agent, and never lose work.">
 <title>Stella — the terminal coding agent that never loses your work</title>
 <style>
@@ -22,8 +23,8 @@
     --fg:      #ececf0;
     --muted:   #9a9aa6;
     --dim:     #6a6a76;
-    --accent:  #ecb54a;   /* the one page accent: Stella, the star */
-    --accent-2:#f6d089;
+    --accent:  #ffac26;   /* the one page accent: Stella's brand orange */
+    --accent-2:#ffc763;
     --accent-ink: #1a1406;
 
     /* terminal-only ANSI-ish palette (authentic inside the emulator) */
@@ -60,7 +61,7 @@
     inset: 0;
     pointer-events: none;
     background:
-      radial-gradient(900px 420px at 50% -8%, rgba(236,181,74,0.10), transparent 70%),
+      radial-gradient(900px 420px at 50% -8%, rgba(255,172,38,0.10), transparent 70%),
       linear-gradient(180deg, rgba(255,255,255,0.015), transparent 40%);
     z-index: 0;
   }
@@ -94,7 +95,8 @@
   .nav { display: flex; align-items: center; gap: 20px; height: 60px; }
   .brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 700;
     letter-spacing: -0.02em; font-size: 17px; text-decoration: none; color: var(--fg); }
-  .brand .star { color: var(--accent); }
+  .brand .logo { width: 21px; height: 21px; display: block; flex: none; }
+  .eyebrow .logo { width: 13px; height: 13px; display: block; flex: none; }
   .brand .tag { color: var(--dim); font-weight: 500; font-size: 12px;
     border: 1px solid var(--border-2); padding: 1px 6px; border-radius: 999px; }
   .nav-spacer { flex: 1; }
@@ -236,7 +238,7 @@
 
   /* ---- never lose work ---------------------------------------------------- */
   .nlw { background:
-      linear-gradient(180deg, transparent, rgba(236,181,74,0.03), transparent);
+      linear-gradient(180deg, transparent, rgba(255,172,38,0.03), transparent);
     border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
   .nlw-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 22px; margin-top: 36px; }
   .nlw-item { border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-1); padding: 24px; }
@@ -340,10 +342,20 @@
 <body>
   <a class="skip-link" href="#content">Skip to content</a>
 
+  <!-- Stella logomark: eight code-chevrons in a star, the east one lit as the prompt. -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+    <symbol id="stella-mark" viewBox="-112 -112 224 224">
+      <path d="M 58.66 -20.17 L 100 0 L 58.66 20.17" fill="none" stroke="#FFAC26" stroke-width="15" stroke-linecap="round" stroke-linejoin="miter" stroke-miterlimit="6"/>
+      <path d="M 20.17 58.66 L 0 100 L -20.17 58.66 M -58.66 20.17 L -100 0 L -58.66 -20.17 M -20.17 -58.66 L 0 -100 L 20.17 -58.66" fill="none" stroke="#EDF0F7" stroke-width="15" stroke-linecap="round" stroke-linejoin="miter" stroke-miterlimit="6"/>
+      <path d="M 37.67 17.83 L 48.08 48.08 L 17.83 37.67 M -17.83 37.67 L -48.08 48.08 L -37.67 17.83 M -37.67 -17.83 L -48.08 -48.08 L -17.83 -37.67 M 17.83 -37.67 L 48.08 -48.08 L 37.67 -17.83" fill="none" stroke="#EDF0F7" stroke-width="12" stroke-linecap="round" stroke-linejoin="miter" stroke-miterlimit="6"/>
+      <circle cx="0" cy="0" r="10.5" fill="#FFAC26"/>
+    </symbol>
+  </svg>
+
   <header class="site">
     <div class="wrap nav">
       <a class="brand" href="#/" data-nav="home">
-        <span class="star" aria-hidden="true">✦</span> Stella <span class="tag">by Oxagen</span>
+        <svg class="logo" aria-hidden="true"><use href="#stella-mark"/></svg> Stella <span class="tag">by Oxagen</span>
       </a>
       <span class="nav-spacer"></span>
       <nav class="nav-links" aria-label="Primary">
@@ -365,7 +377,7 @@
     <div data-view="home" class="active">
       <div class="wrap">
         <section class="hero" aria-labelledby="hero-title">
-          <span class="eyebrow"><span aria-hidden="true">✦</span> BYOK · model-agnostic · local-first</span>
+          <span class="eyebrow"><svg class="logo" aria-hidden="true"><use href="#stella-mark"/></svg> BYOK · model-agnostic · local-first</span>
           <h1 id="hero-title">The terminal coding agent that <span class="hl">never loses your work</span>.</h1>
           <p class="sub">Your agent runs a whole swarm, and you still can't see what it's doing or stop it when it goes wrong. Stella fixes that. Watch every step, kill a runaway with two keys, and stack new work while it runs. Bring your own key for any model.</p>
 
@@ -611,7 +623,7 @@
     <div class="wrap">
       <div class="foot-grid">
         <div class="foot-brand">
-          <a class="brand" href="#/" data-nav="home"><span class="star" aria-hidden="true">✦</span> Stella <span class="tag">by Oxagen</span></a>
+          <a class="brand" href="#/" data-nav="home"><svg class="logo" aria-hidden="true"><use href="#stella-mark"/></svg> Stella <span class="tag">by Oxagen</span></a>
           <p>A fast, BYOK, model-agnostic terminal coding agent. Open source. Local-first. No phone-home.</p>
         </div>
         <div class="foot-shortcuts" aria-label="Keyboard shortcuts">
@@ -628,6 +640,7 @@
             <li><button type="button" class="cmd-opt" style="padding:0;color:var(--muted)" data-scroll="features"><span>Features</span></button></li>
             <li><a href="#/about" data-nav="about" style="text-decoration:none;color:var(--muted)">About Oxagen</a></li>
             <li><a href="#/contact" data-nav="contact" style="text-decoration:none;color:var(--muted)">Contact</a></li>
+            <li><a href="https://github.com/oxageninc/stella" rel="noopener" style="text-decoration:none;color:var(--muted)">GitHub</a></li>
           </ul>
         </div>
       </div>
