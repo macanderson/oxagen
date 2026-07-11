@@ -73,7 +73,16 @@ pub static PROVIDERS: &[ProviderConfig] = &[
         env_var: "GEMINI_API_KEY",
         display_name: "Google Gemini",
         default_model: "gemini-3-pro",
-        base_url: "https://generativelanguage.googleapis.com/v1beta",
+        // NOTE: this is Google's OpenAI-compatibility shim
+        // (`/v1beta/openai/...`), not Gemini's native `generateContent`
+        // wire shape — the two are NOT interchangeable and the base URL
+        // must include the `/openai` segment or every request 404s. A
+        // native "Gemini direct" adapter (07-model-matrix.md §2: thinking
+        // support, Imagen/Veo, native multimodal) is real follow-up work,
+        // deferred because it can't be verified without a live
+        // GEMINI_API_KEY in this environment (same reasoning as Bedrock/
+        // Vertex/local-GGUF — see the Phase 2 PR description).
+        base_url: "https://generativelanguage.googleapis.com/v1beta/openai",
         openai_compatible: true,
     },
     ProviderConfig {
@@ -263,4 +272,37 @@ impl Config {
 
 fn model_id_override(slug: &str) -> String {
     slug.to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Regression test for the bug fixed alongside this test: every
+    /// provider's `default_model` here must resolve against
+    /// `oxagen_model::catalog::Catalog::seed()`, or `build_provider`'s
+    /// catalog check (`agent.rs`) would hard-error on first use of a
+    /// provider whose default was never added to the seed — exactly what
+    /// happened for 5 of these 7 rows before the catalog was completed.
+    #[test]
+    fn every_provider_default_model_resolves_against_the_catalog_seed() {
+        let catalog = oxagen_model::catalog::Catalog::seed();
+        for provider in PROVIDERS {
+            catalog.resolve(provider.default_model).unwrap_or_else(|e| {
+                panic!(
+                    "provider `{}`'s default_model `{}` is not in the catalog seed: {e}",
+                    provider.id, provider.default_model
+                )
+            });
+        }
+    }
+
+    #[test]
+    fn provider_ids_are_unique() {
+        let mut ids: Vec<&str> = PROVIDERS.iter().map(|p| p.id).collect();
+        let before = ids.len();
+        ids.sort_unstable();
+        ids.dedup();
+        assert_eq!(ids.len(), before, "duplicate provider id in PROVIDERS");
+    }
 }

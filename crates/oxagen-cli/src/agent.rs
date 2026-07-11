@@ -249,8 +249,17 @@ async fn run_turn(
     Ok(())
 }
 
-/// Build the provider adapter from config.
+/// Build the provider adapter from config. Consults the catalog first so an
+/// unrecognized model slug is a hard, immediate, named error — never a
+/// silent construction of a provider that will simply fail its first live
+/// call (`07-model-matrix.md` §3, L-M1/L-M2: this hard-error rule existed in
+/// `oxagen_model::catalog` since Phase 0 but was never actually called from
+/// the request path, so it was unenforced in practice).
 fn build_provider(cfg: &Config) -> Result<Box<dyn Provider>, String> {
+    oxagen_model::catalog::Catalog::seed()
+        .resolve(&cfg.model_id)
+        .map_err(|e| e.to_string())?;
+
     let api_key = ApiKey::new(cfg.api_key.clone());
 
     if cfg.provider.openai_compatible {
