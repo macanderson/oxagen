@@ -100,12 +100,17 @@ test.describe("sandbox templates — create, set-default, export/import, bind ag
     if (await setDefaultBtn.count()) {
       await setDefaultBtn.click();
     }
-    // exact: the row also carries a "provider default" badge, which /default/i
-    // matches too (strict-mode violation) — only the promotion badge counts.
+    // After promotion the row shows a "★ default" promotion badge. The row
+    // ALSO carries a static "provider default" spec chip, so target the
+    // promotion badge by its EXACT full text "★ default": a bare "default"
+    // substring matches both badges AND every ancestor that contains them
+    // (strict-mode violation), while an exact "default" matches NEITHER (the
+    // promotion badge text is "★ default", not "default"). Exact-matching the
+    // whole badge text resolves to just the one leaf <Badge>.
     await expect(
       page
         .getByTestId("sandbox-template-row-swe-runner")
-        .getByText("default", { exact: true }),
+        .getByText("★ default", { exact: true }),
     ).toBeVisible({ timeout: 20_000 });
 
     await page.screenshot({
