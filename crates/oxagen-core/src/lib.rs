@@ -10,6 +10,7 @@
 
 pub mod budget;
 pub mod compaction;
+pub mod driver;
 pub mod estimator;
 pub mod loop_detect;
 pub mod ports;
@@ -17,6 +18,7 @@ pub mod retry;
 pub mod router;
 
 pub use budget::{BudgetGuard, BudgetOutcome};
+pub use driver::{Engine, EngineConfig, TurnOutcome};
 pub use loop_detect::{LoopDetectionConfig, LoopVerdict, detect_loop};
 pub use ports::{Clock, ToolExecutor};
 pub use retry::{RetryOutcome, RetryPolicy, retry_with_backoff};

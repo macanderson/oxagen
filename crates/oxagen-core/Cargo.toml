@@ -13,7 +13,7 @@ oxagen-protocol = { path = "../oxagen-protocol" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["sync"] }
 async-trait = { workspace = true }
 rand = { workspace = true }
 
