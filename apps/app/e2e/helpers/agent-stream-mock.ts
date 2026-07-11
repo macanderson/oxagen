@@ -21,6 +21,19 @@ export interface InterceptOptions {
    * (no RSC header), so navigation is unaffected.
    */
   holdRefresh?: boolean;
+  /**
+   * Let the first-turn `router.replace(pathname + "?c=" + publicId)` soft
+   * navigation through the hold so the conversation id can commit into the
+   * URL. Defaults to FALSE — and must stay false for any spec that asserts
+   * streamed content (cards, inline forms, lock state) after the first send:
+   * in the mocked world the assistant reply is never persisted server-side,
+   * so letting the navigation's RSC fetch through re-renders the page from
+   * the DB and races the streamed client state away (nondeterministic across
+   * CI runs). Opt in ONLY when the spec needs `?c=` in the URL and does NOT
+   * rely on streamed state surviving the navigation (it should reload right
+   * after, like conversation-files-zip.spec.ts).
+   */
+  allowConversationNavigation?: boolean;
 }
 
 // Intercept the chat-stream POST and return a deterministic SSE response
@@ -93,11 +106,15 @@ export async function interceptAgentStream(
     // Distinguish the two by comparing the request's LOGICAL url (pathname +
     // search, minus Next's own `_rsc=<hash>` cache-busting param it appends
     // to every RSC fetch) against the page's CURRENTLY COMMITTED url:
-    // router.replace() targets a url that differs from page.url() (that's
-    // the navigation this call must let through, or the browser's address
-    // bar can never gain `?c=`); router.refresh() re-fetches the url the
-    // page is ALREADY on (logically identical to page.url()) — that's the
-    // one meant to be held.
+    // router.replace() targets a url that differs from page.url();
+    // router.refresh() re-fetches the url the page is ALREADY on.
+    //
+    // BOTH are held by default. Letting the navigation through commits `?c=`
+    // but its RSC payload re-renders the page from the DB — which, under this
+    // mock, holds no assistant reply — racing away the streamed client state
+    // (cards, inline forms, composer locks) that most specs assert on. Only
+    // a spec that opted in via `allowConversationNavigation` (because it
+    // needs the URL and reloads right after) gets the navigation through.
     const logicalUrl = (raw: string): string => {
       const u = new URL(raw);
       u.searchParams.delete("_rsc");
@@ -108,10 +125,12 @@ export async function interceptAgentStream(
       async (route: Route) => {
         const req = route.request();
         const isSameUrlRefresh = logicalUrl(req.url()) === logicalUrl(page.url());
+        const isHeldNavigation =
+          !isSameUrlRefresh && !(opts.allowConversationNavigation ?? false);
         if (
           req.method() === "GET" &&
           req.headers()["rsc"] === "1" &&
-          isSameUrlRefresh
+          (isSameUrlRefresh || isHeldNavigation)
         ) {
           // Never fulfill: the refresh stays pending, so the [messages]
           // reconcile that would reset() the streamed bubbles never fires.

@@ -91,10 +91,14 @@ test.describe("conversation files — Download all as ZIP", () => {
 
     // First send persists the conversation and lands `?c=<publicId>` in the
     // URL — the composer needs that id so later uploads link to the
-    // conversation at upload time.
+    // conversation at upload time. This spec is the one legitimate consumer
+    // of allowConversationNavigation: it needs the `?c=` commit and reloads
+    // right after, asserting nothing about streamed state surviving the
+    // navigation (see InterceptOptions docs).
     await interceptAgentStream(page, {
       events: minimalTextEvents("e2e-msg-files-zip-01"),
       delayMs: 50,
+      allowConversationNavigation: true,
     });
     await composer.fill("I will attach two files next.");
     await page.getByRole("button", { name: /^send message$/i }).click();
