@@ -23,8 +23,8 @@ use oxagen_protocol::{CompletionRequest, CompletionResult, ProviderError};
 
 use crate::credential::ApiKey;
 use crate::gemini::{
-    aggregate_gemini_stream, build_generation_config, classify_google_error, to_gemini_request_parts,
-    to_gemini_tools, GeminiRequest,
+    GeminiRequest, aggregate_gemini_stream, build_generation_config, classify_google_error,
+    to_gemini_request_parts, to_gemini_tools,
 };
 use crate::provider::Provider;
 
@@ -126,12 +126,8 @@ mod tests {
 
     #[test]
     fn endpoint_uses_the_global_host_for_the_global_location() {
-        let provider = VertexProvider::new(
-            ApiKey::new("token"),
-            "gemini-3-pro",
-            "my-project",
-            "global",
-        );
+        let provider =
+            VertexProvider::new(ApiKey::new("token"), "gemini-3-pro", "my-project", "global");
         assert_eq!(
             provider.endpoint(),
             "https://aiplatform.googleapis.com/v1/projects/my-project/locations/global/publishers/google/models/gemini-3-pro:streamGenerateContent?alt=sse"

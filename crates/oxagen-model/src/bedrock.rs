@@ -277,9 +277,7 @@ fn to_bedrock_messages(
                     .iter()
                     .map(|result| {
                         let (text, status) = match &result.output {
-                            oxagen_protocol::ToolOutput::Ok { content } => {
-                                (content.clone(), None)
-                            }
+                            oxagen_protocol::ToolOutput::Ok { content } => (content.clone(), None),
                             oxagen_protocol::ToolOutput::Error { message } => {
                                 (message.clone(), Some("error"))
                             }
@@ -306,7 +304,9 @@ fn to_bedrock_messages(
     (system, out)
 }
 
-fn to_bedrock_tool_config(tools: &[oxagen_protocol::tool::ToolSchema]) -> Option<BedrockToolConfig> {
+fn to_bedrock_tool_config(
+    tools: &[oxagen_protocol::tool::ToolSchema],
+) -> Option<BedrockToolConfig> {
     if tools.is_empty() {
         return None;
     }
@@ -947,8 +947,7 @@ mod tests {
         let server = MockServer::start().await;
         Mock::given(method("POST"))
             .respond_with(
-                ResponseTemplate::new(429)
-                    .set_body_string("{\"message\":\"Too many requests\"}"),
+                ResponseTemplate::new(429).set_body_string("{\"message\":\"Too many requests\"}"),
             )
             .mount(&server)
             .await;

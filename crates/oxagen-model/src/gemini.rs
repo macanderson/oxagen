@@ -578,7 +578,10 @@ mod tests {
         assert_eq!(contents[1].role, "user");
         let response = contents[1].parts[0].function_response.as_ref().unwrap();
         assert_eq!(response.name, "read_file");
-        assert_eq!(response.response, serde_json::json!({"output": "fn main(){}"}));
+        assert_eq!(
+            response.response,
+            serde_json::json!({"output": "fn main(){}"})
+        );
     }
 
     #[test]
@@ -596,7 +599,10 @@ mod tests {
         }];
         let (_, contents) = to_gemini_request_parts(&messages);
         let response = contents[0].parts[0].function_response.as_ref().unwrap();
-        assert_eq!(response.response, serde_json::json!({"error": "no such file"}));
+        assert_eq!(
+            response.response,
+            serde_json::json!({"error": "no such file"})
+        );
     }
 
     #[test]

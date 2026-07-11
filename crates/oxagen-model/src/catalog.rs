@@ -181,11 +181,7 @@ impl Catalog {
     /// provider (Gemini on `gemini` and `vertex`; most things on
     /// `openrouter`) and a slug that exists on provider A must still be a
     /// hard error when requested from provider B.
-    pub fn resolve_for(
-        &self,
-        provider: &str,
-        slug: &str,
-    ) -> Result<&CatalogEntry, ProviderError> {
+    pub fn resolve_for(&self, provider: &str, slug: &str) -> Result<&CatalogEntry, ProviderError> {
         self.entries
             .iter()
             .find(|entry| entry.provider == provider && entry.id == slug)
