@@ -43,7 +43,10 @@ impl Tool for Glob {
         let search_path = input.get("path").and_then(|v| v.as_str()).unwrap_or(".");
 
         // Try fd first — fast, respects .gitignore by default.
+        // `--glob` tells fd to interpret the pattern as a glob, not a regex,
+        // so `*.rs` matches the same way as `find -name "*.rs"`.
         let mut fd = Command::new("fd");
+        fd.arg("--glob");
         fd.arg("--type").arg("f");
         fd.arg("--color").arg("never");
         fd.arg("--max-results").arg(MAX_RESULTS.to_string());
@@ -112,10 +115,11 @@ mod tests {
             .await
             .unwrap();
 
-        // fd matches by regex by default; `\.rs$` matches files ending in .rs.
+        // Use a glob pattern (not regex) so both `fd` and `find -name`
+        // handle it identically across platforms.
         let result = Glob
             .execute(
-                &serde_json::json!({"pattern": "\\.rs$", "path": &subdir}),
+                &serde_json::json!({"pattern": "*.rs", "path": &subdir}),
                 &dir,
             )
             .await;

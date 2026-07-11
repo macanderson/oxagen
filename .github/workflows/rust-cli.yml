@@ -25,7 +25,8 @@ concurrency:
 jobs:
   check:
     name: fmt + clippy + test
-    runs-on: macos-14
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: crates
@@ -50,12 +51,18 @@ jobs:
       - name: cargo test
         run: cargo test --workspace
 
-      - name: cargo build (release smoke)
-        run: cargo build --workspace --release
+      - name: cargo build (release smoke, thin LTO)
+        # The workspace release profile uses full LTO + codegen-units=1,
+        # which is correct for shipped binaries but can take 30+ minutes
+        # on a cold CI cache.  Override to thin LTO and 16 codegen units
+        # for the smoke build — we only need to prove it links, not
+        # produce an optimised binary.
+        run: cargo build --workspace --release --config 'profile.release.lto="thin"' --config 'profile.release.codegen-units=16'
 
   supply-chain:
     name: cargo deny + cargo audit
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: crates
