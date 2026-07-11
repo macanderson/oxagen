@@ -103,7 +103,12 @@ describe("createChatEngramOnEvent", () => {
     const events: Record<string, CodingEvent> = {
       text: { type: "text", delta: "hi" },
       reasoning: { type: "reasoning", delta: "thinking" },
-      "file-edit": { type: "file-edit", path: "a.ts", bytes: 10 },
+      "file-edit": {
+        type: "file-edit",
+        path: "a.ts",
+        bytes: 10,
+        kind: "update",
+      },
       command: { type: "command", command: "ls", exitCode: 0 },
       "final-diff": { type: "final-diff", diff: "", changedFiles: [] },
     };
