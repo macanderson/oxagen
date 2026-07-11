@@ -48,13 +48,15 @@ export interface RateCardEntry {
  *
  * `cachedInputPer1M` follows each vendor's published cache-read discount:
  * Anthropic prices a cache read at 10% of fresh input (matches
- * `packages/billing/src/pricing.ts`'s anthropic rows exactly); OpenAI prices
- * a cache read at 50% of fresh input (ditto — gpt-4o/gpt-4o-mini match
- * pricing.ts exactly; gpt-5 has no pricing.ts row yet, so it follows the same
- * 50% OpenAI ratio). Gemini isn't in pricing.ts at all yet; its cache reads
- * are estimated at 25% of fresh input per Google's published context-caching
- * discount — least authoritative row in this card, update when it lands in
- * pricing.ts.
+ * `packages/billing/src/pricing.ts`'s anthropic rows exactly); gpt-4o/
+ * gpt-4o-mini match pricing.ts exactly at 50%. Every other row (gpt-5.x,
+ * o-series, xAI, DeepSeek, zai) has no pricing.ts row and does NOT follow a
+ * flat ratio — cache-read rates vary model to model (roughly 8-25% of fresh
+ * input across the gpt-5/o-series generation), so each is sourced directly
+ * from the AI Gateway's per-model pricing page rather than assumed. Gemini
+ * isn't in pricing.ts at all yet; its cache reads are estimated at 25% of
+ * fresh input per Google's published context-caching discount — least
+ * authoritative row in this card, update when it lands in pricing.ts.
  */
 export const RATE_CARD: RateCardEntry[] = [
   {
@@ -100,11 +102,54 @@ export const RATE_CARD: RateCardEntry[] = [
     vendor: "openai",
     rate: { inputPer1M: 5.0, outputPer1M: 30.0, cachedInputPer1M: 0.5 },
   },
+  // gpt-5.2/gpt-5-mini/gpt-5-nano rows are from the AI Gateway's per-model
+  // pricing pages (2026-07-11). They MUST sort before the generic "gpt-5"
+  // prefix row for the same reason as the gpt-5.5 rows above — "gpt-5.2" and
+  // "gpt-5-mini"/"gpt-5-nano" all start with "gpt-5".
+  {
+    family: "gpt-5.2",
+    label: "GPT-5.2",
+    vendor: "openai",
+    rate: { inputPer1M: 1.75, outputPer1M: 14.0, cachedInputPer1M: 0.17 },
+  },
+  {
+    family: "gpt-5-mini",
+    label: "GPT-5 mini",
+    vendor: "openai",
+    rate: { inputPer1M: 0.25, outputPer1M: 2.0, cachedInputPer1M: 0.03 },
+  },
+  {
+    family: "gpt-5-nano",
+    label: "GPT-5 nano",
+    vendor: "openai",
+    rate: { inputPer1M: 0.05, outputPer1M: 0.4, cachedInputPer1M: 0.01 },
+  },
   {
     family: "gpt-5",
     label: "GPT-5",
+    // Real Gateway cache-read rate is $0.13/M (~10% of fresh input), not the
+    // 50% OpenAI ratio this row previously assumed — corrected 2026-07-11
+    // against the AI Gateway's per-model pricing page; the old $0.625 guess
+    // over-priced every cache hit on plain gpt-5 by ~4.8x.
     vendor: "openai",
-    rate: { inputPer1M: 1.25, outputPer1M: 10.0, cachedInputPer1M: 0.625 },
+    rate: { inputPer1M: 1.25, outputPer1M: 10.0, cachedInputPer1M: 0.13 },
+  },
+  // o3/o4-mini rows are from the AI Gateway's per-model pricing pages
+  // (2026-07-11). NOTE: there is no bare "o4" model published on the
+  // Gateway (only "o3" and "o4-mini") — a slug of exactly "openai/o4" (as
+  // referenced in packages/ai/src/catalog.ts) falls through to
+  // FALLBACK_RATE until/unless OpenAI ships a standalone o4 flagship.
+  {
+    family: "o3",
+    label: "o3",
+    vendor: "openai",
+    rate: { inputPer1M: 2.0, outputPer1M: 8.0, cachedInputPer1M: 0.5 },
+  },
+  {
+    family: "o4-mini",
+    label: "o4-mini",
+    vendor: "openai",
+    rate: { inputPer1M: 1.1, outputPer1M: 4.4, cachedInputPer1M: 0.28 },
   },
   {
     family: "gpt-4o-mini",
@@ -144,6 +189,58 @@ export const RATE_CARD: RateCardEntry[] = [
     label: "GLM",
     vendor: "zai",
     rate: { inputPer1M: 0.95, outputPer1M: 3.15, cachedInputPer1M: 0.2 },
+  },
+  // xAI Grok rows from the AI Gateway's per-model pricing pages (2026-07-11).
+  // grok-4.5/grok-4.3/grok-build-0.1 MUST sort before the generic "grok-4"
+  // row — "grok-4.5" and "grok-4.3" both start with "grok-4" (same
+  // longest-prefix-first rule as the gpt-5.5/glm rows above).
+  {
+    family: "grok-4.5",
+    label: "Grok 4.5",
+    vendor: "xai",
+    rate: { inputPer1M: 2.0, outputPer1M: 6.0, cachedInputPer1M: 0.5 },
+  },
+  {
+    family: "grok-4.3",
+    label: "Grok 4.3",
+    vendor: "xai",
+    rate: { inputPer1M: 1.25, outputPer1M: 2.5, cachedInputPer1M: 0.2 },
+  },
+  {
+    family: "grok-build-0.1",
+    label: "Grok Build 0.1",
+    vendor: "xai",
+    rate: { inputPer1M: 1.0, outputPer1M: 2.0, cachedInputPer1M: 0.2 },
+  },
+  {
+    family: "grok-4",
+    label: "Grok 4",
+    vendor: "xai",
+    rate: { inputPer1M: 3.0, outputPer1M: 15.0, cachedInputPer1M: 0.75 },
+  },
+  // DeepSeek rows from the AI Gateway's per-model pricing pages (2026-07-11),
+  // DeepSeek-direct provider column (cheapest of the multi-provider listing).
+  // deepseek-v4-pro/deepseek-v4-flash MUST sort before a future generic
+  // "deepseek-v4" row, same rule as above; there is no bare "deepseek-v4"
+  // SKU published today so no catch-all row is added — an unqualified
+  // "deepseek-v4*" slug falls through to FALLBACK_RATE until one ships.
+  {
+    family: "deepseek-v4-pro",
+    label: "DeepSeek V4 Pro",
+    vendor: "deepseek",
+    rate: { inputPer1M: 1.74, outputPer1M: 3.48, cachedInputPer1M: 0.0 },
+  },
+  {
+    family: "deepseek-v4-flash",
+    label: "DeepSeek V4 Flash",
+    vendor: "deepseek",
+    rate: { inputPer1M: 0.14, outputPer1M: 0.28, cachedInputPer1M: 0.0 },
+  },
+  {
+    family: "deepseek-v3.2",
+    label: "DeepSeek V3.2",
+    vendor: "deepseek",
+    rate: { inputPer1M: 0.28, outputPer1M: 0.42, cachedInputPer1M: 0.03 },
   },
   // Gateway /v1/models 2026-07-07 (base tier ≤200k): gemini-3-pro* $2/$12.
   {
