@@ -34,17 +34,16 @@
  * lazily in the element's cascade context). .dark therefore only re-declares the
  * core tokens — never the whole component-token surface.
  *
- * CURRENT SKIN: "Oxagen Tangerine" — split-hue neutrals (warm off-white surfaces
- * in light, cool narwhal near-black surfaces in dark), tuned for DRAMATIC
- * contrast: warm paper + crisp white panels in light, narwhal (#0B0D16) page +
- * stepped inky-blue panels in dark. Card and table HEADERS are flat — they sit
- * on the surface with hairline borders, never shaded bars. Colour is
- * concentrated in the tangerine primary (#FD9A4B — the mark
- * start, CTAs, focus rings, the active-tab underline, default badges), a rose
- * secondary (#EB5C5E — secondary buttons/badges, the mark end), and a teak accent
- * (#794036 — hover/selected) — never smeared across every surface. Errors use a
- * true red so they never read as the tangerine primary. Brand mark gradient:
- * tangerine → flame (#F07650) → rose.
+ * CURRENT SKIN: "Oxagen Terracotta" — warm-neutral throughout: ivory paper
+ * (#FAF9F5) + crisp white panels in light, warm charcoal (#1E1D1B) page +
+ * stepped warm-gray panels in dark (no blue cast anywhere). Card and table
+ * HEADERS are flat — they sit on the surface with hairline borders, never
+ * shaded bars. Colour is concentrated in ONE muted terracotta accent
+ * (#D97757 — CTAs, focus rings, the active-tab underline, links via a deeper
+ * rust) — never smeared across every surface; secondary fills are quiet
+ * warm neutrals. Errors use a true red so they never read as the terracotta
+ * primary. Brand mark gradient stays tangerine → flame (#F07650) → rose
+ * (theme-independent; never recolor the mark).
  * ─────────────────────────────────────────────────────────────────────────────
  */
 @import "tailwindcss";
@@ -69,13 +68,12 @@
      * smeared across surfaces (design system stays flat — see THEME.md §7).
      * ════════════════════════════════════════════════════════════════════════ */
 
-    /* Brand anchors — clean cool paper, cool near-black ink, warm soft white.
-       The page was previously a warm off-white (hue ~85°) which read as a muddy
-       pinkish-orange cast across every surface. Retuned to a near-neutral cool
-       white (hue ~264°, near-zero chroma) so neutrals stay honest and colour is
-       introduced intentionally via the brand accents + hero gradients instead. */
-    --_paper: oklch(0.981 0.0015 264);   /* clean cool off-white (was warm #F8F6F1) */
-    --_ink: oklch(0.182 0.019 266.5);    /* #101319 — cool near-black ink (hsl 222 30% 8%) */
+    /* Brand anchors — warm ivory paper, warm near-black slate ink, warm soft
+       white. Chroma on the paper is 0.004 — felt as warmth, never seen as a
+       cast — so neutrals stay honest and colour is introduced intentionally
+       via the terracotta accent + brand mark instead. */
+    --_paper: oklch(0.982 0.004 95);     /* #FAF9F5 — warm ivory paper */
+    --_ink: oklch(0.24 0.004 75);        /* #1F1E1D — warm near-black slate ink */
     --_ink-white: oklch(0.948 0.006 67.8); /* #F1EEEA — warm soft white (hsl 30 20% 93%) */
 
     /* Named brand swatches. Tangerine is the primary accent; rose the secondary;
@@ -89,42 +87,42 @@
     --ox-teak: oklch(0.440 0.081 31.1);   /* #794036 — teak (accent, dark) */
     --ox-bronze: oklch(0.452 0.03 78.6);   /* #5f5443 (legacy, unused) */
     --ox-sunset-red: oklch(0.627 0.186 17.6);   /* #e24b5d */
-    --ox-rust: var(--ox-tangerine);   /* legacy name → tangerine (links, focus, CTAs) */
+    --ox-rust: oklch(0.66 0.115 40);   /* #D97757 — muted terracotta. THE accent knob: drives --primary, --ring, tabs, chart-1 */
     --ox-gold: oklch(0.923 0.104 94.1);   /* #fce594 */
     --ox-wheat: oklch(0.895 0.09 78.8);   /* #fdd698 */
 
-    --ox-indigo: oklch(0.449 0.09 278.2);   /* #4A4F86 — link accent (light) */
-    --ox-indigo-bright: oklch(0.736 0.1 279.2);   /* #9CA3E8 — link accent (dark) */
+    --ox-indigo: oklch(0.45 0.055 278);   /* muted indigo — chart categorical accent (light) */
+    --ox-indigo-bright: oklch(0.74 0.06 279);   /* muted indigo — chart categorical accent (dark) */
 
-    /* Neutral ramp — split-hue: light steps are WARM off-whites (~85°), dark steps
-       are COOL narwhal near-blacks (~267°) so light reads cozy and dark reads
-       inky-blue. Stepped elevation in dark for dramatic contrast. */
-    --_stone-50: oklch(0.992 0.001 264);    /* clean near-white */
-    --_stone-100: oklch(0.966 0.003 264);   /* muted / card-header */
-    --_stone-150: oklch(0.950 0.004 264);   /* surface-alt */
-    --_stone-200: oklch(0.924 0.005 264);   /* secondary surface */
-    --_stone-300: oklch(0.890 0.007 264);   /* input border (light) — a touch darker for contrast */
-    --_stone-400: oklch(0.770 0.017 67.6);   /* muted-foreground (dark) */
-    --_stone-500: oklch(0.567 0.024 264.4);   /* cool tertiary text */
-    --_stone-600: oklch(0.486 0.040 266.8);   /* cool secondary text (light) — darker for contrast */
-    --_stone-700: oklch(0.346 0.028 264.1);   /* cool graphite */
-    --_stone-800: oklch(0.274 0.029 266.5);   /* narwhal accent surface (dark) */
-    --_stone-850: oklch(0.214 0.022 267.8);   /* narwhal popover / muted (dark) */
-    --_stone-900: oklch(0.182 0.018 269.1);   /* narwhal card / sidebar (dark) */
-    --_stone-950: oklch(0.151 0.012 266.5);   /* #0B0D16 — narwhal background (dark) */
+    /* Neutral ramp — warm-neutral throughout (hue ~75–95° at very low chroma):
+       light steps read as ivory, dark steps as warm charcoal. Stepped elevation
+       in dark (950 page → 900 card → 850 popover → 800 accent) is preserved. */
+    --_stone-50: oklch(0.99 0.002 95);      /* warm near-white */
+    --_stone-100: oklch(0.965 0.006 92);    /* #F0EEE6 — muted / card-header */
+    --_stone-150: oklch(0.949 0.007 92);    /* surface-alt */
+    --_stone-200: oklch(0.925 0.008 90);    /* secondary surface */
+    --_stone-300: oklch(0.885 0.009 88);    /* input border (light) — a touch darker for contrast */
+    --_stone-400: oklch(0.77 0.012 80);     /* muted-foreground (dark) */
+    --_stone-500: oklch(0.55 0.012 80);     /* warm tertiary text */
+    --_stone-600: oklch(0.47 0.014 78);     /* warm secondary text (light) — darker for contrast */
+    --_stone-700: oklch(0.35 0.012 75);     /* warm graphite */
+    --_stone-800: oklch(0.320 0.005 78);    /* #393836 — charcoal accent surface (dark) */
+    --_stone-850: oklch(0.285 0.004 78);    /* #2E2D2B — charcoal popover / muted (dark) */
+    --_stone-900: oklch(0.253 0.004 78);    /* #262624 — charcoal card / sidebar (dark) */
+    --_stone-950: oklch(0.220 0.004 78);    /* #1E1D1B — warm charcoal background (dark) */
 
-    /* Tangerine accent ramp (the theme accent — drives accent-subtle backgrounds).
-       Keeps the --_violet-* NAMES for zero-churn; the VALUES are tangerine. */
-    --_violet-50: oklch(0.965 0.020 60.0);   /* tangerine 95% tint */
-    --_violet-100: oklch(0.917 0.050 59.5);
-    --_violet-200: oklch(0.852 0.093 58.5);
-    --_violet-300: oklch(0.803 0.128 57.1);
-    --_violet-400: oklch(0.775 0.150 56.4);   /* #FD9A4B — tangerine */
-    --_violet-500: oklch(0.699 0.168 49.5);
-    --_violet-600: oklch(0.618 0.175 42.3);
-    --_violet-700: oklch(0.508 0.144 38.9);
-    --_violet-800: oklch(0.398 0.098 37.5);
-    --_violet-900: oklch(0.313 0.065 35.1);
+    /* Terracotta accent ramp (the theme accent — drives accent-subtle backgrounds).
+       Keeps the --_violet-* NAMES for zero-churn; the VALUES are terracotta. */
+    --_violet-50: oklch(0.965 0.015 45);   /* terracotta 95% tint */
+    --_violet-100: oklch(0.925 0.030 45);
+    --_violet-200: oklch(0.865 0.055 43);
+    --_violet-300: oklch(0.775 0.085 41);
+    --_violet-400: oklch(0.66 0.115 40);   /* #D97757 — terracotta (matches --ox-rust) */
+    --_violet-500: oklch(0.60 0.115 38);
+    --_violet-600: oklch(0.53 0.105 36);
+    --_violet-700: oklch(0.46 0.090 35);
+    --_violet-800: oklch(0.38 0.070 34);
+    --_violet-900: oklch(0.31 0.050 33);
 
     /* Brand mark primitives (tangerine → flame → rose gradient). */
     --_ember-gold: oklch(0.775 0.150 56.4);    /* #FD9A4B — tangerine (gradient start) */
@@ -149,7 +147,7 @@
      * CONTROLS — single global knobs (rounding + elevation). Flip in one place.
      * ════════════════════════════════════════════════════════════════════════ */
     --ui-radius: 0.5rem; /* moderate rounding — Graphite is confident, not brutal. */
-    --ui-shadow: 0 1px 2px oklch(0.15 0.008 270 / 0.08); /* subtle neutral shadow. */
+    --ui-shadow: 0 1px 2px oklch(0.25 0.015 75 / 0.06); /* subtle warm-neutral shadow — hairline borders do the real work. */
     --radius: var(--ui-radius);
 
     /* Absolute ink semantics (theme-independent). */
@@ -172,19 +170,19 @@
     --popover-foreground: var(--_ink);
     --primary: var(--ox-rust);         /* tangerine */
     --primary-foreground: var(--ox-ink);
-    --secondary: oklch(80.068% 0.07469 63.048);   /* rose (deep for white text — hsl 359 75% 55%) */
-    --secondary-foreground: oklch(22.756% 0.00154 16.344);
+    --secondary: oklch(0.925 0.012 83);   /* quiet warm-neutral fill (secondary buttons, badges) */
+    --secondary-foreground: oklch(0.30 0.012 75);
     --muted: var(--_stone-100);
     --muted-foreground: var(--_stone-600);
-    --accent: oklch(0.930 0.032 62);   /* soft tangerine-tinted hover/selected — brand-aligned, replaces the old pinkish teak */
-    --accent-foreground: oklch(16.204% 0.00658 55.786);   /* deep rust ink on the tint */
+    --accent: oklch(0.945 0.018 45);   /* barely-there terracotta-tinted hover/selected wash */
+    --accent-foreground: oklch(0.32 0.050 40);   /* deep rust ink on the tint */
     --destructive: var(--_clay);         /* true red */
     --destructive-foreground: oklch(1 0 0);
-    --border: oklch(0.884 0.006 264 / 0.9);   /* cool hairline — slightly darker for definition/contrast */
+    --border: oklch(0.885 0.008 85 / 0.9);   /* warm hairline — slightly darker for definition/contrast */
     --input: var(--_stone-300);
     --ring: var(--ox-rust);
-    --link: var(--ox-indigo);
-    --link-hover: oklch(0.388 0.083 277.4);
+    --link: oklch(0.49 0.10 40);   /* deep rust — the text-safe (≥4.5:1) shade of the terracotta accent */
+    --link-hover: oklch(0.42 0.10 38);
 
     /* Status — semantic names (error == destructive). */
     --success: var(--_moss);
@@ -216,7 +214,7 @@
     --sidebar-primary-foreground: var(--ox-ink);
     --sidebar-accent: var(--_stone-150);       /* neutral nav hover/active */
     --sidebar-accent-foreground: var(--_ink);
-    --sidebar-border: oklch(0.884 0.006 264 / 0.5);
+    --sidebar-border: oklch(0.885 0.008 85 / 0.5);
     --sidebar-ring: var(--ring);
 
     /* ════════════════════════════════════════════════════════════════════════
@@ -330,7 +328,7 @@
     --dialog-bg: var(--popover);
     --dialog-fg: var(--popover-foreground);
     --dialog-border: var(--border);
-    --overlay-scrim: oklch(0.18 0.02 50 / 0.5);
+    --overlay-scrim: oklch(0.20 0.010 70 / 0.45);
     --badge-bg: var(--secondary);
     --badge-fg: var(--secondary-foreground);
     --badge-border: var(--border);
@@ -348,7 +346,8 @@
     --motion-base: 220ms;
     --motion-overlay: 200ms;
     --motion-entry: 320ms;
-    --button-hover-scale: 1.02;
+    /* Hover feedback comes from the color-mix hover bg; no grow — crisp, not playful. */
+    --button-hover-scale: 1;
   }
 
   /* ════════════════════════════════════════════════════════════════════════
@@ -367,20 +366,20 @@
     --popover-foreground: var(--_ink-white);
     --primary: var(--ox-rust);
     --primary-foreground: var(--ox-ink);
-    --secondary: var(--ox-rose);         /* bright rose (hsl 359 78% 63%) */
-    --secondary-foreground: var(--ox-ink);   /* dark ink on bright rose */
+    --secondary: oklch(0.34 0.020 50);   /* calm warm-clay chip fill */
+    --secondary-foreground: var(--_ink-white);
     --muted: var(--_stone-850);
-    /* Brighter secondary ink in dark for legibility on the narwhal surfaces. */
+    /* Brighter secondary ink in dark for legibility on the charcoal surfaces. */
     --muted-foreground: var(--_stone-400);
-    --accent: oklch(0.452 0.078 52);   /* deep tangerine-tinted accent — brand-aligned hover/selected */
+    --accent: oklch(0.36 0.045 42);   /* deep terracotta-tinted hover/selected */
     --accent-foreground: var(--_ink-white);
     --destructive: var(--_clay-light);
     --destructive-foreground: oklch(1 0 0);
-    --border: oklch(0.300 0.018 265 / 0.65);   /* cool narwhal hairline */
-    --input: oklch(0.320 0.018 265 / 0.6);
+    --border: oklch(0.340 0.008 80 / 0.65);   /* warm charcoal hairline */
+    --input: oklch(0.360 0.008 80 / 0.6);
     --ring: var(--ox-rust);
-    --link: var(--ox-indigo-bright);
-    --link-hover: oklch(0.809 0.076 279.6);
+    --link: oklch(0.78 0.080 45);   /* warm apricot — text-safe terracotta shade for dark */
+    --link-hover: oklch(0.84 0.075 45);
 
     --success: var(--_moss-light);
     --success-foreground: oklch(0.18 0.03 160);
@@ -480,20 +479,20 @@
       --popover-foreground: var(--_ink-white);
       --primary: var(--ox-rust);
       --primary-foreground: var(--ox-ink);
-      --secondary: var(--ox-rose);         /* bright rose (hsl 359 78% 63%) */
-      --secondary-foreground: var(--ox-ink);   /* dark ink on bright rose */
+      --secondary: oklch(0.34 0.020 50);   /* calm warm-clay chip fill */
+      --secondary-foreground: var(--_ink-white);
       --muted: var(--_stone-850);
       /* Brighter secondary ink in dark for legibility (matches .dark). */
       --muted-foreground: var(--_stone-400);
-      --accent: oklch(0.456 0.070 37.7);   /* teak accent (hsl 14 35% 35%) */
+      --accent: oklch(0.36 0.045 42);   /* deep terracotta-tinted hover/selected (was drifted from .dark; now identical) */
       --accent-foreground: var(--_ink-white);
       --destructive: var(--_clay-light);
       --destructive-foreground: oklch(1 0 0);
-      --border: oklch(0.300 0.018 265 / 0.65);   /* cool narwhal hairline */
-      --input: oklch(0.320 0.018 265 / 0.6);
+      --border: oklch(0.340 0.008 80 / 0.65);   /* warm charcoal hairline */
+      --input: oklch(0.360 0.008 80 / 0.6);
       --ring: var(--ox-rust);
-      --link: var(--ox-indigo-bright);
-      --link-hover: oklch(0.809 0.076 279.6);
+      --link: oklch(0.78 0.080 45);   /* warm apricot — text-safe terracotta shade for dark */
+      --link-hover: oklch(0.84 0.075 45);
 
       --success: var(--_moss-light);
       --success-foreground: oklch(0.18 0.03 160);
@@ -902,7 +901,7 @@
     transition: box-shadow 0.2s ease;
   }
   .hover-glow:hover {
-    box-shadow: 0 0 0 2px oklch(0.626 0.184 36.4 / 0.25);
+    box-shadow: 0 0 0 2px color-mix(in oklch, var(--ring) 25%, transparent);
   }
 
   /* Keyframed entrance used across surfaces. */
@@ -1019,7 +1018,7 @@
     -webkit-mask-image: linear-gradient(to bottom, #000 0%, transparent 62%);
   }
 
-  /* Vibrant code/terminal surface — a dark narwhal fill with the ember brand
+  /* Vibrant code/terminal surface — a warm charcoal fill with the ember brand
      gradient painted into a 1px border (padding-box fill + border-box gradient),
      identical in light and dark so a code block reads as a high-contrast, bold
      terminal on the light page. A real transparent `border` keeps a system line
@@ -1028,7 +1027,7 @@
     --code-fg: var(--_ink-white);
     color: var(--code-fg);
     background:
-      linear-gradient(180deg in oklab, oklch(0.196 0.021 268), oklch(0.150 0.012 266.5)) padding-box,
+      linear-gradient(180deg in oklab, oklch(0.26 0.005 78), oklch(0.22 0.004 78)) padding-box,
       var(--brand-gradient) border-box;
     border: 1px solid transparent;
   }

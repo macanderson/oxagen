@@ -25,6 +25,28 @@ Two things this claim is **not**:
   with explicit labeling of which number is which — never merged in one
   table without that label.
 
+### 1.1 Rev 2 addendum — two published tracks
+
+The rev-2 product direction (GLM 5.2 as the default suite, `07-model-matrix.md`)
+adds a second, separately-labeled track. Neither track's number is ever
+blended with the other's:
+
+- **Track A (headline):** the >3pp claim above, at a pinned frontier worker
+  model chosen for maximum comparability with competitors' best published
+  configurations (e.g. Claude Fable 5 or the strongest GPT-5.5 tier at run
+  time — whichever the comparison field is standardized on).
+- **Track B (specialization):** the full Verified set at the **pinned GLM 5.2
+  flagship**, versus the best publicly documented result for any scaffold at
+  the same GLM model. This substantiates "specialized for GLM 5.2" with a
+  number instead of an adjective, and doubles as the regression gate for the
+  GLM prompt-profile tuning loop (`07-model-matrix.md` §4) — profile changes
+  that don't move Track B don't ship.
+- Cross-family judging and best-of-N remain clearly-labeled separate rows on
+  both tracks (`N_ATTEMPTS=1` stays the headline), and the default shipped
+  configuration remains single-shot — the TS-era head-to-heads showed
+  single-shot winning on cost-per-resolve, and the shipped default follows
+  the evidence, not the leaderboard configuration.
+
 ## 2. Comparison target selection
 
 At the time of the Phase 5 run, pick the comparison target as:

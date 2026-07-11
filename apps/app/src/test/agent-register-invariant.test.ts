@@ -47,32 +47,42 @@ function collectSourceFiles(dir: string): string[] {
   return out;
 }
 
-// Matches an `invoke(` call whose first argument is an "agent.*" capability
-// string literal, tolerant of newlines between the paren and the literal
-// (server actions format these across multiple lines).
-const INVOKES_AGENT_CAPABILITY = /invoke\(\s*["']agent\./;
+// ADR-025 renamed capabilities to bare verb_noun snake_case (e.g.
+// "list_sandboxes"), so a name-prefix regex can no longer identify "agent
+// package" capabilities. Derive the exact set from the package's own LOADERS
+// map instead — `agentHandlerNames` is the single source of truth for which
+// capability names only @oxagen/agent/register can bind.
 const IMPORTS_AGENT_REGISTER = /["']@oxagen\/agent\/register["']/;
+// Legacy dotted form kept as belt-and-braces for any straggler literals.
+const INVOKES_DOTTED_AGENT_CAPABILITY = /invoke\(\s*["']agent\./;
 
-describe("agent.* handler registration invariant", () => {
+function invokesAgentCapability(flattened: string, names: readonly string[]): boolean {
+  if (INVOKES_DOTTED_AGENT_CAPABILITY.test(flattened)) return true;
+  return names.some((name) => flattened.includes(`invoke("${name}"`) || flattened.includes(`invoke('${name}'`));
+}
+
+describe("agent handler registration invariant", () => {
   const files = collectSourceFiles(SRC_DIR);
 
   it("scans a non-empty source tree", () => {
     expect(files.length).toBeGreaterThan(0);
   });
 
-  it("every module that invokes an agent.* capability imports @oxagen/agent/register", () => {
+  it("every module that invokes an agent-package capability imports @oxagen/agent/register", async () => {
+    const { agentHandlerNames } = await import("@oxagen/agent/handlers");
+    expect(agentHandlerNames.length).toBeGreaterThan(0);
     const offenders: string[] = [];
     for (const file of files) {
       const source = readFileSync(file, "utf8");
-      // Collapse whitespace so multi-line `invoke(\n  "agent.x")` matches.
+      // Collapse whitespace so multi-line `invoke(\n  "list_sandboxes")` matches.
       const flattened = source.replace(/\s+/g, " ");
-      if (INVOKES_AGENT_CAPABILITY.test(flattened) && !IMPORTS_AGENT_REGISTER.test(source)) {
+      if (invokesAgentCapability(flattened, agentHandlerNames) && !IMPORTS_AGENT_REGISTER.test(source)) {
         offenders.push(relative(SRC_DIR, file));
       }
     }
     expect(
       offenders,
-      `These modules invoke an agent.* capability but never import "@oxagen/agent/register", ` +
+      `These modules invoke an agent-package capability but never import "@oxagen/agent/register", ` +
         `so the kernel has no handler bound at runtime:\n  ${offenders.join("\n  ")}`,
     ).toEqual([]);
   });

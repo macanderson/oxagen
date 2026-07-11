@@ -27,7 +27,7 @@
   justify-content: center;
 
   /* Dark background matches the PWA manifest background_color. */
-  background-color: #0b0d16;
+  background-color: #1e1d1b;
 
   /* Fade transition on dismiss — disabled under reduced-motion. */
   opacity: 1;
@@ -36,7 +36,7 @@
 
 @media (prefers-color-scheme: light) {
   .splash {
-    background-color: #faf7f2;
+    background-color: #faf9f5;
   }
 }
 
@@ -91,7 +91,7 @@
 .cssSpinner {
   width: 60px;
   height: 60px;
-  /* Default color for dark background (#0b0d16) */
+  /* Default color for dark background (#1e1d1b) */
   color: #e0ddd8;
   border: 4px solid color-mix(in srgb, currentColor 25%, transparent);
   border-top-color: currentColor;
@@ -101,8 +101,8 @@
 
 @media (prefers-color-scheme: light) {
   .cssSpinner {
-    /* Color for light background (#faf7f2) */
-    color: #2a2a35;
+    /* Color for light background (#faf9f5) */
+    color: #2e2d2b;
   }
 }
 

@@ -52,6 +52,10 @@ const nextConfig = {
         source: "/decks/mutation-verifier",
         destination: "/decks/mutation-verifier/index.html",
       },
+      {
+        source: "/decks/agentic-cli-roadmap",
+        destination: "/decks/agentic-cli-roadmap/index.html",
+      },
     ];
   },
 };
