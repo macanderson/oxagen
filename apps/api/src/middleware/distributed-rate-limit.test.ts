@@ -11,16 +11,25 @@ import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import type { Context } from "hono";
 import type { AppEnv } from "../app";
 
-const mocks = vi.hoisted(() => ({ withSystemDb: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  withSystemDb: vi.fn(),
+  requireEnv: vi.fn(),
+}));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@oxagen/database")>();
   return { ...actual, withSystemDb: mocks.withSystemDb };
 });
 
+vi.mock("@oxagen/config/env", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@oxagen/config/env")>();
+  return { ...actual, requireEnv: mocks.requireEnv };
+});
+
 import {
   distributedRateLimiter,
   deriveBucketKey,
+  rateLimitBudgets,
 } from "./distributed-rate-limit";
 
 type FakeContextOpts = {
@@ -178,5 +187,52 @@ describe("distributedRateLimiter", () => {
     expect(next).toHaveBeenCalledTimes(1);
     expect(mocks.withSystemDb).not.toHaveBeenCalled();
     expect(responseHeadersOf(c)["X-RateLimit-Limit"]).toBeUndefined();
+  });
+
+  it("resolves a lazy `max` resolver on each request (function form)", async () => {
+    scriptCount(1);
+    const maxResolver = vi.fn(() => 60);
+    const mw = distributedRateLimiter({ keyPrefix: "chat", max: maxResolver });
+    const next = vi.fn().mockResolvedValue(undefined);
+    const c = fakeContext({ vars: { workspaceId: "ws_lazy" } });
+
+    await mw(c, next);
+
+    expect(maxResolver).toHaveBeenCalledTimes(1);
+    expect(responseHeadersOf(c)["X-RateLimit-Limit"]).toBe("60");
+  });
+
+  it("fires the opportunistic stale-window sweep when the sample roll wins", async () => {
+    // Force the CLEANUP_SAMPLE_RATE (0.01) roll to win so the sweep path runs:
+    // the increment upsert AND the DELETE sweep both hit the (mocked) store.
+    vi.spyOn(Math, "random").mockReturnValue(0.001);
+    scriptCount(1);
+    const mw = distributedRateLimiter({ keyPrefix: "chat", max: 60 });
+    const next = vi.fn().mockResolvedValue(undefined);
+
+    const result = await mw(fakeContext({ vars: { workspaceId: "ws_sweep" } }), next);
+
+    expect(result).toBeUndefined();
+    expect(next).toHaveBeenCalledTimes(1);
+    // Two store touches: the counter upsert plus the fire-and-forget sweep.
+    expect(mocks.withSystemDb).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("rateLimitBudgets", () => {
+  it("resolves the budgets from the validated env once, then memoizes the result", () => {
+    mocks.requireEnv.mockReturnValue({
+      RATE_LIMIT_CHAT_PER_MIN: 90,
+      RATE_LIMIT_AGENT_EXEC_PER_MIN: 45,
+    });
+
+    const first = rateLimitBudgets();
+    expect(first).toEqual({ chat: 90, agentExec: 45 });
+
+    // Second call returns the SAME cached object without re-reading env — the
+    // memoization that keeps app import from tripping env access at module load.
+    const second = rateLimitBudgets();
+    expect(second).toBe(first);
+    expect(mocks.requireEnv).toHaveBeenCalledTimes(1);
   });
 });
