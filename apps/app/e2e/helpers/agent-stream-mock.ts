@@ -79,11 +79,40 @@ export async function interceptAgentStream(
     // streamed bubbles persist through the assertions (see holdRefresh docs).
     // Match only RSC GETs (header `rsc: 1`) to the /ask or /chat route; the
     // full-document page.goto has no RSC header and falls through to continue().
+    //
+    // On a conversation's FIRST turn, chat-shell-client.tsx also calls
+    // `router.replace(pathname + "?c=" + publicId)` to pin the new
+    // conversation id into the URL — that replace() is itself an RSC GET to
+    // this exact same route (a soft navigation needs its target's RSC
+    // payload before it will commit the new URL via history.replaceState).
+    // Holding THAT request indiscriminately (the original regex-only match)
+    // stalls the navigation forever: the browser's address bar never gains
+    // `?c=`, even though the mocked stream still completes and renders (a
+    // deterministic hang, not a flake — see conversation-files-zip.spec.ts).
+    //
+    // Distinguish the two by comparing the request's LOGICAL url (pathname +
+    // search, minus Next's own `_rsc=<hash>` cache-busting param it appends
+    // to every RSC fetch) against the page's CURRENTLY COMMITTED url:
+    // router.replace() targets a url that differs from page.url() (that's
+    // the navigation this call must let through, or the browser's address
+    // bar can never gain `?c=`); router.refresh() re-fetches the url the
+    // page is ALREADY on (logically identical to page.url()) — that's the
+    // one meant to be held.
+    const logicalUrl = (raw: string): string => {
+      const u = new URL(raw);
+      u.searchParams.delete("_rsc");
+      return `${u.pathname}${u.search}`;
+    };
     await page.route(
       (url) => /\/(ask|chat)(\?|$)/.test(`${url.pathname}${url.search}`),
       async (route: Route) => {
         const req = route.request();
-        if (req.method() === "GET" && req.headers()["rsc"] === "1") {
+        const isSameUrlRefresh = logicalUrl(req.url()) === logicalUrl(page.url());
+        if (
+          req.method() === "GET" &&
+          req.headers()["rsc"] === "1" &&
+          isSameUrlRefresh
+        ) {
           // Never fulfill: the refresh stays pending, so the [messages]
           // reconcile that would reset() the streamed bubbles never fires.
           return;
