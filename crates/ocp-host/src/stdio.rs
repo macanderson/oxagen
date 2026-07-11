@@ -145,9 +145,15 @@ impl RawStdioConnection {
     /// appended if missing so the provider's line reader unblocks.
     pub async fn send_raw_line(&mut self, line: &str) -> Result<(), HostError> {
         let label = self.label.clone();
-        let transport = |e: std::io::Error| HostError::Transport {
-            id: label.clone(),
-            message: e.to_string(),
+        // A write into a closed stdin means the child is gone — the
+        // write-side twin of the read-side EOF in `recv`, so both surface
+        // as ProviderCrashed rather than racing between two error shapes.
+        let transport = |e: std::io::Error| match e.kind() {
+            std::io::ErrorKind::BrokenPipe => HostError::ProviderCrashed { id: label.clone() },
+            _ => HostError::Transport {
+                id: label.clone(),
+                message: e.to_string(),
+            },
         };
         self.stdin
             .write_all(line.as_bytes())
