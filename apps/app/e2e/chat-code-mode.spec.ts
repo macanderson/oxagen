@@ -78,6 +78,18 @@ async function createCodeAgent(
   await page.getByTestId("agent-save-draft").click();
   await expect(page.getByText(/draft saved/i)).toBeVisible({ timeout: 20_000 });
 
+  // The "Draft saved" toast fires right after persistDraft() resolves, but
+  // router.replace() onto the durable edit route is a separate async
+  // navigation that can commit slightly AFTER the toast becomes visible —
+  // wait for the URL itself to settle before reading the id back out of it.
+  await page.waitForURL(
+    (url) => {
+      const segments = url.pathname.split("/").filter(Boolean);
+      return segments[segments.length - 1] !== "new";
+    },
+    { timeout: 10_000 },
+  );
+
   const segments = new URL(page.url()).pathname.split("/").filter(Boolean);
   const agentId = segments[segments.length - 1];
   if (!agentId || agentId === "new") {
