@@ -94,7 +94,7 @@ export default function StellaPage(): ReactNode {
             </span>
 
             <h1 className="mt-6 text-balance text-4xl font-semibold tracking-tight sm:text-5xl lg:text-6xl">
-              The coding agent that <span className="lp-grad-text">proves</span> it&apos;s done.
+              The coding agent that <span className="lp-grad-text">proves</span>{" "}it&apos;s done.
             </h1>
 
             <p className="mt-5 max-w-xl text-pretty text-base text-muted-foreground sm:text-lg">
