@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   INTERACTIVE_AGENT_SLUG,
   INTERACTIVE_AGENT_SKILLS,
+  INTERACTIVE_AGENT_TYPE,
   buildInteractiveAgentConfig,
   computeConfigChecksum,
+  isManagedAgentType,
 } from "./interactive-agent";
 import { agentDefinitionConfigSchema } from "./agent-schema";
 
@@ -64,5 +66,17 @@ describe("computeConfigChecksum", () => {
 
   it("produces a 64-char hex sha-256 digest", () => {
     expect(computeConfigChecksum({ a: 1 })).toMatch(/^[0-9a-f]{64}$/);
+  });
+});
+
+describe("isManagedAgentType", () => {
+  it("is true only for the interactive-chat product-managed type", () => {
+    expect(isManagedAgentType(INTERACTIVE_AGENT_TYPE)).toBe(true);
+  });
+
+  it("is false for a customer-created agent type", () => {
+    expect(isManagedAgentType("coding")).toBe(false);
+    expect(isManagedAgentType("workflow")).toBe(false);
+    expect(isManagedAgentType("")).toBe(false);
   });
 });

@@ -466,6 +466,98 @@ describe("resolveRenderDirective — structural transforms (coding-agent cards)"
     });
     expect(d?.componentId).toBe("terminal-trace");
   });
+
+  // repo.pr.get → pr-stats — the transform is a guarded pass-through: the PR
+  // output IS the card's props, gated on a numeric `number` field.
+  it("passes repo.pr.get output through to the pr-stats card verbatim", () => {
+    const output = {
+      number: 42,
+      title: "Wire up the health route",
+      state: "open",
+      additions: 12,
+      deletions: 3,
+      changedFiles: 2,
+      url: "https://github.com/acme/repo/pull/42",
+    };
+    const d = resolveRenderDirective({ capability: "get_pr", output });
+    expect(d?.componentId).toBe("pr-stats");
+    expect(d?.props).toBe(output);
+  });
+
+  it("returns null for repo.pr.get output missing a numeric `number` (falls through)", () => {
+    // No `number` field → not a PR-stats shape → transform yields null and the
+    // standard path renders the generic card, never pr-stats.
+    const d = resolveRenderDirective({
+      capability: "get_pr",
+      output: { title: "no number here", state: "open" },
+    });
+    expect(d?.componentId).not.toBe("pr-stats");
+  });
+
+  // repo.ci.status → ci-status — pass-through gated on a `runs` array.
+  it("passes repo.ci.status output through to the ci-status card verbatim", () => {
+    const output = {
+      state: "success",
+      runs: [
+        { name: "build", status: "completed", conclusion: "success", url: "https://x/1" },
+        { name: "test", status: "completed", conclusion: "success", url: "https://x/2" },
+      ],
+    };
+    const d = resolveRenderDirective({ capability: "get_ci_status", output });
+    expect(d?.componentId).toBe("ci-status");
+    expect(d?.props).toBe(output);
+  });
+
+  it("returns null for repo.ci.status output whose `runs` is not an array", () => {
+    const d = resolveRenderDirective({
+      capability: "get_ci_status",
+      output: { state: "pending", runs: null },
+    });
+    expect(d?.componentId).not.toBe("ci-status");
+  });
+
+  // repo.pr.diff → code-diff — maps the PR file list onto the card's flat
+  // {path, patch, additions, deletions} shape.
+  it("maps repo.pr.diff files onto a code-diff card", () => {
+    const output = {
+      summary: "2 files changed",
+      files: [
+        {
+          path: "src/index.ts",
+          patch: "--- a/src/index.ts\n+++ b/src/index.ts\n@@ -1 +1,2 @@\n a\n+b\n",
+          additions: 1,
+          deletions: 0,
+        },
+        // A file missing patch/stats coerces to null fields, not undefined.
+        { path: "README.md" },
+      ],
+    };
+    const d = resolveRenderDirective({ capability: "get_pr_diff", output });
+    expect(d?.componentId).toBe("code-diff");
+    expect(d?.props.files).toEqual([
+      { path: "src/index.ts", patch: output.files[0]!.patch, additions: 1, deletions: 0 },
+      { path: "README.md", patch: null, additions: null, deletions: null },
+    ]);
+    expect(d?.props.summary).toBe("2 files changed");
+  });
+
+  it("defaults a repo.pr.diff file's path to 'file' when absent", () => {
+    const d = resolveRenderDirective({
+      capability: "get_pr_diff",
+      output: { files: [{ patch: "@@ -0 +1 @@\n+x\n" }] },
+    });
+    expect((d?.props.files as Array<{ path: string }>)[0]?.path).toBe("file");
+  });
+
+  it("returns null for repo.pr.diff with an empty or non-array file list (falls through)", () => {
+    expect(
+      resolveRenderDirective({ capability: "get_pr_diff", output: { files: [] } })?.componentId,
+    ).not.toBe("code-diff");
+    expect(
+      resolveRenderDirective({ capability: "get_pr_diff", output: { files: "nope" } })
+        ?.componentId,
+    ).not.toBe("code-diff");
+  });
 });
 
 describe("route + vocabulary integrity", () => {
