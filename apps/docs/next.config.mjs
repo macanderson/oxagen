@@ -48,6 +48,10 @@ const nextConfig = {
         source: "/decks/architecture-deep-dive",
         destination: "/decks/architecture-deep-dive/index.html",
       },
+      {
+        source: "/decks/verified-outcome-router",
+        destination: "/decks/verified-outcome-router/index.html",
+      },
     ];
   },
 };
