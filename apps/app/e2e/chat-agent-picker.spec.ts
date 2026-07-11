@@ -70,7 +70,13 @@ test.describe("chat.agent-picker", () => {
     const { orgSlug } = await signUpFreshUser(page, {
       orgPrefix: "agent-picker",
     });
-    const slug = `chat-helper-${Date.now().toString(36)}`;
+    // "chat-" (5) + an 8-char base36 timestamp = 13 chars, safely under
+    // create_agent_def's 18-char slug cap. The previous "chat-helper-" prefix
+    // (12 chars) pushed the generated slug to 20 chars — over the cap — so
+    // every create_agent_def call failed zod validation ("too_big") and the
+    // draft was never persisted, deterministically timing out the "draft
+    // saved" toast wait below.
+    const slug = `chat-${Date.now().toString(36)}`;
     await createAgent(page, orgSlug, { name: "Chat Helper", slug });
 
     // New chat — the empty-state gallery leads with "Choose your assistant".
