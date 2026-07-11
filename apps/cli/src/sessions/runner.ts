@@ -47,7 +47,19 @@ import {
   type TurnBudgetPolicy,
   type TurnBudgetVerdict,
 } from "@oxagen/billing/turn-budget";
+import {
+  createSessionRecorder,
+  distillEvalItem,
+  openRecordStore,
+  readRun,
+  reconstructHistory,
+  type RecordStore,
+  type SessionRecorder,
+} from "@oxagen/replay";
 import type { ModelMessage } from "ai";
+import { writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import pkg from "../../package.json" with { type: "json" };
 import {
   EVENT_SCHEMA_VERSION,
   addTurnUsage,
@@ -58,7 +70,13 @@ import {
   type SessionState,
   type TurnUsage,
 } from "./events.js";
-import type { SessionMeta, SessionStore, SessionWriter, TailHandle } from "./store.js";
+import type {
+  SessionMeta,
+  SessionStore,
+  SessionWriter,
+  TailHandle,
+} from "./store.js";
+import { sessionDir } from "./paths.js";
 import {
   createCodeGraphProvider,
   createCombinedMemory,
@@ -107,6 +125,12 @@ const DEFAULT_WORKER_MAX_RSS_BYTES = 4 * 1024 * 1024 * 1024;
 const COALESCE_FLUSH_MS = 150;
 /** Disk-coalescing size cap: a buffered delta run this big flushes immediately. */
 const COALESCE_MAX_BYTES = 2048;
+
+/** ADR-028: sidecar recording is default-on; `OXAGEN_FLEET_RECORD=0|off` disables. */
+function isRecordingEnabled(): boolean {
+  const value = process.env["OXAGEN_FLEET_RECORD"]?.toLowerCase();
+  return value !== "0" && value !== "off";
+}
 
 export interface SessionRunnerOptions {
   /** The session store this session's log/meta/inbox live in. */
@@ -167,6 +191,23 @@ export async function runSession(
 
   const writer: SessionWriter = store.openWriter(meta);
 
+  // ── ADR-028 sidecar record: full tool I/O, per-turn history, fs layers ─────
+  // Default-on for every fleet session. A recorder failure disables itself and
+  // debug-logs once — it must never fail or slow the session it observes.
+  const recordStore: RecordStore = openRecordStore(
+    sessionDir(store.rootDir, sid),
+  );
+  const recorder: SessionRecorder | null = isRecordingEnabled()
+    ? createSessionRecorder({
+        store: recordStore,
+        sid,
+        cwd,
+        ...(opts.now !== undefined ? { now: opts.now } : {}),
+        onError: (m) =>
+          void debugLog("error", "session.record-error", { sid, message: m }),
+      })
+    : null;
+
   // ── Emission: disk (via writer, coalesced deltas) + bus (raw, synchronous) ──
   // `lastSeq` mirrors the writer's assigned seq so a raw bus delta can preview
   // the seq its coalesced disk chunk will claim on flush.
@@ -209,7 +250,11 @@ export async function runSession(
   };
 
   /** Emit a text/reasoning delta: raw to the bus now; coalesced to disk. */
-  const emitDelta = (kind: "message" | "reasoning", text: string, turn: number): void => {
+  const emitDelta = (
+    kind: "message" | "reasoning",
+    text: string,
+    turn: number,
+  ): void => {
     if (text === "") return;
     // Bus: raw, synchronous, previewing the coalesced disk seq.
     onLocalEvent?.({
@@ -233,7 +278,11 @@ export async function runSession(
 
   /** Emit a `session.state` event and mirror the state into meta. */
   const setState = (state: SessionState, reason?: string): void => {
-    emit(reason !== undefined ? { type: "session.state", state, reason } : { type: "session.state", state });
+    emit(
+      reason !== undefined
+        ? { type: "session.state", state, reason }
+        : { type: "session.state", state },
+    );
     writer.patchMeta({ state });
   };
 
@@ -250,7 +299,8 @@ export async function runSession(
 
   const onSigterm = (): void => {
     cancelRequested = true;
-    if (turnRunning && !sessionController.signal.aborted) sessionController.abort();
+    if (turnRunning && !sessionController.signal.aborted)
+      sessionController.abort();
     notifyWaiter?.();
   };
   process.on("SIGTERM", onSigterm);
@@ -260,7 +310,8 @@ export async function runSession(
   const inboxTail: TailHandle = store.tailInbox(sid, (message) => {
     if (message.type === "cancel") {
       cancelRequested = true;
-      if (turnRunning && !sessionController.signal.aborted) sessionController.abort();
+      if (turnRunning && !sessionController.signal.aborted)
+        sessionController.abort();
     } else {
       pendingMessages.push(message.text);
     }
@@ -286,16 +337,26 @@ export async function runSession(
     };
     lifecycleBounds.push(
       startMaxLifetime({
-        ms: resolveBoundMs("OXAGEN_WORKER_MAX_LIFETIME_MS", DEFAULT_WORKER_MAX_LIFETIME_MS),
+        ms: resolveBoundMs(
+          "OXAGEN_WORKER_MAX_LIFETIME_MS",
+          DEFAULT_WORKER_MAX_LIFETIME_MS,
+        ),
         onExpire: () =>
           abortForBound(
             `worker exceeded its max lifetime; aborting gracefully (override with OXAGEN_WORKER_MAX_LIFETIME_MS)`,
           ),
       }),
       startRssWatchdog({
-        maxRssBytes: resolveBoundBytes("OXAGEN_WORKER_MAX_RSS_MB", DEFAULT_WORKER_MAX_RSS_BYTES),
+        maxRssBytes: resolveBoundBytes(
+          "OXAGEN_WORKER_MAX_RSS_MB",
+          DEFAULT_WORKER_MAX_RSS_BYTES,
+        ),
         onWarn: (rss, max) =>
-          void debugLog("timeout", "session.rss-high", { sid, rssMb: Math.round(rss / 1048576), maxMb: Math.round(max / 1048576) }),
+          void debugLog("timeout", "session.rss-high", {
+            sid,
+            rssMb: Math.round(rss / 1048576),
+            maxMb: Math.round(max / 1048576),
+          }),
         onLimit: (rss, max) =>
           abortForBound(
             `worker RSS ${Math.round(rss / 1048576)} MB reached its ${Math.round(max / 1048576)} MB ceiling; aborting gracefully (override with OXAGEN_WORKER_MAX_RSS_MB)`,
@@ -309,7 +370,9 @@ export async function runSession(
   const sessionMemory: SessionMemory | null = memoryDisabled
     ? null
     : await openSessionMemory(cwd, `session-${sid}`);
-  const fleetMemory: FleetMemory | null = memoryDisabled ? null : openFleetMemory(cwd);
+  const fleetMemory: FleetMemory | null = memoryDisabled
+    ? null
+    : openFleetMemory(cwd);
   const serverMemory: ServerMemory | null =
     memoryDisabled || !resolveApiContext()
       ? null
@@ -328,7 +391,9 @@ export async function runSession(
   const settings = loadSettings({ cwd }).settings;
   const workspace = createCwdWorkspace(cwd);
   const projectContext = loadProjectContext(cwd);
-  const codeGraph = createCodeGraphProvider((op, q, l) => queryCodeGraph(cwd, op, q, l));
+  const codeGraph = createCodeGraphProvider((op, q, l) =>
+    queryCodeGraph(cwd, op, q, l),
+  );
   // Cross-process write guard (ADR-021 §5 / ADR-023 §7): N sessions — including
   // detached worker PROCESSES — share this one tree, so file writes serialize on
   // on-disk lease files under <cwd>/.oxagen/locks/ (TTL + fencing). Built ONCE
@@ -342,6 +407,8 @@ export async function runSession(
   let cumulativeUsage: TurnUsage = emptyTurnUsage();
   let lastSummary = "";
   let lastError = "";
+  /** Highest settled turn — mirrors meta.turns, read by the failure distill. */
+  let turnsSettled = 0;
   let fate: SessionFate = "done";
 
   // Session-open events, in the contract order (ADR-023 §runner):
@@ -356,6 +423,13 @@ export async function runSession(
     mode: meta.mode,
     owner: meta.owner,
     pid: meta.pid,
+  });
+  // The record opens with the run's identity + git baseline (never throws).
+  await recorder?.start({
+    prompt: meta.prompt,
+    model: meta.model,
+    agent: meta.agent,
+    cliVersion: pkg.version,
   });
   setState("running");
 
@@ -372,11 +446,19 @@ export async function runSession(
     if (extras.systemAppend) {
       enrichedContext = {
         text: (projectContext?.text ?? "") + extras.systemAppend,
-        sources: [...(projectContext?.sources ?? []), "workspace rules + hooks"],
+        sources: [
+          ...(projectContext?.sources ?? []),
+          "workspace rules + hooks",
+        ],
       };
     }
 
     let history: ModelMessage[] | undefined;
+    // A fork (ADR-028): seed the loop with the source session's reconstructed
+    // history — exactly what the model saw entering resumeOf.turn + 1.
+    if (meta.resumeOf) {
+      history = await loadResumeHistory(meta.resumeOf);
+    }
     let prompt = meta.prompt;
     let turn = 1;
     emit({ type: "message", role: "user", text: prompt, turn });
@@ -429,6 +511,13 @@ export async function runSession(
     await extras?.closeMcp().catch(() => {});
     await sessionMemory?.close().catch(() => {});
 
+    // ADR-028 §4: a failed run distills into an eval item automatically, so the
+    // exact failure becomes a regression case without a human in the loop.
+    if (fate === "failed" && recorder?.isRecording) {
+      await autoDistillFailure();
+    }
+    await recorder?.flush();
+
     const summary =
       fate === "cancelled"
         ? "cancelled"
@@ -436,7 +525,13 @@ export async function runSession(
           ? lastError || lastSummary || "failed"
           : lastSummary;
     const durationMs = Math.max(0, now() - startedAt);
-    emit({ type: "session.end", state: fate, summary, durationMs, usage: cumulativeUsage });
+    emit({
+      type: "session.end",
+      state: fate,
+      summary,
+      durationMs,
+      usage: cumulativeUsage,
+    });
     writer.patchMeta({ state: fate, endedAt: now(), summary });
     // Best-effort: the log dir may have been pruned underneath us (`fleet clean`
     // racing an orphaned owner, or a test teardown). Finalization must never turn
@@ -480,6 +575,7 @@ export async function runSession(
     const budgetGuard = buildBudgetGuard(opts.budgetPolicy, priceModelHint);
 
     turnRunning = true;
+    recorder?.turnStart(turn, prompt);
     try {
       const result = await runTurnImpl({
         prompt,
@@ -488,7 +584,15 @@ export async function runSession(
         history,
         projectContext: enrichedContext,
         extraTools: extras?.extraTools,
-        wrapTools: extras?.wrapTools,
+        // ADR-028: the recorder wraps OUTSIDE the gate so it records what
+        // actually executed (post-gate, post-backstop). Recording disabled ⇒
+        // today's behavior, byte for byte.
+        wrapTools: recorder
+          ? (tools) =>
+              recorder.wrapTools(
+                extras?.wrapTools ? extras.wrapTools(tools) : tools,
+              )
+          : extras?.wrapTools,
         readOnly: false,
         profile,
         model: meta.model,
@@ -502,7 +606,12 @@ export async function runSession(
         signal: runner.signal,
         onStage: (stage) => {
           runner.noteProgress();
-          emit({ type: "stage", kind: stage.kind, label: stage.label, detail: stage.detail });
+          emit({
+            type: "stage",
+            kind: stage.kind,
+            label: stage.label,
+            detail: stage.detail,
+          });
         },
         onText: (delta) => {
           runner.noteProgress();
@@ -525,7 +634,11 @@ export async function runSession(
         },
         onFileChange: (diff, changedFiles) => {
           for (const f of changedFiles) turnFiles.add(f);
-          emit({ type: "diff", changedFiles, changedLines: diffChangedLines(diff) });
+          emit({
+            type: "diff",
+            changedFiles,
+            changedLines: diffChangedLines(diff),
+          });
         },
         onError: (engineErr) =>
           void debugLog("error", "session.engine-nonfatal", {
@@ -540,19 +653,46 @@ export async function runSession(
       emit({ type: "message.end", text, turn });
 
       const priceModel = result.trace?.selectedModel ?? priceModelHint;
-      const perTurn: TurnUsage = accumulateUsage(emptyTurnUsage(), priceModel, result.usage);
+      const perTurn: TurnUsage = accumulateUsage(
+        emptyTurnUsage(),
+        priceModel,
+        result.usage,
+      );
       cumulativeUsage = addTurnUsage(cumulativeUsage, perTurn);
       const changedFiles =
         result.trace?.filesTouched && result.trace.filesTouched.length > 0
           ? result.trace.filesTouched
           : [...turnFiles];
-      const stopReason = result.trace?.finalComplete === false ? "incomplete" : "complete";
+      const stopReason =
+        result.trace?.finalComplete === false ? "incomplete" : "complete";
 
-      emit({ type: "turn.end", turn, steps: result.steps, stopReason, changedFiles, usage: perTurn });
+      emit({
+        type: "turn.end",
+        turn,
+        steps: result.steps,
+        stopReason,
+        changedFiles,
+        usage: perTurn,
+      });
       emit({ type: "usage", cumulative: cumulativeUsage });
 
+      // Record side of the same settle: full history blob + this turn's fs layer.
+      await recorder?.turnEnd({
+        turn,
+        messages: result.messages,
+        changedFiles,
+        steps: result.steps,
+        stopReason,
+        usage: perTurn,
+      });
+
       lastSummary = text.slice(0, 280);
-      writer.patchMeta({ turns: turn, usage: cumulativeUsage, summary: lastSummary });
+      turnsSettled = turn;
+      writer.patchMeta({
+        turns: turn,
+        usage: cumulativeUsage,
+        summary: lastSummary,
+      });
       return { kind: "ok", result };
     } catch (err) {
       // A session cancel (inbox/SIGTERM) aborts the SESSION controller; a stall
@@ -575,7 +715,12 @@ export async function runSession(
       // Fatal only in `once` mode; a conversation session survives to `waiting`.
       const fatal = meta.mode === "once";
       emit({ type: "error", message, fatal });
-      void debugLog("error", "session.turn-error", { sid, turn, message, fatal });
+      void debugLog("error", "session.turn-error", {
+        sid,
+        turn,
+        message,
+        fatal,
+      });
       return { kind: timeoutReason ? "timeout" : "error", message };
     } finally {
       turnRunning = false;
@@ -604,6 +749,106 @@ export async function runSession(
       idleTimer.unref?.();
       notifyWaiter = () => settle(cancelRequested ? "cancel" : "message");
     });
+  }
+
+  /**
+   * Seed the conversation history for a resumed session (ADR-028): read the
+   * SOURCE session's replay record and reconstruct the exact `ModelMessage[]`
+   * the model saw entering `resumeOf.turn + 1`. Reconstruction failure is
+   * non-fatal by design — the fork proceeds from the restored tree with empty
+   * history, and says so loudly on the envelope.
+   */
+  async function loadResumeHistory(resumeOf: {
+    sid: string;
+    turn: number;
+  }): Promise<ModelMessage[] | undefined> {
+    // The state after turn 0 is the session start — empty history by definition.
+    if (resumeOf.turn === 0) return undefined;
+    try {
+      const sourceStore = openRecordStore(
+        sessionDir(store.rootDir, resumeOf.sid),
+      );
+      const run = await readRun(sourceStore);
+      const messages =
+        run === null
+          ? null
+          : await reconstructHistory(sourceStore, run, resumeOf.turn);
+      if (messages === null) {
+        emit({
+          type: "error",
+          message:
+            `resume: no reconstructable history for ${resumeOf.sid} turn ${resumeOf.turn} ` +
+            `(no record, turn never settled, or history truncated) — starting with empty history`,
+          fatal: false,
+        });
+        return undefined;
+      }
+      // reconstructHistory returns unknown[]; the recorded value IS the
+      // ModelMessage[] runTurn produced — the cast restores the erased type.
+      return messages as ModelMessage[];
+    } catch (err) {
+      emit({
+        type: "error",
+        message:
+          `resume: failed reading the record of ${resumeOf.sid}: ` +
+          `${err instanceof Error ? err.message : String(err)} — starting with empty history`,
+        fatal: false,
+      });
+      return undefined;
+    }
+  }
+
+  /**
+   * Failure→eval distillation (ADR-028 §4), best-effort by contract: any error
+   * here is debug-logged and dropped — finalizing a failed session must never
+   * crash on its own post-mortem.
+   */
+  async function autoDistillFailure(): Promise<void> {
+    try {
+      // Settle the recorder's queued appends first so the seq seed below reads
+      // a complete log (one live writer at a time keeps seqs contiguous).
+      await recorder?.flush();
+      const records = await recordStore.readRecords();
+      const item = distillEvalItem({
+        sid,
+        prompt: meta.prompt,
+        reason: "failed",
+        fate,
+        model: meta.model,
+        agent: meta.agent,
+        turns: turnsSettled,
+        errorMessage: lastError || undefined,
+        changedFiles: [],
+        distilledAt: now(),
+      });
+      const blob = await recordStore.putJsonBlob(item);
+      const distillWriter = recordStore.openWriter({
+        sid,
+        // Count normally equals the last seq; max() guards a torn tail line.
+        lastSeq: Math.max(
+          records.length,
+          records[records.length - 1]?.seq ?? 0,
+        ),
+        ...(opts.now !== undefined ? { now: opts.now } : {}),
+      });
+      distillWriter.append({
+        t: "distill",
+        reason: "failed",
+        itemRef: blob.ref,
+        isPushed: false,
+      });
+      await distillWriter.flush();
+      // A human-readable copy next to the log: `cat …/record/distilled.json`.
+      await writeFile(
+        join(recordStore.rootDir, "distilled.json"),
+        JSON.stringify(item, null, 2) + "\n",
+      );
+    } catch (err) {
+      void debugLog("error", "session.distill-failed", {
+        sid,
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
   }
 
   /**
