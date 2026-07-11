@@ -8,9 +8,11 @@ export const routerPolicySetRoute = new Hono<AppEnv>();
 
 // POST /v1/:org/:workspace/router/policy
 routerPolicySetRoute.post("/", async (c) => {
-  const body = await c.req.json().catch(() => ({}));
+  const body: unknown = await c.req.json().catch(() => ({}));
   const input = routerPolicySet.input.parse(body);
   const ctx = capabilityContext(c);
-  const out = await invoke(routerPolicySet.name, input, ctx, { surface: "api" });
+  const out = await invoke(routerPolicySet.name, input, ctx, {
+    surface: "api",
+  });
   return c.json(out);
 });
