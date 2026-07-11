@@ -16,4 +16,6 @@ pub mod ports;
 pub mod retry;
 
 pub use budget::{BudgetGuard, BudgetOutcome};
+pub use loop_detect::{LoopDetectionConfig, LoopVerdict, detect_loop};
 pub use ports::{Clock, ToolExecutor};
+pub use retry::{RetryOutcome, RetryPolicy, retry_with_backoff};
