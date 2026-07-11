@@ -108,8 +108,16 @@ vi.mock("@/lib/session", () => ({
 }));
 
 // Stub ChatShell so the test does not pull in the full streaming client tree.
+// Capture its props (into a hoisted spy) so a test can assert what the page
+// threaded down — notably the parsed `conversationCodeBinding`.
+const shellSpy = vi.hoisted(
+  () => ({ props: null as Record<string, unknown> | null }),
+);
 vi.mock("@/components/chat/chat-shell", () => ({
-  ChatShell: () => <div data-testid="chat-shell" />,
+  ChatShell: (props: Record<string, unknown>) => {
+    shellSpy.props = props;
+    return <div data-testid="chat-shell" />;
+  },
 }));
 
 // Stub ConversationNav (its own client tree is irrelevant to this layout guard).
@@ -188,6 +196,7 @@ vi.mock("./code-mode-data", () => ({
 // ── Import after mocks ───────────────────────────────────────────────────────
 import { ConversationPage } from "./conversation-page";
 import { userPreferencesReadHandler } from "@oxagen/handlers/user.preferences.read";
+import { withTenantDb } from "@oxagen/database";
 
 const actions = {
   sendMessageAction: vi.fn(),
@@ -263,5 +272,70 @@ describe("ConversationPage — non-fatal degrade logging", () => {
     expect(call).toBeDefined();
     expect(call![0].err).toBeInstanceOf(Error);
     expect(call![1]).toMatch(/degraded/i);
+  });
+});
+
+describe("ConversationPage — conversation code binding", () => {
+  afterEach(() => {
+    shellSpy.props = null;
+    vi.mocked(withTenantDb).mockReset();
+    // Restore the default empty behaviour for the shared mock.
+    vi.mocked(withTenantDb).mockImplementation(async () => []);
+  });
+
+  it("parses code_binding off the loaded conversation and threads it to ChatShell", async () => {
+    // The conversation query is the FIRST withTenantDb call — return a bound row.
+    const boundRow = {
+      id: "conv-uuid",
+      publicId: "cnv_1",
+      activeLeafMessageId: null,
+      codeBinding: {
+        version: 1,
+        agentId: "agt_code",
+        connectionId: "con_1",
+        owner: "acme",
+        name: "api",
+        defaultBranch: "main",
+        environmentId: "env_dev",
+        environmentName: "Dev",
+      },
+    };
+    vi.mocked(withTenantDb).mockImplementationOnce(async () => [boundRow]);
+
+    await renderPage();
+
+    expect(shellSpy.props).not.toBeNull();
+    expect(shellSpy.props!.conversationCodeBinding).toEqual({
+      version: 1,
+      agentId: "agt_code",
+      connectionId: "con_1",
+      owner: "acme",
+      name: "api",
+      defaultBranch: "main",
+      environmentId: "env_dev",
+      environmentName: "Dev",
+    });
+  });
+
+  it("passes a null binding for a conversation whose code_binding is unset", async () => {
+    const unboundRow = {
+      id: "conv-uuid-2",
+      publicId: "cnv_2",
+      activeLeafMessageId: null,
+      codeBinding: null,
+    };
+    vi.mocked(withTenantDb).mockImplementationOnce(async () => [unboundRow]);
+
+    await renderPage();
+
+    expect(shellSpy.props).not.toBeNull();
+    expect(shellSpy.props!.conversationCodeBinding).toBeNull();
+  });
+
+  it("passes a null binding when there is no conversation at all", async () => {
+    // Default mock returns [] → no conversation row → null binding.
+    await renderPage();
+    expect(shellSpy.props).not.toBeNull();
+    expect(shellSpy.props!.conversationCodeBinding).toBeNull();
   });
 });

@@ -18,6 +18,7 @@ import type { McpServerSummary } from "./mcp-types";
 import type { RepoOption } from "./repo-selector";
 import type { EnvironmentOption } from "./environment-selector";
 import type { AgentOption } from "./agent-picker/agent-picker-types";
+import type { StoredCodeBinding } from "@/app/api/v1/chat/stream/code-binding";
 
 export interface ChatShellProps {
   conversationId: string | null;
@@ -83,4 +84,10 @@ export interface ChatShellProps {
    * the composer then carries it in each stream request as `agentId`.
    * Null/omitted ⇒ normal unbound chat. */
   agentId?: string | null;
+  /**
+   * The conversation's stored code binding, parsed from
+   * `chat.conversations.code_binding` (claimed on its first code turn — see
+   * `code-binding.ts`). When present the composer's agent + repo + environment
+   * selection is FORCED to it and locked read-only. Null/omitted ⇒ unbound. */
+  conversationCodeBinding?: StoredCodeBinding | null;
 }

@@ -123,4 +123,18 @@ describe("AgentContextChip", () => {
     expect(panel).toHaveAttribute("data-variant", "popover");
     expect(panel).toHaveAttribute("data-selected", "agt_code");
   });
+
+  it("locked: renders a read-only chip showing the bound agent, and does NOT open the panel", async () => {
+    renderChip({ selectedAgentId: "agt_code", locked: true });
+    const chip = screen.getByTestId("agent-context-chip-locked");
+    expect(chip).toBeDisabled();
+    // The bound agent is still visible, with the lock hint as a native tooltip.
+    expect(chip).toHaveTextContent("Coder");
+    expect(chip.getAttribute("title")).toContain(
+      "Locked for this conversation",
+    );
+    // Clicking a disabled trigger never mounts the picker panel.
+    await userEvent.click(chip);
+    expect(screen.queryByTestId("picker-panel")).not.toBeInTheDocument();
+  });
 });

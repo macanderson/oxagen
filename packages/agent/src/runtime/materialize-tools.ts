@@ -115,6 +115,15 @@ export interface ConsentRequiredEvent {
 
 export interface MaterializeOptions {
   allowlist?: Set<string>;
+  /**
+   * Capability names to withhold from the model for THIS turn. Used by the
+   * chat route in code mode to drop `execute_code`/`edit_repo_file` when the
+   * engine's repo-bound workspace toolset (read_file/edit_file/bash …) is
+   * present — advertising two overlapping mutation paths makes the model edit
+   * in the wrong sandbox. Tool-LIST filter only (UX layer); the kernel gate
+   * stays the security enforcement boundary.
+   */
+  excludeCapabilities?: Set<string>;
   // Workspace risk policy: when set to "low" or "medium", any capability
   // with a strictly-higher riskLevel is filtered out of the tool set.
   riskCeiling?: "low" | "medium" | "high";
@@ -175,6 +184,31 @@ const SANDBOX_FAMILY = new Set<string>([
   "run_sandbox_command", // was agent.sandbox.exec
   "snapshot_sandbox", // was agent.sandbox.snapshot
   "stop_sandbox", // was agent.sandbox.stop
+]);
+
+// Sandbox SESSION + management capabilities are Workbench/human tools, not
+// model tools. The engine's workspace toolset (read_file/edit_file/bash …,
+// packages/agent-engine) is the ONLY sanctioned way for a model to touch a
+// repository: it operates inside the conversation-bound sandbox that actually
+// holds the repo clone. These capabilities instead target self-started
+// sessions with NO repo in them — a model "editing files" through
+// run_sandbox_command writes into an empty sandbox and burns a high-risk
+// approval per call — so they are never materialized as LLM tools. Humans
+// keep them through the Workbench Sandboxes UI
+// (apps/app/src/lib/workbench/sandboxes.ts); api/mcp/cli surfaces are
+// unaffected. The one model-facing survivor of the family is `execute_code`
+// (one-shot ephemeral compute), which the code-mode route additionally
+// excludes via `excludeCapabilities` when the workspace toolset is bound.
+const WORKBENCH_ONLY_SANDBOX_CAPS = new Set<string>([
+  "start_sandbox",
+  "run_sandbox_command",
+  "snapshot_sandbox",
+  "stop_sandbox",
+  "list_sandboxes",
+  "rename_sandbox",
+  "read_sandbox_file",
+  "list_sandbox_files",
+  "list_sandbox_logs",
 ]);
 
 // Model-facing output caps for the sandbox-exec capabilities (P0 token flood).
@@ -303,6 +337,8 @@ export async function materializeTools(
 
   for (const cap of all) {
     if (!getSurfaces(cap).includes("agent")) continue;
+    if (WORKBENCH_ONLY_SANDBOX_CAPS.has(cap.name)) continue;
+    if (opts.excludeCapabilities?.has(cap.name)) continue;
     if (opts.allowlist && !opts.allowlist.has(cap.name)) continue;
     if (!passesRisk(cap, opts.riskCeiling)) continue;
     // Gate the entire sandbox-execution family on a configured driver: both the

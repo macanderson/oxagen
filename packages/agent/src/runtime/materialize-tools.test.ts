@@ -37,6 +37,18 @@ const FIXTURE = [
     // is true, so it is filtered out of the default (sandbox-off) tool set and
     // never perturbs the exact-set assertions above. The model-facing output
     // clip is exercised against it in its own describe block below.
+    // (execute_code is the ONE model-facing survivor of the family — the
+    // durable session tools are Workbench-only, asserted below.)
+    name: "execute_code",
+    description: "run code in an ephemeral sandbox",
+    surfaces: ["agent"] as const,
+    agent: { riskLevel: "low" as const },
+    input: z.object({ command: z.string() }),
+  },
+  {
+    // Durable sandbox session tool — Workbench/human-only. NEVER materialized
+    // as an LLM tool, even with a driver configured (the model editing files
+    // through a self-started session was the defect this policy fixes).
     name: "run_sandbox_command",
     description: "run a command in a durable sandbox session",
     surfaces: ["agent"] as const,
@@ -1074,7 +1086,7 @@ describe("materializeTools — entitlement filter (WP4)", () => {
 describe("materializeTools — model-facing sandbox output clip (P0 token flood)", () => {
   beforeEach(() => {
     vi.mocked(invoke).mockReset();
-    // run_sandbox_command only materializes when a sandbox driver is configured.
+    // execute_code only materializes when a sandbox driver is configured.
     vi.mocked(isSandboxAvailable).mockReturnValue(true);
     mocks.insertToolInvocation.mockClear();
     mocks.insertToolInvocation.mockResolvedValue(undefined);
@@ -1087,7 +1099,7 @@ describe("materializeTools — model-facing sandbox output clip (P0 token flood)
   async function runExec(result: unknown): Promise<Record<string, unknown>> {
     vi.mocked(invoke).mockResolvedValueOnce(result);
     const { tools } = await materializeTools(CTX);
-    const t = tools["run_sandbox_command"] as unknown as {
+    const t = tools["execute_code"] as unknown as {
       execute: (i: unknown) => Promise<unknown>;
     };
     expect(t).toBeDefined();
@@ -1159,5 +1171,39 @@ describe("materializeTools — model-facing sandbox output clip (P0 token flood)
       tools["capA"] as unknown as { execute: (i: unknown) => Promise<unknown> }
     ).execute({ x: "hi" })) as Record<string, unknown>;
     expect((out.stdout as string).length).toBe(200_000); // passthrough, unclipped
+  });
+});
+
+// Sandbox tool exposure policy: the engine's workspace toolset is the only
+// sanctioned way for a model to touch a repository. The durable sandbox
+// session/management family is Workbench/human-only (never an LLM tool),
+// and the chat route additionally withholds overlapping mutation paths in
+// code mode via `excludeCapabilities`.
+describe("materializeTools — sandbox tool exposure policy", () => {
+  beforeEach(() => {
+    vi.mocked(invoke).mockReset();
+    vi.mocked(isSandboxAvailable).mockReturnValue(true);
+  });
+  afterEach(() => {
+    vi.mocked(isSandboxAvailable).mockReturnValue(false);
+  });
+
+  it("never materializes the Workbench-only sandbox session family, even with a driver configured", async () => {
+    const { tools, nameMap } = await materializeTools(CTX);
+    // The one model-facing survivor of the family is present…
+    expect(tools["execute_code"]).toBeDefined();
+    // …but the durable session tool is withheld despite surfaces:["agent"]
+    // and an available driver.
+    expect(tools["run_sandbox_command"]).toBeUndefined();
+    expect(Object.values(nameMap)).not.toContain("run_sandbox_command");
+  });
+
+  it("withholds capabilities named in excludeCapabilities (code-mode overlap filter)", async () => {
+    const { tools } = await materializeTools(CTX, {
+      excludeCapabilities: new Set(["execute_code"]),
+    });
+    expect(tools["execute_code"]).toBeUndefined();
+    // Unrelated capabilities are untouched by the exclusion.
+    expect(tools["capA"]).toBeDefined();
   });
 });

@@ -162,7 +162,7 @@ export function MessageFooter({
         setLoading(null);
       }
     },
-    [loading, text, orgSlug, workspaceSlug, addToast, markDone],
+    [loading, text, orgSlug, workspaceSlug, addToast, markDone, copy],
   );
 
   return (

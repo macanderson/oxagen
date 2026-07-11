@@ -36,6 +36,7 @@ import {
   purgeArchivedConversationsAction,
 } from "./conversation-actions";
 import { setDefaultAgentAction } from "./agent-prefs-actions";
+import { parseStoredCodeBinding } from "@/app/api/v1/chat/stream/code-binding";
 import { walkActiveBranch } from "./walk-active-branch";
 export { walkActiveBranch } from "./walk-active-branch";
 
@@ -191,6 +192,14 @@ export async function ConversationPage({
     conversationId = conv.id;
     activeLeafMessageId = conv.activeLeafMessageId ?? null;
   }
+
+  // Parse the conversation's locked coding target (claimed on its first code
+  // turn — see code-binding.ts). Tolerant: a null/corrupt column parses to null
+  // (unbound). Threaded to the composer, which forces the agent + repo + env
+  // selection to it and renders the pickers read-only for a bound conversation.
+  const conversationCodeBinding = conv
+    ? parseStoredCodeBinding(conv.codeBinding)
+    : null;
 
   const actionCtx = {
     orgSlug,
@@ -486,6 +495,7 @@ export async function ConversationPage({
             setDefaultAgentAction={setDefaultAgentAction.bind(null, navCtx)}
             workspaceBudgetGovernance={workspaceBudgetGovernance}
             agentId={boundAgentId ?? null}
+            conversationCodeBinding={conversationCodeBinding}
           />
         </div>
       </div>

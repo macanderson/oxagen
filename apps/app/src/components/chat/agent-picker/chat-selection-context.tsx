@@ -1,6 +1,7 @@
 "use client";
 import * as React from "react";
 import type { AgentOption } from "./agent-picker-types";
+import type { StoredCodeBinding } from "@/app/api/v1/chat/stream/code-binding";
 import {
   agentStorageKey,
   readStoredAgentId,
@@ -42,12 +43,37 @@ export interface ChatSelectionStore {
   selectedAgentId: string | null;
   selectedRepoKey: string | null;
   selectedEnvId: string | null;
+  /**
+   * True once the conversation's coding target is LOCKED — either a server
+   * binding is present (claimed on the conversation's first code turn) or a code
+   * turn has already been sent in this view. While locked the agent/repo/env
+   * selection cannot change: the pickers render read-only and the committing
+   * setters below reject mutations. Mirrors the server, which resolves every
+   * later turn from the stored binding.
+   */
+  selectionLocked: boolean;
   /** Set the agent and persist the choice for this conversation. */
   setSelectedAgentId: (id: string | null) => void;
   setSelectedRepoKey: (key: string | null) => void;
   setSelectedEnvId: (id: string | null) => void;
   /** Apply an agent + optional repo/env atomically (the picker's confirm). */
   applyAgentSelection: (sel: AgentSelectionApply) => void;
+  /**
+   * Lock the current selection client-side. Called the instant a code turn is
+   * sent so the pickers lock immediately, without waiting for the server to
+   * claim the durable binding and the page to reload. Idempotent.
+   */
+  lockSelection: () => void;
+}
+
+/**
+ * The repo key a stored binding maps to — built the SAME way the option loader
+ * builds it (`${connectionId}::${owner}/${name}`, see
+ * `_shared/code-mode-data.ts`) so it matches an `availableRepos` entry and the
+ * repo selector shows the owner/name label rather than a bare key.
+ */
+export function repoKeyForBinding(binding: StoredCodeBinding): string {
+  return `${binding.connectionId}::${binding.owner}/${binding.name}`;
 }
 
 const ChatSelectionContext = React.createContext<ChatSelectionStore | null>(
@@ -69,22 +95,55 @@ export function useComposerSelectionState(): ChatSelectionStore {
   const [agentId, setAgentId] = React.useState<string | null>(null);
   const [repoKey, setRepoKey] = React.useState<string | null>(null);
   const [envId, setEnvId] = React.useState<string | null>(null);
+  const [locked, setLocked] = React.useState(false);
+  // Latest-lock ref so the guarded setters see the current lock state without
+  // stale closures (same pattern as the provider store below).
+  const lockedRef = React.useRef(locked);
+  React.useEffect(() => {
+    lockedRef.current = locked;
+  }, [locked]);
+  const setAgentGuarded = React.useCallback((id: string | null) => {
+    if (lockedRef.current) return;
+    setAgentId(id);
+  }, []);
+  const setRepoGuarded = React.useCallback((key: string | null) => {
+    if (lockedRef.current) return;
+    setRepoKey(key);
+  }, []);
+  const setEnvGuarded = React.useCallback((id: string | null) => {
+    if (lockedRef.current) return;
+    setEnvId(id);
+  }, []);
   const applyLocal = React.useCallback((sel: AgentSelectionApply) => {
+    if (lockedRef.current) return;
     setAgentId(sel.agentId);
     if (sel.repoKey !== undefined) setRepoKey(sel.repoKey);
     if (sel.envId !== undefined) setEnvId(sel.envId);
   }, []);
+  const lockLocal = React.useCallback(() => setLocked(true), []);
   const local = React.useMemo<ChatSelectionStore>(
     () => ({
       selectedAgentId: agentId,
       selectedRepoKey: repoKey,
       selectedEnvId: envId,
-      setSelectedAgentId: setAgentId,
-      setSelectedRepoKey: setRepoKey,
-      setSelectedEnvId: setEnvId,
+      selectionLocked: locked,
+      setSelectedAgentId: setAgentGuarded,
+      setSelectedRepoKey: setRepoGuarded,
+      setSelectedEnvId: setEnvGuarded,
       applyAgentSelection: applyLocal,
+      lockSelection: lockLocal,
     }),
-    [agentId, repoKey, envId, applyLocal],
+    [
+      agentId,
+      repoKey,
+      envId,
+      locked,
+      setAgentGuarded,
+      setRepoGuarded,
+      setEnvGuarded,
+      applyLocal,
+      lockLocal,
+    ],
   );
   return shared ?? local;
 }
@@ -103,6 +162,13 @@ export interface ChatSelectionProviderProps {
   workspaceSlug: string | undefined;
   /** True for a brand-new chat (no conversation yet) — gates the workspace default. */
   isNewConversation: boolean;
+  /**
+   * The conversation's stored code binding, claimed on its first code turn (see
+   * `code-binding.ts`). When present, the selection is FORCED to the binding
+   * (agent + repo + environment) and locked — the pickers render read-only.
+   * Null for an unbound conversation.
+   */
+  codeBinding?: StoredCodeBinding | null;
   children: React.ReactNode;
 }
 
@@ -120,13 +186,20 @@ export function ChatSelectionProvider({
   conversationId,
   workspaceSlug,
   isNewConversation,
+  codeBinding = null,
   children,
 }: ChatSelectionProviderProps) {
-  // SSR-safe initial (no localStorage): URL binding, else the workspace default
-  // for a new chat. The per-conversation persisted choice is layered on after
-  // mount by the hydration effect below.
+  // A server binding locks the conversation's coding target — seed the initial
+  // selection straight from it (SSR-safe, no localStorage) so a bound
+  // conversation renders locked on the very first paint.
+  const boundRepoKey = codeBinding ? repoKeyForBinding(codeBinding) : null;
+
+  // SSR-safe initial (no localStorage): the binding when present, else the URL
+  // binding, else the workspace default for a new chat. The per-conversation
+  // persisted choice is layered on after mount by the hydration effect below.
   const [selectedAgentId, setSelectedAgentId] = React.useState<string | null>(
     () =>
+      codeBinding?.agentId ??
       resolveInitialAgentId({
         boundAgentId,
         persistedAgentId: null,
@@ -135,28 +208,70 @@ export function ChatSelectionProvider({
       }),
   );
   const [selectedRepoKey, setSelectedRepoKey] = React.useState<string | null>(
-    null,
+    () => boundRepoKey,
   );
-  const [selectedEnvId, setSelectedEnvId] = React.useState<string | null>(null);
+  const [selectedEnvId, setSelectedEnvId] = React.useState<string | null>(
+    () => codeBinding?.environmentId ?? null,
+  );
+
+  // Client-side lock: flipped the instant a code turn is sent in this view, so
+  // the pickers lock immediately rather than waiting for the server to claim the
+  // durable binding and the page to reload. A server binding also locks.
+  const [clientLocked, setClientLocked] = React.useState(false);
+  const selectionLocked = codeBinding !== null || clientLocked;
+
+  // Latest-locked ref so the committing setters can reject a mutation once the
+  // selection is locked (belt-and-braces — the UI already renders the pickers
+  // read-only, and the per-conversation pin-hydration effect must not override a
+  // binding). Seeded from the first render and kept in sync via an effect.
+  const lockedRef = React.useRef(selectionLocked);
+  React.useEffect(() => {
+    lockedRef.current = selectionLocked;
+  }, [selectionLocked]);
 
   // Persist in the committing setter (never a key-scoped effect) so switching
   // conversations can't write the previous chat's agent under the new key.
   const commitAgentId = React.useCallback(
     (id: string | null) => {
+      if (lockedRef.current) return;
       setSelectedAgentId(id);
       writeStoredAgentId(agentStorageKey(workspaceSlug, conversationId), id);
     },
     [workspaceSlug, conversationId],
   );
 
+  const setRepoKeyGuarded = React.useCallback((key: string | null) => {
+    if (lockedRef.current) return;
+    setSelectedRepoKey(key);
+  }, []);
+  const setEnvIdGuarded = React.useCallback((id: string | null) => {
+    if (lockedRef.current) return;
+    setSelectedEnvId(id);
+  }, []);
+
   const applyAgentSelection = React.useCallback(
     (sel: AgentSelectionApply) => {
+      if (lockedRef.current) return;
       commitAgentId(sel.agentId);
       if (sel.repoKey !== undefined) setSelectedRepoKey(sel.repoKey);
       if (sel.envId !== undefined) setSelectedEnvId(sel.envId);
     },
     [commitAgentId],
   );
+
+  const lockSelection = React.useCallback(() => setClientLocked(true), []);
+
+  // A server binding is the source of truth — force the selection onto it
+  // (idempotent) whenever the binding's values change. Primitive deps keep this
+  // from re-firing every RSC render (the binding object identity churns each
+  // render; its field values don't).
+  React.useEffect(() => {
+    if (!codeBinding) return;
+    setSelectedAgentId(codeBinding.agentId);
+    setSelectedRepoKey(boundRepoKey);
+    setSelectedEnvId(codeBinding.environmentId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- force to primitive binding values; the object identity churns each render
+  }, [codeBinding?.agentId, boundRepoKey, codeBinding?.environmentId]);
 
   // Hydrate the per-conversation persisted selection on mount / conversation
   // switch, carrying a draft selection onto the real conversation key the first
@@ -169,6 +284,10 @@ export function ChatSelectionProvider({
     const key = agentStorageKey(workspaceSlug, conversationId);
     const prevKey = prevKeyRef.current;
     prevKeyRef.current = key;
+
+    // A server binding owns the selection (forced by the effect above) — never
+    // re-resolve it from prefs/persistence for a locked conversation.
+    if (codeBinding) return;
 
     let persisted = readStoredAgentId(key);
     if (!persisted && prevKey !== key && prevKey.startsWith(DRAFT_PREFIX)) {
@@ -203,17 +322,23 @@ export function ChatSelectionProvider({
       selectedAgentId,
       selectedRepoKey,
       selectedEnvId,
+      selectionLocked,
       setSelectedAgentId: commitAgentId,
-      setSelectedRepoKey,
-      setSelectedEnvId,
+      setSelectedRepoKey: setRepoKeyGuarded,
+      setSelectedEnvId: setEnvIdGuarded,
       applyAgentSelection,
+      lockSelection,
     }),
     [
       selectedAgentId,
       selectedRepoKey,
       selectedEnvId,
+      selectionLocked,
       commitAgentId,
+      setRepoKeyGuarded,
+      setEnvIdGuarded,
       applyAgentSelection,
+      lockSelection,
     ],
   );
 

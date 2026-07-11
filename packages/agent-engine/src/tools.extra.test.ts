@@ -513,7 +513,11 @@ describe("buildWorkspaceTools – edit_file replace_all + structured feedback", 
       old_string: "bar",
       new_string: "baz",
     });
-    expect(out).toBe("Edited /repo/a.ts");
+    // The confirmation echoes the RESOLVED absolute path, plus the edit-integrity
+    // anchor chain (before → after content hash) appended by the always-on gate.
+    expect(out).toMatch(
+      /^Edited \/repo\/a\.ts \(1 replacement\) \[anchor [0-9a-f]{16} → [0-9a-f]{16}\]$/,
+    );
   });
 
   it("keeps an absolute input path as-is in the edit confirmation", async () => {
@@ -524,7 +528,9 @@ describe("buildWorkspaceTools – edit_file replace_all + structured feedback", 
       old_string: "bar",
       new_string: "baz",
     });
-    expect(out).toBe("Edited /repo/a.ts");
+    expect(out).toMatch(
+      /^Edited \/repo\/a\.ts \(1 replacement\) \[anchor [0-9a-f]{16} → [0-9a-f]{16}\]$/,
+    );
   });
 
   it("names the closest line when old_string is not found", async () => {

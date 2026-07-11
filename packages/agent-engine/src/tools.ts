@@ -14,9 +14,15 @@ import type {
   CodingEvent,
   AskUserCallback,
 } from "./types";
-import type { FileLockProvider } from "./ports";
+import type { FileLockProvider, DiagnosticsProvider } from "./ports";
 import { delay } from "./loop-driver";
 import { buildStructuredTools } from "./tools-structured";
+import {
+  EditIntegrityLedger,
+  hashContent,
+  checkSyntax,
+  newSyntaxErrors,
+} from "./edit-integrity";
 
 const MAX_OUTPUT = 30_000; // chars; keep tool output from blowing the context window
 // When truncating, keep this fraction of the budget as the HEAD; the rest is the
@@ -488,6 +494,14 @@ export function buildWorkspaceTools(
     /** Identity `fileLock` acquires/releases under. Required when `fileLock` is supplied. */
     lockContext?: { agentId: string; executionId: string };
     /**
+     * Optional project-diagnostics provider (tsserver / LSP). When supplied, the
+     * edit-integrity gate unions its before/after output with the built-in
+     * single-file syntax check on every edit_file/write_file. Undefined ⇒ only
+     * the built-in syntactic check gates (the CLI's default). A provider failure
+     * degrades to the built-in check alone. See {@link DiagnosticsProvider}.
+     */
+    diagnostics?: DiagnosticsProvider;
+    /**
      * Interactive clarification callback. When supplied, the `ask_user` tool is
      * registered (mirrors `codeGraph` gating); when omitted — every headless /
      * one-shot surface with nobody to ask — the tool is never advertised.
@@ -499,9 +513,59 @@ export function buildWorkspaceTools(
   const signal = opts.signal;
   const fileLock = opts.fileLock;
   const lockContext = opts.lockContext;
+  const diagnostics = opts.diagnostics;
   // Bench/CI-only gate (see OXAGEN_FORBID_TEST_EDITS in the config registry):
   // structurally denies mutations to test-shaped paths — see isTestPath above.
   const forbidTestEdits = process.env["OXAGEN_FORBID_TEST_EDITS"] === "1";
+
+  // Edit integrity (docs/specs/unpoisonable-edits): ONE ledger per
+  // buildWorkspaceTools call — i.e. per agent run. A whole-file read pins the
+  // content-hash anchor; edit_file/write_file verify it before writing (stale
+  // anchor ⇒ refuse the clobber) and re-pin the new hash after. Always on — the
+  // gate is structural, never opt-in.
+  const ledger = new EditIntegrityLedger(workspace.root);
+
+  /**
+   * The NEW syntax/diagnostic errors an edit would introduce on `path`:
+   * before/after delta of the built-in single-file syntax check, unioned with
+   * the optional project-diagnostics provider. `beforeContent === null` marks a
+   * CREATE (no prior content ⇒ no before-errors). A diagnostics-provider failure
+   * degrades to the built-in check alone so a broken server never wedges an edit.
+   */
+  async function gateNewErrors(
+    path: string,
+    beforeContent: string | null,
+    afterContent: string,
+  ): Promise<string[]> {
+    const beforeErrors =
+      beforeContent === null ? [] : checkSyntax(path, beforeContent).errors;
+    const afterErrors = checkSyntax(path, afterContent).errors;
+    if (diagnostics) {
+      try {
+        const after = await diagnostics.diagnostics(path, afterContent);
+        afterErrors.push(...after.errors);
+        if (beforeContent !== null) {
+          const before = await diagnostics.diagnostics(path, beforeContent);
+          beforeErrors.push(...before.errors);
+        }
+      } catch {
+        // Fail-open on the optional provider — the built-in syntax check stands.
+      }
+    }
+    return newSyntaxErrors(beforeErrors, afterErrors);
+  }
+
+  /** The corrective note appended to a syntax-gate rejection. */
+  const editRejection = (count: number, shown: string, errors: string[]): string =>
+    `Edit rejected (would introduce ${count} new syntax error${count === 1 ? "" : "s"} in ${shown}):\n` +
+    `${errors.join("\n")}\n` +
+    `Fix the edit, or pass expect_errors:true only if this is an intentional mid-refactor breakage.`;
+
+  /** Shared stale-anchor rejection message (edit_file and write_file). */
+  const staleAnchor = (shown: string, known: string, actual: string): string =>
+    `Stale anchor: ${shown} changed on disk since you last read it ` +
+    `(expected ${known}, found ${actual}). Re-read the file and re-apply your ` +
+    `edit against the current content.`;
 
   const tools: ToolSet = {
     read_file: tool({
@@ -523,6 +587,12 @@ export function buildWorkspaceTools(
       execute: async ({ path, offset, limit }) => {
         try {
           const text = await workspace.readFile(path, { offset, limit });
+          const isRangeRead = offset !== undefined || limit !== undefined;
+          // Edit integrity: a WHOLE-file read pins the content-hash anchor on the
+          // RAW text (before line-numbering / clipping) so the next edit/write can
+          // detect an external change. A ranged read never touches the ledger — it
+          // saw only a slice, so it cannot vouch for the whole file's hash.
+          if (!isRangeRead) ledger.record(path, hashContent(text));
           // Number lines cat -n style so the model can cite/target exact lines;
           // `offset` (1-based) is the true line number of the first line read.
           const formatted = formatWithLineNumbers(text, offset ?? 1);
@@ -530,7 +600,6 @@ export function buildWorkspaceTools(
           // actionable, line-aware truncation note so the model re-reads the
           // elided middle via offset/limit instead of guessing. A ranged read
           // already targeted a span, so it keeps the generic middle-out marker.
-          const isRangeRead = offset !== undefined || limit !== undefined;
           if (!isRangeRead && formatted.length > MAX_OUTPUT) {
             const totalLines = formatted.split("\n").length;
             return clip(formatted, readFileTruncationMarker(totalLines));
@@ -550,8 +619,15 @@ export function buildWorkspaceTools(
       inputSchema: z.object({
         path: z.string(),
         content: z.string(),
+        expect_errors: z
+          .boolean()
+          .optional()
+          .describe(
+            "Declare that this edit intentionally introduces syntax/type errors " +
+              "that a later step will fix; the declaration is recorded to the audit trail.",
+          ),
       }),
-      execute: async ({ path, content }) => {
+      execute: async ({ path, content, expect_errors }) => {
         if (forbidTestEdits && isTestPath(path))
           return TEST_EDIT_DENIED_MESSAGE;
         return withFileLock(
@@ -561,27 +637,62 @@ export function buildWorkspaceTools(
           lockContext,
           signal,
           async () => {
+            const shown = resolveDisplayPath(workspace.root, path);
+            // Probe the FULL existing file (under the same lock) for existence,
+            // the before-hash, and before-syntax — a create has none of these.
+            let existed = true;
+            let before: string | null = null;
             try {
-              // Probe existence BEFORE the write (under the same file lock) so
-              // the emitted event can say whether this created the file or
-              // overwrote an existing one — UIs use it to badge C vs U.
-              let existed = true;
-              try {
-                await workspace.readFile(path, { offset: 1, limit: 1 });
-              } catch {
-                existed = false;
+              before = await workspace.readFile(path);
+            } catch {
+              existed = false;
+              before = null;
+            }
+            // Stale-anchor guard: a file this run has read/written carries a
+            // ledger hash; if it no longer matches the current on-disk content an
+            // external change landed — refuse the blind clobber. A never-read file
+            // has no entry (writes freely); a brand-new file trivially passes.
+            if (existed && before !== null) {
+              const currentHash = hashContent(before);
+              const known = ledger.get(path);
+              if (known !== undefined && known !== currentHash) {
+                return staleAnchor(shown, known, currentHash);
               }
+            }
+            // Syntax gate on the NEW content (create ⇒ before = []).
+            const fresh = await gateNewErrors(
+              path,
+              existed ? before : null,
+              content,
+            );
+            if (fresh.length > 0 && !expect_errors) {
+              return editRejection(fresh.length, shown, fresh);
+            }
+            const beforeHash =
+              existed && before !== null ? hashContent(before) : undefined;
+            const afterHash = hashContent(content);
+            try {
               await workspace.writeFile(path, content);
-              onEvent({
-                type: "file-edit",
-                path,
-                bytes: content.length,
-                kind: existed ? "update" : "create",
-              });
-              return `Wrote ${content.length} bytes to ${resolveDisplayPath(workspace.root, path)}`;
             } catch (err) {
               return `Error writing ${path}: ${err instanceof Error ? err.message : String(err)}`;
             }
+            ledger.record(path, afterHash);
+            const declaredBreaking = fresh.length > 0 && !!expect_errors;
+            onEvent({
+              type: "file-edit",
+              path,
+              bytes: content.length,
+              kind: existed ? "update" : "create",
+              ...(beforeHash ? { beforeHash } : {}),
+              afterHash,
+              newDiagnostics: declaredBreaking ? fresh.length : 0,
+              ...(declaredBreaking ? { declaredBreaking: true } : {}),
+            });
+            let result = `Wrote ${content.length} bytes to ${shown}`;
+            if (beforeHash) result += ` [anchor ${beforeHash} → ${afterHash}]`;
+            if (declaredBreaking)
+              result += `\n— DECLARED BREAKING: ${fresh.length} new syntax error${fresh.length === 1 ? "" : "s"} recorded`;
+            return result;
           },
         );
       },
@@ -604,8 +715,21 @@ export function buildWorkspaceTools(
           .describe(
             "Replace every occurrence instead of requiring a unique match (default false).",
           ),
+        expect_errors: z
+          .boolean()
+          .optional()
+          .describe(
+            "Declare that this edit intentionally introduces syntax/type errors " +
+              "that a later step will fix; the declaration is recorded to the audit trail.",
+          ),
       }),
-      execute: async ({ path, old_string, new_string, replace_all }) => {
+      execute: async ({
+        path,
+        old_string,
+        new_string,
+        replace_all,
+        expect_errors,
+      }) => {
         if (forbidTestEdits && isTestPath(path))
           return TEST_EDIT_DENIED_MESSAGE;
         return withFileLock(
@@ -615,28 +739,74 @@ export function buildWorkspaceTools(
           lockContext,
           signal,
           async () => {
+            const shown = resolveDisplayPath(workspace.root, path);
+            // 1. Read the current content (full) — the edit anchor's baseline.
+            let current: string;
             try {
-              const count = await workspace.editFile(
-                path,
-                old_string,
-                new_string,
-                {
-                  replaceAll: replace_all,
-                },
-              );
-              onEvent({
-                type: "file-edit",
-                path,
-                bytes: new_string.length,
-                kind: "update",
-              });
-              const shown = resolveDisplayPath(workspace.root, path);
-              return replace_all
-                ? `Edited ${shown} (${count} replacement${count === 1 ? "" : "s"})`
-                : `Edited ${shown}`;
+              current = await workspace.readFile(path);
             } catch (err) {
               return `Error editing ${path}: ${err instanceof Error ? err.message : String(err)}`;
             }
+            // 2. Stale-anchor check: if this file was read/written this run but no
+            //    longer hashes to the recorded anchor, another writer changed it —
+            //    refuse rather than clobber, and tell the model to re-read.
+            const currentHash = hashContent(current);
+            const known = ledger.get(path);
+            if (known !== undefined && known !== currentHash) {
+              return staleAnchor(shown, known, currentHash);
+            }
+            // 3. Apply the replacement in memory. Reuse the corrective-feedback
+            //    contract so guidance is unchanged: the default mode requires a
+            //    UNIQUE match (describeEditFailure covers not-found + ambiguous),
+            //    while replace_all only rejects a not-found (0-occurrence) miss.
+            const occurrences =
+              old_string === "" ? 0 : current.split(old_string).length - 1;
+            let count: number;
+            let newContent: string;
+            if (replace_all) {
+              if (occurrences === 0) {
+                return `Error editing ${path}: ${describeEditFailure(current, old_string) ?? `old_string not found in ${path}`}`;
+              }
+              count = occurrences;
+              newContent = current.split(old_string).join(new_string);
+            } else {
+              const failure = describeEditFailure(current, old_string);
+              if (failure !== null) return `Error editing ${path}: ${failure}`;
+              // describeEditFailure returned null ⇒ exactly one occurrence.
+              count = 1;
+              newContent = current.replace(old_string, new_string);
+            }
+            // 4. Syntax gate: only NEW damage blocks (before/after delta), and
+            //    only when the model did not declare intentional breakage.
+            const fresh = await gateNewErrors(path, current, newContent);
+            if (fresh.length > 0 && !expect_errors) {
+              return editRejection(fresh.length, shown, fresh);
+            }
+            // 5. Write and re-pin the anchor to the new content.
+            const afterHash = hashContent(newContent);
+            try {
+              await workspace.writeFile(path, newContent);
+            } catch (err) {
+              return `Error editing ${path}: ${err instanceof Error ? err.message : String(err)}`;
+            }
+            ledger.record(path, afterHash);
+            // 6. Emit the enriched event and return the anchored result.
+            const declaredBreaking = fresh.length > 0 && !!expect_errors;
+            onEvent({
+              type: "file-edit",
+              path,
+              bytes: new_string.length,
+              kind: "update",
+              beforeHash: currentHash,
+              afterHash,
+              replacements: count,
+              newDiagnostics: declaredBreaking ? fresh.length : 0,
+              ...(declaredBreaking ? { declaredBreaking: true } : {}),
+            });
+            let result = `Edited ${shown} (${count} replacement${count === 1 ? "" : "s"}) [anchor ${currentHash} → ${afterHash}]`;
+            if (declaredBreaking)
+              result += `\n— DECLARED BREAKING: ${fresh.length} new syntax error${fresh.length === 1 ? "" : "s"} recorded`;
+            return result;
           },
         );
       },

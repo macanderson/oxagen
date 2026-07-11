@@ -4,7 +4,6 @@ import {
   Brain,
   ChevronDown,
   ChevronUp,
-  Code2,
   ImageIcon,
   Paperclip,
   Send,
@@ -379,10 +378,6 @@ export function MessageComposer({
   );
 
   // ── Code mode (OXA app-code-mode) ─────────────────────────────────────────
-  // When on, a coding turn runs in a sandbox against a selected repo +
-  // environment — both are REQUIRED before the send gate opens (see
-  // `codeGateBlocked` below).
-  const [manualCodeMode, setManualCodeMode] = React.useState(false);
   // Agent + code-session (repo/env) selection lives in a shared store so the
   // composer chip and the empty-state gallery drive the SAME selection. Without
   // a provider (a bare composer in tests) this transparently falls back to a
@@ -391,9 +386,11 @@ export function MessageComposer({
     selectedAgentId,
     selectedRepoKey,
     selectedEnvId,
+    selectionLocked,
     setSelectedRepoKey,
     setSelectedEnvId,
     applyAgentSelection,
+    lockSelection,
   } = useComposerSelectionState();
   const selectedRepo =
     availableRepos?.find((r) => r.key === selectedRepoKey) ?? null;
@@ -401,23 +398,36 @@ export function MessageComposer({
     availableEnvironments?.find((e) => e.id === selectedEnvId) ?? null;
 
   // ── Agent selection (OXA app-agent-selector) ──────────────────────────────
-  // The selected agent GOVERNS code mode: a code agent (isCode) forces it on
-  // and reveals the repo/code tooling + UI; a chat agent forces it off and
-  // hides that UI. With no agent selected (the "Default chat" option, or a
-  // workspace that never created an agent) the manual Code2 toggle owns code
-  // mode, so agent-less workspaces behave exactly as they did before.
+  // Code mode is derived SOLELY from the selected agent's identity: a code agent
+  // (isCode) runs the turn in a sandbox against a selected repo + environment
+  // and reveals that tooling; a chat agent — or no agent at all — keeps the
+  // plain composer. There is no manual toggle: an agentic coding flow requires a
+  // coding agent (and a repo + environment) by construction (see the send gate
+  // `codeGateBlocked` below).
   const selectedAgent =
     availableAgents?.find((a) => a.agentId === selectedAgentId) ?? null;
-  const agentGovernsCode = selectedAgent !== null;
-  const codeMode = agentGovernsCode ? selectedAgent.isCode : manualCodeMode;
+  const codeMode = selectedAgent?.isCode ?? false;
 
-  // Default the environment picker to the workspace default (isDefault) the
-  // first time code mode is turned on with no environment chosen yet.
+  // When code mode turns on, pre-fill the REQUIRED selections from the obvious
+  // workspace defaults so the user SEES a ready-to-send target (they can still
+  // change it before the first turn locks it): the default environment
+  // (isDefault), and the default repo — the workspace-default repo when set,
+  // else the sole option when there's exactly one. Skipped once locked (the
+  // selection is already forced to the binding).
   React.useEffect(() => {
-    if (!codeMode || selectedEnvId) return;
-    const defaultEnv = availableEnvironments?.find((e) => e.isDefault);
-    if (defaultEnv) setSelectedEnvId(defaultEnv.id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-derive when codeMode flips on; availableEnvironments is stable per render from server props
+    if (!codeMode || selectionLocked) return;
+    if (!selectedEnvId) {
+      const defaultEnv = availableEnvironments?.find((e) => e.isDefault);
+      if (defaultEnv) setSelectedEnvId(defaultEnv.id);
+    }
+    if (!selectedRepoKey) {
+      const repos = availableRepos ?? [];
+      const defaultRepo =
+        (defaultRepoKey ? repos.find((r) => r.key === defaultRepoKey) : null) ??
+        (repos.length === 1 ? repos[0] : null);
+      if (defaultRepo) setSelectedRepoKey(defaultRepo.key);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-derive when codeMode flips on; availableRepos/availableEnvironments are stable per render from server props
   }, [codeMode]);
 
   const codeGateBlocked = codeMode && (!selectedRepo || !selectedEnvId);
@@ -518,7 +528,9 @@ export function MessageComposer({
     } else {
       setIsPinned(false);
     }
-  }, [pinKey]);
+    // setSelectedRepoKey/setSelectedEnvId are stable store setters; they're
+    // listed so this only re-runs on a conversation switch (pinKey change).
+  }, [pinKey, setSelectedRepoKey, setSelectedEnvId]);
 
   // Toggle the pin, persisting a snapshot of the current selection (pin) or
   // clearing it (unpin). Writes happen here and in the selector handlers below,
@@ -1209,6 +1221,12 @@ export function MessageComposer({
 
     const attachmentsSnapshot = toUploadedMeta(attachments);
 
+    // A code turn binds the conversation's coding target for its lifetime — lock
+    // the pickers client-side now (repo/env/agent become read-only) so the user
+    // can't retarget mid-conversation. The server claims the durable binding on
+    // this same turn; locking here means the UI doesn't wait for a reload.
+    if (codeMode) lockSelection();
+
     // If a stream is in flight, honour the pending-prompt behavior.
     if (isStreaming && !pending) {
       if (pendingPromptBehavior === "interrupt") {
@@ -1738,6 +1756,7 @@ export function MessageComposer({
             orgSlug={orgSlug}
             workspaceSlug={workspaceSlug}
             disabled={pending || disabled}
+            locked={selectionLocked}
           />
         ) : null}
 
@@ -1788,6 +1807,7 @@ export function MessageComposer({
                     selectedRepoKey={selectedRepoKey}
                     selectedEnvId={selectedEnvId}
                     onApply={applyAgentSelection}
+                    locked={selectionLocked}
                   />
                   {showEffortControl && effortSelect}
                 </>
@@ -1850,38 +1870,10 @@ export function MessageComposer({
                 </>
               )}
 
-              {/* Code mode toggle — routes the turn to a sandboxed coding agent
-                against the selected repo + environment (chosen in the compact
-                context controls below). Requires both selections before send
-                unblocks. Hidden
-                when a selected agent governs code mode (its identity — code
-                vs chat — decides, so a manual toggle would contradict it);
-                the manual toggle only owns code mode for the default
-                (no-agent) path. Essential — always inline when shown. */}
-              {!agentGovernsCode && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  aria-label="Toggle code mode"
-                  aria-pressed={codeMode}
-                  disabled={!hasRepos && !codeMode}
-                  title={
-                    !hasRepos && !codeMode
-                      ? "Connect a GitHub repository to use code mode"
-                      : undefined
-                  }
-                  onClick={() => setManualCodeMode((v) => !v)}
-                  className={cn(
-                    "p-0",
-                    isMobile ? "h-11 w-11" : "h-8 w-8",
-                    codeMode &&
-                      "bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary",
-                  )}
-                >
-                  <Code2 className="h-4 w-4" />
-                </Button>
-              )}
+              {/* Code mode is governed SOLELY by the selected agent's identity
+                (a code agent turns it on and reveals the repo/environment
+                pickers below) — there is no manual toggle. Selecting a coding
+                agent is the deliberate act that enters the agentic coding flow. */}
 
               {!isMobile && (
                 <>
@@ -2031,6 +2023,7 @@ export function MessageComposer({
                     selectedRepoKey={selectedRepoKey}
                     selectedEnvId={selectedEnvId}
                     onApply={applyAgentSelection}
+                    locked={selectionLocked}
                   />
                 </div>
               )}

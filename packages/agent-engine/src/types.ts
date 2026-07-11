@@ -4,6 +4,7 @@ import type {
   MemoryProvider,
   TraceStore,
   FileLockProvider,
+  DiagnosticsProvider,
 } from "./ports";
 
 /**
@@ -143,6 +144,28 @@ export type CodingEvent =
       bytes: number;
       /** Whether the write created the file or updated an existing one. */
       kind: "create" | "update";
+      /**
+       * The content-hash anchor of the file BEFORE this edit (see
+       * `edit-integrity.ts#hashContent`). Absent for a create (there was no
+       * prior content) and on the legacy pre-integrity write path.
+       */
+      beforeHash?: string;
+      /** The content-hash anchor of the file AFTER this edit — the new anchor. */
+      afterHash?: string;
+      /**
+       * Count of NEW syntax/type diagnostics this edit shipped — non-zero ONLY
+       * when the model passed `expect_errors:true` to knowingly break the file
+       * mid-refactor; 0 (or absent) on a gate-passing edit.
+       */
+      newDiagnostics?: number;
+      /**
+       * True when the edit declared intentional breakage (`expect_errors:true`)
+       * and the gate let new diagnostics through and recorded them to the audit
+       * trail. Absent on a clean edit.
+       */
+      declaredBreaking?: boolean;
+      /** Number of substring occurrences replaced (edit_file); absent for write_file. */
+      replacements?: number;
     }
   | { type: "command"; command: string; exitCode: number }
   | { type: "final-diff"; diff: string; changedFiles: string[] };
@@ -264,6 +287,15 @@ export interface RunCodingAgentOptions {
    * batch release. Ignored when `fileLock` is not supplied.
    */
   lockContext?: { agentId: string; executionId: string };
+  /**
+   * Optional project-diagnostics provider (an incremental tsserver / LSP). When
+   * supplied, the edit-integrity gate compares its before/after output on the
+   * edited file in ADDITION to the built-in single-file syntax check, so a write
+   * that introduces new cross-file type breakage is rejected too (unless the
+   * edit passes `expect_errors:true`). Omitted ⇒ the built-in syntactic check is
+   * the only gate (the CLI's default). See {@link DiagnosticsProvider}.
+   */
+  diagnostics?: DiagnosticsProvider;
   signal?: AbortSignal;
   onEvent?: (e: CodingEvent) => void;
   /**

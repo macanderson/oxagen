@@ -7,6 +7,14 @@ export {
   describeEditFailure,
   clipMiddle,
 } from "./tools";
+// Edit integrity — hash-anchored, syntax-gated, audited file edits.
+export {
+  hashContent,
+  checkSyntax,
+  newSyntaxErrors,
+  EditIntegrityLedger,
+} from "./edit-integrity";
+export type { SyntaxCheckResult } from "./edit-integrity";
 // LocalWorkspace is a CLI adapter (Stage B), not engine code — see ADR-019.
 export {
   runCodingAgent,
@@ -44,3 +52,8 @@ export * from "./lifecycle/index";
 // internally via relative imports and don't need barrel exports).
 export * from "./fork";
 export * from "./oracle/hypotheses";
+
+// Mutation verifier — the "prove your tests witness the fix" gate (layer 1)
+// and patch-scoped mutation scoring (layer 2). Exported so external harnesses
+// (CI jobs, evals) can run the same gate the pipeline enforces per turn.
+export * from "./verify";
