@@ -48,13 +48,17 @@ describe("tenant policy manifest", () => {
   it("marks billing tables org_only and security_events workspace_nullable", () => {
     const find = (t: string) => POLICY_MANIFEST.find((e) => e.table === t);
     expect(find("billing.subscriptions")?.policyClass).toBe("org_only");
-    expect(find("security.security_events")?.policyClass).toBe("workspace_nullable");
+    expect(find("security.security_events")?.policyClass).toBe(
+      "workspace_nullable",
+    );
   });
 
   it("IAM tables live in iam.* schema after the 2026-06-11 rebuild", () => {
     const find = (t: string) => POLICY_MANIFEST.find((e) => e.table === t);
     expect(find("iam.principals")?.policyClass).toBe("workspace_nullable");
-    expect(find("iam.principal_role_assignments")?.policyClass).toBe("workspace_nullable");
+    expect(find("iam.principal_role_assignments")?.policyClass).toBe(
+      "workspace_nullable",
+    );
     expect(find("iam.roles")?.policyClass).toBe("org_only");
     expect(find("iam.role_grants")?.policyClass).toBe("org_only");
     expect(find("iam.access_requests")?.policyClass).toBe("org_only");
@@ -83,7 +87,9 @@ describe("tenant policy manifest", () => {
   });
 
   it("content.generated_assets is present as standard", () => {
-    const entry = POLICY_MANIFEST.find((e) => e.table === "content.generated_assets");
+    const entry = POLICY_MANIFEST.find(
+      (e) => e.table === "content.generated_assets",
+    );
     expect(entry?.policyClass).toBe("standard");
   });
 
@@ -173,10 +179,13 @@ describe("tenant policy manifest", () => {
     //      The table + RLS + manifest all shipped; this ratchet and the
     //      manifest-coverage integration test were the missed halves — surfaced once
     //      main CI stopped dying at pnpm install.
-    // 90 = 89 + workspace.routing_policy (Verified-Outcome Market Router
-    //      governance, org_id NOT NULL + workspace_id NULLABLE → workspace_nullable
-    //      tenant_isolation RLS, 20260731130700_routing_policy.sql).
-    expect(POLICY_MANIFEST.length).toBe(90);
+    // 95 = 89 + 6 billing.reseller_* tables (reseller revenue,
+    //      20260725120000_reseller_revenue.sql — org_id NOT NULL, no
+    //      workspace_id → org_only). The migration shipped RLS DDL inline but
+    //      the manifest was never updated, so manifest-coverage failed in CI
+    //      and a future re-baseline would have silently dropped the policies
+    //      (found by the 2026-07-11 Postgres schema audit).
+    expect(POLICY_MANIFEST.length).toBe(95);
   });
 
   it("covers slug-history tables for org + workspace renames (OXA-1779)", () => {
@@ -184,7 +193,9 @@ describe("tenant policy manifest", () => {
     // org_slug_history has org_id only (no workspace_id) → org_only.
     expect(find("org.org_slug_history")?.policyClass).toBe("org_only");
     // workspace_slug_history has both org_id + workspace_id NN → standard.
-    expect(find("workspace.workspace_slug_history")?.policyClass).toBe("standard");
+    expect(find("workspace.workspace_slug_history")?.policyClass).toBe(
+      "standard",
+    );
   });
 
   it("covers workspace.workspace_memory_policy for agent-memory decay (OXA-1374)", () => {

@@ -159,6 +159,12 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<
       "Files Touched — every file the agent read/created/updated/deleted this session; view diffs, open in your editor",
   },
   { name: "hud", description: "Toggle the running-agents heads-up display" },
+  {
+    name: "dispatch",
+    description:
+      "Async dispatch mode — background task prompts to the fleet (` &` forces bg, `=` forces inline)",
+    argumentHint: "[on|off|cap <n>|status]",
+  },
   { name: "panel", description: "Toggle the Agent Team + Task side panel" },
   {
     name: "mouse",

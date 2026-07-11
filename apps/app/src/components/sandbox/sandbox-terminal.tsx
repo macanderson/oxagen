@@ -176,10 +176,11 @@ export function SandboxTerminal({
   welcome,
   className,
 }: SandboxTerminalProps) {
-  // Monotonic key generator; seeds past the pre-loaded history rows.
-  const keyRef = useRef(0);
+  // Monotonic key generator; seeded past the pre-loaded history rows (which
+  // take indexes 0..n-1) so refs are never read during render.
+  const keyRef = useRef(initialHistory.length);
   const [entries, setEntries] = useState<InternalEntry[]>(() =>
-    initialHistory.map((e) => ({ ...e, key: keyRef.current++ })),
+    initialHistory.map((e, i) => ({ ...e, key: i })),
   );
   const [input, setInput] = useState("");
 

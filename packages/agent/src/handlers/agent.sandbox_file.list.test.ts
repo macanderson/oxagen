@@ -55,7 +55,12 @@ const ROW = {
   snapshotId: null as string | null,
   image: "agent",
   status: "running",
-  metadata: { memoryMb: 2048, ttlSeconds: 86_400, idleTimeoutSeconds: 1_200, network: "allow" },
+  metadata: {
+    memoryMb: 2048,
+    ttlSeconds: 86_400,
+    idleTimeoutSeconds: 1_200,
+    network: "allow",
+  },
 };
 
 const okExec = (stdout: string) => ({
@@ -161,7 +166,9 @@ describe("agent.sandbox.files.list handler", () => {
       { path: "src/index.ts", kind: "file", sizeBytes: 1024 },
     ]);
     // Runs against the workspace root by default, bounded by depth.
-    const call = h.driver.execInSession.mock.calls[0]![0] as { command: string };
+    const call = h.driver.execInSession.mock.calls[0]![0] as {
+      command: string;
+    };
     expect(call.command).toContain("'/work'");
     expect(call.command).toContain("-maxdepth 2");
   });
@@ -176,7 +183,9 @@ describe("agent.sandbox.files.list handler", () => {
       CTX,
     );
 
-    const call = h.driver.execInSession.mock.calls[0]![0] as { command: string };
+    const call = h.driver.execInSession.mock.calls[0]![0] as {
+      command: string;
+    };
     expect(call.command).toContain("'/work/src/components'");
     expect(call.command).toContain("-maxdepth 3");
   });
@@ -189,6 +198,7 @@ describe("agent.sandbox.files.list handler", () => {
   });
 
   it("throws when no durable driver is available", async () => {
+    fake.enqueue([{ ...ROW }]); // getSessionByPublicId — driver is resolved per-row
     h.isDurableSandboxDriver.mockReturnValue(false);
     await expect(
       agentSandboxFilesListHandler({ sessionId: "sbx_1", depth: 2 }, CTX),
@@ -213,8 +223,13 @@ describe("agent.sandbox.files.list handler", () => {
       CTX,
     );
 
-    expect(out.entries).toEqual([{ path: "a.txt", kind: "file", sizeBytes: 2 }]);
-    expect(h.driver.restoreSession).toHaveBeenCalledWith("img-7", expect.any(Object));
+    expect(out.entries).toEqual([
+      { path: "a.txt", kind: "file", sizeBytes: 2 },
+    ]);
+    expect(h.driver.restoreSession).toHaveBeenCalledWith(
+      "img-7",
+      expect.any(Object),
+    );
     expect(h.driver.execInSession).toHaveBeenCalledTimes(2);
   });
 
