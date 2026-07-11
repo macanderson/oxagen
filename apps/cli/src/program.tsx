@@ -2045,6 +2045,68 @@ export function buildProgram(): Command {
       await commandRun(name, args ?? []);
     });
 
+  // ── prompt: saved prompt snippets ───────────────────────────────────────────
+
+  const prompt = program
+    .command("prompt")
+    .description(
+      "Manage saved prompts — reusable, describable prompt snippets you recall by name",
+    );
+  prompt
+    .command("list")
+    .description("List saved prompts")
+    .action(async () => {
+      const { promptList } = await import("./commands/prompt.js");
+      promptList();
+    });
+  prompt
+    .command("show")
+    .description("Show a saved prompt's text")
+    .argument("<name>", "Prompt name")
+    .action(async (name: string) => {
+      const { promptShow } = await import("./commands/prompt.js");
+      promptShow(name);
+    });
+  prompt
+    .command("new")
+    .description("Scaffold a new saved prompt at .oxagen/prompts/<name>.md")
+    .argument("<name>", "Prompt name")
+    .action(async (name: string) => {
+      const { promptNew } = await import("./commands/prompt.js");
+      promptNew(name);
+    });
+
+  // ── skill: loadable skills (SKILL.md reference material) ─────────────────────
+
+  const skill = program
+    .command("skill")
+    .description(
+      "Manage loadable skills — SKILL.md reference material injected into the agent's system prompt",
+    );
+  skill
+    .command("list")
+    .description("List available skills")
+    .action(async () => {
+      const { skillList } = await import("./commands/skill.js");
+      skillList();
+    });
+  skill
+    .command("show")
+    .description("Show a skill's full instructions")
+    .argument("<name>", "Skill name")
+    .action(async (name: string) => {
+      const { skillShow } = await import("./commands/skill.js");
+      skillShow(name);
+    });
+  skill
+    .command("new")
+    .description("Scaffold a new skill at .oxagen/skills/<name>/SKILL.md")
+    .argument("<name>", "Skill name")
+    .action(async (name: string) => {
+      const { skillNew } = await import("./commands/skill.js");
+      skillNew(name);
+    });
+
   // ── rules: workspace rules the agent must follow ────────────────────────────
 
   const rules = program
