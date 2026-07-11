@@ -21,6 +21,8 @@ class FakeWorkspace implements Workspace {
   onExec: (cmd: string) => CommandResult = () => ok(0);
   /** When set, writeFile throws for these paths (restore-failure injection). */
   failWritesFor = new Set<string>();
+  /** One-shot: writeFile throws ONCE per path, then succeeds (revert-failure injection). */
+  failNextWriteFor = new Set<string>();
 
   constructor(files: Record<string, string>) {
     this.files = new Map(Object.entries(files));
@@ -32,6 +34,7 @@ class FakeWorkspace implements Workspace {
   }
   async writeFile(p: string, content: string): Promise<void> {
     if (this.failWritesFor.has(p)) throw new Error(`EACCES: ${p}`);
+    if (this.failNextWriteFor.delete(p)) throw new Error(`EIO once: ${p}`);
     this.files.set(p, content);
   }
   async editFile(): Promise<number> {
@@ -158,6 +161,89 @@ describe("runMutationGate — layer 1", () => {
     });
   });
 
+  it("reverts and restores a fix spanning MULTIPLE source files", async () => {
+    const multiDiff = [
+      "diff --git a/src/a.ts b/src/a.ts",
+      "--- a/src/a.ts",
+      "+++ b/src/a.ts",
+      "@@ -1 +1 @@",
+      "-export const a = 1;",
+      "+export const a = 2;",
+      "diff --git a/src/b.ts b/src/b.ts",
+      "--- a/src/b.ts",
+      "+++ b/src/b.ts",
+      "@@ -1 +1 @@",
+      "-export const b = 1;",
+      "+export const b = 2;",
+      "diff --git a/src/ab.test.ts b/src/ab.test.ts",
+      "new file mode 100644",
+      "--- /dev/null",
+      "+++ b/src/ab.test.ts",
+      "@@ -0,0 +1 @@",
+      "+import './a'; import './b';",
+    ].join("\n");
+    const ws = new FakeWorkspace({
+      "src/a.ts": "export const a = 2;\n",
+      "src/b.ts": "export const b = 2;\n",
+      "src/ab.test.ts": "import './a'; import './b';\n",
+    });
+    const seen: Array<[string, string]> = [];
+    ws.onExec = (cmd) => {
+      if (cmd !== WITNESS) return ok(0);
+      seen.push([ws.files.get("src/a.ts")!, ws.files.get("src/b.ts")!]);
+      const bothReverted =
+        ws.files.get("src/a.ts") === "export const a = 1;\n" &&
+        ws.files.get("src/b.ts") === "export const b = 1;\n";
+      return bothReverted ? ok(1) : ok(0);
+    };
+    const result = await runMutationGate(ws, multiDiff, evidence());
+    expect(result.status).toBe("witnessed");
+    expect(result.revertedFiles).toEqual(["src/a.ts", "src/b.ts"]);
+    // The witness saw BOTH files reverted at once…
+    expect(seen).toEqual([["export const a = 1;\n", "export const b = 1;\n"]]);
+    // …and BOTH are byte-for-byte restored, test file untouched.
+    expect(ws.files.get("src/a.ts")).toBe("export const a = 2;\n");
+    expect(ws.files.get("src/b.ts")).toBe("export const b = 2;\n");
+    expect(ws.files.get("src/ab.test.ts")).toBe("import './a'; import './b';\n");
+  });
+
+  it("reverts a fix that DELETED a source file by recreating it, then removes it again", async () => {
+    const deletedDiff = [
+      "diff --git a/src/legacy.ts b/src/legacy.ts",
+      "deleted file mode 100644",
+      "--- a/src/legacy.ts",
+      "+++ /dev/null",
+      "@@ -1,2 +0,0 @@",
+      "-export const legacy = true;",
+      "-export const gone = 1;",
+      "diff --git a/src/legacy.test.ts b/src/legacy.test.ts",
+      "new file mode 100644",
+      "--- /dev/null",
+      "+++ b/src/legacy.test.ts",
+      "@@ -0,0 +1 @@",
+      "+import './calc';",
+    ].join("\n");
+    const ORIGINAL_LEGACY = "export const legacy = true;\nexport const gone = 1;\n";
+    // The fix deleted src/legacy.ts, so it is ABSENT from the current tree.
+    const ws = new FakeWorkspace({
+      "src/legacy.test.ts": "import './calc';\n",
+    });
+    const seen: Array<string | undefined> = [];
+    ws.onExec = (cmd) => {
+      if (cmd !== WITNESS) return ok(0);
+      seen.push(ws.files.get("src/legacy.ts"));
+      // The shadow recreated the pre-fix file ⇒ the test fails without the fix.
+      return ws.files.get("src/legacy.ts") === ORIGINAL_LEGACY ? ok(1) : ok(0);
+    };
+    const result = await runMutationGate(ws, deletedDiff, evidence());
+    expect(result.status).toBe("witnessed");
+    // The witness really saw the recreated pre-fix file…
+    expect(seen).toEqual([ORIGINAL_LEGACY]);
+    // …and the restore removed it again (the fix deletes it).
+    expect(ws.execLog).toContain("rm -- 'src/legacy.ts'");
+    expect(ws.files.has("src/legacy.ts")).toBe(false);
+  });
+
   it("reverts files the fix CREATED by removing them, then restores them", async () => {
     const createdDiff = [
       "diff --git a/src/helper.ts b/src/helper.ts",
@@ -269,6 +355,47 @@ describe("runMutationGate — skip paths", () => {
 // ── Restore is a hard guarantee ────────────────────────────────────────────────
 
 describe("runMutationGate — restore", () => {
+  it("skips and cleanly restores when a write fails during the REVERT itself", async () => {
+    const multiDiff = [
+      "diff --git a/src/a.ts b/src/a.ts",
+      "--- a/src/a.ts",
+      "+++ b/src/a.ts",
+      "@@ -1 +1 @@",
+      "-export const a = 1;",
+      "+export const a = 2;",
+      "diff --git a/src/b.ts b/src/b.ts",
+      "--- a/src/b.ts",
+      "+++ b/src/b.ts",
+      "@@ -1 +1 @@",
+      "-export const b = 1;",
+      "+export const b = 2;",
+      "diff --git a/src/ab.test.ts b/src/ab.test.ts",
+      "new file mode 100644",
+      "--- /dev/null",
+      "+++ b/src/ab.test.ts",
+      "@@ -0,0 +1 @@",
+      "+import './a'; import './b';",
+    ].join("\n");
+    const ws = new FakeWorkspace({
+      "src/a.ts": "export const a = 2;\n",
+      "src/b.ts": "export const b = 2;\n",
+      "src/ab.test.ts": "import './a'; import './b';\n",
+    });
+    // src/a.ts reverts fine (tree now partially reverted); src/b.ts's revert
+    // write throws once. The restore's own writes must still succeed.
+    ws.failNextWriteFor.add("src/b.ts");
+    const witness = vi.fn(() => ok(1));
+    ws.onExec = witness;
+    const result = await runMutationGate(ws, multiDiff, evidence());
+    expect(result.status).toBe("skipped");
+    expect(result.reason).toContain("shadow run failed");
+    // The witness never ran against a half-reverted tree.
+    expect(witness).not.toHaveBeenCalled();
+    // The partially reverted tree was restored byte-for-byte.
+    expect(ws.files.get("src/a.ts")).toBe("export const a = 2;\n");
+    expect(ws.files.get("src/b.ts")).toBe("export const b = 2;\n");
+  });
+
   it("throws LOUDLY when the working tree cannot be restored", async () => {
     const ws = workspace();
     ws.onExec = (cmd) => {

@@ -233,6 +233,20 @@ describe("runTurn — mutation gate wiring", () => {
     }
   });
 
+  it("never arms on a read-only turn (no revert, no gate verdicts)", async () => {
+    const ws = new GateWorkspace(0); // would be vacuous IF the gate ran
+    const result = await runTurn({
+      prompt: "fix the answer",
+      workspace: ws,
+      ai: makeAi(),
+      readOnly: true,
+    });
+    expect(result.trace.mutationGates).toBeUndefined();
+    expect(result.trace.finalComplete).toBe(true);
+    // The working tree was never touched by a shadow revert.
+    expect(ws.files.get("src/calc.ts")).toBe(FIXED);
+  });
+
   it("is disabled by the explicit mutationVerify:false option", async () => {
     const ws = new GateWorkspace(0);
     const result = await runTurn({

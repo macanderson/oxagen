@@ -446,4 +446,40 @@ describe("generateMutants", () => {
     const deleted = parseUnifiedDiff(DELETED_DIFF)[0]!;
     expect(generateMutants(deleted, "x\n", 10)).toEqual([]);
   });
+
+  it("exercises every remaining operator: !==, &&, ||, <=, >=, early return", () => {
+    const opLines = [
+      "if (a !== b) fail();",
+      "if (a && b) go();",
+      "if (a || b) go();",
+      "if (a <= b) go();",
+      "if (a >= b) go();",
+      "return compute(a);",
+    ];
+    const current = ["function f(a, b) {", ...opLines.map((l) => "  " + l), "}", ""].join("\n");
+    const d = [
+      "--- a/src/ops.ts",
+      "+++ b/src/ops.ts",
+      "@@ -1,2 +1,8 @@",
+      " function f(a, b) {",
+      ...opLines.map((l) => "+  " + l),
+      " }",
+    ].join("\n");
+    const file = parseUnifiedDiff(d)[0]!;
+    const mutants = generateMutants(file, current, 10);
+    expect(mutants.map((m) => m.description)).toEqual([
+      "!== → ===",
+      "&& → ||",
+      "|| → &&",
+      "<= → <",
+      ">= → >",
+      "early return",
+    ]);
+    expect(mutants[0]!.mutatedContent).toContain("if (a === b) fail();");
+    expect(mutants[1]!.mutatedContent).toContain("if (a || b) go();");
+    expect(mutants[2]!.mutatedContent).toContain("if (a && b) go();");
+    expect(mutants[3]!.mutatedContent).toContain("if (a < b) go();");
+    expect(mutants[4]!.mutatedContent).toContain("if (a > b) go();");
+    expect(mutants[5]!.mutatedContent).toContain("return; // compute(a);");
+  });
 });
