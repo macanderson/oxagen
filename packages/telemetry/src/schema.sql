@@ -301,3 +301,33 @@ CREATE TABLE IF NOT EXISTS sandbox_log_events (
 PARTITION BY toYYYYMMDD(ts)
 ORDER BY (org_id, workspace_id, session_id, ts)
 TTL toDateTime(ts) + INTERVAL 14 DAY;
+
+-- Verified-Outcome Market Router observed outcomes (migration 0025). One
+-- append-only row per executed (revise) round: the task class it was routed for,
+-- the model/tier that served it, whether the outcome was VERIFIED, observed cost
+-- + latency, and the routing mode. The router reads this back (readRoutingStats)
+-- to compute each task class's live cost/accuracy Pareto curve. Tenant-scoped
+-- (chInsert/chSelect); 365-day TTL like token_usage. See the migration file for
+-- the full column rationale.
+CREATE TABLE IF NOT EXISTS router_outcomes (
+  org_id UUID,
+  workspace_id UUID DEFAULT toUUID('00000000-0000-0000-0000-000000000000'),
+  execution_id String DEFAULT '',
+  task_class LowCardinality(String) DEFAULT '',
+  signature_hash String DEFAULT '',
+  model LowCardinality(String) DEFAULT '',
+  tier LowCardinality(String) DEFAULT '',
+  verified UInt8 DEFAULT 0,
+  verification_source LowCardinality(String) DEFAULT '',
+  score Float32 DEFAULT 0,
+  cost_usd_micros UInt64 CODEC(T64, ZSTD(1)),
+  latency_ms UInt32 DEFAULT 0,
+  surface LowCardinality(String) DEFAULT '',
+  routing_mode LowCardinality(String) DEFAULT 'static',
+  created_at DateTime64(3) DEFAULT now64(3) CODEC(DoubleDelta, ZSTD(1)),
+  INDEX idx_router_model model TYPE set(0) GRANULARITY 4,
+  INDEX idx_router_execution execution_id TYPE bloom_filter(0.01) GRANULARITY 4
+) ENGINE = MergeTree()
+PARTITION BY toYYYYMM(created_at)
+ORDER BY (org_id, task_class, model, created_at)
+TTL toDateTime(created_at) + INTERVAL 365 DAY;
