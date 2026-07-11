@@ -13,8 +13,24 @@ Stella is bring-your-own-key. Set one or more of these environment variables:
 | **OpenAI (GPT)** | `OPENAI_API_KEY` | `gpt-5.5` |
 | **xAI (Grok)** | `XAI_API_KEY` | `grok-4` |
 | **DeepSeek** | `DEEPSEEK_API_KEY` | `deepseek-chat` |
-| **Google Gemini** | `GEMINI_API_KEY` | `gemini-3-pro` |
+| **Google Gemini** | `GEMINI_API_KEY` (alias `GOOGLE_API_KEY`) | `gemini-3-pro` |
 | **OpenRouter** | `OPENROUTER_API_KEY` | `auto` |
+| **Google Vertex AI** | `VERTEX_ACCESS_TOKEN` + `VERTEX_PROJECT_ID` | `gemini-3-pro` |
+| **Amazon Bedrock** | `AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY` | `us.anthropic.claude-sonnet-4-5-20250929-v1:0` |
+
+Vertex AI takes a ready OAuth token (`export VERTEX_ACCESS_TOKEN=$(gcloud auth
+print-access-token)`) plus `VERTEX_PROJECT_ID` (or `GOOGLE_CLOUD_PROJECT`) and an
+optional `VERTEX_LOCATION` (default `global`). Bedrock uses the standard AWS env
+credentials with optional `AWS_SESSION_TOKEN` / `AWS_REGION` (default `us-east-1`);
+it is last in auto-detection order so having generic AWS credentials exported never
+hijacks provider selection.
+
+Local OpenAI-compatible servers (Ollama, vLLM, LM Studio, llama.cpp server) need no
+key at all — point `--base-url` at them:
+
+```bash
+stella --model local/llama3.3 --base-url http://localhost:11434/v1
+```
 
 ```bash
 export ZAI_API_KEY=your_key_here
@@ -91,14 +107,20 @@ workspace root with a process-group-based timeout kill.
 
 - **Z.ai** (GLM 5.2) - OpenAI-compatible
 - **Anthropic** (Claude Fable 5) - Messages API
-- **OpenAI** (GPT-5.5) - OpenAI-compatible
+- **OpenAI** (GPT-5.5) - Responses API
 - **xAI** (Grok 4) - OpenAI-compatible
 - **DeepSeek** - OpenAI-compatible
-- **Google Gemini** - OpenAI-compatible
+- **Google Gemini** - native generateContent (thinking levels, thought
+  signatures, cached-token accounting)
+- **Google Vertex AI** - native generateContent, project/location-scoped
+- **Amazon Bedrock** - Converse API, SigV4-signed
 - **OpenRouter** - OpenAI-compatible multi-model gateway
+- **Local** - any OpenAI-compatible endpoint via `--model local/<model>
+  --base-url <url>` (Ollama, vLLM, LM Studio, llama.cpp server)
 
-Any OpenAI-compatible gateway (Vercel AI Gateway, Azure OpenAI, Together,
-etc.) can be used by setting the appropriate base URL and key.
+Any other OpenAI-compatible gateway (Vercel AI Gateway, Azure OpenAI,
+Together, etc.) works the same way through the local provider's
+`--base-url`.
 
 ## Architecture
 
