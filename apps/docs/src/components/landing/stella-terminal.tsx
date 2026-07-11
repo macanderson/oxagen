@@ -15,7 +15,7 @@ const STEPS: TerminalStep[] = [
     out: [{ kind: "dim", text: "BYOK: any provider key works. No account, no sign-up." }],
   },
   {
-    cmd: 'stella goal "the parser handles CRLF files and tests pass" --budget 5',
+    cmd: 'stella --budget 5 goal "the parser handles CRLF files and tests pass"',
     out: [
       { kind: "dim", text: "◇ round 1 · worker anthropic/claude-fable-5 · budget $5.00" },
       { kind: "out", text: "→ read_file src/parser.rs · grep \"\\r\\n\" · run_tests kind=unit" },

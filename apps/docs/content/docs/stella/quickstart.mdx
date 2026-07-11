@@ -52,7 +52,7 @@ stella run "add a health check endpoint to the API"
 `run` executes a task; `goal` keeps working, in rounds, until an LLM judge confirms the goal is met from evidence:
 
 ```bash
-stella goal "the parser handles CRLF files and tests pass" --budget 5
+stella --budget 5 goal "the parser handles CRLF files and tests pass"
 ```
 
 Each round, the worker makes changes test-first, then the `verify_done` gate checks the **witness test**: it must fail on your previous code (git HEAD, replayed in a shadow worktree with only the new test files layered in) and pass on the new code. After the round, the judge re-checks the goal with its own read-only tools (`read_file`, `grep`, `glob`, `ci_status`) — its feedback drives the next round. The run ends on `WITNESS CONFIRMED` plus a satisfied judge, a round cap, or your budget.
