@@ -91,10 +91,14 @@ test.describe("conversation files — Download all as ZIP", () => {
 
     // First send persists the conversation and lands `?c=<publicId>` in the
     // URL — the composer needs that id so later uploads link to the
-    // conversation at upload time.
+    // conversation at upload time. This spec is the one legitimate consumer
+    // of allowConversationNavigation: it needs the `?c=` commit and reloads
+    // right after, asserting nothing about streamed state surviving the
+    // navigation (see InterceptOptions docs).
     await interceptAgentStream(page, {
       events: minimalTextEvents("e2e-msg-files-zip-01"),
       delayMs: 50,
+      allowConversationNavigation: true,
     });
     await composer.fill("I will attach two files next.");
     await page.getByRole("button", { name: /^send message$/i }).click();
@@ -116,11 +120,20 @@ test.describe("conversation files — Download all as ZIP", () => {
     await uploadPng(page, "first-diagram.png");
     await uploadPng(page, "second-diagram.png");
 
-    // The Files tab fetched on mount, before the uploads existed. Toggling
-    // Workspace → Files re-activates the list, which refetches.
+    // The Files tab's list fetched on mount (right after the reload above),
+    // before these uploads existed, and ConversationFilesList only re-fetches
+    // when it re-activates (see conversation-files.tsx). There is no
+    // "Workspace" tab to toggle away to and back in this scenario to force
+    // that re-activation — WorkspaceContextPanel only renders a Workspace tab
+    // once a durable sandbox session is active (see
+    // workspace-context-panel.tsx / findActiveSandboxSessionId), and this
+    // spec's mocked turn is plain text with no sandbox tool call. A fresh
+    // navigation re-mounts the panel, which fetches fresh — the same pattern
+    // chat-attachments.spec.ts uses to observe persisted state past the
+    // mock's held RSC refresh.
+    await page.reload();
+    await expect(page).not.toHaveURL(/\/login/);
     const rail = page.locator("aside");
-    await rail.getByRole("tab", { name: /workspace/i }).click();
-    await rail.getByRole("tab", { name: /^files$/i }).click();
 
     // The bulk affordance appears only because MORE THAN ONE file exists.
     await expect(rail.getByText("2 files")).toBeVisible({ timeout: 15_000 });
