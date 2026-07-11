@@ -5,7 +5,7 @@ import type {
 import { WORKSPACE_ROOT, isSafeWorkspacePath } from "@oxagen/sandbox";
 import type { CapabilityContext } from "../types";
 import {
-  requireDurableDriver,
+  requireDurableDriverForRow,
   getSessionByPublicId,
   rebindSession,
   markSessionStatus,
@@ -33,18 +33,19 @@ const EXIT_NOT_A_FILE = 45;
  * binary bytes intact through the exec channel's stdout string; the decode
  * happens here, server-side, where we can distinguish real UTF-8 text from
  * binary and label the result accordingly. Only the Modal driver implements
- * durable sessions today; the rest fail closed via `requireDurableDriver()`.
+ * durable sessions today; the rest fail closed via `requireDurableDriverForRow()`.
  */
 export async function agentSandboxFileReadHandler(
   input: AgentSandboxFileReadInput,
   ctx: CapabilityContext,
 ): Promise<AgentSandboxFileReadOutput> {
-  const driver = requireDurableDriver();
-
   const row = await getSessionByPublicId(ctx, input.sessionId);
   if (!row || row.status === "stopped" || row.status === "gone") {
     throw new SandboxSessionNotFoundError(input.sessionId);
   }
+
+  // Resolve the session's own driver (vendor-neutral), not the deployment default.
+  const driver = requireDurableDriverForRow(row.driver);
 
   // Defense in depth: the contract already rejects unsafe paths at the Zod
   // boundary, but re-validate here so no untrusted string can reach the shell

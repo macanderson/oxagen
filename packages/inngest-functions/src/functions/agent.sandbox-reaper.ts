@@ -212,10 +212,17 @@ async function reapOne(c: CandidateRow): Promise<{ action: string; kind?: string
     logger.debug({ err, sessionId: c.public_id }, "agent.sandbox-reaper: terminate best-effort");
   }
 
+  // Terminal state is written HERE, not left to the best-effort stop above: even
+  // when the stop handler or its provider call throws, a flushed (cleaned-out)
+  // sandbox must NEVER linger in lists as idle/running. Soft-delete the row and
+  // flip status → stopped alongside the recovery columns so retirement is
+  // guaranteed by the reaper itself, independent of the terminate call.
   await withSystemDb(async (tx) => {
     await tx
       .update(schema.sandboxSessions)
       .set({
+        status: "stopped",
+        deletedAt: new Date(),
         flushedAt: new Date(),
         recoveryStatus: outcome.kind === "recovered" ? "recovered" : outcome.kind === "gone" ? "failed" : "none",
         recoveryBranch: outcome.branch ?? null,

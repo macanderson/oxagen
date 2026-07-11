@@ -4,7 +4,7 @@ import type {
 } from "@oxagen/oxagen/contracts/agent.sandbox.snapshot";
 import type { CapabilityContext } from "../types";
 import {
-  requireDurableDriver,
+  requireDurableDriverForRow,
   getSessionByPublicId,
   recordSnapshot,
   SandboxSessionNotFoundError,
@@ -20,12 +20,13 @@ export async function agentSandboxSnapshotHandler(
   input: AgentSandboxSnapshotInput,
   ctx: CapabilityContext,
 ): Promise<AgentSandboxSnapshotOutput> {
-  const driver = requireDurableDriver();
-
   const row = await getSessionByPublicId(ctx, input.sessionId);
   if (!row || row.status === "stopped" || row.status === "gone") {
     throw new SandboxSessionNotFoundError(input.sessionId);
   }
+
+  // Resolve the session's own driver (vendor-neutral), not the deployment default.
+  const driver = requireDurableDriverForRow(row.driver);
 
   const { snapshotId } = await driver.snapshotSession(row.sandboxId);
   await recordSnapshot(ctx, row.id, snapshotId);

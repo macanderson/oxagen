@@ -1247,6 +1247,11 @@ export function ChatShellClient({
             </div>
           ) : null}
 
+          {/* The wrapper (not the scroll container) is the anchor for the mobile
+            Activity trigger below: an `absolute` child of the scroll container
+            would scroll away with the messages, and the old `fixed` placement
+            floated the pill over the composer's Send button on phones. */}
+          <div className="relative min-h-0 flex-1">
           <div
             ref={scrollContainerRef}
             // `relative` is load-bearing: it makes this scroll container the
@@ -1255,7 +1260,7 @@ export function ChatShellClient({
             // those abs elements anchor to the initial containing block, escape this
             // container's `overflow` clipping, and inflate the document height —
             // letting the whole page scroll past the composer on mobile and desktop.
-            className="relative min-h-0 flex-1 overflow-y-auto pr-2"
+            className="relative h-full overflow-y-auto pr-2"
             onScroll={handleScroll}
           >
             {messages.length === 0 && !hasLiveContent ? (
@@ -1351,6 +1356,28 @@ export function ChatShellClient({
               </div>
             )}
           </div>
+            {/* Below lg the trace rail lives in a bottom sheet (ADR-026 mobile
+            parity); this floating trigger sits inside the message viewport —
+            always above the composer, never over its Send/collapse controls. */}
+            {showFiles ? (
+              <button
+                type="button"
+                data-testid="chat-mobile-rail-trigger"
+                aria-haspopup="dialog"
+                aria-expanded={mobileRailOpen}
+                onClick={() => setMobileRailOpen(true)}
+                className={cn(
+                  "absolute bottom-3 right-3 z-20 flex h-11 items-center gap-1.5 rounded-full border border-border/60",
+                  "bg-background/95 px-4 text-xs font-medium text-muted-foreground shadow-sm backdrop-blur",
+                  "lg:hidden",
+                  "hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                )}
+              >
+                <PanelRight className="size-4" aria-hidden="true" />
+                Activity
+              </button>
+            ) : null}
+          </div>
           {/* Suggested prompt chips — shown above the composer once there are messages
           (empty state renders its own chips above; this avoids duplication). */}
           {messages.length > 0 || hasLiveContent ? (
@@ -1429,27 +1456,11 @@ export function ChatShellClient({
           </aside>
         ) : null}
 
-        {/* Below lg the rail reflows into a bottom sheet (ADR-026 mobile parity):
-          a floating thumb-reachable trigger above the mobile bottom bar opens
-          the identical trace + workspace panels. */}
+        {/* Below lg the rail reflows into a bottom sheet (ADR-026 mobile parity);
+          its floating trigger lives inside the message viewport above (anchored
+          to the scroll-area wrapper, so it can't cover the composer). */}
         {showFiles ? (
           <div className="lg:hidden">
-            <button
-              type="button"
-              data-testid="chat-mobile-rail-trigger"
-              aria-haspopup="dialog"
-              aria-expanded={mobileRailOpen}
-              onClick={() => setMobileRailOpen(true)}
-              className={cn(
-                "fixed right-3 z-20 flex h-11 items-center gap-1.5 rounded-full border border-border/60",
-                "bg-background/95 px-4 text-xs font-medium text-muted-foreground shadow-sm backdrop-blur",
-                "bottom-[calc(var(--bottom-bar-h)+var(--bottom-bar-gap,0px)+env(safe-area-inset-bottom)+0.75rem)] md:bottom-3",
-                "hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-              )}
-            >
-              <PanelRight className="size-4" aria-hidden="true" />
-              Activity
-            </button>
             <Sheet open={mobileRailOpen} onOpenChange={setMobileRailOpen}>
               <SheetPopup
                 side="bottom"

@@ -35,7 +35,13 @@ import type { ModelMessage } from "ai";
 import { readFile } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
 import { theme } from "../tui/theme.js";
-import { runTurn, type AgentAi, type StageEvent } from "@oxagen/agent-engine";
+import {
+  runTurn,
+  type AgentAi,
+  type StageEvent,
+  type AskUserResponse,
+} from "@oxagen/agent-engine";
+import { SurveyPrompt } from "./survey-prompt.js";
 import {
   createCwdWorkspace,
   createGatedWorkspace,
@@ -78,7 +84,6 @@ import { openFleetMemory } from "../agent/fleet/memory.js";
 import { openPlanStore } from "../agent/fleet/store.js";
 import { loadAgents } from "../agents/loader.js";
 import { planReplTurn, fallbackPlan } from "./plan-turn.js";
-import { classifyPromptIntent } from "./prompt-intent.js";
 import { runFleetTurn } from "./fleet-turn.js";
 import { agentRegistry, type AgentHandle } from "../agent/agent-registry.js";
 import { taskRegistry } from "../agent/task-registry.js";
@@ -451,6 +456,16 @@ export function ReplApp({
   const [approval, setApproval] = useState<{
     req: ApprovalRequest;
     resolve: (r: ApprovalResponse) => void;
+  } | null>(null);
+
+  // Pending ask_user clarification survey (drives the inline SurveyPrompt;
+  // null when none). Same park-the-promise pattern as `approval`: the engine's
+  // askUser callback stores the resolver here and the overlay resolves it
+  // exactly once (choice, free text, or dismiss).
+  const [pendingSurvey, setPendingSurvey] = useState<{
+    question: string;
+    options: string[];
+    resolve: (r: AskUserResponse) => void;
   } | null>(null);
 
   // The active auth session — starts as the launch-time `options.session`
@@ -2758,27 +2773,9 @@ export function ReplApp({
           dispatchTelemetry({ type: "stage", stage });
           render();
         };
-        // Fast path: a conversational/lookup turn ("what's the command to add
-        // an MCP server?") gets grounded retrieval + a single answer, NOT a
-        // dedicated planner model call up front (skipped here) or a frontier
-        // completeness judge on the back (skipped in the engine via `fastPath`
-        // below, guarded on a zero diff). Classification is a zero-cost text
-        // heuristic; a false "task" only loses the fast path, a false "simple"
-        // is self-corrected by the engine's zero-diff judge guard.
-        const fastPath =
-          !bareRef.current && classifyPromptIntent(goalText) === "simple";
         let plan;
         if (bareRef.current) {
           plan = fallbackPlan(goalText);
-        } else if (fastPath) {
-          // Router-derived single-task plan — genuine, no planner LLM round-trip.
-          pushStage({
-            kind: "plan",
-            label: "Fast path — answering directly",
-            detail: "lookup: skipping planner + judge",
-          });
-          plan = fallbackPlan(goalText);
-          noteProgress();
         } else {
           pushStage({ kind: "plan", label: "Planning the work" });
           plan = await planReplTurn({
@@ -2996,6 +2993,18 @@ export function ReplApp({
           // auth/billing/security/migration work. The scope card shows the
           // routed model + rationale. An explicit pin passes through verbatim.
           model: modelRef.current ?? undefined,
+          // Clarification surveys: interactive turns may ask the user a
+          // structured question instead of guessing. Passing the callback is
+          // the whole gate — the engine registers the ask_user tool and its
+          // prompt rule only when present (headless/one-shot never pass it).
+          askUser: (q) =>
+            new Promise<AskUserResponse>((resolve) =>
+              setPendingSurvey({
+                question: q.question,
+                options: q.options,
+                resolve,
+              }),
+            ),
           // Per-function overrides (undefined ⇒ engine default for that role).
           // Judge takes a panel-shaped list; a single slug is a one-judge panel.
           judgeModels: judgeModelRef.current
@@ -3005,7 +3014,6 @@ export function ReplApp({
           effort: effortRef.current,
           readOnly: modeRef.current === "readonly",
           bare: bareRef.current,
-          fastPath,
           verbose: verboseRef.current,
           budgetGuard,
           enhanceTimeoutMs,
@@ -3398,6 +3406,17 @@ export function ReplApp({
           streamingRef.current = false;
           setIsStreaming(false);
           setTurnStartedAt(null);
+          // A survey pending when its turn ends (cancelled mid-question, or
+          // the engine gave up waiting) must not leave a dead overlay or an
+          // unresolved promise behind.
+          setPendingSurvey((p) => {
+            p?.resolve({
+              answer:
+                "(no answer — the turn ended before the user replied; proceed with your best judgment)",
+              wasFreeText: true,
+            });
+            return null;
+          });
           // Settle the Task Progress checklist so no step lingers half-lit. Guarded
           // on ownership so a cancelled turn's late finally never marks a newer
           // turn's freshly-cleared plan done.
@@ -3732,6 +3751,16 @@ export function ReplApp({
               req={budgetPause.req}
               onResolve={resolveBudgetPause}
             />
+          ) : pendingSurvey ? (
+            <SurveyPrompt
+              question={pendingSurvey.question}
+              options={pendingSurvey.options}
+              width={Math.min(cols - 2, 100)}
+              onAnswer={(a) => {
+                pendingSurvey.resolve(a);
+                setPendingSurvey(null);
+              }}
+            />
           ) : scopeReview ? (
             <ScopeReview
               info={scopeReview.info}
@@ -3970,6 +3999,16 @@ export function ReplApp({
             <ApprovalPrompt
               req={budgetPause.req}
               onResolve={resolveBudgetPause}
+            />
+          ) : pendingSurvey ? (
+            <SurveyPrompt
+              question={pendingSurvey.question}
+              options={pendingSurvey.options}
+              width={Math.min((cols || 80) - 2, 100)}
+              onAnswer={(a) => {
+                pendingSurvey.resolve(a);
+                setPendingSurvey(null);
+              }}
             />
           ) : scopeReview ? (
             <ScopeReview

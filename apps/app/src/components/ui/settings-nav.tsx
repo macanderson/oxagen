@@ -110,6 +110,9 @@ export function MobileSettingsNav({ items, label, className }: MobileSettingsNav
       {/* Spacer matching the switcher height (py-2 ×2 + h-11 button + border). */}
       <div className="h-[3.8125rem] md:hidden" aria-hidden="true" />
       <div
+        // Marker consumed by globals.css: fixed bottom overlays (the PWA
+        // install toast) stack above this switcher instead of covering it.
+        data-mobile-section-nav=""
         className={cn(
           "fixed inset-x-0 bottom-[calc(var(--bottom-bar-h)+env(safe-area-inset-bottom))] z-30 md:hidden",
           "border-t border-border/60 bg-background/95 px-4 py-2 backdrop-blur",

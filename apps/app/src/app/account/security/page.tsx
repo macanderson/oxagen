@@ -17,6 +17,7 @@ import {
   Globe,
 } from "lucide-react";
 import { Panel } from "@/components/ui/panel";
+import { PageHeader } from "@/components/ui/page-header";
 import { Badge } from "@/components/ui/badge";
 import { gt } from "drizzle-orm";
 import { withSystemDb, schema } from "@oxagen/database";
@@ -163,6 +164,12 @@ export default async function AccountSecurityPage() {
 
   return (
     <div className="flex flex-col gap-6">
+      {/* Heading matches the sibling account pages (Preferences/Privacy). */}
+      <PageHeader
+        title="Security"
+        description="Two-factor authentication and active sessions."
+      />
+
       {/* MFA — live TOTP enrollment / management. */}
       <TotpEnrollmentCard enabled={twoFactorEnabled} />
 
@@ -210,11 +217,12 @@ export default async function AccountSecurityPage() {
                   return (
                     <div
                       key={s.id}
-                      className="rounded-xl border border-border/50 bg-muted/20 px-4 py-3 text-sm grid grid-cols-1 gap-y-1 sm:gap-4 sm:items-center"
-                      style={{
-                        gridTemplateColumns:
-                          "minmax(0,1.4fr) 100px 120px 160px 140px",
-                      }}
+                      // The 5-column template is sm+-scoped via an arbitrary
+                      // property: as an inline style it overrode `grid-cols-1`
+                      // at every breakpoint, so phone rows were laid out
+                      // ~660px wide and the timestamp/revoke columns clipped
+                      // off-screen.
+                      className="rounded-xl border border-border/50 bg-muted/20 px-4 py-3 text-sm grid grid-cols-1 gap-y-1 sm:gap-4 sm:items-center sm:[grid-template-columns:minmax(0,1.4fr)_100px_120px_160px_140px]"
                     >
                       {/* Device */}
                       <div className="flex items-center gap-1.5 min-w-0">

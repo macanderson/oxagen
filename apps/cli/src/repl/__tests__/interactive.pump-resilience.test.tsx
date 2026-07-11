@@ -57,7 +57,12 @@ vi.mock("@oxagen/agent-engine", async (importOriginal) => ({
       pending.push({
         prompt: opts.prompt,
         finish: () =>
-          resolve({ text: `done:${opts.prompt}`, messages: [], usage: {}, trace: {} }),
+          resolve({
+            text: `done:${opts.prompt}`,
+            messages: [],
+            usage: {},
+            trace: {},
+          }),
       });
     }),
 }));
@@ -87,7 +92,11 @@ vi.mock("../../agent/trace-store.js", () => ({
   }),
 }));
 vi.mock("../../agent/fleet/memory.js", () => ({
-  openFleetMemory: () => ({ record: () => {}, recall: () => [], all: () => [] }),
+  openFleetMemory: () => ({
+    record: () => {},
+    recall: () => [],
+    all: () => [],
+  }),
 }));
 vi.mock("../../agent/memory.js", () => ({
   openSessionMemory: async () => ({
@@ -101,8 +110,10 @@ vi.mock("../../agent/project-context.js", () => ({
 }));
 vi.mock("../../agent/model.js", () => ({
   resolveModelId: (override?: string) => override ?? "test/model",
+  explicitModelId: (override?: string) => override ?? undefined,
   resolveEffort: () => undefined,
-  isReasoningEffort: (s: string) => ["low", "medium", "high", "xhigh", "max"].includes(s),
+  isReasoningEffort: (s: string) =>
+    ["low", "medium", "high", "xhigh", "max"].includes(s),
   EFFORT_LEVELS: ["low", "medium", "high", "xhigh", "max"] as const,
 }));
 // The REPL now wires the engine code-graph port from this module; stub it so the
@@ -122,7 +133,8 @@ vi.mock("../plan-turn.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../plan-turn.js")>();
   return {
     ...actual,
-    planReplTurn: async ({ goal }: { goal: string }) => actual.fallbackPlan(goal),
+    planReplTurn: async ({ goal }: { goal: string }) =>
+      actual.fallbackPlan(goal),
   };
 });
 
@@ -143,7 +155,8 @@ const tick = (ms = 15): Promise<void> =>
 async function waitFor(cond: () => boolean, ms = 3000): Promise<void> {
   const start = Date.now();
   while (!cond()) {
-    if (Date.now() - start > ms) throw new Error("waitFor: condition timed out");
+    if (Date.now() - start > ms)
+      throw new Error("waitFor: condition timed out");
     await tick(10);
   }
 }
@@ -165,7 +178,9 @@ describe("REPL pump resilience", () => {
   });
 
   it("keeps draining the queue after a turn throws", async () => {
-    const { stdin, lastFrame } = render(<ReplApp options={{ session: TEST_SESSION }} />);
+    const { stdin, lastFrame } = render(
+      <ReplApp options={{ session: TEST_SESSION }} />,
+    );
     await tick();
 
     // 1) First prompt starts a turn and parks (in flight).
@@ -180,8 +195,12 @@ describe("REPL pump resilience", () => {
     pending[0]?.finish();
 
     // The real prompt queued behind the failing one must still run.
-    await waitFor(() => runTurnSpy.mock.calls.some((c) => c[0].prompt === "third task"));
-    expect(runTurnSpy.mock.calls.some((c) => c[0].prompt === "third task")).toBe(true);
+    await waitFor(() =>
+      runTurnSpy.mock.calls.some((c) => c[0].prompt === "third task"),
+    );
+    expect(
+      runTurnSpy.mock.calls.some((c) => c[0].prompt === "third task"),
+    ).toBe(true);
 
     // And the failure was surfaced, not swallowed.
     expect(lastFrame() ?? "").toContain("kaboom");

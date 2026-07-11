@@ -182,3 +182,105 @@ export async function handleSandboxLogs(
     writer.write(isMeta ? dim(text) : text);
   }
 }
+
+interface SandboxRenameResponse {
+  sessionId: string;
+  label: string;
+}
+
+/**
+ * `oxagen sandbox rename <sessionId> <label>` — set a durable session's
+ * human-friendly display label (agent.sandbox.rename over the org-scoped API).
+ */
+export async function handleSandboxRename(
+  sessionId: string,
+  label: string,
+  opts: { json?: boolean },
+  writer: CommandWriter = stdoutWriter,
+): Promise<void> {
+  const res = await apiPost<SandboxRenameResponse>(
+    "agent/sandbox/rename",
+    { sessionId, label },
+    writer,
+  );
+
+  if (opts.json) {
+    writer.write(JSON.stringify(res, null, 2));
+    return;
+  }
+  writer.write(`${res.sessionId} renamed to ${JSON.stringify(res.label)}`);
+}
+
+/** The start contract's per-repo shape ({ owner, repo, branch? }). */
+export interface SandboxRepoSpec {
+  owner: string;
+  repo: string;
+  branch?: string;
+}
+
+interface SandboxStartResponse {
+  sessionId: string;
+  status: string;
+  image: "node" | "python" | "shell" | "agent";
+  createdAt: string;
+  reused: boolean;
+}
+
+/**
+ * Parse a `--repo owner/name[#branch]` CLI value into the start contract's repo
+ * shape. Only splits the convenience form — the full charset / length / path-
+ * traversal validation lives server-side in the start_sandbox contract.
+ */
+export function parseRepoSpec(value: string): SandboxRepoSpec {
+  const hash = value.indexOf("#");
+  const pathPart = hash >= 0 ? value.slice(0, hash) : value;
+  const branch = hash >= 0 ? value.slice(hash + 1) : undefined;
+  const slash = pathPart.indexOf("/");
+  if (slash <= 0 || slash >= pathPart.length - 1) {
+    throw new Error(
+      `Invalid --repo "${value}": expected owner/name or owner/name#branch`,
+    );
+  }
+  return {
+    owner: pathPart.slice(0, slash),
+    repo: pathPart.slice(slash + 1),
+    ...(branch ? { branch } : {}),
+  };
+}
+
+/**
+ * `oxagen sandbox warm` — provision (or reuse via --session-key) a durable
+ * code-agent sandbox, optionally cloning one or more repos into it at provision
+ * time (agent.sandbox.start over the org-scoped API). `--repo` is repeatable.
+ */
+export async function handleSandboxWarm(
+  opts: {
+    sessionKey?: string;
+    label?: string;
+    image?: string;
+    repo?: string[];
+    json?: boolean;
+  },
+  writer: CommandWriter = stdoutWriter,
+): Promise<void> {
+  const body: Record<string, unknown> = {};
+  if (opts.sessionKey) body.sessionKey = opts.sessionKey;
+  if (opts.label) body.label = opts.label;
+  if (opts.image) body.image = opts.image;
+  if (opts.repo && opts.repo.length > 0) {
+    body.repos = opts.repo.map(parseRepoSpec);
+  }
+
+  const res = await apiPost<SandboxStartResponse>(
+    "agent/sandbox/start",
+    body,
+    writer,
+  );
+
+  if (opts.json) {
+    writer.write(JSON.stringify(res, null, 2));
+    return;
+  }
+  const reused = res.reused ? " (reused)" : "";
+  writer.write(`${res.sessionId} ${res.status} ${res.image}${reused}`);
+}

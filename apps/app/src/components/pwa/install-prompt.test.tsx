@@ -22,6 +22,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { InstallPrompt } from "./install-prompt";
 
+// Mutable pathname consumed by the component's usePathname() — individual
+// tests point it at auth/onboarding routes to exercise route suppression.
+let mockPathname: string | null = null;
+vi.mock("next/navigation", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("next/navigation")>()),
+  usePathname: () => mockPathname,
+}));
+
 const DISMISSED_KEY = "oxagen:pwa-install-dismissed";
 
 describe("InstallPrompt — suppression logic", () => {
@@ -101,6 +109,21 @@ describe("InstallPrompt — suppression logic", () => {
     });
     const { container } = render(<InstallPrompt />);
     expect(container.firstChild).toBeNull();
+  });
+
+  it("renders nothing on auth/onboarding routes even on iOS Safari (route suppression)", () => {
+    Object.defineProperty(navigator, "userAgent", {
+      writable: true,
+      value:
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+    });
+    for (const route of ["/login", "/signup", "/new-organization", "/cli/authorize/device"]) {
+      mockPathname = route;
+      const { container, unmount } = render(<InstallPrompt />);
+      expect(container.innerHTML).toBe("");
+      unmount();
+    }
+    mockPathname = null;
   });
 
   it("shows iOS instructions when on iOS Safari (not standalone, not dismissed)", () => {

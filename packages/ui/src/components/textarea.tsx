@@ -3,7 +3,8 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "../lib/utils";
 
 const textareaVariants = cva(
-  "flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:border-ring focus-visible:ring-0 disabled:cursor-not-allowed disabled:opacity-50",
+  // `max-md:text-base` prevents iOS Safari focus auto-zoom (fonts <16px).
+  "flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm max-md:text-base shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:border-ring focus-visible:ring-0 disabled:cursor-not-allowed disabled:opacity-50",
   {
     // coss ui density scale. Match the `size` you use on neighbouring inputs
     // (e.g. `lg`) for visual consistency.

@@ -48,7 +48,11 @@ vi.mock("../../agent/trace-store.js", () => ({
   }),
 }));
 vi.mock("../../agent/fleet/memory.js", () => ({
-  openFleetMemory: () => ({ record: () => {}, recall: () => [], all: () => [] }),
+  openFleetMemory: () => ({
+    record: () => {},
+    recall: () => [],
+    all: () => [],
+  }),
 }));
 vi.mock("../../agent/memory.js", () => ({
   openSessionMemory: async () => ({
@@ -62,8 +66,10 @@ vi.mock("../../agent/project-context.js", () => ({
 }));
 vi.mock("../../agent/model.js", () => ({
   resolveModelId: (override?: string) => override ?? "test/model",
+  explicitModelId: (override?: string) => override ?? undefined,
   resolveEffort: () => undefined,
-  isReasoningEffort: (s: string) => ["low", "medium", "high", "xhigh", "max"].includes(s),
+  isReasoningEffort: (s: string) =>
+    ["low", "medium", "high", "xhigh", "max"].includes(s),
   EFFORT_LEVELS: ["low", "medium", "high", "xhigh", "max"] as const,
 }));
 vi.mock("../../agent/code-graph.js", () => ({
@@ -82,17 +88,22 @@ const TEST_SESSION = {
   apiUrl: "http://localhost:4000",
 };
 
-const tick = (ms = 15): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+const tick = (ms = 15): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms));
 
 async function waitFor(cond: () => boolean, ms = 3000): Promise<void> {
   const start = Date.now();
   while (!cond()) {
-    if (Date.now() - start > ms) throw new Error("waitFor: condition timed out");
+    if (Date.now() - start > ms)
+      throw new Error("waitFor: condition timed out");
     await tick(10);
   }
 }
 
-async function submit(stdin: { write: (s: string) => void }, text: string): Promise<void> {
+async function submit(
+  stdin: { write: (s: string) => void },
+  text: string,
+): Promise<void> {
   stdin.write(text);
   await tick();
   stdin.write("\r");
@@ -105,7 +116,9 @@ describe("REPL /mouse toggle", () => {
   });
 
   it("flips OFF -> ON -> OFF across repeated invocations, not stuck after one toggle", async () => {
-    const { stdin, lastFrame } = render(<ReplApp options={{ session: TEST_SESSION }} />);
+    const { stdin, lastFrame } = render(
+      <ReplApp options={{ session: TEST_SESSION }} />,
+    );
     await tick();
 
     const countOf = (needle: string): number =>
@@ -129,6 +142,8 @@ describe("REPL /mouse toggle", () => {
     // messages into the same frame.
     const onCountBeforeThirdToggle = countOf("Mouse-wheel scroll ON");
     await submit(stdin, "/mouse");
-    await waitFor(() => countOf("Mouse-wheel scroll ON") > onCountBeforeThirdToggle);
+    await waitFor(
+      () => countOf("Mouse-wheel scroll ON") > onCountBeforeThirdToggle,
+    );
   });
 });

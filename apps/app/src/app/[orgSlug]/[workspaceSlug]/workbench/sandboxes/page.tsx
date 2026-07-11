@@ -22,6 +22,8 @@ import {
 } from "@/lib/workbench/sandboxes";
 import { SandboxesClient } from "./sandboxes-client";
 import { SandboxTemplatesPanel } from "./sandbox-templates-panel";
+import { loadCodeModeOptions } from "../../_shared/code-mode-data";
+import type { RepoOption } from "@/components/chat/repo-selector";
 import {
   readEnvironmentsAction,
   readSecretKeysAction,
@@ -52,7 +54,10 @@ interface PageProps {
 
 export default async function WorkbenchSandboxesPage({ params }: PageProps) {
   const { orgSlug, workspaceSlug } = await params;
-  const { ctx, canManage } = await resolveWorkbenchScope(orgSlug, workspaceSlug);
+  const { ctx, canManage } = await resolveWorkbenchScope(
+    orgSlug,
+    workspaceSlug,
+  );
 
   let sandboxes: SandboxSummary[] = [];
   let unavailable = false;
@@ -70,42 +75,47 @@ export default async function WorkbenchSandboxesPage({ params }: PageProps) {
   // Masked reads — values never cross to the client. Each read degrades to
   // empty (logged) so a failure never blanks the sessions list above.
   const scope = { orgSlug, workspaceSlug };
-  const [environments, secretKeys, templates, toolSources] = await Promise.all([
-    readEnvironmentsAction(scope).then(
-      (d) => d,
-      (err) => {
-        logger.error(
-          { err, orgSlug, workspaceSlug },
-          "sandboxes: readEnvironmentsAction failed — rendering empty environment options",
-        );
-        return [] as EnvironmentSummary[];
-      },
-    ),
-    readSecretKeysAction(scope).then(
-      (d) => d,
-      (err) => {
-        logger.error(
-          { err, orgSlug, workspaceSlug },
-          "sandboxes: readSecretKeysAction failed — rendering empty secret options",
-        );
-        return [] as SecretKeySummary[];
-      },
-    ),
-    readTemplatesAction(scope).then(
-      (d) => d,
-      (err) => {
-        logger.error(
-          { err, orgSlug, workspaceSlug },
-          "sandboxes: readTemplatesAction failed — rendering empty templates section",
-        );
-        return [] as SandboxTemplateSummary[];
-      },
-    ),
-    readToolSourcesAction(scope).then(
-      (d) => d,
-      () => [] as ToolSourceOption[],
-    ),
-  ]);
+  const [environments, secretKeys, templates, toolSources, codeModeOptions] =
+    await Promise.all([
+      readEnvironmentsAction(scope).then(
+        (d) => d,
+        (err) => {
+          logger.error(
+            { err, orgSlug, workspaceSlug },
+            "sandboxes: readEnvironmentsAction failed — rendering empty environment options",
+          );
+          return [] as EnvironmentSummary[];
+        },
+      ),
+      readSecretKeysAction(scope).then(
+        (d) => d,
+        (err) => {
+          logger.error(
+            { err, orgSlug, workspaceSlug },
+            "sandboxes: readSecretKeysAction failed — rendering empty secret options",
+          );
+          return [] as SecretKeySummary[];
+        },
+      ),
+      readTemplatesAction(scope).then(
+        (d) => d,
+        (err) => {
+          logger.error(
+            { err, orgSlug, workspaceSlug },
+            "sandboxes: readTemplatesAction failed — rendering empty templates section",
+          );
+          return [] as SandboxTemplateSummary[];
+        },
+      ),
+      readToolSourcesAction(scope).then(
+        (d) => d,
+        () => [] as ToolSourceOption[],
+      ),
+      // loadCodeModeOptions never throws (degrades to empty lists internally),
+      // so no .catch needed here — mirrors its other call site in conversation-page.tsx.
+      loadCodeModeOptions(ctx.orgId, ctx.workspaceId, ctx),
+    ]);
+  const repoOptions: RepoOption[] = codeModeOptions.repos;
 
   return (
     <div className="flex flex-col gap-10">
@@ -121,6 +131,8 @@ export default async function WorkbenchSandboxesPage({ params }: PageProps) {
           initialSandboxes={sandboxes}
           canManage={canManage}
           unavailable={unavailable}
+          templates={templates}
+          repoOptions={repoOptions}
         />
       </div>
       <SandboxTemplatesPanel

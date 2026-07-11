@@ -6,7 +6,7 @@ import type {
 import type { SandboxExecResult } from "@oxagen/sandbox";
 import type { CapabilityContext } from "../types";
 import {
-  requireDurableDriver,
+  requireDurableDriverForRow,
   getSessionByPublicId,
   touchSession,
   rebindSession,
@@ -28,12 +28,16 @@ export async function agentSandboxExecHandler(
   input: AgentSandboxExecInput,
   ctx: CapabilityContext,
 ): Promise<AgentSandboxExecOutput> {
-  const driver = requireDurableDriver();
-
   const row = await getSessionByPublicId(ctx, input.sessionId);
   if (!row || row.status === "stopped" || row.status === "gone") {
     throw new SandboxSessionNotFoundError(input.sessionId);
   }
+
+  // Resolve the driver from the SESSION's own provider (the row's `driver`
+  // column), not the deployment default — a session created on one provider is
+  // always exec'd on that same provider. Falls back to the default when the
+  // column is null (pre-column legacy rows).
+  const driver = requireDurableDriverForRow(row.driver);
 
   // Inject the session's bound environment secrets (if any) below the
   // caller-supplied env. The environmentId — and, for a template-provisioned

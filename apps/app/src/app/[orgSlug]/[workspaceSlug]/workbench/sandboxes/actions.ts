@@ -2,14 +2,20 @@
 /**
  * workbench/sandboxes/actions.ts — server actions for the Sandboxes surface.
  *
- * Every mutating action (start / run / stop) follows the house pattern:
+ * Every mutating action (start / run / stop / rename) follows the house pattern:
  *   1. zod safeParse the client payload (never trust the client),
  *   2. resolveWorkbenchScope → session + org + workspace + IAM,
  *   3. gate on `canManage` (workspace Owner/Admin) — apps/app does NOT bootstrap
  *      IAM through invoke(), so this IS the authorization gate. Running shell in
- *      a sandbox is high-risk, so reads and writes alike require manage rights,
+ *      a sandbox is high-risk, so mutations (and the log read) require manage
+ *      rights,
  *   4. call the lib/workbench/sandboxes helper (invoke with surface "agent"),
  *   5. return a discriminated union { ok: true, … } | { ok: false, error }.
+ *
+ * `refreshSandboxesAction` is the one exception to step 3 — it's a read of the
+ * session registry only (no shell access), so it mirrors the page's own
+ * gating (any resolved workspace member) to let the list's live-tail poll run
+ * for every viewer, not just managers.
  *
  * `run_sandbox_command` is invoked from here rather than the client so the
  * SandboxTerminal stays pure UI (it receives an injected runner).
@@ -25,11 +31,15 @@ import {
   startSandbox,
   runSandboxCommand,
   stopSandbox,
+  listSandboxes,
   listSandboxLogs,
+  renameSandbox,
   isSandboxUnavailable,
   type SandboxExecResult,
   type SandboxStartResult,
   type SandboxLogLine,
+  type SandboxSummary,
+  type SandboxRenameResult,
 } from "@/lib/workbench/sandboxes";
 import { templateById } from "@/components/sandbox/warm-up-templates";
 
@@ -63,6 +73,14 @@ function seedSessionKey(name: string): string {
   return `sbx_${slug || "sandbox"}_${crypto.randomUUID().slice(0, 8)}`;
 }
 
+/** A single repo to clone into `/workspace/<repo>` while the sandbox provisions. */
+const repoRefSchema = z.object({
+  owner: z.string().trim().min(1).max(200),
+  repo: z.string().trim().min(1).max(200),
+  /** Defaults to the repo's default branch server-side when omitted. */
+  branch: z.string().trim().min(1).max(200).optional(),
+});
+
 const startSchema = z.object({
   ...scopeShape,
   /** Required human name — every warmed sandbox is named so it's identifiable. */
@@ -76,6 +94,8 @@ const startSchema = z.object({
   templateId: z.string().min(1),
   /** Optional explicit reuse key; otherwise seeded from the name. */
   sessionKey: z.string().min(1).max(200).optional(),
+  /** As many repos as the caller wants pre-cloned, capped well below any driver limit. */
+  repos: z.array(repoRefSchema).max(8).optional(),
 });
 
 export async function startSandboxAction(
@@ -83,12 +103,22 @@ export async function startSandboxAction(
 ): Promise<ActionResult<{ sandbox: SandboxStartResult }>> {
   const parsed = startSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid input.",
+    };
   }
-  const { orgSlug, workspaceSlug, name, templateId, sessionKey } = parsed.data;
-  const { ctx, canManage } = await resolveWorkbenchScope(orgSlug, workspaceSlug);
+  const { orgSlug, workspaceSlug, name, templateId, sessionKey, repos } =
+    parsed.data;
+  const { ctx, canManage } = await resolveWorkbenchScope(
+    orgSlug,
+    workspaceSlug,
+  );
   if (!canManage) {
-    return { ok: false, error: "Only workspace owners and admins can start sandboxes." };
+    return {
+      ok: false,
+      error: "Only workspace owners and admins can start sandboxes.",
+    };
   }
   // A stable key makes the sandbox reusable/warm across turns; seed one from the
   // name when the caller doesn't supply an explicit key.
@@ -99,15 +129,23 @@ export async function startSandboxAction(
   // so we pass its id through (previously dropped) and let the base image default.
   const isSavedTemplate = templateId.startsWith("sbx_");
   const startInput = isSavedTemplate
-    ? { label: name, sessionKey: key, sandboxTemplateId: templateId, network: "allow" as const }
+    ? {
+        label: name,
+        sessionKey: key,
+        sandboxTemplateId: templateId,
+        network: "allow" as const,
+        repos,
+      }
     : (() => {
         const template = templateById(templateId);
         return {
           image: template.image,
           label: name,
           sessionKey: key,
-          setupCmd: template.setupCmd.length > 0 ? template.setupCmd : undefined,
+          setupCmd:
+            template.setupCmd.length > 0 ? template.setupCmd : undefined,
           network: "allow" as const,
+          repos,
         };
       })();
 
@@ -120,7 +158,13 @@ export async function startSandboxAction(
     return { ok: true, sandbox };
   } catch (err) {
     logger.error(
-      { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId, templateId, sessionKey: key },
+      {
+        err,
+        orgId: ctx.orgId,
+        workspaceId: ctx.workspaceId,
+        templateId,
+        sessionKey: key,
+      },
       "studio.sandboxes: startSandboxAction failed",
     );
     return {
@@ -147,12 +191,21 @@ export async function runSandboxCommandAction(
 ): Promise<ActionResult<{ result: SandboxExecResult }>> {
   const parsed = runSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid input.",
+    };
   }
   const { orgSlug, workspaceSlug, sessionId, command, cwd } = parsed.data;
-  const { ctx, canManage } = await resolveWorkbenchScope(orgSlug, workspaceSlug);
+  const { ctx, canManage } = await resolveWorkbenchScope(
+    orgSlug,
+    workspaceSlug,
+  );
   if (!canManage) {
-    return { ok: false, error: "Only workspace owners and admins can run commands." };
+    return {
+      ok: false,
+      error: "Only workspace owners and admins can run commands.",
+    };
   }
   try {
     const result = await runInTenantScope(
@@ -188,12 +241,21 @@ export async function listSandboxLogsAction(
 ): Promise<ActionResult<{ lines: SandboxLogLine[] }>> {
   const parsed = listLogsSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid input.",
+    };
   }
   const { orgSlug, workspaceSlug, sessionId, level, limit } = parsed.data;
-  const { ctx, canManage } = await resolveWorkbenchScope(orgSlug, workspaceSlug);
+  const { ctx, canManage } = await resolveWorkbenchScope(
+    orgSlug,
+    workspaceSlug,
+  );
   if (!canManage) {
-    return { ok: false, error: "Only workspace owners and admins can view sandbox logs." };
+    return {
+      ok: false,
+      error: "Only workspace owners and admins can view sandbox logs.",
+    };
   }
   try {
     const lines = await runInTenantScope(
@@ -219,12 +281,21 @@ export async function stopSandboxAction(
 ): Promise<ActionResult<{ stopped: boolean }>> {
   const parsed = stopSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid input.",
+    };
   }
   const { orgSlug, workspaceSlug, sessionId } = parsed.data;
-  const { ctx, canManage } = await resolveWorkbenchScope(orgSlug, workspaceSlug);
+  const { ctx, canManage } = await resolveWorkbenchScope(
+    orgSlug,
+    workspaceSlug,
+  );
   if (!canManage) {
-    return { ok: false, error: "Only workspace owners and admins can stop sandboxes." };
+    return {
+      ok: false,
+      error: "Only workspace owners and admins can stop sandboxes.",
+    };
   }
   try {
     const out = await runInTenantScope(
@@ -239,5 +310,96 @@ export async function stopSandboxAction(
       "studio.sandboxes: stopSandboxAction failed",
     );
     return { ok: false, error: errMessage(err, "Failed to stop sandbox.") };
+  }
+}
+
+// ── Rename a sandbox ──────────────────────────────────────────────────────────
+
+const renameSchema = z.object({
+  ...scopeShape,
+  sessionId: z.string().min(1),
+  /** The list's primary identifier — a bare sbx_ id is never shown as a label. */
+  label: z.string().trim().min(1, "Name your sandbox.").max(80),
+});
+
+export async function renameSandboxAction(
+  input: z.input<typeof renameSchema>,
+): Promise<ActionResult<{ sandbox: SandboxRenameResult }>> {
+  const parsed = renameSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid input.",
+    };
+  }
+  const { orgSlug, workspaceSlug, sessionId, label } = parsed.data;
+  const { ctx, canManage } = await resolveWorkbenchScope(
+    orgSlug,
+    workspaceSlug,
+  );
+  if (!canManage) {
+    return {
+      ok: false,
+      error: "Only workspace owners and admins can rename sandboxes.",
+    };
+  }
+  try {
+    const sandbox = await runInTenantScope(
+      { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+      () => renameSandbox(ctx, { sessionId, label }),
+    );
+    revalidatePath(workspace.workbench.sandboxes({ orgSlug, workspaceSlug }));
+    return { ok: true, sandbox };
+  } catch (err) {
+    logger.error(
+      { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId, sessionId },
+      "studio.sandboxes: renameSandboxAction failed",
+    );
+    return { ok: false, error: errMessage(err, "Failed to rename sandbox.") };
+  }
+}
+
+// ── Refresh the list (client polling) ─────────────────────────────────────────
+
+const refreshSchema = z.object({
+  ...scopeShape,
+  /** true ⇒ running|idle only, live-reconciled against the provider. */
+  activeOnly: z.boolean().optional(),
+});
+
+/**
+ * Re-reads the session list for the client's live-tail poll and the "Show
+ * inactive" toggle. Read-only, so it mirrors the page's own gating (any
+ * resolved, org-member workspace scope) rather than the manage-only gate the
+ * mutating actions above use.
+ */
+export async function refreshSandboxesAction(
+  input: z.input<typeof refreshSchema>,
+): Promise<ActionResult<{ sandboxes: SandboxSummary[] }>> {
+  const parsed = refreshSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid input.",
+    };
+  }
+  const { orgSlug, workspaceSlug, activeOnly } = parsed.data;
+  const { ctx } = await resolveWorkbenchScope(orgSlug, workspaceSlug);
+  try {
+    const sandboxes = await runInTenantScope(
+      { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+      () => listSandboxes(ctx, { activeOnly }),
+    );
+    return { ok: true, sandboxes };
+  } catch (err) {
+    logger.error(
+      { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+      "studio.sandboxes: refreshSandboxesAction failed",
+    );
+    return {
+      ok: false,
+      error: errMessage(err, "Failed to refresh sandboxes."),
+      unavailable: isSandboxUnavailable(err),
+    };
   }
 }

@@ -163,6 +163,32 @@ describe("agent.sandbox-reaper", () => {
     expect(flushWrite!.recoveryStatus).toBe("failed");
   });
 
+  it("flush writes terminal state itself: status stopped + soft-deleted", async () => {
+    mocks.candidates = [candidate()];
+    mocks.recoverSandboxSession.mockResolvedValue({ kind: "clean", dirty: false });
+    await runReaper();
+
+    const flushWrite = mocks.updates.find((u) => "flushedAt" in u);
+    expect(flushWrite).toBeDefined();
+    expect(flushWrite!.status).toBe("stopped");
+    expect(flushWrite!.deletedAt).toBeInstanceOf(Date);
+  });
+
+  it("flush RETIRES the row even when terminate throws (no lingering idle/running)", async () => {
+    mocks.candidates = [candidate()];
+    mocks.recoverSandboxSession.mockResolvedValue({ kind: "clean", dirty: false });
+    // The best-effort stop throws (e.g. no durable driver configured) — the
+    // reaper must still write terminal state so the sandbox never lingers.
+    mocks.agentSandboxStopHandler.mockRejectedValue(new Error("no durable driver"));
+    await runReaper();
+
+    const flushWrite = mocks.updates.find((u) => "flushedAt" in u);
+    expect(flushWrite).toBeDefined();
+    expect(flushWrite!.status).toBe("stopped");
+    expect(flushWrite!.deletedAt).toBeInstanceOf(Date);
+    expect(flushWrite!.recoveryStatus).toBe("none");
+  });
+
   it("race guard: a resumed session (no longer a candidate) is skipped", async () => {
     mocks.candidates = [candidate()];
     mocks.recheck = [{ status: "running", grace_past: false, stale: false }];
