@@ -17,13 +17,29 @@ import {
 
 describe("rateFor", () => {
   it("matches a family across the vendor/ prefix and version suffix", () => {
-    expect(rateFor("anthropic/claude-opus-4.8")).toEqual({ inputPer1M: 15, outputPer1M: 75, cachedInputPer1M: 1.5 });
-    expect(rateFor("anthropic/claude-haiku-4.5")).toEqual({ inputPer1M: 1, outputPer1M: 5, cachedInputPer1M: 0.1 });
+    expect(rateFor("anthropic/claude-opus-4.8")).toEqual({
+      inputPer1M: 15,
+      outputPer1M: 75,
+      cachedInputPer1M: 1.5,
+    });
+    expect(rateFor("anthropic/claude-haiku-4.5")).toEqual({
+      inputPer1M: 1,
+      outputPer1M: 5,
+      cachedInputPer1M: 0.1,
+    });
   });
 
   it("prefers the more specific gpt-4o-mini over gpt-4o", () => {
-    expect(rateFor("openai/gpt-4o-mini")).toEqual({ inputPer1M: 0.15, outputPer1M: 0.6, cachedInputPer1M: 0.075 });
-    expect(rateFor("openai/gpt-4o")).toEqual({ inputPer1M: 2.5, outputPer1M: 10, cachedInputPer1M: 1.25 });
+    expect(rateFor("openai/gpt-4o-mini")).toEqual({
+      inputPer1M: 0.15,
+      outputPer1M: 0.6,
+      cachedInputPer1M: 0.075,
+    });
+    expect(rateFor("openai/gpt-4o")).toEqual({
+      inputPer1M: 2.5,
+      outputPer1M: 10,
+      cachedInputPer1M: 1.25,
+    });
   });
 
   it("falls back to the Sonnet-equivalent rate for unknown slugs (never zero)", () => {
@@ -31,21 +47,32 @@ describe("rateFor", () => {
     expect(entryFor("somevendor/mystery-model")).toBeUndefined();
   });
 
-  it("every card entry's cached rate is strictly cheaper than its fresh input rate", () => {
+  it("every card entry's cached rate is cheaper than (or, if genuinely free, equal to) its fresh input rate", () => {
+    // >= 0 rather than > 0: DeepSeek V4 Pro/Flash publish a genuinely free
+    // ($0.0/M) cached-read rate on the Gateway — not a missing/unpriced row.
     for (const entry of listRateCard()) {
-      expect(entry.rate.cachedInputPer1M).toBeGreaterThan(0);
+      expect(entry.rate.cachedInputPer1M).toBeGreaterThanOrEqual(0);
       expect(entry.rate.cachedInputPer1M).toBeLessThan(entry.rate.inputPer1M);
     }
-    expect(FALLBACK_RATE.cachedInputPer1M).toBeLessThan(FALLBACK_RATE.inputPer1M);
+    expect(FALLBACK_RATE.cachedInputPer1M).toBeLessThan(
+      FALLBACK_RATE.inputPer1M,
+    );
   });
 });
 
 describe("estimateCostUsd", () => {
   it("prices input and output independently per 1M tokens", () => {
     // 1M in @ $15 + 1M out @ $75 = $90 on opus.
-    expect(estimateCostUsd("anthropic/claude-opus-4.8", { inputTokens: 1_000_000, outputTokens: 1_000_000 })).toBeCloseTo(90);
+    expect(
+      estimateCostUsd("anthropic/claude-opus-4.8", {
+        inputTokens: 1_000_000,
+        outputTokens: 1_000_000,
+      }),
+    ).toBeCloseTo(90);
     // Half a million haiku output @ $5/1M = $2.50.
-    expect(estimateCostUsd("anthropic/claude-haiku-4.5", { outputTokens: 500_000 })).toBeCloseTo(2.5);
+    expect(
+      estimateCostUsd("anthropic/claude-haiku-4.5", { outputTokens: 500_000 }),
+    ).toBeCloseTo(2.5);
   });
 
   it("treats missing token directions as zero", () => {
@@ -62,7 +89,9 @@ describe("estimateCostUsd", () => {
 
     // Same 1M input with NONE cached prices at the full fresh rate — proves
     // the discount is actually being applied, not just always-zero-cost.
-    const noneCached = estimateCostUsd("anthropic/claude-sonnet-4.6", { inputTokens: 1_000_000 });
+    const noneCached = estimateCostUsd("anthropic/claude-sonnet-4.6", {
+      inputTokens: 1_000_000,
+    });
     expect(noneCached).toBeCloseTo(3.0);
     expect(allCached).toBeLessThan(noneCached);
   });
@@ -103,7 +132,10 @@ describe("formatUsd", () => {
 
 describe("projectCost", () => {
   it("breaks cost into input/output/total with vendor metadata", () => {
-    const p = projectCost("anthropic/claude-sonnet-5", { inputTokens: 1_000_000, outputTokens: 100_000 });
+    const p = projectCost("anthropic/claude-sonnet-5", {
+      inputTokens: 1_000_000,
+      outputTokens: 100_000,
+    });
     expect(p.vendor).toBe("anthropic");
     expect(p.label).toBe("Claude Sonnet");
     expect(p.inputCostUsd).toBeCloseTo(3);
@@ -120,7 +152,10 @@ describe("projectCost", () => {
 
 describe("compareModels", () => {
   it("prices the same usage across every family, cheapest first", () => {
-    const rows = compareModels({ inputTokens: 1_000_000, outputTokens: 1_000_000 });
+    const rows = compareModels({
+      inputTokens: 1_000_000,
+      outputTokens: 1_000_000,
+    });
     expect(rows.length).toBe(listRateCard().length);
     // Sorted ascending by total.
     for (let i = 1; i < rows.length; i++) {

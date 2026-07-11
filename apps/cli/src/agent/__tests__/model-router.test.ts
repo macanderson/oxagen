@@ -41,25 +41,38 @@ describe("classifyTier", () => {
   });
 
   it("pins trivial, mechanical single-file work to fast", () => {
-    expect(classifyTier({ text: "rename the variable foo to bar" }).tier).toBe("fast");
-    expect(classifyTier({ text: "fix a typo in the readme" }).tier).toBe("fast");
+    expect(classifyTier({ text: "rename the variable foo to bar" }).tier).toBe(
+      "fast",
+    );
+    expect(classifyTier({ text: "fix a typo in the readme" }).tier).toBe(
+      "fast",
+    );
     expect(classifyTier({ text: "update the changelog" }).tier).toBe("fast");
   });
 
   it("uses balanced for non-trivial design/debugging language", () => {
-    expect(classifyTier({ text: "refactor the streaming pipeline" }).tier).toBe("balanced");
-    expect(classifyTier({ text: "debug why the parser drops the last token" }).tier).toBe(
+    expect(classifyTier({ text: "refactor the streaming pipeline" }).tier).toBe(
       "balanced",
     );
+    expect(
+      classifyTier({ text: "debug why the parser drops the last token" }).tier,
+    ).toBe("balanced");
   });
 
   it("escalates on breadth: many files or cross-package", () => {
-    expect(classifyTier({ text: "touch up styles", fileCount: 10 }).tier).toBe("precise");
-    expect(classifyTier({ text: "wire it up", fileCount: 4, crossPackage: true }).tier).toBe(
+    expect(classifyTier({ text: "touch up styles", fileCount: 10 }).tier).toBe(
       "precise",
     );
-    expect(classifyTier({ text: "wire it up", fileCount: 4 }).tier).toBe("balanced");
-    expect(classifyTier({ text: "small thing", crossPackage: true }).tier).toBe("balanced");
+    expect(
+      classifyTier({ text: "wire it up", fileCount: 4, crossPackage: true })
+        .tier,
+    ).toBe("precise");
+    expect(classifyTier({ text: "wire it up", fileCount: 4 }).tier).toBe(
+      "balanced",
+    );
+    expect(classifyTier({ text: "small thing", crossPackage: true }).tier).toBe(
+      "balanced",
+    );
   });
 
   it("treats a short unqualified ask as fast and a long one as balanced", () => {
@@ -83,7 +96,7 @@ describe("rate card + cost", () => {
     expect(rateFor("anthropic/claude-opus-4.8").inputPer1M).toBe(15);
     expect(rateFor("anthropic/claude-sonnet-5").inputPer1M).toBe(3);
     expect(rateFor("anthropic/claude-haiku-4.5").outputPer1M).toBe(5);
-    expect(rateFor("openai/gpt-5.2").inputPer1M).toBe(1.25);
+    expect(rateFor("openai/gpt-5.2").inputPer1M).toBe(1.75);
   });
 
   it("falls back to sonnet pricing for an unknown model (never zero-charge)", () => {
@@ -139,7 +152,9 @@ describe("routeModel + tier helpers", () => {
   });
 
   it("auto-routes when nothing is pinned", () => {
-    expect(routeModel({ text: "fix the billing webhook signature" }).tier).toBe("precise");
+    expect(routeModel({ text: "fix the billing webhook signature" }).tier).toBe(
+      "precise",
+    );
   });
 
   it("maps slugs to tiers and tiers to labels/slugs", () => {

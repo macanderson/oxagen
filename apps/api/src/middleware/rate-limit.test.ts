@@ -133,32 +133,6 @@ describe("rateLimiter", () => {
     expect(rejected?.status).toBe(429);
   });
 
-  it("opportunistically sweeps expired buckets once tracked keys exceed the threshold", async () => {
-    // SWEEP_THRESHOLD is 10_000 — a distinct key per call grows the bucket map
-    // past it, which fires the internal sweepExpired() pass on the next
-    // request. The threshold check runs on bucket size BEFORE the current
-    // call's own insert, so it takes one extra call past the threshold to
-    // actually flip it true (the 10_001st insert brings size to 10_001; only
-    // the 10_002nd call observes size > 10_000 and fires the sweep).
-    vi.useFakeTimers();
-    try {
-      let counter = 0;
-      const middleware = rateLimiter({
-        windowMs: 1,
-        max: 1,
-        keyFn: () => `sweep-key-${counter++}`,
-      });
-      const next = vi.fn().mockResolvedValue(undefined);
-
-      for (let i = 0; i < 10_001; i++) {
-        await middleware(fakeContext(), next);
-      }
-      // Every bucket created so far is now past its 1ms window — the sweep's
-      // delete branch (not just the "still fresh, skip" branch) actually runs.
-      vi.advanceTimersByTime(2);
-      await middleware(fakeContext(), next);
-
-      expect(next).toHaveBeenCalledTimes(10_002);
   it("opportunistically sweeps expired buckets once the tracked-key count crosses the threshold", async () => {
     // The limiter only sweeps expired buckets when its map grows past
     // SWEEP_THRESHOLD (10_000 keys). Fill it past that with distinct keys, let

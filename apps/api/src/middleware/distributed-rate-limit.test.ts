@@ -189,26 +189,6 @@ describe("distributedRateLimiter", () => {
     expect(responseHeadersOf(c)["X-RateLimit-Limit"]).toBeUndefined();
   });
 
-  it("opportunistically sweeps stale windows on the sampled fraction of counted requests", async () => {
-    // Math.random() is stubbed at 0.5 (well above CLEANUP_SAMPLE_RATE = 0.01)
-    // in the outer beforeEach specifically so sweepStaleWindows() normally
-    // never fires and withSystemDb is called exactly once per request. Here we
-    // override it below the sample rate to prove the fire-and-forget sweep
-    // path itself: it must call withSystemDb a SECOND time (its own DELETE),
-    // and — being fire-and-forget — must never block or fail the request even
-    // though it shares the same (mocked) store as the increment.
-    vi.spyOn(Math, "random").mockReturnValue(0.001);
-    scriptCount(5);
-    const mw = distributedRateLimiter({ keyPrefix: "chat", max: 60 });
-    const next = vi.fn().mockResolvedValue(undefined);
-    const c = fakeContext({ vars: { workspaceId: "ws_1" } });
-
-    const result = await mw(c, next);
-
-    expect(result).toBeUndefined();
-    expect(next).toHaveBeenCalledTimes(1);
-    // Call 1: the counter increment. Call 2: sweepStaleWindows' own DELETE,
-    // fired synchronously (not awaited) once we're under the sample rate.
   it("resolves a lazy `max` resolver on each request (function form)", async () => {
     scriptCount(1);
     const maxResolver = vi.fn(() => 60);
@@ -230,7 +210,10 @@ describe("distributedRateLimiter", () => {
     const mw = distributedRateLimiter({ keyPrefix: "chat", max: 60 });
     const next = vi.fn().mockResolvedValue(undefined);
 
-    const result = await mw(fakeContext({ vars: { workspaceId: "ws_sweep" } }), next);
+    const result = await mw(
+      fakeContext({ vars: { workspaceId: "ws_sweep" } }),
+      next,
+    );
 
     expect(result).toBeUndefined();
     expect(next).toHaveBeenCalledTimes(1);
@@ -244,18 +227,6 @@ describe("rateLimitBudgets", () => {
   // every test in this suite observes whichever env won the race to call it
   // first — assert the memoization contract itself (same instance, one
   // requireEnv call) rather than re-asserting specific values per call.
-  it("resolves the per-minute budgets from env and memoizes them", () => {
-    mocks.requireEnv.mockReturnValue({
-      RATE_LIMIT_CHAT_PER_MIN: 60,
-      RATE_LIMIT_AGENT_EXEC_PER_MIN: 10,
-    });
-
-    const first = rateLimitBudgets();
-    const second = rateLimitBudgets();
-
-    expect(first).toEqual(second);
-    expect(typeof first.chat).toBe("number");
-    expect(typeof first.agentExec).toBe("number");
   it("resolves the budgets from the validated env once, then memoizes the result", () => {
     mocks.requireEnv.mockReturnValue({
       RATE_LIMIT_CHAT_PER_MIN: 90,
