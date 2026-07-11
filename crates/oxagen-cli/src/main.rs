@@ -90,6 +90,10 @@ enum Command {
     /// reflections, and every code-graph node/edge
     Init,
 
+    /// List every tool available to the agent this session — built-ins,
+    /// developer custom tools (.oxagen/tools/), and manifest diagnostics
+    Tools,
+
     /// List configured providers and available models
     Models,
 
@@ -118,6 +122,9 @@ fn run(cli: Cli) -> Result<(), String> {
         Some(Command::Models) => {
             config::Config::print_available_models();
             return Ok(());
+        }
+        Some(Command::Tools) => {
+            return agent::run_tools_listing();
         }
         Some(Command::Version) => {
             println!("stella v{}", env!("CARGO_PKG_VERSION"));
@@ -157,7 +164,7 @@ fn run(cli: Cli) -> Result<(), String> {
         Command::Chat => {
             rt()?.block_on(agent::run_interactive(&cfg, cli.budget))?;
         }
-        Command::Init => unreachable!("handled above"),
+        Command::Init | Command::Tools => unreachable!("handled above"),
         Command::Models => {
             cfg.print_models();
         }

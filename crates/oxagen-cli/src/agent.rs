@@ -20,6 +20,7 @@ use oxagen_model::provider::Provider;
 use oxagen_protocol::event::BudgetMode;
 use oxagen_protocol::{AgentEvent, CompletionMessage, ToolOutput};
 use oxagen_tools::ToolRegistry;
+use oxagen_tools::custom::{self, CustomTool, CustomToolSet};
 use tokio::sync::mpsc;
 
 use crate::OutputFormat;
@@ -61,6 +62,7 @@ pub async fn run_one_shot(
 ) -> Result<(), String> {
     let provider = build_provider(cfg)?;
     let registry = ToolRegistry::new(cfg.workspace_root.clone());
+    let custom_tools = discover_custom_tools(cfg, format == OutputFormat::Text);
     let mut budget = build_budget_guard(budget_limit);
 
     if format == OutputFormat::Text {
@@ -76,6 +78,7 @@ pub async fn run_one_shot(
     run_turn(
         &*provider,
         &registry,
+        &custom_tools,
         &mut messages,
         &mut budget,
         cfg,
@@ -91,6 +94,7 @@ pub async fn run_one_shot(
 pub async fn run_interactive(cfg: &Config, budget_limit: Option<f64>) -> Result<(), String> {
     let provider = build_provider(cfg)?;
     let registry = ToolRegistry::new(cfg.workspace_root.clone());
+    let custom_tools = discover_custom_tools(cfg, true);
     let mut budget = build_budget_guard(budget_limit);
 
     tui::welcome_banner(
@@ -144,6 +148,7 @@ pub async fn run_interactive(cfg: &Config, budget_limit: Option<f64>) -> Result<
         if let Err(e) = run_turn(
             &*provider,
             &registry,
+            &custom_tools,
             &mut messages,
             &mut budget,
             cfg,
@@ -219,6 +224,79 @@ pub async fn run_init(
     Ok(())
 }
 
+/// Discover developer-defined custom script tools (.oxagen/tools/*.toml,
+/// then ~/.config/oxagen/tools/*.toml — workspace wins on collision; see
+/// oxagen_tools::custom). Broken manifests never abort a session: their
+/// diagnostics print once (text mode) and show up in `stella tools`.
+fn discover_custom_tools(cfg: &Config, print_diagnostics: bool) -> Vec<CustomTool> {
+    let report = custom::discover(&cfg.workspace_root);
+    if print_diagnostics {
+        for diagnostic in &report.diagnostics {
+            eprintln!(
+                "  {} custom tool skipped: {} — {}",
+                "!".yellow(),
+                diagnostic.path.display(),
+                diagnostic.reason
+            );
+        }
+    }
+    report.tools
+}
+
+/// `stella tools` — list every tool the agent would have this session:
+/// native built-ins, developer custom tools (with their source manifests),
+/// ask_user, and any discovery diagnostics for broken manifests.
+pub fn run_tools_listing() -> Result<(), String> {
+    let workspace_root =
+        std::env::current_dir().map_err(|e| format!("cannot determine workspace root: {e}"))?;
+    tui::section_header("Stella tools");
+
+    let registry = ToolRegistry::new(workspace_root.clone());
+    println!("  {}", "built-in:".dimmed());
+    let mut native: Vec<String> = oxagen_core::ports::ToolExecutor::schemas(&registry)
+        .into_iter()
+        .map(|s| s.name)
+        .collect();
+    native.sort();
+    for name in &native {
+        println!("    {} {}", "·".dimmed(), name);
+    }
+    println!(
+        "    {} ask_user {}",
+        "·".dimmed(),
+        "(interactive sessions)".dimmed()
+    );
+
+    let report = custom::discover(&workspace_root);
+    println!(
+        "\n  {}",
+        "custom (.oxagen/tools/, ~/.config/oxagen/tools/):".dimmed()
+    );
+    if report.tools.is_empty() {
+        println!(
+            "    {}",
+            "none — drop a <name>.toml manifest in .oxagen/tools/ to add one".dimmed()
+        );
+    }
+    for tool in &report.tools {
+        println!(
+            "    {} {} — {}",
+            "·".green(),
+            tool.name.bright_blue(),
+            tool.description.dimmed()
+        );
+    }
+    for diagnostic in &report.diagnostics {
+        println!(
+            "    {} {} — {}",
+            "✗".red(),
+            diagnostic.path.display(),
+            diagnostic.reason.red()
+        );
+    }
+    Ok(())
+}
+
 /// Construct the turn/session budget guard from `--budget`. No limit at
 /// all still meters spend (`BudgetMode::Observed`) so the cost summary and
 /// `BudgetTick` events stay meaningful even when nothing is enforced.
@@ -238,6 +316,7 @@ fn build_budget_guard(budget_limit: Option<f64>) -> BudgetGuard {
 async fn run_turn(
     provider: &dyn Provider,
     registry: &ToolRegistry,
+    custom_tools: &[CustomTool],
     messages: &mut Vec<CompletionMessage>,
     budget: &mut BudgetGuard,
     cfg: &Config,
@@ -307,11 +386,15 @@ async fn run_turn(
     // sender is gone, and awaiting the renderer with a live sender would
     // deadlock. The inner scope makes the drop order structural.
     let outcome = {
-        // ask_user rides on top of the native tools; headless formats get
-        // the io that fails the tool loudly instead of waiting on stdin
-        // that will never answer (see interactive.rs).
+        // The tool stack, innermost out: native registry <- developer
+        // custom script tools (.oxagen/tools/, oxagen-tools::custom) <-
+        // ask_user (interactive.rs). Headless formats get the io that
+        // fails ask_user loudly instead of waiting on stdin that will
+        // never answer.
+        let customs =
+            CustomToolSet::new(registry, custom_tools.to_vec(), cfg.workspace_root.clone());
         let tools = InteractiveToolSet::new(
-            registry,
+            &customs,
             tx.clone(),
             default_ask_io(format == OutputFormat::Text),
         );
