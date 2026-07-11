@@ -1998,7 +1998,7 @@ export function ReplApp({
               : "⇉ Dispatch mode OFF — prompts run inline again (` &` still backgrounds explicitly).",
           );
         };
-        if (arg === "" ) {
+        if (arg === "") {
           applyMode(!dispatchModeRef.current);
           return;
         }
@@ -2021,7 +2021,9 @@ export function ReplApp({
         if (arg.startsWith("cap")) {
           const n = Number.parseInt(arg.slice("cap".length).trim(), 10);
           if (!Number.isFinite(n) || n < 1) {
-            pushAssistant("Usage: /dispatch cap <n> — max concurrent background dispatches (≥ 1).");
+            pushAssistant(
+              "Usage: /dispatch cap <n> — max concurrent background dispatches (≥ 1).",
+            );
             return;
           }
           dispatchCapRef.current = n;
@@ -2974,6 +2976,9 @@ export function ReplApp({
               plan,
               cwd,
               ai: activeAiRef.current,
+              // A pinned /worker-model must win for every fanned-out task too —
+              // see fleet-turn.ts's override. undefined ⇒ auto (per-task tiering).
+              workerModel: modelRef.current ?? undefined,
               memory: fleetMemoryRef.current,
               serverMemory: serverMemoryRef.current,
               store: planStoreRef.current,
@@ -4100,7 +4105,9 @@ export function ReplApp({
             <Text color={theme.violet} bold>
               {"⇉ dispatch"}
             </Text>
-            <Text dimColor>{` · task prompts run in the background (cap ${dispatchCapRef.current})`}</Text>
+            <Text
+              dimColor
+            >{` · task prompts run in the background (cap ${dispatchCapRef.current})`}</Text>
           </Box>
         )}
 
