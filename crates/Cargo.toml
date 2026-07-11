@@ -1,12 +1,12 @@
 [workspace]
 resolver = "3"
 members = [
-  "oxagen-protocol",
+  "stella-protocol",
   "ocp-types",
-  "oxagen-core",
-  "oxagen-model",
-  "oxagen-tools",
-  "oxagen-cli",
+  "stella-core",
+  "stella-model",
+  "stella-tools",
+  "stella-cli",
 ]
 
 [workspace.package]
@@ -14,7 +14,7 @@ version = "0.1.0"
 edition = "2024"
 rust-version = "1.90"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/oxageninc/oxagen-platform"
+repository = "https://github.com/oxageninc/stella"
 publish = false
 
 [workspace.dependencies]

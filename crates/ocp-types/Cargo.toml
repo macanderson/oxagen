@@ -1,6 +1,6 @@
 [package]
 name = "ocp-types"
-description = "Open Context Protocol (OCP) wire types: context frames, queries, capabilities, provenance. MIT, zero deps beyond serde — publishable to crates.io independently of any oxagen code."
+description = "Open Context Protocol (OCP) wire types: context frames, queries, capabilities, provenance. MIT, zero deps beyond serde — publishable to crates.io independently of any stella code."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

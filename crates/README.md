@@ -102,10 +102,10 @@ etc.) can be used by setting the appropriate base URL and key.
 
 ## Architecture
 
-stella (oxagen-cli) = CLI binary + agent loop + TUI
-  oxagen-tools = read/write/edit/bash/grep/glob
-  oxagen-model = Provider trait + adapters (SSE, tool-call dialects)
-  oxagen-protocol = Shared serde types
+stella (stella-cli) = CLI binary + agent loop + TUI
+  stella-tools = read/write/edit/bash/grep/glob
+  stella-model = Provider trait + adapters (SSE, tool-call dialects)
+  stella-protocol = Shared serde types
   ocp-types = Open Context Protocol wire types
 
 Key design principles (from docs/specs/oxagen-rust-cli/):
@@ -122,7 +122,7 @@ cd crates
 cargo build --workspace
 cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
-cargo run -p oxagen-cli -- models
+cargo run -p stella-cli -- models
 ```
 
 ## License
