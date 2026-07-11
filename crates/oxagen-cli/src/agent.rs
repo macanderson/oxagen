@@ -28,7 +28,7 @@ use tokio::sync::mpsc;
 use crate::OutputFormat;
 use crate::config::Config;
 use crate::domains::{heuristic_domains, infer_domains};
-use crate::interactive::{InteractiveToolSet, default_ask_io};
+use crate::interactive::{InteractiveToolSet, SkillRegistry, default_ask_io};
 use crate::memory::{SessionMemory, inject_recall_block};
 use crate::tui;
 
@@ -42,6 +42,8 @@ You have these tools available:
 - grep: Search file contents with regex (shells to ripgrep)
 - glob: Find files matching a glob pattern
 - ask_user: Ask the user a multiple-choice question when a decision is genuinely theirs to make (2-6 options; the UI always adds a free-text option automatically — never add an "Other" option yourself)
+- search_skills: Search the public skills registry for reusable skills you don't have locally
+- install_skill: Install a registry skill into the project (always requires the user's confirmation)
 
 Rules:
 - Always read a file before editing it — never edit blind.
@@ -497,7 +499,8 @@ async fn run_turn(
             &customs,
             tx.clone(),
             default_ask_io(format == OutputFormat::Text),
-        );
+        )
+        .with_skill_registry(SkillRegistry::from_env(cfg.workspace_root.clone()));
         let engine = Engine::new(provider, &tools, EngineConfig::default());
         engine.run_turn(messages, budget, &tx).await
     };

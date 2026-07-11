@@ -93,11 +93,87 @@ pub fn default_ask_io(interactive_output: bool) -> Box<dyn AskUserIo> {
     }
 }
 
-/// A `ToolExecutor` that adds `ask_user` on top of an inner executor.
+/// Registry commands for the skills ecosystem (user requirement: the agent
+/// can find skills it doesn't have on the internet and install them into
+/// the project behind a user-confirm workflow). Tokenized argv templates —
+/// `{query}`/`{id}` substitute as a SINGLE argv token, spawned without a
+/// shell, so model-supplied text can never inject. Defaults target the
+/// `npx skills` registry CLI; overridable via STELLA_SKILLS_SEARCH_CMD /
+/// STELLA_SKILLS_INSTALL_CMD since registry CLIs vary.
+#[derive(Debug, Clone)]
+pub struct SkillRegistry {
+    pub search_cmd: Vec<String>,
+    pub install_cmd: Vec<String>,
+    pub workspace_root: std::path::PathBuf,
+}
+
+impl SkillRegistry {
+    pub fn from_env(workspace_root: std::path::PathBuf) -> Self {
+        let parse = |var: &str, default: &[&str]| -> Vec<String> {
+            std::env::var(var)
+                .ok()
+                .map(|v| v.split_whitespace().map(str::to_string).collect())
+                .unwrap_or_else(|| default.iter().map(|s| s.to_string()).collect())
+        };
+        Self {
+            search_cmd: parse(
+                "STELLA_SKILLS_SEARCH_CMD",
+                &["npx", "skills", "find", "{query}"],
+            ),
+            install_cmd: parse(
+                "STELLA_SKILLS_INSTALL_CMD",
+                &["npx", "skills", "add", "{id}"],
+            ),
+            workspace_root,
+        }
+    }
+
+    /// Substitute `placeholder` with `value` across the template's tokens.
+    pub fn render(template: &[String], placeholder: &str, value: &str) -> Vec<String> {
+        template
+            .iter()
+            .map(|t| t.replace(placeholder, value))
+            .collect()
+    }
+
+    async fn run(&self, argv: Vec<String>, timeout_secs: u64) -> Result<String, String> {
+        let Some((program, args)) = argv.split_first() else {
+            return Err("empty registry command".into());
+        };
+        let child = tokio::process::Command::new(program)
+            .args(args)
+            .current_dir(&self.workspace_root)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .map_err(|e| format!("failed to run `{program}`: {e} (is Node/npx installed?)"))?;
+        let output = tokio::time::timeout(
+            std::time::Duration::from_secs(timeout_secs),
+            child.wait_with_output(),
+        )
+        .await
+        .map_err(|_| format!("`{program}` timed out after {timeout_secs}s"))?
+        .map_err(|e| e.to_string())?;
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let mut text = format!("{}\n{}", stdout.trim(), stderr.trim());
+        text.truncate(6000);
+        if output.status.success() {
+            Ok(text.trim().to_string())
+        } else {
+            Err(format!("exit {}: {}", output.status, text.trim()))
+        }
+    }
+}
+
+/// A `ToolExecutor` that adds `ask_user` (plus the skills-registry tools
+/// when configured) on top of an inner executor.
 pub struct InteractiveToolSet<'a> {
     inner: &'a dyn ToolExecutor,
     events: UnboundedSender<AgentEvent>,
     io: Box<dyn AskUserIo>,
+    skills: Option<SkillRegistry>,
 }
 
 impl<'a> InteractiveToolSet<'a> {
@@ -106,7 +182,115 @@ impl<'a> InteractiveToolSet<'a> {
         events: UnboundedSender<AgentEvent>,
         io: Box<dyn AskUserIo>,
     ) -> Self {
-        Self { inner, events, io }
+        Self {
+            inner,
+            events,
+            io,
+            skills: None,
+        }
+    }
+
+    /// Enable the skills-registry tools (search_skills / install_skill).
+    pub fn with_skill_registry(mut self, registry: SkillRegistry) -> Self {
+        self.skills = Some(registry);
+        self
+    }
+
+    fn skills_schemas() -> Vec<ToolSchema> {
+        vec![
+            ToolSchema {
+                name: "search_skills".into(),
+                description: "Search the public skills registry for reusable agent skills \
+                              matching a topic. Use when the task would benefit from a skill \
+                              you don't have locally. Returns the registry's search results."
+                    .into(),
+                input_schema: serde_json::json!({
+                    "type": "object",
+                    "properties": { "query": { "type": "string" } },
+                    "required": ["query"]
+                }),
+            },
+            ToolSchema {
+                name: "install_skill".into(),
+                description: "Install a skill from the registry into this project's \
+                              .oxagen/skills/. ALWAYS asks the user for confirmation first — \
+                              the install only proceeds if they approve. Pass the skill id \
+                              exactly as shown by search_skills."
+                    .into(),
+                input_schema: serde_json::json!({
+                    "type": "object",
+                    "properties": { "id": { "type": "string" } },
+                    "required": ["id"]
+                }),
+            },
+        ]
+    }
+
+    async fn execute_search_skills(&self, registry: &SkillRegistry, input: &Value) -> ToolOutput {
+        let Some(query) = input.get("query").and_then(Value::as_str) else {
+            return ToolOutput::Error {
+                message: "search_skills: missing required string field `query`".into(),
+            };
+        };
+        let argv = SkillRegistry::render(&registry.search_cmd, "{query}", query);
+        match registry.run(argv, 90).await {
+            Ok(out) if out.is_empty() => ToolOutput::Ok {
+                content: "no results".into(),
+            },
+            Ok(out) => ToolOutput::Ok { content: out },
+            Err(e) => ToolOutput::Error {
+                message: format!("skills search failed: {e}"),
+            },
+        }
+    }
+
+    async fn execute_install_skill(&self, registry: &SkillRegistry, input: &Value) -> ToolOutput {
+        let Some(id) = input.get("id").and_then(Value::as_str) else {
+            return ToolOutput::Error {
+                message: "install_skill: missing required string field `id`".into(),
+            };
+        };
+        // THE user-confirm workflow: installation never proceeds without an
+        // explicit yes through the same io ask_user uses (headless io ->
+        // named error -> install impossible headlessly, by design).
+        let options = vec![
+            format!("Yes — install `{id}` into .oxagen/skills/"),
+            "No — don't install".to_string(),
+        ];
+        let answer = match self
+            .io
+            .prompt(
+                &format!("The agent wants to install skill `{id}` from the registry. Proceed?"),
+                &options,
+            )
+            .await
+        {
+            Ok(a) => a,
+            Err(e) => {
+                return ToolOutput::Error {
+                    message: format!("install_skill: confirmation unavailable: {e}"),
+                };
+            }
+        };
+        let approved = matches!(answer.trim(), "1")
+            || answer.trim().eq_ignore_ascii_case("yes")
+            || answer.trim().eq_ignore_ascii_case("y");
+        if !approved {
+            return ToolOutput::Ok {
+                content: "user declined the installation — do not retry; proceed without it".into(),
+            };
+        }
+        let argv = SkillRegistry::render(&registry.install_cmd, "{id}", id);
+        match registry.run(argv, 300).await {
+            Ok(out) => ToolOutput::Ok {
+                content: format!(
+                    "installed `{id}`. It will be considered for selection on the next turn.\n{out}"
+                ),
+            },
+            Err(e) => ToolOutput::Error {
+                message: format!("skills install failed: {e}"),
+            },
+        }
     }
 
     fn ask_user_schema() -> ToolSchema {
@@ -214,6 +398,9 @@ impl ToolExecutor for InteractiveToolSet<'_> {
     fn schemas(&self) -> Vec<ToolSchema> {
         let mut schemas = self.inner.schemas();
         schemas.push(Self::ask_user_schema());
+        if self.skills.is_some() {
+            schemas.extend(Self::skills_schemas());
+        }
         schemas
     }
 
@@ -223,6 +410,14 @@ impl ToolExecutor for InteractiveToolSet<'_> {
             // a per-question counter-free surrogate (the engine's ToolStart
             // event already carries the real call_id for correlation).
             return self.execute_ask_user("ask_user", input).await;
+        }
+        if let Some(registry) = &self.skills {
+            if name == "search_skills" {
+                return self.execute_search_skills(registry, input).await;
+            }
+            if name == "install_skill" {
+                return self.execute_install_skill(registry, input).await;
+            }
         }
         self.inner.execute(name, input).await
     }
