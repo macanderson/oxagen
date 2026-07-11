@@ -7,6 +7,7 @@
 //! for subsequent file operations (L-S2).
 
 pub mod bash;
+pub mod custom;
 pub mod edit;
 pub mod glob;
 pub mod grep;

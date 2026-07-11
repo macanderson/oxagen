@@ -201,6 +201,115 @@ pub fn render_event(event: &AgentEvent) {
                 reason.dimmed()
             );
         }
+        AgentEvent::FileChange { path, kind, .. } => {
+            let verb = match kind {
+                oxagen_protocol::FileChangeKind::Created => "created",
+                oxagen_protocol::FileChangeKind::Modified => "modified",
+                oxagen_protocol::FileChangeKind::Deleted => "deleted",
+            };
+            println!("  {} {} {}", "±".cyan(), verb.dimmed(), path);
+        }
+        AgentEvent::ContextRecall {
+            frames,
+            provider_mix,
+            tokens,
+        } => {
+            let mix = provider_mix
+                .iter()
+                .map(|share| format!("{}×{}", share.frames, share.provider))
+                .collect::<Vec<_>>()
+                .join(", ");
+            println!(
+                "  {} recalled {} frames ({tokens} tokens: {mix})",
+                "◈".cyan(),
+                frames.len()
+            );
+        }
+        AgentEvent::ContextWrite {
+            provider,
+            upserts,
+            superseded,
+        } => {
+            println!(
+                "  {} context write-back via {provider}: {upserts} upserts, {superseded} superseded",
+                "◈".dimmed()
+            );
+        }
+        AgentEvent::MediaProgress {
+            artifact_id,
+            kind,
+            state,
+        } => {
+            let state_str = match state {
+                oxagen_protocol::MediaJobState::Queued => "queued".dimmed(),
+                oxagen_protocol::MediaJobState::Running => "running".cyan(),
+                oxagen_protocol::MediaJobState::Succeeded => "succeeded".green(),
+                oxagen_protocol::MediaJobState::Failed { reason } => {
+                    println!(
+                        "  {} {kind:?} job {artifact_id} failed: {reason}",
+                        "✗".red()
+                    );
+                    return;
+                }
+            };
+            println!("  {} {kind:?} job {artifact_id}: {state_str}", "▣".cyan());
+        }
+        AgentEvent::MediaComplete { artifact } => {
+            println!(
+                "  {} {} ready: {} ({})",
+                "▣".green(),
+                artifact.label,
+                artifact.path,
+                format!("{:?}", artifact.kind).to_lowercase()
+            );
+        }
+        AgentEvent::JudgeVerdict { passed, evidence } => {
+            let icon = if *passed { "✓".green() } else { "✗".red() };
+            let source = if evidence.deterministic {
+                "deterministic"
+            } else {
+                "model judge"
+            };
+            println!("  {icon} verify ({source}): {}", evidence.summary.dimmed());
+        }
+        AgentEvent::ScopeReview { proposal } => {
+            println!(
+                "  {} scope review: {} ({} steps, ~{} files{})",
+                "⌾".yellow().bold(),
+                proposal.summary,
+                proposal.steps.len(),
+                proposal.estimated_files,
+                proposal
+                    .estimated_cost_usd
+                    .map(|c| format!(", ~${c:.2}"))
+                    .unwrap_or_default()
+            );
+        }
+        AgentEvent::AskUser {
+            question, options, ..
+        } => {
+            // The interactive ask_user tool prints the numbered options and
+            // collects the answer itself (it owns stdin while the turn is
+            // in flight); this render arm exists for replay/stream-json
+            // consumers of the event log. The binding free-text contract
+            // (every question always offers a type-your-own option) is
+            // enforced at the prompt site, not here.
+            println!("  {} {}", "?".yellow().bold(), question.bold());
+            for (i, option) in options.iter().enumerate() {
+                println!("    {} {}", format!("{})", i + 1).dimmed(), option);
+            }
+        }
+        AgentEvent::Commit { sha, message } => {
+            let short = sha.get(..8).unwrap_or(sha.as_str());
+            println!("  {} committed {short} {}", "●".green(), message.dimmed());
+        }
+        AgentEvent::Pr { url, status } => {
+            println!(
+                "  {} PR {}: {url}",
+                "⇡".cyan(),
+                format!("{status:?}").to_lowercase()
+            );
+        }
         AgentEvent::Error { message, retryable } => {
             let label = if *retryable { "warning" } else { "error" };
             eprintln!("  {} {}: {}", "✗".red(), label.red().bold(), message);
