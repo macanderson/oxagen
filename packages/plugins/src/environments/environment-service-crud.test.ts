@@ -165,6 +165,16 @@ describe("createEnvironment", () => {
     ).rejects.toThrow(/invalid slug/);
   });
 
+  it("throws when the insert returns no row", async () => {
+    const { createEnvironment } = await import("./environment-service");
+
+    state.insertReturning.push([]); // .returning() came back empty
+
+    await expect(
+      createEnvironment(actor, { name: "Ghost", slug: "ghost" }),
+    ).rejects.toThrow(/insert returned no row/);
+  });
+
   it("passes description through to the insert", async () => {
     const { createEnvironment } = await import("./environment-service");
 
@@ -358,6 +368,17 @@ describe("updateEnvironment", () => {
 
     expect(result.isActive).toBe(false);
     expect(state.updates[0]!.set.isActive).toBe(false);
+  });
+
+  it("throws when the update returns no row", async () => {
+    const { updateEnvironment } = await import("./environment-service");
+
+    state.selectQueue.push([makeEnvRow({ isDefault: false })]); // loadEnv
+    state.updateReturning.push([]); // .returning() came back empty
+
+    await expect(
+      updateEnvironment(actor, { environmentId: "env_pub_1", name: "Ghost" }),
+    ).rejects.toThrow(/update returned no row/);
   });
 
   it("preserves existing memo when memo field is omitted", async () => {

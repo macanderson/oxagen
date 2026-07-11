@@ -104,6 +104,61 @@ describe("setDefaultEnvironment — atomic swap", () => {
   });
 });
 
+describe("setDefaultEnvironment — actor without userId / missing row", () => {
+  it("sets updatedByUserId to null on both updates when the actor has no userId", async () => {
+    const { setDefaultEnvironment } = await import("./environment-service");
+    const actorNoUser = { orgId: "o1", workspaceId: "w1" };
+    state.selectRows = [
+      {
+        id: "int_1",
+        publicId: "env_pub_1",
+        name: "Prod",
+        slug: "production",
+        description: null,
+        isDefault: false,
+        isActive: true,
+      },
+    ];
+    state.updateReturning = [
+      {
+        id: "int_1",
+        publicId: "env_pub_1",
+        name: "Prod",
+        slug: "production",
+        description: null,
+        isDefault: true,
+        isActive: true,
+      },
+    ];
+
+    await setDefaultEnvironment(actorNoUser, { environmentId: "env_pub_1" });
+
+    expect(state.updates).toHaveLength(2);
+    expect(state.updates[0]!.set.updatedByUserId).toBeNull();
+    expect(state.updates[1]!.set.updatedByUserId).toBeNull();
+  });
+
+  it("throws when the promote update returns no row", async () => {
+    const { setDefaultEnvironment } = await import("./environment-service");
+    state.selectRows = [
+      {
+        id: "int_1",
+        publicId: "env_pub_1",
+        name: "Prod",
+        slug: "production",
+        description: null,
+        isDefault: false,
+        isActive: true,
+      },
+    ];
+    state.updateReturning = []; // .returning() came back empty
+
+    await expect(
+      setDefaultEnvironment(actor, { environmentId: "env_pub_1" }),
+    ).rejects.toThrow(/set_default returned no row/);
+  });
+});
+
 describe("default-environment guards", () => {
   const defaultRow = [
     {
