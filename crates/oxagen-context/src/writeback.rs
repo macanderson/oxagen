@@ -15,8 +15,8 @@ use sha2::{Digest, Sha256};
 use crate::error::ContextError;
 use crate::store::{
     ContextStore, NodeInput, NodeKind, close_edge, currently_valid_edge, edges_as_of,
-    embedding_exists, insert_edge, insert_episode, node_by_id, sha256_hex, store_embedding,
-    upsert_node,
+    embedding_exists, insert_edge, insert_episode, insert_memory, node_by_id, sha256_hex,
+    store_embedding, tag_edge_domains, tag_node_domains, upsert_domain, upsert_node,
 };
 
 /// How an episode turned out. Stored as its `as_str` form.
@@ -51,6 +51,8 @@ pub struct EpisodeInput {
     pub started_at: String,
     pub ended_at: String,
     pub salience: f32,
+    /// Workspace domain tags carried onto the episode's mirror node.
+    pub domains: Vec<String>,
 }
 
 impl EpisodeInput {
@@ -67,7 +69,18 @@ impl EpisodeInput {
             started_at: started_at.into(),
             ended_at: ended_at.into(),
             salience: 0.0,
+            domains: Vec::new(),
         }
+    }
+
+    /// Tag with one or more workspace domains.
+    pub fn with_domains<I, S>(mut self, domains: I) -> Self
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        self.domains = domains.into_iter().map(Into::into).collect();
+        self
     }
 
     /// Stable identity: the summary plus its time window.
@@ -81,12 +94,13 @@ impl EpisodeInput {
         format!("epi_{}", &format!("{:x}", h.finalize())[..24])
     }
 
-    /// The retrievable Episode node mirroring this episode.
+    /// The retrievable Episode node mirroring this episode (carries its domains).
     fn as_node(&self) -> NodeInput {
         let label = truncate_label(&self.summary);
         NodeInput::new(NodeKind::Episode, label)
             .with_uri(format!("episode://{}", self.public_id()))
             .with_content(self.summary.clone())
+            .with_domains(self.domains.clone())
     }
 }
 
@@ -104,6 +118,8 @@ pub struct FactAssertion {
     pub weight: f64,
     pub properties: serde_json::Value,
     pub multivalued: bool,
+    /// Domain tags applied to the resulting fact edge.
+    pub domains: Vec<String>,
 }
 
 impl FactAssertion {
@@ -118,6 +134,124 @@ impl FactAssertion {
             weight: 1.0,
             properties: serde_json::json!({}),
             multivalued: false,
+            domains: Vec::new(),
+        }
+    }
+
+    /// Tag the fact edge with one or more workspace domains.
+    pub fn with_domains<I, S>(mut self, domains: I) -> Self
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        self.domains = domains.into_iter().map(Into::into).collect();
+        self
+    }
+}
+
+/// The kind of a memory record. Reflections are the post-turn self-improvement
+/// lessons the CLI/pipeline writes after every chat turn (generation is
+/// oxagen-pipeline/CLI scope; storage + recall are this crate's).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MemoryKind {
+    /// A post-turn self-improvement lesson.
+    Reflection,
+    /// A durable note the agent chose to remember.
+    Note,
+    /// An extracted insight/preference.
+    Insight,
+}
+
+impl MemoryKind {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            MemoryKind::Reflection => "reflection",
+            MemoryKind::Note => "note",
+            MemoryKind::Insight => "insight",
+        }
+    }
+}
+
+/// A memory to write — content, kind, domains, salience. It becomes a `memory`
+/// record and a retrievable `Memory` node, so future turns recall it by
+/// similarity + domain overlap + recency.
+#[derive(Debug, Clone)]
+pub struct MemoryInput {
+    pub kind: MemoryKind,
+    pub content: String,
+    pub domains: Vec<String>,
+    pub salience: f32,
+}
+
+impl MemoryInput {
+    /// A reflection memory tagged with the given domains.
+    pub fn reflection<I, S>(content: impl Into<String>, domains: I) -> Self
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        Self {
+            kind: MemoryKind::Reflection,
+            content: content.into(),
+            domains: domains.into_iter().map(Into::into).collect(),
+            salience: 0.0,
+        }
+    }
+
+    /// A memory of an explicit kind.
+    pub fn new(kind: MemoryKind, content: impl Into<String>) -> Self {
+        Self {
+            kind,
+            content: content.into(),
+            domains: Vec::new(),
+            salience: 0.0,
+        }
+    }
+
+    /// Tag with one or more workspace domains.
+    pub fn with_domains<I, S>(mut self, domains: I) -> Self
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        self.domains = domains.into_iter().map(Into::into).collect();
+        self
+    }
+
+    /// Stable identity: kind + content.
+    fn public_id(&self) -> String {
+        let mut h = Sha256::new();
+        h.update(self.kind.as_str().as_bytes());
+        h.update([0u8]);
+        h.update(self.content.as_bytes());
+        format!("mem_{}", &format!("{:x}", h.finalize())[..24])
+    }
+
+    /// The retrievable Memory node mirroring this memory (carries its domains).
+    fn as_node(&self) -> NodeInput {
+        let label = truncate_label(&self.content);
+        NodeInput::new(NodeKind::Memory, label)
+            .with_uri(format!("memory://{}", self.public_id()))
+            .with_content(self.content.clone())
+            .with_domains(self.domains.clone())
+    }
+}
+
+/// An explicit domain definition (name + optional description). Writing bare
+/// domain names on nodes/edges auto-creates them; this is how a caller attaches
+/// a description (e.g. the `stella init` taxonomy).
+#[derive(Debug, Clone)]
+pub struct DomainInput {
+    pub name: String,
+    pub description: Option<String>,
+}
+
+impl DomainInput {
+    pub fn new(name: impl Into<String>, description: Option<String>) -> Self {
+        Self {
+            name: name.into(),
+            description,
         }
     }
 }
@@ -125,10 +259,16 @@ impl FactAssertion {
 /// A batch of context writes applied atomically.
 #[derive(Debug, Clone, Default)]
 pub struct ContextDelta {
+    /// Explicit domain definitions (names + descriptions). Bare domain names on
+    /// other records auto-create domains, so this is only needed to attach a
+    /// description.
+    pub domains: Vec<DomainInput>,
     /// Bare content nodes to index (docs, snippets, symbols).
     pub nodes: Vec<NodeInput>,
     /// Episodic-memory summaries.
     pub episodes: Vec<EpisodeInput>,
+    /// Reflection/other memories.
+    pub memories: Vec<MemoryInput>,
     /// Fact assertions with bi-temporal supersession.
     pub facts: Vec<FactAssertion>,
 }
@@ -137,6 +277,12 @@ impl ContextDelta {
     /// An empty delta to build up fluently.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Define a domain (name + optional description).
+    pub fn with_domain(mut self, domain: DomainInput) -> Self {
+        self.domains.push(domain);
+        self
     }
 
     /// Add a content node.
@@ -148,6 +294,12 @@ impl ContextDelta {
     /// Add an episode.
     pub fn with_episode(mut self, ep: EpisodeInput) -> Self {
         self.episodes.push(ep);
+        self
+    }
+
+    /// Add a memory (reflection etc.).
+    pub fn with_memory(mut self, memory: MemoryInput) -> Self {
+        self.memories.push(memory);
         self
     }
 
@@ -165,10 +317,13 @@ impl ContextDelta {
 pub struct UpsertReceipt {
     pub nodes_upserted: usize,
     pub episodes_written: usize,
+    pub memories_written: usize,
     pub facts_asserted: usize,
     pub facts_superseded: usize,
     pub embeddings_computed: usize,
     pub embeddings_reused: usize,
+    /// New domain-tag associations written across all records this batch.
+    pub domain_tags_added: usize,
 }
 
 /// A fact resolved to human labels for point-in-time queries (`L-C4`: cite by
@@ -221,6 +376,9 @@ impl ContextStore {
         for ep in &delta.episodes {
             push(&ep.summary, &mut contents, &mut seen);
         }
+        for memory in &delta.memories {
+            push(&memory.content, &mut contents, &mut seen);
+        }
         for fact in &delta.facts {
             push(&fact.subject.content, &mut contents, &mut seen);
             push(&fact.object.content, &mut contents, &mut seen);
@@ -260,8 +418,15 @@ impl ContextStore {
         let conn = self.conn();
         let tx = conn.unchecked_transaction()?;
 
+        // Explicit domain definitions first, so descriptions land even if the
+        // same names are also referenced as bare tags below.
+        for domain in &delta.domains {
+            upsert_domain(&tx, &domain.name, domain.description.as_deref(), &now)?;
+        }
+
         for node in &delta.nodes {
-            upsert_node(&tx, node, &now)?;
+            let id = upsert_node(&tx, node, &now)?;
+            receipt.domain_tags_added += tag_node_domains(&tx, id, &node.domains, &now)?;
             receipt.nodes_upserted += 1;
         }
 
@@ -278,14 +443,34 @@ impl ContextStore {
                 &ep.ended_at,
                 &now,
             )?;
-            upsert_node(&tx, &ep.as_node(), &now)?;
+            let node = ep.as_node();
+            let id = upsert_node(&tx, &node, &now)?;
+            receipt.domain_tags_added += tag_node_domains(&tx, id, &node.domains, &now)?;
             receipt.nodes_upserted += 1;
             receipt.episodes_written += 1;
+        }
+
+        for memory in &delta.memories {
+            insert_memory(
+                &tx,
+                &memory.public_id(),
+                memory.kind.as_str(),
+                &memory.content,
+                memory.salience as f64,
+                &now,
+            )?;
+            let node = memory.as_node();
+            let id = upsert_node(&tx, &node, &now)?;
+            receipt.domain_tags_added += tag_node_domains(&tx, id, &node.domains, &now)?;
+            receipt.nodes_upserted += 1;
+            receipt.memories_written += 1;
         }
 
         for fact in &delta.facts {
             let src = upsert_node(&tx, &fact.subject, &now)?;
             let dst = upsert_node(&tx, &fact.object, &now)?;
+            receipt.domain_tags_added += tag_node_domains(&tx, src, &fact.subject.domains, &now)?;
+            receipt.domain_tags_added += tag_node_domains(&tx, dst, &fact.object.domains, &now)?;
             receipt.nodes_upserted += 2;
             apply_fact(&tx, fact, src, dst, &now, &mut receipt)?;
         }
@@ -338,7 +523,7 @@ fn apply_fact(
     if fact.multivalued {
         // Multi-valued: coexist unless this exact triple is already live.
         if !live_triple_exists(tx, src, &fact.predicate, dst)? {
-            insert_edge(
+            let edge_id = insert_edge(
                 tx,
                 &fact.predicate,
                 src,
@@ -350,6 +535,7 @@ fn apply_fact(
                 now,
                 None,
             )?;
+            receipt.domain_tags_added += tag_edge_domains(tx, edge_id, &fact.domains, now)?;
             receipt.facts_asserted += 1;
         }
         return Ok(());
@@ -364,7 +550,7 @@ fn apply_fact(
             // Object changed → close the old interval, link SUPERSEDES.
             let valid_to = fact.valid_from.as_deref().unwrap_or(now);
             close_edge(tx, existing_edge, now, valid_to)?;
-            insert_edge(
+            let edge_id = insert_edge(
                 tx,
                 &fact.predicate,
                 src,
@@ -376,11 +562,12 @@ fn apply_fact(
                 now,
                 Some(existing_edge),
             )?;
+            receipt.domain_tags_added += tag_edge_domains(tx, edge_id, &fact.domains, now)?;
             receipt.facts_superseded += 1;
             receipt.facts_asserted += 1;
         }
         None => {
-            insert_edge(
+            let edge_id = insert_edge(
                 tx,
                 &fact.predicate,
                 src,
@@ -392,6 +579,7 @@ fn apply_fact(
                 now,
                 None,
             )?;
+            receipt.domain_tags_added += tag_edge_domains(tx, edge_id, &fact.domains, now)?;
             receipt.facts_asserted += 1;
         }
     }

@@ -13,15 +13,20 @@
 //! CLI-local scale; an ANN accelerator is a size-threshold follow-up per
 //! `02-architecture.md` §6. They are property-tested at the bottom of the file.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use ocp_types::frame::FrameEmbedding;
 use ocp_types::{ContextFrame, ContextQuery, Provenance};
 
 use crate::error::ContextError;
 use crate::store::{
-    ContextStore, NodeRow, live_nodes, neighbors, node_ids_for_uris, vectors_for_fingerprint,
+    ContextStore, NodeRow, domains_for_node, live_nodes, neighbors, node_ids_for_uris,
+    node_ids_in_domains, vectors_for_fingerprint,
 };
+
+/// Provenance `kind` marking a frame's domain tag, so a citation view can show
+/// the domains a frame belongs to (scope update: "tag data rides provenance").
+pub(crate) const DOMAIN_PROVENANCE_KIND: &str = "domain";
 
 /// Provider identity stamped into frame provenance.
 pub(crate) const PROVIDER_ID: &str = "oxagen-context/0.1";
@@ -88,10 +93,25 @@ impl RecallResult {
 }
 
 impl ContextStore {
-    /// Hybrid retrieval: fuse → dedup → diversify → budget-pack → coverage
-    /// gate. Returns the rich [`RecallResult`]; the OCP-shaped
-    /// `ContextProvider::query` adapts this down to `Vec<ContextFrame>`.
+    /// Hybrid retrieval with no domain scope — grounding drawn from the whole
+    /// workspace. The OCP-shaped `ContextProvider::query` adapts this down to
+    /// `Vec<ContextFrame>`.
     pub async fn recall(&self, q: &ContextQuery) -> Result<RecallResult, ContextError> {
+        self.recall_scoped(q, &[]).await
+    }
+
+    /// Hybrid retrieval scoped to `domains` (scope update): fuse → dedup →
+    /// diversify → budget-pack → coverage gate. When `domains` is non-empty it
+    /// **filters** candidates to nodes tagged with at least one of them AND
+    /// **boosts** relevance by domain overlap (a frame sharing more of the
+    /// query's domains ranks higher). An empty `domains` slice behaves exactly
+    /// like [`Self::recall`]. Every returned frame carries its domains in
+    /// provenance so a citation view can show them.
+    pub async fn recall_scoped(
+        &self,
+        q: &ContextQuery,
+        domains: &[String],
+    ) -> Result<RecallResult, ContextError> {
         // 1. Query vector: reuse the caller's if it matches our dims, else
         //    embed the query text ourselves. This is the ONLY embedding recall
         //    ever does — it never embeds stored content inline; that is warm's
@@ -111,19 +131,31 @@ impl ContextStore {
             }
         };
 
-        // 2. Gather candidates under one lock — no await is held here.
+        // 2. Gather candidates under one lock — no await is held here. The
+        //    domain filter (if any) is applied here so every downstream signal
+        //    sees only the in-scope nodes.
         let fp_id = self.fingerprint().id();
-        let (nodes, vectors, anchor_ids) = {
+        let (nodes, vectors, anchor_ids, domains_by_id) = {
             let conn = self.conn();
-            let nodes = live_nodes(&conn)?;
-            let vectors = vectors_for_fingerprint(&conn, &fp_id)?;
+            let mut nodes = live_nodes(&conn)?;
+            let mut vectors = vectors_for_fingerprint(&conn, &fp_id)?;
             let anchor_ids = node_ids_for_uris(&conn, &q.anchors)?;
-            (nodes, vectors, anchor_ids)
+            if let Some(allowed) = node_ids_in_domains(&conn, domains)? {
+                nodes.retain(|n| allowed.contains(&n.id));
+                vectors.retain(|(id, _)| allowed.contains(id));
+            }
+            let mut domains_by_id: HashMap<i64, Vec<String>> = HashMap::new();
+            for n in &nodes {
+                domains_by_id.insert(n.id, domains_for_node(&conn, n.id)?);
+            }
+            (nodes, vectors, anchor_ids, domains_by_id)
         };
 
         let node_by_id: HashMap<i64, &NodeRow> = nodes.iter().map(|n| (n.id, n)).collect();
         let vector_by_id: HashMap<i64, &Vec<f32>> =
             vectors.iter().map(|(id, v)| (*id, v)).collect();
+        let no_domains: Vec<String> = Vec::new();
+        let frame_domains_for = |id: &i64| domains_by_id.get(id).unwrap_or(&no_domains).as_slice();
 
         // 3a. Vector-similarity ranking + the cosine values coverage reads.
         let mut cos_scored: Vec<(i64, f32)> = vectors
@@ -133,17 +165,44 @@ impl ContextStore {
         cos_scored.sort_by(|a, b| b.1.total_cmp(&a.1));
         let coverage = coverage_score(&cos_scored);
 
+        // 3b. Domain-overlap ranking (only when the query is domain-scoped):
+        //     nodes sharing more of the query's domains rank higher. Folded
+        //     into RRF like any other signal.
+        let query_domains: HashSet<&str> = domains.iter().map(String::as_str).collect();
+        let domain_ranked: Vec<i64> = if query_domains.is_empty() {
+            Vec::new()
+        } else {
+            let mut scored: Vec<(i64, usize)> = nodes
+                .iter()
+                .filter_map(|n| {
+                    let overlap = frame_domains_for(&n.id)
+                        .iter()
+                        .filter(|d| query_domains.contains(d.as_str()))
+                        .count();
+                    (overlap > 0).then_some((n.id, overlap))
+                })
+                .collect();
+            scored.sort_by_key(|entry| std::cmp::Reverse(entry.1));
+            scored.into_iter().map(|(id, _)| id).collect()
+        };
+
         // 4. Coverage gate (`L-C6`). Below threshold the vector signal is too
         //    weak to trust; rather than dress fused graph/recency hits up as
         //    grounding, serve bounded lexical matches, **explicitly labeled**.
-        //    Above threshold, fuse the three signals into real grounding.
+        //    Above threshold, fuse the signals into real grounding.
         let used_lexical_fallback = coverage < MIN_COVERAGE;
         let candidates: Vec<ContextFrame> = if used_lexical_fallback {
             let terms = query_terms(q);
             let mut frames = Vec::new();
             for (id, score) in lexical_search(&nodes, &terms, LEXICAL_LIMIT) {
                 if let Some(node) = node_by_id.get(&id) {
-                    frames.push(frame_from_node(node, score, &fp_id, true)?);
+                    frames.push(frame_from_node(
+                        node,
+                        score,
+                        &fp_id,
+                        true,
+                        frame_domains_for(&id),
+                    )?);
                 }
             }
             frames
@@ -175,7 +234,10 @@ impl ContextStore {
             let graph_ranked: Vec<i64> = graph_scored.iter().map(|(id, _)| *id).collect();
 
             // 4c. Fuse (RRF) → dedup by content hash → MMR diversity pass.
-            let fused = rrf_fuse(&[vector_ranked, recency_ranked, graph_ranked], RRF_K);
+            let fused = rrf_fuse(
+                &[vector_ranked, recency_ranked, graph_ranked, domain_ranked],
+                RRF_K,
+            );
             let ordered = dedup_by_content_hash(&fused, &node_by_id);
             let max_fused = ordered.first().map(|(_, s)| *s).unwrap_or(0.0);
             let mmr_items: Vec<MmrItem> = ordered
@@ -200,6 +262,7 @@ impl ContextStore {
                         mmr_items[idx].relevance,
                         &fp_id,
                         false,
+                        frame_domains_for(&id),
                     )?);
                 }
             }
@@ -225,6 +288,7 @@ pub(crate) fn frame_from_node(
     score: f32,
     fingerprint: &str,
     lexical: bool,
+    domains: &[String],
 ) -> Result<ContextFrame, ContextError> {
     let label = node.display_name.trim();
     if label.is_empty() {
@@ -247,6 +311,19 @@ pub(crate) fn frame_from_node(
             range: None,
             digest: None,
             method: Some(LEXICAL_FALLBACK_METHOD.into()),
+            by: Some(PROVIDER_ID.into()),
+        });
+    }
+    if !domains.is_empty() {
+        // Domain tags ride provenance so citation views can show which
+        // workspace domains a frame belongs to (user requirement: domains
+        // tag all graph nodes/edges; recall scores domain overlap).
+        provenance.push(Provenance {
+            kind: DOMAIN_PROVENANCE_KIND.into(),
+            uri: None,
+            range: None,
+            digest: None,
+            method: Some(domains.join(",")),
             by: Some(PROVIDER_ID.into()),
         });
     }
@@ -528,7 +605,7 @@ mod tests {
             uri: None,
             recorded_at: "2026-01-01T00:00:00Z".into(),
         };
-        let err = frame_from_node(&node, 0.5, "fp", false).unwrap_err();
+        let err = frame_from_node(&node, 0.5, "fp", false, &[]).unwrap_err();
         assert!(matches!(err, ContextError::MissingCitation { .. }));
     }
 
@@ -544,12 +621,12 @@ mod tests {
             uri: None,
             recorded_at: "2026-01-01T00:00:00Z".into(),
         };
-        let frame = frame_from_node(&node, 0.5, "fp", true).unwrap();
+        let frame = frame_from_node(&node, 0.5, "fp", true, &["billing".to_string()]).unwrap();
         assert!(
             is_lexical_fallback(&frame),
             "fallback frames must be labeled"
         );
-        let graph_frame = frame_from_node(&node, 0.5, "fp", false).unwrap();
+        let graph_frame = frame_from_node(&node, 0.5, "fp", false, &[]).unwrap();
         assert!(!is_lexical_fallback(&graph_frame));
     }
 

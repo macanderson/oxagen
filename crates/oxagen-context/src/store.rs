@@ -25,7 +25,7 @@ use crate::error::ContextError;
 use ocp_types::FrameKind;
 
 /// The current on-disk schema version, tracked in `PRAGMA user_version`.
-const SCHEMA_VERSION: i64 = 1;
+const SCHEMA_VERSION: i64 = 2;
 
 /// The v1 schema. Applied once, inside the migration transaction. Bi-temporal
 /// columns (`valid_from`/`valid_to`/`recorded_at`/`superseded_at`) live on both
@@ -98,6 +98,46 @@ CREATE TABLE embedder_fingerprint (
 );
 ";
 
+/// The v2 schema (scope update): workspace **domains** as first-class tags, and
+/// a **memory** record type (reflections). Domains are a normalized table plus
+/// indexable junctions — never a JSON blob — so "everything in domain X" is a
+/// key-lookup, not a scan. A domain tag rides node and edge/fact rows (and, via
+/// their mirror nodes, episodes and memories). Reflection memories are their
+/// own record with a `kind`, mirrored to a retrievable `Memory` node so recall
+/// scores them by similarity + domain overlap + recency.
+const MIGRATION_V2: &str = "\
+CREATE TABLE domain (
+    id           INTEGER PRIMARY KEY,
+    name         TEXT NOT NULL UNIQUE,
+    description  TEXT,
+    recorded_at  TEXT NOT NULL
+);
+
+CREATE TABLE node_domains (
+    node_id      INTEGER NOT NULL REFERENCES node(id),
+    domain_id    INTEGER NOT NULL REFERENCES domain(id),
+    PRIMARY KEY (node_id, domain_id)
+) WITHOUT ROWID;
+CREATE INDEX idx_node_domains_domain ON node_domains(domain_id);
+
+CREATE TABLE edge_domains (
+    edge_id      INTEGER NOT NULL REFERENCES edge(id),
+    domain_id    INTEGER NOT NULL REFERENCES domain(id),
+    PRIMARY KEY (edge_id, domain_id)
+) WITHOUT ROWID;
+CREATE INDEX idx_edge_domains_domain ON edge_domains(domain_id);
+
+CREATE TABLE memory (
+    id           INTEGER PRIMARY KEY,
+    public_id    TEXT NOT NULL UNIQUE,
+    kind         TEXT NOT NULL,
+    content      TEXT NOT NULL,
+    salience     REAL NOT NULL DEFAULT 0.0,
+    recorded_at  TEXT NOT NULL
+);
+CREATE INDEX idx_memory_kind ON memory(kind);
+";
+
 /// Typed node vocabulary (`06-context-protocol.md` §2.2). Stored as its
 /// `as_str` form; retrieval maps it onto an `ocp_types::FrameKind`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -111,6 +151,9 @@ pub enum NodeKind {
     Person,
     Artifact,
     Task,
+    /// A memory (e.g. a post-turn reflection). Mirrors a `memory` record so it
+    /// is retrievable and domain-taggable through the normal node pipeline.
+    Memory,
 }
 
 impl NodeKind {
@@ -125,6 +168,7 @@ impl NodeKind {
             NodeKind::Person => "person",
             NodeKind::Artifact => "artifact",
             NodeKind::Task => "task",
+            NodeKind::Memory => "memory",
         }
     }
 
@@ -139,6 +183,7 @@ impl NodeKind {
             "person" => NodeKind::Person,
             "artifact" => NodeKind::Artifact,
             "task" => NodeKind::Task,
+            "memory" => NodeKind::Memory,
             _ => return None,
         })
     }
@@ -150,6 +195,7 @@ impl NodeKind {
             NodeKind::Symbol => FrameKind::Symbol,
             NodeKind::Episode => FrameKind::Episode,
             NodeKind::Artifact => FrameKind::Doc,
+            NodeKind::Memory => FrameKind::Memory,
             // Concept/Fact/Person/Task all read as facts to a consuming host.
             NodeKind::Concept | NodeKind::Fact | NodeKind::Person | NodeKind::Task => {
                 FrameKind::Fact
@@ -168,10 +214,13 @@ pub struct NodeInput {
     pub content: String,
     pub uri: Option<String>,
     pub properties: serde_json::Value,
+    /// Workspace domain tags (e.g. `["auth", "billing"]`). One or more; stored
+    /// via the `node_domains` junction (indexable), never a JSON blob.
+    pub domains: Vec<String>,
 }
 
 impl NodeInput {
-    /// A node with the given kind and label, empty content, no uri.
+    /// A node with the given kind and label, empty content, no uri, no domains.
     pub fn new(kind: NodeKind, display_name: impl Into<String>) -> Self {
         Self {
             kind,
@@ -179,6 +228,7 @@ impl NodeInput {
             content: String::new(),
             uri: None,
             properties: serde_json::json!({}),
+            domains: Vec::new(),
         }
     }
 
@@ -191,6 +241,16 @@ impl NodeInput {
     /// Attach a source uri (used for anchor matching and provenance).
     pub fn with_uri(mut self, uri: impl Into<String>) -> Self {
         self.uri = Some(uri.into());
+        self
+    }
+
+    /// Tag with one or more workspace domains.
+    pub fn with_domains<I, S>(mut self, domains: I) -> Self
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        self.domains = domains.into_iter().map(Into::into).collect();
         self
     }
 
@@ -372,6 +432,14 @@ impl ContextStore {
         )?;
         Ok(n as usize)
     }
+
+    /// All workspace domains as `(name, description)` — for a `context status`
+    /// surface. The domains themselves are produced by `stella init` and arrive
+    /// through the write path as data.
+    pub fn domains(&self) -> Result<Vec<(String, Option<String>)>, ContextError> {
+        let conn = lock(&self.conn);
+        list_domains(&conn)
+    }
 }
 
 /// Lock a mutex, recovering the guard even if a previous holder panicked. This
@@ -406,6 +474,9 @@ fn migrate(conn: &Connection) -> Result<(), ContextError> {
     let tx = conn.unchecked_transaction()?;
     if version < 1 {
         tx.execute_batch(MIGRATION_V1)?;
+    }
+    if version < 2 {
+        tx.execute_batch(MIGRATION_V2)?;
     }
     tx.pragma_update(None, "user_version", SCHEMA_VERSION)?;
     tx.commit()?;
@@ -875,6 +946,162 @@ pub(crate) fn insert_episode(
         |r| r.get(0),
     )?;
     Ok(id)
+}
+
+/// Insert or update a memory record (idempotent by `public_id`). Returns rowid.
+pub(crate) fn insert_memory(
+    conn: &Connection,
+    public_id: &str,
+    kind: &str,
+    content: &str,
+    salience: f64,
+    now: &str,
+) -> Result<i64, ContextError> {
+    let id: i64 = conn.query_row(
+        "INSERT INTO memory (public_id, kind, content, salience, recorded_at)
+         VALUES (?1, ?2, ?3, ?4, ?5)
+         ON CONFLICT(public_id) DO UPDATE SET
+             kind = excluded.kind,
+             content = excluded.content,
+             salience = excluded.salience
+         RETURNING id",
+        params![public_id, kind, content, salience, now],
+        |r| r.get(0),
+    )?;
+    Ok(id)
+}
+
+// ---------------------------------------------------------------------------
+// Domains: a normalized table + indexable junctions (scope update). Tagging is
+// idempotent; unknown domain names are auto-created (the workspace's `stella
+// init` domains arrive as data, so a write may reference a name before an
+// explicit definition with a description exists).
+// ---------------------------------------------------------------------------
+
+/// Insert a domain by name (idempotent), optionally setting/refreshing its
+/// description. Returns its rowid.
+pub(crate) fn upsert_domain(
+    conn: &Connection,
+    name: &str,
+    description: Option<&str>,
+    now: &str,
+) -> Result<i64, ContextError> {
+    if name.trim().is_empty() {
+        return Err(ContextError::InvalidInput(
+            "domain name must be non-empty".into(),
+        ));
+    }
+    // COALESCE keeps an existing description when a later tag-only write passes
+    // None, but lets an explicit definition set or update it.
+    let id: i64 = conn.query_row(
+        "INSERT INTO domain (name, description, recorded_at)
+         VALUES (?1, ?2, ?3)
+         ON CONFLICT(name) DO UPDATE SET
+             description = COALESCE(excluded.description, domain.description)
+         RETURNING id",
+        params![name, description, now],
+        |r| r.get(0),
+    )?;
+    Ok(id)
+}
+
+/// Tag a node with domains (auto-creating unknown ones). Returns the number of
+/// new tag associations written.
+pub(crate) fn tag_node_domains(
+    conn: &Connection,
+    node_id: i64,
+    domains: &[String],
+    now: &str,
+) -> Result<usize, ContextError> {
+    let mut added = 0;
+    for name in domains {
+        let domain_id = upsert_domain(conn, name, None, now)?;
+        added += conn.execute(
+            "INSERT INTO node_domains (node_id, domain_id) VALUES (?1, ?2)
+             ON CONFLICT(node_id, domain_id) DO NOTHING",
+            params![node_id, domain_id],
+        )?;
+    }
+    Ok(added)
+}
+
+/// Tag an edge/fact with domains (auto-creating unknown ones). Returns the
+/// number of new tag associations written.
+pub(crate) fn tag_edge_domains(
+    conn: &Connection,
+    edge_id: i64,
+    domains: &[String],
+    now: &str,
+) -> Result<usize, ContextError> {
+    let mut added = 0;
+    for name in domains {
+        let domain_id = upsert_domain(conn, name, None, now)?;
+        added += conn.execute(
+            "INSERT INTO edge_domains (edge_id, domain_id) VALUES (?1, ?2)
+             ON CONFLICT(edge_id, domain_id) DO NOTHING",
+            params![edge_id, domain_id],
+        )?;
+    }
+    Ok(added)
+}
+
+/// The domain names tagged on a node, sorted for stable citation display.
+pub(crate) fn domains_for_node(
+    conn: &Connection,
+    node_id: i64,
+) -> Result<Vec<String>, ContextError> {
+    let mut stmt = conn.prepare(
+        "SELECT d.name FROM node_domains nd
+         JOIN domain d ON d.id = nd.domain_id
+         WHERE nd.node_id = ?1
+         ORDER BY d.name",
+    )?;
+    let rows = stmt.query_map(params![node_id], |r| r.get::<_, String>(0))?;
+    let mut out = Vec::new();
+    for r in rows {
+        out.push(r?);
+    }
+    Ok(out)
+}
+
+/// Live node ids tagged with ANY of the given domains — the domain-filter
+/// candidate set for `recall_scoped`. An empty `domains` slice returns `None`
+/// (meaning "no filter"), distinct from an empty set ("filter matched nothing").
+pub(crate) fn node_ids_in_domains(
+    conn: &Connection,
+    domains: &[String],
+) -> Result<Option<std::collections::HashSet<i64>>, ContextError> {
+    if domains.is_empty() {
+        return Ok(None);
+    }
+    let mut set = std::collections::HashSet::new();
+    let mut stmt = conn.prepare(
+        "SELECT nd.node_id FROM node_domains nd
+         JOIN domain d ON d.id = nd.domain_id
+         JOIN node n ON n.id = nd.node_id
+         WHERE d.name = ?1 AND n.superseded_at IS NULL",
+    )?;
+    for name in domains {
+        for r in stmt.query_map(params![name], |r| r.get::<_, i64>(0))? {
+            set.insert(r?);
+        }
+    }
+    Ok(Some(set))
+}
+
+/// All defined domains as `(name, description)`, for status/inspection.
+pub(crate) fn list_domains(
+    conn: &Connection,
+) -> Result<Vec<(String, Option<String>)>, ContextError> {
+    let mut stmt = conn.prepare("SELECT name, description FROM domain ORDER BY name")?;
+    let rows = stmt.query_map([], |r| {
+        Ok((r.get::<_, String>(0)?, r.get::<_, Option<String>>(1)?))
+    })?;
+    let mut out = Vec::new();
+    for r in rows {
+        out.push(r?);
+    }
+    Ok(out)
 }
 
 /// Live nodes lacking a vector under `fingerprint`, as `(content_hash, content)`.
