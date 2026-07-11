@@ -13,6 +13,7 @@ pub mod compaction;
 pub mod estimator;
 pub mod loop_detect;
 pub mod ports;
+pub mod retry;
 
 pub use budget::{BudgetGuard, BudgetOutcome};
 pub use ports::{Clock, ToolExecutor};
