@@ -120,4 +120,107 @@ describe("AgentRegistry", () => {
     reg.remove(a.id);
     expect(listener).toHaveBeenCalledTimes(1);
   });
+
+  // ── Kill seam ──────────────────────────────────────────────────────────────
+
+  it("kill() fires a registered AbortController, marks 'killed', keeps it visible, and returns true", () => {
+    const { reg } = makeRegistry();
+    const ctrl = new AbortController();
+    const a = reg.register({ kind: "turn", title: "long turn" });
+    expect(reg.registerAbort(a.id, ctrl)).toBe(true);
+
+    const hadHandle = reg.kill(a.id);
+    expect(hadHandle).toBe(true); // an abort handle existed and was fired
+    expect(ctrl.signal.aborted).toBe(true); // real work was cancelled
+    const snap = reg.snapshot();
+    expect(snap).toHaveLength(1); // still visible — not auto-removed
+    expect(snap[0]?.status).toBe("killed");
+  });
+
+  it("kill() accepts a bare abort function handle", () => {
+    const { reg } = makeRegistry();
+    const abort = vi.fn();
+    const a = reg.register({ kind: "subagent", title: "poller" });
+    reg.registerAbort(a.id, abort);
+    expect(reg.kill(a.id)).toBe(true);
+    expect(abort).toHaveBeenCalledOnce();
+    expect(reg.snapshot()[0]?.status).toBe("killed");
+  });
+
+  it("register({ abort }) wires the handle up front", () => {
+    const { reg } = makeRegistry();
+    const ctrl = new AbortController();
+    const a = reg.register({ kind: "turn", title: "up-front", abort: ctrl });
+    expect(reg.kill(a.id)).toBe(true);
+    expect(ctrl.signal.aborted).toBe(true);
+  });
+
+  it("kill() with no abort handle still marks 'killed' but returns false", () => {
+    const { reg } = makeRegistry();
+    const a = reg.register({ kind: "turn", title: "handle-less" });
+    expect(reg.kill(a.id)).toBe(false); // nothing to abort
+    expect(reg.snapshot()[0]?.status).toBe("killed"); // but transitioned anyway
+  });
+
+  it("kill() is a no-op returning false for an unknown id", () => {
+    const { reg } = makeRegistry();
+    const listener = vi.fn();
+    reg.on(listener);
+    expect(reg.kill("ghost")).toBe(false);
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  it("registerAbort() returns false for an unknown id", () => {
+    const { reg } = makeRegistry();
+    expect(reg.registerAbort("ghost", new AbortController())).toBe(false);
+  });
+
+  it("a throwing abort handle never wedges the registry — the entry is still killed", () => {
+    const { reg } = makeRegistry();
+    const a = reg.register({ kind: "turn", title: "throws on abort" });
+    reg.registerAbort(a.id, () => {
+      throw new Error("abort blew up");
+    });
+    expect(() => reg.kill(a.id)).not.toThrow();
+    expect(reg.kill(a.id)).toBe(false); // handle consumed by the first kill
+    expect(reg.snapshot()[0]?.status).toBe("killed");
+  });
+
+  it("a killed entry lingers under the TTL, then is pruned", () => {
+    const { reg, advance } = makeRegistry();
+    const a = reg.register({ kind: "turn", title: "kill me" });
+    reg.registerAbort(a.id, new AbortController());
+    reg.kill(a.id);
+    advance(4_999);
+    expect(reg.snapshot()).toHaveLength(1); // within TTL — visible
+    advance(2);
+    expect(reg.snapshot()).toHaveLength(0); // past TTL — pruned
+  });
+
+  it("kill() notifies subscribers", () => {
+    const { reg } = makeRegistry();
+    const a = reg.register({ kind: "turn", title: "x" });
+    const listener = vi.fn();
+    reg.on(listener);
+    reg.kill(a.id);
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it("remove() drops the abort handle so a subsequent kill can't fire it", () => {
+    const { reg } = makeRegistry();
+    const ctrl = new AbortController();
+    const a = reg.register({ kind: "turn", title: "dismiss then kill" });
+    reg.registerAbort(a.id, ctrl);
+    reg.remove(a.id);
+    expect(reg.kill(a.id)).toBe(false); // entry gone
+    expect(ctrl.signal.aborted).toBe(false); // handle never fired
+  });
+
+  it("summary() counts killed entries", () => {
+    const { reg } = makeRegistry();
+    const a = reg.register({ kind: "turn", title: "victim" });
+    reg.register({ kind: "turn", title: "survivor" });
+    reg.kill(a.id);
+    expect(reg.summary()).toMatchObject({ total: 2, running: 1, killed: 1 });
+  });
 });

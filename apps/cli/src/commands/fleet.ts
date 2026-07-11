@@ -1324,7 +1324,12 @@ export async function handleFleetBisect(
 // ── resume ───────────────────────────────────────────────────────────────────
 
 export interface FleetResumeOptions extends CommonOptions {
-  /** Fork point: the state AFTER this turn (0 = session start). Required. */
+  /**
+   * Fork point: the state AFTER this turn (0 = session start), or the literal
+   * `"last"` for the run's last settled turn — what orphan auto-adoption
+   * passes (sessions/adopt.ts) since it can't know each run's turn count.
+   * Required.
+   */
   turn?: string;
   /** Model override for the fork (default: the source run's model). */
   model?: string;
@@ -1359,10 +1364,11 @@ export async function handleFleetResume(
   if (!opened) return;
   const { sid, meta, recordStore, run } = opened;
 
-  const turn = parseTurnFlag(opts.turn, 0);
+  const turn =
+    opts.turn === "last" ? run.lastSettledTurn : parseTurnFlag(opts.turn, 0);
   if (turn === null || turn > run.lastSettledTurn) {
     out.error(
-      `invalid --turn "${opts.turn}" — use 0..${run.lastSettledTurn} (the run's last settled turn).`,
+      `invalid --turn "${opts.turn}" — use 0..${run.lastSettledTurn} (the run's last settled turn) or "last".`,
       "usage",
     );
     process.exitCode = 2;

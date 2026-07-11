@@ -34,6 +34,7 @@ import { readFileSync, readdirSync, existsSync, statSync } from "node:fs";
 import { join, basename } from "node:path";
 import { homedir } from "node:os";
 import { parseFrontmatter, parseToolList } from "../agents/loader.js";
+import { WORKSPACE_SKILL_DIRS, USER_SKILL_DIRS } from "../skills/loader.js";
 import { resolveWorkspaceConfig } from "./resolve.js";
 import { loadSettings, type SettingsScope } from "../settings/resolve.js";
 import { checkServer } from "../mcp/client.js";
@@ -61,7 +62,8 @@ export interface BuildIndexOptions {
 
 const DEFAULT_WORKSPACE_SOURCES: Required<SourceCategories> = {
   conventions: ["CLAUDE.md", "AGENTS.md", ".cursorrules", ".cursor/rules/**"],
-  skills: [".agents/skills", ".claude/skills", ".oxagen/skills"],
+  // Single source of truth for the skill scan set — shared with skills/loader.ts.
+  skills: [...WORKSPACE_SKILL_DIRS],
   agents: [".claude/agents", ".oxagen/agents", ".cursor/agents"],
   mcp: [".mcp.json", ".cursor/mcp.json", ".oxagen/settings.json"],
   commands: [".claude/commands", ".oxagen/commands"],
@@ -70,7 +72,7 @@ const DEFAULT_WORKSPACE_SOURCES: Required<SourceCategories> = {
 
 const DEFAULT_USER_SOURCES: Required<SourceCategories> = {
   conventions: ["~/.claude/CLAUDE.md"],
-  skills: ["~/.claude/skills", "~/.oxagen/skills"],
+  skills: [...USER_SKILL_DIRS],
   agents: ["~/.claude/agents", "~/.oxagen/agents"],
   mcp: ["~/.claude.json", "~/.cursor/mcp.json"],
   commands: ["~/.claude/commands"],

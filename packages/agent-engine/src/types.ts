@@ -8,12 +8,37 @@ import type {
 } from "./ports";
 
 /**
+ * Where a {@link EngineNonFatalError} happened. Each value names a distinct
+ * best-effort side effect the engine runs but must NEVER let fail the turn — so
+ * instead of a silent `.catch(() => {})` the failure is routed to `onError` for
+ * the consumer to log/telemeter.
+ *
+ * - `memory-recall` — recalling episodic memory failed; the turn degrades to no
+ *   recalled context.
+ * - `memory-remember` — persisting the turn's episodic memory failed.
+ * - `trace-record` — writing the turn trace failed.
+ * - `graph-sync` — a fire-and-forget knowledge-graph sync (file upsert / lineage
+ *   edge) failed (pipeline finalization).
+ * - `file-lock-release` — the turn-end batch lock release failed (the lock TTL is
+ *   the ultimate backstop).
+ * - `budget-wait-slow` — NOT an error but an observability breadcrumb: an
+ *   interactive budget-approval wait has been pending a long time (the human's
+ *   decision still ends it; nothing was auto-denied).
+ */
+export type EngineNonFatalPhase =
+  | "memory-recall"
+  | "memory-remember"
+  | "trace-record"
+  | "graph-sync"
+  | "file-lock-release"
+  | "budget-wait-slow";
+
+/**
  * A non-fatal internal failure the engine surfaces through `onError` instead of
  * swallowing. `phase` names where it happened so a consumer can route/label it.
  */
 export interface EngineNonFatalError {
-  /** "memory-recall" — recalling episodic memory failed; the turn degrades to no recalled context. */
-  phase: "memory-recall";
+  phase: EngineNonFatalPhase;
   error: unknown;
 }
 
@@ -252,6 +277,17 @@ export interface RunCodingAgentOptions {
    * single error rather than a silent re-stream.
    */
   maxOverflowRetries?: number;
+  /**
+   * Stream-inactivity watchdog (ms). If no `fullStream` part arrives for this
+   * long WITHIN a step, the step's stream is aborted and the failure is treated
+   * as a RETRYABLE step error — so a transport that wedges without erroring
+   * (dropped connection, silent gateway stall) re-runs the step via the normal
+   * retry/backoff path instead of hanging the turn forever. The caller's
+   * `signal` is composed in, so a genuine user abort is NEVER misclassified as a
+   * stall. Default 180_000 (3 min). Pass `0` or a non-finite value to disable
+   * the watchdog entirely (unbounded wait, the pre-watchdog behaviour).
+   */
+  streamStallMs?: number;
   /** Model context window in tokens; auto-detected from the model slug when omitted. */
   contextWindow?: number;
   /** Compact the transcript once its estimated tokens exceed this fraction of the window (default 0.8). */
@@ -374,8 +410,17 @@ export interface RunCodingAgentOptions {
   ) => Promise<"continue" | "stop">;
 }
 
-/** Why {@link runCodingAgent} ended the turn. Absent ⇒ natural finish. */
-export type TurnStopReason = "budget";
+/**
+ * Why {@link runCodingAgent} ended the turn. Absent ⇒ the model finished
+ * naturally (a non-`tool-calls` finish reason).
+ *
+ * - `budget` — a per-turn dollar ceiling stopped it (the `budgetGuard` returned
+ *   `"stop"`).
+ * - `max-steps` — the step cap (`maxSteps`) was reached before the model
+ *   finished, so the turn is EXHAUSTED, not complete. Lets a caller distinguish
+ *   "ran out of room" from a clean finish (and, e.g., warn the user or continue).
+ */
+export type TurnStopReason = "budget" | "max-steps";
 
 export interface RunCodingAgentResult {
   text: string;

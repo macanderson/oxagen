@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import type { ModelMessage } from "ai";
 import {
   backoffMs,
@@ -10,11 +10,16 @@ import {
   FILE_PART_TOKENS,
   isContextOverflowError,
   isFatalAuthOrBillingError,
+  isMutatingTool,
   isRetryableModelError,
   loopNudgeMessage,
+  midFlightRetryMessage,
+  MUTATING_TOOL_NAMES,
+  StreamStallError,
   successfulRepeatNudgeMessage,
   SUCCESSFUL_REPEAT_THRESHOLD,
   toolCallSignature,
+  withSlowWaitBreadcrumb,
 } from "./loop-driver";
 
 describe("toolCallSignature", () => {
@@ -568,5 +573,148 @@ describe("delay", () => {
     });
     // Rejected essentially instantly, not after ~10s.
     expect(Date.now() - started).toBeLessThan(1_000);
+  });
+});
+
+describe("estimateMessageTokens caching", () => {
+  it("returns the SAME total on repeated calls (memo is exact, not stale)", () => {
+    const messages: ModelMessage[] = [
+      { role: "user", content: "x".repeat(400) },
+      { role: "assistant", content: "y".repeat(80) },
+    ];
+    const first = estimateMessageTokens(messages);
+    const second = estimateMessageTokens(messages);
+    expect(second).toBe(first);
+    // ~400/4 + ~80/4 = 100 + 20.
+    expect(first).toBe(Math.ceil(400 / 4) + Math.ceil(80 / 4));
+  });
+
+  it("equals the sum of the per-message estimates (cache never changes the value)", () => {
+    const a: ModelMessage = { role: "user", content: "a".repeat(1000) };
+    const b: ModelMessage = { role: "assistant", content: "b".repeat(200) };
+    // Measure each alone (warms the cache per object), then together.
+    const soloA = estimateMessageTokens([a]);
+    const soloB = estimateMessageTokens([b]);
+    expect(estimateMessageTokens([a, b])).toBe(soloA + soloB);
+  });
+
+  it("re-measures a NEW message object with different content (identity-keyed, self-invalidating)", () => {
+    const original: ModelMessage = { role: "user", content: "z".repeat(40) };
+    const before = estimateMessageTokens([original]); // 10 tokens
+    // A rewrite (as compaction does) produces a NEW object → cache miss → exact.
+    const rewritten: ModelMessage = { ...original, content: "z".repeat(4000) };
+    const after = estimateMessageTokens([rewritten]);
+    expect(before).toBe(10);
+    expect(after).toBe(1000);
+    // The original object's memo is untouched — still its own value.
+    expect(estimateMessageTokens([original])).toBe(10);
+  });
+});
+
+describe("MUTATING_TOOL_NAMES / isMutatingTool", () => {
+  it("classifies bash/write_file/edit_file as mutating and reads as not", () => {
+    expect(isMutatingTool("bash")).toBe(true);
+    expect(isMutatingTool("write_file")).toBe(true);
+    expect(isMutatingTool("edit_file")).toBe(true);
+    expect(isMutatingTool("read_file")).toBe(false);
+    expect(isMutatingTool("grep")).toBe(false);
+    expect(isMutatingTool("code_graph")).toBe(false);
+    expect(isMutatingTool("ask_user")).toBe(false);
+    expect([...MUTATING_TOOL_NAMES].sort()).toEqual([
+      "bash",
+      "edit_file",
+      "write_file",
+    ]);
+  });
+});
+
+describe("midFlightRetryMessage", () => {
+  it("names the mutating tools, dedupes/sorts them, and tells the model to re-inspect state", () => {
+    const msg = midFlightRetryMessage(["bash", "write_file", "bash"]);
+    expect(msg).toContain("bash, write_file"); // deduped + sorted
+    expect(msg).not.toMatch(/bash.*bash/); // no duplicate
+    expect(msg.toLowerCase()).toContain("not retried");
+    expect(msg.toLowerCase()).toContain("re-inspect");
+  });
+
+  it("falls back to a generic phrase when the tool list is empty", () => {
+    const msg = midFlightRetryMessage([]);
+    expect(msg.toLowerCase()).toContain("state-changing tool");
+  });
+});
+
+describe("StreamStallError + isRetryableModelError", () => {
+  it("is a retryable error carrying the stall deadline", () => {
+    const err = new StreamStallError(180_000);
+    expect(err).toBeInstanceOf(Error);
+    expect(err.name).toBe("StreamStallError");
+    expect(err.stallMs).toBe(180_000);
+    expect(isRetryableModelError(err)).toBe(true);
+  });
+
+  it("a plain AbortError stays NON-retryable (a stall must not be confused with a user cancel)", () => {
+    const abort = new Error("aborted");
+    abort.name = "AbortError";
+    expect(isRetryableModelError(abort)).toBe(false);
+    // The stall, by contrast, retries.
+    expect(isRetryableModelError(new StreamStallError(1000))).toBe(true);
+  });
+});
+
+describe("withSlowWaitBreadcrumb", () => {
+  it("does NOT fire the breadcrumb when fn settles before the threshold", async () => {
+    vi.useFakeTimers();
+    try {
+      const onSlow = vi.fn();
+      const p = withSlowWaitBreadcrumb(
+        () => Promise.resolve("fast"),
+        60_000,
+        onSlow,
+      );
+      await expect(p).resolves.toBe("fast");
+      // Advance well past the threshold — the timer was cleared on settle.
+      vi.advanceTimersByTime(120_000);
+      expect(onSlow).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("fires the breadcrumb once when fn is still pending at the threshold, then resolves normally", async () => {
+    vi.useFakeTimers();
+    try {
+      const onSlow = vi.fn();
+      let release!: (v: string) => void;
+      const gate = new Promise<string>((r) => (release = r));
+      const p = withSlowWaitBreadcrumb(() => gate, 60_000, onSlow);
+      // Cross the threshold while fn is still pending → breadcrumb fires once.
+      await vi.advanceTimersByTimeAsync(60_001);
+      expect(onSlow).toHaveBeenCalledTimes(1);
+      // The wait is NOT cancelled — only the human/producer resolves it.
+      release("approved");
+      await expect(p).resolves.toBe("approved");
+      // Still only fired once.
+      expect(onSlow).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("clears the timer even when fn rejects", async () => {
+    vi.useFakeTimers();
+    try {
+      const onSlow = vi.fn();
+      await expect(
+        withSlowWaitBreadcrumb(
+          () => Promise.reject(new Error("boom")),
+          60_000,
+          onSlow,
+        ),
+      ).rejects.toThrow("boom");
+      vi.advanceTimersByTime(120_000);
+      expect(onSlow).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

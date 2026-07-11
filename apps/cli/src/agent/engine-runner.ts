@@ -54,6 +54,10 @@ export function createEngineRunner(
       settings,
       readOnly: opts.readOnly,
       agentTools: opts.agent?.tools,
+      // Per-agent skills (full SKILL.md bodies) + MCP-server selection —
+      // AgentDefinition.skills / .mcpServers, parsed by agents/loader.ts.
+      agentSkills: opts.agent?.skills,
+      agentMcpServers: opts.agent?.mcpServers,
       gatePermissions: true,
       signal: opts.signal,
       onBlocked: (name, reason) =>

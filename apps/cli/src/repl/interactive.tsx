@@ -147,6 +147,28 @@ import { HudPanel } from "./hud.js";
 import { ConfigPanel } from "./config-panel.js";
 import { DiffPanel } from "./diff-panel.js";
 import { FilesPanel } from "./files-panel.js";
+import { TasksPanel } from "./tasks-panel.js";
+import { SwarmPanel } from "./swarm-panel.js";
+import {
+  MarketplacePanel,
+  type MarketplaceClient as MarketplacePanelClient,
+  type MarketplaceEntry as MarketplacePanelEntry,
+} from "./marketplace-panel.js";
+import { PromptsPanel, type SavedPrompt as PanelSavedPrompt } from "./prompts-panel.js";
+import { CreateWizard, type CreateKind } from "./create-wizard.js";
+import { loadPrompts, scaffoldPrompt } from "../prompts/index.js";
+import { scaffoldSkill } from "../skills/index.js";
+import { scaffoldCommand } from "../slash/write.js";
+import { scaffoldAgent } from "../agents/write.js";
+import {
+  createMarketplaceClient,
+  type MarketplaceEntry as LibMarketplaceEntry,
+} from "../lib/marketplace.js";
+import { triagePrompt } from "./triage.js";
+import {
+  createResourceMonitor,
+  type ResourceMonitor,
+} from "./resource-monitor.js";
 import {
   recordTouch,
   normalizeTouchPath,
@@ -162,7 +184,7 @@ import { resolveEscapeAction } from "./escape-action.js";
 import { resolveCtrlC, CTRL_C_EXIT_WINDOW_MS } from "./ctrl-c-action.js";
 import { capTranscript, MAX_TRANSCRIPT_MESSAGES } from "./transcript-cap.js";
 import { TerminalPanel, type TerminalRun } from "./terminal-panel.js";
-import { isDebugEnabled } from "../lib/debug-log.js";
+import { isDebugEnabled, DEBUG_ENV, debugLogFile } from "../lib/debug-log.js";
 import { Banner, bannerRowCount } from "../tui/banner.js";
 import { useTerminalSize } from "./use-terminal-size.js";
 import {
@@ -322,6 +344,13 @@ function summarizeInput(toolName: string, input: unknown): string {
  * double-Esc reset window's "confirm by repeating" feel.
  */
 const CTRL_X_WINDOW_MS = 1500;
+
+/**
+ * The REPL fleet's configured concurrency ceiling (the orchestrator's own
+ * default, stated explicitly because the resource monitor scales down FROM
+ * this cap — see the runFleetTurn concurrencyProvider wiring).
+ */
+const FLEET_TURN_CONCURRENCY = 4;
 
 /**
  * Isolates the 1Hz live-clock tick (header time-of-day, thinking-elapsed
@@ -705,6 +734,108 @@ export function ReplApp({
   const dispatchModeRef = useRef(dispatchMode);
   dispatchModeRef.current = dispatchMode;
   const dispatchCapRef = useRef<number>(dispatchInitRef.current.maxConcurrent);
+  // Plan-only mode (the /plan command). While ON, a submission runs ONLY the
+  // planner: the decomposed task list renders for inspection (and stays pending
+  // in the Task Progress panel) and nothing executes. `/plan run` re-submits
+  // the last planned prompt with a one-shot bypass — planRunOverrideRef holds
+  // that exact prompt text and is consumed by the plan gate when the pump
+  // delivers it, so an unrelated queued prompt can never steal the bypass.
+  const [planOnly, setPlanOnly] = useState(false);
+  const planOnlyRef = useRef(planOnly);
+  planOnlyRef.current = planOnly;
+  const lastPlanOnlyRef = useRef<string | null>(null);
+  const planRunOverrideRef = useRef<string | null>(null);
+  // Late-bound resubmission seam: /plan run needs `enqueue`, which is defined
+  // after handleSubmit (the pump). Assigned every render once enqueue exists.
+  const resubmitRef = useRef<(text: string) => void>(() => {});
+  // ── Takeover panels: Ctrl+T tasks · Ctrl+S swarm · /marketplace · /prompts ·
+  // /create-* wizard. Same open-ref pattern as /config below (each panel owns
+  // the keyboard via its own useInput; the central handler yields on the ref).
+  // The openers below keep them mutually exclusive.
+  const [tasksOpen, setTasksOpen] = useState(false);
+  const tasksOpenRef = useRef(false);
+  const [swarmOpen, setSwarmOpen] = useState(false);
+  const swarmOpenRef = useRef(false);
+  const [marketplaceOpen, setMarketplaceOpen] = useState(false);
+  const marketplaceOpenRef = useRef(false);
+  const [promptsOpen, setPromptsOpen] = useState(false);
+  const promptsOpenRef = useRef(false);
+  const [promptsList, setPromptsList] = useState<PanelSavedPrompt[]>([]);
+  const [createKind, setCreateKind] = useState<CreateKind | null>(null);
+  const createKindRef = useRef<CreateKind | null>(null);
+  const closeOverlayPanels = useCallback((): void => {
+    tasksOpenRef.current = false;
+    setTasksOpen(false);
+    swarmOpenRef.current = false;
+    setSwarmOpen(false);
+    marketplaceOpenRef.current = false;
+    setMarketplaceOpen(false);
+    promptsOpenRef.current = false;
+    setPromptsOpen(false);
+    createKindRef.current = null;
+    setCreateKind(null);
+  }, []);
+  const toggleTasksPanel = useCallback((): void => {
+    const next = !tasksOpenRef.current;
+    closeOverlayPanels();
+    tasksOpenRef.current = next;
+    setTasksOpen(next);
+  }, [closeOverlayPanels]);
+  const toggleSwarmPanel = useCallback((): void => {
+    const next = !swarmOpenRef.current;
+    closeOverlayPanels();
+    swarmOpenRef.current = next;
+    setSwarmOpen(next);
+  }, [closeOverlayPanels]);
+  const openCreateWizard = useCallback(
+    (kind: CreateKind): void => {
+      closeOverlayPanels();
+      createKindRef.current = kind;
+      setCreateKind(kind);
+    },
+    [closeOverlayPanels],
+  );
+  // Global (input-zone) Ctrl-X double-press: kill the newest running agent.
+  const globalCtrlXRef = useRef<{ id: string; at: number } | null>(null);
+  // The /marketplace panel's data seam — the live plugin-catalog client behind
+  // the panel's own narrower interface. Entries seen by browse() are cached by
+  // id so install(id) can recover the pluginType the install capability needs.
+  // useState initializer (not useMemo/useRef) guarantees the referential
+  // stability MarketplacePanel requires of its `client` prop.
+  const [marketplaceClient] = useState<MarketplacePanelClient>(() => {
+    const real = createMarketplaceClient();
+    const seen = new Map<string, LibMarketplaceEntry>();
+    return {
+      browse: async (opts) => {
+        const res = await real.browseCatalog(opts);
+        if (!res.ok) throw new Error(res.error);
+        const entries: MarketplacePanelEntry[] = res.data.entries.map((e) => {
+          seen.set(e.id, e);
+          return { ...e, title: e.title ?? undefined };
+        });
+        return {
+          entries,
+          total: res.data.total,
+          nextOffset: res.data.nextOffset,
+        };
+      },
+      install: async (id) => {
+        const entry = seen.get(id);
+        if (!entry) return { ok: false, error: "unknown plugin id" };
+        const res = await real.installPlugin({
+          pluginType: entry.pluginType,
+          id,
+        });
+        return res.ok ? { ok: true } : { ok: false, error: res.error };
+      },
+    };
+  });
+  // Machine-aware swarm sizing: free memory + load average clamp the effective
+  // background-dispatch and fleet concurrency (see resource-monitor.ts).
+  const resourceMonitorRef = useRef<ResourceMonitor | null>(null);
+  if (resourceMonitorRef.current === null) {
+    resourceMonitorRef.current = createResourceMonitor();
+  }
   // Observer for the dispatches this REPL spawned (fold-back + concurrency cap).
   const trackerRef = useRef<BackgroundTracker | null>(null);
   // Prompts waiting for a background slot when the cap is hit (local queue, so
@@ -1158,6 +1289,153 @@ export function ReplApp({
     },
     [cwd, fullscreen, pushAssistant, rawStdin, setRawMode],
   );
+
+  // Double-Ctrl-V in the prompt bar (see PromptInput's onOpenLastTouched):
+  // open the agent's most recently touched file in $VISUAL/$EDITOR. "Most
+  // recent" = highest firstSeq in the Files Touched store — the same
+  // chronological order the /files panel lists.
+  const openLastTouchedInEditor = useCallback((): void => {
+    const entries = [...filesTouchedRef.current.values()];
+    if (entries.length === 0) {
+      pushAssistant(
+        "Ctrl-V twice opens the agent's most recently touched file — none touched yet this session. /files browses them once a turn runs.",
+      );
+      return;
+    }
+    const latest = entries.reduce((a, b) => (b.firstSeq > a.firstSeq ? b : a));
+    openTouchedInEditor(latest.path);
+  }, [pushAssistant, openTouchedInEditor]);
+
+  // /prompts — load fresh from disk on every open so newly-authored prompts
+  // appear without a restart (three small dirs; cheap).
+  const openPromptsPanel = useCallback((): void => {
+    const loaded: PanelSavedPrompt[] = [...loadPrompts({ cwd }).values()].map(
+      (p) => ({ name: p.name, description: p.description, body: p.body }),
+    );
+    closeOverlayPanels();
+    setPromptsList(loaded);
+    promptsOpenRef.current = true;
+    setPromptsOpen(true);
+  }, [cwd, closeOverlayPanels]);
+
+  const openMarketplacePanel = useCallback((): void => {
+    closeOverlayPanels();
+    marketplaceOpenRef.current = true;
+    setMarketplaceOpen(true);
+  }, [closeOverlayPanels]);
+
+  // The /create-* wizard's filesystem seam: kind → the real scaffolder.
+  const scaffoldForKind = useCallback(
+    (kind: CreateKind, name: string): { path: string; created: boolean } => {
+      switch (kind) {
+        case "command":
+          return scaffoldCommand({ name, cwd });
+        case "agent":
+          return scaffoldAgent({ name, cwd });
+        case "skill":
+          return scaffoldSkill({ name, cwd });
+        case "prompt":
+          return scaffoldPrompt({ name, cwd });
+      }
+    },
+    [cwd],
+  );
+  const handleCreated = useCallback(
+    (path: string): void => {
+      // A newly-scaffolded custom command must appear in the / menu right
+      // away — rebuild the catalog from disk.
+      setCatalog(
+        buildSlashCatalog({ cwd, cliCommands: cliCommandsRef.current ?? [] }),
+      );
+      pushAssistant(
+        `✚ Created ${path} — edit the template, then use it immediately (custom commands reload per open of the / menu).`,
+      );
+    },
+    [cwd, pushAssistant],
+  );
+
+  // Resource-monitor lifecycle: announce pressure transitions (the moment the
+  // machine can't carry the configured swarm, say so and by how much), and
+  // stop the sampler on unmount. The clamp itself is enforced at the dispatch
+  // gate and the fleet's concurrencyProvider — this effect is the narrator.
+  useEffect(() => {
+    const mon = resourceMonitorRef.current;
+    if (!mon) return;
+    const off = mon.onChange((snap) => {
+      if (snap.pressure === "ok") return;
+      const eff = mon.effectiveConcurrency(dispatchCapRef.current);
+      pushAssistant(
+        `⚖ Machine pressure ${snap.pressure} — free memory ${(snap.freeMemRatio * 100).toFixed(0)}%, ` +
+          `load ${snap.load1.toFixed(1)} on ${snap.cores} cores. Swarm concurrency clamped to ${eff} until it eases.`,
+      );
+    });
+    return () => {
+      off();
+      mon.stop();
+    };
+  }, [pushAssistant]);
+
+  // Orphan auto-resume (crash-proof state, ADR-023/028): shortly after mount,
+  // scan this project's fleet roster for sessions whose owner process died
+  // mid-run and fork each back to life at its last settled turn — work
+  // survives a crashed worker without being restarted from scratch. Deferred
+  // off the mount critical path and dynamically imported (commands/fleet.ts is
+  // heavy); strictly best-effort — failure must never affect the REPL.
+  useEffect(() => {
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      void (async () => {
+        try {
+          const [{ adoptOrphans }, { handleFleetResume }, { captureWriter }] =
+            await Promise.all([
+              import("../sessions/adopt.js"),
+              import("../commands/fleet.js"),
+              import("../lib/capture-writer.js"),
+            ]);
+          const result = await adoptOrphans({
+            cwd,
+            resume: async (sid) => {
+              const { writer, output } = captureWriter();
+              // handleFleetResume flips process.exitCode on usage errors —
+              // never let a background adoption change the REPL's exit code.
+              const savedExitCode = process.exitCode;
+              try {
+                await handleFleetResume(
+                  sid,
+                  { turn: "last", json: true, quiet: true, cwd },
+                  writer,
+                );
+              } finally {
+                process.exitCode = savedExitCode;
+              }
+              const lines = output().trim().split("\n").filter(Boolean);
+              const parsed = JSON.parse(lines[lines.length - 1] ?? "{}") as {
+                sid?: string;
+              };
+              if (!parsed.sid) throw new Error("resume emitted no session id");
+              return parsed.sid;
+            },
+          });
+          if (!cancelled && result.adopted.length > 0) {
+            const n = result.adopted.length;
+            pushAssistant(
+              `↻ Recovered ${n} orphaned session${n === 1 ? "" : "s"} from a dead worker — ` +
+                result.adopted
+                  .map((a) => `${a.sid.slice(0, 10)} → ${a.newSid.slice(0, 10)}`)
+                  .join(", ") +
+                ". Each resumes at its last settled turn; watch with Ctrl+S or oxagen fleet ps.",
+            );
+          }
+        } catch {
+          // Best-effort recovery only — never surface a failure here.
+        }
+      })();
+    }, 1500);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [cwd, pushAssistant]);
 
   // Called once by the LoginPanel (see the /login handler below) on a
   // successful inline login. The session is already persisted to
@@ -1634,6 +1912,25 @@ export function ReplApp({
     // Same for the /login panel (its own useInput handles Esc/any-key).
     if (loginOpenRef.current) return;
 
+    // Ctrl-T / Ctrl-S toggle the task-inspector / swarm panels. Bound BEFORE
+    // their own yield checks below so a second press closes the open panel
+    // (each toggle also closes its siblings — one takeover panel at a time).
+    if (key.ctrl && input === "t") {
+      toggleTasksPanel();
+      return;
+    }
+    if (key.ctrl && input === "s") {
+      toggleSwarmPanel();
+      return;
+    }
+    // The Ctrl+T/Ctrl+S/marketplace/prompts/create panels own the keyboard
+    // while open — same yield rule as /config and /files above.
+    if (tasksOpenRef.current) return;
+    if (swarmOpenRef.current) return;
+    if (marketplaceOpenRef.current) return;
+    if (promptsOpenRef.current) return;
+    if (createKindRef.current !== null) return;
+
     // Ctrl-O is the global "reveal detail" gesture (Claude Code style): it
     // flips verbose/expanded mode — long prompts, the enhanced-prompt scope
     // card, and reasoning render in FULL instead of a truncated preview — AND
@@ -1700,6 +1997,41 @@ export function ReplApp({
       }
       // Every other key is swallowed while a panel row holds focus — the bar has
       // no focus, so stray characters must never leak into it or the transcript.
+      return;
+    }
+
+    // ── Global kill gesture (input zone): Ctrl-X twice ──
+    // Kills the NEWEST running agent via the registry's abort seam — the
+    // no-look version of the swarm panel's per-row kill (dock rows keep their
+    // own Ctrl-X delete above; this only fires while the bar has focus).
+    if (key.ctrl && input === "x") {
+      const nowMs = Date.now();
+      const running = agentRegistry
+        .snapshot()
+        .filter((a) => a.status === "running");
+      const target = running[running.length - 1];
+      if (!target) {
+        globalCtrlXRef.current = null;
+        pushAssistant("No running agents to kill — Ctrl+S shows the swarm.");
+        return;
+      }
+      const prev = globalCtrlXRef.current;
+      if (
+        prev !== null &&
+        prev.id === target.id &&
+        nowMs - prev.at <= CTRL_X_WINDOW_MS
+      ) {
+        globalCtrlXRef.current = null;
+        const aborted = agentRegistry.kill(target.id);
+        pushAssistant(
+          aborted
+            ? `◼ Killed ${target.title}.`
+            : `◼ Marked ${target.title} killed — it exposed no abort handle, so in-flight work may still settle (Esc cancels the whole turn).`,
+        );
+      } else {
+        globalCtrlXRef.current = { id: target.id, at: nowMs };
+        pushAssistant(`Press Ctrl+X again to kill ${target.title}.`);
+      }
       return;
     }
 
@@ -1881,10 +2213,21 @@ export function ReplApp({
   const dispatchToBackground = useCallback(
     (prompt: string): void => {
       const tracker = trackerRef.current;
-      if (tracker && !tracker.reserve()) {
+      // The RESOURCE-EFFECTIVE cap: the configured /dispatch cap, scaled down
+      // under memory/CPU pressure (resource-monitor.ts). Checked before the
+      // tracker's own fixed-cap reserve so a strained machine queues instead
+      // of piling on more detached workers.
+      const effectiveCap =
+        resourceMonitorRef.current?.effectiveConcurrency(
+          dispatchCapRef.current,
+        ) ?? dispatchCapRef.current;
+      if (
+        tracker &&
+        (tracker.runningCount() >= effectiveCap || !tracker.reserve())
+      ) {
         dispatchQueueRef.current = [...dispatchQueueRef.current, prompt];
         pushAssistant(
-          `⧗ dispatch queued (${tracker.maxConcurrent()} already running) — ` +
+          `⧗ dispatch queued (${tracker.runningCount()} running, effective cap ${Math.min(effectiveCap, tracker.maxConcurrent())}) — ` +
             `starts when a background slot frees.`,
         );
         return;
@@ -1895,11 +2238,18 @@ export function ReplApp({
   );
 
   // Drain the local dispatch queue as slots free (called by the tracker on every
-  // completion). Reserves atomically per prompt so the cap is never exceeded.
+  // completion). Reserves atomically per prompt so the cap is never exceeded —
+  // and re-checks the resource-effective cap per iteration so a strained
+  // machine stops refilling even when fixed-cap slots are free.
   const drainDispatchQueue = useCallback((): void => {
     const tracker = trackerRef.current;
     if (!tracker) return;
-    while (dispatchQueueRef.current.length > 0 && tracker.reserve()) {
+    while (dispatchQueueRef.current.length > 0) {
+      const effectiveCap =
+        resourceMonitorRef.current?.effectiveConcurrency(
+          dispatchCapRef.current,
+        ) ?? dispatchCapRef.current;
+      if (tracker.runningCount() >= effectiveCap || !tracker.reserve()) break;
       const next = dispatchQueueRef.current[0] as string;
       dispatchQueueRef.current = dispatchQueueRef.current.slice(1);
       void dispatchOne(next, true);
@@ -1928,7 +2278,10 @@ export function ReplApp({
         const decision = decideDispatch(text, {
           mode: dispatchModeRef.current,
         });
-        if (decision.kind === "background") {
+        // Plan-only mode forces INLINE routing: a background dispatch would
+        // execute the prompt in a detached worker, silently bypassing the
+        // plan-only gate below — the one thing /plan promises can't happen.
+        if (decision.kind === "background" && !planOnlyRef.current) {
           dispatchToBackground(decision.prompt);
           return;
         }
@@ -2504,6 +2857,116 @@ export function ReplApp({
         }
         return;
       }
+      if (cmd === "/debug") {
+        // Toggle the JSONL debug file log for THIS process. isDebugEnabled()
+        // reads process.env on every call, so flipping the env var here takes
+        // effect immediately for every subsequent debugLog() in this session —
+        // no restart, no settings write (use settings.json `env` to persist).
+        const arg = text.slice("/debug".length).trim().toLowerCase();
+        const report = (): void => {
+          pushAssistant(
+            `🐞 Debug file log ${isDebugEnabled() ? "ON" : "OFF"} — ${debugLogFile()}\n` +
+              `Streams invoke/turn/pipeline/llm/timeout/error records as JSONL. ` +
+              `Tail it with: oxagen logs --follow (or jq the file directly).`,
+          );
+        };
+        if (arg === "status") {
+          report();
+          return;
+        }
+        const next =
+          arg === "on" ? true : arg === "off" ? false : !isDebugEnabled();
+        if (arg !== "" && arg !== "on" && arg !== "off") {
+          pushAssistant("Usage: /debug [on|off|status]");
+          return;
+        }
+        if (next) {
+          process.env[DEBUG_ENV] = "1";
+          // First entry doubles as the enable marker (and proves the sink works).
+          void debugLog("invoke", "debug.enabled", { via: "/debug" });
+        } else {
+          void debugLog("invoke", "debug.disabled", { via: "/debug" });
+          process.env[DEBUG_ENV] = "0";
+        }
+        report();
+        return;
+      }
+      if (cmd === "/plan") {
+        // Plan-only mode: see the planOnlyRef block up top. `/plan run`
+        // re-submits the last planned prompt with a one-shot bypass token.
+        const arg = text.slice("/plan".length).trim().toLowerCase();
+        const applyPlanMode = (next: boolean): void => {
+          planOnlyRef.current = next;
+          setPlanOnly(next);
+          pushAssistant(
+            next
+              ? "▤ Plan-only mode ON — prompts are decomposed into a task plan (inspect it with Ctrl+T " +
+                  "or /panel) and NOTHING executes. `/plan run` executes the last plan; `/plan off` resumes normal turns."
+              : "▤ Plan-only mode OFF — prompts execute normally again.",
+          );
+        };
+        if (arg === "") {
+          applyPlanMode(!planOnlyRef.current);
+          return;
+        }
+        if (arg === "on") {
+          applyPlanMode(true);
+          return;
+        }
+        if (arg === "off") {
+          applyPlanMode(false);
+          return;
+        }
+        if (arg === "status") {
+          pushAssistant(
+            `▤ Plan-only mode ${planOnlyRef.current ? "ON" : "OFF"}` +
+              (lastPlanOnlyRef.current
+                ? ` · last planned prompt: "${lastPlanOnlyRef.current.slice(0, 80)}${lastPlanOnlyRef.current.length > 80 ? "…" : ""}"`
+                : " · no prompt planned yet"),
+          );
+          return;
+        }
+        if (arg === "run") {
+          const last = lastPlanOnlyRef.current;
+          if (!last) {
+            pushAssistant(
+              "No plan to run — submit a prompt while plan-only mode is ON first.",
+            );
+            return;
+          }
+          planRunOverrideRef.current = last;
+          pushAssistant("▶ Executing the last planned prompt…");
+          resubmitRef.current(last);
+          return;
+        }
+        pushAssistant("Usage: /plan [on|off|status|run]");
+        return;
+      }
+      if (cmd === "/tasks") {
+        toggleTasksPanel();
+        return;
+      }
+      if (cmd === "/swarm") {
+        toggleSwarmPanel();
+        return;
+      }
+      if (cmd === "/marketplace") {
+        openMarketplacePanel();
+        return;
+      }
+      if (cmd === "/prompts") {
+        openPromptsPanel();
+        return;
+      }
+      if (
+        cmd === "/create-command" ||
+        cmd === "/create-agent" ||
+        cmd === "/create-skill" ||
+        cmd === "/create-prompt"
+      ) {
+        openCreateWizard(cmd.slice("/create-".length) as CreateKind);
+        return;
+      }
       if (cmd === "/login") {
         // Already logged in: just report the session (fast path, no need to
         // open the picker at all). Not logged in: open the Ink-native
@@ -2723,6 +3186,9 @@ export function ReplApp({
       const inactivityMs = resolveTurnInactivityMs();
       let inFlightTools = 0;
       let fleetInFlight = false;
+      // Set by the plan-only gate below: the turn ended after planning, so the
+      // finally must NOT finalize the checklist — the pending tasks ARE the output.
+      let planOnlyExit = false;
       const ciProbe = createCiWaitProbe(cwd);
       // The REPL tracks tools/fleet in its own closures (the stream sinks below
       // mutate them), so the fleet-aware shouldDefer REPLACES the runner's
@@ -2851,10 +3317,14 @@ export function ReplApp({
           prompt: submission,
         });
         // Surface this turn in the `/hud` heads-up display for its whole life.
+        // The abort handle wires the swarm panel / global Ctrl-X kill gesture
+        // to this turn's own controller — killing the lead turn IS cancelling
+        // it (the catch below reports "(cancelled)").
         hudHandle = agentRegistry.register({
           kind: "turn",
           title: submission,
           model: modelRef.current ?? "auto",
+          abort: controller,
         });
 
         // Resolve this turn's pasted image attachments (Ctrl-V) into bytes.
@@ -2951,6 +3421,36 @@ export function ReplApp({
           });
         }
 
+        // ── Plan-only gate (the /plan command) ───────────────────────────────
+        // When plan-only mode is ON the turn STOPS here: the plan renders for
+        // inspection and the seeded tasks stay PENDING in the Task Progress
+        // panel (planOnlyExit skips the finally's finalizeOpen). `/plan run`
+        // stashes this exact prompt text in planRunOverrideRef — matching on
+        // equality (not a boolean) so an unrelated queued prompt can never
+        // consume the one-shot bypass.
+        {
+          const bypass = planRunOverrideRef.current === submission;
+          if (bypass) planRunOverrideRef.current = null;
+          if (planOnlyRef.current && !bypass) {
+            planOnlyExit = true;
+            lastPlanOnlyRef.current = submission;
+            const taskLines = plan.tasks.map(
+              (t, i) =>
+                `  ${i + 1}. ${t.title}${t.agent ? `  · agent: ${t.agent}` : ""}`,
+            );
+            turn.push({
+              role: "assistant",
+              content:
+                `▤ Plan only — ${plan.tasks.length} task${plan.tasks.length === 1 ? "" : "s"}, nothing executed:\n` +
+                taskLines.join("\n") +
+                "\n\n/plan run executes this plan · refine the prompt to re-plan · /plan off resumes normal turns.",
+              timestamp: Date.now(),
+            });
+            render();
+            return;
+          }
+        }
+
         // ── Fan out ──────────────────────────────────────────────────────────
         // A multi-task plan runs as a fleet of parallel subagents (each in its
         // own worktree, merged back) — the same machinery as `oxagen agents`,
@@ -2967,6 +3467,10 @@ export function ReplApp({
           });
           hudHandle?.update({ detail: `fleet: ${plan.tasks.length} tasks` });
           const fleetHandles = new Map<string, AgentHandle>();
+          // The live fleet's per-task cancel surface, captured via onFleet so
+          // each subagent's registry row can carry a REAL abort handle (the
+          // swarm panel's Ctrl-X kill and the global gesture route through it).
+          let cancelFleetTask: ((id: string) => void) | null = null;
           try {
             // Subagents work silently for minutes between onTask lifecycle
             // events — defer the inactivity guard for the whole fleet run (each
@@ -2986,6 +3490,17 @@ export function ReplApp({
               agents: agentsRef.current,
               readOnly: modeRef.current === "readonly",
               signal: runner.signal,
+              // Resource-aware swarm sizing: the orchestrator consults this at
+              // every slot refill and clamps to [1, concurrency] — memory/CPU
+              // pressure shrinks the swarm without touching queued tasks.
+              concurrency: FLEET_TURN_CONCURRENCY,
+              concurrencyProvider: () =>
+                resourceMonitorRef.current?.effectiveConcurrency(
+                  FLEET_TURN_CONCURRENCY,
+                ) ?? FLEET_TURN_CONCURRENCY,
+              onFleet: (fleet) => {
+                cancelFleetTask = (id) => fleet.cancelTask(id);
+              },
               onTask: (ev) => {
                 if (runner.signal.aborted) return;
                 noteProgress();
@@ -3005,7 +3520,8 @@ export function ReplApp({
                       ? { detail: ev.summary.slice(0, 80) }
                       : {}),
                 });
-                // Agent Team panel: one live row per spawned subagent.
+                // Agent Team panel: one live row per spawned subagent — with a
+                // real abort handle so Ctrl-X kills cancel the fleet task.
                 if (ev.status === "running" && !fleetHandles.has(ev.taskId)) {
                   fleetHandles.set(
                     ev.taskId,
@@ -3014,6 +3530,7 @@ export function ReplApp({
                       title: ev.title,
                       model: ev.model,
                       ...(ev.agent ? { detail: `agent: ${ev.agent}` } : {}),
+                      abort: () => cancelFleetTask?.(ev.taskId),
                     }),
                   );
                 } else if (ev.status !== "running" && ev.status !== "queued") {
@@ -3573,8 +4090,10 @@ export function ReplApp({
           });
           // Settle the Task Progress checklist so no step lingers half-lit. Guarded
           // on ownership so a cancelled turn's late finally never marks a newer
-          // turn's freshly-cleared plan done.
-          taskRegistry.finalizeOpen("done");
+          // turn's freshly-cleared plan done. A plan-only exit skips this — the
+          // pending tasks ARE the turn's output, kept inspectable until the next
+          // turn's clear().
+          if (!planOnlyExit) taskRegistry.finalizeOpen("done");
         }
       }
     },
@@ -3663,6 +4182,10 @@ export function ReplApp({
     },
     [pump],
   );
+  // Late-bind the /plan run resubmission seam (declared with the plan-only
+  // state up top, long before enqueue exists). Reassigned every render —
+  // enqueue is a stable callback, so this is effectively a one-time bind.
+  resubmitRef.current = enqueue;
 
   // Every PromptInput submission funnels through here. The Esc-twice reset
   // confirmation must be answered SYNCHRONOUSLY — if we let it fall through to
@@ -3707,10 +4230,63 @@ export function ReplApp({
         runShellCommand(text);
         return;
       }
+      // ── Busy-submit triage (dispatch-mode's "LLM triager v2") ──
+      // A prompt submitted while a turn is streaming NEVER interrupts it: it is
+      // enqueued immediately (the composer stays free, the work can't be lost),
+      // then a small triage model asynchronously decides whether it should
+      // instead start NOW as a detached background worker. "queue" (also the
+      // deterministic fallback on any triage error/timeout) leaves it exactly
+      // where FIFO put it; "background" pulls it back out — only if the pump
+      // hasn't started it — and dispatches it. Slash commands, pasted-image
+      // prompts (images can't ride a detached worker), plan-only mode, and
+      // Dispatch mode (which has its own deterministic routing) all skip triage.
+      if (
+        streamingRef.current &&
+        !text.startsWith("/") &&
+        paste === undefined &&
+        !dispatchModeRef.current &&
+        !planOnlyRef.current
+      ) {
+        enqueue(text, paste);
+        void triagePrompt({
+          text,
+          activeSummary:
+            lastActivityRef.current ?? "an agent turn is streaming",
+          queueDepth: queueRef.current.length,
+          ai: activeAiRef.current,
+          ...(triageModelRef.current
+            ? { model: triageModelRef.current }
+            : {}),
+        })
+          .then((decision) => {
+            if (decision.route === "background") {
+              // Pull it back out only if it is still waiting its FIFO turn.
+              const idx = queueRef.current.findIndex((q) => q.text === text);
+              if (idx === -1) return; // already started (or recalled) — leave it
+              queueRef.current = [
+                ...queueRef.current.slice(0, idx),
+                ...queueRef.current.slice(idx + 1),
+              ];
+              setQueued(queueRef.current);
+              dispatchToBackground(text);
+              pushAssistant(`⚖ triage: backgrounded — ${decision.reason}`);
+            } else if (decision.route === "clarify") {
+              pushAssistant(
+                `⚖ triage: kept in the queue — ${decision.reason}`,
+              );
+            }
+          })
+          .catch(() => {
+            // triagePrompt never throws by contract; the enqueued prompt runs
+            // FIFO regardless, so there is nothing to recover here.
+          });
+        return;
+      }
       enqueue(text, paste);
     },
     [
       enqueue,
+      dispatchToBackground,
       resetConversation,
       pushAssistant,
       setEditingTaskId,
@@ -3944,6 +4520,40 @@ export function ReplApp({
               width={Math.min(cols - 2, 100)}
               expanded={detailExpanded}
             />
+          ) : tasksOpen ? (
+            <TasksPanel
+              onClose={closeOverlayPanels}
+              width={Math.min(cols - 2, 100)}
+            />
+          ) : swarmOpen ? (
+            <SwarmPanel
+              onClose={closeOverlayPanels}
+              onKill={(id) => agentRegistry.kill(id)}
+              width={Math.min(cols - 2, 100)}
+            />
+          ) : marketplaceOpen ? (
+            <MarketplacePanel
+              onClose={closeOverlayPanels}
+              client={marketplaceClient}
+              width={Math.min(cols - 2, 100)}
+            />
+          ) : promptsOpen ? (
+            <PromptsPanel
+              prompts={promptsList}
+              onClose={closeOverlayPanels}
+              onInsert={injectText}
+              onCreateNew={() => openCreateWizard("prompt")}
+              width={Math.min(cols - 2, 100)}
+            />
+          ) : createKind !== null ? (
+            <CreateWizard
+              kind={createKind}
+              onClose={closeOverlayPanels}
+              onCreated={handleCreated}
+              scaffold={scaffoldForKind}
+              openInEditor={openTouchedInEditor}
+              width={Math.min(cols - 2, 100)}
+            />
           ) : diffOpen ? (
             <DiffPanel
               cwd={cwd}
@@ -3985,6 +4595,7 @@ export function ReplApp({
               inject={inject}
               onMenuOpenChange={handleMenuOpenChange}
               onEmptyChange={handleEmptyChange}
+              onOpenLastTouched={openLastTouchedInEditor}
             />
           )}
         </Box>
@@ -4208,6 +4819,33 @@ export function ReplApp({
               width={Math.min((cols || 80) - 2, 100)}
               expanded={detailExpanded}
             />
+          ) : tasksOpen ? (
+            <TasksPanel onClose={closeOverlayPanels} />
+          ) : swarmOpen ? (
+            <SwarmPanel
+              onClose={closeOverlayPanels}
+              onKill={(id) => agentRegistry.kill(id)}
+            />
+          ) : marketplaceOpen ? (
+            <MarketplacePanel
+              onClose={closeOverlayPanels}
+              client={marketplaceClient}
+            />
+          ) : promptsOpen ? (
+            <PromptsPanel
+              prompts={promptsList}
+              onClose={closeOverlayPanels}
+              onInsert={injectText}
+              onCreateNew={() => openCreateWizard("prompt")}
+            />
+          ) : createKind !== null ? (
+            <CreateWizard
+              kind={createKind}
+              onClose={closeOverlayPanels}
+              onCreated={handleCreated}
+              scaffold={scaffoldForKind}
+              openInEditor={openTouchedInEditor}
+            />
           ) : diffOpen ? (
             <DiffPanel
               cwd={cwd}
@@ -4237,6 +4875,7 @@ export function ReplApp({
               focused={focus.zone === "input"}
               inject={inject}
               onMenuOpenChange={handleMenuOpenChange}
+              onOpenLastTouched={openLastTouchedInEditor}
             />
           )}
 

@@ -76,6 +76,48 @@ export function successfulRepeatNudgeMessage(
   );
 }
 
+// ── Mid-flight side-effect safety ────────────────────────────────────────────
+
+/**
+ * Tools that MUTATE the workspace when they execute — running them a second time
+ * re-applies their side effects. These are the built-in `buildWorkspaceTools`
+ * names (see tools.ts): `bash` (arbitrary shell), `write_file`, and `edit_file`.
+ * A step that ran any of these and THEN failed mid-stream must NOT be blindly
+ * retried (tools execute during `fullStream`, so a retry re-runs them); instead
+ * the loop injects {@link midFlightRetryMessage} and advances so the model
+ * re-assesses state. Exported for tests.
+ */
+export const MUTATING_TOOL_NAMES: ReadonlySet<string> = new Set<string>([
+  "bash",
+  "write_file",
+  "edit_file",
+]);
+
+/** True when `name` is a workspace-mutating tool (see {@link MUTATING_TOOL_NAMES}). Exported for tests. */
+export function isMutatingTool(name: string): boolean {
+  return MUTATING_TOOL_NAMES.has(name);
+}
+
+/**
+ * The corrective message injected when a step FAILED mid-stream AFTER it had
+ * already executed one or more mutating tools ({@link isMutatingTool}). We do
+ * not re-run the step (that would double-apply the side effects); instead we
+ * tell the model exactly what happened and continue, so its next step re-reads
+ * the current state rather than assuming the failed step's plan still holds.
+ * Exported for tests.
+ */
+export function midFlightRetryMessage(mutatingTools: string[]): string {
+  const unique = [...new Set(mutatingTools)].sort();
+  const list = unique.length > 0 ? unique.join(", ") : "a state-changing tool";
+  return (
+    `Your previous step failed part-way through the model stream AFTER it had ` +
+    `already run ${list}, so those changes may have partially applied. The step ` +
+    `was NOT retried, to avoid running those tools twice. Do not assume the step ` +
+    `completed: re-inspect the current state (e.g. \`git diff\`, or re-read the ` +
+    `files you were editing) before continuing, then proceed from what you find.`
+  );
+}
+
 // ── Token estimation ─────────────────────────────────────────────────────────
 
 /**
@@ -93,15 +135,44 @@ export const IMAGE_PART_TOKENS = 1600;
 export const FILE_PART_TOKENS = 2000;
 
 /**
+ * Per-message memo of {@link contentTokens}, keyed by the message object's
+ * identity. The step loop calls {@link estimateMessageTokens} over the WHOLE
+ * transcript every step (an O(n²) sweep over the turn), yet each message's
+ * content is immutable once appended — compaction produces NEW message objects
+ * (`{ ...msg, content }`) for anything it changes, so a cache keyed by object
+ * identity is self-invalidating: a rewritten message misses (new key) and a
+ * carried-over message hits. WeakMap so retired transcripts are GC'd, never a
+ * leak. The estimate is a pure function of `content`, so a memo is exact.
+ */
+const messageTokenCache = new WeakMap<object, number>();
+
+/**
  * Rough token estimate: ~4 chars per token over serialized content, except
  * binary media parts, which are counted at a flat per-asset constant (see
  * {@link IMAGE_PART_TOKENS}/{@link FILE_PART_TOKENS}). Deliberately a heuristic —
  * no tokenizer dependency, and it only needs to be good enough to decide WHEN to
- * compact (we compact well below the true window). Exported for tests.
+ * compact (we compact well below the true window). Per-message results are memoed
+ * by object identity (see {@link messageTokenCache}) so re-measuring an unchanged
+ * transcript every step is O(changed), not O(total). Exported for tests.
  */
 export function estimateMessageTokens(messages: ModelMessage[]): number {
   let tokens = 0;
-  for (const m of messages) tokens += contentTokens(m.content);
+  for (const m of messages) {
+    // A message is always an object here; guard defensively so a malformed
+    // entry can't wedge the cache lookup, and fall back to a direct measure.
+    if (m && typeof m === "object") {
+      const cached = messageTokenCache.get(m);
+      if (cached !== undefined) {
+        tokens += cached;
+        continue;
+      }
+      const measured = contentTokens(m.content);
+      messageTokenCache.set(m, measured);
+      tokens += measured;
+    } else {
+      tokens += contentTokens((m as ModelMessage).content);
+    }
+  }
   return tokens;
 }
 
@@ -414,12 +485,35 @@ export function isFatalAuthOrBillingError(err: unknown): boolean {
 }
 
 /**
- * Is this a retryable transient model/transport error? 429, 5xx, and the
- * network/overload/stream family — but NOT user aborts, 4xx-other (bad
- * request/auth), insufficient funds, or context-overflow (handled separately).
- * Exported for tests.
+ * Raised by the step-driver's stream-inactivity watchdog: the model stream went
+ * quiet — no `fullStream` part for `stallMs` — without erroring or finishing, so
+ * the step is abandoned and (being retryable) re-run. This is DISTINCT from an
+ * `AbortError` (a user cancel), which the loop must never retry: a stall is the
+ * transport wedging, a cancel is the human stopping. Named so `instanceof` works
+ * across module/realm boundaries via {@link isRetryableModelError}. Exported for tests.
+ */
+export class StreamStallError extends Error {
+  /** The inactivity deadline (ms) that elapsed with no stream part. */
+  readonly stallMs: number;
+  constructor(stallMs: number) {
+    super(
+      `Model stream stalled: no stream part received for ${stallMs}ms — abandoning the step.`,
+    );
+    this.name = "StreamStallError";
+    this.stallMs = stallMs;
+  }
+}
+
+/**
+ * Is this a retryable transient model/transport error? 429, 5xx, the
+ * network/overload/stream family, and a {@link StreamStallError} — but NOT user
+ * aborts, 4xx-other (bad request/auth), insufficient funds, or context-overflow
+ * (handled separately). Exported for tests.
  */
 export function isRetryableModelError(err: unknown): boolean {
+  // A stalled stream is transient — retry it. Checked FIRST so its distinct
+  // class is never confused with the AbortError (user cancel) branch below.
+  if (err instanceof StreamStallError) return true;
   if (err instanceof Error && err.name === "AbortError") return false;
   if (isContextOverflowError(err)) return false;
   if (isFatalAuthOrBillingError(err)) return false;
@@ -458,6 +552,32 @@ export function backoffMs(
   const exp = Math.min(cap, base * 2 ** Math.max(0, attempt - 1));
   // Full jitter: uniform in [0, exp].
   return Math.floor(rand() * exp);
+}
+
+/**
+ * Await `fn()`, and if it hasn't settled within `thresholdMs`, fire `onSlow`
+ * exactly once as a breadcrumb — WITHOUT ever cancelling or auto-resolving the
+ * wait. Used to make an unbounded interactive wait (the budget guard's
+ * approval-mode block) observable: the caller learns "this has been pending a
+ * long time" but the human's decision is still the only thing that ends it. The
+ * timer is cleared the moment `fn` settles (resolve OR reject), so a fast wait
+ * costs one `setTimeout`/`clearTimeout` and never leaks. Exported for tests.
+ */
+export async function withSlowWaitBreadcrumb<T>(
+  fn: () => Promise<T>,
+  thresholdMs: number,
+  onSlow: () => void,
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined = setTimeout(() => {
+    timer = undefined;
+    onSlow();
+  }, thresholdMs);
+  (timer as unknown as { unref?: () => void }).unref?.();
+  try {
+    return await fn();
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 /** Resolve after `ms`, rejecting early with an AbortError if `signal` fires. */

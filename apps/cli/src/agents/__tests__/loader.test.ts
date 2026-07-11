@@ -99,4 +99,52 @@ describe("loadAgents", () => {
     expect(getAgent("solo", { cwd: dir, userAgentsDir: userDir, settingsOptions: { userSettingsPath: userSettings } })?.name).toBe("solo");
     expect(getAgent("nope", { cwd: dir, userAgentsDir: userDir, settingsOptions: { userSettingsPath: userSettings } })).toBeNull();
   });
+
+  it("parses skills and mcpServers from frontmatter (comma and bracket lists)", () => {
+    writeAgent(
+      ".oxagen/agents/wired.md",
+      "---\nname: wired\nskills: reviewer, deploy\nmcpServers: [github, linear]\n---\nbody",
+    );
+    const a = load().get("wired");
+    expect(a?.skills).toEqual(["reviewer", "deploy"]);
+    expect(a?.mcpServers).toEqual(["github", "linear"]);
+  });
+
+  it("leaves skills and mcpServers undefined when absent from frontmatter", () => {
+    writeAgent(".oxagen/agents/bare.md", "---\nname: bare\n---\nbody");
+    const a = load().get("bare");
+    expect(a?.skills).toBeUndefined();
+    expect(a?.mcpServers).toBeUndefined();
+  });
+
+  it("parses skills and mcpServers from an inline settings.json agent", () => {
+    writeFileSync(
+      userSettings,
+      JSON.stringify({
+        agents: {
+          inline: {
+            prompt: "inline prompt",
+            skills: ["reviewer"],
+            mcpServers: ["github"],
+          },
+        },
+      }),
+    );
+    clearSettingsCache();
+    const a = load().get("inline");
+    expect(a?.skills).toEqual(["reviewer"]);
+    expect(a?.mcpServers).toEqual(["github"]);
+    expect(a?.source).toBe("settings.json");
+  });
+
+  it("leaves inline skills and mcpServers undefined when empty or absent", () => {
+    writeFileSync(
+      userSettings,
+      JSON.stringify({ agents: { inline: { prompt: "p", skills: [] } } }),
+    );
+    clearSettingsCache();
+    const a = load().get("inline");
+    expect(a?.skills).toBeUndefined();
+    expect(a?.mcpServers).toBeUndefined();
+  });
 });
