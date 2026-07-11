@@ -48,6 +48,10 @@ const nextConfig = {
         source: "/decks/architecture-deep-dive",
         destination: "/decks/architecture-deep-dive/index.html",
       },
+      {
+        source: "/decks/unpoisonable-edits",
+        destination: "/decks/unpoisonable-edits/index.html",
+      },
     ];
   },
 };
