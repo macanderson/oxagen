@@ -8,8 +8,8 @@ export const routerDecisionPreviewRoute = new Hono<AppEnv>();
 
 // POST /v1/:org/:workspace/router/preview
 routerDecisionPreviewRoute.post("/", async (c) => {
-  const body = await c.req.json().catch(() => ({}));
-  const input = routerDecisionPreview.input.parse(body);
+  const raw = (await c.req.json().catch(() => ({}))) as unknown;
+  const input = routerDecisionPreview.input.parse(raw);
   const ctx = capabilityContext(c);
   const out = await invoke(routerDecisionPreview.name, input, ctx, {
     surface: "api",
