@@ -28,9 +28,9 @@ import { slugify } from "@/lib/slug";
 import {
   ArrowLeft,
   ArrowRight,
+  Check,
   ChevronDown,
   ChevronUp,
-  CircleDot,
   Rocket,
   Save,
   Send,
@@ -541,36 +541,74 @@ export function AgentBuilder({
   const canSaveIdentity =
     name.trim().length > 0 && /^[a-z0-9]+(-[a-z0-9]+)*$/.test(slug.trim());
 
+  /**
+   * Per-step "has content" signal for the rail — a filled check means the
+   * builder holds something durable for that stage, not that the stage is
+   * mandatory. Describe and Review are waypoints, never "complete".
+   */
+  function stepFilled(key: string): boolean {
+    switch (key) {
+      case "identity":
+        return canSaveIdentity;
+      case "prompt":
+        return instructions.trim().length > 0;
+      case "equip":
+        return agentTools.length > 0;
+      case "ground":
+        return ontologyId.trim().length > 0;
+      case "triggers":
+        return (
+          manualEnabled ||
+          scheduleCron.trim().length > 0 ||
+          (eventSource.trim().length > 0 && eventType.trim().length > 0)
+        );
+      default:
+        return false;
+    }
+  }
+
   return (
-    <div className="flex flex-col gap-6 lg:flex-row">
+    <div className="flex flex-col gap-4 lg:flex-row lg:gap-8">
       {/* Step rail — horizontal scroll strip on mobile (44px+ touch targets),
-          vertical rail on desktop. */}
+          vertical rail on desktop. Chips flip to a check once a stage holds
+          real content, so overall progress is glanceable from any step. */}
       <nav
-        className="flex flex-row gap-1 overflow-x-auto max-lg:-mx-1 max-lg:px-1 lg:w-48 lg:flex-col lg:gap-0.5"
+        className="flex flex-row gap-1 overflow-x-auto max-lg:-mx-1 max-lg:px-1 lg:w-52 lg:flex-col lg:gap-0.5"
         aria-label="Builder steps"
       >
         {steps.map((s, i) => {
           const active = i === stepIdx;
+          const filled = stepFilled(s.key);
           return (
             <button
               key={s.key}
               type="button"
               onClick={() => setStepIdx(i)}
-              className={`flex items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors max-lg:min-h-11 max-lg:flex-shrink-0 ${
+              className={`flex items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm transition-colors max-lg:min-h-11 max-lg:flex-shrink-0 ${
                 active
                   ? "bg-muted font-medium text-foreground"
-                  : "text-muted-foreground hover:bg-muted/40"
+                  : "text-muted-foreground hover:bg-muted/40 hover:text-foreground"
               }`}
               aria-current={active ? "step" : undefined}
               data-testid={`builder-step-${s.key}`}
             >
-              <CircleDot
-                className={`h-3.5 w-3.5 flex-shrink-0 ${active ? "opacity-100" : "opacity-40"}`}
+              <span
+                className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border text-[10px] font-semibold tabular-nums transition-colors ${
+                  active
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : filled
+                      ? "border-success/50 bg-success/10 text-success"
+                      : "border-border bg-background text-muted-foreground"
+                }`}
                 aria-hidden="true"
-              />
-              <span className="whitespace-nowrap">
-                {i + 1}. {s.label}
+              >
+                {filled && !active ? (
+                  <Check className="h-3 w-3" aria-hidden="true" />
+                ) : (
+                  i + 1
+                )}
               </span>
+              <span className="whitespace-nowrap">{s.label}</span>
             </button>
           );
         })}
@@ -677,7 +715,26 @@ export function AgentBuilder({
           </div>
         ) : null}
 
-        <div className="rounded-lg border bg-card p-6">
+        {/* Quick save — reachable from every config step, not just Review, so
+            long wizards never lose work to a mis-tap. Describe has nothing to
+            save yet; Review carries the full action set. */}
+        {!readOnly && step.key !== "describe" && step.key !== "review" ? (
+          <div className="mb-2 flex items-center justify-end">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={disabled || !canSaveIdentity}
+              onClick={onSaveDraft}
+              startIcon={<Save className="h-3.5 w-3.5" aria-hidden="true" />}
+              data-testid="agent-save-draft-inline"
+            >
+              Save draft
+            </Button>
+          </div>
+        ) : null}
+
+        <div className="rounded-lg border bg-card p-4 sm:p-6">
           {/* ── Describe (AI-assisted setup, create mode only) ───────────── */}
           {step.key === "describe" ? (
             <div className="flex flex-col gap-4" data-testid="step-describe">
@@ -1223,14 +1280,25 @@ export function AgentBuilder({
           ) : null}
         </div>
 
-        {/* Step nav — inline on desktop; on mobile a sticky thumb bar pinned
-            above the bottom nav (44px+ targets, safe-area aware). */}
-        <div className="mt-4 flex items-center justify-between gap-3 max-lg:sticky max-lg:bottom-[calc(var(--bottom-bar-h)+env(safe-area-inset-bottom))] max-lg:z-10 max-lg:-mx-4 max-lg:border-t max-lg:border-border/60 max-lg:bg-background/95 max-lg:px-4 max-lg:py-3 max-lg:backdrop-blur">
+        {/* Step nav — inline row on ≥md; below md a FIXED thumb bar docked
+            flush on top of the MobileBottomBar. Fixed, never sticky: sticky
+            floated mid-content on short steps and reserved a phantom band on
+            768–1023px viewports where the bottom bar (sub-`md` geometry, see
+            globals.css --bottom-bar-h) doesn't render at all. The in-flow
+            spacer keeps the last field scrollable clear of the fixed bar,
+            mirroring MobileSettingsNav (3.8125rem = py-2 ×2 + h-11 + border). */}
+        <div className="h-[3.8125rem] md:hidden" aria-hidden="true" />
+        <div
+          // Marker consumed by globals.css: fixed bottom overlays (the PWA
+          // install toast) stack above this bar instead of covering it.
+          data-mobile-section-nav=""
+          className="mt-4 flex items-center justify-between gap-3 max-md:fixed max-md:inset-x-0 max-md:bottom-[calc(var(--bottom-bar-h)+env(safe-area-inset-bottom))] max-md:z-30 max-md:mt-0 max-md:border-t max-md:border-border/60 max-md:bg-background/95 max-md:px-4 max-md:py-2 max-md:backdrop-blur"
+        >
           <Button
             type="button"
             variant="ghost"
             size="sm"
-            className="max-lg:h-11 max-lg:flex-1"
+            className="max-md:h-11 max-md:flex-1"
             disabled={stepIdx === 0}
             onClick={() => setStepIdx((i) => Math.max(0, i - 1))}
             startIcon={<ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />}
@@ -1239,7 +1307,7 @@ export function AgentBuilder({
             Back
           </Button>
           <span
-            className="text-xs tabular-nums text-muted-foreground lg:hidden"
+            className="text-xs tabular-nums text-muted-foreground md:hidden"
             aria-label={`Step ${stepIdx + 1} of ${steps.length}`}
           >
             {stepIdx + 1} / {steps.length}
@@ -1249,7 +1317,7 @@ export function AgentBuilder({
               type="button"
               variant="secondary"
               size="sm"
-              className="max-lg:h-11 max-lg:flex-1"
+              className="max-md:h-11 max-md:flex-1"
               onClick={() => setStepIdx((i) => Math.min(steps.length - 1, i + 1))}
               endIcon={<ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />}
               data-testid="builder-next"
@@ -1257,7 +1325,7 @@ export function AgentBuilder({
               Next
             </Button>
           ) : (
-            <span className="text-xs text-muted-foreground max-lg:flex-1 max-lg:text-right">
+            <span className="text-xs text-muted-foreground max-md:flex-1 max-md:text-right">
               {mode === "edit" && initialAgent
                 ? `Editing ${initialAgent.slug} · v${initialAgent.version ?? "—"}`
                 : "New agent"}
