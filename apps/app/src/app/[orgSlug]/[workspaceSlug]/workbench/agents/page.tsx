@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Bot, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { workspace } from "@/lib/routes";
 import type { ScopeContext } from "@/lib/scope";
@@ -66,28 +67,26 @@ export default async function WorkbenchAgentsPage({ params }: PageProps) {
           ) : undefined
         }
       />
-      <div className="text-sm text-muted-foreground">
-        {agents.length} agent{agents.length !== 1 ? "s" : ""}
-      </div>
-
       {agents.length === 0 ? (
-        <div
-          className="flex flex-col items-center gap-3 rounded-md border bg-card py-16 text-center text-muted-foreground"
+        <EmptyState
+          variant="dashed"
+          icon={<Bot />}
+          title="No agents in this workspace yet"
+          description="Describe an agent in plain language and the builder drafts its full configuration — prompt, tools, graph access, and triggers."
           data-testid="agents-empty-state"
-        >
-          <Bot className="h-8 w-8 opacity-40" aria-hidden="true" />
-          <p className="text-sm">No agents in this workspace yet.</p>
-          {canManage ? (
-            <Button
-              variant="outline"
-              size="sm"
-              startIcon={<Plus className="h-3.5 w-3.5" aria-hidden="true" />}
-              render={<Link href={workspace.workbench.agentNew(routeCtx)} />}
-            >
-              Build your first agent
-            </Button>
-          ) : null}
-        </div>
+          action={
+            canManage ? (
+              <Button
+                variant="outline"
+                size="sm"
+                startIcon={<Plus className="h-3.5 w-3.5" aria-hidden="true" />}
+                render={<Link href={workspace.workbench.agentNew(routeCtx)} />}
+              >
+                Build your first agent
+              </Button>
+            ) : undefined
+          }
+        />
       ) : (
         <AgentsGrid agents={rows} />
       )}
