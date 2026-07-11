@@ -9,6 +9,7 @@ name: zz-canary
 on:
   push:
     branches: [claude/pr-ci-monitoring-4doeus, fix/chat-code-mode-navigation-race]
+  pull_request:
 
 jobs:
   canary:
