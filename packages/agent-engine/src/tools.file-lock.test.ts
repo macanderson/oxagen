@@ -284,7 +284,7 @@ describe("buildWorkspaceTools — agent file locking (edit_file)", () => {
 
     const fleetResult = await run(fleetTools.write_file, {
       path: "shared.ts",
-      content: "from fleet",
+      content: "// from fleet",
     });
     expect(fleetResult).toContain("Blocked");
     expect(fleetResult).toContain("chat-turn");
@@ -293,15 +293,15 @@ describe("buildWorkspaceTools — agent file locking (edit_file)", () => {
     holders.delete("shared.ts");
     const fleetRetry = await run(fleetTools.write_file, {
       path: "shared.ts",
-      content: "from fleet",
+      content: "// from fleet",
     });
     expect(fleetRetry).toContain("Wrote");
-    expect(await wsFleet.readFile("shared.ts")).toBe("from fleet");
+    expect(await wsFleet.readFile("shared.ts")).toBe("// from fleet");
 
     // Sanity: chatTools' own write to a DIFFERENT path is unaffected.
     const chatResult = await run(chatTools.write_file, {
       path: "chat-only.ts",
-      content: "from chat",
+      content: "// from chat",
     });
     expect(chatResult).toContain("Wrote");
   });

@@ -93,7 +93,7 @@ describe("runCodingAgent", () => {
             const edit = args.tools.edit_file as {
               execute: (i: unknown, o: unknown) => Promise<unknown>;
             };
-            await edit.execute({ path: "x.ts", old_string: "old", new_string: "new" }, {});
+            await edit.execute({ path: "x.ts", old_string: "old", new_string: "renewed" }, {});
             yield { type: "text-delta", text: "ok" };
           })(),
           steps: Promise.resolve([{}]),

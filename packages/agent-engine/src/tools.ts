@@ -17,6 +17,7 @@ import type {
 import type { FileLockProvider } from "./ports";
 import { delay } from "./loop-driver";
 import { buildStructuredTools } from "./tools-structured";
+import { createEditGuard } from "./guard/edit-guard";
 
 const MAX_OUTPUT = 30_000; // chars; keep tool output from blowing the context window
 // When truncating, keep this fraction of the budget as the HEAD; the rest is the
@@ -493,6 +494,13 @@ export function buildWorkspaceTools(
      * one-shot surface with nobody to ask — the tool is never advertised.
      */
     askUser?: AskUserCallback;
+    /**
+     * Un-poisonable edits (guard/edit-guard.ts): per-mutation stale-read hash
+     * anchor + syntax-regression gate. Both default ON; explicit options win
+     * over the OXAGEN_EDIT_HASH_GUARD / OXAGEN_EDIT_SYNTAX_GUARD kill
+     * switches (env value "0"/"false" disables).
+     */
+    editGuard?: { hashGuard?: boolean; syntaxGuard?: boolean };
   } = {},
 ): ToolSet {
   const onEvent = opts.onEvent ?? (() => undefined);
@@ -502,6 +510,18 @@ export function buildWorkspaceTools(
   // Bench/CI-only gate (see OXAGEN_FORBID_TEST_EDITS in the config registry):
   // structurally denies mutations to test-shaped paths — see isTestPath above.
   const forbidTestEdits = process.env["OXAGEN_FORBID_TEST_EDITS"] === "1";
+  // Default-ON kill switches for the edit guard (explicit option beats env).
+  const envFlagDefaultOn = (name: string): boolean => {
+    const v = process.env[name];
+    return v !== "0" && v !== "false";
+  };
+  const guard = createEditGuard(workspace, {
+    hashGuard:
+      opts.editGuard?.hashGuard ?? envFlagDefaultOn("OXAGEN_EDIT_HASH_GUARD"),
+    syntaxGuard:
+      opts.editGuard?.syntaxGuard ??
+      envFlagDefaultOn("OXAGEN_EDIT_SYNTAX_GUARD"),
+  });
 
   const tools: ToolSet = {
     read_file: tool({
@@ -523,6 +543,9 @@ export function buildWorkspaceTools(
       execute: async ({ path, offset, limit }) => {
         try {
           const text = await workspace.readFile(path, { offset, limit });
+          // Anchor the file's FULL content hash (not just the range read) so a
+          // later edit_file can detect drift since this read (guard/edit-guard.ts).
+          await guard.recordRead(path);
           // Number lines cat -n style so the model can cite/target exact lines;
           // `offset` (1-based) is the true line number of the first line read.
           const formatted = formatWithLineNumbers(text, offset ?? 1);
@@ -550,8 +573,15 @@ export function buildWorkspaceTools(
       inputSchema: z.object({
         path: z.string(),
         content: z.string(),
+        allow_syntax_errors: z
+          .boolean()
+          .optional()
+          .describe(
+            "Skip the syntax-regression gate for this write — only when the broken " +
+              "state is intentional (e.g. a deliberately-invalid test fixture).",
+          ),
       }),
-      execute: async ({ path, content }) => {
+      execute: async ({ path, content, allow_syntax_errors }) => {
         if (forbidTestEdits && isTestPath(path))
           return TEST_EDIT_DENIED_MESSAGE;
         return withFileLock(
@@ -562,6 +592,12 @@ export function buildWorkspaceTools(
           signal,
           async () => {
             try {
+              // Un-poisonable edits: deny BEFORE writing when the new content
+              // would introduce syntax errors the file doesn't already have.
+              const verdict = await guard.checkWrite(path, content, {
+                allowSyntaxErrors: allow_syntax_errors,
+              });
+              if (!verdict.ok) return verdict.denial;
               // Probe existence BEFORE the write (under the same file lock) so
               // the emitted event can say whether this created the file or
               // overwrote an existing one — UIs use it to badge C vs U.
@@ -572,6 +608,7 @@ export function buildWorkspaceTools(
                 existed = false;
               }
               await workspace.writeFile(path, content);
+              guard.recordContent(path, content);
               onEvent({
                 type: "file-edit",
                 path,
@@ -604,8 +641,21 @@ export function buildWorkspaceTools(
           .describe(
             "Replace every occurrence instead of requiring a unique match (default false).",
           ),
+        allow_syntax_errors: z
+          .boolean()
+          .optional()
+          .describe(
+            "Skip the syntax-regression gate for this edit — only when the broken " +
+              "state is intentional (e.g. a deliberately-invalid test fixture).",
+          ),
       }),
-      execute: async ({ path, old_string, new_string, replace_all }) => {
+      execute: async ({
+        path,
+        old_string,
+        new_string,
+        replace_all,
+        allow_syntax_errors,
+      }) => {
         if (forbidTestEdits && isTestPath(path))
           return TEST_EDIT_DENIED_MESSAGE;
         return withFileLock(
@@ -616,6 +666,14 @@ export function buildWorkspaceTools(
           signal,
           async () => {
             try {
+              // Un-poisonable edits: deny BEFORE applying when the file drifted
+              // since it was last read (hash anchor) or when the splice would
+              // introduce new syntax errors. Nothing is written on a denial.
+              const verdict = await guard.checkEdit(path, old_string, new_string, {
+                replaceAll: replace_all,
+                allowSyntaxErrors: allow_syntax_errors,
+              });
+              if (!verdict.ok) return verdict.denial;
               const count = await workspace.editFile(
                 path,
                 old_string,
@@ -624,6 +682,7 @@ export function buildWorkspaceTools(
                   replaceAll: replace_all,
                 },
               );
+              await guard.noteEditApplied(path, verdict.newContent);
               onEvent({
                 type: "file-edit",
                 path,

@@ -7,6 +7,20 @@ export {
   describeEditFailure,
   clipMiddle,
 } from "./tools";
+// Un-poisonable edits — stale-read hash anchor + syntax-regression gate
+// enforced inside write_file/edit_file (Phase 1 "verified green").
+export {
+  createEditGuard,
+  countSyntaxErrors,
+  computeEditResult,
+  staleFileDeniedMessage,
+  syntaxRegressionDeniedMessage,
+  type EditGuard,
+  type EditGuardOptions,
+  type EditVerdict,
+  type SyntaxReport,
+  type TsLikeModule,
+} from "./guard/edit-guard";
 // LocalWorkspace is a CLI adapter (Stage B), not engine code — see ADR-019.
 export {
   runCodingAgent,

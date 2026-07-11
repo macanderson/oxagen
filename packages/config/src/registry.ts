@@ -1834,6 +1834,38 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
   },
+  OXAGEN_EDIT_HASH_GUARD: {
+    group: "CLI",
+    description:
+      "Un-poisonable edits, hash anchor (kill switch — ON by default). read_file records a " +
+      "sha256 of the file's full content; edit_file re-hashes just before applying and DENIES " +
+      "the edit when the file changed on disk since that read (formatter, parallel session, or " +
+      "the agent's own bash command), telling the model to re-read. Set to '0'/'false' to " +
+      "disable. The buildWorkspaceTools editGuard.hashGuard option wins over this var.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "1",
+  },
+  OXAGEN_EDIT_SYNTAX_GUARD: {
+    group: "CLI",
+    description:
+      "Un-poisonable edits, syntax-regression gate (kill switch — ON by default). " +
+      "write_file/edit_file compute the candidate content in memory, parse it (TS/JS via a " +
+      "lazily-loaded TypeScript parser, JSON via JSON.parse), and DENY the mutation before " +
+      "anything touches disk when it would introduce NEW syntax errors — files that already " +
+      "fail to parse stay editable, and the model can pass allow_syntax_errors:true for " +
+      "intentional fixtures. Fails open where the parser is unavailable. Set to '0'/'false' " +
+      "to disable. The buildWorkspaceTools editGuard.syntaxGuard option wins over this var.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "1",
+  },
   OXAGEN_ALLOW_STDIO_MCP: {
     group: "CLI",
     description:
