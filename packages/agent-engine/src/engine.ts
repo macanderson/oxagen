@@ -101,6 +101,10 @@ export async function runCodingAgent(
         // (the CLI's default).
         fileLock: opts.fileLock,
         lockContext: opts.lockContext,
+        // Optional project-diagnostics provider — the edit-integrity gate unions
+        // its before/after output with the built-in syntax check. Undefined ⇒
+        // built-in check only (the CLI's default).
+        diagnostics: opts.diagnostics,
         // Interactive clarification: register `ask_user` only when a surface
         // with a human supplied the callback (mirrors codeGraph gating).
         askUser: opts.askUser,

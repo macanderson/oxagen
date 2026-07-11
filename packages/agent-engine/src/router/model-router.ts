@@ -95,15 +95,18 @@ export interface RouteDecision {
 // expensive (security/data correctness), so we never under-spend on them.
 // NOTE: bare "token" is deliberately excluded — it collides with lexer/parser
 // "tokens". Auth work is caught by the unambiguous terms below.
-const PRECISE_DOMAINS =
+// Exported so the market router's `deriveTaskClass` classifies task classes from
+// the SAME vocabulary the deterministic tiering uses — one source of truth for
+// what counts as a high-stakes domain / design / trivial ask.
+export const PRECISE_DOMAINS =
   /\b(auth|authn|authz|login|session|password|secret|credential|oauth|saml|sso|billing|payment|invoice|stripe|charge|refund|security|crypto|encrypt|decrypt|rls|tenant|migration|schema change|architecture|architect|data model|storage boundary|production incident|outage|race condition)\b/i;
 
 // Words that signal genuine design / non-trivial reasoning → at least balanced.
-const DESIGN_SIGNALS =
+export const DESIGN_SIGNALS =
   /\b(design|refactor|redesign|rearchitect|debug|investigate|root[- ]cause|why|optimi[sz]e|performance|concurren|async|deadlock|integrate|cross[- ]package|end[- ]to[- ]end|e2e|new (feature|capability|endpoint|tool|service)|implement)\b/i;
 
 // Words that signal trivial, mechanical work → fast tier is plenty.
-const TRIVIAL_SIGNALS =
+export const TRIVIAL_SIGNALS =
   /\b(rename|format|typo|comment|lint|prettier|reword|copy[- ]?edit|bump|sort imports|add a? ?(log|console)|tweak|adjust spacing|fix indentation|update (the )?(version|readme|changelog)|one[- ]liner)\b/i;
 
 /**

@@ -185,7 +185,14 @@ describe("tenant policy manifest", () => {
     //      the manifest was never updated, so manifest-coverage failed in CI
     //      and a future re-baseline would have silently dropped the policies
     //      (found by the 2026-07-11 Postgres schema audit).
-    expect(POLICY_MANIFEST.length).toBe(95);
+    // 96 = 95 + workspace.routing_policy (Verified-Outcome Market Router
+    //      governance, PR #903: org_id NOT NULL + workspace_id NULLABLE →
+    //      workspace_nullable tenant_isolation RLS,
+    //      20260731130700_routing_policy.sql). Re-added here because the
+    //      reseller dedupe pass on this branch dropped it while PR #903 was
+    //      merging — without this entry a future re-baseline would silently
+    //      drop the table's RLS policy.
+    expect(POLICY_MANIFEST.length).toBe(96);
   });
 
   it("covers slug-history tables for org + workspace renames (OXA-1779)", () => {

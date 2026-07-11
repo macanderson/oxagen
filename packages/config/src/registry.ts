@@ -2022,6 +2022,47 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "manual",
     placeholder: "2",
   },
+  OXAGEN_MUTATION_VERIFY: {
+    group: "CLI",
+    description:
+      "Mutation gate (layer 1) kill switch. ON by default: after a judged-complete round, " +
+      "the pipeline reverts the fix in a shadow (test files stay put), re-runs the agent's " +
+      "own passing test command, and demands a failure — a test that still passes without " +
+      "the fix witnesses nothing, and the verdict is overridden into a revise round. " +
+      "Set 0/false to disable. The RunTurnOptions.mutationVerify option wins over this var.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "1",
+  },
+  OXAGEN_MUTATION_SCORE: {
+    group: "CLI",
+    description:
+      "Mutation gate layer 2 (opt-in): when the witness check passes, apply deterministic " +
+      "one-line mutants to the fix's added lines and measure the kill rate (each mutant " +
+      "costs one witness-command run). Reported on the trace as mutationGates[].score.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "1",
+  },
+  OXAGEN_MUTATION_TIMEOUT_MS: {
+    group: "CLI",
+    description:
+      "Per-command timeout (ms) for the mutation gate's witness re-runs in the fix-reverted " +
+      "shadow. Unset ⇒ 180000. A timed-out witness run counts as a failure (the shadow " +
+      "behaves differently without the fix), which still proves the tests witness the fix.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "180000",
+  },
   OXAGEN_REVISE_MIN_CONFIDENCE: {
     group: "CLI",
     description:
@@ -2156,6 +2197,19 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: [],
     requiredIn: [],
     valueOrigin: "manual",
+  },
+  OXAGEN_FLEET_RECORD: {
+    group: "CLI",
+    description:
+      "Toggles the ADR-028 time-travel sidecar record (`record/record.ndjson` + blob store) " +
+      "written by every `oxagen fleet` session. Recording is default-ON; set to `0` or `off` " +
+      "to disable. CLI-local only; never set in deployed environments.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "off",
   },
   INGESTION_CRYPTO_PROVIDER: {
     group: "Ingestion",

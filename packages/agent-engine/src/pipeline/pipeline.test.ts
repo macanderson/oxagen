@@ -144,9 +144,16 @@ describe("runTurn — GraphSyncProvider", () => {
     expect(last.diff).toContain("src/e.ts");
   });
 
-  it("fires onFileEdit per landed edit with a create/update kind", async () => {
+  it("fires onFileEdit per landed edit, carrying the create/update kind and the edit-integrity anchor chain", async () => {
     const ws = new MemoryWorkspace({ "src/e.ts": "before" });
-    const edits: Array<{ path: string; kind: string; bytes: number }> = [];
+    const edits: Array<{
+      path: string;
+      kind: string;
+      bytes: number;
+      beforeHash?: string;
+      afterHash?: string;
+      replacements?: number;
+    }> = [];
 
     await runTurn({
       prompt: "rename before to after in src/e.ts",
@@ -156,11 +163,18 @@ describe("runTurn — GraphSyncProvider", () => {
       onFileEdit: (e) => edits.push(e),
     });
 
-    expect(edits).toContainEqual({
+    const edit = edits.find((e) => e.path === "src/e.ts");
+    expect(edit).toBeDefined();
+    expect(edit).toMatchObject({
       path: "src/e.ts",
       kind: "update",
       bytes: "after".length,
+      replacements: 1,
     });
+    // The edit-integrity anchor chain must be threaded through the pipeline's
+    // onFileEdit rebuild, not silently dropped.
+    expect(edit?.beforeHash).toMatch(/^[0-9a-f]{16}$/);
+    expect(edit?.afterHash).toMatch(/^[0-9a-f]{16}$/);
   });
 
   it("does NOT call graphSync when no files are touched", async () => {

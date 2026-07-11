@@ -35,7 +35,9 @@ export class DurableSandboxUnavailableError extends Error {
 export class SandboxSessionNotFoundError extends Error {
   readonly code = "sandbox_session_not_found";
   constructor(sessionId: string) {
-    super(`Sandbox session "${sessionId}" was not found in this workspace, or it has been stopped.`);
+    super(
+      `Sandbox session "${sessionId}" was not found in this workspace, or it has been stopped.`,
+    );
     this.name = "SandboxSessionNotFoundError";
   }
 }
@@ -62,7 +64,8 @@ export class SandboxSessionGoneError extends Error {
 export function requireDurableDriver(provider?: string): DurableSandboxDriver {
   if (!isSandboxAvailable()) throw new DurableSandboxUnavailableError();
   const driver = getSandbox(provider);
-  if (!isDurableSandboxDriver(driver)) throw new DurableSandboxUnavailableError();
+  if (!isDurableSandboxDriver(driver))
+    throw new DurableSandboxUnavailableError();
   return driver;
 }
 
@@ -76,7 +79,9 @@ export function requireDurableDriver(provider?: string): DurableSandboxDriver {
  * Throwing variant: for handlers (exec/file/log/snapshot) that cannot proceed
  * without a live driver. Fails closed with DurableSandboxUnavailableError.
  */
-export function requireDurableDriverForRow(driver: string | null): DurableSandboxDriver {
+export function requireDurableDriverForRow(
+  driver: string | null,
+): DurableSandboxDriver {
   return requireDurableDriver(driver ?? undefined);
 }
 
@@ -90,7 +95,9 @@ export function requireDurableDriverForRow(driver: string | null): DurableSandbo
  * provider: an explicit `driver` column that cannot be built yields null, not a
  * silent fallback to the deployment default.
  */
-export function resolveSessionDriver(driver: string | null): DurableSandboxDriver | null {
+export function resolveSessionDriver(
+  driver: string | null,
+): DurableSandboxDriver | null {
   if (!isSandboxAvailable()) return null;
   try {
     const resolved = getSandbox(driver ?? undefined);
@@ -194,13 +201,18 @@ function toRow(raw: Record<string, unknown> | undefined): SessionRow | null {
 }
 
 /** Reconstruct a driver spec from a registry row (used for restore). */
-export function specFromRow(row: SessionRow, ctx: CapabilityContext): SandboxSessionSpec {
+export function specFromRow(
+  row: SessionRow,
+  ctx: CapabilityContext,
+): SandboxSessionSpec {
   return {
     image: row.image,
     ...(row.metadata.imageRef ? { imageRef: row.metadata.imageRef } : {}),
     memoryMb: row.metadata.memoryMb,
     ...(row.metadata.vcpu !== undefined ? { vcpu: row.metadata.vcpu } : {}),
-    ...(row.metadata.diskMb !== undefined ? { diskMb: row.metadata.diskMb } : {}),
+    ...(row.metadata.diskMb !== undefined
+      ? { diskMb: row.metadata.diskMb }
+      : {}),
     ttlSeconds: row.metadata.ttlSeconds,
     idleTimeoutSeconds: row.metadata.idleTimeoutSeconds,
     network: row.metadata.network,
@@ -327,13 +339,21 @@ export async function insertSession(
 }
 
 /** Bump last_used_at (and keep status running) for a live session. */
-export async function touchSession(ctx: CapabilityContext, id: string): Promise<void> {
+export async function touchSession(
+  ctx: CapabilityContext,
+  id: string,
+): Promise<void> {
   await withTenantDb(async (tx) => {
     await tx
       .update(schema.sandboxSessions)
       // Clear grace_deadline_at: an active turn is holding this session, so it
       // must not be a reap candidate until it releases to 'idle' again.
-      .set({ lastUsedAt: new Date(), status: "running", graceDeadlineAt: null, updatedByUserId: ctx.userId })
+      .set({
+        lastUsedAt: new Date(),
+        status: "running",
+        graceDeadlineAt: null,
+        updatedByUserId: ctx.userId,
+      })
       .where(
         and(
           eq(schema.sandboxSessions.id, id),
@@ -447,7 +467,10 @@ export function sandboxStaleRunningSeconds(): number {
  * session is never resurrected to 'idle'. Keyed by public id (what the caller
  * holds); a no-op when the session is gone.
  */
-export async function releaseSession(ctx: CapabilityContext, publicId: string): Promise<void> {
+export async function releaseSession(
+  ctx: CapabilityContext,
+  publicId: string,
+): Promise<void> {
   const graceMs = sandboxGraceSeconds() * 1000;
   await withTenantDb(async (tx) => {
     await tx

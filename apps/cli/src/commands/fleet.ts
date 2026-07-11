@@ -18,6 +18,14 @@
  *   fleet clean                prune terminal sessions (--older-than, --all)
  *   fleet worker <sid>         [hidden] the detached worker entry point
  *
+ * Time travel (ADR-028) — read the session's sidecar record (`record/`):
+ *
+ *   fleet replay <sid>         inspect the recorded run (--turn N for full I/O, --verify)
+ *   fleet bisect <sid> --cmd   restore-and-probe binary search for the first bad turn
+ *   fleet resume <sid> --turn  fork a new session from the state after turn N
+ *   fleet feedback <sid> up|down   append a human verdict (down auto-distills)
+ *   fleet distill <sid>        run → evals-v1 dataset item (--push to the platform)
+ *
  * Design notes:
  * - Handlers take a trailing {@link CommandWriter} (default the real stdout) so
  *   they compose with the REPL's inline capture seam exactly like `models.ts`.
@@ -32,8 +40,35 @@
  *   no account. The heavy engine (`runner.js`) is imported lazily inside the
  *   worker only, so `fleet ls` never pays the agent-engine cold start.
  */
+import { execFile, spawn } from "node:child_process";
+import { randomBytes } from "node:crypto";
+import { writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import {
+  DISTILL_DATASET_SLUG,
+  bisectTurns,
+  distillEvalItem,
+  isTruncatedBlob,
+  openRecordStore,
+  readRun,
+  removeWorktree,
+  restoreFsAtTurn,
+  verifyRun,
+  type DistillReason,
+  type DistilledEvalItem,
+  type ExecPort,
+  type RecordStore,
+  type RecordWriter,
+  type ReplayRecord,
+  type ReplayRun,
+} from "@oxagen/replay";
 import { createOutput, type Output } from "../lib/output.js";
 import { stdoutWriter, type CommandWriter } from "../lib/capture-writer.js";
+import {
+  apiGetOrThrow,
+  apiPostOrThrow,
+  resolveApiContext,
+} from "../lib/api.js";
 import {
   isActiveState,
   openFleetStore,
@@ -42,7 +77,7 @@ import {
   type SessionStore,
   type TailHandle,
 } from "../sessions/store.js";
-import { fleetRoot } from "../sessions/paths.js";
+import { fleetRoot, sessionDir } from "../sessions/paths.js";
 import { resolveSidRef, shortSid } from "../sessions/ids.js";
 import type { SessionEvent } from "../sessions/events.js";
 import {
@@ -132,7 +167,9 @@ function emitEvent(
   }
   const line = toAggregateLine(event, { verbose: render.verbose });
   if (!line) return;
-  writer.write(render.gutter ? `${shortSid(line.sid).padEnd(6)} ${line.text}` : line.text);
+  writer.write(
+    render.gutter ? `${shortSid(line.sid).padEnd(6)} ${line.text}` : line.text,
+  );
 }
 
 /**
@@ -238,7 +275,10 @@ function relTime(ts: number, now: number = Date.now()): string {
 }
 
 /** Render the roster as an aligned human-readable table. */
-function renderLsTable(sessions: SessionMetaView[], now: number = Date.now()): string {
+function renderLsTable(
+  sessions: SessionMetaView[],
+  now: number = Date.now(),
+): string {
   if (sessions.length === 0) {
     return 'No sessions in this fleet. Start one with `oxagen fleet dispatch "…"`.';
   }
@@ -313,10 +353,15 @@ export async function handleFleetDispatch(
 
   let prompt = promptWords.join(" ").trim();
   if ((prompt === "" || prompt === "-") && !process.stdin.isTTY) {
-    prompt = (opts.readStdin ? await opts.readStdin() : await readStdin()).trim();
+    prompt = (
+      opts.readStdin ? await opts.readStdin() : await readStdin()
+    ).trim();
   }
   if (prompt === "" || prompt === "-") {
-    out.error('dispatch needs a prompt (arguments, or piped stdin with "-").', "usage");
+    out.error(
+      'dispatch needs a prompt (arguments, or piped stdin with "-").',
+      "usage",
+    );
     process.exitCode = 2;
     return;
   }
@@ -466,7 +511,9 @@ export async function handleFleetAttach(
       autoJson: true,
       // One TTY truth: the injected override must steer autoJson AND the
       // interactive branch below, or a test/caller can land in a mode split.
-      ...(opts.stdoutIsTTY !== undefined ? { stdoutIsTTY: opts.stdoutIsTTY } : {}),
+      ...(opts.stdoutIsTTY !== undefined
+        ? { stdoutIsTTY: opts.stdoutIsTTY }
+        : {}),
     },
     writer,
   );
@@ -496,7 +543,9 @@ export async function handleFleetAttach(
 
   // Pretty mode wants a full terminal for the focused TUI.
   if (writer !== stdoutWriter) {
-    out.info(`open a full terminal and run: oxagen fleet attach ${shortSid(resolved)}`);
+    out.info(
+      `open a full terminal and run: oxagen fleet attach ${shortSid(resolved)}`,
+    );
     return;
   }
   if (!stdoutIsTty(opts.stdoutIsTTY)) {
@@ -546,7 +595,9 @@ export async function handleFleetSend(
     return;
   }
   if (!isActiveState(meta.derivedState)) {
-    out.error(`session ${shortSid(meta.sid)} is ${meta.derivedState}; cannot send to it.`);
+    out.error(
+      `session ${shortSid(meta.sid)} is ${meta.derivedState}; cannot send to it.`,
+    );
     return;
   }
 
@@ -562,7 +613,10 @@ export async function handleFleetSend(
   }
 
   await store.appendInbox(meta.sid, { type: "message", text, ts: Date.now() });
-  out.data({ sid: meta.sid, ok: true }, () => `→ sent to ${shortSid(meta.sid)}`);
+  out.data(
+    { sid: meta.sid, ok: true },
+    () => `→ sent to ${shortSid(meta.sid)}`,
+  );
 }
 
 // ── cancel ───────────────────────────────────────────────────────────────────
@@ -594,7 +648,8 @@ export async function handleFleetCancel(
   const store = openStore(opts.cwd);
   const sessions = await store.listSessions();
   const kill =
-    opts.killImpl ?? ((pid: number, signal: NodeJS.Signals) => process.kill(pid, signal));
+    opts.killImpl ??
+    ((pid: number, signal: NodeJS.Signals) => process.kill(pid, signal));
 
   let targets: SessionMetaView[];
   if (opts.all) {
@@ -609,7 +664,9 @@ export async function handleFleetCancel(
       sidRef,
       sessions.map((s) => s.sid),
     );
-    const meta = resolved ? sessions.find((s) => s.sid === resolved) : undefined;
+    const meta = resolved
+      ? sessions.find((s) => s.sid === resolved)
+      : undefined;
     if (!meta) {
       out.error(`no session matching "${sidRef}"`);
       return;
@@ -620,7 +677,12 @@ export async function handleFleetCancel(
   const results: CancelResult[] = [];
   for (const s of targets) {
     if (!isActiveState(s.derivedState)) {
-      results.push({ sid: s.sid, cancelled: false, signalled: false, reason: `already ${s.derivedState}` });
+      results.push({
+        sid: s.sid,
+        cancelled: false,
+        signalled: false,
+        reason: `already ${s.derivedState}`,
+      });
       continue;
     }
     await store.appendInbox(s.sid, { type: "cancel", ts: Date.now() });
@@ -692,7 +754,10 @@ export async function handleFleetLogs(
   if (opts.fromSeq !== undefined) {
     const parsed = Number.parseInt(opts.fromSeq, 10);
     if (!Number.isInteger(parsed) || parsed < 1) {
-      out.error(`invalid --from-seq "${opts.fromSeq}". Use a positive integer.`, "usage");
+      out.error(
+        `invalid --from-seq "${opts.fromSeq}". Use a positive integer.`,
+        "usage",
+      );
       process.exitCode = 2;
       return;
     }
@@ -707,9 +772,13 @@ export async function handleFleetLogs(
     return;
   }
   // --follow: tailEvents replays from fromSeq, then streams live; hold open.
-  const tail = store.tailEvents(resolved, (event) => emitEvent(out, writer, event, render), {
-    fromSeq,
-  });
+  const tail = store.tailEvents(
+    resolved,
+    (event) => emitEvent(out, writer, event, render),
+    {
+      fromSeq,
+    },
+  );
   await waitForStop(opts.signal);
   tail.stop();
 }
@@ -756,11 +825,879 @@ export async function handleFleetClean(
     olderThanMs = parsed;
   }
 
-  const { removed } = await openStore(opts.cwd).clean({ olderThanMs, all: opts.all });
+  const { removed } = await openStore(opts.cwd).clean({
+    olderThanMs,
+    all: opts.all,
+  });
   out.data({ removed, count: removed.length }, () =>
     removed.length === 0
       ? "Nothing to prune."
       : `Pruned ${removed.length} session(s): ${removed.map(shortSid).join(", ")}`,
+  );
+}
+
+// ── time travel: replay / bisect / resume / feedback / distill (ADR-028) ─────
+
+/** States a session must be in before post-hoc verdicts/distills make sense. */
+const TERMINAL_STATES: ReadonlySet<string> = new Set([
+  "done",
+  "failed",
+  "cancelled",
+]);
+
+/** Real exec port for git worktree restore ops (tests inject a fake). */
+const realExec: ExecPort = (cmd, args, opts) =>
+  new Promise((resolve) => {
+    execFile(
+      cmd,
+      args,
+      { cwd: opts.cwd, maxBuffer: 16 * 1024 * 1024 },
+      (err, stdout) => {
+        const code = err
+          ? (((err as { code?: unknown }).code as number | undefined) ?? 1)
+          : 0;
+        resolve({
+          stdout: stdout ?? "",
+          code: typeof code === "number" ? code : 1,
+        });
+      },
+    );
+  });
+
+/** Run a predicate command via `sh -c` in `cwd`; resolves its exit code (127 = spawn failure). */
+function runShell(cmd: string, cwd: string): Promise<number> {
+  return new Promise((resolve) => {
+    const child = spawn("sh", ["-c", cmd], { cwd, stdio: "ignore" });
+    child.once("error", () => resolve(127));
+    child.once("close", (code) => resolve(code ?? 1));
+  });
+}
+
+/** A short random suffix for scratch worktree names (collision-proof enough). */
+function scratchSuffix(): string {
+  return randomBytes(3).toString("hex");
+}
+
+/**
+ * Resolve a sid reference and load its recorded run, with the uniform error
+ * contract of the other verbs. Returns null after reporting when the session
+ * is unknown or has no ADR-028 record (recording off / pre-ADR-028 session).
+ */
+async function openRecordedRun(
+  store: SessionStore,
+  sidRef: string,
+  out: Output,
+): Promise<{
+  sid: string;
+  meta: SessionMetaView;
+  recordStore: RecordStore;
+  run: ReplayRun;
+} | null> {
+  const sessions = await store.listSessions();
+  const sid = resolveSidRef(
+    sidRef,
+    sessions.map((s) => s.sid),
+  );
+  const meta = sid ? sessions.find((s) => s.sid === sid) : undefined;
+  if (!sid || !meta) {
+    out.error(`no session matching "${sidRef}"`);
+    return null;
+  }
+  const recordStore = openRecordStore(sessionDir(store.rootDir, sid));
+  const run = await readRun(recordStore);
+  if (!run) {
+    out.error(
+      `session ${shortSid(sid)} has no replay record — recording was off (OXAGEN_FLEET_RECORD=0) ` +
+        `or the session predates ADR-028.`,
+      "no_record",
+    );
+    return null;
+  }
+  return { sid, meta, recordStore, run };
+}
+
+/**
+ * Open a record writer seeded PAST the existing log for post-hoc appends
+ * (feedback, distill). The count normally equals the last seq; `max()` guards
+ * a torn tail line so a new append can never collide with an existing seq.
+ */
+function openPostHocWriter(
+  recordStore: RecordStore,
+  sid: string,
+  records: ReplayRecord[],
+): RecordWriter {
+  return recordStore.openWriter({
+    sid,
+    lastSeq: Math.max(records.length, records[records.length - 1]?.seq ?? 0),
+  });
+}
+
+/** Parse a `--turn`-style integer flag; null when not a valid integer ≥ `min`. */
+function parseTurnFlag(raw: string, min: number): number | null {
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isInteger(parsed) && parsed >= min ? parsed : null;
+}
+
+// ── replay ───────────────────────────────────────────────────────────────────
+
+/** One tool call in the replay view; input/output only present for the focused turn. */
+export interface ReplayToolCallView {
+  idx: number;
+  name: string;
+  ok: boolean;
+  durationMs: number;
+  input?: unknown;
+  output?: unknown;
+}
+
+export interface ReplayTurnView {
+  turn: number;
+  prompt: string;
+  settled: boolean;
+  steps?: number;
+  stopReason?: string;
+  changedFiles: string[];
+  usage?: { inputTokens: number; outputTokens: number; costUsd: number };
+  toolCalls: ReplayToolCallView[];
+}
+
+export interface ReplayRunView {
+  sid: string;
+  model?: string;
+  agent?: string;
+  cliVersion?: string;
+  gitHead?: string;
+  cwd?: string;
+  prompt?: string;
+  lastSettledTurn: number;
+  turns: ReplayTurnView[];
+  feedback: Array<{ verdict: "up" | "down"; comment?: string }>;
+  distills: Array<{
+    reason: DistillReason;
+    isPushed: boolean;
+    datasetSlug?: string;
+  }>;
+}
+
+/** Decode a payload blob for display: parsed JSON, a truncation note, or the raw string. */
+async function blobForDisplay(
+  recordStore: RecordStore,
+  ref: string,
+): Promise<unknown> {
+  const raw = await recordStore.getBlob(ref);
+  if (raw === null) return { missing: true, ref };
+  try {
+    const value: unknown = JSON.parse(raw);
+    if (isTruncatedBlob(value)) {
+      return {
+        truncated: true,
+        bytes: value.bytes,
+        sha256: value.sha256,
+        head: value.head,
+      };
+    }
+    return value;
+  } catch {
+    return raw;
+  }
+}
+
+/**
+ * Merge a recorded run into the serializable time-travel view. `focusTurn`
+ * additionally resolves that turn's FULL tool input/output payloads from the
+ * blob store (every other turn stays a summary — the log can be large).
+ */
+export async function buildReplayView(
+  recordStore: RecordStore,
+  run: ReplayRun,
+  focusTurn?: number,
+): Promise<ReplayRunView> {
+  const turns: ReplayTurnView[] = [];
+  for (const turn of run.turns) {
+    const toolCalls: ReplayToolCallView[] = [];
+    for (const call of turn.toolCalls) {
+      const view: ReplayToolCallView = {
+        idx: call.idx,
+        name: call.name,
+        ok: call.ok,
+        durationMs: call.durationMs,
+      };
+      if (focusTurn === turn.turn) {
+        view.input = await blobForDisplay(recordStore, call.inputRef);
+        view.output = await blobForDisplay(recordStore, call.outputRef);
+      }
+      toolCalls.push(view);
+    }
+    turns.push({
+      turn: turn.turn,
+      prompt: turn.prompt,
+      settled: turn.end !== undefined,
+      ...(turn.end !== undefined ? { steps: turn.end.steps } : {}),
+      ...(turn.end?.stopReason !== undefined
+        ? { stopReason: turn.end.stopReason }
+        : {}),
+      changedFiles: turn.end?.changedFiles ?? [],
+      ...(turn.end !== undefined ? { usage: turn.end.usage } : {}),
+      toolCalls,
+    });
+  }
+  return {
+    sid: run.sid,
+    ...(run.meta?.model !== undefined ? { model: run.meta.model } : {}),
+    ...(run.meta?.agent !== undefined ? { agent: run.meta.agent } : {}),
+    ...(run.meta?.cliVersion !== undefined
+      ? { cliVersion: run.meta.cliVersion }
+      : {}),
+    ...(run.meta?.gitHead !== undefined ? { gitHead: run.meta.gitHead } : {}),
+    ...(run.meta !== null
+      ? { cwd: run.meta.cwd, prompt: run.meta.prompt }
+      : {}),
+    lastSettledTurn: run.lastSettledTurn,
+    turns,
+    feedback: run.feedback.map((f) => ({
+      verdict: f.verdict,
+      ...(f.comment !== undefined ? { comment: f.comment } : {}),
+    })),
+    distills: run.distills.map((d) => ({
+      reason: d.reason,
+      isPushed: d.isPushed,
+      ...(d.datasetSlug !== undefined ? { datasetSlug: d.datasetSlug } : {}),
+    })),
+  };
+}
+
+/** Indent a pretty-printed JSON payload under its label line. */
+function indentPayload(value: unknown, pad: string): string {
+  const text =
+    typeof value === "string" ? value : JSON.stringify(value, null, 2);
+  return text
+    .split("\n")
+    .map((line) => pad + line)
+    .join("\n");
+}
+
+/** Render the time-travel view for humans (json mode emits the view itself). */
+export function renderReplayView(
+  view: ReplayRunView,
+  focusTurn?: number,
+): string {
+  const lines: string[] = [];
+  const settled = `${view.lastSettledTurn} settled turn(s)`;
+  lines.push(
+    `run ${view.sid} — ${settled}${view.model ? ` · model ${view.model}` : ""}`,
+  );
+  if (view.gitHead)
+    lines.push(`  git ${view.gitHead.slice(0, 12)} · cwd ${view.cwd ?? "?"}`);
+  if (view.cliVersion || view.agent) {
+    const parts: string[] = [];
+    if (view.agent) parts.push(`agent ${view.agent}`);
+    if (view.cliVersion) parts.push(`cli ${view.cliVersion}`);
+    lines.push(`  ${parts.join(" · ")}`);
+  }
+  for (const f of view.feedback) {
+    lines.push(
+      `  feedback: ${f.verdict}${f.comment ? ` — ${clip(f.comment, 80)}` : ""}`,
+    );
+  }
+  for (const d of view.distills) {
+    lines.push(
+      `  distilled (${d.reason}) → ${d.isPushed ? `pushed to ${d.datasetSlug ?? "platform"}` : "local only"}`,
+    );
+  }
+  for (const turn of view.turns) {
+    lines.push("");
+    const status = turn.settled
+      ? `${turn.steps ?? 0} step(s)${turn.stopReason ? ` · ${turn.stopReason}` : ""}`
+      : "never settled";
+    lines.push(`turn ${turn.turn} (${status}) — ${clip(turn.prompt, 100)}`);
+    for (const call of turn.toolCalls) {
+      lines.push(
+        `  tool ${call.name} ${call.ok ? "✓" : "✗"} ${Math.round(call.durationMs)}ms`,
+      );
+      if (focusTurn === turn.turn) {
+        lines.push(`    input:\n${indentPayload(call.input, "      ")}`);
+        lines.push(`    output:\n${indentPayload(call.output, "      ")}`);
+      }
+    }
+    if (turn.changedFiles.length > 0)
+      lines.push(`  changed: ${turn.changedFiles.join(", ")}`);
+    if (turn.usage) {
+      lines.push(
+        `  usage: ${turn.usage.inputTokens}→${turn.usage.outputTokens} tok · $${turn.usage.costUsd.toFixed(4)}`,
+      );
+    }
+  }
+  return lines.join("\n");
+}
+
+export interface FleetReplayOptions extends CommonOptions {
+  /** Focus turn: print this turn's FULL tool input/output payloads. */
+  turn?: string;
+  /** Run the integrity check; exit 1 when it fails. */
+  verify?: boolean;
+}
+
+/**
+ * `oxagen fleet replay <sid>` — the time-travel debugger view of a recorded
+ * run: run identity, then per turn the prompt, tool calls, changed files, and
+ * usage. `--turn N` resolves that turn's full tool I/O from the blob store;
+ * `--verify` checks every ref resolves and hashes clean (exit 1 when not).
+ */
+export async function handleFleetReplay(
+  sidRef: string,
+  opts: FleetReplayOptions = {},
+  writer: CommandWriter = stdoutWriter,
+): Promise<void> {
+  const out = createOutput({ json: opts.json, quiet: opts.quiet }, writer);
+  const store = openStore(opts.cwd);
+  const opened = await openRecordedRun(store, sidRef, out);
+  if (!opened) return;
+
+  let focusTurn: number | undefined;
+  if (opts.turn !== undefined) {
+    const parsed = parseTurnFlag(opts.turn, 1);
+    if (parsed === null) {
+      out.error(
+        `invalid --turn "${opts.turn}". Use a positive integer.`,
+        "usage",
+      );
+      process.exitCode = 2;
+      return;
+    }
+    focusTurn = parsed;
+  }
+
+  const view = await buildReplayView(opened.recordStore, opened.run, focusTurn);
+  const verify = opts.verify
+    ? await verifyRun(opened.recordStore, opened.run)
+    : null;
+
+  if (out.isJson) {
+    out.data(verify !== null ? { ...view, verify } : view);
+  } else {
+    writer.write(renderReplayView(view, focusTurn));
+    if (verify !== null) {
+      writer.write("");
+      writer.write(
+        verify.ok
+          ? `verify: ok — ${verify.refsChecked} ref(s) checked`
+          : `verify: FAILED — ${verify.refsChecked} ref(s) checked`,
+      );
+      for (const issue of verify.issues) writer.write(`  ✗ ${issue}`);
+    }
+  }
+  if (verify !== null && !verify.ok && !process.exitCode) process.exitCode = 1;
+}
+
+// ── bisect ───────────────────────────────────────────────────────────────────
+
+export interface FleetBisectOptions extends CommonOptions {
+  /** Predicate command (`sh -c`), run inside the restored tree; exit 0 = good. */
+  cmd?: string;
+  /** Known-good turn (state AFTER it passes the predicate). Default 0. */
+  good?: string;
+  /** Known-bad turn. Default: the run's last settled turn. */
+  bad?: string;
+  /** Injectable exec port (tests). */
+  execImpl?: ExecPort;
+  /** Injectable predicate runner (tests). */
+  runShellImpl?: (cmd: string, cwd: string) => Promise<number>;
+}
+
+/**
+ * `oxagen fleet bisect <sid> --cmd <shell>` — `git bisect` for agent runs.
+ * Binary-searches (goodTurn, badTurn] restoring the recorded tree at each
+ * probed turn into a scratch worktree under `<fleetRoot>/scratch/` and running
+ * the predicate there. Assumes monotonic badness (once doomed, stays doomed),
+ * exactly like git bisect; endpoints are trusted, not probed.
+ */
+export async function handleFleetBisect(
+  sidRef: string,
+  opts: FleetBisectOptions = {},
+  writer: CommandWriter = stdoutWriter,
+): Promise<void> {
+  const out = createOutput({ json: opts.json, quiet: opts.quiet }, writer);
+  const cmd = opts.cmd?.trim();
+  if (!cmd) {
+    out.error("bisect needs --cmd <shell> (exit 0 = good state).", "usage");
+    process.exitCode = 2;
+    return;
+  }
+  const store = openStore(opts.cwd);
+  const opened = await openRecordedRun(store, sidRef, out);
+  if (!opened) return;
+  const { sid, recordStore, run } = opened;
+  if (!run.meta?.gitHead) {
+    out.error(
+      "this run recorded no git baseline (not a git repository at record time) — cannot restore its tree.",
+      "no_git",
+    );
+    return;
+  }
+  const repoCwd = run.meta.cwd;
+
+  const goodTurn = opts.good !== undefined ? parseTurnFlag(opts.good, 0) : 0;
+  const badTurn =
+    opts.bad !== undefined ? parseTurnFlag(opts.bad, 1) : run.lastSettledTurn;
+  if (goodTurn === null || badTurn === null) {
+    out.error("--good/--bad must be non-negative integers.", "usage");
+    process.exitCode = 2;
+    return;
+  }
+  if (badTurn <= goodTurn) {
+    out.error(
+      `nothing to bisect: good turn ${goodTurn} ≥ bad turn ${badTurn} ` +
+        `(last settled turn is ${run.lastSettledTurn}).`,
+      "usage",
+    );
+    process.exitCode = 2;
+    return;
+  }
+
+  const exec = opts.execImpl ?? realExec;
+  const sh = opts.runShellImpl ?? runShell;
+  const probe = async (turn: number): Promise<boolean> => {
+    const scratch = join(
+      store.rootDir,
+      "scratch",
+      `${sid}-t${turn}-${scratchSuffix()}`,
+    );
+    const restored = await restoreFsAtTurn({
+      store: recordStore,
+      run,
+      turn,
+      targetDir: scratch,
+      exec,
+    });
+    for (const warning of restored.warnings)
+      out.warn(`turn ${turn}: ${warning}`);
+    try {
+      const code = await sh(cmd, scratch);
+      out.info(
+        `probe turn ${turn}: exit ${code} (${code === 0 ? "good" : "bad"})`,
+      );
+      return code === 0;
+    } finally {
+      await removeWorktree({ repoCwd, targetDir: scratch, exec });
+    }
+  };
+
+  let result: Awaited<ReturnType<typeof bisectTurns>>;
+  try {
+    result = await bisectTurns({ goodTurn, badTurn, probe });
+  } catch (err) {
+    out.error(err, "bisect");
+    return;
+  }
+
+  const badView = run.turns.find((t) => t.turn === result.firstBadTurn);
+  const summary = {
+    sid,
+    goodTurn,
+    badTurn,
+    firstBadTurn: result.firstBadTurn,
+    probes: result.probes,
+    prompt: badView?.prompt ?? "",
+    toolCalls: (badView?.toolCalls ?? []).map((c) => ({
+      name: c.name,
+      ok: c.ok,
+      durationMs: c.durationMs,
+    })),
+  };
+  out.data(summary, () => {
+    const lines = [
+      `first bad turn: ${result.firstBadTurn} (bisected ${goodTurn}..${badTurn} in ${result.probes.length} probe(s))`,
+      `  prompt: ${clip(summary.prompt, 100)}`,
+    ];
+    for (const call of summary.toolCalls) {
+      lines.push(
+        `  tool ${call.name} ${call.ok ? "✓" : "✗"} ${Math.round(call.durationMs)}ms`,
+      );
+    }
+    lines.push(
+      `inspect it: oxagen fleet replay ${shortSid(sid)} --turn ${result.firstBadTurn}`,
+    );
+    return lines.join("\n");
+  });
+}
+
+// ── resume ───────────────────────────────────────────────────────────────────
+
+export interface FleetResumeOptions extends CommonOptions {
+  /** Fork point: the state AFTER this turn (0 = session start). Required. */
+  turn?: string;
+  /** Model override for the fork (default: the source run's model). */
+  model?: string;
+  /** Prompt override (default: the source's turn N+1 prompt, else its original prompt). */
+  prompt?: string;
+  /** Injectable exec port (tests). */
+  execImpl?: ExecPort;
+  /** Injectable spawner (tests). */
+  spawnImpl?: DispatchDetachedOptions["spawnImpl"];
+}
+
+/**
+ * `oxagen fleet resume <sid> --turn N` — fork a recorded session: restore the
+ * tree as it stood after turn N into a scratch worktree, then dispatch a
+ * detached session there whose history is reconstructed from the record
+ * (`meta.resumeOf`). The fork records normally, so forks are replayable. The
+ * scratch worktree is the caller's to clean.
+ */
+export async function handleFleetResume(
+  sidRef: string,
+  opts: FleetResumeOptions = {},
+  writer: CommandWriter = stdoutWriter,
+): Promise<void> {
+  const out = createOutput({ json: opts.json, quiet: opts.quiet }, writer);
+  if (opts.turn === undefined) {
+    out.error("resume needs --turn <n> (0 = session start).", "usage");
+    process.exitCode = 2;
+    return;
+  }
+  const store = openStore(opts.cwd);
+  const opened = await openRecordedRun(store, sidRef, out);
+  if (!opened) return;
+  const { sid, meta, recordStore, run } = opened;
+
+  const turn = parseTurnFlag(opts.turn, 0);
+  if (turn === null || turn > run.lastSettledTurn) {
+    out.error(
+      `invalid --turn "${opts.turn}" — use 0..${run.lastSettledTurn} (the run's last settled turn).`,
+      "usage",
+    );
+    process.exitCode = 2;
+    return;
+  }
+  if (!run.meta?.gitHead) {
+    out.error(
+      "this run recorded no git baseline (not a git repository at record time) — cannot restore its tree.",
+      "no_git",
+    );
+    return;
+  }
+
+  const exec = opts.execImpl ?? realExec;
+  const scratch = join(
+    store.rootDir,
+    "scratch",
+    `resume-${sid}-t${turn}-${scratchSuffix()}`,
+  );
+  try {
+    const restored = await restoreFsAtTurn({
+      store: recordStore,
+      run,
+      turn,
+      targetDir: scratch,
+      exec,
+    });
+    for (const warning of restored.warnings) out.warn(warning);
+  } catch (err) {
+    out.error(err, "restore");
+    return;
+  }
+
+  // Prompt: explicit override, else the turn the source ran NEXT (rerun it
+  // against the fork), else the run's original prompt.
+  const nextPrompt = run.turns.find((t) => t.turn === turn + 1)?.prompt;
+  const prompt =
+    opts.prompt ??
+    (nextPrompt && nextPrompt !== "" ? nextPrompt : run.meta.prompt);
+  const model = opts.model ?? run.meta.model ?? meta.model;
+
+  const { sid: newSid, title } = await dispatchDetachedSession({
+    cwd: scratch,
+    // Stay in the SOURCE project's fleet: the scratch worktree would hash to
+    // its own fleet root, stranding the worker away from this session's meta
+    // and the source record (see DispatchDetachedOptions.fleetCwd).
+    fleetCwd: opts.cwd ?? process.cwd(),
+    prompt,
+    resumeOf: { sid, turn },
+    store,
+    ...(model !== undefined ? { model } : {}),
+    ...(meta.agent !== undefined ? { agent: meta.agent } : {}),
+    ...(opts.spawnImpl !== undefined ? { spawnImpl: opts.spawnImpl } : {}),
+  });
+
+  out.data(
+    {
+      sid: newSid,
+      title,
+      resumedFrom: { sid, turn },
+      scratchDir: scratch,
+      prompt,
+      model: model ?? null,
+    },
+    () =>
+      [
+        `resumed ${shortSid(sid)} after turn ${turn} → ${newSid}`,
+        `  worktree: ${scratch} (yours to clean when done)`,
+        `  watch it: oxagen fleet attach ${shortSid(newSid)}`,
+      ].join("\n"),
+  );
+}
+
+// ── feedback ─────────────────────────────────────────────────────────────────
+
+export interface FleetFeedbackOptions extends CommonOptions {
+  /** Optional free-text comment attached to the verdict. */
+  message?: string;
+}
+
+/**
+ * Build the evals-v1 item for a recorded run: prompt as input, provenance +
+ * failure forensics as metadata (last envelope error, changed-file union).
+ */
+async function buildDistilledItem(args: {
+  store: SessionStore;
+  run: ReplayRun;
+  meta: SessionMetaView;
+  reason: DistillReason;
+  feedbackComment?: string;
+}): Promise<DistilledEvalItem> {
+  const { run, meta } = args;
+  // The record has no error events — the last salient error lives on the envelope.
+  const events = await args.store.readEvents(meta.sid);
+  const errors = events.filter((e) => e.type === "error");
+  const lastError = errors[errors.length - 1]?.message;
+  const changedFiles = [
+    ...new Set(run.turns.flatMap((t) => t.end?.changedFiles ?? [])),
+  ];
+  return distillEvalItem({
+    sid: meta.sid,
+    prompt: run.meta?.prompt ?? meta.prompt,
+    reason: args.reason,
+    fate: meta.state,
+    model: run.meta?.model ?? meta.model,
+    agent: run.meta?.agent ?? meta.agent,
+    turns: run.lastSettledTurn,
+    errorMessage: lastError,
+    changedFiles,
+    feedbackComment: args.feedbackComment,
+    cliVersion: run.meta?.cliVersion,
+    gitHead: run.meta?.gitHead,
+    distilledAt: Date.now(),
+  });
+}
+
+/** Blob-store the item + write the human-readable `record/distilled.json` copy. */
+async function persistDistilledItem(
+  recordStore: RecordStore,
+  item: DistilledEvalItem,
+): Promise<string> {
+  const blob = await recordStore.putJsonBlob(item);
+  await writeFile(
+    join(recordStore.rootDir, "distilled.json"),
+    JSON.stringify(item, null, 2) + "\n",
+  );
+  return blob.ref;
+}
+
+/**
+ * `oxagen fleet feedback <sid> up|down` — append a human verdict to a finished
+ * session's record log (NOT the envelope — no public-contract change). A
+ * thumbs-down auto-distills the run into a local eval item, like a failure.
+ */
+export async function handleFleetFeedback(
+  sidRef: string,
+  verdict: string,
+  opts: FleetFeedbackOptions = {},
+  writer: CommandWriter = stdoutWriter,
+): Promise<void> {
+  const out = createOutput({ json: opts.json, quiet: opts.quiet }, writer);
+  if (verdict !== "up" && verdict !== "down") {
+    out.error(
+      `feedback verdict must be "up" or "down" (got "${verdict}").`,
+      "usage",
+    );
+    process.exitCode = 2;
+    return;
+  }
+  const store = openStore(opts.cwd);
+  const opened = await openRecordedRun(store, sidRef, out);
+  if (!opened) return;
+  const { sid, meta, recordStore, run } = opened;
+  if (!TERMINAL_STATES.has(meta.state)) {
+    out.error(
+      `session ${shortSid(sid)} is ${meta.derivedState}; feedback needs a finished (done/failed/cancelled) session.`,
+      "not_terminal",
+    );
+    return;
+  }
+
+  const records = await recordStore.readRecords();
+  const recordWriter = openPostHocWriter(recordStore, sid, records);
+  const comment = opts.message?.trim();
+  recordWriter.append({
+    t: "feedback",
+    verdict,
+    ...(comment ? { comment } : {}),
+  });
+
+  // A thumbs-down IS a failure signal — distill exactly like the runner's
+  // failed path, with the human's reason and comment attached.
+  let isDistilled = false;
+  if (verdict === "down") {
+    try {
+      const item = await buildDistilledItem({
+        store,
+        run,
+        meta,
+        reason: "thumbs_down",
+        ...(comment ? { feedbackComment: comment } : {}),
+      });
+      const itemRef = await persistDistilledItem(recordStore, item);
+      recordWriter.append({
+        t: "distill",
+        reason: "thumbs_down",
+        itemRef,
+        isPushed: false,
+      });
+      isDistilled = true;
+    } catch (err) {
+      // Best-effort like the runner's path: the verdict still lands.
+      out.warn(
+        `could not distill: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+  await recordWriter.flush();
+
+  out.data({ sid, verdict, ...(comment ? { comment } : {}), isDistilled }, () =>
+    [
+      `recorded ${verdict === "up" ? "👍" : "👎"} on ${shortSid(sid)}${comment ? ` — ${clip(comment, 80)}` : ""}`,
+      ...(isDistilled
+        ? [
+            `distilled to record/distilled.json — push it: oxagen fleet distill ${shortSid(sid)} --push`,
+          ]
+        : []),
+    ].join("\n"),
+  );
+}
+
+// ── distill ──────────────────────────────────────────────────────────────────
+
+/** Reason precedence for a manual distill: thumbs-down → failed → manual. */
+export function distillReasonFor(run: ReplayRun, state: string): DistillReason {
+  if (run.feedback.some((f) => f.verdict === "down")) return "thumbs_down";
+  if (state === "failed") return "failed";
+  return "manual";
+}
+
+/** Find the dataset with `slug`, or create it; returns its public id. */
+async function findOrCreateDataset(slug: string): Promise<string> {
+  const { datasets } = await apiGetOrThrow<{
+    datasets: Array<{ datasetId: string; slug: string }>;
+  }>("eval/datasets");
+  const existing = datasets.find((d) => d.slug === slug);
+  if (existing) return existing.datasetId;
+  const created = await apiPostOrThrow<{
+    datasetId: string;
+    publicId: string;
+    slug: string;
+  }>("eval/datasets", {
+    name: slug === DISTILL_DATASET_SLUG ? "Fleet distilled failures" : slug,
+    slug,
+  });
+  return created.publicId;
+}
+
+export interface FleetDistillOptions extends CommonOptions {
+  /** Push the item to the platform through the governed eval.* capabilities. */
+  push?: boolean;
+  /** Target dataset slug (default: the shared fleet-distilled-failures dataset). */
+  dataset?: string;
+}
+
+/**
+ * `oxagen fleet distill <sid>` — turn a recorded run into an evals-v1 dataset
+ * item: written locally to `record/distilled.json` always; `--push` also
+ * find-or-creates the dataset by slug and adds the item via the existing
+ * `eval.dataset.*` capabilities (metered, IAM-gated — no new contract surface).
+ */
+export async function handleFleetDistill(
+  sidRef: string,
+  opts: FleetDistillOptions = {},
+  writer: CommandWriter = stdoutWriter,
+): Promise<void> {
+  const out = createOutput({ json: opts.json, quiet: opts.quiet }, writer);
+  const store = openStore(opts.cwd);
+  const opened = await openRecordedRun(store, sidRef, out);
+  if (!opened) return;
+  const { sid, meta, recordStore, run } = opened;
+
+  const reason = distillReasonFor(run, meta.state);
+  const downComment = [...run.feedback]
+    .reverse()
+    .find((f) => f.verdict === "down")?.comment;
+  let item: DistilledEvalItem;
+  try {
+    item = await buildDistilledItem({
+      store,
+      run,
+      meta,
+      reason,
+      ...(downComment !== undefined ? { feedbackComment: downComment } : {}),
+    });
+  } catch (err) {
+    out.error(err, "distill"); // e.g. a run with an empty prompt
+    return;
+  }
+  const itemRef = await persistDistilledItem(recordStore, item);
+
+  const datasetSlug = opts.dataset ?? DISTILL_DATASET_SLUG;
+  let isPushed = false;
+  let pushError: string | null = null;
+  if (opts.push) {
+    if (!resolveApiContext()) {
+      pushError =
+        "not logged in — run `oxagen login` (or set OXAGEN_API_TOKEN / OXAGEN_ORG_ID / " +
+        "OXAGEN_WORKSPACE_ID) before --push. The item was still written locally.";
+    } else {
+      try {
+        const datasetPublicId = await findOrCreateDataset(datasetSlug);
+        await apiPostOrThrow("eval/datasets/items", {
+          datasetPublicId,
+          items: [item],
+        });
+        isPushed = true;
+      } catch (err) {
+        pushError = err instanceof Error ? err.message : String(err);
+      }
+    }
+  }
+
+  // The distill record's isPushed reflects reality — including a failed push.
+  const records = await recordStore.readRecords();
+  const recordWriter = openPostHocWriter(recordStore, sid, records);
+  recordWriter.append({
+    t: "distill",
+    reason,
+    itemRef,
+    ...(opts.push ? { datasetSlug } : {}),
+    isPushed,
+  });
+  await recordWriter.flush();
+
+  if (pushError !== null) {
+    out.error(pushError, "push");
+    return;
+  }
+  out.data(
+    {
+      sid,
+      reason,
+      itemRef,
+      isPushed,
+      ...(opts.push ? { datasetSlug } : {}),
+      item,
+    },
+    () =>
+      [
+        `distilled ${shortSid(sid)} (${reason}) → record/distilled.json`,
+        isPushed
+          ? `pushed to dataset "${datasetSlug}"`
+          : `local only — push it: oxagen fleet distill ${shortSid(sid)} --push`,
+      ].join("\n"),
   );
 }
 
@@ -800,7 +1737,8 @@ export async function handleFleetWorker(
   pidWriter.patchMeta({ pid: process.pid });
   await pidWriter.flush();
 
-  const runSession = opts.runSessionImpl ?? (await import("../sessions/runner.js")).runSession;
+  const runSession =
+    opts.runSessionImpl ?? (await import("../sessions/runner.js")).runSession;
   const { state } = await runSession({ store, meta });
   return { code: state === "done" ? 0 : state === "cancelled" ? 130 : 1 };
 }
@@ -828,7 +1766,9 @@ export async function handleFleetRoot(
       autoJson: true,
       // One TTY truth: the injected override must steer autoJson AND the
       // interactive branch below, or a test/caller can land in a mode split.
-      ...(opts.stdoutIsTTY !== undefined ? { stdoutIsTTY: opts.stdoutIsTTY } : {}),
+      ...(opts.stdoutIsTTY !== undefined
+        ? { stdoutIsTTY: opts.stdoutIsTTY }
+        : {}),
     },
     writer,
   );
@@ -861,13 +1801,18 @@ export async function handleFleetRoot(
  * Boot Mission Control over this project's fleet. The manager (and through it
  * the engine) loads lazily — headless verbs never pay for Ink or the runner.
  */
-async function launchMissionControlFor(cwd: string | undefined, focusSid?: string): Promise<void> {
+async function launchMissionControlFor(
+  cwd: string | undefined,
+  focusSid?: string,
+): Promise<void> {
   const projectCwd = cwd ?? process.cwd();
   const store = openStore(cwd);
-  const [{ FleetSessionManager }, { launchMissionControl }] = await Promise.all([
-    import("../sessions/manager.js"),
-    import("../tui/mission-control/index.js"),
-  ]);
+  const [{ FleetSessionManager }, { launchMissionControl }] = await Promise.all(
+    [
+      import("../sessions/manager.js"),
+      import("../tui/mission-control/index.js"),
+    ],
+  );
   const manager = new FleetSessionManager({ store, cwd: projectCwd });
   await launchMissionControl({
     store,
