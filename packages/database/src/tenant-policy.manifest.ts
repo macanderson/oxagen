@@ -107,14 +107,6 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "billing.org_billing_profiles", policyClass: "org_only" },
   { table: "billing.org_billing_settings", policyClass: "org_only" },
   { table: "billing.billing_disputes", policyClass: "org_only" },
-  // Reseller Revenue — org-only tenant_isolation RLS created in
-  // 20260725120000_reseller_revenue.sql (Stripe-for-agents re-bill loop).
-  { table: "billing.reseller_price_plans", policyClass: "org_only" },
-  { table: "billing.reseller_customers", policyClass: "org_only" },
-  { table: "billing.reseller_attribution_rules", policyClass: "org_only" },
-  { table: "billing.reseller_rebill_runs", policyClass: "org_only" },
-  { table: "billing.reseller_rebill_line_items", policyClass: "org_only" },
-  { table: "billing.reseller_settings", policyClass: "org_only" },
   // Reseller revenue tables (20260725120000_reseller_revenue.sql). All six
   // carry org_id NOT NULL, no workspace_id → org_only. The migration created
   // ENABLE/FORCE RLS + tenant_isolation inline with the identical org_only
@@ -239,6 +231,10 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // Per-turn budget governance (OXA-2081). org_id + workspace_id both NOT NULL
   // → standard tenant_isolation RLS.
   { table: "workspace.workspace_budget_policy", policyClass: "standard" },
+  // Verified-Outcome Market Router governance. org_id NOT NULL, workspace_id
+  // NULLABLE (a NULL row is the org-level default routing policy for every
+  // workspace) → workspace_nullable tenant_isolation RLS.
+  { table: "workspace.routing_policy", policyClass: "workspace_nullable" },
 
   // ── environments.* — Agent Environments & Credential Vault (Phase 0, Spec §5).
   //   All four carry org_id + workspace_id NOT NULL → standard tenant_isolation.

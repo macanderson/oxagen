@@ -40,6 +40,12 @@ import {
 import { enhancePrompt } from "../evaluate/prompt-enhancer";
 import { createSpecTestTracker } from "../oracle/spec-test";
 import {
+  runMutationGate,
+  applyGateToVerdict,
+  resolveMutationVerifyEnabled,
+  type MutationGateResult,
+} from "../verify";
+import {
   specGateInstruction,
   shouldInjectSpecGate,
   buildLadderSignals,
@@ -47,6 +53,7 @@ import {
   resolveJudgeSkipEnabled,
   shouldSkipJudgeReadOnly,
 } from "./wiring";
+import { createHash } from "node:crypto";
 import {
   classifyTier,
   modelForTier,
@@ -54,7 +61,14 @@ import {
   tierLabel,
   accumulateUsage,
 } from "../router/model-router";
-import { projectCost } from "../router/rate-card";
+import { estimateCostUsd, projectCost } from "../router/rate-card";
+import {
+  deriveTaskClass,
+  decideMarketRoute,
+  escalateTier,
+  type MarketRoutingPolicy,
+  type RoutingStatRow,
+} from "../router/market-router";
 import { emptyUsage, mergeUsage } from "../types";
 import type {
   ModelTier,
@@ -266,6 +280,22 @@ export interface RunTurnOptions {
    */
   judgeModels?: string[];
   /**
+   * Mutation gate (layer 1): after a judged-complete round, revert the fix in
+   * a shadow (test files stay put), re-run the agent's own witness test
+   * command, and demand a failure — a test that still passes without the fix
+   * witnesses nothing, and the verdict is overridden back into the revise
+   * loop. ON by default (`OXAGEN_MUTATION_VERIFY=0` disables); this explicit
+   * option wins over the env var. Deterministic — zero model calls.
+   */
+  mutationVerify?: boolean;
+  /**
+   * Mutation gate layer 2: when the witness check passes, additionally apply
+   * deterministic one-line mutants to the fix's added lines and measure the
+   * kill rate (how many mutants the tests catch). Each mutant costs one
+   * witness-command run, so this is opt-in (or `OXAGEN_MUTATION_SCORE=1`).
+   */
+  mutationScore?: boolean;
+  /**
    * TRIAGE / coordinator model — drives the pre-execution EVALUATE stage
    * (`evaluatePrompt`). Set via `/triage-model`. When set, the evaluator runs
    * this model instead of the free local heuristic; undefined ⇒ `OXAGEN_LLM_EVALUATOR`
@@ -305,6 +335,27 @@ export interface RunTurnOptions {
   budgetGuard?: (
     usage: RunCodingAgentResult["usage"],
   ) => Promise<"continue" | "stop">;
+  /**
+   * Verified-Outcome Market Router policy for this turn. Absent / `mode: "off"`
+   * ⇒ exactly today's deterministic routing (the default). `shadow` computes the
+   * market decision, records the outcome, and annotates the trace but keeps
+   * today's routing. `enforce` uses the market decision for the worker model and
+   * escalates the worker one tier when the judge rejects a revision round.
+   */
+  routingPolicy?: MarketRoutingPolicy;
+  /**
+   * Pre-fetched observed-outcome stats snapshot the market router reads (the
+   * engine has no ClickHouse access — a server caller injects this). Absent ⇒
+   * the market router always falls back to deterministic routing.
+   */
+  routingStats?: RoutingStatRow[];
+  /**
+   * Fire-and-forget sink for each round's routing outcome (task class, model,
+   * verified?, cost, latency, mode). A server caller wires this to
+   * `recordRouterOutcome`. MUST NOT throw into the pipeline — the engine wraps
+   * it defensively, but keep it side-effect-only.
+   */
+  onRouteOutcome?: (outcome: RouteOutcome) => void | Promise<void>;
   /**
    * Fired once, after ROUTE and before EXECUTE, with a full pre-execution
    * snapshot (enhanced prompt + estimated cost). Always non-blocking display —
@@ -551,7 +602,12 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
 
   // ── 3. ROUTE ──
   const routeStart = Date.now();
-  const routed = selectModel(opts.model, evaluation);
+  // Market-aware routing (flag-gated). `routed` is mutated in place when the
+  // market router escalates the worker tier on a judge rejection — runSegment
+  // reads `routed.model` at call time, so the escalated model flows into the
+  // next round. The INITIAL worker model is captured for budget-guard repricing.
+  const routed = selectMarketModel(opts, evaluation);
+  const initialWorkerModel = routed.model;
   phases.push(phaseStat("route", 0, routeStart, undefined, emptyUsage()));
   opts.onStage?.({
     kind: "route",
@@ -574,6 +630,9 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
     opts.maxReviseRounds ?? envMaxReviseRounds ?? 1,
   );
   const judgeRounds: JudgeVerdict[] = [];
+  // One entry per judged-complete round the mutation gate examined (usually
+  // exactly one — the loop breaks after a complete verdict survives the gate).
+  const mutationGates: MutationGateResult[] = [];
   let history = opts.history ?? [];
   let prompt = enhanced.prompt;
 
@@ -687,18 +746,60 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
     outputTokens: 0,
     cachedInputTokens: 0,
   };
+  // Budget-guard tier-escalation repricing. The caller's guard prices the whole
+  // turn against ONE reference model, but market-router `enforce` mode can
+  // escalate the worker to a pricier tier mid-turn. The token-based guard closure
+  // can't be re-keyed to a new model, so we reprice the ESCALATION DELTA against
+  // the engine rate card here: the current round's tokens are scaled by the cost
+  // ratio of the running model vs the turn's INITIAL worker model, and each
+  // completed escalated round's premium accumulates in `budgetEscalationPremium`
+  // (the reset-from-`usage` baseline below is raw tokens and would otherwise lose
+  // it). When nothing escalates (routed.model === initialWorkerModel) the factor
+  // is exactly 1, so a non-escalated turn is byte-identical to before this
+  // feature. Exact when the guard's reference model equals the initial worker
+  // (the common/pinned case); a conservative premium approximation otherwise.
+  const budgetEscalationPremium = {
+    inputTokens: 0,
+    outputTokens: 0,
+    cachedInputTokens: 0,
+  };
+  const escalationFactor = (u: {
+    inputTokens?: number;
+    outputTokens?: number;
+    cachedInputTokens?: number;
+  }): number => {
+    if (routed.model === initialWorkerModel) return 1;
+    const usage = {
+      inputTokens: u.inputTokens ?? 0,
+      outputTokens: u.outputTokens ?? 0,
+      cachedTokens: u.cachedInputTokens ?? 0,
+    };
+    const base = estimateCostUsd(initialWorkerModel, usage);
+    if (base <= 0) return 1;
+    return estimateCostUsd(routed.model, usage) / base;
+  };
   const turnBudgetGuard: RunTurnOptions["budgetGuard"] = opts.budgetGuard
-    ? (u) =>
-        opts.budgetGuard!({
-          inputTokens: budgetBaseline.inputTokens + (u.inputTokens ?? 0),
-          outputTokens: budgetBaseline.outputTokens + (u.outputTokens ?? 0),
-          totalTokens:
-            budgetBaseline.inputTokens +
-            budgetBaseline.outputTokens +
-            (u.totalTokens ?? 0),
-          cachedInputTokens:
-            budgetBaseline.cachedInputTokens + (u.cachedInputTokens ?? 0),
-        })
+    ? (u) => {
+        const f = escalationFactor(u);
+        const inputTokens =
+          budgetBaseline.inputTokens +
+          budgetEscalationPremium.inputTokens +
+          (u.inputTokens ?? 0) * f;
+        const outputTokens =
+          budgetBaseline.outputTokens +
+          budgetEscalationPremium.outputTokens +
+          (u.outputTokens ?? 0) * f;
+        const cachedInputTokens =
+          budgetBaseline.cachedInputTokens +
+          budgetEscalationPremium.cachedInputTokens +
+          (u.cachedInputTokens ?? 0) * f;
+        return opts.budgetGuard!({
+          inputTokens,
+          outputTokens,
+          totalTokens: inputTokens + outputTokens,
+          cachedInputTokens,
+        });
+      }
     : undefined;
 
   // Mid-session judge: run the agent in two halves on round 0, checking
@@ -1120,11 +1221,133 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
       });
     }
 
+    // ── 5b. MUTATION GATE (deterministic, zero model calls) ──
+    // A judged-complete coding turn must prove its tests witness the fix:
+    // revert the fix in a shadow (tests stay put), re-run the agent's own
+    // passing test command, and demand a failure. Still green without the
+    // fix ⇒ the green is false — override the verdict so the EXISTING revise
+    // loop sends the agent back before the user ever sees it. Fail-open: any
+    // condition the gate can't check faithfully yields "skipped", and the
+    // shadow is always restored (a failed restore throws — loudly).
+    if (
+      verdict.complete &&
+      !opts.readOnly &&
+      !opts.signal?.aborted &&
+      resolveMutationVerifyEnabled(process.env, opts.mutationVerify) &&
+      result.diff.trim() !== ""
+    ) {
+      const gateStart = Date.now();
+      const timeoutEnv = Number(process.env["OXAGEN_MUTATION_TIMEOUT_MS"]);
+      const gate = await runMutationGate(
+        opts.workspace,
+        result.diff,
+        { lastOutcomes: tracker.lastOutcomes(), flippedBy: tracker.flippedBy() },
+        {
+          score:
+            opts.mutationScore ??
+            Boolean(process.env["OXAGEN_MUTATION_SCORE"]),
+          ...(Number.isFinite(timeoutEnv) && timeoutEnv > 0
+            ? { timeoutMsPerCommand: timeoutEnv }
+            : {}),
+          ...(opts.signal ? { signal: opts.signal } : {}),
+          onStart: ({ commands }) =>
+            opts.onStage?.({
+              kind: "judge",
+              label: "mutation gate: reverting fix to prove the tests witness it",
+              ...(commands[0] ? { detail: commands[0] } : {}),
+            }),
+        },
+      );
+      mutationGates.push(gate);
+      if (gate.status !== "skipped") {
+        opts.onStage?.({
+          kind: "judge",
+          label:
+            gate.status === "witnessed"
+              ? "mutation gate: tests fail without the fix — the green is real"
+              : "mutation gate: VACUOUS — tests still pass without the fix",
+          detail:
+            `${gate.runs.length} witness run(s) · ${gate.durationMs}ms` +
+            (gate.score
+              ? ` · mutant kill rate ${Math.round(gate.score.killRate * 100)}%`
+              : ""),
+        });
+        phases.push(
+          phaseStat(
+            "judge",
+            round,
+            gateStart,
+            "deterministic/mutation-gate",
+            emptyUsage(),
+          ),
+        );
+      }
+      verdict = applyGateToVerdict(verdict, gate);
+    }
+
     phases.push(
       phaseStat("judge", round, judgeStart, verdict.model, verdict.usage),
     );
     usage = mergeUsage(usage, verdict.usage);
     judgeRounds.push(verdict);
+
+    // ── Router outcome (fire-and-forget) ──
+    // Record what the router did this round and whether the work verified, so the
+    // market router can learn each task class's live cost/accuracy curve. Also
+    // fold this round's budget-escalation premium into the accumulator — both use
+    // `routed.model` (the model that just ran), so they MUST run before the
+    // escalation below bumps `routed` for the next round.
+    {
+      // Executed-evidence "tests passed" signal (a failing repro later flipped
+      // to passing). Wins over the judge for the verification source, per spec.
+      const testsGreen = tracker.state() === "flipped";
+      const deterministicVerdict =
+        verdict.model.startsWith("deterministic/") ||
+        verdict.model.startsWith("ladder/");
+      const verificationSource: RouteOutcome["verificationSource"] = testsGreen
+        ? "tests"
+        : deterministicVerdict
+          ? "completion"
+          : "judge";
+      const verified = testsGreen || verdict.complete;
+      const score = testsGreen
+        ? 1
+        : Math.max(0, Math.min(1, verdict.confidence / 100));
+      if (opts.onRouteOutcome) {
+        const outcome: RouteOutcome = {
+          taskClass: routed.taskClass,
+          signatureHash: hashSignature(evaluation.refinedPrompt),
+          model: routed.model,
+          tier: routed.tier,
+          verified,
+          verificationSource,
+          score,
+          costUsdMicros: Math.round(execUsage.costUsd * 1_000_000),
+          latencyMs: Date.now() - execStart,
+          routingMode: routed.routingMode,
+          round,
+        };
+        // A telemetry hook must never throw into the turn — defer into a
+        // microtask so a SYNCHRONOUS throw is caught too, not just a rejection.
+        const hook = opts.onRouteOutcome;
+        void Promise.resolve()
+          .then(() => hook(outcome))
+          .catch(() => {});
+      }
+      if (opts.budgetGuard && routed.model !== initialWorkerModel) {
+        const f = escalationFactor({
+          inputTokens: result.usage.inputTokens,
+          outputTokens: result.usage.outputTokens,
+          cachedInputTokens: result.usage.cachedInputTokens,
+        });
+        budgetEscalationPremium.inputTokens +=
+          (f - 1) * (result.usage.inputTokens ?? 0);
+        budgetEscalationPremium.outputTokens +=
+          (f - 1) * (result.usage.outputTokens ?? 0);
+        budgetEscalationPremium.cachedInputTokens +=
+          (f - 1) * (result.usage.cachedInputTokens ?? 0);
+      }
+    }
 
     // Perf #10: don't spend a full execute+judge round on a low-confidence
     // "incomplete" verdict. `confidence` is the judge's confidence IN its
@@ -1143,6 +1366,30 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
       verdict.confidence >= reviseMinConfidence;
     if (!canRevise) break;
     prompt = buildRevisionPrompt(verdict);
+
+    // ── Market-router tier escalation ──
+    // enforce mode + escalateOnRejection and the judge rejected this round →
+    // spend up one tier for the NEXT revision round (unless a model is pinned, or
+    // we're already at the precise ceiling). runSegment reads `routed.model` at
+    // call time, so mutating it here escalates the next round's worker.
+    if (
+      routed.routingMode === "enforce" &&
+      opts.routingPolicy?.escalateOnRejection &&
+      !opts.model &&
+      routed.tier !== "precise"
+    ) {
+      const nextTier = escalateTier(routed.tier);
+      if (nextTier !== routed.tier) {
+        routed.tier = nextTier;
+        routed.model = modelForTier(nextTier);
+        routed.rationale = `${routed.rationale} · escalated to ${tierLabel(nextTier)} after judge rejection (round ${round + 1})`;
+        opts.onStage?.({
+          kind: "route",
+          label: `escalated · ${tierLabel(nextTier)} (${routed.model.split("/").pop()})`,
+          detail: "judge rejected — market router spending up one tier",
+        });
+      }
+    }
   }
 
   const finalComplete = judgeRounds[judgeRounds.length - 1]?.complete ?? true;
@@ -1169,6 +1416,7 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
     phases,
     toolEvents,
     thinkingLog,
+    mutationGates,
   });
 
   // ── Graph sync: always-on, fire-and-forget, non-blocking. ──
@@ -1268,21 +1516,49 @@ function enhancementSource(
   return "none";
 }
 
+/** How the router settled a turn — `static` (deterministic), `shadow`, or `enforce`. */
+type RoutingMode = "static" | "shadow" | "enforce";
+
 interface RouteResult {
   model: string;
   tier: ModelTier;
   rationale: string;
+  /** The task class this turn was routed for (recorded on every outcome). */
+  taskClass: string;
+  /** Which routing regime settled it — recorded on every outcome. */
+  routingMode: RoutingMode;
+}
+
+/** One recorded routing outcome — emitted per (revise) round via `onRouteOutcome`. */
+export interface RouteOutcome {
+  taskClass: string;
+  /** SHA-256 (hex) of the refined prompt — dedup / drift signal, PII-free. */
+  signatureHash: string;
+  model: string;
+  tier: ModelTier;
+  /** True when the round's work was verified (tests green, or judge complete). */
+  verified: boolean;
+  verificationSource: "tests" | "judge" | "eval" | "completion";
+  /** Confidence / eval score in [0,1]. */
+  score: number;
+  costUsdMicros: number;
+  latencyMs: number;
+  routingMode: RoutingMode;
+  /** The 0-based execute round this outcome is for. */
+  round: number;
 }
 
 /**
- * Pick the executor (worker) model. A manual pin always wins. Otherwise the Haiku
- * evaluator is the authority — it already chose the cheapest tier that does the job
- * well. The deterministic router is consulted only as a one-way SAFETY FLOOR.
+ * Pick the executor (worker) model deterministically. A manual pin always wins.
+ * Otherwise the Haiku evaluator is the authority — it already chose the cheapest
+ * tier that does the job well. The deterministic router is consulted only as a
+ * one-way SAFETY FLOOR. Returns just the base fields; {@link selectMarketModel}
+ * decorates them with taskClass + routingMode.
  */
 function selectModel(
   override: string | undefined,
   evaluation: PromptEvaluation,
-): RouteResult {
+): { model: string; tier: ModelTier; rationale: string } {
   if (override) {
     return {
       model: override,
@@ -1298,6 +1574,80 @@ function selectModel(
     rationale = `safety floor raised to ${tierLabel(tier)} — ${floor.rationale}`;
   }
   return { model: modelForTier(tier), tier, rationale };
+}
+
+/**
+ * Choose the worker model, honoring the Verified-Outcome Market Router policy.
+ *
+ *   - `off` / absent  → exactly today's deterministic {@link selectModel} result.
+ *   - `shadow`        → today's routing runs, but the market decision is computed
+ *                       and annotated onto the rationale (the outcome is recorded
+ *                       for the model that ACTUALLY ran, so shadow learns without
+ *                       changing behavior).
+ *   - `enforce`       → the market decision picks the worker (a manual pin still
+ *                       wins — decideMarketRoute honors `override`).
+ *
+ * The returned {@link RouteResult} carries the task class + routing mode so every
+ * recorded outcome is stamped consistently.
+ */
+export function selectMarketModel(
+  opts: RunTurnOptions,
+  evaluation: PromptEvaluation,
+): RouteResult {
+  const signals = { text: evaluation.refinedPrompt };
+  const taskClass = deriveTaskClass(signals);
+  const deterministic = selectModel(opts.model, evaluation);
+  const policy = opts.routingPolicy;
+  const mode = policy?.mode ?? "off";
+
+  if (policy && mode === "enforce") {
+    const decision = decideMarketRoute({
+      signals,
+      taskClass,
+      stats: opts.routingStats ?? [],
+      policy,
+      override: opts.model,
+    });
+    return {
+      model: decision.model,
+      tier: decision.tier,
+      rationale: `[market:enforce] ${decision.rationale}`,
+      taskClass,
+      routingMode: "enforce",
+    };
+  }
+
+  if (policy && mode === "shadow") {
+    const decision = decideMarketRoute({
+      signals,
+      taskClass,
+      stats: opts.routingStats ?? [],
+      policy,
+      override: opts.model,
+    });
+    // Keep today's routing; annotate what the market WOULD have chosen so a
+    // shadow run is legible on the trace without altering behavior.
+    return {
+      model: deterministic.model,
+      tier: deterministic.tier,
+      rationale: `${deterministic.rationale} · [market:shadow → would pick ${decision.model.split("/").pop()} (${decision.source})]`,
+      taskClass,
+      routingMode: "shadow",
+    };
+  }
+
+  return {
+    model: deterministic.model,
+    tier: deterministic.tier,
+    rationale: deterministic.rationale,
+    taskClass,
+    routingMode: "static",
+  };
+}
+
+/** SHA-256 (hex) of a prompt — the PII-free signature stamped on router outcomes. */
+function hashSignature(text: string): string {
+  return createHash("sha256").update(text).digest("hex");
 }
 
 /** Count real changed lines in a unified diff (ignores +++/--- file headers). Exported for tests. */
@@ -1367,6 +1717,7 @@ interface AssembleArgs {
   phases?: PhaseStat[];
   toolEvents?: ToolEvent[];
   thinkingLog?: Array<{ round: number; text: string }>;
+  mutationGates?: MutationGateResult[];
 }
 
 function assembleTrace(a: AssembleArgs): TurnTrace {
@@ -1406,6 +1757,9 @@ function assembleTrace(a: AssembleArgs): TurnTrace {
     steps: a.steps,
     usage: a.usage,
     durationMs: Date.now() - a.startedAt,
+    ...(a.mutationGates && a.mutationGates.length > 0
+      ? { mutationGates: a.mutationGates }
+      : {}),
     ...(thinking.length > 0 ? { thinkingLog: thinking } : {}),
     ...(a.verbose
       ? {
@@ -1545,6 +1899,8 @@ async function runBare(
       model,
       tier: tierForSlug(model),
       rationale: "bare mode (no routing)",
+      taskClass: deriveTaskClass({ text: opts.prompt }),
+      routingMode: "static",
     },
     response: result.text,
     filesTouched: [...filesTouched],
