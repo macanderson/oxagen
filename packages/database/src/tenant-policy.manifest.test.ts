@@ -173,7 +173,10 @@ describe("tenant policy manifest", () => {
     //      The table + RLS + manifest all shipped; this ratchet and the
     //      manifest-coverage integration test were the missed halves — surfaced once
     //      main CI stopped dying at pnpm install.
-    expect(POLICY_MANIFEST.length).toBe(89);
+    // 90 = 89 + workspace.routing_policy (Verified-Outcome Market Router
+    //      governance, org_id NOT NULL + workspace_id NULLABLE → workspace_nullable
+    //      tenant_isolation RLS, 20260731130700_routing_policy.sql).
+    expect(POLICY_MANIFEST.length).toBe(90);
   });
 
   it("covers slug-history tables for org + workspace renames (OXA-1779)", () => {
