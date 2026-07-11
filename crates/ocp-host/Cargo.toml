@@ -18,6 +18,13 @@ async-trait.workspace = true
 futures-util.workspace = true
 reqwest.workspace = true
 
+[target.'cfg(unix)'.dependencies]
+# Unix process-group creation (setsid) + kill(-pgid): a stdio provider's
+# whole child tree dies on drop/shutdown, never outliving the host
+# (06-context-protocol.md §3.5; 02-architecture.md §8). Same narrow
+# OS-boundary use oxagen-tools' bash tool makes.
+libc.workspace = true
+
 [dev-dependencies]
 tempfile.workspace = true
 wiremock = "0.6"
