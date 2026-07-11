@@ -49,3 +49,30 @@ impl Clock for SystemClock {
         self.origin.elapsed().as_millis() as u64
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn system_clock_starts_near_zero_and_advances_monotonically() {
+        let clock = SystemClock::new();
+        let first = clock.now_ms();
+        std::thread::sleep(std::time::Duration::from_millis(5));
+        let second = clock.now_ms();
+        assert!(second >= first, "clock must never go backwards");
+        assert!(
+            second - first >= 4,
+            "clock must actually advance with wall time"
+        );
+    }
+
+    #[test]
+    fn default_constructs_a_fresh_clock() {
+        let clock = SystemClock::default();
+        assert!(
+            clock.now_ms() < 1000,
+            "a freshly constructed clock starts near zero"
+        );
+    }
+}
