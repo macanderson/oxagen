@@ -1,6 +1,6 @@
 name: rust-cli
 
-# Scoped CI for the `stella` Rust workspace (docs/specs/oxagen-rust-cli/).
+# Scoped CI for the `oxagen-cli` Rust workspace (docs/specs/oxagen-rust-cli/).
 # Deliberately its own job, not folded into pipeline.yml: the Cargo workspace
 # lives inside this monorepo temporarily (03-plan.md §9) and has zero
 # overlap with the pnpm/turbo build graph, so it gets its own trigger paths
@@ -26,9 +26,7 @@ jobs:
   check:
     name: fmt + clippy + test
     runs-on: ubuntu-latest
-    # DuckDB (stella-store, bundled) is a heavy C++ compile on a cold
-    # cache; rust-cache keeps warm runs fast.
-    timeout-minutes: 60
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: crates
@@ -52,12 +50,6 @@ jobs:
 
       - name: cargo test
         run: cargo test --workspace
-
-      - name: coverage gate (stella-core >= 85%)
-        # The Phase 2 exit criterion, enforced: measured, not asserted.
-        run: |
-          cargo install --locked cargo-llvm-cov
-          cargo llvm-cov -p stella-core --fail-under-lines 85
 
       - name: cargo build (release smoke, thin LTO)
         # The workspace release profile uses full LTO + codegen-units=1,

@@ -1,0 +1,24 @@
+[package]
+name = "oxagen-tools"
+description = "Built-in agent tools: read_file, write_file, edit_file, bash, grep, glob. Workspace-root-pinned, timeout-backed, size-capped."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+oxagen-protocol = { path = "../oxagen-protocol" }
+oxagen-core = { path = "../oxagen-core" }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+async-trait.workspace = true
+libc.workspace = true
+toml.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "process", "fs", "io-util"] }
+tempfile.workspace = true
