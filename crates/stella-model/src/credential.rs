@@ -3,9 +3,16 @@
 //! (`docs/specs/oxagen-rust-cli/02-architecture.md` §8).
 //!
 //! Resolution order per `01-product-spec.md` §4: CLI flag -> env var ->
+<<<<<<< HEAD:crates/stella-model/src/credential.rs
 //! provider-native config (`~/.config/stella/credentials.toml` here; AWS
 //! profile / ADC file are Bedrock/Vertex concerns, deferred alongside those
 //! adapters) -> interactive prompt on first use, which never silently fails
+=======
+//! provider-native config (`~/.config/oxagen/credentials.toml` here; the AWS
+//! profile file and Google ADC file remain deferred — the Bedrock/Vertex
+//! adapters take ready credentials from env vars for now, see their module
+//! docs) -> interactive prompt on first use, which never silently fails
+>>>>>>> 19d73e90c2c817ff663b6b16806253aae5141821:crates/oxagen-model/src/credential.rs
 //! with an opaque provider error.
 
 use std::collections::BTreeMap;

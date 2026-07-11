@@ -17,7 +17,12 @@ thiserror.workspace = true
 tokio.workspace = true
 async-trait.workspace = true
 libc.workspace = true
+<<<<<<< HEAD:crates/stella-tools/Cargo.toml
 reqwest.workspace = true
+=======
+toml.workspace = true
+>>>>>>> 19d73e90c2c817ff663b6b16806253aae5141821:crates/oxagen-tools/Cargo.toml
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "process", "fs", "io-util"] }
+tempfile.workspace = true

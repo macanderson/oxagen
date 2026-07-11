@@ -369,6 +369,11 @@ async function _localize(
 ): Promise<LocalizationMap> {
   const scoreMap = new Map<string, FileScore>();
 
+  // One shared wall-clock budget for the whole pass. Every safeQuery gates on
+  // this single timer's event, so short-circuiting after the deadline is
+  // deterministic regardless of monotonic/wall clock skew under load.
+  const gate = createDeadlineGate(deadline);
+
   function touch(path: string): FileScore {
     let entry = scoreMap.get(path);
     if (!entry) {
@@ -398,7 +403,7 @@ async function _localize(
       "search",
       frame.symbol,
       4,
-      deadline,
+      gate,
     );
     if (isHit(searchResult)) {
       for (const p of parseGraphPaths(searchResult)) {
@@ -415,7 +420,7 @@ async function _localize(
       "file_symbols",
       frame.file,
       8,
-      deadline,
+      gate,
     );
     if (isHit(fileResult)) {
       // The file path itself or the paths returned
@@ -434,7 +439,7 @@ async function _localize(
       (p) => (scoreMap.get(p)?.tracebackScore ?? 0) > 0,
     );
     for (const p of tracebackFiles) {
-      const depsResult = await safeQuery(graph, "dependents", p, 5, deadline);
+      const depsResult = await safeQuery(graph, "dependents", p, 5, gate);
       if (isHit(depsResult)) {
         for (const dp of parseGraphPaths(depsResult)) {
           const e = touch(dp);
@@ -442,7 +447,7 @@ async function _localize(
           e.reasons.add(`dependent of traceback file ${p}`);
         }
       }
-      const importsResult = await safeQuery(graph, "imports", p, 5, deadline);
+      const importsResult = await safeQuery(graph, "imports", p, 5, gate);
       if (isHit(importsResult)) {
         for (const ip of parseGraphPaths(importsResult)) {
           const e = touch(ip);
@@ -458,7 +463,7 @@ async function _localize(
   const { symbols, paths } = extractCandidates(issue);
 
   for (const sym of symbols.slice(0, 8)) {
-    const res = await safeQuery(graph, "search", sym, 4, deadline);
+    const res = await safeQuery(graph, "search", sym, 4, gate);
     if (isHit(res)) {
       for (const p of parseGraphPaths(res)) {
         const e = touch(p);
@@ -470,7 +475,7 @@ async function _localize(
   }
 
   for (const path of paths.slice(0, 6)) {
-    const res = await safeQuery(graph, "file_symbols", path, 8, deadline);
+    const res = await safeQuery(graph, "file_symbols", path, 8, gate);
     if (isHit(res)) {
       const resolved = parseGraphPaths(res);
       const targets = resolved.length > 0 ? resolved : [path];
@@ -492,7 +497,7 @@ async function _localize(
       "semantic_search",
       issue,
       5,
-      deadline,
+      gate,
     );
     if (isHit(semResult)) {
       for (const p of parseGraphPaths(semResult)) {
@@ -518,11 +523,76 @@ async function _localize(
   const testHints = nearestTestDirs(ranked.map((f) => f.path));
   const renderedBlock = renderLocalizationMap(ranked, testHints);
 
+  gate.dispose();
+
   return {
     files: ranked,
     testHints,
     tracebackParsed,
     renderedBlock,
+  };
+}
+
+// ── deadline gate ───────────────────────────────────────────────────────────
+
+/**
+ * A single, shared wall-clock budget for one localization pass.
+ *
+ * One timer, one flag. When the budget expires the timer callback flips
+ * `expired` and resolves `timeout`; every subsequent query reads that flag
+ * instead of re-deriving the remaining budget from `Date.now()`. That matters
+ * because `setTimeout` fires against libuv's monotonic loop clock (snapshotted
+ * at the start of the event-loop tick), while `Date.now()` reads the wall
+ * clock — so a per-query timer can resolve a hair *before* `Date.now()` reaches
+ * the deadline, and a naive `remaining = deadline - Date.now()` recheck would
+ * then see a sliver of budget and let one extra query through. Gating on the
+ * timer's own event makes short-circuiting deterministic under load.
+ */
+interface DeadlineGate {
+  /** True once the shared budget timer has fired (or the budget was already spent). */
+  readonly expired: boolean;
+  /**
+   * Resolves to "" when the budget expires; `null` when the budget is
+   * unbounded (no timer, queries await their provider directly).
+   */
+  readonly timeout: Promise<string> | null;
+  /** Release the timer. Idempotent; a no-op when the gate is unbounded. */
+  dispose(): void;
+}
+
+/** Build the shared deadline gate for a pass from an absolute wall-clock deadline. */
+function createDeadlineGate(deadline: number): DeadlineGate {
+  // Unbounded budget: no timer, never expires.
+  if (deadline === Infinity) {
+    return { expired: false, timeout: null, dispose() {} };
+  }
+  const remaining = deadline - Date.now();
+  // Budget already spent before the first query — skip everything.
+  if (remaining <= 0) {
+    return { expired: true, timeout: Promise.resolve(""), dispose() {} };
+  }
+  // Over the max 32-bit timer ⇒ treat as unbounded (a shorter timer would
+  // overflow and fire immediately).
+  if (remaining > MAX_TIMER_MS) {
+    return { expired: false, timeout: null, dispose() {} };
+  }
+  let expired = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<string>((resolve) => {
+    timer = setTimeout(() => {
+      expired = true;
+      resolve("");
+    }, remaining);
+    timer.unref?.();
+  });
+  return {
+    get expired() {
+      return expired;
+    },
+    timeout,
+    dispose() {
+      if (timer) clearTimeout(timer);
+    },
   };
 }
 
@@ -533,11 +603,12 @@ async function _localize(
  * localize() must never throw, and individual query failures must not abort
  * the whole localization pass.
  *
- * Deadline-aware: once the pass's deadline is hit, the query is skipped
- * without touching the provider, and an in-flight query is raced against the
- * remaining budget (the abandoned promise keeps running in the provider,
- * warming its cache — only this pass stops waiting). Mirrors the ENHANCE
- * stage's `queryWithin` so localization can never extend the stage budget.
+ * Deadline-aware: once the pass's shared budget is spent (`gate.expired`), the
+ * query is skipped without touching the provider. An in-flight query is raced
+ * against the shared budget (the abandoned promise keeps running in the
+ * provider, warming its cache — only this pass stops waiting). Mirrors the
+ * ENHANCE stage's `queryWithin` so localization can never extend the stage
+ * budget.
  */
 async function safeQuery(
   graph: CodeGraphProvider,
@@ -549,24 +620,14 @@ async function safeQuery(
     | "semantic_search",
   query: string,
   limit: number | undefined,
-  deadline: number,
+  gate: DeadlineGate,
 ): Promise<string> {
-  const remaining = deadline - Date.now();
-  if (remaining <= 0) return "";
+  if (gate.expired) return "";
   try {
     const q = graph.query(operation, query, limit).catch(() => "");
-    // Unbounded budget (Infinity deadline): no timer needed.
-    if (remaining > MAX_TIMER_MS) return await q;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const timeout = new Promise<string>((resolve) => {
-      timer = setTimeout(() => resolve(""), remaining);
-      timer.unref?.();
-    });
-    try {
-      return await Promise.race([q, timeout]);
-    } finally {
-      clearTimeout(timer);
-    }
+    // Unbounded budget: no timer, await the provider directly.
+    if (gate.timeout === null) return await q;
+    return await Promise.race([q, gate.timeout]);
   } catch {
     return "";
   }

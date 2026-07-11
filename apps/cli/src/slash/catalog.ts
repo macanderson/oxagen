@@ -110,6 +110,12 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<
     argumentHint: "[on|off]",
   },
   {
+    name: "plan",
+    description:
+      "Plan-only mode — prompts produce a task plan without executing; `run` executes the last plan",
+    argumentHint: "[on|off|status|run]",
+  },
+  {
     name: "config",
     description:
       "Browse and edit tiered config (repo ▸ workspace ▸ user ▸ org) — `doctor` scans it",
@@ -119,6 +125,12 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<
     name: "verbose",
     description: "Toggle per-phase timing, token/cost, and tool telemetry",
     argumentHint: "[on|off]",
+  },
+  {
+    name: "debug",
+    description:
+      "Toggle the JSONL debug file log (~/.oxagen/logs/cli.output) for this session",
+    argumentHint: "[on|off|status]",
   },
 
   // Memory
@@ -159,6 +171,42 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<
       "Files Touched — every file the agent read/created/updated/deleted this session; view diffs, open in your editor",
   },
   { name: "hud", description: "Toggle the running-agents heads-up display" },
+  {
+    name: "tasks",
+    description:
+      "Planner task inspector — the current turn's task plan, live (Ctrl+T)",
+  },
+  {
+    name: "swarm",
+    description:
+      "Agent swarm view — every live agent; Ctrl+X twice kills one (Ctrl+S)",
+  },
+  {
+    name: "marketplace",
+    description:
+      "Browse & install skills, MCP servers, agents, knowledge sources, integrations",
+  },
+  {
+    name: "prompts",
+    description:
+      "Saved prompts (.oxagen/prompts) — pick one to insert into the composer",
+  },
+  {
+    name: "create-command",
+    description: "Scaffold a custom slash command (.oxagen/commands/<name>.md)",
+  },
+  {
+    name: "create-agent",
+    description: "Scaffold a named agent definition (.oxagen/agents/<name>.md)",
+  },
+  {
+    name: "create-skill",
+    description: "Scaffold a skill (.oxagen/skills/<name>/SKILL.md)",
+  },
+  {
+    name: "create-prompt",
+    description: "Scaffold a saved prompt (.oxagen/prompts/<name>.md)",
+  },
   {
     name: "dispatch",
     description:

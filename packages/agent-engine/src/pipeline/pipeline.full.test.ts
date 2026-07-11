@@ -395,6 +395,39 @@ describe("runTurn — full pipeline path", () => {
     expect(record).toHaveBeenCalledOnce();
   });
 
+  it("surfaces a failing graph sync through onError instead of swallowing it", async () => {
+    const ws = new MemoryWorkspace({ "src/a.ts": "before" });
+    const graphSync: GraphSyncProvider = {
+      ensureGraph: vi.fn().mockRejectedValue(new Error("neo4j down")),
+      recordLineage: vi.fn().mockRejectedValue(new Error("neo4j down")),
+    };
+    const onError = vi.fn();
+    const { ai } = makeAi();
+
+    await runTurn({ prompt: "do it", workspace: ws, ai, graphSync, onError });
+    await tick();
+    await tick();
+
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({ phase: "graph-sync", error: expect.any(Error) }),
+    );
+  });
+
+  it("surfaces a failing trace record through onError instead of swallowing it", async () => {
+    const ws = new MemoryWorkspace({ "src/a.ts": "before" });
+    const record = vi.fn().mockRejectedValue(new Error("clickhouse timeout"));
+    const onError = vi.fn();
+    const { ai } = makeAi();
+
+    await runTurn({ prompt: "do it", workspace: ws, ai, trace: { record }, onError });
+    await tick();
+    await tick();
+
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({ phase: "trace-record", error: expect.any(Error) }),
+    );
+  });
+
   it("forwards every streamed event to its callback", async () => {
     const ws = new MemoryWorkspace({ "src/a.ts": "before" });
     const texts: string[] = [];

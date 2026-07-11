@@ -56,6 +56,16 @@ describe("oxagenSettingsSchema", () => {
     expect(() => oxagenSettingsSchema.parse({ agents: { bad: { model: "z" } } })).toThrow();
   });
 
+  it("accepts per-agent skills and mcpServers on an inline agent", () => {
+    const parsed = oxagenSettingsSchema.parse({
+      agents: {
+        reviewer: { prompt: "You review.", skills: ["reviewer"], mcpServers: ["github"] },
+      },
+    });
+    expect(parsed.agents?.reviewer?.skills).toEqual(["reviewer"]);
+    expect(parsed.agents?.reviewer?.mcpServers).toEqual(["github"]);
+  });
+
   it("accepts an empty document", () => {
     expect(oxagenSettingsSchema.parse({})).toEqual({});
   });

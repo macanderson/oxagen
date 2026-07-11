@@ -2,7 +2,11 @@ import { stepCountIs, type ModelMessage, type ToolSet } from "ai";
 import { buildWorkspaceTools } from "./tools";
 import { wrapToolsWithSpeculation } from "./speculate/index";
 import { buildCodingCorePrompt } from "./prompt/system-prompt";
-import type { RunCodingAgentOptions, RunCodingAgentResult } from "./types";
+import type {
+  RunCodingAgentOptions,
+  RunCodingAgentResult,
+  TurnStopReason,
+} from "./types";
 import {
   backoffMs,
   compactMessages,
@@ -10,13 +14,22 @@ import {
   delay,
   estimateMessageTokens,
   isContextOverflowError,
+  isMutatingTool,
   isRetryableModelError,
   LOOP_NUDGE_THRESHOLD,
   SUCCESSFUL_REPEAT_THRESHOLD,
   loopNudgeMessage,
+  midFlightRetryMessage,
+  StreamStallError,
   successfulRepeatNudgeMessage,
   toolCallSignature,
+  withSlowWaitBreadcrumb,
 } from "./loop-driver";
+
+/** Default stream-inactivity watchdog (ms) — see `RunCodingAgentOptions.streamStallMs`. */
+const DEFAULT_STREAM_STALL_MS = 180_000;
+/** Threshold (ms) past which an interactive budget-approval wait emits a breadcrumb. */
+const BUDGET_WAIT_BREADCRUMB_MS = 60_000;
 
 // The workspace-less chat default. Built from the shared coding core
 // (buildCodingCorePrompt) so its wording is a single source of truth the CLI and
@@ -71,6 +84,71 @@ export function stringifyCapped(v: unknown, max: number): string {
     s = String(v);
   }
   return s.length > max ? s.slice(0, max) + "…" : s;
+}
+
+/** Outcome of a single stall-guarded `iterator.next()`: a part, stream end, or a stall. */
+type StallableRead<T> =
+  | { kind: "part"; value: T }
+  | { kind: "done" }
+  | { kind: "stall" };
+
+/**
+ * Await one `iterator.next()`, but if it hasn't settled within `stallMs`, resolve
+ * as a `stall` instead of hanging — UNLESS `shouldDefer()` says the silence is
+ * expected, in which case the watchdog re-arms and keeps waiting.
+ *
+ * The critical caller-side reason for `shouldDefer`: tool execution BLOCKS
+ * `fullStream`. The SDK emits the `tool-call` part, then this very `next()` stays
+ * pending for the WHOLE tool run (a `bash` build/test can legitimately run for
+ * minutes — its own per-tool timeout governs it), then the `tool-result` arrives.
+ * Without a defer probe the watchdog would false-fire on every long tool call,
+ * abort it, and re-run the same slow command until the turn failed. So the engine
+ * passes `() => pendingToolCalls > 0`: quiet-while-a-tool-runs is deferred; only
+ * quiet-with-no-tool-in-flight (a genuinely dead model stream) trips the stall.
+ * Mirrors the CLI's `makeStallDetector` `shouldDefer` escape hatch
+ * (apps/cli/src/agent/timeouts.ts).
+ *
+ * The pending read is NOT consumed on a stall — the caller tears the stream down
+ * (by aborting its step signal) and abandons it; we attach a catch to the
+ * abandoned read so its eventual (post-abort) rejection is never an unhandled
+ * rejection. Every armed timer is cleared as soon as its race settles (including
+ * on each re-arm), so nothing leaks. `stallMs <= 0` / non-finite disables the
+ * watchdog (a plain awaited read).
+ */
+async function readPartWithStall<T>(
+  next: Promise<IteratorResult<T>>,
+  stallMs: number,
+  shouldDefer?: () => boolean,
+): Promise<StallableRead<T>> {
+  const mapped = next.then<StallableRead<T>>((r) =>
+    r.done ? { kind: "done" } : { kind: "part", value: r.value },
+  );
+  if (!(Number.isFinite(stallMs) && stallMs > 0)) return mapped;
+
+  // If a stall ends the wait, `mapped` is abandoned; swallow its later rejection
+  // (the aborted read rejects) so it is not an unhandled rejection.
+  mapped.catch(() => undefined);
+
+  // Re-arm loop: arm a fresh watchdog each pass and race it against the SAME
+  // pending read. A real part/done wins → return it. The timer wins → consult
+  // `shouldDefer`: true means expected silence (a tool is executing) so re-arm;
+  // false means a dead stream so report the stall.
+  for (;;) {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const stall = new Promise<"stall">((resolve) => {
+      timer = setTimeout(() => resolve("stall"), stallMs);
+      (timer as unknown as { unref?: () => void }).unref?.();
+    });
+    let outcome: StallableRead<T> | "stall";
+    try {
+      outcome = await Promise.race([mapped, stall]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+    if (outcome !== "stall") return outcome;
+    if (shouldDefer?.()) continue; // expected silence — a tool is running
+    return { kind: "stall" };
+  }
 }
 
 /**
@@ -203,6 +281,7 @@ export async function runCodingAgent(
   const compactionThreshold = opts.compactionThreshold ?? 0.8;
   const maxRetries = opts.maxRetries ?? 4;
   const maxOverflowRetries = opts.maxOverflowRetries ?? 2;
+  const streamStallMs = opts.streamStallMs ?? DEFAULT_STREAM_STALL_MS;
 
   // The EXPLICIT STEP LOOP. Instead of one `streamText(stopWhen: stepCountIs(256))`
   // call — which loses the whole turn to a transient error and can only grow the
@@ -224,11 +303,6 @@ export async function runCodingAgent(
   let steps = 0;
   let retriesUsed = 0;
   let overflowRetries = 0;
-  // Start times by toolCallId, so tool-result events carry REAL per-tool
-  // durations, and are emitted as parts stream (tool-call the moment the model
-  // commits, tool-result/tool-error when execution settles) — live progress for
-  // the UI and for callers' inactivity guards, not step-granular after-the-fact.
-  const toolStartedAt = new Map<string, number>();
   // Loop detection: count consecutive failures of the SAME tool call (by
   // signature). A success clears it; N identical failures inject a corrective
   // nudge so the model stops re-issuing a doomed call (a common way agents burn
@@ -242,15 +316,35 @@ export async function runCodingAgent(
   // model stops re-running the same command and either declares done or acts.
   const successCounts = new Map<string, number>();
   const successNudged = new Set<string>();
-  // Set when the per-turn budget guard stops the turn — surfaced on the result
-  // so a caller can tell the user the turn cut off on its dollar ceiling.
-  let stopReason: "budget" | undefined;
+  // Set when the turn ends for a reason other than the model finishing — a
+  // per-turn budget stop or step-cap exhaustion — surfaced on the result so a
+  // caller can tell the user WHY the turn cut off.
+  let stopReason: TurnStopReason | undefined;
 
   while (steps < maxSteps) {
     if (opts.signal?.aborted) break;
     // A nudge queued by the previous step's repeated failure — inject it as the
     // next instruction so the model changes tack.
     let pendingNudge: string | null = null;
+    // Per-attempt start times by toolCallId, so tool-result events carry REAL
+    // per-tool durations. Scoped to the attempt (not the turn) so a step that
+    // fails between a tool-call and its tool-result leaves NO stale entry to
+    // skew a later step's duration on retry — the map is simply discarded with
+    // the failed attempt.
+    const toolStartedAt = new Map<string, number>();
+    // Mutating tools this attempt has begun executing (bash/write_file/edit_file).
+    // If the attempt then fails mid-stream, a blind retry would re-run them and
+    // double-apply side effects — so the catch injects a corrective message and
+    // advances instead. Populated at tool-call time (execution is imminent), the
+    // earliest safe point to know a side effect may land.
+    const attemptMutatingTools = new Set<string>();
+    // Tools currently executing in this stream. Tool execution BLOCKS the
+    // fullStream read (tool-call → [tool runs] → tool-result), so the stall
+    // watchdog must DEFER while this is > 0 — a quiet stream during a legit
+    // multi-minute bash is not a dead stream (the tool has its own timeout). A
+    // counter (not a boolean) so parallel tool calls all have to settle before
+    // the watchdog re-engages.
+    let pendingToolCalls = 0;
 
     // Compact BEFORE the call so the request itself fits. Keep the task + recent
     // working set verbatim; truncate the bulky content of older tool results.
@@ -278,6 +372,16 @@ export async function runCodingAgent(
     // adds a flush at the step boundary, not a per-token stall.
     const deferred: Array<() => void> = [];
     try {
+      // Per-step abort surface: compose the caller's turn signal with a private
+      // controller the stall watchdog can trip. A stall aborts ONLY this step's
+      // stream (via `stepAbort`), so the step re-runs; a genuine user abort flows
+      // through `opts.signal` and ends the turn. Composing (not replacing) means
+      // the catch still sees `opts.signal.aborted` for a user cancel and never
+      // misclassifies it as a stall.
+      const stepAbort = new AbortController();
+      const abortSignal = opts.signal
+        ? AbortSignal.any([opts.signal, stepAbort.signal])
+        : stepAbort.signal;
       const result = opts.ai.stream({
         model,
         system,
@@ -285,13 +389,30 @@ export async function runCodingAgent(
         tools,
         effort: opts.effort,
         stopWhen: stepCountIs(1),
-        abortSignal: opts.signal,
+        abortSignal,
         onError: ({ error }) => {
           streamError = error;
         },
       });
 
-      for await (const part of result.fullStream) {
+      // Manual iteration (not `for await`) so each read can race a stall
+      // watchdog: if no part arrives for `streamStallMs`, the step's stream is
+      // torn down and a retryable StreamStallError is raised.
+      const iterator = result.fullStream[Symbol.asyncIterator]();
+      for (;;) {
+        const read = await readPartWithStall(
+          iterator.next(),
+          streamStallMs,
+          // Defer the watchdog while any tool is executing — its silence is
+          // expected, not a dead stream (see readPartWithStall).
+          () => pendingToolCalls > 0,
+        );
+        if (read.kind === "done") break;
+        if (read.kind === "stall") {
+          stepAbort.abort(new StreamStallError(streamStallMs));
+          throw new StreamStallError(streamStallMs);
+        }
+        const part = read.value;
         // Raw part tap: forward EVERY part verbatim before the engine's own
         // subset translation below. The in-app SSE translator consumes this to
         // reproduce the client wire protocol byte-for-byte. Must not throw.
@@ -306,6 +427,14 @@ export async function runCodingAgent(
           deferred.push(() => onEvent({ type: "reasoning", delta }));
         } else if (part.type === "tool-call") {
           toolStartedAt.set(part.toolCallId, Date.now());
+          // A tool is now executing — the next fullStream read will block for its
+          // whole run, so tell the watchdog to defer until it settles.
+          pendingToolCalls++;
+          // Record a mutating tool the MOMENT the model commits the call —
+          // execution is imminent, so if the stream dies right after, the catch
+          // must know a side effect may have landed (see the mid-flight guard).
+          if (isMutatingTool(part.toolName))
+            attemptMutatingTools.add(part.toolName);
           const toolName = part.toolName;
           const input: unknown = part.input;
           deferred.push(() =>
@@ -317,6 +446,10 @@ export async function runCodingAgent(
           if (!part.preliminary) {
             const started = toolStartedAt.get(part.toolCallId);
             toolStartedAt.delete(part.toolCallId);
+            // The tool finished — re-engage the watchdog once no tool is in
+            // flight. Floored at 0 so a stray/duplicate result can't drive it
+            // negative and wedge the defer probe below zero.
+            pendingToolCalls = Math.max(0, pendingToolCalls - 1);
             const durationMs = started ? Date.now() - started : 0;
             const ok = !isErrorResult(part.output);
             const sig = toolCallSignature(part.toolName, part.input);
@@ -371,6 +504,9 @@ export async function runCodingAgent(
         } else if (part.type === "tool-error") {
           const started = toolStartedAt.get(part.toolCallId);
           toolStartedAt.delete(part.toolCallId);
+          // The tool settled (with an error) — re-engage the watchdog once no
+          // tool is in flight. Floored at 0, same as the success path.
+          pendingToolCalls = Math.max(0, pendingToolCalls - 1);
           const durationMs = started ? Date.now() - started : 0;
           const sig = toolCallSignature(part.toolName, part.input);
           const toolName = part.toolName;
@@ -435,12 +571,31 @@ export async function runCodingAgent(
       // stopReason — the same graceful exit as a natural finish, so the diff,
       // memory, and trace below still run on the partial turn.
       if (opts.budgetGuard) {
-        const verdict = await opts.budgetGuard({
-          inputTokens: usage.inputTokens,
-          outputTokens: usage.outputTokens,
-          totalTokens: usage.totalTokens,
-          cachedInputTokens: usage.cachedInputTokens,
-        });
+        const guard = opts.budgetGuard;
+        // The guard MAY block indefinitely in "prompt" mode (waiting on a human
+        // to approve raising the ceiling). We never auto-deny — the human's
+        // decision is the only thing that ends the wait — but we DO make a long
+        // wait observable: a breadcrumb through `onError` after 60s so a stuck
+        // approval isn't silent. Timer cleared the moment the guard resolves.
+        const verdict = await withSlowWaitBreadcrumb(
+          () =>
+            guard({
+              inputTokens: usage.inputTokens,
+              outputTokens: usage.outputTokens,
+              totalTokens: usage.totalTokens,
+              cachedInputTokens: usage.cachedInputTokens,
+            }),
+          BUDGET_WAIT_BREADCRUMB_MS,
+          () =>
+            opts.onError?.({
+              phase: "budget-wait-slow",
+              error: new Error(
+                `Budget approval has been pending for over ${Math.round(
+                  BUDGET_WAIT_BREADCRUMB_MS / 1000,
+                )}s.`,
+              ),
+            }),
+        );
         if (verdict === "stop") {
           stopReason = "budget";
           break;
@@ -450,6 +605,15 @@ export async function runCodingAgent(
       // `tool-calls` means the model wants to act again — keep looping. Any other
       // finish reason (stop / length / content-filter / error) ends the turn.
       if (finishReason !== "tool-calls") break;
+
+      // The model wants another step, but we've reached the step cap: the while
+      // condition will now end the loop. That is EXHAUSTION, not a finish — mark
+      // it so the caller can tell "ran out of steps" apart from a clean stop.
+      // (A budget stop `break`s above with its own reason and never reaches here.)
+      if (steps >= maxSteps) {
+        stopReason = "max-steps";
+        break;
+      }
 
       // The model just repeated an identical failing call past the threshold —
       // inject a corrective instruction so the next step changes approach.
@@ -477,8 +641,32 @@ export async function runCodingAgent(
         throw err; // couldn't shrink — give up rather than spin
       }
 
-      // Transient 429/5xx/network/stream error: back off and retry the SAME step
-      // (nothing was committed), up to the per-turn budget.
+      // A retryable error AFTER this attempt already began a MUTATING tool
+      // (bash/write_file/edit_file): the tools ran DURING the stream, so a blind
+      // retry would re-execute them and double-apply side effects. Do NOT re-run
+      // the step — inject a corrective message so the model re-inspects state,
+      // and ADVANCE. Bounded by the same retry budget so a step that always
+      // mutates-then-fails can't spin. Read-only steps fall through to the plain
+      // retry below (re-running them is safe and cheaper than losing the turn).
+      if (
+        isRetryableModelError(err) &&
+        attemptMutatingTools.size > 0 &&
+        retriesUsed < maxRetries
+      ) {
+        retriesUsed++;
+        conversation = [
+          ...conversation,
+          {
+            role: "user",
+            content: midFlightRetryMessage([...attemptMutatingTools]),
+          },
+        ];
+        continue;
+      }
+
+      // Transient 429/5xx/network/stream error on a read-only (or budget-exhausted
+      // mutating) step: back off and retry the SAME step (nothing was committed),
+      // up to the per-turn budget.
       if (isRetryableModelError(err) && retriesUsed < maxRetries) {
         retriesUsed++;
         try {
@@ -514,13 +702,19 @@ export async function runCodingAgent(
   const changedFiles = opts.workspace ? changedFilesFromDiff(diff) : [];
   if (opts.workspace) onEvent({ type: "final-diff", diff, changedFiles });
 
+  // Both are best-effort side effects that must NEVER fail the turn — but a
+  // failure is no longer swallowed blind: it is routed to `onError` so a
+  // consumer can log/telemeter it (a platform-wide memory/trace outage should be
+  // visible, not silent). The turn still completes regardless.
   if (opts.memory)
     void Promise.resolve(
       opts.memory.remember("coding_turn", {
         instruction: opts.instruction,
         changedFiles,
       }),
-    ).catch(() => {});
+    ).catch((error: unknown) =>
+      opts.onError?.({ phase: "memory-remember", error }),
+    );
   if (opts.trace)
     void Promise.resolve(
       opts.trace.record({
@@ -530,7 +724,9 @@ export async function runCodingAgent(
         text,
         usage,
       }),
-    ).catch(() => {});
+    ).catch((error: unknown) =>
+      opts.onError?.({ phase: "trace-record", error }),
+    );
 
   return {
     text,

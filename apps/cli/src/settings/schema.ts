@@ -136,6 +136,10 @@ export const inlineAgentSchema = z.object({
   prompt: z.string().min(1),
   tools: z.array(z.string()).optional(),
   model: z.string().optional(),
+  /** Skill names to pre-load for this agent (matched against `loadSkills`). */
+  skills: z.array(z.string()).optional(),
+  /** Keys into the top-level `mcpServers` map this agent connects to. */
+  mcpServers: z.array(z.string()).optional(),
 });
 export type InlineAgent = z.infer<typeof inlineAgentSchema>;
 

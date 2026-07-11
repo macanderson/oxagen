@@ -25,6 +25,7 @@ import { wrapToolsWithGate } from "../settings/gate.js";
 import { runHooks } from "../settings/hooks.js";
 import { loadMcpTools, type McpServerStatus } from "../mcp/client.js";
 import { filterToolsForAgent } from "../agents/tools.js";
+import { loadSkills, skillsPromptBlock, type Skill } from "../skills/index.js";
 import type { OxagenSettings } from "../settings/schema.js";
 import type { Rule } from "../rules/types.js";
 
@@ -34,10 +35,25 @@ export interface TurnExtrasOptions {
   settings: OxagenSettings;
   /** Workspace rules; defaults to `loadRules({ cwd })`. Injectable for tests. */
   rules?: Rule[];
+  /** Discovered skills; defaults to `loadSkills({ cwd })`. Injectable for tests. */
+  skills?: Skill[];
   /** Read-only mode: withhold MCP tools (they may mutate). */
   readOnly?: boolean;
   /** Named-agent tool allowlist — restricts the tool set the model sees. */
   agentTools?: string[];
+  /**
+   * Named-agent skill selection (AgentDefinition.skills): these skills'
+   * FULL SKILL.md bodies are injected into the system prompt; every other
+   * discovered skill still appears in the compact name+description list.
+   * Undefined ⇒ list-only awareness (no full bodies).
+   */
+  agentSkills?: string[];
+  /**
+   * Named-agent MCP-server selection (AgentDefinition.mcpServers): keys into
+   * the global `settings.mcpServers` map. Undefined ⇒ inherit every
+   * configured server (today's behavior); `[]` ⇒ connect none.
+   */
+  agentMcpServers?: string[];
   /**
    * When true, the tool gate ALSO enforces `settings.permissions` — for paths
    * with no workspace broker (`--agent`, fleet). REPL/one-shot leave this false
@@ -84,11 +100,33 @@ export async function buildTurnExtras(opts: TurnExtrasOptions): Promise<TurnExtr
     systemAppend += "\n\n## Session context (from SessionStart hooks)\n" + sessionStart.output;
   }
 
-  // MCP tools — skipped in read-only mode (may mutate) and when none configured.
-  const hasServers =
-    !opts.readOnly && Object.keys(opts.settings.mcpServers ?? {}).length > 0;
+  // Loadable skills (.oxagen/skills, .claude/skills, …): every turn sees the
+  // compact name+description inventory; an agent's declared `skills` selection
+  // additionally injects those SKILL.md bodies in full (progressive
+  // disclosure — see skills/loader.ts's skillsPromptBlock).
+  const skillsBlock = skillsPromptBlock(
+    opts.skills ?? [...loadSkills({ cwd: opts.cwd }).values()],
+    opts.agentSkills,
+  );
+  if (skillsBlock) systemAppend += "\n\n" + skillsBlock;
+
+  // MCP tools — skipped in read-only mode (may mutate) and when none
+  // configured. An agent's `mcpServers` selection narrows the global map to
+  // just its declared servers (undefined inherits everything).
+  const configuredServers = opts.settings.mcpServers ?? {};
+  const selectedServers = opts.agentMcpServers
+    ? Object.fromEntries(
+        Object.entries(configuredServers).filter(([name]) =>
+          opts.agentMcpServers!.includes(name),
+        ),
+      )
+    : configuredServers;
+  const hasServers = !opts.readOnly && Object.keys(selectedServers).length > 0;
   const mcp = hasServers
-    ? await loadMcpTools(opts.settings, { onStatus: opts.onMcpServer })
+    ? await loadMcpTools(
+        { ...opts.settings, mcpServers: selectedServers },
+        { onStatus: opts.onMcpServer },
+      )
     : null;
 
   // Permission set for the tool gate: rule-guard denies always; the full

@@ -701,7 +701,10 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
           thinkingLog,
         });
         if (opts.trace) {
-          void Promise.resolve(opts.trace.record(trace)).catch(() => {});
+          void Promise.resolve(opts.trace.record(trace)).catch(
+            (error: unknown) =>
+              opts.onError?.({ phase: "trace-record", error }),
+          );
         }
         return {
           text: cancelText,
@@ -1427,14 +1430,14 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
   if (opts.graphSync && filesTouched.size > 0) {
     const touchedArr = [...filesTouched];
     void Promise.resolve(opts.graphSync.ensureGraph(touchedArr)).catch(
-      () => {},
+      (error: unknown) => opts.onError?.({ phase: "graph-sync", error }),
     );
     void Promise.resolve(
       opts.graphSync.recordLineage({
         executionId: trace.id,
         touchedFiles: touchedArr,
       }),
-    ).catch(() => {});
+    ).catch((error: unknown) => opts.onError?.({ phase: "graph-sync", error }));
   }
 
   // Turn-end batch release (docs/specs/agent-file-locking/plan.md §5): every
@@ -1443,11 +1446,14 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
   // covering a lock that leaked because a tool call didn't reach its own
   // `finally` (e.g. the turn was aborted between rounds). Fire-and-forget,
   // same fail-soft shape as graphSync above: a throwing release must never
-  // fail the turn — the lock's own TTL is the ultimate backstop.
+  // fail the turn — the lock's own TTL is the ultimate backstop — but the
+  // failure is surfaced through `onError` rather than swallowed.
   if (opts.fileLock && lockContext) {
     void Promise.resolve(
       opts.fileLock.releaseAll(lockContext.executionId),
-    ).catch(() => {});
+    ).catch((error: unknown) =>
+      opts.onError?.({ phase: "file-lock-release", error }),
+    );
   }
 
   // Record a lesson when the judge had to send the agent back (a gotcha).
@@ -1462,13 +1468,17 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
           files: [...filesTouched].slice(0, 5),
           outcome: finalComplete ? "success" : "failure",
         }),
-      ).catch(() => {});
+      ).catch((error: unknown) =>
+        opts.onError?.({ phase: "memory-remember", error }),
+      );
     }
   }
 
   // Record trace.
   if (opts.trace) {
-    void Promise.resolve(opts.trace.record(trace)).catch(() => {});
+    void Promise.resolve(opts.trace.record(trace)).catch((error: unknown) =>
+      opts.onError?.({ phase: "trace-record", error }),
+    );
   }
 
   return {
@@ -1919,25 +1929,29 @@ async function runBare(
   if (opts.graphSync && filesTouched.size > 0) {
     const touchedArr = [...filesTouched];
     void Promise.resolve(opts.graphSync.ensureGraph(touchedArr)).catch(
-      () => {},
+      (error: unknown) => opts.onError?.({ phase: "graph-sync", error }),
     );
     void Promise.resolve(
       opts.graphSync.recordLineage({
         executionId: trace.id,
         touchedFiles: touchedArr,
       }),
-    ).catch(() => {});
+    ).catch((error: unknown) => opts.onError?.({ phase: "graph-sync", error }));
   }
 
   // Turn-end batch release — see the full-pipeline path's identical block above.
   if (opts.fileLock && lockContext) {
     void Promise.resolve(
       opts.fileLock.releaseAll(lockContext.executionId),
-    ).catch(() => {});
+    ).catch((error: unknown) =>
+      opts.onError?.({ phase: "file-lock-release", error }),
+    );
   }
 
   if (opts.trace) {
-    void Promise.resolve(opts.trace.record(trace)).catch(() => {});
+    void Promise.resolve(opts.trace.record(trace)).catch((error: unknown) =>
+      opts.onError?.({ phase: "trace-record", error }),
+    );
   }
 
   return {

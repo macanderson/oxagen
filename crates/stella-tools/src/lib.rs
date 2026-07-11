@@ -7,8 +7,12 @@
 //! for subsequent file operations (L-S2).
 
 pub mod bash;
+<<<<<<< HEAD:crates/stella-tools/src/lib.rs
 pub mod ci;
 pub mod delete;
+=======
+pub mod custom;
+>>>>>>> 19d73e90c2c817ff663b6b16806253aae5141821:crates/oxagen-tools/src/lib.rs
 pub mod edit;
 mod exec;
 pub mod exploration;

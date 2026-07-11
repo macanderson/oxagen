@@ -45,6 +45,7 @@ const PILLARS = [
 const SURFACES = [
   { title: "Getting started", body: "Sign up, create your organization and workspace, send your first message.", href: "/docs/getting-started" },
   { title: "CLI", body: "Install the oxagen CLI, run the agent loop locally, query the knowledge graph from your terminal.", href: "/docs/cli" },
+  { title: "Stella", body: "Our open-source Rust coding agent — BYOK, model-agnostic, witness-verified done. No account needed.", href: "/stella" },
   { title: "REST API", body: "/v1 endpoints, API-key authentication, the capability registry, and the chat streaming transport.", href: "/docs/api/overview" },
   { title: "MCP server", body: "Connect at /mcp over streamable HTTP; org + workspace scope carried by your API key.", href: "/docs/mcp/overview" },
   { title: "Agent platform", body: "Tools and capabilities, agent memory, plan mode and approvals, code execution, the research swarm.", href: "/docs/agent/overview" },
