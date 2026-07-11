@@ -9,12 +9,38 @@
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   openRecordStore,
   type ExecPort,
   type RecordStore,
 } from "@oxagen/replay";
+
+// Controllable platform-API seam: `fleet distill --push` goes through the
+// shared lib/api client; the mock lets tests drive logged-out, find-or-create,
+// and push-failure paths without HTTP.
+const apiMock = vi.hoisted(() => ({
+  ctx: null as Record<string, string> | null,
+  datasets: [] as Array<{ datasetId: string; slug: string }>,
+  posts: [] as Array<{ path: string; body: unknown }>,
+  failPostWith: null as string | null,
+}));
+vi.mock("../../lib/api.js", () => ({
+  resolveApiContext: () => apiMock.ctx,
+  apiGetOrThrow: async (_path: string) => ({ datasets: apiMock.datasets }),
+  apiPostOrThrow: async (path: string, body: unknown) => {
+    if (apiMock.failPostWith !== null) throw new Error(apiMock.failPostWith);
+    apiMock.posts.push({ path, body });
+    if (path === "eval/datasets") {
+      return {
+        datasetId: "ds_internal",
+        publicId: "ds_pub_1",
+        slug: "created",
+      };
+    }
+    return { datasetId: "ds_pub_1", added: 1, itemCount: 1 };
+  },
+}));
 import {
   distillReasonFor,
   handleFleetBisect,
@@ -59,6 +85,10 @@ beforeEach(async () => {
   process.env["OXAGEN_FLEET_DIR"] = join(base, "fleet");
   projectCwd = join(base, "project");
   store = new SessionStore({ root: fleetRoot(projectCwd) });
+  apiMock.ctx = null;
+  apiMock.datasets = [];
+  apiMock.posts = [];
+  apiMock.failPostWith = null;
 });
 
 afterEach(async () => {
@@ -580,5 +610,153 @@ describe("fleet distill", () => {
     );
     expect(err.join("\n")).toContain("no replay record");
     expect(process.exitCode).toBe(1);
+  });
+
+  it("--push without an API context fails loudly, telling the user to log in — item still written locally", async () => {
+    const recordStore = await seedRecordedRun({
+      sid: "s-eee-0004",
+      state: "failed",
+    });
+    const { writer, err } = memoryWriter();
+    await handleFleetDistill(
+      "s-eee-0004",
+      { json: true, push: true, cwd: projectCwd },
+      writer,
+    );
+    expect(err.join("\n")).toContain("oxagen login");
+    expect(process.exitCode).toBe(1);
+    // The local artifacts landed anyway, and the record is honest: not pushed.
+    await expect(
+      readFile(join(recordStore.rootDir, "distilled.json"), "utf8"),
+    ).resolves.toContain("seeded prompt");
+    const distill = (await recordStore.readRecords()).find(
+      (r) => r.t === "distill",
+    );
+    expect(distill).toMatchObject({
+      isPushed: false,
+      datasetSlug: "fleet-distilled-failures",
+    });
+  });
+
+  it("--push find-or-creates the dataset by slug and adds the item (isPushed true)", async () => {
+    const recordStore = await seedRecordedRun({
+      sid: "s-eee-0005",
+      state: "failed",
+    });
+    apiMock.ctx = { apiUrl: "http://x", token: "t", org: "o", ws: "w" };
+    const { writer, out, err } = memoryWriter();
+    await handleFleetDistill(
+      "s-eee-0005",
+      { json: true, push: true, dataset: "created", cwd: projectCwd },
+      writer,
+    );
+    expect(err).toEqual([]);
+    const result = JSON.parse(out.join("")) as {
+      isPushed: boolean;
+      datasetSlug: string;
+    };
+    expect(result.isPushed).toBe(true);
+    expect(result.datasetSlug).toBe("created");
+    // No dataset matched the slug → created, then the item was added to it.
+    expect(apiMock.posts.map((p) => p.path)).toEqual([
+      "eval/datasets",
+      "eval/datasets/items",
+    ]);
+    expect(apiMock.posts[1]?.body).toMatchObject({
+      datasetPublicId: "ds_pub_1",
+    });
+    const distill = (await recordStore.readRecords()).find(
+      (r) => r.t === "distill",
+    );
+    expect(distill).toMatchObject({ isPushed: true, datasetSlug: "created" });
+  });
+
+  it("--push reuses an existing dataset and records a failed push as isPushed false", async () => {
+    const recordStore = await seedRecordedRun({
+      sid: "s-eee-0006",
+      state: "failed",
+    });
+    apiMock.ctx = { apiUrl: "http://x", token: "t", org: "o", ws: "w" };
+    apiMock.datasets = [
+      { datasetId: "ds_existing", slug: "fleet-distilled-failures" },
+    ];
+    apiMock.failPostWith = "Error 500 from eval/datasets/items";
+    const { writer, err } = memoryWriter();
+    await handleFleetDistill(
+      "s-eee-0006",
+      { json: true, push: true, cwd: projectCwd },
+      writer,
+    );
+    expect(err.join("\n")).toContain("Error 500");
+    expect(process.exitCode).toBe(1);
+    const distill = (await recordStore.readRecords()).find(
+      (r) => r.t === "distill",
+    );
+    expect(distill).toMatchObject({ isPushed: false });
+  });
+});
+
+// ── pretty rendering ─────────────────────────────────────────────────────────
+
+describe("fleet replay — pretty mode", () => {
+  it("renders the run header, per-turn summaries, verdicts, and focused payloads", async () => {
+    await seedRecordedRun({ sid: "s-fff-0001", state: "done", turns: 2 });
+    const feedbackIo = memoryWriter();
+    await handleFleetFeedback(
+      "s-fff-0001",
+      "down",
+      { json: true, message: "nope", cwd: projectCwd },
+      feedbackIo.writer,
+    );
+    process.exitCode = savedExit; // feedback path is not under test here
+
+    const { writer, out } = memoryWriter();
+    await handleFleetReplay(
+      "s-fff-0001",
+      { turn: "1", verify: true, cwd: projectCwd },
+      writer,
+    );
+    const text = out.join("\n");
+    expect(text).toContain("run s-fff-0001 — 2 settled turn(s)");
+    expect(text).toContain("model anthropic/claude-haiku-4-5");
+    expect(text).toContain("git aaaaaaaaaaaa");
+    expect(text).toContain("feedback: down — nope");
+    expect(text).toContain("distilled (thumbs_down) → local only");
+    expect(text).toContain("turn 1 (2 step(s) · complete) — seeded prompt");
+    expect(text).toContain("tool bash ✓ 5ms");
+    // Focused turn 1 shows its full payloads, indented under labels.
+    expect(text).toContain('"command": "cmd 1"');
+    expect(text).not.toContain('"command": "cmd 2"');
+    expect(text).toContain("changed: state.txt");
+    expect(text).toContain("verify: ok");
+    expect(process.exitCode).toBe(savedExit);
+  });
+});
+
+// ── bisect flag validation ───────────────────────────────────────────────────
+
+describe("fleet bisect — flag validation", () => {
+  it("rejects non-integer --good/--bad (usage, exit 2)", async () => {
+    await seedRecordedRun({ sid: "s-ggg-0001", state: "failed" });
+    const { writer, err } = memoryWriter();
+    await handleFleetBisect(
+      "s-ggg-0001",
+      { json: true, cmd: "true", good: "x", cwd: projectCwd },
+      writer,
+    );
+    expect(err.join("\n")).toContain("--good/--bad");
+    expect(process.exitCode).toBe(2);
+  });
+
+  it("rejects an empty bisect range (good ≥ bad)", async () => {
+    await seedRecordedRun({ sid: "s-ggg-0002", state: "failed", turns: 1 });
+    const { writer, err } = memoryWriter();
+    await handleFleetBisect(
+      "s-ggg-0002",
+      { json: true, cmd: "true", good: "1", cwd: projectCwd },
+      writer,
+    );
+    expect(err.join("\n")).toContain("nothing to bisect");
+    expect(process.exitCode).toBe(2);
   });
 });

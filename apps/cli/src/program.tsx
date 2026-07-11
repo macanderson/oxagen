@@ -2780,8 +2780,20 @@ export function buildProgram(): Command {
         _opts: unknown,
         command: Command,
       ) => {
+        const merged = command.optsWithGlobals<{
+          message?: string;
+          model?: unknown;
+        }>();
+        // The root program's global `-m, --model` claims `-m` before this
+        // subcommand can (commander parses ancestor options non-positionally —
+        // the same gotcha the fleet parent documents for --json). Feedback has
+        // no model semantics, so a swallowed `-m` value was meant as the
+        // message; `--message` always wins when both are present.
+        if (merged.message === undefined && typeof merged.model === "string") {
+          merged.message = merged.model;
+        }
         const { handleFleetFeedback } = await import("./commands/fleet.js");
-        await handleFleetFeedback(sid, verdict, command.optsWithGlobals());
+        await handleFleetFeedback(sid, verdict, merged);
       },
     );
 
