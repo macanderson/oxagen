@@ -15,6 +15,12 @@ pub struct ToolSchema {
     pub name: String,
     pub description: String,
     pub input_schema: serde_json::Value,
+    /// True when the tool cannot mutate any state (filesystem, processes,
+    /// environment) — the engine may run consecutive read-only calls from
+    /// one step concurrently. Defaults to false so unknown/external tools
+    /// are treated as mutating, the safe direction.
+    #[serde(default)]
+    pub read_only: bool,
 }
 
 /// One tool invocation the model requested.
@@ -82,6 +88,15 @@ mod tests {
             }
             .is_error()
         );
+    }
+
+    #[test]
+    fn read_only_defaults_to_false_the_safe_direction() {
+        // A schema serialized before the field existed (or by an external
+        // MCP tool that doesn't know about it) must deserialize as mutating.
+        let json = r#"{"name":"t","description":"d","input_schema":{}}"#;
+        let schema: ToolSchema = serde_json::from_str(json).unwrap();
+        assert!(!schema.read_only);
     }
 
     #[test]

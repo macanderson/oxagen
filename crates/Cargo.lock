@@ -1360,6 +1360,7 @@ name = "stella-core"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "futures-util",
  "proptest",
  "rand 0.9.5",
  "serde",
@@ -1402,6 +1403,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "libc",
+ "reqwest",
  "serde",
  "serde_json",
  "stella-core",

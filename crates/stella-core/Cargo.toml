@@ -15,6 +15,7 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["sync"] }
 async-trait = { workspace = true }
+futures-util = { workspace = true }
 rand = { workspace = true }
 
 [dev-dependencies]

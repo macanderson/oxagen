@@ -27,6 +27,7 @@ impl Tool for ReadFile {
                 },
                 "required": ["path"]
             }),
+            read_only: true,
         }
     }
 

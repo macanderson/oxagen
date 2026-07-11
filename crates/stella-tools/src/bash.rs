@@ -25,10 +25,12 @@ impl Tool for Bash {
                 "type": "object",
                 "properties": {
                     "command": { "type": "string", "description": "Shell command to execute" },
-                    "timeout_secs": { "type": "integer", "description": "Timeout in seconds (default 120)" }
+                    "timeout_secs": { "type": "integer", "description": "Timeout in seconds (default 120)" },
+                    "trace": { "type": "boolean", "description": "Echo each executed line (set -x) as an execution trace" }
                 },
                 "required": ["command"]
             }),
+            read_only: false,
         }
     }
 
@@ -45,6 +47,19 @@ impl Tool for Bash {
             .get("timeout_secs")
             .and_then(|v| v.as_u64())
             .unwrap_or(DEFAULT_TIMEOUT_SECS);
+        // trace: true prefixes `set -x` so every executed line echoes to
+        // stderr — an execution trace a judge can demand as evidence.
+        let traced;
+        let command = if input
+            .get("trace")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+        {
+            traced = format!("set -x\n{command}");
+            traced.as_str()
+        } else {
+            command
+        };
 
         let mut cmd = Command::new("bash");
         cmd.arg("-c").arg(command);

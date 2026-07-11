@@ -23,7 +23,9 @@ use stella_protocol::{
     ProviderError, ReasoningEffort, ToolCall,
 };
 
+use crate::catalog::{Catalog, Pricing};
 use crate::credential::ApiKey;
+use crate::http;
 use crate::provider::Provider;
 use crate::sse::SseDecoder;
 
@@ -34,17 +36,23 @@ pub struct OpenAiProvider {
     api_key: ApiKey,
     base_url: String,
     model: String,
+    /// List pricing for `model`, resolved from the catalog at construction so
+    /// `cost_usd` is computed on the real request path (see `zai.rs`).
+    pricing: Option<Pricing>,
 }
 
 impl OpenAiProvider {
     /// Build an adapter for `model` (a catalog-resolved slug, e.g.
     /// `gpt-5.5` — never a literal chosen at the call site).
     pub fn new(api_key: ApiKey, model: impl Into<String>) -> Self {
+        let model = model.into();
+        let pricing = Catalog::seed().resolve(&model).ok().map(|e| e.pricing);
         Self {
-            client: reqwest::Client::new(),
+            client: http::client(),
             api_key,
             base_url: DEFAULT_BASE_URL.to_string(),
-            model: model.into(),
+            model,
+            pricing,
         }
     }
 
@@ -157,6 +165,26 @@ enum OpenAiStreamEvent {
     },
     #[serde(rename = "response.completed")]
     Completed { response: OpenAiResponseObject },
+    /// The response terminated in failure. The `response.error` object
+    /// carries the code/message — modeled explicitly so it aborts the turn
+    /// instead of falling into `Other` and returning truncated text as a
+    /// bogus success.
+    #[serde(rename = "response.failed")]
+    Failed { response: OpenAiResponseObject },
+    /// The response stopped before completing (e.g. `max_output_tokens`,
+    /// `content_filter`). Returning the partial text as success would be a
+    /// silent truncation, so this is surfaced as a terminal error.
+    #[serde(rename = "response.incomplete")]
+    Incomplete { response: OpenAiResponseObject },
+    /// A top-level stream error frame (`event: error`), distinct from a
+    /// `response.failed` wrapper.
+    #[serde(rename = "error")]
+    Error {
+        #[serde(default)]
+        code: Option<String>,
+        #[serde(default)]
+        message: Option<String>,
+    },
     #[serde(other)]
     Other,
 }
@@ -182,6 +210,58 @@ enum OpenAiOutputItem {
 struct OpenAiResponseObject {
     #[serde(default)]
     usage: Option<OpenAiUsage>,
+    /// Present on `response.failed`.
+    #[serde(default)]
+    error: Option<OpenAiResponseError>,
+    /// Present on `response.incomplete`.
+    #[serde(default)]
+    incomplete_details: Option<OpenAiIncompleteDetails>,
+}
+
+#[derive(Deserialize, Debug, Default)]
+struct OpenAiResponseError {
+    #[serde(default)]
+    code: Option<String>,
+    #[serde(default)]
+    message: Option<String>,
+}
+
+#[derive(Deserialize, Debug, Default)]
+struct OpenAiIncompleteDetails {
+    #[serde(default)]
+    reason: Option<String>,
+}
+
+/// Classify an OpenAI Responses-API error (from a `response.failed` error
+/// object or a top-level `error` frame) into a typed `ProviderError`.
+/// Server-side/overload/timeout conditions are **retryable** `Transport`; an
+/// explicit rate limit is `RateLimited`; everything else is `Terminal`.
+fn classify_openai_stream_error(code: Option<&str>, message: &str) -> ProviderError {
+    let haystack = format!("{} {}", code.unwrap_or(""), message).to_lowercase();
+    let detail = match code {
+        Some(c) if !c.is_empty() && !message.is_empty() => {
+            format!("OpenAI stream error [{c}]: {message}")
+        }
+        Some(c) if !c.is_empty() => format!("OpenAI stream error [{c}]"),
+        _ if !message.is_empty() => format!("OpenAI stream error: {message}"),
+        _ => "OpenAI stream error".to_string(),
+    };
+    if haystack.contains("server_error")
+        || haystack.contains("overloaded")
+        || haystack.contains("unavailable")
+        || haystack.contains("timeout")
+    {
+        ProviderError::Transport(detail)
+    } else if haystack.contains("rate_limit")
+        || (haystack.contains("rate") && haystack.contains("limit"))
+    {
+        ProviderError::RateLimited {
+            message: detail,
+            retry_after_ms: None,
+        }
+    } else {
+        ProviderError::Terminal(detail)
+    }
 }
 
 #[derive(Deserialize, Debug, Default)]
@@ -334,6 +414,15 @@ impl Provider for OpenAiProvider {
                 retry_after_ms,
             });
         }
+        // 5xx is a transient server-side failure — retryable Transport, not
+        // the terminal bucket below.
+        if response.status().is_server_error() {
+            let status = response.status();
+            let text = response.text().await.unwrap_or_default();
+            return Err(ProviderError::Transport(format!(
+                "OpenAI HTTP {status}: {text}"
+            )));
+        }
         if !response.status().is_success() {
             let status = response.status();
             let text = response.text().await.unwrap_or_default();
@@ -343,12 +432,13 @@ impl Provider for OpenAiProvider {
         }
 
         let (text, tool_calls, usage) = aggregate_openai_stream(response).await?;
+        let cost_usd = self.pricing.map(|p| p.cost_usd(&usage)).unwrap_or(0.0);
         Ok(CompletionResult {
             text,
             tool_calls,
             usage,
             model: self.model.clone(),
-            cost_usd: 0.0,
+            cost_usd,
         })
     }
 }
@@ -365,19 +455,16 @@ struct ToolCallAccumulator {
 async fn aggregate_openai_stream(
     response: reqwest::Response,
 ) -> Result<(String, Vec<ToolCall>, CompletionUsage), ProviderError> {
-    use futures_util::StreamExt;
-
     let mut decoder = SseDecoder::new();
     let mut text = String::new();
     let mut usage = CompletionUsage::default();
     let mut tool_calls: BTreeMap<usize, ToolCallAccumulator> = BTreeMap::new();
     let mut stream = response.bytes_stream();
 
-    while let Some(chunk) = stream.next().await {
-        let chunk = chunk.map_err(|e| ProviderError::Transport(e.to_string()))?;
-        let chunk_str =
-            std::str::from_utf8(&chunk).map_err(|e| ProviderError::Malformed(e.to_string()))?;
-        decoder.push(chunk_str);
+    while let Some(chunk) = http::next_with_timeout(&mut stream, http::STREAM_IDLE_TIMEOUT).await? {
+        decoder
+            .push_bytes(&chunk)
+            .map_err(|e| ProviderError::Malformed(e.to_string()))?;
         for event in decoder.poll() {
             let data = event.data.trim();
             if data.is_empty() {
@@ -415,6 +502,30 @@ async fn aggregate_openai_stream(
                         usage.cached_input_tokens =
                             u.input_tokens_details.map(|d| d.cached_tokens).unwrap_or(0);
                     }
+                }
+                // A mid-stream failure/incompletion/error aborts the turn with
+                // a typed error — never a truncated Ok with the text so far.
+                OpenAiStreamEvent::Failed { response } => {
+                    let (code, message) = response
+                        .error
+                        .map(|e| (e.code, e.message.unwrap_or_default()))
+                        .unwrap_or((None, String::new()));
+                    return Err(classify_openai_stream_error(code.as_deref(), &message));
+                }
+                OpenAiStreamEvent::Incomplete { response } => {
+                    let reason = response
+                        .incomplete_details
+                        .and_then(|d| d.reason)
+                        .unwrap_or_else(|| "unspecified".to_string());
+                    return Err(ProviderError::Terminal(format!(
+                        "OpenAI response incomplete: {reason}"
+                    )));
+                }
+                OpenAiStreamEvent::Error { code, message } => {
+                    return Err(classify_openai_stream_error(
+                        code.as_deref(),
+                        message.as_deref().unwrap_or_default(),
+                    ));
                 }
                 OpenAiStreamEvent::Other => {}
             }
@@ -622,6 +733,7 @@ mod tests {
                 name: "read_file".into(),
                 description: "Read a file".into(),
                 input_schema: serde_json::json!({"type":"object"}),
+                read_only: false,
             }],
         };
 
@@ -668,6 +780,7 @@ mod tests {
                 name: "bash".into(),
                 description: "Run a command".into(),
                 input_schema: serde_json::json!({"type":"object"}),
+                read_only: false,
             }],
         };
 
@@ -732,6 +845,136 @@ mod tests {
                 assert_eq!(retry_after_ms, Some(2000));
             }
             other => panic!("expected RateLimited, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn complete_computes_nonzero_cost_from_catalog_pricing() {
+        let server = MockServer::start().await;
+        let sse_body = concat!(
+            "event: response.output_text.delta\n",
+            "data: {\"type\":\"response.output_text.delta\",\"delta\":\"hi\"}\n\n",
+            "event: response.completed\n",
+            "data: {\"type\":\"response.completed\",\"response\":{\"usage\":{\"input_tokens\":1000,\"output_tokens\":500,\"input_tokens_details\":{\"cached_tokens\":200}}}}\n\n",
+        );
+        Mock::given(method("POST"))
+            .and(path("/responses"))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(sse_body, "text/event-stream"))
+            .mount(&server)
+            .await;
+
+        let provider =
+            OpenAiProvider::new(ApiKey::new("sk-test"), "gpt-5.5").with_base_url(server.uri());
+        let req = CompletionRequest {
+            messages: vec![CompletionMessage::user("hi")],
+            max_output_tokens: None,
+            temperature: None,
+            effort: None,
+            tools: vec![],
+        };
+
+        let result = provider.complete(req).await.expect("should succeed");
+        // Cached input is billed at its own rate — assert against the catalog
+        // computation so the wiring (and the cached-token split) is proven.
+        let expected = Catalog::seed()
+            .resolve("gpt-5.5")
+            .unwrap()
+            .pricing
+            .cost_usd(&CompletionUsage {
+                input_tokens: 1000,
+                output_tokens: 500,
+                cached_input_tokens: 200,
+            });
+        assert!(result.cost_usd > 0.0, "cost must be non-zero");
+        assert_eq!(result.cost_usd, expected);
+    }
+
+    #[tokio::test]
+    async fn complete_maps_5xx_to_retryable_transport() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/responses"))
+            .respond_with(ResponseTemplate::new(500).set_body_string("internal error"))
+            .mount(&server)
+            .await;
+
+        let provider =
+            OpenAiProvider::new(ApiKey::new("sk-test"), "gpt-5.5").with_base_url(server.uri());
+        let req = CompletionRequest {
+            messages: vec![CompletionMessage::user("hi")],
+            max_output_tokens: None,
+            temperature: None,
+            effort: None,
+            tools: vec![],
+        };
+
+        let err = provider.complete(req).await.unwrap_err();
+        assert!(matches!(err, ProviderError::Transport(_)));
+        assert!(err.is_retryable(), "5xx must be retryable");
+    }
+
+    #[tokio::test]
+    async fn complete_returns_err_on_response_failed_not_truncated_ok() {
+        let server = MockServer::start().await;
+        // Text arrives, then `response.failed`: the turn must error, not
+        // return the partial "Hel".
+        let sse_body = concat!(
+            "event: response.output_text.delta\n",
+            "data: {\"type\":\"response.output_text.delta\",\"delta\":\"Hel\"}\n\n",
+            "event: response.failed\n",
+            "data: {\"type\":\"response.failed\",\"response\":{\"error\":{\"code\":\"server_error\",\"message\":\"upstream failure\"}}}\n\n",
+        );
+        Mock::given(method("POST"))
+            .and(path("/responses"))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(sse_body, "text/event-stream"))
+            .mount(&server)
+            .await;
+
+        let provider =
+            OpenAiProvider::new(ApiKey::new("sk-test"), "gpt-5.5").with_base_url(server.uri());
+        let req = CompletionRequest {
+            messages: vec![CompletionMessage::user("hi")],
+            max_output_tokens: None,
+            temperature: None,
+            effort: None,
+            tools: vec![],
+        };
+
+        let err = provider.complete(req).await.unwrap_err();
+        // server_error ⇒ retryable Transport.
+        assert!(matches!(err, ProviderError::Transport(_)));
+        assert!(err.is_retryable());
+    }
+
+    #[tokio::test]
+    async fn complete_returns_err_on_response_incomplete_not_truncated_ok() {
+        let server = MockServer::start().await;
+        let sse_body = concat!(
+            "event: response.output_text.delta\n",
+            "data: {\"type\":\"response.output_text.delta\",\"delta\":\"partial\"}\n\n",
+            "event: response.incomplete\n",
+            "data: {\"type\":\"response.incomplete\",\"response\":{\"incomplete_details\":{\"reason\":\"max_output_tokens\"}}}\n\n",
+        );
+        Mock::given(method("POST"))
+            .and(path("/responses"))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(sse_body, "text/event-stream"))
+            .mount(&server)
+            .await;
+
+        let provider =
+            OpenAiProvider::new(ApiKey::new("sk-test"), "gpt-5.5").with_base_url(server.uri());
+        let req = CompletionRequest {
+            messages: vec![CompletionMessage::user("hi")],
+            max_output_tokens: None,
+            temperature: None,
+            effort: None,
+            tools: vec![],
+        };
+
+        let err = provider.complete(req).await.unwrap_err();
+        match err {
+            ProviderError::Terminal(msg) => assert!(msg.contains("max_output_tokens"), "{msg}"),
+            other => panic!("expected Terminal incomplete error, got {other:?}"),
         }
     }
 }

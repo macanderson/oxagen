@@ -27,6 +27,7 @@ impl Tool for Grep {
                 },
                 "required": ["pattern"]
             }),
+            read_only: true,
         }
     }
 

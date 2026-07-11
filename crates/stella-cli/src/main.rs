@@ -47,11 +47,11 @@ struct Cli {
     #[arg(long, env = "STELLA_OUTPUT_FORMAT", default_value = "text")]
     output_format: String,
 
-    /// Hard per-turn USD spend limit — enforced mode (07-model-matrix.md
-    /// §6): the turn aborts cleanly (never mid-tool) once spend exceeds
-    /// this. Omit to meter spend for the cost summary without ever
-    /// blocking (observed mode).
-    #[arg(long, env = "STELLA_BUDGET")]
+    /// Hard USD spend limit for the whole run/session — enforced mode
+    /// (07-model-matrix.md §6): work aborts cleanly (never mid-tool) once
+    /// total spend exceeds this. Omit to meter spend for the cost summary
+    /// without ever blocking (observed mode).
+    #[arg(long, env = "STELLA_BUDGET", value_parser = parse_budget)]
     budget: Option<f64>,
 
     #[command(subcommand)]
@@ -66,6 +66,12 @@ enum Command {
         prompt: String,
     },
 
+    /// Work in judged rounds until a judge model confirms the goal is met
+    Goal {
+        /// What must be true when done — assessed by the judge each round
+        goal: String,
+    },
+
     /// Start an interactive REPL session
     Chat,
 
@@ -77,6 +83,21 @@ enum Command {
 
     /// Print the version and exit
     Version,
+}
+
+/// `--budget` must be a positive, finite dollar amount — a NaN or negative
+/// limit would make every comparison silently false and turn the "hard
+/// cap" into a no-op, the worst failure mode for a money control.
+fn parse_budget(raw: &str) -> Result<f64, String> {
+    let value: f64 = raw
+        .parse()
+        .map_err(|_| format!("`{raw}` is not a number"))?;
+    if !value.is_finite() || value <= 0.0 {
+        return Err(format!(
+            "budget must be a positive dollar amount, got `{raw}`"
+        ));
+    }
+    Ok(value)
 }
 
 fn main() -> ExitCode {
@@ -115,6 +136,13 @@ fn run(cli: Cli) -> Result<(), String> {
                 .build()
                 .map_err(|e| format!("failed to start runtime: {e}"))?;
             rt.block_on(agent::run_one_shot(&cfg, &prompt, cli.budget))?;
+        }
+        Command::Goal { goal } => {
+            let rt = tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .build()
+                .map_err(|e| format!("failed to start runtime: {e}"))?;
+            rt.block_on(agent::run_goal_cmd(&cfg, &goal, cli.budget))?;
         }
         Command::Chat => {
             let rt = tokio::runtime::Builder::new_multi_thread()

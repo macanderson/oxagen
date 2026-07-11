@@ -11,7 +11,38 @@
 //! endpoint that grows this catalog with live data) is future work; the
 //! shape does not change, only the row count.
 
-use stella_protocol::ProviderError;
+use stella_protocol::{CompletionUsage, ProviderError};
+
+/// Per-model list pricing in USD per million tokens (`07-model-matrix.md`
+/// §6). Seed values below are day-0 offline approximations of each
+/// provider's published list price; `stella models refresh` (future work)
+/// overwrites them with live data. Cached input is billed at its own,
+/// cheaper rate — cached tokens are a *subset* of `input_tokens` in the
+/// normalized [`CompletionUsage`] envelope, so cost accounting must not
+/// double-charge them.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Pricing {
+    pub input_usd_per_mtok: f64,
+    pub output_usd_per_mtok: f64,
+    pub cached_input_usd_per_mtok: f64,
+}
+
+impl Pricing {
+    /// Estimated USD cost for one completion's normalized usage. Non-cached
+    /// input (`input_tokens - cached_input_tokens`) is billed at the input
+    /// rate, the cached remainder at the cached rate, and output at the
+    /// output rate. Never panics and never goes negative — a provider that
+    /// reports more cached than total input (shouldn't happen, but is not
+    /// worth aborting a turn over) saturates to zero non-cached input.
+    pub fn cost_usd(&self, usage: &CompletionUsage) -> f64 {
+        let cached = usage.cached_input_tokens.min(usage.input_tokens);
+        let uncached_input = usage.input_tokens - cached;
+        const PER_MTOK: f64 = 1_000_000.0;
+        (uncached_input as f64 / PER_MTOK) * self.input_usd_per_mtok
+            + (cached as f64 / PER_MTOK) * self.cached_input_usd_per_mtok
+            + (usage.output_tokens as f64 / PER_MTOK) * self.output_usd_per_mtok
+    }
+}
 
 /// Which tool-call dialect a model's provider speaks
 /// (`07-model-matrix.md` §4).
@@ -33,13 +64,21 @@ pub enum ToolDialect {
 
 /// One catalog row — provider-native slug, verified against the provider's
 /// own `/models` endpoint (seed data below is the day-0 offline fallback).
-#[derive(Debug, Clone, PartialEq, Eq)]
+///
+/// `Eq` is intentionally *not* derived: [`Pricing`] carries `f64` fields, and
+/// exact float equality is not a meaningful identity for a catalog row (rows
+/// are keyed by `id`, deduped by the seed test). `PartialEq` is kept for
+/// tests that compare whole entries.
+#[derive(Debug, Clone, PartialEq)]
 pub struct CatalogEntry {
     pub id: &'static str,
     pub provider: &'static str,
     pub family: &'static str,
     pub context_window: u32,
     pub tool_dialect: ToolDialect,
+    /// List pricing used to compute `CompletionResult::cost_usd` on the real
+    /// request path — each adapter resolves its own row in its constructor.
+    pub pricing: Pricing,
 }
 
 /// The in-binary seed catalog. Curated, versioned data — not code that
@@ -63,6 +102,11 @@ impl Catalog {
                     family: "glm",
                     context_window: 200_000,
                     tool_dialect: ToolDialect::OpenaiJson,
+                    pricing: Pricing {
+                        input_usd_per_mtok: 0.60,
+                        output_usd_per_mtok: 2.20,
+                        cached_input_usd_per_mtok: 0.11,
+                    },
                 },
                 CatalogEntry {
                     id: "claude-fable-5",
@@ -70,6 +114,11 @@ impl Catalog {
                     family: "claude",
                     context_window: 200_000,
                     tool_dialect: ToolDialect::AnthropicTools,
+                    pricing: Pricing {
+                        input_usd_per_mtok: 3.00,
+                        output_usd_per_mtok: 15.00,
+                        cached_input_usd_per_mtok: 0.30,
+                    },
                 },
                 CatalogEntry {
                     id: "gpt-5.5",
@@ -83,6 +132,11 @@ impl Catalog {
                     // base URL as a stand-in until the Responses API
                     // adapter landed.
                     tool_dialect: ToolDialect::OpenaiResponses,
+                    pricing: Pricing {
+                        input_usd_per_mtok: 1.25,
+                        output_usd_per_mtok: 10.00,
+                        cached_input_usd_per_mtok: 0.125,
+                    },
                 },
                 CatalogEntry {
                     id: "grok-4",
@@ -90,6 +144,11 @@ impl Catalog {
                     family: "grok",
                     context_window: 256_000,
                     tool_dialect: ToolDialect::OpenaiJson,
+                    pricing: Pricing {
+                        input_usd_per_mtok: 3.00,
+                        output_usd_per_mtok: 15.00,
+                        cached_input_usd_per_mtok: 0.75,
+                    },
                 },
                 CatalogEntry {
                     id: "deepseek-chat",
@@ -97,6 +156,11 @@ impl Catalog {
                     family: "deepseek",
                     context_window: 128_000,
                     tool_dialect: ToolDialect::OpenaiJson,
+                    pricing: Pricing {
+                        input_usd_per_mtok: 0.27,
+                        output_usd_per_mtok: 1.10,
+                        cached_input_usd_per_mtok: 0.07,
+                    },
                 },
                 CatalogEntry {
                     id: "gemini-3-pro",
@@ -109,6 +173,11 @@ impl Catalog {
                     // GeminiFunctions dialect once built (deferred — see
                     // config.rs and the Phase 2 PR description).
                     tool_dialect: ToolDialect::OpenaiJson,
+                    pricing: Pricing {
+                        input_usd_per_mtok: 1.25,
+                        output_usd_per_mtok: 10.00,
+                        cached_input_usd_per_mtok: 0.31,
+                    },
                 },
                 CatalogEntry {
                     id: "auto",
@@ -122,6 +191,19 @@ impl Catalog {
                     // through verbatim).
                     context_window: 128_000,
                     tool_dialect: ToolDialect::OpenaiJson,
+                    // OpenRouter's `auto` meta-model routes to whichever
+                    // underlying model it picks, so the effective price
+                    // varies per request and the gateway reports it back on
+                    // its own usage/generation endpoint — we cannot know it
+                    // from the slug alone. Left at zero deliberately: a wrong
+                    // fixed estimate is worse than a zero the metering layer
+                    // can flag as "gateway-priced, reconcile from the
+                    // provider's usage record."
+                    pricing: Pricing {
+                        input_usd_per_mtok: 0.0,
+                        output_usd_per_mtok: 0.0,
+                        cached_input_usd_per_mtok: 0.0,
+                    },
                 },
             ],
         }
@@ -178,6 +260,65 @@ mod tests {
             before,
             "catalog seed must not contain duplicate slugs"
         );
+    }
+
+    #[test]
+    fn pricing_bills_cached_input_at_its_own_rate_and_never_double_charges() {
+        let pricing = Pricing {
+            input_usd_per_mtok: 3.00,
+            output_usd_per_mtok: 15.00,
+            cached_input_usd_per_mtok: 0.30,
+        };
+        // 1M input tokens of which 400k are cached, plus 200k output:
+        //   uncached input = 600k @ $3/M    = 1.80
+        //   cached input   = 400k @ $0.30/M = 0.12
+        //   output         = 200k @ $15/M   = 3.00
+        //                                     ------
+        //                                      4.92
+        let usage = CompletionUsage {
+            input_tokens: 1_000_000,
+            output_tokens: 200_000,
+            cached_input_tokens: 400_000,
+        };
+        assert!((pricing.cost_usd(&usage) - 4.92).abs() < 1e-9);
+    }
+
+    #[test]
+    fn pricing_saturates_when_cached_exceeds_reported_input() {
+        // Defensive: a provider reporting more cached than total input must
+        // never produce a negative uncached-input charge.
+        let pricing = Pricing {
+            input_usd_per_mtok: 3.00,
+            output_usd_per_mtok: 15.00,
+            cached_input_usd_per_mtok: 0.30,
+        };
+        let usage = CompletionUsage {
+            input_tokens: 100,
+            output_tokens: 0,
+            cached_input_tokens: 1_000,
+        };
+        // All 100 input tokens billed as cached (clamped), never negative.
+        let expected = (100.0 / 1_000_000.0) * 0.30;
+        assert!((pricing.cost_usd(&usage) - expected).abs() < 1e-12);
+        assert!(pricing.cost_usd(&usage) >= 0.0);
+    }
+
+    #[test]
+    fn every_priced_provider_default_has_nonzero_input_and_output_pricing() {
+        // OpenRouter `auto` is deliberately zero (gateway-priced); every
+        // other seeded model must carry a real, positive list price so
+        // `cost_usd` is never a silent no-op on the real request path.
+        let catalog = Catalog::seed();
+        for entry in catalog.entries() {
+            if entry.id == "auto" {
+                continue;
+            }
+            assert!(
+                entry.pricing.input_usd_per_mtok > 0.0 && entry.pricing.output_usd_per_mtok > 0.0,
+                "model `{}` has zero pricing — budget metering would be a no-op",
+                entry.id
+            );
+        }
     }
 
     #[test]

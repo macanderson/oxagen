@@ -27,13 +27,18 @@ pub struct CompactionReport {
 const EVICTION_STUB: &str =
     "[tool output evicted to fit context — re-run the tool if you need it again]";
 
-fn dedup_stub(kept_at: usize) -> String {
-    format!("[identical output repeated — see the later result at message index {kept_at}]")
+fn dedup_stub() -> String {
+    // Models can't see message indices — point at the surviving copy in
+    // terms they can act on.
+    "[identical output repeated — the full content appears again in a more recent tool result]"
+        .to_string()
 }
 
 /// Evict + dedup until the conversation fits `budget_tokens`, or until
 /// nothing more can be safely removed. Returns `None` if no compaction was
-/// needed (already under budget).
+/// needed (already under budget) — or if the pass changed nothing (all
+/// remaining content is protected), so a permanently-over-budget
+/// conversation doesn't emit a no-op `Compaction` event before every step.
 pub fn compact(messages: &mut [CompletionMessage], budget_tokens: u64) -> Option<CompactionReport> {
     let before_tokens = estimate_conversation_tokens(messages);
     if before_tokens <= budget_tokens {
@@ -75,7 +80,7 @@ pub fn compact(messages: &mut [CompletionMessage], budget_tokens: u64) -> Option
                     && kept_at > idx
                 {
                     result.output = ToolOutput::Ok {
-                        content: dedup_stub(kept_at),
+                        content: dedup_stub(),
                     };
                     deduped += 1;
                 }
@@ -116,6 +121,10 @@ pub fn compact(messages: &mut [CompletionMessage], budget_tokens: u64) -> Option
         }
     }
 
+    if evicted == 0 && deduped == 0 {
+        // Over budget but nothing compactable — don't report a no-op.
+        return None;
+    }
     let after_tokens = estimate_conversation_tokens(messages);
     Some(CompactionReport {
         before_tokens,

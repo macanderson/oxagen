@@ -11,10 +11,12 @@
 //! over a caller-supplied abstraction (`ProviderProfile`) instead of any
 //! concrete catalog type, and has no I/O of its own: `resolve` is a plain
 //! synchronous function over owned data. It returns *data* describing what
-//! happened (a `ModelRef` plus an optional `FallbackInfo`); the future
-//! `driver.rs` is the one place that turns a `FallbackInfo` into an
-//! `AgentEvent::ProviderFallback` and pushes it onto the event channel —
-//! there is no event channel here.
+//! happened (a `ModelRef` plus an optional `FallbackInfo`). NOT YET WIRED:
+//! no production caller consumes the router today — `driver.rs` runs a
+//! single provider, and `AgentEvent::ProviderFallback` is emitted nowhere.
+//! Wiring the router (and its fallback events) into the turn path is the
+//! multi-provider follow-up; until then this module is a tested port, not
+//! live behavior.
 //!
 //! Binding lessons this module exists to satisfy: L-M3 (no `"auto"` string
 //! sentinel anywhere — absence of a pin is `Option::None`), L-M6 (role-based

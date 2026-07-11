@@ -7,11 +7,20 @@
 //! for subsequent file operations (L-S2).
 
 pub mod bash;
+pub mod ci;
+pub mod delete;
 pub mod edit;
+mod exec;
+pub mod exploration;
 pub mod glob;
 pub mod grep;
+pub mod issues;
+pub mod memory;
+pub mod project;
 pub mod read;
 pub mod registry;
+pub mod screenshot;
+pub mod verify;
 pub mod write;
 
 pub use registry::ToolRegistry;

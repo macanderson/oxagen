@@ -10,7 +10,7 @@
 //! Per `07-model-matrix.md` §6, `enforced` mode is "a hard stop with a
 //! clean turn abort — never a mid-tool kill." This module cannot enforce
 //! *when* the caller checks the outcome — that discipline belongs to the
-//! future `driver.rs` step-driver, which must only consult
+//! `driver.rs` step-driver, which only consults
 //! [`BudgetGuard::record_spend`]'s (or [`BudgetGuard::evaluate`]'s) return
 //! value **between steps**, after a model/media call has fully completed and
 //! before the next one is dispatched — never while a tool call is

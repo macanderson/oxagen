@@ -13,6 +13,7 @@ pub mod compaction;
 pub mod driver;
 pub mod estimator;
 mod glob;
+pub mod goal;
 pub mod hooks;
 pub mod loop_detect;
 pub mod ports;
@@ -22,6 +23,7 @@ pub mod rules;
 
 pub use budget::{BudgetGuard, BudgetOutcome};
 pub use driver::{Engine, EngineConfig, TurnOutcome};
+pub use goal::{GoalConfig, GoalOutcome};
 pub use hooks::{HookEvent, HookPayload, HookRunOutcome, HookRunner, Hooks, run_hooks};
 pub use loop_detect::{LoopDetectionConfig, LoopVerdict, detect_loop};
 pub use ports::{Clock, ToolExecutor};

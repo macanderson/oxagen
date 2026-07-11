@@ -23,6 +23,32 @@ use std::time::Duration;
 use colored::Colorize;
 use stella_protocol::AgentEvent;
 
+/// Truncate `s` to at most `max` characters, appending `…` when it was
+/// shortened. Char-boundary-safe: operates on `char`s, never byte indices, so
+/// it can never panic on multi-byte UTF-8 the way the previous `&s[..57]` /
+/// `&preview[..77]` byte-slices did (a slice at a non-char boundary is an
+/// immediate panic — e.g. any tool input or output containing an accented
+/// letter or emoji at the cut point).
+fn truncate_with_ellipsis(s: &str, max: usize) -> String {
+    if s.chars().count() > max {
+        let head: String = s.chars().take(max).collect();
+        format!("{head}…")
+    } else {
+        s.to_string()
+    }
+}
+
+/// Render a token count compactly: `842`, `12.3k`, `1.2M`.
+fn fmt_tokens(tokens: u64) -> String {
+    if tokens >= 1_000_000 {
+        format!("{:.1}M", tokens as f64 / 1_000_000.0)
+    } else if tokens >= 1_000 {
+        format!("{:.1}k", tokens as f64 / 1_000.0)
+    } else {
+        tokens.to_string()
+    }
+}
+
 /// Print a tool-call card: name, input summary, status.
 pub fn tool_call_card(name: &str, input: &serde_json::Value, status: &str) {
     let icon = match status {
@@ -39,11 +65,7 @@ pub fn tool_call_card(name: &str, input: &serde_json::Value, status: &str) {
                 .take(3)
                 .map(|(k, v)| {
                     let val_str = if let Some(s) = v.as_str() {
-                        if s.len() > 60 {
-                            format!("{}…", &s[..57])
-                        } else {
-                            s.to_string()
-                        }
+                        truncate_with_ellipsis(s, 57)
                     } else {
                         v.to_string()
                     };
@@ -75,11 +97,7 @@ pub fn tool_result_card(_name: &str, output: &str, is_error: bool, duration: Dur
         "ok".green()
     };
     let preview = output.lines().next().unwrap_or("(empty)");
-    let preview = if preview.len() > 80 {
-        format!("{}…", &preview[..77])
-    } else {
-        preview.to_string()
-    };
+    let preview = truncate_with_ellipsis(preview, 77);
     println!(
         "    {} {} in {:.0}ms — {}",
         icon,
@@ -184,12 +202,79 @@ pub fn render_event(event: &AgentEvent) {
             limit_usd,
             mode,
         } => {
+            // Only render when a limit is being enforced — running spend
+            // with no limit is already covered per step by `StepUsage` and
+            // at turn end by `cost_summary`, so an extra line per call is
+            // pure noise in observed mode.
             if matches!(mode, stella_protocol::BudgetMode::Off) {
                 return;
             }
-            match limit_usd {
-                Some(limit) => println!("  {} spend: ${spent_usd:.4} / ${limit:.2}", "$".dimmed()),
-                None => println!("  {} spend: ${spent_usd:.4}", "$".dimmed()),
+            if let Some(limit) = limit_usd {
+                println!("  {} spend: ${spent_usd:.4} / ${limit:.2}", "$".dimmed());
+            }
+        }
+        AgentEvent::StepUsage {
+            step,
+            model,
+            input_tokens,
+            output_tokens,
+            cached_input_tokens,
+            cost_usd,
+            duration_ms,
+            retries,
+            tool_calls,
+        } => {
+            // One dimmed telemetry line per committed model call: the live
+            // HUD a metering consumer would reconstruct from this event.
+            let cached = if *cached_input_tokens > 0 {
+                format!(" ({} cached)", fmt_tokens(*cached_input_tokens))
+            } else {
+                String::new()
+            };
+            let retried = if *retries > 0 {
+                format!(" · {retries} retry")
+            } else {
+                String::new()
+            };
+            let tools = if *tool_calls > 0 {
+                format!(
+                    " · {tool_calls} tool call{}",
+                    if *tool_calls == 1 { "" } else { "s" }
+                )
+            } else {
+                String::new()
+            };
+            println!(
+                "  {} step {} · {} · {}{} in → {} out · ${cost_usd:.4} · {:.1}s{}{}",
+                "·".dimmed(),
+                step + 1,
+                model.dimmed(),
+                fmt_tokens(*input_tokens),
+                cached.dimmed(),
+                fmt_tokens(*output_tokens),
+                (*duration_ms as f64) / 1000.0,
+                retried.dimmed(),
+                tools.dimmed(),
+            );
+        }
+        AgentEvent::GoalVerdict {
+            round,
+            met,
+            reasoning,
+            ..
+        } => {
+            if *met {
+                println!(
+                    "  {} judge verdict (round {round}): goal met — {}",
+                    "✓".green().bold(),
+                    reasoning
+                );
+            } else {
+                println!(
+                    "  {} judge verdict (round {round}): not yet met — {}",
+                    "○".yellow(),
+                    reasoning
+                );
             }
         }
         AgentEvent::ProviderFallback { from, to, reason } => {
@@ -210,5 +295,52 @@ pub fn render_event(event: &AgentEvent) {
             // directly (it has the same model/cost_usd this event carries,
             // plus wall-clock elapsed time this event doesn't).
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn truncate_leaves_short_strings_untouched() {
+        assert_eq!(truncate_with_ellipsis("hello", 57), "hello");
+    }
+
+    #[test]
+    fn truncate_appends_ellipsis_when_shortened() {
+        let long = "a".repeat(100);
+        let out = truncate_with_ellipsis(&long, 57);
+        assert_eq!(out.chars().count(), 58); // 57 chars + the ellipsis
+        assert!(out.ends_with('…'));
+    }
+
+    #[test]
+    fn truncate_never_panics_on_multibyte_boundaries() {
+        // Regression for the `&s[..57]` / `&preview[..77]` byte-slice panic:
+        // a string whose byte-length exceeds the cap but whose cut point
+        // lands inside a multi-byte char must truncate cleanly, not crash.
+        let accented = "é".repeat(100); // each 'é' is 2 bytes
+        let out = truncate_with_ellipsis(&accented, 57);
+        assert_eq!(out.chars().count(), 58);
+        assert!(out.ends_with('…'));
+
+        let emoji = "🦀".repeat(80); // each is 4 bytes
+        let out = truncate_with_ellipsis(&emoji, 77);
+        assert_eq!(out.chars().count(), 78);
+    }
+
+    #[test]
+    fn tool_cards_do_not_panic_on_non_ascii_input_and_output() {
+        // Exercises the real call sites (both former panic points) with
+        // non-ASCII payloads long enough to trip truncation.
+        let input = serde_json::json!({ "path": "café/".to_string() + &"señor".repeat(40) });
+        tool_call_card("read_file", &input, "running");
+        tool_result_card(
+            "read_file",
+            &("🦀 ".repeat(60)),
+            false,
+            Duration::from_millis(3),
+        );
     }
 }

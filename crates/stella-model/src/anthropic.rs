@@ -11,7 +11,9 @@ use stella_protocol::{
     ProviderError, ToolCall,
 };
 
+use crate::catalog::{Catalog, Pricing};
 use crate::credential::ApiKey;
+use crate::http;
 use crate::provider::Provider;
 use crate::sse::SseDecoder;
 
@@ -23,15 +25,21 @@ pub struct AnthropicProvider {
     api_key: ApiKey,
     base_url: String,
     model: String,
+    /// List pricing for `model`, resolved from the catalog at construction so
+    /// `cost_usd` is computed on the real request path (see `zai.rs`).
+    pricing: Option<Pricing>,
 }
 
 impl AnthropicProvider {
     pub fn new(api_key: ApiKey, model: impl Into<String>) -> Self {
+        let model = model.into();
+        let pricing = Catalog::seed().resolve(&model).ok().map(|e| e.pricing);
         Self {
-            client: reqwest::Client::new(),
+            client: http::client(),
             api_key,
             base_url: DEFAULT_BASE_URL.to_string(),
-            model: model.into(),
+            model,
+            pricing,
         }
     }
 
@@ -52,6 +60,12 @@ struct AnthropicRequest<'a> {
     system: Option<&'a str>,
     messages: Vec<AnthropicMessage>,
     stream: bool,
+    /// Sampling temperature, forwarded from `CompletionRequest.temperature`.
+    /// Omitted when `None` so Anthropic applies its own default — dropping it
+    /// unconditionally (the prior bug) meant a caller-set temperature was
+    /// silently ignored.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    temperature: Option<f32>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     tools: Vec<AnthropicToolSchema>,
 }
@@ -112,8 +126,44 @@ enum AnthropicStreamEvent {
     },
     #[serde(rename = "message_delta")]
     MessageDelta { usage: Option<AnthropicUsage> },
+    /// A mid-stream error event. The Messages API can send
+    /// `event: error` / `data: {"type":"error","error":{...}}` after already
+    /// streaming content — modeled explicitly so it aborts the turn with a
+    /// typed error instead of falling into `Other` and being swallowed,
+    /// returning truncated text as a bogus success.
+    #[serde(rename = "error")]
+    Error { error: AnthropicStreamError },
     #[serde(other)]
     Other,
+}
+
+#[derive(Deserialize, Debug, Default)]
+struct AnthropicStreamError {
+    #[serde(default, rename = "type")]
+    kind: String,
+    #[serde(default)]
+    message: String,
+}
+
+/// Map an Anthropic in-stream error to a typed `ProviderError`. Anthropic
+/// documents `overloaded_error` and `api_error` as transient server-side
+/// conditions (retryable `Transport`); `rate_limit_error` is `RateLimited`;
+/// everything else (`invalid_request_error`, `authentication_error`,
+/// `permission_error`, `not_found_error`, …) is `Terminal`.
+fn classify_anthropic_stream_error(err: &AnthropicStreamError) -> ProviderError {
+    let detail = if err.message.is_empty() {
+        format!("Anthropic stream error ({})", err.kind)
+    } else {
+        format!("Anthropic stream error: {}", err.message)
+    };
+    match err.kind.as_str() {
+        "overloaded_error" | "api_error" | "timeout_error" => ProviderError::Transport(detail),
+        "rate_limit_error" => ProviderError::RateLimited {
+            message: detail,
+            retry_after_ms: None,
+        },
+        _ => ProviderError::Terminal(detail),
+    }
 }
 
 #[derive(Deserialize, Debug, Default)]
@@ -240,6 +290,7 @@ impl Provider for AnthropicProvider {
             system: system.as_deref(),
             messages,
             stream: true,
+            temperature: req.temperature,
             tools: req
                 .tools
                 .iter()
@@ -271,6 +322,15 @@ impl Provider for AnthropicProvider {
                 retry_after_ms: None,
             });
         }
+        // 5xx (incl. 529 overloaded, which Anthropic uses for load shedding)
+        // is transient — map to a retryable Transport error.
+        if response.status().is_server_error() {
+            let status = response.status();
+            let text = response.text().await.unwrap_or_default();
+            return Err(ProviderError::Transport(format!(
+                "Anthropic HTTP {status}: {text}"
+            )));
+        }
         if !response.status().is_success() {
             let status = response.status();
             let text = response.text().await.unwrap_or_default();
@@ -279,15 +339,15 @@ impl Provider for AnthropicProvider {
             )));
         }
 
-        aggregate_anthropic_stream(response)
-            .await
-            .map(|(text, tool_calls, usage)| CompletionResult {
-                text,
-                tool_calls,
-                usage,
-                model: self.model.clone(),
-                cost_usd: 0.0,
-            })
+        let (text, tool_calls, usage) = aggregate_anthropic_stream(response).await?;
+        let cost_usd = self.pricing.map(|p| p.cost_usd(&usage)).unwrap_or(0.0);
+        Ok(CompletionResult {
+            text,
+            tool_calls,
+            usage,
+            model: self.model.clone(),
+            cost_usd,
+        })
     }
 }
 
@@ -303,7 +363,6 @@ struct ToolUseAccumulator {
 async fn aggregate_anthropic_stream(
     response: reqwest::Response,
 ) -> Result<(String, Vec<ToolCall>, CompletionUsage), ProviderError> {
-    use futures_util::StreamExt;
     use std::collections::BTreeMap;
 
     let mut decoder = SseDecoder::new();
@@ -312,17 +371,21 @@ async fn aggregate_anthropic_stream(
     let mut tool_uses: BTreeMap<usize, ToolUseAccumulator> = BTreeMap::new();
     let mut stream = response.bytes_stream();
 
-    while let Some(chunk) = stream.next().await {
-        let chunk = chunk.map_err(|e| ProviderError::Transport(e.to_string()))?;
-        let chunk_str =
-            std::str::from_utf8(&chunk).map_err(|e| ProviderError::Malformed(e.to_string()))?;
-        decoder.push(chunk_str);
+    while let Some(chunk) = http::next_with_timeout(&mut stream, http::STREAM_IDLE_TIMEOUT).await? {
+        decoder
+            .push_bytes(&chunk)
+            .map_err(|e| ProviderError::Malformed(e.to_string()))?;
         for event in decoder.poll() {
             if event.data.trim() == "[DONE]" || event.data.is_empty() {
                 continue;
             }
             let parsed: Result<AnthropicStreamEvent, _> = serde_json::from_str(&event.data);
             match parsed {
+                Ok(AnthropicStreamEvent::Error { error }) => {
+                    // A mid-stream error aborts the turn with a typed error —
+                    // never a truncated Ok with the text seen so far.
+                    return Err(classify_anthropic_stream_error(&error));
+                }
                 Ok(AnthropicStreamEvent::MessageStart { message }) => {
                     if let Some(u) = message.usage {
                         usage.input_tokens = u.input_tokens;
@@ -388,7 +451,7 @@ async fn aggregate_anthropic_stream(
 mod tests {
     use super::*;
     use stella_protocol::MessageRole;
-    use wiremock::matchers::{header, method, path};
+    use wiremock::matchers::{body_string_contains, header, method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     #[test]
@@ -482,6 +545,7 @@ mod tests {
                 name: "read_file".into(),
                 description: "Read a file".into(),
                 input_schema: serde_json::json!({"type":"object"}),
+                read_only: false,
             }],
         };
 
@@ -567,5 +631,134 @@ mod tests {
         let err = provider.complete(req).await.unwrap_err();
         assert!(matches!(err, ProviderError::Auth(_)));
         assert!(!err.is_retryable());
+    }
+
+    #[tokio::test]
+    async fn complete_computes_nonzero_cost_from_catalog_pricing() {
+        let server = MockServer::start().await;
+        let sse_body = concat!(
+            "event: message_start\n",
+            "data: {\"type\":\"message_start\",\"message\":{\"usage\":{\"input_tokens\":1000,\"output_tokens\":0}}}\n\n",
+            "event: content_block_delta\n",
+            "data: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\"hi\"}}\n\n",
+            "event: message_delta\n",
+            "data: {\"type\":\"message_delta\",\"usage\":{\"input_tokens\":0,\"output_tokens\":500}}\n\n",
+        );
+        Mock::given(method("POST"))
+            .and(path("/v1/messages"))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(sse_body, "text/event-stream"))
+            .mount(&server)
+            .await;
+
+        let provider = AnthropicProvider::new(ApiKey::new("sk-test"), "claude-fable-5")
+            .with_base_url(server.uri());
+        let req = CompletionRequest {
+            messages: vec![CompletionMessage::user("hi")],
+            max_output_tokens: None,
+            temperature: None,
+            effort: None,
+            tools: vec![],
+        };
+
+        let result = provider.complete(req).await.expect("should succeed");
+        let expected = Catalog::seed()
+            .resolve("claude-fable-5")
+            .unwrap()
+            .pricing
+            .cost_usd(&CompletionUsage {
+                input_tokens: 1000,
+                output_tokens: 500,
+                cached_input_tokens: 0,
+            });
+        assert!(result.cost_usd > 0.0, "cost must be non-zero");
+        assert_eq!(result.cost_usd, expected);
+    }
+
+    #[tokio::test]
+    async fn complete_forwards_temperature_to_the_request_body() {
+        let server = MockServer::start().await;
+        let sse_body = concat!(
+            "event: content_block_delta\n",
+            "data: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\"ok\"}}\n\n",
+        );
+        // The mock only matches if the serialized body carries the
+        // temperature — proving the adapter no longer drops it.
+        Mock::given(method("POST"))
+            .and(path("/v1/messages"))
+            .and(body_string_contains("\"temperature\":0.3"))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(sse_body, "text/event-stream"))
+            .mount(&server)
+            .await;
+
+        let provider = AnthropicProvider::new(ApiKey::new("sk-test"), "claude-fable-5")
+            .with_base_url(server.uri());
+        let req = CompletionRequest {
+            messages: vec![CompletionMessage::user("hi")],
+            max_output_tokens: None,
+            temperature: Some(0.3),
+            effort: None,
+            tools: vec![],
+        };
+
+        let result = provider.complete(req).await.expect("should succeed");
+        assert_eq!(result.text, "ok");
+    }
+
+    #[tokio::test]
+    async fn complete_maps_5xx_to_retryable_transport() {
+        let server = MockServer::start().await;
+        // 529 is Anthropic's "overloaded" load-shedding status.
+        Mock::given(method("POST"))
+            .and(path("/v1/messages"))
+            .respond_with(ResponseTemplate::new(529).set_body_string("overloaded"))
+            .mount(&server)
+            .await;
+
+        let provider = AnthropicProvider::new(ApiKey::new("sk-test"), "claude-fable-5")
+            .with_base_url(server.uri());
+        let req = CompletionRequest {
+            messages: vec![CompletionMessage::user("hi")],
+            max_output_tokens: None,
+            temperature: None,
+            effort: None,
+            tools: vec![],
+        };
+
+        let err = provider.complete(req).await.unwrap_err();
+        assert!(matches!(err, ProviderError::Transport(_)));
+        assert!(err.is_retryable(), "5xx/529 must be retryable");
+    }
+
+    #[tokio::test]
+    async fn complete_returns_err_on_mid_stream_error_event_not_truncated_ok() {
+        let server = MockServer::start().await;
+        // Text arrives, then an `error` event: the turn must fail, not return
+        // the partial "Hel".
+        let sse_body = concat!(
+            "event: content_block_delta\n",
+            "data: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\"Hel\"}}\n\n",
+            "event: error\n",
+            "data: {\"type\":\"error\",\"error\":{\"type\":\"overloaded_error\",\"message\":\"server overloaded\"}}\n\n",
+        );
+        Mock::given(method("POST"))
+            .and(path("/v1/messages"))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(sse_body, "text/event-stream"))
+            .mount(&server)
+            .await;
+
+        let provider = AnthropicProvider::new(ApiKey::new("sk-test"), "claude-fable-5")
+            .with_base_url(server.uri());
+        let req = CompletionRequest {
+            messages: vec![CompletionMessage::user("hi")],
+            max_output_tokens: None,
+            temperature: None,
+            effort: None,
+            tools: vec![],
+        };
+
+        let err = provider.complete(req).await.unwrap_err();
+        // overloaded_error ⇒ retryable Transport.
+        assert!(matches!(err, ProviderError::Transport(_)));
+        assert!(err.is_retryable());
     }
 }

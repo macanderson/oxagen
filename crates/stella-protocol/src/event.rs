@@ -88,6 +88,36 @@ pub enum AgentEvent {
         limit_usd: Option<f64>,
         mode: BudgetMode,
     },
+    /// One committed model call — the metering record. Emitted exactly once
+    /// per step that lands (a step whose retries all fail emits `Error`,
+    /// never a `StepUsage`), carrying the normalized usage envelope from
+    /// `CompletionUsage` plus everything a metering/billing pipeline needs
+    /// to price and audit the call without reconstructing state:
+    /// aggregate a turn by summing its `StepUsage` events.
+    /// `duration_ms` is wall-clock for the committed call *including* any
+    /// retry backoff that preceded it (`retries` says how many).
+    StepUsage {
+        step: usize,
+        model: String,
+        input_tokens: u64,
+        output_tokens: u64,
+        cached_input_tokens: u64,
+        cost_usd: f64,
+        duration_ms: u64,
+        retries: u32,
+        tool_calls: usize,
+    },
+    /// A judge model's assessment of a goal-driven loop
+    /// (`stella-core::goal`) after one working round. `met == true` ends
+    /// the loop; `met == false` feeds `reasoning` back to the worker as
+    /// course-correction. `cost_usd` is the judge call's own spend (already
+    /// recorded against the budget when this event fires).
+    GoalVerdict {
+        round: usize,
+        met: bool,
+        reasoning: String,
+        cost_usd: f64,
+    },
     /// A provider's circuit breaker opened and the router fell back to the
     /// next configured provider of the same role's tier. Never silent
     /// (L-M7) — no mid-turn family switch happens without this event.
@@ -184,6 +214,67 @@ mod tests {
         let json = serde_json::to_string(&event).unwrap();
         assert!(json.contains("\"from\":\"zai\""), "{json}");
         assert!(json.contains("\"to\":\"anthropic\""), "{json}");
+    }
+
+    #[test]
+    fn step_usage_roundtrips_as_a_complete_metering_record() {
+        let event = AgentEvent::StepUsage {
+            step: 3,
+            model: "glm-5.2".into(),
+            input_tokens: 12_000,
+            output_tokens: 450,
+            cached_input_tokens: 9_000,
+            cost_usd: 0.0042,
+            duration_ms: 1_830,
+            retries: 1,
+            tool_calls: 4,
+        };
+        let json = serde_json::to_string(&event).unwrap();
+        assert!(json.contains("\"type\":\"step_usage\""), "{json}");
+        let back: AgentEvent = serde_json::from_str(&json).unwrap();
+        match back {
+            AgentEvent::StepUsage {
+                step,
+                input_tokens,
+                cached_input_tokens,
+                retries,
+                tool_calls,
+                ..
+            } => {
+                assert_eq!(step, 3);
+                assert_eq!(input_tokens, 12_000);
+                assert_eq!(cached_input_tokens, 9_000);
+                assert_eq!(retries, 1);
+                assert_eq!(tool_calls, 4);
+            }
+            other => panic!("unexpected variant: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn goal_verdict_roundtrips_both_outcomes() {
+        for met in [true, false] {
+            let event = AgentEvent::GoalVerdict {
+                round: 2,
+                met,
+                reasoning: "tests now pass".into(),
+                cost_usd: 0.001,
+            };
+            let json = serde_json::to_string(&event).unwrap();
+            assert!(json.contains("\"type\":\"goal_verdict\""), "{json}");
+            let back: AgentEvent = serde_json::from_str(&json).unwrap();
+            match back {
+                AgentEvent::GoalVerdict {
+                    met: back_met,
+                    round,
+                    ..
+                } => {
+                    assert_eq!(back_met, met);
+                    assert_eq!(round, 2);
+                }
+                other => panic!("unexpected variant: {other:?}"),
+            }
+        }
     }
 
     #[test]

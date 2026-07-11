@@ -415,7 +415,14 @@ fn guard_matches(guard: &RuleGuard, action: &ProposedAction<'_>) -> bool {
         return false;
     }
     match (&guard.deny_path_glob, &guard.deny_command_glob) {
-        (Some(p), _) => action.path.is_some_and(|path| match_glob(p, path)),
+        // A guard carrying BOTH globs denies when EITHER matches — a rule
+        // author who wrote two deny conditions meant both of them, not
+        // "path wins, command silently ignored".
+        (Some(p), Some(c)) => {
+            action.path.is_some_and(|path| match_glob(p, path))
+                || action.command.is_some_and(|cmd| match_glob(c, cmd))
+        }
+        (Some(p), None) => action.path.is_some_and(|path| match_glob(p, path)),
         (None, Some(c)) => action.command.is_some_and(|cmd| match_glob(c, cmd)),
         // A guard with no path/command glob blocks the whole tool (TS:
         // `guardDenyEntry` emits the bare tool name in this case).

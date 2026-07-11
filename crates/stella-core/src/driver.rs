@@ -52,9 +52,11 @@
 //! §4.2: "malformed-call repair tuned to the failure shapes GLM actually
 //! produces") is a documented follow-up, not faked here.
 
+use std::collections::HashSet;
 use std::future::Future;
 use std::pin::Pin;
 
+use futures_util::StreamExt;
 use stella_protocol::{
     AgentEvent, CompletionMessage, CompletionRequest, MessageRole, Provider, ProviderError,
     ReasoningEffort, StageKind, ToolCall, ToolOutput, ToolResult,
@@ -117,11 +119,16 @@ pub enum TurnOutcome {
 /// REPL, fleet worker) own persistence and can inspect history after an
 /// aborted turn.
 pub struct Engine<'a> {
-    provider: &'a dyn Provider,
-    tools: &'a dyn ToolExecutor,
-    sleeper: &'a dyn Sleeper,
-    config: EngineConfig,
+    pub(crate) provider: &'a dyn Provider,
+    pub(crate) tools: &'a dyn ToolExecutor,
+    pub(crate) sleeper: &'a dyn Sleeper,
+    pub(crate) config: EngineConfig,
 }
+
+/// Upper bound on tool calls from one step executing concurrently. Tools
+/// are I/O-bound (process spawns, file reads), so this caps descriptor and
+/// process pressure, not CPU.
+const MAX_CONCURRENT_TOOL_CALLS: usize = 8;
 
 impl<'a> Engine<'a> {
     /// Construct an engine with the production [`TokioSleeper`]. Use
@@ -169,7 +176,7 @@ impl<'a> Engine<'a> {
 
         let mut total_cost_usd = 0.0f64;
 
-        for _step in 0..self.config.max_steps {
+        for step in 0..self.config.max_steps {
             // ---- Compaction (before every model call, per the running
             // ---- estimate; L-E3 dedup+evict, stable system prefix — the
             // ---- system message is index 0 and compact() never touches it).
@@ -218,6 +225,11 @@ impl<'a> Engine<'a> {
 
             // ---- The model call, with retry+backoff.
             let tools_schema = self.tools.schemas();
+            let read_only_tools: HashSet<String> = tools_schema
+                .iter()
+                .filter(|s| s.read_only)
+                .map(|s| s.name.clone())
+                .collect();
             let messages_snapshot = messages.clone();
             let req_config = &self.config;
             let attempt: RetryAttemptFn = Box::new(move || {
@@ -231,8 +243,10 @@ impl<'a> Engine<'a> {
                 Box::pin(self.provider.complete(req))
             });
 
+            let call_started = std::time::Instant::now();
             let outcome =
                 retry_with_backoff(&self.config.retry_policy, self.sleeper, attempt).await;
+            let call_duration_ms = call_started.elapsed().as_millis() as u64;
 
             let RetryOutcome {
                 value: result,
@@ -261,6 +275,20 @@ impl<'a> Engine<'a> {
                 });
             }
 
+            // ---- Telemetry for the call that just committed: exactly one
+            // ---- StepUsage per landed step — the metering record.
+            let _ = events.send(AgentEvent::StepUsage {
+                step,
+                model: result.model.clone(),
+                input_tokens: result.usage.input_tokens,
+                output_tokens: result.usage.output_tokens,
+                cached_input_tokens: result.usage.cached_input_tokens,
+                cost_usd: result.cost_usd,
+                duration_ms: call_duration_ms,
+                retries: retries.len() as u32,
+                tool_calls: result.tool_calls.len(),
+            });
+
             // ---- Budget accounting for the call that just committed.
             let outcome = budget.record_spend(result.cost_usd);
             total_cost_usd += result.cost_usd;
@@ -277,9 +305,22 @@ impl<'a> Engine<'a> {
             {
                 // The call that just landed is the one that pushed spend
                 // over the limit — it already committed (its result is
-                // real, its cost already happened), so record it, THEN
-                // abort before dispatching anything further. Still not a
-                // mid-tool kill: no tool from *this* result has run yet.
+                // real, its cost already happened), so deliver what was
+                // paid for: emit its text and append it to history, THEN
+                // abort before dispatching anything further (its tool
+                // calls, if any, never run — recorded so the transcript
+                // shows what was cut). Still not a mid-tool kill.
+                if !result.text.is_empty() {
+                    let _ = events.send(AgentEvent::Text {
+                        delta: result.text.clone(),
+                    });
+                }
+                messages.push(CompletionMessage {
+                    role: MessageRole::Assistant,
+                    content: result.text.clone(),
+                    tool_calls: result.tool_calls.clone(),
+                    tool_results: Vec::new(),
+                });
                 let reason = format!(
                     "budget exceeded after this call: spent ${spent_usd:.4} against a ${limit_usd:.2} limit"
                 );
@@ -323,22 +364,9 @@ impl<'a> Engine<'a> {
                 tool_results: Vec::new(),
             });
 
-            let mut tool_results = Vec::with_capacity(result.tool_calls.len());
-            for call in &result.tool_calls {
-                let _ = events.send(AgentEvent::ToolStart { call: call.clone() });
-                let start = std::time::Instant::now();
-                let output = self.execute_with_repair(call).await;
-                let duration_ms = start.elapsed().as_millis() as u64;
-                let _ = events.send(AgentEvent::ToolResult {
-                    call_id: call.call_id.clone(),
-                    output: output.clone(),
-                    duration_ms,
-                });
-                tool_results.push(ToolResult {
-                    call_id: call.call_id.clone(),
-                    output,
-                });
-            }
+            let tool_results = self
+                .execute_tool_calls(&result.tool_calls, &read_only_tools, events)
+                .await;
 
             messages.push(CompletionMessage {
                 role: MessageRole::Tool,
@@ -358,6 +386,81 @@ impl<'a> Engine<'a> {
             retryable: false,
         });
         TurnOutcome::Aborted { reason }
+    }
+
+    /// Execute one step's tool calls, preserving sequential semantics for
+    /// anything that can mutate: consecutive read-only calls (per
+    /// `ToolSchema::read_only`) form a group executed concurrently (capped
+    /// at [`MAX_CONCURRENT_TOOL_CALLS`]); every mutating call is its own
+    /// barrier, executed alone, in call order. So `[read, read, edit,
+    /// read]` runs the two reads in parallel, then the edit alone, then the
+    /// final read — an observer of any *mutable* state cannot distinguish
+    /// this schedule from fully-sequential execution, while the common
+    /// "read five files" step gets real concurrency.
+    ///
+    /// `ToolStart` fires when a call actually starts; `ToolResult` fires as
+    /// each call completes (so results from one parallel group may
+    /// interleave — consumers correlate by `call_id`, which the TUI already
+    /// does). The returned `Vec<ToolResult>` is always in original call
+    /// order, so message history is deterministic regardless of completion
+    /// order.
+    async fn execute_tool_calls(
+        &self,
+        calls: &[ToolCall],
+        read_only_tools: &HashSet<String>,
+        events: &UnboundedSender<AgentEvent>,
+    ) -> Vec<ToolResult> {
+        let mut indexed: Vec<(usize, ToolResult)> = Vec::with_capacity(calls.len());
+        let mut i = 0;
+        while i < calls.len() {
+            let group_end = if read_only_tools.contains(&calls[i].name) {
+                let mut end = i + 1;
+                while end < calls.len() && read_only_tools.contains(&calls[end].name) {
+                    end += 1;
+                }
+                end
+            } else {
+                i + 1
+            };
+
+            // Plain copy for the closures: borrowing the loop variable
+            // itself would conflict with advancing it below (E0506).
+            let group_start = i;
+            let group_futures =
+                calls[group_start..group_end]
+                    .iter()
+                    .enumerate()
+                    .map(|(offset, call)| {
+                        let _ = events.send(AgentEvent::ToolStart { call: call.clone() });
+                        let index = group_start + offset;
+                        async move {
+                            let started = std::time::Instant::now();
+                            let output = self.execute_with_repair(call).await;
+                            (index, call, output, started.elapsed().as_millis() as u64)
+                        }
+                    });
+            let mut in_flight = futures_util::stream::iter(group_futures)
+                .buffer_unordered(MAX_CONCURRENT_TOOL_CALLS);
+            while let Some((index, call, output, duration_ms)) = in_flight.next().await {
+                let _ = events.send(AgentEvent::ToolResult {
+                    call_id: call.call_id.clone(),
+                    output: output.clone(),
+                    duration_ms,
+                });
+                indexed.push((
+                    index,
+                    ToolResult {
+                        call_id: call.call_id.clone(),
+                        output,
+                    },
+                ));
+            }
+            drop(in_flight);
+
+            i = group_end;
+        }
+        indexed.sort_by_key(|(index, _)| *index);
+        indexed.into_iter().map(|(_, result)| result).collect()
     }
 
     /// Execute one tool call, first checking for the malformed-input
@@ -387,11 +490,20 @@ type RetryAttemptFn<'a> = Box<
 >;
 type CompletionResultAlias = stella_protocol::CompletionResult;
 
-/// Flatten the recent tool calls out of message history, in chronological
-/// order, for `crate::loop_detect::detect_loop`. Pulled out as a free
-/// function since it's plain data-shape massaging, not driver state.
+/// Flatten the tool calls of the CURRENT turn — assistant messages after
+/// the last user message — in chronological order, for
+/// `crate::loop_detect::detect_loop`. Windowing at the user boundary
+/// matters: identical calls across turns are the user re-asking a
+/// question, not a stuck loop (a REPL session asking the same thing three
+/// times would otherwise trip the exact-repeat detector), and it keeps
+/// this per-step scan O(turn) instead of O(entire history).
 fn recent_tool_calls(messages: &[CompletionMessage]) -> Vec<ToolCall> {
-    messages
+    let turn_start = messages
+        .iter()
+        .rposition(|m| m.role == MessageRole::User)
+        .map(|i| i + 1)
+        .unwrap_or(0);
+    messages[turn_start..]
         .iter()
         .filter(|m| m.role == MessageRole::Assistant)
         .flat_map(|m| m.tool_calls.iter().cloned())
@@ -435,6 +547,7 @@ mod tests {
                 name: "bash".into(),
                 description: "run a command".into(),
                 input_schema: serde_json::json!({"type": "object"}),
+                read_only: false,
             }]
         }
         async fn execute(&self, _name: &str, _input: &Value) -> ToolOutput {
@@ -830,7 +943,7 @@ mod tests {
             script: TokioMutex::new(script),
             calls: Arc::new(AtomicU32::new(0)),
         };
-        // A tool executor whose output grows with each call — the context
+        // A tool executor returning a constant 600-char output — the context
         // pressure half of the exit criterion.
         struct GrowingTools;
         #[async_trait]
@@ -840,6 +953,7 @@ mod tests {
                     name: "bash".into(),
                     description: "run a command".into(),
                     input_schema: serde_json::json!({"type": "object"}),
+                    read_only: false,
                 }]
             }
             async fn execute(&self, _name: &str, _input: &Value) -> ToolOutput {
@@ -903,5 +1017,282 @@ mod tests {
             matches!(outcome, TurnOutcome::Completed { .. }),
             "OpenAI-shaped turn must survive 200 steps, got {outcome:?}"
         );
+    }
+
+    // ---- Parallel tool execution ------------------------------------------
+
+    fn read_only_schema(name: &str) -> ToolSchema {
+        ToolSchema {
+            name: name.into(),
+            description: "read".into(),
+            input_schema: serde_json::json!({"type": "object"}),
+            read_only: true,
+        }
+    }
+
+    fn multi_call_result(calls: &[(&str, &str)]) -> CompletionResultAlias {
+        CompletionResultAlias {
+            text: String::new(),
+            tool_calls: calls
+                .iter()
+                .map(|(id, name)| ToolCall {
+                    call_id: (*id).into(),
+                    name: (*name).into(),
+                    input: serde_json::json!({"which": *id}),
+                })
+                .collect(),
+            usage: CompletionUsage::default(),
+            model: "scripted".into(),
+            cost_usd: 0.0001,
+        }
+    }
+
+    /// Read-only tools that rendezvous on a barrier: the step completes
+    /// ONLY if both calls are in flight at the same time. Sequential
+    /// execution deadlocks here — the timeout below converts that into a
+    /// named failure.
+    struct BarrierTools {
+        barrier: tokio::sync::Barrier,
+    }
+    #[async_trait]
+    impl ToolExecutor for BarrierTools {
+        fn schemas(&self) -> Vec<ToolSchema> {
+            vec![read_only_schema("read_file")]
+        }
+        async fn execute(&self, _name: &str, _input: &Value) -> ToolOutput {
+            self.barrier.wait().await;
+            ToolOutput::Ok {
+                content: "read".into(),
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn read_only_calls_in_one_step_execute_concurrently() {
+        let provider = ScriptedProvider {
+            id: "scripted".into(),
+            script: TokioMutex::new(vec![
+                Ok(multi_call_result(&[
+                    ("call_1", "read_file"),
+                    ("call_2", "read_file"),
+                ])),
+                Ok(text_result("done")),
+            ]),
+            calls: Arc::new(AtomicU32::new(0)),
+        };
+        let tools = BarrierTools {
+            barrier: tokio::sync::Barrier::new(2),
+        };
+        let sleeper = NoopSleeper;
+        let engine = Engine::with_sleeper(&provider, &tools, EngineConfig::default(), &sleeper);
+        let mut messages = vec![
+            CompletionMessage::system("sys"),
+            CompletionMessage::user("read two files"),
+        ];
+        let mut budget = BudgetGuard::new(BudgetMode::Off, None, None);
+        let (tx, _rx) = mpsc::unbounded_channel();
+
+        let outcome = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            engine.run_turn(&mut messages, &mut budget, &tx),
+        )
+        .await
+        .expect(
+            "two read-only calls in one step must run concurrently — a sequential \
+             executor deadlocks on the barrier",
+        );
+        assert!(matches!(outcome, TurnOutcome::Completed { .. }));
+    }
+
+    /// Tools that log start/end order. Read-only `read_file` sleeps per its
+    /// input so completion order can invert; mutating `edit_file` records
+    /// that it saw a quiet world (no read in flight).
+    struct RecordingTools {
+        log: Arc<TokioMutex<Vec<String>>>,
+    }
+    #[async_trait]
+    impl ToolExecutor for RecordingTools {
+        fn schemas(&self) -> Vec<ToolSchema> {
+            vec![
+                read_only_schema("read_file"),
+                ToolSchema {
+                    name: "edit_file".into(),
+                    description: "edit".into(),
+                    input_schema: serde_json::json!({"type": "object"}),
+                    read_only: false,
+                },
+            ]
+        }
+        async fn execute(&self, name: &str, input: &Value) -> ToolOutput {
+            let which = input.get("which").and_then(|v| v.as_str()).unwrap_or("?");
+            self.log.lock().await.push(format!("start:{name}:{which}"));
+            if name == "read_file" && which == "call_1" {
+                // The FIRST read is slow, so with real concurrency the
+                // second read finishes first.
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            }
+            self.log.lock().await.push(format!("end:{name}:{which}"));
+            ToolOutput::Ok {
+                content: "done".into(),
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn mutating_calls_are_barriers_and_history_keeps_call_order() {
+        let provider = ScriptedProvider {
+            id: "scripted".into(),
+            script: TokioMutex::new(vec![
+                Ok(multi_call_result(&[
+                    ("call_1", "read_file"),
+                    ("call_2", "read_file"),
+                    ("call_3", "edit_file"),
+                    ("call_4", "read_file"),
+                ])),
+                Ok(text_result("done")),
+            ]),
+            calls: Arc::new(AtomicU32::new(0)),
+        };
+        let log = Arc::new(TokioMutex::new(Vec::new()));
+        let tools = RecordingTools { log: log.clone() };
+        let sleeper = NoopSleeper;
+        let engine = Engine::with_sleeper(&provider, &tools, EngineConfig::default(), &sleeper);
+        let mut messages = vec![
+            CompletionMessage::system("sys"),
+            CompletionMessage::user("work"),
+        ];
+        let mut budget = BudgetGuard::new(BudgetMode::Off, None, None);
+        let (tx, mut rx) = mpsc::unbounded_channel();
+
+        let outcome = engine.run_turn(&mut messages, &mut budget, &tx).await;
+        assert!(matches!(outcome, TurnOutcome::Completed { .. }));
+
+        // Sequencing: the mutating call is a barrier — it must start only
+        // after BOTH reads ended, and the trailing read only after it ended.
+        let log = log.lock().await.clone();
+        let position = |entry: &str| {
+            log.iter()
+                .position(|l| l == entry)
+                .unwrap_or_else(|| panic!("missing `{entry}` in {log:?}"))
+        };
+        assert!(position("start:edit_file:call_3") > position("end:read_file:call_1"));
+        assert!(position("start:edit_file:call_3") > position("end:read_file:call_2"));
+        assert!(position("start:read_file:call_4") > position("end:edit_file:call_3"));
+
+        // Real concurrency inside the read group: the slow first read ends
+        // AFTER the fast second read (sequential execution would finish
+        // call_1 before call_2 even starts).
+        assert!(
+            position("end:read_file:call_2") < position("end:read_file:call_1"),
+            "reads did not overlap — executed sequentially? log: {log:?}"
+        );
+
+        // History: the Tool message's results are in original call order
+        // even though completion order inverted.
+        let tool_message = messages
+            .iter()
+            .find(|m| m.role == MessageRole::Tool)
+            .expect("a Tool message must be recorded");
+        let ids: Vec<&str> = tool_message
+            .tool_results
+            .iter()
+            .map(|r| r.call_id.as_str())
+            .collect();
+        assert_eq!(ids, vec!["call_1", "call_2", "call_3", "call_4"]);
+
+        // Events: ToolResult for the fast read arrives before the slow one
+        // (completion order), and consumers correlate by call_id.
+        let mut result_order = Vec::new();
+        while let Ok(event) = rx.try_recv() {
+            if let AgentEvent::ToolResult { call_id, .. } = event {
+                result_order.push(call_id);
+            }
+        }
+        let pos_1 = result_order.iter().position(|id| id == "call_1").unwrap();
+        let pos_2 = result_order.iter().position(|id| id == "call_2").unwrap();
+        assert!(
+            pos_2 < pos_1,
+            "expected call_2 to complete first: {result_order:?}"
+        );
+    }
+
+    // ---- StepUsage telemetry ----------------------------------------------
+
+    #[tokio::test]
+    async fn every_committed_step_emits_exactly_one_step_usage_record() {
+        let with_usage = |text: &str, calls: &[(&str, &str)]| {
+            let mut result = if calls.is_empty() {
+                text_result(text)
+            } else {
+                multi_call_result(calls)
+            };
+            result.usage = CompletionUsage {
+                input_tokens: 1000,
+                output_tokens: 50,
+                cached_input_tokens: 800,
+            };
+            result
+        };
+        let provider = ScriptedProvider {
+            id: "scripted".into(),
+            script: TokioMutex::new(vec![
+                // Step 0 commits only after one retryable failure — its
+                // StepUsage must say retries: 1.
+                Err(ProviderError::RateLimited {
+                    message: "429".into(),
+                    retry_after_ms: Some(1),
+                }),
+                Ok(with_usage("", &[("call_1", "bash")])),
+                Ok(with_usage("done", &[])),
+            ]),
+            calls: Arc::new(AtomicU32::new(0)),
+        };
+        let tools = CountingTools {
+            calls: Arc::new(AtomicU32::new(0)),
+        };
+        let sleeper = NoopSleeper;
+        let engine = Engine::with_sleeper(&provider, &tools, EngineConfig::default(), &sleeper);
+        let mut messages = vec![
+            CompletionMessage::system("sys"),
+            CompletionMessage::user("do work"),
+        ];
+        let mut budget = BudgetGuard::new(BudgetMode::Observed, None, None);
+        let (tx, mut rx) = mpsc::unbounded_channel();
+
+        let outcome = engine.run_turn(&mut messages, &mut budget, &tx).await;
+        assert!(matches!(outcome, TurnOutcome::Completed { .. }));
+
+        let mut usages = Vec::new();
+        while let Ok(event) = rx.try_recv() {
+            if let AgentEvent::StepUsage {
+                step,
+                input_tokens,
+                cached_input_tokens,
+                retries,
+                tool_calls,
+                cost_usd,
+                ..
+            } = event
+            {
+                usages.push((
+                    step,
+                    input_tokens,
+                    cached_input_tokens,
+                    retries,
+                    tool_calls,
+                    cost_usd,
+                ));
+            }
+        }
+        // Two committed model calls → exactly two metering records; the
+        // 429'd attempt shows up as retries: 1 on step 0, never as its own
+        // record.
+        assert_eq!(
+            usages.len(),
+            2,
+            "one StepUsage per committed step: {usages:?}"
+        );
+        assert_eq!(usages[0], (0, 1000, 800, 1, 1, 0.0001));
+        assert_eq!(usages[1], (1, 1000, 800, 0, 0, 0.0001));
     }
 }

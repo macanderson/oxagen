@@ -122,6 +122,28 @@ impl ApiKey {
     pub fn reveal(&self) -> &str {
         &self.0
     }
+
+    /// A non-reversible preview for human display (e.g. `stella config`):
+    /// a few leading and trailing characters with the middle elided, so a
+    /// user can eyeball *which* key is active without the full secret hitting
+    /// the terminal. Char-boundary-safe (never panics on multi-byte input)
+    /// and never panics on short keys — a key too short to partially reveal
+    /// without effectively exposing it is shown fully masked instead. This is
+    /// the safe replacement for the old `&self.api_key[..8]` byte-slice, which
+    /// panicked both on keys shorter than 8 bytes and on non-ASCII boundaries.
+    pub fn redacted_preview(&self) -> String {
+        const HEAD: usize = 6;
+        const TAIL: usize = 4;
+        let chars: Vec<char> = self.0.chars().collect();
+        // Require enough length that head+tail don't overlap and the elided
+        // middle actually hides something; otherwise mask entirely.
+        if chars.len() <= HEAD + TAIL + 2 {
+            return "•".repeat(chars.len().min(8));
+        }
+        let head: String = chars[..HEAD].iter().collect();
+        let tail: String = chars[chars.len() - TAIL..].iter().collect();
+        format!("{head}…{tail}")
+    }
 }
 
 impl fmt::Debug for ApiKey {
@@ -227,9 +249,15 @@ impl CredentialsFile {
     }
 
     /// Write the current in-memory state to disk, creating parent
-    /// directories as needed and restricting permissions to owner
-    /// read/write on Unix (best-effort elsewhere — Windows ACLs are a
-    /// different mechanism entirely and out of scope here).
+    /// directories as needed. The write is **atomic** and the secret file is
+    /// created with owner-only (`0600`) permissions **from birth** on Unix:
+    /// contents go to a sibling temp file opened `0600`, which is then
+    /// `rename`d over the target (an atomic filesystem operation on the same
+    /// directory). This closes the prior TOCTOU window where the file existed
+    /// world-readable (`0644`) between `write` and the follow-up `chmod`, and
+    /// guarantees no reader ever sees a half-written credentials file.
+    /// (Best-effort on non-Unix — Windows ACLs are a different mechanism,
+    /// out of scope here.)
     pub fn save(&self) -> Result<(), CredentialError> {
         if self.path.as_os_str().is_empty() {
             return Err(CredentialError::FileWrite {
@@ -248,29 +276,64 @@ impl CredentialsFile {
                 path: self.path.display().to_string(),
                 message: e.to_string(),
             })?;
-        std::fs::write(&self.path, contents).map_err(|e| CredentialError::FileWrite {
-            path: self.path.display().to_string(),
-            message: e.to_string(),
+
+        // Temp file in the SAME directory so the final `rename` is atomic
+        // (a cross-filesystem rename would fall back to copy+delete and lose
+        // atomicity). Unique per-process suffix avoids clobbering a temp file
+        // a parallel writer is using.
+        let tmp_path = self
+            .path
+            .with_extension(format!("tmp.{}", std::process::id()));
+        write_secret_file(&tmp_path, contents.as_bytes()).inspect_err(|_| {
+            let _ = std::fs::remove_file(&tmp_path);
         })?;
-        restrict_permissions(&self.path)?;
+        std::fs::rename(&tmp_path, &self.path).map_err(|e| {
+            let _ = std::fs::remove_file(&tmp_path);
+            CredentialError::FileWrite {
+                path: self.path.display().to_string(),
+                message: e.to_string(),
+            }
+        })?;
         Ok(())
     }
 }
 
+fn write_err(path: &Path, e: std::io::Error) -> CredentialError {
+    CredentialError::FileWrite {
+        path: path.display().to_string(),
+        message: e.to_string(),
+    }
+}
+
+/// Write `bytes` to `path`, creating the file with `0600` permissions from
+/// the moment it exists on Unix (via `OpenOptions::mode`, applied at
+/// creation — never a create-then-chmod race). `0600` has no group/other
+/// bits, so it is unaffected by any reasonable `umask`.
 #[cfg(unix)]
-fn restrict_permissions(path: &Path) -> Result<(), CredentialError> {
-    use std::os::unix::fs::PermissionsExt;
-    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600)).map_err(|e| {
-        CredentialError::FileWrite {
-            path: path.display().to_string(),
-            message: e.to_string(),
-        }
-    })
+fn write_secret_file(path: &Path, bytes: &[u8]) -> Result<(), CredentialError> {
+    use std::io::Write;
+    use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(0o600)
+        .open(path)
+        .map_err(|e| write_err(path, e))?;
+    // Belt-and-suspenders: if the temp path already existed (e.g. a crashed
+    // prior run), `mode` on `open` does not reset an existing file's perms,
+    // so force them here before writing any secret bytes.
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))
+        .map_err(|e| write_err(path, e))?;
+    file.write_all(bytes).map_err(|e| write_err(path, e))?;
+    file.flush().map_err(|e| write_err(path, e))?;
+    Ok(())
 }
 
 #[cfg(not(unix))]
-fn restrict_permissions(_path: &Path) -> Result<(), CredentialError> {
-    Ok(())
+fn write_secret_file(path: &Path, bytes: &[u8]) -> Result<(), CredentialError> {
+    std::fs::write(path, bytes).map_err(|e| write_err(path, e))
 }
 
 #[cfg(test)]
@@ -292,6 +355,45 @@ mod tests {
         let debug = format!("{key:?}");
         assert!(!debug.contains("sk-super-secret-value"));
         assert!(debug.contains("redacted"));
+    }
+
+    #[test]
+    fn redacted_preview_masks_short_keys_without_panicking_or_revealing() {
+        // The old `&key[..8]` panicked on keys shorter than 8 bytes; the
+        // preview must never panic and must not echo a short secret verbatim.
+        for short in ["", "a", "short", "sk-1234"] {
+            let preview = ApiKey::new(short).redacted_preview();
+            assert!(
+                !preview.contains(short) || short.is_empty(),
+                "short key `{short}` leaked in preview `{preview}`"
+            );
+            assert!(
+                !preview
+                    .chars()
+                    .any(|c| c.is_ascii_alphanumeric() && short.contains(c))
+            );
+        }
+    }
+
+    #[test]
+    fn redacted_preview_handles_non_ascii_keys_without_panicking() {
+        // The old byte-slice `&key[..8]` panicked on a non-char boundary;
+        // a multi-byte key must be previewed safely.
+        let preview = ApiKey::new("kéy-with-mültibyte-çharacters-1234").redacted_preview();
+        assert!(preview.contains('…'));
+        assert!(!preview.contains("mültibyte"));
+    }
+
+    #[test]
+    fn redacted_preview_shows_head_and_tail_but_elides_the_middle() {
+        let preview = ApiKey::new("sk-abcdefghijklmnopqrstuvwxyz-9876").redacted_preview();
+        assert!(preview.starts_with("sk-abc"), "{preview}");
+        assert!(preview.ends_with("9876"), "{preview}");
+        assert!(preview.contains('…'));
+        assert!(
+            !preview.contains("ghijkl"),
+            "middle must be elided: {preview}"
+        );
     }
 
     #[test]
@@ -376,6 +478,39 @@ mod tests {
 
         let mode = std::fs::metadata(&path).unwrap().permissions().mode();
         assert_eq!(mode & 0o777, 0o600, "credentials file must be 0600");
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn overwriting_existing_credentials_stays_0600_and_leaves_no_temp_file() {
+        use std::os::unix::fs::PermissionsExt;
+        let path = temp_credentials_path("overwrite");
+        let _ = std::fs::remove_file(&path);
+
+        // First save creates the file.
+        let mut file = CredentialsFile::load(&path).unwrap();
+        file.set("zai", "sk-first");
+        file.save().unwrap();
+
+        // Second save must atomically replace it, keep 0600 (from the temp
+        // file's birth mode, carried through the rename), and update content.
+        file.set("zai", "sk-second-longer-value");
+        file.save().unwrap();
+
+        let mode = std::fs::metadata(&path).unwrap().permissions().mode();
+        assert_eq!(mode & 0o777, 0o600, "overwrite must preserve 0600");
+
+        let reloaded = CredentialsFile::load(&path).unwrap();
+        assert_eq!(reloaded.get("zai"), Some("sk-second-longer-value"));
+
+        // No `.tmp.<pid>` sibling left behind after a successful rename.
+        let tmp = path.with_extension(format!("tmp.{}", std::process::id()));
+        assert!(
+            !tmp.exists(),
+            "temp file must be renamed away, not left on disk"
+        );
 
         let _ = std::fs::remove_file(&path);
     }

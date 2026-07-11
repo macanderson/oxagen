@@ -19,6 +19,50 @@ pub trait ToolExecutor: Send + Sync {
     async fn execute(&self, name: &str, input: &Value) -> ToolOutput;
 }
 
+/// A read-only view over another executor: advertises only the schemas
+/// marked `read_only` and refuses to execute anything else. This is how a
+/// judge gets real evidence-gathering power (read files, grep, check
+/// saved explorations) with a structural guarantee it cannot mutate the
+/// workspace it is judging — the restriction is enforced at execution
+/// time, not just by prompt.
+pub struct ReadOnlyTools<'a> {
+    inner: &'a dyn ToolExecutor,
+}
+
+impl<'a> ReadOnlyTools<'a> {
+    pub fn new(inner: &'a dyn ToolExecutor) -> Self {
+        Self { inner }
+    }
+}
+
+#[async_trait]
+impl ToolExecutor for ReadOnlyTools<'_> {
+    fn schemas(&self) -> Vec<ToolSchema> {
+        self.inner
+            .schemas()
+            .into_iter()
+            .filter(|s| s.read_only)
+            .collect()
+    }
+
+    async fn execute(&self, name: &str, input: &Value) -> ToolOutput {
+        let allowed = self
+            .inner
+            .schemas()
+            .iter()
+            .any(|s| s.name == name && s.read_only);
+        if !allowed {
+            return ToolOutput::Error {
+                message: format!(
+                    "`{name}` is not available here: this context is read-only (verification/\
+                     judging) and may only use read-only tools"
+                ),
+            };
+        }
+        self.inner.execute(name, input).await
+    }
+}
+
 /// Time source, injectable for deterministic tests.
 pub trait Clock: Send + Sync {
     /// Monotonic milliseconds since an arbitrary epoch.

@@ -102,11 +102,16 @@ pub static PROVIDERS: &[ProviderConfig] = &[
 ];
 
 /// Resolved configuration: which provider, which model, which API key.
+///
+/// `api_key` is an [`ApiKey`] (not a raw `String`) so it inherits the
+/// redaction newtype's guarantees: `Config`'s derived `Debug` prints the key
+/// as `<redacted>`, and the only ways to see the value are the deliberate
+/// `reveal()` (auth headers) and `redacted_preview()` (partial display).
 #[derive(Debug, Clone)]
 pub struct Config {
     pub provider: ProviderConfig,
     pub model_id: String,
-    pub api_key: String,
+    pub api_key: ApiKey,
     pub workspace_root: std::path::PathBuf,
 }
 
@@ -232,7 +237,6 @@ impl Config {
                 provider.display_name
             )
         })?;
-        let api_key = key.reveal().to_string();
 
         // "Interactive prompt on first use" (01-product-spec.md §4) implies
         // exactly that — first use. Persist so next invocation resolves via
@@ -240,7 +244,7 @@ impl Config {
         // save failure (e.g. read-only home dir) shouldn't fail the command
         // the user actually asked for, just warn so it isn't silent.
         if source == stella_model::credential::CredentialSource::Interactive {
-            credentials_file.set(provider.id, &api_key);
+            credentials_file.set(provider.id, key.reveal());
             if let Err(e) = credentials_file.save() {
                 eprintln!(
                     "  {} could not save the credential to ~/.config/stella/credentials.toml \
@@ -253,7 +257,7 @@ impl Config {
         Ok(Self {
             provider: provider.clone(),
             model_id,
-            api_key,
+            api_key: key,
             workspace_root: workspace_root.to_path_buf(),
         })
     }
@@ -290,15 +294,7 @@ impl Config {
             self.provider.id.bright_blue(),
             self.model_id.bright_white()
         );
-        println!(
-            "  API Key:    {}",
-            format!(
-                "{}...{}",
-                &self.api_key[..8],
-                &self.api_key[self.api_key.len().saturating_sub(4)..]
-            )
-            .dimmed()
-        );
+        println!("  API Key:    {}", self.api_key.redacted_preview().dimmed());
         println!("  Base URL:   {}", self.provider.base_url.dimmed());
         println!("  Workspace:  {}", self.workspace_root.display());
         println!(
@@ -375,5 +371,21 @@ mod tests {
         ids.sort_unstable();
         ids.dedup();
         assert_eq!(ids.len(), before, "duplicate provider id in PROVIDERS");
+    }
+
+    #[test]
+    fn config_debug_never_leaks_the_api_key() {
+        // H3: with `api_key: ApiKey`, the whole Config's derived Debug must
+        // redact the secret — no `{:?}` (logs, panics, traces) can leak it.
+        let secret = "sk-super-secret-do-not-log-XYZ";
+        let cfg = Config {
+            provider: PROVIDERS[0].clone(),
+            model_id: "glm-5.2".to_string(),
+            api_key: ApiKey::new(secret),
+            workspace_root: std::path::PathBuf::from("/tmp/ws"),
+        };
+        let dbg = format!("{cfg:?}");
+        assert!(!dbg.contains(secret), "Config Debug leaked the key: {dbg}");
+        assert!(dbg.contains("redacted"));
     }
 }

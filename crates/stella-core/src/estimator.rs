@@ -1,8 +1,9 @@
-//! Token estimation for compaction decisions. Validated against providers'
-//! own usage-reporting fields, not assumed from tiktoken
-//! (`07-model-matrix.md` §4.3): the estimator returns a deliberately
-//! conservative (over-)estimate, and the step-driver corrects drift with
-//! the provider-reported `input_tokens` after every completed call.
+//! Token estimation for compaction decisions. The estimator returns a
+//! deliberately conservative (over-)estimate — over-estimating triggers
+//! compaction earlier, the safe direction. Provider-reported usage flows
+//! through `AgentEvent::StepUsage` for telemetry; feeding it back to
+//! correct estimator drift per provider (`07-model-matrix.md` §4.3) is
+//! planned but NOT implemented yet — do not rely on drift correction.
 
 use stella_protocol::CompletionMessage;
 

@@ -14,7 +14,9 @@ use stella_protocol::{
     ProviderError, ToolCall,
 };
 
+use crate::catalog::{Catalog, Pricing};
 use crate::credential::ApiKey;
+use crate::http;
 use crate::provider::Provider;
 use crate::sse::SseDecoder;
 
@@ -28,15 +30,23 @@ pub struct ZaiProvider {
     api_key: ApiKey,
     base_url: String,
     model: String,
+    /// List pricing for `model`, resolved from the catalog at construction so
+    /// `cost_usd` is computed on the real request path. `None` only if the
+    /// slug isn't in the catalog — `build_provider` (`agent.rs`) rejects that
+    /// case up front, so in practice this is always `Some` for a live call.
+    pricing: Option<Pricing>,
 }
 
 impl ZaiProvider {
     pub fn new(api_key: ApiKey, model: impl Into<String>) -> Self {
+        let model = model.into();
+        let pricing = Catalog::seed().resolve(&model).ok().map(|e| e.pricing);
         Self {
-            client: reqwest::Client::new(),
+            client: http::client(),
             api_key,
             base_url: DEFAULT_BASE_URL.to_string(),
-            model: model.into(),
+            model,
+            pricing,
         }
     }
 
@@ -108,6 +118,62 @@ struct ZaiStreamChunk {
     choices: Vec<ZaiStreamChoice>,
     #[serde(default)]
     usage: Option<ZaiUsage>,
+    /// An in-band error frame. The OpenAI-compatible gateways can emit
+    /// `data: {"error":{...}}` mid-stream after already sending some content
+    /// deltas — without this field it deserialized into an all-default,
+    /// empty `ZaiStreamChunk` and was silently swallowed, returning the
+    /// truncated text so far as a bogus success.
+    #[serde(default)]
+    error: Option<ZaiStreamError>,
+}
+
+/// An OpenAI-compatible in-band error object. `code` is `Value` because
+/// gateways disagree on its type (string on some, integer HTTP status on
+/// others) — we only classify on `type`/`message` text, so its exact type
+/// doesn't matter.
+#[derive(Deserialize, Debug, Default)]
+struct ZaiStreamError {
+    #[serde(default)]
+    message: String,
+    #[serde(default, rename = "type")]
+    kind: String,
+    #[serde(default)]
+    #[allow(dead_code)]
+    code: Option<Value>,
+}
+
+/// Classify an in-band OpenAI-compatible error frame into a typed
+/// `ProviderError`. Transient/server-side conditions (overloaded, 5xx,
+/// unavailable, timeout) are **retryable** `Transport`; an explicit rate
+/// limit is `RateLimited`; everything else is `Terminal`. The gateways don't
+/// share a stable machine code, so this matches on the human-readable
+/// `type`/`message` text — deliberately conservative: unknown ⇒ terminal, so
+/// a genuine failure is never retried into an infinite loop.
+fn classify_zai_stream_error(err: &ZaiStreamError) -> ProviderError {
+    let haystack = format!("{} {}", err.kind, err.message).to_lowercase();
+    let detail = if err.message.is_empty() {
+        format!("Z.ai stream error ({})", err.kind)
+    } else {
+        format!("Z.ai stream error: {}", err.message)
+    };
+    if haystack.contains("overload")
+        || haystack.contains("server_error")
+        || haystack.contains("unavailable")
+        || haystack.contains("timeout")
+        || haystack.contains("500")
+        || haystack.contains("502")
+        || haystack.contains("503")
+        || haystack.contains("529")
+    {
+        ProviderError::Transport(detail)
+    } else if haystack.contains("rate") && haystack.contains("limit") {
+        ProviderError::RateLimited {
+            message: detail,
+            retry_after_ms: None,
+        }
+    } else {
+        ProviderError::Terminal(detail)
+    }
 }
 
 #[derive(Deserialize, Debug)]
@@ -256,6 +322,15 @@ impl Provider for ZaiProvider {
                 retry_after_ms: None,
             });
         }
+        // 5xx (incl. 529 overloaded) is a transient server-side failure — map
+        // to a retryable Transport error, not the terminal bucket below.
+        if response.status().is_server_error() {
+            let status = response.status();
+            let text = response.text().await.unwrap_or_default();
+            return Err(ProviderError::Transport(format!(
+                "Z.ai HTTP {status}: {text}"
+            )));
+        }
         if !response.status().is_success() {
             let status = response.status();
             let text = response.text().await.unwrap_or_default();
@@ -265,12 +340,13 @@ impl Provider for ZaiProvider {
         }
 
         let (text, tool_calls, usage) = aggregate_zai_stream(response).await?;
+        let cost_usd = self.pricing.map(|p| p.cost_usd(&usage)).unwrap_or(0.0);
         Ok(CompletionResult {
             text,
             tool_calls,
             usage,
             model: self.model.clone(),
-            cost_usd: 0.0,
+            cost_usd,
         })
     }
 }
@@ -287,19 +363,16 @@ struct ToolCallAccumulator {
 async fn aggregate_zai_stream(
     response: reqwest::Response,
 ) -> Result<(String, Vec<ToolCall>, CompletionUsage), ProviderError> {
-    use futures_util::StreamExt;
-
     let mut decoder = SseDecoder::new();
     let mut text = String::new();
     let mut usage = CompletionUsage::default();
     let mut tool_calls: BTreeMap<usize, ToolCallAccumulator> = BTreeMap::new();
     let mut stream = response.bytes_stream();
 
-    while let Some(chunk) = stream.next().await {
-        let chunk = chunk.map_err(|e| ProviderError::Transport(e.to_string()))?;
-        let chunk_str =
-            std::str::from_utf8(&chunk).map_err(|e| ProviderError::Malformed(e.to_string()))?;
-        decoder.push(chunk_str);
+    while let Some(chunk) = http::next_with_timeout(&mut stream, http::STREAM_IDLE_TIMEOUT).await? {
+        decoder
+            .push_bytes(&chunk)
+            .map_err(|e| ProviderError::Malformed(e.to_string()))?;
         for event in decoder.poll() {
             let data = event.data.trim();
             if data.is_empty() || data == "[DONE]" {
@@ -309,6 +382,11 @@ async fn aggregate_zai_stream(
                 Ok(v) => v,
                 Err(_) => continue, // tolerate keep-alive/ping frames
             };
+            // A mid-stream error frame aborts the turn with a typed error —
+            // never a truncated Ok with the partial text seen so far.
+            if let Some(err) = &parsed.error {
+                return Err(classify_zai_stream_error(err));
+            }
             if let Some(u) = parsed.usage {
                 usage.input_tokens = u.prompt_tokens;
                 usage.output_tokens = u.completion_tokens;
@@ -489,6 +567,7 @@ mod tests {
                 name: "read_file".into(),
                 description: "Read a file".into(),
                 input_schema: serde_json::json!({"type":"object"}),
+                read_only: false,
             }],
         };
 
@@ -525,6 +604,101 @@ mod tests {
 
         let err = provider.complete(req).await.unwrap_err();
         assert!(matches!(err, ProviderError::RateLimited { .. }));
+        assert!(err.is_retryable());
+    }
+
+    #[tokio::test]
+    async fn complete_computes_nonzero_cost_from_catalog_pricing() {
+        let server = MockServer::start().await;
+        let sse_body = concat!(
+            "data: {\"choices\":[{\"delta\":{\"content\":\"hi\"}}]}\n\n",
+            "data: {\"choices\":[{\"delta\":{}}],\"usage\":{\"prompt_tokens\":1000,\"completion_tokens\":500}}\n\n",
+            "data: [DONE]\n\n",
+        );
+        Mock::given(method("POST"))
+            .and(path("/chat/completions"))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(sse_body, "text/event-stream"))
+            .mount(&server)
+            .await;
+
+        let provider =
+            ZaiProvider::new(ApiKey::new("sk-test-zai"), "glm-5.2").with_base_url(server.uri());
+        let req = CompletionRequest {
+            messages: vec![CompletionMessage::user("hi")],
+            max_output_tokens: None,
+            temperature: None,
+            effort: None,
+            tools: vec![],
+        };
+
+        let result = provider.complete(req).await.expect("should succeed");
+        // Budget metering is no longer a no-op: cost is derived from the
+        // catalog's glm-5.2 pricing and the streamed usage, not hard-coded 0.
+        let expected = Catalog::seed()
+            .resolve("glm-5.2")
+            .unwrap()
+            .pricing
+            .cost_usd(&CompletionUsage {
+                input_tokens: 1000,
+                output_tokens: 500,
+                cached_input_tokens: 0,
+            });
+        assert!(result.cost_usd > 0.0, "cost must be non-zero");
+        assert_eq!(result.cost_usd, expected);
+    }
+
+    #[tokio::test]
+    async fn complete_maps_5xx_to_retryable_transport() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/chat/completions"))
+            .respond_with(ResponseTemplate::new(503).set_body_string("service unavailable"))
+            .mount(&server)
+            .await;
+
+        let provider =
+            ZaiProvider::new(ApiKey::new("sk-test-zai"), "glm-5.2").with_base_url(server.uri());
+        let req = CompletionRequest {
+            messages: vec![CompletionMessage::user("hi")],
+            max_output_tokens: None,
+            temperature: None,
+            effort: None,
+            tools: vec![],
+        };
+
+        let err = provider.complete(req).await.unwrap_err();
+        assert!(matches!(err, ProviderError::Transport(_)));
+        assert!(err.is_retryable(), "5xx must be retryable");
+    }
+
+    #[tokio::test]
+    async fn complete_returns_err_on_mid_stream_error_frame_not_truncated_ok() {
+        let server = MockServer::start().await;
+        // Some text arrives, THEN an in-band error frame: the turn must fail
+        // rather than return the partial "Hel" as a success.
+        let sse_body = concat!(
+            "data: {\"choices\":[{\"delta\":{\"content\":\"Hel\"}}]}\n\n",
+            "data: {\"error\":{\"type\":\"server_error\",\"message\":\"upstream overloaded\"}}\n\n",
+        );
+        Mock::given(method("POST"))
+            .and(path("/chat/completions"))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(sse_body, "text/event-stream"))
+            .mount(&server)
+            .await;
+
+        let provider =
+            ZaiProvider::new(ApiKey::new("sk-test-zai"), "glm-5.2").with_base_url(server.uri());
+        let req = CompletionRequest {
+            messages: vec![CompletionMessage::user("hi")],
+            max_output_tokens: None,
+            temperature: None,
+            effort: None,
+            tools: vec![],
+        };
+
+        let err = provider.complete(req).await.unwrap_err();
+        // server_error / overloaded ⇒ retryable Transport.
+        assert!(matches!(err, ProviderError::Transport(_)));
         assert!(err.is_retryable());
     }
 }
