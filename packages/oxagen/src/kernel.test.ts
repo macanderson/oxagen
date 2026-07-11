@@ -7,6 +7,7 @@ import {
   assertHandlersComplete,
   authorizeExternalCapability,
   capabilitiesForSurface,
+  clearBillingAdmissionGate,
   clearHandlersForTests,
   clearKernelAccessRequestCreator,
   clearKernelIAMRuntime,
@@ -14,6 +15,8 @@ import {
   hasHandler,
   invoke,
   registerHandler,
+  registerHandlersOnce,
+  setBillingAdmissionGate,
   setKernelAccessRequestCreator,
   setKernelIAMRuntime,
   setSecurityEventEmitter,
@@ -859,5 +862,73 @@ describe("invoke() principal spine", () => {
 
     await invoke("test.echo", { value: "hi" }, spineCtx);
     expect(targets).toEqual([null]);
+  });
+});
+
+describe("billing admission gate", () => {
+  afterEach(() => {
+    clearRegistryForTests();
+    clearHandlersForTests();
+    clearBillingAdmissionGate();
+  });
+
+  it("invokes the registered gate for a scoped capability carrying an orgId", async () => {
+    echoCap();
+    registerHandler("test.echo", async () => async (input) => input);
+    const gate = vi.fn(async () => {});
+    setBillingAdmissionGate(gate);
+
+    await invoke("test.echo", { value: "hi" }, ctx);
+
+    expect(gate).toHaveBeenCalledWith(ctx.orgId);
+  });
+
+  it("propagates a rejection thrown by the gate", async () => {
+    echoCap();
+    registerHandler("test.echo", async () => async (input) => input);
+    setBillingAdmissionGate(async () => {
+      throw new Error("insufficient credits");
+    });
+
+    await expect(invoke("test.echo", { value: "hi" }, ctx)).rejects.toThrow(
+      "insufficient credits",
+    );
+  });
+
+  it("stops firing once cleared", async () => {
+    echoCap();
+    registerHandler("test.echo", async () => async (input) => input);
+    const gate = vi.fn(async () => {
+      throw new Error("should not run");
+    });
+    setBillingAdmissionGate(gate);
+    clearBillingAdmissionGate();
+
+    const out = await invoke("test.echo", { value: "hi" }, ctx);
+
+    expect(out).toEqual({ value: "hi" });
+    expect(gate).not.toHaveBeenCalled();
+  });
+});
+
+describe("registerHandlersOnce", () => {
+  it("runs the register callback only once per token", () => {
+    const register = vi.fn();
+
+    registerHandlersOnce("kernel-test-token-once", register);
+    registerHandlersOnce("kernel-test-token-once", register);
+
+    expect(register).toHaveBeenCalledTimes(1);
+  });
+
+  it("runs independently for a different token", () => {
+    const registerA = vi.fn();
+    const registerB = vi.fn();
+
+    registerHandlersOnce("kernel-test-token-a", registerA);
+    registerHandlersOnce("kernel-test-token-b", registerB);
+
+    expect(registerA).toHaveBeenCalledTimes(1);
+    expect(registerB).toHaveBeenCalledTimes(1);
   });
 });

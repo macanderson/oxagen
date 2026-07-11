@@ -23,13 +23,13 @@
       "Bash(cd /Users/macanderson/Workspaces/oxagen-platform && echo \"=== apps/cli/package.json bin ===\"; python3 -c 'import json; d=json.load(open(\"apps/cli/package.json\")); print(json.dumps(d.get(\"bin\"),indent=2)); print(\"name\",d.get(\"name\"))'; echo \"=== npm normalize test ===\"; cd /tmp && rm -rf npmbintest && mkdir npmbintest && cd npmbintest && cp /Users/macanderson/Workspaces/oxagen-platform/apps/cli/dist-standalone/package.json . && echo \"// stub\" > oxagen.mjs && npm pkg fix 2>&1 | tail -5; echo \"--- bin after fix ---\"; python3 -c 'import json; print(json.dumps(json.load(open(\"package.json\")).get(\"bin\"),indent=2))')",
       "Bash(cd /Users/macanderson/Workspaces/oxagen-platform/apps/app && rm -rf e2e/screenshots && timeout 300 npx playwright test chat-attachments.spec.ts -g \"uploads a PNG\" --project=chromium --reporter=list 2>&1 | tail -60)",
       "Bash(cd /Users/macanderson/Workspaces/oxagen-platform/apps/app && rm -rf e2e/screenshots && npx playwright test chat-attachments.spec.ts -g \"uploads a PNG\" --project=chromium --reporter=list 2>&1 | tail -70)",
-      "Bash(cd /Users/macanderson/Workspaces/oxagen-platform/.claude/worktrees/agent-a968d7435975bbe0f/apps/cli && rm -rf node_modules/.vite; ( CI=true ../../node_modules/.bin/vitest run src/agent/__tests__/loop-errors.test.ts > /tmp/oxa-vitest2.log 2>&1 & echo pid=$! ); sleep 60; echo \"=== log ===\"; tail -16 /tmp/oxa-vitest2.log; pkill -f vitest 2>/dev/null; echo)"
+      "Bash(cd /Users/macanderson/Workspaces/oxagen-platform/.claude/worktrees/agent-a968d7435975bbe0f/apps/cli && rm -rf node_modules/.vite; ( CI=true ../../node_modules/.bin/vitest run src/agent/__tests__/loop-errors.test.ts > /tmp/oxa-vitest2.log 2>&1 & echo pid=$! ); sleep 60; echo \"=== log ===\"; tail -16 /tmp/oxa-vitest2.log; pkill -f vitest 2>/dev/null; echo)",
+      "Write(../oxagen-phase2/crates/oxagen-protocol/src/event.rs)",
+      "Write(../oxagen-phase2/crates/oxagen-core/Cargo.toml)",
+      "Write(../oxagen-phase2/crates/oxagen-core/src/lib.rs)",
+      "Write(../oxagen-phase2/crates/oxagen-core/src/ports.rs)"
     ],
-    "deny": [
-      "Bash(rm -rf*)",
-      "Write(.env*)",
-      "Read(.env*)"
-    ]
+    "deny": ["Bash(rm -rf*)", "Write(.env*)", "Read(.env*)"]
   },
   "hooks": {
     "SessionStart": [],
