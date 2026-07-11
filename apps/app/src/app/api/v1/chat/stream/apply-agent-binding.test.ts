@@ -26,7 +26,6 @@ describe("applyAgentBinding", () => {
       def: def(),
       skills: ["alpha"],
       serverAllowlist: ["srv_1"],
-      codeMode: false,
     });
     expect(result.instructions).toBe("");
     expect(result.skills).toEqual(["alpha"]);
@@ -39,7 +38,6 @@ describe("applyAgentBinding", () => {
       def: def({ instructions: "  Be concise.  " }),
       skills: [],
       serverAllowlist: [],
-      codeMode: false,
     });
     expect(result.instructions).toBe("Be concise.");
   });
@@ -50,7 +48,6 @@ describe("applyAgentBinding", () => {
         def: def({ instructions: null }),
         skills: [],
         serverAllowlist: [],
-        codeMode: false,
       }).instructions,
     ).toBe("");
     expect(
@@ -58,7 +55,6 @@ describe("applyAgentBinding", () => {
         def: def({ instructions: "   " }),
         skills: [],
         serverAllowlist: [],
-        codeMode: false,
       }).instructions,
     ).toBe("");
   });
@@ -75,7 +71,6 @@ describe("applyAgentBinding", () => {
       }),
       skills: ["alpha"],
       serverAllowlist: [],
-      codeMode: false,
     });
     expect(result.skills).toEqual(["alpha", "beta", "gamma"]);
   });
@@ -85,7 +80,6 @@ describe("applyAgentBinding", () => {
       def: def({ agentTools: [{ type: "skill", ref: "alpha" }] }),
       skills: ["alpha"],
       serverAllowlist: [],
-      codeMode: false,
     });
     expect(result.skills).toEqual(["alpha"]);
   });
@@ -102,7 +96,6 @@ describe("applyAgentBinding", () => {
       }),
       skills: ["s1", "s2"],
       serverAllowlist: [],
-      codeMode: false,
     });
     expect(result.skills).toEqual(["s1", "s2", "s3", "s4", "s5"]);
     expect(result.skills).toHaveLength(5);
@@ -119,39 +112,30 @@ describe("applyAgentBinding", () => {
       }),
       skills: [],
       serverAllowlist: ["srv_1"],
-      codeMode: false,
     });
     expect(result.serverAllowlist).toEqual(["srv_1", "srv_2"]);
   });
 
-  it("forces code mode on for a coding agent", () => {
-    const result = applyAgentBinding({
-      def: def({ agentType: "coding" }),
-      skills: [],
-      serverAllowlist: [],
-      codeMode: false,
-    });
-    expect(result.codeMode).toBe(true);
+  it("turns code mode on for a code agent (both agentType spellings)", () => {
+    for (const agentType of ["code", "coding"]) {
+      const result = applyAgentBinding({
+        def: def({ agentType }),
+        skills: [],
+        serverAllowlist: [],
+      });
+      expect(result.codeMode).toBe(true);
+    }
   });
 
-  it("leaves code mode on when the request already enabled it", () => {
-    const result = applyAgentBinding({
-      def: def({ agentType: "assistant" }),
-      skills: [],
-      serverAllowlist: [],
-      codeMode: true,
-    });
-    expect(result.codeMode).toBe(true);
-  });
-
-  it("does not force code mode for a non-coding agent", () => {
-    const result = applyAgentBinding({
-      def: def({ agentType: "research" }),
-      skills: [],
-      serverAllowlist: [],
-      codeMode: false,
-    });
-    expect(result.codeMode).toBe(false);
+  it("never enters code mode for a non-code agent — the agent definition is the only gate", () => {
+    for (const agentType of ["assistant", "research", "support"]) {
+      const result = applyAgentBinding({
+        def: def({ agentType }),
+        skills: [],
+        serverAllowlist: [],
+      });
+      expect(result.codeMode).toBe(false);
+    }
   });
 
   it("applies instructions, skills, servers, and code-mode together", () => {
@@ -166,7 +150,6 @@ describe("applyAgentBinding", () => {
       }),
       skills: ["security"],
       serverAllowlist: [],
-      codeMode: false,
     });
     expect(result).toEqual({
       instructions: "Prefer TypeScript.",

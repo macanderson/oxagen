@@ -1,6 +1,6 @@
 "use client";
 import * as React from "react";
-import { Bot, ChevronDown, Code2 } from "lucide-react";
+import { Bot, ChevronDown, Code2, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverTrigger, PopoverPopup } from "@/components/ui/popover";
@@ -31,8 +31,18 @@ export interface AgentContextChipProps {
   selectedRepoKey: string | null;
   selectedEnvId: string | null;
   onApply: (sel: AgentSelectionApply) => void;
+  /**
+   * When true the conversation's agent is LOCKED (its coding target was claimed
+   * on the first code turn). The chip renders read-only — the selected agent is
+   * shown but the picker can't be opened. Start a new conversation to change.
+   */
+  locked?: boolean;
   className?: string;
 }
+
+/** Human hint shown on the locked chip / pickers. */
+const LOCK_HINT =
+  "Locked for this conversation — start a new conversation to change";
 
 export function AgentContextChip({
   agents,
@@ -46,6 +56,7 @@ export function AgentContextChip({
   selectedRepoKey,
   selectedEnvId,
   onApply,
+  locked = false,
   className,
 }: AgentContextChipProps) {
   const [open, setOpen] = React.useState(false);
@@ -58,6 +69,40 @@ export function AgentContextChip({
     ? (agents.find((a) => a.agentId === selectedAgentId) ?? null)
     : null;
   const label = selected?.name ?? "Assistant";
+
+  // Locked: render the chip read-only — the bound agent is visible but the
+  // picker can't open. A disabled button carries a native `title` tooltip and a
+  // lock glyph so the state is legible without a portal (which also keeps this
+  // robust under tests that stub the popover).
+  if (locked) {
+    return (
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        disabled
+        aria-label={`Agent locked: ${label}`}
+        title={LOCK_HINT}
+        data-testid="agent-context-chip-locked"
+        className={cn("h-8 gap-1.5 px-2 text-xs font-medium", className)}
+      >
+        {selected ? (
+          <AgentAvatar
+            avatarUrl={selected.avatarUrl}
+            name={selected.name}
+            slug={selected.slug}
+            size="sm"
+            shape="square"
+          />
+        ) : (
+          <Bot className="size-3.5 text-muted-foreground" />
+        )}
+        <span className="max-w-[140px] truncate">{label}</span>
+        {selected?.isCode ? <Code2 className="size-3 text-primary" /> : null}
+        <Lock className="size-3 text-muted-foreground" aria-hidden="true" />
+      </Button>
+    );
+  }
 
   return (
     <Popover open={open} onOpenChange={setOpen}>

@@ -37,6 +37,7 @@ import type { McpServerSummary } from "./mcp-types";
 import type { RepoOption } from "./repo-selector";
 import type { EnvironmentOption } from "./environment-selector";
 import type { AgentOption } from "./agent-picker/agent-picker-types";
+import type { StoredCodeBinding } from "@/app/api/v1/chat/stream/code-binding";
 import { ChatSelectionProvider } from "./agent-picker/chat-selection-context";
 import { AgentGallery } from "./agent-picker/agent-gallery";
 import {
@@ -166,6 +167,7 @@ export function ChatShellClient({
   setDefaultAgentAction,
   workspaceBudgetGovernance,
   agentId,
+  conversationCodeBinding,
   pageContext,
   onFormFillStart,
   onFormFillEnd,
@@ -219,6 +221,11 @@ export function ChatShellClient({
    * agent selection so the composer chip reflects the binding; the composer
    * then carries it in each stream request as `agentId`. Null ⇒ unbound. */
   agentId?: string | null;
+  /**
+   * The conversation's stored code binding (claimed on its first code turn).
+   * When present the selection is forced to it and locked read-only — the
+   * composer keeps sending the same bound `code` payload. Null ⇒ unbound. */
+  conversationCodeBinding?: StoredCodeBinding | null;
   /**
    * Page context forwarded from the current page. When a fillable form is
    * registered (e.g. in AskDrawer/WandPanel wrappers), this is passed to the
@@ -1231,6 +1238,7 @@ export function ChatShellClient({
       conversationId={conversationId}
       workspaceSlug={workspaceSlug}
       isNewConversation={!conversationId}
+      codeBinding={conversationCodeBinding ?? null}
     >
       <div className="flex h-full w-full gap-4">
         <div className="mx-auto flex h-full min-w-0 max-w-3xl flex-1 flex-col gap-4">

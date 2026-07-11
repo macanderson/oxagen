@@ -54,6 +54,7 @@ export function ChatShell({
   setDefaultAgentAction,
   workspaceBudgetGovernance,
   agentId,
+  conversationCodeBinding,
 }: ChatShellProps) {
   return (
     <>
@@ -84,6 +85,7 @@ export function ChatShell({
           setDefaultAgentAction={setDefaultAgentAction}
           workspaceBudgetGovernance={workspaceBudgetGovernance}
           agentId={agentId}
+          conversationCodeBinding={conversationCodeBinding}
         />
       </Suspense>
       <BackgroundTaskTray
@@ -121,6 +123,7 @@ async function AsyncShell({
   setDefaultAgentAction,
   workspaceBudgetGovernance,
   agentId,
+  conversationCodeBinding,
 }: {
   promise: Promise<ChatMessage[]>;
   conversationId: string | null;
@@ -149,6 +152,7 @@ async function AsyncShell({
   ) => Promise<{ ok: boolean; error?: string }>;
   workspaceBudgetGovernance?: WorkspaceBudgetGovernance | null;
   agentId?: string | null;
+  conversationCodeBinding?: ChatShellProps["conversationCodeBinding"];
 }) {
   const messages = await promise;
   const modelConfig = resolvedTierCatalog();
@@ -180,6 +184,7 @@ async function AsyncShell({
       setDefaultAgentAction={setDefaultAgentAction}
       workspaceBudgetGovernance={workspaceBudgetGovernance}
       agentId={agentId}
+      conversationCodeBinding={conversationCodeBinding}
     />
   );
 }

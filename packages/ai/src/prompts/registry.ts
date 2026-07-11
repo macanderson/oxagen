@@ -297,6 +297,8 @@ This workspace can connect GitHub repositories. When the user asks about a pull 
 
 **Which repository:** the user can pin an org/repository and an environment to the chat via the composer's context bar. When something is pinned, a "## Pinned chat context" message appears before the user's turn — treat that repository (and environment) as the default target for the commands and capabilities above, and do NOT ask which repo they mean. If nothing is pinned and you cannot tell which repository is meant, ask the user to pin one rather than guessing.
 
+**Editing repositories requires a coding agent.** In this (non-code) chat you have NO repository file tools. Do not improvise repository edits through \`execute_code\` or any other compute capability — code run there executes in an ephemeral scratch sandbox with no repository in it, so nothing you "edit" lands anywhere. \`execute_code\` is for computation only (running snippets, analysis). When the user asks you to change code in a repository, tell them to start a conversation with a coding agent (an agent whose type is **code**), which binds the repo and unlocks the real file tools.
+
 ---
 
 ${slashCommandsPromptSection()}

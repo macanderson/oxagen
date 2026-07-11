@@ -51,6 +51,11 @@ import type {
 } from "@/components/chat/stream-event-types";
 import { autoTitleConversation } from "./auto-title";
 import {
+  parseStoredCodeBinding,
+  resolveCodeBinding,
+  toStoredCodeBinding,
+} from "./code-binding";
+import {
   buildRecentTurns,
   extractToolActivity,
   generateTurnSuggestions,
@@ -816,6 +821,56 @@ export async function POST(request: NextRequest): Promise<Response> {
           clientIp,
         };
 
+        // ── Conversation code binding (locked coding target) ────────────────
+        // The repo + environment + agent chosen on a conversation's FIRST
+        // code-mode turn is persisted on the conversation row and locked for
+        // its lifetime (claimed in the code-mode block below). Resolve this
+        // turn against the stored binding FIRST so a stale client or a
+        // mid-conversation picker change can never retarget the sandbox —
+        // matching the CLI, where the repo is the launch cwd, pinned for the
+        // whole session. Fail-open: a read failure degrades to unbound
+        // (request values stand), never a dead turn.
+        let storedCodeBinding: ReturnType<typeof parseStoredCodeBinding> =
+          null;
+        if (conversationId) {
+          try {
+            const [conversationRow] = await runInTenantScope(
+              { orgId: tenant.id, workspaceId: workspace.id },
+              () =>
+                withTenantDb((tx) =>
+                  tx
+                    .select({ codeBinding: schema.conversations.codeBinding })
+                    .from(schema.conversations)
+                    .where(
+                      and(
+                        eq(schema.conversations.id, conversationId),
+                        eq(schema.conversations.orgId, tenant.id),
+                        eq(schema.conversations.workspaceId, workspace.id),
+                      ),
+                    )
+                    .limit(1),
+                ),
+            );
+            storedCodeBinding = parseStoredCodeBinding(
+              conversationRow?.codeBinding,
+            );
+          } catch (err) {
+            logger.warn(
+              { err: String(err), conversationId, requestId },
+              "[chat/stream] code-binding read failed — running turn unbound",
+            );
+          }
+        }
+        const bindingResolution = resolveCodeBinding({
+          stored: storedCodeBinding,
+          requestedAgentId: agentId,
+          requestedCode: codeModeRaw,
+        });
+        const effectiveAgentId = bindingResolution.agentId;
+        for (const message of bindingResolution.warnings) {
+          emit({ type: "warning", message, code: "code_binding_locked" });
+        }
+
         // Agent memory capture (memory-capture.ts wraps @oxagen/agent/runtime/
         // engram-writer): rides the SAME tenant-asserted org/workspace ids as
         // every other capability call in this turn — never ambient state, so
@@ -826,7 +881,7 @@ export async function POST(request: NextRequest): Promise<Response> {
           orgId: tenant.id,
           workspaceId: workspace.id,
           sessionId: conversationId ?? undefined,
-          agentId: agentId ?? undefined,
+          agentId: effectiveAgentId ?? undefined,
           messageId: capCtx.messageId,
         };
 
@@ -836,13 +891,12 @@ export async function POST(request: NextRequest): Promise<Response> {
         //   • instructions → appended to the system-prompt baseline (below),
         //   • skill agentTools → unioned into the pinned-skill slugs,
         //   • mcp_server agentTools → unioned into the MCP server allowlist,
-        //   • agentType "code"/"coding" → forces code mode ON for the turn
-        //     (`useCodeModePrompt`, system-prompt flavor only), AND is the
-        //     AUTHORITATIVE gate that can force code mode OFF: a `code` payload
-        //     paired with a non-code agent is dropped (see `codeMode` below,
-        //     computed from `agentIsCode`) regardless of what the client sent.
-        // Absent `agentId`, every effective value is exactly the request value,
-        // so the whole turn is byte-identical to before this feature.
+        //   • agentType "code"/"coding" → the ONLY thing that can put a turn
+        //     in coding flow: `useCodeModePrompt` and the authoritative
+        //     `codeMode` gate below both derive from `agentIsCode`. A `code`
+        //     payload without a code agent — including the legacy no-agent
+        //     manual toggle — is dropped regardless of what the client sent.
+        // Absent an agent, every effective value is exactly the request value.
         //
         // FAIL-OPEN: a failed/denied agent.definition.get must NEVER break the
         // turn — log and fall through to the normal (unbound) behavior, exactly
@@ -853,18 +907,20 @@ export async function POST(request: NextRequest): Promise<Response> {
         let effectiveSkillSlugs = pinnedSkillSlugs;
         let effectiveServerIds = activeServerIds;
         let agentIsCode = false;
-        // `useCodeModePrompt` drives the code-mode SYSTEM PROMPT; the sandbox is
-        // still only bound when `codeMode` (the authoritative, agent-gated value
-        // computed below) carried a repo/env. A coding agent with no repo
-        // therefore degrades to the code-mode prompt with no filesystem tools
-        // (see the code-mode block further below).
-        let useCodeModePrompt = Boolean(codeModeRaw);
-        if (agentId) {
+        // `useCodeModePrompt` drives the code-mode SYSTEM PROMPT; the sandbox
+        // is still only bound when `codeMode` (the authoritative value
+        // computed below) carries a repo/env. Both derive from the AGENT
+        // DEFINITION: without a code agent there is no coding flow, so the
+        // prompt starts false and only `binding.codeMode` (= is-code-agent)
+        // can raise it. A coding agent with no repo degrades to the code-mode
+        // prompt with no filesystem tools (see the code-mode block below).
+        let useCodeModePrompt = false;
+        if (effectiveAgentId) {
           try {
             const def = await runInTenantScope(
               { orgId: tenant.id, workspaceId: workspace.id },
               () =>
-                invoke("get_agent_def", { agentId }, capCtx, {
+                invoke("get_agent_def", { agentId: effectiveAgentId }, capCtx, {
                   surface: "agent",
                 }),
             );
@@ -875,7 +931,6 @@ export async function POST(request: NextRequest): Promise<Response> {
               def: def as AgentBindingDefinition,
               skills: pinnedSkillSlugs,
               serverAllowlist: activeServerIds,
-              codeMode: Boolean(codeModeRaw),
             });
             boundInstructions = binding.instructions;
             effectiveSkillSlugs = binding.skills;
@@ -883,10 +938,27 @@ export async function POST(request: NextRequest): Promise<Response> {
             useCodeModePrompt = binding.codeMode;
           } catch (err) {
             logger.warn(
-              { err, agentId, requestId },
+              { err, agentId: effectiveAgentId, requestId },
               "[chat/stream] agent binding failed — running unbound turn",
             );
           }
+        }
+
+        // ── Authoritative code-mode gate (agent-definition–driven) ──────────
+        // Coding flow exists ONLY when the bound agent's definition marks it
+        // a code agent. A `code` payload without one is dropped, and a stored
+        // binding whose agent no longer resolves as code is likewise inert.
+        // Hoisted ABOVE materializeTools so the capability tool list can
+        // exclude the mutation paths that overlap the engine's repo-bound
+        // workspace toolset.
+        const codeMode = agentIsCode ? bindingResolution.code : null;
+        if (!agentIsCode && bindingResolution.code) {
+          emit({
+            type: "warning",
+            message:
+              "Repository tools are only available to coding agents — this turn runs without them.",
+            code: "code_mode_requires_code_agent",
+          });
         }
 
         const [
@@ -902,6 +974,18 @@ export async function POST(request: NextRequest): Promise<Response> {
           () =>
             Promise.all([
               materializeTools(capCtx, {
+                // Code mode binds the engine's repo-bound workspace toolset
+                // (read_file/edit_file/bash …) — the ONLY sanctioned way for
+                // the model to touch the repository. Exclude the capability
+                // tools that overlap it: execute_code runs in a separate
+                // ephemeral sandbox (the model would "verify" its edits in a
+                // box that doesn't contain them) and edit_repo_file spawns a
+                // nested clone-edit-PR loop. (The durable sandbox session
+                // family is Workbench-only and never materialized — see
+                // WORKBENCH_ONLY_SANDBOX_CAPS in materialize-tools.ts.)
+                excludeCapabilities: codeMode
+                  ? new Set(["execute_code", "edit_repo_file"])
+                  : undefined,
                 // Effective allowlist = request activeServerIds ∪ any mcp_server
                 // refs from the bound agent (unchanged when no agent is bound).
                 serverAllowlist:
@@ -1247,17 +1331,12 @@ export async function POST(request: NextRequest): Promise<Response> {
         );
 
         // ── Code mode: bind the durable sandbox workspace + code graph ────────
-        // When the composer selected a repo + environment, run the coding engine
-        // against a sandbox with the repo cloned. The per-turn repo/env context
-        // rides as a USER message (ADR-021 §2), never the cached system prompt.
-        // `agentIsCode` was already resolved in the agent-binding block above
-        // (one `agent.definition.get` load, not two) — this is just the
-        // AUTHORITATIVE gate on top of it: only a code agent may bind the
-        // sandbox + code tools, so a `code` payload paired with a non-code agent
-        // is dropped here regardless of what the client sent; with no agent
-        // selected the client's payload stands (unchanged legacy behavior).
-        const codeMode = agentId && !agentIsCode ? null : codeModeRaw;
-
+        // When this conversation's coding target is active (`codeMode` — the
+        // code agent + effective repo/env resolved through the conversation
+        // code binding and the authoritative agent gate above
+        // materializeTools), run the coding engine against a sandbox with the
+        // repo cloned. The per-turn repo/env context rides as a USER message
+        // (ADR-021 §2), never the cached system prompt.
         let codeGraphForTurn:
           | ReturnType<typeof createNeo4jCodeGraphProvider>
           | undefined;
@@ -1290,11 +1369,46 @@ export async function POST(request: NextRequest): Promise<Response> {
               );
               return undefined;
             });
+            // First code turn of this conversation: claim the binding
+            // atomically (WHERE code_binding IS NULL — a concurrent first
+            // turn can never overwrite a winner). Fire-and-forget + fail-open:
+            // a claim failure only means the next turn re-attempts; the turn
+            // itself proceeds.
+            if (conversationId && !storedCodeBinding && effectiveAgentId) {
+              const bindingToClaim = toStoredCodeBinding(
+                codeMode,
+                effectiveAgentId,
+              );
+              runInTenantScope(
+                { orgId: tenant.id, workspaceId: workspace.id },
+                () =>
+                  withTenantDb((tx) =>
+                    tx
+                      .update(schema.conversations)
+                      .set({ codeBinding: bindingToClaim })
+                      .where(
+                        and(
+                          eq(schema.conversations.id, conversationId),
+                          isNull(schema.conversations.codeBinding),
+                        ),
+                      ),
+                  ),
+              ).catch((err) => {
+                logger.warn(
+                  { err: String(err), conversationId, requestId },
+                  "[chat/stream] code-binding claim failed — next turn retries",
+                );
+              });
+            }
             codeWorkspace = new ModalSandboxWorkspace({
               ctx: capCtx,
-              // Stable per-(workspace, conversation, repo) key so every turn of
-              // one conversation reuses ONE warm sandbox across turns.
-              sessionKey: `chat:${workspace.id}:${conversationId ?? requestId}:${codeMode.connectionId}`,
+              // Stable per-(workspace, conversation, connection, REPO) key so
+              // every turn of one conversation reuses ONE warm sandbox.
+              // owner/name is part of the key: a different repo must never
+              // silently reuse a previous repo's warm clone (the conversation
+              // binding already makes a mid-conversation switch impossible —
+              // this is defense in depth).
+              sessionKey: `chat:${workspace.id}:${conversationId ?? requestId}:${codeMode.connectionId}:${codeMode.owner}/${codeMode.name}`,
               environmentId: codeMode.environmentId,
               repo: {
                 owner: codeMode.owner,

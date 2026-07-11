@@ -18,6 +18,12 @@ export const conversations = chatSchema.table(
     // restorable. archived_at NULL = active. (conversation.archive toggles it.)
     archivedAt: timestamp("archived_at", { withTimezone: true, mode: "date" }),
     archivedByUserId: uuid("archived_by_user_id"),
+    // Code binding: the repo + environment + agent selected on the FIRST
+    // code-mode turn, claimed once (UPDATE … WHERE code_binding IS NULL) and
+    // immutable for the conversation's lifetime — the coding target can never
+    // drift mid-conversation. NULL = non-code conversation. Shape:
+    // StoredCodeBinding (apps/app chat stream code-binding.ts).
+    codeBinding: jsonb("code_binding"),
     // softDeleteMixin (deleted_at / deleted_by_user_id): the engineering law
     // forbids hard-deletes on org-scoped tables, so the user-facing "delete"
     // sets deleted_at — the row is retained for SOC2/audit but vanishes from
