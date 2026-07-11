@@ -1318,7 +1318,7 @@ wheels = [
 [[package]]
 name = "oxagen-rag-eval"
 version = "0.1.0"
-source = { editable = "." }
+source = { virtual = "." }
 dependencies = [
     { name = "datasets" },
     { name = "deepeval" },
