@@ -202,9 +202,7 @@ fn to_anthropic_messages(
                     .iter()
                     .map(|result| {
                         let (text, is_error) = match &result.output {
-                            oxagen_protocol::ToolOutput::Ok { content } => {
-                                (content.clone(), false)
-                            }
+                            oxagen_protocol::ToolOutput::Ok { content } => (content.clone(), false),
                             oxagen_protocol::ToolOutput::Error { message } => {
                                 (message.clone(), true)
                             }

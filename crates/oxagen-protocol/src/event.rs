@@ -69,6 +69,33 @@ pub enum AgentEvent {
         attempt: u32,
         reason: String,
     },
+    /// A compaction pass ran (`oxagen-core::compaction`). Fields mirror
+    /// `CompactionReport` — kept as a flat struct here (not a re-exported
+    /// type) so `oxagen-protocol` never depends on `oxagen-core` (dependency
+    /// direction: core depends on protocol, never the reverse).
+    Compaction {
+        before_tokens: u64,
+        after_tokens: u64,
+        evicted: usize,
+        deduped: usize,
+    },
+    /// Emitted after every provider/media call that spends money
+    /// (`07-model-matrix.md` §6). The TUI HUD renders spend live from this
+    /// stream; nothing user-visible about spend is derived from state that
+    /// isn't also in this event.
+    BudgetTick {
+        spent_usd: f64,
+        limit_usd: Option<f64>,
+        mode: BudgetMode,
+    },
+    /// A provider's circuit breaker opened and the router fell back to the
+    /// next configured provider of the same role's tier. Never silent
+    /// (L-M7) — no mid-turn family switch happens without this event.
+    ProviderFallback {
+        from: String,
+        to: String,
+        reason: String,
+    },
     Error {
         message: String,
         retryable: bool,
@@ -99,6 +126,64 @@ mod tests {
             AgentEvent::ToolStart { call } => assert_eq!(call.name, "read_file"),
             other => panic!("unexpected variant: {other:?}"),
         }
+    }
+
+    #[test]
+    fn budget_tick_roundtrips_with_optional_limit() {
+        let event = AgentEvent::BudgetTick {
+            spent_usd: 0.42,
+            limit_usd: Some(2.5),
+            mode: BudgetMode::Enforced,
+        };
+        let json = serde_json::to_string(&event).unwrap();
+        let back: AgentEvent = serde_json::from_str(&json).unwrap();
+        match back {
+            AgentEvent::BudgetTick {
+                spent_usd,
+                limit_usd,
+                mode,
+            } => {
+                assert_eq!(spent_usd, 0.42);
+                assert_eq!(limit_usd, Some(2.5));
+                assert_eq!(mode, BudgetMode::Enforced);
+            }
+            other => panic!("unexpected variant: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn compaction_event_carries_counts() {
+        let event = AgentEvent::Compaction {
+            before_tokens: 10_000,
+            after_tokens: 4_000,
+            evicted: 3,
+            deduped: 2,
+        };
+        let json = serde_json::to_string(&event).unwrap();
+        assert!(json.contains("\"type\":\"compaction\""), "{json}");
+        let back: AgentEvent = serde_json::from_str(&json).unwrap();
+        match back {
+            AgentEvent::Compaction {
+                before_tokens,
+                after_tokens,
+                ..
+            } => {
+                assert!(after_tokens < before_tokens);
+            }
+            other => panic!("unexpected variant: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn provider_fallback_is_never_silent_it_names_both_ends() {
+        let event = AgentEvent::ProviderFallback {
+            from: "zai".into(),
+            to: "anthropic".into(),
+            reason: "circuit breaker open after 3 consecutive transport failures".into(),
+        };
+        let json = serde_json::to_string(&event).unwrap();
+        assert!(json.contains("\"from\":\"zai\""), "{json}");
+        assert!(json.contains("\"to\":\"anthropic\""), "{json}");
     }
 
     #[test]
