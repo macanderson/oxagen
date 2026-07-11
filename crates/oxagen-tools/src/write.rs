@@ -1,7 +1,5 @@
 //! `write_file` — create or overwrite a file, creating parent dirs.
 
-use std::path::PathBuf;
-
 use async_trait::async_trait;
 use oxagen_protocol::tool::{ToolOutput, ToolSchema};
 use serde_json::Value;
@@ -27,14 +25,22 @@ impl Tool for WriteFile {
         }
     }
 
-    async fn execute(&self, input: &Value, root: &PathBuf) -> ToolOutput {
+    async fn execute(&self, input: &Value, root: &std::path::Path) -> ToolOutput {
         let path = match input.get("path").and_then(|v| v.as_str()) {
             Some(p) => p,
-            None => return ToolOutput::Error { message: "missing required field `path`".into() },
+            None => {
+                return ToolOutput::Error {
+                    message: "missing required field `path`".into(),
+                };
+            }
         };
         let content = match input.get("content").and_then(|v| v.as_str()) {
             Some(c) => c,
-            None => return ToolOutput::Error { message: "missing required field `content`".into() },
+            None => {
+                return ToolOutput::Error {
+                    message: "missing required field `content`".into(),
+                };
+            }
         };
 
         let full_path = root.join(path);
@@ -44,10 +50,12 @@ impl Tool for WriteFile {
             };
         }
 
-        if let Some(parent) = full_path.parent() {
-            if let Err(e) = tokio::fs::create_dir_all(parent).await {
-                return ToolOutput::Error { message: format!("failed to create dirs: {e}") };
-            }
+        if let Some(parent) = full_path.parent()
+            && let Err(e) = tokio::fs::create_dir_all(parent).await
+        {
+            return ToolOutput::Error {
+                message: format!("failed to create dirs: {e}"),
+            };
         }
 
         match tokio::fs::write(&full_path, content).await {
@@ -73,7 +81,10 @@ mod tests {
         let dir = std::env::temp_dir();
         let path = format!("stella_write_test_{}/sub/dir/file.txt", std::process::id());
         let result = WriteFile
-            .execute(&serde_json::json!({"path": path, "content": "hello stella"}), &dir)
+            .execute(
+                &serde_json::json!({"path": path, "content": "hello stella"}),
+                &dir,
+            )
             .await;
         match result {
             ToolOutput::Ok { content } => assert!(content.contains("wrote 12 bytes")),
@@ -81,14 +92,20 @@ mod tests {
         }
         let written = tokio::fs::read_to_string(dir.join(&path)).await.unwrap();
         assert_eq!(written, "hello stella");
-        let _ = tokio::fs::remove_dir_all(dir.join(format!("stella_write_test_{}", std::process::id()))).await;
+        let _ = tokio::fs::remove_dir_all(
+            dir.join(format!("stella_write_test_{}", std::process::id())),
+        )
+        .await;
     }
 
     #[tokio::test]
     async fn path_escape_returns_error() {
         let dir = std::env::temp_dir();
         let result = WriteFile
-            .execute(&serde_json::json!({"path": "../../etc/bad", "content": "x"}), &dir)
+            .execute(
+                &serde_json::json!({"path": "../../etc/bad", "content": "x"}),
+                &dir,
+            )
             .await;
         assert!(result.is_error());
     }

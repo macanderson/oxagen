@@ -1,8 +1,6 @@
 //! `grep` — search file contents with a regex. Shells to `rg` when present
 //! for speed; falls back to a pure-Rust walk otherwise.
 
-use std::path::PathBuf;
-
 use async_trait::async_trait;
 use oxagen_protocol::tool::{ToolOutput, ToolSchema};
 use serde_json::Value;
@@ -32,17 +30,24 @@ impl Tool for Grep {
         }
     }
 
-    async fn execute(&self, input: &Value, root: &PathBuf) -> ToolOutput {
+    async fn execute(&self, input: &Value, root: &std::path::Path) -> ToolOutput {
         let pattern = match input.get("pattern").and_then(|v| v.as_str()) {
             Some(p) => p,
-            None => return ToolOutput::Error { message: "missing required field `pattern`".into() },
+            None => {
+                return ToolOutput::Error {
+                    message: "missing required field `pattern`".into(),
+                };
+            }
         };
         let search_path = input.get("path").and_then(|v| v.as_str()).unwrap_or(".");
         let glob_filter = input.get("glob").and_then(|v| v.as_str());
 
         // Try ripgrep first — it's the fast path.
         let mut rg = Command::new("rg");
-        rg.arg("--line-number").arg("--no-heading").arg("--color").arg("never");
+        rg.arg("--line-number")
+            .arg("--no-heading")
+            .arg("--color")
+            .arg("never");
         rg.arg("--max-count").arg(MAX_RESULTS.to_string());
         if let Some(g) = glob_filter {
             rg.arg("--glob").arg(g);
@@ -55,7 +60,9 @@ impl Tool for Grep {
             Ok(output) if output.status.success() || !output.stdout.is_empty() => {
                 let text = String::from_utf8_lossy(&output.stdout);
                 if text.is_empty() {
-                    return ToolOutput::Ok { content: "(no matches)".into() };
+                    return ToolOutput::Ok {
+                        content: "(no matches)".into(),
+                    };
                 }
                 let lines: Vec<&str> = text.lines().take(MAX_RESULTS).collect();
                 let mut result = lines.join("\n");
@@ -64,7 +71,9 @@ impl Tool for Grep {
                 }
                 ToolOutput::Ok { content: result }
             }
-            Ok(_) => ToolOutput::Ok { content: "(no matches)".into() },
+            Ok(_) => ToolOutput::Ok {
+                content: "(no matches)".into(),
+            },
             Err(_) => {
                 // rg not installed — fall back to grep
                 let mut grep = Command::new("grep");
@@ -80,10 +89,14 @@ impl Tool for Grep {
                     Ok(output) => {
                         let text = String::from_utf8_lossy(&output.stdout);
                         if text.is_empty() {
-                            ToolOutput::Ok { content: "(no matches)".into() }
+                            ToolOutput::Ok {
+                                content: "(no matches)".into(),
+                            }
                         } else {
                             let lines: Vec<&str> = text.lines().take(MAX_RESULTS).collect();
-                            ToolOutput::Ok { content: lines.join("\n") }
+                            ToolOutput::Ok {
+                                content: lines.join("\n"),
+                            }
                         }
                     }
                     Err(e) => ToolOutput::Error {
@@ -103,9 +116,13 @@ mod tests {
     async fn finds_matching_lines() {
         let dir = std::env::temp_dir();
         let path = format!("stella_grep_{}.txt", std::process::id());
-        tokio::fs::write(dir.join(&path), "hello world\nfoo bar\nhello again\n").await.unwrap();
+        tokio::fs::write(dir.join(&path), "hello world\nfoo bar\nhello again\n")
+            .await
+            .unwrap();
 
-        let result = Grep.execute(&serde_json::json!({"pattern": "hello", "path": path}), &dir).await;
+        let result = Grep
+            .execute(&serde_json::json!({"pattern": "hello", "path": path}), &dir)
+            .await;
         match result {
             ToolOutput::Ok { content } => {
                 assert!(content.contains("hello world") || content.contains("hello"));

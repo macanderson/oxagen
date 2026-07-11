@@ -18,7 +18,7 @@ pub trait Tool: Send + Sync {
 
     /// Execute the tool. `root` is the workspace root for path resolution;
     /// tools must never read or write outside it without explicit opt-in.
-    async fn execute(&self, input: &Value, root: &PathBuf) -> ToolOutput;
+    async fn execute(&self, input: &Value, root: &std::path::Path) -> ToolOutput;
 }
 
 /// Registry of all built-in tools, keyed by name.
@@ -56,7 +56,10 @@ impl ToolRegistry {
         match self.tools.get(name) {
             Some(tool) => tool.execute(input, &self.root).await,
             None => ToolOutput::Error {
-                message: format!("unknown tool `{name}` — available: {}", self.available_names()),
+                message: format!(
+                    "unknown tool `{name}` — available: {}",
+                    self.available_names()
+                ),
             },
         }
     }
