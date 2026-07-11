@@ -111,9 +111,15 @@ async fn interactive_probe(descriptor: &Descriptor, query_goal: Option<&str>) {
 
     match added {
         Ok(()) => {
-            let (info, caps) = {
-                let provider = host.provider(id).expect("just registered");
-                (provider.info().clone(), provider.capabilities().clone())
+            let (info, caps) = match host.provider(id) {
+                Some(provider) => (provider.info().clone(), provider.capabilities().clone()),
+                None => {
+                    println!(
+                        "{} provider vanished immediately after a successful handshake",
+                        "internal error:".red().bold()
+                    );
+                    return;
+                }
             };
             print_capabilities(&info, &caps);
 
