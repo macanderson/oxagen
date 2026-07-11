@@ -48,6 +48,10 @@ const nextConfig = {
         source: "/decks/architecture-deep-dive",
         destination: "/decks/architecture-deep-dive/index.html",
       },
+      {
+        source: "/decks/agentic-cli-roadmap",
+        destination: "/decks/agentic-cli-roadmap/index.html",
+      },
     ];
   },
 };

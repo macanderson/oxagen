@@ -6,24 +6,25 @@ component references a raw Tailwind palette color (`bg-blue-500`) or an arbitrar
 hex. **Reskinning the entire app — light and dark — is done by editing one file:
 `packages/ui/src/styles/globals.css`.**
 
-The current skin is **Oxagen Tangerine**: a **split-hue neutral** palette — WARM
-off-white surfaces in light, COOL narwhal near-black surfaces in dark — tuned for
-DRAMATIC light/dark contrast. Light = warm paper page + crisp white panels; dark =
-narwhal (`#0B0D16`) page + stepped inky-blue panels. **Card and table headers are
-dark bars in both modes.** Colour lives in the **tangerine primary** (`--ox-rust` →
-`--ox-tangerine`, `#FD9A4B`) — primary CTAs, focus rings, the active-tab underline,
-default badges, the brand mark start — plus a **rose secondary** (`--ox-rose`,
-`#EB5C5E`, secondary buttons/badges + the brand-mark end) and a **teak accent**
-(`#794036`) for hover/selected surfaces. Colour is never smeared across every
-surface (the system stays flat — no gradients/glows on chrome; see §7). The topbar
-matches the page background. Text links/charts use a cool **indigo** accent for
-categorical contrast; app-chrome icons (support, notifications, mobile nav) are
-neutral, not blue. Errors use a true **red** (`hsl 0 72% 51%`) so they never read
-as the tangerine primary. The wordmark is lowercase **`oxagen`** in Space Grotesk
-(`--font-wordmark`). Surfaces use moderate rounding (`0.5rem`) and a subtle shadow.
+The current skin is **Oxagen Terracotta**: a **warm-neutral** palette in both
+modes — ivory paper (`#FAF9F5`) + crisp white panels in light, warm charcoal
+(`#1E1D1B`) page + stepped warm-gray panels in dark (no blue cast anywhere).
+**Card and table headers are flat** — they match their surface, separated only
+by hairline borders. Colour lives in ONE muted **terracotta primary**
+(`--ox-rust`, `#D97757`) — primary CTAs, focus rings, the active-tab underline,
+chart-1 — with text links using a deeper **rust** shade (light) / warm apricot
+(dark) so link text stays ≥4.5:1. The secondary is a quiet warm-neutral fill,
+the hover/selected accent a barely-there terracotta tint. Colour is never
+smeared across every surface (the system stays flat — no gradients/glows on
+chrome; see §7). The topbar matches the page background. Charts keep a muted
+**indigo** for categorical contrast; app-chrome icons (support, notifications,
+mobile nav) are neutral. Errors use a true **red** (`hsl 0 72% 51%`) so they
+never read as the terracotta primary. The wordmark is lowercase **`oxagen`** in
+Space Grotesk (`--font-wordmark`). Surfaces use moderate rounding (`0.5rem`)
+and a subtle warm shadow; buttons do not grow on hover (`--button-hover-scale: 1`).
 
-The brand mark gradient is **tangerine → flame (`#F07650`) → rose**
-(`--_ember-*`).
+The brand mark gradient stays **tangerine (`#FD9A4B`) → flame (`#F07650`) →
+rose (`#EB5C5E`)** (`--_ember-*`) — theme-independent, never recolored.
 
 ---
 
@@ -62,7 +63,7 @@ worked example in §8.
 | Token | Default | Effect |
 |---|---|---|
 | `--ui-radius` | `0.5rem` | Master corner radius. The whole `--radius-*` scale derives from it. Set `0px` for hard square corners. |
-| `--ui-shadow` | `0 1px 2px oklch(0.24 0.1 275 / 0.06)` | Master elevation. Every Tailwind `shadow-*` step reads it. Set `0 0 #0000` for a flat UI. |
+| `--ui-shadow` | `0 1px 2px oklch(0.25 0.015 75 / 0.06)` | Master elevation. Every Tailwind `shadow-*` step reads it. Set `0 0 #0000` for a flat UI. |
 
 ---
 
@@ -74,44 +75,44 @@ The only literal colors in the system. Swap these to reskin.
 
 | Token | oklch | hex | Purpose |
 |---|---|---|---|
-| `--_paper` | `oklch(0.980 0.004 84.6)` | `#F8F6F1` | Light mode background (warm paper) |
-| `--_ink` | `oklch(0.182 0.019 266.5)` | `#101319` | Primary text + wordmark ink (light, cool) |
+| `--_paper` | `oklch(0.982 0.004 95)` | `#FAF9F5` | Light mode background (ivory paper) |
+| `--_ink` | `oklch(0.24 0.004 75)` | `#1F1E1D` | Primary text + wordmark ink (warm slate) |
 | `--_ink-white` | `oklch(0.948 0.006 67.8)` | `#F1EEEA` | Primary text + wordmark ink (dark, warm) |
 
-### Split-hue neutral ramp (stone) — warm light, cool narwhal dark
+### Warm-neutral ramp (stone) — ivory light, warm charcoal dark
 
-| Token | approx hex | hue | Purpose |
-|---|---|---|---|
-| `--_stone-50` | `#FCFBF9` | warm | Near-white |
-| `--_stone-100` | `#F4F2EE` | warm | Muted background / card-header |
-| `--_stone-150` | `#EFEDE8` | warm | Surface-alt (light) |
-| `--_stone-200` | `#E7E4DE` | warm | Secondary surfaces |
-| `--_stone-300` | `#DCD8D1` | warm | Input borders (light) |
-| `--_stone-400` | `#B4B0A9` | warm | muted-foreground (dark) |
-| `--_stone-500` | `#78767E` | cool | Tertiary text |
-| `--_stone-600` | `#6A6874` | cool | Secondary text (light) |
-| `--_stone-700` | `#45454E` | cool | Graphite |
-| `--_stone-800` | `#33343D` | cool | Narwhal accent surface (dark) |
-| `--_stone-850` | `#23252E` | cool | Popover / muted (dark) |
-| `--_stone-900` | `#191B23` | cool | Card / sidebar (dark) |
-| `--_stone-950` | `#0B0D16` | cool | Narwhal background (dark) |
+| Token | approx hex | Purpose |
+|---|---|---|
+| `--_stone-50` | `#FCFBF8` | Near-white |
+| `--_stone-100` | `#F0EEE6` | Muted background / card-header |
+| `--_stone-150` | `#ECEAE2` | Surface-alt (light) |
+| `--_stone-200` | `#E6E3DA` | Secondary surfaces |
+| `--_stone-300` | `#DBD7CE` | Input borders (light) |
+| `--_stone-400` | `#B3AFA7` | muted-foreground (dark) |
+| `--_stone-500` | `#77736C` | Tertiary text |
+| `--_stone-600` | `#635F58` | Secondary text (light) |
+| `--_stone-700` | `#46433E` | Warm graphite |
+| `--_stone-800` | `#393836` | Charcoal accent surface (dark) |
+| `--_stone-850` | `#2E2D2B` | Popover / muted (dark) |
+| `--_stone-900` | `#262624` | Card / sidebar (dark) |
+| `--_stone-950` | `#1E1D1B` | Warm charcoal background (dark) |
 
-### Tangerine accent ramp
+### Terracotta accent ramp
 
-The `--_violet-*` **names** are retained for zero-churn; the **values** are tangerine.
+The `--_violet-*` **names** are retained for zero-churn; the **values** are terracotta.
 
 | Token | oklch | approx hex | Purpose |
 |---|---|---|---|
-| `--_violet-50` | `oklch(0.965 0.020 60)` | `#FCEBDA` | Accent subtle (light) |
-| `--_violet-100` | `oklch(0.917 0.050 59.5)` | `#FBD9BB` | — |
-| `--_violet-200` | `oklch(0.852 0.093 58.5)` | `#F9BE8B` | — |
-| `--_violet-300` | `oklch(0.803 0.128 57.1)` | `#FCA95F` | — |
-| `--_violet-400` | `oklch(0.775 0.150 56.4)` | `#FD9A4B` | **Tangerine** — primary accent |
-| `--_violet-500` | `oklch(0.699 0.168 49.5)` | `#E87F32` | — |
-| `--_violet-600` | `oklch(0.618 0.175 42.3)` | `#CB621C` | — |
-| `--_violet-700` | `oklch(0.508 0.144 38.9)` | `#A24E1B` | — |
-| `--_violet-800` | `oklch(0.398 0.098 37.5)` | `#7A3D1C` | — |
-| `--_violet-900` | `oklch(0.313 0.065 35.1)` | `#5A2E18` | — |
+| `--_violet-50` | `oklch(0.965 0.015 45)` | `#FBEFE7` | Accent subtle (light) |
+| `--_violet-100` | `oklch(0.925 0.030 45)` | `#F6E0D1` | — |
+| `--_violet-200` | `oklch(0.865 0.055 43)` | `#EEC7AE` | — |
+| `--_violet-300` | `oklch(0.775 0.085 41)` | `#E0A583` | — |
+| `--_violet-400` | `oklch(0.66 0.115 40)` | `#D97757` | **Terracotta** — primary accent |
+| `--_violet-500` | `oklch(0.60 0.115 38)` | `#C56545` | — |
+| `--_violet-600` | `oklch(0.53 0.105 36)` | `#A85238` | — |
+| `--_violet-700` | `oklch(0.46 0.090 35)` | `#8C412C` | — |
+| `--_violet-800` | `oklch(0.38 0.070 34)` | `#6D3222` | — |
+| `--_violet-900` | `oklch(0.31 0.050 33)` | `#52271B` | — |
 
 ### Brand mark (tangerine → flame → rose)
 
@@ -122,8 +123,9 @@ The `--_violet-*` **names** are retained for zero-churn; the **values** are tang
 | `--_ember-crimson` | `#EB5C5E` | Gradient end (rose) |
 | `--_ember-navy` | `#0B0D16` | Narwhal ink anchor |
 
-Named brand swatches: `--ox-tangerine` (#FD9A4B), `--ox-rose` (#EB5C5E),
-`--ox-teak` (#794036). `--ox-rust` is retained as a legacy name → tangerine.
+Named brand swatches: `--ox-tangerine` (#FD9A4B) and `--ox-rose` (#EB5C5E)
+document the mark hues; `--ox-teak` (#794036) is legacy. `--ox-rust` holds the
+**terracotta primary** (#D97757) — the master accent knob.
 
 ### Status hues
 
@@ -143,24 +145,25 @@ These ~30 tokens (mapped to `--color-*` → utilities `bg-background`,
 
 | Token | Light | Dark |
 |---|---|---|
-| `--background` | `--_paper` (#F8F6F1) | `--_stone-950` (#0B0D16) |
-| `--foreground` | `--_ink` (#101319) | `--_ink-white` (#F1EEEA) |
+| `--background` | `--_paper` (#FAF9F5) | `--_stone-950` (#1E1D1B) |
+| `--foreground` | `--_ink` (#1F1E1D) | `--_ink-white` (#F1EEEA) |
 | `--card` / `--popover` | white / white | stone-900 / stone-850 |
-| `--primary` | **tangerine** (#FD9A4B) | **tangerine** (#FD9A4B) |
-| `--primary-foreground` | ink (dark) | ink (dark) |
-| `--secondary` | **rose** (deep, #C63C42) | **rose** (bright, #EB5C5E) |
-| `--secondary-foreground` | white | ink (dark) |
+| `--primary` | **terracotta** (#D97757) | **terracotta** (#D97757) |
+| `--primary-foreground` | ink (warm slate — white fails AA on terracotta) | ink (warm slate) |
+| `--secondary` | quiet warm-neutral fill | warm-clay chip fill |
+| `--secondary-foreground` | deep warm gray | ink-white |
 | `--muted` / `--muted-foreground` | stone-100 / stone-600 | stone-850 / stone-400 |
-| `--accent` / `--accent-foreground` | pale teak / deep teak | teak (#794036 adj.) / ink-white |
-| `--border` | warm hairline 40 18% 86% | cool narwhal 220 18% ~ |
-| `--input` | stone-300 | cool narwhal |
-| `--ring` | **tangerine** | **tangerine** |
+| `--accent` / `--accent-foreground` | terracotta tint / deep rust | deep terracotta tint / ink-white |
+| `--border` | warm hairline | warm charcoal hairline |
+| `--input` | stone-300 | warm charcoal |
+| `--ring` | **terracotta** | **terracotta** |
+| `--link` | deep rust (≥4.5:1) | warm apricot (≥4.5:1) |
 | `--success/-foreground` | moss / white | moss-light / dark |
 | `--warning/-foreground` | ochre / dark | ochre-light / dark |
 | `--error/-foreground` | true red / white | true red / white |
 | `--info/-foreground` | slate / white | slate-light / dark |
-| `--chart-1 … 5` | tangerine · indigo · moss · ochre · slate | bright equivalents |
-| `--sidebar*` | white, tangerine accent | stone-900, tangerine accent |
+| `--chart-1 … 5` | terracotta · muted indigo · moss · ochre · slate | bright equivalents |
+| `--sidebar*` | white, terracotta accent | stone-900, terracotta accent |
 
 ---
 
@@ -220,37 +223,42 @@ Base UI data-attributes:
 
 ## 7. Motion policy — **motion is retained**
 
-Tune feel via `--motion-*` / `--ease-*` tokens. The Tangerine skin keeps all
-motion from the system: button hover-grow, tab slide, overlay enter/exit, control
-transitions, `.hover-lift`, `.hover-glow` (tangerine ring), `.animate-in`,
-wand pulse. The skin stays **flat** — no gradients, glows, mesh,
-or glassmorphism on chrome (depth is a 1px border); the tangerine→rose gradient is
-reserved for the brand mark and marketing surfaces only.
+Tune feel via `--motion-*` / `--ease-*` tokens. The Terracotta skin keeps
+structural motion: tab slide, overlay enter/exit, control transitions,
+`.hover-lift`, `.hover-glow` (accent ring via `--ring`), `.animate-in`, wand
+pulse. Button hover-grow is neutralized (`--button-hover-scale: 1`) — hover
+feedback is the color-mix background shift. The skin stays **flat** — no
+gradients, glows, mesh, or glassmorphism on chrome (depth is a 1px border); the
+tangerine→rose gradient is reserved for the brand mark and marketing surfaces
+only.
 
 Global `prefers-reduced-motion` kill-switch zeroes animation/transition durations.
 
 ---
 
-## 8. Worked reskin example — swap the tangerine accent hue
+## 8. Worked reskin example — swap the terracotta accent hue
 
-Goal: change the tangerine accent to a teal, light + dark, in one edit. `--ox-rust`
-(→ `--ox-tangerine`) drives `--primary`, `--ring`, sidebar accent, the active-tab
-underline and chart-1, so repointing the tangerine anchor re-skins them all.
+Goal: change the terracotta accent to a teal, light + dark, in one edit.
+`--ox-rust` drives `--primary`, `--ring`, sidebar accent, the active-tab
+underline and chart-1, so repointing that anchor re-skins them all.
 
 ### Before
 
 ```css
 /* packages/ui/src/styles/globals.css — :root, PRIMITIVES block */
---ox-tangerine: oklch(0.775 0.150 56.4);   /* #FD9A4B — tangerine */
---_violet-400: oklch(0.775 0.150 56.4);    /* tangerine (accent-subtle anchor) */
+--ox-rust: oklch(0.66 0.115 40);   /* #D97757 — terracotta */
+--_violet-400: oklch(0.66 0.115 40);   /* terracotta (accent-subtle anchor) */
 ```
 
 ### After
 
 ```css
---ox-tangerine: oklch(0.72 0.14 185);   /* teal */
---_violet-400: oklch(0.72 0.14 185);    /* teal */
+--ox-rust: oklch(0.72 0.14 185);   /* teal */
+--_violet-400: oklch(0.72 0.14 185);   /* teal */
 ```
+
+(Also retune `--link`/`--link-hover` in all three theme blocks — they are
+hand-picked text-safe shades of the accent hue.)
 
 That's it. `--brand`, `--primary`, `--ring`, `--accent`, sidebar accent, button
 backgrounds, focus rings, chart-1 — all re-point to the new hue in both themes
@@ -272,8 +280,8 @@ To flatten corners or remove shadows, edit the two control knobs (§2):
   (motion-only, flat).
 - **Brand mark** — the `--brand-gradient` and `--_ember-*` tokens are
   theme-independent (identical light/dark): the tangerine → flame → rose sweep.
-  Recolor them only as a deliberate brand change (as in the Tangerine reskin), in
-  lockstep with the named `--ox-tangerine` / `--ox-rose` swatches — never per-theme.
+  Recolor them only as a deliberate brand change, in lockstep with the named
+  `--ox-tangerine` / `--ox-rose` swatches — never per-theme.
   Only the ink (wordmark strokes) flips via `--_ink` / `--_ink-white`.
 - **`global-error.tsx`** — its hardcoded crash-page hexes are NOT theme-aware; if
   the brand hues change, update them there too (no `@oxagen/ui` tokens are loaded

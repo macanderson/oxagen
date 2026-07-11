@@ -19,7 +19,9 @@ export const SETTABLE_KEYS = [
   "judgeModel",
   "triageModel",
   "apiUrl",
-  "confirmScope"
+  "confirmScope",
+  "dispatchMode",
+  "dispatchMaxConcurrent",
 ] as const;
 
 /**
@@ -29,7 +31,14 @@ export const SETTABLE_KEYS = [
  * `false` before being written, so the file holds a real boolean and not the
  * string `"true"`, which would fail `oxagenSettingsSchema`'s `z.boolean()`.
  */
-const BOOLEAN_SETTABLE_KEYS = new Set<string>(["confirmScope"]);
+const BOOLEAN_SETTABLE_KEYS = new Set<string>(["confirmScope", "dispatchMode"]);
+
+/**
+ * Keys whose settings.json value is a JSON number rather than a string. Parsed
+ * the same way as booleans so the file holds a real number and not the string
+ * form, which would fail the schema's `z.number()`.
+ */
+const NUMBER_SETTABLE_KEYS = new Set<string>(["dispatchMaxConcurrent"]);
 
 /** `"true"`/`"false"` (case-insensitive, trimmed) → boolean. Throws otherwise. */
 function parseBooleanSettingValue(raw: string): boolean {
@@ -37,6 +46,15 @@ function parseBooleanSettingValue(raw: string): boolean {
   if (v === "true") return true;
   if (v === "false") return false;
   throw new Error(`invalid boolean value "${raw}" — expected "true" or "false"`);
+}
+
+/** A finite number string → number. Throws otherwise. */
+function parseNumberSettingValue(raw: string): number {
+  const n = Number(raw.trim());
+  if (!Number.isFinite(n)) {
+    throw new Error(`invalid number value "${raw}" — expected a number`);
+  }
+  return n;
 }
 
 export interface WriteValueOptions {
@@ -85,7 +103,9 @@ export function writeSettingsValue(opts: WriteValueOptions): string {
   } else if ((SETTABLE_KEYS as readonly string[]).includes(opts.key)) {
     doc[opts.key] = BOOLEAN_SETTABLE_KEYS.has(opts.key)
       ? parseBooleanSettingValue(opts.value)
-      : opts.value;
+      : NUMBER_SETTABLE_KEYS.has(opts.key)
+        ? parseNumberSettingValue(opts.value)
+        : opts.value;
   } else {
     throw new Error(
       `cannot set "${opts.key}". Settable: ${SETTABLE_KEYS.join(", ")}, env.<NAME>. ` +

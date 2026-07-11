@@ -6,7 +6,6 @@ const SANDBOX_REPO_SEGMENT = /^[A-Za-z0-9_.-]+$/;
 // Branch names: printable, no whitespace, and none of the shell metacharacters
 // that could break out of the single-quoted context the server-composed clone
 // script wraps every value in. C0 control chars are rejected on purpose.
-// eslint-disable-next-line no-control-regex -- rejecting C0 control chars in a branch name is the intent
 const SANDBOX_REPO_BRANCH = /^[^\s\x00-\x1f`$;&|<>"'\\]+$/;
 
 // ── Durable sandbox sessions ─────────────────────────────────────────────────
