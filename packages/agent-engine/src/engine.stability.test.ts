@@ -129,6 +129,122 @@ describe("runCodingAgent – stream-stall watchdog", () => {
     expect(calls()).toBe(1);
     expect(result.text).toBe("answer");
   });
+
+  it("DEFERS the watchdog while a tool executes: a long tool call does NOT false-stall", async () => {
+    // Tool execution blocks the fullStream read: the SDK emits tool-call, then
+    // the next read stays pending for the WHOLE tool run, then tool-result. With
+    // streamStallMs=50 and a 130ms tool, the watchdog fires twice mid-run but
+    // must DEFER (a tool is in flight) rather than aborting + retrying.
+    let streamCalls = 0;
+    const ai: AgentAi = {
+      stream() {
+        streamCalls++;
+        return {
+          fullStream: (async function* () {
+            yield {
+              type: "tool-call",
+              toolCallId: "t1",
+              toolName: "bash",
+              input: { command: "pnpm test" },
+            };
+            // The "tool" runs 130ms — far past the 50ms stall window.
+            await new Promise((r) => setTimeout(r, 130));
+            yield {
+              type: "tool-result",
+              toolCallId: "t1",
+              toolName: "bash",
+              input: { command: "pnpm test" },
+              output: "42 passed",
+            };
+            yield { type: "text-delta", text: "tests pass" };
+          })(),
+          steps: Promise.resolve([{}]),
+          usage: Promise.resolve({
+            inputTokens: 1,
+            outputTokens: 1,
+            totalTokens: 2,
+          }),
+          response: Promise.resolve({ messages: [] }),
+          finishReason: Promise.resolve("stop"),
+        } as unknown as ReturnType<AgentAi["stream"]>;
+      },
+      generateObject: async () => ({
+        object: {} as never,
+        usage: { totalTokens: 0 },
+      }),
+    };
+    const events: CodingEvent[] = [];
+    const result = await runCodingAgent({
+      ai,
+      instruction: "run the tests",
+      model: "anthropic/claude-opus-4-8",
+      streamStallMs: 50,
+      onEvent: (e) => events.push(e),
+    });
+    expect(streamCalls).toBe(1); // NOT retried — the long tool did not false-stall
+    expect(result.text).toBe("tests pass");
+    expect(
+      events.some(
+        (e) => e.type === "tool-result" && (e as { name: string }).name === "bash",
+      ),
+    ).toBe(true);
+  });
+
+  it("RE-ENGAGES the watchdog after a tool settles: silence with no tool in flight still stalls", async () => {
+    // After the tool's result arrives the in-flight counter returns to 0, so a
+    // subsequent dead-silent model stream IS a stall and must be retried.
+    let streamCalls = 0;
+    const ai: AgentAi = {
+      stream() {
+        streamCalls++;
+        const attempt = streamCalls;
+        return {
+          fullStream: (async function* () {
+            if (attempt === 1) {
+              yield {
+                type: "tool-call",
+                toolCallId: "r1",
+                toolName: "read_file",
+                input: { path: "a.ts" },
+              };
+              yield {
+                type: "tool-result",
+                toolCallId: "r1",
+                toolName: "read_file",
+                input: { path: "a.ts" },
+                output: "contents",
+              };
+              // Tool settled (counter back to 0) — now the model goes dead
+              // silent. This is a genuine stall; the watchdog must fire.
+              await new Promise<never>(() => undefined);
+            } else {
+              yield { type: "text-delta", text: "recovered" };
+            }
+          })(),
+          steps: Promise.resolve([{}]),
+          usage: Promise.resolve({
+            inputTokens: 1,
+            outputTokens: 1,
+            totalTokens: 2,
+          }),
+          response: Promise.resolve({ messages: [] }),
+          finishReason: Promise.resolve(attempt === 1 ? "tool-calls" : "stop"),
+        } as unknown as ReturnType<AgentAi["stream"]>;
+      },
+      generateObject: async () => ({
+        object: {} as never,
+        usage: { totalTokens: 0 },
+      }),
+    };
+    const result = await runCodingAgent({
+      ai,
+      instruction: "read then hang",
+      model: "anthropic/claude-opus-4-8",
+      streamStallMs: 50,
+    });
+    expect(streamCalls).toBe(2); // post-tool silence stalled → retried
+    expect(result.text).toBe("recovered");
+  });
 });
 
 describe("runCodingAgent – max-steps stop reason", () => {

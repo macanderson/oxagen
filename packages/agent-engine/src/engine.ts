@@ -94,35 +94,60 @@ type StallableRead<T> =
 
 /**
  * Await one `iterator.next()`, but if it hasn't settled within `stallMs`, resolve
- * as a `stall` instead of hanging. The pending read is NOT consumed — the caller
- * tears the stream down (by aborting its step signal) and abandons it; we attach
- * a catch to the abandoned read so its eventual (post-abort) rejection is never
- * an unhandled rejection. The watchdog timer is cleared the moment the read
- * settles OR the stall fires, so it never leaks. `stallMs <= 0` / non-finite
- * disables the watchdog (a plain awaited read).
+ * as a `stall` instead of hanging — UNLESS `shouldDefer()` says the silence is
+ * expected, in which case the watchdog re-arms and keeps waiting.
+ *
+ * The critical caller-side reason for `shouldDefer`: tool execution BLOCKS
+ * `fullStream`. The SDK emits the `tool-call` part, then this very `next()` stays
+ * pending for the WHOLE tool run (a `bash` build/test can legitimately run for
+ * minutes — its own per-tool timeout governs it), then the `tool-result` arrives.
+ * Without a defer probe the watchdog would false-fire on every long tool call,
+ * abort it, and re-run the same slow command until the turn failed. So the engine
+ * passes `() => pendingToolCalls > 0`: quiet-while-a-tool-runs is deferred; only
+ * quiet-with-no-tool-in-flight (a genuinely dead model stream) trips the stall.
+ * Mirrors the CLI's `makeStallDetector` `shouldDefer` escape hatch
+ * (apps/cli/src/agent/timeouts.ts).
+ *
+ * The pending read is NOT consumed on a stall — the caller tears the stream down
+ * (by aborting its step signal) and abandons it; we attach a catch to the
+ * abandoned read so its eventual (post-abort) rejection is never an unhandled
+ * rejection. Every armed timer is cleared as soon as its race settles (including
+ * on each re-arm), so nothing leaks. `stallMs <= 0` / non-finite disables the
+ * watchdog (a plain awaited read).
  */
 async function readPartWithStall<T>(
   next: Promise<IteratorResult<T>>,
   stallMs: number,
+  shouldDefer?: () => boolean,
 ): Promise<StallableRead<T>> {
   const mapped = next.then<StallableRead<T>>((r) =>
     r.done ? { kind: "done" } : { kind: "part", value: r.value },
   );
   if (!(Number.isFinite(stallMs) && stallMs > 0)) return mapped;
 
-  // If the stall wins, `mapped` is abandoned; swallow its later rejection (the
-  // aborted read rejects) so it is not an unhandled rejection.
+  // If a stall ends the wait, `mapped` is abandoned; swallow its later rejection
+  // (the aborted read rejects) so it is not an unhandled rejection.
   mapped.catch(() => undefined);
 
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const stall = new Promise<StallableRead<T>>((resolve) => {
-    timer = setTimeout(() => resolve({ kind: "stall" }), stallMs);
-    (timer as unknown as { unref?: () => void }).unref?.();
-  });
-  try {
-    return await Promise.race([mapped, stall]);
-  } finally {
-    if (timer) clearTimeout(timer);
+  // Re-arm loop: arm a fresh watchdog each pass and race it against the SAME
+  // pending read. A real part/done wins → return it. The timer wins → consult
+  // `shouldDefer`: true means expected silence (a tool is executing) so re-arm;
+  // false means a dead stream so report the stall.
+  for (;;) {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const stall = new Promise<"stall">((resolve) => {
+      timer = setTimeout(() => resolve("stall"), stallMs);
+      (timer as unknown as { unref?: () => void }).unref?.();
+    });
+    let outcome: StallableRead<T> | "stall";
+    try {
+      outcome = await Promise.race([mapped, stall]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+    if (outcome !== "stall") return outcome;
+    if (shouldDefer?.()) continue; // expected silence — a tool is running
+    return { kind: "stall" };
   }
 }
 
@@ -313,6 +338,13 @@ export async function runCodingAgent(
     // advances instead. Populated at tool-call time (execution is imminent), the
     // earliest safe point to know a side effect may land.
     const attemptMutatingTools = new Set<string>();
+    // Tools currently executing in this stream. Tool execution BLOCKS the
+    // fullStream read (tool-call → [tool runs] → tool-result), so the stall
+    // watchdog must DEFER while this is > 0 — a quiet stream during a legit
+    // multi-minute bash is not a dead stream (the tool has its own timeout). A
+    // counter (not a boolean) so parallel tool calls all have to settle before
+    // the watchdog re-engages.
+    let pendingToolCalls = 0;
 
     // Compact BEFORE the call so the request itself fits. Keep the task + recent
     // working set verbatim; truncate the bulky content of older tool results.
@@ -368,7 +400,13 @@ export async function runCodingAgent(
       // torn down and a retryable StreamStallError is raised.
       const iterator = result.fullStream[Symbol.asyncIterator]();
       for (;;) {
-        const read = await readPartWithStall(iterator.next(), streamStallMs);
+        const read = await readPartWithStall(
+          iterator.next(),
+          streamStallMs,
+          // Defer the watchdog while any tool is executing — its silence is
+          // expected, not a dead stream (see readPartWithStall).
+          () => pendingToolCalls > 0,
+        );
         if (read.kind === "done") break;
         if (read.kind === "stall") {
           stepAbort.abort(new StreamStallError(streamStallMs));
@@ -389,6 +427,9 @@ export async function runCodingAgent(
           deferred.push(() => onEvent({ type: "reasoning", delta }));
         } else if (part.type === "tool-call") {
           toolStartedAt.set(part.toolCallId, Date.now());
+          // A tool is now executing — the next fullStream read will block for its
+          // whole run, so tell the watchdog to defer until it settles.
+          pendingToolCalls++;
           // Record a mutating tool the MOMENT the model commits the call —
           // execution is imminent, so if the stream dies right after, the catch
           // must know a side effect may have landed (see the mid-flight guard).
@@ -405,6 +446,10 @@ export async function runCodingAgent(
           if (!part.preliminary) {
             const started = toolStartedAt.get(part.toolCallId);
             toolStartedAt.delete(part.toolCallId);
+            // The tool finished — re-engage the watchdog once no tool is in
+            // flight. Floored at 0 so a stray/duplicate result can't drive it
+            // negative and wedge the defer probe below zero.
+            pendingToolCalls = Math.max(0, pendingToolCalls - 1);
             const durationMs = started ? Date.now() - started : 0;
             const ok = !isErrorResult(part.output);
             const sig = toolCallSignature(part.toolName, part.input);
@@ -459,6 +504,9 @@ export async function runCodingAgent(
         } else if (part.type === "tool-error") {
           const started = toolStartedAt.get(part.toolCallId);
           toolStartedAt.delete(part.toolCallId);
+          // The tool settled (with an error) — re-engage the watchdog once no
+          // tool is in flight. Floored at 0, same as the success path.
+          pendingToolCalls = Math.max(0, pendingToolCalls - 1);
           const durationMs = started ? Date.now() - started : 0;
           const sig = toolCallSignature(part.toolName, part.input);
           const toolName = part.toolName;
