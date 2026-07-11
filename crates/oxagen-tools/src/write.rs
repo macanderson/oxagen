@@ -25,6 +25,7 @@ impl Tool for WriteFile {
         }
     }
 
+    #[allow(clippy::collapsible_if)]
     async fn execute(&self, input: &Value, root: &std::path::Path) -> ToolOutput {
         let path = match input.get("path").and_then(|v| v.as_str()) {
             Some(p) => p,
@@ -50,12 +51,12 @@ impl Tool for WriteFile {
             };
         }
 
-        if let Some(parent) = full_path.parent()
-            && let Err(e) = tokio::fs::create_dir_all(parent).await
-        {
-            return ToolOutput::Error {
-                message: format!("failed to create dirs: {e}"),
-            };
+        if let Some(parent) = full_path.parent() {
+            if let Err(e) = tokio::fs::create_dir_all(parent).await {
+                return ToolOutput::Error {
+                    message: format!("failed to create dirs: {e}"),
+                };
+            }
         }
 
         match tokio::fs::write(&full_path, content).await {
