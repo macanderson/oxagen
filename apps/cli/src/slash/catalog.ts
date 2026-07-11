@@ -110,6 +110,12 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<
     argumentHint: "[on|off]",
   },
   {
+    name: "plan",
+    description:
+      "Plan-only mode — prompts produce a task plan without executing; `run` executes the last plan",
+    argumentHint: "[on|off|status|run]",
+  },
+  {
     name: "config",
     description:
       "Browse and edit tiered config (repo ▸ workspace ▸ user ▸ org) — `doctor` scans it",
@@ -119,6 +125,12 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<
     name: "verbose",
     description: "Toggle per-phase timing, token/cost, and tool telemetry",
     argumentHint: "[on|off]",
+  },
+  {
+    name: "debug",
+    description:
+      "Toggle the JSONL debug file log (~/.oxagen/logs/cli.output) for this session",
+    argumentHint: "[on|off|status]",
   },
 
   // Memory

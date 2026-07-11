@@ -147,6 +147,7 @@ export const HELP = [
   "                 (even mid-turn). Esc/Ctrl-C kills the running command. When it",
   "                 finishes the red panel folds into the chat as a collapsed card.",
   "  Ctrl-O         expand/collapse the most recent folded !command output",
+  "  Ctrl-V twice   open the most recently touched file in $VISUAL/$EDITOR",
   "Type / to open the command menu — 📦 marks built-in & CLI commands; every",
   "`oxagen --help` command is browsable there too (custom commands show no glyph).",
   "Permission prompt: y allow once · a allow + remember · n/Esc deny",
@@ -175,6 +176,24 @@ export function humanizeTokens(n: number): string {
 
 // ── Prompt Input ──────────────────────────────────────────────────────────────
 
+/** Window (ms) a second Ctrl-V must land within to open the editor. */
+export const CTRL_V_EDITOR_WINDOW_MS = 1500;
+
+/**
+ * The pure double-press decision for Ctrl-V (same shape as files-panel's
+ * resolveCtrlO and ctrl-c-action's resolveCtrlC): the first press arms, a
+ * second within the window fires the open-in-editor gesture.
+ */
+export function resolveCtrlV(
+  lastCtrlVMs: number | null,
+  now: number,
+): "arm" | "open" {
+  if (lastCtrlVMs !== null && now - lastCtrlVMs <= CTRL_V_EDITOR_WINDOW_MS) {
+    return "open";
+  }
+  return "arm";
+}
+
 export function PromptInput({
   onSubmit,
   busy,
@@ -186,6 +205,7 @@ export function PromptInput({
   inject,
   onMenuOpenChange,
   onEmptyChange,
+  onOpenLastTouched,
   readClipboardImage = readClipboardImageDefault,
 }: {
   /**
@@ -254,6 +274,16 @@ export function PromptInput({
    */
   onEmptyChange?: (empty: boolean) => void;
   /**
+   * Double-Ctrl-V gesture: fires when a second Ctrl-V lands within
+   * {@link CTRL_V_EDITOR_WINDOW_MS} of the first. The parent opens the most
+   * recently touched file in $VISUAL/$EDITOR (see interactive.tsx). The FIRST
+   * press still fire-and-forgets the image-paste probe below — with no image
+   * on the clipboard (the common case) that inserts nothing, so the gesture
+   * is clean; with one, a single pasted token may remain (backspace removes
+   * it). Undefined disables the gesture (standalone/test usage).
+   */
+  onOpenLastTouched?: () => void;
+  /**
    * Reads a system-clipboard image to a temp PNG (Ctrl-V). Injectable for
    * tests; defaults to the real macOS pngpaste/osascript implementation.
    * Resolves `null` (never throws) when there's no image to attach.
@@ -280,6 +310,8 @@ export function PromptInput({
   // Paste placeholder registry (`[Text #N]` / `[Image #N]` → real content).
   // Same lifecycle as `value`: lives for one prompt, reset in `resetInput`.
   const pasteRegistryRef = useRef(createPasteRegistry());
+  // Timestamp of the last Ctrl-V press — the double-press editor gesture.
+  const lastCtrlVRef = useRef<number | null>(null);
 
   // Replace the buffer when the parent injects new text (queue recall, task
   // edit, or a clear). Keyed on the nonce so the same text can be re-injected
@@ -383,6 +415,10 @@ export function PromptInput({
     const mouseSeq = input.charCodeAt(0) === 0x1b ? input.slice(1) : input;
     if (/^\[?<[0-9;]+[Mm]$/.test(mouseSeq)) return;
 
+    // Any key other than Ctrl-V breaks the double-Ctrl-V editor chain (the
+    // same disarm-on-other-key rule the files panel applies to Ctrl-O).
+    if (!(key.ctrl && input === "v")) lastCtrlVRef.current = null;
+
     // ── Typeahead navigation (only while the menu is open) ──
     if (menuOpen) {
       if (key.downArrow) {
@@ -452,8 +488,16 @@ export function PromptInput({
     // this is the ONLY signal available for an IMAGE paste, since a terminal
     // sends nothing at all to stdin when Cmd-V's clipboard has no text
     // representation. Async: the clipboard check shells out, so this fires
-    // and forgets rather than blocking the keystroke.
+    // and forgets rather than blocking the keystroke. A SECOND Ctrl-V within
+    // the window is the open-in-editor gesture (see onOpenLastTouched).
     if (key.ctrl && input === "v") {
+      const now = Date.now();
+      if (onOpenLastTouched && resolveCtrlV(lastCtrlVRef.current, now) === "open") {
+        lastCtrlVRef.current = null;
+        onOpenLastTouched();
+        return;
+      }
+      lastCtrlVRef.current = now;
       void (async (): Promise<void> => {
         const image = await readClipboardImage();
         if (!image) return; // no image on the clipboard, or no tool available

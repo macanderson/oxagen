@@ -128,6 +128,9 @@ function agentStatusStyle(status: AgentStatus): { glyph: string; color: string }
       return { glyph: "✓", color: "#34D399" };
     case "failed":
       return { glyph: "✗", color: "#F87171" };
+    case "killed":
+      // Deliberate user kill (Ctrl-X twice) — a stop square, not a failure ✗.
+      return { glyph: "◼", color: "#F87171" };
   }
 }
 

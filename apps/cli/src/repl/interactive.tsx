@@ -162,7 +162,7 @@ import { resolveEscapeAction } from "./escape-action.js";
 import { resolveCtrlC, CTRL_C_EXIT_WINDOW_MS } from "./ctrl-c-action.js";
 import { capTranscript, MAX_TRANSCRIPT_MESSAGES } from "./transcript-cap.js";
 import { TerminalPanel, type TerminalRun } from "./terminal-panel.js";
-import { isDebugEnabled } from "../lib/debug-log.js";
+import { isDebugEnabled, DEBUG_ENV, debugLogFile } from "../lib/debug-log.js";
 import { Banner, bannerRowCount } from "../tui/banner.js";
 import { useTerminalSize } from "./use-terminal-size.js";
 import {
@@ -705,6 +705,20 @@ export function ReplApp({
   const dispatchModeRef = useRef(dispatchMode);
   dispatchModeRef.current = dispatchMode;
   const dispatchCapRef = useRef<number>(dispatchInitRef.current.maxConcurrent);
+  // Plan-only mode (the /plan command). While ON, a submission runs ONLY the
+  // planner: the decomposed task list renders for inspection (and stays pending
+  // in the Task Progress panel) and nothing executes. `/plan run` re-submits
+  // the last planned prompt with a one-shot bypass — planRunOverrideRef holds
+  // that exact prompt text and is consumed by the plan gate when the pump
+  // delivers it, so an unrelated queued prompt can never steal the bypass.
+  const [planOnly, setPlanOnly] = useState(false);
+  const planOnlyRef = useRef(planOnly);
+  planOnlyRef.current = planOnly;
+  const lastPlanOnlyRef = useRef<string | null>(null);
+  const planRunOverrideRef = useRef<string | null>(null);
+  // Late-bound resubmission seam: /plan run needs `enqueue`, which is defined
+  // after handleSubmit (the pump). Assigned every render once enqueue exists.
+  const resubmitRef = useRef<(text: string) => void>(() => {});
   // Observer for the dispatches this REPL spawned (fold-back + concurrency cap).
   const trackerRef = useRef<BackgroundTracker | null>(null);
   // Prompts waiting for a background slot when the cap is hit (local queue, so
@@ -1158,6 +1172,22 @@ export function ReplApp({
     },
     [cwd, fullscreen, pushAssistant, rawStdin, setRawMode],
   );
+
+  // Double-Ctrl-V in the prompt bar (see PromptInput's onOpenLastTouched):
+  // open the agent's most recently touched file in $VISUAL/$EDITOR. "Most
+  // recent" = highest firstSeq in the Files Touched store — the same
+  // chronological order the /files panel lists.
+  const openLastTouchedInEditor = useCallback((): void => {
+    const entries = [...filesTouchedRef.current.values()];
+    if (entries.length === 0) {
+      pushAssistant(
+        "Ctrl-V twice opens the agent's most recently touched file — none touched yet this session. /files browses them once a turn runs.",
+      );
+      return;
+    }
+    const latest = entries.reduce((a, b) => (b.firstSeq > a.firstSeq ? b : a));
+    openTouchedInEditor(latest.path);
+  }, [pushAssistant, openTouchedInEditor]);
 
   // Called once by the LoginPanel (see the /login handler below) on a
   // successful inline login. The session is already persisted to
@@ -1928,7 +1958,10 @@ export function ReplApp({
         const decision = decideDispatch(text, {
           mode: dispatchModeRef.current,
         });
-        if (decision.kind === "background") {
+        // Plan-only mode forces INLINE routing: a background dispatch would
+        // execute the prompt in a detached worker, silently bypassing the
+        // plan-only gate below — the one thing /plan promises can't happen.
+        if (decision.kind === "background" && !planOnlyRef.current) {
           dispatchToBackground(decision.prompt);
           return;
         }
@@ -2504,6 +2537,91 @@ export function ReplApp({
         }
         return;
       }
+      if (cmd === "/debug") {
+        // Toggle the JSONL debug file log for THIS process. isDebugEnabled()
+        // reads process.env on every call, so flipping the env var here takes
+        // effect immediately for every subsequent debugLog() in this session —
+        // no restart, no settings write (use settings.json `env` to persist).
+        const arg = text.slice("/debug".length).trim().toLowerCase();
+        const report = (): void => {
+          pushAssistant(
+            `🐞 Debug file log ${isDebugEnabled() ? "ON" : "OFF"} — ${debugLogFile()}\n` +
+              `Streams invoke/turn/pipeline/llm/timeout/error records as JSONL. ` +
+              `Tail it with: oxagen logs --follow (or jq the file directly).`,
+          );
+        };
+        if (arg === "status") {
+          report();
+          return;
+        }
+        const next =
+          arg === "on" ? true : arg === "off" ? false : !isDebugEnabled();
+        if (arg !== "" && arg !== "on" && arg !== "off") {
+          pushAssistant("Usage: /debug [on|off|status]");
+          return;
+        }
+        if (next) {
+          process.env[DEBUG_ENV] = "1";
+          // First entry doubles as the enable marker (and proves the sink works).
+          void debugLog("invoke", "debug.enabled", { via: "/debug" });
+        } else {
+          void debugLog("invoke", "debug.disabled", { via: "/debug" });
+          process.env[DEBUG_ENV] = "0";
+        }
+        report();
+        return;
+      }
+      if (cmd === "/plan") {
+        // Plan-only mode: see the planOnlyRef block up top. `/plan run`
+        // re-submits the last planned prompt with a one-shot bypass token.
+        const arg = text.slice("/plan".length).trim().toLowerCase();
+        const applyPlanMode = (next: boolean): void => {
+          planOnlyRef.current = next;
+          setPlanOnly(next);
+          pushAssistant(
+            next
+              ? "▤ Plan-only mode ON — prompts are decomposed into a task plan (inspect it with Ctrl+T " +
+                  "or /panel) and NOTHING executes. `/plan run` executes the last plan; `/plan off` resumes normal turns."
+              : "▤ Plan-only mode OFF — prompts execute normally again.",
+          );
+        };
+        if (arg === "") {
+          applyPlanMode(!planOnlyRef.current);
+          return;
+        }
+        if (arg === "on") {
+          applyPlanMode(true);
+          return;
+        }
+        if (arg === "off") {
+          applyPlanMode(false);
+          return;
+        }
+        if (arg === "status") {
+          pushAssistant(
+            `▤ Plan-only mode ${planOnlyRef.current ? "ON" : "OFF"}` +
+              (lastPlanOnlyRef.current
+                ? ` · last planned prompt: "${lastPlanOnlyRef.current.slice(0, 80)}${lastPlanOnlyRef.current.length > 80 ? "…" : ""}"`
+                : " · no prompt planned yet"),
+          );
+          return;
+        }
+        if (arg === "run") {
+          const last = lastPlanOnlyRef.current;
+          if (!last) {
+            pushAssistant(
+              "No plan to run — submit a prompt while plan-only mode is ON first.",
+            );
+            return;
+          }
+          planRunOverrideRef.current = last;
+          pushAssistant("▶ Executing the last planned prompt…");
+          resubmitRef.current(last);
+          return;
+        }
+        pushAssistant("Usage: /plan [on|off|status|run]");
+        return;
+      }
       if (cmd === "/login") {
         // Already logged in: just report the session (fast path, no need to
         // open the picker at all). Not logged in: open the Ink-native
@@ -2723,6 +2841,9 @@ export function ReplApp({
       const inactivityMs = resolveTurnInactivityMs();
       let inFlightTools = 0;
       let fleetInFlight = false;
+      // Set by the plan-only gate below: the turn ended after planning, so the
+      // finally must NOT finalize the checklist — the pending tasks ARE the output.
+      let planOnlyExit = false;
       const ciProbe = createCiWaitProbe(cwd);
       // The REPL tracks tools/fleet in its own closures (the stream sinks below
       // mutate them), so the fleet-aware shouldDefer REPLACES the runner's
@@ -2949,6 +3070,36 @@ export function ReplApp({
             status: "pending",
             ...(t.agent ? { detail: `agent: ${t.agent}` } : {}),
           });
+        }
+
+        // ── Plan-only gate (the /plan command) ───────────────────────────────
+        // When plan-only mode is ON the turn STOPS here: the plan renders for
+        // inspection and the seeded tasks stay PENDING in the Task Progress
+        // panel (planOnlyExit skips the finally's finalizeOpen). `/plan run`
+        // stashes this exact prompt text in planRunOverrideRef — matching on
+        // equality (not a boolean) so an unrelated queued prompt can never
+        // consume the one-shot bypass.
+        {
+          const bypass = planRunOverrideRef.current === submission;
+          if (bypass) planRunOverrideRef.current = null;
+          if (planOnlyRef.current && !bypass) {
+            planOnlyExit = true;
+            lastPlanOnlyRef.current = submission;
+            const taskLines = plan.tasks.map(
+              (t, i) =>
+                `  ${i + 1}. ${t.title}${t.agent ? `  · agent: ${t.agent}` : ""}`,
+            );
+            turn.push({
+              role: "assistant",
+              content:
+                `▤ Plan only — ${plan.tasks.length} task${plan.tasks.length === 1 ? "" : "s"}, nothing executed:\n` +
+                taskLines.join("\n") +
+                "\n\n/plan run executes this plan · refine the prompt to re-plan · /plan off resumes normal turns.",
+              timestamp: Date.now(),
+            });
+            render();
+            return;
+          }
         }
 
         // ── Fan out ──────────────────────────────────────────────────────────
@@ -3573,8 +3724,10 @@ export function ReplApp({
           });
           // Settle the Task Progress checklist so no step lingers half-lit. Guarded
           // on ownership so a cancelled turn's late finally never marks a newer
-          // turn's freshly-cleared plan done.
-          taskRegistry.finalizeOpen("done");
+          // turn's freshly-cleared plan done. A plan-only exit skips this — the
+          // pending tasks ARE the turn's output, kept inspectable until the next
+          // turn's clear().
+          if (!planOnlyExit) taskRegistry.finalizeOpen("done");
         }
       }
     },
@@ -3663,6 +3816,10 @@ export function ReplApp({
     },
     [pump],
   );
+  // Late-bind the /plan run resubmission seam (declared with the plan-only
+  // state up top, long before enqueue exists). Reassigned every render —
+  // enqueue is a stable callback, so this is effectively a one-time bind.
+  resubmitRef.current = enqueue;
 
   // Every PromptInput submission funnels through here. The Esc-twice reset
   // confirmation must be answered SYNCHRONOUSLY — if we let it fall through to
@@ -3985,6 +4142,7 @@ export function ReplApp({
               inject={inject}
               onMenuOpenChange={handleMenuOpenChange}
               onEmptyChange={handleEmptyChange}
+              onOpenLastTouched={openLastTouchedInEditor}
             />
           )}
         </Box>
@@ -4237,6 +4395,7 @@ export function ReplApp({
               focused={focus.zone === "input"}
               inject={inject}
               onMenuOpenChange={handleMenuOpenChange}
+              onOpenLastTouched={openLastTouchedInEditor}
             />
           )}
 

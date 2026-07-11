@@ -30,7 +30,8 @@ export type ActivityStatus =
   | "blocked"
   | "cancelled"
   | "done"
-  | "failed";
+  | "failed"
+  | "killed";
 
 /** A minimal activity update: what's happening, and how it's going. */
 export interface ActivityEvent {
@@ -73,6 +74,11 @@ export function activityGlyph(status: ActivityStatus, frame?: number): ActivityG
       return { glyph: "✓", color: theme.green };
     case "failed":
       return { glyph: "✗", color: theme.red };
+    case "killed":
+      // A deliberate user kill (Ctrl-X twice on a swarm row) — a red stop
+      // square, distinct from "failed" (the work errored on its own) and
+      // "cancelled" (a soft dim ⊘: the turn was cancelled around it).
+      return { glyph: "◼", color: theme.red };
   }
 }
 
