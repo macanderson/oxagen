@@ -58,6 +58,8 @@ crossterm = "0.28"
 roxmltree = "0.20"
 base64 = "0.22"
 tempfile = "3"
+hmac = "0.12"
+sha2 = "0.10"
 
 [profile.release]
 lto = true

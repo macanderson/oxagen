@@ -5,6 +5,10 @@
 //! any OpenAI-compatible endpoint), `oxagen-core` for the step-driver
 //! engine, `oxagen-tools` for the built-in tool set, and `oxagen-protocol`
 //! for the shared types.
+//! abstraction (Z.ai/GLM 5.2, Anthropic, OpenAI, xAI, DeepSeek, Gemini
+//! direct, Vertex AI, Amazon Bedrock, OpenRouter — plus any local
+//! OpenAI-compatible endpoint via `--base-url`), `oxagen-tools` for the
+//! built-in tool set, and `oxagen-protocol` for the shared types.
 //!
 //! Design goals (per docs/specs/oxagen-rust-cli/01-product-spec.md):
 //! - No phone-home requirement — works with zero network calls other than
@@ -62,6 +66,16 @@ struct Cli {
     /// stream-json (one line per agent event)
     #[arg(long, env = "STELLA_OUTPUT_FORMAT", value_enum, default_value = "text")]
     output_format: OutputFormat,
+    /// Base URL override. Required with --model local/<model> to point at a
+    /// local OpenAI-compatible server (Ollama, vLLM, LM Studio, llama.cpp
+    /// server — e.g. http://localhost:11434/v1); optional for every other
+    /// provider to route through a proxy.
+    #[arg(long, env = "STELLA_BASE_URL")]
+    base_url: Option<String>,
+
+    /// Output format: text (default, interactive) or json (headless)
+//     #[arg(long, env = "STELLA_OUTPUT_FORMAT", default_value = "text")]
+//     output_format: String,
 
     /// Hard per-turn USD spend limit — enforced mode (07-model-matrix.md
     /// §6): the turn aborts cleanly (never mid-tool) once spend exceeds
@@ -150,7 +164,11 @@ fn run(cli: Cli) -> Result<(), String> {
     }
 
     // Run/Chat/Config need a resolved config (which requires an API key).
-    let cfg = config::Config::load(cli.model.as_deref(), cli.api_key.as_deref())?;
+    let cfg = config::Config::load(
+        cli.model.as_deref(),
+        cli.api_key.as_deref(),
+        cli.base_url.as_deref(),
+    )?;
 
     match cli.command.unwrap_or(Command::Chat) {
         Command::Run { prompt } => {
