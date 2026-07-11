@@ -96,6 +96,68 @@ pub enum AgentEvent {
         to: String,
         reason: String,
     },
+    /// A file was created/modified/deleted by the agent, carrying the diff
+    /// so the TUI's files-touched panel renders per-edit diffs without a
+    /// second data path (L-T5: in TS, the `onFileEdit` callback had to be
+    /// patched into two pipeline switches — here there is one emission
+    /// point by construction).
+    FileChange {
+        path: String,
+        kind: FileChangeKind,
+        diff: Option<String>,
+    },
+    /// Context recall completed (`06-context-protocol.md`): which frames
+    /// reached the prompt, from which providers, at what token cost. Every
+    /// frame carries a human `citation_label`, never a raw id (L-C4).
+    ContextRecall {
+        frames: Vec<ContextFrameRef>,
+        provider_mix: Vec<ProviderShare>,
+        tokens: u32,
+    },
+    /// Context write-back completed: episode summaries, fact upserts,
+    /// supersession (`06-context-protocol.md` §2.2 — bi-temporal,
+    /// close-not-delete per L-C3).
+    ContextWrite {
+        provider: String,
+        upserts: u32,
+        superseded: u32,
+    },
+    /// A media generation job changed state (`08-multimodal.md`). Video
+    /// jobs are async and long-lived; this event is how the TUI shows
+    /// progress without polling shared state (L-T1).
+    MediaProgress {
+        artifact_id: String,
+        kind: MediaKind,
+        state: MediaJobState,
+    },
+    /// A media artifact landed under `.oxagen/artifacts/` with a manifest
+    /// row.
+    MediaComplete {
+        artifact: MediaArtifactRef,
+    },
+    /// A verification verdict — from the deterministic ladder (flip oracle,
+    /// touched-tests-green) or the model judge (L-E11: deterministic-first;
+    /// model judges handle only inconclusive evidence).
+    JudgeVerdict {
+        passed: bool,
+        evidence: JudgeEvidence,
+    },
+    /// Interactive gate before large plans execute (L-E5): the pipeline
+    /// pauses on this event and waits for approval above configured
+    /// thresholds; headless requires a flag to bypass.
+    ScopeReview {
+        proposal: ScopeProposal,
+    },
+    /// A commit landed (fleet ledger / pipeline execute stage).
+    Commit {
+        sha: String,
+        message: String,
+    },
+    /// A pull request was opened or changed status (fleet PR/CI monitor).
+    Pr {
+        url: String,
+        status: PrStatus,
+    },
     Error {
         message: String,
         retryable: bool,
@@ -104,6 +166,107 @@ pub enum AgentEvent {
         model: String,
         cost_usd: f64,
     },
+}
+
+/// What happened to a file in a `FileChange` event.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FileChangeKind {
+    Created,
+    Modified,
+    Deleted,
+}
+
+/// A context frame as cited in a `ContextRecall` event. `citation_label`
+/// is mandatory and human-readable; the raw `id` (when the frame is
+/// materialized at all) belongs only in inspectable detail views, never as
+/// the primary identifier (L-C4).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ContextFrameRef {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
+    pub citation_label: String,
+    /// Which provider produced the frame (e.g. `"code-graph"`, `"memory"`,
+    /// `"git-history"`, or an external OCP provider id).
+    pub source: String,
+    pub token_cost: u32,
+}
+
+/// One provider's share of a recall's frame mix.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProviderShare {
+    pub provider: String,
+    pub frames: u32,
+}
+
+/// Which kind of media artifact a job produces (`08-multimodal.md`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MediaKind {
+    Image,
+    Svg,
+    Video,
+}
+
+/// Lifecycle of an async media job. `Failed` carries the reason inline —
+/// a failed job must never be distinguishable only by the absence of a
+/// success event.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "state", rename_all = "snake_case")]
+pub enum MediaJobState {
+    Queued,
+    Running,
+    Succeeded,
+    Failed { reason: String },
+}
+
+/// A completed media artifact: id + kind + where it landed on disk.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MediaArtifactRef {
+    pub id: String,
+    pub kind: MediaKind,
+    /// Path under `.oxagen/artifacts/` (the generation tools may never
+    /// write outside it — `02-architecture.md` §8).
+    pub path: String,
+    /// Human label for citation/display.
+    pub label: String,
+}
+
+/// Evidence backing a `JudgeVerdict`. `deterministic` distinguishes the
+/// flip-oracle/tests ladder from a model judge's opinion — the two are
+/// never conflated (L-E11).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct JudgeEvidence {
+    pub summary: String,
+    /// `true` when the verdict came from the deterministic ladder (a
+    /// fail→pass flip of the same normalized test command, touched-tests
+    /// green, diff budget) rather than a model judge.
+    pub deterministic: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub evidence_refs: Vec<String>,
+}
+
+/// What a `ScopeReview` gate presents for approval before a large plan
+/// executes (L-E5).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ScopeProposal {
+    pub summary: String,
+    pub steps: Vec<String>,
+    pub estimated_files: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub estimated_cost_usd: Option<f64>,
+}
+
+/// A pull request's status as observed by the fleet monitor. Reconciled
+/// against the live source before rendering, never served from cache
+/// alone (L-V3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PrStatus {
+    Draft,
+    Open,
+    Merged,
+    Closed,
 }
 
 #[cfg(test)]
@@ -184,6 +347,101 @@ mod tests {
         let json = serde_json::to_string(&event).unwrap();
         assert!(json.contains("\"from\":\"zai\""), "{json}");
         assert!(json.contains("\"to\":\"anthropic\""), "{json}");
+    }
+
+    #[test]
+    fn file_change_carries_the_diff_on_the_single_event_path() {
+        let event = AgentEvent::FileChange {
+            path: "src/lib.rs".into(),
+            kind: FileChangeKind::Modified,
+            diff: Some("@@ -1 +1 @@\n-old\n+new".into()),
+        };
+        let json = serde_json::to_string(&event).unwrap();
+        assert!(json.contains("\"type\":\"file_change\""), "{json}");
+        let back: AgentEvent = serde_json::from_str(&json).unwrap();
+        match back {
+            AgentEvent::FileChange { kind, diff, .. } => {
+                assert_eq!(kind, FileChangeKind::Modified);
+                assert!(diff.is_some());
+            }
+            other => panic!("unexpected variant: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn context_recall_frames_always_carry_a_citation_label() {
+        let event = AgentEvent::ContextRecall {
+            frames: vec![ContextFrameRef {
+                id: None, // not-yet-materialized frames carry no id (L-C4)
+                citation_label: "engine step-driver (driver.rs)".into(),
+                source: "code-graph".into(),
+                token_cost: 120,
+            }],
+            provider_mix: vec![ProviderShare {
+                provider: "code-graph".into(),
+                frames: 1,
+            }],
+            tokens: 120,
+        };
+        let json = serde_json::to_string(&event).unwrap();
+        assert!(json.contains("citation_label"), "{json}");
+        assert!(
+            !json.contains("\"id\""),
+            "absent id must be omitted: {json}"
+        );
+    }
+
+    #[test]
+    fn media_job_failure_carries_its_reason_inline() {
+        let state = MediaJobState::Failed {
+            reason: "provider rejected the prompt".into(),
+        };
+        let json = serde_json::to_string(&state).unwrap();
+        let back: MediaJobState = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, state);
+    }
+
+    #[test]
+    fn judge_verdict_distinguishes_deterministic_from_model_evidence() {
+        let event = AgentEvent::JudgeVerdict {
+            passed: true,
+            evidence: JudgeEvidence {
+                summary: "flip oracle: fail→pass on `cargo test -p x`".into(),
+                deterministic: true,
+                evidence_refs: vec!["trace:t1#verify".into()],
+            },
+        };
+        let json = serde_json::to_string(&event).unwrap();
+        let back: AgentEvent = serde_json::from_str(&json).unwrap();
+        match back {
+            AgentEvent::JudgeVerdict { evidence, .. } => assert!(evidence.deterministic),
+            other => panic!("unexpected variant: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn scope_review_and_pr_events_roundtrip() {
+        for event in [
+            AgentEvent::ScopeReview {
+                proposal: ScopeProposal {
+                    summary: "refactor the auth module".into(),
+                    steps: vec!["step 1".into(), "step 2".into()],
+                    estimated_files: 12,
+                    estimated_cost_usd: Some(1.25),
+                },
+            },
+            AgentEvent::Pr {
+                url: "https://github.com/x/y/pull/1".into(),
+                status: PrStatus::Open,
+            },
+            AgentEvent::Commit {
+                sha: "abc123".into(),
+                message: "feat: x".into(),
+            },
+        ] {
+            let json = serde_json::to_string(&event).unwrap();
+            let _back: AgentEvent = serde_json::from_str(&json).unwrap();
+        }
     }
 
     #[test]
