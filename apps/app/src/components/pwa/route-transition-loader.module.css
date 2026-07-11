@@ -45,7 +45,7 @@
   .cssSpinner {
     width: 28px;
     height: 28px;
-    color: #a0a0b0;
+    color: #aaa7a1;
     border: 3px solid color-mix(in srgb, currentColor 25%, transparent);
     border-top-color: currentColor;
     border-radius: 50%;
