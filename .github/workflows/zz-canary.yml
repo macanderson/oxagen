@@ -8,7 +8,7 @@ name: zz-canary
 # Remove once CI is green again.
 on:
   push:
-    branches: [claude/pr-ci-monitoring-4doeus]
+    branches: [claude/pr-ci-monitoring-4doeus, fix/chat-code-mode-navigation-race]
 
 jobs:
   canary:
