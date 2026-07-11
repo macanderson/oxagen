@@ -279,28 +279,30 @@ describe("buildWorkspaceTools — agent file locking (edit_file)", () => {
     });
 
     // Hold the lock via the chat path first (acquire without releasing yet by
-    // never resolving the write) — simulate by acquiring directly.
-    holders.set("shared.ts", "chat-turn");
+    // never resolving the write) — simulate by acquiring directly. Non-code
+    // (.txt) paths keep this focused on the LOCK: the marker content is not
+    // valid code and the syntax gate (correctly) only applies to code files.
+    holders.set("shared.txt", "chat-turn");
 
     const fleetResult = await run(fleetTools.write_file, {
-      path: "shared.ts",
+      path: "shared.txt",
       content: "from fleet",
     });
     expect(fleetResult).toContain("Blocked");
     expect(fleetResult).toContain("chat-turn");
 
     // Once the chat turn releases (simulated), the fleet child can proceed.
-    holders.delete("shared.ts");
+    holders.delete("shared.txt");
     const fleetRetry = await run(fleetTools.write_file, {
-      path: "shared.ts",
+      path: "shared.txt",
       content: "from fleet",
     });
     expect(fleetRetry).toContain("Wrote");
-    expect(await wsFleet.readFile("shared.ts")).toBe("from fleet");
+    expect(await wsFleet.readFile("shared.txt")).toBe("from fleet");
 
     // Sanity: chatTools' own write to a DIFFERENT path is unaffected.
     const chatResult = await run(chatTools.write_file, {
-      path: "chat-only.ts",
+      path: "chat-only.txt",
       content: "from chat",
     });
     expect(chatResult).toContain("Wrote");

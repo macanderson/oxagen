@@ -26,6 +26,7 @@ export * from "./error-clusters";
 export * from "./usage-events";
 export { chInsert, chSelect } from "./tenant";
 export * from "./eval-item-results";
+export * from "./router-outcomes";
 export {
   initTracer,
   shutdownTracer,

@@ -76,6 +76,14 @@ export const sessionMetaSchema = z.object({
   summary: z.string().optional(),
   /** Last salient activity ("wrote src/auth.ts"), for live rosters. */
   lastActivity: z.string().optional(),
+  /**
+   * Fork provenance (ADR-028): this session resumed another session's state
+   * after `turn`. The runner seeds its model history from the source session's
+   * replay record. Additive and optional — pre-ADR-028 metas parse unchanged.
+   */
+  resumeOf: z
+    .object({ sid: z.string().min(1), turn: z.number().int().nonnegative() })
+    .optional(),
 });
 export type SessionMeta = z.infer<typeof sessionMetaSchema>;
 
@@ -90,7 +98,11 @@ export interface SessionMetaView extends SessionMeta {
   derivedState: SessionState | "orphaned";
 }
 
-const NON_TERMINAL: ReadonlySet<SessionState> = new Set(["queued", "running", "waiting"]);
+const NON_TERMINAL: ReadonlySet<SessionState> = new Set([
+  "queued",
+  "running",
+  "waiting",
+]);
 
 /** True when `state` means the session can still emit events. */
 export function isActiveState(state: SessionState | "orphaned"): boolean {
@@ -120,7 +132,11 @@ function deriveView(meta: SessionMeta): SessionMetaView {
 // ---------------------------------------------------------------------------
 
 export const inboxMessageSchema = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("message"), text: z.string().min(1), ts: z.number().int() }),
+  z.object({
+    type: z.literal("message"),
+    text: z.string().min(1),
+    ts: z.number().int(),
+  }),
   z.object({ type: z.literal("cancel"), ts: z.number().int() }),
 ]);
 export type InboxMessage = z.infer<typeof inboxMessageSchema>;
@@ -226,6 +242,8 @@ export interface CreateSessionInit {
   model?: string;
   agent?: string;
   state?: SessionState;
+  /** Fork provenance (ADR-028): resume from this session's state after `turn`. */
+  resumeOf?: SessionMeta["resumeOf"];
 }
 
 /**
@@ -275,6 +293,7 @@ export class SessionStore {
       mode: init.mode,
       ...(init.model !== undefined ? { model: init.model } : {}),
       ...(init.agent !== undefined ? { agent: init.agent } : {}),
+      ...(init.resumeOf !== undefined ? { resumeOf: init.resumeOf } : {}),
       createdAt: now,
       updatedAt: now,
       turns: 0,
@@ -343,7 +362,12 @@ export class SessionStore {
         return event;
       },
       patchMeta: (patch: Partial<SessionMeta>): void => {
-        current = { ...current, ...patch, sid: current.sid, updatedAt: Date.now() };
+        current = {
+          ...current,
+          ...patch,
+          sid: current.sid,
+          updatedAt: Date.now(),
+        };
         scheduleMetaWrite();
       },
       flush: async (): Promise<void> => {
@@ -385,7 +409,10 @@ export class SessionStore {
   }
 
   /** All events currently on disk for `sid` (optionally from a sequence). */
-  async readEvents(sid: string, opts: { fromSeq?: number } = {}): Promise<SessionEvent[]> {
+  async readEvents(
+    sid: string,
+    opts: { fromSeq?: number } = {},
+  ): Promise<SessionEvent[]> {
     const fromSeq = opts.fromSeq ?? 1;
     let raw: string;
     try {
@@ -425,7 +452,10 @@ export class SessionStore {
 
   /** Append a control message to `sid`'s inbox (any process may call). */
   async appendInbox(sid: string, message: InboxMessage): Promise<void> {
-    await appendFile(join(this.dir(sid), "inbox.ndjson"), JSON.stringify(message) + "\n");
+    await appendFile(
+      join(this.dir(sid), "inbox.ndjson"),
+      JSON.stringify(message) + "\n",
+    );
   }
 
   /** Owner-side: consume inbox messages as they arrive (replays existing). */
@@ -482,7 +512,11 @@ export class SessionStore {
     const timer = setInterval(() => void scan(), intervalMs);
     timer.unref?.();
     try {
-      watcher = watch(join(this.root, "sessions"), { persistent: false }, () => void scan());
+      watcher = watch(
+        join(this.root, "sessions"),
+        { persistent: false },
+        () => void scan(),
+      );
     } catch {
       watcher = null;
     }
@@ -505,7 +539,9 @@ export class SessionStore {
    * Prune sessions that are terminal (or orphaned) and idle past the cutoff.
    * Live sessions are never touched.
    */
-  async clean(opts: { olderThanMs?: number; all?: boolean } = {}): Promise<{ removed: string[] }> {
+  async clean(
+    opts: { olderThanMs?: number; all?: boolean } = {},
+  ): Promise<{ removed: string[] }> {
     const olderThanMs = opts.olderThanMs ?? 7 * 24 * 60 * 60 * 1000;
     const cutoff = Date.now() - (opts.all ? 0 : olderThanMs);
     const removed: string[] = [];

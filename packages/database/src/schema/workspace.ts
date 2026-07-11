@@ -192,3 +192,57 @@ export const workspaceBudgetPolicy = workspaceSchema.table(
     orgWorkspaceIdx: index("workspace_budget_policy_org_workspace_idx").on(t.orgId, t.workspaceId),
   }),
 );
+
+// Verified-Outcome Market Router GOVERNANCE. An org/workspace admin decides
+// whether model routing is learned+economic (market) or the deterministic
+// default, and the tunables (verified-success bar, min samples, window,
+// tier-escalation on judge rejection). ONE table holds both scopes: a row with
+// workspace_id = NULL is the org-level default for every workspace; a row with a
+// workspace_id overrides it for that workspace. Resolved by
+// resolveEffectiveRoutingPolicy in @oxagen/agent-engine (workspace > org >
+// OFF-default). Off by default — absent rows ⇒ today's deterministic routing.
+// RLS: `workspace_nullable` (org_id NOT NULL, workspace_id nullable), so a
+// withTenantDb read sees both the org-default row and the workspace's own row.
+export const routingPolicy = workspaceSchema.table(
+  "routing_policy",
+  {
+    id: uuid("id")
+      .primaryKey()
+      .default(sql`COALESCE(
+        CASE WHEN to_regprocedure('public.uuid_generate_v7()') IS NOT NULL
+          THEN uuid_generate_v7() ELSE uuid_generate_v4() END,
+        uuid_generate_v4())`),
+    orgId: uuid("org_id").notNull(),
+    // NULL ⇒ this is the ORG-LEVEL default policy for all workspaces in the org.
+    // A non-NULL value scopes the policy to that one workspace.
+    workspaceId: uuid("workspace_id"),
+    // Router mode: "off" (deterministic — today), "shadow" (compute + record the
+    // market decision, keep today's routing), "enforce" (use the market decision).
+    mode: text("mode").notNull().default("off"),
+    // Minimum observed verified-success rate (0..1) a model must hit to serve.
+    successThreshold: real("success_threshold").notNull().default(0.95),
+    // Minimum observed samples before a model's verified rate is trusted.
+    minSamples: integer("min_samples").notNull().default(20),
+    // Trailing window (days) the routing stats are computed over.
+    windowDays: integer("window_days").notNull().default(30),
+    // Escalate the worker one tier when the completeness judge rejects a round.
+    escalateOnRejection: boolean("escalate_on_rejection").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    // At most one org-level default row per org (workspace_id IS NULL)…
+    orgDefaultIdx: uniqueIndex("routing_policy_org_default_idx")
+      .on(t.orgId)
+      .where(sql`workspace_id IS NULL`),
+    // …and at most one row per workspace.
+    workspaceIdx: uniqueIndex("routing_policy_workspace_idx")
+      .on(t.workspaceId)
+      .where(sql`workspace_id IS NOT NULL`),
+    orgWorkspaceIdx: index("routing_policy_org_workspace_idx").on(t.orgId, t.workspaceId),
+  }),
+);

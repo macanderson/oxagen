@@ -13,6 +13,7 @@
  * and their tests never import a renderer or hit the gateway.
  */
 import type { ModelTier, UsageTotals } from "../types";
+import type { MutationGateResult } from "../verify/mutation";
 
 // Re-export for consumers that only import from this module.
 export type { ModelTier, UsageTotals };
@@ -225,6 +226,15 @@ export interface TurnTrace {
   phases?: PhaseStat[];
   /** Every tool call + result with timing (verbose turns). */
   toolEvents?: ToolEvent[];
+  /**
+   * Mutation-gate verdicts, one per judged-complete round the gate examined
+   * (usually exactly one). Records whether the turn's tests actually FAIL
+   * without the fix ("witnessed"), still pass without it ("vacuous" — the
+   * verdict was overridden into a revise round), or the gate stepped aside
+   * ("skipped", with the reason). Optional for backward-compat with stored
+   * traces.
+   */
+  mutationGates?: MutationGateResult[];
   /**
    * The model's reasoning / chain-of-thought, captured per execution round.
    * Previously these deltas were streamed dim to the terminal and DISCARDED;

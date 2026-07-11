@@ -1481,4 +1481,28 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./eval.run.get")).evalRunGetHandler as CapabilityHandlerFn,
   );
+  registerHandler(
+    "get_routing_policy",
+    async () =>
+      (await import("./router.policy.get"))
+        .routerPolicyGetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "set_routing_policy",
+    async () =>
+      (await import("./router.policy.set"))
+        .routerPolicySetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "list_routing_stats",
+    async () =>
+      (await import("./router.stats.list"))
+        .routerStatsListHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "preview_routing_decision",
+    async () =>
+      (await import("./router.decision.preview"))
+        .routerDecisionPreviewHandler as CapabilityHandlerFn,
+  );
 });

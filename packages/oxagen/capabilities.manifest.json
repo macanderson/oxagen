@@ -4430,6 +4430,78 @@
       }
     },
     {
+      "name": "preview_routing_decision",
+      "file": "router.decision.preview.ts",
+      "domain": "router",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "docs": true
+      }
+    },
+    {
+      "name": "get_routing_policy",
+      "file": "router.policy.get.ts",
+      "domain": "router",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "docs": true
+      }
+    },
+    {
+      "name": "set_routing_policy",
+      "file": "router.policy.set.ts",
+      "domain": "router",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "docs": true
+      }
+    },
+    {
+      "name": "list_routing_stats",
+      "file": "router.stats.list.ts",
+      "domain": "router",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "docs": true
+      }
+    },
+    {
       "name": "create_sandbox_template",
       "file": "sandbox.template.create.ts",
       "domain": "sandbox",
