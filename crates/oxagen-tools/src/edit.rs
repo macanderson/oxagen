@@ -1,8 +1,6 @@
 //! `edit_file` — replace an exact substring in a file. Surgical edits, not
 //! full rewrites. Supports `replace_all` for multi-occurrence.
 
-use std::path::PathBuf;
-
 use async_trait::async_trait;
 use oxagen_protocol::tool::{ToolOutput, ToolSchema};
 use serde_json::Value;
@@ -30,20 +28,35 @@ impl Tool for EditFile {
         }
     }
 
-    async fn execute(&self, input: &Value, root: &PathBuf) -> ToolOutput {
+    async fn execute(&self, input: &Value, root: &std::path::Path) -> ToolOutput {
         let path = match input.get("path").and_then(|v| v.as_str()) {
             Some(p) => p,
-            None => return ToolOutput::Error { message: "missing required field `path`".into() },
+            None => {
+                return ToolOutput::Error {
+                    message: "missing required field `path`".into(),
+                };
+            }
         };
         let old_string = match input.get("old_string").and_then(|v| v.as_str()) {
             Some(s) => s,
-            None => return ToolOutput::Error { message: "missing required field `old_string`".into() },
+            None => {
+                return ToolOutput::Error {
+                    message: "missing required field `old_string`".into(),
+                };
+            }
         };
         let new_string = match input.get("new_string").and_then(|v| v.as_str()) {
             Some(s) => s,
-            None => return ToolOutput::Error { message: "missing required field `new_string`".into() },
+            None => {
+                return ToolOutput::Error {
+                    message: "missing required field `new_string`".into(),
+                };
+            }
         };
-        let replace_all = input.get("replace_all").and_then(|v| v.as_bool()).unwrap_or(false);
+        let replace_all = input
+            .get("replace_all")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
 
         let full_path = root.join(path);
         if !full_path.starts_with(root) {
@@ -54,18 +67,26 @@ impl Tool for EditFile {
 
         let content = match tokio::fs::read_to_string(&full_path).await {
             Ok(c) => c,
-            Err(e) => return ToolOutput::Error { message: format!("failed to read `{path}`: {e}") },
+            Err(e) => {
+                return ToolOutput::Error {
+                    message: format!("failed to read `{path}`: {e}"),
+                };
+            }
         };
 
         let count = content.matches(old_string).count();
         if count == 0 {
             return ToolOutput::Error {
-                message: format!("old_string not found in `{path}` — check for exact whitespace/newline differences"),
+                message: format!(
+                    "old_string not found in `{path}` — check for exact whitespace/newline differences"
+                ),
             };
         }
         if count > 1 && !replace_all {
             return ToolOutput::Error {
-                message: format!("old_string appears {count} times in `{path}` — set replace_all=true or provide a more specific string"),
+                message: format!(
+                    "old_string appears {count} times in `{path}` — set replace_all=true or provide a more specific string"
+                ),
             };
         }
 
@@ -123,7 +144,10 @@ mod tests {
         tokio::fs::write(&full, "a a a").await.unwrap();
 
         let result = EditFile
-            .execute(&serde_json::json!({"path": path, "old_string": "a", "new_string": "b"}), &dir)
+            .execute(
+                &serde_json::json!({"path": path, "old_string": "a", "new_string": "b"}),
+                &dir,
+            )
             .await;
         assert!(result.is_error());
         let _ = tokio::fs::remove_file(&full).await;
@@ -159,7 +183,10 @@ mod tests {
         tokio::fs::write(&full, "hello world").await.unwrap();
 
         let result = EditFile
-            .execute(&serde_json::json!({"path": path, "old_string": "xyz", "new_string": "abc"}), &dir)
+            .execute(
+                &serde_json::json!({"path": path, "old_string": "xyz", "new_string": "abc"}),
+                &dir,
+            )
             .await;
         assert!(result.is_error());
         let _ = tokio::fs::remove_file(&full).await;

@@ -2,8 +2,6 @@
 //! Mirrors the TS `read_file` tool: 1-based line numbers, `offset`/`limit`
 //! params, and a hard size cap to prevent dumping huge files into context.
 
-use std::path::PathBuf;
-
 use async_trait::async_trait;
 use oxagen_protocol::tool::{ToolOutput, ToolSchema};
 use serde_json::Value;
@@ -32,13 +30,20 @@ impl Tool for ReadFile {
         }
     }
 
-    async fn execute(&self, input: &Value, root: &PathBuf) -> ToolOutput {
+    async fn execute(&self, input: &Value, root: &std::path::Path) -> ToolOutput {
         let path = match input.get("path").and_then(|v| v.as_str()) {
             Some(p) => p,
-            None => return ToolOutput::Error { message: "missing required field `path`".into() },
+            None => {
+                return ToolOutput::Error {
+                    message: "missing required field `path`".into(),
+                };
+            }
         };
 
-        let offset = input.get("offset").and_then(|v| v.as_u64()).map(|n| n as usize);
+        let offset = input
+            .get("offset")
+            .and_then(|v| v.as_u64())
+            .map(|n| n as usize);
         let limit = input
             .get("limit")
             .and_then(|v| v.as_u64())
@@ -60,7 +65,10 @@ impl Tool for ReadFile {
 
                 if start >= lines.len() {
                     return ToolOutput::Ok {
-                        content: format!("(file has {} lines, offset {start} is past end)", lines.len()),
+                        content: format!(
+                            "(file has {} lines, offset {start} is past end)",
+                            lines.len()
+                        ),
                     };
                 }
 
@@ -90,9 +98,13 @@ mod tests {
         let dir = std::env::temp_dir();
         let path = format!("stella_test_read_{}.txt", std::process::id());
         let full = dir.join(&path);
-        tokio::fs::write(&full, "line one\nline two\nline three\n").await.unwrap();
+        tokio::fs::write(&full, "line one\nline two\nline three\n")
+            .await
+            .unwrap();
 
-        let result = ReadFile.execute(&serde_json::json!({"path": path}), &dir).await;
+        let result = ReadFile
+            .execute(&serde_json::json!({"path": path}), &dir)
+            .await;
         match result {
             ToolOutput::Ok { content } => {
                 assert!(content.contains("1\tline one"));
@@ -112,7 +124,10 @@ mod tests {
         tokio::fs::write(&full, "a\nb\nc\nd\ne\n").await.unwrap();
 
         let result = ReadFile
-            .execute(&serde_json::json!({"path": path, "offset": 2, "limit": 2}), &dir)
+            .execute(
+                &serde_json::json!({"path": path, "offset": 2, "limit": 2}),
+                &dir,
+            )
             .await;
         match result {
             ToolOutput::Ok { content } => {
@@ -130,7 +145,10 @@ mod tests {
     async fn missing_file_returns_error() {
         let dir = std::env::temp_dir();
         let result = ReadFile
-            .execute(&serde_json::json!({"path": "nonexistent_xyz_123.txt"}), &dir)
+            .execute(
+                &serde_json::json!({"path": "nonexistent_xyz_123.txt"}),
+                &dir,
+            )
             .await;
         assert!(result.is_error());
     }

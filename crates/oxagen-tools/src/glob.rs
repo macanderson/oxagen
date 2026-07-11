@@ -1,8 +1,6 @@
 //! `glob` — find files matching a glob pattern. Shells to `fd` when present,
 //! falls back to `find` otherwise.
 
-use std::path::PathBuf;
-
 use async_trait::async_trait;
 use oxagen_protocol::tool::{ToolOutput, ToolSchema};
 use serde_json::Value;
@@ -19,7 +17,9 @@ impl Tool for Glob {
     fn schema(&self) -> ToolSchema {
         ToolSchema {
             name: "glob".into(),
-            description: "Find files matching a glob pattern. Returns relative paths from workspace root.".into(),
+            description:
+                "Find files matching a glob pattern. Returns relative paths from workspace root."
+                    .into(),
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {
@@ -31,10 +31,14 @@ impl Tool for Glob {
         }
     }
 
-    async fn execute(&self, input: &Value, root: &PathBuf) -> ToolOutput {
+    async fn execute(&self, input: &Value, root: &std::path::Path) -> ToolOutput {
         let pattern = match input.get("pattern").and_then(|v| v.as_str()) {
             Some(p) => p,
-            None => return ToolOutput::Error { message: "missing required field `pattern`".into() },
+            None => {
+                return ToolOutput::Error {
+                    message: "missing required field `pattern`".into(),
+                };
+            }
         };
         let search_path = input.get("path").and_then(|v| v.as_str()).unwrap_or(".");
 
@@ -51,10 +55,14 @@ impl Tool for Glob {
             Ok(output) => {
                 let text = String::from_utf8_lossy(&output.stdout);
                 if text.is_empty() {
-                    return ToolOutput::Ok { content: "(no files found)".into() };
+                    return ToolOutput::Ok {
+                        content: "(no files found)".into(),
+                    };
                 }
                 let lines: Vec<&str> = text.lines().take(MAX_RESULTS).collect();
-                ToolOutput::Ok { content: lines.join("\n") }
+                ToolOutput::Ok {
+                    content: lines.join("\n"),
+                }
             }
             Err(_) => {
                 // fd not installed — fall back to find
@@ -69,10 +77,14 @@ impl Tool for Glob {
                     Ok(output) => {
                         let text = String::from_utf8_lossy(&output.stdout);
                         if text.is_empty() {
-                            ToolOutput::Ok { content: "(no files found)".into() }
+                            ToolOutput::Ok {
+                                content: "(no files found)".into(),
+                            }
                         } else {
                             let lines: Vec<&str> = text.lines().take(MAX_RESULTS).collect();
-                            ToolOutput::Ok { content: lines.join("\n") }
+                            ToolOutput::Ok {
+                                content: lines.join("\n"),
+                            }
                         }
                     }
                     Err(e) => ToolOutput::Error {
@@ -93,17 +105,27 @@ mod tests {
         let dir = std::env::temp_dir();
         let subdir = format!("stella_glob_{}", std::process::id());
         tokio::fs::create_dir_all(dir.join(&subdir)).await.unwrap();
-        tokio::fs::write(dir.join(&subdir).join("a.rs"), "fn main(){}").await.unwrap();
-        tokio::fs::write(dir.join(&subdir).join("b.txt"), "hello").await.unwrap();
+        tokio::fs::write(dir.join(&subdir).join("a.rs"), "fn main(){}")
+            .await
+            .unwrap();
+        tokio::fs::write(dir.join(&subdir).join("b.txt"), "hello")
+            .await
+            .unwrap();
 
         // fd matches by regex by default; `\.rs$` matches files ending in .rs.
         let result = Glob
-            .execute(&serde_json::json!({"pattern": "\\.rs$", "path": &subdir}), &dir)
+            .execute(
+                &serde_json::json!({"pattern": "\\.rs$", "path": &subdir}),
+                &dir,
+            )
             .await;
         match result {
             ToolOutput::Ok { content } => {
                 assert!(content.contains("a.rs"), "expected a.rs in: {content}");
-                assert!(!content.contains("b.txt"), "should not contain b.txt: {content}");
+                assert!(
+                    !content.contains("b.txt"),
+                    "should not contain b.txt: {content}"
+                );
             }
             ToolOutput::Error { message } => panic!("expected ok, got: {message}"),
         }
