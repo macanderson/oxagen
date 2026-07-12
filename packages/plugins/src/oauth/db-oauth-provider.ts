@@ -138,6 +138,18 @@ export class DbOAuthClientProvider implements OAuthClientProvider {
   }
 
   async saveTokens(tokens: OAuthTokens): Promise<void> {
+    // Persist the absolute expiry so the proactive-refresh watcher
+    // (plugin.oauth-refresh-watcher) can select this credential BEFORE its
+    // access token lapses. Without this, expires_at stays NULL, `expires_at <
+    // now() + interval` never matches, and proactive refresh silently never
+    // runs — leaving only reactive 401-driven refresh. `expires_in` is seconds
+    // from now per RFC 6749 §5.1; a refresh with no expires_in clears the
+    // stored expiry (null) rather than preserving a stale one.
+    const now = this.c.now();
+    const expiresAt =
+      typeof tokens.expires_in === "number" && tokens.expires_in > 0
+        ? new Date(now + tokens.expires_in * 1000)
+        : null;
     await setWorkspaceSecret({
       orgId: this.c.orgId,
       workspaceId: this.c.workspaceId,
@@ -145,6 +157,8 @@ export class DbOAuthClientProvider implements OAuthClientProvider {
       authKind: "oauth",
       accessToken: tokens.access_token,
       refreshToken: tokens.refresh_token ?? null,
+      expiresAt,
+      lastRefreshedAt: new Date(now),
     });
   }
 
