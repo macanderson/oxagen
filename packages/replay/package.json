@@ -1,6 +1,6 @@
 {
   "name": "@oxagen/replay",
-  "version": "0.1.0",
+  "version": "0.27.86",
   "private": true,
   "type": "module",
   "main": "./src/index.ts",
