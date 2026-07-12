@@ -11,7 +11,9 @@
  *
  * This spec signs up a fresh user, intercepts the SSE endpoint with a single
  * `error` event, sends a message, and asserts:
- *  - a destructive toast appears with the friendly title + human message,
+ *  - a destructive toast appears with the friendly title + dedicated
+ *    "out of usage credits" copy (not the raw server message) plus a
+ *    clickable link straight to the org's credits-purchase page,
  *  - the raw error envelope (snake_case code, `requestId`, JSON braces) does
  *    NOT appear anywhere in the chat surface.
  *
@@ -65,15 +67,22 @@ test.describe("chat.error-toast — turn error surfaces a toast, not inline JSON
     await expect(sendBtn).toBeVisible();
     await sendBtn.click();
 
-    // The error toast carries the human-readable message. (The Base UI toast is
-    // portaled to the viewport at the document root.)
-    await expect(page.getByText(/your balance is empty/i)).toBeVisible({
+    // insufficient_credits gets dedicated copy (not the raw server message) plus
+    // a clickable link straight to the credits-purchase page. (The Base UI toast
+    // is portaled to the viewport at the document root.)
+    await expect(page.getByText(/out of usage credits/i)).toBeVisible({
       timeout: 12_000,
     });
     // And the friendly, code-derived title.
     await expect(page.getByText("Insufficient credits", { exact: true })).toBeVisible({
       timeout: 5_000,
     });
+    const purchaseLink = page.getByRole("link", { name: "here" });
+    await expect(purchaseLink).toBeVisible();
+    await expect(purchaseLink).toHaveAttribute(
+      "href",
+      `/${orgSlug}/billing/subscription`,
+    );
 
     // The raw error envelope must NOT leak onto the page in any form: not the
     // snake_case machine code, not the requestId field, not JSON object braces.
@@ -87,5 +96,10 @@ test.describe("chat.error-toast — turn error surfaces a toast, not inline JSON
       path: "e2e/screenshots/chat-error-toast.png",
       fullPage: true,
     });
+
+    // The link genuinely goes to the credits-purchase widget, not just a
+    // correctly-shaped href.
+    await purchaseLink.click();
+    await expect(page).toHaveURL(new RegExp(`/${orgSlug}/billing/subscription`));
   });
 });

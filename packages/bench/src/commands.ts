@@ -58,11 +58,19 @@ export async function handleBenchList(opts: BenchListOptions): Promise<void> {
 
   out(
     `  ${"#id".padStart(6)}  ${"task".padEnd(34)}${"type".padEnd(15)}${"reward".padStart(7)}` +
-      `${"resolved".padStart(10)}${"cost".padStart(9)}  date`,
+      `${"resolved".padStart(10)}${"tokens".padStart(9)}${"cost".padStart(9)}  date`,
   );
   for (const r of rows) {
     out(`  ${formatResultRow(r)}`);
   }
+}
+
+/** Compact token count for the list column: 0 -> "-", 506956 -> "507.0k", 2_400_000 -> "2.40M". */
+function formatTokens(n: number): string {
+  if (n <= 0) return "-";
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+  return String(n);
 }
 
 function formatResultRow(r: BenchmarkRunResultRow): string {
@@ -70,7 +78,8 @@ function formatResultRow(r: BenchmarkRunResultRow): string {
   const task = r.task_id.length > 34 ? r.task_id.slice(0, 31) + "…" : r.task_id;
   return (
     `${("#" + r.public_id).padStart(6)}  ${task.padEnd(34)}${r.bench_type.padEnd(15)}` +
-    `${r.reward.toFixed(2).padStart(7)}${resolved.padStart(10)}${("$" + r.cost_usd.toFixed(2)).padStart(9)}  ${r.started_at}`
+    `${r.reward.toFixed(2).padStart(7)}${resolved.padStart(10)}${formatTokens(r.tokens_total).padStart(9)}` +
+    `${("$" + r.cost_usd.toFixed(2)).padStart(9)}  ${r.started_at}`
   );
 }
 
@@ -121,6 +130,9 @@ export async function handleBenchReplay(idArg: string | undefined, opts: BenchRe
   const run = await getBenchRunByPublicId(result.run_public_id);
   out(`#${result.public_id} — ${result.task_id} (${result.bench_type})`);
   out(`  reward: ${result.reward}   resolved: ${result.resolved === 1 ? "yes" : "no"}   status: ${result.status}`);
+  out(
+    `  tokens: ${formatTokens(result.tokens_total)}   cost: $${result.cost_usd.toFixed(2)}   duration: ${result.duration_s}s`,
+  );
   out(`  run: #${result.run_public_id}${run ? ` (${run.dataset}, git ${run.git_sha || "unknown"})` : ""}`);
   out("");
   out("Reproducing command:");
