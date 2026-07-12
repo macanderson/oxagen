@@ -15,13 +15,17 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("@oxagen/handlers/register", () => ({}));
 vi.mock("@oxagen/oxagen", () => ({ invoke: vi.fn() }));
 
-const passthrough = (name: string) => ({
-  [name]: {
-    name,
-    input: { parse: (v: unknown) => v },
-    output: { parse: (v: unknown) => v },
-  },
-});
+// vi.hoisted so `passthrough` is initialized before the hoisted vi.mock
+// factories below reference it (plain const would be in its TDZ at mock time).
+const { passthrough } = vi.hoisted(() => ({
+  passthrough: (name: string) => ({
+    [name]: {
+      name,
+      input: { parse: (v: unknown) => v },
+      output: { parse: (v: unknown) => v },
+    },
+  }),
+}));
 vi.mock("@oxagen/oxagen/contracts/agent.trigger.list", () => ({
   agentTriggerList: passthrough("list_triggers").list_triggers,
 }));

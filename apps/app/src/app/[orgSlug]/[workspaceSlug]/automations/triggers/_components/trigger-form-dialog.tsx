@@ -212,7 +212,7 @@ export function TriggerFormDialog(props: TriggerFormDialogProps) {
           {mode === "create" ? (
             <div className="space-y-1.5">
               <Label>Agent</Label>
-              <Select value={agentId} onValueChange={setAgentId}>
+              <Select value={agentId} onValueChange={(v) => setAgentId(v ?? "")}>
                 <SelectTrigger className="w-full" data-testid="trigger-agent-select">
                   <SelectValue placeholder="Select an agent" />
                 </SelectTrigger>

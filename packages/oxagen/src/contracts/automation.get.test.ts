@@ -15,8 +15,11 @@ describe("automation.get capability", () => {
     expect(automationGet.surfaces).toContain("agent");
   });
 
-  it("does not declare the app layer (owned by the app-team lead)", () => {
-    expect(automationGet.layers).not.toContain("app");
+  it("declares the app layer (the Automations editor page binds it)", () => {
+    // The automation editor (automations/[automationId]) reads the full
+    // automation via this capability, so it declares the app surface and is
+    // bound in apps/app/capability-ui-map.json with an e2e proof.
+    expect(automationGet.layers).toContain("app");
   });
 
   // ── input: automation_id required ────────────────────────────────────────
