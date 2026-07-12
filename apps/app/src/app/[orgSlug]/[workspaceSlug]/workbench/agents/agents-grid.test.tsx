@@ -12,7 +12,11 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, cleanup, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { AgentsGrid, type AgentGridRow } from "./agents-grid";
+import {
+  AgentsGrid,
+  matchesStatusFilter,
+  type AgentGridRow,
+} from "./agents-grid";
 
 afterEach(cleanup);
 
@@ -157,6 +161,46 @@ describe("AgentsGrid", () => {
     expect(screen.getByText(/page 1 of 2/i)).toBeDefined();
   });
 
+  it("filters cards by the status segmented control and reports slice counts", async () => {
+    const user = userEvent.setup();
+    render(
+      <AgentsGrid
+        agents={[
+          agent({
+            slug: "billing-bot",
+            name: "Billing Bot",
+            status: "active",
+            deploymentStatus: "active",
+          }),
+          agent({ slug: "qa-chat", name: "QA Chat" }), // draft + inactive
+          agent({
+            slug: "old-bot",
+            name: "Old Bot",
+            status: "archived",
+            deploymentStatus: "inactive",
+          }),
+        ]}
+      />,
+    );
+
+    // Counts are rendered into the segmented control up front.
+    expect(screen.getByTestId("agents-filter-all")).toHaveTextContent("All (3)");
+    expect(screen.getByTestId("agents-filter-deployed")).toHaveTextContent(
+      "Deployed (1)",
+    );
+
+    // Deployed slice shows only the live agent.
+    await user.click(screen.getByTestId("agents-filter-deployed"));
+    expect(screen.getByTestId("agent-row-billing-bot")).toBeDefined();
+    expect(screen.queryByTestId("agent-row-qa-chat")).toBeNull();
+    expect(screen.queryByTestId("agent-row-old-bot")).toBeNull();
+
+    // Drafts slice shows only the draft.
+    await user.click(screen.getByTestId("agents-filter-draft"));
+    expect(screen.getByTestId("agent-row-qa-chat")).toBeDefined();
+    expect(screen.queryByTestId("agent-row-billing-bot")).toBeNull();
+  });
+
   it("exports the filtered rows as CSV", async () => {
     const user = userEvent.setup();
     render(
@@ -180,5 +224,32 @@ describe("AgentsGrid", () => {
     expect(filename).toBe("agents.csv");
     expect(csv).toContain("Billing Bot");
     expect(csv).not.toContain("QA Chat");
+  });
+});
+
+describe("matchesStatusFilter", () => {
+  const live = { status: "active", deploymentStatus: "active" } as const;
+  const draft = { status: "draft", deploymentStatus: "inactive" } as const;
+  const archived = { status: "archived", deploymentStatus: "inactive" } as const;
+  // A published-but-not-deployed agent: active lifecycle, inactive deployment.
+  const published = { status: "active", deploymentStatus: "inactive" } as const;
+
+  it("'all' matches every agent", () => {
+    for (const a of [live, draft, archived, published]) {
+      expect(matchesStatusFilter(a, "all")).toBe(true);
+    }
+  });
+
+  it("'deployed' keys off deploymentStatus, not lifecycle status", () => {
+    expect(matchesStatusFilter(live, "deployed")).toBe(true);
+    expect(matchesStatusFilter(published, "deployed")).toBe(false);
+    expect(matchesStatusFilter(draft, "deployed")).toBe(false);
+  });
+
+  it("'draft' and 'archived' key off lifecycle status", () => {
+    expect(matchesStatusFilter(draft, "draft")).toBe(true);
+    expect(matchesStatusFilter(live, "draft")).toBe(false);
+    expect(matchesStatusFilter(archived, "archived")).toBe(true);
+    expect(matchesStatusFilter(draft, "archived")).toBe(false);
   });
 });

@@ -25,8 +25,10 @@ import Link from "next/link";
 import { Boxes, Pencil, Play, Square, Terminal } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { StatusDot } from "@/components/ui/status-dot";
 import { Switch } from "@/components/ui/switch";
 import {
   Card,
@@ -76,11 +78,15 @@ import {
   refreshSandboxesAction,
 } from "./actions";
 
-const STATUS_TONE: Record<SandboxStatus, "success" | "warning" | "muted"> = {
+/** StatusDot tone per provider state; running pulses to read as "live". */
+const STATUS_DOT: Record<
+  SandboxStatus,
+  "success" | "warning" | "error" | "info" | "neutral" | "primary"
+> = {
   running: "success",
   idle: "warning",
-  stopped: "muted",
-  gone: "muted",
+  stopped: "neutral",
+  gone: "neutral",
 };
 
 const POLL_MS = 8_000;
@@ -405,8 +411,15 @@ export function SandboxesClient({
       {/* Session list */}
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between gap-2">
-          <h2 className="text-lg font-semibold">Sessions</h2>
-          <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+          <h2 className="flex items-baseline gap-2 text-lg font-semibold">
+            Sessions
+            {sandboxes.length > 0 ? (
+              <span className="text-sm font-normal tabular-nums text-muted-foreground">
+                {sandboxes.length}
+              </span>
+            ) : null}
+          </h2>
+          <label className="flex min-h-9 cursor-pointer items-center gap-2 text-xs text-muted-foreground">
             <Switch
               checked={showInactive}
               onCheckedChange={(c) => setShowInactive(c === true)}
@@ -421,14 +434,18 @@ export function SandboxesClient({
           </p>
         ) : null}
         {sandboxes.length === 0 ? (
-          <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-border px-6 py-12 text-center">
-            <Boxes className="h-6 w-6 text-muted-foreground" aria-hidden />
-            <p className="text-sm text-muted-foreground">
-              {showInactive
-                ? "No sandbox sessions yet. Warm one above to give an agent a ready workspace."
-                : 'No active sandbox sessions. Warm one above, or toggle "Show inactive" to see stopped sessions.'}
-            </p>
-          </div>
+          <EmptyState
+            variant="dashed"
+            icon={<Boxes />}
+            title={
+              showInactive ? "No sandbox sessions yet" : "No active sandboxes"
+            }
+            description={
+              showInactive
+                ? "Warm one above to give an agent a ready workspace."
+                : 'Warm one above, or toggle "Show inactive" to see stopped sessions.'
+            }
+          />
         ) : (
           <ul className="grid grid-cols-1 gap-3 lg:grid-cols-2">
             {sandboxes.map((s) => {
@@ -488,11 +505,17 @@ export function SandboxesClient({
                     <div className="flex shrink-0 flex-col items-end gap-2">
                       <div className="flex items-center gap-1.5">
                         {s.recoveryStatus === "failed" ? (
-                          <Badge variant="error">recovery failed</Badge>
+                          <Badge variant="error" size="sm">
+                            recovery failed
+                          </Badge>
                         ) : null}
-                        <Badge variant={STATUS_TONE[s.status]}>
-                          {s.status}
-                        </Badge>
+                        <StatusDot
+                          status={STATUS_DOT[s.status]}
+                          pulse={s.status === "running"}
+                          size="sm"
+                          label={s.status}
+                          className="text-xs capitalize text-muted-foreground"
+                        />
                       </div>
                       {canManage ? (
                         <div className="flex items-center gap-1">
