@@ -52,7 +52,13 @@ export default async function EvalsPage({ params }: PageProps) {
       </div>
 
       <Suspense fallback={<TableSkeleton rows={4} cols={5} />}>
-        <DatasetsSection orgId={org.id} workspaceId={ws.id} userId={session.user.id} />
+        <DatasetsSection
+          orgId={org.id}
+          workspaceId={ws.id}
+          userId={session.user.id}
+          orgSlug={orgSlug}
+          workspaceSlug={workspaceSlug}
+        />
       </Suspense>
     </div>
   );
