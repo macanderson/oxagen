@@ -456,18 +456,18 @@
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/evals/runs/[runId]/page.tsx",
       "entry": "RunDetailSection RSC → RunDetailClient",
       "testid": "eval-run-detail",
-      "proof": null,
-      "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
+      "proof": "apps/app/e2e/eval-run-detail.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
     },
     "list_datasets": {
       "route": "/[orgSlug]/[workspaceSlug]/evals",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/evals/page.tsx",
       "entry": "DatasetsSection RSC → DatasetsClient list",
       "testid": "evals-datasets-table",
-      "proof": null,
-      "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
+      "proof": "apps/app/e2e/evals-write-path.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
     },
     "generate_video": {
       "route": "/[orgSlug]/[workspaceSlug]/ask",
@@ -738,6 +738,60 @@
       "proof": "apps/app/e2e/billing-revenue.spec.ts",
       "verifiedAt": "2026-07-10",
       "verifiedBy": "session_01Hi2b4PCDZG2LrYumbaqPwX"
+    },
+    "create_dataset": {
+      "route": "/[orgSlug]/[workspaceSlug]/evals",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/evals/create-dataset-drawer.tsx",
+      "entry": "New dataset drawer → Manual mode → createDatasetAction",
+      "testid": "evals-create-manual-submit",
+      "proof": "apps/app/e2e/evals-write-path.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "create_trace_dataset": {
+      "route": "/[orgSlug]/[workspaceSlug]/evals",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/evals/create-dataset-drawer.tsx",
+      "entry": "New dataset drawer → From traces mode → createTraceDatasetAction",
+      "testid": "evals-create-traces-submit",
+      "proof": "apps/app/e2e/evals-write-path.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "add_dataset_item": {
+      "route": "/[orgSlug]/[workspaceSlug]/evals",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/evals/dataset-detail-drawer.tsx",
+      "entry": "Dataset detail drawer → Add item form → addDatasetItemAction",
+      "testid": "evals-add-item-submit",
+      "proof": "apps/app/e2e/evals-write-path.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "get_dataset": {
+      "route": "/[orgSlug]/[workspaceSlug]/evals",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/evals/dataset-detail-drawer.tsx",
+      "entry": "Dataset card click → drawer open → getDatasetAction loads items",
+      "testid": "evals-dataset-drawer",
+      "proof": "apps/app/e2e/evals-write-path.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "start_eval_run": {
+      "route": "/[orgSlug]/[workspaceSlug]/evals",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/evals/dataset-detail-drawer.tsx",
+      "entry": "Dataset detail drawer → Run eval launcher → startEvalRunAction",
+      "testid": "evals-run-start",
+      "proof": "apps/app/e2e/evals-write-path.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "get_eval_status": {
+      "route": "/[orgSlug]/[workspaceSlug]/evals",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/evals/dataset-detail-drawer.tsx",
+      "entry": "Run launcher status poll → getEvalRunStatusAction (evals-run-status chip)",
+      "testid": "evals-run-status",
+      "proof": "apps/app/e2e/evals-write-path.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
     }
   }
 }
