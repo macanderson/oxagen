@@ -361,6 +361,16 @@ describe("enumerateNavTargets", () => {
     expect(hrefs).toContain("/acme/production/ask");
     expect(hrefs).toContain("/acme/production/knowledge/sources");
     expect(hrefs).toContain("/acme/production/settings");
+
+    // web-app-2.0 Phase 2 nav restructure: the renamed/merged targets are
+    // present and the old ones are gone.
+    expect(hrefs).toContain("/acme/production/knowledge/graph");
+    expect(hrefs).toContain("/acme/production/knowledge/ontology");
+    expect(hrefs).toContain("/acme/production/knowledge/memory");
+    expect(hrefs).toContain("/acme/production/settings/agent-defaults");
+    expect(hrefs).not.toContain("/acme/production/knowledge/repos");
+    expect(hrefs).not.toContain("/acme/production/knowledge/explore");
+    expect(hrefs).not.toContain("/acme/production/settings/models");
   });
 
   it("includes org paths regardless of workspaceSlug", () => {

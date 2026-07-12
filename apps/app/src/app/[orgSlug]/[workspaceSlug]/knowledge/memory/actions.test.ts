@@ -53,7 +53,11 @@ vi.mock("@oxagen/database", () => ({
   schema: { workspaceUsers: { role: {}, workspaceId: {}, userId: {} } },
 }));
 
-import { listMemoryCitationsAction, attachMemoryEvidenceAction } from "./actions";
+import {
+  listMemoryCitationsAction,
+  attachMemoryEvidenceAction,
+  promoteMemoryAction,
+} from "./actions";
 
 const BASE = { orgSlug: "oxagen", workspaceSlug: "main" };
 
@@ -200,6 +204,68 @@ describe("attachMemoryEvidenceAction", () => {
     mockInvoke.mockRejectedValue(new Error("write failed"));
     const res = await attachMemoryEvidenceAction(validInput);
     expect(res).toEqual({ ok: false, error: "write failed" });
+    expect(mockRevalidatePath).not.toHaveBeenCalled();
+  });
+});
+
+describe("promoteMemoryAction", () => {
+  const promoteInput = {
+    ...BASE,
+    memoryId: "mem-1",
+    toClass: "FACT" as const,
+    enforcementScore: 80,
+    rationale: "Confirmed by two independent runs",
+    basedOnEvidenceIds: ["ev-1", "ev-2"],
+  };
+
+  it("denies a caller who is not a workspace member (never invokes promote_memory)", async () => {
+    dbState.role = "viewer";
+    const res = await promoteMemoryAction(promoteInput);
+    expect(res).toEqual({ ok: false, error: expect.stringContaining("workspace member") });
+    expect(mockInvoke).not.toHaveBeenCalled();
+    expect(mockRevalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("invokes promote_memory with the full input, revalidates, and returns the promoted memory", async () => {
+    const promoted = { id: "mem-1", memoryClass: "FACT" };
+    mockInvoke.mockResolvedValue(promoted);
+    const res = await promoteMemoryAction(promoteInput);
+    expect(mockInvoke).toHaveBeenCalledWith(
+      "promote_memory",
+      {
+        memoryId: "mem-1",
+        toClass: "FACT",
+        enforcementScore: 80,
+        rationale: "Confirmed by two independent runs",
+        basedOnEvidenceIds: ["ev-1", "ev-2"],
+      },
+      expect.objectContaining({ orgId: "org-1", workspaceId: "ws-1", userId: "user-1" }),
+      { surface: "agent" },
+    );
+    expect(mockRevalidatePath).toHaveBeenCalledWith("/oxagen/main/knowledge/memory");
+    expect(res).toEqual({ ok: true, memory: promoted });
+  });
+
+  it("omits enforcementScore and basedOnEvidenceIds from the invoke input when not supplied", async () => {
+    mockInvoke.mockResolvedValue({ id: "mem-1" });
+    await promoteMemoryAction({
+      ...BASE,
+      memoryId: "mem-1",
+      toClass: "RULE",
+      rationale: "Recurring preference",
+    });
+    expect(mockInvoke).toHaveBeenCalledWith(
+      "promote_memory",
+      { memoryId: "mem-1", toClass: "RULE", rationale: "Recurring preference" },
+      expect.any(Object),
+      { surface: "agent" },
+    );
+  });
+
+  it("returns ok:false when invoke throws and does not revalidate (FACT promotion never silently applies)", async () => {
+    mockInvoke.mockRejectedValue(new Error("promotion rejected"));
+    const res = await promoteMemoryAction(promoteInput);
+    expect(res).toEqual({ ok: false, error: "promotion rejected" });
     expect(mockRevalidatePath).not.toHaveBeenCalled();
   });
 });
