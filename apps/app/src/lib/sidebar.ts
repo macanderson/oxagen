@@ -345,6 +345,8 @@ const accountConfig: SidebarConfig = {
 // ---------------------------------------------------------------------------
 
 export const ORG_SCOPE_ROUTES = new Set([
+  "workspaces",
+  "new-workspace",
   "members",
   "access",
   "security",
