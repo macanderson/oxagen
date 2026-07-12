@@ -178,6 +178,13 @@ export abstract class BaseAgentRunner implements AgentRunner {
     git(["config", "user.name", "oxagen-bench"]);
 
     writeFileSync(join(workDir, "TASK.md"), buildTaskPrompt(task) + "\n");
+    // Keep the captured diff to the agent's own edits: exclude installed deps
+    // and build output an agent may create while solving the task.
+    writeFileSync(
+      join(workDir, ".gitignore"),
+      ["node_modules/", ".vite/", "dist/", "build/", "coverage/", ".next/", "*.log"].join("\n") +
+        "\n",
+    );
 
     for (const rel of task.filesToModify ?? []) {
       const abs = join(workDir, rel);

@@ -258,6 +258,16 @@ describe("BaseAgentRunner execution flow", () => {
     expect(result.id).toContain("anthropic_claude-opus-4.8");
   });
 
+  it("excludes installed deps from the captured diff via seeded .gitignore", async () => {
+    const runner = new FakeRunner(
+      "mkdir -p node_modules/pkg; echo x > node_modules/pkg/index.js; " +
+        "printf 'guarded\\n' >> src/api/users.ts; echo '{\"type\":\"result\"}'",
+    );
+    const result = await runner.runTask(task, config);
+    expect(result.diff).toContain("guarded");
+    expect(result.diff).not.toContain("node_modules");
+  });
+
   it("marks failure and skips tests when the agent process errors", async () => {
     const runner = new FakeRunner("echo boom >&2; exit 3");
     const result = await runner.runTask(task, config);
