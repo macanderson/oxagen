@@ -7,9 +7,9 @@ interface PageProps {
   params: Promise<{ orgSlug: string; workspaceSlug: string }>;
 }
 
-export const metadata: Metadata = { title: "Knowledge Schema — Settings" };
+export const metadata: Metadata = { title: "Ontology — Knowledge" };
 
-export default async function KnowledgeSettingsPage({ params }: PageProps) {
+export default async function KnowledgeOntologyPage({ params }: PageProps) {
   const { orgSlug, workspaceSlug } = await params;
 
   // Schema mutation (creating/editing labels, properties, relationships) is an

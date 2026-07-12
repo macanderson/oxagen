@@ -326,7 +326,7 @@ export function KnowledgeConnectionsClient({
       // the connect flow started in. Self-correct to the originating workspace so
       // the resume targets the connection that actually lives there.
       window.location.replace(
-        `/${pending.orgSlug}/${pending.workspaceSlug}/knowledge/repos?setup=github`,
+        `/${pending.orgSlug}/${pending.workspaceSlug}/knowledge/sources?setup=github`,
       );
       return;
     }

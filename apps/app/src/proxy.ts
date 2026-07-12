@@ -68,8 +68,14 @@ export function proxy(request: NextRequest): NextResponse {
     // (b) Workspace-scope renames: /{org}/{ws}/{from}(/{tail})? → …/{to}(/{tail})?
     //     preserveTail keeps the sub-path (/studio/agents → /workbench/agents);
     //     otherwise the tail collapses onto the target. `exact` entries match the
-    //     bare path only — critically `knowledge/nodes` (the old browse index) so
-    //     the real node-detail route /knowledge/nodes/{id} is NOT swept up.
+    //     bare path only.
+    //
+    //     web-app-2.0 Phase 2 (Knowledge IA): knowledge/repos → sources,
+    //     knowledge/explore → graph, knowledge/memories → memory, and the
+    //     ontology/schema builder moved out of Settings into Knowledge
+    //     (settings/knowledge → knowledge/ontology). Node detail moved under
+    //     Graph: knowledge/nodes/{id} → knowledge/graph/{id} (preserveTail),
+    //     while the bare knowledge/nodes browse index → knowledge/graph.
     const WS_RENAMES: {
       from: string;
       to: string;
@@ -82,10 +88,16 @@ export function proxy(request: NextRequest): NextResponse {
       { from: "settings/skills", to: "workbench/tools/skills", preserveTail: true },
       { from: "settings/plugins", to: "workbench/tools/capabilities", preserveTail: false, exact: true },
       { from: "settings/environments", to: "workbench/environments", preserveTail: false, exact: true },
+      { from: "settings/knowledge", to: "knowledge/ontology", preserveTail: false, exact: true },
       { from: "marketplace/browse", to: "marketplace/agent-tools", preserveTail: false, exact: true },
       { from: "marketplace/installed", to: "workbench/tools/capabilities", preserveTail: false, exact: true },
       { from: "marketplace/mcp", to: "workbench/tools/mcp", preserveTail: false, exact: true },
-      { from: "knowledge/nodes", to: "knowledge/inference", preserveTail: false, exact: true },
+      // Knowledge renames. `knowledge/nodes/{id}` must precede the bare-index
+      // entry: preserveTail moves the node id onto the Graph child route.
+      { from: "knowledge/repos", to: "knowledge/sources", preserveTail: true },
+      { from: "knowledge/explore", to: "knowledge/graph", preserveTail: true },
+      { from: "knowledge/memories", to: "knowledge/memory", preserveTail: true },
+      { from: "knowledge/nodes", to: "knowledge/graph", preserveTail: true },
     ];
     const wsRouteMove = pathname.match(/^(\/[^/]+\/[^/]+)\/(.*)$/);
     if (wsRouteMove) {

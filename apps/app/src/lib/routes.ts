@@ -200,22 +200,29 @@ export const workspace = {
       `${wsBase(ctx)}/automations/workflows`,
   },
 
-  // Knowledge
+  // Knowledge — web-app-2.0 Phase 2 IA: Sources · Graph · Inference ·
+  // Ontology · Memory. The graph explorer, node browser, and query console
+  // all live under the single /knowledge/graph surface; node detail is a
+  // child of Graph.
   knowledge: {
     root: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/knowledge`,
-    repos: (ctx: Required<ScopeContext>): string =>
-      `${wsBase(ctx)}/knowledge/repos`,
+    sources: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/knowledge/sources`,
+    sourcesConnect: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/knowledge/sources/connect`,
+    graph: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/knowledge/graph`,
     inference: (ctx: Required<ScopeContext>): string =>
       `${wsBase(ctx)}/knowledge/inference`,
-    explore: (ctx: Required<ScopeContext>): string =>
-      `${wsBase(ctx)}/knowledge/explore`,
-    memories: (ctx: Required<ScopeContext>): string =>
-      `${wsBase(ctx)}/knowledge/memories`,
-    // Inspectable detail page for a single KnowledgeNode. Mirrors the
-    // capability-meta RECORD_LINK_ROUTES["graph.node"] template so chat
+    ontology: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/knowledge/ontology`,
+    memory: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/knowledge/memory`,
+    // Inspectable detail page for a single KnowledgeNode, now nested under
+    // Graph. Mirrors capability-meta RECORD_LINK_ROUTES["graph.node"] so chat
     // deep-links and in-app navigation resolve to the same URL.
     node: (ctx: Required<ScopeContext>, nodeId: string): string =>
-      `${wsBase(ctx)}/knowledge/nodes/${encodeURIComponent(nodeId)}`,
+      `${wsBase(ctx)}/knowledge/graph/${encodeURIComponent(nodeId)}`,
   },
 
   // Settings
@@ -268,7 +275,7 @@ export const workspace = {
 
 export const defaultTab: Record<string, string> = {
   // Workspace-scope parents
-  knowledge: "repos",
+  knowledge: "sources",
   settings: "general",
   workbench: "agents",
   marketplace: "agent-tools",

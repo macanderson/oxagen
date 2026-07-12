@@ -252,7 +252,7 @@ export async function commitImportAction(input: {
         { surface: "agent" },
       )) as AgentMemoryImportCommitOutput;
 
-      revalidatePath(`/${orgSlug}/${workspaceSlug}/knowledge/memories`);
+      revalidatePath(`/${orgSlug}/${workspaceSlug}/knowledge/memory`);
       return {
         ok: true,
         results: out.results,

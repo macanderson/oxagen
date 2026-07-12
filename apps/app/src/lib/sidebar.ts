@@ -625,8 +625,13 @@ export function enumerateNavTargets(
 
     // Knowledge tabs
     targets.push({
-      label: "Knowledge · Repos",
-      href: workspace.knowledge.repos(wsCtx),
+      label: "Knowledge · Sources",
+      href: workspace.knowledge.sources(wsCtx),
+      parent: "knowledge",
+    });
+    targets.push({
+      label: "Knowledge · Graph",
+      href: workspace.knowledge.graph(wsCtx),
       parent: "knowledge",
     });
     targets.push({
@@ -635,13 +640,13 @@ export function enumerateNavTargets(
       parent: "knowledge",
     });
     targets.push({
-      label: "Knowledge · Explore",
-      href: workspace.knowledge.explore(wsCtx),
+      label: "Knowledge · Ontology",
+      href: workspace.knowledge.ontology(wsCtx),
       parent: "knowledge",
     });
     targets.push({
-      label: "Knowledge · Memories",
-      href: workspace.knowledge.memories(wsCtx),
+      label: "Knowledge · Memory",
+      href: workspace.knowledge.memory(wsCtx),
       parent: "knowledge",
     });
 

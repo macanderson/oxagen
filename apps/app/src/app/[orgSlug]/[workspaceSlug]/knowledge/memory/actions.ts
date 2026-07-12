@@ -162,12 +162,12 @@ export async function createMemoryAction(input: {
         { surface: "agent" },
       )) as { memory: AgentMemoryRecord };
 
-      revalidatePath(`/${orgSlug}/${workspaceSlug}/knowledge/memories`);
+      revalidatePath(`/${orgSlug}/${workspaceSlug}/knowledge/memory`);
       return { ok: true, memory: out.memory };
     } catch (err) {
       logger.error(
         { err, orgId: org.id, workspaceId: ws.id },
-        "knowledge.memories: createMemoryAction failed",
+        "knowledge.memory: createMemoryAction failed",
       );
       const message = err instanceof Error ? err.message : "";
       return { ok: false, error: message || "Failed to add memory." };
@@ -230,12 +230,12 @@ export async function updateMemoryAction(input: {
         { surface: "agent" },
       )) as AgentMemoryRecord;
 
-      revalidatePath(`/${orgSlug}/${workspaceSlug}/knowledge/memories`);
+      revalidatePath(`/${orgSlug}/${workspaceSlug}/knowledge/memory`);
       return { ok: true, memory };
     } catch (err) {
       logger.error(
         { err, orgId: org.id, workspaceId: ws.id, memoryId },
-        "knowledge.memories: updateMemoryAction failed",
+        "knowledge.memory: updateMemoryAction failed",
       );
       const message = err instanceof Error ? err.message : "";
       return { ok: false, error: message || "Failed to update memory." };
@@ -288,12 +288,12 @@ export async function deleteMemoryAction(input: {
         { surface: "agent" },
       );
 
-      revalidatePath(`/${orgSlug}/${workspaceSlug}/knowledge/memories`);
+      revalidatePath(`/${orgSlug}/${workspaceSlug}/knowledge/memory`);
       return { ok: true };
     } catch (err) {
       logger.error(
         { err, orgId: org.id, workspaceId: ws.id, memoryId },
-        "knowledge.memories: deleteMemoryAction failed",
+        "knowledge.memory: deleteMemoryAction failed",
       );
       const message = err instanceof Error ? err.message : "";
       return { ok: false, error: message || "Failed to delete memory." };
@@ -359,12 +359,12 @@ export async function promoteMemoryAction(input: {
         { surface: "agent" },
       )) as AgentMemoryRecord;
 
-      revalidatePath(`/${orgSlug}/${workspaceSlug}/knowledge/memories`);
+      revalidatePath(`/${orgSlug}/${workspaceSlug}/knowledge/memory`);
       return { ok: true, memory };
     } catch (err) {
       logger.error(
         { err, orgId: org.id, workspaceId: ws.id, memoryId, toClass },
-        "knowledge.memories: promoteMemoryAction failed",
+        "knowledge.memory: promoteMemoryAction failed",
       );
       const message = err instanceof Error ? err.message : "";
       return { ok: false, error: message || "Failed to promote memory." };
@@ -420,7 +420,7 @@ export async function promotionCandidatesAction(input: {
     } catch (err) {
       logger.error(
         { err, orgId: org.id, workspaceId: ws.id },
-        "knowledge.memories: promotionCandidatesAction failed",
+        "knowledge.memory: promotionCandidatesAction failed",
       );
       const message = err instanceof Error ? err.message : "";
       return { ok: false, error: message || "Failed to load promotion candidates." };

@@ -158,7 +158,7 @@ describe("commandMenuSearchHandler", () => {
     );
 
     // Postgres href: /acme/prod/automation/playbooks/plb_abc
-    // Graph href:    /acme/prod/knowledge/nodes/plb_abc
+    // Graph href:    /acme/prod/knowledge/graph/plb_abc
     // Different hrefs → no dedup; both appear.
     // But we only tested "same href" dedup — here they differ.
     // Just verify total ≤ 8 and Postgres row is first.

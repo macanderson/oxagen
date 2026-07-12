@@ -53,7 +53,7 @@ describe("CapabilityResult render", () => {
           meta: { nested: 1 },
         }}
         links={[
-          { field: "id", recordType: "graph.node", id: "n1", href: "/acme/ws/knowledge/nodes/n1", label: "Open node" },
+          { field: "id", recordType: "graph.node", id: "n1", href: "/acme/ws/knowledge/graph/n1", label: "Open node" },
         ]}
       />,
     );
@@ -67,7 +67,7 @@ describe("CapabilityResult render", () => {
     expect(screen.getByText("Yes")).toBeTruthy();
     // deep-link chip present with the resolved href
     const chip = screen.getByText("Open node").closest("a");
-    expect(chip?.getAttribute("href")).toBe("/acme/ws/knowledge/nodes/n1");
+    expect(chip?.getAttribute("href")).toBe("/acme/ws/knowledge/graph/n1");
     // external url rendered as a link (full url shown, truncated at 80 chars)
     const ext = screen.getByText("https://example.com/page").closest("a");
     expect(ext?.getAttribute("target")).toBe("_blank");

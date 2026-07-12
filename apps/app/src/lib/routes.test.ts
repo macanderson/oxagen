@@ -130,7 +130,12 @@ describe("org route builders", () => {
 describe("workspace route builders", () => {
   it("ask → /{org}/{ws}/ask", () => expect(workspace.ask(wsCtx)).toBe("/acme/prod/ask"));
   it("knowledge.root → /{org}/{ws}/knowledge", () => expect(workspace.knowledge.root(wsCtx)).toBe("/acme/prod/knowledge"));
-  it("knowledge.repos → /{org}/{ws}/knowledge/repos", () => expect(workspace.knowledge.repos(wsCtx)).toBe("/acme/prod/knowledge/repos"));
+  it("knowledge.sources → /{org}/{ws}/knowledge/sources", () => expect(workspace.knowledge.sources(wsCtx)).toBe("/acme/prod/knowledge/sources"));
+  it("knowledge.sourcesConnect → /{org}/{ws}/knowledge/sources/connect", () => expect(workspace.knowledge.sourcesConnect(wsCtx)).toBe("/acme/prod/knowledge/sources/connect"));
+  it("knowledge.graph → /{org}/{ws}/knowledge/graph", () => expect(workspace.knowledge.graph(wsCtx)).toBe("/acme/prod/knowledge/graph"));
+  it("knowledge.ontology → /{org}/{ws}/knowledge/ontology", () => expect(workspace.knowledge.ontology(wsCtx)).toBe("/acme/prod/knowledge/ontology"));
+  it("knowledge.memory → /{org}/{ws}/knowledge/memory", () => expect(workspace.knowledge.memory(wsCtx)).toBe("/acme/prod/knowledge/memory"));
+  it("knowledge.node → /{org}/{ws}/knowledge/graph/{id}", () => expect(workspace.knowledge.node(wsCtx, "n_1")).toBe("/acme/prod/knowledge/graph/n_1"));
   it("settings.root → /{org}/{ws}/settings", () => expect(workspace.settings.root(wsCtx)).toBe("/acme/prod/settings"));
   it("settings.models → /{org}/{ws}/settings/models", () => expect(workspace.settings.models(wsCtx)).toBe("/acme/prod/settings/models"));
 });

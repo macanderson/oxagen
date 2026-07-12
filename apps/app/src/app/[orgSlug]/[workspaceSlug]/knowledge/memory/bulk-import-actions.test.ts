@@ -169,7 +169,7 @@ describe("commitImportAction", () => {
       failed: 0,
     });
     expect(mockInvoke.mock.calls[0]?.[0]).toBe("commit_memory_import");
-    expect(mockRevalidatePath).toHaveBeenCalledWith("/oxagen/main/knowledge/memories");
+    expect(mockRevalidatePath).toHaveBeenCalledWith("/oxagen/main/knowledge/memory");
   });
 
   it("returns ok:false when invoke throws", async () => {

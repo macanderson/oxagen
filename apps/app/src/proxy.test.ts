@@ -79,12 +79,31 @@ describe("proxy — IA realignment redirects (§16)", () => {
     );
   });
 
-  it("301s the bare /knowledge/nodes index → /knowledge/inference but NEVER the node-detail route", () => {
-    expect(location("/acme/prod/knowledge/nodes")).toBe(
-      `${ORIGIN}/acme/prod/knowledge/inference`,
+  it("301s the web-app-2.0 Knowledge renames → their new tab homes", () => {
+    // repos → sources, explore → graph, memories → memory (bare + tail).
+    expect(location("/acme/prod/knowledge/repos")).toBe(
+      `${ORIGIN}/acme/prod/knowledge/sources`,
     );
-    // The real node-detail page /knowledge/nodes/{id} must fall through untouched.
-    expect(location("/acme/prod/knowledge/nodes/n_abc123")).toBeNull();
+    expect(location("/acme/prod/knowledge/explore")).toBe(
+      `${ORIGIN}/acme/prod/knowledge/graph`,
+    );
+    expect(location("/acme/prod/knowledge/memories")).toBe(
+      `${ORIGIN}/acme/prod/knowledge/memory`,
+    );
+    // The ontology/schema builder moved out of Settings into Knowledge.
+    expect(location("/acme/prod/settings/knowledge")).toBe(
+      `${ORIGIN}/acme/prod/knowledge/ontology`,
+    );
+  });
+
+  it("301s /knowledge/nodes → Graph: bare index to /knowledge/graph, node detail preserving the id", () => {
+    expect(location("/acme/prod/knowledge/nodes")).toBe(
+      `${ORIGIN}/acme/prod/knowledge/graph`,
+    );
+    // Node detail moved under Graph: /knowledge/nodes/{id} → /knowledge/graph/{id}.
+    expect(location("/acme/prod/knowledge/nodes/n_abc123")).toBe(
+      `${ORIGIN}/acme/prod/knowledge/graph/n_abc123`,
+    );
   });
 
   it("301s org-scope settings tabs promoted to top-level org sections", () => {
@@ -124,7 +143,12 @@ describe("proxy — IA realignment redirects (§16)", () => {
 
 describe("proxy — no redirect loop", () => {
   it("leaves unrelated workspace and org routes untouched", () => {
-    expect(location("/acme/prod/knowledge/repos")).toBeNull();
+    // The renamed Knowledge targets themselves must NOT redirect (no loop).
+    expect(location("/acme/prod/knowledge/sources")).toBeNull();
+    expect(location("/acme/prod/knowledge/graph")).toBeNull();
+    expect(location("/acme/prod/knowledge/graph/n_abc123")).toBeNull();
+    expect(location("/acme/prod/knowledge/memory")).toBeNull();
+    expect(location("/acme/prod/knowledge/ontology")).toBeNull();
     expect(location("/acme/settings/general")).toBeNull();
     expect(location("/acme/developer/mcp")).toBeNull();
   });

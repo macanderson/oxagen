@@ -353,8 +353,8 @@
       "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
     "list_connections": {
-      "route": "/[orgSlug]/[workspaceSlug]/knowledge/repos",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/knowledge/repos/connections-section.tsx",
+      "route": "/[orgSlug]/[workspaceSlug]/knowledge/sources",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/knowledge/sources/connections-section.tsx",
       "entry": "ConnectionsSection RSC invoke(connection.list) → KnowledgeConnectionsClient",
       "testid": "connection-row-{publicId}",
       "proof": null,
@@ -371,9 +371,9 @@
       "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
     "get_node": {
-      "route": "/[orgSlug]/[workspaceSlug]/knowledge/nodes/[nodeId]",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/knowledge/nodes/[nodeId]/page.tsx",
-      "entry": "Node detail page server-fetch (deep-linked from graph explorer)",
+      "route": "/[orgSlug]/[workspaceSlug]/knowledge/graph/[nodeId]",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/knowledge/graph/[nodeId]/page.tsx",
+      "entry": "Node detail page server-fetch (deep-linked from Graph canvas/browse and chat citations)",
       "testid": null,
       "proof": null,
       "verifiedAt": null,
