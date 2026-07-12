@@ -56,7 +56,7 @@ test("developer tokens: create, rotate, and revoke an API key end-to-end", async
   await expect(
     page.getByText("No API tokens yet. Create one above to get started."),
   ).toHaveCount(0);
-  await expect(page.getByText("e2e key")).toBeVisible();
+  await expect(page.getByText("e2e key").first()).toBeVisible();
   const rotateButton = page.getByRole("button", { name: "Rotate" });
   await expect(rotateButton).toHaveCount(1);
   await expect(page.getByRole("button", { name: "Revoke" })).toHaveCount(1);
