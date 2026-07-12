@@ -106,6 +106,10 @@ export function WorkspaceContextTabs({
 
   return (
     <Tabs
+      // Marker lives on the shared tabs component (not the registry wrapper) so
+      // both the model-dispatched WorkspaceContextPanel and the AgentActivityRail's
+      // OutputsCard — which renders these tabs directly — expose the same anchor.
+      data-component="workspace-context-panel-tabs"
       value={tab}
       onValueChange={(v) => setTab(v as PanelTab)}
       className={cn("flex min-h-0 flex-1 flex-col", className)}
@@ -150,7 +154,6 @@ export function WorkspaceContextPanel({
 }: WorkspaceContextPanelProps) {
   return (
     <div
-      data-component="workspace-context-panel-tabs"
       className={cn(
         "flex min-h-0 flex-col rounded-xl border border-border bg-card text-card-foreground shadow-sm",
         className,
