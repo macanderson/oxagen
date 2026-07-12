@@ -22,7 +22,8 @@ vi.mock("next/navigation", () => ({
   usePathname: () => "/acme/prod/settings/agent-defaults",
 }));
 
-import { AgentDefaultsTabs, isAgentDefaultsTab } from "./agent-defaults-tabs";
+import { AgentDefaultsTabs } from "./agent-defaults-tabs";
+import { isAgentDefaultsTab } from "./agent-defaults-tabs-shared";
 
 afterEach(() => {
   cleanup();

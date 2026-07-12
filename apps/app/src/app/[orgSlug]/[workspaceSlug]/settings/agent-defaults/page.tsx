@@ -46,7 +46,11 @@ import type { PromptSettingsReadOutput } from "./prompt-settings-action";
 import { MemoryPolicyForm } from "./memory-policy-form";
 import { readMemoryPolicyAction } from "./memory-policy-actions";
 import { CodingAgentPreferencesForm } from "./coding-agent-preferences-form";
-import { AgentDefaultsTabs, isAgentDefaultsTab, type AgentDefaultsTab } from "./agent-defaults-tabs";
+import { AgentDefaultsTabs } from "./agent-defaults-tabs";
+// Guard + type come from the boundary-agnostic sibling — importing them from
+// the "use client" tabs module would make isAgentDefaultsTab() a client
+// reference that throws when this Server Component calls it during render.
+import { isAgentDefaultsTab, type AgentDefaultsTab } from "./agent-defaults-tabs-shared";
 
 export const metadata: Metadata = {
   title: "Agent Defaults — Workspace Settings",

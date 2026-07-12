@@ -22,14 +22,10 @@
 import * as React from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Tabs, TabsList, TabsTab, TabsPanel, TabsIndicator } from "@/components/ui/tabs";
-
-export type AgentDefaultsTab = "models" | "budget" | "prompts" | "memory";
-
-const TAB_VALUES: AgentDefaultsTab[] = ["models", "budget", "prompts", "memory"];
-
-export function isAgentDefaultsTab(value: string | undefined): value is AgentDefaultsTab {
-  return value !== undefined && (TAB_VALUES as string[]).includes(value);
-}
+// The type + `?tab=` guard live in a boundary-agnostic (non-"use client")
+// sibling so the Server Component page can call the guard without tripping the
+// "call a client function from the server" error. See ./agent-defaults-tabs-shared.
+import { isAgentDefaultsTab, type AgentDefaultsTab } from "./agent-defaults-tabs-shared";
 
 export interface AgentDefaultsTabsProps {
   initialTab: AgentDefaultsTab;
