@@ -26,7 +26,7 @@ export const repoPrGet = registerCapability({
   description: "Read a GitHub pull request's summary, diff stats, comments, and CI status.",
   mode: "sync",
   surfaces: ["agent", "api", "mcp"],
-  layers: ["api", "mcp", "unit", "docs"],
+  layers: ["api", "mcp", "unit", "docs", "app"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "vcs" },
   sensitivity: "low",

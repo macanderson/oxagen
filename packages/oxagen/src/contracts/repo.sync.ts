@@ -7,7 +7,7 @@ export const repoSync = registerCapability({
   description: "Trigger incremental or full re-index of a repository connection.",
   mode: "async",
   surfaces: ["api", "mcp", "cli", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "medium", category: "ingestion" },
   sensitivity: "medium",

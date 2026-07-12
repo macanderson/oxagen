@@ -7,7 +7,7 @@ export const repoBranchCreate = registerCapability({
   description: "Create a new branch in a GitHub repository, optionally from another branch.",
   mode: "sync",
   surfaces: ["agent", "api", "mcp"],
-  layers: ["api", "mcp", "unit", "docs"],
+  layers: ["api", "mcp", "unit", "docs", "app"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "high", category: "vcs" },
   sensitivity: "high",

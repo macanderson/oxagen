@@ -15,7 +15,7 @@ export const agentFileLockRelease = registerCapability({
     "Force-release a file lock by its lockId — for clearing a lock a crashed/stuck agent left behind. Does not require the original holder's agentId.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "medium", category: "write" },
   sensitivity: "medium",

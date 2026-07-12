@@ -8,7 +8,7 @@ export const agentRepoEdit = registerCapability({
     "Use the coding agent to edit files in a connected GitHub repository and open a pull request with the changes.",
   mode: "sync",
   surfaces: ["api", "agent", "mcp"],
-  layers: ["api", "mcp", "unit", "docs"],
+  layers: ["api", "mcp", "unit", "docs", "app"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "high", category: "vcs" },
   sensitivity: "high",
