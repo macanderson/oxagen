@@ -136,6 +136,15 @@ jobs:
       - name: Manifest, contracts, env invariants
         run: pnpm check:manifest && pnpm check:contracts && pnpm env:check && pnpm db:lint-migrations
 
+      # UI Capability Parity is now a hard gate (web-app-2.0 Phase 0). --strict
+      # fails only on NON-grandfathered forward gaps: every app-layer capability
+      # shipped from here on must have a binding + existing page + runtime proof.
+      # The 44 pre-existing gaps are grandfathered in
+      # apps/app/capability-ui-parity-baseline.json and must SHRINK (never grow)
+      # as Phases 1-6 add each page's proof.
+      - name: UI capability parity (strict ratchet)
+        run: pnpm check:ui-parity --strict
+
       - name: File Linear tickets for manifest gaps
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         continue-on-error: true

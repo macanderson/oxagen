@@ -48,6 +48,7 @@ const info = JSON_MODE ? () => {} : (...a) => console.log(...a);
 const ROOT = resolve(process.cwd());
 const CAP_DIR = join(ROOT, "packages/oxagen/src/contracts");
 const REGISTRY = join(ROOT, "apps/app/capability-ui-map.json");
+const BASELINE = join(ROOT, "apps/app/capability-ui-parity-baseline.json");
 const APP_SRC = join(ROOT, "apps/app/src");
 
 // ── Contract parsing (kept byte-compatible with check_manifest.mjs) ──────────
@@ -101,6 +102,21 @@ function readRegistry() {
   return parsed.bindings ?? {};
 }
 
+// ── Ratchet baseline ──────────────────────────────────────────────────────────
+// The set of capability names whose FORWARD gaps are grandfathered (known
+// pre-existing debt). --strict fails only on gaps NOT in this set. Missing file
+// = empty baseline (every gap blocks), which is the strictest, safest default.
+function readBaseline() {
+  if (!existsSync(BASELINE)) return new Set();
+  try {
+    const parsed = JSON.parse(readFileSync(BASELINE, "utf8"));
+    return new Set(parsed.grandfathered ?? []);
+  } catch (e) {
+    console.error(`capability-ui-parity-baseline.json is not valid JSON: ${e.message}`);
+    process.exit(2);
+  }
+}
+
 /**
  * Set of capability names invoked by app code. The app invokes capabilities in
  * two shapes:
@@ -131,11 +147,18 @@ export function resolveInvoked(src, validNames, identToName) {
 /**
  * Pure parity computation. Given parsed contracts, the registry bindings, the
  * set of app-invoked names, and a `pageExists` predicate (injected so tests
- * need no disk), return { forward, reverse } gap lists.
+ * need no disk), return { forward, reverse, blocking } gap lists.
  *
- * @param {{caps:Array, bindings:Object, invoked:Set<string>, pageExists:(p:string)=>boolean}} args
+ * `baseline` is the ratchet: a Set of capability names whose forward gaps are
+ * grandfathered (known pre-existing debt). `blocking` is the subset of
+ * `forward` gaps that are NOT baselined — those are the ones --strict fails on.
+ * `forward` still lists EVERY gap (baselined or not) so --json/warn output keeps
+ * the full debt visible. `baseline` defaults to empty, so callers that omit it
+ * get `blocking === forward` (backward compatible).
+ *
+ * @param {{caps:Array, bindings:Object, invoked:Set<string>, pageExists:(p:string)=>boolean, baseline?:Set<string>}} args
  */
-export function computeParity({ caps, bindings, invoked, pageExists }) {
+export function computeParity({ caps, bindings, invoked, pageExists, baseline = new Set() }) {
   const byName = new Map(caps.map((c) => [c.name, c]));
   const forward = [];
   for (const cap of caps) {
@@ -153,6 +176,7 @@ export function computeParity({ caps, bindings, invoked, pageExists }) {
       forward.push({ capability: cap.name, reason: "binding has no runtime `proof` (screenshot under verifications/ or an e2e spec)" });
     }
   }
+  const blocking = forward.filter((g) => !baseline.has(g.capability));
   const reverse = [];
   for (const name of invoked) {
     const cap = byName.get(name);
@@ -163,7 +187,7 @@ export function computeParity({ caps, bindings, invoked, pageExists }) {
       reverse.push({ capability: name, reason: "invoked by apps/app and declares 'app' but has no binding" });
     }
   }
-  return { forward, reverse };
+  return { forward, reverse, blocking };
 }
 
 /** Concatenated source of every .ts/.tsx under apps/app/src (via rg or a walk). */
@@ -209,25 +233,28 @@ function walkGrep(dir) {
 function main() {
   const caps = readCapabilities();
   const bindings = readRegistry();
+  const baseline = readBaseline();
   const validNames = new Set(caps.map((c) => c.name));
   const identToName = new Map(
     caps.filter((c) => c.ident).map((c) => [c.ident, c.name]),
   );
 
   const invoked = resolveInvoked(readAppSource(), validNames, identToName);
-  const { forward, reverse } = computeParity({
+  const { forward, reverse, blocking } = computeParity({
     caps,
     bindings,
     invoked,
+    baseline,
     pageExists: (p) => existsSync(join(ROOT, p)),
   });
 
   if (JSON_MODE) {
-    process.stdout.write(JSON.stringify({ forward, reverse }, null, 2) + "\n");
+    process.stdout.write(JSON.stringify({ forward, reverse, blocking }, null, 2) + "\n");
     return;
   }
 
-  info(`UI parity: ${caps.length} capabilities, ${Object.keys(bindings).length} bindings, ${invoked.size} app-invoked.`);
+  const grandfathered = forward.length - blocking.length;
+  info(`UI parity: ${caps.length} capabilities, ${Object.keys(bindings).length} bindings, ${invoked.size} app-invoked, ${grandfathered} grandfathered.`);
 
   for (const g of reverse) {
     console.log(`::warning title=UI parity (advisory)::${g.capability} — ${g.reason}`);
@@ -238,16 +265,27 @@ function main() {
   }
 
   if (forward.length) {
+    const baselined = new Set(blocking.map((g) => g.capability));
     for (const g of forward) {
-      console.log(`::warning title=UI parity gap::${g.capability} — ${g.reason}`);
+      // Blocking gaps annotate as ::error:: under --strict so they surface loudly;
+      // grandfathered gaps stay ::warning:: (tracked debt, not a build failure).
+      const isBlocking = baselined.has(g.capability);
+      const level = isBlocking && STRICT ? "error" : "warning";
+      const tag = isBlocking ? "UI parity gap" : "UI parity gap (grandfathered)";
+      console.log(`::${level} title=${tag}::${g.capability} — ${g.reason}`);
     }
-    console.error(`\nUI PARITY GAPS — ${forward.length} 'app'-layer capability(ies) not backed by working UI:`);
-    for (const g of forward) console.error(`  - ${g.capability}: ${g.reason}`);
-    if (STRICT) {
-      console.error("\n--strict: failing because forward UI-parity gaps exist.");
-      process.exit(1);
+    if (grandfathered) {
+      console.error(`\nGRANDFATHERED — ${grandfathered} pre-existing 'app'-layer gap(s) in capability-ui-parity-baseline.json (shrink this list as Phases 1-6 add each page's proof):`);
     }
-    console.error("\n(warn-only — pass --strict to fail. A declared 'app' layer is a promise; back it or drop it.)");
+    if (blocking.length) {
+      console.error(`\nUI PARITY GAPS — ${blocking.length} NEW 'app'-layer capability(ies) not backed by a working, proven page:`);
+      for (const g of blocking) console.error(`  - ${g.capability}: ${g.reason}`);
+      if (STRICT) {
+        console.error("\n--strict: failing because non-grandfathered forward UI-parity gaps exist. Back the page (binding + proof) or drop the 'app' layer — do NOT add it to the baseline.");
+        process.exit(1);
+      }
+      console.error("\n(warn-only — pass --strict to fail. A declared 'app' layer is a promise; back it or drop it.)");
+    }
     return;
   }
 
