@@ -11,7 +11,7 @@ export const agentFileLockList = registerCapability({
   description: "List every currently-live file lock in the workspace, optionally filtered to one file.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "introspection" },
   sensitivity: "low",

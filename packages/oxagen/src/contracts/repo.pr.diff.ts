@@ -32,7 +32,7 @@ export const repoPrDiff = registerCapability({
   description: "Read the per-file unified-diff patches for a GitHub pull request.",
   mode: "sync",
   surfaces: ["agent", "api", "mcp"],
-  layers: ["api", "mcp", "unit", "docs"],
+  layers: ["api", "mcp", "unit", "docs", "app"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "vcs" },
   sensitivity: "low",

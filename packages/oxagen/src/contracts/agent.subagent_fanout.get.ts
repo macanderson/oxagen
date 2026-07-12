@@ -12,7 +12,7 @@ export const agentSubagentFanoutGet = registerCapability({
     "Get one subagent fan-out with its child runs — each child's capability, status, timings, error reason, and input/output size + preview.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
+  layers: ["schema", "api", "mcp", "app", "unit", "e2e", "docs"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "introspection" },
   sensitivity: "low",
