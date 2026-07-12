@@ -136,7 +136,8 @@ describe("listReposWithMetrics", () => {
         return Promise.resolve({ connections: [connection("repo-1", "acme/weird")] });
       }
       if (capability === "get_repo_metrics") {
-        // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- intentionally non-Error throw to cover the fallback branch
+        // Intentionally reject with a non-Error to cover the fallback branch
+        // that stringifies a non-Error thrown value.
         return Promise.reject("boom");
       }
       throw new Error(`unexpected capability ${capability}`);

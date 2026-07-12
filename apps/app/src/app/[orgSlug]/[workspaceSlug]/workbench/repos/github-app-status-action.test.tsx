@@ -54,6 +54,7 @@ describe("GithubAppStatusAction", () => {
       installations: [],
       manageUrl: "https://github.com/settings/installations",
       identityUrl: "https://github.com/login/oauth/authorize?state=abc",
+      installUrl: "https://github.com/apps/oxagen/installations/new",
     } as GithubStatusResponse);
   });
 
@@ -74,6 +75,7 @@ describe("GithubAppStatusAction", () => {
       installations: [],
       manageUrl: "https://github.com/settings/installations",
       identityUrl: "https://github.com/login/oauth/authorize?state=abc",
+      installUrl: "https://github.com/apps/oxagen/installations/new",
     } as GithubStatusResponse);
 
     render(<GithubAppStatusAction {...PROPS} />);
@@ -106,6 +108,7 @@ describe("GithubAppStatusAction", () => {
       installations: [],
       manageUrl: "https://github.com/settings/installations",
       identityUrl: "https://github.com/login/oauth/authorize?state=abc",
+      installUrl: "https://github.com/apps/oxagen/installations/new",
     } as GithubStatusResponse);
 
     const { rerender } = render(<GithubAppStatusAction {...PROPS} />);
