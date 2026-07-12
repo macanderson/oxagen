@@ -555,5 +555,3 @@ export function LiveProgressDisplay({
     </div>
   );
 }
-
-export type { BenchmarkProgressState };

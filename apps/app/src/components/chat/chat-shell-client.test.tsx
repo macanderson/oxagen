@@ -83,7 +83,12 @@ vi.mock("./agent-picker/agent-gallery", () => ({
   AgentGallery: () => <div data-testid="agent-gallery" />,
 }));
 vi.mock("./suggested-prompt-chips", () => ({ SuggestedPromptChips: () => null }));
-vi.mock("./coding-trace-panel", () => ({
+vi.mock("./coding-trace-panel", async (importOriginal) => ({
+  // Spread the real module so the AgentActivityRail's ProgressCard keeps its
+  // real `groupCodingTraceStages` / `CodingTraceStages` (a full-replacement
+  // mock drops those siblings → "No export defined on the mock"). Only the
+  // heavy visual panel is stubbed.
+  ...(await importOriginal<typeof import("./coding-trace-panel")>()),
   CodingTracePanel: () => <div data-testid="coding-trace-panel" />,
 }));
 vi.mock("./workspace-context-panel", () => ({

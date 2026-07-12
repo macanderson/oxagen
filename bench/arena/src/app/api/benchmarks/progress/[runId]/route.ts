@@ -32,9 +32,9 @@ export function getProgress(runId: string): BenchmarkProgressState | undefined {
 
 export async function GET(
   request: Request,
-  { params }: { params: { runId: string } }
+  { params }: { params: Promise<{ runId: string }> }
 ) {
-  const { runId } = params;
+  const { runId } = await params;
 
   const progress = getProgress(runId);
 
@@ -53,9 +53,9 @@ export async function GET(
  */
 export async function POST(
   request: Request,
-  { params }: { params: { runId: string } }
+  { params }: { params: Promise<{ runId: string }> }
 ) {
-  const { runId } = params;
+  const { runId } = await params;
 
   try {
     const body = await request.json();
