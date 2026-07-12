@@ -2,13 +2,12 @@
  * run-evals — the one command to run evals and land them in ClickHouse.
  *
  *   pnpm eval                                  # run the engram context-quality suite + ingest
- *   pnpm eval bench/rag-eval/rag-eval.eval.json   # also ingest already-produced bench results
+ *   pnpm eval path/to/results.eval.json           # also ingest already-produced eval results
  *
  * The engram golden suite is the cheap, deterministic, no-external-deps everyday
- * eval (no LLM, no Docker), so it runs in-process here. The heavier bench suites
- * (rag-eval / context-eval / terminal-bench) cost money / need Docker — run those
- * with their own scripts (they each emit a `.eval.json`) and pass the file(s) to
- * this command, or to `pnpm eval:ingest`, to land them in ClickHouse.
+ * eval (no LLM, no Docker), so it runs in-process here. Heavier external eval
+ * harnesses emit a `.eval.json`; pass the file(s) to this command, or to
+ * `pnpm eval:ingest`, to land them in ClickHouse.
  *
  * If CLICKHOUSE_* env is absent, results are still computed and written to
  * tools/eval-out/, and ingest is skipped with a notice (so offline runs work).
@@ -33,7 +32,9 @@ const OUT_DIR = resolve(REPO_ROOT, "tools/eval-out");
 /** Oxagen agent version = the CLI package version (the thing being measured over time). */
 function cliVersion(): string {
   try {
-    const pkg = JSON.parse(readFileSync(resolve(REPO_ROOT, "apps/cli/package.json"), "utf8")) as {
+    const pkg = JSON.parse(
+      readFileSync(resolve(REPO_ROOT, "apps/cli/package.json"), "utf8"),
+    ) as {
       version?: string;
     };
     return pkg.version ?? "";
@@ -43,7 +44,10 @@ function cliVersion(): string {
 }
 
 /** Map the engram suite result into the normalized `oxagen.eval.v1` run shape. */
-function buildEngramRunFile(result: EvalSuiteResult, runId: string): EvalRunFile {
+function buildEngramRunFile(
+  result: EvalSuiteResult,
+  runId: string,
+): EvalRunFile {
   const results: NormalizedResult[] = [];
   let nTasks = 0;
   let nPassed = 0;
@@ -110,8 +114,11 @@ async function main(): Promise<void> {
   const runFile = buildEngramRunFile(result, randomUUID());
   const run = runFile.run;
   const nTraces = Math.max(1, result.results.length);
-  const precision = result.results.reduce((s, t) => s + t.metrics.contextPrecision, 0) / nTraces;
-  const recall = result.results.reduce((s, t) => s + t.metrics.contextRecall, 0) / nTraces;
+  const precision =
+    result.results.reduce((s, t) => s + t.metrics.contextPrecision, 0) /
+    nTraces;
+  const recall =
+    result.results.reduce((s, t) => s + t.metrics.contextRecall, 0) / nTraces;
   process.stdout.write(
     `  ${run.n_passed}/${run.n_tasks} turns · precision ${(precision * 100).toFixed(1)}%` +
       ` · recall ${(recall * 100).toFixed(1)}% · ${result.overallPassed ? "PASS" : "FAIL"}\n`,
@@ -129,7 +136,9 @@ async function main(): Promise<void> {
     try {
       allFiles.push(...loadEvalFile(p));
     } catch (err) {
-      process.stderr.write(`  skipped ${p}: ${err instanceof Error ? err.message : String(err)}\n`);
+      process.stderr.write(
+        `  skipped ${p}: ${err instanceof Error ? err.message : String(err)}\n`,
+      );
     }
   }
 
@@ -144,14 +153,18 @@ async function main(): Promise<void> {
   process.stdout.write("\n▶ ingesting into ClickHouse…\n");
   for (const file of allFiles) {
     const r = await ingestRun(file, { force });
-    process.stdout.write(`  ${r.status.padEnd(22)} ${file.run.harness}/${file.run.suite} (${r.results} results)\n`);
+    process.stdout.write(
+      `  ${r.status.padEnd(22)} ${file.run.harness}/${file.run.suite} (${r.results} results)\n`,
+    );
   }
 }
 
 main()
   .then(() => closeClickhouse())
   .catch(async (err: unknown) => {
-    process.stderr.write(`run-evals failed: ${err instanceof Error ? err.message : String(err)}\n`);
+    process.stderr.write(
+      `run-evals failed: ${err instanceof Error ? err.message : String(err)}\n`,
+    );
     await closeClickhouse();
     process.exitCode = 1;
   });
