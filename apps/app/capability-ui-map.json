@@ -213,45 +213,45 @@
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/_shared/conversation-page.tsx",
       "entry": "Conversation history nav — initial list, Load more, Archived expander",
       "testid": null,
-      "proof": null,
-      "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
+      "proof": "apps/app/e2e/conversation-lifecycle.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
     },
     "rename_conversation": {
       "route": "/[orgSlug]/[workspaceSlug]/ask",
       "page": "apps/app/src/components/conversations/conversation-item.tsx",
       "entry": "Row ⋯ menu → Rename → RenameDialog submit",
       "testid": null,
-      "proof": null,
-      "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
+      "proof": "apps/app/e2e/conversation-lifecycle.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
     },
     "archive_conversation": {
       "route": "/[orgSlug]/[workspaceSlug]/ask",
       "page": "apps/app/src/components/conversations/conversation-item.tsx",
       "entry": "Row ⋯ menu → Archive/Unarchive",
       "testid": null,
-      "proof": null,
-      "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
+      "proof": "apps/app/e2e/conversation-lifecycle.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
     },
     "delete_conversation": {
       "route": "/[orgSlug]/[workspaceSlug]/ask",
       "page": "apps/app/src/components/conversations/conversation-item.tsx",
       "entry": "Row ⋯ menu → Delete → DeleteConfirmDialog",
       "testid": null,
-      "proof": null,
-      "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
+      "proof": "apps/app/e2e/conversation-lifecycle.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
     },
     "purge_conversations": {
       "route": "/[orgSlug]/[workspaceSlug]/ask",
       "page": "apps/app/src/components/conversations/conversation-list.tsx",
       "entry": "Archived section → \"Delete all\" → DeleteConfirmDialog",
       "testid": null,
-      "proof": null,
-      "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
+      "proof": "apps/app/e2e/conversation-lifecycle.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
     },
     "list_notifications": {
       "route": "/[orgSlug]/[workspaceSlug]/* (shell)",
@@ -276,9 +276,9 @@
       "page": "apps/app/src/app/account/preferences/preferences-form.tsx",
       "entry": "\"Save preferences\" submit",
       "testid": null,
-      "proof": null,
-      "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
+      "proof": "apps/app/e2e/account-tabs.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
     },
     "suggest_commands": {
       "route": "/[orgSlug]/[workspaceSlug]/* (Cmd+K)",
@@ -357,45 +357,45 @@
       "page": "apps/app/src/app/[orgSlug]/developer/tokens/page.tsx",
       "entry": "TokensPanel → CreateKeyDialog form → createApiKeyAction",
       "testid": null,
-      "proof": null,
-      "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
+      "proof": "apps/app/e2e/developer-tokens.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
     },
     "revoke_api_key": {
       "route": "/[orgSlug]/developer/tokens",
       "page": "apps/app/src/app/[orgSlug]/developer/tokens/page.tsx",
       "entry": "ActiveKeyRow Revoke/Confirm → revokeApiKeyAction",
       "testid": null,
-      "proof": null,
-      "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
+      "proof": "apps/app/e2e/developer-tokens.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
     },
     "rotate_api_key": {
       "route": "/[orgSlug]/developer/tokens",
       "page": "apps/app/src/app/[orgSlug]/developer/tokens/page.tsx",
       "entry": "ActiveKeyRow Rotate → rotateApiKeyAction",
       "testid": null,
-      "proof": null,
-      "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
+      "proof": "apps/app/e2e/developer-tokens.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
     },
     "list_connections": {
-      "route": "/[orgSlug]/[workspaceSlug]/knowledge/repos",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/knowledge/repos/connections-section.tsx",
-      "entry": "ConnectionsSection RSC invoke(connection.list) → KnowledgeConnectionsClient",
-      "testid": "connection-row-{publicId}",
-      "proof": null,
-      "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
+      "route": "/[orgSlug]/[workspaceSlug]",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/page.tsx",
+      "entry": "Overview → Source health tile (SourcesTile RSC → status rows / zero state) on page load",
+      "testid": "overview-sources-tile",
+      "proof": "apps/app/e2e/workspace-overview.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
     },
     "get_graph_stats": {
-      "route": "/[orgSlug]/[workspaceSlug]/knowledge/inference",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/knowledge/inference/page.tsx",
-      "entry": "GraphStatsSection RSC → GraphStatsBoxes on load",
-      "testid": "graph-stats",
-      "proof": null,
-      "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
+      "route": "/[orgSlug]/[workspaceSlug]",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/page.tsx",
+      "entry": "Overview → Graph grounding tile (GraphTile RSC → GraphStatsBoxes / zero state) on page load",
+      "testid": "overview-graph-tile",
+      "proof": "apps/app/e2e/workspace-overview.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
     },
     "get_node": {
       "route": "/[orgSlug]/[workspaceSlug]/knowledge/nodes/[nodeId]",
