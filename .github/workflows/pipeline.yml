@@ -387,14 +387,22 @@ jobs:
       - name: Build
         run: |
           set -f  # keep the unquoted ...[origin/main] filter literal (no globbing)
-          # --concurrency=3: same fix as the `checks` job's lint/typecheck step
-          # (see below) — turbo's default (10) runs that many packages' build
-          # scripts in parallel, several of which set their own large
-          # NODE_OPTIONS --max-old-space-size, far exceeding this runner's
-          # available RAM (shared with the Postgres/ClickHouse/Neo4j service
-          # containers) and triggering a kernel OOM-kill (exit 137) rather
-          # than a graceful per-task heap error.
-          pnpm turbo run build --concurrency=3 $TURBO_FILTER
+          # --concurrency=2: same fix as the `checks` job's lint/typecheck step
+          # (see below), dropped a further notch from 3. turbo's default (10)
+          # runs that many packages' build scripts in parallel, several of
+          # which set their own large NODE_OPTIONS --max-old-space-size, far
+          # exceeding this runner's available RAM (shared with the
+          # Postgres/ClickHouse/Neo4j service containers) and triggering a
+          # kernel OOM-kill (exit 137) rather than a graceful per-task heap
+          # error. apps/app alone reserves a 5GB V8 heap for its
+          # typecheck-during-build step; even at concurrency=3 that single
+          # task plus two siblings running alongside it can exceed the
+          # 2-core runner's total RAM (observed: apps/app#build SIGKILL'd
+          # mid "Running TypeScript ..." after 8.5min of otherwise-successful
+          # compilation). Two concurrent tasks leaves enough headroom for
+          # apps/app's own build to run without contending against another
+          # large build at the same time.
+          pnpm turbo run build --concurrency=2 $TURBO_FILTER
 
       # Chromium + OS deps are baked into oxagen-ci-e2e at apps/app's pinned
       # @playwright/test version; this is a no-op unless the pin drifted ahead
