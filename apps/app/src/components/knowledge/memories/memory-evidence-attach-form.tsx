@@ -14,9 +14,11 @@
  * HUMAN_CONFIRM / CODE_SCAN / AGENT_JUDGE / REPEAT_OBSERVATION) plus a
  * strength (0-1) and optional free-text detail — it does not carry a
  * structured graph-node or conversation-turn reference, so this form does not
- * fabricate one. The memory being strengthened is still cited via NodeRef
- * (never a raw UUID) once identified, matching the codebase-wide citation
- * rule for AgentMemory nodes.
+ * fabricate one. The attach response returns only { evidenceId,
+ * confidenceScore } — no human label for the memory — so the success
+ * confirmation cites the memory by a `CopyableId` (the sanctioned home for a
+ * bare id per the citation rule), never a raw UUID rendered as a primary
+ * label.
  *
  * Independent of the main MemoriesClient list — its own Suspense boundary,
  * its own error state, fails open.
@@ -36,8 +38,7 @@ import {
   SelectPopup,
   SelectItem,
 } from "@/components/ui/select";
-import { NodeRef } from "@/components/knowledge/graph/node-ref";
-import type { KnowledgeNodeRef } from "@oxagen/oxagen/contracts/semantic.edge.list";
+import { CopyableId } from "@/components/knowledge/graph-explorer/copyable-id";
 
 // ---------------------------------------------------------------------------
 // Structural mirror of the server action type (this is a "use client" file —
@@ -126,15 +127,6 @@ export function MemoryEvidenceAttachForm({
       }
     });
   }
-
-  const attachedNodeRef: KnowledgeNodeRef | null = success
-    ? {
-        id: success.memoryId,
-        label: "AgentMemory",
-        displayName: success.memoryId,
-        properties: {},
-      }
-    : null;
 
   return (
     <section aria-labelledby="memory-evidence-heading" className="flex flex-col gap-4">
@@ -244,13 +236,13 @@ export function MemoryEvidenceAttachForm({
         </div>
       </form>
 
-      {success && attachedNodeRef && (
+      {success && (
         <div className="flex flex-col gap-1.5 rounded-md border border-emerald-500/30 bg-emerald-500/5 p-3">
           <p className="text-xs font-medium text-emerald-700 dark:text-emerald-400">
             Evidence attached
           </p>
-          <div className="flex items-center gap-2 text-xs text-foreground">
-            <NodeRef node={attachedNodeRef} emphasis="muted" />
+          <div className="flex flex-wrap items-center gap-2 text-xs text-foreground">
+            <CopyableId value={success.memoryId} label="Memory" max={24} />
             <span>now at {Math.round(success.confidenceScore)}% confidence</span>
           </div>
         </div>

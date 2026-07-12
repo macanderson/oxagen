@@ -106,24 +106,42 @@ export function BrowsePanel({ orgSlug, workspaceSlug, availableLabels, onLabelsC
     setExpandedId((prev) => (prev === nodeId ? null : nodeId));
   }, []);
 
+  // Which node ids we've already kicked off a neighbor fetch for. Keying the
+  // "fetch once per node" guard on a ref (not on `neighborState`) is load-
+  // bearing: if the effect DEPENDED on `neighborState`, writing the "loading"
+  // placeholder below would change its identity and re-run the effect
+  // synchronously, and that re-run's cleanup would abort the still-in-flight
+  // fetch (`active = false`) — so the "ready" result was never written and
+  // neighbors never appeared. The ref lets the effect depend only on
+  // `expandedId` + tenant, so the loading write can't cancel its own fetch.
+  const requestedNeighborsRef = React.useRef<Set<string>>(new Set());
+  const mountedRef = React.useRef(true);
   React.useEffect(() => {
-    if (!expandedId || neighborState[expandedId]) return;
-    let active = true;
-    setNeighborState((prev) => ({ ...prev, [expandedId]: { status: "loading", neighbors: [] } }));
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  React.useEffect(() => {
+    if (!expandedId || requestedNeighborsRef.current.has(expandedId)) return;
+    const nodeId = expandedId;
+    requestedNeighborsRef.current.add(nodeId);
+    setNeighborState((prev) => ({ ...prev, [nodeId]: { status: "loading", neighbors: [] } }));
     void (async () => {
-      const res = await ontologyNeighborsAction({ orgSlug, workspaceSlug, nodeId: expandedId, limit: 25 });
-      if (!active) return;
+      const res = await ontologyNeighborsAction({ orgSlug, workspaceSlug, nodeId, limit: 25 });
+      if (!mountedRef.current) return;
+      // On failure, drop the guard so a later re-expand retries instead of
+      // sticking on the error state forever.
+      if (!res.ok) requestedNeighborsRef.current.delete(nodeId);
       setNeighborState((prev) => ({
         ...prev,
-        [expandedId]: res.ok
+        [nodeId]: res.ok
           ? { status: "ready", neighbors: res.neighbors }
           : { status: "error", neighbors: [], error: res.error },
       }));
     })();
-    return () => {
-      active = false;
-    };
-  }, [expandedId, neighborState, orgSlug, workspaceSlug]);
+  }, [expandedId, orgSlug, workspaceSlug]);
 
   const sortedRows = React.useMemo(() => {
     const copy = [...rows];

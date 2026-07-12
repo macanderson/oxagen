@@ -145,8 +145,8 @@ describe("ConnectSourceWizard", () => {
       connectorId: "custom-sql",
     }));
     await waitFor(() => expect(screen.getByText("Step 2 of 5")).toBeInTheDocument());
-    await userEvent.type(screen.getByLabelText("Connection String"), "postgresql://u:p@host/db");
-    await userEvent.type(screen.getByLabelText("SQL Queries"), "SELECT star FROM orders");
+    await userEvent.type(screen.getByLabelText("Connection String", { exact: false }), "postgresql://u:p@host/db");
+    await userEvent.type(screen.getByLabelText("SQL Queries", { exact: false }), "SELECT star FROM orders");
     await userEvent.click(screen.getByTestId("credentials-next-btn"));
 
     // Step 3 — preview

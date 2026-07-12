@@ -104,9 +104,9 @@ describe("CredentialsStep", () => {
     const onSubmit = vi.fn();
     render(<CredentialsStep {...baseProps({ onValidate, onSubmit })} />);
 
-    await userEvent.type(screen.getByLabelText("Connection String"), "postgresql://u:p@host/db");
+    await userEvent.type(screen.getByLabelText("Connection String", { exact: false }), "postgresql://u:p@host/db");
     // Avoid curly braces — userEvent.type() treats {..} as special key sequences.
-    await userEvent.type(screen.getByLabelText("SQL Queries"), "SELECT star FROM orders");
+    await userEvent.type(screen.getByLabelText("SQL Queries", { exact: false }), "SELECT star FROM orders");
 
     await userEvent.click(screen.getByTestId("credentials-next-btn"));
 
@@ -128,8 +128,8 @@ describe("CredentialsStep", () => {
     const onSubmit = vi.fn();
     render(<CredentialsStep {...baseProps({ onValidate, onSubmit })} />);
 
-    await userEvent.type(screen.getByLabelText("Connection String"), "not-a-real-connection-string");
-    await userEvent.type(screen.getByLabelText("SQL Queries"), "SELECT 1");
+    await userEvent.type(screen.getByLabelText("Connection String", { exact: false }), "not-a-real-connection-string");
+    await userEvent.type(screen.getByLabelText("SQL Queries", { exact: false }), "SELECT 1");
     await userEvent.click(screen.getByTestId("credentials-next-btn"));
 
     // The message renders both inline (under the field) and in the summary

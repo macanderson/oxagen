@@ -97,19 +97,19 @@ const COMPLIANCE_CONFIG: Record<Compliance, string> = {
 };
 
 /** Build a NodeRef-compatible citation for the memory a citation row refers
- * to — AgentMemory nodes live in Neo4j, so this never surfaces a raw id. */
+ * to — AgentMemory nodes live in Neo4j, so this never surfaces a raw id. The
+ * property bag carries only detail the row's own columns don't already show
+ * (influence, compliance, and rationale are rendered as their own cells), so
+ * the inspect popover complements the row rather than repeating it. */
 function citationNodeRef(citation: MemoryCitation): KnowledgeNodeRef {
   return {
     id: citation.memoryId,
     label: "AgentMemory",
     displayName: citation.lesson,
     properties: {
-      influence: citation.influence,
-      compliance: citation.compliance,
       enforcementAtCite: citation.enforcementAtCite,
       expectedValue: citation.expectedValue,
       observedValue: citation.observedValue,
-      agentRationale: citation.agentRationale,
     },
   };
 }

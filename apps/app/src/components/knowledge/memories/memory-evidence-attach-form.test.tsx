@@ -140,9 +140,9 @@ describe("MemoryEvidenceAttachForm", () => {
 
     await waitFor(() => expect(screen.getByText("Evidence attached")).toBeInTheDocument());
     expect(screen.getByText("now at 68% confidence")).toBeInTheDocument();
-    // The memory is cited via NodeRef — its raw id should not appear bare in
-    // the confirmation copy outside the chip itself.
-    expect(screen.getByText("mem-42")).toBeInTheDocument();
+    // The memory id is cited via a CopyableId chip (the sanctioned home for a
+    // bare id) — never a raw UUID rendered as a primary label.
+    expect(screen.getAllByText("mem-42").length).toBeGreaterThan(0);
   });
 
   it("includes detail only when non-blank, and honors a non-default source kind + strength", async () => {

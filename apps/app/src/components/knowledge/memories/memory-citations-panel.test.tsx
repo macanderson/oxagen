@@ -137,14 +137,20 @@ describe("MemoryCitationsPanel", () => {
     fireEvent.change(screen.getByLabelText("Execution ID"), { target: { value: "exec-1" } });
     fireEvent.click(screen.getByRole("button", { name: /load citations/i }));
 
+    // NodeRef renders the lesson in both its trigger and its (mock-open)
+    // popover header, so the label legitimately appears more than once — assert
+    // presence with getAllByText, matching inference-pending-list.test.tsx.
     await waitFor(() =>
-      expect(screen.getByText("Always open a PR before merging.")).toBeInTheDocument(),
+      expect(
+        screen.getAllByText("Always open a PR before merging.").length,
+      ).toBeGreaterThan(0),
     );
     expect(screen.queryByText("913d6df1-5dca-4bc7-aff6-193939228260")).not.toBeInTheDocument();
 
     // Scope to the results table — the influence toggle buttons above the
     // table also render the raw "DECISIVE" label, so an unscoped query would
-    // match twice.
+    // match twice. Within the table, influence/compliance appear only as their
+    // badge cells (the NodeRef property bag deliberately omits them).
     const table = screen.getByRole("table");
     expect(within(table).getByText("DECISIVE")).toBeInTheDocument();
     expect(within(table).getByText("COMPLIED")).toBeInTheDocument();
@@ -213,8 +219,9 @@ describe("MemoryCitationsPanel", () => {
     fireEvent.click(retryButton);
 
     await waitFor(() => expect(listCitations).toHaveBeenCalledTimes(2));
+    // NodeRef renders the lesson in trigger + (mock-open) popover header.
     await waitFor(() =>
-      expect(screen.getByText("Never push directly to main.")).toBeInTheDocument(),
+      expect(screen.getAllByText("Never push directly to main.").length).toBeGreaterThan(0),
     );
   });
 });

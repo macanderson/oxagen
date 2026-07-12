@@ -98,7 +98,11 @@ describe("MemoryPromotionQueue — load states", () => {
         promoteMemory={vi.fn()}
       />,
     );
-    expect(screen.getByText("Always open a PR before merging.")).toBeInTheDocument();
+    // NodeRef renders the lesson in trigger + (mock-open) popover header, so
+    // the label appears more than once — assert with getAllByText.
+    expect(
+      screen.getAllByText("Always open a PR before merging.").length,
+    ).toBeGreaterThan(0);
     expect(
       screen.queryByText("913d6df1-5dca-4bc7-aff6-193939228260"),
     ).not.toBeInTheDocument();
@@ -239,7 +243,11 @@ describe("MemoryPromotionQueue — FACT confirm flow (human confirmation gate)",
     fireEvent.click(screen.getByRole("button", { name: /^confirm promote to rule/i }));
 
     await waitFor(() => expect(screen.getByText("concurrent update")).toBeInTheDocument());
-    expect(screen.getByText("Always open a PR before merging.")).toBeInTheDocument();
+    // Candidate stays in the queue — NodeRef renders its lesson in trigger +
+    // (mock-open) popover header, so assert with getAllByText.
+    expect(
+      screen.getAllByText("Always open a PR before merging.").length,
+    ).toBeGreaterThan(0);
     expect(mockRefresh).not.toHaveBeenCalled();
   });
 });
