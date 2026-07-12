@@ -1,6 +1,6 @@
 name: rust-cli
 
-# Scoped CI for the `oxagen-cli` Rust workspace (docs/specs/oxagen-rust-cli/).
+# Scoped CI for the Open Context Protocol (OCP) Rust workspace in crates/.
 # Deliberately its own job, not folded into pipeline.yml: the Cargo workspace
 # lives inside this monorepo temporarily (03-plan.md §9) and has zero
 # overlap with the pnpm/turbo build graph, so it gets its own trigger paths
