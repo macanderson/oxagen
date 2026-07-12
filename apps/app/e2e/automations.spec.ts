@@ -78,8 +78,10 @@ test.describe("Automations list + editor", () => {
     await expect(page.getByRole("heading", { name })).toBeVisible({ timeout: 20_000 });
 
     // Editor read path: trigger config + read-only playbook + run history.
-    await expect(page.getByText("Trigger configuration")).toBeVisible();
-    await expect(page.getByText("Playbook")).toBeVisible();
+    // Match the section headings by role — "Playbook" also appears in body copy
+    // (description, hints), so getByText would be a strict-mode violation.
+    await expect(page.getByRole("heading", { name: "Trigger configuration" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Playbook" })).toBeVisible();
     await expect(page.getByText(/Never fired/)).toBeVisible();
 
     // Starts disabled (human-gated activation).

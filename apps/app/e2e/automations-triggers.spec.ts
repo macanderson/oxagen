@@ -82,7 +82,9 @@ test.describe("Triggers board", () => {
     await page.getByTestId("agent-describe-skip").click();
     await expect(page.getByTestId("step-identity")).toBeVisible();
 
-    const slug = `e2e-trigger-agent-${Date.now().toString(36)}`;
+    // Agent slugs are capped at 18 chars (agent.definition.create's slug.max(18)),
+    // so keep a short prefix — `e2e-trg-` + an ~8-char base36 timestamp ≈ 16 chars.
+    const slug = `e2e-trg-${Date.now().toString(36)}`;
     await page.getByTestId("agent-name-input").fill("Trigger Board Test Agent");
     await page.getByTestId("agent-slug-input").fill(slug);
     await page.getByTestId("builder-step-review").click();
