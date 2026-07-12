@@ -9,10 +9,6 @@ are not listed here — run those via `pnpm --filter <pkg> <script>`.
 | `preinstall` | Blocks any install that isn't `pnpm` (`npx only-allow pnpm`). | Runs automatically; never invoke directly. |
 | `prepare` | Installs the Lefthook git hooks (`lefthook install`). | Runs automatically after `pnpm i`. |
 | `dev` | Starts every app (`app`, `api`, `mcp`, `docs`, …) plus the Docker datastores (Postgres, ClickHouse, Neo4j), the Stripe webhook tunnel, and the Inngest dev server. | Day-to-day local development. Long-running — background it. |
-| `eval:app` | Runs the `@oxagen/bench-web` eval dashboard in dev mode. | Inspecting eval results locally. |
-| `bench` | Alias for `eval:app`. | Same as above. |
-| `bench:swe` | Runs the SWE-bench benchmark harness (`bench/swe-bench/run.sh`). | Benchmarking agent code-fix quality. |
-| `bench:swe:compare` | Compares two SWE-bench runs (`bench/swe-bench/compare.sh`). | Regression-checking a model/prompt change against a prior run. |
 | `cli:dev` | Installs a launcher so the `oxagen` command on this machine always runs the monorepo's CLI straight from source (no build/watch). | Once, when setting up local CLI development. |
 | `cli:install` | Same as `cli:dev` but runs once and exits instead of watching. | One-shot CLI launcher (re)install, e.g. in CI or a fresh clone. |
 | `kill` | Stops all `pnpm dev` processes, the Stripe tunnel, the Inngest dev server, and (with `--volumes`) tears down Docker volumes. | Before restarting the stack, or when a port is stuck in use. |
