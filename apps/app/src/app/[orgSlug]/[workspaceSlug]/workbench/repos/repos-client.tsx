@@ -15,7 +15,14 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { GitBranch, GitFork, Plus, RefreshCw, Settings2, Sparkles } from "lucide-react";
+import {
+  GitBranch,
+  GitFork,
+  Plus,
+  RefreshCw,
+  Settings2,
+  Sparkles,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { StatusDot } from "@/components/ui/status-dot";
@@ -69,7 +76,8 @@ export function repoStatusDisplay(
       return { label: "Setup incomplete", dot: "warning" };
     case "connected":
       if (healthStatus === "errored") return { label: "Error", dot: "error" };
-      if (healthStatus === "degraded") return { label: "Degraded", dot: "warning" };
+      if (healthStatus === "degraded")
+        return { label: "Degraded", dot: "warning" };
       return { label: "Syncing", dot: "success" };
     case "paused":
       return { label: "Paused", dot: "neutral" };
@@ -93,13 +101,19 @@ export function ReposClient({
 }: ReposClientProps) {
   const { add: toast } = useToast();
   const [repos, setRepos] = React.useState<RepoRow[]>(initialRepos);
-  const [rowBusy, setRowBusy] = React.useState<Record<string, string | undefined>>({});
-  const [rowErrors, setRowErrors] = React.useState<Record<string, string | undefined>>({});
+  const [rowBusy, setRowBusy] = React.useState<
+    Record<string, string | undefined>
+  >({});
+  const [rowErrors, setRowErrors] = React.useState<
+    Record<string, string | undefined>
+  >({});
   const [refreshing, setRefreshing] = React.useState(false);
   const [createOpen, setCreateOpen] = React.useState(false);
   const [forkOpen, setForkOpen] = React.useState(false);
   const [editLauncherOpen, setEditLauncherOpen] = React.useState(false);
-  const [configureTarget, setConfigureTarget] = React.useState<RepoRow | null>(null);
+  const [configureTarget, setConfigureTarget] = React.useState<RepoRow | null>(
+    null,
+  );
 
   const scope = { orgSlug, workspaceSlug };
 
@@ -114,7 +128,11 @@ export function ReposClient({
   async function handleSync(row: RepoRow) {
     setRowBusy((p) => ({ ...p, [row.publicId]: "sync" }));
     setRowErrors((p) => ({ ...p, [row.publicId]: undefined }));
-    const res = await syncRepoAction({ ...scope, repoId: row.publicId, mode: "incremental" });
+    const res = await syncRepoAction({
+      ...scope,
+      repoId: row.publicId,
+      mode: "incremental",
+    });
     setRowBusy((p) => ({ ...p, [row.publicId]: undefined }));
     if (!res.ok) {
       setRowErrors((p) => ({ ...p, [row.publicId]: res.error }));
@@ -127,7 +145,10 @@ export function ReposClient({
 
   async function handlePauseResume(row: RepoRow) {
     const isPaused = row.status === "paused";
-    setRowBusy((p) => ({ ...p, [row.publicId]: isPaused ? "resume" : "pause" }));
+    setRowBusy((p) => ({
+      ...p,
+      [row.publicId]: isPaused ? "resume" : "pause",
+    }));
     setRowErrors((p) => ({ ...p, [row.publicId]: undefined }));
     const res = isPaused
       ? await resumeRepoAction({ ...scope, repoId: row.publicId })
@@ -135,7 +156,11 @@ export function ReposClient({
     setRowBusy((p) => ({ ...p, [row.publicId]: undefined }));
     if (!res.ok) {
       setRowErrors((p) => ({ ...p, [row.publicId]: res.error }));
-      toast({ title: isPaused ? "Resume failed" : "Pause failed", description: res.error, type: "error" });
+      toast({
+        title: isPaused ? "Resume failed" : "Pause failed",
+        description: res.error,
+        type: "error",
+      });
       return;
     }
     toast({ title: isPaused ? "Repo resumed" : "Repo paused" });
@@ -145,7 +170,10 @@ export function ReposClient({
   return (
     <div className="flex flex-col gap-4" data-testid="repos-client">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <GithubAppStatusAction orgSlug={orgSlug} workspaceSlug={workspaceSlug} />
+        <GithubAppStatusAction
+          orgSlug={orgSlug}
+          workspaceSlug={workspaceSlug}
+        />
         {canManage && (
           <div className="flex flex-wrap items-center gap-2">
             <Button
@@ -156,7 +184,10 @@ export function ReposClient({
               disabled={refreshing}
               data-testid="repos-refresh-btn"
             >
-              <RefreshCw className={refreshing ? "animate-spin" : undefined} aria-hidden="true" />
+              <RefreshCw
+                className={refreshing ? "animate-spin" : undefined}
+                aria-hidden="true"
+              />
               Refresh
             </Button>
             <Button
@@ -219,7 +250,9 @@ export function ReposClient({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {repos.length === 0 && <TableEmpty colSpan={6}>No repos connected.</TableEmpty>}
+            {repos.length === 0 && (
+              <TableEmpty colSpan={6}>No repos connected.</TableEmpty>
+            )}
             {repos.map((row) => {
               const slug = parseRepoSlug(row.displayName);
               // repo.metrics uses a coarser status enum (pending_setup/active/
@@ -231,8 +264,10 @@ export function ReposClient({
               const busy = rowBusy[row.publicId];
               const rowError = rowErrors[row.publicId];
               const detailHref = workspace.workbench.repo(scope, row.publicId);
-              const canSync = row.status !== "deleting" && row.status !== "deleted";
-              const canToggle = row.status === "connected" || row.status === "paused";
+              const canSync =
+                row.status !== "deleting" && row.status !== "deleted";
+              const canToggle =
+                row.status === "connected" || row.status === "paused";
 
               return (
                 <React.Fragment key={row.publicId}>
@@ -244,15 +279,22 @@ export function ReposClient({
                           className="font-medium text-foreground hover:underline"
                           data-testid={`repo-link-${row.publicId}`}
                         >
-                          {slug ? `${slug.owner}/${slug.repo}` : row.displayName}
+                          {slug
+                            ? `${slug.owner}/${slug.repo}`
+                            : row.displayName}
                         </Link>
                         <CopyableId value={row.publicId} label="ID" max={14} />
                       </div>
                     </TableCell>
                     <TableCell>
                       <span className="inline-flex items-center gap-1.5">
-                        <StatusDot status={display.dot} pulse={display.dot === "success"} />
-                        <span className="text-sm text-foreground">{display.label}</span>
+                        <StatusDot
+                          status={display.dot}
+                          pulse={display.dot === "success"}
+                        />
+                        <span className="text-sm text-foreground">
+                          {display.label}
+                        </span>
                       </span>
                       {row.metricsError && (
                         <p className="mt-0.5 text-xs text-muted-foreground">
@@ -264,12 +306,18 @@ export function ReposClient({
                       {lastSyncAt ? timeAgo(lastSyncAt) : "Never"}
                     </TableCell>
                     <TableCell className="text-sm">
-                      <Link href={`${detailHref}?tab=pulls`} className="text-primary hover:underline">
+                      <Link
+                        href={`${detailHref}?tab=pulls`}
+                        className="text-primary hover:underline"
+                      >
                         View →
                       </Link>
                     </TableCell>
                     <TableCell className="text-sm">
-                      <Link href={`${detailHref}?tab=pulls`} className="text-primary hover:underline">
+                      <Link
+                        href={`${detailHref}?tab=pulls`}
+                        className="text-primary hover:underline"
+                      >
                         View →
                       </Link>
                     </TableCell>

@@ -30,7 +30,12 @@ interface CreatedBranch {
   sha: string;
 }
 
-export function BranchesTab({ scope, slug, canManage, onBranchCreated }: BranchesTabProps) {
+export function BranchesTab({
+  scope,
+  slug,
+  canManage,
+  onBranchCreated,
+}: BranchesTabProps) {
   const [branch, setBranch] = React.useState("");
   const [fromBranch, setFromBranch] = React.useState("");
   const [submitting, setSubmitting] = React.useState(false);
@@ -53,7 +58,10 @@ export function BranchesTab({ scope, slug, canManage, onBranchCreated }: Branche
       setError(res.error);
       return;
     }
-    setCreated((p) => [{ branch, ref: res.result.ref, sha: res.result.sha }, ...p]);
+    setCreated((p) => [
+      { branch, ref: res.result.ref, sha: res.result.sha },
+      ...p,
+    ]);
     onBranchCreated(branch);
     setBranch("");
     setFromBranch("");
@@ -100,7 +108,11 @@ export function BranchesTab({ scope, slug, canManage, onBranchCreated }: Branche
               placeholder="Repo default branch"
             />
           </div>
-          <Button type="submit" disabled={submitting || !branch.trim()} data-testid="branch-create-submit">
+          <Button
+            type="submit"
+            disabled={submitting || !branch.trim()}
+            data-testid="branch-create-submit"
+          >
             {submitting ? "Creating…" : "Create branch"}
           </Button>
         </form>
@@ -122,7 +134,9 @@ export function BranchesTab({ scope, slug, canManage, onBranchCreated }: Branche
               className="flex items-center justify-between rounded-md border border-border/60 px-3 py-2 text-sm"
             >
               <span className="font-medium text-foreground">{b.branch}</span>
-              <span className="font-mono text-xs text-muted-foreground">{b.sha.slice(0, 8)}</span>
+              <span className="font-mono text-xs text-muted-foreground">
+                {b.sha.slice(0, 8)}
+              </span>
             </li>
           ))}
         </ul>

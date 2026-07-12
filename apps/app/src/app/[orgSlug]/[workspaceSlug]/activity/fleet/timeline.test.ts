@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { layoutTimeline, timelineEntriesFrom, type TimelineEntry } from "./timeline";
+import {
+  layoutTimeline,
+  timelineEntriesFrom,
+  type TimelineEntry,
+} from "./timeline";
 import type { AgentSubagentFanoutGetOutput } from "@oxagen/oxagen/contracts/agent.subagent_fanout.get";
 import type { AgentSubagentAggregateOutput } from "@oxagen/oxagen/contracts/agent.subagent.aggregate";
 
@@ -60,13 +64,19 @@ describe("timelineEntriesFrom", () => {
       recheckAfterMs: 5000,
       firstError: null,
     };
-    const entries = timelineEntriesFrom(fanout([run({ runId: "sar_get" })]), agg);
+    const entries = timelineEntriesFrom(
+      fanout([run({ runId: "sar_get" })]),
+      agg,
+    );
     expect(entries).toHaveLength(1);
     expect(entries[0]?.runId).toBe("sar_agg");
   });
 
   it("falls back to fanout.runs when aggregate is null", () => {
-    const entries = timelineEntriesFrom(fanout([run({ runId: "sar_get" })]), null);
+    const entries = timelineEntriesFrom(
+      fanout([run({ runId: "sar_get" })]),
+      null,
+    );
     expect(entries).toHaveLength(1);
     expect(entries[0]?.runId).toBe("sar_get");
   });
@@ -85,7 +95,10 @@ describe("timelineEntriesFrom", () => {
       recheckAfterMs: 5000,
       firstError: null,
     };
-    const entries = timelineEntriesFrom(fanout([run({ runId: "sar_get" })]), agg);
+    const entries = timelineEntriesFrom(
+      fanout([run({ runId: "sar_get" })]),
+      agg,
+    );
     expect(entries).toHaveLength(1);
     expect(entries[0]?.runId).toBe("sar_get");
   });
@@ -96,7 +109,14 @@ describe("layoutTimeline", () => {
 
   it("returns a full-width bar when no entry has started", () => {
     const entries: TimelineEntry[] = [
-      { runId: "a", capabilityName: "x", status: "pending", startedAt: null, completedAt: null, errorReason: null },
+      {
+        runId: "a",
+        capabilityName: "x",
+        status: "pending",
+        startedAt: null,
+        completedAt: null,
+        errorReason: null,
+      },
     ];
     const bars = layoutTimeline(entries, now);
     expect(bars).toEqual([{ ...entries[0], offsetPct: 0, widthPct: 100 }]);
@@ -112,7 +132,14 @@ describe("layoutTimeline", () => {
         completedAt: "2026-07-12T00:02:00.000Z",
         errorReason: null,
       },
-      { runId: "b", capabilityName: "queued", status: "pending", startedAt: null, completedAt: null, errorReason: null },
+      {
+        runId: "b",
+        capabilityName: "queued",
+        status: "pending",
+        startedAt: null,
+        completedAt: null,
+        errorReason: null,
+      },
     ];
     const bars = layoutTimeline(entries, now);
     const queued = bars.find((b) => b.runId === "b")!;

@@ -61,9 +61,11 @@ export function CreateRepoDrawer({
   const [autoInit, setAutoInit] = React.useState(true);
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-  const [result, setResult] = React.useState<{ fullName: string; htmlUrl: string; defaultBranch: string } | null>(
-    null,
-  );
+  const [result, setResult] = React.useState<{
+    fullName: string;
+    htmlUrl: string;
+    defaultBranch: string;
+  } | null>(null);
 
   function reset() {
     setName("");
@@ -109,8 +111,12 @@ export function CreateRepoDrawer({
       {result ? (
         <div className="flex flex-col gap-3" data-testid="create-repo-success">
           <p className="text-sm text-foreground">
-            Created <span className="font-medium">{result.fullName}</span> (default branch{" "}
-            <code className="rounded bg-muted px-1">{result.defaultBranch}</code>).
+            Created <span className="font-medium">{result.fullName}</span>{" "}
+            (default branch{" "}
+            <code className="rounded bg-muted px-1">
+              {result.defaultBranch}
+            </code>
+            ).
           </p>
           <a
             href={result.htmlUrl}
@@ -162,15 +168,25 @@ export function CreateRepoDrawer({
             />
           </div>
           <label className="flex items-center gap-2 text-sm text-foreground">
-            <Switch checked={isPrivate} onCheckedChange={(c) => setIsPrivate(c === true)} />
+            <Switch
+              checked={isPrivate}
+              onCheckedChange={(c) => setIsPrivate(c === true)}
+            />
             Private repository
           </label>
           <label className="flex items-center gap-2 text-sm text-foreground">
-            <Switch checked={autoInit} onCheckedChange={(c) => setAutoInit(c === true)} />
+            <Switch
+              checked={autoInit}
+              onCheckedChange={(c) => setAutoInit(c === true)}
+            />
             Initialize with a README
           </label>
           {error && <p className="text-xs text-destructive">{error}</p>}
-          <Button type="submit" disabled={submitting || !name.trim()} data-testid="create-repo-submit">
+          <Button
+            type="submit"
+            disabled={submitting || !name.trim()}
+            data-testid="create-repo-submit"
+          >
             {submitting ? "Creating…" : "Create repo"}
           </Button>
         </form>
@@ -193,9 +209,11 @@ export function ForkRepoDrawer({
   const [intoOrg, setIntoOrg] = React.useState("");
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-  const [result, setResult] = React.useState<{ fullName: string; htmlUrl: string; defaultBranch: string } | null>(
-    null,
-  );
+  const [result, setResult] = React.useState<{
+    fullName: string;
+    htmlUrl: string;
+    defaultBranch: string;
+  } | null>(null);
 
   function reset() {
     setOwner("");
@@ -282,7 +300,9 @@ export function ForkRepoDrawer({
             />
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="fork-into-org">Fork into organization (optional)</Label>
+            <Label htmlFor="fork-into-org">
+              Fork into organization (optional)
+            </Label>
             <Input
               id="fork-into-org"
               value={intoOrg}
@@ -312,13 +332,20 @@ export function ConfigureRepoDrawer({
   orgSlug,
   workspaceSlug,
   onSaved,
-}: Scope & { target: RepoRow | null; onOpenChange: (open: boolean) => void; onSaved: () => void }) {
+}: Scope & {
+  target: RepoRow | null;
+  onOpenChange: (open: boolean) => void;
+  onSaved: () => void;
+}) {
   const { add: toast } = useToast();
   const [recordTypes, setRecordTypes] = React.useState("");
   const [inferenceEnabled, setInferenceEnabled] = React.useState(true);
   const [ontologyPrompt, setOntologyPrompt] = React.useState("");
-  const [syncCadence, setSyncCadence] = React.useState<"manual" | "polling" | "webhook">("polling");
-  const [pollingIntervalSeconds, setPollingIntervalSeconds] = React.useState("300");
+  const [syncCadence, setSyncCadence] = React.useState<
+    "manual" | "polling" | "webhook"
+  >("polling");
+  const [pollingIntervalSeconds, setPollingIntervalSeconds] =
+    React.useState("300");
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
@@ -378,7 +405,9 @@ export function ConfigureRepoDrawer({
         }}
       >
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="configure-record-types">Record types (comma-separated)</Label>
+          <Label htmlFor="configure-record-types">
+            Record types (comma-separated)
+          </Label>
           <Input
             id="configure-record-types"
             value={recordTypes}
@@ -387,11 +416,16 @@ export function ConfigureRepoDrawer({
           />
         </div>
         <label className="flex items-center gap-2 text-sm text-foreground">
-          <Switch checked={inferenceEnabled} onCheckedChange={(c) => setInferenceEnabled(c === true)} />
+          <Switch
+            checked={inferenceEnabled}
+            onCheckedChange={(c) => setInferenceEnabled(c === true)}
+          />
           Enable LLM-driven semantic inference
         </label>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="configure-ontology-prompt">Ontology prompt (optional)</Label>
+          <Label htmlFor="configure-ontology-prompt">
+            Ontology prompt (optional)
+          </Label>
           <Textarea
             id="configure-ontology-prompt"
             value={ontologyPrompt}
@@ -401,8 +435,14 @@ export function ConfigureRepoDrawer({
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="configure-sync-cadence">Sync cadence</Label>
-          <Select value={syncCadence} onValueChange={(v) => v && setSyncCadence(v as typeof syncCadence)}>
-            <SelectTrigger id="configure-sync-cadence" aria-label="Sync cadence">
+          <Select
+            value={syncCadence}
+            onValueChange={(v) => v && setSyncCadence(v as typeof syncCadence)}
+          >
+            <SelectTrigger
+              id="configure-sync-cadence"
+              aria-label="Sync cadence"
+            >
               <SelectValue placeholder="Sync cadence" />
             </SelectTrigger>
             <SelectPopup>
@@ -414,7 +454,9 @@ export function ConfigureRepoDrawer({
         </div>
         {syncCadence === "polling" && (
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="configure-polling-interval">Polling interval (seconds)</Label>
+            <Label htmlFor="configure-polling-interval">
+              Polling interval (seconds)
+            </Label>
             <Input
               id="configure-polling-interval"
               type="number"
@@ -425,7 +467,11 @@ export function ConfigureRepoDrawer({
           </div>
         )}
         {error && <p className="text-xs text-destructive">{error}</p>}
-        <Button type="submit" disabled={submitting} data-testid="configure-repo-submit">
+        <Button
+          type="submit"
+          disabled={submitting}
+          data-testid="configure-repo-submit"
+        >
           {submitting ? "Saving…" : "Save configuration"}
         </Button>
       </form>
@@ -443,16 +489,27 @@ export function EditFileLauncherDrawer({
   orgSlug,
   workspaceSlug,
   repos,
-}: Scope & { open: boolean; onOpenChange: (open: boolean) => void; repos: RepoRow[] }) {
+}: Scope & {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  repos: RepoRow[];
+}) {
   const { add: toast } = useToast();
   const resolvable = React.useMemo(
     () =>
       repos
         .map((r) => ({ row: r, slug: parseRepoSlug(r.displayName) }))
-        .filter((r): r is { row: RepoRow; slug: { owner: string; repo: string } } => r.slug !== null),
+        .filter(
+          (r): r is { row: RepoRow; slug: { owner: string; repo: string } } =>
+            r.slug !== null,
+        ),
     [repos],
   );
-  const [choice, setChoice] = React.useState<string>(resolvable[0] ? `${resolvable[0].slug.owner}/${resolvable[0].slug.repo}` : MANUAL_REPO);
+  const [choice, setChoice] = React.useState<string>(
+    resolvable[0]
+      ? `${resolvable[0].slug.owner}/${resolvable[0].slug.repo}`
+      : MANUAL_REPO,
+  );
   const [manualOwner, setManualOwner] = React.useState("");
   const [manualRepo, setManualRepo] = React.useState("");
   const [instruction, setInstruction] = React.useState("");
@@ -508,7 +565,10 @@ export function EditFileLauncherDrawer({
       return;
     }
     setResult(res.result);
-    toast({ title: "Pull request opened", description: `#${res.result.prNumber}` });
+    toast({
+      title: "Pull request opened",
+      description: `#${res.result.prNumber}`,
+    });
   }
 
   return (
@@ -522,9 +582,13 @@ export function EditFileLauncherDrawer({
       description="Dispatch the coding agent against a repo with a natural-language instruction. Name the file(s) to touch in the instruction — the agent resolves the rest."
     >
       {result ? (
-        <div className="flex flex-col gap-3" data-testid="edit-file-launcher-success">
+        <div
+          className="flex flex-col gap-3"
+          data-testid="edit-file-launcher-success"
+        >
           <p className="text-sm text-foreground">
-            Opened <span className="font-medium">#{result.prNumber}</span> on branch{" "}
+            Opened <span className="font-medium">#{result.prNumber}</span> on
+            branch{" "}
             <code className="rounded bg-muted px-1">{result.branch}</code>.
           </p>
           <a
@@ -538,7 +602,9 @@ export function EditFileLauncherDrawer({
           <p className="text-sm text-muted-foreground">{result.summary}</p>
           {result.changedFiles.length > 0 && (
             <div className="flex flex-col gap-1">
-              <p className="text-xs font-medium text-muted-foreground">Changed files</p>
+              <p className="text-xs font-medium text-muted-foreground">
+                Changed files
+              </p>
               <ul className="flex flex-col gap-0.5">
                 {result.changedFiles.map((f) => (
                   <li key={f} className="font-mono text-xs text-foreground">
@@ -563,16 +629,25 @@ export function EditFileLauncherDrawer({
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="edit-file-repo">Repo</Label>
             <Select value={choice} onValueChange={(v) => v && setChoice(v)}>
-              <SelectTrigger id="edit-file-repo" aria-label="Repo" data-testid="edit-file-repo-select">
+              <SelectTrigger
+                id="edit-file-repo"
+                aria-label="Repo"
+                data-testid="edit-file-repo-select"
+              >
                 <SelectValue placeholder="Choose a repo" />
               </SelectTrigger>
               <SelectPopup>
                 {resolvable.map(({ slug }) => (
-                  <SelectItem key={`${slug.owner}/${slug.repo}`} value={`${slug.owner}/${slug.repo}`}>
+                  <SelectItem
+                    key={`${slug.owner}/${slug.repo}`}
+                    value={`${slug.owner}/${slug.repo}`}
+                  >
                     <Github aria-hidden="true" /> {slug.owner}/{slug.repo}
                   </SelectItem>
                 ))}
-                <SelectItem value={MANUAL_REPO}>Other (enter owner/repo)</SelectItem>
+                <SelectItem value={MANUAL_REPO}>
+                  Other (enter owner/repo)
+                </SelectItem>
               </SelectPopup>
             </Select>
           </div>
@@ -614,7 +689,9 @@ export function EditFileLauncherDrawer({
           </div>
           <div className="flex gap-3">
             <div className="flex flex-1 flex-col gap-1.5">
-              <Label htmlFor="edit-file-base-branch">Base branch (optional)</Label>
+              <Label htmlFor="edit-file-base-branch">
+                Base branch (optional)
+              </Label>
               <Input
                 id="edit-file-base-branch"
                 value={baseBranch}
@@ -623,7 +700,9 @@ export function EditFileLauncherDrawer({
               />
             </div>
             <div className="flex flex-1 flex-col gap-1.5">
-              <Label htmlFor="edit-file-branch-name">Branch name (optional)</Label>
+              <Label htmlFor="edit-file-branch-name">
+                Branch name (optional)
+              </Label>
               <Input
                 id="edit-file-branch-name"
                 value={branchName}
@@ -657,7 +736,9 @@ export function EditFileLauncherDrawer({
           {error && <p className="text-xs text-destructive">{error}</p>}
           <Button
             type="submit"
-            disabled={submitting || !owner || !repo || instruction.trim().length < 10}
+            disabled={
+              submitting || !owner || !repo || instruction.trim().length < 10
+            }
             data-testid="edit-file-launcher-submit"
           >
             {submitting ? "Running agent…" : "Run agent & open PR"}

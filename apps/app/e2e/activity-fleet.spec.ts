@@ -20,16 +20,22 @@ import { test, expect } from "@playwright/test";
 import { signUpFreshUser } from "./helpers/signup";
 
 test.describe("activity/fleet — empty state", () => {
-  test("a fresh workspace with no fan-outs shows the Fleet empty state", async ({ page }) => {
+  test("a fresh workspace with no fan-outs shows the Fleet empty state", async ({
+    page,
+  }) => {
     const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "fleet" });
 
     await page.goto(`/${orgSlug}/default/activity/fleet`);
     await expect(page).not.toHaveURL(/\/login/);
 
-    await expect(page.getByTestId("fleet-page")).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId("fleet-page")).toBeVisible({
+      timeout: 20_000,
+    });
     await expect(page.getByText("Fleet", { exact: true })).toBeVisible();
 
-    await expect(page.getByTestId("fleet-empty-state")).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId("fleet-empty-state")).toBeVisible({
+      timeout: 20_000,
+    });
     await expect(page.getByText(/no fan-outs yet/i)).toBeVisible();
     await expect(page.getByText(/subagent dispatch/i)).toBeVisible();
 
@@ -43,11 +49,17 @@ test.describe("activity/fleet — empty state", () => {
   }) => {
     const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "fleet-nf" });
 
-    await page.goto(`/${orgSlug}/default/activity/fleet?fanout=fo_does_not_exist`);
+    await page.goto(
+      `/${orgSlug}/default/activity/fleet?fanout=fo_does_not_exist`,
+    );
     await expect(page).not.toHaveURL(/\/login/);
 
-    await expect(page.getByTestId("fleet-page")).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByTestId("fleet-detail-not-found")).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId("fleet-page")).toBeVisible({
+      timeout: 20_000,
+    });
+    await expect(page.getByTestId("fleet-detail-not-found")).toBeVisible({
+      timeout: 20_000,
+    });
     await expect(page.getByText(/fan-out not found/i)).toBeVisible();
   });
 });

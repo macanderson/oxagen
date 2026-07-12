@@ -22,7 +22,11 @@ import { gotoStable } from "./helpers/nav";
 import { rm, mkdir } from "node:fs/promises";
 import path from "node:path";
 
-const SCREENSHOTS_DIR = path.resolve(import.meta.dirname, "screenshots", "marketplace-agent-tools-bulk");
+const SCREENSHOTS_DIR = path.resolve(
+  import.meta.dirname,
+  "screenshots",
+  "marketplace-agent-tools-bulk",
+);
 
 test.beforeAll(async () => {
   await rm(SCREENSHOTS_DIR, { recursive: true, force: true });
@@ -30,7 +34,9 @@ test.beforeAll(async () => {
 });
 
 test.describe("Marketplace Agent Tools — bulk install", () => {
-  test("multi-select reveals the selection toolbar and dispatches Install selected", async ({ page }) => {
+  test("multi-select reveals the selection toolbar and dispatches Install selected", async ({
+    page,
+  }) => {
     test.setTimeout(180_000);
 
     const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "mkt-bulk" });
@@ -52,27 +58,44 @@ test.describe("Marketplace Agent Tools — bulk install", () => {
       // Empty catalog for a fresh workspace — assert the honest empty state and
       // that no selection toolbar is shown. The multi-select code path is still
       // covered by the unit tests (browse-panel.test.tsx).
-      await expect(page.getByTestId("marketplace-browse-selection-toolbar")).toHaveCount(0);
-      await page.screenshot({ path: path.join(SCREENSHOTS_DIR, "empty-catalog.png"), fullPage: true });
+      await expect(
+        page.getByTestId("marketplace-browse-selection-toolbar"),
+      ).toHaveCount(0);
+      await page.screenshot({
+        path: path.join(SCREENSHOTS_DIR, "empty-catalog.png"),
+        fullPage: true,
+      });
       return;
     }
 
     // Select the first (up to) two installable cards.
     await cards.nth(0).click();
-    await expect(page.getByTestId("marketplace-browse-selection-toolbar")).toBeVisible();
-    await expect(page.getByTestId("marketplace-browse-selection-count")).toHaveText(/1 selected/);
+    await expect(
+      page.getByTestId("marketplace-browse-selection-toolbar"),
+    ).toBeVisible();
+    await expect(
+      page.getByTestId("marketplace-browse-selection-count"),
+    ).toHaveText(/1 selected/);
     if (count > 1) {
       await cards.nth(1).click();
-      await expect(page.getByTestId("marketplace-browse-selection-count")).toHaveText(/2 selected/);
+      await expect(
+        page.getByTestId("marketplace-browse-selection-count"),
+      ).toHaveText(/2 selected/);
     }
 
-    await page.screenshot({ path: path.join(SCREENSHOTS_DIR, "selection-toolbar.png"), fullPage: true });
+    await page.screenshot({
+      path: path.join(SCREENSHOTS_DIR, "selection-toolbar.png"),
+      fullPage: true,
+    });
 
     // Dispatch the bulk install. Result depends on registry reachability; either
     // way the click is accepted and the button enters its pending/enabled cycle
     // without throwing a page error.
     await page.getByTestId("marketplace-browse-bulk-install-btn").click();
     await page.waitForTimeout(1_500);
-    await page.screenshot({ path: path.join(SCREENSHOTS_DIR, "after-bulk-install.png"), fullPage: true });
+    await page.screenshot({
+      path: path.join(SCREENSHOTS_DIR, "after-bulk-install.png"),
+      fullPage: true,
+    });
   });
 });

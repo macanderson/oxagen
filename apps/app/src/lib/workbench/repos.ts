@@ -29,7 +29,10 @@ import "@oxagen/handlers/register";
 import "@oxagen/agent/register";
 import { invoke } from "@oxagen/oxagen";
 import type { ConnectionListOutput } from "@oxagen/oxagen/contracts/connection.list";
-import type { RepoSyncInput, RepoSyncOutput } from "@oxagen/oxagen/contracts/repo.sync";
+import type {
+  RepoSyncInput,
+  RepoSyncOutput,
+} from "@oxagen/oxagen/contracts/repo.sync";
 import type { RepoPauseOutput } from "@oxagen/oxagen/contracts/repo.pause";
 import type { RepoResumeOutput } from "@oxagen/oxagen/contracts/repo.resume";
 import type { RepoMetricsOutput } from "@oxagen/oxagen/contracts/repo.metrics";
@@ -37,20 +40,38 @@ import type {
   RepoConfigureInput,
   RepoConfigureOutput,
 } from "@oxagen/oxagen/contracts/repo.configure";
-import type { RepoCreateInput, RepoCreateOutput } from "@oxagen/oxagen/contracts/repo.create";
-import type { RepoForkInput, RepoForkOutput } from "@oxagen/oxagen/contracts/repo.fork";
+import type {
+  RepoCreateInput,
+  RepoCreateOutput,
+} from "@oxagen/oxagen/contracts/repo.create";
+import type {
+  RepoForkInput,
+  RepoForkOutput,
+} from "@oxagen/oxagen/contracts/repo.fork";
 import type {
   RepoBranchCreateInput,
   RepoBranchCreateOutput,
 } from "@oxagen/oxagen/contracts/repo.branch.create";
-import type { RepoPrOpenInput, RepoPrOpenOutput } from "@oxagen/oxagen/contracts/repo.pr.open";
-import type { RepoPrGetInput, RepoPrGetOutput } from "@oxagen/oxagen/contracts/repo.pr.get";
-import type { RepoPrDiffInput, RepoPrDiffOutput } from "@oxagen/oxagen/contracts/repo.pr.diff";
+import type {
+  RepoPrOpenInput,
+  RepoPrOpenOutput,
+} from "@oxagen/oxagen/contracts/repo.pr.open";
+import type {
+  RepoPrGetInput,
+  RepoPrGetOutput,
+} from "@oxagen/oxagen/contracts/repo.pr.get";
+import type {
+  RepoPrDiffInput,
+  RepoPrDiffOutput,
+} from "@oxagen/oxagen/contracts/repo.pr.diff";
 import type {
   RepoCiStatusInput,
   RepoCiStatusOutput,
 } from "@oxagen/oxagen/contracts/repo.ci.status";
-import type { RepoFilePutInput, RepoFilePutOutput } from "@oxagen/oxagen/contracts/repo.file.put";
+import type {
+  RepoFilePutInput,
+  RepoFilePutOutput,
+} from "@oxagen/oxagen/contracts/repo.file.put";
 import type {
   AgentRepoEditInput,
   AgentRepoEditOutput,
@@ -80,7 +101,9 @@ export { parseRepoSlug } from "./repo-slug";
 // ── Reads ────────────────────────────────────────────────────────────────────
 
 /** List every GitHub-typed connection ("repo") in the workspace. */
-export async function listRepoConnections(ctx: WorkbenchCtx): Promise<RepoConnection[]> {
+export async function listRepoConnections(
+  ctx: WorkbenchCtx,
+): Promise<RepoConnection[]> {
   const out = (await invoke(
     "list_connections",
     { connectorId: "github" },
@@ -91,7 +114,9 @@ export async function listRepoConnections(ctx: WorkbenchCtx): Promise<RepoConnec
 }
 
 /** listRepoConnections plus a best-effort per-repo repo.metrics call, gracefully degraded. */
-export async function listReposWithMetrics(ctx: WorkbenchCtx): Promise<RepoRow[]> {
+export async function listReposWithMetrics(
+  ctx: WorkbenchCtx,
+): Promise<RepoRow[]> {
   const connections = await listRepoConnections(ctx);
   const rows = await Promise.all(
     connections.map(async (connection): Promise<RepoRow> => {
@@ -102,7 +127,8 @@ export async function listReposWithMetrics(ctx: WorkbenchCtx): Promise<RepoRow[]
         return {
           ...connection,
           metrics: null,
-          metricsError: err instanceof Error ? err.message : "Failed to load metrics.",
+          metricsError:
+            err instanceof Error ? err.message : "Failed to load metrics.",
         };
       }
     }),
@@ -110,28 +136,40 @@ export async function listReposWithMetrics(ctx: WorkbenchCtx): Promise<RepoRow[]
   return rows;
 }
 
-export async function getRepoMetrics(ctx: WorkbenchCtx, repoId: string): Promise<RepoMetrics> {
+export async function getRepoMetrics(
+  ctx: WorkbenchCtx,
+  repoId: string,
+): Promise<RepoMetrics> {
   return (await invoke("get_repo_metrics", { repoId }, ctx, {
     surface: "agent",
   })) as RepoMetricsOutput;
 }
 
-export async function getPr(ctx: WorkbenchCtx, input: RepoPrGetInput): Promise<RepoPrGetOutput> {
-  return (await invoke("get_pr", input, ctx, { surface: "agent" })) as RepoPrGetOutput;
+export async function getPr(
+  ctx: WorkbenchCtx,
+  input: RepoPrGetInput,
+): Promise<RepoPrGetOutput> {
+  return (await invoke("get_pr", input, ctx, {
+    surface: "agent",
+  })) as RepoPrGetOutput;
 }
 
 export async function getPrDiff(
   ctx: WorkbenchCtx,
   input: RepoPrDiffInput,
 ): Promise<RepoPrDiffOutput> {
-  return (await invoke("get_pr_diff", input, ctx, { surface: "agent" })) as RepoPrDiffOutput;
+  return (await invoke("get_pr_diff", input, ctx, {
+    surface: "agent",
+  })) as RepoPrDiffOutput;
 }
 
 export async function getCiStatus(
   ctx: WorkbenchCtx,
   input: RepoCiStatusInput,
 ): Promise<RepoCiStatusOutput> {
-  return (await invoke("get_ci_status", input, ctx, { surface: "agent" })) as RepoCiStatusOutput;
+  return (await invoke("get_ci_status", input, ctx, {
+    surface: "agent",
+  })) as RepoCiStatusOutput;
 }
 
 export async function listFileLocks(
@@ -146,15 +184,28 @@ export async function listFileLocks(
 
 // ── Mutations ────────────────────────────────────────────────────────────────
 
-export async function syncRepo(ctx: WorkbenchCtx, input: RepoSyncInput): Promise<RepoSyncOutput> {
-  return (await invoke("sync_repo", input, ctx, { surface: "agent" })) as RepoSyncOutput;
+export async function syncRepo(
+  ctx: WorkbenchCtx,
+  input: RepoSyncInput,
+): Promise<RepoSyncOutput> {
+  return (await invoke("sync_repo", input, ctx, {
+    surface: "agent",
+  })) as RepoSyncOutput;
 }
 
-export async function pauseRepo(ctx: WorkbenchCtx, repoId: string): Promise<RepoPauseOutput> {
-  return (await invoke("pause_repo", { repoId }, ctx, { surface: "agent" })) as RepoPauseOutput;
+export async function pauseRepo(
+  ctx: WorkbenchCtx,
+  repoId: string,
+): Promise<RepoPauseOutput> {
+  return (await invoke("pause_repo", { repoId }, ctx, {
+    surface: "agent",
+  })) as RepoPauseOutput;
 }
 
-export async function resumeRepo(ctx: WorkbenchCtx, repoId: string): Promise<RepoResumeOutput> {
+export async function resumeRepo(
+  ctx: WorkbenchCtx,
+  repoId: string,
+): Promise<RepoResumeOutput> {
   return (await invoke("resume_repo", { repoId }, ctx, {
     surface: "agent",
   })) as RepoResumeOutput;
@@ -173,11 +224,18 @@ export async function createRepo(
   ctx: WorkbenchCtx,
   input: RepoCreateInput,
 ): Promise<RepoCreateOutput> {
-  return (await invoke("create_repo", input, ctx, { surface: "agent" })) as RepoCreateOutput;
+  return (await invoke("create_repo", input, ctx, {
+    surface: "agent",
+  })) as RepoCreateOutput;
 }
 
-export async function forkRepo(ctx: WorkbenchCtx, input: RepoForkInput): Promise<RepoForkOutput> {
-  return (await invoke("fork_repo", input, ctx, { surface: "agent" })) as RepoForkOutput;
+export async function forkRepo(
+  ctx: WorkbenchCtx,
+  input: RepoForkInput,
+): Promise<RepoForkOutput> {
+  return (await invoke("fork_repo", input, ctx, {
+    surface: "agent",
+  })) as RepoForkOutput;
 }
 
 export async function createBranch(
@@ -193,7 +251,9 @@ export async function openPr(
   ctx: WorkbenchCtx,
   input: RepoPrOpenInput,
 ): Promise<RepoPrOpenOutput> {
-  return (await invoke("open_pr", input, ctx, { surface: "agent" })) as RepoPrOpenOutput;
+  return (await invoke("open_pr", input, ctx, {
+    surface: "agent",
+  })) as RepoPrOpenOutput;
 }
 
 export async function putRepoFile(

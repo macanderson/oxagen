@@ -53,8 +53,12 @@ describe("OverviewTab", () => {
 
     const alert = screen.getByRole("alert");
     expect(alert).toHaveTextContent("Couldn't load repo metrics");
-    expect(alert).toHaveTextContent("Failed to load get_repo_metrics for this connection.");
-    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+    expect(alert).toHaveTextContent(
+      "Failed to load get_repo_metrics for this connection.",
+    );
+    expect(
+      screen.getByRole("button", { name: "Try again" }),
+    ).toBeInTheDocument();
     expect(screen.queryByTestId("repo-overview-tab")).not.toBeInTheDocument();
   });
 
@@ -84,11 +88,16 @@ describe("OverviewTab", () => {
     expect(container.querySelector(".animate-pulse")).toBeInTheDocument();
 
     resolveRetry({ ok: true, metrics: makeMetrics() });
-    await waitFor(() => expect(screen.getByTestId("repo-overview-tab")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByTestId("repo-overview-tab")).toBeInTheDocument(),
+    );
   });
 
   it("retry success replaces the error state with the loaded stats", async () => {
-    getRepoMetricsAction.mockResolvedValue({ ok: true, metrics: makeMetrics({ entityCount: 7 }) });
+    getRepoMetricsAction.mockResolvedValue({
+      ok: true,
+      metrics: makeMetrics({ entityCount: 7 }),
+    });
     const user = userEvent.setup();
     render(
       <OverviewTab
@@ -104,11 +113,17 @@ describe("OverviewTab", () => {
 
     const tab = await screen.findByTestId("repo-overview-tab");
     expect(tab).toHaveTextContent("7");
-    expect(getRepoMetricsAction).toHaveBeenCalledWith({ ...SCOPE, repoId: "con_1" });
+    expect(getRepoMetricsAction).toHaveBeenCalledWith({
+      ...SCOPE,
+      repoId: "con_1",
+    });
   });
 
   it("retry failure updates the ErrorState description with the new error", async () => {
-    getRepoMetricsAction.mockResolvedValue({ ok: false, error: "GitHub API rate limited" });
+    getRepoMetricsAction.mockResolvedValue({
+      ok: false,
+      error: "GitHub API rate limited",
+    });
     const user = userEvent.setup();
     render(
       <OverviewTab
@@ -122,7 +137,9 @@ describe("OverviewTab", () => {
 
     await user.click(screen.getByRole("button", { name: "Try again" }));
 
-    expect(await screen.findByText("GitHub API rate limited")).toBeInTheDocument();
+    expect(
+      await screen.findByText("GitHub API rate limited"),
+    ).toBeInTheDocument();
   });
 
   it("no-slug empty: renders the setup-incomplete empty state when metrics loaded but slug is null", () => {
@@ -148,7 +165,10 @@ describe("OverviewTab", () => {
       <OverviewTab
         scope={SCOPE}
         connectionId="con_1"
-        initialMetrics={makeMetrics({ entityCount: 1234, errorMessage: "Last sync partially failed" })}
+        initialMetrics={makeMetrics({
+          entityCount: 1234,
+          errorMessage: "Last sync partially failed",
+        })}
         slug={SLUG}
         onNavigateToBranches={vi.fn()}
       />,
@@ -159,7 +179,9 @@ describe("OverviewTab", () => {
     expect(screen.getByTestId("repo-overview-error")).toHaveTextContent(
       "Last sync partially failed",
     );
-    expect(screen.queryByTestId("overview-create-branch-cta")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("overview-create-branch-cta"),
+    ).not.toBeInTheDocument();
   });
 
   it("zero-entity CTA: renders when entityCount is 0 and calls onNavigateToBranches on click", async () => {
@@ -176,7 +198,9 @@ describe("OverviewTab", () => {
     );
 
     expect(screen.getByText("No activity here yet")).toBeInTheDocument();
-    expect(screen.getByText(/Create your first branch on acme\/widgets/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Create your first branch on acme\/widgets/),
+    ).toBeInTheDocument();
 
     await user.click(screen.getByTestId("overview-create-branch-cta"));
     expect(onNavigateToBranches).toHaveBeenCalledTimes(1);

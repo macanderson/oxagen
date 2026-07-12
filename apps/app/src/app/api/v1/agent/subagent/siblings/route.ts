@@ -75,9 +75,18 @@ export async function GET(request: NextRequest): Promise<Response> {
     return NextResponse.json(out);
   } catch (err) {
     if (isSubagentRunNotFoundError(err)) {
-      return NextResponse.json({ error: "Subagent run not found" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Subagent run not found" },
+        { status: 404 },
+      );
     }
-    console.error("[agent/subagent/siblings] list_subagent_siblings failed", err);
-    return NextResponse.json({ error: "Failed to load siblings" }, { status: 500 });
+    console.error(
+      "[agent/subagent/siblings] list_subagent_siblings failed",
+      err,
+    );
+    return NextResponse.json(
+      { error: "Failed to load siblings" },
+      { status: 500 },
+    );
   }
 }

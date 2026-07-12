@@ -12,6 +12,8 @@ import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
 import { PageHeader } from "@/components/ui/page-header";
 import { TableSkeleton } from "@/components/loading";
+import { workspace } from "@/lib/routes";
+import { TabStrip } from "@/app/[orgSlug]/[workspaceSlug]/_shared/components";
 import { ActivitySection } from "./activity-section";
 
 interface PageProps {
@@ -36,6 +38,15 @@ export default async function ActivityPage({ params, searchParams }: PageProps) 
         title="Activity"
         description="Recent agent runs. Open any run to inspect its span tree — steps, tool calls, durations, and cost."
       />
+      <div data-testid="activity-tab-strip">
+        <TabStrip
+          tabs={[
+            { label: "Runs", href: workspace.activity.root({ orgSlug, workspaceSlug }) },
+            { label: "Fleet", href: workspace.activity.fleet({ orgSlug, workspaceSlug }) },
+            { label: "Evals", href: workspace.evals.root({ orgSlug, workspaceSlug }) },
+          ]}
+        />
+      </div>
       <Suspense fallback={<TableSkeleton rows={8} cols={5} />}>
         <ActivitySection
           orgId={org.id}

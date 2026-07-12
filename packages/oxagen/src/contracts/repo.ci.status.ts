@@ -34,7 +34,7 @@ export const ciRunSchema = z.object({
   app: z
     .string()
     .nullable()
-    .describe("Owning app/integration, e.g. \"GitHub Actions\""),
+    .describe('Owning app/integration, e.g. "GitHub Actions"'),
 });
 
 export const ciCountsSchema = z.object({
@@ -57,7 +57,8 @@ export const ciOverallSchema = z.enum([
 export const repoCiStatus = registerCapability({
   name: "get_ci_status",
   domain: "repo",
-  description: "Read CI check-run and commit-status results for a ref in a GitHub repository.",
+  description:
+    "Read CI check-run and commit-status results for a ref in a GitHub repository.",
   mode: "sync",
   surfaces: ["agent", "api", "mcp"],
   layers: ["api", "mcp", "unit", "docs", "app"],

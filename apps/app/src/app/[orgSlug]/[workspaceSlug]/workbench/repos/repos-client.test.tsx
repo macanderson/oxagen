@@ -21,9 +21,22 @@ import userEvent from "@testing-library/user-event";
 import { ReposClient, repoStatusDisplay } from "./repos-client";
 import type { RepoRow } from "@/lib/workbench/repos";
 
-const { refreshReposAction, syncRepoAction, pauseRepoAction, resumeRepoAction } = vi.hoisted(() => ({
+const {
+  refreshReposAction,
+  syncRepoAction,
+  pauseRepoAction,
+  resumeRepoAction,
+} = vi.hoisted(() => ({
   refreshReposAction: vi.fn(async () => ({ ok: true, repos: [] })),
-  syncRepoAction: vi.fn(async () => ({ ok: true, result: { jobId: "job_1", status: "queued", mode: "incremental", estimatedRecords: 0 } })),
+  syncRepoAction: vi.fn(async () => ({
+    ok: true,
+    result: {
+      jobId: "job_1",
+      status: "queued",
+      mode: "incremental",
+      estimatedRecords: 0,
+    },
+  })),
   pauseRepoAction: vi.fn(async () => ({ ok: true, result: {} })),
   resumeRepoAction: vi.fn(async () => ({ ok: true, result: {} })),
 }));
@@ -58,28 +71,52 @@ afterEach(() => {
 
 describe("repoStatusDisplay", () => {
   it("pending_setup → Setup incomplete / warning", () => {
-    expect(repoStatusDisplay("pending_setup", "healthy")).toEqual({ label: "Setup incomplete", dot: "warning" });
+    expect(repoStatusDisplay("pending_setup", "healthy")).toEqual({
+      label: "Setup incomplete",
+      dot: "warning",
+    });
   });
   it("connected + healthy → Syncing / success", () => {
-    expect(repoStatusDisplay("connected", "healthy")).toEqual({ label: "Syncing", dot: "success" });
+    expect(repoStatusDisplay("connected", "healthy")).toEqual({
+      label: "Syncing",
+      dot: "success",
+    });
   });
   it("connected + degraded → Degraded / warning", () => {
-    expect(repoStatusDisplay("connected", "degraded")).toEqual({ label: "Degraded", dot: "warning" });
+    expect(repoStatusDisplay("connected", "degraded")).toEqual({
+      label: "Degraded",
+      dot: "warning",
+    });
   });
   it("connected + errored → Error / error", () => {
-    expect(repoStatusDisplay("connected", "errored")).toEqual({ label: "Error", dot: "error" });
+    expect(repoStatusDisplay("connected", "errored")).toEqual({
+      label: "Error",
+      dot: "error",
+    });
   });
   it("paused → Paused / neutral", () => {
-    expect(repoStatusDisplay("paused", "healthy")).toEqual({ label: "Paused", dot: "neutral" });
+    expect(repoStatusDisplay("paused", "healthy")).toEqual({
+      label: "Paused",
+      dot: "neutral",
+    });
   });
   it("error → Error / error", () => {
-    expect(repoStatusDisplay("error", "errored")).toEqual({ label: "Error", dot: "error" });
+    expect(repoStatusDisplay("error", "errored")).toEqual({
+      label: "Error",
+      dot: "error",
+    });
   });
   it("deleting → Deleting / neutral", () => {
-    expect(repoStatusDisplay("deleting", "healthy")).toEqual({ label: "Deleting", dot: "neutral" });
+    expect(repoStatusDisplay("deleting", "healthy")).toEqual({
+      label: "Deleting",
+      dot: "neutral",
+    });
   });
   it("deleted → Deleted / neutral", () => {
-    expect(repoStatusDisplay("deleted", "healthy")).toEqual({ label: "Deleted", dot: "neutral" });
+    expect(repoStatusDisplay("deleted", "healthy")).toEqual({
+      label: "Deleted",
+      dot: "neutral",
+    });
   });
 });
 
@@ -133,7 +170,9 @@ describe("ReposClient", () => {
       />,
     );
     const row = screen.getByTestId("repo-row-con_1");
-    expect(within(row).getByTestId("repo-link-con_1")).toHaveTextContent("acme/widgets");
+    expect(within(row).getByTestId("repo-link-con_1")).toHaveTextContent(
+      "acme/widgets",
+    );
     expect(within(row).getByTestId("repo-link-con_1")).toHaveAttribute(
       "href",
       "/acme/eng/workbench/repos/con_1",
@@ -184,6 +223,8 @@ describe("ReposClient", () => {
         unavailable={false}
       />,
     );
-    expect(screen.getByTestId("repo-pause-resume-con_1")).toHaveTextContent("Resume");
+    expect(screen.getByTestId("repo-pause-resume-con_1")).toHaveTextContent(
+      "Resume",
+    );
   });
 });

@@ -10,7 +10,11 @@ export const repoConfigure = registerCapability({
   surfaces: ["api", "mcp", "cli", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
-  agent: { requiresApproval: false, riskLevel: "medium", category: "ingestion" },
+  agent: {
+    requiresApproval: false,
+    riskLevel: "medium",
+    category: "ingestion",
+  },
   sensitivity: "medium",
   defaultEffect: "deny",
   defaultRoles: {
@@ -26,7 +30,10 @@ export const repoConfigure = registerCapability({
     pathFilters: z
       .object({
         include: z.array(z.string()).optional().describe("Paths to include"),
-        exclude: z.array(z.string()).optional().describe("Paths to exclude (e.g., node_modules, dist)"),
+        exclude: z
+          .array(z.string())
+          .optional()
+          .describe("Paths to exclude (e.g., node_modules, dist)"),
       })
       .optional()
       .describe("Path-based filtering"),
@@ -37,11 +44,16 @@ export const repoConfigure = registerCapability({
       })
       .optional()
       .describe("Label-based filtering for issues and PRs"),
-    inferenceEnabled: z.boolean().optional().describe("Enable LLM-driven semantic inference"),
+    inferenceEnabled: z
+      .boolean()
+      .optional()
+      .describe("Enable LLM-driven semantic inference"),
     ontologyPrompt: z
       .string()
       .optional()
-      .describe("Custom prompt instructing LLM on entity extraction and relationships"),
+      .describe(
+        "Custom prompt instructing LLM on entity extraction and relationships",
+      ),
     syncCadence: z
       .enum(["manual", "polling", "webhook"])
       .optional()
@@ -55,7 +67,9 @@ export const repoConfigure = registerCapability({
     fieldMappings: z
       .record(z.string())
       .optional()
-      .describe("Custom field mappings (source field path → canonical property)"),
+      .describe(
+        "Custom field mappings (source field path → canonical property)",
+      ),
   }),
   output: z.object({
     repoId: z.string(),

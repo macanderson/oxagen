@@ -30,7 +30,9 @@ export const agentSubagentAggregate = registerCapability({
     workspace: { Owner: "allow", Member: "allow" },
   },
   input: z.object({
-    fanoutId: z.string().describe("Public ID of the subagent fanout to aggregate"),
+    fanoutId: z
+      .string()
+      .describe("Public ID of the subagent fanout to aggregate"),
     timeoutMs: z
       .number()
       .int()
@@ -60,7 +62,14 @@ export const agentSubagentAggregate = registerCapability({
   output: z.object({
     fanoutId: z.string(),
     status: z
-      .enum(["pending", "running", "completed", "partial", "failed", "timed_out"])
+      .enum([
+        "pending",
+        "running",
+        "completed",
+        "partial",
+        "failed",
+        "timed_out",
+      ])
       .describe(
         "running/pending = children still executing (aggregatedData null); completed = all succeeded; partial = some succeeded, some failed/incomplete (merged data of the successful subset); failed = none succeeded; timed_out = still unfinished past the snapshot window",
       ),
@@ -104,24 +113,34 @@ export const agentSubagentAggregate = registerCapability({
           status: z.string(),
           summary: z
             .string()
-            .describe("≤280-char structural digest of the child's output (or error)"),
+            .describe(
+              "≤280-char structural digest of the child's output (or error)",
+            ),
           outputBytes: z
             .number()
             .int()
-            .describe("Serialized size of the full output payload, 0 when none"),
+            .describe(
+              "Serialized size of the full output payload, 0 when none",
+            ),
           errorReason: z.string().nullable(),
           input: z
             .unknown()
             .optional()
-            .describe("Full input payload — present only when includeOutputs is true (deprecated)"),
+            .describe(
+              "Full input payload — present only when includeOutputs is true (deprecated)",
+            ),
           output: z
             .unknown()
             .optional()
-            .describe("Full output payload — present only when includeOutputs is true (deprecated); capped, see outputTruncated"),
+            .describe(
+              "Full output payload — present only when includeOutputs is true (deprecated); capped, see outputTruncated",
+            ),
           outputTruncated: z
             .boolean()
             .optional()
-            .describe("True when the includeOutputs payload was clipped at the size cap"),
+            .describe(
+              "True when the includeOutputs payload was clipped at the size cap",
+            ),
         }),
       )
       .describe(
@@ -138,9 +157,16 @@ export const agentSubagentAggregate = registerCapability({
       .describe(
         "Suggested wait before the next aggregate call, derived from observed child latency. Non-null only while the fanout is still running; respect it instead of tight-polling.",
       ),
-    firstError: z.string().nullable().describe("Error reason from the first failed child run, or null"),
+    firstError: z
+      .string()
+      .nullable()
+      .describe("Error reason from the first failed child run, or null"),
   }),
 });
 
-export type AgentSubagentAggregateInput = z.output<typeof agentSubagentAggregate.input>;
-export type AgentSubagentAggregateOutput = z.output<typeof agentSubagentAggregate.output>;
+export type AgentSubagentAggregateInput = z.output<
+  typeof agentSubagentAggregate.input
+>;
+export type AgentSubagentAggregateOutput = z.output<
+  typeof agentSubagentAggregate.output
+>;

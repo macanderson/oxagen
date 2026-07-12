@@ -10,7 +10,13 @@
  */
 
 import * as React from "react";
-import { GitBranch, GitPullRequest, Lock, FileCode2, LayoutDashboard } from "lucide-react";
+import {
+  GitBranch,
+  GitPullRequest,
+  Lock,
+  FileCode2,
+  LayoutDashboard,
+} from "lucide-react";
 import { Tabs, TabsList, TabsTab, TabsPanel } from "@/components/ui/tabs";
 import type { RepoConnection, RepoMetrics } from "@/lib/workbench/repos";
 import { OverviewTab } from "./overview-tab";
@@ -61,11 +67,19 @@ export function RepoDetailClient({
       className="flex flex-col gap-4"
     >
       <TabsList variant="underline">
-        <TabsTab value="overview" data-testid="repo-tab-overview" className="gap-1.5">
+        <TabsTab
+          value="overview"
+          data-testid="repo-tab-overview"
+          className="gap-1.5"
+        >
           <LayoutDashboard className="size-3.5" aria-hidden="true" />
           Overview
         </TabsTab>
-        <TabsTab value="branches" data-testid="repo-tab-branches" className="gap-1.5">
+        <TabsTab
+          value="branches"
+          data-testid="repo-tab-branches"
+          className="gap-1.5"
+        >
           <GitBranch className="size-3.5" aria-hidden="true" />
           Branches
         </TabsTab>

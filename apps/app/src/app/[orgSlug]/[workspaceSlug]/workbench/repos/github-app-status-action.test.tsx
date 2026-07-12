@@ -20,8 +20,13 @@ vi.mock("@/lib/github", () => ({ fetchGithubStatus }));
 vi.mock("@/lib/routes", () => ({
   workspace: {
     settings: {
-      github: ({ orgSlug, workspaceSlug }: { orgSlug: string; workspaceSlug: string }) =>
-        `/${orgSlug}/${workspaceSlug}/settings/github`,
+      github: ({
+        orgSlug,
+        workspaceSlug,
+      }: {
+        orgSlug: string;
+        workspaceSlug: string;
+      }) => `/${orgSlug}/${workspaceSlug}/settings/github`,
     },
   },
 }));
@@ -44,9 +49,15 @@ describe("GithubAppStatusAction", () => {
     const { container } = render(<GithubAppStatusAction {...PROPS} />);
 
     expect(container.querySelector(".animate-pulse")).toBeInTheDocument();
-    expect(screen.queryByTestId("repos-connect-github-btn")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("repos-manage-github-btn")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("repos-github-status-error")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("repos-connect-github-btn"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("repos-manage-github-btn"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("repos-github-status-error"),
+    ).not.toBeInTheDocument();
 
     // Resolve so the pending act() doesn't leak into the next test.
     resolveStatus({
@@ -82,7 +93,10 @@ describe("GithubAppStatusAction", () => {
 
     const btn = await screen.findByTestId("repos-connect-github-btn");
     expect(btn).toHaveTextContent("Connect GitHub App");
-    expect(btn).toHaveAttribute("href", "https://github.com/login/oauth/authorize?state=abc");
+    expect(btn).toHaveAttribute(
+      "href",
+      "https://github.com/login/oauth/authorize?state=abc",
+    );
   });
 
   it("connected: renders a Manage/disconnect button linking externally to the manage URL", async () => {
@@ -97,7 +111,10 @@ describe("GithubAppStatusAction", () => {
 
     const btn = await screen.findByTestId("repos-manage-github-btn");
     expect(btn).toHaveTextContent("Manage / disconnect GitHub App");
-    expect(btn).toHaveAttribute("href", "https://github.com/settings/installations/1");
+    expect(btn).toHaveAttribute(
+      "href",
+      "https://github.com/settings/installations/1",
+    );
     expect(btn).toHaveAttribute("target", "_blank");
     expect(btn).toHaveAttribute("rel", "noopener noreferrer");
   });
@@ -113,11 +130,19 @@ describe("GithubAppStatusAction", () => {
 
     const { rerender } = render(<GithubAppStatusAction {...PROPS} />);
     await screen.findByTestId("repos-connect-github-btn");
-    expect(fetchGithubStatus).toHaveBeenCalledWith("acme", "eng", expect.anything());
+    expect(fetchGithubStatus).toHaveBeenCalledWith(
+      "acme",
+      "eng",
+      expect.anything(),
+    );
 
     rerender(<GithubAppStatusAction orgSlug="acme" workspaceSlug="other-ws" />);
     await waitFor(() =>
-      expect(fetchGithubStatus).toHaveBeenCalledWith("acme", "other-ws", expect.anything()),
+      expect(fetchGithubStatus).toHaveBeenCalledWith(
+        "acme",
+        "other-ws",
+        expect.anything(),
+      ),
     );
   });
 });

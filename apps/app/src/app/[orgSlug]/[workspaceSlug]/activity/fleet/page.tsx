@@ -27,7 +27,10 @@ interface PageProps {
 export default async function FleetPage({ params, searchParams }: PageProps) {
   const { orgSlug, workspaceSlug } = await params;
   const { fanout } = await searchParams;
-  const { ctx, canManage } = await resolveWorkbenchScope(orgSlug, workspaceSlug);
+  const { ctx, canManage } = await resolveWorkbenchScope(
+    orgSlug,
+    workspaceSlug,
+  );
 
   return (
     <div className="flex flex-col gap-5" data-testid="fleet-page">

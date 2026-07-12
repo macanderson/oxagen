@@ -79,7 +79,13 @@ function jsonPreview(value: unknown): string {
   }
 }
 
-export function ChildDrawer({ open, onOpenChange, run, fanoutId, workspaceId }: ChildDrawerProps) {
+export function ChildDrawer({
+  open,
+  onOpenChange,
+  run,
+  fanoutId,
+  workspaceId,
+}: ChildDrawerProps) {
   const { add: toast } = useToast();
   const [result, setResult] = useState<SubagentResult | null>(null);
   const [resultLoading, setResultLoading] = useState(true);
@@ -108,7 +114,9 @@ export function ChildDrawer({ open, onOpenChange, run, fanoutId, workspaceId }: 
       })
       .catch((err: unknown) => {
         if (!cancelled) {
-          setResultError(err instanceof Error ? err.message : "Failed to load payload.");
+          setResultError(
+            err instanceof Error ? err.message : "Failed to load payload.",
+          );
         }
       })
       .finally(() => {
@@ -130,7 +138,9 @@ export function ChildDrawer({ open, onOpenChange, run, fanoutId, workspaceId }: 
       const data = (await res.json()) as { siblings: Sibling[] };
       setSiblings(data.siblings);
     } catch (err) {
-      setSiblingsError(err instanceof Error ? err.message : "Failed to load siblings.");
+      setSiblingsError(
+        err instanceof Error ? err.message : "Failed to load siblings.",
+      );
     } finally {
       setSiblingsLoading(false);
     }
@@ -178,11 +188,15 @@ export function ChildDrawer({ open, onOpenChange, run, fanoutId, workspaceId }: 
         <dl className="grid grid-cols-2 gap-3 text-sm">
           <div>
             <dt className="text-xs text-muted-foreground">Duration</dt>
-            <dd className="font-mono text-xs">{formatDuration(run.durationMs)}</dd>
+            <dd className="font-mono text-xs">
+              {formatDuration(run.durationMs)}
+            </dd>
           </div>
           <div>
             <dt className="text-xs text-muted-foreground">Started</dt>
-            <dd className="text-xs">{run.startedAt ? formatTimestamp(run.startedAt) : "—"}</dd>
+            <dd className="text-xs">
+              {run.startedAt ? formatTimestamp(run.startedAt) : "—"}
+            </dd>
           </div>
           <div>
             <dt className="text-xs text-muted-foreground">Input size</dt>
@@ -190,12 +204,17 @@ export function ChildDrawer({ open, onOpenChange, run, fanoutId, workspaceId }: 
           </div>
           <div>
             <dt className="text-xs text-muted-foreground">Output size</dt>
-            <dd className="font-mono text-xs">{formatBytes(run.outputBytes)}</dd>
+            <dd className="font-mono text-xs">
+              {formatBytes(run.outputBytes)}
+            </dd>
           </div>
         </dl>
 
         {run.errorReason ? (
-          <p className="rounded-md bg-destructive/10 p-2 text-xs text-destructive" data-testid="child-drawer-error">
+          <p
+            className="rounded-md bg-destructive/10 p-2 text-xs text-destructive"
+            data-testid="child-drawer-error"
+          >
             {run.errorReason}
           </p>
         ) : null}
@@ -218,7 +237,10 @@ export function ChildDrawer({ open, onOpenChange, run, fanoutId, workspaceId }: 
           {resultLoading ? (
             <Skeleton className="h-24 w-full" />
           ) : resultError ? (
-            <p className="text-xs text-destructive" data-testid="child-drawer-result-error">
+            <p
+              className="text-xs text-destructive"
+              data-testid="child-drawer-result-error"
+            >
               {resultError}
             </p>
           ) : (
@@ -267,24 +289,36 @@ export function ChildDrawer({ open, onOpenChange, run, fanoutId, workspaceId }: 
               ) : null}
             </div>
             {siblingsError ? (
-              <p className="text-xs text-destructive" data-testid="child-drawer-siblings-error">
+              <p
+                className="text-xs text-destructive"
+                data-testid="child-drawer-siblings-error"
+              >
                 {siblingsError}
               </p>
             ) : null}
             {siblings ? (
               siblings.length === 0 ? (
-                <p className="text-xs text-muted-foreground">No other children in this fan-out.</p>
+                <p className="text-xs text-muted-foreground">
+                  No other children in this fan-out.
+                </p>
               ) : (
-                <ul className="flex flex-col gap-1.5" data-testid="child-drawer-siblings-list">
+                <ul
+                  className="flex flex-col gap-1.5"
+                  data-testid="child-drawer-siblings-list"
+                >
                   {siblings.map((sib) => (
                     <li
                       key={sib.runId}
                       className="flex items-center justify-between gap-2 rounded-md border px-2 py-1.5 text-xs"
                     >
                       <span className="flex min-w-0 flex-col gap-0.5">
-                        <span className="truncate font-medium">{sib.capabilityName}</span>
+                        <span className="truncate font-medium">
+                          {sib.capabilityName}
+                        </span>
                         {sib.summary ? (
-                          <span className="truncate text-muted-foreground">{sib.summary}</span>
+                          <span className="truncate text-muted-foreground">
+                            {sib.summary}
+                          </span>
                         ) : null}
                       </span>
                       <Badge variant={runStatusVariant(sib.status)} size="sm">

@@ -88,13 +88,17 @@ export async function refreshReposAction(
 ): Promise<ActionResult<{ repos: RepoRow[] }>> {
   const parsed = refreshSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid input.",
+    };
   }
   const { orgSlug, workspaceSlug } = parsed.data;
   const { ctx } = await resolveWorkbenchScope(orgSlug, workspaceSlug);
   try {
-    const repos = await runInTenantScope({ orgId: ctx.orgId, workspaceId: ctx.workspaceId }, () =>
-      listReposWithMetrics(ctx),
+    const repos = await runInTenantScope(
+      { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+      () => listReposWithMetrics(ctx),
     );
     return { ok: true, repos };
   } catch (err) {
@@ -115,18 +119,28 @@ export async function getRepoMetricsAction(
 ): Promise<ActionResult<{ metrics: RepoMetricsOutput }>> {
   const parsed = getMetricsSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid input.",
+    };
   }
   const { orgSlug, workspaceSlug, repoId } = parsed.data;
   const { ctx } = await resolveWorkbenchScope(orgSlug, workspaceSlug);
   try {
-    const metrics = await runInTenantScope({ orgId: ctx.orgId, workspaceId: ctx.workspaceId }, () =>
-      getRepoMetrics(ctx, repoId),
+    const metrics = await runInTenantScope(
+      { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+      () => getRepoMetrics(ctx, repoId),
     );
     return { ok: true, metrics };
   } catch (err) {
-    logger.error({ err, orgId: ctx.orgId, workspaceId: ctx.workspaceId, repoId }, "workbench.repos: getRepoMetricsAction failed");
-    return { ok: false, error: errMessage(err, "Failed to load repo metrics.") };
+    logger.error(
+      { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId, repoId },
+      "workbench.repos: getRepoMetricsAction failed",
+    );
+    return {
+      ok: false,
+      error: errMessage(err, "Failed to load repo metrics."),
+    };
   }
 }
 
@@ -144,19 +158,29 @@ export async function syncRepoAction(
 ): Promise<ActionResult<{ result: RepoSyncOutput }>> {
   const parsed = syncSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid input.",
+    };
   }
   const { orgSlug, workspaceSlug, repoId, mode, recordTypes } = parsed.data;
-  const { ctx, canManage } = await resolveWorkbenchScope(orgSlug, workspaceSlug);
+  const { ctx, canManage } = await resolveWorkbenchScope(
+    orgSlug,
+    workspaceSlug,
+  );
   if (!canManage) return { ok: false, error: MANAGE_ERROR };
   try {
-    const result = await runInTenantScope({ orgId: ctx.orgId, workspaceId: ctx.workspaceId }, () =>
-      syncRepo(ctx, { repoId, mode, recordTypes }),
+    const result = await runInTenantScope(
+      { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+      () => syncRepo(ctx, { repoId, mode, recordTypes }),
     );
     revalidatePath(workspace.workbench.repos({ orgSlug, workspaceSlug }));
     return { ok: true, result };
   } catch (err) {
-    logger.error({ err, orgId: ctx.orgId, workspaceId: ctx.workspaceId, repoId }, "workbench.repos: syncRepoAction failed");
+    logger.error(
+      { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId, repoId },
+      "workbench.repos: syncRepoAction failed",
+    );
     return { ok: false, error: errMessage(err, "Failed to sync repo.") };
   }
 }
@@ -170,19 +194,29 @@ export async function pauseRepoAction(
 ): Promise<ActionResult<{ result: RepoPauseOutput }>> {
   const parsed = repoIdSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid input.",
+    };
   }
   const { orgSlug, workspaceSlug, repoId } = parsed.data;
-  const { ctx, canManage } = await resolveWorkbenchScope(orgSlug, workspaceSlug);
+  const { ctx, canManage } = await resolveWorkbenchScope(
+    orgSlug,
+    workspaceSlug,
+  );
   if (!canManage) return { ok: false, error: MANAGE_ERROR };
   try {
-    const result = await runInTenantScope({ orgId: ctx.orgId, workspaceId: ctx.workspaceId }, () =>
-      pauseRepo(ctx, repoId),
+    const result = await runInTenantScope(
+      { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+      () => pauseRepo(ctx, repoId),
     );
     revalidatePath(workspace.workbench.repos({ orgSlug, workspaceSlug }));
     return { ok: true, result };
   } catch (err) {
-    logger.error({ err, orgId: ctx.orgId, workspaceId: ctx.workspaceId, repoId }, "workbench.repos: pauseRepoAction failed");
+    logger.error(
+      { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId, repoId },
+      "workbench.repos: pauseRepoAction failed",
+    );
     return { ok: false, error: errMessage(err, "Failed to pause repo.") };
   }
 }
@@ -192,19 +226,29 @@ export async function resumeRepoAction(
 ): Promise<ActionResult<{ result: RepoResumeOutput }>> {
   const parsed = repoIdSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid input.",
+    };
   }
   const { orgSlug, workspaceSlug, repoId } = parsed.data;
-  const { ctx, canManage } = await resolveWorkbenchScope(orgSlug, workspaceSlug);
+  const { ctx, canManage } = await resolveWorkbenchScope(
+    orgSlug,
+    workspaceSlug,
+  );
   if (!canManage) return { ok: false, error: MANAGE_ERROR };
   try {
-    const result = await runInTenantScope({ orgId: ctx.orgId, workspaceId: ctx.workspaceId }, () =>
-      resumeRepo(ctx, repoId),
+    const result = await runInTenantScope(
+      { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+      () => resumeRepo(ctx, repoId),
     );
     revalidatePath(workspace.workbench.repos({ orgSlug, workspaceSlug }));
     return { ok: true, result };
   } catch (err) {
-    logger.error({ err, orgId: ctx.orgId, workspaceId: ctx.workspaceId, repoId }, "workbench.repos: resumeRepoAction failed");
+    logger.error(
+      { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId, repoId },
+      "workbench.repos: resumeRepoAction failed",
+    );
     return { ok: false, error: errMessage(err, "Failed to resume repo.") };
   }
 }
@@ -216,10 +260,16 @@ const configureSchema = z.object({
   repoId: z.string().min(1),
   recordTypes: z.array(z.string()).optional(),
   pathFilters: z
-    .object({ include: z.array(z.string()).optional(), exclude: z.array(z.string()).optional() })
+    .object({
+      include: z.array(z.string()).optional(),
+      exclude: z.array(z.string()).optional(),
+    })
     .optional(),
   labelFilters: z
-    .object({ include: z.array(z.string()).optional(), exclude: z.array(z.string()).optional() })
+    .object({
+      include: z.array(z.string()).optional(),
+      exclude: z.array(z.string()).optional(),
+    })
     .optional(),
   inferenceEnabled: z.boolean().optional(),
   ontologyPrompt: z.string().optional(),
@@ -233,20 +283,32 @@ export async function configureRepoAction(
 ): Promise<ActionResult<{ result: RepoConfigureOutput }>> {
   const parsed = configureSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid input.",
+    };
   }
   const { orgSlug, workspaceSlug, ...rest } = parsed.data;
-  const { ctx, canManage } = await resolveWorkbenchScope(orgSlug, workspaceSlug);
+  const { ctx, canManage } = await resolveWorkbenchScope(
+    orgSlug,
+    workspaceSlug,
+  );
   if (!canManage) return { ok: false, error: MANAGE_ERROR };
   try {
-    const result = await runInTenantScope({ orgId: ctx.orgId, workspaceId: ctx.workspaceId }, () =>
-      configureRepo(ctx, rest),
+    const result = await runInTenantScope(
+      { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+      () => configureRepo(ctx, rest),
     );
     revalidatePath(workspace.workbench.repos({ orgSlug, workspaceSlug }));
     return { ok: true, result };
   } catch (err) {
     logger.error(
-      { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId, repoId: rest.repoId },
+      {
+        err,
+        orgId: ctx.orgId,
+        workspaceId: ctx.workspaceId,
+        repoId: rest.repoId,
+      },
       "workbench.repos: configureRepoAction failed",
     );
     return { ok: false, error: errMessage(err, "Failed to configure repo.") };
@@ -269,18 +331,28 @@ export async function createRepoAction(
 ): Promise<ActionResult<{ result: RepoCreateOutput }>> {
   const parsed = createRepoSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid input.",
+    };
   }
   const { orgSlug, workspaceSlug, ...rest } = parsed.data;
-  const { ctx, canManage } = await resolveWorkbenchScope(orgSlug, workspaceSlug);
+  const { ctx, canManage } = await resolveWorkbenchScope(
+    orgSlug,
+    workspaceSlug,
+  );
   if (!canManage) return { ok: false, error: MANAGE_ERROR };
   try {
-    const result = await runInTenantScope({ orgId: ctx.orgId, workspaceId: ctx.workspaceId }, () =>
-      createRepo(ctx, rest),
+    const result = await runInTenantScope(
+      { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+      () => createRepo(ctx, rest),
     );
     return { ok: true, result };
   } catch (err) {
-    logger.error({ err, orgId: ctx.orgId, workspaceId: ctx.workspaceId }, "workbench.repos: createRepoAction failed");
+    logger.error(
+      { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+      "workbench.repos: createRepoAction failed",
+    );
     return { ok: false, error: errMessage(err, "Failed to create repo.") };
   }
 }
@@ -299,18 +371,28 @@ export async function forkRepoAction(
 ): Promise<ActionResult<{ result: RepoForkOutput }>> {
   const parsed = forkRepoSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid input.",
+    };
   }
   const { orgSlug, workspaceSlug, ...rest } = parsed.data;
-  const { ctx, canManage } = await resolveWorkbenchScope(orgSlug, workspaceSlug);
+  const { ctx, canManage } = await resolveWorkbenchScope(
+    orgSlug,
+    workspaceSlug,
+  );
   if (!canManage) return { ok: false, error: MANAGE_ERROR };
   try {
-    const result = await runInTenantScope({ orgId: ctx.orgId, workspaceId: ctx.workspaceId }, () =>
-      forkRepo(ctx, rest),
+    const result = await runInTenantScope(
+      { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+      () => forkRepo(ctx, rest),
     );
     return { ok: true, result };
   } catch (err) {
-    logger.error({ err, orgId: ctx.orgId, workspaceId: ctx.workspaceId }, "workbench.repos: forkRepoAction failed");
+    logger.error(
+      { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+      "workbench.repos: forkRepoAction failed",
+    );
     return { ok: false, error: errMessage(err, "Failed to fork repo.") };
   }
 }
@@ -330,18 +412,28 @@ export async function createBranchAction(
 ): Promise<ActionResult<{ result: RepoBranchCreateOutput }>> {
   const parsed = createBranchSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid input.",
+    };
   }
   const { orgSlug, workspaceSlug, ...rest } = parsed.data;
-  const { ctx, canManage } = await resolveWorkbenchScope(orgSlug, workspaceSlug);
+  const { ctx, canManage } = await resolveWorkbenchScope(
+    orgSlug,
+    workspaceSlug,
+  );
   if (!canManage) return { ok: false, error: MANAGE_ERROR };
   try {
-    const result = await runInTenantScope({ orgId: ctx.orgId, workspaceId: ctx.workspaceId }, () =>
-      createBranch(ctx, rest),
+    const result = await runInTenantScope(
+      { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+      () => createBranch(ctx, rest),
     );
     return { ok: true, result };
   } catch (err) {
-    logger.error({ err, orgId: ctx.orgId, workspaceId: ctx.workspaceId }, "workbench.repos: createBranchAction failed");
+    logger.error(
+      { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+      "workbench.repos: createBranchAction failed",
+    );
     return { ok: false, error: errMessage(err, "Failed to create branch.") };
   }
 }
@@ -364,19 +456,32 @@ export async function openPrAction(
 ): Promise<ActionResult<{ result: RepoPrOpenOutput }>> {
   const parsed = openPrSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid input.",
+    };
   }
   const { orgSlug, workspaceSlug, ...rest } = parsed.data;
-  const { ctx, canManage } = await resolveWorkbenchScope(orgSlug, workspaceSlug);
+  const { ctx, canManage } = await resolveWorkbenchScope(
+    orgSlug,
+    workspaceSlug,
+  );
   if (!canManage) return { ok: false, error: MANAGE_ERROR };
   try {
-    const result = await runInTenantScope({ orgId: ctx.orgId, workspaceId: ctx.workspaceId }, () =>
-      openPr(ctx, rest),
+    const result = await runInTenantScope(
+      { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+      () => openPr(ctx, rest),
     );
     return { ok: true, result };
   } catch (err) {
-    logger.error({ err, orgId: ctx.orgId, workspaceId: ctx.workspaceId }, "workbench.repos: openPrAction failed");
-    return { ok: false, error: errMessage(err, "Failed to open pull request.") };
+    logger.error(
+      { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+      "workbench.repos: openPrAction failed",
+    );
+    return {
+      ok: false,
+      error: errMessage(err, "Failed to open pull request."),
+    };
   }
 }
 
@@ -392,18 +497,28 @@ export async function getPrAction(
 ): Promise<ActionResult<{ result: RepoPrGetOutput }>> {
   const parsed = prNumberSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid input.",
+    };
   }
   const { orgSlug, workspaceSlug, ...rest } = parsed.data;
   const { ctx } = await resolveWorkbenchScope(orgSlug, workspaceSlug);
   try {
-    const result = await runInTenantScope({ orgId: ctx.orgId, workspaceId: ctx.workspaceId }, () =>
-      getPr(ctx, rest),
+    const result = await runInTenantScope(
+      { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+      () => getPr(ctx, rest),
     );
     return { ok: true, result };
   } catch (err) {
-    logger.error({ err, orgId: ctx.orgId, workspaceId: ctx.workspaceId }, "workbench.repos: getPrAction failed");
-    return { ok: false, error: errMessage(err, "Failed to load pull request.") };
+    logger.error(
+      { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+      "workbench.repos: getPrAction failed",
+    );
+    return {
+      ok: false,
+      error: errMessage(err, "Failed to load pull request."),
+    };
   }
 }
 
@@ -412,18 +527,28 @@ export async function getPrDiffAction(
 ): Promise<ActionResult<{ result: RepoPrDiffOutput }>> {
   const parsed = prNumberSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid input.",
+    };
   }
   const { orgSlug, workspaceSlug, ...rest } = parsed.data;
   const { ctx } = await resolveWorkbenchScope(orgSlug, workspaceSlug);
   try {
-    const result = await runInTenantScope({ orgId: ctx.orgId, workspaceId: ctx.workspaceId }, () =>
-      getPrDiff(ctx, rest),
+    const result = await runInTenantScope(
+      { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+      () => getPrDiff(ctx, rest),
     );
     return { ok: true, result };
   } catch (err) {
-    logger.error({ err, orgId: ctx.orgId, workspaceId: ctx.workspaceId }, "workbench.repos: getPrDiffAction failed");
-    return { ok: false, error: errMessage(err, "Failed to load pull request diff.") };
+    logger.error(
+      { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+      "workbench.repos: getPrDiffAction failed",
+    );
+    return {
+      ok: false,
+      error: errMessage(err, "Failed to load pull request diff."),
+    };
   }
 }
 
@@ -441,17 +566,24 @@ export async function getCiStatusAction(
 ): Promise<ActionResult<{ result: RepoCiStatusOutput }>> {
   const parsed = ciStatusSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid input.",
+    };
   }
   const { orgSlug, workspaceSlug, ...rest } = parsed.data;
   const { ctx } = await resolveWorkbenchScope(orgSlug, workspaceSlug);
   try {
-    const result = await runInTenantScope({ orgId: ctx.orgId, workspaceId: ctx.workspaceId }, () =>
-      getCiStatus(ctx, rest),
+    const result = await runInTenantScope(
+      { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+      () => getCiStatus(ctx, rest),
     );
     return { ok: true, result };
   } catch (err) {
-    logger.error({ err, orgId: ctx.orgId, workspaceId: ctx.workspaceId }, "workbench.repos: getCiStatusAction failed");
+    logger.error(
+      { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+      "workbench.repos: getCiStatusAction failed",
+    );
     return { ok: false, error: errMessage(err, "Failed to load CI status.") };
   }
 }
@@ -473,18 +605,28 @@ export async function putRepoFileAction(
 ): Promise<ActionResult<{ result: RepoFilePutOutput }>> {
   const parsed = putFileSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid input.",
+    };
   }
   const { orgSlug, workspaceSlug, ...rest } = parsed.data;
-  const { ctx, canManage } = await resolveWorkbenchScope(orgSlug, workspaceSlug);
+  const { ctx, canManage } = await resolveWorkbenchScope(
+    orgSlug,
+    workspaceSlug,
+  );
   if (!canManage) return { ok: false, error: MANAGE_ERROR };
   try {
-    const result = await runInTenantScope({ orgId: ctx.orgId, workspaceId: ctx.workspaceId }, () =>
-      putRepoFile(ctx, rest),
+    const result = await runInTenantScope(
+      { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+      () => putRepoFile(ctx, rest),
     );
     return { ok: true, result };
   } catch (err) {
-    logger.error({ err, orgId: ctx.orgId, workspaceId: ctx.workspaceId }, "workbench.repos: putRepoFileAction failed");
+    logger.error(
+      { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+      "workbench.repos: putRepoFileAction failed",
+    );
     return { ok: false, error: errMessage(err, "Failed to commit file.") };
   }
 }
@@ -495,7 +637,10 @@ const editRepoFileSchema = z.object({
   ...scopeShape,
   owner: z.string().trim().min(1),
   repo: z.string().trim().min(1),
-  instruction: z.string().trim().min(10, "Instruction must be at least 10 characters."),
+  instruction: z
+    .string()
+    .trim()
+    .min(10, "Instruction must be at least 10 characters."),
   baseBranch: z.string().trim().min(1).optional(),
   branchName: z.string().trim().min(1).optional(),
   model: z.string().trim().min(1).optional(),
@@ -508,19 +653,32 @@ export async function editRepoFileAction(
 ): Promise<ActionResult<{ result: AgentRepoEditOutput }>> {
   const parsed = editRepoFileSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid input.",
+    };
   }
   const { orgSlug, workspaceSlug, ...rest } = parsed.data;
-  const { ctx, canManage } = await resolveWorkbenchScope(orgSlug, workspaceSlug);
+  const { ctx, canManage } = await resolveWorkbenchScope(
+    orgSlug,
+    workspaceSlug,
+  );
   if (!canManage) return { ok: false, error: MANAGE_ERROR };
   try {
-    const result = await runInTenantScope({ orgId: ctx.orgId, workspaceId: ctx.workspaceId }, () =>
-      editRepoFile(ctx, rest),
+    const result = await runInTenantScope(
+      { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+      () => editRepoFile(ctx, rest),
     );
     return { ok: true, result };
   } catch (err) {
-    logger.error({ err, orgId: ctx.orgId, workspaceId: ctx.workspaceId }, "workbench.repos: editRepoFileAction failed");
-    return { ok: false, error: errMessage(err, "The coding agent failed to complete this edit.") };
+    logger.error(
+      { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+      "workbench.repos: editRepoFileAction failed",
+    );
+    return {
+      ok: false,
+      error: errMessage(err, "The coding agent failed to complete this edit."),
+    };
   }
 }
 
@@ -538,40 +696,60 @@ export async function listFileLocksAction(
 ): Promise<ActionResult<{ locks: RepoLock[] }>> {
   const parsed = listLocksSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid input.",
+    };
   }
   const { orgSlug, workspaceSlug, ...rest } = parsed.data;
   const { ctx } = await resolveWorkbenchScope(orgSlug, workspaceSlug);
   try {
-    const locks = await runInTenantScope({ orgId: ctx.orgId, workspaceId: ctx.workspaceId }, () =>
-      listFileLocks(ctx, rest),
+    const locks = await runInTenantScope(
+      { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+      () => listFileLocks(ctx, rest),
     );
     return { ok: true, locks };
   } catch (err) {
-    logger.error({ err, orgId: ctx.orgId, workspaceId: ctx.workspaceId }, "workbench.repos: listFileLocksAction failed");
+    logger.error(
+      { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+      "workbench.repos: listFileLocksAction failed",
+    );
     return { ok: false, error: errMessage(err, "Failed to load file locks.") };
   }
 }
 
-const releaseLockSchema = z.object({ ...scopeShape, lockId: z.string().min(1) });
+const releaseLockSchema = z.object({
+  ...scopeShape,
+  lockId: z.string().min(1),
+});
 
 export async function releaseFileLockAction(
   input: z.input<typeof releaseLockSchema>,
 ): Promise<ActionResult<{ released: boolean }>> {
   const parsed = releaseLockSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid input.",
+    };
   }
   const { orgSlug, workspaceSlug, lockId } = parsed.data;
-  const { ctx, canManage } = await resolveWorkbenchScope(orgSlug, workspaceSlug);
+  const { ctx, canManage } = await resolveWorkbenchScope(
+    orgSlug,
+    workspaceSlug,
+  );
   if (!canManage) return { ok: false, error: MANAGE_ERROR };
   try {
-    const out = await runInTenantScope({ orgId: ctx.orgId, workspaceId: ctx.workspaceId }, () =>
-      releaseFileLock(ctx, lockId),
+    const out = await runInTenantScope(
+      { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+      () => releaseFileLock(ctx, lockId),
     );
     return { ok: true, released: out.released };
   } catch (err) {
-    logger.error({ err, orgId: ctx.orgId, workspaceId: ctx.workspaceId, lockId }, "workbench.repos: releaseFileLockAction failed");
+    logger.error(
+      { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId, lockId },
+      "workbench.repos: releaseFileLockAction failed",
+    );
     return { ok: false, error: errMessage(err, "Failed to release lock.") };
   }
 }

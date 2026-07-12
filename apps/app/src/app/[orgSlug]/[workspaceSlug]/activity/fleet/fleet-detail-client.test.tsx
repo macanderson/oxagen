@@ -32,7 +32,15 @@ vi.mock("next/navigation", () => ({
 
 // next/link → plain anchor so it renders in jsdom (mirrors activity-list.test.tsx).
 vi.mock("next/link", () => ({
-  default: ({ href, children, ...rest }: { href: string; children: React.ReactNode; [k: string]: unknown }) => (
+  default: ({
+    href,
+    children,
+    ...rest
+  }: {
+    href: string;
+    children: React.ReactNode;
+    [k: string]: unknown;
+  }) => (
     <a href={href} {...rest}>
       {children}
     </a>
@@ -50,7 +58,15 @@ vi.mock("./actions", () => ({
 }));
 
 vi.mock("./child-drawer", () => ({
-  ChildDrawer: ({ run, fanoutId, workspaceId }: { run: { runId: string }; fanoutId: string; workspaceId: string }) => (
+  ChildDrawer: ({
+    run,
+    fanoutId,
+    workspaceId,
+  }: {
+    run: { runId: string };
+    fanoutId: string;
+    workspaceId: string;
+  }) => (
     <div data-testid="mock-child-drawer">
       {run.runId}:{fanoutId}:{workspaceId}
     </div>
@@ -74,7 +90,9 @@ function makeFanout(
   };
 }
 
-function makeRun(overrides: Partial<AgentSubagentFanoutGetOutput["runs"][number]>) {
+function makeRun(
+  overrides: Partial<AgentSubagentFanoutGetOutput["runs"][number]>,
+) {
   return {
     runId: "sar_1",
     capabilityName: "search_web",
@@ -99,8 +117,17 @@ beforeEach(() => {
 describe("FleetDetailClient — header + stats", () => {
   it("renders the status badge and fanout id", () => {
     const fanout = makeFanout([makeRun({})]);
-    render(<FleetDetailClient fanout={fanout} aggregate={null} canManage {...PROPS_BASE} />);
-    expect(screen.getByTestId("fleet-detail-status")).toHaveTextContent("running");
+    render(
+      <FleetDetailClient
+        fanout={fanout}
+        aggregate={null}
+        canManage
+        {...PROPS_BASE}
+      />,
+    );
+    expect(screen.getByTestId("fleet-detail-status")).toHaveTextContent(
+      "running",
+    );
   });
 
   it("renders conflict count from aggregate when present", () => {
@@ -112,13 +139,22 @@ describe("FleetDetailClient — header + stats", () => {
       completedChildren: 0,
       aggregatedData: null,
       aggregatedDataTruncated: false,
-      conflicts: [{ key: "region", values: ["us", "eu"], runIds: ["sar_1", "sar_2"] }],
+      conflicts: [
+        { key: "region", values: ["us", "eu"], runIds: ["sar_1", "sar_2"] },
+      ],
       timeline: [],
       children: [],
       recheckAfterMs: 1000,
       firstError: null,
     };
-    render(<FleetDetailClient fanout={fanout} aggregate={aggregate} canManage {...PROPS_BASE} />);
+    render(
+      <FleetDetailClient
+        fanout={fanout}
+        aggregate={aggregate}
+        canManage
+        {...PROPS_BASE}
+      />,
+    );
     const stats = screen.getByTestId("fleet-detail-stats");
     expect(stats).toHaveTextContent("1");
   });
@@ -127,13 +163,31 @@ describe("FleetDetailClient — header + stats", () => {
 describe("FleetDetailClient — child table + timeline", () => {
   it("renders one row per child run with capability/status/duration/sizes", () => {
     const fanout = makeFanout([
-      makeRun({ runId: "sar_1", capabilityName: "search_web", status: "completed" }),
-      makeRun({ runId: "sar_2", capabilityName: "summarize_text", status: "failed", errorReason: "timeout" }),
+      makeRun({
+        runId: "sar_1",
+        capabilityName: "search_web",
+        status: "completed",
+      }),
+      makeRun({
+        runId: "sar_2",
+        capabilityName: "summarize_text",
+        status: "failed",
+        errorReason: "timeout",
+      }),
     ]);
-    render(<FleetDetailClient fanout={fanout} aggregate={null} canManage {...PROPS_BASE} />);
+    render(
+      <FleetDetailClient
+        fanout={fanout}
+        aggregate={null}
+        canManage
+        {...PROPS_BASE}
+      />,
+    );
     expect(screen.getByTestId("fleet-child-row-sar_1")).toBeInTheDocument();
     expect(screen.getByTestId("fleet-child-row-sar_2")).toBeInTheDocument();
-    expect(screen.getByTestId("fleet-child-row-sar_2")).toHaveTextContent("timeout");
+    expect(screen.getByTestId("fleet-child-row-sar_2")).toHaveTextContent(
+      "timeout",
+    );
   });
 
   it("renders one timeline track per child", () => {
@@ -141,7 +195,14 @@ describe("FleetDetailClient — child table + timeline", () => {
       makeRun({ runId: "sar_1", capabilityName: "search_web" }),
       makeRun({ runId: "sar_2", capabilityName: "summarize_text" }),
     ]);
-    render(<FleetDetailClient fanout={fanout} aggregate={null} canManage {...PROPS_BASE} />);
+    render(
+      <FleetDetailClient
+        fanout={fanout}
+        aggregate={null}
+        canManage
+        {...PROPS_BASE}
+      />,
+    );
     const timeline = screen.getByTestId("fleet-timeline");
     expect(timeline).toHaveTextContent("search_web");
     expect(timeline).toHaveTextContent("summarize_text");
@@ -150,10 +211,19 @@ describe("FleetDetailClient — child table + timeline", () => {
   it("clicking a child row opens the child drawer with that run", async () => {
     const user = userEvent.setup();
     const fanout = makeFanout([makeRun({ runId: "sar_1" })]);
-    render(<FleetDetailClient fanout={fanout} aggregate={null} canManage {...PROPS_BASE} />);
+    render(
+      <FleetDetailClient
+        fanout={fanout}
+        aggregate={null}
+        canManage
+        {...PROPS_BASE}
+      />,
+    );
     expect(screen.queryByTestId("mock-child-drawer")).not.toBeInTheDocument();
     await user.click(screen.getByTestId("fleet-child-row-sar_1"));
-    expect(screen.getByTestId("mock-child-drawer")).toHaveTextContent("sar_1:fo_abc123:w1");
+    expect(screen.getByTestId("mock-child-drawer")).toHaveTextContent(
+      "sar_1:fo_abc123:w1",
+    );
   });
 });
 
@@ -161,20 +231,48 @@ describe("FleetDetailClient — cancel", () => {
   it("shows Cancel only when cancellable + canManage", () => {
     const runningFanout = makeFanout([makeRun({})], { status: "running" });
     const { rerender } = render(
-      <FleetDetailClient fanout={runningFanout} aggregate={null} canManage {...PROPS_BASE} />,
+      <FleetDetailClient
+        fanout={runningFanout}
+        aggregate={null}
+        canManage
+        {...PROPS_BASE}
+      />,
     );
     expect(screen.getByTestId("fleet-detail-cancel-btn")).toBeInTheDocument();
 
     const doneFanout = makeFanout([makeRun({})], { status: "completed" });
-    rerender(<FleetDetailClient fanout={doneFanout} aggregate={null} canManage {...PROPS_BASE} />);
-    expect(screen.queryByTestId("fleet-detail-cancel-btn")).not.toBeInTheDocument();
+    rerender(
+      <FleetDetailClient
+        fanout={doneFanout}
+        aggregate={null}
+        canManage
+        {...PROPS_BASE}
+      />,
+    );
+    expect(
+      screen.queryByTestId("fleet-detail-cancel-btn"),
+    ).not.toBeInTheDocument();
   });
 
   it("confirming cancel calls cancelFanoutAction and refreshes", async () => {
     const user = userEvent.setup();
-    cancelFanoutAction.mockResolvedValue({ ok: true, fanout: { fanoutId: "fo_abc123", status: "timed_out", cancelledChildren: 1 } });
+    cancelFanoutAction.mockResolvedValue({
+      ok: true,
+      fanout: {
+        fanoutId: "fo_abc123",
+        status: "timed_out",
+        cancelledChildren: 1,
+      },
+    });
     const fanout = makeFanout([makeRun({})], { status: "running" });
-    render(<FleetDetailClient fanout={fanout} aggregate={null} canManage {...PROPS_BASE} />);
+    render(
+      <FleetDetailClient
+        fanout={fanout}
+        aggregate={null}
+        canManage
+        {...PROPS_BASE}
+      />,
+    );
 
     await user.click(screen.getByTestId("fleet-detail-cancel-btn"));
     await user.click(screen.getByTestId("cancel-fanout-confirm"));
@@ -197,7 +295,14 @@ describe("FleetDetailClient — download logfile", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
     const fanout = makeFanout([makeRun({})]);
-    render(<FleetDetailClient fanout={fanout} aggregate={null} canManage {...PROPS_BASE} />);
+    render(
+      <FleetDetailClient
+        fanout={fanout}
+        aggregate={null}
+        canManage
+        {...PROPS_BASE}
+      />,
+    );
 
     await user.click(screen.getByTestId("fleet-download-logs-btn"));
 
@@ -205,16 +310,32 @@ describe("FleetDetailClient — download logfile", () => {
       "/api/v1/agent/subagent/logs",
       expect.objectContaining({ method: "POST" }),
     );
-    const body = JSON.parse((fetchMock.mock.calls[0]![1] as { body: string }).body) as Record<string, unknown>;
+    const body = JSON.parse(
+      (fetchMock.mock.calls[0]![1] as { body: string }).body,
+    ) as Record<string, unknown>;
     expect(body).toEqual({ workspaceId: "w1", fanoutId: "fo_abc123" });
-    expect(window.open).toHaveBeenCalledWith("/api/v1/assets/ast_1", "_blank", "noopener,noreferrer");
+    expect(window.open).toHaveBeenCalledWith(
+      "/api/v1/assets/ast_1",
+      "_blank",
+      "noopener,noreferrer",
+    );
   });
 
   it("shows an error toast when logfile generation fails", async () => {
     const user = userEvent.setup();
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: false, status: 500 }),
+    );
     const fanout = makeFanout([makeRun({})]);
-    render(<FleetDetailClient fanout={fanout} aggregate={null} canManage {...PROPS_BASE} />);
+    render(
+      <FleetDetailClient
+        fanout={fanout}
+        aggregate={null}
+        canManage
+        {...PROPS_BASE}
+      />,
+    );
 
     await user.click(screen.getByTestId("fleet-download-logs-btn"));
 

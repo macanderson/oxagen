@@ -17,12 +17,16 @@ interface DatasetsSectionProps {
   orgId: string;
   workspaceId: string;
   userId: string;
+  orgSlug: string;
+  workspaceSlug: string;
 }
 
 export async function DatasetsSection({
   orgId,
   workspaceId,
   userId,
+  orgSlug,
+  workspaceSlug,
 }: DatasetsSectionProps) {
   const ctx = {
     orgId,
@@ -47,5 +51,5 @@ export async function DatasetsSection({
     // Render empty state on failure — never throw from RSC.
   }
 
-  return <DatasetsClient datasets={datasets} />;
+  return <DatasetsClient datasets={datasets} orgSlug={orgSlug} workspaceSlug={workspaceSlug} />;
 }

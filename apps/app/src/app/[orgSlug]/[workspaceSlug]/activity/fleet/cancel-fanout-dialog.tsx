@@ -35,8 +35,8 @@ export function CancelFanoutDialog({
         <DialogHeader>
           <DialogTitle>Cancel this fan-out?</DialogTitle>
           <DialogDescription>
-            Every pending or running child of {fanoutId} will be stopped. Completed
-            children keep their results — this cannot be undone.
+            Every pending or running child of {fanoutId} will be stopped.
+            Completed children keep their results — this cannot be undone.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>

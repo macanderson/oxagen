@@ -118,7 +118,7 @@ export const agentDebugTrace = registerCapability({
     "Diagnose why an agent execution failed as a structured frame: the failing step, error class + message, parsed top stack frames, related spans, and suspect files ranked deterministically. Prefer this over reading raw logs or the full trace when an execution has failed and you need the fix site. Not for successful runs (use agent.trace.get) or for listing runs (use agent.execution.list). Set summarize:true to also get an LLM root-cause diagnosis.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "introspection" },
   sensitivity: "low",

@@ -17,7 +17,12 @@ interface ReposSectionProps {
   canManage: boolean;
 }
 
-export async function ReposSection({ ctx, orgSlug, workspaceSlug, canManage }: ReposSectionProps) {
+export async function ReposSection({
+  ctx,
+  orgSlug,
+  workspaceSlug,
+  canManage,
+}: ReposSectionProps) {
   let repos: Awaited<ReturnType<typeof listReposWithMetrics>> = [];
   let unavailable = false;
   try {

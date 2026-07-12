@@ -25,7 +25,10 @@ export interface GithubAppStatusActionProps {
   workspaceSlug: string;
 }
 
-export function GithubAppStatusAction({ orgSlug, workspaceSlug }: GithubAppStatusActionProps) {
+export function GithubAppStatusAction({
+  orgSlug,
+  workspaceSlug,
+}: GithubAppStatusActionProps) {
   const [status, setStatus] = React.useState<GithubStatusResponse | null>(null);
   const [error, setError] = React.useState<string | null>(null);
 
@@ -37,7 +40,9 @@ export function GithubAppStatusAction({ orgSlug, workspaceSlug }: GithubAppStatu
       },
       (e) => {
         if (!controller.signal.aborted) {
-          setError(e instanceof Error ? e.message : "Failed to load GitHub status.");
+          setError(
+            e instanceof Error ? e.message : "Failed to load GitHub status.",
+          );
         }
       },
     );
@@ -48,7 +53,10 @@ export function GithubAppStatusAction({ orgSlug, workspaceSlug }: GithubAppStatu
 
   if (error) {
     return (
-      <p className="text-xs text-muted-foreground" data-testid="repos-github-status-error">
+      <p
+        className="text-xs text-muted-foreground"
+        data-testid="repos-github-status-error"
+      >
         GitHub App status unavailable —{" "}
         <a href={settingsHref} className="text-primary hover:underline">
           check Settings → GitHub
@@ -59,7 +67,12 @@ export function GithubAppStatusAction({ orgSlug, workspaceSlug }: GithubAppStatu
   }
 
   if (!status) {
-    return <div className="h-8 w-40 animate-pulse rounded-md bg-muted" aria-hidden="true" />;
+    return (
+      <div
+        className="h-8 w-40 animate-pulse rounded-md bg-muted"
+        aria-hidden="true"
+      />
+    );
   }
 
   if (!status.connected) {
@@ -81,7 +94,9 @@ export function GithubAppStatusAction({ orgSlug, workspaceSlug }: GithubAppStatu
       variant="ghost"
       size="sm"
       data-testid="repos-manage-github-btn"
-      render={<a href={status.manageUrl} target="_blank" rel="noopener noreferrer" />}
+      render={
+        <a href={status.manageUrl} target="_blank" rel="noopener noreferrer" />
+      }
     >
       <ExternalLink aria-hidden="true" />
       Manage / disconnect GitHub App

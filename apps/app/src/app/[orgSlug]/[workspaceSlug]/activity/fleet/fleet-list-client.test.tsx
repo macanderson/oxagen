@@ -31,7 +31,15 @@ vi.mock("next/navigation", () => ({
 // next/link → plain anchor so href assertions work in jsdom (mirrors
 // activity-list.test.tsx).
 vi.mock("next/link", () => ({
-  default: ({ href, children, ...rest }: { href: string; children: React.ReactNode; [k: string]: unknown }) => (
+  default: ({
+    href,
+    children,
+    ...rest
+  }: {
+    href: string;
+    children: React.ReactNode;
+    [k: string]: unknown;
+  }) => (
     <a href={href} {...rest}>
       {children}
     </a>
@@ -76,14 +84,28 @@ describe("FleetListClient — empty state", () => {
 describe("FleetListClient — rows", () => {
   it("renders one row per fan-out with status + child counts", () => {
     const fanouts = [
-      makeFanout({ fanoutId: "fo_running", status: "running", totalChildren: 3, completedChildren: 1 }),
-      makeFanout({ fanoutId: "fo_done", status: "completed", totalChildren: 2, completedChildren: 2 }),
+      makeFanout({
+        fanoutId: "fo_running",
+        status: "running",
+        totalChildren: 3,
+        completedChildren: 1,
+      }),
+      makeFanout({
+        fanoutId: "fo_done",
+        status: "completed",
+        totalChildren: 2,
+        completedChildren: 2,
+      }),
     ];
     render(<FleetListClient fanouts={fanouts} canManage {...PROPS_BASE} />);
     expect(screen.getByTestId("fleet-row-fo_running")).toBeInTheDocument();
     expect(screen.getByTestId("fleet-row-fo_done")).toBeInTheDocument();
-    expect(within(screen.getByTestId("fleet-row-fo_running")).getByText("1/3")).toBeInTheDocument();
-    expect(within(screen.getByTestId("fleet-row-fo_done")).getByText("2/2")).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId("fleet-row-fo_running")).getByText("1/3"),
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId("fleet-row-fo_done")).getByText("2/2"),
+    ).toBeInTheDocument();
   });
 
   it("shows a Cancel action only for cancellable (running/pending) fan-outs when canManage", () => {
@@ -92,28 +114,46 @@ describe("FleetListClient — rows", () => {
       makeFanout({ fanoutId: "fo_done", status: "completed" }),
     ];
     render(<FleetListClient fanouts={fanouts} canManage {...PROPS_BASE} />);
-    expect(screen.getByTestId("fleet-cancel-btn-fo_running")).toBeInTheDocument();
-    expect(screen.queryByTestId("fleet-cancel-btn-fo_done")).not.toBeInTheDocument();
+    expect(
+      screen.getByTestId("fleet-cancel-btn-fo_running"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByTestId("fleet-cancel-btn-fo_done"),
+    ).not.toBeInTheDocument();
   });
 
   it("hides Cancel entirely when canManage is false, even for a running fan-out", () => {
     const fanouts = [makeFanout({ fanoutId: "fo_running", status: "running" })];
-    render(<FleetListClient fanouts={fanouts} canManage={false} {...PROPS_BASE} />);
-    expect(screen.queryByTestId("fleet-cancel-btn-fo_running")).not.toBeInTheDocument();
+    render(
+      <FleetListClient fanouts={fanouts} canManage={false} {...PROPS_BASE} />,
+    );
+    expect(
+      screen.queryByTestId("fleet-cancel-btn-fo_running"),
+    ).not.toBeInTheDocument();
   });
 
   it("links each row to the detail view via ?fanout=<id>", () => {
     const fanouts = [makeFanout({ fanoutId: "fo_running" })];
     render(<FleetListClient fanouts={fanouts} canManage {...PROPS_BASE} />);
     const link = screen.getByTestId("fleet-row-link-fo_running");
-    expect(link).toHaveAttribute("href", expect.stringContaining("?fanout=fo_running"));
+    expect(link).toHaveAttribute(
+      "href",
+      expect.stringContaining("?fanout=fo_running"),
+    );
   });
 });
 
 describe("FleetListClient — cancel flow", () => {
   it("confirming cancel calls cancelFanoutAction and shows a success toast", async () => {
     const user = userEvent.setup();
-    cancelFanoutAction.mockResolvedValue({ ok: true, fanout: { fanoutId: "fo_running", status: "timed_out", cancelledChildren: 2 } });
+    cancelFanoutAction.mockResolvedValue({
+      ok: true,
+      fanout: {
+        fanoutId: "fo_running",
+        status: "timed_out",
+        cancelledChildren: 2,
+      },
+    });
     const fanouts = [makeFanout({ fanoutId: "fo_running", status: "running" })];
     render(<FleetListClient fanouts={fanouts} canManage {...PROPS_BASE} />);
 
@@ -143,7 +183,11 @@ describe("FleetListClient — cancel flow", () => {
     await user.click(screen.getByTestId("cancel-fanout-confirm"));
 
     expect(toastAdd).toHaveBeenCalledWith(
-      expect.objectContaining({ title: "Cancel failed", description: "boom", type: "error" }),
+      expect.objectContaining({
+        title: "Cancel failed",
+        description: "boom",
+        type: "error",
+      }),
     );
     expect(screen.getByTestId("fleet-row-fo_running")).toBeInTheDocument();
     expect(refreshMock).not.toHaveBeenCalled();

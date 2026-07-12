@@ -81,6 +81,9 @@ export async function POST(request: NextRequest): Promise<Response> {
     return NextResponse.json(out);
   } catch (err) {
     console.error("[agent/subagent/logs] get_subagent_logs failed", err);
-    return NextResponse.json({ error: "Failed to generate logfile" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to generate logfile" },
+      { status: 500 },
+    );
   }
 }

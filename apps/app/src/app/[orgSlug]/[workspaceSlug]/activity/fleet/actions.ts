@@ -48,12 +48,21 @@ export async function cancelFanoutAction(
 ): Promise<ActionResult<{ fanout: AgentSubagentCancelOutput }>> {
   const parsed = cancelSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid input.",
+    };
   }
   const { orgSlug, workspaceSlug, fanoutId } = parsed.data;
-  const { ctx, canManage } = await resolveWorkbenchScope(orgSlug, workspaceSlug);
+  const { ctx, canManage } = await resolveWorkbenchScope(
+    orgSlug,
+    workspaceSlug,
+  );
   if (!canManage) {
-    return { ok: false, error: "Only workspace owners and admins can cancel a fan-out." };
+    return {
+      ok: false,
+      error: "Only workspace owners and admins can cancel a fan-out.",
+    };
   }
   try {
     const fanout = (await runInTenantScope(

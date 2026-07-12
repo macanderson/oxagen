@@ -10,7 +10,10 @@ import { parseRepoSlug } from "./repo-slug";
 
 describe("parseRepoSlug", () => {
   it("parses a valid owner/repo slug", () => {
-    expect(parseRepoSlug("acme/widgets")).toEqual({ owner: "acme", repo: "widgets" });
+    expect(parseRepoSlug("acme/widgets")).toEqual({
+      owner: "acme",
+      repo: "widgets",
+    });
   });
 
   it("returns null when there is no slash", () => {
@@ -26,19 +29,31 @@ describe("parseRepoSlug", () => {
   });
 
   it("strips the '(+N more)' multi-repo suffix before parsing", () => {
-    expect(parseRepoSlug("acme/widgets (+3 more)")).toEqual({ owner: "acme", repo: "widgets" });
+    expect(parseRepoSlug("acme/widgets (+3 more)")).toEqual({
+      owner: "acme",
+      repo: "widgets",
+    });
   });
 
   it("strips a double-digit '(+N more)' suffix", () => {
-    expect(parseRepoSlug("acme/widgets (+12 more)")).toEqual({ owner: "acme", repo: "widgets" });
+    expect(parseRepoSlug("acme/widgets (+12 more)")).toEqual({
+      owner: "acme",
+      repo: "widgets",
+    });
   });
 
   it("trims surrounding whitespace on the whole display name", () => {
-    expect(parseRepoSlug("  acme/widgets  ")).toEqual({ owner: "acme", repo: "widgets" });
+    expect(parseRepoSlug("  acme/widgets  ")).toEqual({
+      owner: "acme",
+      repo: "widgets",
+    });
   });
 
   it("trims whitespace around the slash separator", () => {
-    expect(parseRepoSlug("acme / widgets")).toEqual({ owner: "acme", repo: "widgets" });
+    expect(parseRepoSlug("acme / widgets")).toEqual({
+      owner: "acme",
+      repo: "widgets",
+    });
   });
 
   it("returns null for an empty string", () => {
@@ -50,7 +65,10 @@ describe("parseRepoSlug", () => {
   });
 
   it("folds extra path segments into the repo portion", () => {
-    expect(parseRepoSlug("acme/widgets/extra")).toEqual({ owner: "acme", repo: "widgets/extra" });
+    expect(parseRepoSlug("acme/widgets/extra")).toEqual({
+      owner: "acme",
+      repo: "widgets/extra",
+    });
   });
 
   it("returns null when the display name is just the suffix with no slug", () => {

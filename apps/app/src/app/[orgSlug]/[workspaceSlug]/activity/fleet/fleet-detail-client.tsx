@@ -29,7 +29,11 @@ import { workspace } from "@/lib/routes";
 import { cancelFanoutAction } from "./actions";
 import { CancelFanoutDialog } from "./cancel-fanout-dialog";
 import { ChildDrawer } from "./child-drawer";
-import { fanoutStatusVariant, isFanoutCancellable, runStatusVariant } from "./status";
+import {
+  fanoutStatusVariant,
+  isFanoutCancellable,
+  runStatusVariant,
+} from "./status";
 import { layoutTimeline, timelineEntriesFrom } from "./timeline";
 
 type FanoutRun = AgentSubagentFanoutGetOutput["runs"][number];
@@ -63,7 +67,11 @@ export function FleetDetailClient({
   const cancellable = canManage && isFanoutCancellable(status);
 
   const timelineBars = useMemo(
-    () => layoutTimeline(timelineEntriesFrom(fanout, aggregate), new Date().toISOString()),
+    () =>
+      layoutTimeline(
+        timelineEntriesFrom(fanout, aggregate),
+        new Date().toISOString(),
+      ),
     [fanout, aggregate],
   );
 
@@ -77,7 +85,11 @@ export function FleetDetailClient({
     setCancelling(false);
     setConfirmCancel(false);
     if (!result.ok) {
-      toast({ title: "Cancel failed", description: result.error, type: "error" });
+      toast({
+        title: "Cancel failed",
+        description: result.error,
+        type: "error",
+      });
       return;
     }
     toast({
@@ -127,7 +139,11 @@ export function FleetDetailClient({
             All fan-outs
           </Link>
           <div className="flex items-center gap-2">
-            <Badge variant={fanoutStatusVariant(status)} size="sm" data-testid="fleet-detail-status">
+            <Badge
+              variant={fanoutStatusVariant(status)}
+              size="sm"
+              data-testid="fleet-detail-status"
+            >
               {status}
             </Badge>
             <CopyableId value={fanout.fanoutId} label="Fan-out" max={24} />
@@ -157,8 +173,14 @@ export function FleetDetailClient({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4" data-testid="fleet-detail-stats">
-        <StatTile label="Children" value={`${fanout.completedChildren}/${fanout.totalChildren}`} />
+      <div
+        className="grid grid-cols-2 gap-3 sm:grid-cols-4"
+        data-testid="fleet-detail-stats"
+      >
+        <StatTile
+          label="Children"
+          value={`${fanout.completedChildren}/${fanout.totalChildren}`}
+        />
         <StatTile label="Created" value={formatTimestamp(fanout.createdAt)} />
         <StatTile label="Updated" value={formatTimestamp(fanout.updatedAt)} />
         <StatTile
@@ -170,7 +192,10 @@ export function FleetDetailClient({
 
       {/* Timeline strip — one track per child, positioned by start offset /
           duration along a shared axis. */}
-      <div className="rounded-lg border bg-card p-3" data-testid="fleet-timeline">
+      <div
+        className="rounded-lg border bg-card p-3"
+        data-testid="fleet-timeline"
+      >
         <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
           Timeline
         </p>
@@ -180,13 +205,19 @@ export function FleetDetailClient({
           <div className="flex flex-col gap-1.5">
             {timelineBars.map((bar) => (
               <div key={bar.runId} className="flex items-center gap-2 text-xs">
-                <span className="w-40 shrink-0 truncate text-muted-foreground" title={bar.capabilityName}>
+                <span
+                  className="w-40 shrink-0 truncate text-muted-foreground"
+                  title={bar.capabilityName}
+                >
                   {bar.capabilityName}
                 </span>
                 <div className="relative h-3 flex-1 rounded-full bg-muted">
                   <div
                     className={`absolute h-3 rounded-full ${timelineBarColor(bar.status)}`}
-                    style={{ left: `${bar.offsetPct}%`, width: `${bar.widthPct}%` }}
+                    style={{
+                      left: `${bar.offsetPct}%`,
+                      width: `${bar.widthPct}%`,
+                    }}
                     title={`${bar.status}${bar.errorReason ? `: ${bar.errorReason}` : ""}`}
                   />
                 </div>
@@ -283,7 +314,9 @@ function StatTile({
       <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
         {label}
       </p>
-      <p className={`mt-1 text-sm font-medium ${warn ? "text-warning" : "text-foreground"}`}>
+      <p
+        className={`mt-1 text-sm font-medium ${warn ? "text-warning" : "text-foreground"}`}
+      >
         {value}
       </p>
     </div>

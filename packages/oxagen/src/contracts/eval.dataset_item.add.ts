@@ -9,7 +9,7 @@ export const evalDatasetItemAdd = registerCapability({
     "Bulk-add cases to an eval dataset. Batch by design — one call inserts many items as a set and bumps the dataset's item count.",
   mode: "batch",
   surfaces: ["api", "mcp", "cli"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "mutation" },

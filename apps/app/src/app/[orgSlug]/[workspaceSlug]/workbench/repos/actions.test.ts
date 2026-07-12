@@ -77,8 +77,13 @@ vi.mock("@/lib/workbench/repos", () => ({
 vi.mock("@/lib/routes", () => ({
   workspace: {
     workbench: {
-      repos: ({ orgSlug, workspaceSlug }: { orgSlug: string; workspaceSlug: string }) =>
-        `/${orgSlug}/${workspaceSlug}/workbench/repos`,
+      repos: ({
+        orgSlug,
+        workspaceSlug,
+      }: {
+        orgSlug: string;
+        workspaceSlug: string;
+      }) => `/${orgSlug}/${workspaceSlug}/workbench/repos`,
     },
   },
 }));
@@ -165,10 +170,19 @@ describe("syncRepoAction", () => {
 
   it("defaults mode to incremental and calls the wrapper", async () => {
     resolveWorkbenchScope.mockResolvedValue(scope(true));
-    syncRepo.mockResolvedValue({ jobId: "job_1", status: "queued", mode: "incremental", estimatedRecords: 0 });
+    syncRepo.mockResolvedValue({
+      jobId: "job_1",
+      status: "queued",
+      mode: "incremental",
+      estimatedRecords: 0,
+    });
     const res = await syncRepoAction({ ...SCOPE, repoId: "con_1" });
     expect(res.ok).toBe(true);
-    expect(syncRepo).toHaveBeenCalledWith(CTX, { repoId: "con_1", mode: "incremental", recordTypes: undefined });
+    expect(syncRepo).toHaveBeenCalledWith(CTX, {
+      repoId: "con_1",
+      mode: "incremental",
+      recordTypes: undefined,
+    });
   });
 
   it("surfaces a handler error", async () => {
@@ -190,14 +204,23 @@ describe("pauseRepoAction / resumeRepoAction", () => {
 
   it("pause succeeds for managers", async () => {
     resolveWorkbenchScope.mockResolvedValue(scope(true));
-    pauseRepo.mockResolvedValue({ repoId: "con_1", status: "paused", pausedAt: "now" });
+    pauseRepo.mockResolvedValue({
+      repoId: "con_1",
+      status: "paused",
+      pausedAt: "now",
+    });
     const res = await pauseRepoAction({ ...SCOPE, repoId: "con_1" });
     expect(res.ok).toBe(true);
   });
 
   it("resume succeeds for managers", async () => {
     resolveWorkbenchScope.mockResolvedValue(scope(true));
-    resumeRepo.mockResolvedValue({ repoId: "con_1", status: "active", resumedAt: "now", nextSyncAt: null });
+    resumeRepo.mockResolvedValue({
+      repoId: "con_1",
+      status: "active",
+      resumedAt: "now",
+      nextSyncAt: null,
+    });
     const res = await resumeRepoAction({ ...SCOPE, repoId: "con_1" });
     expect(res.ok).toBe(true);
   });
@@ -223,7 +246,11 @@ describe("configureRepoAction", () => {
     expect(res.ok).toBe(true);
     expect(configureRepo).toHaveBeenCalledWith(
       CTX,
-      expect.objectContaining({ repoId: "con_1", inferenceEnabled: false, syncCadence: "manual" }),
+      expect.objectContaining({
+        repoId: "con_1",
+        inferenceEnabled: false,
+        syncCadence: "manual",
+      }),
     );
   });
 });
@@ -245,14 +272,22 @@ describe("createRepoAction / forkRepoAction", () => {
 
   it("create succeeds for managers", async () => {
     resolveWorkbenchScope.mockResolvedValue(scope(true));
-    createRepo.mockResolvedValue({ fullName: "acme/my-repo", htmlUrl: "https://github.com/acme/my-repo", defaultBranch: "main" });
+    createRepo.mockResolvedValue({
+      fullName: "acme/my-repo",
+      htmlUrl: "https://github.com/acme/my-repo",
+      defaultBranch: "main",
+    });
     const res = await createRepoAction({ ...SCOPE, name: "my-repo" });
     expect(res.ok).toBe(true);
   });
 
   it("fork gates non-managers", async () => {
     resolveWorkbenchScope.mockResolvedValue(scope(false));
-    const res = await forkRepoAction({ ...SCOPE, owner: "octocat", repo: "hello-world" });
+    const res = await forkRepoAction({
+      ...SCOPE,
+      owner: "octocat",
+      repo: "hello-world",
+    });
     expect(res.ok).toBe(false);
     expect(forkRepo).not.toHaveBeenCalled();
   });
@@ -261,7 +296,12 @@ describe("createRepoAction / forkRepoAction", () => {
 describe("createBranchAction / openPrAction", () => {
   it("createBranch gates non-managers", async () => {
     resolveWorkbenchScope.mockResolvedValue(scope(false));
-    const res = await createBranchAction({ ...SCOPE, owner: "o", repo: "r", branch: "feat" });
+    const res = await createBranchAction({
+      ...SCOPE,
+      owner: "o",
+      repo: "r",
+      branch: "feat",
+    });
     expect(res.ok).toBe(false);
     expect(createBranch).not.toHaveBeenCalled();
   });
@@ -269,13 +309,25 @@ describe("createBranchAction / openPrAction", () => {
   it("createBranch succeeds for managers", async () => {
     resolveWorkbenchScope.mockResolvedValue(scope(true));
     createBranch.mockResolvedValue({ ref: "refs/heads/feat", sha: "abc123" });
-    const res = await createBranchAction({ ...SCOPE, owner: "o", repo: "r", branch: "feat" });
+    const res = await createBranchAction({
+      ...SCOPE,
+      owner: "o",
+      repo: "r",
+      branch: "feat",
+    });
     expect(res.ok).toBe(true);
   });
 
   it("openPr gates non-managers", async () => {
     resolveWorkbenchScope.mockResolvedValue(scope(false));
-    const res = await openPrAction({ ...SCOPE, owner: "o", repo: "r", title: "t", head: "feat", base: "main" });
+    const res = await openPrAction({
+      ...SCOPE,
+      owner: "o",
+      repo: "r",
+      title: "t",
+      head: "feat",
+      base: "main",
+    });
     expect(res.ok).toBe(false);
     expect(openPr).not.toHaveBeenCalled();
   });
@@ -285,21 +337,36 @@ describe("read actions (no manage gate)", () => {
   it("getPrAction succeeds for a non-manager", async () => {
     resolveWorkbenchScope.mockResolvedValue(scope(false));
     getPr.mockResolvedValue({ number: 1 });
-    const res = await getPrAction({ ...SCOPE, owner: "o", repo: "r", number: 1 });
+    const res = await getPrAction({
+      ...SCOPE,
+      owner: "o",
+      repo: "r",
+      number: 1,
+    });
     expect(res.ok).toBe(true);
   });
 
   it("getPrDiffAction succeeds for a non-manager", async () => {
     resolveWorkbenchScope.mockResolvedValue(scope(false));
     getPrDiff.mockResolvedValue({ files: [] });
-    const res = await getPrDiffAction({ ...SCOPE, owner: "o", repo: "r", number: 1 });
+    const res = await getPrDiffAction({
+      ...SCOPE,
+      owner: "o",
+      repo: "r",
+      number: 1,
+    });
     expect(res.ok).toBe(true);
   });
 
   it("getCiStatusAction succeeds for a non-manager", async () => {
     resolveWorkbenchScope.mockResolvedValue(scope(false));
     getCiStatus.mockResolvedValue({ overall: "passing" });
-    const res = await getCiStatusAction({ ...SCOPE, owner: "o", repo: "r", ref: "main" });
+    const res = await getCiStatusAction({
+      ...SCOPE,
+      owner: "o",
+      repo: "r",
+      ref: "main",
+    });
     expect(res.ok).toBe(true);
   });
 
@@ -328,7 +395,12 @@ describe("putRepoFileAction / editRepoFileAction / releaseFileLockAction", () =>
 
   it("editRepoFile rejects a short instruction", async () => {
     resolveWorkbenchScope.mockResolvedValue(scope(true));
-    const res = await editRepoFileAction({ ...SCOPE, owner: "o", repo: "r", instruction: "short" });
+    const res = await editRepoFileAction({
+      ...SCOPE,
+      owner: "o",
+      repo: "r",
+      instruction: "short",
+    });
     expect(res.ok).toBe(false);
     expect(editRepoFile).not.toHaveBeenCalled();
   });

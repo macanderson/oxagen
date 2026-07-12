@@ -9,7 +9,7 @@ export const evalRunStatus = registerCapability({
     "Poll an eval run's lifecycle: status, progress counts, and mean score once available. Cheap header read — use eval.run.get for per-item detail.",
   mode: "sync",
   surfaces: ["api", "mcp", "cli"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "read" },

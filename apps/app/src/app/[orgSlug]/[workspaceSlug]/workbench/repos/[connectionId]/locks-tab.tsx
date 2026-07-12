@@ -14,7 +14,15 @@ import * as React from "react";
 import { Lock, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell, TableEmpty } from "@/components/ui/table";
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+  TableEmpty,
+} from "@/components/ui/table";
 import { useToast } from "@/components/ui/toast";
 import { CopyableId } from "@/components/knowledge/graph-explorer/copyable-id";
 import type { RepoLock } from "@/lib/workbench/repos";
@@ -45,7 +53,9 @@ export function LocksTab({ scope, slug, canManage }: LocksTabProps) {
   const load = React.useCallback(async () => {
     setLoading(true);
     setError(null);
-    const res = await listFileLocksAction(slug ? { ...scope, owner: slug.owner, repo: slug.repo } : scope);
+    const res = await listFileLocksAction(
+      slug ? { ...scope, owner: slug.owner, repo: slug.repo } : scope,
+    );
     setLoading(false);
     if (!res.ok) {
       setError(res.error);
@@ -64,7 +74,11 @@ export function LocksTab({ scope, slug, canManage }: LocksTabProps) {
     const res = await releaseFileLockAction({ ...scope, lockId });
     setReleasing(null);
     if (!res.ok) {
-      toast({ title: "Couldn't release lock", description: res.error, type: "error" });
+      toast({
+        title: "Couldn't release lock",
+        description: res.error,
+        type: "error",
+      });
       return;
     }
     toast({ title: res.released ? "Lock released" : "Lock was already gone" });
@@ -75,10 +89,21 @@ export function LocksTab({ scope, slug, canManage }: LocksTabProps) {
     <div className="flex flex-col gap-3" data-testid="repo-locks-tab">
       <div className="flex items-center justify-between">
         <p className="text-xs text-muted-foreground">
-          Live file locks — TTL-bounded leases agents hold while editing, so concurrent edits don&apos;t collide.
+          Live file locks — TTL-bounded leases agents hold while editing, so
+          concurrent edits don&apos;t collide.
         </p>
-        <Button type="button" variant="outline" size="sm" onClick={() => void load()} disabled={loading} data-testid="locks-refresh-btn">
-          <RefreshCw className={loading ? "animate-spin" : undefined} aria-hidden="true" />
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => void load()}
+          disabled={loading}
+          data-testid="locks-refresh-btn"
+        >
+          <RefreshCw
+            className={loading ? "animate-spin" : undefined}
+            aria-hidden="true"
+          />
           Refresh
         </Button>
       </div>
@@ -86,7 +111,12 @@ export function LocksTab({ scope, slug, canManage }: LocksTabProps) {
       {error ? (
         <p className="text-xs text-destructive">{error}</p>
       ) : locks.length === 0 && !loading ? (
-        <EmptyState icon={<Lock />} title="No active locks" description="No agent currently holds a file lock in this workspace." variant="dashed" />
+        <EmptyState
+          icon={<Lock />}
+          title="No active locks"
+          description="No agent currently holds a file lock in this workspace."
+          variant="dashed"
+        />
       ) : (
         <Table data-testid="locks-table">
           <TableHeader>
@@ -95,19 +125,36 @@ export function LocksTab({ scope, slug, canManage }: LocksTabProps) {
               <TableHead>Held by</TableHead>
               <TableHead>Acquired</TableHead>
               <TableHead>Expires</TableHead>
-              {canManage && <TableHead className="text-right">Action</TableHead>}
+              {canManage && (
+                <TableHead className="text-right">Action</TableHead>
+              )}
             </TableRow>
           </TableHeader>
           <TableBody>
-            {locks.length === 0 && <TableEmpty colSpan={canManage ? 5 : 4}>No active locks.</TableEmpty>}
+            {locks.length === 0 && (
+              <TableEmpty colSpan={canManage ? 5 : 4}>
+                No active locks.
+              </TableEmpty>
+            )}
             {locks.map((lock) => (
-              <TableRow key={lock.lockId} data-testid={`lock-row-${lock.lockId}`}>
-                <TableCell className="font-mono text-xs">{lock.naturalKey}</TableCell>
-                <TableCell>
-                  <span className="text-sm text-foreground">{lock.agentId}</span>
+              <TableRow
+                key={lock.lockId}
+                data-testid={`lock-row-${lock.lockId}`}
+              >
+                <TableCell className="font-mono text-xs">
+                  {lock.naturalKey}
                 </TableCell>
-                <TableCell className="text-xs text-muted-foreground">{formatEpochMs(lock.acquiredAt)}</TableCell>
-                <TableCell className="text-xs text-muted-foreground">{formatEpochMs(lock.expiresAt)}</TableCell>
+                <TableCell>
+                  <span className="text-sm text-foreground">
+                    {lock.agentId}
+                  </span>
+                </TableCell>
+                <TableCell className="text-xs text-muted-foreground">
+                  {formatEpochMs(lock.acquiredAt)}
+                </TableCell>
+                <TableCell className="text-xs text-muted-foreground">
+                  {formatEpochMs(lock.expiresAt)}
+                </TableCell>
                 {canManage && (
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-2">

@@ -3,16 +3,26 @@
  * via agent.trace.get and renders <SpanTree>. Renders a clear "not found" card
  * when the execution is unknown or cross-tenant (never throws from the RSC).
  *
+ * When the resolved trace's root status is "failed", also renders the
+ * structured failure frame (<DebugSection>, agent.debug.trace) ABOVE the span
+ * tree — per the run-detail spec, the debug panel comes first so a failed run
+ * leads with "why", not a raw tree. DebugSection gets its own Suspense
+ * boundary so its (separate) invoke() never blocks the span tree that's
+ * already resolved here.
+ *
  * Auth note: apps/app does NOT bootstrap IAM (invoke() skips role checks); the
  * page already gated org membership. agent.trace.get is surfaces
  * ["api","mcp","agent"] — pass surface "agent".
  */
+import { Suspense } from "react";
 import "@oxagen/handlers/register";
 import "@oxagen/agent/register";
 import { invoke } from "@oxagen/oxagen";
 import { runInTenantScope } from "@oxagen/tenancy";
 import type { AgentTraceGetOutput } from "@oxagen/oxagen/contracts/agent.trace.get";
 import { SpanTree } from "@/components/activity/span-tree";
+import { Skeleton } from "@/components/ui/skeleton";
+import { DebugSection } from "./debug-section";
 
 interface TraceSectionProps {
   orgId: string;
@@ -62,5 +72,27 @@ export async function TraceSection({
     );
   }
 
-  return <SpanTree trace={trace} />;
+  return (
+    <div className="flex flex-col gap-4">
+      {trace.status === "failed" ? (
+        <Suspense
+          fallback={
+            <div className="flex flex-col gap-2 rounded-lg border border-destructive/40 bg-destructive/5 p-4">
+              <Skeleton className="h-5 w-1/3" />
+              <Skeleton className="h-4 w-2/3" />
+              <Skeleton className="h-4 w-1/2" />
+            </div>
+          }
+        >
+          <DebugSection
+            orgId={orgId}
+            workspaceId={workspaceId}
+            userId={userId}
+            executionId={trace.executionId}
+          />
+        </Suspense>
+      ) : null}
+      <SpanTree trace={trace} />
+    </div>
+  );
 }

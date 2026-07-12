@@ -130,7 +130,9 @@ export function FilesTab({ scope, slug, canManage }: FilesTabProps) {
         {error && <p className="text-xs text-destructive">{error}</p>}
         <Button
           type="submit"
-          disabled={submitting || !path.trim() || !message.trim() || !branch.trim()}
+          disabled={
+            submitting || !path.trim() || !message.trim() || !branch.trim()
+          }
           className="self-start"
           data-testid="file-commit-submit"
         >
@@ -139,7 +141,10 @@ export function FilesTab({ scope, slug, canManage }: FilesTabProps) {
       </form>
 
       {result && (
-        <div className="flex flex-col gap-2 rounded-md border border-border/60 p-3" data-testid="file-commit-result">
+        <div
+          className="flex flex-col gap-2 rounded-md border border-border/60 p-3"
+          data-testid="file-commit-result"
+        >
           <a
             href={result.htmlUrl}
             target="_blank"
@@ -148,7 +153,9 @@ export function FilesTab({ scope, slug, canManage }: FilesTabProps) {
           >
             View file on GitHub ↗
           </a>
-          <p className="font-mono text-xs text-muted-foreground">{result.commitSha.slice(0, 12)}</p>
+          <p className="font-mono text-xs text-muted-foreground">
+            {result.commitSha.slice(0, 12)}
+          </p>
           {result.diffs?.map((d) => (
             <pre
               key={d.path}

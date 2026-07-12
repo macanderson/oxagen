@@ -23,14 +23,17 @@ import {
 } from "./repo-drawers";
 import type { RepoRow } from "@/lib/workbench/repos";
 
-const { createRepoAction, forkRepoAction, configureRepoAction, editRepoFileAction } = vi.hoisted(
-  () => ({
-    createRepoAction: vi.fn(),
-    forkRepoAction: vi.fn(),
-    configureRepoAction: vi.fn(),
-    editRepoFileAction: vi.fn(),
-  }),
-);
+const {
+  createRepoAction,
+  forkRepoAction,
+  configureRepoAction,
+  editRepoFileAction,
+} = vi.hoisted(() => ({
+  createRepoAction: vi.fn(),
+  forkRepoAction: vi.fn(),
+  configureRepoAction: vi.fn(),
+  editRepoFileAction: vi.fn(),
+}));
 
 vi.mock("./actions", () => ({
   createRepoAction,
@@ -38,7 +41,9 @@ vi.mock("./actions", () => ({
   configureRepoAction,
   editRepoFileAction,
 }));
-vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ add: vi.fn() }) }));
+vi.mock("@/components/ui/toast", () => ({
+  useToast: () => ({ add: vi.fn() }),
+}));
 
 const SCOPE = { orgSlug: "acme", workspaceSlug: "eng" };
 
@@ -76,7 +81,11 @@ describe("CreateRepoDrawer", () => {
   it("submit success shows the result and 'Create another' resets the form", async () => {
     createRepoAction.mockResolvedValue({
       ok: true,
-      result: { fullName: "acme/new-repo", htmlUrl: "https://github.com/acme/new-repo", defaultBranch: "main" },
+      result: {
+        fullName: "acme/new-repo",
+        htmlUrl: "https://github.com/acme/new-repo",
+        defaultBranch: "main",
+      },
     });
     const user = userEvent.setup();
     render(<CreateRepoDrawer open={true} onOpenChange={vi.fn()} {...SCOPE} />);
@@ -87,7 +96,11 @@ describe("CreateRepoDrawer", () => {
     const success = await screen.findByTestId("create-repo-success");
     expect(within(success).getByText("acme/new-repo")).toBeInTheDocument();
     expect(createRepoAction).toHaveBeenCalledWith(
-      expect.objectContaining({ orgSlug: "acme", workspaceSlug: "eng", name: "new-repo" }),
+      expect.objectContaining({
+        orgSlug: "acme",
+        workspaceSlug: "eng",
+        name: "new-repo",
+      }),
     );
 
     await user.click(screen.getByRole("button", { name: "Create another" }));
@@ -96,7 +109,10 @@ describe("CreateRepoDrawer", () => {
   });
 
   it("submit error displays the error and keeps the form visible", async () => {
-    createRepoAction.mockResolvedValue({ ok: false, error: "Name already taken" });
+    createRepoAction.mockResolvedValue({
+      ok: false,
+      error: "Name already taken",
+    });
     const user = userEvent.setup();
     render(<CreateRepoDrawer open={true} onOpenChange={vi.fn()} {...SCOPE} />);
 
@@ -117,7 +133,11 @@ describe("ForkRepoDrawer", () => {
   it("submit success shows the result and 'Fork another' resets the form", async () => {
     forkRepoAction.mockResolvedValue({
       ok: true,
-      result: { fullName: "acme/hello-world", htmlUrl: "https://github.com/acme/hello-world", defaultBranch: "main" },
+      result: {
+        fullName: "acme/hello-world",
+        htmlUrl: "https://github.com/acme/hello-world",
+        defaultBranch: "main",
+      },
     });
     const user = userEvent.setup();
     render(<ForkRepoDrawer open={true} onOpenChange={vi.fn()} {...SCOPE} />);
@@ -143,7 +163,10 @@ describe("ForkRepoDrawer", () => {
   });
 
   it("submit error displays the error and keeps the form visible", async () => {
-    forkRepoAction.mockResolvedValue({ ok: false, error: "Repository not found" });
+    forkRepoAction.mockResolvedValue({
+      ok: false,
+      error: "Repository not found",
+    });
     const user = userEvent.setup();
     render(<ForkRepoDrawer open={true} onOpenChange={vi.fn()} {...SCOPE} />);
 
@@ -178,7 +201,11 @@ describe("ConfigureRepoDrawer", () => {
     await user.click(screen.getByTestId("configure-repo-submit"));
 
     expect(configureRepoAction).toHaveBeenCalledWith(
-      expect.objectContaining({ orgSlug: "acme", workspaceSlug: "eng", repoId: "con_1" }),
+      expect.objectContaining({
+        orgSlug: "acme",
+        workspaceSlug: "eng",
+        repoId: "con_1",
+      }),
     );
     await vi.waitFor(() => {
       expect(onSaved).toHaveBeenCalledTimes(1);
@@ -187,16 +214,26 @@ describe("ConfigureRepoDrawer", () => {
   });
 
   it("submit error displays the error and does not call onSaved", async () => {
-    configureRepoAction.mockResolvedValue({ ok: false, error: "Invalid polling interval" });
+    configureRepoAction.mockResolvedValue({
+      ok: false,
+      error: "Invalid polling interval",
+    });
     const onSaved = vi.fn();
     const user = userEvent.setup();
     render(
-      <ConfigureRepoDrawer target={makeRow()} onOpenChange={vi.fn()} onSaved={onSaved} {...SCOPE} />,
+      <ConfigureRepoDrawer
+        target={makeRow()}
+        onOpenChange={vi.fn()}
+        onSaved={onSaved}
+        {...SCOPE}
+      />,
     );
 
     await user.click(screen.getByTestId("configure-repo-submit"));
 
-    expect(await screen.findByText("Invalid polling interval")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Invalid polling interval"),
+    ).toBeInTheDocument();
     expect(onSaved).not.toHaveBeenCalled();
   });
 });
@@ -277,11 +314,16 @@ describe("EditFileLauncherDrawer", () => {
     );
 
     await user.click(screen.getByRole("button", { name: "Start another" }));
-    expect(screen.queryByTestId("edit-file-launcher-success")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("edit-file-launcher-success"),
+    ).not.toBeInTheDocument();
   });
 
   it("submit error displays the error and keeps the form visible", async () => {
-    editRepoFileAction.mockResolvedValue({ ok: false, error: "The coding agent failed to complete this edit." });
+    editRepoFileAction.mockResolvedValue({
+      ok: false,
+      error: "The coding agent failed to complete this edit.",
+    });
     const user = userEvent.setup();
     render(
       <EditFileLauncherDrawer
@@ -303,7 +345,9 @@ describe("EditFileLauncherDrawer", () => {
     expect(
       await screen.findByText("The coding agent failed to complete this edit."),
     ).toBeInTheDocument();
-    expect(screen.queryByTestId("edit-file-launcher-success")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("edit-file-launcher-success"),
+    ).not.toBeInTheDocument();
   });
 
   it("disables submit until owner, repo, and a >=10 char instruction are present", async () => {
@@ -323,10 +367,16 @@ describe("EditFileLauncherDrawer", () => {
     await user.type(screen.getByLabelText("Repository"), "hello-world");
     expect(screen.getByTestId("edit-file-launcher-submit")).toBeDisabled();
 
-    await user.type(screen.getByTestId("edit-file-instruction-input"), "too short");
+    await user.type(
+      screen.getByTestId("edit-file-instruction-input"),
+      "too short",
+    );
     expect(screen.getByTestId("edit-file-launcher-submit")).toBeDisabled();
 
-    await user.type(screen.getByTestId("edit-file-instruction-input"), " now long enough");
+    await user.type(
+      screen.getByTestId("edit-file-instruction-input"),
+      " now long enough",
+    );
     expect(screen.getByTestId("edit-file-launcher-submit")).toBeEnabled();
   });
 });

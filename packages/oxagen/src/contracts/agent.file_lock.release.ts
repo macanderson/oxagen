@@ -25,12 +25,24 @@ export const agentFileLockRelease = registerCapability({
     workspace: { Owner: "allow" },
   },
   input: z.object({
-    lockId: z.string().describe("The lockId returned by agent.file.lock.acquire or agent.file.lock.list."),
+    lockId: z
+      .string()
+      .describe(
+        "The lockId returned by agent.file.lock.acquire or agent.file.lock.list.",
+      ),
   }),
   output: z.object({
-    released: z.boolean().describe("false when no matching lock existed (idempotent, not an error)."),
+    released: z
+      .boolean()
+      .describe(
+        "false when no matching lock existed (idempotent, not an error).",
+      ),
   }),
 });
 
-export type AgentFileLockReleaseInput = z.output<typeof agentFileLockRelease.input>;
-export type AgentFileLockReleaseOutput = z.output<typeof agentFileLockRelease.output>;
+export type AgentFileLockReleaseInput = z.output<
+  typeof agentFileLockRelease.input
+>;
+export type AgentFileLockReleaseOutput = z.output<
+  typeof agentFileLockRelease.output
+>;

@@ -48,7 +48,9 @@ export const agentSubagentLogs = registerCapability({
   input: z.object({
     fanoutId: z
       .string()
-      .describe("The fan-out / dispatch id (the dispatchId from research.swarm.start or agent.subagent.dispatch)"),
+      .describe(
+        "The fan-out / dispatch id (the dispatchId from research.swarm.start or agent.subagent.dispatch)",
+      ),
     title: z
       .string()
       .max(200)

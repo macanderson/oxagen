@@ -9,7 +9,13 @@
  * non-manager.
  */
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, cleanup, within, waitFor } from "@testing-library/react";
+import {
+  render,
+  screen,
+  cleanup,
+  within,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { LocksTab } from "./locks-tab";
 
@@ -19,7 +25,9 @@ const { listFileLocksAction, releaseFileLockAction } = vi.hoisted(() => ({
 }));
 
 vi.mock("../actions", () => ({ listFileLocksAction, releaseFileLockAction }));
-vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ add: vi.fn() }) }));
+vi.mock("@/components/ui/toast", () => ({
+  useToast: () => ({ add: vi.fn() }),
+}));
 
 const LOCK = {
   lockId: "lock_abc123",
@@ -81,11 +89,15 @@ describe("LocksTab", () => {
       />,
     );
     await screen.findByTestId("lock-row-lock_abc123");
-    expect(screen.queryByTestId("lock-release-lock_abc123")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("lock-release-lock_abc123"),
+    ).not.toBeInTheDocument();
   });
 
   it("Release calls releaseFileLockAction and refreshes the list", async () => {
-    listFileLocksAction.mockResolvedValueOnce({ ok: true, locks: [LOCK] }).mockResolvedValueOnce({ ok: true, locks: [] });
+    listFileLocksAction
+      .mockResolvedValueOnce({ ok: true, locks: [LOCK] })
+      .mockResolvedValueOnce({ ok: true, locks: [] });
     releaseFileLockAction.mockResolvedValue({ ok: true, released: true });
     const user = userEvent.setup();
     render(

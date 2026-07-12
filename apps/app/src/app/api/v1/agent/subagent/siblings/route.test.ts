@@ -9,13 +9,17 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { SubagentRunNotFoundError } from "@oxagen/agent";
 
-const { mockGetSessionOrRedirect, mockResolveWorkspaceScope, mockInvoke, mockConsoleError } =
-  vi.hoisted(() => ({
-    mockGetSessionOrRedirect: vi.fn(),
-    mockResolveWorkspaceScope: vi.fn(),
-    mockInvoke: vi.fn(),
-    mockConsoleError: vi.fn(),
-  }));
+const {
+  mockGetSessionOrRedirect,
+  mockResolveWorkspaceScope,
+  mockInvoke,
+  mockConsoleError,
+} = vi.hoisted(() => ({
+  mockGetSessionOrRedirect: vi.fn(),
+  mockResolveWorkspaceScope: vi.fn(),
+  mockInvoke: vi.fn(),
+  mockConsoleError: vi.fn(),
+}));
 
 vi.mock("@oxagen/handlers/register", () => ({}));
 vi.mock("@oxagen/agent/register", () => ({}));
@@ -57,7 +61,9 @@ describe("GET /api/v1/agent/subagent/siblings", () => {
   it("returns 401 when there is no session", async () => {
     mockGetSessionOrRedirect.mockRejectedValueOnce(new Error("no session"));
 
-    const res = await GET(req({ workspaceId: "ws-1", runId: "run-1" }) as never);
+    const res = await GET(
+      req({ workspaceId: "ws-1", runId: "run-1" }) as never,
+    );
 
     expect(res.status).toBe(401);
     expect(mockInvoke).not.toHaveBeenCalled();
@@ -80,7 +86,9 @@ describe("GET /api/v1/agent/subagent/siblings", () => {
   it("returns 404 when the workspace is unknown or membership is denied", async () => {
     mockResolveWorkspaceScope.mockResolvedValueOnce(null);
 
-    const res = await GET(req({ workspaceId: "ws-1", runId: "run-1" }) as never);
+    const res = await GET(
+      req({ workspaceId: "ws-1", runId: "run-1" }) as never,
+    );
 
     expect(res.status).toBe(404);
     const body = (await res.json()) as { error: string };
@@ -91,7 +99,9 @@ describe("GET /api/v1/agent/subagent/siblings", () => {
   it("returns 404 when list_subagent_siblings throws SubagentRunNotFoundError", async () => {
     mockInvoke.mockRejectedValueOnce(new SubagentRunNotFoundError("run-1"));
 
-    const res = await GET(req({ workspaceId: "ws-1", runId: "run-1" }) as never);
+    const res = await GET(
+      req({ workspaceId: "ws-1", runId: "run-1" }) as never,
+    );
 
     expect(res.status).toBe(404);
     const body = (await res.json()) as { error: string };
@@ -102,7 +112,9 @@ describe("GET /api/v1/agent/subagent/siblings", () => {
     const payload = { siblings: [{ runId: "run-2", status: "running" }] };
     mockInvoke.mockResolvedValueOnce(payload);
 
-    const res = await GET(req({ workspaceId: "ws-1", runId: "run-1" }) as never);
+    const res = await GET(
+      req({ workspaceId: "ws-1", runId: "run-1" }) as never,
+    );
 
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual(payload);
@@ -122,7 +134,9 @@ describe("GET /api/v1/agent/subagent/siblings", () => {
   it("returns a logged 500 when invoke() throws an unrelated error", async () => {
     mockInvoke.mockRejectedValueOnce(new Error("neo4j down"));
 
-    const res = await GET(req({ workspaceId: "ws-1", runId: "run-1" }) as never);
+    const res = await GET(
+      req({ workspaceId: "ws-1", runId: "run-1" }) as never,
+    );
 
     expect(res.status).toBe(500);
     const body = (await res.json()) as { error: string };

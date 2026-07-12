@@ -14,7 +14,9 @@
  * yet (e.g. displayName is still the literal "GitHub" from a pending_setup
  * install) — callers must treat null as "repo not yet configured".
  */
-export function parseRepoSlug(displayName: string): { owner: string; repo: string } | null {
+export function parseRepoSlug(
+  displayName: string,
+): { owner: string; repo: string } | null {
   const primary = displayName.replace(/\s*\(\+\d+ more\)\s*$/, "").trim();
   const slash = primary.indexOf("/");
   if (slash <= 0 || slash === primary.length - 1) return null;

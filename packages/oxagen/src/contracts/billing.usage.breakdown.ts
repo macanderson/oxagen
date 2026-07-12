@@ -67,7 +67,7 @@ export const billingUsageBreakdown = registerCapability({
     "Aggregated usage for a time window broken down by model, surface, workspace, capability, and acting principal, plus a daily time series of tokens and cost. Org-scoped; pass workspaceId to narrow to one workspace. Powers the usage dashboard and per-seat/per-agent metering.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "e2e", "docs", "app"],
   scoped: true,
   // Reading your own usage must never consume credits — see file header.
   noBillingGate: true,

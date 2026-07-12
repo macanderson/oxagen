@@ -87,8 +87,16 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-const A = makeServer({ id: "reg:web-scraper:1.0.0", name: "web-scraper", title: "Web Scraper" });
-const B = makeServer({ id: "reg:pdf-parser:2.1.0", name: "pdf-parser", title: "PDF Parser" });
+const A = makeServer({
+  id: "reg:web-scraper:1.0.0",
+  name: "web-scraper",
+  title: "Web Scraper",
+});
+const B = makeServer({
+  id: "reg:pdf-parser:2.1.0",
+  name: "pdf-parser",
+  title: "PDF Parser",
+});
 
 describe("BrowsePanel — bulk install", () => {
   it("reveals a selection toolbar with a live count as cards are checked", async () => {
@@ -105,13 +113,19 @@ describe("BrowsePanel — bulk install", () => {
 
     // Toolbar hidden until something is selected.
     await screen.findByTestId(`marketplace-browse-card-${A.id}`);
-    expect(screen.queryByTestId("marketplace-browse-selection-toolbar")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("marketplace-browse-selection-toolbar"),
+    ).not.toBeInTheDocument();
 
     await user.click(screen.getByTestId(`marketplace-browse-select-${A.id}`));
-    expect(screen.getByTestId("marketplace-browse-selection-count")).toHaveTextContent("1 selected");
+    expect(
+      screen.getByTestId("marketplace-browse-selection-count"),
+    ).toHaveTextContent("1 selected");
 
     await user.click(screen.getByTestId(`marketplace-browse-select-${B.id}`));
-    expect(screen.getByTestId("marketplace-browse-selection-count")).toHaveTextContent("2 selected");
+    expect(
+      screen.getByTestId("marketplace-browse-selection-count"),
+    ).toHaveTextContent("2 selected");
   });
 
   it("dispatches installBulkAction with resolved names + tab pluginType and marks rows installed", async () => {
@@ -144,10 +158,16 @@ describe("BrowsePanel — bulk install", () => {
 
     // Rows flip to installed → checkboxes disappear, selection clears.
     await waitFor(() =>
-      expect(screen.queryByTestId("marketplace-browse-selection-toolbar")).not.toBeInTheDocument(),
+      expect(
+        screen.queryByTestId("marketplace-browse-selection-toolbar"),
+      ).not.toBeInTheDocument(),
     );
-    expect(screen.getByTestId(`marketplace-browse-installed-badge-${A.id}`)).toBeInTheDocument();
-    expect(screen.getByTestId(`marketplace-browse-installed-badge-${B.id}`)).toBeInTheDocument();
+    expect(
+      screen.getByTestId(`marketplace-browse-installed-badge-${A.id}`),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByTestId(`marketplace-browse-installed-badge-${B.id}`),
+    ).toBeInTheDocument();
   });
 
   it("surfaces per-item failures inline and keeps rows uninstalled on partial failure", async () => {
@@ -173,11 +193,17 @@ describe("BrowsePanel — bulk install", () => {
     await user.click(screen.getByTestId("marketplace-browse-bulk-install-btn"));
 
     // Per-item failures render in the toolbar; selection is retained.
-    const failures = await screen.findByTestId("marketplace-browse-bulk-failures");
+    const failures = await screen.findByTestId(
+      "marketplace-browse-bulk-failures",
+    );
     expect(failures).toHaveTextContent("pdf-parser: registry unreachable");
-    expect(screen.getByTestId("marketplace-browse-selection-toolbar")).toBeInTheDocument();
+    expect(
+      screen.getByTestId("marketplace-browse-selection-toolbar"),
+    ).toBeInTheDocument();
 
     // No optimistic install badge on a failed bulk run.
-    expect(screen.queryByTestId(`marketplace-browse-installed-badge-${A.id}`)).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId(`marketplace-browse-installed-badge-${A.id}`),
+    ).not.toBeInTheDocument();
   });
 });

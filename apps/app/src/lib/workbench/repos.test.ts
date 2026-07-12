@@ -21,7 +21,11 @@ vi.mock("@oxagen/oxagen", () => ({
   invoke: mockInvoke,
 }));
 
-import { listReposWithMetrics, listRepoConnections, getRepoMetrics } from "./repos";
+import {
+  listReposWithMetrics,
+  listRepoConnections,
+  getRepoMetrics,
+} from "./repos";
 import type { WorkbenchCtx } from "./scope";
 
 const CTX: WorkbenchCtx = {
@@ -34,7 +38,10 @@ const CTX: WorkbenchCtx = {
   messageId: null,
 };
 
-function connection(publicId: string, displayName: string): Record<string, unknown> {
+function connection(
+  publicId: string,
+  displayName: string,
+): Record<string, unknown> {
   return { publicId, displayName, connectorId: "github" };
 }
 
@@ -65,7 +72,10 @@ describe("listReposWithMetrics", () => {
     mockInvoke.mockImplementation((capability: string, input: unknown) => {
       if (capability === "list_connections") {
         return Promise.resolve({
-          connections: [connection("repo-1", "acme/one"), connection("repo-2", "acme/two")],
+          connections: [
+            connection("repo-1", "acme/one"),
+            connection("repo-2", "acme/two"),
+          ],
         });
       }
       if (capability === "get_repo_metrics") {
@@ -133,7 +143,9 @@ describe("listReposWithMetrics", () => {
   it("falls back to a generic message when the thrown value is not an Error", async () => {
     mockInvoke.mockImplementation((capability: string) => {
       if (capability === "list_connections") {
-        return Promise.resolve({ connections: [connection("repo-1", "acme/weird")] });
+        return Promise.resolve({
+          connections: [connection("repo-1", "acme/weird")],
+        });
       }
       if (capability === "get_repo_metrics") {
         // Intentionally reject with a non-Error to cover the fallback branch

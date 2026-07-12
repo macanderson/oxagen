@@ -18,20 +18,28 @@ export const agentRepoEdit = registerCapability({
     workspace: { Owner: "allow", Member: "allow" },
   },
   input: z.object({
-    owner: z.string().describe("GitHub organisation or user that owns the repository"),
+    owner: z
+      .string()
+      .describe("GitHub organisation or user that owns the repository"),
     repo: z.string().describe("Repository name (without the owner prefix)"),
     instruction: z
       .string()
       .min(10, "Instruction must be at least 10 characters")
-      .describe("Natural-language coding instruction for the agent (min 10 chars)"),
+      .describe(
+        "Natural-language coding instruction for the agent (min 10 chars)",
+      ),
     baseBranch: z
       .string()
       .optional()
-      .describe("Branch to base the changes on (defaults to 'main' when omitted)"),
+      .describe(
+        "Branch to base the changes on (defaults to 'main' when omitted)",
+      ),
     branchName: z
       .string()
       .optional()
-      .describe("Branch name to push the agent's changes to (auto-generated when omitted)"),
+      .describe(
+        "Branch name to push the agent's changes to (auto-generated when omitted)",
+      ),
     model: z
       .string()
       .optional()
@@ -43,7 +51,9 @@ export const agentRepoEdit = registerCapability({
       .max(40)
       .optional()
       .default(12)
-      .describe("Maximum coding-loop steps the agent may execute (1–40, default 12)"),
+      .describe(
+        "Maximum coding-loop steps the agent may execute (1–40, default 12)",
+      ),
     environmentId: z
       .string()
       .min(1)
@@ -71,14 +81,26 @@ export const agentRepoEdit = registerCapability({
     warnings: z
       .array(z.string())
       .optional()
-      .describe("Non-fatal advisories, e.g. that shell execution was unavailable."),
+      .describe(
+        "Non-fatal advisories, e.g. that shell execution was unavailable.",
+      ),
     diffs: z
       .array(
         z.object({
-          path: z.string().describe("Repo-relative file path (matches an entry in changedFiles)"),
+          path: z
+            .string()
+            .describe(
+              "Repo-relative file path (matches an entry in changedFiles)",
+            ),
           patch: z.string().describe("Unified-diff patch body for this file"),
-          additions: z.number().int().describe("Added-line count for this file"),
-          deletions: z.number().int().describe("Removed-line count for this file"),
+          additions: z
+            .number()
+            .int()
+            .describe("Added-line count for this file"),
+          deletions: z
+            .number()
+            .int()
+            .describe("Removed-line count for this file"),
         }),
       )
       .optional()

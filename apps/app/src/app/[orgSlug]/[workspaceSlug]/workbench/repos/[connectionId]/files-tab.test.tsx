@@ -75,7 +75,10 @@ describe("FilesTab", () => {
 
     await user.type(screen.getByTestId("file-path-input"), "src/index.ts");
     await user.type(screen.getByTestId("file-branch-input"), "feature/x");
-    await user.type(screen.getByTestId("file-content-input"), "console.log('hi')");
+    await user.type(
+      screen.getByTestId("file-content-input"),
+      "console.log('hi')",
+    );
     await user.type(screen.getByTestId("file-message-input"), "Update index");
     await user.click(screen.getByTestId("file-commit-submit"));
 
@@ -95,7 +98,10 @@ describe("FilesTab", () => {
   });
 
   it("submit error shows the error message and no result", async () => {
-    putRepoFileAction.mockResolvedValue({ ok: false, error: "File is locked by another agent" });
+    putRepoFileAction.mockResolvedValue({
+      ok: false,
+      error: "File is locked by another agent",
+    });
     const user = userEvent.setup();
     render(<FilesTab scope={SCOPE} slug={SLUG} canManage={true} />);
 
@@ -104,7 +110,9 @@ describe("FilesTab", () => {
     await user.type(screen.getByTestId("file-message-input"), "Update index");
     await user.click(screen.getByTestId("file-commit-submit"));
 
-    expect(await screen.findByText("File is locked by another agent")).toBeInTheDocument();
+    expect(
+      await screen.findByText("File is locked by another agent"),
+    ).toBeInTheDocument();
     expect(screen.queryByTestId("file-commit-result")).not.toBeInTheDocument();
   });
 });

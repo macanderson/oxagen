@@ -11,13 +11,17 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { mockGetSessionOrRedirect, mockResolveWorkspaceScope, mockInvoke, mockConsoleError } =
-  vi.hoisted(() => ({
-    mockGetSessionOrRedirect: vi.fn(),
-    mockResolveWorkspaceScope: vi.fn(),
-    mockInvoke: vi.fn(),
-    mockConsoleError: vi.fn(),
-  }));
+const {
+  mockGetSessionOrRedirect,
+  mockResolveWorkspaceScope,
+  mockInvoke,
+  mockConsoleError,
+} = vi.hoisted(() => ({
+  mockGetSessionOrRedirect: vi.fn(),
+  mockResolveWorkspaceScope: vi.fn(),
+  mockInvoke: vi.fn(),
+  mockConsoleError: vi.fn(),
+}));
 
 vi.mock("@oxagen/handlers/register", () => ({}));
 vi.mock("@oxagen/agent/register", () => ({}));
@@ -60,14 +64,18 @@ beforeEach(() => {
   vi.spyOn(console, "error").mockImplementation(mockConsoleError);
   mockGetSessionOrRedirect.mockResolvedValue(SESSION);
   mockResolveWorkspaceScope.mockResolvedValue(SCOPE);
-  mockInvoke.mockResolvedValue({ url: "https://app.oxagen.sh/logs/fanout-1.md" });
+  mockInvoke.mockResolvedValue({
+    url: "https://app.oxagen.sh/logs/fanout-1.md",
+  });
 });
 
 describe("POST /api/v1/agent/subagent/logs", () => {
   it("returns 401 when there is no session", async () => {
     mockGetSessionOrRedirect.mockRejectedValueOnce(new Error("no session"));
 
-    const res = await POST(req({ workspaceId: "ws-1", fanoutId: "fanout-1" }) as never);
+    const res = await POST(
+      req({ workspaceId: "ws-1", fanoutId: "fanout-1" }) as never,
+    );
 
     expect(res.status).toBe(401);
     expect(mockInvoke).not.toHaveBeenCalled();
@@ -99,7 +107,9 @@ describe("POST /api/v1/agent/subagent/logs", () => {
   it("returns 404 when the workspace is unknown or membership is denied", async () => {
     mockResolveWorkspaceScope.mockResolvedValueOnce(null);
 
-    const res = await POST(req({ workspaceId: "ws-1", fanoutId: "fanout-1" }) as never);
+    const res = await POST(
+      req({ workspaceId: "ws-1", fanoutId: "fanout-1" }) as never,
+    );
 
     expect(res.status).toBe(404);
     const body = (await res.json()) as { error: string };
@@ -111,7 +121,9 @@ describe("POST /api/v1/agent/subagent/logs", () => {
     const payload = { url: "https://app.oxagen.sh/logs/fanout-1.md" };
     mockInvoke.mockResolvedValueOnce(payload);
 
-    const res = await POST(req({ workspaceId: "ws-1", fanoutId: "fanout-1" }) as never);
+    const res = await POST(
+      req({ workspaceId: "ws-1", fanoutId: "fanout-1" }) as never,
+    );
 
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual(payload);
@@ -130,7 +142,11 @@ describe("POST /api/v1/agent/subagent/logs", () => {
 
   it("passes an optional title through to get_subagent_logs", async () => {
     await POST(
-      req({ workspaceId: "ws-1", fanoutId: "fanout-1", title: "My Fanout" }) as never,
+      req({
+        workspaceId: "ws-1",
+        fanoutId: "fanout-1",
+        title: "My Fanout",
+      }) as never,
     );
 
     expect(mockInvoke).toHaveBeenCalledWith(
@@ -144,7 +160,9 @@ describe("POST /api/v1/agent/subagent/logs", () => {
   it("returns a logged 500 when invoke() throws (no not-found special case)", async () => {
     mockInvoke.mockRejectedValueOnce(new Error("fanout not found"));
 
-    const res = await POST(req({ workspaceId: "ws-1", fanoutId: "fanout-1" }) as never);
+    const res = await POST(
+      req({ workspaceId: "ws-1", fanoutId: "fanout-1" }) as never,
+    );
 
     expect(res.status).toBe(500);
     const body = (await res.json()) as { error: string };

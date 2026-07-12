@@ -76,23 +76,42 @@ describe("ChildDrawer — payload viewer", () => {
     );
 
     expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining("/api/v1/agent/subagent/result?workspaceId=w1&runId=sar_1"),
+      expect.stringContaining(
+        "/api/v1/agent/subagent/result?workspaceId=w1&runId=sar_1",
+      ),
     );
 
     await waitFor(() =>
-      expect(screen.getByTestId("child-drawer-input")).toHaveTextContent('"query": "oxagen"'),
+      expect(screen.getByTestId("child-drawer-input")).toHaveTextContent(
+        '"query": "oxagen"',
+      ),
     );
-    expect(screen.getByTestId("child-drawer-output")).toHaveTextContent('"results"');
+    expect(screen.getByTestId("child-drawer-output")).toHaveTextContent(
+      '"results"',
+    );
   });
 
   it("renders an inline error when the result fetch fails", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 404 }));
-
-    render(
-      <ChildDrawer open onOpenChange={vi.fn()} run={makeRun()} fanoutId="fo_1" workspaceId="w1" />,
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: false, status: 404 }),
     );
 
-    await waitFor(() => expect(screen.getByTestId("child-drawer-result-error")).toBeInTheDocument());
+    render(
+      <ChildDrawer
+        open
+        onOpenChange={vi.fn()}
+        run={makeRun()}
+        fanoutId="fo_1"
+        workspaceId="w1"
+      />,
+    );
+
+    await waitFor(() =>
+      expect(
+        screen.getByTestId("child-drawer-result-error"),
+      ).toBeInTheDocument(),
+    );
     expect(screen.queryByTestId("child-drawer-input")).not.toBeInTheDocument();
   });
 });
@@ -125,7 +144,14 @@ describe("ChildDrawer — siblings", () => {
             runId: "sar_1",
             fanoutId: "fo_1",
             siblings: [
-              { runId: "sar_2", capabilityName: "summarize_text", status: "running", summary: "in progress", attempts: 1, errorReason: null },
+              {
+                runId: "sar_2",
+                capabilityName: "summarize_text",
+                status: "running",
+                summary: "in progress",
+                attempts: 1,
+                errorReason: null,
+              },
             ],
           }),
         });
@@ -147,10 +173,16 @@ describe("ChildDrawer — siblings", () => {
     const loadBtn = await screen.findByTestId("child-drawer-load-siblings-btn");
     await user.click(loadBtn);
 
-    await waitFor(() => expect(screen.getByTestId("child-drawer-siblings-list")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(
+        screen.getByTestId("child-drawer-siblings-list"),
+      ).toBeInTheDocument(),
+    );
     expect(screen.getByText("summarize_text")).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining("/api/v1/agent/subagent/siblings?workspaceId=w1&runId=sar_1"),
+      expect.stringContaining(
+        "/api/v1/agent/subagent/siblings?workspaceId=w1&runId=sar_1",
+      ),
     );
   });
 
@@ -175,83 +207,123 @@ describe("ChildDrawer — siblings", () => {
     );
 
     render(
-      <ChildDrawer open onOpenChange={vi.fn()} run={makeRun({ status: "completed" })} fanoutId="fo_1" workspaceId="w1" />,
+      <ChildDrawer
+        open
+        onOpenChange={vi.fn()}
+        run={makeRun({ status: "completed" })}
+        fanoutId="fo_1"
+        workspaceId="w1"
+      />,
     );
 
-    await waitFor(() => expect(screen.getByTestId("child-drawer-input")).toBeInTheDocument());
-    expect(screen.queryByTestId("child-drawer-load-siblings-btn")).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByTestId("child-drawer-input")).toBeInTheDocument(),
+    );
+    expect(
+      screen.queryByTestId("child-drawer-load-siblings-btn"),
+    ).not.toBeInTheDocument();
   });
 });
 
 describe("ChildDrawer — download logfile", () => {
   it("POSTs {workspaceId, fanoutId} and opens the returned URL", async () => {
     const user = userEvent.setup();
-    const fetchMock = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
-      if (init?.method === "POST") {
-        return Promise.resolve({ ok: true, json: async () => ({ serveUrl: "/api/v1/assets/ast_1" }) });
-      }
-      return Promise.resolve({
-        ok: true,
-        json: async () => ({
-          runId: "sar_1",
-          fanoutId: "fo_1",
-          capabilityName: "search_web",
-          status: "completed",
-          summary: null,
-          input: {},
-          output: {},
-          errorReason: null,
-          startedAt: null,
-          completedAt: null,
-        }),
+    const fetchMock = vi
+      .fn()
+      .mockImplementation((url: string, init?: RequestInit) => {
+        if (init?.method === "POST") {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({ serveUrl: "/api/v1/assets/ast_1" }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            runId: "sar_1",
+            fanoutId: "fo_1",
+            capabilityName: "search_web",
+            status: "completed",
+            summary: null,
+            input: {},
+            output: {},
+            errorReason: null,
+            startedAt: null,
+            completedAt: null,
+          }),
+        });
       });
-    });
     vi.stubGlobal("fetch", fetchMock);
 
     render(
-      <ChildDrawer open onOpenChange={vi.fn()} run={makeRun()} fanoutId="fo_1" workspaceId="w1" />,
+      <ChildDrawer
+        open
+        onOpenChange={vi.fn()}
+        run={makeRun()}
+        fanoutId="fo_1"
+        workspaceId="w1"
+      />,
     );
 
     await user.click(screen.getByTestId("child-drawer-download-logs-btn"));
 
     await waitFor(() =>
-      expect(window.open).toHaveBeenCalledWith("/api/v1/assets/ast_1", "_blank", "noopener,noreferrer"),
+      expect(window.open).toHaveBeenCalledWith(
+        "/api/v1/assets/ast_1",
+        "_blank",
+        "noopener,noreferrer",
+      ),
     );
-    const postCall = fetchMock.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === "POST")!;
-    const body = JSON.parse((postCall[1] as RequestInit).body as string) as Record<string, unknown>;
+    const postCall = fetchMock.mock.calls.find(
+      ([, init]) => (init as RequestInit | undefined)?.method === "POST",
+    )!;
+    const body = JSON.parse(
+      (postCall[1] as RequestInit).body as string,
+    ) as Record<string, unknown>;
     expect(body).toEqual({ workspaceId: "w1", fanoutId: "fo_1" });
   });
 
   it("shows an error toast when logfile generation fails", async () => {
     const user = userEvent.setup();
-    const fetchMock = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
-      if (init?.method === "POST") return Promise.resolve({ ok: false, status: 500 });
-      return Promise.resolve({
-        ok: true,
-        json: async () => ({
-          runId: "sar_1",
-          fanoutId: "fo_1",
-          capabilityName: "search_web",
-          status: "completed",
-          summary: null,
-          input: {},
-          output: {},
-          errorReason: null,
-          startedAt: null,
-          completedAt: null,
-        }),
+    const fetchMock = vi
+      .fn()
+      .mockImplementation((url: string, init?: RequestInit) => {
+        if (init?.method === "POST")
+          return Promise.resolve({ ok: false, status: 500 });
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            runId: "sar_1",
+            fanoutId: "fo_1",
+            capabilityName: "search_web",
+            status: "completed",
+            summary: null,
+            input: {},
+            output: {},
+            errorReason: null,
+            startedAt: null,
+            completedAt: null,
+          }),
+        });
       });
-    });
     vi.stubGlobal("fetch", fetchMock);
 
     render(
-      <ChildDrawer open onOpenChange={vi.fn()} run={makeRun()} fanoutId="fo_1" workspaceId="w1" />,
+      <ChildDrawer
+        open
+        onOpenChange={vi.fn()}
+        run={makeRun()}
+        fanoutId="fo_1"
+        workspaceId="w1"
+      />,
     );
 
     await user.click(screen.getByTestId("child-drawer-download-logs-btn"));
 
     await waitFor(() =>
-      expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ title: "Couldn't generate logfile" })),
+      expect(toastAdd).toHaveBeenCalledWith(
+        expect.objectContaining({ title: "Couldn't generate logfile" }),
+      ),
     );
   });
 });

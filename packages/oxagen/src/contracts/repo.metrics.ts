@@ -24,9 +24,17 @@ export const repoMetrics = registerCapability({
     displayName: z.string(),
     status: z.enum(["pending_setup", "active", "paused", "failed"]),
     entityCount: z.number().describe("Total entities ingested from this repo"),
-    entityCountByType: z.record(z.number()).describe("Entity count breakdown by type"),
-    lastSyncAt: z.string().nullable().describe("ISO timestamp of last successful sync"),
-    lastSyncDurationMs: z.number().nullable().describe("Duration of last sync in milliseconds"),
+    entityCountByType: z
+      .record(z.number())
+      .describe("Entity count breakdown by type"),
+    lastSyncAt: z
+      .string()
+      .nullable()
+      .describe("ISO timestamp of last successful sync"),
+    lastSyncDurationMs: z
+      .number()
+      .nullable()
+      .describe("Duration of last sync in milliseconds"),
     lastErrorAt: z.string().nullable().describe("ISO timestamp of last error"),
     errorMessage: z.string().nullable().describe("Most recent error message"),
     syncIntervalSeconds: z.number().int().positive().nullable(),

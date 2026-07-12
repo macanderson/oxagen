@@ -24,7 +24,10 @@ interface PageProps {
 
 export default async function WorkbenchReposPage({ params }: PageProps) {
   const { orgSlug, workspaceSlug } = await params;
-  const { ctx, canManage } = await resolveWorkbenchScope(orgSlug, workspaceSlug);
+  const { ctx, canManage } = await resolveWorkbenchScope(
+    orgSlug,
+    workspaceSlug,
+  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -34,7 +37,12 @@ export default async function WorkbenchReposPage({ params }: PageProps) {
         className="pb-0"
       />
       <Suspense fallback={<TableSkeleton rows={6} cols={5} />}>
-        <ReposSection ctx={ctx} orgSlug={orgSlug} workspaceSlug={workspaceSlug} canManage={canManage} />
+        <ReposSection
+          ctx={ctx}
+          orgSlug={orgSlug}
+          workspaceSlug={workspaceSlug}
+          canManage={canManage}
+        />
       </Suspense>
     </div>
   );

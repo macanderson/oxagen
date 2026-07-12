@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { fanoutStatusVariant, isFanoutCancellable, runStatusVariant } from "./status";
+import {
+  fanoutStatusVariant,
+  isFanoutCancellable,
+  runStatusVariant,
+} from "./status";
 
 describe("fanoutStatusVariant", () => {
   it.each([

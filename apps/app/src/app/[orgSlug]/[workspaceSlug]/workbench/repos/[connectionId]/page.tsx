@@ -16,7 +16,11 @@ import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { PageHeader } from "@/components/ui/page-header";
 import { workspace } from "@/lib/routes";
 import { resolveWorkbenchScope } from "@/lib/workbench/scope";
-import { listRepoConnections, getRepoMetrics, type RepoMetrics } from "@/lib/workbench/repos";
+import {
+  listRepoConnections,
+  getRepoMetrics,
+  type RepoMetrics,
+} from "@/lib/workbench/repos";
 import { parseRepoSlug } from "@/lib/workbench/repo-slug";
 import { RepoDetailClient, type TabValue } from "./repo-detail-client";
 
@@ -24,20 +28,38 @@ export const metadata: Metadata = {
   title: "Repo | Workbench",
 };
 
-const VALID_TABS: readonly TabValue[] = ["overview", "branches", "pulls", "files", "locks"];
+const VALID_TABS: readonly TabValue[] = [
+  "overview",
+  "branches",
+  "pulls",
+  "files",
+  "locks",
+];
 
 interface PageProps {
-  params: Promise<{ orgSlug: string; workspaceSlug: string; connectionId: string }>;
+  params: Promise<{
+    orgSlug: string;
+    workspaceSlug: string;
+    connectionId: string;
+  }>;
   searchParams: Promise<{ tab?: string }>;
 }
 
-export default async function WorkbenchRepoDetailPage({ params, searchParams }: PageProps) {
+export default async function WorkbenchRepoDetailPage({
+  params,
+  searchParams,
+}: PageProps) {
   const { orgSlug, workspaceSlug, connectionId } = await params;
   const { tab: requestedTab } = await searchParams;
-  const initialTab: TabValue = (VALID_TABS as readonly string[]).includes(requestedTab ?? "")
+  const initialTab: TabValue = (VALID_TABS as readonly string[]).includes(
+    requestedTab ?? "",
+  )
     ? (requestedTab as TabValue)
     : "overview";
-  const { ctx, canManage } = await resolveWorkbenchScope(orgSlug, workspaceSlug);
+  const { ctx, canManage } = await resolveWorkbenchScope(
+    orgSlug,
+    workspaceSlug,
+  );
 
   const connections = await listRepoConnections(ctx);
   const connection = connections.find((c) => c.publicId === connectionId);
@@ -67,8 +89,15 @@ export default async function WorkbenchRepoDetailPage({ params, searchParams }: 
         breadcrumb={
           <Breadcrumb
             items={[
-              { label: "Repos", href: workspace.workbench.repos({ orgSlug, workspaceSlug }) },
-              { label: slug ? `${slug.owner}/${slug.repo}` : connection.displayName },
+              {
+                label: "Repos",
+                href: workspace.workbench.repos({ orgSlug, workspaceSlug }),
+              },
+              {
+                label: slug
+                  ? `${slug.owner}/${slug.repo}`
+                  : connection.displayName,
+              },
             ]}
           />
         }

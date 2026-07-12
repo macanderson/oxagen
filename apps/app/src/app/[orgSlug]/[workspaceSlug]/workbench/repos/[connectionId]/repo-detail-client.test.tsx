@@ -14,11 +14,21 @@ import userEvent from "@testing-library/user-event";
 import { RepoDetailClient } from "./repo-detail-client";
 import type { RepoConnection } from "@/lib/workbench/repos";
 
-vi.mock("./overview-tab", () => ({ OverviewTab: () => <div data-testid="stub-overview" /> }));
-vi.mock("./branches-tab", () => ({ BranchesTab: () => <div data-testid="stub-branches" /> }));
-vi.mock("./pull-requests-tab", () => ({ PullRequestsTab: () => <div data-testid="stub-pulls" /> }));
-vi.mock("./files-tab", () => ({ FilesTab: () => <div data-testid="stub-files" /> }));
-vi.mock("./locks-tab", () => ({ LocksTab: () => <div data-testid="stub-locks" /> }));
+vi.mock("./overview-tab", () => ({
+  OverviewTab: () => <div data-testid="stub-overview" />,
+}));
+vi.mock("./branches-tab", () => ({
+  BranchesTab: () => <div data-testid="stub-branches" />,
+}));
+vi.mock("./pull-requests-tab", () => ({
+  PullRequestsTab: () => <div data-testid="stub-pulls" />,
+}));
+vi.mock("./files-tab", () => ({
+  FilesTab: () => <div data-testid="stub-files" />,
+}));
+vi.mock("./locks-tab", () => ({
+  LocksTab: () => <div data-testid="stub-locks" />,
+}));
 
 afterEach(() => {
   cleanup();
@@ -40,7 +50,14 @@ const CONNECTION: RepoConnection = {
   createdAt: "2026-07-01T00:00:00.000Z",
 };
 
-function renderClient(initialTab: "overview" | "branches" | "pulls" | "files" | "locks" = "overview") {
+function renderClient(
+  initialTab:
+    | "overview"
+    | "branches"
+    | "pulls"
+    | "files"
+    | "locks" = "overview",
+) {
   return render(
     <RepoDetailClient
       orgSlug="acme"

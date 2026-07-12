@@ -19,8 +19,14 @@ export const repoFilePut = registerCapability({
   input: z.object({
     owner: z.string().describe("Repository owner (user or organisation)"),
     repo: z.string().describe("Repository name"),
-    path: z.string().describe("File path within the repository (e.g. src/index.ts)"),
-    content: z.string().describe("Raw UTF-8 file content — base64 encoding is handled internally"),
+    path: z
+      .string()
+      .describe("File path within the repository (e.g. src/index.ts)"),
+    content: z
+      .string()
+      .describe(
+        "Raw UTF-8 file content — base64 encoding is handled internally",
+      ),
     message: z.string().describe("Commit message"),
     branch: z
       .string()
@@ -33,15 +39,25 @@ export const repoFilePut = registerCapability({
       ),
   }),
   output: z.object({
-    commitSha: z.string().describe("SHA of the commit that created or updated the file"),
+    commitSha: z
+      .string()
+      .describe("SHA of the commit that created or updated the file"),
     htmlUrl: z.string().describe("HTML URL of the committed file"),
     diffs: z
       .array(
         z.object({
-          path: z.string().describe("Repo-relative file path (equal to the input `path`)"),
+          path: z
+            .string()
+            .describe("Repo-relative file path (equal to the input `path`)"),
           patch: z.string().describe("Unified-diff patch body for this file"),
-          additions: z.number().int().describe("Added-line count for this file"),
-          deletions: z.number().int().describe("Removed-line count for this file"),
+          additions: z
+            .number()
+            .int()
+            .describe("Added-line count for this file"),
+          deletions: z
+            .number()
+            .int()
+            .describe("Removed-line count for this file"),
         }),
       )
       .optional()

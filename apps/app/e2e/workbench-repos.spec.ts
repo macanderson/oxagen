@@ -52,8 +52,13 @@ test("Repos list renders header actions + empty state; an unknown repo id 404s",
   });
 
   // ── 2. Detail page — an id from another workspace (or nonexistent) 404s ──
-  await gotoStable(page, `/${user.orgSlug}/default/workbench/repos/con_doesnotexist`);
-  await expect(page.getByRole("heading", { name: "Page not found" })).toBeVisible({
+  await gotoStable(
+    page,
+    `/${user.orgSlug}/default/workbench/repos/con_doesnotexist`,
+  );
+  await expect(
+    page.getByRole("heading", { name: "Page not found" }),
+  ).toBeVisible({
     timeout: 20_000,
   });
 

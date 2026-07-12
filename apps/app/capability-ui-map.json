@@ -186,45 +186,45 @@
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/_shared/conversation-page.tsx",
       "entry": "Conversation history nav — initial list, Load more, Archived expander",
       "testid": null,
-      "proof": null,
-      "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
+      "proof": "apps/app/e2e/conversation-lifecycle.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
     },
     "rename_conversation": {
       "route": "/[orgSlug]/[workspaceSlug]/ask",
       "page": "apps/app/src/components/conversations/conversation-item.tsx",
       "entry": "Row ⋯ menu → Rename → RenameDialog submit",
       "testid": null,
-      "proof": null,
-      "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
+      "proof": "apps/app/e2e/conversation-lifecycle.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
     },
     "archive_conversation": {
       "route": "/[orgSlug]/[workspaceSlug]/ask",
       "page": "apps/app/src/components/conversations/conversation-item.tsx",
       "entry": "Row ⋯ menu → Archive/Unarchive",
       "testid": null,
-      "proof": null,
-      "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
+      "proof": "apps/app/e2e/conversation-lifecycle.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
     },
     "delete_conversation": {
       "route": "/[orgSlug]/[workspaceSlug]/ask",
       "page": "apps/app/src/components/conversations/conversation-item.tsx",
       "entry": "Row ⋯ menu → Delete → DeleteConfirmDialog",
       "testid": null,
-      "proof": null,
-      "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
+      "proof": "apps/app/e2e/conversation-lifecycle.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
     },
     "purge_conversations": {
       "route": "/[orgSlug]/[workspaceSlug]/ask",
       "page": "apps/app/src/components/conversations/conversation-list.tsx",
       "entry": "Archived section → \"Delete all\" → DeleteConfirmDialog",
       "testid": null,
-      "proof": null,
-      "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
+      "proof": "apps/app/e2e/conversation-lifecycle.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
     },
     "list_notifications": {
       "route": "/[orgSlug]/[workspaceSlug]/* (shell)",
@@ -249,9 +249,9 @@
       "page": "apps/app/src/app/account/preferences/preferences-form.tsx",
       "entry": "\"Save preferences\" submit",
       "testid": null,
-      "proof": null,
-      "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
+      "proof": "apps/app/e2e/account-tabs.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
     },
     "suggest_commands": {
       "route": "/[orgSlug]/[workspaceSlug]/* (Cmd+K)",
@@ -330,45 +330,45 @@
       "page": "apps/app/src/app/[orgSlug]/developer/tokens/page.tsx",
       "entry": "TokensPanel → CreateKeyDialog form → createApiKeyAction",
       "testid": null,
-      "proof": null,
-      "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
+      "proof": "apps/app/e2e/developer-tokens.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
     },
     "revoke_api_key": {
       "route": "/[orgSlug]/developer/tokens",
       "page": "apps/app/src/app/[orgSlug]/developer/tokens/page.tsx",
       "entry": "ActiveKeyRow Revoke/Confirm → revokeApiKeyAction",
       "testid": null,
-      "proof": null,
-      "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
+      "proof": "apps/app/e2e/developer-tokens.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
     },
     "rotate_api_key": {
       "route": "/[orgSlug]/developer/tokens",
       "page": "apps/app/src/app/[orgSlug]/developer/tokens/page.tsx",
       "entry": "ActiveKeyRow Rotate → rotateApiKeyAction",
       "testid": null,
-      "proof": null,
-      "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
+      "proof": "apps/app/e2e/developer-tokens.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
     },
     "list_connections": {
-      "route": "/[orgSlug]/[workspaceSlug]/knowledge/repos",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/knowledge/repos/connections-section.tsx",
-      "entry": "ConnectionsSection RSC invoke(connection.list) → KnowledgeConnectionsClient",
-      "testid": "connection-row-{publicId}",
-      "proof": null,
-      "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
+      "route": "/[orgSlug]/[workspaceSlug]",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/page.tsx",
+      "entry": "Overview → Source health tile (SourcesTile RSC → status rows / zero state) on page load",
+      "testid": "overview-sources-tile",
+      "proof": "apps/app/e2e/workspace-overview.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
     },
     "get_graph_stats": {
-      "route": "/[orgSlug]/[workspaceSlug]/knowledge/inference",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/knowledge/inference/page.tsx",
-      "entry": "GraphStatsSection RSC → GraphStatsBoxes on load",
-      "testid": "graph-stats",
-      "proof": null,
-      "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
+      "route": "/[orgSlug]/[workspaceSlug]",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/page.tsx",
+      "entry": "Overview → Graph grounding tile (GraphTile RSC → GraphStatsBoxes / zero state) on page load",
+      "testid": "overview-graph-tile",
+      "proof": "apps/app/e2e/workspace-overview.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
     },
     "get_node": {
       "route": "/[orgSlug]/[workspaceSlug]/knowledge/nodes/[nodeId]",
@@ -411,18 +411,18 @@
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/evals/runs/[runId]/page.tsx",
       "entry": "RunDetailSection RSC → RunDetailClient",
       "testid": "eval-run-detail",
-      "proof": null,
-      "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
+      "proof": "apps/app/e2e/eval-run-detail.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
     },
     "list_datasets": {
       "route": "/[orgSlug]/[workspaceSlug]/evals",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/evals/page.tsx",
       "entry": "DatasetsSection RSC → DatasetsClient list",
       "testid": "evals-datasets-table",
-      "proof": null,
-      "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
+      "proof": "apps/app/e2e/evals-write-path.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
     },
     "generate_video": {
       "route": "/[orgSlug]/[workspaceSlug]/ask",
@@ -1039,6 +1039,105 @@
       "entry": "Cancel action (list row + detail header) with confirm dialog",
       "testid": "fleet-detail-cancel-btn",
       "proof": "apps/app/e2e/activity-fleet.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "debug_execution": {
+      "route": "/[orgSlug]/[workspaceSlug]/activity/[executionId]",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/activity/[executionId]/debug-section.tsx",
+      "entry": "Run detail page load, status=failed only — DebugSection invokes debug_execution and renders <DebugPanel> above the span tree",
+      "testid": "run-debug-panel",
+      "proof": "apps/app/e2e/activity-failed-run-debug.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "get_execution_lineage": {
+      "route": "/[orgSlug]/[workspaceSlug]/activity/[executionId]",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/activity/[executionId]/lineage-section.tsx",
+      "entry": "Run detail page load — LineageSection invokes get_execution_lineage and renders the :Execution→:SourceFile touch graph (NodeRef chips) when TOUCHED_FILE edges exist",
+      "testid": null,
+      "proof": "apps/app/e2e/activity-failed-run-debug.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "get_usage_breakdown": {
+      "route": "/[orgSlug]/billing/usage",
+      "page": "apps/app/src/app/[orgSlug]/billing/usage/page.tsx",
+      "entry": "Usage dashboard page load (assertOrgMember + assertBillingManager, then invoke) renders KPI tiles, daily trend, and per-model/surface/workspace/capability/principal breakdown tables",
+      "testid": null,
+      "proof": "apps/app/e2e/billing-usage-breakdown.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "list_executions": {
+      "route": "/[orgSlug]/[workspaceSlug]/activity",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/activity/page.tsx",
+      "entry": "Activity Runs tab — ActivitySection lists recent executions with keyset pagination (?before=) on page load",
+      "testid": null,
+      "proof": "apps/app/e2e/agent-execution-list.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "get_execution_trace": {
+      "route": "/[orgSlug]/[workspaceSlug]/activity/[executionId]",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/activity/[executionId]/page.tsx",
+      "entry": "Run detail page load — TraceSection renders the span tree (steps, tool calls, durations, tokens, cost)",
+      "testid": null,
+      "proof": "apps/app/e2e/agent-trace-get.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "create_dataset": {
+      "route": "/[orgSlug]/[workspaceSlug]/evals",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/evals/create-dataset-drawer.tsx",
+      "entry": "New dataset drawer → Manual mode → createDatasetAction",
+      "testid": "evals-create-manual-submit",
+      "proof": "apps/app/e2e/evals-write-path.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "create_trace_dataset": {
+      "route": "/[orgSlug]/[workspaceSlug]/evals",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/evals/create-dataset-drawer.tsx",
+      "entry": "New dataset drawer → From traces mode → createTraceDatasetAction",
+      "testid": "evals-create-traces-submit",
+      "proof": "apps/app/e2e/evals-write-path.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "add_dataset_item": {
+      "route": "/[orgSlug]/[workspaceSlug]/evals",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/evals/dataset-detail-drawer.tsx",
+      "entry": "Dataset detail drawer → Add item form → addDatasetItemAction",
+      "testid": "evals-add-item-submit",
+      "proof": "apps/app/e2e/evals-write-path.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "get_dataset": {
+      "route": "/[orgSlug]/[workspaceSlug]/evals",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/evals/dataset-detail-drawer.tsx",
+      "entry": "Dataset card click → drawer open → getDatasetAction loads items",
+      "testid": "evals-dataset-drawer",
+      "proof": "apps/app/e2e/evals-write-path.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "start_eval_run": {
+      "route": "/[orgSlug]/[workspaceSlug]/evals",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/evals/dataset-detail-drawer.tsx",
+      "entry": "Dataset detail drawer → Run eval launcher → startEvalRunAction",
+      "testid": "evals-run-start",
+      "proof": "apps/app/e2e/evals-write-path.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "get_eval_status": {
+      "route": "/[orgSlug]/[workspaceSlug]/evals",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/evals/dataset-detail-drawer.tsx",
+      "entry": "Run launcher status poll → getEvalRunStatusAction (evals-run-status chip)",
+      "testid": "evals-run-status",
+      "proof": "apps/app/e2e/evals-write-path.spec.ts",
       "verifiedAt": "2026-07-12",
       "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
     }

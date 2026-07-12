@@ -50,14 +50,21 @@ export function OverviewTab({
     return (
       <ErrorState
         title="Couldn't load repo metrics"
-        description={error ?? "Failed to load get_repo_metrics for this connection."}
+        description={
+          error ?? "Failed to load get_repo_metrics for this connection."
+        }
         retry={() => void retry()}
       />
     );
   }
 
   if (!metrics) {
-    return <div className="h-32 animate-pulse rounded-xl bg-muted" aria-hidden="true" />;
+    return (
+      <div
+        className="h-32 animate-pulse rounded-xl bg-muted"
+        aria-hidden="true"
+      />
+    );
   }
 
   if (!slug) {
@@ -74,24 +81,45 @@ export function OverviewTab({
   return (
     <div className="flex flex-col gap-4" data-testid="repo-overview-tab">
       <StatGroup columns={4}>
-        <Stat label="Entities ingested" value={metrics.entityCount.toLocaleString()} />
+        <Stat
+          label="Entities ingested"
+          value={metrics.entityCount.toLocaleString()}
+        />
         <Stat
           label="Status"
           value={metrics.status}
           tone={
-            metrics.status === "failed" ? "error" : metrics.status === "paused" ? "warning" : "neutral"
+            metrics.status === "failed"
+              ? "error"
+              : metrics.status === "paused"
+                ? "warning"
+                : "neutral"
           }
         />
-        <Stat label="Last sync" value={metrics.lastSyncAt ? timeAgo(metrics.lastSyncAt) : "Never"} />
+        <Stat
+          label="Last sync"
+          value={metrics.lastSyncAt ? timeAgo(metrics.lastSyncAt) : "Never"}
+        />
         <Stat
           label="Next sync"
-          value={metrics.estimatedNextSyncAt ? timeAgo(metrics.estimatedNextSyncAt) : "—"}
-          hint={metrics.syncIntervalSeconds ? `every ${metrics.syncIntervalSeconds}s` : undefined}
+          value={
+            metrics.estimatedNextSyncAt
+              ? timeAgo(metrics.estimatedNextSyncAt)
+              : "—"
+          }
+          hint={
+            metrics.syncIntervalSeconds
+              ? `every ${metrics.syncIntervalSeconds}s`
+              : undefined
+          }
         />
       </StatGroup>
 
       {metrics.errorMessage && (
-        <p className="rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive" data-testid="repo-overview-error">
+        <p
+          className="rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive"
+          data-testid="repo-overview-error"
+        >
           {metrics.errorMessage}
         </p>
       )}
@@ -103,7 +131,11 @@ export function OverviewTab({
           description={`Create your first branch on ${slug.owner}/${slug.repo} to get started.`}
           variant="muted"
           action={
-            <Button size="sm" onClick={onNavigateToBranches} data-testid="overview-create-branch-cta">
+            <Button
+              size="sm"
+              onClick={onNavigateToBranches}
+              data-testid="overview-create-branch-cta"
+            >
               Create your first branch
             </Button>
           }
