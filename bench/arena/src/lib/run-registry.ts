@@ -61,6 +61,7 @@ export interface RunRecord {
   category: RunCategory;
   budget: number;
   timeout: number;
+  concurrent: number;
   status: RunStatus;
   jobs: RunJob[];
   logFile: string;
@@ -125,6 +126,8 @@ function cliArgs(
     String(record.budget),
     "--timeout",
     String(record.timeout),
+    "--concurrent",
+    String(record.concurrent),
   ];
   if (record.category !== "smoke") {
     args.push("--filter", `category=${record.category}`);
@@ -170,6 +173,7 @@ export function startRun(input: StartRunInput): RunRecord {
     category: input.category,
     budget: input.budget,
     timeout: input.timeout,
+    concurrent: input.concurrent,
     status: "running",
     jobs: input.agents.map((a) => ({
       agent: a.type,
@@ -188,7 +192,7 @@ export function startRun(input: StartRunInput): RunRecord {
   log(
     record,
     `=== Arena run ${runId} — ${input.dryRun ? "DRY RUN" : "LIVE RUN"} — ` +
-      `category=${input.category} budget=$${input.budget} timeout=${input.timeout}s ===`,
+      `category=${input.category} budget=$${String(input.budget)} timeout=${String(input.timeout)}s ===`,
   );
 
   for (const job of record.jobs) {

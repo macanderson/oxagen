@@ -61,7 +61,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   if (config.budget > MAX_BUDGET_PER_AGENT) {
     return NextResponse.json(
       {
-        error: `Budget $${config.budget} exceeds the per-agent cap of $${MAX_BUDGET_PER_AGENT}. Set ARENA_MAX_BUDGET to raise it.`,
+        error: `Budget $${String(config.budget)} exceeds the per-agent cap of $${String(MAX_BUDGET_PER_AGENT)}. Set ARENA_MAX_BUDGET to raise it.`,
       },
       { status: 400 },
     );
