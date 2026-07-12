@@ -24,6 +24,12 @@ import { renderRulesSection, guardsToDeny } from "../rules/enforce.js";
 import { wrapToolsWithGate } from "../settings/gate.js";
 import { runHooks } from "../settings/hooks.js";
 import { loadMcpTools, type McpServerStatus } from "../mcp/client.js";
+import {
+  fetchWorkspaceMcpServers,
+  buildWorkspaceServerConfigs,
+  buildWorkspaceRemoteFetch,
+  type WorkspaceMcpServer,
+} from "../mcp/workspace-servers.js";
 import { filterToolsForAgent } from "../agents/tools.js";
 import { loadSkills, skillsPromptBlock, type Skill } from "../skills/index.js";
 import type { OxagenSettings } from "../settings/schema.js";
@@ -60,6 +66,13 @@ export interface TurnExtrasOptions {
    * (their broker handles permissions) to avoid double-gating.
    */
   gatePermissions?: boolean;
+  /**
+   * DB-backed, workspace-installed MCP servers (resolved from the platform with
+   * their credentials). Undefined ⇒ fetch them live (best-effort) when the CLI
+   * is logged in and not read-only. Injectable so tests bypass the network.
+   * See mcp/workspace-servers.ts for the security design.
+   */
+  workspaceMcpServers?: WorkspaceMcpServer[];
   /** Turn abort signal (aborts hook commands + gates). */
   signal?: AbortSignal;
   /** Fired when a tool call is blocked by a permission rule / PreToolUse hook. */
@@ -85,7 +98,9 @@ export interface TurnExtras {
  * applies: the agent allowlist, then the permission/hook gate (rule-guard denies
  * always; `settings.permissions` only when `gatePermissions`).
  */
-export async function buildTurnExtras(opts: TurnExtrasOptions): Promise<TurnExtras> {
+export async function buildTurnExtras(
+  opts: TurnExtrasOptions,
+): Promise<TurnExtras> {
   const rules = opts.rules ?? loadRules({ cwd: opts.cwd });
   const ruleDenies = guardsToDeny(rules);
 
@@ -97,7 +112,9 @@ export async function buildTurnExtras(opts: TurnExtrasOptions): Promise<TurnExtr
     opts.signal,
   );
   if (sessionStart.output) {
-    systemAppend += "\n\n## Session context (from SessionStart hooks)\n" + sessionStart.output;
+    systemAppend +=
+      "\n\n## Session context (from SessionStart hooks)\n" +
+      sessionStart.output;
   }
 
   // Loadable skills (.oxagen/skills, .claude/skills, …): every turn sees the
@@ -113,25 +130,49 @@ export async function buildTurnExtras(opts: TurnExtrasOptions): Promise<TurnExtr
   // MCP tools — skipped in read-only mode (may mutate) and when none
   // configured. An agent's `mcpServers` selection narrows the global map to
   // just its declared servers (undefined inherits everything).
+  //
+  // DB-backed, workspace-installed servers (installed via the web app) are
+  // fetched from the platform — with their credentials resolved SERVER-SIDE —
+  // and merged into the file-based map. File-based config wins on a name
+  // collision (an explicit local override is never clobbered). Their
+  // credentials flow through a `remoteFetch` handed to loadMcpTools and are
+  // never persisted to disk. See mcp/workspace-servers.ts.
   const configuredServers = opts.settings.mcpServers ?? {};
+  const workspaceServers = opts.readOnly
+    ? []
+    : (opts.workspaceMcpServers ?? (await fetchWorkspaceMcpServers()));
+  const workspaceConfigs = buildWorkspaceServerConfigs(
+    workspaceServers,
+    new Set(Object.keys(configuredServers)),
+  );
+  // File-based spread last so it wins on collision.
+  const allServers = { ...workspaceConfigs, ...configuredServers };
   const selectedServers = opts.agentMcpServers
     ? Object.fromEntries(
-        Object.entries(configuredServers).filter(([name]) =>
+        Object.entries(allServers).filter(([name]) =>
           opts.agentMcpServers!.includes(name),
         ),
       )
-    : configuredServers;
+    : allServers;
   const hasServers = !opts.readOnly && Object.keys(selectedServers).length > 0;
   const mcp = hasServers
     ? await loadMcpTools(
         { ...opts.settings, mcpServers: selectedServers },
-        { onStatus: opts.onMcpServer },
+        {
+          onStatus: opts.onMcpServer,
+          credentials: {
+            remoteFetch: buildWorkspaceRemoteFetch(workspaceServers),
+            persistRemote: false,
+          },
+        },
       )
     : null;
 
   // Permission set for the tool gate: rule-guard denies always; the full
   // settings.permissions only when this path has no workspace broker.
-  const basePerms = opts.gatePermissions ? opts.settings.permissions : undefined;
+  const basePerms = opts.gatePermissions
+    ? opts.settings.permissions
+    : undefined;
   const permissions =
     ruleDenies.deny.length || basePerms
       ? {

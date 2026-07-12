@@ -12,6 +12,8 @@ const credStore: Record<
     oauthClientSecret?: string | null;
     accessToken?: string | null;
     refreshToken?: string | null;
+    expiresAt?: Date | null;
+    lastRefreshedAt?: Date | null;
   }
 > = {};
 
@@ -25,6 +27,8 @@ vi.mock("../credentials/workspace-credential", () => ({
     oauthClientSecret?: string | null;
     accessToken?: string | null;
     refreshToken?: string | null;
+    expiresAt?: Date | null;
+    lastRefreshedAt?: Date | null;
   }) => {
     const key = `${input.workspaceId}:${input.orgListingId}`;
     credStore[key] = {
@@ -33,6 +37,8 @@ vi.mock("../credentials/workspace-credential", () => ({
       oauthClientSecret: input.oauthClientSecret ?? null,
       accessToken: input.accessToken ?? null,
       refreshToken: input.refreshToken ?? null,
+      expiresAt: input.expiresAt ?? null,
+      lastRefreshedAt: input.lastRefreshedAt ?? null,
     };
     return "cred-id-mock";
   },
@@ -113,6 +119,35 @@ describe("DbOAuthClientProvider", () => {
     const stored = credStore["ws-1:ol-1"];
     expect(stored?.accessToken).toBe("at-abc"); // mocked store (real store encrypts)
     expect(stored?.refreshToken).toBe("rt-xyz");
+  });
+
+  it("saveTokens persists expiresAt from expires_in + stamps lastRefreshedAt", async () => {
+    const { DbOAuthClientProvider } = await import("./db-oauth-provider");
+    const provider = new DbOAuthClientProvider(ctx);
+    await provider.saveTokens({
+      access_token: "at-abc",
+      token_type: "Bearer",
+      refresh_token: "rt-xyz",
+      expires_in: 3600,
+    });
+    const stored = credStore["ws-1:ol-1"];
+    // now() is fixed at 1_700_000_000_000; expires_in 3600s → +3_600_000ms.
+    expect(stored?.expiresAt?.getTime()).toBe(1_700_000_000_000 + 3_600_000);
+    expect(stored?.lastRefreshedAt?.getTime()).toBe(1_700_000_000_000);
+  });
+
+  it("saveTokens clears expiresAt when the refresh omits expires_in", async () => {
+    const { DbOAuthClientProvider } = await import("./db-oauth-provider");
+    const provider = new DbOAuthClientProvider(ctx);
+    await provider.saveTokens({
+      access_token: "at-no-expiry",
+      token_type: "Bearer",
+    });
+    const stored = credStore["ws-1:ol-1"];
+    // A refresh with no expires_in must not leave a stale expiry behind.
+    expect(stored?.expiresAt).toBeNull();
+    // lastRefreshedAt is still stamped — the token WAS refreshed.
+    expect(stored?.lastRefreshedAt?.getTime()).toBe(1_700_000_000_000);
   });
 
   it("tokens() returns undefined when no credentials exist", async () => {

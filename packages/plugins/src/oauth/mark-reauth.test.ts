@@ -10,6 +10,9 @@ interface ListingRow {
   orgId: string;
   name: string;
   title: string | null;
+  orgSlug: string;
+  orgName: string;
+  workspaceSlug: string;
 }
 
 const fixtures: {
@@ -29,25 +32,45 @@ vi.mock("@oxagen/database", () => {
         },
       }),
     }),
-    select: () => ({
-      from: () => ({
+    // The listing lookup joins organizations + workspaces, so the builder chain
+    // is select→from→innerJoin→innerJoin→where→limit. Each innerJoin returns
+    // the same chainable stub.
+    select: () => {
+      const chain = {
+        from: () => chain,
+        innerJoin: () => chain,
         where: () => ({
           limit: async () => (fixtures.listing ? [fixtures.listing] : []),
         }),
-      }),
-    }),
+      };
+      return chain;
+    },
   };
   return {
     withSystemDb: async (cb: (t: typeof tx) => Promise<unknown>) => cb(tx),
     schema: {
-      mcpCredentials: { workspaceId: "workspaceId", orgListingId: "orgListingId" },
-      pluginInstalledPlugins: { id: "id", orgId: "orgId", name: "name", title: "title" },
+      mcpCredentials: {
+        workspaceId: "workspaceId",
+        orgListingId: "orgListingId",
+      },
+      pluginInstalledPlugins: {
+        id: "id",
+        orgId: "orgId",
+        name: "name",
+        title: "title",
+      },
+      organizations: { id: "id", slug: "slug", name: "name" },
+      workspaces: { id: "id", slug: "slug" },
     },
   };
 });
 
 vi.mock("@oxagen/notifications", () => ({
-  reauthEmailTemplate: (input: { serverName: string; reauthUrl: string; orgName: string }) => ({
+  reauthEmailTemplate: (input: {
+    serverName: string;
+    reauthUrl: string;
+    orgName: string;
+  }) => ({
     subject: `Reconnect ${input.serverName}`,
     text: `Reconnect ${input.serverName}: ${input.reauthUrl}`,
     html: `<a href="${input.reauthUrl}">Reconnect ${input.serverName}</a>`,
@@ -67,8 +90,17 @@ beforeEach(() => {
 });
 
 describe("markCredentialNeedsReauth", () => {
+  const LISTING: ListingRow = {
+    orgId: "org-1",
+    name: "github",
+    title: "GitHub",
+    orgSlug: "acme",
+    orgName: "Acme Inc",
+    workspaceSlug: "main",
+  };
+
   it("flips the credential row to needs_reauth", async () => {
-    fixtures.listing = { orgId: "org-1", name: "github", title: "GitHub" };
+    fixtures.listing = { ...LISTING };
     const { markCredentialNeedsReauth } = await import("./mark-reauth");
     await markCredentialNeedsReauth("ws-1", "ol-1");
 
@@ -77,8 +109,8 @@ describe("markCredentialNeedsReauth", () => {
     expect(fixtures.updates[0]?.["updatedAt"]).toBeInstanceOf(Date);
   });
 
-  it("notifies org managers with a deep-link carrying the orgListingId", async () => {
-    fixtures.listing = { orgId: "org-1", name: "github", title: "GitHub" };
+  it("notifies org managers with a real MCP-servers deep-link (slugs, not UUIDs)", async () => {
+    fixtures.listing = { ...LISTING };
     const { markCredentialNeedsReauth } = await import("./mark-reauth");
     await markCredentialNeedsReauth("ws-1", "ol-1");
 
@@ -87,13 +119,19 @@ describe("markCredentialNeedsReauth", () => {
     expect(sent["orgId"]).toBe("org-1");
     expect(sent["workspaceId"]).toBe("ws-1");
     expect(sent["kind"]).toBe("security");
-    expect(sent["deepLink"]).toContain("/reauth/ol-1");
+    // The link points at the actual MCP Servers page for this org/workspace,
+    // with ?reauth=<orgListingId> — never the old dead /settings/integrations
+    // route, and never a raw UUID path.
+    const deepLink = sent["deepLink"] as string;
+    expect(deepLink).toContain("/acme/main/workbench/tools/mcp?reauth=ol-1");
+    expect(deepLink).not.toContain("/settings/integrations");
+    expect(deepLink).not.toContain("org-1"); // no UUID leakage in the path
     // serverName prefers the human title over the slug.
     expect(sent["title"]).toBe("Reconnect GitHub");
   });
 
   it("falls back to the listing name when title is null", async () => {
-    fixtures.listing = { orgId: "org-1", name: "slack", title: null };
+    fixtures.listing = { ...LISTING, name: "slack", title: null };
     const { markCredentialNeedsReauth } = await import("./mark-reauth");
     await markCredentialNeedsReauth("ws-1", "ol-2");
 
@@ -110,12 +148,14 @@ describe("markCredentialNeedsReauth", () => {
   });
 
   it("does not propagate notification failure (best-effort)", async () => {
-    fixtures.listing = { orgId: "org-1", name: "github", title: "GitHub" };
+    fixtures.listing = { ...LISTING };
     fixtures.notifyRejects = true;
     const { markCredentialNeedsReauth } = await import("./mark-reauth");
 
     // The credential flip is authoritative; a notify failure must not surface.
-    await expect(markCredentialNeedsReauth("ws-1", "ol-1")).resolves.toBeUndefined();
+    await expect(
+      markCredentialNeedsReauth("ws-1", "ol-1"),
+    ).resolves.toBeUndefined();
     expect(fixtures.updates).toHaveLength(1);
   });
 });

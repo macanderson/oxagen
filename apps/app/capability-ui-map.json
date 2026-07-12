@@ -136,6 +136,15 @@
       "verifiedAt": "2026-07-08",
       "verifiedBy": "session_012L8WKM81ZqYaiLYsqLvkw6"
     },
+    "set_plugin_secret": {
+      "route": "/[orgSlug]/[workspaceSlug]/workbench/tools/mcp",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/tools/mcp/page.tsx",
+      "entry": "\"Enter API key\" / \"Update API key\" on a secret-auth MCP server row (McpServerList → SecretDialog → setMcpServerSecret → invoke(\"set_plugin_secret\"))",
+      "testid": "mcp-server-set-secret-*",
+      "proof": "apps/app/e2e/mcp-servers-authenticate.spec.ts",
+      "verifiedAt": "2026-07-11",
+      "verifiedBy": "session_09b551c7"
+    },
     "install_plugins_bulk": {
       "route": "/[orgSlug]/[workspaceSlug]/workbench/tools/capabilities",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/tools/capabilities/page.tsx",
