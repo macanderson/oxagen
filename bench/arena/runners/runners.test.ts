@@ -11,6 +11,7 @@ import { describe, expect, it } from "vitest";
 
 import type { AgentConfig, Metrics, Task } from "../src/lib/types.js";
 import { BaseAgentRunner } from "./agent-runner.js";
+import { getRunner } from "./index.js";
 import {
   buildTaskPrompt,
   countOf,
@@ -19,16 +20,19 @@ import {
   sanitizeSegment,
 } from "./lib.js";
 import {
+  OxagenRunner,
   buildOxagenArgs,
   parseOxagenMetrics,
   resolveOxagenModel,
 } from "./oxagen-runner.js";
 import {
+  StellaRunner,
   buildStellaArgs,
   parseStellaMetrics,
   resolveStellaModel,
 } from "./stella-runner.js";
 import {
+  ClaudeCodeRunner,
   buildClaudeArgs,
   parseClaudeMetrics,
   resolveClaudeModel,
@@ -276,5 +280,62 @@ describe("BaseAgentRunner execution flow", () => {
     const runner = new FakeRunner("echo '{\"type\":\"result\"}'");
     const result = await runner.runTask(noTestTask, config);
     expect(result.metrics.success).toBe(true);
+  });
+});
+
+/** Structural view of the runners' protected CLI hooks, for delegation tests. */
+interface ExposedRunner {
+  binary(): string;
+  resolveModel(model: string): string;
+  buildArgs(prompt: string, model: string, config: AgentConfig): string[];
+  envFor(config: AgentConfig): Record<string, string>;
+  parseMetrics(
+    stdout: string,
+    startTime: number,
+    config: AgentConfig,
+  ): Partial<Metrics>;
+}
+
+const expose = (runner: object): ExposedRunner =>
+  runner as unknown as ExposedRunner;
+
+describe("concrete runner classes delegate to their pure helpers", () => {
+  const cases: [string, ExposedRunner][] = [
+    ["oxagen", expose(new OxagenRunner())],
+    ["stella", expose(new StellaRunner())],
+    ["claude-code", expose(new ClaudeCodeRunner())],
+  ];
+
+  it.each(cases)("%s builds a non-empty argv and metrics", (_name, runner) => {
+    expect(typeof runner.binary()).toBe("string");
+    const model = runner.resolveModel(config.model);
+    expect(model.length).toBeGreaterThan(0);
+    const args = runner.buildArgs("do it", model, config);
+    expect(args.length).toBeGreaterThan(0);
+    expect(Object.keys(runner.envFor(config)).length).toBeGreaterThan(0);
+    const metrics = runner.parseMetrics("{}", Date.now(), config);
+    expect(metrics.durationSeconds).toBeGreaterThanOrEqual(0);
+  });
+
+  it("isAvailable/getVersion resolve without throwing when the binary is absent", async () => {
+    // Binaries are not installed in CI; the calls must degrade, not throw.
+    const runner = new OxagenRunner();
+    expect(typeof (await runner.isAvailable())).toBe("boolean");
+    expect(typeof (await runner.getVersion())).toBe("string");
+  });
+});
+
+describe("getRunner registry", () => {
+  it("returns the matching runner for each known agent type", () => {
+    expect(getRunner("oxagen")).toBeInstanceOf(OxagenRunner);
+    expect(getRunner("stella")).toBeInstanceOf(StellaRunner);
+    expect(getRunner("claude-code")).toBeInstanceOf(ClaudeCodeRunner);
+  });
+
+  it("throws for the custom placeholder and unknown agent types", () => {
+    expect(() => getRunner("custom")).toThrow();
+    expect(() => getRunner("nope" as never)).toThrow(
+      /No runner registered/,
+    );
   });
 });
