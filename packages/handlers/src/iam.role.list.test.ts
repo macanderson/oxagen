@@ -2,9 +2,16 @@
  * iam.role.list handler tests.
  *
  * Strategy: mock withSystemDb with a chainable stub keyed by drizzle table
- * identity. Asserts: org-scoping is applied to every query (tenant isolation),
- * system-default roles sort first, grants group per role, member counts map,
- * pagination + hasMore, and includeGrants=false skips the grants query.
+ * identity. drizzle-orm's `eq`/`and` are spied (not replaced — the real
+ * implementations still run) so tenant-scoping and the scopeKind filter can
+ * be asserted STRUCTURALLY (which columns/values were actually passed into
+ * the WHERE builder), not just inferred from the mock being called — a mock
+ * `.where()` that ignores its arguments would otherwise pass a test that
+ * only checks call counts even if the org-id filter were dropped.
+ *
+ * Covers: org-scoping on every table read, system-default-first sort,
+ * grants grouping per role, member counts, pagination + hasMore,
+ * includeGrants=false skipping the grants query, and the scopeKind filter.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
@@ -21,9 +28,21 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   return { ...real, withSystemDb: mocks.withSystemDb };
 });
 
+// Spy on eq/and while keeping their real drizzle-orm behavior, so assertions
+// can check exactly which (column, value) pairs were built into each WHERE
+// — the only way to catch a regression that silently drops the org filter.
+vi.mock("drizzle-orm", async (importOriginal) => {
+  const real = await importOriginal<typeof import("drizzle-orm")>();
+  return { ...real, eq: vi.fn(real.eq), and: vi.fn(real.and) };
+});
+
 import { schema } from "@oxagen/database";
+import { eq, and } from "drizzle-orm";
 import { iamRoleListHandler } from "./iam.role.list";
 import { TEST_CTX as CTX } from "./test-utils/fixtures";
+
+const eqMock = eq as unknown as ReturnType<typeof vi.fn>;
+const andMock = and as unknown as ReturnType<typeof vi.fn>;
 
 function makeTx() {
   return {
@@ -151,5 +170,40 @@ describe("iamRoleListHandler", () => {
   it("runs every read inside withSystemDb (tenant isolation enforced in-handler)", async () => {
     await iamRoleListHandler({ includeGrants: true, limit: 100, offset: 0 }, CTX);
     expect(mocks.withSystemDb).toHaveBeenCalledTimes(1);
+  });
+
+  it("scopes every table read to ctx.orgId (structural check, not just call count)", async () => {
+    mocks.countRows = [{ roleId: "uuid-owner", count: 1 }];
+    mocks.grantRows = [{ roleId: "uuid-owner", capabilityId: "x", effect: "allow" }];
+    await iamRoleListHandler({ includeGrants: true, limit: 100, offset: 0 }, CTX);
+
+    // A regression that dropped any of these org-id equality checks would
+    // fail this assertion even though the mock's .where() ignores its args.
+    expect(eqMock).toHaveBeenCalledWith(schema.roles.orgId, CTX.orgId);
+    expect(eqMock).toHaveBeenCalledWith(
+      schema.principalRoleAssignments.orgId,
+      CTX.orgId,
+    );
+    expect(eqMock).toHaveBeenCalledWith(schema.roleGrants.orgId, CTX.orgId);
+  });
+
+  it("does not build a scopeKind condition when the filter is omitted", async () => {
+    await iamRoleListHandler({ includeGrants: false, limit: 100, offset: 0 }, CTX);
+    const scopeKindCalls = eqMock.mock.calls.filter(
+      (call: unknown[]) => call[0] === schema.roles.scopeKind,
+    );
+    expect(scopeKindCalls).toHaveLength(0);
+    // Only the org-id condition is passed to and(...) for the roles query.
+    expect(andMock.mock.calls.some((call: unknown[]) => call.length === 1)).toBe(true);
+  });
+
+  it("applies the scopeKind filter when provided (structural check)", async () => {
+    await iamRoleListHandler(
+      { scopeKind: "org", includeGrants: false, limit: 100, offset: 0 },
+      CTX,
+    );
+    expect(eqMock).toHaveBeenCalledWith(schema.roles.scopeKind, "org");
+    // and() for the roles query now combines 2 conditions (org-id + scopeKind).
+    expect(andMock.mock.calls.some((call: unknown[]) => call.length === 2)).toBe(true);
   });
 });
