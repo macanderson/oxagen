@@ -41,24 +41,66 @@ export function proxy(request: NextRequest): NextResponse {
     return NextResponse.redirect(new URL(`${dest}${search}`, request.url), 308);
   }
 
-  // 2. v1 → v2 workspace route renames (§16 of the IA spec).
-  //    Pattern: /{org}/{ws}/{old}(/{rest})? → /{org}/{ws}/{new}(/{rest})?
-  //    Uses 301 (permanent, GET-preserving) per spec — these routes moved for good.
-  //    The Automation feature areas (playbooks, workflows, runs) were removed,
-  //    so their legacy redirects are gone too — old links fall through to a 404
-  //    rather than a dead redirect. Activity has since been reintroduced at
-  //    /{org}/{ws}/activity (2026-07-09) as a new route, not a redirect target.
+  // 2. IA-realignment redirects (§16 of the IA spec). Legacy routes that were
+  //    RENAMED but whose target still exists get a 301 (permanent, GET-preserving)
+  //    so old links + bookmarks keep resolving. web-app-2.0 Phase 0 collapsed the
+  //    former page-level redirect *shims* and relocated their redirects here, to
+  //    the correct edge layer. RETIRED routes (the old Automation/Activity areas:
+  //    agents, playbooks, workflows, executions, runs) are intentionally absent —
+  //    they 404 rather than dead-redirect.
   {
+    // (a) Org-scope settings tabs promoted to top-level org sections.
+    //     /{org}/settings/{billing,members} → /{org}/{billing,members}. The
+    //     literal `settings` 2nd segment is unambiguously org-scope (a workspace
+    //     would put it 3rd), so this never touches /{org}/{ws}/settings/*.
+    const orgSettingsMove = pathname.match(
+      /^\/([^/]+)\/settings\/(billing|members)(?:\/.*)?$/,
+    );
+    if (orgSettingsMove) {
+      const orgSlug = orgSettingsMove[1] ?? "";
+      const target = orgSettingsMove[2] ?? "";
+      return NextResponse.redirect(
+        new URL(`/${orgSlug}/${target}${search}`, request.url),
+        301,
+      );
+    }
+
+    // (b) Workspace-scope renames: /{org}/{ws}/{from}(/{tail})? → …/{to}(/{tail})?
+    //     preserveTail keeps the sub-path (/studio/agents → /workbench/agents);
+    //     otherwise the tail collapses onto the target. `exact` entries match the
+    //     bare path only — critically `knowledge/nodes` (the old browse index) so
+    //     the real node-detail route /knowledge/nodes/{id} is NOT swept up.
+    const WS_RENAMES: {
+      from: string;
+      to: string;
+      preserveTail: boolean;
+      exact?: boolean;
+    }[] = [
+      { from: "chat", to: "ask", preserveTail: false },
+      { from: "studio", to: "workbench", preserveTail: true },
+      { from: "workbench/skills", to: "workbench/tools/skills", preserveTail: true },
+      { from: "settings/skills", to: "workbench/tools/skills", preserveTail: true },
+      { from: "settings/plugins", to: "workbench/tools/capabilities", preserveTail: false, exact: true },
+      { from: "settings/environments", to: "workbench/environments", preserveTail: false, exact: true },
+      { from: "marketplace/browse", to: "marketplace/agent-tools", preserveTail: false, exact: true },
+      { from: "marketplace/installed", to: "workbench/tools/capabilities", preserveTail: false, exact: true },
+      { from: "marketplace/mcp", to: "workbench/tools/mcp", preserveTail: false, exact: true },
+      { from: "knowledge/nodes", to: "knowledge/inference", preserveTail: false, exact: true },
+    ];
     const wsRouteMove = pathname.match(/^(\/[^/]+\/[^/]+)\/(.*)$/);
     if (wsRouteMove) {
       const wsBase = wsRouteMove[1] ?? "";
       const rest = wsRouteMove[2] ?? "";
-      let dest: string | null = null;
-      if (rest === "chat" || rest.startsWith("chat/")) {
-        dest = "ask";
-      }
-      if (dest) {
-        return NextResponse.redirect(new URL(`${wsBase}/${dest}${search}`, request.url), 301);
+      for (const r of WS_RENAMES) {
+        const exactHit = rest === r.from;
+        const prefixHit = !r.exact && rest.startsWith(`${r.from}/`);
+        if (exactHit || prefixHit) {
+          const tail = r.preserveTail && prefixHit ? rest.slice(r.from.length) : "";
+          return NextResponse.redirect(
+            new URL(`${wsBase}/${r.to}${tail}${search}`, request.url),
+            301,
+          );
+        }
       }
     }
   }

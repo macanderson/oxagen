@@ -39,6 +39,17 @@ export const org = {
 
   members: (ctx: ScopeContext): string => `/${ctx.orgSlug}/members`,
 
+  // Governance (web-app-2.0) — the accountability-chain hub. Renders each typed
+  // capability contract as the one enforced object (identity → scope → action →
+  // terms → outcome → audit); Policies covers IAM roles/entitlements + MCP auth.
+  governance: {
+    root: (ctx: ScopeContext): string => `/${ctx.orgSlug}/governance`,
+    capabilities: (ctx: ScopeContext): string =>
+      `/${ctx.orgSlug}/governance/capabilities`,
+    policies: (ctx: ScopeContext): string =>
+      `/${ctx.orgSlug}/governance/policies`,
+  },
+
   // Access sub-routes (only wired tabs remain: sessions, reviews)
   access: {
     root: (ctx: ScopeContext): string => `/${ctx.orgSlug}/access`,
@@ -124,6 +135,12 @@ export const workspace = {
       `${wsBase(ctx)}/workbench/sandboxes`,
     sandbox: (ctx: Required<ScopeContext>, sessionId: string): string =>
       `${wsBase(ctx)}/workbench/sandboxes/${encodeURIComponent(sessionId)}`,
+    // Repos (web-app-2.0) — the home for the headless repo.* family: sync, fork,
+    // create, edit→PR. Detail is keyed by the source connection id.
+    repos: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/workbench/repos`,
+    repo: (ctx: Required<ScopeContext>, connectionId: string): string =>
+      `${wsBase(ctx)}/workbench/repos/${encodeURIComponent(connectionId)}`,
     // Agent Tools hub — All Tools / Skills / MCP Servers / Capabilities.
     tools: {
       root: (ctx: Required<ScopeContext>): string =>
@@ -164,6 +181,23 @@ export const workspace = {
     // Per-run span tree. executionId is the aex_* public id.
     run: (ctx: Required<ScopeContext>, executionId: string): string =>
       `${wsBase(ctx)}/activity/${encodeURIComponent(executionId)}`,
+    // Fleet (web-app-2.0) — subagent fan-out / fleet observability with
+    // per-child lineage + cost.
+    fleet: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/activity/fleet`,
+  },
+
+  // Automations (web-app-2.0) — human-gated agent automation: the automations
+  // list + editor, the workspace-wide trigger board, and parallel workflow/swarm
+  // runs. The biggest previously-headless section (automation.* + workflow.*).
+  automations: {
+    root: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/automations`,
+    automation: (ctx: Required<ScopeContext>, automationId: string): string =>
+      `${wsBase(ctx)}/automations/${encodeURIComponent(automationId)}`,
+    triggers: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/automations/triggers`,
+    workflows: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/automations/workflows`,
   },
 
   // Knowledge
