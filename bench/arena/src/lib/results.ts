@@ -11,8 +11,8 @@
 import { readdirSync, readFileSync, existsSync, statSync } from "fs";
 import { join } from "path";
 
-import { validateBenchmarkResult } from "./schema";
-import type { BenchmarkResult } from "./types";
+import { validateBenchmarkResult, validateTrackerEntry } from "./schema";
+import type { BenchmarkResult, TrackerEntry } from "./types";
 
 export interface RecentResultRow {
   id: string;
@@ -52,6 +52,10 @@ function resultsDir(): string {
   return join(process.cwd(), "results");
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
 /** A sortable run timestamp: measured provenance carries one; else file mtime. */
 function runDateOf(result: BenchmarkResult, filePath: string): string {
   if (result.provenance.kind === "measured") return result.provenance.runDate;
@@ -62,18 +66,30 @@ function runDateOf(result: BenchmarkResult, filePath: string): string {
   }
 }
 
-/** Read + validate every result JSON under results/. Malformed files skipped. */
+/**
+ * Read + validate every measured result under `results/`, de-duped by id.
+ *
+ * Each run writes a `summary.json` (`{ metadata, results: [...] }`) **plus** one
+ * flat file per result. The summary is the durable source of truth: every
+ * result is pushed into `results[]` before its individual file is written, so
+ * it survives even when a per-result write fails — e.g. a model id containing a
+ * "/" (`anthropic/claude-opus-4.8`) would otherwise target a missing nested
+ * directory and be lost from disk. We therefore expand `results[]` from
+ * summaries as well as reading standalone result files, and de-dupe by
+ * `result.id` so the copies that exist in both places are counted once.
+ * Malformed files/entries are skipped. When no runs exist the caller gets an
+ * empty array — the dashboard renders an honest empty state (Arena's core
+ * "no simulated score" rule) rather than inventing numbers.
+ */
 export function readResults(): { result: BenchmarkResult; runDate: string }[] {
   const dir = resultsDir();
   if (!existsSync(dir)) return [];
 
   const entries = readdirSync(dir, { recursive: true }) as string[];
-  const out: { result: BenchmarkResult; runDate: string }[] = [];
+  const byId = new Map<string, { result: BenchmarkResult; runDate: string }>();
 
   for (const rel of entries) {
     if (!rel.endsWith(".json")) continue;
-    // The per-run `summary.json` is not a BenchmarkResult — it fails validation
-    // and is skipped, which is exactly what we want.
     const filePath = join(dir, rel);
     let raw: unknown;
     try {
@@ -81,11 +97,28 @@ export function readResults(): { result: BenchmarkResult; runDate: string }[] {
     } catch {
       continue;
     }
-    const parsed = validateBenchmarkResult(raw);
-    if (!parsed.success) continue;
-    out.push({ result: parsed.data, runDate: runDateOf(parsed.data, filePath) });
+
+    // A summary bundles many results under `.results[]` and carries a
+    // run-level `metadata.runDate`; a standalone file is a single result.
+    const summaryDate =
+      isRecord(raw) && isRecord(raw.metadata) && typeof raw.metadata.runDate === "string"
+        ? raw.metadata.runDate
+        : undefined;
+    const candidates: unknown[] =
+      isRecord(raw) && Array.isArray(raw.results) ? raw.results : [raw];
+
+    for (const candidate of candidates) {
+      const parsed = validateBenchmarkResult(candidate);
+      if (!parsed.success) continue;
+      if (byId.has(parsed.data.id)) continue;
+      byId.set(parsed.data.id, {
+        result: parsed.data,
+        runDate: summaryDate ?? runDateOf(parsed.data, filePath),
+      });
+    }
   }
-  return out;
+
+  return [...byId.values()];
 }
 
 export function computeQuickStats(
@@ -196,4 +229,149 @@ export function agentComparison(
   }
 
   return { agents, significantDifference };
+}
+
+// ── Progress tracker (longitudinal history) ──────────────────────────────────
+
+export interface HistorySeries {
+  agentType: string;
+  model: string;
+  /** Points sorted oldest → newest. */
+  points: TrackerEntry[];
+  first: TrackerEntry;
+  latest: TrackerEntry;
+  /** latest.successRate − first.successRate (0 for a single point). */
+  successRateDelta: number;
+  /** latest.avgCost − first.avgCost. */
+  costDelta: number;
+}
+
+function historyPath(): string {
+  return join(process.cwd(), "tracker", "history.json");
+}
+
+/**
+ * Read + validate the longitudinal tracker history that
+ * `scripts/update-tracker.ts` writes to `tracker/history.json`, sorted oldest
+ * → newest. A missing or malformed file yields an empty array (honest empty
+ * state), and any individual malformed entry is skipped.
+ */
+export function readHistory(): TrackerEntry[] {
+  const path = historyPath();
+  if (!existsSync(path)) return [];
+
+  let raw: unknown;
+  try {
+    raw = JSON.parse(readFileSync(path, "utf8"));
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(raw)) return [];
+
+  const entries: TrackerEntry[] = [];
+  for (const candidate of raw) {
+    const parsed = validateTrackerEntry(candidate);
+    if (parsed.success) entries.push(parsed.data);
+  }
+  return entries.sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/** Group history into per-agent+model series with first/latest deltas. */
+export function historySeries(entries: TrackerEntry[]): HistorySeries[] {
+  const groups = new Map<string, TrackerEntry[]>();
+  for (const entry of entries) {
+    const key = `${entry.agentType}::${entry.model}`;
+    const points = groups.get(key) ?? [];
+    points.push(entry);
+    groups.set(key, points);
+  }
+
+  return [...groups.values()].map((points) => {
+    const sorted = [...points].sort((a, b) => a.date.localeCompare(b.date));
+    const first = sorted[0];
+    const latest = sorted[sorted.length - 1];
+    return {
+      agentType: first.agentType,
+      model: first.model,
+      points: sorted,
+      first,
+      latest,
+      successRateDelta: latest.successRate - first.successRate,
+      costDelta: latest.avgCost - first.avgCost,
+    };
+  });
+}
+
+// ── Per-task breakdown (Compare page) ────────────────────────────────────────
+
+export interface TaskBreakdownCell {
+  agentType: string;
+  model: string;
+  runCount: number;
+  successRate: number;
+  avgCost: number;
+}
+
+export interface TaskBreakdownData {
+  /** Ordered agent columns (type + model). */
+  agents: { type: string; model: string; key: string }[];
+  /** One row per task; `cells` keyed by agent column `key`. Missing = not run. */
+  rows: { taskId: string; cells: Record<string, TaskBreakdownCell> }[];
+}
+
+/**
+ * Build a task × agent matrix of success rate and average cost from measured
+ * results — the drill-down the head-to-head summary doesn't show. Rows are
+ * sorted by taskId; columns follow first-seen agent order.
+ */
+export function taskBreakdown(
+  rows: { result: BenchmarkResult }[],
+): TaskBreakdownData {
+  const agentOrder: { type: string; model: string; key: string }[] = [];
+  const agentSeen = new Set<string>();
+  // taskId -> agentKey -> accumulator
+  const matrix = new Map<
+    string,
+    Map<string, { type: string; model: string; n: number; successes: number; cost: number }>
+  >();
+
+  for (const { result } of rows) {
+    const agentKey = `${result.agent.type}::${result.agent.model}`;
+    if (!agentSeen.has(agentKey)) {
+      agentSeen.add(agentKey);
+      agentOrder.push({ type: result.agent.type, model: result.agent.model, key: agentKey });
+    }
+
+    const taskRow = matrix.get(result.taskId) ?? new Map();
+    const cell = taskRow.get(agentKey) ?? {
+      type: result.agent.type,
+      model: result.agent.model,
+      n: 0,
+      successes: 0,
+      cost: 0,
+    };
+    cell.n += 1;
+    if (result.metrics.success) cell.successes += 1;
+    cell.cost += result.metrics.totalCost;
+    taskRow.set(agentKey, cell);
+    matrix.set(result.taskId, taskRow);
+  }
+
+  const outRows = [...matrix.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([taskId, taskRow]) => {
+      const cells: Record<string, TaskBreakdownCell> = {};
+      for (const [agentKey, acc] of taskRow) {
+        cells[agentKey] = {
+          agentType: acc.type,
+          model: acc.model,
+          runCount: acc.n,
+          successRate: acc.successes / acc.n,
+          avgCost: acc.cost / acc.n,
+        };
+      }
+      return { taskId, cells };
+    });
+
+  return { agents: agentOrder, rows: outRows };
 }
