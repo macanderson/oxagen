@@ -1,18 +1,41 @@
-import { GitBranch } from "lucide-react";
-import { EmptyState } from "@/app/[orgSlug]/[workspaceSlug]/_shared/components";
-
 /**
- * Repos (web-app-2.0 Phase 0 shell). Home for the headless repo.* family
- * (sync, create, fork, edit→PR); the real surface lands in the Workbench phase.
+ * page.tsx — Workspace → Workbench → Repos.
+ *
+ * The GitHub-typed connections ("repos") home: sync/pause/resume control, an
+ * "Edit file & open PR" agent launcher, and Create/Fork/Connect GitHub App
+ * header actions. Data loads server-side via resolveWorkbenchScope +
+ * listReposWithMetrics inside <Suspense> (repos-section.tsx) so the header
+ * renders immediately.
  */
-export default function ReposPage() {
+import type { Metadata } from "next";
+import { Suspense } from "react";
+import { PageHeader } from "@/components/ui/page-header";
+import { TableSkeleton } from "@/components/loading";
+import { resolveWorkbenchScope } from "@/lib/workbench/scope";
+import { ReposSection } from "./repos-section";
+
+export const metadata: Metadata = {
+  title: "Repos | Workbench",
+};
+
+interface PageProps {
+  params: Promise<{ orgSlug: string; workspaceSlug: string }>;
+}
+
+export default async function WorkbenchReposPage({ params }: PageProps) {
+  const { orgSlug, workspaceSlug } = await params;
+  const { ctx, canManage } = await resolveWorkbenchScope(orgSlug, workspaceSlug);
+
   return (
-    <div className="flex min-h-[60vh] items-center justify-center">
-      <EmptyState
-        icon={GitBranch}
+    <div className="flex flex-col gap-6">
+      <PageHeader
         title="Repos"
-        description="Connected repositories — sync, fork, create, and agent edit→PR — are coming to the Workbench as part of Web App 2.0."
+        description="GitHub repositories connected to this workspace — sync, pause/resume, and dispatch a code agent to edit a file and open a PR."
+        className="pb-0"
       />
+      <Suspense fallback={<TableSkeleton rows={6} cols={5} />}>
+        <ReposSection ctx={ctx} orgSlug={orgSlug} workspaceSlug={workspaceSlug} canManage={canManage} />
+      </Suspense>
     </div>
   );
 }
