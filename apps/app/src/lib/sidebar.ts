@@ -18,11 +18,14 @@ import {
   Building2,
   CreditCard,
   FlaskConical,
+  Gauge,
+  GitBranch,
   KeyRound,
   Layers,
   LayoutGrid,
   Lock,
   MessageSquare,
+  Scale,
   Settings,
   ShieldCheck,
   ShoppingBag,
@@ -31,6 +34,7 @@ import {
   User,
   Users,
   Wrench,
+  Zap,
   type LucideIcon,
 } from "lucide-react";
 
@@ -95,12 +99,39 @@ const workspaceConfig: SidebarConfig = {
       external: true,
     },
     {
+      id: "overview",
+      label: "Overview",
+      icon: Gauge,
+      // Metering-forward workspace home (web-app-2.0). The workspace root
+      // (`/{org}/{ws}`) currently redirects to Ask until the Overview page lands
+      // in a later phase; the nav entry is placed now because the sidebar is
+      // frozen after Phase 0 (only this phase may edit it).
+      href: (ctx) =>
+        ctx.workspaceSlug
+          ? workspace.root(ctx as Required<ScopeContext>)
+          : `/${ctx.orgSlug}`,
+      group: "primary",
+    },
+    {
       id: "knowledge",
       label: "Knowledge",
       icon: BookOpen,
       href: (ctx) =>
         ctx.workspaceSlug
           ? workspace.knowledge.root(ctx as Required<ScopeContext>)
+          : `/${ctx.orgSlug}`,
+      group: "primary",
+    },
+    {
+      id: "automations",
+      label: "Automations",
+      icon: Zap,
+      // The biggest previously-headless section (automation.* + workflow.*):
+      // human-gated agent automation, triggers, and parallel workflow/swarm runs.
+      // Placed high (front-and-center) per the IA recommendation.
+      href: (ctx) =>
+        ctx.workspaceSlug
+          ? workspace.automations.root(ctx as Required<ScopeContext>)
           : `/${ctx.orgSlug}`,
       group: "primary",
     },
@@ -184,6 +215,18 @@ const workspaceConfig: SidebarConfig = {
       group: "tools",
     },
     {
+      id: "repos",
+      label: "Repos",
+      icon: GitBranch,
+      // The whole headless repo.* family (sync, fork, create, edit→PR) gets a
+      // home in the Workbench group (web-app-2.0).
+      href: (ctx) =>
+        ctx.workspaceSlug
+          ? workspace.workbench.repos(ctx as Required<ScopeContext>)
+          : `/${ctx.orgSlug}`,
+      group: "tools",
+    },
+    {
       id: "marketplace",
       label: "Marketplace",
       icon: ShoppingBag,
@@ -228,16 +271,28 @@ const orgConfig: SidebarConfig = {
       id: "workspaces",
       label: "Workspaces",
       icon: LayoutGrid,
-      href: (ctx) => org.root(ctx),
+      // Org-scope workspace picker (cards + avatars). Previously pointed at
+      // org.root (`/{org}`), which immediately redirects into the first
+      // workspace's Ask surface — clicking it from the governance surface
+      // flashed an error before dumping the user on Ask. Now it lands on a
+      // real listing page; each card is the jump into workspace mode.
+      href: (ctx) => org.workspaces(ctx),
       group: "primary",
-      // external = true renders the ↗ affordance to signal mode transition.
-      external: true,
     },
     {
       id: "members",
       label: "Members",
       icon: Users,
       href: (ctx) => org.members(ctx),
+      group: "primary",
+    },
+    {
+      id: "governance",
+      label: "Governance",
+      icon: Scale,
+      // The accountability-chain hub (web-app-2.0): the typed-contract catalog
+      // (identity → scope → action → terms → outcome → audit) + IAM policies.
+      href: (ctx) => org.governance.root(ctx),
       group: "primary",
     },
     {
@@ -342,7 +397,10 @@ const accountConfig: SidebarConfig = {
 // ---------------------------------------------------------------------------
 
 export const ORG_SCOPE_ROUTES = new Set([
+  "workspaces",
+  "new-workspace",
   "members",
+  "governance",
   "access",
   "security",
   "billing",
@@ -488,9 +546,29 @@ export function enumerateNavTargets(
     // Sidebar-level items
     targets.push({ label: "Ask", href: workspace.ask(wsCtx), parent: "ask" });
     targets.push({
+      label: "Overview",
+      href: workspace.root(wsCtx),
+      parent: "overview",
+    });
+    targets.push({
       label: "Knowledge",
       href: workspace.knowledge.root(wsCtx),
       parent: "knowledge",
+    });
+    targets.push({
+      label: "Automations",
+      href: workspace.automations.root(wsCtx),
+      parent: "automations",
+    });
+    targets.push({
+      label: "Automations · Triggers",
+      href: workspace.automations.triggers(wsCtx),
+      parent: "automations",
+    });
+    targets.push({
+      label: "Automations · Workflows",
+      href: workspace.automations.workflows(wsCtx),
+      parent: "automations",
     });
     targets.push({
       label: "Settings",
@@ -534,11 +612,26 @@ export function enumerateNavTargets(
       href: workspace.workbench.sandboxes(wsCtx),
       parent: "sandboxes",
     });
+    targets.push({
+      label: "Repos",
+      href: workspace.workbench.repos(wsCtx),
+      parent: "repos",
+    });
+    targets.push({
+      label: "Activity · Fleet",
+      href: workspace.activity.fleet(wsCtx),
+      parent: "activity",
+    });
 
     // Knowledge tabs
     targets.push({
-      label: "Knowledge · Repos",
-      href: workspace.knowledge.repos(wsCtx),
+      label: "Knowledge · Sources",
+      href: workspace.knowledge.sources(wsCtx),
+      parent: "knowledge",
+    });
+    targets.push({
+      label: "Knowledge · Graph",
+      href: workspace.knowledge.graph(wsCtx),
       parent: "knowledge",
     });
     targets.push({
@@ -547,13 +640,13 @@ export function enumerateNavTargets(
       parent: "knowledge",
     });
     targets.push({
-      label: "Knowledge · Explore",
-      href: workspace.knowledge.explore(wsCtx),
+      label: "Knowledge · Ontology",
+      href: workspace.knowledge.ontology(wsCtx),
       parent: "knowledge",
     });
     targets.push({
-      label: "Knowledge · Memories",
-      href: workspace.knowledge.memories(wsCtx),
+      label: "Knowledge · Memory",
+      href: workspace.knowledge.memory(wsCtx),
       parent: "knowledge",
     });
 
@@ -564,13 +657,13 @@ export function enumerateNavTargets(
       parent: "settings",
     });
     targets.push({
-      label: "Settings · Members",
-      href: workspace.settings.members(wsCtx),
+      label: "Settings · Agent Defaults",
+      href: workspace.settings.agentDefaults(wsCtx),
       parent: "settings",
     });
     targets.push({
-      label: "Settings · Models",
-      href: workspace.settings.models(wsCtx),
+      label: "Settings · GitHub",
+      href: workspace.settings.github(wsCtx),
       parent: "settings",
     });
     targets.push({
@@ -587,6 +680,21 @@ export function enumerateNavTargets(
     parent: "workspaces",
   });
   targets.push({ label: "Members", href: org.members(ctx), parent: "members" });
+  targets.push({
+    label: "Governance",
+    href: org.governance.root(ctx),
+    parent: "governance",
+  });
+  targets.push({
+    label: "Governance · Capabilities",
+    href: org.governance.capabilities(ctx),
+    parent: "governance",
+  });
+  targets.push({
+    label: "Governance · Policies",
+    href: org.governance.policies(ctx),
+    parent: "governance",
+  });
   targets.push({
     label: "Access",
     href: org.access.root(ctx),

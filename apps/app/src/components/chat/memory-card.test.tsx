@@ -473,7 +473,7 @@ describe("MemoryCard — grounding-node citations", () => {
     });
     expect(link).toHaveAttribute(
       "href",
-      "/acme/core/knowledge/explore?focus=node-42",
+      "/acme/core/knowledge/graph?focus=node-42",
     );
   });
 

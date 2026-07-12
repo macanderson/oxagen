@@ -74,7 +74,7 @@ describe("inferRecordTypeForField", () => {
 describe("resolveRecordHref", () => {
   it("builds a tenant-scoped graph.node href", () => {
     expect(resolveRecordHref("graph.node", "n_123", SLUGS)).toBe(
-      "/acme/research/knowledge/nodes/n_123",
+      "/acme/research/knowledge/graph/n_123",
     );
   });
   it("builds a conversation href", () => {
@@ -112,7 +112,7 @@ describe("resolveRecordLinks", () => {
         field: "node.nodeId",
         recordType: "graph.node",
         id: "n_1",
-        href: "/acme/research/knowledge/nodes/n_1",
+        href: "/acme/research/knowledge/graph/n_1",
         label: "Reactor",
       },
     ]);
@@ -298,7 +298,7 @@ describe("resolveRenderDirective", () => {
     expect(d?.componentId).toBe("graph-node-card");
     expect(d?.props.title).toBe("Hyman Rickover");
     const links = d?.props.links as Array<{ href: string | null; id: string }>;
-    expect(links[0]).toMatchObject({ id: "n_7", href: "/acme/research/knowledge/nodes/n_7" });
+    expect(links[0]).toMatchObject({ id: "n_7", href: "/acme/research/knowledge/graph/n_7" });
   });
 
   it("falls back to the generic capability-result component for an uncurated, substantial output", () => {

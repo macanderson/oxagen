@@ -8,7 +8,7 @@ export const evalDatasetFromTraces = registerCapability({
     "Create an eval dataset from the workspace's real, already-metered run traces — samples recent user messages that produced billed activity and captures them as dataset items. This is the wedge: score what actually ran, not synthetic prompts.",
   mode: "sync",
   surfaces: ["api", "mcp", "cli"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   // Reads traces + Postgres messages; captures inputs. No AI tokens spent.
   noBillingGate: true,

@@ -38,8 +38,8 @@
       "verifiedBy": "session_0171c9SvAk9sxjKLzCr7uBWL"
     },
     "search_references": {
-      "route": "/[orgSlug]/[workspaceSlug]/chat",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/chat/page.tsx",
+      "route": "/[orgSlug]/[workspaceSlug]/ask",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/ask/page.tsx",
       "entry": "Composer @-mention picker (type '@' → pick a reference type → scoped search) and mention-chip hover hydration → POST /api/reference-search → invoke(\"search_references\")",
       "testid": "mention-menu",
       "proof": "apps/app/e2e/chat-mentions.spec.ts",
@@ -136,14 +136,23 @@
       "verifiedAt": "2026-07-08",
       "verifiedBy": "session_012L8WKM81ZqYaiLYsqLvkw6"
     },
+    "set_plugin_secret": {
+      "route": "/[orgSlug]/[workspaceSlug]/workbench/tools/mcp",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/tools/mcp/page.tsx",
+      "entry": "\"Enter API key\" / \"Update API key\" on a secret-auth MCP server row (McpServerList → SecretDialog → setMcpServerSecret → invoke(\"set_plugin_secret\"))",
+      "testid": "mcp-server-set-secret-*",
+      "proof": "apps/app/e2e/mcp-servers-authenticate.spec.ts",
+      "verifiedAt": "2026-07-11",
+      "verifiedBy": "session_09b551c7"
+    },
     "install_plugins_bulk": {
-      "route": "/[orgSlug]/[workspaceSlug]/workbench/tools/capabilities",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/tools/capabilities/page.tsx",
-      "entry": "\"Browse Marketplace\" button -> MarketplaceModal checkbox multi-select -> \"Install selected\" (handleBulkInstall) -> installBulkAction prop -> installBulkPlugin -> invoke(\"install_plugins_bulk\")",
-      "testid": "marketplace-bulk-install-btn",
-      "proof": null,
-      "verifiedAt": null,
-      "verifiedBy": "static-trace/session_01DT3cxXyqx6W9zmCj9wuiVy"
+      "route": "/[orgSlug]/[workspaceSlug]/marketplace/agent-tools",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/marketplace/agent-tools/browse-panel.tsx",
+      "entry": "Card checkbox multi-select -> selection toolbar -> \"Install selected\" (handleBulkInstall) -> installBulkAction -> installBulkPlugin -> invoke(\"install_plugins_bulk\")",
+      "testid": "marketplace-browse-bulk-install-btn",
+      "proof": "apps/app/e2e/marketplace-agent-tools-bulk.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
     },
     "set_plugin_enabled": {
       "route": "/[orgSlug]/[workspaceSlug]/workbench/tools/capabilities",
@@ -177,45 +186,45 @@
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/_shared/conversation-page.tsx",
       "entry": "Conversation history nav — initial list, Load more, Archived expander",
       "testid": null,
-      "proof": null,
-      "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
+      "proof": "apps/app/e2e/conversation-lifecycle.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
     },
     "rename_conversation": {
       "route": "/[orgSlug]/[workspaceSlug]/ask",
       "page": "apps/app/src/components/conversations/conversation-item.tsx",
       "entry": "Row ⋯ menu → Rename → RenameDialog submit",
       "testid": null,
-      "proof": null,
-      "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
+      "proof": "apps/app/e2e/conversation-lifecycle.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
     },
     "archive_conversation": {
       "route": "/[orgSlug]/[workspaceSlug]/ask",
       "page": "apps/app/src/components/conversations/conversation-item.tsx",
       "entry": "Row ⋯ menu → Archive/Unarchive",
       "testid": null,
-      "proof": null,
-      "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
+      "proof": "apps/app/e2e/conversation-lifecycle.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
     },
     "delete_conversation": {
       "route": "/[orgSlug]/[workspaceSlug]/ask",
       "page": "apps/app/src/components/conversations/conversation-item.tsx",
       "entry": "Row ⋯ menu → Delete → DeleteConfirmDialog",
       "testid": null,
-      "proof": null,
-      "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
+      "proof": "apps/app/e2e/conversation-lifecycle.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
     },
     "purge_conversations": {
       "route": "/[orgSlug]/[workspaceSlug]/ask",
       "page": "apps/app/src/components/conversations/conversation-list.tsx",
       "entry": "Archived section → \"Delete all\" → DeleteConfirmDialog",
       "testid": null,
-      "proof": null,
-      "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
+      "proof": "apps/app/e2e/conversation-lifecycle.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
     },
     "list_notifications": {
       "route": "/[orgSlug]/[workspaceSlug]/* (shell)",
@@ -240,9 +249,9 @@
       "page": "apps/app/src/app/account/preferences/preferences-form.tsx",
       "entry": "\"Save preferences\" submit",
       "testid": null,
-      "proof": null,
-      "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
+      "proof": "apps/app/e2e/account-tabs.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
     },
     "suggest_commands": {
       "route": "/[orgSlug]/[workspaceSlug]/* (Cmd+K)",
@@ -254,40 +263,58 @@
       "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
     "get_model_settings": {
-      "route": "/[orgSlug]/[workspaceSlug]/settings/models",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/models/page.tsx",
-      "entry": "WorkspaceModelsForm reads server-fetched settings",
+      "route": "/[orgSlug]/[workspaceSlug]/settings/agent-defaults",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/agent-defaults/page.tsx",
+      "entry": "Agent Defaults → Models sub-tab: models-form.tsx reads server-fetched settings",
       "testid": null,
-      "proof": null,
+      "proof": "apps/app/e2e/settings-consolidation.spec.ts",
       "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
+      "verifiedBy": "web-app-2.0-phase-2"
     },
     "update_model_settings": {
-      "route": "/[orgSlug]/[workspaceSlug]/settings/models",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/models/models-action.ts",
-      "entry": "\"Save changes\" in models-form.tsx → updateWorkspaceModelsAction",
+      "route": "/[orgSlug]/[workspaceSlug]/settings/agent-defaults",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/agent-defaults/models-action.ts",
+      "entry": "Agent Defaults → Models sub-tab \"Save changes\" → updateWorkspaceModelsAction",
       "testid": null,
-      "proof": null,
+      "proof": "apps/app/e2e/settings-consolidation.spec.ts",
       "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
+      "verifiedBy": "web-app-2.0-phase-2"
     },
     "get_budget_policy": {
-      "route": "/[orgSlug]/[workspaceSlug]/settings/budget",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/budget/page.tsx",
-      "entry": "WorkspaceBudgetForm reads server-fetched policy",
+      "route": "/[orgSlug]/[workspaceSlug]/settings/agent-defaults",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/agent-defaults/page.tsx",
+      "entry": "Agent Defaults → Budget sub-tab: budget-form.tsx reads server-fetched policy",
       "testid": null,
-      "proof": null,
+      "proof": "apps/app/e2e/settings-consolidation.spec.ts",
       "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
+      "verifiedBy": "web-app-2.0-phase-2"
     },
     "update_budget_policy": {
-      "route": "/[orgSlug]/[workspaceSlug]/settings/budget",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/budget/budget-action.ts",
-      "entry": "\"Save changes\" in budget-form.tsx → updateWorkspaceBudgetAction",
+      "route": "/[orgSlug]/[workspaceSlug]/settings/agent-defaults",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/agent-defaults/budget-action.ts",
+      "entry": "Agent Defaults → Budget sub-tab \"Save changes\" → updateWorkspaceBudgetAction",
       "testid": null,
-      "proof": null,
+      "proof": "apps/app/e2e/settings-consolidation.spec.ts",
       "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
+      "verifiedBy": "web-app-2.0-phase-2"
+    },
+    "get_workspace_user_preferences": {
+      "route": "/[orgSlug]/[workspaceSlug]/settings/agent-defaults",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/agent-defaults/coding-agent-preferences-form.tsx",
+      "entry": "Agent Defaults → Models sub-tab \"Your coding-agent preferences\" reads via get_workspace_user_preferences",
+      "testid": null,
+      "proof": "apps/app/e2e/settings-consolidation.spec.ts",
+      "verifiedAt": null,
+      "verifiedBy": "web-app-2.0-phase-2"
+    },
+    "update_workspace_user_preferences": {
+      "route": "/[orgSlug]/[workspaceSlug]/settings/agent-defaults",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/agent-defaults/coding-agent-preferences-actions.ts",
+      "entry": "Agent Defaults → \"Your coding-agent preferences\" Save → updateWorkspaceUserPreferences",
+      "testid": null,
+      "proof": "apps/app/e2e/settings-consolidation.spec.ts",
+      "verifiedAt": null,
+      "verifiedBy": "web-app-2.0-phase-2"
     },
     "update_user_budget": {
       "route": "/[orgSlug]/[workspaceSlug]/ask (chat composer)",
@@ -321,31 +348,31 @@
       "page": "apps/app/src/app/[orgSlug]/developer/tokens/page.tsx",
       "entry": "TokensPanel → CreateKeyDialog form → createApiKeyAction",
       "testid": null,
-      "proof": null,
-      "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
+      "proof": "apps/app/e2e/developer-tokens.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
     },
     "revoke_api_key": {
       "route": "/[orgSlug]/developer/tokens",
       "page": "apps/app/src/app/[orgSlug]/developer/tokens/page.tsx",
       "entry": "ActiveKeyRow Revoke/Confirm → revokeApiKeyAction",
       "testid": null,
-      "proof": null,
-      "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
+      "proof": "apps/app/e2e/developer-tokens.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
     },
     "rotate_api_key": {
       "route": "/[orgSlug]/developer/tokens",
       "page": "apps/app/src/app/[orgSlug]/developer/tokens/page.tsx",
       "entry": "ActiveKeyRow Rotate → rotateApiKeyAction",
       "testid": null,
-      "proof": null,
-      "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
+      "proof": "apps/app/e2e/developer-tokens.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
     },
     "list_connections": {
-      "route": "/[orgSlug]/[workspaceSlug]/knowledge/repos",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/knowledge/repos/connections-section.tsx",
+      "route": "/[orgSlug]/[workspaceSlug]/knowledge/sources",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/knowledge/sources/connections-section.tsx",
       "entry": "ConnectionsSection RSC invoke(connection.list) → KnowledgeConnectionsClient",
       "testid": "connection-row-{publicId}",
       "proof": null,
@@ -353,22 +380,31 @@
       "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
     "get_graph_stats": {
-      "route": "/[orgSlug]/[workspaceSlug]/knowledge/inference",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/knowledge/inference/page.tsx",
-      "entry": "GraphStatsSection RSC → GraphStatsBoxes on load",
+      "route": "/[orgSlug]/[workspaceSlug]/knowledge/graph",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/knowledge/graph/_panels/graph-side-panel.tsx",
+      "entry": "Graph side-panel header shows summary counts via get_graph_stats (also on the Inference stats section)",
       "testid": "graph-stats",
-      "proof": null,
+      "proof": "apps/app/e2e/knowledge-graph.spec.ts",
       "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
+      "verifiedBy": "web-app-2.0-phase-2"
+    },
+    "get_graph_stats": {
+      "route": "/[orgSlug]/[workspaceSlug]",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/page.tsx",
+      "entry": "Overview → Graph grounding tile (GraphTile RSC → GraphStatsBoxes / zero state) on page load",
+      "testid": "overview-graph-tile",
+      "proof": "apps/app/e2e/workspace-overview.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
     },
     "get_node": {
-      "route": "/[orgSlug]/[workspaceSlug]/knowledge/nodes/[nodeId]",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/knowledge/nodes/[nodeId]/page.tsx",
-      "entry": "Node detail page server-fetch (deep-linked from graph explorer)",
+      "route": "/[orgSlug]/[workspaceSlug]/knowledge/graph/[nodeId]",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/knowledge/graph/[nodeId]/page.tsx",
+      "entry": "Node detail page server-fetch (deep-linked from Graph canvas/browse and chat citations)",
       "testid": null,
-      "proof": null,
+      "proof": "apps/app/e2e/knowledge-node-detail.spec.ts",
       "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
+      "verifiedBy": "web-app-2.0-phase-2"
     },
     "ingest_graph": {
       "route": "/[orgSlug]/[workspaceSlug]/ask",
@@ -402,18 +438,18 @@
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/evals/runs/[runId]/page.tsx",
       "entry": "RunDetailSection RSC → RunDetailClient",
       "testid": "eval-run-detail",
-      "proof": null,
-      "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
+      "proof": "apps/app/e2e/eval-run-detail.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
     },
     "list_datasets": {
       "route": "/[orgSlug]/[workspaceSlug]/evals",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/evals/page.tsx",
       "entry": "DatasetsSection RSC → DatasetsClient list",
       "testid": "evals-datasets-table",
-      "proof": null,
-      "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
+      "proof": "apps/app/e2e/evals-write-path.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
     },
     "generate_video": {
       "route": "/[orgSlug]/[workspaceSlug]/ask",
@@ -684,6 +720,506 @@
       "proof": "apps/app/e2e/billing-revenue.spec.ts",
       "verifiedAt": "2026-07-10",
       "verifiedBy": "session_01Hi2b4PCDZG2LrYumbaqPwX"
+    },
+    "list_capability_registry": {
+      "route": "/[orgSlug]/governance/capabilities",
+      "page": "apps/app/src/app/[orgSlug]/governance/capabilities/page.tsx",
+      "entry": "CatalogView renders the contract registry table on page load (invokeOrgCapability list_capability_registry)",
+      "testid": "capability-catalog",
+      "proof": "apps/app/e2e/governance.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_e448d4cc"
+    },
+    "get_capability_registry": {
+      "route": "/[orgSlug]/governance/capabilities",
+      "page": "apps/app/src/app/[orgSlug]/governance/capabilities/page.tsx",
+      "entry": "Clicking a capability row opens ContractDrawer which loads full contract detail (get_capability_registry)",
+      "testid": "capability-row-",
+      "proof": "apps/app/e2e/governance.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_e448d4cc"
+    },
+    "list_iam_roles": {
+      "route": "/[orgSlug]/governance/policies",
+      "page": "apps/app/src/app/[orgSlug]/governance/policies/page.tsx",
+      "entry": "Roles & permissions table (server read list_iam_roles on page load)",
+      "testid": "roles-table",
+      "proof": "apps/app/e2e/governance.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_e448d4cc"
+    },
+    "get_auth_alerts": {
+      "route": "/[orgSlug]/governance/policies",
+      "page": "apps/app/src/app/[orgSlug]/governance/policies/page.tsx",
+      "entry": "MCP auth alerts panel reflects current per-role alert settings (get_auth_alerts on page load)",
+      "testid": "auth-alerts-panel",
+      "proof": "apps/app/e2e/governance.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_e448d4cc"
+    },
+    "set_auth_alerts": {
+      "route": "/[orgSlug]/governance/policies",
+      "page": "apps/app/src/app/[orgSlug]/governance/policies/page.tsx",
+      "entry": "MCP auth alerts panel \"Save\" submit → saveAuthAlertsAction → set_auth_alerts",
+      "testid": "auth-alerts-save",
+      "proof": "apps/app/e2e/governance.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_e448d4cc"
+    },
+    "query_audit_log": {
+      "route": "/[orgSlug]/governance",
+      "page": "apps/app/src/app/[orgSlug]/governance/page.tsx",
+      "entry": "Governance hub \"Recent denied invocations\" panel + Audit events tile (the only governance page that invokes query_audit_log — capabilities/policies invoke list_capability_registry/get_capability_registry/list_iam_roles/get_auth_alerts instead)",
+      "testid": "denied-feed",
+      "proof": "apps/app/e2e/governance-hub.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_e448d4cc"
+    "list_automations": {
+      "route": "/[orgSlug]/[workspaceSlug]/automations",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/automations/page.tsx",
+      "entry": "AutomationsSection (async RSC) loads automation.list on render",
+      "testid": "automations-table",
+      "proof": "apps/app/e2e/automations.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "create_automation": {
+      "route": "/[orgSlug]/[workspaceSlug]/automations",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/automations/page.tsx",
+      "entry": "\"New automation\" button → NewAutomationDialog submit → createAutomationAction",
+      "testid": "create-automation",
+      "proof": "apps/app/e2e/automations.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "enable_automation": {
+      "route": "/[orgSlug]/[workspaceSlug]/automations",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/automations/page.tsx",
+      "entry": "Row menu Enable / editor toggle → EnableConfirmDialog (human gate) → enableAutomationAction",
+      "testid": "confirm-enable",
+      "proof": "apps/app/e2e/automations.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "disable_automation": {
+      "route": "/[orgSlug]/[workspaceSlug]/automations",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/automations/page.tsx",
+      "entry": "Row menu Disable / editor toggle-off → disableAutomationAction",
+      "testid": null,
+      "proof": "apps/app/e2e/automations.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "trigger_automation": {
+      "route": "/[orgSlug]/[workspaceSlug]/automations",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/automations/page.tsx",
+      "entry": "Row menu / editor \"Trigger now\" → TriggerNowDialog → triggerAutomationAction",
+      "testid": "confirm-trigger",
+      "proof": "apps/app/e2e/automations.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "update_automation": {
+      "route": "/[orgSlug]/[workspaceSlug]/automations/[automationId]",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/automations/[automationId]/page.tsx",
+      "entry": "Editor header name/description edit + trigger-config panel edit → updateAutomationAction",
+      "testid": "save-details",
+      "proof": "apps/app/e2e/automations.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "get_automation": {
+      "route": "/[orgSlug]/[workspaceSlug]/automations/[automationId]",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/automations/[automationId]/page.tsx",
+      "entry": "Automation editor SSR reads the full automation (config, steps, runs) via automation.get",
+      "testid": null,
+      "proof": "apps/app/e2e/automations.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "list_triggers": {
+      "route": "/[orgSlug]/[workspaceSlug]/automations/triggers",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/automations/triggers/page.tsx",
+      "entry": "TriggersSection (async RSC) fans list_triggers out per agent (listWorkspaceTriggers)",
+      "testid": "triggers-table",
+      "proof": "apps/app/e2e/automations-triggers.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "create_trigger": {
+      "route": "/[orgSlug]/[workspaceSlug]/automations/triggers",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/automations/triggers/page.tsx",
+      "entry": "\"New trigger\" → TriggerFormDialog submit (create) → createTriggerAction",
+      "testid": "new-trigger",
+      "proof": "apps/app/e2e/automations-triggers.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "update_trigger": {
+      "route": "/[orgSlug]/[workspaceSlug]/automations/triggers",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/automations/triggers/page.tsx",
+      "entry": "Row menu Edit → TriggerFormDialog submit (edit) → updateTriggerAction; also Enable/Disable → toggleTriggerAction",
+      "testid": null,
+      "proof": "apps/app/e2e/automations-triggers.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "delete_trigger": {
+      "route": "/[orgSlug]/[workspaceSlug]/automations/triggers",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/automations/triggers/page.tsx",
+      "entry": "Row menu Delete → DeleteTriggerDialog confirm → deleteTriggerAction",
+      "testid": null,
+      "proof": "apps/app/e2e/automations-triggers.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "run_workflow": {
+      "route": "/[orgSlug]/[workspaceSlug]/automations/workflows",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/automations/workflows/page.tsx",
+      "entry": "\"Launch\" → LaunchWorkflowDialog Workflow tab submit → runWorkflowAction",
+      "testid": "launch-workflow",
+      "proof": "apps/app/e2e/automations-workflows.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "get_workflow_status": {
+      "route": "/[orgSlug]/[workspaceSlug]/automations/workflows",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/automations/workflows/page.tsx",
+      "entry": "Runs table bounded enrichment + detail drawer WorkflowProgress poll",
+      "testid": null,
+      "proof": "apps/app/e2e/automations-workflows.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "cancel_workflow": {
+      "route": "/[orgSlug]/[workspaceSlug]/automations/workflows",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/automations/workflows/page.tsx",
+      "entry": "Row menu / drawer Cancel (canManage-gated) → cancelWorkflowAction",
+      "testid": null,
+      "proof": "apps/app/e2e/automations-workflows.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "start_research_swarm": {
+      "route": "/[orgSlug]/[workspaceSlug]/automations/workflows",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/automations/workflows/page.tsx",
+      "entry": "\"Launch\" → LaunchWorkflowDialog Swarm tab submit → startResearchSwarmAction",
+      "testid": "launch-tab-swarm",
+      "proof": "apps/app/e2e/automations-workflows.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "get_research_status": {
+      "route": "/[orgSlug]/[workspaceSlug]/automations/workflows",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/automations/workflows/page.tsx",
+      "entry": "Swarm row → detail drawer ResearchSwarmCard poll",
+      "testid": null,
+      "proof": "apps/app/e2e/automations-workflows.spec.ts",
+    "sync_repo": {
+      "route": "/[orgSlug]/[workspaceSlug]/workbench/repos",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/repos/repos-client.tsx",
+      "entry": "Repos list row 'Sync now' button",
+      "testid": "repo-sync-{connectionId}",
+      "proof": "apps/app/e2e/workbench-repos.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "pause_repo": {
+      "route": "/[orgSlug]/[workspaceSlug]/workbench/repos",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/repos/repos-client.tsx",
+      "entry": "Repos list row Pause toggle",
+      "testid": "repo-pause-resume-{connectionId}",
+      "proof": "apps/app/e2e/workbench-repos.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "resume_repo": {
+      "route": "/[orgSlug]/[workspaceSlug]/workbench/repos",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/repos/repos-client.tsx",
+      "entry": "Repos list row Resume toggle",
+      "testid": "repo-pause-resume-{connectionId}",
+      "proof": "apps/app/e2e/workbench-repos.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "get_repo_metrics": {
+      "route": "/[orgSlug]/[workspaceSlug]/workbench/repos",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/repos/repos-section.tsx",
+      "entry": "Repos list sync/last-index columns; detail Overview tab stats",
+      "testid": "repos-table",
+      "proof": "apps/app/e2e/workbench-repos.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "configure_repo": {
+      "route": "/[orgSlug]/[workspaceSlug]/workbench/repos",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/repos/repo-drawers.tsx",
+      "entry": "Configure drawer submit",
+      "testid": "configure-repo-submit",
+      "proof": "apps/app/e2e/workbench-repos.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "create_repo": {
+      "route": "/[orgSlug]/[workspaceSlug]/workbench/repos",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/repos/repo-drawers.tsx",
+      "entry": "'Create repo' header button + drawer submit",
+      "testid": "create-repo-submit",
+      "proof": "apps/app/e2e/workbench-repos.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "fork_repo": {
+      "route": "/[orgSlug]/[workspaceSlug]/workbench/repos",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/repos/repo-drawers.tsx",
+      "entry": "'Fork' header button + drawer submit",
+      "testid": "fork-repo-submit",
+      "proof": "apps/app/e2e/workbench-repos.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "create_branch": {
+      "route": "/[orgSlug]/[workspaceSlug]/workbench/repos/[connectionId]",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/repos/[connectionId]/branches-tab.tsx",
+      "entry": "Branches tab create-branch form",
+      "testid": "branch-create-submit",
+      "proof": "apps/app/e2e/workbench-repos.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "open_pr": {
+      "route": "/[orgSlug]/[workspaceSlug]/workbench/repos/[connectionId]",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/repos/[connectionId]/pull-requests-tab.tsx",
+      "entry": "Pull Requests tab 'Open a pull request' form",
+      "testid": "open-pr-submit",
+      "proof": "apps/app/e2e/workbench-repos.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "get_pr": {
+      "route": "/[orgSlug]/[workspaceSlug]/workbench/repos/[connectionId]",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/repos/[connectionId]/pull-requests-tab.tsx",
+      "entry": "Pull Requests tab 'Look up a pull request' form",
+      "testid": "pr-lookup-submit",
+      "proof": "apps/app/e2e/workbench-repos.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "get_pr_diff": {
+      "route": "/[orgSlug]/[workspaceSlug]/workbench/repos/[connectionId]",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/repos/[connectionId]/pull-requests-tab.tsx",
+      "entry": "Pull Requests tab PR diff view",
+      "testid": "pr-lookup-submit",
+      "proof": "apps/app/e2e/workbench-repos.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "get_ci_status": {
+      "route": "/[orgSlug]/[workspaceSlug]/workbench/repos/[connectionId]",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/repos/[connectionId]/pull-requests-tab.tsx",
+      "entry": "Pull Requests tab 'Check CI for a branch or ref' form",
+      "testid": "ci-check-submit",
+      "proof": "apps/app/e2e/workbench-repos.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "put_repo_file": {
+      "route": "/[orgSlug]/[workspaceSlug]/workbench/repos/[connectionId]",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/repos/[connectionId]/files-tab.tsx",
+      "entry": "Files tab commit form",
+      "testid": "file-commit-submit",
+      "proof": "apps/app/e2e/workbench-repos.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "edit_repo_file": {
+      "route": "/[orgSlug]/[workspaceSlug]/workbench/repos",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/repos/repo-drawers.tsx",
+      "entry": "'Edit file & open PR' header launcher submit",
+      "testid": "edit-file-launcher-submit",
+      "proof": "apps/app/e2e/workbench-repos.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "list_file_locks": {
+      "route": "/[orgSlug]/[workspaceSlug]/workbench/repos/[connectionId]",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/repos/[connectionId]/locks-tab.tsx",
+      "entry": "Locks tab table (auto-loads on mount)",
+      "testid": "locks-table",
+      "proof": "apps/app/e2e/workbench-repos.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "release_file_lock": {
+      "route": "/[orgSlug]/[workspaceSlug]/workbench/repos/[connectionId]",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/repos/[connectionId]/locks-tab.tsx",
+      "entry": "Locks tab row 'Release' button (admin-gated)",
+      "testid": "lock-release-{lockId}",
+      "proof": "apps/app/e2e/workbench-repos.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "list_subagent_fanouts": {
+      "route": "/[orgSlug]/[workspaceSlug]/activity/fleet",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/activity/fleet/page.tsx",
+      "entry": "Fleet list table (fleet-list-section -> fleet-list-client)",
+      "testid": "fleet-list-table",
+      "proof": "apps/app/e2e/activity-fleet.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "get_subagent_fanout": {
+      "route": "/[orgSlug]/[workspaceSlug]/activity/fleet",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/activity/fleet/page.tsx",
+      "entry": "Fan-out detail via ?fanout=<id> (child table)",
+      "testid": "fleet-child-table",
+      "proof": "apps/app/e2e/activity-fleet.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "aggregate_subagents": {
+      "route": "/[orgSlug]/[workspaceSlug]/activity/fleet",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/activity/fleet/page.tsx",
+      "entry": "Fan-out detail timeline/aggregate strip",
+      "testid": "fleet-timeline",
+      "proof": "apps/app/e2e/activity-fleet.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "get_subagent_result": {
+      "route": "/[orgSlug]/[workspaceSlug]/activity/fleet",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/activity/fleet/child-drawer.tsx",
+      "entry": "Child detail drawer payload viewer (GET /api/v1/agent/subagent/result)",
+      "testid": "child-drawer-input",
+      "proof": "apps/app/e2e/activity-fleet.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "list_subagent_siblings": {
+      "route": "/[orgSlug]/[workspaceSlug]/activity/fleet",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/activity/fleet/child-drawer.tsx",
+      "entry": "Child detail drawer Siblings section (GET /api/v1/agent/subagent/siblings)",
+      "testid": "child-drawer-siblings-list",
+      "proof": "apps/app/e2e/activity-fleet.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "get_subagent_logs": {
+      "route": "/[orgSlug]/[workspaceSlug]/activity/fleet",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/activity/fleet/child-drawer.tsx",
+      "entry": "Download logfile action (POST /api/v1/agent/subagent/logs)",
+      "testid": "fleet-download-logs-btn",
+      "proof": "apps/app/e2e/activity-fleet.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "cancel_subagent": {
+      "route": "/[orgSlug]/[workspaceSlug]/activity/fleet",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/activity/fleet/actions.ts",
+      "entry": "Cancel action (list row + detail header) with confirm dialog",
+      "testid": "fleet-detail-cancel-btn",
+      "proof": "apps/app/e2e/activity-fleet.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "debug_execution": {
+      "route": "/[orgSlug]/[workspaceSlug]/activity/[executionId]",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/activity/[executionId]/debug-section.tsx",
+      "entry": "Run detail page load, status=failed only — DebugSection invokes debug_execution and renders <DebugPanel> above the span tree",
+      "testid": "run-debug-panel",
+      "proof": "apps/app/e2e/activity-failed-run-debug.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "get_execution_lineage": {
+      "route": "/[orgSlug]/[workspaceSlug]/activity/[executionId]",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/activity/[executionId]/lineage-section.tsx",
+      "entry": "Run detail page load — LineageSection invokes get_execution_lineage and renders the :Execution→:SourceFile touch graph (NodeRef chips) when TOUCHED_FILE edges exist",
+      "testid": null,
+      "proof": "apps/app/e2e/activity-failed-run-debug.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "get_usage_breakdown": {
+      "route": "/[orgSlug]/billing/usage",
+      "page": "apps/app/src/app/[orgSlug]/billing/usage/page.tsx",
+      "entry": "Usage dashboard page load (assertOrgMember + assertBillingManager, then invoke) renders KPI tiles, daily trend, and per-model/surface/workspace/capability/principal breakdown tables",
+      "testid": null,
+      "proof": "apps/app/e2e/billing-usage-breakdown.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "list_executions": {
+      "route": "/[orgSlug]/[workspaceSlug]/activity",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/activity/page.tsx",
+      "entry": "Activity Runs tab — ActivitySection lists recent executions with keyset pagination (?before=) on page load",
+      "testid": null,
+      "proof": "apps/app/e2e/agent-execution-list.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "get_execution_trace": {
+      "route": "/[orgSlug]/[workspaceSlug]/activity/[executionId]",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/activity/[executionId]/page.tsx",
+      "entry": "Run detail page load — TraceSection renders the span tree (steps, tool calls, durations, tokens, cost)",
+      "testid": null,
+      "proof": "apps/app/e2e/agent-trace-get.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "create_dataset": {
+      "route": "/[orgSlug]/[workspaceSlug]/evals",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/evals/create-dataset-drawer.tsx",
+      "entry": "New dataset drawer → Manual mode → createDatasetAction",
+      "testid": "evals-create-manual-submit",
+      "proof": "apps/app/e2e/evals-write-path.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "create_trace_dataset": {
+      "route": "/[orgSlug]/[workspaceSlug]/evals",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/evals/create-dataset-drawer.tsx",
+      "entry": "New dataset drawer → From traces mode → createTraceDatasetAction",
+      "testid": "evals-create-traces-submit",
+      "proof": "apps/app/e2e/evals-write-path.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "add_dataset_item": {
+      "route": "/[orgSlug]/[workspaceSlug]/evals",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/evals/dataset-detail-drawer.tsx",
+      "entry": "Dataset detail drawer → Add item form → addDatasetItemAction",
+      "testid": "evals-add-item-submit",
+      "proof": "apps/app/e2e/evals-write-path.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "get_dataset": {
+      "route": "/[orgSlug]/[workspaceSlug]/evals",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/evals/dataset-detail-drawer.tsx",
+      "entry": "Dataset card click → drawer open → getDatasetAction loads items",
+      "testid": "evals-dataset-drawer",
+      "proof": "apps/app/e2e/evals-write-path.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "start_eval_run": {
+      "route": "/[orgSlug]/[workspaceSlug]/evals",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/evals/dataset-detail-drawer.tsx",
+      "entry": "Dataset detail drawer → Run eval launcher → startEvalRunAction",
+      "testid": "evals-run-start",
+      "proof": "apps/app/e2e/evals-write-path.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "get_eval_status": {
+      "route": "/[orgSlug]/[workspaceSlug]/evals",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/evals/dataset-detail-drawer.tsx",
+      "entry": "Run launcher status poll → getEvalRunStatusAction (evals-run-status chip)",
+      "testid": "evals-run-status",
+      "proof": "apps/app/e2e/evals-write-path.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
     }
   }
 }

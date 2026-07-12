@@ -4,11 +4,12 @@ import { registerCapability } from "../registry";
 export const pluginCredentialSetSecret = registerCapability({
   name: "set_plugin_secret",
   domain: "plugin",
-  description: "Store or update an encrypted credential (API key or OAuth token) for a plugin server in this workspace.",
+  description:
+    "Store or update an encrypted credential (API key or OAuth token) for a plugin server in this workspace.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   agent: { requiresApproval: true, riskLevel: "high", category: "plugin" },
-  layers: ["api", "docs", "mcp", "unit"],
+  layers: ["api", "docs", "mcp", "unit", "app"],
   scoped: true,
   sensitivity: "high",
   defaultEffect: "deny",

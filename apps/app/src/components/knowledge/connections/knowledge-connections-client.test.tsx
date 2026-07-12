@@ -194,7 +194,7 @@ describe("KnowledgeConnectionsClient — GitHub wizard resume after redirect", (
     );
 
     await waitFor(() =>
-      expect(replaceSpy).toHaveBeenCalledWith("/acme/research/knowledge/repos?setup=github"),
+      expect(replaceSpy).toHaveBeenCalledWith("/acme/research/knowledge/sources?setup=github"),
     );
   });
 

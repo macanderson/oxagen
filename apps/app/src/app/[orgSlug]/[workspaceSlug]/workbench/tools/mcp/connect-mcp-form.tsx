@@ -21,6 +21,7 @@ import {
 import { useToast } from "@/components/ui/toast";
 import { Plug } from "lucide-react";
 import { AuthenticateDialog } from "./authenticate-dialog";
+import { SecretDialog } from "./secret-dialog";
 
 type TransportValue = "streamable-http" | "sse" | "stdio";
 type AuthKindValue = "oauth" | "secret" | "none";
@@ -53,9 +54,21 @@ interface ConnectMcpFormProps {
     authKind?: AuthKindValue;
     error?: string;
   }>;
+  /** Stores an API key for a secret-auth server (post-install prompt). */
+  saveSecretAction: (input: {
+    orgSlug: string;
+    workspaceSlug: string;
+    orgListingId: string;
+    secret: string;
+  }) => Promise<{ ok: boolean; error?: string }>;
 }
 
-export function ConnectMcpForm({ orgSlug, workspaceSlug, connectAction }: ConnectMcpFormProps) {
+export function ConnectMcpForm({
+  orgSlug,
+  workspaceSlug,
+  connectAction,
+  saveSecretAction,
+}: ConnectMcpFormProps) {
   const toast = useToast();
   const router = useRouter();
   const [name, setName] = React.useState("");
@@ -65,6 +78,10 @@ export function ConnectMcpForm({ orgSlug, workspaceSlug, connectAction }: Connec
   const [pending, setPending] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [authPrompt, setAuthPrompt] = React.useState<{
+    orgListingId: string;
+    serverTitle: string;
+  } | null>(null);
+  const [secretPrompt, setSecretPrompt] = React.useState<{
     orgListingId: string;
     serverTitle: string;
   } | null>(null);
@@ -104,11 +121,15 @@ export function ConnectMcpForm({ orgSlug, workspaceSlug, connectAction }: Connec
       description:
         effectiveAuthKind === "oauth"
           ? "One more step: authenticate to activate it."
-          : "The MCP server is now installed for this workspace.",
+          : effectiveAuthKind === "secret"
+            ? "One more step: add its API key to activate it."
+            : "The MCP server is now installed for this workspace.",
       type: "success",
     });
     if (effectiveAuthKind === "oauth" && result.orgListingId) {
       setAuthPrompt({ orgListingId: result.orgListingId, serverTitle });
+    } else if (effectiveAuthKind === "secret" && result.orgListingId) {
+      setSecretPrompt({ orgListingId: result.orgListingId, serverTitle });
     }
     setName("");
     setEndpointUrl("");
@@ -216,6 +237,24 @@ export function ConnectMcpForm({ orgSlug, workspaceSlug, connectAction }: Connec
           orgListingId={authPrompt.orgListingId}
           serverTitle={authPrompt.serverTitle}
           returnTo={`/${orgSlug}/${workspaceSlug}/workbench/tools/mcp`}
+        />
+      ) : null}
+
+      {secretPrompt ? (
+        <SecretDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setSecretPrompt(null);
+          }}
+          orgSlug={orgSlug}
+          workspaceSlug={workspaceSlug}
+          orgListingId={secretPrompt.orgListingId}
+          serverTitle={secretPrompt.serverTitle}
+          saveAction={saveSecretAction}
+          onSaved={() => {
+            setSecretPrompt(null);
+            router.refresh();
+          }}
         />
       ) : null}
     </form>

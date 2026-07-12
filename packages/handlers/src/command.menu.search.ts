@@ -273,7 +273,7 @@ async function searchOntology(
       label: n.displayName,
       scope: `Workspace: ${workspaceSlug}`,
       contextLine: n.description ?? null,
-      href: `/${orgSlug}/${workspaceSlug}/knowledge/nodes/${n.nodeId}`,
+      href: `/${orgSlug}/${workspaceSlug}/knowledge/graph/${n.nodeId}`,
     }));
   } catch {
     // Ontology search is best-effort — if Neo4j is unavailable, fall through

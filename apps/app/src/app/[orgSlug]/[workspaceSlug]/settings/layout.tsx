@@ -19,16 +19,16 @@ export default async function SettingsLayout({
   // Workbench, never here. The one MCP concern that IS settings-shaped is
   // registry administration: which catalog sources the marketplace and MCP
   // install flows discover servers from.
+  // web-app-2.0 Phase 2 consolidation: Models·Budget·Prompts·Memory-policy
+  // merged into Agent Defaults, Members folded into General, and the
+  // ontology/schema builder moved to Knowledge. Environments lives in the
+  // Workbench (see settings/environments -> workbench/environments redirect),
+  // so it is not a Settings tab here.
   const navItems = [
     { label: "General", href: workspace.settings.general(ctx) },
-    { label: "Members", href: workspace.settings.members(ctx) },
-    { label: "Models", href: workspace.settings.models(ctx) },
-    { label: "Budget", href: workspace.settings.budget(ctx) },
+    { label: "Agent Defaults", href: workspace.settings.agentDefaults(ctx) },
     { label: "GitHub", href: workspace.settings.github(ctx) },
     { label: "MCP Registries", href: workspace.settings.mcpServerRegistries(ctx) },
-    { label: "Prompts", href: workspace.settings.prompts(ctx) },
-    { label: "Knowledge", href: workspace.settings.knowledge(ctx) },
-    { label: "Memory", href: workspace.settings.memory(ctx) },
   ];
 
   return (

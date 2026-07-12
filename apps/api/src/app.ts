@@ -50,6 +50,7 @@ import { codeMapRoute } from "./routes/v1/code.map";
 import { agentToolListRoute } from "./routes/v1/agent.tool.list";
 import { agentMcpRegisterRoute } from "./routes/v1/agent.mcp.register";
 import { agentMcpListRoute } from "./routes/v1/agent.mcp.list";
+import { agentMcpResolveRoute } from "./routes/v1/agent.mcp.resolve";
 import { agentMcpSetEnabledRoute } from "./routes/v1/agent.mcp.set_enabled";
 import { agentMcpDeleteRoute } from "./routes/v1/agent.mcp.delete";
 import { agentMcpConsentResolveRoute } from "./routes/v1/agent.mcp_consent.resolve";
@@ -179,6 +180,10 @@ import { secretExportRoute } from "./routes/v1/secret.export";
 import { notificationsListRoute } from "./routes/v1/notification.list";
 import { notificationsMarkRoute } from "./routes/v1/notification.mark";
 import { pluginSettingsSetAuthAlertsRoute } from "./routes/v1/plugin.settings.set_auth_alerts";
+import { pluginSettingsGetAuthAlertsRoute } from "./routes/v1/plugin.settings.get_auth_alerts";
+import { capabilityRegistryListRoute } from "./routes/v1/capability.registry.list";
+import { capabilityRegistryGetRoute } from "./routes/v1/capability.registry.get";
+import { iamRoleListRoute } from "./routes/v1/iam.role.list";
 import { apiKeyCreateRoute } from "./routes/v1/api.key.create";
 import { apiKeyRevokeRoute } from "./routes/v1/api.key.revoke";
 import { apiKeyRotateRoute } from "./routes/v1/api.key.rotate";
@@ -193,6 +198,7 @@ import { documentCreateRoute } from "./routes/v1/document.create";
 import { documentListRoute } from "./routes/v1/document.list";
 import { documentReadRoute } from "./routes/v1/document.read";
 import { automationListRoute } from "./routes/v1/automation.list";
+import { automationGetRoute } from "./routes/v1/automation.get";
 import { automationCreateRoute } from "./routes/v1/automation.create";
 import { automationUpdateRoute } from "./routes/v1/automation.update";
 import { automationEnableRoute } from "./routes/v1/automation.enable";
@@ -459,6 +465,7 @@ orgScoped.route("/code/map", codeMapRoute);
 orgScoped.route("/agent/tools", agentToolListRoute);
 orgScoped.route("/agent/mcp-servers", agentMcpRegisterRoute);
 orgScoped.route("/agent/mcp-servers", agentMcpListRoute);
+orgScoped.route("/agent/mcp-servers/resolve", agentMcpResolveRoute);
 orgScoped.route("/agent/mcp-servers/set-enabled", agentMcpSetEnabledRoute);
 orgScoped.route("/agent/mcp-servers/delete", agentMcpDeleteRoute);
 orgScoped.route("/agent/mcp-consents/resolve", agentMcpConsentResolveRoute);
@@ -647,6 +654,16 @@ orgScoped.route(
   "/plugin/settings/auth-alerts",
   pluginSettingsSetAuthAlertsRoute,
 );
+// GET on the same path reads the setting (separate thin adapter per capability).
+orgScoped.route(
+  "/plugin/settings/auth-alerts",
+  pluginSettingsGetAuthAlertsRoute,
+);
+// Typed-contract registry reads — the governance catalog's data source.
+orgScoped.route("/capability/registry/list", capabilityRegistryListRoute);
+orgScoped.route("/capability/registry/get", capabilityRegistryGetRoute);
+// IAM roles read (read-only; writes remain provisioning-script-only).
+orgScoped.route("/iam/roles/list", iamRoleListRoute);
 orgScoped.route("/api-keys", apiKeyCreateRoute);
 orgScoped.route("/api-keys/revoke", apiKeyRevokeRoute);
 orgScoped.route("/api-keys/rotate", apiKeyRotateRoute);
@@ -661,6 +678,7 @@ orgScoped.route("/document/create", documentCreateRoute);
 orgScoped.route("/document/list", documentListRoute);
 orgScoped.route("/document/read", documentReadRoute);
 orgScoped.route("/automation/list", automationListRoute);
+orgScoped.route("/automation/get", automationGetRoute);
 orgScoped.route("/automation/create", automationCreateRoute);
 orgScoped.route("/automation/update", automationUpdateRoute);
 orgScoped.route("/automation/enable", automationEnableRoute);

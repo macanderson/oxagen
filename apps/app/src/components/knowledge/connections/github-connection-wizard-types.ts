@@ -25,9 +25,9 @@ export type SyncDepth = (typeof SYNC_DEPTH_OPTIONS)[number];
  * then needs to resume with that exact connection when the workspace is
  * returned to via the GitHub OAuth callback or the stateless Setup-URL leg.
  * The OAuth leg carries our signed `state` and lands on
- * `…/knowledge/repos?setup=github&connectionId=<id>`; the Setup-URL leg
+ * `…/knowledge/sources?setup=github&connectionId=<id>`; the Setup-URL leg
  * (`setup_action=update`) is stateless and lands on
- * `…/knowledge/repos?setup=github` — the id is lost.
+ * `…/knowledge/sources?setup=github` — the id is lost.
  *
  * The browser is the only party that reliably knows which connection is
  * mid-setup, so we stash it in `sessionStorage` before any redirect and read

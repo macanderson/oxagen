@@ -1,0 +1,172 @@
+{
+  "name": "get_automation",
+  "domain": "automation",
+  "description": "Get one automation's trigger config, description, steps, and recent run history",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent",
+    "cli"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "read"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "automation_id": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Trigger public ID (plt_*) from automation.list"
+      }
+    },
+    "required": [
+      "automation_id"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "automation_id": {
+        "type": "string"
+      },
+      "playbook_id": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      },
+      "description": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "status": {
+        "type": "string"
+      },
+      "triggerType": {
+        "type": "string",
+        "enum": [
+          "event",
+          "schedule",
+          "api"
+        ]
+      },
+      "enabled": {
+        "type": "boolean"
+      },
+      "triggerConfig": {
+        "type": "object",
+        "additionalProperties": {}
+      },
+      "steps": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "stepKey": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "stepType": {
+              "type": "string"
+            },
+            "config": {
+              "type": "object",
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "stepKey",
+            "name",
+            "stepType",
+            "config"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "runs": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            },
+            "source": {
+              "type": "string"
+            },
+            "startedAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "completedAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "createdAt": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "status",
+            "source",
+            "startedAt",
+            "completedAt",
+            "createdAt"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "automation_id",
+      "playbook_id",
+      "name",
+      "description",
+      "status",
+      "triggerType",
+      "enabled",
+      "triggerConfig",
+      "steps",
+      "runs"
+    ],
+    "additionalProperties": false
+  }
+}

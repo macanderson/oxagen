@@ -15,7 +15,7 @@ export const agentFileLockRelease = registerCapability({
     "Force-release a file lock by its lockId — for clearing a lock a crashed/stuck agent left behind. Does not require the original holder's agentId.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "medium", category: "write" },
   sensitivity: "medium",
@@ -25,12 +25,24 @@ export const agentFileLockRelease = registerCapability({
     workspace: { Owner: "allow" },
   },
   input: z.object({
-    lockId: z.string().describe("The lockId returned by agent.file.lock.acquire or agent.file.lock.list."),
+    lockId: z
+      .string()
+      .describe(
+        "The lockId returned by agent.file.lock.acquire or agent.file.lock.list.",
+      ),
   }),
   output: z.object({
-    released: z.boolean().describe("false when no matching lock existed (idempotent, not an error)."),
+    released: z
+      .boolean()
+      .describe(
+        "false when no matching lock existed (idempotent, not an error).",
+      ),
   }),
 });
 
-export type AgentFileLockReleaseInput = z.output<typeof agentFileLockRelease.input>;
-export type AgentFileLockReleaseOutput = z.output<typeof agentFileLockRelease.output>;
+export type AgentFileLockReleaseInput = z.output<
+  typeof agentFileLockRelease.input
+>;
+export type AgentFileLockReleaseOutput = z.output<
+  typeof agentFileLockRelease.output
+>;

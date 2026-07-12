@@ -84,10 +84,33 @@ vi.mock("./agent-picker/agent-gallery", () => ({
 }));
 vi.mock("./suggested-prompt-chips", () => ({ SuggestedPromptChips: () => null }));
 vi.mock("./coding-trace-panel", () => ({
+  // The AgentActivityRail's ProgressCard renders CodingTraceStages (driven by
+  // groupCodingTraceStages), not CodingTracePanel — so stub all three exports
+  // the rail touches. groupCodingTraceStages returns one non-empty stage group
+  // so ProgressCard's `hasContent` is true and the rail's testid mounts.
   CodingTracePanel: () => <div data-testid="coding-trace-panel" />,
+  CodingTraceStages: () => <div data-testid="coding-trace-panel" />,
+  groupCodingTraceStages: () => ({
+    plan: [
+      {
+        key: "plan:stub",
+        label: "Plan",
+        tone: "done",
+        active: false,
+        anchorId: "turn-entry-plan:stub",
+      },
+    ],
+    tool: [],
+    code: [],
+    subagent: [],
+    result: [],
+  }),
 }));
 vi.mock("./workspace-context-panel", () => ({
+  // The rail's OutputsCard renders WorkspaceContextTabs; keep WorkspaceContextPanel
+  // stubbed for the registry path. Both map to the same testid.
   WorkspaceContextPanel: () => <div data-testid="workspace-context-panel" />,
+  WorkspaceContextTabs: () => <div data-testid="workspace-context-panel" />,
 }));
 vi.mock("./activity-timeline", () => ({
   ActivityTimeline: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,

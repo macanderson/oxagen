@@ -29,10 +29,11 @@ export const prDiffFileSchema = z.object({
 export const repoPrDiff = registerCapability({
   name: "get_pr_diff",
   domain: "repo",
-  description: "Read the per-file unified-diff patches for a GitHub pull request.",
+  description:
+    "Read the per-file unified-diff patches for a GitHub pull request.",
   mode: "sync",
   surfaces: ["agent", "api", "mcp"],
-  layers: ["api", "mcp", "unit", "docs"],
+  layers: ["api", "mcp", "unit", "docs", "app"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "vcs" },
   sensitivity: "low",
@@ -47,9 +48,7 @@ export const repoPrDiff = registerCapability({
     number: z.number().int().describe("Pull request number"),
   }),
   output: z.object({
-    summary: z
-      .string()
-      .describe("Human summary, e.g. \"12 files, +340 -58\""),
+    summary: z.string().describe('Human summary, e.g. "12 files, +340 -58"'),
     additions: z.number().int().describe("Total added lines"),
     deletions: z.number().int().describe("Total deleted lines"),
     changedFiles: z.number().int().describe("Number of changed files"),

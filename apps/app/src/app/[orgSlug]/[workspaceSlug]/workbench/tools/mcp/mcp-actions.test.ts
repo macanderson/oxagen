@@ -47,7 +47,11 @@ vi.mock("@/lib/routes", () => ({
 import { revalidatePath } from "next/cache";
 import { invoke } from "@oxagen/oxagen";
 import { resolveAgentToolsManager } from "@/lib/agent-tools/authz";
-import { connectCustomMcpServer, revokeMcpCredential } from "./mcp-actions";
+import {
+  connectCustomMcpServer,
+  revokeMcpCredential,
+  setMcpServerSecret,
+} from "./mcp-actions";
 import type { ResolvedWorkbenchScope } from "@/lib/workbench/scope";
 
 const mockInvoke = vi.mocked(invoke);
@@ -228,5 +232,75 @@ describe("revokeMcpCredential", () => {
     const result = await revokeMcpCredential(VALID_REVOKE_INPUT);
 
     expect(result).toEqual({ ok: false, error: "Revoke failed" });
+  });
+});
+
+const VALID_SECRET_INPUT = {
+  orgSlug: "acme",
+  workspaceSlug: "main",
+  orgListingId: "orl_1",
+  secret: "sk_live_abc123",
+};
+
+describe("setMcpServerSecret", () => {
+  it("returns ok:false on invalid input (empty secret) without resolving auth", async () => {
+    const result = await setMcpServerSecret({
+      ...VALID_SECRET_INPUT,
+      secret: "",
+    });
+
+    expect(result).toEqual({ ok: false, error: "Invalid input" });
+    expect(mockResolveManager).not.toHaveBeenCalled();
+  });
+
+  it("passes through the auth-denial error", async () => {
+    mockResolveManager.mockResolvedValue({
+      ok: false,
+      error: "Only workspace owners and admins can manage agent tools.",
+    });
+
+    const result = await setMcpServerSecret(VALID_SECRET_INPUT);
+
+    expect(result).toEqual({
+      ok: false,
+      error: "Only workspace owners and admins can manage agent tools.",
+    });
+    expect(mockInvoke).not.toHaveBeenCalled();
+  });
+
+  it("stores the secret via set_plugin_secret and revalidates the mcp path on success", async () => {
+    mockResolveManager.mockResolvedValue({ ok: true, scope: AUTHORIZED_SCOPE });
+    mockInvoke.mockResolvedValue({ ok: true });
+
+    const result = await setMcpServerSecret(VALID_SECRET_INPUT);
+
+    expect(mockInvoke).toHaveBeenCalledWith(
+      "set_plugin_secret",
+      { orgListingId: "orl_1", authKind: "secret", secret: "sk_live_abc123" },
+      AUTHORIZED_SCOPE.ctx,
+      { surface: "agent" },
+    );
+    expect(mockRevalidatePath).toHaveBeenCalledWith(
+      "/acme/main/workbench/tools/mcp",
+    );
+    expect(result).toEqual({ ok: true });
+  });
+
+  it("returns a clean error when set_plugin_secret rejects", async () => {
+    mockResolveManager.mockResolvedValue({ ok: true, scope: AUTHORIZED_SCOPE });
+    mockInvoke.mockRejectedValue(new Error("kms key missing"));
+
+    const result = await setMcpServerSecret(VALID_SECRET_INPUT);
+
+    expect(result).toEqual({ ok: false, error: "kms key missing" });
+  });
+
+  it("falls back to a generic message when the thrown value isn't an Error", async () => {
+    mockResolveManager.mockResolvedValue({ ok: true, scope: AUTHORIZED_SCOPE });
+    mockInvoke.mockRejectedValue("weird throw");
+
+    const result = await setMcpServerSecret(VALID_SECRET_INPUT);
+
+    expect(result).toEqual({ ok: false, error: "Saving the key failed" });
   });
 });

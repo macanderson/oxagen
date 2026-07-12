@@ -28,7 +28,7 @@ describe("GraphNodeCard", () => {
             properties: { rank: "Admiral" },
           },
         }}
-        links={[{ field: "node.nodeId", recordType: "graph.node", id: "n_7", href: "/acme/ws/knowledge/nodes/n_7", label: "Hyman Rickover" }]}
+        links={[{ field: "node.nodeId", recordType: "graph.node", id: "n_7", href: "/acme/ws/knowledge/graph/n_7", label: "Hyman Rickover" }]}
       />,
     );
     expect(screen.getByText("Hyman Rickover")).toBeTruthy();
@@ -36,7 +36,7 @@ describe("GraphNodeCard", () => {
     expect(screen.getByText("Father of the Nuclear Navy")).toBeTruthy();
     expect(screen.getByText("Admiral")).toBeTruthy();
     const open = screen.getByText("Open node").closest("a");
-    expect(open?.getAttribute("href")).toBe("/acme/ws/knowledge/nodes/n_7");
+    expect(open?.getAttribute("href")).toBe("/acme/ws/knowledge/graph/n_7");
   });
 
   it("renders a graph.node.upsert result with a success-toned New label", () => {

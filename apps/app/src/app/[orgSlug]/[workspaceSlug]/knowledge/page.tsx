@@ -7,5 +7,5 @@ export default async function KnowledgeRoot({
   params: Promise<{ orgSlug: string; workspaceSlug: string }>;
 }) {
   const { orgSlug, workspaceSlug } = await params;
-  redirect(workspace.knowledge.repos({ orgSlug, workspaceSlug }));
+  redirect(workspace.knowledge.sources({ orgSlug, workspaceSlug }));
 }
