@@ -265,7 +265,7 @@ function TraversalConsole({ orgSlug, workspaceSlug }: QueryConsoleProps) {
         Traverse from a node
       </h3>
       <p className="text-[11px] text-muted-foreground">
-        Multi-hop traversal from a known node's publicId — paste one from a Browse or Search result.
+        Multi-hop traversal from a known node&apos;s publicId — paste one from a Browse or Search result.
       </p>
 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
