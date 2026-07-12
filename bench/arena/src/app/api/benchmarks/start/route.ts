@@ -1,150 +1,100 @@
 /**
- * Start Benchmark API Route
+ * Start Benchmark API Route — REAL, guarded execution.
  *
- * Initiates a benchmark run with the specified configuration.
- * Returns a run ID for tracking progress.
+ * Spawns the actual `scripts/run-benchmark.ts` CLI (one child per enabled
+ * agent) via the run registry and returns a run id the UI can poll. This is
+ * NOT a simulation.
+ *
+ * Guardrails enforced here:
+ *   • `dryRun` defaults to true — a spending run must be explicitly requested.
+ *   • Per-agent budget is rejected above MAX_BUDGET_PER_AGENT.
+ * See src/lib/run-registry.ts for the process-group teardown guarantee.
  */
 
 import { NextResponse } from "next/server";
-import { randomUUID } from "crypto";
+import { z } from "zod";
 
-import { validateRunConfig } from "@/lib/schema";
-import type { RunConfig } from "@/lib/types";
-import { setProgress } from "../progress/[runId]/route";
+import {
+  MAX_BUDGET_PER_AGENT,
+  RUN_CATEGORIES,
+  startRun,
+} from "@/lib/run-registry";
 
-export async function POST(request: Request) {
+// child_process + fs → Node runtime, never cached.
+export const dynamic = "force-dynamic";
+
+const startSchema = z.object({
+  agents: z
+    .array(
+      z.object({
+        type: z.enum(["oxagen", "stella", "claude-code", "custom"]),
+        model: z.string().min(1),
+      }),
+    )
+    .min(1, "Enable at least one agent"),
+  category: z.enum(RUN_CATEGORIES),
+  budget: z.number().positive(),
+  timeout: z.number().int().positive(),
+  concurrent: z.number().int().positive().max(10).default(1),
+  // Safe by default: the client must send `dryRun: false` to actually spend.
+  dryRun: z.boolean().default(true),
+});
+
+export async function POST(request: Request): Promise<NextResponse> {
+  let body: unknown;
   try {
-    const body = await request.json();
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
 
-    // Validate configuration
-    const configResult = validateRunConfig(body);
+  const parsed = startSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: "Invalid configuration", issues: parsed.error.issues },
+      { status: 400 },
+    );
+  }
+  const config = parsed.data;
 
-    if (!configResult.success) {
-      return NextResponse.json(
-        { error: "Invalid configuration", issues: configResult.error.issues },
-        { status: 400 }
-      );
-    }
+  // Budget cap guardrail — never accept a per-agent budget above the ceiling.
+  if (config.budget > MAX_BUDGET_PER_AGENT) {
+    return NextResponse.json(
+      {
+        error: `Budget $${config.budget} exceeds the per-agent cap of $${MAX_BUDGET_PER_AGENT}. Set ARENA_MAX_BUDGET to raise it.`,
+      },
+      { status: 400 },
+    );
+  }
 
-    const config = configResult.data as RunConfig;
-
-    // Generate run ID
-    const runId = `run-${Date.now()}-${randomUUID().slice(0, 8)}`;
-
-    // Initialize progress state
-    setProgress(runId, {
-      runId,
-      status: "queued",
-      startTime: Date.now(),
-      totalTasks: 3, // Default to smoke test count
-      completedTasks: 0,
-      results: [],
-      totalCost: 0,
-      totalTokens: 0,
-      errors: [],
+  try {
+    const record = startRun({
+      agents: config.agents,
+      category: config.category,
+      budget: config.budget,
+      timeout: config.timeout,
+      concurrent: config.concurrent,
+      dryRun: config.dryRun,
     });
 
-    // Start the benchmark run asynchronously (in production, use a job queue)
-    startBenchmarkRun(runId, config).catch(error => {
-      console.error(`Benchmark run ${runId} failed:`, error);
-      setProgress(runId, {
-        status: "failed",
-        errors: [error.message],
-      });
-    });
-
-    return NextResponse.json({
-      runId,
-      status: "queued",
-      config,
-      message: "Benchmark run queued successfully"
-    });
+    return NextResponse.json(
+      {
+        runId: record.runId,
+        status: record.status,
+        dryRun: record.dryRun,
+        jobs: record.jobs,
+        statusUrl: `/api/benchmarks/${record.runId}/status`,
+        message: record.dryRun
+          ? "Dry run started — planning only, no agents will spend."
+          : "Live benchmark run started.",
+      },
+      { status: 202 },
+    );
   } catch (error) {
     console.error("Error starting benchmark:", error);
     return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
+      { error: "Failed to start benchmark run" },
+      { status: 500 },
     );
   }
-}
-
-/**
- * Simulated benchmark run (in production, this would run the actual agents)
- */
-async function startBenchmarkRun(runId: string, config: RunConfig) {
-  const tasks = [
-    { id: "smoke-add-import", name: "Add Missing Import" },
-    { id: "smoke-fix-typos", name: "Fix Typos in Comments" },
-    { id: "smoke-add-error-handling", name: "Add Error Handling" },
-  ];
-
-  // Update status to running
-  setProgress(runId, {
-    status: "running",
-    totalTasks: tasks.length,
-  });
-
-  // Simulate running each task
-  for (let i = 0; i < tasks.length; i++) {
-    const task = tasks[i];
-
-    // Set current task
-    setProgress(runId, {
-      currentTask: {
-        id: task.id,
-        name: task.name,
-        agent: config.agents[0]?.type || "unknown",
-        model: config.agents[0]?.model || "unknown",
-        status: "running",
-        progress: 0,
-        tokensUsed: 0,
-        costSoFar: 0,
-        duration: 0,
-      },
-    });
-
-    // Simulate task progress
-    for (let progress = 0; progress <= 100; progress += 10) {
-      await new Promise(resolve => setTimeout(resolve, 200));
-      setProgress(runId, {
-        currentTask: {
-          id: task.id,
-          name: task.name,
-          agent: config.agents[0]?.type || "unknown",
-          model: config.agents[0]?.model || "unknown",
-          status: "running",
-          progress,
-          tokensUsed: progress * 50,
-          costSoFar: progress * 0.001,
-          duration: progress * 0.5,
-        },
-      });
-    }
-
-    // Task completed
-    setProgress(runId, {
-      completedTasks: i + 1,
-      currentTask: undefined,
-      results: [
-        {
-          taskId: task.id,
-          taskName: task.name,
-          agent: config.agents[0]?.type || "unknown",
-          model: config.agents[0]?.model || "unknown",
-          success: Math.random() > 0.2, // 80% success rate
-          duration: 50 + Math.random() * 20,
-          cost: 0.05 + Math.random() * 0.02,
-          tokens: 5000 + Math.floor(Math.random() * 1000),
-        },
-      ],
-      totalCost: (i + 1) * 0.05,
-      totalTokens: (i + 1) * 5000,
-    });
-  }
-
-  // Mark as completed
-  setProgress(runId, {
-    status: "completed",
-    endTime: Date.now(),
-  });
 }
