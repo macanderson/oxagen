@@ -554,6 +554,20 @@
       }
     },
     {
+      "name": "resolve_mcp_servers",
+      "file": "agent.mcp.resolve.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": false
+      }
+    },
+    {
       "name": "set_mcp_enabled",
       "file": "agent.mcp.set_enabled.ts",
       "domain": "agent",
@@ -1795,7 +1809,7 @@
         "schema": true,
         "api": false,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "docs": true,
         "app": true
       }
@@ -1870,7 +1884,7 @@
         "schema": true,
         "api": false,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "docs": true,
         "app": true
       }
@@ -3843,7 +3857,8 @@
         "api": true,
         "docs": true,
         "mcp": true,
-        "unit": true
+        "unit": true,
+        "app": true
       }
     },
     {
