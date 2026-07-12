@@ -117,6 +117,15 @@ contract-first design, IAM enforcement, and instrumentation.
 | ----------------- | ----------------------------------------------------------------------------- |
 | `audit.log.query` | Query security + automation audit spines (org-scoped); admin-only, read-only. |
 
+## Capability (2)
+
+- [capability.registry.list](capability.registry.list.md) — List the platform's typed capability contracts from the live in-process registry (name, domain, surfaces, layers, sensitivity, default IAM grants, entitlement gate, audit binding); the governance catalog's data source
+- [capability.registry.get](capability.registry.get.md) — Read one typed contract as the full enforced object: identity grants, tenancy scope, input/output field specs, commercial terms, and chaining metadata
+
+## Iam (1)
+
+- [iam.role.list](iam.role.list.md) — List the org's IAM roles with capability grants and active assignment counts; read-only (writes remain provisioning-script-only)
+
 ## Billing (18)
 
 - [billing.credits.purchase](billing.credits.purchase.md) — Initiate a dynamic usage-credit purchase via Stripe Checkout with automatic volume discount
@@ -296,7 +305,7 @@ contract-first design, IAM enforcement, and instrumentation.
 
 - [organization.create](organization.create.md) — Create a new organization with a globally-unique slug
 
-## Plugin (22)
+## Plugin (23)
 
 - [plugin.catalog.browse](plugin.catalog.browse.md) — Search and filter the MCP server catalog by text, category, transport, and auth kind
 - [plugin.catalog.get](plugin.catalog.get.md) — Get full detail for one catalog server entry including README, packages, and transport types
@@ -318,6 +327,7 @@ contract-first design, IAM enforcement, and instrumentation.
 - [plugin.schema.get](plugin.schema.get.md) — Fetch typed config schema for a connector plugin
 - [plugin.schema.validate](plugin.schema.validate.md) — Validate a config object against a plugin schema
 - [plugin.settings.set_auth_alerts](plugin.settings.set_auth_alerts.md) — Configure re-authentication alert preferences for the org
+- [plugin.settings.get_auth_alerts](plugin.settings.get_auth_alerts.md) — Read the org's MCP auth-alert notification setting (roles + email toggle), with the documented default when unset
 - [plugin.version.list](plugin.version.list.md) — List version history with changelog and breaking-change flags
 
 ## Privacy (2)

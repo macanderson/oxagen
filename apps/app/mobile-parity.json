@@ -121,6 +121,10 @@
       "equivalent": "Settings section nav re-presented on mobile as MobileSettingsNav — a sticky bottom-sheet section switcher above the app bottom bar with 44px targets and the identical item list."
     },
     {
+      "file": "apps/app/src/app/[orgSlug]/security/layout.tsx",
+      "match": "mb-6 max-md:hidden",
+      "kind": "reflow",
+      "equivalent": "The desktop PageTabs strip (Overview/MFA/Audit/Compliance/Trust) is hidden below md; MobileSettingsNav renders immediately after with the identical tab list as a sticky bottom-sheet switcher, so every tab stays reachable on mobile."
       "file": "apps/app/src/app/[orgSlug]/billing/layout.tsx",
       "match": "mb-6 max-md:hidden",
       "kind": "reflow",
@@ -148,7 +152,13 @@
       "file": "apps/app/src/app/[orgSlug]/access/layout.tsx",
       "match": "mb-6 max-md:hidden",
       "kind": "reflow",
-      "equivalent": "The desktop PageTabs strip hides below md; the same tabs array renders as MobileSettingsNav (label \"Access\") in this layout — a sticky mobile section switcher with the identical Sessions/Reviews destinations."
+      "equivalent": "The desktop PageTabs strip (Sessions/Reviews) is hidden below md; MobileSettingsNav renders immediately after with the identical tab list as a sticky bottom-sheet switcher, so both tabs stay reachable on mobile."
+    },
+    {
+      "file": "apps/app/src/app/[orgSlug]/governance/layout.tsx",
+      "match": "mb-6 max-md:hidden",
+      "kind": "reflow",
+      "equivalent": "The desktop PageTabs strip (Hub/Capabilities/Policies) is hidden below md; MobileSettingsNav renders immediately after with the identical tab list as a sticky bottom-sheet switcher, so every tab stays reachable on mobile."
     },
     {
       "file": "apps/app/src/app/[orgSlug]/[workspaceSlug]/marketplace/layout.tsx",

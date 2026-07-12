@@ -180,6 +180,10 @@ import { secretExportRoute } from "./routes/v1/secret.export";
 import { notificationsListRoute } from "./routes/v1/notification.list";
 import { notificationsMarkRoute } from "./routes/v1/notification.mark";
 import { pluginSettingsSetAuthAlertsRoute } from "./routes/v1/plugin.settings.set_auth_alerts";
+import { pluginSettingsGetAuthAlertsRoute } from "./routes/v1/plugin.settings.get_auth_alerts";
+import { capabilityRegistryListRoute } from "./routes/v1/capability.registry.list";
+import { capabilityRegistryGetRoute } from "./routes/v1/capability.registry.get";
+import { iamRoleListRoute } from "./routes/v1/iam.role.list";
 import { apiKeyCreateRoute } from "./routes/v1/api.key.create";
 import { apiKeyRevokeRoute } from "./routes/v1/api.key.revoke";
 import { apiKeyRotateRoute } from "./routes/v1/api.key.rotate";
@@ -650,6 +654,16 @@ orgScoped.route(
   "/plugin/settings/auth-alerts",
   pluginSettingsSetAuthAlertsRoute,
 );
+// GET on the same path reads the setting (separate thin adapter per capability).
+orgScoped.route(
+  "/plugin/settings/auth-alerts",
+  pluginSettingsGetAuthAlertsRoute,
+);
+// Typed-contract registry reads — the governance catalog's data source.
+orgScoped.route("/capability/registry/list", capabilityRegistryListRoute);
+orgScoped.route("/capability/registry/get", capabilityRegistryGetRoute);
+// IAM roles read (read-only; writes remain provisioning-script-only).
+orgScoped.route("/iam/roles/list", iamRoleListRoute);
 orgScoped.route("/api-keys", apiKeyCreateRoute);
 orgScoped.route("/api-keys/revoke", apiKeyRevokeRoute);
 orgScoped.route("/api-keys/rotate", apiKeyRotateRoute);
