@@ -7,7 +7,7 @@ export const automationGet = registerCapability({
   description: "Get one automation's trigger config, description, steps, and recent run history",
   mode: "sync",
   surfaces: ["api", "mcp", "agent", "cli"],
-  layers: ["schema", "api", "mcp", "docs", "unit"],
+  layers: ["schema", "api", "mcp", "docs", "unit", "app"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "read" },
   sensitivity: "low",

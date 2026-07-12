@@ -11,15 +11,23 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("@oxagen/handlers/register", () => ({}));
 vi.mock("@oxagen/oxagen", () => ({ invoke: vi.fn() }));
 
-const passthrough = (name: string) => ({
-  [name]: {
-    name,
-    input: { parse: (v: unknown) => v },
-    output: { parse: (v: unknown) => v },
-  },
-});
+// vi.hoisted so the hoisted vi.mock factories below can reference it without a
+// temporal-dead-zone error (vi.mock calls are lifted above plain const decls).
+const passthrough = vi.hoisted(
+  () =>
+    (name: string) => ({
+      [name]: {
+        name,
+        input: { parse: (v: unknown) => v },
+        output: { parse: (v: unknown) => v },
+      },
+    }),
+);
 vi.mock("@oxagen/oxagen/contracts/automation.list", () =>
   ({ automationList: passthrough("list_automations").list_automations }),
+);
+vi.mock("@oxagen/oxagen/contracts/automation.get", () =>
+  ({ automationGet: passthrough("get_automation").get_automation }),
 );
 vi.mock("@oxagen/oxagen/contracts/automation.create", () =>
   ({ automationCreate: passthrough("create_automation").create_automation }),
@@ -40,6 +48,7 @@ vi.mock("@oxagen/oxagen/contracts/automation.update", () =>
 import { invoke } from "@oxagen/oxagen";
 import {
   listAutomations,
+  getAutomation,
   createAutomation,
   enableAutomation,
   disableAutomation,
@@ -69,6 +78,12 @@ describe("automation.* helpers", () => {
     mockInvoke.mockResolvedValue([]);
     await listAutomations(CTX);
     expect(mockInvoke).toHaveBeenCalledWith("list_automations", { workspace_id: "ws-1" }, CTX);
+  });
+
+  it("getAutomation dispatches get_automation with the id, no opts", async () => {
+    mockInvoke.mockResolvedValue({});
+    await getAutomation(CTX, "plt_9");
+    expect(mockInvoke).toHaveBeenCalledWith("get_automation", { automation_id: "plt_9" }, CTX);
   });
 
   it("createAutomation dispatches create_automation with the given input", async () => {

@@ -22,17 +22,12 @@ export interface TriggersSectionProps {
 }
 
 export async function TriggersSection({ orgSlug, workspaceSlug }: TriggersSectionProps) {
+  // Only the await lives in the try — constructing JSX inside a try/catch is a
+  // lint error (React renders lazily, so render-time throws escape the catch
+  // anyway; render-path failures belong to the route error boundary).
+  let result: Awaited<ReturnType<typeof listWorkspaceTriggers>>;
   try {
-    const { rows, failedAgents, canManage } = await listWorkspaceTriggers(orgSlug, workspaceSlug);
-    return (
-      <TriggersTable
-        rows={rows}
-        failedAgents={failedAgents}
-        canManage={canManage}
-        orgSlug={orgSlug}
-        workspaceSlug={workspaceSlug}
-      />
-    );
+    result = await listWorkspaceTriggers(orgSlug, workspaceSlug);
   } catch (err) {
     console.error("triggers: listWorkspaceTriggers failed:", err);
     return (
@@ -45,4 +40,15 @@ export async function TriggersSection({ orgSlug, workspaceSlug }: TriggersSectio
       </div>
     );
   }
+
+  const { rows, failedAgents, canManage } = result;
+  return (
+    <TriggersTable
+      rows={rows}
+      failedAgents={failedAgents}
+      canManage={canManage}
+      orgSlug={orgSlug}
+      workspaceSlug={workspaceSlug}
+    />
+  );
 }

@@ -21,12 +21,14 @@ import "@oxagen/handlers/register";
 import type { z } from "zod";
 import { invoke } from "@oxagen/oxagen";
 import { automationList } from "@oxagen/oxagen/contracts/automation.list";
+import { automationGet } from "@oxagen/oxagen/contracts/automation.get";
 import { automationCreate } from "@oxagen/oxagen/contracts/automation.create";
 import { automationEnable } from "@oxagen/oxagen/contracts/automation.enable";
 import { automationDisable } from "@oxagen/oxagen/contracts/automation.disable";
 import { automationTrigger } from "@oxagen/oxagen/contracts/automation.trigger";
 import { automationUpdate } from "@oxagen/oxagen/contracts/automation.update";
 import type { AutomationListOutput } from "@oxagen/oxagen/contracts/automation.list";
+import type { AutomationGetOutput } from "@oxagen/oxagen/contracts/automation.get";
 import type { AutomationCreateOutput } from "@oxagen/oxagen/contracts/automation.create";
 import type { AutomationEnableOutput } from "@oxagen/oxagen/contracts/automation.enable";
 import type { AutomationDisableOutput } from "@oxagen/oxagen/contracts/automation.disable";
@@ -47,6 +49,20 @@ export async function listAutomations(ctx: AutomationsCtx): Promise<AutomationLi
   const input = automationList.input.parse({ workspace_id: ctx.workspaceId });
   const out = await invoke(automationList.name, input, ctx);
   return automationList.output.parse(out);
+}
+
+/**
+ * Read one automation's full detail — trigger config, playbook steps, and the
+ * 20 most-recent runs — for the editor page. (automation.list returns only
+ * name/status/triggerType; this is the single-automation read.)
+ */
+export async function getAutomation(
+  ctx: AutomationsCtx,
+  automationId: string,
+): Promise<AutomationGetOutput> {
+  const input = automationGet.input.parse({ automation_id: automationId });
+  const out = await invoke(automationGet.name, input, ctx);
+  return automationGet.output.parse(out);
 }
 
 /** Create a new automation. Human-origin app calls honor `enabled` per the contract. */
