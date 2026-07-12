@@ -6,7 +6,10 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  agentCostUsd,
   agentNameFromHarborConfig,
+  agentSplitTokens,
+  agentTotalTokens,
   bareTaskId,
   bestOfNMetadata,
   durationSeconds,
@@ -80,6 +83,74 @@ describe("rewardOf", () => {
     expect(rewardOf({})).toBe(0);
     expect(rewardOf({ verifier_result: {} })).toBe(0);
     expect(rewardOf({ verifier_result: { rewards: { reward: Number.NaN } } })).toBe(0);
+  });
+});
+
+describe("agentSplitTokens", () => {
+  it("reads the n_input/output/cache split reported by competitor adapters", () => {
+    const trial: HarborTaskResult = {
+      agent_result: { n_input_tokens: 1000, n_output_tokens: 300, n_cache_tokens: 200 },
+    };
+    expect(agentSplitTokens(trial)).toEqual({ in: 1000, out: 300, cache: 200 });
+  });
+
+  it("coerces null/absent split fields (the oxagen shape) to 0", () => {
+    const trial: HarborTaskResult = {
+      agent_result: { n_input_tokens: null, n_output_tokens: null, n_cache_tokens: null },
+    };
+    expect(agentSplitTokens(trial)).toEqual({ in: 0, out: 0, cache: 0 });
+    expect(agentSplitTokens({})).toEqual({ in: 0, out: 0, cache: 0 });
+  });
+});
+
+describe("agentTotalTokens", () => {
+  it("prefers agent_result.metadata.oxagen_total_tokens (the oxagen path) over the null split", () => {
+    const trial: HarborTaskResult = {
+      agent_result: {
+        n_input_tokens: null,
+        n_output_tokens: null,
+        n_cache_tokens: null,
+        metadata: { oxagen_total_tokens: 506956 },
+      },
+    };
+    expect(agentTotalTokens(trial)).toBe(506956);
+  });
+
+  it("falls back to the sum of the split fields when no metadata total is present (the competitor path)", () => {
+    const trial: HarborTaskResult = {
+      agent_result: { n_input_tokens: 1000, n_output_tokens: 300, n_cache_tokens: 200, metadata: {} },
+    };
+    expect(agentTotalTokens(trial)).toBe(1500);
+  });
+
+  it("honors an explicit oxagen_total_tokens of 0 rather than silently summing the split", () => {
+    const trial: HarborTaskResult = {
+      agent_result: {
+        n_input_tokens: 5,
+        n_output_tokens: 5,
+        n_cache_tokens: 5,
+        metadata: { oxagen_total_tokens: 0 },
+      },
+    };
+    // A present-and-finite 0 is authoritative; a non-numeric value is treated as absent.
+    expect(agentTotalTokens(trial)).toBe(0);
+  });
+
+  it("returns 0 when neither a metadata total nor any split is available", () => {
+    expect(agentTotalTokens({})).toBe(0);
+    expect(agentTotalTokens({ agent_result: { metadata: {} } })).toBe(0);
+  });
+});
+
+describe("agentCostUsd", () => {
+  it("reads agent_result.cost_usd", () => {
+    expect(agentCostUsd({ agent_result: { cost_usd: 1.62 } })).toBe(1.62);
+  });
+
+  it("defaults to 0 when null, absent, or non-finite", () => {
+    expect(agentCostUsd({ agent_result: { cost_usd: null } })).toBe(0);
+    expect(agentCostUsd({ agent_result: {} })).toBe(0);
+    expect(agentCostUsd({})).toBe(0);
   });
 });
 

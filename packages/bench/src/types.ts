@@ -77,6 +77,8 @@ export interface BenchmarkRunRow {
   tokens_in: number;
   tokens_out: number;
   tokens_cache: number;
+  /** Authoritative total (oxagen reports only this; competitors sum their split). See migration 0002. */
+  tokens_total: number;
   status: BenchStatus;
   notes: string;
   started_at: string;
@@ -112,6 +114,8 @@ export interface BenchmarkRunResultRow {
   tokens_in: number;
   tokens_out: number;
   tokens_cache: number;
+  /** Authoritative total (oxagen reports only this; competitors sum their split). See migration 0002. */
+  tokens_total: number;
   duration_s: number;
   status: BenchStatus;
   error: string;
@@ -180,10 +184,11 @@ export interface IngestBenchOptions {
   /** Falls back to the `bench-config.json` snapshot, then "". */
   gitSha?: string;
   /**
-   * Total run cost in USD, when known out-of-band. Harbor does not record
-   * cost for the oxagen agent (see oxagen_agent.py `_populate_best_of_n_metadata`),
-   * so this is normally supplied by the caller (e.g. from a billing export)
-   * rather than derived from the results dir. Defaults to 0.
+   * Total run cost in USD, when known out-of-band (e.g. from a billing
+   * export). When omitted, the run's total_cost_usd is summed from the
+   * per-task `agent_result.cost_usd` Harbor records for every agent, oxagen
+   * included (see oxagen_agent.py `_populate_best_of_n_usage`). Supply this
+   * only to override that sum with an authoritative external figure.
    */
   costUsd?: number;
   /** Falls back to a name derived from config.json's agents[0].name. */

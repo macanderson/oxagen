@@ -97,6 +97,7 @@ function resultRow(overrides: Partial<BenchmarkRunResultRow> = {}): BenchmarkRun
     tokens_in: 0,
     tokens_out: 0,
     tokens_cache: 0,
+    tokens_total: 506956,
     duration_s: 120,
     status: "completed",
     error: "",
@@ -123,6 +124,7 @@ function runRow(overrides: Partial<BenchmarkRunRow> = {}): BenchmarkRunRow {
     tokens_in: 0,
     tokens_out: 0,
     tokens_cache: 0,
+    tokens_total: 1319301,
     status: "partial",
     notes: "",
     started_at: "2026-07-03 14:26:34",
@@ -143,6 +145,8 @@ describe("handleBenchList", () => {
     expect(stdout).toContain("…"); // the 40-char task id got truncated
     expect(stdout).toContain("yes");
     expect(stdout).toContain("no");
+    expect(stdout).toContain("tokens"); // the token column header
+    expect(stdout).toContain("507.0k"); // tokens_total 506956 rendered compactly
   });
 
   it("passes the type filter and a parsed numeric limit through", async () => {
@@ -209,6 +213,8 @@ describe("handleBenchReplay — display", () => {
     expect(stdout).toContain("django__django-11099");
     expect(stdout).toContain("reward: 1");
     expect(stdout).toContain("resolved: yes");
+    expect(stdout).toContain("tokens: 507.0k"); // tokens_total surfaced in the replay view
+    expect(stdout).toContain("cost: $4.20"); // real per-task cost, no longer $0.00
     expect(stdout).toContain("run: #3");
     expect(stdout).toContain("abc1234");
     expect(stdout).toContain("Reproducing command:");

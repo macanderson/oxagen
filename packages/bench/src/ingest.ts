@@ -17,7 +17,10 @@ import { join } from "node:path";
 import { chBenchInsert, chBenchQuery } from "@oxagen/telemetry/bench-client";
 import { assertNoSecretValues } from "./secrets";
 import {
+  agentCostUsd,
   agentNameFromHarborConfig,
+  agentSplitTokens,
+  agentTotalTokens,
   bareTaskId,
   bestOfNMetadata,
   durationSeconds,
@@ -245,6 +248,8 @@ export async function ingestBenchResultsDir(
   let tokensIn = 0;
   let tokensOut = 0;
   let tokensCache = 0;
+  let tokensTotal = 0;
+  let costSum = 0;
 
   for (const taskDirName of taskDirNames) {
     const taskDir = join(dir, taskDirName);
@@ -270,12 +275,18 @@ export async function ingestBenchResultsDir(
     const trajectoryText = readTextOptional(join(taskDir, "agent", "oxagen.txt"), Number.MAX_SAFE_INTEGER);
     const trajectory = parseTrajectory(trajectoryText);
 
-    const inTok = trial.agent_result?.n_input_tokens ?? 0;
-    const outTok = trial.agent_result?.n_output_tokens ?? 0;
-    const cacheTok = trial.agent_result?.n_cache_tokens ?? 0;
-    tokensIn += inTok;
-    tokensOut += outTok;
-    tokensCache += cacheTok;
+    // Split fields are populated by Harbor's built-in competitor adapters;
+    // the oxagen adapter leaves them null and reports one total in metadata,
+    // so `totalTok` is the authoritative number for every agent. cost_usd is
+    // recorded by Harbor for oxagen too — read it, don't hardcode 0.
+    const split = agentSplitTokens(trial);
+    const totalTok = agentTotalTokens(trial);
+    const costUsd = agentCostUsd(trial);
+    tokensIn += split.in;
+    tokensOut += split.out;
+    tokensCache += split.cache;
+    tokensTotal += totalTok;
+    costSum += costUsd;
 
     const resultPublicId = nextResultPublicId++;
     const startedAt = trial.agent_execution?.started_at ?? trial.started_at ?? startedAtIso;
@@ -305,10 +316,11 @@ export async function ingestBenchResultsDir(
       reward,
       resolved,
       verifier_stdout: verifierStdout,
-      cost_usd: 0,
-      tokens_in: inTok,
-      tokens_out: outTok,
-      tokens_cache: cacheTok,
+      cost_usd: costUsd,
+      tokens_in: split.in,
+      tokens_out: split.out,
+      tokens_cache: split.cache,
+      tokens_total: totalTok,
       duration_s: durationSeconds(trial),
       status: trial.exception_info ? "errored" : "completed",
       error: trial.exception_info ? JSON.stringify(trial.exception_info) : "",
@@ -356,10 +368,13 @@ export async function ingestBenchResultsDir(
     n_tasks: nTasks,
     n_resolved: nResolved,
     resolved_rate: resolvedRate,
-    total_cost_usd: options.costUsd ?? 0,
+    // Prefer an out-of-band total (e.g. a billing export) when supplied;
+    // otherwise sum the per-task cost Harbor recorded on each agent_result.
+    total_cost_usd: options.costUsd ?? costSum,
     tokens_in: tokensIn,
     tokens_out: tokensOut,
     tokens_cache: tokensCache,
+    tokens_total: tokensTotal,
     status,
     notes: options.notes ?? "",
     started_at: toClickHouseDateTime(startedAtIso),

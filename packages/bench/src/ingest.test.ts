@@ -132,6 +132,16 @@ describe("ingestBenchResultsDir", () => {
     expect(taskOne.code_graph_calls).toBe(1);
     expect(taskOne.grep_calls).toBe(1);
 
+    // Token/cost capture: oxagen reports one undifferentiated total in
+    // agent_result.metadata.oxagen_total_tokens (not the input/output/cache
+    // split), plus a real agent_result.cost_usd. tokens_total carries the
+    // metadata total; the split columns stay 0 (oxagen never populates them).
+    expect(taskOne.tokens_total).toBe(506956);
+    expect(taskOne.tokens_in).toBe(0);
+    expect(taskOne.tokens_out).toBe(0);
+    expect(taskOne.tokens_cache).toBe(0);
+    expect(taskOne.cost_usd).toBe(1.62);
+
     const expectedDuration = Math.round(
       (Date.parse("2026-07-03T21:29:50.872754Z") - Date.parse("2026-07-03T21:27:00.997829Z")) / 1000,
     );
@@ -140,6 +150,8 @@ describe("ingestBenchResultsDir", () => {
     const taskTwo = results.find((r) => r.task_id === "task-two-unresolved")!;
     expect(taskTwo.resolved).toBe(0);
     expect(taskTwo.reward).toBe(0);
+    expect(taskTwo.tokens_total).toBe(812345);
+    expect(taskTwo.cost_usd).toBe(3.08);
   });
 
   it("degrades gracefully when a task has a result.json but no trajectory or verifier report", async () => {
@@ -190,6 +202,9 @@ describe("ingestBenchResultsDir", () => {
     expect(taskSix.tokens_in).toBe(1000);
     expect(taskSix.tokens_out).toBe(300);
     expect(taskSix.tokens_cache).toBe(200);
+    // No oxagen_total_tokens metadata (competitor-shaped result) -> tokens_total
+    // falls back to the sum of the split fields, per agentTotalTokens().
+    expect(taskSix.tokens_total).toBe(1500);
     // No agent_execution block -> falls back to the trial-level started_at/finished_at.
     expect(taskSix.duration_s).toBe(
       Math.round(
@@ -206,11 +221,25 @@ describe("ingestBenchResultsDir", () => {
     expect(taskSix.resolved).toBe(0);
     expect(JSON.parse(taskSix.test_spec)).toEqual({ FAIL_TO_PASS: [], PASS_TO_PASS: [] });
 
-    // The run-level token totals include task-six's real counts (every other fixture task has null tokens).
+    // The run-level split totals include task-six's real counts (every other fixture task has null split fields).
     const runRow = insertedTable("bench.benchmark_run").values[0] as BenchmarkRunRow;
     expect(runRow.tokens_in).toBe(1000);
     expect(runRow.tokens_out).toBe(300);
     expect(runRow.tokens_cache).toBe(200);
+    // tokens_total sums every task's authoritative total: task-one 506956 +
+    // task-two 812345 + task-six 1500 (split sum) + task-three/task-seven 0.
+    expect(runRow.tokens_total).toBe(506956 + 812345 + 1500);
+  });
+
+  it("sums per-task agent_result.cost_usd into total_cost_usd when no out-of-band costUsd is supplied", async () => {
+    // Regression guard for the "cost is always $0" half of the token/cost bug:
+    // ingest.ts used to hardcode result cost_usd to 0 and default the run
+    // total to 0 unless a caller passed costUsd. It now reads the real
+    // agent_result.cost_usd Harbor records for every task.
+    await mod.ingestBenchResultsDir(FIXTURE_DIR, { benchType: "swe-bench", gitSha: "abc123" });
+    const runRow = insertedTable("bench.benchmark_run").values[0] as BenchmarkRunRow;
+    // task-one 1.62 + task-two 3.08 + task-three/six/seven (null -> 0).
+    expect(runRow.total_cost_usd).toBeCloseTo(4.7, 5);
   });
 
   it("handles a run with zero finished tasks, no run-level result.json, and an explicit status override", async () => {
@@ -386,6 +415,7 @@ describe("insertBenchmarkRun / insertBenchmarkRunResults / insertBenchmarkCandid
       tokens_in: 0,
       tokens_out: 0,
       tokens_cache: 0,
+      tokens_total: 0,
       status: "completed",
       notes: "",
       started_at: "2026-07-03 00:00:00",

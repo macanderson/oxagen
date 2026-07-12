@@ -88,9 +88,70 @@ export function rewardOf(trial: HarborTaskResult): number {
   return typeof r === "number" && Number.isFinite(r) ? r : 0;
 }
 
+/** A number when finite, else 0 — the shared coercion for nullable numeric result fields. */
+function finiteOrZero(v: number | null | undefined): number {
+  return typeof v === "number" && Number.isFinite(v) ? v : 0;
+}
+
 function numberMetadata(metadata: Record<string, unknown> | null | undefined, key: string): number {
   const v = metadata?.[key];
   return typeof v === "number" && Number.isFinite(v) ? v : 0;
+}
+
+/** True when a numeric metadata key is present and finite (distinguishes "absent" from a real 0). */
+function hasNumberMetadata(metadata: Record<string, unknown> | null | undefined, key: string): boolean {
+  const v = metadata?.[key];
+  return typeof v === "number" && Number.isFinite(v);
+}
+
+/** Per-modality token counts as reported by Harbor's built-in competitor adapters. */
+export interface AgentSplitTokens {
+  in: number;
+  out: number;
+  cache: number;
+}
+
+/**
+ * The input/output/cache split from agent_result. Populated by Harbor's own
+ * competitor adapters (claude-code, codex, aider); always 0 for the oxagen
+ * adapter, which reports a single undifferentiated total in metadata instead
+ * (see `agentTotalTokens`).
+ */
+export function agentSplitTokens(trial: HarborTaskResult): AgentSplitTokens {
+  const ar = trial.agent_result;
+  return {
+    in: finiteOrZero(ar?.n_input_tokens),
+    out: finiteOrZero(ar?.n_output_tokens),
+    cache: finiteOrZero(ar?.n_cache_tokens),
+  };
+}
+
+/**
+ * Authoritative total token count for a trial. The oxagen adapter reports one
+ * undifferentiated total in `agent_result.metadata.oxagen_total_tokens` (it
+ * does not split input/output/cache — see oxagen_agent.py), while competitor
+ * adapters report the split. Prefer the metadata total when present, else fall
+ * back to the sum of the split fields. This mirrors the normalization already
+ * done in bench/swe-bench/summarize.py and terminal-bench eval_normalize.py —
+ * the TS ingest previously read only the split fields, so oxagen runs landed
+ * with an all-zero token total.
+ */
+export function agentTotalTokens(trial: HarborTaskResult): number {
+  const meta = trial.agent_result?.metadata;
+  if (hasNumberMetadata(meta, "oxagen_total_tokens")) {
+    return numberMetadata(meta, "oxagen_total_tokens");
+  }
+  const split = agentSplitTokens(trial);
+  return split.in + split.out + split.cache;
+}
+
+/**
+ * Trial cost in USD from `agent_result.cost_usd`. Harbor DOES record this for
+ * the oxagen agent — the adapter sets `context.cost_usd` from the CLI's usage
+ * envelope (oxagen_agent.py `_populate_best_of_n_usage`). 0 when absent/malformed.
+ */
+export function agentCostUsd(trial: HarborTaskResult): number {
+  return finiteOrZero(trial.agent_result?.cost_usd);
 }
 
 function stringMetadata(metadata: Record<string, unknown> | null | undefined, key: string): string {

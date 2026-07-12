@@ -11,8 +11,11 @@
     "n_input_tokens": null,
     "n_cache_tokens": null,
     "n_output_tokens": null,
-    "cost_usd": null,
+    "cost_usd": 1.62,
     "metadata": {
+      "oxagen_total_tokens": 506956,
+      "oxagen_wall_sec": 170.87,
+      "oxagen_steps": 5,
       "oxagen_bestofn_candidates": 2,
       "oxagen_bestofn_winner_id": "candidate-1",
       "oxagen_bestofn_winner_files": 1,
