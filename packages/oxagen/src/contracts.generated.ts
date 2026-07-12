@@ -342,3 +342,4 @@ import "./contracts/workspace.model_settings.read";
 import "./contracts/workspace.model_settings.write";
 import "./contracts/workspace.settings.read";
 import "./contracts/workspace.settings.write";
+// ci-sync: barrel regenerated to include agent.mcp.resolve (see PR #956)
