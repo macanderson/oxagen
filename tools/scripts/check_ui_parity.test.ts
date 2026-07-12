@@ -62,6 +62,51 @@ describe("computeParity — forward gate", () => {
   });
 });
 
+describe("computeParity — ratchet baseline", () => {
+  const pageExists = () => false; // every binding.page is missing → gaps
+
+  it("with no baseline, blocking === forward (backward compatible)", () => {
+    const { forward, blocking } = computeParity({
+      caps: CAPS,
+      bindings: {},
+      invoked: new Set(),
+      pageExists,
+    });
+    expect(forward).toHaveLength(1); // only create_api_key declares 'app'
+    expect(blocking).toEqual(forward);
+  });
+
+  it("grandfathers a baselined gap: it stays in forward but leaves blocking", () => {
+    const baseline = new Set(["create_api_key"]);
+    const { forward, blocking } = computeParity({
+      caps: CAPS,
+      bindings: {},
+      invoked: new Set(),
+      pageExists,
+      baseline,
+    });
+    expect(forward.map((g) => g.capability)).toContain("create_api_key");
+    expect(blocking).toHaveLength(0); // the ratchet suppresses the strict failure
+  });
+
+  it("still blocks a NEW gap not present in the baseline", () => {
+    // A second app-layer cap with a gap; baseline only grandfathers the first.
+    const caps = [
+      ...CAPS,
+      { name: "list_secrets", layers: ["api", "app"], ident: "listSecrets" },
+    ];
+    const baseline = new Set(["create_api_key"]);
+    const { blocking } = computeParity({
+      caps,
+      bindings: {},
+      invoked: new Set(),
+      pageExists,
+      baseline,
+    });
+    expect(blocking.map((g) => g.capability)).toEqual(["list_secrets"]);
+  });
+});
+
 describe("computeParity — reverse advisory", () => {
   const pageExists = () => true;
 

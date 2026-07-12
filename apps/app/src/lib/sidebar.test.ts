@@ -53,6 +53,7 @@ describe("resolveSidebarMode", () => {
 
   it("returns 'org' for reserved org-scope routes even without workspaceSlug", () => {
     expect(resolveSidebarMode("/acme/members", orgCtx)).toBe("org");
+    expect(resolveSidebarMode("/acme/governance", orgCtx)).toBe("org");
     expect(resolveSidebarMode("/acme/access", orgCtx)).toBe("org");
     expect(resolveSidebarMode("/acme/security", orgCtx)).toBe("org");
     expect(resolveSidebarMode("/acme/billing", orgCtx)).toBe("org");
@@ -91,22 +92,24 @@ describe("resolveSidebarMode", () => {
 // ---------------------------------------------------------------------------
 
 describe("getSidebarConfig item counts", () => {
-  it("workspace config has exactly 10 items", () => {
+  it("workspace config has exactly 13 items", () => {
     const config = getSidebarConfig("workspace");
     expect(config.mode).toBe("workspace");
-    expect(config.items).toHaveLength(10);
+    // web-app-2.0 added Overview, Automations, and Repos to the 10-item base.
+    expect(config.items).toHaveLength(13);
   });
 
-  it("org config has 6 items by default (access filtered for non-enterprise)", () => {
+  it("org config has 7 items by default (access filtered for non-enterprise)", () => {
     const config = getSidebarConfig("org");
     expect(config.mode).toBe("org");
-    expect(config.items).toHaveLength(6);
+    // web-app-2.0 added Governance to the 6-item non-enterprise base.
+    expect(config.items).toHaveLength(7);
   });
 
-  it("org config has 7 items for enterprise", () => {
+  it("org config has 8 items for enterprise", () => {
     const config = getSidebarConfig("org", "enterprise");
     expect(config.mode).toBe("org");
-    expect(config.items).toHaveLength(7);
+    expect(config.items).toHaveLength(8);
   });
 
   it("account config has exactly 5 items", () => {
@@ -122,7 +125,7 @@ describe("getSidebarConfig item counts", () => {
     expect(returnItems[0]?.id).toBe("back");
   });
 
-  it("workspace config 'tools' group holds the four first-class Workbench destinations", () => {
+  it("workspace config 'tools' group holds the five first-class Workbench destinations", () => {
     const items = getSidebarConfig("workspace").items;
     const toolsItems = items.filter((item) => item.group === "tools");
     expect(toolsItems.map((i) => i.id)).toEqual([
@@ -130,17 +133,18 @@ describe("getSidebarConfig item counts", () => {
       "agent-tools",
       "environments",
       "sandboxes",
+      "repos",
     ]);
   });
 
-  it("does NOT surface standalone Skills / Tools / Subagent Runs / Workflows / Automation items", () => {
+  it("does NOT surface standalone Skills / Tools / Subagent Runs / Workflows items", () => {
     const ids = getSidebarConfig("workspace").items.map((i) => i.id);
     // Skills and Tools collapsed into the single Agent Tools hub.
     expect(ids).not.toContain("skills");
     expect(ids).not.toContain("tools");
     expect(ids).not.toContain("agent-runs");
+    // Workflows is a tab under Automations, not a standalone sidebar item.
     expect(ids).not.toContain("workflows");
-    expect(ids).not.toContain("automation");
     // The clean spec tree, in raw declaration order (the mobile bottom bar's
     // unfiltered MAX_BAR_ITEMS cut relies on this exact order — see
     // mobile-bottom-bar.tsx). Activity is the run-trace surface; Evals
@@ -152,13 +156,16 @@ describe("getSidebarConfig item counts", () => {
     // Sandboxes) to the sidebar.
     expect(ids).toEqual([
       "ask",
+      "overview",
       "knowledge",
+      "automations",
       "activity",
       "agents",
       "evals",
       "agent-tools",
       "environments",
       "sandboxes",
+      "repos",
       "marketplace",
       "settings",
     ]);
@@ -241,6 +248,22 @@ describe("href builders produce correct paths", () => {
     it("settings -> /{org}/{ws}/settings", () => {
       expect(findItem("settings").href(wsCtx)).toBe("/acme/production/settings");
     });
+
+    it("overview -> /{org}/{ws} (workspace root, web-app-2.0)", () => {
+      expect(findItem("overview").href(wsCtx)).toBe("/acme/production");
+    });
+
+    it("automations -> /{org}/{ws}/automations (web-app-2.0)", () => {
+      expect(findItem("automations").href(wsCtx)).toBe(
+        "/acme/production/automations",
+      );
+    });
+
+    it("repos -> /{org}/{ws}/workbench/repos (web-app-2.0)", () => {
+      expect(findItem("repos").href(wsCtx)).toBe(
+        "/acme/production/workbench/repos",
+      );
+    });
   });
 
   describe("org mode", () => {
@@ -253,6 +276,10 @@ describe("href builders produce correct paths", () => {
 
     it("members -> /{org}/members", () => {
       expect(findItem("members").href(orgCtx)).toBe("/acme/members");
+    });
+
+    it("governance -> /{org}/governance (web-app-2.0)", () => {
+      expect(findItem("governance").href(orgCtx)).toBe("/acme/governance");
     });
 
     it("access -> /{org}/access (enterprise only)", () => {
