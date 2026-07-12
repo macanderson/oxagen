@@ -466,7 +466,11 @@ export async function ConversationPage({
         actions={conversationNavActions}
       />
       <div className="min-h-0 min-w-0 flex-1">
-        <div className="mx-auto h-full max-w-4xl">
+        {/* Wider than the old max-w-4xl so the conversation (max-w-3xl) and the
+          three-card activity rail (w-72) both breathe on desktop; below lg the
+          rail reflows into a bottom sheet and the conversation uses the full
+          width up to this cap. */}
+        <div className="mx-auto h-full max-w-6xl">
           <ChatShell
             conversationId={conversationId}
             conversationPublicId={conv?.publicId ?? null}

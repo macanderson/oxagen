@@ -71,7 +71,15 @@ export interface WorkspaceContextPanelProps {
 
 type PanelTab = "files" | "workspace";
 
-export function WorkspaceContextPanel({
+/**
+ * The chrome-less tabs body: the Files / Workspace `Tabs` with all the
+ * sandbox-detection + default-tab logic, but WITHOUT the bordered card wrapper.
+ * Split out of `WorkspaceContextPanel` so the calm Agent-activity rail can drop
+ * these tabs into its own "Outputs" card without doubling up the border /
+ * shadow. `WorkspaceContextPanel` renders this inside its wrapper, so its
+ * existing tests are unaffected.
+ */
+export function WorkspaceContextTabs({
   conversationPublicId,
   orgSlug,
   workspaceSlug,
@@ -97,6 +105,50 @@ export function WorkspaceContextPanel({
   }, [sandboxSessionId]);
 
   return (
+    <Tabs
+      value={tab}
+      onValueChange={(v) => setTab(v as PanelTab)}
+      className={cn("flex min-h-0 flex-1 flex-col", className)}
+    >
+      <TabsList variant="underline">
+        <TabsTab value="files" className="gap-1.5">
+          <Paperclip className="size-3.5" aria-hidden="true" />
+          <span>Files</span>
+        </TabsTab>
+        {sandboxSessionId ? (
+          <TabsTab value="workspace" className="gap-1.5">
+            <FolderTree className="size-3.5" aria-hidden="true" />
+            <span>Workspace</span>
+          </TabsTab>
+        ) : null}
+      </TabsList>
+
+      <TabsPanel value="files" className="min-h-0 flex-1 overflow-y-auto">
+        <ConversationFilesList conversationPublicId={conversationPublicId} active={tab === "files"} />
+      </TabsPanel>
+
+      {sandboxSessionId ? (
+        <TabsPanel value="workspace" className="min-h-0 flex-1 overflow-y-auto">
+          <SandboxWorkspaceTree
+            sessionId={sandboxSessionId}
+            orgSlug={orgSlug}
+            workspaceSlug={workspaceSlug}
+            title="Workspace files"
+          />
+        </TabsPanel>
+      ) : null}
+    </Tabs>
+  );
+}
+
+export function WorkspaceContextPanel({
+  conversationPublicId,
+  orgSlug,
+  workspaceSlug,
+  toolCalls,
+  className,
+}: WorkspaceContextPanelProps) {
+  return (
     <div
       data-component="workspace-context-panel-tabs"
       className={cn(
@@ -104,39 +156,13 @@ export function WorkspaceContextPanel({
         className,
       )}
     >
-      <Tabs
-        value={tab}
-        onValueChange={(v) => setTab(v as PanelTab)}
-        className="flex min-h-0 flex-1 flex-col p-2"
-      >
-        <TabsList variant="underline">
-          <TabsTab value="files" className="gap-1.5">
-            <Paperclip className="size-3.5" aria-hidden="true" />
-            <span>Files</span>
-          </TabsTab>
-          {sandboxSessionId ? (
-            <TabsTab value="workspace" className="gap-1.5">
-              <FolderTree className="size-3.5" aria-hidden="true" />
-              <span>Workspace</span>
-            </TabsTab>
-          ) : null}
-        </TabsList>
-
-        <TabsPanel value="files" className="min-h-0 flex-1 overflow-y-auto">
-          <ConversationFilesList conversationPublicId={conversationPublicId} active={tab === "files"} />
-        </TabsPanel>
-
-        {sandboxSessionId ? (
-          <TabsPanel value="workspace" className="min-h-0 flex-1 overflow-y-auto">
-            <SandboxWorkspaceTree
-              sessionId={sandboxSessionId}
-              orgSlug={orgSlug}
-              workspaceSlug={workspaceSlug}
-              title="Workspace files"
-            />
-          </TabsPanel>
-        ) : null}
-      </Tabs>
+      <WorkspaceContextTabs
+        conversationPublicId={conversationPublicId}
+        orgSlug={orgSlug}
+        workspaceSlug={workspaceSlug}
+        toolCalls={toolCalls}
+        className="p-2"
+      />
     </div>
   );
 }
