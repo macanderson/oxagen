@@ -34,6 +34,9 @@ export const org = {
   /** Workspace picker — also the Org mode root. */
   root: (ctx: ScopeContext): string => `/${ctx.orgSlug}`,
 
+  /** Org workspaces listing — cards for every workspace in the org. */
+  workspaces: (ctx: ScopeContext): string => `/${ctx.orgSlug}/workspaces`,
+
   members: (ctx: ScopeContext): string => `/${ctx.orgSlug}/members`,
 
   // Access sub-routes (only wired tabs remain: sessions, reviews)

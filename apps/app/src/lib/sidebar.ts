@@ -228,10 +228,13 @@ const orgConfig: SidebarConfig = {
       id: "workspaces",
       label: "Workspaces",
       icon: LayoutGrid,
-      href: (ctx) => org.root(ctx),
+      // Org-scope workspace picker (cards + avatars). Previously pointed at
+      // org.root (`/{org}`), which immediately redirects into the first
+      // workspace's Ask surface — clicking it from the governance surface
+      // flashed an error before dumping the user on Ask. Now it lands on a
+      // real listing page; each card is the jump into workspace mode.
+      href: (ctx) => org.workspaces(ctx),
       group: "primary",
-      // external = true renders the ↗ affordance to signal mode transition.
-      external: true,
     },
     {
       id: "members",

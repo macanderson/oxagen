@@ -33,22 +33,32 @@ const orgCtx: ScopeContext = { orgSlug: "acme" };
 
 describe("resolveSidebarMode", () => {
   it("returns 'account' for /account/* paths regardless of ctx", () => {
-    expect(resolveSidebarMode("/account/profile", wsCtx)).toBe("account" satisfies SidebarMode);
+    expect(resolveSidebarMode("/account/profile", wsCtx)).toBe(
+      "account" satisfies SidebarMode,
+    );
     expect(resolveSidebarMode("/account/security", orgCtx)).toBe("account");
     expect(resolveSidebarMode("/account", wsCtx)).toBe("account");
   });
 
   it("returns 'workspace' when workspaceSlug is present and path is not /account", () => {
     expect(resolveSidebarMode("/acme/production/ask", wsCtx)).toBe("workspace");
-    expect(resolveSidebarMode("/acme/production/knowledge/repos", wsCtx)).toBe("workspace");
+    expect(resolveSidebarMode("/acme/production/knowledge/repos", wsCtx)).toBe(
+      "workspace",
+    );
   });
 
   it("returns 'workspace' from pathname when ctx has no workspaceSlug (org-layout boundary)", () => {
     // The AppShell at the org layout level has no workspaceSlug in ctx.
     // resolveSidebarMode must derive workspace mode purely from the URL.
-    expect(resolveSidebarMode("/acme/production/ask", orgCtx)).toBe("workspace");
-    expect(resolveSidebarMode("/acme/production/settings/general", orgCtx)).toBe("workspace");
-    expect(resolveSidebarMode("/acme/my-ws/knowledge", orgCtx)).toBe("workspace");
+    expect(resolveSidebarMode("/acme/production/ask", orgCtx)).toBe(
+      "workspace",
+    );
+    expect(
+      resolveSidebarMode("/acme/production/settings/general", orgCtx),
+    ).toBe("workspace");
+    expect(resolveSidebarMode("/acme/my-ws/knowledge", orgCtx)).toBe(
+      "workspace",
+    );
   });
 
   it("returns 'org' for reserved org-scope routes even without workspaceSlug", () => {
@@ -63,7 +73,9 @@ describe("resolveSidebarMode", () => {
   it("returns 'org' when no workspaceSlug and path is not /account", () => {
     expect(resolveSidebarMode("/acme", orgCtx)).toBe("org");
     expect(resolveSidebarMode("/acme/members", orgCtx)).toBe("org");
-    expect(resolveSidebarMode("/acme/billing/subscription", orgCtx)).toBe("org");
+    expect(resolveSidebarMode("/acme/billing/subscription", orgCtx)).toBe(
+      "org",
+    );
   });
 
   it("account mode takes priority over workspace ctx", () => {
@@ -173,10 +185,13 @@ describe("getSidebarConfig item counts", () => {
     expect(ids).toContain("settings");
   });
 
-  it("org config 'workspaces' item has external: true", () => {
+  it("org config 'workspaces' item links to the org workspaces listing", () => {
     const items = getSidebarConfig("org").items;
     const workspacesItem = items.find((item) => item.id === "workspaces");
-    expect(workspacesItem?.external).toBe(true);
+    // No longer an external mode-jump: it lands on a real in-org listing page,
+    // so the ↗ affordance would be misleading.
+    expect(workspacesItem?.external).toBeUndefined();
+    expect(workspacesItem?.href({ orgSlug: "acme" })).toBe("/acme/workspaces");
   });
 
   it("org config has exactly one 'footer' group item (Settings)", () => {
@@ -201,11 +216,15 @@ describe("href builders produce correct paths", () => {
     });
 
     it("knowledge -> /{org}/{ws}/knowledge", () => {
-      expect(findItem("knowledge").href(wsCtx)).toBe("/acme/production/knowledge");
+      expect(findItem("knowledge").href(wsCtx)).toBe(
+        "/acme/production/knowledge",
+      );
     });
 
     it("activity -> /{org}/{ws}/activity", () => {
-      expect(findItem("activity").href(wsCtx)).toBe("/acme/production/activity");
+      expect(findItem("activity").href(wsCtx)).toBe(
+        "/acme/production/activity",
+      );
     });
 
     it("evals -> /{org}/{ws}/evals", () => {
@@ -213,11 +232,15 @@ describe("href builders produce correct paths", () => {
     });
 
     it("marketplace -> /{org}/{ws}/marketplace (workspace-scoped, from ws ctx)", () => {
-      expect(findItem("marketplace").href(wsCtx)).toBe("/acme/production/marketplace");
+      expect(findItem("marketplace").href(wsCtx)).toBe(
+        "/acme/production/marketplace",
+      );
     });
 
     it("agents -> /{org}/{ws}/workbench/agents", () => {
-      expect(findItem("agents").href(wsCtx)).toBe("/acme/production/workbench/agents");
+      expect(findItem("agents").href(wsCtx)).toBe(
+        "/acme/production/workbench/agents",
+      );
     });
 
     it("agent-tools -> /{org}/{ws}/workbench/tools", () => {
@@ -239,7 +262,9 @@ describe("href builders produce correct paths", () => {
     });
 
     it("settings -> /{org}/{ws}/settings", () => {
-      expect(findItem("settings").href(wsCtx)).toBe("/acme/production/settings");
+      expect(findItem("settings").href(wsCtx)).toBe(
+        "/acme/production/settings",
+      );
     });
   });
 
@@ -247,8 +272,8 @@ describe("href builders produce correct paths", () => {
     const config = getSidebarConfig("org", "enterprise");
     const findItem = (id: string) => config.items.find((i) => i.id === id)!;
 
-    it("workspaces -> /{org}", () => {
-      expect(findItem("workspaces").href(orgCtx)).toBe("/acme");
+    it("workspaces -> /{org}/workspaces", () => {
+      expect(findItem("workspaces").href(orgCtx)).toBe("/acme/workspaces");
     });
 
     it("members -> /{org}/members", () => {
@@ -272,7 +297,9 @@ describe("href builders produce correct paths", () => {
     });
 
     it("org-settings -> /{org}/settings/general", () => {
-      expect(findItem("org-settings").href(orgCtx)).toBe("/acme/settings/general");
+      expect(findItem("org-settings").href(orgCtx)).toBe(
+        "/acme/settings/general",
+      );
     });
   });
 
@@ -291,7 +318,6 @@ describe("href builders produce correct paths", () => {
     it("profile -> /account/profile", () => {
       expect(findItem("profile").href(wsCtx)).toBe("/account/profile");
     });
-
   });
 });
 
@@ -361,7 +387,9 @@ describe("resolveSidebarCtx", () => {
     expect(eff.workspaceSlug).toBe("production");
 
     // Regression: before the fix every item's href fell back to "/acme".
-    const hrefs = getSidebarConfig("workspace").items.map((item) => item.href(eff));
+    const hrefs = getSidebarConfig("workspace").items.map((item) =>
+      item.href(eff),
+    );
     expect(hrefs.every((h) => h === "/acme")).toBe(false);
     expect(new Set(hrefs).size).toBe(hrefs.length);
   });
@@ -388,17 +416,23 @@ describe("resolveSidebarCtx", () => {
 
 describe("activeHrefFor", () => {
   it("returns the exact match when present", () => {
-    expect(activeHrefFor("/acme/members", ["/acme/members", "/acme/billing"])).toBe("/acme/members");
+    expect(
+      activeHrefFor("/acme/members", ["/acme/members", "/acme/billing"]),
+    ).toBe("/acme/members");
   });
 
   it("prefers the longest (most specific) prefix match", () => {
     const hrefs = ["/acme/production/knowledge", "/acme/production/ask"];
-    expect(activeHrefFor("/acme/production/knowledge/repos", hrefs)).toBe("/acme/production/knowledge");
+    expect(activeHrefFor("/acme/production/knowledge/repos", hrefs)).toBe(
+      "/acme/production/knowledge",
+    );
   });
 
   it("does not let an ancestor root stay active on a sibling page", () => {
     // On /acme/members the org root "/acme" must NOT win over the deeper sibling.
-    expect(activeHrefFor("/acme/members", ["/acme", "/acme/members"])).toBe("/acme/members");
+    expect(activeHrefFor("/acme/members", ["/acme", "/acme/members"])).toBe(
+      "/acme/members",
+    );
     // …but the root IS active on the root page itself.
     expect(activeHrefFor("/acme", ["/acme", "/acme/members"])).toBe("/acme");
   });
@@ -463,7 +497,10 @@ describe("ORG_SCOPE_ROUTES", () => {
 // ---------------------------------------------------------------------------
 
 describe("IA realignment (spec §4/§5/§19)", () => {
-  const ctx: Required<ScopeContext> = { orgSlug: "acme", workspaceSlug: "prod" };
+  const ctx: Required<ScopeContext> = {
+    orgSlug: "acme",
+    workspaceSlug: "prod",
+  };
 
   it("enumerateNavTargets has no Automation or Agents destination", () => {
     const targets = enumerateNavTargets(ctx);
@@ -512,7 +549,9 @@ describe("IA realignment (spec §4/§5/§19)", () => {
 
   it("all workspace hrefs are unique", () => {
     const eff = resolveSidebarCtx("/acme/prod/ask", ctx);
-    const hrefs = getSidebarConfig("workspace").items.map((item) => item.href(eff));
+    const hrefs = getSidebarConfig("workspace").items.map((item) =>
+      item.href(eff),
+    );
     expect(new Set(hrefs).size).toBe(hrefs.length);
   });
 });
