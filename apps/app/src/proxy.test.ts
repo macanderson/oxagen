@@ -1,11 +1,12 @@
 /**
  * proxy.test.ts — edge redirect + auth-boundary behavior.
  *
- * Locks the IA realignment redirects (§16). The Automation and Activity
- * feature areas (agents, playbooks, workflows, executions, runs) were removed
- * entirely, so their legacy paths no longer redirect anywhere — they fall
- * through to the normal auth/next handling like any other unmatched route.
- * The only surviving rename redirect is the legacy /chat → /ask alias.
+ * Locks the IA realignment redirects (§16). web-app-2.0 Phase 0 collapsed the
+ * page-level redirect shims and relocated their redirects here, so the edge now
+ * carries the full rename map (renamed-but-live routes → their new homes) plus
+ * the org-scope settings→top-level promotions. RETIRED feature areas (the old
+ * Automation/Activity paths: agents, playbooks, workflows, executions, runs)
+ * are deliberately NOT in the map — they 404 rather than dead-redirect.
  */
 import { describe, it, expect } from "vitest";
 import { NextRequest } from "next/server";
@@ -28,13 +29,81 @@ function status(path: string, opts?: { authed?: boolean }): number {
 }
 
 describe("proxy — IA realignment redirects (§16)", () => {
-  it("301s legacy /chat → /ask (only surviving rename redirect)", () => {
+  it("301s legacy /chat → /ask (tail collapses)", () => {
     expect(location("/acme/prod/chat")).toBe(`${ORIGIN}/acme/prod/ask`);
     expect(status("/acme/prod/chat")).toBe(301);
+    expect(location("/acme/prod/chat/anything")).toBe(`${ORIGIN}/acme/prod/ask`);
   });
 
-  it("301s nested /chat/* → /ask (tail collapses to the ask route)", () => {
-    expect(location("/acme/prod/chat/anything")).toBe(`${ORIGIN}/acme/prod/ask`);
+  it("301s /studio/* → /workbench/* preserving the tail (1:1 section rename)", () => {
+    expect(location("/acme/prod/studio")).toBe(`${ORIGIN}/acme/prod/workbench`);
+    expect(location("/acme/prod/studio/agents/repo-review")).toBe(
+      `${ORIGIN}/acme/prod/workbench/agents/repo-review`,
+    );
+    expect(status("/acme/prod/studio")).toBe(301);
+  });
+
+  it("301s the workbench/settings Skills shims → /workbench/tools/skills (tail preserved)", () => {
+    expect(location("/acme/prod/workbench/skills")).toBe(
+      `${ORIGIN}/acme/prod/workbench/tools/skills`,
+    );
+    expect(location("/acme/prod/workbench/skills/my-skill")).toBe(
+      `${ORIGIN}/acme/prod/workbench/tools/skills/my-skill`,
+    );
+    expect(location("/acme/prod/settings/skills")).toBe(
+      `${ORIGIN}/acme/prod/workbench/tools/skills`,
+    );
+    expect(location("/acme/prod/settings/skills/my-skill")).toBe(
+      `${ORIGIN}/acme/prod/workbench/tools/skills/my-skill`,
+    );
+  });
+
+  it("301s the retired settings tool tabs → their Workbench homes", () => {
+    expect(location("/acme/prod/settings/plugins")).toBe(
+      `${ORIGIN}/acme/prod/workbench/tools/capabilities`,
+    );
+    expect(location("/acme/prod/settings/environments")).toBe(
+      `${ORIGIN}/acme/prod/workbench/environments`,
+    );
+  });
+
+  it("301s the legacy marketplace tabs → their new homes", () => {
+    expect(location("/acme/prod/marketplace/browse")).toBe(
+      `${ORIGIN}/acme/prod/marketplace/agent-tools`,
+    );
+    expect(location("/acme/prod/marketplace/installed")).toBe(
+      `${ORIGIN}/acme/prod/workbench/tools/capabilities`,
+    );
+    expect(location("/acme/prod/marketplace/mcp")).toBe(
+      `${ORIGIN}/acme/prod/workbench/tools/mcp`,
+    );
+  });
+
+  it("301s the bare /knowledge/nodes index → /knowledge/inference but NEVER the node-detail route", () => {
+    expect(location("/acme/prod/knowledge/nodes")).toBe(
+      `${ORIGIN}/acme/prod/knowledge/inference`,
+    );
+    // The real node-detail page /knowledge/nodes/{id} must fall through untouched.
+    expect(location("/acme/prod/knowledge/nodes/n_abc123")).toBeNull();
+  });
+
+  it("301s org-scope settings tabs promoted to top-level org sections", () => {
+    expect(location("/acme/settings/billing")).toBe(`${ORIGIN}/acme/billing`);
+    expect(location("/acme/settings/members")).toBe(`${ORIGIN}/acme/members`);
+    expect(status("/acme/settings/billing")).toBe(301);
+  });
+
+  it("does NOT confuse workspace-scope settings with the org-scope promotion", () => {
+    // /{org}/{ws}/settings/members and /settings/general are REAL workspace pages —
+    // the org-scope rule only fires when `settings` is the 2nd path segment.
+    expect(location("/acme/prod/settings/members")).toBeNull();
+    expect(location("/acme/prod/settings/general")).toBeNull();
+  });
+
+  it("preserves the query string across a rename redirect", () => {
+    expect(location("/acme/prod/chat?c=thread_1")).toBe(
+      `${ORIGIN}/acme/prod/ask?c=thread_1`,
+    );
   });
 
   it("does NOT redirect the deleted Automation/Activity legacy paths (authed request falls through)", () => {
