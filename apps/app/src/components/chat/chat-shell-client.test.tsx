@@ -29,6 +29,13 @@ vi.mock("next/navigation", () => ({
   usePathname: () => "/test-org/test-ws/ask",
 }));
 
+// Mock next/link — render the href as a plain <a> for testability (same
+// pattern as balance-pill.test.tsx).
+vi.mock("next/link", () => ({
+  default: ({ href, children, ...props }: { href: string; children: React.ReactNode; [key: string]: unknown }) =>
+    <a href={href} {...props}>{children}</a>,
+}));
+
 // ── Streaming hook stub ──────────────────────────────────────────────────────
 // Hoisted mutable overlay so individual tests can inject live-stream state
 // (e.g. a streamed component directive) without re-mocking the module.
@@ -612,7 +619,7 @@ describe("ChatShellClient — turn error surfaces a toast (not inline JSON)", ()
     mockStream.overrides = {};
   });
 
-  it("raises an error toast with a friendly title + message for a billing turnError", async () => {
+  it("raises an error toast with a friendly title + a purchase-credits link for a billing turnError", async () => {
     mockStream.overrides = {
       turnError: {
         code: "insufficient_credits",
@@ -621,11 +628,22 @@ describe("ChatShellClient — turn error surfaces a toast (not inline JSON)", ()
     };
     await renderClient();
     expect(toastAdd).toHaveBeenCalledTimes(1);
-    expect(toastAdd).toHaveBeenCalledWith({
-      type: "error",
-      title: "Insufficient credits",
-      description: "Insufficient credits: your balance is empty. Please add credits to continue.",
-    });
+    const call = toastAdd.mock.calls[0]![0] as {
+      type: string;
+      title: string;
+      description: React.ReactNode;
+    };
+    expect(call.type).toBe("error");
+    expect(call.title).toBe("Insufficient credits");
+
+    // The description is JSX (not the raw server message) so it can carry a
+    // clickable link straight to the credits-purchase page — render it to
+    // assert the user-facing copy and the link target.
+    cleanup();
+    render(<>{call.description}</>);
+    expect(screen.getByText(/out of usage credits/i)).toBeInTheDocument();
+    const link = screen.getByRole("link", { name: "here" });
+    expect(link).toHaveAttribute("href", "/test-org/billing/subscription");
   });
 
   it("uses a generic title when the turnError carries no recognized code", async () => {

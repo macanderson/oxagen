@@ -2,6 +2,7 @@
 import * as React from "react";
 import { Suspense } from "react";
 import { useRouter, usePathname } from "next/navigation";
+import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { MessageTree } from "./message-tree";
 import { MessageComposer, type ComposerAction } from "./message-composer";
@@ -87,6 +88,11 @@ function errorToastTitle(code: string | undefined): string {
     default:
       return "Request failed";
   }
+}
+
+/** True for the turn-error codes that mean "the org's credit balance is empty". */
+function isCreditsDepletedCode(code: string | undefined): boolean {
+  return code === "insufficient_credits" || code === "credit_balance_empty";
 }
 
 /**
@@ -335,9 +341,22 @@ export function ChatShellClient({
     toast.add({
       type: "error",
       title: errorToastTitle(turnError.code),
-      description: turnError.message,
+      description: isCreditsDepletedCode(turnError.code) ? (
+        <>
+          You&apos;re out of usage credits. To continue, click{" "}
+          <Link
+            href={`/${orgSlug}/billing/subscription`}
+            className="font-semibold underline underline-offset-2"
+          >
+            here
+          </Link>{" "}
+          to purchase additional credits.
+        </>
+      ) : (
+        turnError.message
+      ),
     });
-  }, [turnError, toast]);
+  }, [turnError, toast, orgSlug]);
 
   // Non-fatal advisory (e.g. the reply failed to persist to history): toast it
   // as a warning so the user knows, without marking the turn failed. Same
