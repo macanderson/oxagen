@@ -14,7 +14,13 @@
  *   --append           Append to existing history (default: replace)
  */
 
-import { mkdirSync, writeFileSync, readFileSync, existsSync } from "fs";
+import {
+  mkdirSync,
+  writeFileSync,
+  readFileSync,
+  readdirSync,
+  existsSync
+} from "fs";
 import { join } from "path";
 import { parseArgs } from "util";
 
@@ -47,10 +53,10 @@ let history: TrackerEntry[] = [];
 
 if (append && existsSync(outputFile)) {
   try {
-    history = JSON.parse(readFileSync(outputFile, "utf-8"));
+    history = JSON.parse(readFileSync(outputFile, "utf-8")) as TrackerEntry[];
     console.log(`\n📂 Loaded ${history.length} existing entries`);
   } catch (error) {
-    console.warn(`  ⚠️  Failed to load history: ${error}`);
+    console.warn(`  ⚠️  Failed to load history: ${String(error)}`);
   }
 }
 
@@ -62,7 +68,7 @@ const results: BenchmarkResult[] = [];
 function scanDirectory(dir: string): void {
   if (!existsSync(dir)) return;
 
-  const entries = require("fs").readdirSync(dir, { withFileTypes: true });
+  const entries = readdirSync(dir, { withFileTypes: true });
 
   for (const entry of entries) {
     const path = join(dir, entry.name);
@@ -75,7 +81,7 @@ function scanDirectory(dir: string): void {
         const result = JSON.parse(content) as BenchmarkResult;
         results.push(result);
       } catch (error) {
-        console.warn(`  ⚠️  Failed to parse ${path}: ${error}`);
+        console.warn(`  ⚠️  Failed to parse ${path}: ${String(error)}`);
       }
     }
   }
@@ -95,10 +101,12 @@ const agentGroups = new Map<string, BenchmarkResult[]>();
 
 for (const result of results) {
   const key = `${result.agent.type}:${result.agent.model}`;
-  if (!agentGroups.has(key)) {
-    agentGroups.set(key, []);
+  let group = agentGroups.get(key);
+  if (!group) {
+    group = [];
+    agentGroups.set(key, group);
   }
-  agentGroups.get(key)!.push(result);
+  group.push(result);
 }
 
 // Calculate metrics for each agent
@@ -116,7 +124,8 @@ for (const [key, agentResults] of agentGroups) {
   // Calculate change from previous entry
   const prevEntry = history
     .filter(e => e.agentType === agentType && e.model === model)
-    .sort((a, b) => b.date.localeCompare(a.date))[0];
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .at(0);
 
   let notes: string | undefined;
 

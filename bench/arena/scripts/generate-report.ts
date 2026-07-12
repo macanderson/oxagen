@@ -80,7 +80,7 @@ function scanDirectory(dir: string): void {
         const result = JSON.parse(content) as BenchmarkResult;
         results.push(result);
       } catch (error) {
-        console.warn(`  ⚠️  Failed to parse ${path}: ${error}`);
+        console.warn(`  ⚠️  Failed to parse ${path}: ${String(error)}`);
       }
     }
   }
@@ -101,8 +101,9 @@ const summaries = new Map<string, TaskAgentSummary>();
 for (const result of results) {
   const key = `${result.taskId}:${result.agent.type}:${result.agent.model}`;
 
-  if (!summaries.has(key)) {
-    summaries.set(key, {
+  let summary = summaries.get(key);
+  if (!summary) {
+    summary = {
       taskId: result.taskId,
       agentType: result.agent.type,
       model: result.agent.model,
@@ -113,10 +114,10 @@ for (const result of results) {
       avgTokens: 0,
       latestRun:
         result.provenance.kind === "measured" ? result.provenance.runDate : "",
-    });
+    };
+    summaries.set(key, summary);
   }
 
-  const summary = summaries.get(key)!;
   summary.runCount++;
 
   // Update averages
@@ -152,7 +153,7 @@ if (includeHistory) {
   const historyPath = join("tracker", "history.json");
   if (existsSync(historyPath)) {
     try {
-      history = JSON.parse(readFileSync(historyPath, "utf-8"));
+      history = JSON.parse(readFileSync(historyPath, "utf-8")) as TrackerEntry[];
     } catch {
       console.warn("  ⚠️  Failed to load history");
     }
@@ -168,10 +169,12 @@ if (compare) {
 
   for (const summary of summaries.values()) {
     const agent = summary.agentType;
-    if (!agentSummaries.has(agent)) {
-      agentSummaries.set(agent, []);
+    let agentList = agentSummaries.get(agent);
+    if (!agentList) {
+      agentList = [];
+      agentSummaries.set(agent, agentList);
     }
-    agentSummaries.get(agent)!.push(summary);
+    agentList.push(summary);
   }
 
   for (const [agent, agentData] of agentSummaries) {
@@ -420,7 +423,7 @@ function generateHtmlReport(report: BenchmarkReport): string {
     </table>
 
     ${
-      history && history.length > 0
+      history.length > 0
         ? `
     <h2>Progress Tracking</h2>
     <table>
@@ -463,7 +466,7 @@ function generateHtmlReport(report: BenchmarkReport): string {
  * Generate Markdown report
  */
 function generateMarkdownReport(report: BenchmarkReport): string {
-  const { metadata, summaries, results, history, insights } = report;
+  const { metadata, summaries, results, insights } = report;
 
   let md = `# ${metadata.title}\n\n`;
   md += `Generated ${new Date(metadata.generatedAt).toLocaleString()}\n\n`;
