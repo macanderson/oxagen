@@ -34,6 +34,9 @@ export const org = {
   /** Workspace picker — also the Org mode root. */
   root: (ctx: ScopeContext): string => `/${ctx.orgSlug}`,
 
+  /** Org workspaces listing — cards for every workspace in the org. */
+  workspaces: (ctx: ScopeContext): string => `/${ctx.orgSlug}/workspaces`,
+
   members: (ctx: ScopeContext): string => `/${ctx.orgSlug}/members`,
 
   // Governance (web-app-2.0) — the accountability-chain hub. Renders each typed
