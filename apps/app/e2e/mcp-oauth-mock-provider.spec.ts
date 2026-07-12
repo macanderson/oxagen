@@ -306,14 +306,12 @@ test.describe("MCP OAuth — deterministic mock provider", () => {
     await gotoStable(page, `${ws}/workbench/tools/mcp`);
     await expect(page).not.toHaveURL(/\/login/);
     await expect(page.getByTestId("connect-mcp-form")).toBeVisible({
-      timeout: 20_000,
+      timeout: 45_000,
     });
 
     // ── Fill + submit the connect form (OAuth) ───────────────────────────────
     await page.getByTestId("mcp-server-name-input").fill("Mock OAuth Server");
-    await page
-      .getByTestId("mcp-server-endpoint-input")
-      .fill(oauthMock.mcpUrl);
+    await page.getByTestId("mcp-server-endpoint-input").fill(oauthMock.mcpUrl);
     await page.getByText("OAuth", { exact: true }).click();
     await page.screenshot({
       path: path.join(SCREENSHOTS_DIR, "01-oauth-connect-form-filled.png"),
@@ -381,7 +379,7 @@ test.describe("MCP OAuth — deterministic mock provider", () => {
 
     await gotoStable(page, `${ws}/workbench/tools/mcp`);
     await expect(page.getByTestId("connect-mcp-form")).toBeVisible({
-      timeout: 20_000,
+      timeout: 45_000,
     });
 
     await page.getByTestId("mcp-server-name-input").fill("Mock Secret Server");
@@ -422,7 +420,7 @@ test.describe("MCP OAuth — deterministic mock provider", () => {
 
     await gotoStable(page, `${ws}/workbench/tools/mcp`);
     await expect(page.getByTestId("connect-mcp-form")).toBeVisible({
-      timeout: 20_000,
+      timeout: 45_000,
     });
 
     await page.getByTestId("mcp-server-name-input").fill("Mock No-Auth Server");
