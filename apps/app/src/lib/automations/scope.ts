@@ -8,10 +8,12 @@
  * Triggers, and Workflows pages all gate identically. Mirrors the canonical
  * pattern in lib/workbench/scope.ts but decoupled from the Workbench module.
  *
- * The `ctx.surface` is "app" for attribution/metering, but every invoke() must
- * pass `{ surface: "agent" }` as opts because the automation.* / agent.trigger.*
- * / workflow.* / research.swarm.* contracts list "agent" (not "app") in their
- * surfaces[] — passing surface:"app" would be denied by the surface gate.
+ * The `ctx.surface` is "app" for attribution/metering. invoke() is called with
+ * NO opts.surface override: the kernel's surface allowlist gate only fires when
+ * opts.surface is explicitly set (kernel.ts:578), so omitting it keeps the
+ * automation.* / agent.trigger.* / workflow.* / research.swarm.* contracts (which
+ * list "agent" but not "app" in surfaces[]) reachable from this trusted
+ * first-party surface, with honest "app" attribution.
  *
  * Server-only: imports invoke handlers and tenant DB. Never import from a
  * "use client" module.
