@@ -528,7 +528,10 @@ export function SpanTree({ trace }: { trace: Trace }) {
   }
 
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_20rem]">
+    <div
+      className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_20rem]"
+      data-testid="run-span-tree"
+    >
       <div className="min-w-0 rounded-lg border bg-card p-2">
         <div className="flex items-center gap-2 px-2 pb-2 text-xs uppercase tracking-wide text-muted-foreground">
           <span className="min-w-0 flex-1">Span</span>
