@@ -84,8 +84,9 @@ test.describe("Automations list + editor", () => {
     await expect(page.getByRole("heading", { name: "Playbook" })).toBeVisible();
     await expect(page.getByText(/Never fired/)).toBeVisible();
 
-    // Starts disabled (human-gated activation).
-    await expect(page.getByText("Disabled")).toBeVisible();
+    // Starts disabled (human-gated activation). "Disabled" appears in the status
+    // badge and in body copy, so scope to the first match.
+    await expect(page.getByText("Disabled").first()).toBeVisible();
 
     await page.screenshot({
       path: path.join(SCREENSHOTS_DIR, "02-automation-editor.png"),
@@ -98,8 +99,9 @@ test.describe("Automations list + editor", () => {
     await expect(page.getByText("Enable this automation?")).toBeVisible({ timeout: 15_000 });
     await page.getByTestId("confirm-enable").click();
 
-    // After confirming, the automation flips live.
-    await expect(page.getByText("Enabled")).toBeVisible({ timeout: 20_000 });
+    // After confirming, the automation flips live. "Enabled" also appears in
+    // body copy, so scope to the first match.
+    await expect(page.getByText("Enabled").first()).toBeVisible({ timeout: 20_000 });
 
     await page.screenshot({
       path: path.join(SCREENSHOTS_DIR, "03-automation-enabled.png"),
