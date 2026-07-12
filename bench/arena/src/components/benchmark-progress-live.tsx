@@ -12,7 +12,6 @@ import {
   motion,
   useMotionValue,
   useSpring,
-  useTransform,
   AnimatePresence,
 } from "motion/react";
 
@@ -318,7 +317,7 @@ export function LiveProgressDisplay({
       try {
         const response = await fetch(`/api/benchmarks/progress/${runId}`);
         if (response.ok) {
-          const data = await response.json();
+          const data = (await response.json()) as BenchmarkProgressState;
           setState(data);
 
           if (data.status === "completed" || data.status === "failed") {
@@ -330,15 +329,23 @@ export function LiveProgressDisplay({
       }
     };
 
-    poll();
-    const interval = setInterval(poll, pollInterval);
-    return () => clearInterval(interval);
+    void poll();
+    const interval = setInterval(() => {
+      void poll();
+    }, pollInterval);
+    return () => {
+      clearInterval(interval);
+    };
   }, [runId, pollInterval, onComplete]);
 
   // Update current time for duration calculations
   useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(Date.now()), 100);
-    return () => clearInterval(timer);
+    const timer = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 100);
+    return () => {
+      clearInterval(timer);
+    };
   }, []);
 
   const elapsed = ((state.endTime || currentTime) - state.startTime) / 1000;

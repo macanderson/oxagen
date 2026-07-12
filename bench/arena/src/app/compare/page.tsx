@@ -99,7 +99,13 @@ function TaskBreakdownTable({ data }: { data: TaskBreakdownData }) {
                   {row.taskId}
                 </td>
                 {data.agents.map((agent) => {
-                  const cell = row.cells[agent.key];
+                  // A `cells` record only has entries for agents that ran the
+                  // task; missing keys render "—", so the value is genuinely
+                  // optional. The record's index signature reports it as always
+                  // present, so widen the read to reflect the real contract.
+                  const cell = row.cells[agent.key] as
+                    | TaskBreakdownCell
+                    | undefined;
                   return (
                     <td key={agent.key} className="px-4 py-3 align-top">
                       {cell ? (

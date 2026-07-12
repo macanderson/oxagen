@@ -151,12 +151,12 @@ export function BenchmarkRunner() {
       (t) => !existingTypes.includes(t.id),
     );
     if (availableType) {
-      const models = MODELS[availableType.id as keyof typeof MODELS];
+      const models = MODELS[availableType.id];
       setAgents([
         ...agents,
         {
           type: availableType.id,
-          model: models[0]?.id || "",
+          model: models[0].id,
           enabled: true,
         },
       ]);
@@ -180,9 +180,13 @@ export function BenchmarkRunner() {
   const isBusy = isRunning || runState === "confirm";
 
   async function pollStatus(id: string): Promise<void> {
-    while (pollingRef.current) {
+    // Read through a getter: `pollingRef.current` is flipped asynchronously by
+    // the cancel handler during the sleep below, which the type-checker can't
+    // see — a direct read would be narrowed and trip `no-unnecessary-condition`.
+    const isPolling = () => pollingRef.current;
+    while (isPolling()) {
       await new Promise((resolve) => setTimeout(resolve, 1200));
-      if (!pollingRef.current) return;
+      if (!isPolling()) return;
       let data: StatusResponse | null = null;
       try {
         const res = await fetch(`/api/benchmarks/${id}/status`, {
@@ -333,23 +337,21 @@ export function BenchmarkRunner() {
               <input
                 type="checkbox"
                 checked={agent.enabled}
-                onChange={(e) =>
-                  updateAgent(index, { enabled: e.target.checked })
-                }
+                onChange={(e) => {
+                  updateAgent(index, { enabled: e.target.checked });
+                }}
                 className="size-4 accent-[var(--_ember-flame)]"
                 disabled={isBusy}
               />
 
               <select
                 value={agent.type}
-                onChange={(e) =>
+                onChange={(e) => {
                   updateAgent(index, {
                     type: e.target.value,
-                    model:
-                      MODELS[e.target.value as keyof typeof MODELS]?.[0]?.id ||
-                      "",
-                  })
-                }
+                    model: MODELS[e.target.value as keyof typeof MODELS][0].id,
+                  });
+                }}
                 className={`flex-1 ${SELECT_CLASS}`}
                 disabled={isBusy}
               >
@@ -362,11 +364,13 @@ export function BenchmarkRunner() {
 
               <select
                 value={agent.model}
-                onChange={(e) => updateAgent(index, { model: e.target.value })}
+                onChange={(e) => {
+                  updateAgent(index, { model: e.target.value });
+                }}
                 className={`flex-1 ${SELECT_CLASS}`}
                 disabled={isBusy}
               >
-                {MODELS[agent.type as keyof typeof MODELS]?.map((m) => (
+                {MODELS[agent.type as keyof typeof MODELS].map((m) => (
                   <option key={m.id} value={m.id}>
                     {m.name}
                   </option>
@@ -375,7 +379,7 @@ export function BenchmarkRunner() {
 
               <div className="text-xs text-muted-foreground">
                 {
-                  MODELS[agent.type as keyof typeof MODELS]?.find(
+                  MODELS[agent.type as keyof typeof MODELS].find(
                     (m) => m.id === agent.model,
                   )?.cost
                 }
@@ -383,7 +387,7 @@ export function BenchmarkRunner() {
 
               {agents.length > 1 && (
                 <button
-                  onClick={() => removeAgent(index)}
+                  onClick={() => { removeAgent(index); }}
                   disabled={isBusy}
                   className="rounded px-3 py-1 text-sm text-[var(--color-danger)] transition-colors hover:bg-[var(--color-danger)]/10 disabled:opacity-50"
                 >
@@ -423,7 +427,7 @@ export function BenchmarkRunner() {
             return (
               <button
                 key={category.id}
-                onClick={() => setSelectedCategory(category.id)}
+                onClick={() => { setSelectedCategory(category.id); }}
                 disabled={isBusy}
                 aria-pressed={active}
                 className={`rounded-lg border p-4 text-left transition-all disabled:opacity-50 ${
@@ -462,7 +466,7 @@ export function BenchmarkRunner() {
             <input
               type="number"
               value={budget}
-              onChange={(e) => setBudget(parseFloat(e.target.value) || 0)}
+              onChange={(e) => { setBudget(parseFloat(e.target.value) || 0); }}
               min={1}
               step={1}
               disabled={isBusy}
@@ -477,7 +481,7 @@ export function BenchmarkRunner() {
             <input
               type="number"
               value={timeoutSecs}
-              onChange={(e) => setTimeoutSecs(parseFloat(e.target.value) || 0)}
+              onChange={(e) => { setTimeoutSecs(parseFloat(e.target.value) || 0); }}
               min={60}
               step={60}
               disabled={isBusy}
@@ -492,7 +496,7 @@ export function BenchmarkRunner() {
             <input
               type="number"
               value={concurrent}
-              onChange={(e) => setConcurrent(parseInt(e.target.value) || 1)}
+              onChange={(e) => { setConcurrent(parseInt(e.target.value) || 1); }}
               min={1}
               max={10}
               disabled={isBusy}
@@ -507,7 +511,7 @@ export function BenchmarkRunner() {
         <input
           type="checkbox"
           checked={dryRun}
-          onChange={(e) => setDryRun(e.target.checked)}
+          onChange={(e) => { setDryRun(e.target.checked); }}
           disabled={isBusy}
           className="mt-0.5 size-4 accent-[var(--_ember-flame)]"
         />
