@@ -169,6 +169,10 @@ import { pluginRegistryAdd } from "./plugin.registry.add";
 import { pluginRegistryList } from "./plugin.registry.list";
 import { pluginRegistryRemove } from "./plugin.registry.remove";
 import { pluginSettingsSetAuthAlerts } from "./plugin.settings.set_auth_alerts";
+import { pluginSettingsGetAuthAlerts } from "./plugin.settings.get_auth_alerts";
+import { capabilityRegistryList } from "./capability.registry.list";
+import { capabilityRegistryGet } from "./capability.registry.get";
+import { iamRoleList } from "./iam.role.list";
 import { workflowRun } from "./workflow.run";
 import { workflowStatus } from "./workflow.status";
 import { workflowCancel } from "./workflow.cancel";
@@ -665,6 +669,10 @@ export {
   pluginRegistryList,
   pluginRegistryRemove,
   pluginSettingsSetAuthAlerts,
+  pluginSettingsGetAuthAlerts,
+  capabilityRegistryList,
+  capabilityRegistryGet,
+  iamRoleList,
   workflowRun,
   workflowStatus,
   workflowCancel,
@@ -1004,6 +1012,10 @@ export const contracts = [
   pluginRegistryList,
   pluginRegistryRemove,
   pluginSettingsSetAuthAlerts,
+  pluginSettingsGetAuthAlerts,
+  capabilityRegistryList,
+  capabilityRegistryGet,
+  iamRoleList,
   workflowRun,
   workflowStatus,
   workflowCancel,

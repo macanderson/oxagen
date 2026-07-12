@@ -39,7 +39,9 @@ export const auditLogQuery = registerCapability({
     "Query the org's security and automation audit events (security_events + playbook_events) with filters — actor, capability, outcome, event type, time range — returning a unified, time-ordered feed. Read-only.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent", "cli"] as const,
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  // "app": the org Governance hub invokes this for the denied-invocation feed
+  // (binding in apps/app/capability-ui-map.json — UI Capability Parity law).
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "read" },
   sensitivity: "high",

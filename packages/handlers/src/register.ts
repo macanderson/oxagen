@@ -1116,6 +1116,30 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .auditLogQueryHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "list_capability_registry",
+    async () =>
+      (await import("./capability.registry.list"))
+        .capabilityRegistryListHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "get_capability_registry",
+    async () =>
+      (await import("./capability.registry.get"))
+        .capabilityRegistryGetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "list_iam_roles",
+    async () =>
+      (await import("./iam.role.list"))
+        .iamRoleListHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "get_auth_alerts",
+    async () =>
+      (await import("./plugin.settings.get_auth_alerts"))
+        .pluginSettingsGetAuthAlertsHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "search_command_menu",
     async () =>
       (await import("./command.menu.search"))
