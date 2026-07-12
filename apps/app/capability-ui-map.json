@@ -10,6 +10,24 @@
     "verifiedBy": "session id / agent that captured the proof"
   },
   "bindings": {
+    "debug_execution": {
+      "route": "/[orgSlug]/[workspaceSlug]/activity/[executionId]",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/activity/[executionId]/debug-section.tsx",
+      "entry": "Run detail page load, status=failed only — DebugSection invokes debug_execution and renders <DebugPanel> above the span tree",
+      "testid": "run-debug-panel",
+      "proof": "apps/app/e2e/activity-failed-run-debug.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "get_execution_lineage": {
+      "route": "/[orgSlug]/[workspaceSlug]/activity/[executionId]",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/activity/[executionId]/lineage-section.tsx",
+      "entry": "Run detail page load — LineageSection invokes get_execution_lineage and renders the :Execution→:SourceFile touch graph (NodeRef chips) when TOUCHED_FILE edges exist",
+      "testid": null,
+      "proof": "apps/app/e2e/activity-failed-run-debug.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
     "get_usage_breakdown": {
       "route": "/[orgSlug]/billing/usage",
       "page": "apps/app/src/app/[orgSlug]/billing/usage/page.tsx",
