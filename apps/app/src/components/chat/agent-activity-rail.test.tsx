@@ -210,10 +210,10 @@ describe("AgentActivityRail", () => {
           order: ["tool:a"],
           toolCalls: { a: tc({ toolCallId: "a", capability: "read_file" }) },
           turnUsage: {
-            inputTokens: 10,
-            outputTokens: 5,
+            promptTokens: 10,
+            completionTokens: 5,
             totalTokens: 15,
-          } as AgentActivityRailProps["turnUsage"],
+          },
         })}
       />,
     );
