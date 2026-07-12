@@ -23,6 +23,10 @@
  * Server-only. Never import from a "use client" module.
  */
 import "@oxagen/handlers/register";
+// agent.repo.edit + agent.file_lock.* are agent-package capabilities bound only
+// by @oxagen/agent/register — without this import the kernel has no handler at
+// runtime (enforced by src/test/agent-register-invariant.test.ts).
+import "@oxagen/agent/register";
 import { invoke } from "@oxagen/oxagen";
 import type { ConnectionListOutput } from "@oxagen/oxagen/contracts/connection.list";
 import type { RepoSyncInput, RepoSyncOutput } from "@oxagen/oxagen/contracts/repo.sync";
