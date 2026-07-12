@@ -113,10 +113,25 @@ describe("proxy — IA realignment redirects (§16)", () => {
   });
 
   it("does NOT confuse workspace-scope settings with the org-scope promotion", () => {
-    // /{org}/{ws}/settings/members and /settings/general are REAL workspace pages —
-    // the org-scope rule only fires when `settings` is the 2nd path segment.
-    expect(location("/acme/prod/settings/members")).toBeNull();
+    // /settings/general is a REAL workspace page (no redirect). The org-scope
+    // promotion rule only fires when `settings` is the 2nd path segment; the
+    // workspace-scope settings/members redirect below is a DIFFERENT rule.
     expect(location("/acme/prod/settings/general")).toBeNull();
+  });
+
+  it("301s the web-app-2.0 Settings consolidation → General + Agent Defaults", () => {
+    // Members folded into General; Models·Budget·Prompts·Memory-policy merged
+    // into Agent Defaults.
+    expect(location("/acme/prod/settings/members")).toBe(
+      `${ORIGIN}/acme/prod/settings/general`,
+    );
+    for (const tab of ["models", "budget", "prompts", "memory"]) {
+      expect(location(`/acme/prod/settings/${tab}`)).toBe(
+        `${ORIGIN}/acme/prod/settings/agent-defaults`,
+      );
+    }
+    // The consolidated targets themselves must NOT redirect (no loop).
+    expect(location("/acme/prod/settings/agent-defaults")).toBeNull();
   });
 
   it("preserves the query string across a rename redirect", () => {

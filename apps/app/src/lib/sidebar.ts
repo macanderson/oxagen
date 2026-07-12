@@ -657,13 +657,13 @@ export function enumerateNavTargets(
       parent: "settings",
     });
     targets.push({
-      label: "Settings · Members",
-      href: workspace.settings.members(wsCtx),
+      label: "Settings · Agent Defaults",
+      href: workspace.settings.agentDefaults(wsCtx),
       parent: "settings",
     });
     targets.push({
-      label: "Settings · Models",
-      href: workspace.settings.models(wsCtx),
+      label: "Settings · GitHub",
+      href: workspace.settings.github(wsCtx),
       parent: "settings",
     });
     targets.push({

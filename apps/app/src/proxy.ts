@@ -89,6 +89,13 @@ export function proxy(request: NextRequest): NextResponse {
       { from: "settings/plugins", to: "workbench/tools/capabilities", preserveTail: false, exact: true },
       { from: "settings/environments", to: "workbench/environments", preserveTail: false, exact: true },
       { from: "settings/knowledge", to: "knowledge/ontology", preserveTail: false, exact: true },
+      // web-app-2.0 Phase 2 Settings consolidation: Models·Budget·Prompts·
+      // Memory-policy merged into Agent Defaults; Members folded into General.
+      { from: "settings/models", to: "settings/agent-defaults", preserveTail: false, exact: true },
+      { from: "settings/budget", to: "settings/agent-defaults", preserveTail: false, exact: true },
+      { from: "settings/prompts", to: "settings/agent-defaults", preserveTail: false, exact: true },
+      { from: "settings/memory", to: "settings/agent-defaults", preserveTail: false, exact: true },
+      { from: "settings/members", to: "settings/general", preserveTail: false, exact: true },
       { from: "marketplace/browse", to: "marketplace/agent-tools", preserveTail: false, exact: true },
       { from: "marketplace/installed", to: "workbench/tools/capabilities", preserveTail: false, exact: true },
       { from: "marketplace/mcp", to: "workbench/tools/mcp", preserveTail: false, exact: true },

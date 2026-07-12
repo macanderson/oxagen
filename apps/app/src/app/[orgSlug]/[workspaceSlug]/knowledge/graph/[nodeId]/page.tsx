@@ -5,8 +5,18 @@
  * graph-node-list-card, graph-edge-card) deep-links to. Server-fetches the node
  * via graph.node.get inside the tenant scope and renders its full property set,
  * provenance, and metadata — so a record id referenced in chat is always one
- * click from its source of truth.
+ * click from its source of truth. Also renders:
+ *   - Neighbors: the node's one-hop neighborhood (ontology.neighbors), streamed
+ *     in its own <Suspense> boundary so a slow/large neighborhood never blocks
+ *     the header/properties.
+ *   - Admin actions (owner/admin only): delete node, add/remove a Neo4j label,
+ *     upsert/delete an outgoing relationship. Gated the same way
+ *     knowledge/ontology/page.tsx gates schema mutation — apps/app does not
+ *     bootstrap IAM, so the caller's real org role is resolved here and used
+ *     to decide whether to render the panel; actions.ts re-asserts admin
+ *     server-side on every mutation.
  */
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { Network, ArrowLeft, ExternalLink } from "lucide-react";
@@ -14,10 +24,22 @@ import { invoke } from "@oxagen/oxagen";
 import "@oxagen/handlers/register";
 import { runInTenantScope } from "@oxagen/tenancy";
 import type { GraphNodeGetOutput } from "@oxagen/oxagen/contracts/graph.node.get";
+import type { GraphNodeLabelsGetOutput } from "@oxagen/oxagen/contracts/graph.node_label.get";
 import { getSessionOrRedirect } from "@/lib/session";
-import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
+import { resolveOrg, resolveWorkspace, assertOrgMember, getOrgRole } from "@/lib/resolve-org";
 import { workspace } from "@/lib/routes";
 import { Badge } from "@/components/ui/badge";
+import { CopyableId } from "@/components/knowledge/graph-explorer/copyable-id";
+import { LoadingState } from "@/app/[orgSlug]/[workspaceSlug]/_shared/components";
+import { NodeNeighbors } from "./_sections/node-neighbors";
+import { NodeAdminActions } from "./node-admin-actions";
+import {
+  deleteNodeAction,
+  addNodeLabelAction,
+  removeNodeLabelAction,
+  upsertEdgeAction,
+  deleteEdgeAction,
+} from "./actions";
 
 interface PageProps {
   params: Promise<{ orgSlug: string; workspaceSlug: string; nodeId: string }>;
@@ -44,6 +66,12 @@ export default async function KnowledgeNodePage({ params }: PageProps) {
   if (!ws) notFound();
   await assertOrgMember(org.id, session.user.id);
 
+  // Admin gate for the mutation panel (delete node / relabel / rewire edges).
+  // apps/app does not bootstrap IAM, so the caller's real org role is
+  // resolved here — same pattern as knowledge/ontology/page.tsx.
+  const viewerRole = await getOrgRole(org.id, session.user.id);
+  const isAdmin = ["owner", "admin"].includes(viewerRole ?? "");
+
   const ctx = {
     orgId: org.id,
     workspaceId: ws.id,
@@ -55,11 +83,36 @@ export default async function KnowledgeNodePage({ params }: PageProps) {
   };
 
   let node: GraphNodeGetOutput["node"] = null;
+  let labels: string[] = [];
   try {
-    const result = (await runInTenantScope({ orgId: org.id, workspaceId: ws.id }, () =>
-      invoke("get_node", { nodeId }, ctx, { surface: "agent" }),
-    )) as GraphNodeGetOutput;
-    node = result.node;
+    const result = await runInTenantScope({ orgId: org.id, workspaceId: ws.id }, async () => {
+      const nodeResult = (await invoke(
+        "get_node",
+        { nodeId },
+        ctx,
+        { surface: "agent" },
+      )) as GraphNodeGetOutput;
+
+      // Neo4j multi-label set (distinct from the single domain `label`
+      // property returned by get_node) — best-effort, never blocks the page.
+      let labelsResult: GraphNodeLabelsGetOutput | null = null;
+      if (nodeResult.node) {
+        try {
+          labelsResult = (await invoke(
+            "get_node_labels",
+            { nodeId },
+            ctx,
+            { surface: "agent" },
+          )) as GraphNodeLabelsGetOutput;
+        } catch {
+          labelsResult = null;
+        }
+      }
+
+      return { nodeResult, labelsResult };
+    });
+    node = result.nodeResult.node;
+    labels = result.labelsResult?.labels ?? [];
   } catch {
     node = null;
   }
@@ -160,9 +213,25 @@ export default async function KnowledgeNodePage({ params }: PageProps) {
             </h2>
             <dl className="grid gap-x-4 gap-y-1.5 sm:grid-cols-[minmax(7rem,auto)_1fr]">
               <dt className="text-xs font-medium text-muted-foreground">Node ID</dt>
-              <dd className="min-w-0 break-all font-mono text-xs">{node.nodeId}</dd>
+              {/* Citation rule: the raw id is never the primary identifier —
+                  it only ever appears here, inside a CopyableId. */}
+              <dd className="min-w-0">
+                <CopyableId value={node.nodeId} label="ID" max={40} />
+              </dd>
               <dt className="text-xs font-medium text-muted-foreground">Label</dt>
               <dd className="text-sm">{node.label}</dd>
+              {labels.length > 0 ? (
+                <>
+                  <dt className="text-xs font-medium text-muted-foreground">Labels</dt>
+                  <dd className="flex flex-wrap gap-1">
+                    {labels.map((label) => (
+                      <Badge key={label} variant="outline" size="sm">
+                        {label}
+                      </Badge>
+                    ))}
+                  </dd>
+                </>
+              ) : null}
               {createdAt ? (
                 <>
                   <dt className="text-xs font-medium text-muted-foreground">Created</dt>
@@ -179,6 +248,39 @@ export default async function KnowledgeNodePage({ params }: PageProps) {
           </section>
         </div>
       </div>
+
+      {/* Neighbors — the node's one-hop neighborhood. Its own Suspense
+          boundary so a slow/large neighborhood never blocks the header and
+          properties above from rendering. */}
+      <div className="overflow-hidden rounded-xl border border-border bg-card px-6 py-5">
+        <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          Neighbors
+        </h2>
+        <Suspense fallback={<LoadingState variant="detail" />}>
+          <NodeNeighbors
+            orgId={org.id}
+            workspaceId={ws.id}
+            userId={session.user.id}
+            orgSlug={orgSlug}
+            workspaceSlug={workspaceSlug}
+            nodeId={nodeId}
+          />
+        </Suspense>
+      </div>
+
+      {isAdmin ? (
+        <NodeAdminActions
+          orgSlug={orgSlug}
+          workspaceSlug={workspaceSlug}
+          nodeId={nodeId}
+          initialLabels={labels}
+          deleteNode={deleteNodeAction}
+          addNodeLabel={addNodeLabelAction}
+          removeNodeLabel={removeNodeLabelAction}
+          upsertEdge={upsertEdgeAction}
+          deleteEdge={deleteEdgeAction}
+        />
+      ) : null}
     </div>
   );
 }

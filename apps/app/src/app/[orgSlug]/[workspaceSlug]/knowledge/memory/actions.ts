@@ -26,6 +26,8 @@ import "@oxagen/agent/register";
 import { withTenantDb, schema } from "@oxagen/database";
 import type { AgentMemoryRecord } from "@oxagen/oxagen/contracts/agent.memory.list";
 import type { AgentMemoryPromotionCandidatesOutput } from "@oxagen/oxagen/contracts/agent.memory_promotion.list";
+import type { AgentMemoryCitationsListOutput } from "@oxagen/oxagen/contracts/agent.memory_citation.list";
+import type { AgentMemoryEvidenceAttachOutput } from "@oxagen/oxagen/contracts/agent.memory_evidence.attach";
 import { logger } from "@oxagen/handlers/logger";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
@@ -52,6 +54,14 @@ export type PromoteMemoryResult =
 
 export type PromotionCandidatesResult =
   | { ok: true; candidates: AgentMemoryPromotionCandidatesOutput["candidates"] }
+  | { ok: false; error: string };
+
+export type ListMemoryCitationsResult =
+  | { ok: true; citations: AgentMemoryCitationsListOutput["citations"] }
+  | { ok: false; error: string };
+
+export type AttachMemoryEvidenceResult =
+  | { ok: true; evidenceId: string; confidenceScore: number }
   | { ok: false; error: string };
 
 type MemoryStatus = "ACTIVE" | "SUPERSEDED" | "RETRACTED" | "ARCHIVED";
@@ -424,6 +434,168 @@ export async function promotionCandidatesAction(input: {
       );
       const message = err instanceof Error ? err.message : "";
       return { ok: false, error: message || "Failed to load promotion candidates." };
+    }
+  });
+}
+
+// ---------------------------------------------------------------------------
+// listMemoryCitationsAction
+//
+// Backs the Citations view: which memories were cited during an execution,
+// how much each one actually shaped the output (influence), and whether any
+// cited RULE was violated (compliance). agent.memory_citation.list (schema
+// §7d/§7e) is scoped to a single executionId, not a single memoryId — there is
+// no "citations for this memory across all executions" query — so the panel
+// asks for an execution id and the caller narrows to one memory client-side
+// (each citation row already carries its memoryId + lesson).
+// ---------------------------------------------------------------------------
+
+export async function listMemoryCitationsAction(input: {
+  orgSlug: string;
+  workspaceSlug: string;
+  executionId: string;
+  compliance?: "COMPLIED" | "DISCRETION" | "VIOLATION" | "NA";
+  influenceIn?: Array<"DECISIVE" | "CONTRIBUTING" | "CONSIDERED" | "IGNORED">;
+}): Promise<ListMemoryCitationsResult> {
+  const session = await getSessionOrRedirect();
+  const { orgSlug, workspaceSlug, executionId, compliance, influenceIn } = input;
+
+  const trimmedExecutionId = executionId.trim();
+  if (trimmedExecutionId.length === 0) {
+    return { ok: false, error: "Enter an execution id to look up citations." };
+  }
+
+  const org = await resolveOrg(orgSlug);
+  const ws = await resolveWorkspace(org.id, workspaceSlug);
+
+  // IDOR guard: caller must be an org member.
+  await assertOrgMember(org.id, session.user.id);
+
+  return runInTenantScope({ orgId: org.id, workspaceId: ws.id }, async () => {
+    // Workspace membership gate — apps/app skips IAM, so enforce here.
+    const gate = await assertWorkspaceMember(ws.id, session.user.id);
+    if (gate === "denied") {
+      return { ok: false, error: "You must be a workspace member to view citations." };
+    }
+
+    const ctx = {
+      orgId: org.id,
+      workspaceId: ws.id,
+      userId: session.user.id,
+      apiKeyId: null as string | null,
+      requestId: crypto.randomUUID(),
+      surface: "app" as const,
+      messageId: null as string | null,
+    };
+
+    try {
+      const out = (await invoke(
+        "list_memory_citations",
+        {
+          executionId: trimmedExecutionId,
+          ...(compliance ? { compliance } : {}),
+          ...(influenceIn && influenceIn.length > 0 ? { influenceIn } : {}),
+        },
+        ctx,
+        { surface: "agent" },
+      )) as AgentMemoryCitationsListOutput;
+
+      return { ok: true, citations: out.citations };
+    } catch (err) {
+      logger.error(
+        { err, orgId: org.id, workspaceId: ws.id, executionId: trimmedExecutionId },
+        "knowledge.memory: listMemoryCitationsAction failed",
+      );
+      const message = err instanceof Error ? err.message : "";
+      return { ok: false, error: message || "Failed to load citations." };
+    }
+  });
+}
+
+// ---------------------------------------------------------------------------
+// attachMemoryEvidenceAction
+//
+// Backs the Evidence attach panel: records a corroborating (or refuting)
+// :Evidence node against a memory, which moves confidence by strength*100
+// (capped 100) and refreshes the decay clock (schema §5/§7b). This is how a
+// memory's confidence recovers between decay passes without waiting for a
+// fresh citation.
+// ---------------------------------------------------------------------------
+
+export async function attachMemoryEvidenceAction(input: {
+  orgSlug: string;
+  workspaceSlug: string;
+  memoryId: string;
+  sourceKind:
+    | "CITATION"
+    | "HUMAN_CONFIRM"
+    | "CODE_SCAN"
+    | "AGENT_JUDGE"
+    | "REPEAT_OBSERVATION";
+  strength: number;
+  detail?: string;
+  refutes?: boolean;
+}): Promise<AttachMemoryEvidenceResult> {
+  const session = await getSessionOrRedirect();
+  const { orgSlug, workspaceSlug, memoryId, sourceKind, strength, detail, refutes } = input;
+
+  const trimmedMemoryId = memoryId.trim();
+  if (trimmedMemoryId.length === 0) {
+    return { ok: false, error: "Enter the id of the memory to attach evidence to." };
+  }
+  if (!Number.isFinite(strength) || strength < 0 || strength > 1) {
+    return { ok: false, error: "Strength must be between 0 and 1." };
+  }
+
+  const org = await resolveOrg(orgSlug);
+  const ws = await resolveWorkspace(org.id, workspaceSlug);
+
+  // IDOR guard: caller must be an org member.
+  await assertOrgMember(org.id, session.user.id);
+
+  return runInTenantScope({ orgId: org.id, workspaceId: ws.id }, async () => {
+    // Workspace membership gate — apps/app skips IAM, so enforce here.
+    const gate = await assertWorkspaceMember(ws.id, session.user.id);
+    if (gate === "denied") {
+      return { ok: false, error: "You must be a workspace member to attach evidence." };
+    }
+
+    const ctx = {
+      orgId: org.id,
+      workspaceId: ws.id,
+      userId: session.user.id,
+      apiKeyId: null as string | null,
+      requestId: crypto.randomUUID(),
+      surface: "app" as const,
+      messageId: null as string | null,
+    };
+
+    try {
+      const trimmedDetail = detail?.trim();
+      const out = (await invoke(
+        "attach_memory_evidence",
+        {
+          memoryId: trimmedMemoryId,
+          sourceKind,
+          strength,
+          ...(trimmedDetail ? { detail: trimmedDetail } : {}),
+          refutes: refutes ?? false,
+        },
+        ctx,
+        { surface: "agent" },
+      )) as AgentMemoryEvidenceAttachOutput;
+
+      // Confidence moved — revalidate the list so the row's confidence bar
+      // reflects the new score on next visit.
+      revalidatePath(`/${orgSlug}/${workspaceSlug}/knowledge/memory`);
+      return { ok: true, evidenceId: out.evidenceId, confidenceScore: out.confidenceScore };
+    } catch (err) {
+      logger.error(
+        { err, orgId: org.id, workspaceId: ws.id, memoryId: trimmedMemoryId },
+        "knowledge.memory: attachMemoryEvidenceAction failed",
+      );
+      const message = err instanceof Error ? err.message : "";
+      return { ok: false, error: message || "Failed to attach evidence." };
     }
   });
 }
