@@ -1,6 +1,6 @@
 {
   "name": "oxagen-monorepo",
-  "version": "1.1.2",
+  "version": "0.27.86",
   "private": true,
   "packageManager": "pnpm@11.7.0",
   "engines": {
