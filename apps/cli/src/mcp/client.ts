@@ -22,15 +22,26 @@ import { WebSocketClientTransport } from "@modelcontextprotocol/sdk/client/webso
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { tool, type ToolSet } from "ai";
 import { z } from "zod";
-import { resolveCredential } from "@oxagen/mcp-config/credentials";
-import { filterToolVisibility, getNonDeniedTools } from "@oxagen/mcp-config/permissions";
+import {
+  resolveCredential,
+  type StoredCredential,
+} from "@oxagen/mcp-config/credentials";
+import {
+  filterToolVisibility,
+  getNonDeniedTools,
+} from "@oxagen/mcp-config/permissions";
 import type { McpServerConfig } from "@oxagen/mcp-config/schema";
 import type { OxagenSettings, Permissions } from "../settings/schema.js";
 
 /** The slice of the MCP SDK client the CLI uses (structural, so tests can fake it). */
 export interface McpClientLike {
-  listTools(): Promise<{ tools: Array<{ name: string; description?: string | null }> }>;
-  callTool(args: { name: string; arguments?: Record<string, unknown> }): Promise<unknown>;
+  listTools(): Promise<{
+    tools: Array<{ name: string; description?: string | null }>;
+  }>;
+  callTool(args: {
+    name: string;
+    arguments?: Record<string, unknown>;
+  }): Promise<unknown>;
   close(): Promise<void>;
 }
 
@@ -56,20 +67,43 @@ export function mcpToolName(server: string, tool: string): string {
 }
 
 /** Adapt the unified permissions to @oxagen/mcp-config's per-server gate shape. */
-function toMcpPermissions(p: Permissions | undefined): Permissions & { defaultMcpPolicy: "allow" | "deny" | "ask" } {
+function toMcpPermissions(
+  p: Permissions | undefined,
+): Permissions & { defaultMcpPolicy: "allow" | "deny" | "ask" } {
   return { ...p, defaultMcpPolicy: p?.defaultMcpPolicy ?? "ask" };
+}
+
+/**
+ * How the CLI resolves a server's credential. Threaded from `loadMcpTools` down
+ * to `resolveCredential` so DB-backed, workspace-installed servers can supply
+ * their platform-resolved token via `remoteFetch` without persisting it to disk.
+ */
+export interface CredentialResolution {
+  /** Fetch a credential from the platform when env/file resolution misses. */
+  remoteFetch?: (serverName: string) => Promise<StoredCredential | null>;
+  /**
+   * Whether a `remoteFetch` result is cached to the local credential file.
+   * Defaults to false here (workspace secrets stay in memory only).
+   */
+  persistRemote?: boolean;
 }
 
 /** Resolve auth headers for an HTTP-family server (none for stdio). */
 async function resolveHeaders(
   name: string,
   config: McpServerConfig,
+  creds?: CredentialResolution,
 ): Promise<Record<string, string>> {
   if (config.transport === "stdio") return {};
   const auth = "auth" in config ? config.auth : "none";
   if (auth === "none") return {};
 
-  const cred = await resolveCredential({ serverName: name, config });
+  const cred = await resolveCredential({
+    serverName: name,
+    config,
+    remoteFetch: creds?.remoteFetch,
+    persistRemote: creds?.persistRemote ?? false,
+  });
   if (cred.source === "none") {
     throw new Error(
       `MCP server "${name}" needs ${auth} auth but no credential was found ` +
@@ -78,7 +112,9 @@ async function resolveHeaders(
     );
   }
   if (cred.expired && !cred.hasRefreshToken) {
-    throw new Error(`MCP server "${name}" credential is expired — re-authenticate.`);
+    throw new Error(
+      `MCP server "${name}" credential is expired — re-authenticate.`,
+    );
   }
   const headers: Record<string, string> = {};
   if (cred.token) headers["authorization"] = `Bearer ${cred.token}`;
@@ -86,7 +122,11 @@ async function resolveHeaders(
   return headers;
 }
 
-async function buildTransport(name: string, config: McpServerConfig): Promise<Transport> {
+async function buildTransport(
+  name: string,
+  config: McpServerConfig,
+  creds?: CredentialResolution,
+): Promise<Transport> {
   if (config.transport === "stdio") {
     return new StdioClientTransport({
       command: config.command,
@@ -96,10 +136,12 @@ async function buildTransport(name: string, config: McpServerConfig): Promise<Tr
     });
   }
   const url = new URL(config.url);
-  const headers = await resolveHeaders(name, config);
+  const headers = await resolveHeaders(name, config, creds);
   switch (config.transport) {
     case "streamable-http":
-      return new StreamableHTTPClientTransport(url, { requestInit: { headers } });
+      return new StreamableHTTPClientTransport(url, {
+        requestInit: { headers },
+      });
     case "sse":
       return new SSEClientTransport(url, { requestInit: { headers } });
     case "websocket":
@@ -110,23 +152,36 @@ async function buildTransport(name: string, config: McpServerConfig): Promise<Tr
 }
 
 /** Open a client to one MCP server. Caller owns closing it. */
-export async function connectServer(name: string, config: McpServerConfig): Promise<Client> {
-  const transport = await buildTransport(name, config);
-  const client = new Client({ name: "oxagen-cli", version: "0.1.0" }, { capabilities: {} });
+export async function connectServer(
+  name: string,
+  config: McpServerConfig,
+  creds?: CredentialResolution,
+): Promise<Client> {
+  const transport = await buildTransport(name, config, creds);
+  const client = new Client(
+    { name: "oxagen-cli", version: "0.1.0" },
+    { capabilities: {} },
+  );
   await client.connect(transport);
   return client;
 }
 
 /** MCP content → a string the model can read. */
 function formatResult(result: unknown): string {
-  if (result === null || typeof result !== "object") return String(result ?? "");
+  if (result === null || typeof result !== "object")
+    return String(result ?? "");
   const obj = result as { content?: unknown; isError?: boolean };
   const content = obj.content;
   let text: string;
   if (Array.isArray(content)) {
     const parts = content
       .map((c) => {
-        if (c && typeof c === "object" && "text" in c && typeof (c as { text: unknown }).text === "string") {
+        if (
+          c &&
+          typeof c === "object" &&
+          "text" in c &&
+          typeof (c as { text: unknown }).text === "string"
+        ) {
           return (c as { text: string }).text;
         }
         return JSON.stringify(c);
@@ -145,8 +200,15 @@ export function filterServerTools(
   toolNames: string[],
   settings: OxagenSettings,
 ): string[] {
-  const visible = filterToolVisibility(toolNames, settings.toolVisibility?.[serverName]);
-  return getNonDeniedTools(serverName, visible, toMcpPermissions(settings.permissions));
+  const visible = filterToolVisibility(
+    toolNames,
+    settings.toolVisibility?.[serverName],
+  );
+  return getNonDeniedTools(
+    serverName,
+    visible,
+    toMcpPermissions(settings.permissions),
+  );
 }
 
 /**
@@ -172,7 +234,8 @@ export async function materializeServerTools(
   for (const t of tools) {
     if (!allowed.has(t.name)) continue;
     out[mcpToolName(serverName, t.name)] = tool({
-      description: t.description ?? `External MCP tool ${t.name} (server: ${serverName})`,
+      description:
+        t.description ?? `External MCP tool ${t.name} (server: ${serverName})`,
       inputSchema: z.record(z.string(), z.unknown()),
       execute: async (input: unknown) => {
         const res = await client.callTool({
@@ -201,10 +264,17 @@ export function buildServerReport(
   allToolNames: string[],
   settings: OxagenSettings,
 ): ServerToolReport {
-  const visible = filterToolVisibility(allToolNames, settings.toolVisibility?.[serverName]);
+  const visible = filterToolVisibility(
+    allToolNames,
+    settings.toolVisibility?.[serverName],
+  );
   const visibleSet = new Set(visible);
   const hidden = allToolNames.filter((t) => !visibleSet.has(t));
-  const advertised = getNonDeniedTools(serverName, visible, toMcpPermissions(settings.permissions));
+  const advertised = getNonDeniedTools(
+    serverName,
+    visible,
+    toMcpPermissions(settings.permissions),
+  );
   const advertisedSet = new Set(advertised);
   const denied = visible.filter((t) => !advertisedSet.has(t));
   return { advertised, hidden, denied };
@@ -230,9 +300,18 @@ export async function checkServer(
     client = await connectServer(name, config);
     const { tools } = await client.listTools();
     const names = tools.map((t) => t.name);
-    return { name, ok: true, total: names.length, report: buildServerReport(name, names, settings) };
+    return {
+      name,
+      ok: true,
+      total: names.length,
+      report: buildServerReport(name, names, settings),
+    };
   } catch (err) {
-    return { name, ok: false, error: err instanceof Error ? err.message : String(err) };
+    return {
+      name,
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+    };
   } finally {
     await client?.close();
   }
@@ -245,7 +324,15 @@ export async function checkServer(
  */
 export async function loadMcpTools(
   settings: OxagenSettings,
-  opts: { onStatus?: (status: McpServerStatus) => void } = {},
+  opts: {
+    onStatus?: (status: McpServerStatus) => void;
+    /**
+     * Credential resolution for HTTP-family servers. The CLI→platform bridge
+     * passes a `remoteFetch` here so DB-backed, workspace-installed servers
+     * resolve their platform-provided token (see mcp/workspace-servers.ts).
+     */
+    credentials?: CredentialResolution;
+  } = {},
 ): Promise<LoadedMcpTools> {
   const servers: McpServerStatus[] = [];
   const clients: McpClientLike[] = [];
@@ -253,9 +340,14 @@ export async function loadMcpTools(
 
   for (const [name, config] of Object.entries(settings.mcpServers ?? {})) {
     if ("disabled" in config && config.disabled) continue;
-    const status: McpServerStatus = { name, transport: config.transport, toolCount: 0, ok: false };
+    const status: McpServerStatus = {
+      name,
+      transport: config.transport,
+      toolCount: 0,
+      ok: false,
+    };
     try {
-      const client = await connectServer(name, config);
+      const client = await connectServer(name, config, opts.credentials);
       clients.push(client);
       const serverTools = await materializeServerTools(client, name, settings);
       Object.assign(tools, serverTools);

@@ -21,6 +21,17 @@ export function oauthErrorDescription(
   name: string,
 ): string {
   switch (reason) {
+    case "not_permitted":
+      return (
+        "You don't have permission to connect MCP servers for this " +
+        "organization. Ask an organization owner or admin to authenticate " +
+        `${name}.`
+      );
+    case "not_found":
+      return (
+        `${name} could not be found in this workspace. It may have been ` +
+        "uninstalled — try installing it again."
+      );
     case "dcr_unsupported":
       // This provider (e.g. GitHub) can't self-register an OAuth client, so it
       // needs a one-time setup on the Oxagen platform side before sign-in works.

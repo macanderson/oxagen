@@ -61,6 +61,7 @@ import { documentsPdfCreate } from "./document.pdf.create";
 import { markdownGenerate } from "./markdown.generate";
 import { mermaidGenerate } from "./mermaid.generate";
 import { agentMcpList } from "./agent.mcp.list";
+import { agentMcpResolve } from "./agent.mcp.resolve";
 import { agentMcpRegister } from "./agent.mcp.register";
 import { agentMcpSetEnabled } from "./agent.mcp.set_enabled";
 import { agentMcpDelete } from "./agent.mcp.delete";
@@ -554,6 +555,7 @@ export {
   markdownGenerate,
   mermaidGenerate,
   agentMcpList,
+  agentMcpResolve,
   agentMcpRegister,
   agentMcpSetEnabled,
   agentMcpDelete,
@@ -892,6 +894,7 @@ export const contracts = [
   markdownGenerate,
   mermaidGenerate,
   agentMcpList,
+  agentMcpResolve,
   agentMcpRegister,
   agentMcpSetEnabled,
   agentMcpDelete,

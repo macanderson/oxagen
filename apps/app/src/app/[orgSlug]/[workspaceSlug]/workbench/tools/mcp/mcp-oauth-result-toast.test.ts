@@ -18,6 +18,19 @@ describe("oauthErrorDescription", () => {
     expect(msg).not.toContain("MCP_OAUTH_PREREGISTERED_CLIENTS");
   });
 
+  it("explains not_permitted with the ask-an-admin remedy", () => {
+    const msg = oauthErrorDescription("not_permitted", "Linear MCP");
+    expect(msg).toContain("Linear MCP");
+    expect(msg).toContain("permission");
+    expect(msg).toContain("owner or admin");
+  });
+
+  it("explains not_found as an uninstalled server", () => {
+    const msg = oauthErrorDescription("not_found", "Linear MCP");
+    expect(msg).toContain("Linear MCP");
+    expect(msg).toContain("could not be found");
+  });
+
   it("points provider_error at the endpoint URL", () => {
     const msg = oauthErrorDescription("provider_error", "Acme MCP");
     expect(msg).toContain("Acme MCP");
