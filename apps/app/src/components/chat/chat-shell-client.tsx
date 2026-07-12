@@ -50,8 +50,7 @@ import { deriveComposerPr } from "./composer-pr-status-chip";
 import { SuggestedPromptChips } from "./suggested-prompt-chips";
 import type { ConversationMessageSummary } from "@/lib/page-context/suggested-prompts";
 import { ConversationExportMenu } from "./conversation-export-menu";
-import { CodingTracePanel } from "./coding-trace-panel";
-import { WorkspaceContextPanel } from "./workspace-context-panel";
+import { AgentActivityRail } from "./agent-activity-rail";
 import { useLatestRef } from "@/lib/use-latest-ref";
 import type { FieldDescriptor } from "@/lib/ask/fill-types";
 import { interceptFormFillEvents } from "./intercept-form-fill";
@@ -1458,27 +1457,27 @@ export function ChatShellClient({
             codeSessionPr={codeSessionPr}
           />
         </div>
-        {/* Right rail: turn-trace stage rail + files/workspace tabbed panel.
-          Hidden in the floating in-app panel (showFiles=false, same gate the
-          toolbar's export trigger uses) and on narrow viewports — the rail
-          needs real width to be legible. */}
+        {/* Right rail: the calm three-card activity rail (Progress / Context /
+          Outputs). Hidden in the floating in-app panel (showFiles=false, same
+          gate the toolbar's export trigger uses) and on narrow viewports — the
+          rail needs real width to be legible; below lg it reflows into the
+          bottom sheet below. */}
         {showFiles ? (
-          <aside className="hidden w-64 shrink-0 flex-col gap-3 overflow-y-auto py-1 lg:flex">
-            <CodingTracePanel
+          <aside className="hidden w-72 shrink-0 overflow-y-auto py-1 lg:block">
+            <AgentActivityRail
               order={order}
               plans={plans}
               toolCalls={toolCalls}
               activeFanouts={activeFanouts}
               turnUsage={turnUsage}
               isStreaming={isStreaming}
-              className="w-full"
-            />
-            <WorkspaceContextPanel
               conversationPublicId={conversationPublicId}
               orgSlug={orgSlug}
               workspaceSlug={workspaceSlug}
-              toolCalls={toolCalls}
-              className="min-h-64 flex-1"
+              codeSessionPr={codeSessionPr}
+              availableRepos={availableRepos}
+              availableEnvironments={availableEnvironments}
+              conversationCodeBinding={conversationCodeBinding ?? null}
             />
           </aside>
         ) : null}
@@ -1500,24 +1499,23 @@ export function ChatShellClient({
                   </SheetDescription>
                 </SheetHeader>
                 <div
-                  className="flex flex-col gap-3 overflow-y-auto p-3"
+                  className="overflow-y-auto p-3"
                   data-testid="chat-mobile-rail-sheet"
                 >
-                  <CodingTracePanel
+                  <AgentActivityRail
                     order={order}
                     plans={plans}
                     toolCalls={toolCalls}
                     activeFanouts={activeFanouts}
                     turnUsage={turnUsage}
                     isStreaming={isStreaming}
-                    className="w-full"
-                  />
-                  <WorkspaceContextPanel
                     conversationPublicId={conversationPublicId}
                     orgSlug={orgSlug}
                     workspaceSlug={workspaceSlug}
-                    toolCalls={toolCalls}
-                    className="min-h-64"
+                    codeSessionPr={codeSessionPr}
+                    availableRepos={availableRepos}
+                    availableEnvironments={availableEnvironments}
+                    conversationCodeBinding={conversationCodeBinding ?? null}
                   />
                 </div>
               </SheetPopup>

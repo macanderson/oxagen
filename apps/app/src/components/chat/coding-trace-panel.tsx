@@ -287,6 +287,28 @@ function StageSection({ stage, rows }: { stage: CodingTraceStage; rows: CodingTr
   );
 }
 
+/**
+ * The chrome-less stage list — `STAGE_ORDER` rendered as collapsible
+ * `StageSection`s over a precomputed `groups` map. Split out of
+ * `CodingTracePanel` so the calm Agent-activity rail can drop the same stage
+ * list into its own "Progress" card without the panel's border / collapse-all
+ * header (which would double up with the card's own chrome). `CodingTracePanel`
+ * still renders this inside its wrapper, so its existing tests are unaffected.
+ */
+export function CodingTraceStages({
+  groups,
+}: {
+  groups: Record<CodingTraceStage, CodingTraceRow[]>;
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      {STAGE_ORDER.map((stage) => (
+        <StageSection key={stage} stage={stage} rows={groups[stage]} />
+      ))}
+    </div>
+  );
+}
+
 export interface CodingTracePanelProps {
   order: string[];
   plans: Record<string, LivePlan>;
@@ -343,13 +365,7 @@ export function CodingTracePanel({
           )}
         </button>
       </div>
-      {!collapsed ? (
-        <div className="flex flex-col gap-1">
-          {STAGE_ORDER.map((stage) => (
-            <StageSection key={stage} stage={stage} rows={groups[stage]} />
-          ))}
-        </div>
-      ) : null}
+      {!collapsed ? <CodingTraceStages groups={groups} /> : null}
     </div>
   );
 }
