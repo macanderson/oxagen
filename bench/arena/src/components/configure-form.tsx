@@ -8,7 +8,56 @@
 
 import { useState } from "react";
 
-const CONFIG_OPTIONS = {
+interface SelectOption {
+  value: string;
+  label: string;
+  description?: string;
+}
+
+interface SelectField {
+  id: string;
+  label: string;
+  type: "select";
+  options: SelectOption[];
+  default: string;
+  description?: string;
+}
+
+interface NumberField {
+  id: string;
+  label: string;
+  type: "number";
+  default: number;
+  min?: number;
+  max?: number;
+  description?: string;
+}
+
+interface BooleanField {
+  id: string;
+  label: string;
+  type: "boolean";
+  default: boolean;
+  description?: string;
+}
+
+interface GroupField {
+  id: string;
+  label: string;
+  type: "group";
+  fields: NumberField[];
+  description?: string;
+}
+
+type ConfigField = SelectField | NumberField | BooleanField | GroupField;
+
+interface ConfigSection {
+  title: string;
+  description: string;
+  fields: ConfigField[];
+}
+
+const CONFIG_OPTIONS: Record<string, ConfigSection> = {
   execution: {
     title: "🚀 Execution",
     description: "How the benchmark is executed",
@@ -171,7 +220,9 @@ export function ConfigureForm() {
     // In real implementation, save to localStorage or API
     localStorage.setItem("arena-config", JSON.stringify(config));
     setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    setTimeout(() => {
+      setSaved(false);
+    }, 2000);
   };
 
   const resetConfig = () => {
@@ -182,7 +233,7 @@ export function ConfigureForm() {
   const loadConfig = () => {
     const saved = localStorage.getItem("arena-config");
     if (saved) {
-      setConfig(JSON.parse(saved));
+      setConfig(JSON.parse(saved) as Record<string, unknown>);
     }
   };
 
@@ -233,7 +284,9 @@ export function ConfigureForm() {
                 key={field.id}
                 field={field}
                 value={config[field.id]}
-                onChange={(value) => updateConfig(field.id, value)}
+                onChange={(value) => {
+                  updateConfig(field.id, value);
+                }}
               />
             ))}
           </div>
@@ -274,7 +327,9 @@ export function ConfigureForm() {
                   const reader = new FileReader();
                   reader.onload = (e) => {
                     try {
-                      const imported = JSON.parse(e.target?.result as string);
+                      const imported = JSON.parse(
+                        e.target?.result as string,
+                      ) as Record<string, unknown>;
                       setConfig(imported);
                     } catch {
                       alert("Invalid config file");
@@ -300,7 +355,7 @@ function FieldComponent({
   value,
   onChange
 }: {
-  field: any;
+  field: ConfigField;
   value: unknown;
   onChange: (value: unknown) => void;
 }) {
@@ -309,11 +364,11 @@ function FieldComponent({
       <div className="space-y-2">
         <label className="block text-sm font-medium">{field.label}</label>
         <select
-          value={value as string ?? field.default}
-          onChange={e => onChange(e.target.value)}
+          value={(value as string | undefined) ?? field.default}
+          onChange={e => { onChange(e.target.value); }}
           className="w-full px-3 py-2 border rounded-lg bg-background"
         >
-          {field.options.map((opt: any) => (
+          {field.options.map((opt) => (
             <option key={opt.value} value={opt.value}>
               {opt.label}
             </option>
@@ -333,8 +388,8 @@ function FieldComponent({
           <input
             type="checkbox"
             id={field.id}
-            checked={value as boolean ?? field.default}
-            onChange={e => onChange(e.target.checked)}
+            checked={(value as boolean | undefined) ?? field.default}
+            onChange={e => { onChange(e.target.checked); }}
             className="w-5 h-5 text-primary"
           />
           <label htmlFor={field.id} className="text-sm font-medium cursor-pointer">
@@ -354,8 +409,8 @@ function FieldComponent({
         <label className="block text-sm font-medium">{field.label}</label>
         <input
           type="number"
-          value={value as number ?? field.default}
-          onChange={e => onChange(parseFloat(e.target.value) || 0)}
+          value={(value as number | undefined) ?? field.default}
+          onChange={e => { onChange(parseFloat(e.target.value) || 0); }}
           min={field.min}
           max={field.max}
           className="w-full px-3 py-2 border rounded-lg bg-background"
@@ -372,8 +427,8 @@ function FieldComponent({
       <label className="block text-sm font-medium">{field.label}</label>
       <input
         type="text"
-        value={value as string ?? ""}
-        onChange={e => onChange(e.target.value)}
+        value={(value as string | undefined) ?? ""}
+        onChange={e => { onChange(e.target.value); }}
         className="w-full px-3 py-2 border rounded-lg bg-background"
       />
       {field.description && (

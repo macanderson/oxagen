@@ -319,6 +319,15 @@ export interface TaskBreakdownData {
   rows: { taskId: string; cells: Record<string, TaskBreakdownCell> }[];
 }
 
+/** Per-(task, agent) running accumulator used while building the matrix. */
+interface TaskBreakdownAcc {
+  type: string;
+  model: string;
+  n: number;
+  successes: number;
+  cost: number;
+}
+
 /**
  * Build a task × agent matrix of success rate and average cost from measured
  * results — the drill-down the head-to-head summary doesn't show. Rows are
@@ -330,10 +339,7 @@ export function taskBreakdown(
   const agentOrder: { type: string; model: string; key: string }[] = [];
   const agentSeen = new Set<string>();
   // taskId -> agentKey -> accumulator
-  const matrix = new Map<
-    string,
-    Map<string, { type: string; model: string; n: number; successes: number; cost: number }>
-  >();
+  const matrix = new Map<string, Map<string, TaskBreakdownAcc>>();
 
   for (const { result } of rows) {
     const agentKey = `${result.agent.type}::${result.agent.model}`;
@@ -342,8 +348,9 @@ export function taskBreakdown(
       agentOrder.push({ type: result.agent.type, model: result.agent.model, key: agentKey });
     }
 
-    const taskRow = matrix.get(result.taskId) ?? new Map();
-    const cell = taskRow.get(agentKey) ?? {
+    const taskRow =
+      matrix.get(result.taskId) ?? new Map<string, TaskBreakdownAcc>();
+    const cell: TaskBreakdownAcc = taskRow.get(agentKey) ?? {
       type: result.agent.type,
       model: result.agent.model,
       n: 0,
