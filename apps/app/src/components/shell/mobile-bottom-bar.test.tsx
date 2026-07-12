@@ -57,19 +57,19 @@ afterEach(() => {
 
 describe("MobileBottomBar — primary tabs", () => {
   it("renders the workspace destinations as client-routed tabs with resolved hrefs", () => {
-    // Workspace mode has ten nav items in raw declaration order (ask,
-    // knowledge, activity, agents, evals, agent-tools, environments,
-    // sandboxes, marketplace, settings); only the first four (MAX_BAR_ITEMS)
-    // fit the bar — the rest (evals and the Workbench extras included)
-    // overflow into the "More" sheet, covered below.
+    // Workspace mode has thirteen nav items in raw declaration order (ask,
+    // overview, knowledge, automations, activity, agents, evals, agent-tools,
+    // environments, sandboxes, repos, marketplace, settings); only the first
+    // four (MAX_BAR_ITEMS) fit the bar — everything from Activity onward
+    // overflows into the "More" sheet, covered below.
     render(<MobileBottomBar ctx={wsCtx} user={user} />);
     const nav = screen.getByRole("navigation", { name: /mobile navigation/i });
     expect(within(nav).getByRole("link", { name: "Ask" })).toHaveAttribute("href", "/acme/prod/ask");
+    expect(within(nav).getByRole("link", { name: "Overview" })).toHaveAttribute("href", "/acme/prod");
     expect(within(nav).getByRole("link", { name: "Knowledge" })).toHaveAttribute("href", "/acme/prod/knowledge");
-    expect(within(nav).getByRole("link", { name: "Activity" })).toHaveAttribute("href", "/acme/prod/activity");
-    expect(within(nav).getByRole("link", { name: "Agents" })).toHaveAttribute(
+    expect(within(nav).getByRole("link", { name: "Automations" })).toHaveAttribute(
       "href",
-      "/acme/prod/workbench/agents",
+      "/acme/prod/automations",
     );
   });
 
@@ -79,32 +79,37 @@ describe("MobileBottomBar — primary tabs", () => {
     expect(screen.getByRole("link", { name: "Knowledge" })).not.toHaveAttribute("aria-current");
   });
 
-  it("overflows the Workbench extras, Marketplace, and Settings into the More sheet while the first four destinations stay in the bar", async () => {
+  it("overflows Activity, the Workbench group, Marketplace, and Settings into the More sheet while the first four destinations stay in the bar", async () => {
     render(<MobileBottomBar ctx={wsCtx} user={user} />);
     const nav = screen.getByRole("navigation", { name: /mobile navigation/i });
     expect(screen.getByRole("button", { name: /more navigation/i })).toBeInTheDocument();
-    expect(within(nav).getByRole("link", { name: "Agents" })).toBeInTheDocument();
-    // Items past MAX_BAR_ITEMS never render in the bar itself.
+    // The first four (Ask, Overview, Knowledge, Automations) stay in the bar.
+    expect(within(nav).getByRole("link", { name: "Automations" })).toBeInTheDocument();
+    // Items past MAX_BAR_ITEMS never render in the bar itself — Agents and the
+    // rest of the Workbench group now overflow (Automations displaced them).
+    expect(within(nav).queryByRole("link", { name: "Activity" })).toBeNull();
+    expect(within(nav).queryByRole("link", { name: "Agents" })).toBeNull();
     expect(within(nav).queryByRole("link", { name: "Agent Tools" })).toBeNull();
     expect(within(nav).queryByRole("link", { name: "Environments" })).toBeNull();
     expect(within(nav).queryByRole("link", { name: "Sandboxes" })).toBeNull();
+    expect(within(nav).queryByRole("link", { name: "Repos" })).toBeNull();
     expect(within(nav).queryByRole("link", { name: "Marketplace" })).toBeNull();
     expect(within(nav).queryByRole("link", { name: "Settings" })).toBeNull();
     // …but every overflow destination is reachable from the More sheet.
     await userEvent.click(screen.getByRole("button", { name: /more navigation/i }));
     await waitFor(() => {
-      expect(screen.getByRole("link", { name: "Agent Tools" })).toHaveAttribute(
+      expect(screen.getByRole("link", { name: "Agents" })).toHaveAttribute(
         "href",
-        "/acme/prod/workbench/tools",
+        "/acme/prod/workbench/agents",
       );
     });
-    expect(screen.getByRole("link", { name: "Environments" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Agent Tools" })).toHaveAttribute(
       "href",
-      "/acme/prod/workbench/environments",
+      "/acme/prod/workbench/tools",
     );
-    expect(screen.getByRole("link", { name: "Sandboxes" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Repos" })).toHaveAttribute(
       "href",
-      "/acme/prod/workbench/sandboxes",
+      "/acme/prod/workbench/repos",
     );
   });
 });
