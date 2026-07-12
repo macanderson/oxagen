@@ -301,7 +301,10 @@ export function CodingTraceStages({
   groups: Record<CodingTraceStage, CodingTraceRow[]>;
 }) {
   return (
-    <div className="flex flex-col gap-1">
+    // Marker lives on the shared stages list (not the CodingTracePanel wrapper)
+    // so both the registry panel and the AgentActivityRail's ProgressCard —
+    // which renders these stages directly — expose the same anchor.
+    <div data-component="coding-trace-panel" className="flex flex-col gap-1">
       {STAGE_ORDER.map((stage) => (
         <StageSection key={stage} stage={stage} rows={groups[stage]} />
       ))}
@@ -341,8 +344,9 @@ export function CodingTracePanel({
   if (totalRows === 0) return null;
 
   return (
+    // The marker now rides on the inner CodingTraceStages (rendered below), so
+    // this wrapper no longer carries it — avoids a duplicate when both render.
     <div
-      data-component="coding-trace-panel"
       className={cn(
         "flex flex-col gap-1 rounded-xl border border-border bg-card p-2 text-card-foreground shadow-sm",
         collapsed ? "w-11" : "w-64",

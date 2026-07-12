@@ -102,9 +102,12 @@ export function AgentBadge({ agentType }: { agentType: string }) {
     "claude-code": "border-violet-400/40 bg-violet-400/12 text-violet-300",
   } as const;
 
-  const style =
-    styles[agentType as keyof typeof styles] ??
-    "border-border bg-muted text-muted-foreground";
+  // `styles` is a fixed record; index access is typed as always-present, so a
+  // `??` fallback reads as unnecessary. Gate on `Object.hasOwn` instead so the
+  // unknown-agent fallback stays and the type stops lying about coverage.
+  const style = Object.hasOwn(styles, agentType)
+    ? styles[agentType as keyof typeof styles]
+    : "border-border bg-muted text-muted-foreground";
 
   return (
     <span

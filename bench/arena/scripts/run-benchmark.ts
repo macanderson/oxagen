@@ -20,7 +20,7 @@
  *   --dry-run             Show what would be run without executing
  */
 
-import { mkdirSync, writeFileSync, existsSync } from "fs";
+import { mkdirSync, writeFileSync } from "fs";
 import { join } from "path";
 import { parseArgs } from "util";
 
@@ -92,7 +92,8 @@ const agentType = (values.agent ?? "oxagen") as AgentType;
 const model = values.model ?? "anthropic/claude-sonnet-5";
 const budget = values.budget ? parseFloat(values.budget) : 25;
 const timeout = values.timeout ? parseInt(values.timeout, 10) : 600;
-const concurrent = values.concurrent ? parseInt(values.concurrent, 10) : 1;
+// NB: `--concurrent` is parsed and advertised but not yet wired into the
+// runner; drop the unused local until concurrency lands (the flag stays).
 const outputDir = values.output ?? "results";
 const dryRun = values["dry-run"] ?? false;
 
@@ -119,11 +120,9 @@ if (values.filter) {
       break;
   }
 
-  if (taskIds) {
-    taskIds = taskIds.filter((id) => filteredTasks.includes(id));
-  } else {
-    taskIds = filteredTasks;
-  }
+  // `taskIds` is always a populated array by this point (defaulted to the
+  // smoke set above), so intersect it with the filter result directly.
+  taskIds = taskIds.filter((id) => filteredTasks.includes(id));
 }
 
 const tasks = taskIds.map((id) => allTasks[id]).filter(Boolean);
@@ -224,7 +223,7 @@ for (const task of tasks) {
       console.log(`   ⚠️  Error: ${result.error}`);
     }
   } catch (error) {
-    console.error(`   ❌ Failed: ${error}`);
+    console.error(`   ❌ Failed: ${String(error)}`);
   }
 }
 

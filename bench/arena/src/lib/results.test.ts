@@ -213,10 +213,15 @@ describe("taskBreakdown", () => {
     expect(bd.agents.map((a) => a.type)).toEqual(["oxagen", "stella"]);
     expect(bd.rows.map((r) => r.taskId)).toEqual(["t1", "t2"]);
 
-    const oxKey = bd.agents.find((a) => a.type === "oxagen")!.key;
-    const stKey = bd.agents.find((a) => a.type === "stella")!.key;
-    const t1 = bd.rows.find((r) => r.taskId === "t1")!;
-    const t2 = bd.rows.find((r) => r.taskId === "t2")!;
+    const oxAgent = bd.agents.find((a) => a.type === "oxagen");
+    const stAgent = bd.agents.find((a) => a.type === "stella");
+    const t1 = bd.rows.find((r) => r.taskId === "t1");
+    const t2 = bd.rows.find((r) => r.taskId === "t2");
+    if (!oxAgent || !stAgent || !t1 || !t2) {
+      throw new Error("fixture missing expected agent columns or task rows");
+    }
+    const oxKey = oxAgent.key;
+    const stKey = stAgent.key;
 
     expect(t1.cells[oxKey].successRate).toBe(1);
     expect(t1.cells[stKey].successRate).toBe(0);
