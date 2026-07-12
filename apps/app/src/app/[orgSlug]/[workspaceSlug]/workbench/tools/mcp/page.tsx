@@ -12,7 +12,11 @@ import {
   togglePlugin,
   uninstallPlugin,
 } from "@/lib/agent-tools/install-actions";
-import { connectCustomMcpServer, revokeMcpCredential } from "./mcp-actions";
+import {
+  connectCustomMcpServer,
+  revokeMcpCredential,
+  setMcpServerSecret,
+} from "./mcp-actions";
 import { workspace } from "@/lib/routes";
 import { ConnectMcpForm } from "./connect-mcp-form";
 import { McpCatalogSearch } from "./mcp-catalog-search";
@@ -251,6 +255,7 @@ export default async function AgentToolsMcpPage({
           toggleAction={togglePlugin}
           uninstallAction={uninstallPlugin}
           revokeAction={revokeMcpCredential}
+          saveSecretAction={setMcpServerSecret}
           reauthListingId={reauthListingId ?? null}
         />
       </div>
@@ -299,6 +304,7 @@ export default async function AgentToolsMcpPage({
           orgSlug={orgSlug}
           workspaceSlug={workspaceSlug}
           connectAction={connectCustomMcpServer}
+          saveSecretAction={setMcpServerSecret}
         />
       </div>
 
