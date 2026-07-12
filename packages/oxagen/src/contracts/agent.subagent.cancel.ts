@@ -12,7 +12,7 @@ export const agentSubagentCancel = registerCapability({
     "Cancel an in-progress subagent fan-out; transitions the fanout and all non-terminal child runs to a terminal status so no further work is performed.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "app", "unit", "docs"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "write" },
   sensitivity: "low",

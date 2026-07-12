@@ -16,7 +16,7 @@ export const agentSubagentResultGet = registerCapability({
     "summaries plus conflicts are usually enough.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "app", "unit", "docs"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "introspection" },
   sensitivity: "low",
