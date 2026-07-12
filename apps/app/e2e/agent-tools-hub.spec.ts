@@ -162,15 +162,21 @@ test.describe("Agent Tools consolidated IA", () => {
     const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "mobile-tools" });
     const ws = `/${orgSlug}/default`;
 
-    // Mobile bottom bar shows the primary destinations; Agents is a tab.
+    // Mobile bottom bar shows the first four primary destinations (web-app-2.0:
+    // Ask, Overview, Knowledge, Automations); the rest — including Agents and
+    // the Workbench group — overflow into the "More" sheet.
     await gotoStable(page, `${ws}/workbench/agents`);
     const nav = page.getByRole("navigation", { name: /mobile navigation/i });
     await expect(nav).toBeVisible({ timeout: 20_000 });
-    await expect(nav.getByRole("link", { name: "Agents" })).toBeVisible();
+    await expect(nav.getByRole("link", { name: "Automations" })).toBeVisible();
+    // Agents is not in the bar itself anymore — it is reachable via "More".
+    await expect(nav.getByRole("link", { name: "Agents" })).toHaveCount(0);
     await page.screenshot({
       path: path.join(SCREENSHOTS_DIR, "08-mobile-bottom-bar.png"),
       fullPage: false,
     });
+    await nav.getByRole("button", { name: /more navigation/i }).click();
+    await expect(page.getByRole("link", { name: "Agents" })).toBeVisible();
 
     // Builder: sticky step nav with large touch targets and a step counter.
     await gotoStable(page, `${ws}/workbench/agents/new`);
