@@ -643,6 +643,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .automationListHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "get_automation",
+    async () =>
+      (await import("./automation.get"))
+        .automationGetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "create_automation",
     async () =>
       (await import("./automation.create"))

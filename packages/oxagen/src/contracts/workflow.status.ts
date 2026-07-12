@@ -44,7 +44,7 @@ export const workflowStatus = registerCapability({
   description: "Read current status and task progress of a workflow run",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "workflow" },
   sensitivity: "low",

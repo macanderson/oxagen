@@ -10,7 +10,7 @@ export const automationDisable = registerCapability({
     "Disable an automation trigger so it stops firing. Safe to call without confirmation. Returns the new enabled state.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent", "cli"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "automation" },
   sensitivity: "low",

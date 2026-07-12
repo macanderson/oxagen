@@ -694,6 +694,147 @@
       "verifiedAt": "2026-07-10",
       "verifiedBy": "session_01Hi2b4PCDZG2LrYumbaqPwX"
     },
+    "list_automations": {
+      "route": "/[orgSlug]/[workspaceSlug]/automations",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/automations/page.tsx",
+      "entry": "AutomationsSection (async RSC) loads automation.list on render",
+      "testid": "automations-table",
+      "proof": "apps/app/e2e/automations.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "create_automation": {
+      "route": "/[orgSlug]/[workspaceSlug]/automations",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/automations/page.tsx",
+      "entry": "\"New automation\" button → NewAutomationDialog submit → createAutomationAction",
+      "testid": "create-automation",
+      "proof": "apps/app/e2e/automations.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "enable_automation": {
+      "route": "/[orgSlug]/[workspaceSlug]/automations",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/automations/page.tsx",
+      "entry": "Row menu Enable / editor toggle → EnableConfirmDialog (human gate) → enableAutomationAction",
+      "testid": "confirm-enable",
+      "proof": "apps/app/e2e/automations.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "disable_automation": {
+      "route": "/[orgSlug]/[workspaceSlug]/automations",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/automations/page.tsx",
+      "entry": "Row menu Disable / editor toggle-off → disableAutomationAction",
+      "testid": null,
+      "proof": "apps/app/e2e/automations.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "trigger_automation": {
+      "route": "/[orgSlug]/[workspaceSlug]/automations",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/automations/page.tsx",
+      "entry": "Row menu / editor \"Trigger now\" → TriggerNowDialog → triggerAutomationAction",
+      "testid": "confirm-trigger",
+      "proof": "apps/app/e2e/automations.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "update_automation": {
+      "route": "/[orgSlug]/[workspaceSlug]/automations/[automationId]",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/automations/[automationId]/page.tsx",
+      "entry": "Editor header name/description edit + trigger-config panel edit → updateAutomationAction",
+      "testid": "save-details",
+      "proof": "apps/app/e2e/automations.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "get_automation": {
+      "route": "/[orgSlug]/[workspaceSlug]/automations/[automationId]",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/automations/[automationId]/page.tsx",
+      "entry": "Automation editor SSR reads the full automation (config, steps, runs) via automation.get",
+      "testid": null,
+      "proof": "apps/app/e2e/automations.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "list_triggers": {
+      "route": "/[orgSlug]/[workspaceSlug]/automations/triggers",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/automations/triggers/page.tsx",
+      "entry": "TriggersSection (async RSC) fans list_triggers out per agent (listWorkspaceTriggers)",
+      "testid": "triggers-table",
+      "proof": "apps/app/e2e/automations-triggers.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "create_trigger": {
+      "route": "/[orgSlug]/[workspaceSlug]/automations/triggers",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/automations/triggers/page.tsx",
+      "entry": "\"New trigger\" → TriggerFormDialog submit (create) → createTriggerAction",
+      "testid": "new-trigger",
+      "proof": "apps/app/e2e/automations-triggers.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "update_trigger": {
+      "route": "/[orgSlug]/[workspaceSlug]/automations/triggers",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/automations/triggers/page.tsx",
+      "entry": "Row menu Edit → TriggerFormDialog submit (edit) → updateTriggerAction; also Enable/Disable → toggleTriggerAction",
+      "testid": null,
+      "proof": "apps/app/e2e/automations-triggers.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "delete_trigger": {
+      "route": "/[orgSlug]/[workspaceSlug]/automations/triggers",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/automations/triggers/page.tsx",
+      "entry": "Row menu Delete → DeleteTriggerDialog confirm → deleteTriggerAction",
+      "testid": null,
+      "proof": "apps/app/e2e/automations-triggers.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "run_workflow": {
+      "route": "/[orgSlug]/[workspaceSlug]/automations/workflows",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/automations/workflows/page.tsx",
+      "entry": "\"Launch\" → LaunchWorkflowDialog Workflow tab submit → runWorkflowAction",
+      "testid": "launch-workflow",
+      "proof": "apps/app/e2e/automations-workflows.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "get_workflow_status": {
+      "route": "/[orgSlug]/[workspaceSlug]/automations/workflows",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/automations/workflows/page.tsx",
+      "entry": "Runs table bounded enrichment + detail drawer WorkflowProgress poll",
+      "testid": null,
+      "proof": "apps/app/e2e/automations-workflows.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "cancel_workflow": {
+      "route": "/[orgSlug]/[workspaceSlug]/automations/workflows",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/automations/workflows/page.tsx",
+      "entry": "Row menu / drawer Cancel (canManage-gated) → cancelWorkflowAction",
+      "testid": null,
+      "proof": "apps/app/e2e/automations-workflows.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "start_research_swarm": {
+      "route": "/[orgSlug]/[workspaceSlug]/automations/workflows",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/automations/workflows/page.tsx",
+      "entry": "\"Launch\" → LaunchWorkflowDialog Swarm tab submit → startResearchSwarmAction",
+      "testid": "launch-tab-swarm",
+      "proof": "apps/app/e2e/automations-workflows.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "get_research_status": {
+      "route": "/[orgSlug]/[workspaceSlug]/automations/workflows",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/automations/workflows/page.tsx",
+      "entry": "Swarm row → detail drawer ResearchSwarmCard poll",
+      "testid": null,
+      "proof": "apps/app/e2e/automations-workflows.spec.ts",
     "sync_repo": {
       "route": "/[orgSlug]/[workspaceSlug]/workbench/repos",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/repos/repos-client.tsx",

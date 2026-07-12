@@ -9,7 +9,7 @@ export const agentTriggerCreate = registerCapability({
     "Create a trigger for an agent — a manual, scheduled (cron), or event binding validated against agentTriggerSchema and persisted as an agent_triggers row",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "e2e", "docs", "app"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "medium", category: "mutation" },
   sensitivity: "medium",
