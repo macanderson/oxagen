@@ -1,0 +1,51 @@
+{
+  "name": "@oxagen/bench-arena",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Arena — Agentic coding benchmark framework for comparing Oxagen, Stella, and Claude Code",
+  "scripts": {
+    "dev": "NODE_ENV=development node scripts/dev.mjs",
+    "build": "NODE_ENV=production next build",
+    "start": "next start --port 3300",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test:unit": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "run:benchmark": "tsx scripts/run-benchmark.ts",
+    "report:generate": "tsx scripts/generate-report.ts",
+    "tracker:update": "tsx scripts/update-tracker.ts"
+  },
+  "dependencies": {
+    "@ai-sdk/provider": "^1.0.4",
+    "@ai-sdk/react": "^1.1.3",
+    "ai": "^6.0.0",
+    "clsx": "^2.1.1",
+    "date-fns": "^4.1.0",
+    "motion": "^12.40.0",
+    "next": "16.2.7",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
+    "tailwind-merge": "^2.6.1",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3.3.5",
+    "@eslint/js": "^9.39.4",
+    "@tailwindcss/postcss": "^4.3.0",
+    "@types/node": "^25.9.1",
+    "@types/react": "^19.2.15",
+    "@types/react-dom": "^19.2.3",
+    "@vitest/coverage-v8": "^2.1.9",
+    "autoprefixer": "^10.5.0",
+    "eslint": "^9.39.4",
+    "globals": "^17.6.0",
+    "postcss": "^8.5.15",
+    "tailwindcss": "^4.3.0",
+    "tsx": "^4.19.2",
+    "turbo": "^2.4.2",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.60.0",
+    "vitest": "^2.1.9"
+  }
+}

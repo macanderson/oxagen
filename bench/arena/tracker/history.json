@@ -1,0 +1,22 @@
+[
+  {
+    "date": "2026-07-01",
+    "agentType": "oxagen",
+    "model": "anthropic/claude-sonnet-5",
+    "successRate": 0.75,
+    "avgCost": 0.18,
+    "avgDuration": 38.5,
+    "tasksCompleted": 32,
+    "notes": "Initial baseline"
+  },
+  {
+    "date": "2026-07-08",
+    "agentType": "oxagen",
+    "model": "anthropic/claude-sonnet-5",
+    "successRate": 0.81,
+    "avgCost": 0.15,
+    "avgDuration": 35.2,
+    "tasksCompleted": 42,
+    "notes": "Success rate improved by 6%"
+  }
+]
