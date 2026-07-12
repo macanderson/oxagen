@@ -101,6 +101,12 @@ interface McpServerListProps {
     workspaceSlug: string;
     orgListingId: string;
   }) => Promise<{ ok: boolean; revoked?: boolean; error?: string }>;
+  /**
+   * orgListingId from the ?reauth= deep link (the "needs re-auth" notification).
+   * When set and present in the list, that row is scrolled into view and
+   * briefly highlighted so the user lands directly on its Re-authenticate action.
+   */
+  reauthListingId?: string | null;
 }
 
 export function McpServerList({
@@ -110,6 +116,7 @@ export function McpServerList({
   toggleAction,
   uninstallAction,
   revokeAction,
+  reauthListingId,
 }: McpServerListProps) {
   const [servers, setServers] = React.useState(initialServers);
   // The parent server component re-queries and passes fresh `initialServers`
@@ -121,6 +128,23 @@ export function McpServerList({
   }, [initialServers]);
   const [pendingIds, setPendingIds] = React.useState<Set<string>>(new Set());
   const [errors, setErrors] = React.useState<Record<string, string>>({});
+
+  // Deep-link landing: scroll the reauth-target row into view and highlight it
+  // briefly. Only fires when the id actually matches an installed row, so a
+  // stale link (server since uninstalled) degrades to a normal page view.
+  const [highlightId, setHighlightId] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    if (!reauthListingId) return;
+    if (!servers.some((s) => s.id === reauthListingId)) return;
+    setHighlightId(reauthListingId);
+    const el = document.querySelector(
+      `[data-testid="mcp-server-row-${reauthListingId}"]`,
+    );
+    el?.scrollIntoView({ behavior: "smooth", block: "center" });
+    // Fade the highlight after a few seconds so it reads as a one-time cue.
+    const t = setTimeout(() => setHighlightId(null), 4000);
+    return () => clearTimeout(t);
+  }, [reauthListingId, servers]);
 
   const setError = (id: string, msg: string | null) =>
     setErrors((prev) => {
@@ -235,7 +259,11 @@ export function McpServerList({
         return (
           <li
             key={server.id}
-            className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:gap-6"
+            className={`flex flex-col gap-3 px-4 py-3 transition-colors sm:flex-row sm:items-center sm:gap-6 ${
+              highlightId === server.id
+                ? "bg-warning/12 ring-1 ring-inset ring-warning/40"
+                : ""
+            }`}
             data-testid={`mcp-server-row-${server.id}`}
           >
             <div className="flex min-w-0 flex-1 items-center gap-2">

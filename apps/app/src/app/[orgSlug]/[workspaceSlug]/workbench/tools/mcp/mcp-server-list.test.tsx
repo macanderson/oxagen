@@ -127,6 +127,7 @@ function renderList(
   }) => Promise<{ ok: boolean; revoked?: boolean; error?: string }> = vi.fn(
     async () => ({ ok: true, revoked: true }),
   ),
+  reauthListingId?: string | null,
 ) {
   return render(
     <McpServerList
@@ -136,6 +137,7 @@ function renderList(
       toggleAction={vi.fn(async () => ({ ok: true }))}
       uninstallAction={vi.fn(async () => ({ ok: true }))}
       revokeAction={revokeAction}
+      reauthListingId={reauthListingId}
     />,
   );
 }
@@ -222,9 +224,7 @@ describe("McpServerList", () => {
       orgListingId: "srv-1",
     });
     // Credential gone → status falls back to Needs authentication, action gone.
-    expect(
-      await screen.findByText("Needs authentication"),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("Needs authentication")).toBeInTheDocument();
     expect(
       screen.queryByTestId("mcp-server-revoke-srv-1"),
     ).not.toBeInTheDocument();
@@ -235,5 +235,38 @@ describe("McpServerList", () => {
     expect(
       screen.queryByTestId("mcp-server-revoke-srv-1"),
     ).not.toBeInTheDocument();
+  });
+
+  // (g) ?reauth deep-link landing — highlight + scroll the target row
+  it("highlights and scrolls the row named by reauthListingId", () => {
+    const scrollSpy = vi.fn();
+    // jsdom has no scrollIntoView — stub it so the effect can call it.
+    Element.prototype.scrollIntoView = scrollSpy;
+    renderList(
+      [
+        makeRow({ id: "srv-1" }),
+        makeRow({ id: "srv-2", name: "linear", title: "Linear" }),
+      ],
+      undefined,
+      "srv-2",
+    );
+
+    const row = screen.getByTestId("mcp-server-row-srv-2");
+    // The reauth target carries the highlight ring…
+    expect(row.className).toContain("ring-warning/40");
+    // …and non-target rows do not.
+    expect(screen.getByTestId("mcp-server-row-srv-1").className).not.toContain(
+      "ring-warning/40",
+    );
+    // …and the target was scrolled into view.
+    expect(scrollSpy).toHaveBeenCalled();
+  });
+
+  it("does not highlight anything when reauthListingId matches no installed row", () => {
+    Element.prototype.scrollIntoView = vi.fn();
+    renderList([makeRow({ id: "srv-1" })], undefined, "srv-gone");
+    expect(screen.getByTestId("mcp-server-row-srv-1").className).not.toContain(
+      "ring-warning/40",
+    );
   });
 });

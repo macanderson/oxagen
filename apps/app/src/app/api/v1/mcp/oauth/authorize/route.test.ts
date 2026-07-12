@@ -9,8 +9,15 @@
  * thrown sentinel escaped the handler uncaught — Vercel reported it as
  * FUNCTION_INVOCATION_FAILED / HTTP 502 (the production bug). These tests
  * assert the handler now returns a real, handled Response for every failing
- * condition and NEVER rejects:
- *   - notFound() from a resolve-org gate -> 404 JSON (not an unhandled throw)
+ * condition and NEVER rejects. Because the Authenticate button is a full-page
+ * <a> navigation, user-facing gate failures REDIRECT back to the launching
+ * surface with ?mcp=error&reason=… (the result toast translates the code)
+ * rather than dead-ending on a raw-JSON page:
+ *   - notFound() from a resolve-org gate (non-manager / unknown org)
+ *                                        -> 307 redirect, reason=not_permitted
+ *   - missing listing / workspace        -> 307 redirect, reason=not_found
+ *   - no session                         -> 307 redirect to /login?next=<returnTo>
+ *   - missing query params               -> 400 JSON (no valid surface to bounce to)
  *   - an unexpected DB/infra throw       -> 500 JSON (not a 502 crash)
  *   - the success path                   -> redirect to the authorization server
  *

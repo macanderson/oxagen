@@ -34,6 +34,11 @@ export const metadata: Metadata = {
 
 interface PageProps {
   params: Promise<{ orgSlug: string; workspaceSlug: string }>;
+  // ?reauth=<orgListingId> — set by the "needs re-auth" notification deep link
+  // (packages/plugins/src/oauth/mark-reauth.ts). Highlights + scrolls to the
+  // server whose credential expired so the user lands directly on its
+  // Re-authenticate action.
+  searchParams: Promise<{ reauth?: string }>;
 }
 
 const MCP_URL = "https://mcp.oxagen.sh/mcp";
@@ -118,8 +123,12 @@ async function highlight(code: string, lang: string): Promise<string> {
  * Registry administration deliberately does NOT live here — catalog sources
  * are managed in Settings → MCP Server Registries.
  */
-export default async function AgentToolsMcpPage({ params }: PageProps) {
+export default async function AgentToolsMcpPage({
+  params,
+  searchParams,
+}: PageProps) {
   const { orgSlug, workspaceSlug } = await params;
+  const { reauth: reauthListingId } = await searchParams;
   const { org, ws } = await resolveWorkbenchScope(orgSlug, workspaceSlug);
 
   // (b) Installed mcp_server plugins for this workspace.
@@ -242,6 +251,7 @@ export default async function AgentToolsMcpPage({ params }: PageProps) {
           toggleAction={togglePlugin}
           uninstallAction={uninstallPlugin}
           revokeAction={revokeMcpCredential}
+          reauthListingId={reauthListingId ?? null}
         />
       </div>
 
