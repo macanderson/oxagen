@@ -693,6 +693,60 @@
       "proof": "apps/app/e2e/billing-revenue.spec.ts",
       "verifiedAt": "2026-07-10",
       "verifiedBy": "session_01Hi2b4PCDZG2LrYumbaqPwX"
+    },
+    "list_capability_registry": {
+      "route": "/[orgSlug]/governance/capabilities",
+      "page": "apps/app/src/app/[orgSlug]/governance/capabilities/page.tsx",
+      "entry": "CatalogView renders the contract registry table on page load (invokeOrgCapability list_capability_registry)",
+      "testid": "capability-catalog",
+      "proof": "apps/app/e2e/governance.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_e448d4cc"
+    },
+    "get_capability_registry": {
+      "route": "/[orgSlug]/governance/capabilities",
+      "page": "apps/app/src/app/[orgSlug]/governance/capabilities/page.tsx",
+      "entry": "Clicking a capability row opens ContractDrawer which loads full contract detail (get_capability_registry)",
+      "testid": "capability-row-",
+      "proof": "apps/app/e2e/governance.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_e448d4cc"
+    },
+    "list_iam_roles": {
+      "route": "/[orgSlug]/governance/policies",
+      "page": "apps/app/src/app/[orgSlug]/governance/policies/page.tsx",
+      "entry": "Roles & permissions table (server read list_iam_roles on page load)",
+      "testid": "roles-table",
+      "proof": "apps/app/e2e/governance.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_e448d4cc"
+    },
+    "get_auth_alerts": {
+      "route": "/[orgSlug]/governance/policies",
+      "page": "apps/app/src/app/[orgSlug]/governance/policies/page.tsx",
+      "entry": "MCP auth alerts panel reflects current per-role alert settings (get_auth_alerts on page load)",
+      "testid": "auth-alerts-panel",
+      "proof": "apps/app/e2e/governance.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_e448d4cc"
+    },
+    "set_auth_alerts": {
+      "route": "/[orgSlug]/governance/policies",
+      "page": "apps/app/src/app/[orgSlug]/governance/policies/page.tsx",
+      "entry": "MCP auth alerts panel \"Save\" submit → saveAuthAlertsAction → set_auth_alerts",
+      "testid": "auth-alerts-save",
+      "proof": "apps/app/e2e/governance.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_e448d4cc"
+    },
+    "query_audit_log": {
+      "route": "/[orgSlug]/governance/policies",
+      "page": "apps/app/src/app/[orgSlug]/governance/policies/page.tsx",
+      "entry": "Recent governance audit events surfaced on the Policies page (query_audit_log on page load)",
+      "testid": "governance-policies",
+      "proof": "apps/app/e2e/governance.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_e448d4cc"
     }
   }
 }
