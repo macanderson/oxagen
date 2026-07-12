@@ -91,6 +91,44 @@ OXAGEN_MODEL_SLUG=anthropic/claude-opus-4.8 ./run.sh
 OXAGEN_PREWARMED=1 TASK_IDS="django__django-11099" N_CONCURRENT=1 ./run.sh
 ```
 
+## Stella (Rust CLI)
+
+Stella is the Rust-based successor to the TypeScript Oxagen CLI — a fast,
+BYOK, model-agnostic terminal coding agent. The SWE-bench harness now supports
+benchmarking Stella alongside the TS CLI.
+
+```bash
+cd bench/swe-bench
+
+# Build Stella (one-time, or use the pre-built binary):
+cd ../../crates && cargo build --release -p oxagen-cli
+
+# Run SWE-bench with Stella:
+export ANTHROPIC_API_KEY=...          # or provider key for your chosen model
+./run_stella.sh                        # full Verified, default model
+
+# Smoke test a single instance:
+TASK_IDS="django__django-11099" N_CONCURRENT=1 ./run_stella.sh
+
+# Pin a different model:
+STELLA_MODEL=zai/glm-5.2 ./run_stella.sh
+
+# Set a per-task budget cap:
+STELLA_BUDGET=5.0 ./run_stella.sh
+```
+
+**Stella vs TS CLI differences:**
+- Stella is a static binary (no Node runtime required)
+- BYOK: talks directly to providers (no AI Gateway indirection)
+- Uses `AgentEvent` protocol (`--output-format stream-json`) for stable telemetry
+- Commands: `stella run` instead of `oxagen --mode bypass`
+- Faster startup and native performance
+
+**Adapter location:** `src/oxagen_swe_bench/stella_agent.py` exports `StellaAgent`,
+which implements Harbor's `BaseInstalledAgent` the same way `OxagenAgent` does for
+the TS CLI. Use `--agent oxagen_swe_bench:StellaAgent` with Harbor directly,
+or `run_stella.sh` which sets this flag automatically.
+
 ## Multi-vendor comparison
 
 ```bash
