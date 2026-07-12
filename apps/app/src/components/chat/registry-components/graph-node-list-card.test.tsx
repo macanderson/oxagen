@@ -32,7 +32,7 @@ describe("GraphNodeListCard", () => {
     );
     expect(screen.getByText("2 nodes")).toBeTruthy();
     const link = screen.getByText("USS Nautilus").closest("a");
-    expect(link?.getAttribute("href")).toBe("/acme/ws/knowledge/nodes/n_1");
+    expect(link?.getAttribute("href")).toBe("/acme/ws/knowledge/graph/n_1");
   });
 
   it("renders graph.node.search rows with a relevance score", () => {

@@ -58,10 +58,10 @@ export type KnownDataTag = (typeof CAPABILITY_DATA_TAGS)[number];
 // are filled from the chat tenant context; `{id}` from the output field value.
 // Only routes that genuinely resolve to an inspectable page are listed — a
 // missing entry yields href:null (the id renders as plain text, not a dead
-// link). graph.node points at the detail route added under
-// /[orgSlug]/[workspaceSlug]/knowledge/nodes/[nodeId].
+// link). graph.node points at the node-detail route, now nested under Graph at
+// /[orgSlug]/[workspaceSlug]/knowledge/graph/[nodeId] (web-app-2.0 Phase 2).
 export const RECORD_LINK_ROUTES: Readonly<Record<string, string>> = {
-  "graph.node": "/{orgSlug}/{workspaceSlug}/knowledge/nodes/{id}",
+  "graph.node": "/{orgSlug}/{workspaceSlug}/knowledge/graph/{id}",
   conversation: "/{orgSlug}/{workspaceSlug}/chat/{id}",
   // Agent detail lives at Workbench → Agents → [agentId] (segment is the agent
   // publicId, `agt_…`). Only opt-in callers that KNOW a value is an agent id

@@ -27,7 +27,7 @@ describe("GraphIngestCard", () => {
       .getAllByText("USS Nautilus")
       .map((el) => el.closest("a"))
       .find((a): a is HTMLAnchorElement => a !== null);
-    expect(link?.getAttribute("href")).toBe("/acme/ws/knowledge/nodes/n_1");
+    expect(link?.getAttribute("href")).toBe("/acme/ws/knowledge/graph/n_1");
     // type label + confidence shown
     expect(screen.getByText("Vessel")).toBeTruthy();
     expect(screen.getByText("95%")).toBeTruthy();

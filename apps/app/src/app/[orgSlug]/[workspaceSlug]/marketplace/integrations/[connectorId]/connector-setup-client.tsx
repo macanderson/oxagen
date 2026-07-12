@@ -44,7 +44,7 @@ export function ConnectorSetupClient({
     () => ({ orgSlug, workspaceSlug }),
     [orgSlug, workspaceSlug],
   );
-  const reposHref = workspace.knowledge.repos(ctx);
+  const reposHref = workspace.knowledge.sources(ctx);
   const integrationsHref = workspace.marketplace.integrations(ctx);
 
   const handleSuccess = React.useCallback(() => {

@@ -16,7 +16,7 @@ const mockRouter = { push: vi.fn() };
 
 vi.mock("next/navigation", () => ({
   useRouter: () => mockRouter,
-  usePathname: () => "/acme/prod/knowledge/memories/mem_123",
+  usePathname: () => "/acme/prod/knowledge/memory/mem_123",
 }));
 
 const mockPageCtx = {
@@ -119,7 +119,7 @@ const mockTemplate = {
   description: "Generate a root-cause summary",
   category: "investigate" as const,
   tags: ["run", "failure"],
-  applicableTo: [{ routePattern: "/{org}/{ws}/knowledge/memories/:memoryId" }],
+  applicableTo: [{ routePattern: "/{org}/{ws}/knowledge/memory/:memoryId" }],
   autoSubmit: true,
   body: "Summarize the failure of run {{run_id}}.",
   variables: [
@@ -175,7 +175,7 @@ describe("CommandMenu — Quick Actions section (OXA-1769)", () => {
     const callArg = mockGetApplicableTemplates.mock.calls[0]?.[0] as {
       pathname: string;
     };
-    expect(callArg.pathname).toBe("/acme/prod/knowledge/memories/mem_123");
+    expect(callArg.pathname).toBe("/acme/prod/knowledge/memory/mem_123");
   });
 
   it("hides Quick Actions section when user types a query", () => {

@@ -42,7 +42,7 @@ describe("resolveSidebarMode", () => {
 
   it("returns 'workspace' when workspaceSlug is present and path is not /account", () => {
     expect(resolveSidebarMode("/acme/production/ask", wsCtx)).toBe("workspace");
-    expect(resolveSidebarMode("/acme/production/knowledge/repos", wsCtx)).toBe(
+    expect(resolveSidebarMode("/acme/production/knowledge/sources", wsCtx)).toBe(
       "workspace",
     );
   });
@@ -359,8 +359,18 @@ describe("enumerateNavTargets", () => {
 
     // Spot-check a workspace path and a tab path
     expect(hrefs).toContain("/acme/production/ask");
-    expect(hrefs).toContain("/acme/production/knowledge/repos");
+    expect(hrefs).toContain("/acme/production/knowledge/sources");
     expect(hrefs).toContain("/acme/production/settings");
+
+    // web-app-2.0 Phase 2 nav restructure: the renamed/merged targets are
+    // present and the old ones are gone.
+    expect(hrefs).toContain("/acme/production/knowledge/graph");
+    expect(hrefs).toContain("/acme/production/knowledge/ontology");
+    expect(hrefs).toContain("/acme/production/knowledge/memory");
+    expect(hrefs).toContain("/acme/production/settings/agent-defaults");
+    expect(hrefs).not.toContain("/acme/production/knowledge/repos");
+    expect(hrefs).not.toContain("/acme/production/knowledge/explore");
+    expect(hrefs).not.toContain("/acme/production/settings/models");
   });
 
   it("includes org paths regardless of workspaceSlug", () => {
@@ -390,7 +400,7 @@ describe("enumerateNavTargets", () => {
     const hrefs = targets.map((t) => t.href);
 
     expect(hrefs).not.toContain("/acme/production/ask");
-    expect(hrefs).not.toContain("/acme/production/knowledge/repos");
+    expect(hrefs).not.toContain("/acme/production/knowledge/sources");
   });
 
   it("all entries have non-empty label and href", () => {
@@ -410,7 +420,7 @@ describe("enumerateNavTargets", () => {
 
 describe("resolveSidebarCtx", () => {
   it("recovers workspaceSlug from the URL so workspace hrefs do not collapse", () => {
-    const eff = resolveSidebarCtx("/acme/production/knowledge/repos", orgCtx);
+    const eff = resolveSidebarCtx("/acme/production/knowledge/sources", orgCtx);
     expect(eff.workspaceSlug).toBe("production");
 
     // Regression: before the fix every item's href fell back to "/acme".
@@ -450,7 +460,7 @@ describe("activeHrefFor", () => {
 
   it("prefers the longest (most specific) prefix match", () => {
     const hrefs = ["/acme/production/knowledge", "/acme/production/ask"];
-    expect(activeHrefFor("/acme/production/knowledge/repos", hrefs)).toBe(
+    expect(activeHrefFor("/acme/production/knowledge/sources", hrefs)).toBe(
       "/acme/production/knowledge",
     );
   });

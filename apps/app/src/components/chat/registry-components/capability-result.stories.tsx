@@ -27,7 +27,7 @@ export const WithDeepLink: Story = {
     title: "Created record",
     output: { displayName: "Reactor S2W", count: 1200, active: true, tags: ["nuclear", "naval"] },
     links: [
-      { field: "id", recordType: "graph.node", id: "n_1", href: "/acme/research/knowledge/nodes/n_1", label: "Open node" },
+      { field: "id", recordType: "graph.node", id: "n_1", href: "/acme/research/knowledge/graph/n_1", label: "Open node" },
     ],
   },
 };

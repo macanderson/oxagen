@@ -64,7 +64,7 @@ export default function ConnectionCreateInline({
 
   // Fallback for connectors that don't have an inline connect flow yet.
   const sourcesHref =
-    orgSlug && workspaceSlug ? `/${orgSlug}/${workspaceSlug}/knowledge/repos` : "/";
+    orgSlug && workspaceSlug ? `/${orgSlug}/${workspaceSlug}/knowledge/sources` : "/";
 
   return (
     <div
