@@ -21,6 +21,17 @@ export function oauthErrorDescription(
   name: string,
 ): string {
   switch (reason) {
+    case "not_permitted":
+      return (
+        "You don't have permission to connect MCP servers for this " +
+        "organization. Ask an organization owner or admin to authenticate " +
+        `${name}.`
+      );
+    case "not_found":
+      return (
+        `${name} could not be found in this workspace. It may have been ` +
+        "uninstalled — try installing it again."
+      );
     case "dcr_unsupported":
       return (
         `${name} doesn't support automatic client registration. ` +

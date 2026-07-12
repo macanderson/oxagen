@@ -102,26 +102,33 @@ beforeEach(() => {
 });
 
 describe("GET /api/v1/mcp/oauth/authorize — never crashes the function", () => {
-  it("returns a handled 404 (not an unhandled throw) when assertMcpManager denies via notFound()", async () => {
-    // Pre-fix: assertMcpManager's thrown notFound() escaped uncaught -> 502.
+  it("redirects back with reason=not_permitted when assertMcpManager denies via notFound()", async () => {
+    // The very common non-manager case. This is reached by a full-page <a>
+    // navigation, so a raw 404 JSON page would dead-end the user. Pre-fix it
+    // returned 404 JSON (and, before that, 502'd uncaught). The promise must
+    // RESOLVE to a redirect Response, never reject.
     mockAssertMcpManager.mockRejectedValueOnce(notFoundSentinel());
 
-    // The promise must RESOLVE to a Response, never reject.
     const res = await GET(req() as never);
 
     expect(res).toBeInstanceOf(Response);
-    expect(res.status).toBe(404);
-    await expect(res.json()).resolves.toEqual({
-      error: "not found or not permitted",
-    });
+    expect(res.status).toBe(307);
+    const dest = new URL(res.headers.get("location") ?? "");
+    expect(dest.origin).toBe("https://app.oxagen.sh");
+    expect(dest.pathname).toBe("/acme/main/workbench/tools/mcp");
+    expect(dest.searchParams.get("mcp")).toBe("error");
+    expect(dest.searchParams.get("listing")).toBe("listing-1");
+    expect(dest.searchParams.get("reason")).toBe("not_permitted");
   });
 
-  it("returns a handled 404 when resolveOrg denies an unknown org slug via notFound()", async () => {
+  it("redirects back with reason=not_permitted when resolveOrg denies an unknown org slug via notFound()", async () => {
     mockResolveOrg.mockRejectedValueOnce(notFoundSentinel());
 
     const res = await GET(req() as never);
 
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(307);
+    const dest = new URL(res.headers.get("location") ?? "");
+    expect(dest.searchParams.get("reason")).toBe("not_permitted");
   });
 
   it("returns a logged 500 (not a 502 crash) on an unexpected DB throw", async () => {
@@ -136,12 +143,19 @@ describe("GET /api/v1/mcp/oauth/authorize — never crashes the function", () =>
     await expect(res.json()).resolves.toEqual({ error: "internal error" });
   });
 
-  it("returns 401 JSON when there is no session", async () => {
+  it("redirects to login (not a 401 JSON dead end) when there is no session", async () => {
+    // Full-page navigation: an unauthenticated user must be sent to sign in and
+    // bounced back to the launching surface, not stranded on a 401 JSON page.
     mockGetSession.mockResolvedValueOnce(null);
 
     const res = await GET(req() as never);
 
-    expect(res.status).toBe(401);
+    expect(res.status).toBe(307);
+    const dest = new URL(res.headers.get("location") ?? "");
+    expect(dest.pathname).toBe("/login");
+    expect(dest.searchParams.get("next")).toBe(
+      "/acme/main/workbench/tools/mcp",
+    );
   });
 
   it("returns 400 JSON when required query params are missing", async () => {
