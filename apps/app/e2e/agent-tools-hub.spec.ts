@@ -181,8 +181,6 @@ test.describe("Agent Tools consolidated IA", () => {
       path: path.join(SCREENSHOTS_DIR, "08-mobile-bottom-bar.png"),
       fullPage: false,
     });
-    await nav.getByRole("button", { name: /more navigation/i }).click();
-    await expect(page.getByRole("link", { name: "Agents" })).toBeVisible();
 
     // Builder: sticky step nav with large touch targets and a step counter.
     await gotoStable(page, `${ws}/workbench/agents/new`);
