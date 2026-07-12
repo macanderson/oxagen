@@ -217,7 +217,7 @@ test.describe("failed run — Debug panel + populated lineage", () => {
     // class and message, not an empty shell.
     const debugPanel = page.getByTestId("run-debug-panel");
     await expect(debugPanel).toBeVisible({ timeout: 20_000 });
-    await expect(debugPanel.getByText("TypeError")).toBeVisible();
+    await expect(debugPanel.getByText("TypeError").first()).toBeVisible();
     await expect(debugPanel.getByText(FAILURE_REASON)).toBeVisible();
     await expect(debugPanel.getByText(/get_ontology_neighbors/)).toBeVisible();
 

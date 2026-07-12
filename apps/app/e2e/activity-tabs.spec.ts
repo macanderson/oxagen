@@ -73,7 +73,7 @@ test("Activity tab strip navigates Runs / Fleet / Evals", async ({ page }) => {
   // title text is visible and no error boundary / 404 rendered — without
   // asserting on content Phase 4 owns.
   await expect(page.getByText(/error|something went wrong/i)).toHaveCount(0);
-  await expect(page.getByText("Fleet", { exact: true })).toBeVisible({
+  await expect(page.getByText("Fleet", { exact: true }).first()).toBeVisible({
     timeout: 20_000,
   });
   await page.screenshot({
