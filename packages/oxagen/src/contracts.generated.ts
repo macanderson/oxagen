@@ -33,6 +33,7 @@ import "./contracts/agent.file_lock.release";
 import "./contracts/agent.mcp.delete";
 import "./contracts/agent.mcp.list";
 import "./contracts/agent.mcp.register";
+import "./contracts/agent.mcp.resolve";
 import "./contracts/agent.mcp.set_enabled";
 import "./contracts/agent.mcp_consent.list";
 import "./contracts/agent.mcp_consent.resolve";
