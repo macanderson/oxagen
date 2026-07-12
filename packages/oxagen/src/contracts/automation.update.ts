@@ -27,7 +27,7 @@ export const automationUpdate = registerCapability({
     "Edit an existing automation: rename it, change its description, and/or replace its trigger configuration (conditions / schedule). Enable/disable is handled separately by automation.enable / automation.disable. Partial update — omit a field to leave it unchanged.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent", "cli"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "automation" },
   sensitivity: "low",

@@ -8,7 +8,7 @@ export const researchSwarmStatus = registerCapability({
     "Poll the status of a running research swarm. Returns task completion progress AND the actual web-search results collected by each subagent — title, url, and content snippet per hit — so the agent can summarize them and feed them into graph ingestion. Delegates to agent.subagent.aggregate internally.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "research" },
   sensitivity: "low",

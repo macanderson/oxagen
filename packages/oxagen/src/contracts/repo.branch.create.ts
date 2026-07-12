@@ -4,10 +4,11 @@ import { registerCapability } from "../registry";
 export const repoBranchCreate = registerCapability({
   name: "create_branch",
   domain: "repo",
-  description: "Create a new branch in a GitHub repository, optionally from another branch.",
+  description:
+    "Create a new branch in a GitHub repository, optionally from another branch.",
   mode: "sync",
   surfaces: ["agent", "api", "mcp"],
-  layers: ["api", "mcp", "unit", "docs"],
+  layers: ["api", "mcp", "unit", "docs", "app"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "high", category: "vcs" },
   sensitivity: "high",
@@ -27,10 +28,16 @@ export const repoBranchCreate = registerCapability({
     fromBranch: z
       .string()
       .optional()
-      .describe("Branch to base the new branch on (defaults to the repository default branch)"),
+      .describe(
+        "Branch to base the new branch on (defaults to the repository default branch)",
+      ),
   }),
   output: z.object({
-    ref: z.string().describe("Full Git ref of the newly created branch (e.g. refs/heads/my-feature)"),
+    ref: z
+      .string()
+      .describe(
+        "Full Git ref of the newly created branch (e.g. refs/heads/my-feature)",
+      ),
     sha: z.string().describe("SHA that the new branch points to"),
   }),
 });

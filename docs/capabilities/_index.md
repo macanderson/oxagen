@@ -101,12 +101,13 @@ contract-first design, IAM enforcement, and instrumentation.
 
 - [asset.upload](asset.upload.md) — Ingest a binary asset from a publicly reachable source URL into object storage
 
-## Automation (6)
+## Automation (7)
 
 - [automation.create](automation.create.md) — Create a playbook and trigger for an automation with configurable trigger type (event, schedule, or manual)
 - [automation.update](automation.update.md) — Edit an existing automation: rename, change description, or replace the trigger configuration
 - [automation.disable](automation.disable.md) — Disable an automation trigger so it stops firing; safe to call without approval
 - [automation.enable](automation.enable.md) — Enable an automation trigger so it fires live; the only path from configured to live, gated by human approval
+- [automation.get](automation.get.md) — Fetch one automation's trigger config, description, active-version steps, and recent run history by its trigger public ID
 - [automation.list](automation.list.md) — List automation rules in the caller's active workspace, ordered by creation date descending
 - [automation.trigger](automation.trigger.md) — Manually trigger an automation by ID with an optional payload; creates a run record
 

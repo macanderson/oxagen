@@ -188,6 +188,7 @@ import { automationCreate } from "./automation.create";
 import { automationTrigger } from "./automation.trigger";
 import { automationEnable } from "./automation.enable";
 import { automationDisable } from "./automation.disable";
+import { automationGet } from "./automation.get";
 import { workspaceMemberList } from "./workspace.member.list";
 import { workspaceInviteSend } from "./workspace.invite.send";
 import { skillWorkspaceList } from "./skill.workspace.list";
@@ -688,6 +689,7 @@ export {
   automationTrigger,
   automationEnable,
   automationDisable,
+  automationGet,
   workspaceMemberList,
   workspaceInviteSend,
   skillWorkspaceList,
@@ -1031,6 +1033,7 @@ export const contracts = [
   automationTrigger,
   automationEnable,
   automationDisable,
+  automationGet,
   workspaceMemberList,
   workspaceInviteSend,
   skillWorkspaceList,

@@ -7,7 +7,7 @@ export const automationTrigger = registerCapability({
   description: "Trigger an automation by ID with an optional payload",
   mode: "sync",
   surfaces: ["api", "mcp", "agent", "cli"],
-  layers: ["schema", "api", "docs", "mcp"],
+  layers: ["schema", "api", "docs", "mcp", "app"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "medium", category: "automation" },
   sensitivity: "low",

@@ -159,7 +159,13 @@ export async function inviteMemberAction(
         );
       }
 
+      // Revalidate both routes: this action is called from the People page
+      // (AddMemberDialog) AND from the Invited tab (PendingInvitationsActions
+      // "Resend") — a mutation triggered from /members/pending must refresh
+      // that page too, not just /members, or the currently-viewed list and
+      // the layout's pending-count badge go stale until an unrelated nav.
       revalidatePath(`/${orgSlug}/members`);
+      revalidatePath(`/${orgSlug}/members/pending`);
       return { ok: true };
     } catch (err) {
       // Unique violation on (orgId, email) for pending invitations.
@@ -208,7 +214,11 @@ export async function declineInvitationAction(input: {
         { orgSlug: input.orgSlug, invitationPublicId: input.invitationPublicId },
         "members: invitation declined",
       );
+      // See the matching comment in inviteMemberAction: this action is also
+      // called from the Invited tab (Revoke), which lives at a different
+      // route than /members — both must be revalidated.
       revalidatePath(`/${input.orgSlug}/members`);
+      revalidatePath(`/${input.orgSlug}/members/pending`);
       return { ok: true };
     } catch (err) {
       logger.error({ err }, "members: declineInvitationAction failed");

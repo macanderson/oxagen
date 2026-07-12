@@ -92,6 +92,7 @@ import "./contracts/audit.log.query";
 import "./contracts/automation.create";
 import "./contracts/automation.disable";
 import "./contracts/automation.enable";
+import "./contracts/automation.get";
 import "./contracts/automation.list";
 import "./contracts/automation.trigger";
 import "./contracts/automation.update";

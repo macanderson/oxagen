@@ -8,7 +8,7 @@ export const agentTriggerDelete = registerCapability({
     "Soft-delete an agent trigger — marks deletedAt so the binding stops firing while preserving the audit record",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "e2e", "docs", "app"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "medium", category: "mutation" },
   sensitivity: "medium",
