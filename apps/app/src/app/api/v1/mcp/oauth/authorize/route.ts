@@ -241,15 +241,29 @@ async function handleAuthorize(req: NextRequest): Promise<Response> {
       },
       "mcp-oauth: mcpAuth threw during authorize",
     );
+    const reason = classifyAuthError(err);
+    if (reason === "dcr_unsupported") {
+      // The end-user toast intentionally omits the remedy (they can't act on
+      // it). Log the actionable operator fix here: this provider's host needs a
+      // pre-registered OAuth client configured on the platform.
+      const host = (() => {
+        try {
+          return new URL(endpointUrl).host;
+        } catch {
+          return endpointUrl;
+        }
+      })();
+      logger.error(
+        { orgId: tenant.id, orgListingId, host, endpointUrl },
+        `mcp-oauth: ${host} does not support dynamic client registration — ` +
+          `add "${host}" to MCP_OAUTH_PREREGISTERED_CLIENTS (client_id/secret from an ` +
+          `OAuth app whose callback is ${url.origin}/api/v1/mcp/oauth/callback) to enable OAuth sign-in`,
+      );
+    }
     // This is a full-page navigation — a JSON body would strand the user on a
     // dead error page. Land back on the launching surface with a reason code
     // the result toast can translate into actionable copy.
-    return redirectBackWithError(
-      url.origin,
-      returnTo,
-      orgListingId,
-      classifyAuthError(err),
-    );
+    return redirectBackWithError(url.origin, returnTo, orgListingId, reason);
   }
 
   logger.info(
