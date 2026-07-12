@@ -121,7 +121,11 @@ test.describe("settings/agent-defaults — Models · Budget · Prompts · Memory
     await expect(
       page.getByText("Effective workspace system prompt"),
     ).toBeVisible();
-    await expect(page.getByLabel("Workspace instructions")).toBeVisible();
+    // The instructions editor is a CodeMirror (MarkdownCodeEditor): it exposes
+    // the "Workspace instructions" accessible name on both its root <div>
+    // (via the visible <Label htmlFor>) and its inner contenteditable
+    // (via aria-label), so scope to the first to avoid strict-mode ambiguity.
+    await expect(page.getByLabel("Workspace instructions").first()).toBeVisible();
     await page.screenshot({
       path: path.join(SCREENSHOTS_DIR, "05-agent-defaults-prompts.png"),
       fullPage: false,
