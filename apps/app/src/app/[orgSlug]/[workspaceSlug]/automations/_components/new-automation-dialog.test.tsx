@@ -250,7 +250,7 @@ describe("NewAutomationDialog — submit wiring", () => {
     fireEvent.click(screen.getByText("Add step"));
     fireEvent.click(screen.getByText("Add step"));
     const nameInputs = screen.getAllByPlaceholderText("Step name");
-    fireEvent.change(nameInputs[1], { target: { value: "Notify Slack" } });
+    fireEvent.change(nameInputs[1]!, { target: { value: "Notify Slack" } });
 
     await act(async () => {
       fireEvent.click(screen.getByTestId("create-automation"));
