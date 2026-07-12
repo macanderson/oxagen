@@ -67,8 +67,15 @@ describe("RunsTile", () => {
     expect(screen.getByTestId("overview-runs-tile")).toBeInTheDocument();
     expect(screen.getByText("completed")).toBeInTheDocument();
     expect(screen.getByText("ask")).toBeInTheDocument();
-    const runLink = screen.getByRole("link", { name: /completed ask/i });
-    expect(runLink).toHaveAttribute("href", "/acme/prod/activity/aex_1");
+    // Locate the run-row link by href rather than by accessible name: the row
+    // concatenates a Badge ("completed") and separate flex-child spans, and
+    // dom-accessibility-api under jsdom does not reliably join adjacent
+    // flex-child text with a space, so a `/completed ask/i` name match is
+    // brittle. The status/origin text is already asserted above.
+    const runLink = screen
+      .getAllByRole("link")
+      .find((a) => a.getAttribute("href") === "/acme/prod/activity/aex_1");
+    expect(runLink).toBeDefined();
     expect(screen.getByRole("link", { name: /view all runs/i })).toHaveAttribute(
       "href",
       "/acme/prod/activity",
