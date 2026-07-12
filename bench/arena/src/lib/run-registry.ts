@@ -22,6 +22,7 @@ import { spawn, type ChildProcess } from "child_process";
 import { appendFileSync, mkdirSync, readFileSync, existsSync, statSync } from "fs";
 import { join } from "path";
 
+import { sanitizedEnv } from "./env";
 import type { AgentType } from "./types";
 
 /** Hard ceiling on per-agent budget accepted from the web UI (USD). */
@@ -188,7 +189,7 @@ export function startRun(input: StartRunInput): RunRecord {
   log(
     record,
     `=== Arena run ${runId} — ${input.dryRun ? "DRY RUN" : "LIVE RUN"} — ` +
-      `category=${input.category} budget=$${input.budget} timeout=${input.timeout}s ===`,
+      `category=${input.category} budget=$${String(input.budget)} timeout=${String(input.timeout)}s ===`,
   );
 
   for (const job of record.jobs) {
@@ -198,7 +199,9 @@ export function startRun(input: StartRunInput): RunRecord {
     const child = spawn("npx", args, {
       cwd: process.cwd(),
       detached: true, // own process group → cancel can kill the whole tree
-      env: process.env,
+      // Strip pnpm-injected keys npm rejects, else `npx` warns to stderr on
+      // every spawn (logged as `[<agent>!] npm warn Unknown env config …`).
+      env: sanitizedEnv(),
     });
 
     job.pid = child.pid ?? null;
