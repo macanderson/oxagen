@@ -113,7 +113,7 @@ describe("CredentialsStep", () => {
     await waitFor(() => expect(onValidate).toHaveBeenCalled());
     await waitFor(() => expect(onSubmit).toHaveBeenCalled());
 
-    const submitted = onSubmit.mock.calls[0][0];
+    const submitted = onSubmit.mock.calls[0]![0];
     expect(submitted.displayName).toBe("Custom SQL");
     expect(submitted.authCredential.apiKey).toBe("postgresql://u:p@host/db");
     expect(submitted.authCredential.type).toBe("api_key");

@@ -142,7 +142,7 @@ export function CodingAgentPreferencesForm({
           </Label>
           <div className="flex items-center gap-2">
             <GitBranch className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-            <Select value={repoKey} onValueChange={(v) => setRepoKey(v)} disabled={isSaving}>
+            <Select value={repoKey} onValueChange={(v) => setRepoKey(v ?? "")} disabled={isSaving}>
               <SelectTrigger id="coding-prefs-repo" size="sm" className="w-full max-md:h-11">
                 <SelectValue>
                   {(value: string | null) => {
@@ -170,7 +170,7 @@ export function CodingAgentPreferencesForm({
           </Label>
           <div className="flex items-center gap-2">
             <EnvIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-            <Select value={envId} onValueChange={(v) => setEnvId(v)} disabled={isSaving}>
+            <Select value={envId} onValueChange={(v) => setEnvId(v ?? "")} disabled={isSaving}>
               <SelectTrigger id="coding-prefs-env" size="sm" className="w-full max-md:h-11">
                 <SelectValue>
                   {(value: string | null) => {
@@ -198,7 +198,7 @@ export function CodingAgentPreferencesForm({
           </Label>
           <div className="flex items-center gap-2">
             <Bot className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-            <Select value={agentId} onValueChange={(v) => setAgentId(v)} disabled={isSaving}>
+            <Select value={agentId} onValueChange={(v) => setAgentId(v ?? "")} disabled={isSaving}>
               <SelectTrigger id="coding-prefs-agent" size="sm" className="w-full max-md:h-11">
                 <SelectValue>
                   {(value: string | null) => {

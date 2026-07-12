@@ -77,7 +77,7 @@ describe("MappingsStep", () => {
       <MappingsStep
         loading={false}
         error={null}
-        drafts={[{ ...DRAFTS[0], oxagenEntityType: "" }]}
+        drafts={[{ ...DRAFTS[0]!, oxagenEntityType: "" }]}
         onChangeDraft={vi.fn()}
         onRetry={vi.fn()}
         onNext={vi.fn()}
