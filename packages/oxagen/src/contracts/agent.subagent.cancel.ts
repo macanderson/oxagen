@@ -12,7 +12,7 @@ export const agentSubagentCancel = registerCapability({
     "Cancel an in-progress subagent fan-out; transitions the fanout and all non-terminal child runs to a terminal status so no further work is performed.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "app", "unit", "docs"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "write" },
   sensitivity: "low",
@@ -26,13 +26,21 @@ export const agentSubagentCancel = registerCapability({
   }),
   output: z.object({
     fanoutId: z.string(),
-    status: z.string().describe("Terminal status the fanout was transitioned to"),
+    status: z
+      .string()
+      .describe("Terminal status the fanout was transitioned to"),
     cancelledChildren: z
       .number()
       .int()
-      .describe("Number of child runs that were transitioned to a terminal status"),
+      .describe(
+        "Number of child runs that were transitioned to a terminal status",
+      ),
   }),
 });
 
-export type AgentSubagentCancelInput = z.output<typeof agentSubagentCancel.input>;
-export type AgentSubagentCancelOutput = z.output<typeof agentSubagentCancel.output>;
+export type AgentSubagentCancelInput = z.output<
+  typeof agentSubagentCancel.input
+>;
+export type AgentSubagentCancelOutput = z.output<
+  typeof agentSubagentCancel.output
+>;

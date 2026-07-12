@@ -4,12 +4,17 @@ import { registerCapability } from "../registry";
 export const repoSync = registerCapability({
   name: "sync_repo",
   domain: "repo",
-  description: "Trigger incremental or full re-index of a repository connection.",
+  description:
+    "Trigger incremental or full re-index of a repository connection.",
   mode: "async",
   surfaces: ["api", "mcp", "cli", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
-  agent: { requiresApproval: false, riskLevel: "medium", category: "ingestion" },
+  agent: {
+    requiresApproval: false,
+    riskLevel: "medium",
+    category: "ingestion",
+  },
   sensitivity: "medium",
   defaultEffect: "deny",
   defaultRoles: {
@@ -21,14 +26,21 @@ export const repoSync = registerCapability({
     mode: z
       .enum(["incremental", "full"])
       .default("incremental")
-      .describe("Sync mode: incremental (since last cursor) or full (from scratch)"),
-    recordTypes: z.array(z.string()).optional().describe("Restrict sync to these record types"),
+      .describe(
+        "Sync mode: incremental (since last cursor) or full (from scratch)",
+      ),
+    recordTypes: z
+      .array(z.string())
+      .optional()
+      .describe("Restrict sync to these record types"),
   }),
   output: z.object({
     jobId: z.string().describe("Background sync job ID"),
     status: z.literal("queued"),
     mode: z.enum(["incremental", "full"]),
-    estimatedRecords: z.number().describe("Estimated number of records to process"),
+    estimatedRecords: z
+      .number()
+      .describe("Estimated number of records to process"),
   }),
 });
 
