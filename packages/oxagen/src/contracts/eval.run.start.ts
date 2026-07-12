@@ -10,7 +10,7 @@ export const evalRunStart = registerCapability({
   // Async: returns a run handle immediately; the Inngest worker does the work.
   mode: "async",
   surfaces: ["api", "mcp", "cli"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   // Intentionally billing-gated: this consumes AI tokens (target + judge), so
   // an org with zero balance must be refused at admission. Do NOT set noBillingGate.

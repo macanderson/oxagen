@@ -169,6 +169,10 @@ import { pluginRegistryAdd } from "./plugin.registry.add";
 import { pluginRegistryList } from "./plugin.registry.list";
 import { pluginRegistryRemove } from "./plugin.registry.remove";
 import { pluginSettingsSetAuthAlerts } from "./plugin.settings.set_auth_alerts";
+import { pluginSettingsGetAuthAlerts } from "./plugin.settings.get_auth_alerts";
+import { capabilityRegistryList } from "./capability.registry.list";
+import { capabilityRegistryGet } from "./capability.registry.get";
+import { iamRoleList } from "./iam.role.list";
 import { workflowRun } from "./workflow.run";
 import { workflowStatus } from "./workflow.status";
 import { workflowCancel } from "./workflow.cancel";
@@ -184,6 +188,7 @@ import { automationCreate } from "./automation.create";
 import { automationTrigger } from "./automation.trigger";
 import { automationEnable } from "./automation.enable";
 import { automationDisable } from "./automation.disable";
+import { automationGet } from "./automation.get";
 import { workspaceMemberList } from "./workspace.member.list";
 import { workspaceInviteSend } from "./workspace.invite.send";
 import { skillWorkspaceList } from "./skill.workspace.list";
@@ -665,6 +670,10 @@ export {
   pluginRegistryList,
   pluginRegistryRemove,
   pluginSettingsSetAuthAlerts,
+  pluginSettingsGetAuthAlerts,
+  capabilityRegistryList,
+  capabilityRegistryGet,
+  iamRoleList,
   workflowRun,
   workflowStatus,
   workflowCancel,
@@ -680,6 +689,7 @@ export {
   automationTrigger,
   automationEnable,
   automationDisable,
+  automationGet,
   workspaceMemberList,
   workspaceInviteSend,
   skillWorkspaceList,
@@ -1004,6 +1014,10 @@ export const contracts = [
   pluginRegistryList,
   pluginRegistryRemove,
   pluginSettingsSetAuthAlerts,
+  pluginSettingsGetAuthAlerts,
+  capabilityRegistryList,
+  capabilityRegistryGet,
+  iamRoleList,
   workflowRun,
   workflowStatus,
   workflowCancel,
@@ -1019,6 +1033,7 @@ export const contracts = [
   automationTrigger,
   automationEnable,
   automationDisable,
+  automationGet,
   workspaceMemberList,
   workspaceInviteSend,
   skillWorkspaceList,

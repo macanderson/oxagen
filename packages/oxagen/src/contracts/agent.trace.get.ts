@@ -122,7 +122,7 @@ export const agentTraceGet = registerCapability({
     "Get one agent execution as a collapsible span tree — the run, its ordered steps, each step's tool calls with durations/tokens/cost/status, and child executions (subagent/A2A lineage).",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "e2e", "docs", "app"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "introspection" },
   sensitivity: "low",

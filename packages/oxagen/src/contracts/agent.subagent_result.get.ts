@@ -16,9 +16,13 @@ export const agentSubagentResultGet = registerCapability({
     "summaries plus conflicts are usually enough.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "app", "unit", "docs"],
   scoped: true,
-  agent: { requiresApproval: false, riskLevel: "low", category: "introspection" },
+  agent: {
+    requiresApproval: false,
+    riskLevel: "low",
+    category: "introspection",
+  },
   sensitivity: "low",
   defaultEffect: "deny",
   defaultRoles: {
@@ -26,21 +30,40 @@ export const agentSubagentResultGet = registerCapability({
     workspace: { Owner: "allow", Member: "allow" },
   },
   input: z.object({
-    runId: z.string().describe("Public ID of the child run to fetch (sar_… from aggregate children[].runId)"),
+    runId: z
+      .string()
+      .describe(
+        "Public ID of the child run to fetch (sar_… from aggregate children[].runId)",
+      ),
   }),
   output: z.object({
     runId: z.string(),
-    fanoutId: z.string().describe("Public ID of the fanout this run belongs to"),
+    fanoutId: z
+      .string()
+      .describe("Public ID of the fanout this run belongs to"),
     capabilityName: z.string(),
     status: z.enum(["pending", "running", "completed", "failed"]),
-    summary: z.string().nullable().describe("The structural digest aggregate returned, when one was recorded"),
-    input: z.unknown().describe("Full input payload the child was dispatched with"),
-    output: z.unknown().describe("Full output payload, null until the run completes"),
+    summary: z
+      .string()
+      .nullable()
+      .describe(
+        "The structural digest aggregate returned, when one was recorded",
+      ),
+    input: z
+      .unknown()
+      .describe("Full input payload the child was dispatched with"),
+    output: z
+      .unknown()
+      .describe("Full output payload, null until the run completes"),
     errorReason: z.string().nullable(),
     startedAt: z.string().nullable(),
     completedAt: z.string().nullable(),
   }),
 });
 
-export type AgentSubagentResultGetInput = z.output<typeof agentSubagentResultGet.input>;
-export type AgentSubagentResultGetOutput = z.output<typeof agentSubagentResultGet.output>;
+export type AgentSubagentResultGetInput = z.output<
+  typeof agentSubagentResultGet.input
+>;
+export type AgentSubagentResultGetOutput = z.output<
+  typeof agentSubagentResultGet.output
+>;

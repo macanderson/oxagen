@@ -8,7 +8,7 @@ export const repoCreate = registerCapability({
     "Create a new GitHub repository. Omit `org` to create it in the connected user's personal account; pass `org` only to create it inside a GitHub organisation the user belongs to.",
   mode: "sync",
   surfaces: ["agent", "api", "mcp"],
-  layers: ["api", "mcp", "unit", "docs"],
+  layers: ["api", "mcp", "unit", "docs", "app"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "high", category: "vcs" },
   sensitivity: "high",
@@ -26,8 +26,14 @@ export const repoCreate = registerCapability({
       ),
     name: z.string().describe("Repository name"),
     description: z.string().optional().describe("Short repository description"),
-    private: z.boolean().optional().describe("Whether the repository is private (default: false)"),
-    autoInit: z.boolean().optional().describe("Initialise the repository with a README (default: false)"),
+    private: z
+      .boolean()
+      .optional()
+      .describe("Whether the repository is private (default: false)"),
+    autoInit: z
+      .boolean()
+      .optional()
+      .describe("Initialise the repository with a README (default: false)"),
   }),
   output: z.object({
     fullName: z.string().describe("Owner/repo full name (e.g. myorg/myrepo)"),

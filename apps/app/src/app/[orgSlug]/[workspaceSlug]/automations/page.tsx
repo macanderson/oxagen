@@ -1,21 +1,46 @@
-import { Zap } from "lucide-react";
-import { EmptyState } from "@/app/[orgSlug]/[workspaceSlug]/_shared/components";
-
 /**
- * Automations (web-app-2.0 Phase 0 shell).
+ * page.tsx — Workspace → Automations (list, tab-strip default tab).
  *
- * Route registered + linked in nav now so the IA resolves with no 404s; the
- * real list (human-gated enable, audited run history over the automation.* /
- * workflow.* families) lands in the Automations phase.
+ * The management surface for the automation.* family: every playbook bound to
+ * an event, schedule, or manual trigger, with human-gated activation front and
+ * center. Server component — resolves auth + org/workspace scope + workspace
+ * role, renders the header + tab strip immediately, then streams the live
+ * automation.list into <AutomationsSection> inside a Suspense boundary.
  */
-export default function AutomationsPage() {
+import { Suspense } from "react";
+import { resolveAutomationsScope } from "@/lib/automations/scope";
+import { TableSkeleton } from "@/components/loading";
+import { AutomationsHeader } from "./_components/automations-header";
+import { NewAutomationButton } from "./_components/new-automation-button";
+import { AutomationsSection } from "./automations-section";
+
+interface PageProps {
+  params: Promise<{ orgSlug: string; workspaceSlug: string }>;
+}
+
+export default async function AutomationsPage({ params }: PageProps) {
+  const { orgSlug, workspaceSlug } = await params;
+  const { ctx, canManage } = await resolveAutomationsScope(orgSlug, workspaceSlug);
+  const routeCtx = { orgSlug, workspaceSlug };
+
   return (
-    <div className="flex min-h-[60vh] items-center justify-center">
-      <EmptyState
-        icon={Zap}
-        title="Automations"
-        description="Human-gated agent automations — triggers, playbooks, and audited run history — are coming to this workspace as part of Web App 2.0."
+    <div className="flex flex-col gap-5">
+      <AutomationsHeader
+        ctx={routeCtx}
+        actions={
+          canManage ? (
+            <NewAutomationButton orgSlug={orgSlug} workspaceSlug={workspaceSlug} />
+          ) : undefined
+        }
       />
+      <Suspense fallback={<TableSkeleton rows={6} cols={4} />}>
+        <AutomationsSection
+          ctx={ctx}
+          orgSlug={orgSlug}
+          workspaceSlug={workspaceSlug}
+          canManage={canManage}
+        />
+      </Suspense>
     </div>
   );
 }

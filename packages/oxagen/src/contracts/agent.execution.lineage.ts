@@ -40,7 +40,7 @@ export const agentExecutionLineage = registerCapability({
     "Get one agent execution's file-level lineage as a graph — the :Execution node plus every :SourceFile it touched via TOUCHED_FILE edges. Proves, as a real queryable graph, exactly which files an agent run modified.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"] as const,
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "introspection" },
   sensitivity: "low",

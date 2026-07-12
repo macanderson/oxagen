@@ -1355,7 +1355,8 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {
@@ -1374,7 +1375,8 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {
@@ -1393,7 +1395,8 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {
@@ -1412,7 +1415,8 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {
@@ -1534,7 +1538,8 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {
@@ -1553,7 +1558,8 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {
@@ -1572,7 +1578,8 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {
@@ -1591,7 +1598,28 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": true,
+        "app": true
+      }
+    },
+    {
+      "name": "get_automation",
+      "file": "automation.get.ts",
+      "domain": "automation",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "docs": true,
+        "unit": true,
+        "app": true
       }
     },
     {
@@ -1609,7 +1637,8 @@
         "schema": true,
         "api": true,
         "docs": true,
-        "mcp": true
+        "mcp": true,
+        "app": true
       }
     },
     {
@@ -1627,7 +1656,8 @@
         "schema": true,
         "api": true,
         "docs": true,
-        "mcp": true
+        "mcp": true,
+        "app": true
       }
     },
     {
@@ -1646,7 +1676,8 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {
@@ -2154,6 +2185,42 @@
         "docs": true,
         "mcp": true,
         "unit": true,
+        "app": true
+      }
+    },
+    {
+      "name": "get_capability_registry",
+      "file": "capability.registry.get.ts",
+      "domain": "capability",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
+      "name": "list_capability_registry",
+      "file": "capability.registry.list.ts",
+      "domain": "capability",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true,
         "app": true
       }
     },
@@ -3284,6 +3351,25 @@
       }
     },
     {
+      "name": "list_iam_roles",
+      "file": "iam.role.list.ts",
+      "domain": "iam",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
       "name": "analyze_image",
       "file": "image.analyze.ts",
       "domain": "image",
@@ -4039,6 +4125,24 @@
       }
     },
     {
+      "name": "get_auth_alerts",
+      "file": "plugin.settings.get_auth_alerts.ts",
+      "domain": "plugin",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "api": true,
+        "docs": true,
+        "mcp": true,
+        "unit": true,
+        "app": true
+      }
+    },
+    {
       "name": "set_auth_alerts",
       "file": "plugin.settings.set_auth_alerts.ts",
       "domain": "plugin",
@@ -4052,7 +4156,8 @@
         "api": true,
         "docs": true,
         "mcp": true,
-        "unit": true
+        "unit": true,
+        "app": true
       }
     },
     {
@@ -4423,7 +4528,8 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {
@@ -4441,7 +4547,8 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {
@@ -5743,7 +5850,8 @@
         "api": false,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {
@@ -5761,7 +5869,8 @@
         "api": false,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {
@@ -5779,7 +5888,8 @@
         "api": false,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {

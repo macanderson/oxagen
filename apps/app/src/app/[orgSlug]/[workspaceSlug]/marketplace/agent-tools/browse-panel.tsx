@@ -20,8 +20,10 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/components/ui/toast";
 import { useTenant } from "@/lib/tenant/tenant-context";
+import { cn } from "@/lib/utils";
 import {
   CapabilityIcon,
   PLUGIN_TYPE_DEFAULTS,
@@ -72,7 +74,9 @@ interface BrowsePanelProps {
       pluginType: PluginTypeValue;
       pluginId?: string;
     }>;
-  }) => Promise<{ ok: boolean; error?: string }>;
+    // Per-item failures come back in `failures` — bulk install is not
+    // all-or-nothing (see @/lib/agent-tools/install-actions installBulkPlugin).
+  }) => Promise<{ ok: boolean; error?: string; failures?: string[] }>;
 }
 
 // The Agent Tools side of the Marketplace: skills, MCP servers, and
@@ -131,14 +135,10 @@ export function BrowsePanel({
   installAction,
   installBulkAction,
 }: BrowsePanelProps) {
-  // installBulkAction is part of the shared action surface (parity with the
-  // legacy marketplace modal); this page-based browse experience installs one
-  // card at a time, so it is accepted but not wired to a bulk-select UI here.
-  void installBulkAction;
-
   const toast = useToast();
   const { workspaceId } = useTenant();
-  const [activeTab, setActiveTab] = React.useState<PluginTypeValue>("agent_skill");
+  const [activeTab, setActiveTab] =
+    React.useState<PluginTypeValue>("agent_skill");
   const [search, setSearch] = React.useState("");
   const [servers, setServers] = React.useState<CatalogServer[]>([]);
   const [total, setTotal] = React.useState(0);
@@ -146,6 +146,12 @@ export function BrowsePanel({
   const [loading, setLoading] = React.useState(false);
   const [installingId, setInstallingId] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
+  // Bulk-install multi-select. `selected` holds `srv.id` (the compound catalog
+  // id); the handler resolves each back to `srv.name` before dispatching, same
+  // as the legacy MarketplaceModal. Per-item failures surface in `bulkFailures`.
+  const [selected, setSelected] = React.useState<Set<string>>(new Set());
+  const [bulkPending, setBulkPending] = React.useState(false);
+  const [bulkFailures, setBulkFailures] = React.useState<string[]>([]);
 
   const fetchServers = React.useCallback(
     async (offset = 0, replace = true) => {
@@ -159,14 +165,18 @@ export function BrowsePanel({
           workspaceId,
         });
         if (search.trim()) params.set("search", search.trim());
-        const res = await fetch(`/api/v1/plugin/catalog/browse?${params.toString()}`);
+        const res = await fetch(
+          `/api/v1/plugin/catalog/browse?${params.toString()}`,
+        );
         if (!res.ok) throw new Error(await res.text());
         const data = (await res.json()) as {
           servers: CatalogServer[];
           nextOffset: number | null;
           total: number;
         };
-        setServers((prev) => (replace ? data.servers : [...prev, ...data.servers]));
+        setServers((prev) =>
+          replace ? data.servers : [...prev, ...data.servers],
+        );
         setNextOffset(data.nextOffset);
         setTotal(data.total);
       } catch (e) {
@@ -184,7 +194,8 @@ export function BrowsePanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
-  const searchTimeoutRef = React.useRef<ReturnType<typeof setTimeout>>(undefined);
+  const searchTimeoutRef =
+    React.useRef<ReturnType<typeof setTimeout>>(undefined);
   React.useEffect(() => () => clearTimeout(searchTimeoutRef.current), []);
   const handleSearchChange = (val: string) => {
     setSearch(val);
@@ -206,12 +217,15 @@ export function BrowsePanel({
         setError(result.error ?? "Install failed");
         toast.add({
           title: "Install failed",
-          description: result.error ?? `Could not install ${srv.title ?? srv.name}.`,
+          description:
+            result.error ?? `Could not install ${srv.title ?? srv.name}.`,
           type: "error",
         });
         return;
       }
-      setServers((prev) => prev.map((s) => (s.id === srv.id ? { ...s, installed: true } : s)));
+      setServers((prev) =>
+        prev.map((s) => (s.id === srv.id ? { ...s, installed: true } : s)),
+      );
       toast.add({
         title: `${srv.title ?? srv.name} installed`,
         description: "You can use it now.",
@@ -220,9 +234,69 @@ export function BrowsePanel({
     } catch (e) {
       const message = e instanceof Error ? e.message : "Install failed";
       setError(message);
-      toast.add({ title: "Install failed", description: message, type: "error" });
+      toast.add({
+        title: "Install failed",
+        description: message,
+        type: "error",
+      });
     } finally {
       setInstallingId(null);
+    }
+  };
+
+  const toggleSelect = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const handleBulkInstall = async () => {
+    if (selected.size === 0) return;
+    setBulkPending(true);
+    setError(null);
+    setBulkFailures([]);
+    // Resolve each selected compound id back to the server's install name/slug;
+    // pluginType is the active tab (this catalog is single-type per tab).
+    const items = Array.from(selected).map((id) => {
+      const srv = servers.find((s) => s.id === id);
+      return { catalogServerId: srv?.name ?? id, pluginType: activeTab };
+    });
+    try {
+      const result = await installBulkAction({ orgSlug, workspaceSlug, items });
+      if (!result.ok) {
+        setBulkFailures(result.failures ?? []);
+        setError(result.error ?? "Bulk install failed");
+        toast.add({
+          title: "Some installs failed",
+          description:
+            result.error ?? "One or more plugins could not be installed.",
+          type: "error",
+        });
+        return;
+      }
+      // Mark every selected row installed and clear the selection.
+      setServers((prev) =>
+        prev.map((s) => (selected.has(s.id) ? { ...s, installed: true } : s)),
+      );
+      const count = selected.size;
+      setSelected(new Set());
+      toast.add({
+        title: count === 1 ? "Plugin installed" : `${count} plugins installed`,
+        description: "You can equip them now.",
+        type: "success",
+      });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "Bulk install failed";
+      setError(message);
+      toast.add({
+        title: "Install failed",
+        description: message,
+        type: "error",
+      });
+    } finally {
+      setBulkPending(false);
     }
   };
 
@@ -249,6 +323,8 @@ export function BrowsePanel({
                 if (value === activeTab) return;
                 setActiveTab(value);
                 setServers([]);
+                setSelected(new Set());
+                setBulkFailures([]);
               }}
               className={`rounded-full px-3 py-1.5 text-xs font-medium border transition-colors ${
                 isActive
@@ -281,46 +357,153 @@ export function BrowsePanel({
 
       {error && <p className="text-sm text-destructive">{error}</p>}
 
+      {/* Selection toolbar — appears once one or more cards are checked. */}
+      {selected.size > 0 && (
+        <div
+          className="flex flex-col gap-2 rounded-lg border border-primary/40 bg-primary/5 px-4 py-3"
+          data-testid="marketplace-browse-selection-toolbar"
+        >
+          <div className="flex items-center gap-3">
+            <p
+              className="text-sm font-medium"
+              data-testid="marketplace-browse-selection-count"
+            >
+              {selected.size} selected
+            </p>
+            <div className="ml-auto flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setSelected(new Set());
+                  setBulkFailures([]);
+                }}
+                disabled={bulkPending}
+                data-testid="marketplace-browse-clear-selection"
+              >
+                Clear
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleBulkInstall}
+                disabled={bulkPending}
+                data-testid="marketplace-browse-bulk-install-btn"
+              >
+                {bulkPending
+                  ? "Installing…"
+                  : `Install selected (${selected.size})`}
+              </Button>
+            </div>
+          </div>
+          {bulkFailures.length > 0 && (
+            <ul
+              className="list-disc space-y-0.5 pl-5 text-xs text-destructive"
+              data-testid="marketplace-browse-bulk-failures"
+            >
+              {bulkFailures.map((f, i) => (
+                <li key={i}>{f}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
       {loading && servers.length === 0 ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" data-testid="marketplace-browse-skeleton">
+        <div
+          className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
+          data-testid="marketplace-browse-skeleton"
+        >
           {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="h-40 rounded-xl border border-border/40 bg-muted/30 animate-pulse" />
+            <div
+              key={i}
+              className="h-40 rounded-xl border border-border/40 bg-muted/30 animate-pulse"
+            />
           ))}
         </div>
       ) : (
         <>
           <p className="text-xs text-muted-foreground">
-            {total} {activeTab === "mcp_server" || activeTab === "integration" ? "servers" : "plugins"}
+            {total}{" "}
+            {activeTab === "mcp_server" || activeTab === "integration"
+              ? "servers"
+              : "plugins"}
           </p>
 
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" data-testid="marketplace-browse-grid">
+          <div
+            className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
+            data-testid="marketplace-browse-grid"
+          >
             {servers.length === 0 && (
               <div className="col-span-full rounded-lg border border-border/40 bg-muted/20 px-6 py-10 text-center">
-                <ShoppingBag className="mx-auto mb-2 h-6 w-6 text-muted-foreground" aria-hidden="true" />
-                <p className="text-sm text-muted-foreground">No plugins found.</p>
+                <ShoppingBag
+                  className="mx-auto mb-2 h-6 w-6 text-muted-foreground"
+                  aria-hidden="true"
+                />
+                <p className="text-sm text-muted-foreground">
+                  No plugins found.
+                </p>
               </div>
             )}
             {servers.map((srv) => (
-              <Card key={srv.id} data-testid={`marketplace-browse-card-${srv.id}`}>
-                <CardHeader className="flex flex-row items-start gap-3">
-                  <ServerIcon icons={srv.icons} pluginType={srv.pluginType} size={32} />
+              <Card
+                key={srv.id}
+                className={cn(
+                  "relative",
+                  selected.has(srv.id) && "border-primary/60 bg-primary/5",
+                )}
+                data-testid={`marketplace-browse-card-${srv.id}`}
+              >
+                {/* Multi-select checkbox — disabled once installed. */}
+                {!srv.installed && (
+                  <span className="absolute right-3 top-3 z-10">
+                    <Checkbox
+                      checked={selected.has(srv.id)}
+                      onCheckedChange={() => toggleSelect(srv.id)}
+                      aria-label={
+                        selected.has(srv.id)
+                          ? `Deselect ${srv.title ?? srv.name}`
+                          : `Select ${srv.title ?? srv.name}`
+                      }
+                      data-testid={`marketplace-browse-select-${srv.id}`}
+                    />
+                  </span>
+                )}
+                <CardHeader className="flex flex-row items-start gap-3 pr-8">
+                  <ServerIcon
+                    icons={srv.icons}
+                    pluginType={srv.pluginType}
+                    size={32}
+                  />
                   <div className="min-w-0 flex-1">
-                    <CardTitle className="truncate text-sm" data-testid={`marketplace-browse-title-${srv.id}`}>
+                    <CardTitle
+                      className="truncate text-sm"
+                      data-testid={`marketplace-browse-title-${srv.id}`}
+                    >
                       {srv.title ?? srv.name}
                     </CardTitle>
-                    <CardDescription className="line-clamp-2">{srv.description}</CardDescription>
+                    <CardDescription className="line-clamp-2">
+                      {srv.description}
+                    </CardDescription>
                   </div>
                 </CardHeader>
                 <div className="flex flex-wrap gap-1.5 px-6 pb-2">
                   {srv.installed && (
-                    <Badge variant="success" size="sm" data-testid={`marketplace-browse-installed-badge-${srv.id}`}>
+                    <Badge
+                      variant="success"
+                      size="sm"
+                      data-testid={`marketplace-browse-installed-badge-${srv.id}`}
+                    >
                       Installed
                     </Badge>
                   )}
-                  <Badge variant={srv.tier === "premium" ? "warning" : "muted"} size="sm">
+                  <Badge
+                    variant={srv.tier === "premium" ? "warning" : "muted"}
+                    size="sm"
+                  >
                     {srv.tier === "premium" ? "Premium" : "Free"}
                   </Badge>
-                  {srv.pluginType === "mcp_server" || srv.pluginType === "integration" ? (
+                  {srv.pluginType === "mcp_server" ||
+                  srv.pluginType === "integration" ? (
                     <>
                       {srv.transportTypes.slice(0, 2).map((t) => (
                         <Badge key={t} variant="outline" size="sm">
@@ -329,7 +512,11 @@ export function BrowsePanel({
                       ))}
                       <Badge
                         variant={
-                          srv.authKind === "oauth" ? "info" : srv.authKind === "secret" ? "warning" : "muted"
+                          srv.authKind === "oauth"
+                            ? "info"
+                            : srv.authKind === "secret"
+                              ? "warning"
+                              : "muted"
                         }
                         size="sm"
                       >
