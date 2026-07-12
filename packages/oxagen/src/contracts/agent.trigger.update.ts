@@ -9,7 +9,7 @@ export const agentTriggerUpdate = registerCapability({
     "Update an existing agent trigger in place — replaces its type-specific binding and enabled flag, re-validated against agentTriggerSchema",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "e2e", "docs", "app"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "medium", category: "mutation" },
   sensitivity: "medium",

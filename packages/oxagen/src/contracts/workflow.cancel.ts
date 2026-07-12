@@ -7,7 +7,7 @@ export const workflowCancel = registerCapability({
   description: "Cancel a running or planning workflow, stopping all in-flight sub-tasks",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   agent: { requiresApproval: true, riskLevel: "medium", category: "workflow" },
   sensitivity: "medium",

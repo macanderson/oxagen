@@ -13,7 +13,7 @@ export const automationEnable = registerCapability({
     "Enable an automation trigger so it fires live. Requires explicit human confirmation — AI agents must never enable an automation without the user approving. Returns the new enabled state.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent", "cli"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   agent: { requiresApproval: true, riskLevel: "high", category: "automation" },
   sensitivity: "medium",
