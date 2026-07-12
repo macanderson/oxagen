@@ -10,6 +10,33 @@
     "verifiedBy": "session id / agent that captured the proof"
   },
   "bindings": {
+    "get_usage_breakdown": {
+      "route": "/[orgSlug]/billing/usage",
+      "page": "apps/app/src/app/[orgSlug]/billing/usage/page.tsx",
+      "entry": "Usage dashboard page load (assertOrgMember + assertBillingManager, then invoke) renders KPI tiles, daily trend, and per-model/surface/workspace/capability/principal breakdown tables",
+      "testid": null,
+      "proof": "apps/app/e2e/billing-usage-breakdown.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "list_executions": {
+      "route": "/[orgSlug]/[workspaceSlug]/activity",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/activity/page.tsx",
+      "entry": "Activity Runs tab — ActivitySection lists recent executions with keyset pagination (?before=) on page load",
+      "testid": null,
+      "proof": "apps/app/e2e/agent-execution-list.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "get_execution_trace": {
+      "route": "/[orgSlug]/[workspaceSlug]/activity/[executionId]",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/activity/[executionId]/page.tsx",
+      "entry": "Run detail page load — TraceSection renders the span tree (steps, tool calls, durations, tokens, cost)",
+      "testid": null,
+      "proof": "apps/app/e2e/agent-trace-get.spec.ts",
+      "verifiedAt": "2026-07-12",
+      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
     "get_plugin_schema": {
       "route": "/[orgSlug]/[workspaceSlug]/marketplace/integrations/[connectorId]",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/marketplace/integrations/[connectorId]/page.tsx",

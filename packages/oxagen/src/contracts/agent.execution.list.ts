@@ -14,7 +14,7 @@ export const agentExecutionList = registerCapability({
     "List recent top-level agent runs (executions) for the workspace, newest first, with keyset pagination — each row's status, origin, duration, token/cost figures.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "e2e", "docs", "app"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "introspection" },
   sensitivity: "low",
