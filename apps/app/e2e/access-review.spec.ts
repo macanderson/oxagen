@@ -80,7 +80,7 @@ test("access: Enterprise org renders own session + own review row with self-acti
   await expect(page).toHaveURL(/\/access\/sessions/);
   await page.waitForLoadState("domcontentloaded");
 
-  await expect(page.getByText("Active sessions", { exact: false })).toBeVisible({
+  await expect(page.getByText("Active sessions", { exact: false }).first()).toBeVisible({
     timeout: 15_000,
   });
   // The caller's own session is present and explicitly not revokable.
@@ -93,7 +93,7 @@ test("access: Enterprise org renders own session + own review row with self-acti
   await expect(page).toHaveURL(/\/access\/reviews/);
   await page.waitForLoadState("domcontentloaded");
 
-  await expect(page.getByText("Access review", { exact: false })).toBeVisible({
+  await expect(page.getByText("Access review", { exact: false }).first()).toBeVisible({
     timeout: 15_000,
   });
   // The org creator's own row: Owner role badge + "You" self badge.
