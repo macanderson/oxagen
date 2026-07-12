@@ -31,14 +31,16 @@ const { mockWithTenantDb, mockRunInTenantScope, dbState } = vi.hoisted(() => {
     }>;
     orgRolesRows: Array<{ userId: string; orgRole: string }>;
     throwOnMembers: boolean;
-  } = { membersRows: [], orgRolesRows: [], throwOnMembers: false };
+    // The component issues the members query and the org-roles query as TWO
+    // separate withTenantDb() calls, so this counter must persist across them.
+    callIndex: number;
+  } = { membersRows: [], orgRolesRows: [], throwOnMembers: false, callIndex: 0 };
 
   const mockWithTenantDb = vi.fn((fn: (tx: unknown) => unknown) => {
-    let callIndex = 0;
     const tx = {
       select: vi.fn(() => {
-        callIndex += 1;
-        if (callIndex === 1) {
+        dbState.callIndex += 1;
+        if (dbState.callIndex === 1) {
           if (dbState.throwOnMembers) throw new Error("db down");
           return {
             from: vi.fn(() => ({
@@ -79,6 +81,7 @@ afterEach(() => {
   dbState.membersRows = [];
   dbState.orgRolesRows = [];
   dbState.throwOnMembers = false;
+  dbState.callIndex = 0;
 });
 
 const BASE_PROPS = {

@@ -263,40 +263,58 @@
       "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
     "get_model_settings": {
-      "route": "/[orgSlug]/[workspaceSlug]/settings/models",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/models/page.tsx",
-      "entry": "WorkspaceModelsForm reads server-fetched settings",
+      "route": "/[orgSlug]/[workspaceSlug]/settings/agent-defaults",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/agent-defaults/page.tsx",
+      "entry": "Agent Defaults → Models sub-tab: models-form.tsx reads server-fetched settings",
       "testid": null,
-      "proof": null,
+      "proof": "apps/app/e2e/settings-consolidation.spec.ts",
       "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
+      "verifiedBy": "web-app-2.0-phase-2"
     },
     "update_model_settings": {
-      "route": "/[orgSlug]/[workspaceSlug]/settings/models",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/models/models-action.ts",
-      "entry": "\"Save changes\" in models-form.tsx → updateWorkspaceModelsAction",
+      "route": "/[orgSlug]/[workspaceSlug]/settings/agent-defaults",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/agent-defaults/models-action.ts",
+      "entry": "Agent Defaults → Models sub-tab \"Save changes\" → updateWorkspaceModelsAction",
       "testid": null,
-      "proof": null,
+      "proof": "apps/app/e2e/settings-consolidation.spec.ts",
       "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
+      "verifiedBy": "web-app-2.0-phase-2"
     },
     "get_budget_policy": {
-      "route": "/[orgSlug]/[workspaceSlug]/settings/budget",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/budget/page.tsx",
-      "entry": "WorkspaceBudgetForm reads server-fetched policy",
+      "route": "/[orgSlug]/[workspaceSlug]/settings/agent-defaults",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/agent-defaults/page.tsx",
+      "entry": "Agent Defaults → Budget sub-tab: budget-form.tsx reads server-fetched policy",
       "testid": null,
-      "proof": null,
+      "proof": "apps/app/e2e/settings-consolidation.spec.ts",
       "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
+      "verifiedBy": "web-app-2.0-phase-2"
     },
     "update_budget_policy": {
-      "route": "/[orgSlug]/[workspaceSlug]/settings/budget",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/budget/budget-action.ts",
-      "entry": "\"Save changes\" in budget-form.tsx → updateWorkspaceBudgetAction",
+      "route": "/[orgSlug]/[workspaceSlug]/settings/agent-defaults",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/agent-defaults/budget-action.ts",
+      "entry": "Agent Defaults → Budget sub-tab \"Save changes\" → updateWorkspaceBudgetAction",
       "testid": null,
-      "proof": null,
+      "proof": "apps/app/e2e/settings-consolidation.spec.ts",
       "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
+      "verifiedBy": "web-app-2.0-phase-2"
+    },
+    "get_workspace_user_preferences": {
+      "route": "/[orgSlug]/[workspaceSlug]/settings/agent-defaults",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/agent-defaults/coding-agent-preferences-form.tsx",
+      "entry": "Agent Defaults → Models sub-tab \"Your coding-agent preferences\" reads via get_workspace_user_preferences",
+      "testid": null,
+      "proof": "apps/app/e2e/settings-consolidation.spec.ts",
+      "verifiedAt": null,
+      "verifiedBy": "web-app-2.0-phase-2"
+    },
+    "update_workspace_user_preferences": {
+      "route": "/[orgSlug]/[workspaceSlug]/settings/agent-defaults",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/agent-defaults/coding-agent-preferences-actions.ts",
+      "entry": "Agent Defaults → \"Your coding-agent preferences\" Save → updateWorkspaceUserPreferences",
+      "testid": null,
+      "proof": "apps/app/e2e/settings-consolidation.spec.ts",
+      "verifiedAt": null,
+      "verifiedBy": "web-app-2.0-phase-2"
     },
     "update_user_budget": {
       "route": "/[orgSlug]/[workspaceSlug]/ask (chat composer)",
@@ -362,22 +380,22 @@
       "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
     "get_graph_stats": {
-      "route": "/[orgSlug]/[workspaceSlug]/knowledge/inference",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/knowledge/inference/page.tsx",
-      "entry": "GraphStatsSection RSC → GraphStatsBoxes on load",
+      "route": "/[orgSlug]/[workspaceSlug]/knowledge/graph",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/knowledge/graph/_panels/graph-side-panel.tsx",
+      "entry": "Graph side-panel header shows summary counts via get_graph_stats (also on the Inference stats section)",
       "testid": "graph-stats",
-      "proof": null,
+      "proof": "apps/app/e2e/knowledge-graph.spec.ts",
       "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
+      "verifiedBy": "web-app-2.0-phase-2"
     },
     "get_node": {
       "route": "/[orgSlug]/[workspaceSlug]/knowledge/graph/[nodeId]",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/knowledge/graph/[nodeId]/page.tsx",
       "entry": "Node detail page server-fetch (deep-linked from Graph canvas/browse and chat citations)",
       "testid": null,
-      "proof": null,
+      "proof": "apps/app/e2e/knowledge-node-detail.spec.ts",
       "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
+      "verifiedBy": "web-app-2.0-phase-2"
     },
     "ingest_graph": {
       "route": "/[orgSlug]/[workspaceSlug]/ask",
