@@ -14,7 +14,7 @@
     },
     {
       "file": "apps/app/src/components/conversations/conversation-nav.tsx",
-      "match": "hidden w-64 shrink-0 flex-col overflow-hidden rounded-xl border border-border bg-background md:flex",
+      "match": "hidden shrink-0 flex-col overflow-hidden rounded-xl border border-border bg-background transition-[width] duration-200 ease-in-out md:flex",
       "kind": "reflow",
       "equivalent": "Desktop persistent conversation sidebar; the same ConversationList renders instead behind the md:hidden trigger button + slide-in Sheet defined earlier in this file, giving identical conversation switching from a thumb-reachable trigger."
     },
@@ -38,7 +38,7 @@
     },
     {
       "file": "apps/app/src/components/chat/chat-shell-client.tsx",
-      "match": "hidden w-64 shrink-0 flex-col gap-3 overflow-y-auto py-1 lg:flex",
+      "match": "hidden w-72 shrink-0 overflow-y-auto py-1 lg:block",
       "kind": "reflow",
       "equivalent": "The right rail (CodingTracePanel + WorkspaceContextPanel) is desktop-only layout; below lg the identical panels open in a bottom Sheet via the floating chat-mobile-rail-trigger button rendered in the same file (mobileRailOpen state)."
     },
@@ -61,10 +61,10 @@
       "equivalent": "The \"/\" keyboard-shortcut hint chip is decorative only; the search input beneath it stays fully rendered and focusable by tap on every viewport, so no functionality is hidden, only the keyboard hint."
     },
     {
-      "file": "apps/app/src/components/chat/conversation-files.tsx",
-      "match": "hidden sm:inline",
+      "file": "apps/app/src/components/org/org-switcher.tsx",
+      "match": "hidden min-w-0 text-left leading-tight md:grid",
       "kind": "reflow",
-      "equivalent": "Only the \"Files\" text label beside the icon is hidden below sm; the trigger button keeps its aria-label and onClick, so tapping it still opens the identical conversation-files Sheet on mobile."
+      "equivalent": "Only the org name + plan text beside the avatar hides below md; the switcher trigger (avatar + chevron, 44px target) stays visible and the menu popup lists every organization with its full name, so switching orgs works identically on mobile."
     },
     {
       "file": "apps/app/src/components/knowledge/graph-explorer/graph-toolbar.tsx",
@@ -119,6 +119,72 @@
       "match": "hidden w-48 shrink-0 md:block",
       "kind": "reflow",
       "equivalent": "Settings section nav re-presented on mobile as MobileSettingsNav — a sticky bottom-sheet section switcher above the app bottom bar with 44px targets and the identical item list."
+    },
+    {
+      "file": "apps/app/src/app/[orgSlug]/billing/layout.tsx",
+      "match": "mb-6 max-md:hidden",
+      "kind": "reflow",
+      "equivalent": "The desktop PageTabs strip hides below md; the same tabs array renders as MobileSettingsNav (label \"Billing\") in this layout — a sticky mobile section switcher with the identical Subscription/Usage/Revenue/Invoices destinations."
+    },
+    {
+      "file": "apps/app/src/app/[orgSlug]/members/layout.tsx",
+      "match": "mb-6 max-md:hidden",
+      "kind": "reflow",
+      "equivalent": "The desktop PageTabs strip hides below md; the same tabs array renders as MobileSettingsNav (label \"Members\") in this layout — a sticky mobile section switcher with the identical People/Invited destinations."
+    },
+    {
+      "file": "apps/app/src/app/[orgSlug]/security/layout.tsx",
+      "match": "mb-6 max-md:hidden",
+      "kind": "reflow",
+      "equivalent": "The desktop PageTabs strip hides below md; the same tabs array renders as MobileSettingsNav (label \"Security\") in this layout — a sticky mobile section switcher with the identical security tab destinations."
+    },
+    {
+      "file": "apps/app/src/app/[orgSlug]/developer/layout.tsx",
+      "match": "mb-6 max-md:hidden",
+      "kind": "reflow",
+      "equivalent": "The desktop PageTabs strip hides below md; the same tabs array renders as MobileSettingsNav (label \"Developer\") in this layout — a sticky mobile section switcher with the identical MCP/Tokens destinations."
+    },
+    {
+      "file": "apps/app/src/app/[orgSlug]/access/layout.tsx",
+      "match": "mb-6 max-md:hidden",
+      "kind": "reflow",
+      "equivalent": "The desktop PageTabs strip hides below md; the same tabs array renders as MobileSettingsNav (label \"Access\") in this layout — a sticky mobile section switcher with the identical Sessions/Reviews destinations."
+    },
+    {
+      "file": "apps/app/src/app/[orgSlug]/[workspaceSlug]/marketplace/layout.tsx",
+      "match": "mb-6 max-md:hidden",
+      "kind": "reflow",
+      "equivalent": "The desktop PageTabs strip hides below md; the same tabs array renders as MobileSettingsNav (label \"Marketplace\") in this layout — a sticky mobile section switcher with the identical Agent Tools/Integrations destinations."
+    },
+    {
+      "file": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/tools/layout.tsx",
+      "match": "mb-6 max-md:hidden",
+      "kind": "reflow",
+      "equivalent": "The desktop PageTabs strip hides below md; the same tabs array renders as MobileSettingsNav (label \"Agent Tools\") in this layout — a sticky mobile section switcher with the identical All Tools/Skills/MCP/Capabilities destinations."
+    },
+    {
+      "file": "apps/app/src/app/[orgSlug]/[workspaceSlug]/knowledge/layout.tsx",
+      "match": "mb-6 max-md:hidden",
+      "kind": "reflow",
+      "equivalent": "The desktop PageTabs strip hides below md; the same tabs array renders as MobileSettingsNav (label \"Knowledge\") in this layout — a sticky mobile section switcher with the identical Knowledge tab destinations."
+    },
+    {
+      "file": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/tools/tools-catalog.tsx",
+      "match": "hidden sm:inline-flex",
+      "kind": "reflow",
+      "equivalent": "The grid/list layout SegmentedControl hides below sm because the catalog collapses to a single column on mobile, where grid and list render identically; every tool card, filter, and action in the catalog remains fully rendered and operable."
+    },
+    {
+      "file": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/tools/tools-catalog.tsx",
+      "match": "hidden sm:inline",
+      "kind": "reflow",
+      "equivalent": "Only the long \"Install more in Marketplace\" label hides below sm; the adjacent sm:hidden span renders the shorter \"Install\" label on the same fully tappable button, so the action is identical on mobile."
+    },
+    {
+      "file": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/tools/tools-catalog.tsx",
+      "match": "hidden shrink-0 items-center gap-1.5 sm:flex",
+      "kind": "reflow",
+      "equivalent": "Only the supplementary domain/risk metadata badges hide below sm in the list rows; the tool entry itself (name, description, and its install/equip affordances) remains fully rendered and operable on mobile, and the same metadata stays available from the tool's detail surface."
     }
   ]
 }
