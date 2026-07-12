@@ -740,11 +740,11 @@
       "verifiedBy": "session_e448d4cc"
     },
     "query_audit_log": {
-      "route": "/[orgSlug]/governance/policies",
-      "page": "apps/app/src/app/[orgSlug]/governance/policies/page.tsx",
-      "entry": "Recent governance audit events surfaced on the Policies page (query_audit_log on page load)",
-      "testid": "governance-policies",
-      "proof": "apps/app/e2e/governance.spec.ts",
+      "route": "/[orgSlug]/governance",
+      "page": "apps/app/src/app/[orgSlug]/governance/page.tsx",
+      "entry": "Governance hub \"Recent denied invocations\" panel + Audit events tile (the only governance page that invokes query_audit_log — capabilities/policies invoke list_capability_registry/get_capability_registry/list_iam_roles/get_auth_alerts instead)",
+      "testid": "denied-feed",
+      "proof": "apps/app/e2e/governance-hub.spec.ts",
       "verifiedAt": "2026-07-12",
       "verifiedBy": "session_e448d4cc"
     }
