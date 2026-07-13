@@ -1795,7 +1795,7 @@
         "schema": true,
         "api": false,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "docs": true,
         "app": true
       }
@@ -1870,7 +1870,7 @@
         "schema": true,
         "api": false,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "docs": true,
         "app": true
       }
