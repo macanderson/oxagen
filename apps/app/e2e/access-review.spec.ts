@@ -29,7 +29,8 @@ const SCREENSHOT_DIR = resolve(__dirname, "screenshots");
 
 function deQuote(raw: string | undefined, fallback: string): string {
   if (!raw) return fallback;
-  if (raw.length >= 2 && raw.startsWith('"') && raw.endsWith('"')) return raw.slice(1, -1);
+  if (raw.length >= 2 && raw.startsWith('"') && raw.endsWith('"'))
+    return raw.slice(1, -1);
   return raw;
 }
 
@@ -44,7 +45,8 @@ async function getOrgId(orgSlug: string): Promise<string> {
     const [row] = await sql<{ id: string }[]>`
       SELECT id FROM org.organizations WHERE slug = ${orgSlug}
     `;
-    if (!row) throw new Error(`access-review e2e: org not found for slug ${orgSlug}`);
+    if (!row)
+      throw new Error(`access-review e2e: org not found for slug ${orgSlug}`);
     return row.id;
   } finally {
     await sql.end({ timeout: 5 });
@@ -56,14 +58,19 @@ test.beforeAll(() => {
   mkdirSync(SCREENSHOT_DIR, { recursive: true });
 });
 
-test("access: non-Enterprise org is redirected away from the gated section", async ({ page }) => {
+test("access: non-Enterprise org is redirected away from the gated section", async ({
+  page,
+}) => {
   test.setTimeout(60_000);
 
   const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "access-free" });
 
   await page.goto(`/${orgSlug}/access`);
   await page.waitForLoadState("domcontentloaded");
-  await expect(page).not.toHaveURL(/\/access/);
+  // Assert we left the Access SECTION, scoped to this org's path. A bare
+  // /\/access/ regex would false-match the org slug itself ("access-free-…"),
+  // so it can never pass however the gate behaves — scope it to /{org}/access.
+  await expect(page).not.toHaveURL(new RegExp(`/${orgSlug}/access`));
 });
 
 test("access: Enterprise org renders own session + own review row with self-action gates", async ({
@@ -71,29 +78,42 @@ test("access: Enterprise org renders own session + own review row with self-acti
 }) => {
   test.setTimeout(60_000);
 
-  const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "access-review" });
+  const { orgSlug } = await signUpFreshUser(page, {
+    orgPrefix: "access-review",
+  });
   const orgId = await getOrgId(orgSlug);
-  await seedSubscription({ orgId, planSlug: "enterprise-v2", planName: "Enterprise" });
+  await seedSubscription({
+    orgId,
+    planSlug: "enterprise-v2",
+    planName: "Enterprise",
+  });
 
   // Sessions tab.
   await page.goto(`/${orgSlug}/access/sessions`);
   await expect(page).toHaveURL(/\/access\/sessions/);
   await page.waitForLoadState("domcontentloaded");
 
-  await expect(page.getByText("Active sessions", { exact: false }).first()).toBeVisible({
+  await expect(
+    page.getByText("Active sessions", { exact: false }).first(),
+  ).toBeVisible({
     timeout: 15_000,
   });
   // The caller's own session is present and explicitly not revokable.
   await expect(page.getByText("Your session", { exact: true })).toBeVisible();
 
-  await page.screenshot({ path: `${SCREENSHOT_DIR}/access-sessions.png`, fullPage: true });
+  await page.screenshot({
+    path: `${SCREENSHOT_DIR}/access-sessions.png`,
+    fullPage: true,
+  });
 
   // Reviews tab.
   await page.getByRole("link", { name: "Reviews" }).click();
   await expect(page).toHaveURL(/\/access\/reviews/);
   await page.waitForLoadState("domcontentloaded");
 
-  await expect(page.getByText("Access review", { exact: false }).first()).toBeVisible({
+  await expect(
+    page.getByText("Access review", { exact: false }).first(),
+  ).toBeVisible({
     timeout: 15_000,
   });
   // The org creator's own row: Owner role badge + "You" self badge.
@@ -106,5 +126,8 @@ test("access: Enterprise org renders own session + own review row with self-acti
   await expect(confirmSelf).toBeVisible();
   await expect(confirmSelf).toBeDisabled();
 
-  await page.screenshot({ path: `${SCREENSHOT_DIR}/access-reviews.png`, fullPage: true });
+  await page.screenshot({
+    path: `${SCREENSHOT_DIR}/access-reviews.png`,
+    fullPage: true,
+  });
 });

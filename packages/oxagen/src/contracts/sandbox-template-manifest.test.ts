@@ -4,6 +4,7 @@ import {
   sandboxResourcesSchema,
   sandboxNetworkSchema,
   sandboxSecretSelectionSchema,
+  sandboxTemplatePackageGroupSchema,
   manifestSecretKeySchema,
   SANDBOX_TEMPLATE_MANIFEST_KIND,
 } from "./sandbox-template-manifest";
@@ -21,6 +22,7 @@ describe("sandbox manifest v1", () => {
     expect(m.network).toEqual({ mode: "public" });
     expect(m.secretSelection).toBe("all");
     expect(m.literalEnv).toEqual({});
+    expect(m.packages).toEqual([]);
     expect(m.tools).toEqual([]);
     expect(m.secretKeys).toEqual([]);
   });
@@ -43,7 +45,12 @@ describe("sandbox manifest v1", () => {
         { kind: "agent_skill" as const, ref: "swe-bench" },
       ],
       secretKeys: [
-        { key: "EVAL_API_KEY", sensitive: true, memo: "provider key", required: true },
+        {
+          key: "EVAL_API_KEY",
+          sensitive: true,
+          memo: "provider key",
+          required: true,
+        },
       ],
     };
     const parsed = sandboxTemplateManifestSchema.parse(input);
@@ -54,7 +61,12 @@ describe("sandbox manifest v1", () => {
 
   it("rejects the wrong kind and a non-1 version", () => {
     expect(() =>
-      sandboxTemplateManifestSchema.parse({ kind: "x", version: 1, name: "n", slug: "s" }),
+      sandboxTemplateManifestSchema.parse({
+        kind: "x",
+        version: 1,
+        name: "n",
+        slug: "s",
+      }),
     ).toThrow();
     expect(() =>
       sandboxTemplateManifestSchema.parse({
@@ -77,7 +89,9 @@ describe("sandbox manifest v1", () => {
   });
 
   it("bounds resources (<=4 vcpu, <=8192 MB, <=300000 ms, <=20480 MB disk)", () => {
-    expect(() => sandboxResourcesSchema.parse({ vcpu: 4, memoryMb: 8192 })).not.toThrow();
+    expect(() =>
+      sandboxResourcesSchema.parse({ vcpu: 4, memoryMb: 8192 }),
+    ).not.toThrow();
     expect(() => sandboxResourcesSchema.parse({ vcpu: 5 })).toThrow();
     expect(() => sandboxResourcesSchema.parse({ memoryMb: 9000 })).toThrow();
     expect(() => sandboxResourcesSchema.parse({ timeoutMs: 400000 })).toThrow();
@@ -85,9 +99,67 @@ describe("sandbox manifest v1", () => {
   });
 
   it("validates network modes and secret selections", () => {
-    expect(() => sandboxNetworkSchema.parse({ mode: "aws_privatelink" })).not.toThrow();
+    expect(() =>
+      sandboxNetworkSchema.parse({ mode: "aws_privatelink" }),
+    ).not.toThrow();
     expect(() => sandboxNetworkSchema.parse({ mode: "nope" })).toThrow();
     expect(sandboxSecretSelectionSchema.parse("all")).toBe("all");
-    expect(() => sandboxSecretSelectionSchema.parse({ keyPublicIds: ["sk_1"] })).not.toThrow();
+    expect(() =>
+      sandboxSecretSelectionSchema.parse({ keyPublicIds: ["sk_1"] }),
+    ).not.toThrow();
+  });
+
+  it("defaults packages to [] when the key is omitted", () => {
+    const m = sandboxTemplateManifestSchema.parse({
+      kind: SANDBOX_TEMPLATE_MANIFEST_KIND,
+      version: 1,
+      name: "Bare",
+      slug: "bare",
+    });
+    expect(m.packages).toEqual([]);
+  });
+
+  it("round-trips a valid packages value unchanged", () => {
+    const parsed = sandboxTemplateManifestSchema.parse({
+      kind: SANDBOX_TEMPLATE_MANIFEST_KIND,
+      version: 1,
+      name: "Py",
+      slug: "py",
+      packages: [{ manager: "pip", names: ["fastapi", "pydantic==2.5"] }],
+    });
+    expect(parsed.packages).toEqual([
+      { manager: "pip", names: ["fastapi", "pydantic==2.5"] },
+    ]);
+    // Re-parsing the parsed value is stable (idempotent round-trip).
+    expect(sandboxTemplateManifestSchema.parse(parsed)).toEqual(parsed);
+  });
+});
+
+describe("sandbox template package group", () => {
+  it("defaults names to [] when omitted", () => {
+    const group = sandboxTemplatePackageGroupSchema.parse({ manager: "npm" });
+    expect(group.names).toEqual([]);
+  });
+
+  it("rejects an unknown package manager", () => {
+    expect(() =>
+      sandboxTemplatePackageGroupSchema.parse({ manager: "conda", names: [] }),
+    ).toThrow();
+  });
+
+  it("rejects an empty string in names (min length 1)", () => {
+    expect(() =>
+      sandboxTemplatePackageGroupSchema.parse({ manager: "npm", names: [""] }),
+    ).toThrow();
+  });
+
+  it(".strict() rejects an unknown key on a package group", () => {
+    expect(() =>
+      sandboxTemplatePackageGroupSchema.parse({
+        manager: "npm",
+        names: ["react"],
+        registry: "https://example.com",
+      }),
+    ).toThrow();
   });
 });

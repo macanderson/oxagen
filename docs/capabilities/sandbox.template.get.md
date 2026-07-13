@@ -25,7 +25,7 @@ secretSelection, literalEnv) before invoking `update_sandbox_template` or
 
 | Field      | Type                    | Notes                                                                                                                                                                          |
 | ---------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `template` | `SandboxTemplateSummary` | `{ id, environmentId, name, slug, description, isDefault, isActive, provider, runtime, resources, network, secretSelection, literalEnv, tools }`; `tools` is `{ id, kind, ref, config }[]` |
+| `template` | `SandboxTemplateSummary` | `{ id, environmentId, name, slug, description, isDefault, isActive, provider, runtime, resources, network, secretSelection, literalEnv, tools, packages }`; `tools` is `{ id, kind, ref, config }[]`; `packages` is `{ manager, names }[]` |
 
 ## Side effects
 
