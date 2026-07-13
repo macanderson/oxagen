@@ -344,6 +344,8 @@ import { evalDatasetFromTraces } from "./eval.dataset.from_traces";
 import { evalRunStart } from "./eval.run.start";
 import { evalRunStatus } from "./eval.run.status";
 import { evalRunGet } from "./eval.run.get";
+import { evalRunList } from "./eval.run.list";
+import { evalRunSeries } from "./eval.run.series";
 import { routerPolicyGet } from "./router.policy.get";
 import { routerPolicySet } from "./router.policy.set";
 import { routerStatsList } from "./router.stats.list";
@@ -843,6 +845,8 @@ export {
   evalRunStart,
   evalRunStatus,
   evalRunGet,
+  evalRunList,
+  evalRunSeries,
   routerPolicyGet,
   routerPolicySet,
   routerStatsList,
@@ -1190,6 +1194,8 @@ export const contracts = [
   evalRunStart,
   evalRunStatus,
   evalRunGet,
+  evalRunList,
+  evalRunSeries,
   routerPolicyGet,
   routerPolicySet,
   routerStatsList,

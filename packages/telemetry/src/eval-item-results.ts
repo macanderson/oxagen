@@ -68,3 +68,52 @@ export async function selectEvalItemResults(
   });
   return res.data;
 }
+
+/** Per-run cost + token rollup (in the ClickHouse-native micros / token units). */
+export interface EvalRunCostRollup {
+  costUsdMicros: number;
+  inputTokens: number;
+  outputTokens: number;
+}
+
+/**
+ * Roll up cost and token totals per run across a set of runs, in a single
+ * grouped scan of eval_item_results. Tenant-filtered by the active scope via
+ * chSelect (throws if unscoped). Returns a Map keyed by run_id; runs with no
+ * result rows are simply absent from the map (callers default them to zero).
+ * No-ops to an empty map on an empty input array.
+ */
+export async function selectEvalRunCostRollup(
+  runPublicIds: readonly string[],
+): Promise<Map<string, EvalRunCostRollup>> {
+  const rollup = new Map<string, EvalRunCostRollup>();
+  if (runPublicIds.length === 0) return rollup;
+  const res = await chSelect<{
+    run_id: string;
+    cost_usd_micros: string | number;
+    input_tokens: string | number;
+    output_tokens: string | number;
+  }>({
+    query: `
+      SELECT
+        run_id,
+        SUM(cost_usd_micros) AS cost_usd_micros,
+        SUM(input_tokens) AS input_tokens,
+        SUM(output_tokens) AS output_tokens
+      FROM eval_item_results
+      WHERE org_id = {orgId:UUID}
+        AND workspace_id = {workspaceId:UUID}
+        AND run_id IN {runIds:Array(String)}
+      GROUP BY run_id
+    `,
+    params: { runIds: runPublicIds },
+  });
+  for (const row of res.data) {
+    rollup.set(row.run_id, {
+      costUsdMicros: Number(row.cost_usd_micros),
+      inputTokens: Number(row.input_tokens),
+      outputTokens: Number(row.output_tokens),
+    });
+  }
+  return rollup;
+}

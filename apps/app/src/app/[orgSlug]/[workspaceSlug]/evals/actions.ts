@@ -28,15 +28,24 @@ import { invoke } from "@oxagen/oxagen";
 import "@oxagen/handlers/register";
 import { withTenantDb, schema } from "@oxagen/database";
 import { logger } from "@oxagen/handlers/logger";
-import { evalTargetSchema, type EvalTarget } from "@oxagen/oxagen/contracts/eval-schema";
+import {
+  evalTargetSchema,
+  type EvalTarget,
+} from "@oxagen/oxagen/contracts/eval-schema";
 import type { EvalDatasetCreateOutput } from "@oxagen/oxagen/contracts/eval.dataset.create";
 import type { EvalDatasetFromTracesOutput } from "@oxagen/oxagen/contracts/eval.dataset.from_traces";
 import type { EvalDatasetItemAddOutput } from "@oxagen/oxagen/contracts/eval.dataset_item.add";
 import type { EvalDatasetGetOutput } from "@oxagen/oxagen/contracts/eval.dataset.get";
 import type { EvalRunStartOutput } from "@oxagen/oxagen/contracts/eval.run.start";
 import type { EvalRunStatusOutput } from "@oxagen/oxagen/contracts/eval.run.status";
+import type { EvalRunListOutput } from "@oxagen/oxagen/contracts/eval.run.list";
+import type { EvalRunSeriesOutput } from "@oxagen/oxagen/contracts/eval.run.series";
 import { getSessionOrRedirect } from "@/lib/session";
-import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
+import {
+  resolveOrg,
+  resolveWorkspace,
+  assertOrgMember,
+} from "@/lib/resolve-org";
 
 // ---------------------------------------------------------------------------
 // Result types (exported for client prop typing)
@@ -47,7 +56,13 @@ export type CreateDatasetResult =
   | { ok: false; error: string };
 
 export type CreateTraceDatasetResult =
-  | { ok: true; datasetId: string; publicId: string; slug: string; itemCount: number }
+  | {
+      ok: true;
+      datasetId: string;
+      publicId: string;
+      slug: string;
+      itemCount: number;
+    }
   | { ok: false; error: string };
 
 export type AddDatasetItemResult =
@@ -81,7 +96,10 @@ export type GetEvalRunStatusResult =
 // allow only Owner/Member.
 // ---------------------------------------------------------------------------
 
-async function workspaceRole(workspaceId: string, userId: string): Promise<string> {
+async function workspaceRole(
+  workspaceId: string,
+  userId: string,
+): Promise<string> {
   const rows = await withTenantDb((tx) =>
     tx
       .select({ role: schema.workspaceUsers.role })
@@ -137,7 +155,11 @@ const CreateTraceDatasetSchema = z.object({
   slug: SlugSchema,
   description: z.string().optional(),
   capabilityName: z.string().optional(),
-  sinceHours: z.number().int().min(1).max(24 * 90),
+  sinceHours: z
+    .number()
+    .int()
+    .min(1)
+    .max(24 * 90),
   limit: z.number().int().min(1).max(500),
 });
 
@@ -184,7 +206,10 @@ export async function createDatasetAction(
 
   const parsed = CreateDatasetSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid input",
+    };
   }
   const { orgSlug, workspaceSlug, name, slug, description } = parsed.data;
 
@@ -195,7 +220,10 @@ export async function createDatasetAction(
   return runInTenantScope({ orgId: org.id, workspaceId: ws.id }, async () => {
     const gate = await assertWorkspaceWriter(ws.id, session.user.id);
     if (gate === "denied") {
-      return { ok: false, error: "You must be a workspace member to create datasets." };
+      return {
+        ok: false,
+        error: "You must be a workspace member to create datasets.",
+      };
     }
 
     const ctx = {
@@ -222,7 +250,12 @@ export async function createDatasetAction(
       )) as EvalDatasetCreateOutput;
 
       revalidatePath(`/${orgSlug}/${workspaceSlug}/evals`);
-      return { ok: true, datasetId: out.datasetId, publicId: out.publicId, slug: out.slug };
+      return {
+        ok: true,
+        datasetId: out.datasetId,
+        publicId: out.publicId,
+        slug: out.slug,
+      };
     } catch (err) {
       logger.error(
         { err, orgId: org.id, workspaceId: ws.id },
@@ -245,10 +278,21 @@ export async function createTraceDatasetAction(
 
   const parsed = CreateTraceDatasetSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid input",
+    };
   }
-  const { orgSlug, workspaceSlug, name, slug, description, capabilityName, sinceHours, limit } =
-    parsed.data;
+  const {
+    orgSlug,
+    workspaceSlug,
+    name,
+    slug,
+    description,
+    capabilityName,
+    sinceHours,
+    limit,
+  } = parsed.data;
 
   const org = await resolveOrg(orgSlug);
   const ws = await resolveWorkspace(org.id, workspaceSlug);
@@ -257,7 +301,10 @@ export async function createTraceDatasetAction(
   return runInTenantScope({ orgId: org.id, workspaceId: ws.id }, async () => {
     const gate = await assertWorkspaceWriter(ws.id, session.user.id);
     if (gate === "denied") {
-      return { ok: false, error: "You must be a workspace member to create datasets." };
+      return {
+        ok: false,
+        error: "You must be a workspace member to create datasets.",
+      };
     }
 
     const ctx = {
@@ -298,7 +345,10 @@ export async function createTraceDatasetAction(
         "evals: createTraceDatasetAction failed",
       );
       const message = err instanceof Error ? err.message : "";
-      return { ok: false, error: message || "Failed to create dataset from traces." };
+      return {
+        ok: false,
+        error: message || "Failed to create dataset from traces.",
+      };
     }
   });
 }
@@ -317,10 +367,18 @@ export async function addDatasetItemAction(
 
   const parsed = AddDatasetItemSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid input",
+    };
   }
-  const { orgSlug, workspaceSlug, datasetPublicId, input: itemInput, expectedOutput } =
-    parsed.data;
+  const {
+    orgSlug,
+    workspaceSlug,
+    datasetPublicId,
+    input: itemInput,
+    expectedOutput,
+  } = parsed.data;
 
   const org = await resolveOrg(orgSlug);
   const ws = await resolveWorkspace(org.id, workspaceSlug);
@@ -329,7 +387,10 @@ export async function addDatasetItemAction(
   return runInTenantScope({ orgId: org.id, workspaceId: ws.id }, async () => {
     const gate = await assertWorkspaceWriter(ws.id, session.user.id);
     if (gate === "denied") {
-      return { ok: false, error: "You must be a workspace member to add dataset items." };
+      return {
+        ok: false,
+        error: "You must be a workspace member to add dataset items.",
+      };
     }
 
     const ctx = {
@@ -358,7 +419,12 @@ export async function addDatasetItemAction(
       )) as EvalDatasetItemAddOutput;
 
       revalidatePath(`/${orgSlug}/${workspaceSlug}/evals`);
-      return { ok: true, datasetId: out.datasetId, added: out.added, itemCount: out.itemCount };
+      return {
+        ok: true,
+        datasetId: out.datasetId,
+        added: out.added,
+        itemCount: out.itemCount,
+      };
     } catch (err) {
       logger.error(
         { err, orgId: org.id, workspaceId: ws.id, datasetPublicId },
@@ -381,7 +447,10 @@ export async function getDatasetAction(
 
   const parsed = GetDatasetSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid input",
+    };
   }
   const { orgSlug, workspaceSlug, datasetPublicId, cursor } = parsed.data;
 
@@ -392,7 +461,10 @@ export async function getDatasetAction(
   return runInTenantScope({ orgId: org.id, workspaceId: ws.id }, async () => {
     const gate = await assertWorkspaceReader(ws.id, session.user.id);
     if (gate === "denied") {
-      return { ok: false, error: "You must be a workspace member to view this dataset." };
+      return {
+        ok: false,
+        error: "You must be a workspace member to view this dataset.",
+      };
     }
 
     const ctx = {
@@ -412,7 +484,12 @@ export async function getDatasetAction(
         ctx,
       )) as EvalDatasetGetOutput;
 
-      return { ok: true, dataset: out.dataset, items: out.items, nextCursor: out.nextCursor };
+      return {
+        ok: true,
+        dataset: out.dataset,
+        items: out.items,
+        nextCursor: out.nextCursor,
+      };
     } catch (err) {
       logger.error(
         { err, orgId: org.id, workspaceId: ws.id, datasetPublicId },
@@ -435,10 +512,21 @@ export async function startEvalRunAction(
 
   const parsed = StartEvalRunSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid input",
+    };
   }
-  const { orgSlug, workspaceSlug, datasetPublicId, target, judgeModel, name, passThreshold, maxItems } =
-    parsed.data;
+  const {
+    orgSlug,
+    workspaceSlug,
+    datasetPublicId,
+    target,
+    judgeModel,
+    name,
+    passThreshold,
+    maxItems,
+  } = parsed.data;
 
   const org = await resolveOrg(orgSlug);
   const ws = await resolveWorkspace(org.id, workspaceSlug);
@@ -447,7 +535,10 @@ export async function startEvalRunAction(
   return runInTenantScope({ orgId: org.id, workspaceId: ws.id }, async () => {
     const gate = await assertWorkspaceWriter(ws.id, session.user.id);
     if (gate === "denied") {
-      return { ok: false, error: "You must be a workspace member to start an eval run." };
+      return {
+        ok: false,
+        error: "You must be a workspace member to start an eval run.",
+      };
     }
 
     const ctx = {
@@ -497,7 +588,10 @@ export async function getEvalRunStatusAction(
 
   const parsed = GetEvalRunStatusSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid input",
+    };
   }
   const { orgSlug, workspaceSlug, runPublicId } = parsed.data;
 
@@ -508,7 +602,10 @@ export async function getEvalRunStatusAction(
   return runInTenantScope({ orgId: org.id, workspaceId: ws.id }, async () => {
     const gate = await assertWorkspaceReader(ws.id, session.user.id);
     if (gate === "denied") {
-      return { ok: false, error: "You must be a workspace member to view this run." };
+      return {
+        ok: false,
+        error: "You must be a workspace member to view this run.",
+      };
     }
 
     const ctx = {
@@ -536,6 +633,159 @@ export async function getEvalRunStatusAction(
       );
       const message = err instanceof Error ? err.message : "";
       return { ok: false, error: message || "Failed to load run status." };
+    }
+  });
+}
+
+// ---------------------------------------------------------------------------
+// listEvalRunsAction — eval.run.list (sortable / filterable / paginated runs)
+// ---------------------------------------------------------------------------
+
+export type ListEvalRunsResult =
+  | { ok: true; data: EvalRunListOutput }
+  | { ok: false; error: string };
+
+const ListEvalRunsSchema = z.object({
+  orgSlug: z.string().min(1),
+  workspaceSlug: z.string().min(1),
+  datasetPublicId: z.string().min(1).optional(),
+  since: z.string().datetime().optional(),
+  until: z.string().datetime().optional(),
+  status: z
+    .enum(["pending", "queued", "running", "completed", "failed", "cancelled"])
+    .optional(),
+  model: z.string().min(1).optional(),
+  sortBy: z.enum(["score", "created", "model", "status"]).default("created"),
+  sortDir: z.enum(["asc", "desc"]).default("desc"),
+  limit: z.number().int().min(1).max(100).default(25),
+  offset: z.number().int().min(0).default(0),
+});
+
+export async function listEvalRunsAction(
+  input: z.input<typeof ListEvalRunsSchema>,
+): Promise<ListEvalRunsResult> {
+  const session = await getSessionOrRedirect();
+
+  const parsed = ListEvalRunsSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid input",
+    };
+  }
+  const { orgSlug, workspaceSlug, ...query } = parsed.data;
+
+  const org = await resolveOrg(orgSlug);
+  const ws = await resolveWorkspace(org.id, workspaceSlug);
+  await assertOrgMember(org.id, session.user.id);
+
+  return runInTenantScope({ orgId: org.id, workspaceId: ws.id }, async () => {
+    const gate = await assertWorkspaceReader(ws.id, session.user.id);
+    if (gate === "denied") {
+      return {
+        ok: false,
+        error: "You must be a workspace member to view eval runs.",
+      };
+    }
+
+    const ctx = {
+      orgId: org.id,
+      workspaceId: ws.id,
+      userId: session.user.id,
+      apiKeyId: null as string | null,
+      requestId: crypto.randomUUID(),
+      surface: "app" as const,
+      messageId: null as string | null,
+    };
+
+    try {
+      // list_eval_runs exposes surfaces ["api","mcp","cli"] — omit the surface
+      // opt so no allowlist runs (passing one throws surface_denied).
+      const data = (await invoke(
+        "list_eval_runs",
+        query,
+        ctx,
+      )) as EvalRunListOutput;
+      return { ok: true, data };
+    } catch (err) {
+      logger.error(
+        { err, orgId: org.id, workspaceId: ws.id },
+        "evals: listEvalRunsAction failed",
+      );
+      const message = err instanceof Error ? err.message : "";
+      return { ok: false, error: message || "Failed to load eval runs." };
+    }
+  });
+}
+
+// ---------------------------------------------------------------------------
+// evalRunSeriesAction — eval.run.series (score-over-time + per-model breakdown)
+// ---------------------------------------------------------------------------
+
+export type EvalRunSeriesResult =
+  | { ok: true; data: EvalRunSeriesOutput }
+  | { ok: false; error: string };
+
+const EvalRunSeriesSchema = z.object({
+  orgSlug: z.string().min(1),
+  workspaceSlug: z.string().min(1),
+  datasetPublicId: z.string().min(1).optional(),
+  since: z.string().datetime().optional(),
+  until: z.string().datetime().optional(),
+  bucket: z.enum(["day", "week"]).default("day"),
+});
+
+export async function evalRunSeriesAction(
+  input: z.input<typeof EvalRunSeriesSchema>,
+): Promise<EvalRunSeriesResult> {
+  const session = await getSessionOrRedirect();
+
+  const parsed = EvalRunSeriesSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid input",
+    };
+  }
+  const { orgSlug, workspaceSlug, ...query } = parsed.data;
+
+  const org = await resolveOrg(orgSlug);
+  const ws = await resolveWorkspace(org.id, workspaceSlug);
+  await assertOrgMember(org.id, session.user.id);
+
+  return runInTenantScope({ orgId: org.id, workspaceId: ws.id }, async () => {
+    const gate = await assertWorkspaceReader(ws.id, session.user.id);
+    if (gate === "denied") {
+      return {
+        ok: false,
+        error: "You must be a workspace member to view eval analytics.",
+      };
+    }
+
+    const ctx = {
+      orgId: org.id,
+      workspaceId: ws.id,
+      userId: session.user.id,
+      apiKeyId: null as string | null,
+      requestId: crypto.randomUUID(),
+      surface: "app" as const,
+      messageId: null as string | null,
+    };
+
+    try {
+      const data = (await invoke(
+        "get_eval_run_series",
+        query,
+        ctx,
+      )) as EvalRunSeriesOutput;
+      return { ok: true, data };
+    } catch (err) {
+      logger.error(
+        { err, orgId: org.id, workspaceId: ws.id },
+        "evals: evalRunSeriesAction failed",
+      );
+      const message = err instanceof Error ? err.message : "";
+      return { ok: false, error: message || "Failed to load eval analytics." };
     }
   });
 }

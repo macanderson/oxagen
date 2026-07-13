@@ -239,6 +239,8 @@ import { evalDatasetFromTracesRoute } from "./routes/v1/eval.dataset.from_traces
 import { evalRunStartRoute } from "./routes/v1/eval.run.start";
 import { evalRunStatusRoute } from "./routes/v1/eval.run.status";
 import { evalRunGetRoute } from "./routes/v1/eval.run.get";
+import { evalRunListRoute } from "./routes/v1/eval.run.list";
+import { evalRunSeriesRoute } from "./routes/v1/eval.run.series";
 import { routerPolicyGetRoute } from "./routes/v1/router.policy.get";
 import { routerPolicySetRoute } from "./routes/v1/router.policy.set";
 import { routerStatsListRoute } from "./routes/v1/router.stats.list";
@@ -556,6 +558,8 @@ orgScoped.route("/eval/datasets", evalDatasetCreateRoute);
 orgScoped.route("/eval/datasets", evalDatasetListRoute);
 orgScoped.route("/eval/runs/status", evalRunStatusRoute);
 orgScoped.route("/eval/runs/get", evalRunGetRoute);
+orgScoped.route("/eval/runs/list", evalRunListRoute);
+orgScoped.route("/eval/runs/series", evalRunSeriesRoute);
 orgScoped.route("/eval/runs", evalRunStartRoute);
 // Verified-Outcome Market Router governance + inspection.
 orgScoped.route("/router/policy/set", routerPolicySetRoute);
