@@ -6,6 +6,7 @@ import {
   sandboxNetworkSchema,
   sandboxSecretSelectionSchema,
   sandboxLiteralEnvSchema,
+  sandboxTemplatePackagesSchema,
 } from "./sandbox-template-manifest";
 import { sandboxTemplateSummarySchema } from "./sandbox.template.create";
 
@@ -13,10 +14,14 @@ export const sandboxTemplateUpdate = registerCapability({
   name: "update_sandbox_template",
   domain: "sandbox",
   description:
-    "Update a sandbox template's metadata, provider, runtime, resources, network, secret selection, literal config, or active state. A default template cannot be deactivated — promote another first.",
+    "Update a sandbox template's metadata, provider, runtime, resources, network, secret selection, literal config, packages, or active state. A default template cannot be deactivated — promote another first.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  agent: { requiresApproval: false, riskLevel: "medium", category: "configuration" },
+  agent: {
+    requiresApproval: false,
+    riskLevel: "medium",
+    category: "configuration",
+  },
   layers: ["api", "mcp", "unit", "docs", "app"],
   scoped: true,
   sensitivity: "medium",
@@ -33,10 +38,15 @@ export const sandboxTemplateUpdate = registerCapability({
     network: sandboxNetworkSchema.optional(),
     secretSelection: sandboxSecretSelectionSchema.optional(),
     literalEnv: sandboxLiteralEnvSchema.optional(),
+    packages: sandboxTemplatePackagesSchema.optional(),
     isActive: z.boolean().optional(),
   }),
   output: z.object({ template: sandboxTemplateSummarySchema }),
 });
 
-export type SandboxTemplateUpdateInput = z.output<typeof sandboxTemplateUpdate.input>;
-export type SandboxTemplateUpdateOutput = z.output<typeof sandboxTemplateUpdate.output>;
+export type SandboxTemplateUpdateInput = z.output<
+  typeof sandboxTemplateUpdate.input
+>;
+export type SandboxTemplateUpdateOutput = z.output<
+  typeof sandboxTemplateUpdate.output
+>;

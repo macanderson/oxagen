@@ -6,6 +6,7 @@ import {
   sandboxNetworkSchema,
   sandboxSecretSelectionSchema,
   sandboxLiteralEnvSchema,
+  sandboxTemplatePackagesSchema,
   sandboxTemplateToolSchema,
   sandboxToolKindSchema,
 } from "./sandbox-template-manifest";
@@ -33,6 +34,7 @@ export const sandboxTemplateSummarySchema = z.object({
   network: sandboxNetworkSchema,
   secretSelection: sandboxSecretSelectionSchema,
   literalEnv: sandboxLiteralEnvSchema,
+  packages: sandboxTemplatePackagesSchema,
   tools: z.array(sandboxTemplateToolSummarySchema),
 });
 
@@ -43,7 +45,11 @@ export const sandboxTemplateCreate = registerCapability({
     "Create a portable sandbox template under an environment: provider, runtime image, resources, network posture, selected vault keys, literal config, and preloaded tools.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  agent: { requiresApproval: false, riskLevel: "medium", category: "configuration" },
+  agent: {
+    requiresApproval: false,
+    riskLevel: "medium",
+    category: "configuration",
+  },
   layers: ["api", "mcp", "unit", "docs", "app"],
   scoped: true,
   sensitivity: "medium",
@@ -60,11 +66,16 @@ export const sandboxTemplateCreate = registerCapability({
     network: sandboxNetworkSchema.optional(),
     secretSelection: sandboxSecretSelectionSchema.optional(),
     literalEnv: sandboxLiteralEnvSchema.optional(),
+    packages: sandboxTemplatePackagesSchema.optional(),
     tools: z.array(sandboxTemplateToolSchema).optional(),
     setAsDefault: z.boolean().optional(),
   }),
   output: z.object({ template: sandboxTemplateSummarySchema }),
 });
 
-export type SandboxTemplateCreateInput = z.output<typeof sandboxTemplateCreate.input>;
-export type SandboxTemplateCreateOutput = z.output<typeof sandboxTemplateCreate.output>;
+export type SandboxTemplateCreateInput = z.output<
+  typeof sandboxTemplateCreate.input
+>;
+export type SandboxTemplateCreateOutput = z.output<
+  typeof sandboxTemplateCreate.output
+>;

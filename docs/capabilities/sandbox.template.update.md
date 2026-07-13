@@ -10,7 +10,7 @@
 ## Intent
 
 Update a sandbox template's metadata, provider, runtime, resources, network,
-secret selection, literal config, or active state. This is a partial update —
+secret selection, literal config, packages, or active state. This is a partial update —
 only supplied fields change. A default template cannot be deactivated via
 `isActive: false`; promote another template to default first via
 `set_default_sandbox_template`. Owner/Admin only.
@@ -29,6 +29,7 @@ only supplied fields change. A default template cannot be deactivated via
 | `network`         | `SandboxNetwork?`          | unchanged | `{ mode, config? }`                                                                          |
 | `secretSelection` | `SandboxSecretSelection?`  | unchanged | `"all"` or `{ keyPublicIds: string[] }`                                                      |
 | `literalEnv`      | `Record<string,string>?`  | unchanged | Non-sensitive `KEY=value` config                                                             |
+| `packages`        | `SandboxPackageGroup[]?`  | unchanged | Per-ecosystem packages installed at provision time: `{ manager, names }[]`; `manager` ∈ `apt, cargo, gem, go, npm, pnpm, yarn, pip, poetry, uv`; `names` are free-text specs that may carry a version pin. Only replaced when provided |
 | `isActive`        | `boolean?`                 | unchanged | Cannot be set to `false` while the template is the environment default                       |
 
 ## Output

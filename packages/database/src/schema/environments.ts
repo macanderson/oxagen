@@ -232,11 +232,19 @@ export const sandboxTemplates = environmentsSchema.table(
     resources: jsonb("resources").notNull().default(sql`'{}'::jsonb`),
     // { mode, config? } — mode ∈ public|static_egress|aws_privatelink|gcp_psc|
     // reverse_tunnel|ssh_bastion (provisioner fails fast on unimplemented modes).
-    network: jsonb("network").notNull().default(sql`'{"mode":"public"}'::jsonb`),
+    network: jsonb("network")
+      .notNull()
+      .default(sql`'{"mode":"public"}'::jsonb`),
     // 'all' | { keyPublicIds: string[] } — which vault keys resolve for this run.
-    secretSelection: jsonb("secret_selection").notNull().default(sql`'"all"'::jsonb`),
+    secretSelection: jsonb("secret_selection")
+      .notNull()
+      .default(sql`'"all"'::jsonb`),
     // Non-sensitive literal KEY=value config (§19.3). NEVER secrets.
     literalEnv: jsonb("literal_env").notNull().default(sql`'{}'::jsonb`),
+    // Per-ecosystem package lists installed into the image at provision time:
+    // [{ manager: 'pip'|'npm'|'apt'|…, names: string[] }]. Validated in zod
+    // (sandboxTemplatePackagesSchema) — not a DB enum (the manager set is extensible).
+    packages: jsonb("packages").notNull().default(sql`'[]'::jsonb`),
   },
   (t) => ({
     // One live template per (workspace, slug). Canonical WHERE in migration.
@@ -245,14 +253,18 @@ export const sandboxTemplates = environmentsSchema.table(
       .nullsNotDistinct(),
     // Exactly one default per (workspace, environment). Placeholder — canonical
     // partial-unique `(workspace_id, environment_id) WHERE is_default` in the migration.
-    workspaceEnvDefaultUniq: unique("sandbox_templates_workspace_env_default_uniq")
+    workspaceEnvDefaultUniq: unique(
+      "sandbox_templates_workspace_env_default_uniq",
+    )
       .on(t.workspaceId, t.environmentId)
       .nullsNotDistinct(),
     orgWorkspaceIdx: index("sandbox_templates_org_workspace_idx").on(
       t.orgId,
       t.workspaceId,
     ),
-    environmentIdx: index("sandbox_templates_environment_idx").on(t.environmentId),
+    environmentIdx: index("sandbox_templates_environment_idx").on(
+      t.environmentId,
+    ),
   }),
 );
 
@@ -278,12 +290,12 @@ export const sandboxTemplateTools = environmentsSchema.table(
   },
   (t) => ({
     // One row per (template, kind, ref).
-    templateKindRefUniq: unique("sandbox_template_tools_template_kind_ref_uniq").on(
+    templateKindRefUniq: unique(
+      "sandbox_template_tools_template_kind_ref_uniq",
+    ).on(t.sandboxTemplateId, t.kind, t.ref),
+    templateIdx: index("sandbox_template_tools_template_idx").on(
       t.sandboxTemplateId,
-      t.kind,
-      t.ref,
     ),
-    templateIdx: index("sandbox_template_tools_template_idx").on(t.sandboxTemplateId),
     orgWorkspaceIdx: index("sandbox_template_tools_org_workspace_idx").on(
       t.orgId,
       t.workspaceId,

@@ -9,6 +9,7 @@ import {
   buildSecretSelection,
   buildSecretKeys,
   cleanTools,
+  cleanPackages,
   buildManifestInput,
   validateManifestInput,
   formatZodErrors,
@@ -103,6 +104,35 @@ describe("manifest-form-state", () => {
     });
   });
 
+  describe("cleanPackages", () => {
+    it("trims names, drops blanks, and drops manager rows left with no names", () => {
+      const state = baseState({
+        packages: [
+          { manager: "pip", names: ["  fastapi  ", "", "pydantic==2.5"] },
+          { manager: "npm", names: [] },
+          { manager: "apt", names: ["   "] },
+        ],
+      });
+      expect(cleanPackages(state)).toEqual([
+        { manager: "pip", names: ["fastapi", "pydantic==2.5"] },
+      ]);
+    });
+
+    it("returns [] for no packages and preserves manager-row order", () => {
+      expect(cleanPackages(baseState())).toEqual([]);
+      const state = baseState({
+        packages: [
+          { manager: "apt", names: ["git"] },
+          { manager: "pip", names: ["numpy"] },
+        ],
+      });
+      expect(cleanPackages(state).map((g) => g.manager)).toEqual([
+        "apt",
+        "pip",
+      ]);
+    });
+  });
+
   describe("buildSecretKeys — mirrors exportTemplate's resolution", () => {
     const keys = [
       makeKey({
@@ -150,6 +180,7 @@ describe("manifest-form-state", () => {
         secretKind: "select",
         selectedKeys: ["key-1"],
         literalRows: [{ key: "LOG_LEVEL", value: "debug" }],
+        packages: [{ manager: "pip", names: ["fastapi", "pydantic==2.5"] }],
         tools: [{ kind: "capability", ref: "repo.pr.open" }],
       });
       const keys = [makeKey({ id: "key-1", key: "DATABASE_URL" })];
@@ -171,6 +202,7 @@ describe("manifest-form-state", () => {
         network: { mode: "static_egress" },
         secretSelection: { keyPublicIds: ["key-1"] },
         literalEnv: { LOG_LEVEL: "debug" },
+        packages: [{ manager: "pip", names: ["fastapi", "pydantic==2.5"] }],
         tools: [{ kind: "capability", ref: "repo.pr.open" }],
         secretKeys: [{ key: "DATABASE_URL", required: true }],
       });

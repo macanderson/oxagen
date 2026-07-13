@@ -76,6 +76,14 @@ test("Connect a source wizard: pick → credentials → preview → mappings →
   // set_connection_mappings persists + activates, then redirects to Sources
   // with the new connection visible.
   await page.waitForURL(new RegExp(`/${user.orgSlug}/default/knowledge/sources$`), { timeout: 30_000 });
+
+  // The Sources page's ConnectionsSection (RSC) invokes list_connections to
+  // render the list — the freshly created connection's row appearing here is
+  // the runtime proof for the list_connections UI binding
+  // (capability-ui-map.json → list_connections.proof points at this spec).
+  await expect(
+    page.locator('[data-testid^="connection-row-"]').first(),
+  ).toBeVisible({ timeout: 15_000 });
 });
 
 test("Connect a source wizard: OAuth-only connectors render a redirect-out notice instead of an inline form", async ({
