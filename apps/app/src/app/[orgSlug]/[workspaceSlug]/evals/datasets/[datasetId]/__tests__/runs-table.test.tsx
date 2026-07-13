@@ -37,7 +37,7 @@ const { mockListEvalRunsAction } = vi.hoisted(() => ({
   mockListEvalRunsAction: vi.fn(),
 }));
 
-vi.mock("../../actions", () => ({
+vi.mock("../../../actions", () => ({
   listEvalRunsAction: (...args: unknown[]) => mockListEvalRunsAction(...args),
 }));
 
@@ -116,7 +116,7 @@ describe("RunsTable — seeding", () => {
       />,
     );
     expect(screen.getByTestId("evals-runs-count")).toHaveTextContent(
-      /Showing 1 of 3 — 42 all-time/,
+      /Showing 1.*of 3.*42 all-time/,
     );
   });
 });

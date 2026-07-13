@@ -48,7 +48,7 @@ const {
   mockRefresh: vi.fn(),
 }));
 
-vi.mock("../../actions", () => ({
+vi.mock("../../../actions", () => ({
   startEvalRunAction: (...args: unknown[]) => mockStartEvalRunAction(...args),
   getEvalRunStatusAction: (...args: unknown[]) =>
     mockGetEvalRunStatusAction(...args),
