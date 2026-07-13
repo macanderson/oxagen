@@ -106,8 +106,10 @@ test("access: Enterprise org renders own session + own review row with self-acti
     fullPage: true,
   });
 
-  // Reviews tab.
-  await page.getByRole("link", { name: "Reviews" }).click();
+  // Reviews tab. PageTabs renders each tab as <Link role="tab">, so it must be
+  // located by the "tab" role — getByRole("link") no longer matches (the
+  // element's ARIA role is overridden to "tab"), which timed out the click.
+  await page.getByRole("tab", { name: "Reviews" }).click();
   await expect(page).toHaveURL(/\/access\/reviews/);
   await page.waitForLoadState("domcontentloaded");
 
