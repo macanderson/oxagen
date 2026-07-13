@@ -245,8 +245,7 @@ describe("ProviderModelPicker", () => {
 
     // The model list is already scoped to OpenAI (derived from value's vendor).
     const modelSelects = screen.getAllByTestId("select");
-    const modelSelect = modelSelects[modelSelects.length - 1];
-    if (!modelSelect) throw new Error("expected a model select to be rendered");
+    const modelSelect = modelSelects[modelSelects.length - 1]!;
     expect(within(modelSelect).getByText("GPT-5.2")).toBeInTheDocument();
     // No Anthropic model should be listed.
     expect(
