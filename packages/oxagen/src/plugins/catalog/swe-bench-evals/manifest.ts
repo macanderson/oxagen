@@ -40,11 +40,20 @@ export const sweBenchEvalsManifest: OxagenPluginManifest = {
       // Placeholder digest-pinned image ref — replace with the published
       // prewarmed image (e.g. the OXAGEN_PREWARMED SWE-bench image) once it is
       // pushed to a registry. Digest-pinning keeps eval runs reproducible.
-      runtime: "ghcr.io/oxageninc/swe-bench-prewarmed@sha256:0000000000000000000000000000000000000000000000000000000000000000",
-      resources: { vcpu: 2, memoryMb: 4096, timeoutMs: 300_000, diskMb: 10_240 },
+      runtime:
+        "ghcr.io/oxageninc/swe-bench-prewarmed@sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      resources: {
+        vcpu: 2,
+        memoryMb: 4096,
+        timeoutMs: 300_000,
+        diskMb: 10_240,
+      },
       network: { mode: "public" },
       secretSelection: "all",
       literalEnv: {},
+      // Toolchain is baked into the digest-pinned prewarmed image, so no
+      // provision-time package installs are needed.
+      packages: [],
       tools: [
         // Post-ADR-025 capability name for code execution (was agent.code.execute).
         { kind: "capability", ref: "execute_code" },

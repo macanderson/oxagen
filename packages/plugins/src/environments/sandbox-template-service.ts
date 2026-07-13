@@ -16,6 +16,7 @@ import type {
   SandboxNetwork,
   SandboxSecretSelection,
   SandboxLiteralEnv,
+  SandboxTemplatePackages,
   SandboxTemplateTool,
   SandboxTemplateManifest,
 } from "@oxagen/oxagen/contracts";
@@ -51,6 +52,7 @@ export interface SandboxTemplateSummary {
   network: SandboxNetwork;
   secretSelection: SandboxSecretSelection;
   literalEnv: SandboxLiteralEnv;
+  packages: SandboxTemplatePackages;
   tools: SandboxTemplateToolSummary[];
 }
 
@@ -94,6 +96,7 @@ const templateColumns = () =>
     network: schema.sandboxTemplates.network,
     secretSelection: schema.sandboxTemplates.secretSelection,
     literalEnv: schema.sandboxTemplates.literalEnv,
+    packages: schema.sandboxTemplates.packages,
   }) as const;
 
 interface TemplateRow {
@@ -114,6 +117,7 @@ interface TemplateRow {
   network: unknown;
   secretSelection: unknown;
   literalEnv: unknown;
+  packages: unknown;
 }
 
 function toToolSummary(row: {
@@ -130,7 +134,10 @@ function toToolSummary(row: {
   };
 }
 
-function toSummary(row: TemplateRow, tools: SandboxTemplateToolSummary[]): SandboxTemplateSummary {
+function toSummary(
+  row: TemplateRow,
+  tools: SandboxTemplateToolSummary[],
+): SandboxTemplateSummary {
   return {
     id: row.publicId,
     environmentId: row.environmentPublicId,
@@ -145,13 +152,18 @@ function toSummary(row: TemplateRow, tools: SandboxTemplateToolSummary[]): Sandb
     network: (row.network ?? { mode: "public" }) as SandboxNetwork,
     secretSelection: (row.secretSelection ?? "all") as SandboxSecretSelection,
     literalEnv: (row.literalEnv ?? {}) as SandboxLiteralEnv,
+    packages: (row.packages ?? []) as SandboxTemplatePackages,
     tools,
   };
 }
 
 // ── loaders ──────────────────────────────────────────────────────────────────
 
-async function loadTemplateRow(tx: Tx, workspaceId: string, publicId: string): Promise<TemplateRow> {
+async function loadTemplateRow(
+  tx: Tx,
+  workspaceId: string,
+  publicId: string,
+): Promise<TemplateRow> {
   const [row] = await tx
     .select(templateColumns())
     .from(schema.sandboxTemplates)
@@ -167,7 +179,8 @@ async function loadTemplateRow(tx: Tx, workspaceId: string, publicId: string): P
       ),
     )
     .limit(1);
-  if (!row) throw new Error(`[sandbox-template] template not found: ${publicId}`);
+  if (!row)
+    throw new Error(`[sandbox-template] template not found: ${publicId}`);
   return row;
 }
 
@@ -193,7 +206,8 @@ async function loadEnvironment(
       ),
     )
     .limit(1);
-  if (!row) throw new Error(`[sandbox-template] environment not found: ${publicId}`);
+  if (!row)
+    throw new Error(`[sandbox-template] environment not found: ${publicId}`);
   return row;
 }
 
@@ -213,7 +227,12 @@ async function loadToolsFor(
       config: schema.sandboxTemplateTools.config,
     })
     .from(schema.sandboxTemplateTools)
-    .where(inArray(schema.sandboxTemplateTools.sandboxTemplateId, templateInternalIds));
+    .where(
+      inArray(
+        schema.sandboxTemplateTools.sandboxTemplateId,
+        templateInternalIds,
+      ),
+    );
   for (const r of rows) {
     const list = byTemplate.get(r.sandboxTemplateId) ?? [];
     list.push(toToolSummary(r));
@@ -241,7 +260,9 @@ async function replaceToolsTx(
 ): Promise<void> {
   await tx
     .delete(schema.sandboxTemplateTools)
-    .where(eq(schema.sandboxTemplateTools.sandboxTemplateId, templateInternalId));
+    .where(
+      eq(schema.sandboxTemplateTools.sandboxTemplateId, templateInternalId),
+    );
   if (tools.length === 0) return;
   // De-dupe on (kind, ref) — the unique index forbids duplicates and a manifest
   // may repeat a ref; last write wins.
@@ -269,7 +290,11 @@ async function clearEnvDefaultTx(
 ): Promise<void> {
   await tx
     .update(schema.sandboxTemplates)
-    .set({ isDefault: false, updatedAt: new Date(), updatedByUserId: actor.userId ?? null })
+    .set({
+      isDefault: false,
+      updatedAt: new Date(),
+      updatedByUserId: actor.userId ?? null,
+    })
     .where(
       and(
         eq(schema.sandboxTemplates.workspaceId, actor.workspaceId),
@@ -295,6 +320,7 @@ export async function createTemplate(
     network?: SandboxNetwork;
     secretSelection?: SandboxSecretSelection;
     literalEnv?: SandboxLiteralEnv;
+    packages?: SandboxTemplatePackages;
     tools?: SandboxTemplateTool[];
     setAsDefault?: boolean;
   },
@@ -304,7 +330,11 @@ export async function createTemplate(
     throw new Error(`[sandbox-template] invalid slug: ${input.slug}`);
   }
   return withTenantDb(async (tx) => {
-    const env = await loadEnvironment(tx, actor.workspaceId, input.environmentId);
+    const env = await loadEnvironment(
+      tx,
+      actor.workspaceId,
+      input.environmentId,
+    );
     const [row] = await tx
       .insert(schema.sandboxTemplates)
       .values({
@@ -322,10 +352,14 @@ export async function createTemplate(
         network: input.network ?? { mode: "public" },
         secretSelection: input.secretSelection ?? "all",
         literalEnv: input.literalEnv ?? {},
+        packages: input.packages ?? [],
         createdByUserId: actor.userId ?? null,
         updatedByUserId: actor.userId ?? null,
       })
-      .returning({ id: schema.sandboxTemplates.id, publicId: schema.sandboxTemplates.publicId });
+      .returning({
+        id: schema.sandboxTemplates.id,
+        publicId: schema.sandboxTemplates.publicId,
+      });
     if (!row) throw new Error("[sandbox-template] insert returned no row");
     if (input.tools && input.tools.length > 0) {
       await replaceToolsTx(tx, actor, row.id, input.tools);
@@ -351,7 +385,11 @@ export async function listTemplates(
       isNull(schema.sandboxTemplates.deletedAt),
     ];
     if (input.environmentId) {
-      const env = await loadEnvironment(tx, actor.workspaceId, input.environmentId);
+      const env = await loadEnvironment(
+        tx,
+        actor.workspaceId,
+        input.environmentId,
+      );
       filters.push(eq(schema.sandboxTemplates.environmentId, env.id));
     }
     const rows = await tx
@@ -363,7 +401,10 @@ export async function listTemplates(
       )
       .where(and(...filters))
       .orderBy(schema.sandboxTemplates.slug);
-    const toolsByTemplate = await loadToolsFor(tx, rows.map((r) => r.id));
+    const toolsByTemplate = await loadToolsFor(
+      tx,
+      rows.map((r) => r.id),
+    );
     return rows.map((r) => toSummary(r, toolsByTemplate.get(r.id) ?? []));
   });
 }
@@ -372,7 +413,9 @@ export async function getTemplate(
   actor: SandboxTemplateActor,
   input: { templateId: string },
 ): Promise<SandboxTemplateSummary> {
-  return withTenantDb(async (tx) => loadTemplateWithTools(tx, actor.workspaceId, input.templateId));
+  return withTenantDb(async (tx) =>
+    loadTemplateWithTools(tx, actor.workspaceId, input.templateId),
+  );
 }
 
 export async function updateTemplate(
@@ -388,11 +431,16 @@ export async function updateTemplate(
     network?: SandboxNetwork;
     secretSelection?: SandboxSecretSelection;
     literalEnv?: SandboxLiteralEnv;
+    packages?: SandboxTemplatePackages;
     isActive?: boolean;
   },
 ): Promise<SandboxTemplateSummary> {
   return withTenantDb(async (tx) => {
-    const existing = await loadTemplateRow(tx, actor.workspaceId, input.templateId);
+    const existing = await loadTemplateRow(
+      tx,
+      actor.workspaceId,
+      input.templateId,
+    );
     // A default template must stay active — promote another in the same
     // environment before deactivating this one (mirrors the environments guard).
     if (input.isActive === false && existing.isDefault) {
@@ -400,7 +448,8 @@ export async function updateTemplate(
         "[sandbox-template] cannot deactivate the default template — promote another template in this environment first",
       );
     }
-    const slug = input.slug !== undefined ? input.slug.toLowerCase() : undefined;
+    const slug =
+      input.slug !== undefined ? input.slug.toLowerCase() : undefined;
     if (slug !== undefined && !isValidEnvironmentSlug(slug)) {
       throw new Error(`[sandbox-template] invalid slug: ${input.slug}`);
     }
@@ -409,13 +458,22 @@ export async function updateTemplate(
       .set({
         ...(input.name !== undefined ? { name: input.name } : {}),
         ...(slug !== undefined ? { slug } : {}),
-        ...(input.description !== undefined ? { description: input.description } : {}),
+        ...(input.description !== undefined
+          ? { description: input.description }
+          : {}),
         ...(input.provider !== undefined ? { provider: input.provider } : {}),
         ...(input.runtime !== undefined ? { runtime: input.runtime } : {}),
-        ...(input.resources !== undefined ? { resources: input.resources } : {}),
+        ...(input.resources !== undefined
+          ? { resources: input.resources }
+          : {}),
         ...(input.network !== undefined ? { network: input.network } : {}),
-        ...(input.secretSelection !== undefined ? { secretSelection: input.secretSelection } : {}),
-        ...(input.literalEnv !== undefined ? { literalEnv: input.literalEnv } : {}),
+        ...(input.secretSelection !== undefined
+          ? { secretSelection: input.secretSelection }
+          : {}),
+        ...(input.literalEnv !== undefined
+          ? { literalEnv: input.literalEnv }
+          : {}),
+        ...(input.packages !== undefined ? { packages: input.packages } : {}),
         ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
         updatedAt: new Date(),
         updatedByUserId: actor.userId ?? null,
@@ -430,7 +488,11 @@ export async function deleteTemplate(
   input: { templateId: string },
 ): Promise<{ ok: true }> {
   await withTenantDb(async (tx) => {
-    const existing = await loadTemplateRow(tx, actor.workspaceId, input.templateId);
+    const existing = await loadTemplateRow(
+      tx,
+      actor.workspaceId,
+      input.templateId,
+    );
     if (existing.isDefault) {
       throw new Error(
         "[sandbox-template] cannot delete the default template — promote another template in this environment first",
@@ -455,7 +517,11 @@ export async function setDefaultTemplate(
   input: { templateId: string },
 ): Promise<SandboxTemplateSummary> {
   return withTenantDb(async (tx) => {
-    const target = await loadTemplateRow(tx, actor.workspaceId, input.templateId);
+    const target = await loadTemplateRow(
+      tx,
+      actor.workspaceId,
+      input.templateId,
+    );
     await clearEnvDefaultTx(tx, actor, target.environmentInternalId);
     await tx
       .update(schema.sandboxTemplates)
@@ -475,7 +541,11 @@ export async function setTemplateTools(
   input: { templateId: string; tools: SandboxTemplateTool[] },
 ): Promise<SandboxTemplateSummary> {
   return withTenantDb(async (tx) => {
-    const existing = await loadTemplateRow(tx, actor.workspaceId, input.templateId);
+    const existing = await loadTemplateRow(
+      tx,
+      actor.workspaceId,
+      input.templateId,
+    );
     await replaceToolsTx(tx, actor, existing.id, input.tools);
     return loadTemplateWithTools(tx, actor.workspaceId, existing.publicId);
   });
@@ -490,7 +560,10 @@ export async function exportTemplate(
   const summary = await getTemplate(actor, input);
   // Resolve the selected key public ids back to their env-var NAMES (a manifest
   // travels by name, never by internal id or value).
-  const keys = await listSecretKeys({ orgId: actor.orgId, workspaceId: actor.workspaceId });
+  const keys = await listSecretKeys({
+    orgId: actor.orgId,
+    workspaceId: actor.workspaceId,
+  });
   let secretKeys: SandboxTemplateManifest["secretKeys"];
   if (summary.secretSelection === "all") {
     secretKeys = keys.map((k) => ({
@@ -503,7 +576,12 @@ export async function exportTemplate(
     const selected = new Set(summary.secretSelection.keyPublicIds);
     secretKeys = keys
       .filter((k) => selected.has(k.id))
-      .map((k) => ({ key: k.key, sensitive: k.sensitive, memo: k.memo ?? null, required: true }));
+      .map((k) => ({
+        key: k.key,
+        sensitive: k.sensitive,
+        memo: k.memo ?? null,
+        required: true,
+      }));
   }
   return {
     kind: "oxagen.sandbox-template",
@@ -517,7 +595,12 @@ export async function exportTemplate(
     network: summary.network,
     secretSelection: summary.secretSelection,
     literalEnv: summary.literalEnv,
-    tools: summary.tools.map((t) => ({ kind: t.kind, ref: t.ref, config: t.config })),
+    packages: summary.packages,
+    tools: summary.tools.map((t) => ({
+      kind: t.kind,
+      ref: t.ref,
+      config: t.config,
+    })),
     secretKeys,
   };
 }
@@ -541,7 +624,9 @@ export async function importTemplate(
   const manifest = input.manifest;
   const slug = (input.slug ?? manifest.slug).toLowerCase();
   if (!isValidEnvironmentSlug(slug)) {
-    throw new Error(`[sandbox-template] invalid slug: ${input.slug ?? manifest.slug}`);
+    throw new Error(
+      `[sandbox-template] invalid slug: ${input.slug ?? manifest.slug}`,
+    );
   }
 
   // Upsert missing secret keys FIRST (own tx via the vault service) so the
@@ -556,7 +641,11 @@ export async function importTemplate(
   for (const mk of manifest.secretKeys) {
     if (existingKeyNames.has(mk.key)) continue;
     await upsertSecretKey(
-      { orgId: actor.orgId, workspaceId: actor.workspaceId, userId: actor.userId },
+      {
+        orgId: actor.orgId,
+        workspaceId: actor.workspaceId,
+        userId: actor.userId,
+      },
       { key: mk.key, sensitive: mk.sensitive, memo: mk.memo ?? null },
     );
   }
@@ -576,7 +665,9 @@ export async function importTemplate(
   if (manifest.secretSelection !== "all") {
     // Manifests reference keys by NAME via secretKeys[]; a required key becomes
     // part of the selection. Fall back to 'all' only if nothing resolved.
-    const requiredNames = manifest.secretKeys.filter((k) => k.required).map((k) => k.key);
+    const requiredNames = manifest.secretKeys
+      .filter((k) => k.required)
+      .map((k) => k.key);
     const ids = requiredNames
       .map((n) => keyIdByName.get(n))
       .filter((v): v is string => typeof v === "string");
@@ -584,7 +675,11 @@ export async function importTemplate(
   }
 
   return withTenantDb(async (tx) => {
-    const env = await loadEnvironment(tx, actor.workspaceId, input.environmentId);
+    const env = await loadEnvironment(
+      tx,
+      actor.workspaceId,
+      input.environmentId,
+    );
 
     // Slug collision → hard error unless overridden (§3).
     const [collision] = await tx
@@ -621,18 +716,27 @@ export async function importTemplate(
         network: manifest.network,
         secretSelection,
         literalEnv: manifest.literalEnv,
+        packages: manifest.packages,
         createdByUserId: actor.userId ?? null,
         updatedByUserId: actor.userId ?? null,
       })
-      .returning({ id: schema.sandboxTemplates.id, publicId: schema.sandboxTemplates.publicId });
-    if (!row) throw new Error("[sandbox-template] import insert returned no row");
+      .returning({
+        id: schema.sandboxTemplates.id,
+        publicId: schema.sandboxTemplates.publicId,
+      });
+    if (!row)
+      throw new Error("[sandbox-template] import insert returned no row");
 
     if (manifest.tools.length > 0) {
       await replaceToolsTx(
         tx,
         actor,
         row.id,
-        manifest.tools.map((t) => ({ kind: t.kind, ref: t.ref, config: t.config })),
+        manifest.tools.map((t) => ({
+          kind: t.kind,
+          ref: t.ref,
+          config: t.config,
+        })),
       );
       // Advisory: capability refs not installed in this workspace are preloaded
       // best-effort at provision time (skipped with a logged warning).
@@ -651,7 +755,11 @@ export async function importTemplate(
         .where(eq(schema.sandboxTemplates.id, row.id));
     }
 
-    const template = await loadTemplateWithTools(tx, actor.workspaceId, row.publicId);
+    const template = await loadTemplateWithTools(
+      tx,
+      actor.workspaceId,
+      row.publicId,
+    );
     return { template, warnings };
   });
 }
@@ -674,13 +782,16 @@ export interface InstallTemplatesFromPackResult {
 
 /** Derive the pack's slug segment from its id ("ns/slug" → "slug"). */
 function packSlugSegment(packId: string): string {
-  const seg = packId.includes("/") ? packId.slice(packId.lastIndexOf("/") + 1) : packId;
+  const seg = packId.includes("/")
+    ? packId.slice(packId.lastIndexOf("/") + 1)
+    : packId;
   return seg.toLowerCase();
 }
 
 /** `${pack}-${slug}`, avoiding a redundant double prefix. */
 function prefixedTemplateSlug(packSeg: string, bareSlug: string): string {
-  if (bareSlug === packSeg || bareSlug.startsWith(`${packSeg}-`)) return bareSlug;
+  if (bareSlug === packSeg || bareSlug.startsWith(`${packSeg}-`))
+    return bareSlug;
   return `${packSeg}-${bareSlug}`;
 }
 
@@ -718,7 +829,10 @@ export async function installTemplatesFromPack(
   });
   const existingKeyNames = new Set(existingKeys.map((k) => k.key));
   const keyIdByName = new Map(existingKeys.map((k) => [k.key, k.id]));
-  const seenKeys = new Map<string, { sensitive: boolean; memo: string | null }>();
+  const seenKeys = new Map<
+    string,
+    { sensitive: boolean; memo: string | null }
+  >();
   for (const tpl of input.templates) {
     for (const mk of tpl.secretKeys) {
       if (existingKeyNames.has(mk.key) || seenKeys.has(mk.key)) continue;
@@ -727,7 +841,11 @@ export async function installTemplatesFromPack(
   }
   for (const [key, meta] of seenKeys) {
     await upsertSecretKey(
-      { orgId: actor.orgId, workspaceId: actor.workspaceId, userId: actor.userId },
+      {
+        orgId: actor.orgId,
+        workspaceId: actor.workspaceId,
+        userId: actor.userId,
+      },
       { key, sensitive: meta.sensitive, memo: meta.memo },
     );
   }
@@ -764,7 +882,9 @@ export async function installTemplatesFromPack(
     for (const manifest of input.templates) {
       const bare = manifest.slug.toLowerCase();
       if (!isValidEnvironmentSlug(bare)) {
-        throw new Error(`[sandbox-template] pack template has invalid slug: ${manifest.slug}`);
+        throw new Error(
+          `[sandbox-template] pack template has invalid slug: ${manifest.slug}`,
+        );
       }
       const prefixed = prefixedTemplateSlug(packSeg, bare);
 
@@ -772,7 +892,9 @@ export async function installTemplatesFromPack(
       // (identical to importTemplate: required keys form an explicit selection).
       let secretSelection: SandboxSecretSelection = "all";
       if (manifest.secretSelection !== "all") {
-        const requiredNames = manifest.secretKeys.filter((k) => k.required).map((k) => k.key);
+        const requiredNames = manifest.secretKeys
+          .filter((k) => k.required)
+          .map((k) => k.key);
         const ids = requiredNames
           .map((n) => keyIdByName.get(n))
           .filter((v): v is string => typeof v === "string");
@@ -825,6 +947,7 @@ export async function installTemplatesFromPack(
         network: manifest.network,
         secretSelection,
         literalEnv: manifest.literalEnv,
+        packages: manifest.packages,
         isActive: true,
       };
 
@@ -861,7 +984,10 @@ export async function installTemplatesFromPack(
             id: schema.sandboxTemplates.id,
             publicId: schema.sandboxTemplates.publicId,
           });
-        if (!row) throw new Error("[sandbox-template] pack template insert returned no row");
+        if (!row)
+          throw new Error(
+            "[sandbox-template] pack template insert returned no row",
+          );
         templateInternalId = row.id;
         publicId = row.publicId;
         created = true;
@@ -872,7 +998,11 @@ export async function installTemplatesFromPack(
         tx,
         actor,
         templateInternalId,
-        manifest.tools.map((t) => ({ kind: t.kind, ref: t.ref, config: t.config })),
+        manifest.tools.map((t) => ({
+          kind: t.kind,
+          ref: t.ref,
+          config: t.config,
+        })),
       );
       for (const t of manifest.tools) {
         warnings.push(
@@ -896,7 +1026,8 @@ const bindingColumns = () =>
     publicId: schema.agentEnvironmentBindings.publicId,
     agentId: schema.agentEnvironmentBindings.agentId,
     environmentInternalId: schema.agentEnvironmentBindings.environmentId,
-    sandboxTemplateInternalId: schema.agentEnvironmentBindings.sandboxTemplateId,
+    sandboxTemplateInternalId:
+      schema.agentEnvironmentBindings.sandboxTemplateId,
     isPrimary: schema.agentEnvironmentBindings.isPrimary,
   }) as const;
 
@@ -946,7 +1077,8 @@ async function bindingSummary(
   };
 }
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * Resolve an agent identifier (internal UUID, `agt_…` public id, or slug) to
@@ -966,9 +1098,16 @@ async function resolveAgentInternalId(
   const [row] = await tx
     .select({ id: schema.agents.id })
     .from(schema.agents)
-    .where(and(eq(schema.agents.workspaceId, workspaceId), match, isNull(schema.agents.deletedAt)))
+    .where(
+      and(
+        eq(schema.agents.workspaceId, workspaceId),
+        match,
+        isNull(schema.agents.deletedAt),
+      ),
+    )
     .limit(1);
-  if (!row) throw new Error(`[sandbox-template] agent not found: ${identifier}`);
+  if (!row)
+    throw new Error(`[sandbox-template] agent not found: ${identifier}`);
   return row.id;
 }
 
@@ -982,13 +1121,25 @@ export async function bindAgentEnvironment(
   },
 ): Promise<AgentEnvironmentBinding> {
   return withTenantDb(async (tx) => {
-    const agentInternalId = await resolveAgentInternalId(tx, actor.workspaceId, input.agentId);
-    const env = await loadEnvironment(tx, actor.workspaceId, input.environmentId);
+    const agentInternalId = await resolveAgentInternalId(
+      tx,
+      actor.workspaceId,
+      input.agentId,
+    );
+    const env = await loadEnvironment(
+      tx,
+      actor.workspaceId,
+      input.environmentId,
+    );
 
     // A named template must belong to the same environment as the binding.
     let templateInternalId: string | null = null;
     if (input.sandboxTemplateId) {
-      const tpl = await loadTemplateRow(tx, actor.workspaceId, input.sandboxTemplateId);
+      const tpl = await loadTemplateRow(
+        tx,
+        actor.workspaceId,
+        input.sandboxTemplateId,
+      );
       if (tpl.environmentInternalId !== env.id) {
         throw new Error(
           "[sandbox-template] bound template must belong to the bound environment",
@@ -1019,7 +1170,11 @@ export async function bindAgentEnvironment(
     if (desiredPrimary) {
       await tx
         .update(schema.agentEnvironmentBindings)
-        .set({ isPrimary: false, updatedAt: new Date(), updatedByUserId: actor.userId ?? null })
+        .set({
+          isPrimary: false,
+          updatedAt: new Date(),
+          updatedByUserId: actor.userId ?? null,
+        })
         .where(
           and(
             eq(schema.agentEnvironmentBindings.workspaceId, actor.workspaceId),
@@ -1029,7 +1184,9 @@ export async function bindAgentEnvironment(
         );
     }
 
-    const existing = existingForAgent.find((b) => b.environmentInternalId === env.id);
+    const existing = existingForAgent.find(
+      (b) => b.environmentInternalId === env.id,
+    );
     let publicId: string;
     if (existing) {
       const [updated] = await tx
@@ -1079,8 +1236,16 @@ export async function unbindAgentEnvironment(
   input: { agentId: string; environmentId: string },
 ): Promise<{ ok: true }> {
   await withTenantDb(async (tx) => {
-    const agentInternalId = await resolveAgentInternalId(tx, actor.workspaceId, input.agentId);
-    const env = await loadEnvironment(tx, actor.workspaceId, input.environmentId);
+    const agentInternalId = await resolveAgentInternalId(
+      tx,
+      actor.workspaceId,
+      input.agentId,
+    );
+    const env = await loadEnvironment(
+      tx,
+      actor.workspaceId,
+      input.environmentId,
+    );
     await tx
       .delete(schema.agentEnvironmentBindings)
       .where(
@@ -1099,7 +1264,11 @@ export async function listAgentBindings(
   input: { agentId: string },
 ): Promise<AgentEnvironmentBinding[]> {
   return withTenantDb(async (tx) => {
-    const agentInternalId = await resolveAgentInternalId(tx, actor.workspaceId, input.agentId);
+    const agentInternalId = await resolveAgentInternalId(
+      tx,
+      actor.workspaceId,
+      input.agentId,
+    );
     const rows = await tx
       .select(bindingColumns())
       .from(schema.agentEnvironmentBindings)
@@ -1109,7 +1278,9 @@ export async function listAgentBindings(
           eq(schema.agentEnvironmentBindings.agentId, agentInternalId),
         ),
       );
-    return Promise.all(rows.map((r) => bindingSummary(tx, actor.workspaceId, r)));
+    return Promise.all(
+      rows.map((r) => bindingSummary(tx, actor.workspaceId, r)),
+    );
   });
 }
 
@@ -1127,7 +1298,11 @@ export async function listAgentBindings(
  */
 export async function resolveSandboxTemplateForRun(
   actor: SandboxTemplateActor,
-  input: { agentId?: string; environmentId?: string; sandboxTemplateId?: string } = {},
+  input: {
+    agentId?: string;
+    environmentId?: string;
+    sandboxTemplateId?: string;
+  } = {},
 ): Promise<ResolvedSandboxTemplate> {
   return withTenantDb(async (tx) => {
     const agentInternalId = input.agentId
@@ -1136,39 +1311,70 @@ export async function resolveSandboxTemplateForRun(
     // 0. Explicit template pin — a caller (or template-driven run) that already
     // chose a template. Its own environment governs secret resolution.
     if (input.sandboxTemplateId) {
-      const row = await loadTemplateRow(tx, actor.workspaceId, input.sandboxTemplateId);
-      const pinnedEnv = await loadEnvironment(tx, actor.workspaceId, row.environmentPublicId);
+      const row = await loadTemplateRow(
+        tx,
+        actor.workspaceId,
+        input.sandboxTemplateId,
+      );
+      const pinnedEnv = await loadEnvironment(
+        tx,
+        actor.workspaceId,
+        row.environmentPublicId,
+      );
       if (!pinnedEnv.isActive) {
         throw new Error(
           `[sandbox-template] environment "${pinnedEnv.slug}" is inactive — activate it or choose another`,
         );
       }
-      const template = await loadTemplateWithTools(tx, actor.workspaceId, row.publicId);
+      const template = await loadTemplateWithTools(
+        tx,
+        actor.workspaceId,
+        row.publicId,
+      );
       if (!template.isActive) {
         throw new Error(
           `[sandbox-template] template "${template.slug}" is inactive — activate it or promote another default`,
         );
       }
       return {
-        environment: { id: row.environmentPublicId, name: pinnedEnv.name, slug: pinnedEnv.slug },
+        environment: {
+          id: row.environmentPublicId,
+          name: pinnedEnv.name,
+          slug: pinnedEnv.slug,
+        },
         template,
       };
     }
 
     // 1. Resolve the environment (internal row).
-    let envRow: { id: string; name: string; slug: string; isActive: boolean } | null = null;
+    let envRow: {
+      id: string;
+      name: string;
+      slug: string;
+      isActive: boolean;
+    } | null = null;
     let bindingTemplateInternalId: string | null = null;
 
     if (input.environmentId) {
-      envRow = await loadEnvironment(tx, actor.workspaceId, input.environmentId);
+      envRow = await loadEnvironment(
+        tx,
+        actor.workspaceId,
+        input.environmentId,
+      );
       // A binding for (agent, this env) may still pin a specific template.
       if (agentInternalId) {
         const [b] = await tx
-          .select({ sandboxTemplateId: schema.agentEnvironmentBindings.sandboxTemplateId })
+          .select({
+            sandboxTemplateId:
+              schema.agentEnvironmentBindings.sandboxTemplateId,
+          })
           .from(schema.agentEnvironmentBindings)
           .where(
             and(
-              eq(schema.agentEnvironmentBindings.workspaceId, actor.workspaceId),
+              eq(
+                schema.agentEnvironmentBindings.workspaceId,
+                actor.workspaceId,
+              ),
               eq(schema.agentEnvironmentBindings.agentId, agentInternalId),
               eq(schema.agentEnvironmentBindings.environmentId, envRow.id),
             ),
@@ -1248,7 +1454,10 @@ export async function resolveSandboxTemplateForRun(
     let templatePublicId: string;
     if (bindingTemplateInternalId) {
       const [t] = await tx
-        .select({ publicId: schema.sandboxTemplates.publicId, isActive: schema.sandboxTemplates.isActive })
+        .select({
+          publicId: schema.sandboxTemplates.publicId,
+          isActive: schema.sandboxTemplates.isActive,
+        })
         .from(schema.sandboxTemplates)
         .where(
           and(
@@ -1258,7 +1467,9 @@ export async function resolveSandboxTemplateForRun(
         )
         .limit(1);
       if (!t) {
-        throw new Error("[sandbox-template] bound template was deleted — rebind or clear the binding");
+        throw new Error(
+          "[sandbox-template] bound template was deleted — rebind or clear the binding",
+        );
       }
       templatePublicId = t.publicId;
     } else {
@@ -1282,7 +1493,11 @@ export async function resolveSandboxTemplateForRun(
       templatePublicId = t.publicId;
     }
 
-    const template = await loadTemplateWithTools(tx, actor.workspaceId, templatePublicId);
+    const template = await loadTemplateWithTools(
+      tx,
+      actor.workspaceId,
+      templatePublicId,
+    );
     if (!template.isActive) {
       throw new Error(
         `[sandbox-template] template "${template.slug}" is inactive — activate it or promote another default`,
@@ -1292,7 +1507,11 @@ export async function resolveSandboxTemplateForRun(
     // template.environmentId is the resolved environment's PUBLIC id (the
     // template lives in envRow's environment — guaranteed by binding/default).
     return {
-      environment: { id: template.environmentId, name: envRow.name, slug: envRow.slug },
+      environment: {
+        id: template.environmentId,
+        name: envRow.name,
+        slug: envRow.slug,
+      },
       template,
     };
   });
