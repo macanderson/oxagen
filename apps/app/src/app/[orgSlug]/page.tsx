@@ -3,12 +3,20 @@ import { eq } from "drizzle-orm";
 import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { resolveOrg } from "@/lib/resolve-org";
+import { requestScopeSlugs } from "@/lib/request-path";
 
 // Sentinel workspaceId for org-only routes (no workspace context). — OXA-1515
 const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
 
-export default async function OrgHome({ params }: { params: Promise<{ orgSlug: string }> }) {
-  const { orgSlug } = await params;
+/**
+ * Org root → first workspace (or the workspace-creation page when the org has
+ * none). The org slug is read from the request URL, NOT `params`: awaiting
+ * `params` before `redirect()` regresses to a client meta-refresh under Cache
+ * Components and 500s the shell. See lib/request-path.ts.
+ */
+export default async function OrgHome() {
+  const { orgSlug } = await requestScopeSlugs();
+  if (!orgSlug) redirect("/");
   const org = await resolveOrg(orgSlug);
   const rows = await runInTenantScope(
     { orgId: org.id, workspaceId: ORG_ONLY_WS },
