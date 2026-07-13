@@ -171,8 +171,6 @@ export const bookEditions = cmsSchema.table(
     bookSlug: text("book_slug").notNull(),
     format: text("format").notNull(),
     title: text("title").notNull(),
-    description: text("description").notNull(),
-    ogImageUrl: text("og_image_url"),
     html: text("html").notNull(),
     published: boolean("published").notNull().default(true),
   },

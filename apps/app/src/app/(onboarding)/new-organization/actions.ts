@@ -1,6 +1,11 @@
 "use server";
 import { z } from "zod";
-import { withSystemDb, schema, isUniqueViolation, deriveNamespace } from "@oxagen/database";
+import {
+  withSystemDb,
+  schema,
+  isUniqueViolation,
+  deriveNamespace,
+} from "@oxagen/database";
 // tenancy: unscoped seam (org creation bootstrap — no org or workspace exists
 // yet at call time; this action IS what creates the first tenant identity, so
 // a scope cannot be entered before the org row exists; withSystemDb bypasses
@@ -55,9 +60,9 @@ async function resolveOrgAvatarUrl(
 }
 
 // FormData schema: captures all flat fields from NewOrgForm.
-// Fields forwarded via hidden inputs (type, industry, employeeSize, addressCountry,
-// addressRegion, addressPlaceId) are always present but may be empty strings —
-// converted to undefined downstream before DB insert.
+// Fields forwarded via hidden inputs (type, industry, employeeSize) are always
+// present but may be empty strings — converted to undefined downstream before
+// DB insert.
 const FormSchema = z.object({
   name: z.string().min(1),
   slug: z.string().min(2).max(40),
@@ -65,14 +70,6 @@ const FormSchema = z.object({
   website: z.string().optional(),
   industry: z.string().optional(),
   employeeSize: z.string().optional(),
-  billingEmail: z.string().optional(),
-  addressLine1: z.string().optional(),
-  addressLine2: z.string().optional(),
-  addressCity: z.string().optional(),
-  addressRegion: z.string().optional(),
-  addressPostalCode: z.string().optional(),
-  addressCountry: z.string().optional(),
-  addressPlaceId: z.string().optional(),
   // Logo URL produced by the avatar upload endpoint. Written directly to the
   // organizations row (the capability contract does not carry avatarUrl), the
   // same pattern the settings general-action uses.
@@ -90,29 +87,27 @@ function nonEmpty(s: string | undefined): string | undefined {
 // transaction so partial state is impossible.
 export async function createOrgAction(
   formData: FormData,
-): Promise<{ ok: true; orgSlug: string; workspaceSlug: string } | { ok: false; error: string }> {
+): Promise<
+  | { ok: true; orgSlug: string; workspaceSlug: string }
+  | { ok: false; error: string }
+> {
   const session = await getSessionOrRedirect();
   const raw = Object.fromEntries(formData);
   const parsedForm = FormSchema.safeParse(raw);
   if (!parsedForm.success) {
-    return { ok: false, error: parsedForm.error.issues[0]?.message ?? "Invalid form input" };
+    return {
+      ok: false,
+      error: parsedForm.error.issues[0]?.message ?? "Invalid form input",
+    };
   }
 
   const fd = parsedForm.data;
 
   const isBusiness = fd.type === "business";
 
-  // Assemble the billing address only when all required parts are present.
-  const line1 = nonEmpty(fd.addressLine1);
-  const city = nonEmpty(fd.addressCity);
-  const postalCode = nonEmpty(fd.addressPostalCode);
-  const country = nonEmpty(fd.addressCountry)?.toUpperCase();
-  const hasBillingAddress = Boolean(line1 && city && postalCode && country);
-
   // Validate the FULL payload through the capability contract so this onboarding
-  // surface enforces the exact same ISO-code / US-region / business-field rules
-  // as the API and MCP surfaces (no drift, defense in depth — the UI selects
-  // produce codes, but a crafted POST must not bypass them).
+  // surface enforces the exact same business-field rules as the API and MCP
+  // surfaces (no drift, defense in depth — a crafted POST must not bypass them).
   const orgInput = organizationCreate.input.safeParse({
     name: fd.name,
     slug: fd.slug,
@@ -120,21 +115,12 @@ export async function createOrgAction(
     website: isBusiness ? nonEmpty(fd.website) : undefined,
     industry: isBusiness ? nonEmpty(fd.industry) : undefined,
     employeeSize: isBusiness ? nonEmpty(fd.employeeSize) : undefined,
-    billingEmail: nonEmpty(fd.billingEmail),
-    billingAddress: hasBillingAddress
-      ? {
-          line1,
-          line2: nonEmpty(fd.addressLine2),
-          city,
-          region: nonEmpty(fd.addressRegion),
-          postalCode,
-          country,
-          placeId: nonEmpty(fd.addressPlaceId),
-        }
-      : undefined,
   });
   if (!orgInput.success) {
-    return { ok: false, error: orgInput.error.issues[0]?.message ?? "Invalid organization" };
+    return {
+      ok: false,
+      error: orgInput.error.issues[0]?.message ?? "Invalid organization",
+    };
   }
   const org = orgInput.data;
 
@@ -147,26 +133,10 @@ export async function createOrgAction(
   // Resolve the logo BEFORE the transaction — copying an OAuth avatar into our
   // blob store is a network call that must not run inside the DB transaction.
   // Best-effort: never block org creation on it.
-  const resolvedAvatarUrl = await resolveOrgAvatarUrl(fd.avatarUrl, session.user.id);
-
-  // Build the billing-profile row from the validated, normalised input.
-  const billingProfile =
-    org.billingEmail !== undefined || org.billingAddress !== undefined
-      ? {
-          billingEmail: org.billingEmail ?? null,
-          addressLine1: org.billingAddress?.line1 ?? null,
-          addressLine2: org.billingAddress?.line2 ?? null,
-          addressCity: org.billingAddress?.city ?? null,
-          // Only uppercase for US state codes; non-US regions are free-text.
-          addressRegion:
-            org.billingAddress?.country?.toUpperCase() === "US"
-              ? (org.billingAddress.region?.toUpperCase() ?? null)
-              : (org.billingAddress?.region ?? null),
-          addressPostalCode: org.billingAddress?.postalCode ?? null,
-          addressCountry: org.billingAddress?.country?.toUpperCase() ?? null,
-          addressPlaceId: org.billingAddress?.placeId ?? null,
-        }
-      : null;
+  const resolvedAvatarUrl = await resolveOrgAvatarUrl(
+    fd.avatarUrl,
+    session.user.id,
+  );
 
   try {
     const result = await withSystemDb(async (tx) => {
@@ -256,17 +226,12 @@ export async function createOrgAction(
         tx,
       });
 
-      // Insert billing profile when billing email or any address field is present.
-      if (billingProfile) {
-        await tx.insert(schema.orgBillingProfiles).values({
-          orgId: tenant.id,
-          ...billingProfile,
-          createdByUserId: session.user.id,
-          updatedByUserId: session.user.id,
-        });
-      }
-
-      return { orgId: tenant.id, orgSlug: tenant.slug, workspaceId: workspace.id, workspaceSlug: workspace.slug };
+      return {
+        orgId: tenant.id,
+        orgSlug: tenant.slug,
+        workspaceId: workspace.id,
+        workspaceSlug: workspace.slug,
+      };
     });
 
     // Grant the non-expiring Free signup credits ($5) outside the org
@@ -275,14 +240,20 @@ export async function createOrgAction(
     try {
       await grantFreeCredits(result.orgId);
     } catch (grantErr) {
-      logger.error({ err: grantErr, orgId: result.orgId }, "[onboarding] grantFreeCredits failed");
+      logger.error(
+        { err: grantErr, orgId: result.orgId },
+        "[onboarding] grantFreeCredits failed",
+      );
     }
 
     // Seed the default MCP registry, capability packs, and builtin skills
     // outside the transaction (fire-and-log): a seed failure must NOT roll
     // back the org/workspace that was just created.
     try {
-      await seedWorkspaceDefaultRegistrySystem({ orgId: result.orgId, workspaceId: result.workspaceId });
+      await seedWorkspaceDefaultRegistrySystem({
+        orgId: result.orgId,
+        workspaceId: result.workspaceId,
+      });
     } catch (seedErr) {
       logger.error(
         { err: seedErr, orgId: result.orgId, workspaceId: result.workspaceId },
@@ -290,7 +261,10 @@ export async function createOrgAction(
       );
     }
     try {
-      await seedWorkspaceDefaultCapabilitiesSystem({ orgId: result.orgId, workspaceId: result.workspaceId });
+      await seedWorkspaceDefaultCapabilitiesSystem({
+        orgId: result.orgId,
+        workspaceId: result.workspaceId,
+      });
     } catch (seedErr) {
       logger.error(
         { err: seedErr, orgId: result.orgId, workspaceId: result.workspaceId },
@@ -298,7 +272,10 @@ export async function createOrgAction(
       );
     }
     try {
-      await seedWorkspaceDefaultSkillsSystem({ orgId: result.orgId, workspaceId: result.workspaceId });
+      await seedWorkspaceDefaultSkillsSystem({
+        orgId: result.orgId,
+        workspaceId: result.workspaceId,
+      });
     } catch (seedErr) {
       logger.error(
         { err: seedErr, orgId: result.orgId, workspaceId: result.workspaceId },
@@ -306,7 +283,10 @@ export async function createOrgAction(
       );
     }
     try {
-      await seedWorkspaceDefaultEnvironmentSystem({ orgId: result.orgId, workspaceId: result.workspaceId });
+      await seedWorkspaceDefaultEnvironmentSystem({
+        orgId: result.orgId,
+        workspaceId: result.workspaceId,
+      });
     } catch (seedErr) {
       logger.error(
         { err: seedErr, orgId: result.orgId, workspaceId: result.workspaceId },
@@ -314,7 +294,11 @@ export async function createOrgAction(
       );
     }
 
-    return { ok: true, orgSlug: result.orgSlug, workspaceSlug: result.workspaceSlug };
+    return {
+      ok: true,
+      orgSlug: result.orgSlug,
+      workspaceSlug: result.workspaceSlug,
+    };
   } catch (err) {
     // The only unique index reachable here is organizations_slug_idx — the
     // workspace insert always uses slug "default" under a freshly-minted org id,
@@ -325,7 +309,13 @@ export async function createOrgAction(
     // Never surface a raw driver/SQL error string to the user (information leak
     // — the unhandled path previously echoed the full INSERT statement). Log the
     // real cause for diagnosis and return a generic, safe message.
-    logger.error({ err, slug: org.slug }, "[onboarding] createOrgAction failed");
-    return { ok: false, error: "Failed to create organization. Please try again." };
+    logger.error(
+      { err, slug: org.slug },
+      "[onboarding] createOrgAction failed",
+    );
+    return {
+      ok: false,
+      error: "Failed to create organization. Please try again.",
+    };
   }
 }

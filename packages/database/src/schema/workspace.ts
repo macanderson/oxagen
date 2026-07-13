@@ -174,6 +174,9 @@ export const workspaceMemoryPolicy = workspaceSchema.table(
     // workspace_memory_policy_workspace_idx was dropped (2026-07-11 audit
     // §4.2): duplicate of the workspaceId.unique() constraint above (identical
     // single column, both unique).
+    workspaceIdx: uniqueIndex("workspace_memory_policy_workspace_idx").on(
+      t.workspaceId,
+    ),
     orgWorkspaceIdx: index("workspace_memory_policy_org_workspace_idx").on(
       t.orgId,
       t.workspaceId,
@@ -225,6 +228,9 @@ export const workspaceBudgetPolicy = workspaceSchema.table(
     // workspace_budget_policy_workspace_idx was dropped (2026-07-11 audit
     // §4.2): duplicate of the workspaceId.unique() constraint above (identical
     // single column, both unique).
+    workspaceIdx: uniqueIndex("workspace_budget_policy_workspace_idx").on(
+      t.workspaceId,
+    ),
     orgWorkspaceIdx: index("workspace_budget_policy_org_workspace_idx").on(
       t.orgId,
       t.workspaceId,

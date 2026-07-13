@@ -284,8 +284,6 @@ export const setupSuggestions = ingestionSchema.table(
       .default(sql`'{}'::jsonb`),
     reasoning: text("reasoning"),
     status: text("status").notNull().default("pending"),
-    resolvedAt: timestamp("resolved_at", { withTimezone: true, mode: "date" }),
-    resolvedBy: uuid("resolved_by"),
   },
   (t) => ({
     connectionIdx: index("setup_suggestions_connection_idx").on(t.connectionId),

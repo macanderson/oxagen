@@ -38,7 +38,11 @@ export interface FixtureOptions {
 // Capabilities granted to the seeded Owner role when bootstrapIam is true.
 // Union of every defaultEffect:"deny" capability the API-surface e2e specs
 // call (api-key-lifecycle, workspace-isolation).
-const IAM_E2E_GRANTS = ["list_conversations", "create_api_key", "revoke_api_key"] as const;
+const IAM_E2E_GRANTS = [
+  "list_conversations",
+  "create_api_key",
+  "revoke_api_key",
+] as const;
 
 export interface DbState {
   toolCalls: Array<{ id: string; capability: string; status: string }>;
@@ -72,7 +76,8 @@ export interface AgentRuntimeFixture {
 // running app.
 function deQuote(raw: string | undefined, fallback: string): string {
   if (!raw) return fallback;
-  if (raw.length >= 2 && raw.startsWith('"') && raw.endsWith('"')) return raw.slice(1, -1);
+  if (raw.length >= 2 && raw.startsWith('"') && raw.endsWith('"'))
+    return raw.slice(1, -1);
   return raw;
 }
 
@@ -80,8 +85,14 @@ const DATABASE_URL = deQuote(
   process.env.DATABASE_URL,
   "postgres://oxagen:oxagen@localhost:5432/oxagen",
 );
-const NEO4J_URL = deQuote(process.env.NEO4J_URI ?? process.env.NEO4J_URL, "bolt://localhost:7687");
-const NEO4J_USER = deQuote(process.env.NEO4J_USERNAME ?? process.env.NEO4J_USER, "neo4j");
+const NEO4J_URL = deQuote(
+  process.env.NEO4J_URI ?? process.env.NEO4J_URL,
+  "bolt://localhost:7687",
+);
+const NEO4J_USER = deQuote(
+  process.env.NEO4J_USERNAME ?? process.env.NEO4J_USER,
+  "neo4j",
+);
 const NEO4J_PASSWORD = deQuote(process.env.NEO4J_PASSWORD, "oxagen-dev");
 
 let pg: ReturnType<typeof postgres> | null = null;
@@ -123,7 +134,8 @@ export async function setupAgentRuntimeFixture(
     ON CONFLICT (slug) DO UPDATE SET status = 'active'
     RETURNING id
   `;
-  if (!tenantRow) throw new Error("fixture: organization insert returned no row");
+  if (!tenantRow)
+    throw new Error("fixture: organization insert returned no row");
   const orgId = tenantRow.id;
   // Per-fixture suffix for every seeded public_id. CI runs e2e shards in
   // PARALLEL against one database, so hardcoded global public_ids let two specs
@@ -134,13 +146,12 @@ export async function setupAgentRuntimeFixture(
   const sfx = orgId.replace(/-/g, "").slice(0, 16);
 
   const [userRow] = await sql<{ id: string }[]>`
-    INSERT INTO auth.users (public_id, email, display_name, status, email_verified_at)
+    INSERT INTO auth.users (public_id, email, display_name, status)
     VALUES (
       'usr_' || substr(replace(gen_random_uuid()::text, '-', ''), 1, 22),
       ${opts.userEmail},
       'E2E Runtime',
-      'active',
-      now()
+      'active'
     )
     ON CONFLICT (email) DO UPDATE SET status = 'active'
     RETURNING id
@@ -203,7 +214,8 @@ export async function setupAgentRuntimeFixture(
       ON CONFLICT (public_id) DO UPDATE SET status = 'active'
       RETURNING id
     `;
-    if (!principalRow) throw new Error("fixture: IAM principal upsert returned no row");
+    if (!principalRow)
+      throw new Error("fixture: IAM principal upsert returned no row");
 
     await sql`
       INSERT INTO iam.principal_role_assignments (public_id, principal_id, role_id, org_id, workspace_id, assigned_by)
@@ -303,9 +315,21 @@ export async function setupAgentRuntimeFixture(
     const fanoutId = fanoutExisting.id;
     // child_message_id is a UUID column — use deterministic UUIDs.
     const subagentRuns = [
-      { publicId: `sr_e2e_${sfx}_001`, childMessageUuid: "00000000-e2e0-0000-0006-000000000001", capability: "execute_code" },
-      { publicId: `sr_e2e_${sfx}_002`, childMessageUuid: "00000000-e2e0-0000-0006-000000000002", capability: "execute_code" },
-      { publicId: `sr_e2e_${sfx}_003`, childMessageUuid: "00000000-e2e0-0000-0006-000000000003", capability: "execute_code" },
+      {
+        publicId: `sr_e2e_${sfx}_001`,
+        childMessageUuid: "00000000-e2e0-0000-0006-000000000001",
+        capability: "execute_code",
+      },
+      {
+        publicId: `sr_e2e_${sfx}_002`,
+        childMessageUuid: "00000000-e2e0-0000-0006-000000000002",
+        capability: "execute_code",
+      },
+      {
+        publicId: `sr_e2e_${sfx}_003`,
+        childMessageUuid: "00000000-e2e0-0000-0006-000000000003",
+        capability: "execute_code",
+      },
     ];
     for (const run of subagentRuns) {
       await sql`
@@ -393,7 +417,11 @@ export async function setupAgentRuntimeFixture(
     async queryDbState(): Promise<DbState> {
       // execution.tool_calls and agent.tools were dropped (migrations 0020–0021).
       // Tool-call tracking is now in ClickHouse telemetry.
-      const toolCalls: Array<{ id: string; capability: string; status: string }> = [];
+      const toolCalls: Array<{
+        id: string;
+        capability: string;
+        status: string;
+      }> = [];
       const byCap: Record<string, number> = {};
 
       const approvalRequests = await sql<
@@ -521,10 +549,9 @@ export async function teardownFixture(opts: {
       const driver = getNeo();
       const session = driver.session();
       try {
-        await session.run(
-          `MATCH (n) WHERE n.orgId = $orgId DETACH DELETE n`,
-          { orgId },
-        );
+        await session.run(`MATCH (n) WHERE n.orgId = $orgId DETACH DELETE n`, {
+          orgId,
+        });
       } finally {
         await session.close();
       }

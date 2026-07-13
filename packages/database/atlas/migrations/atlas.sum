@@ -65,4 +65,7 @@ h1:es0mGksSDzS1pU7Q+TxVmdwnU/kZDTqniI3LMCjhWYQ=
 20260801120000_catalog_servers_updated_by_user_id.sql h1:jUVOkeLa5woCxfF/Xhr8TkwT9U830z02klVTv/jSV4Y=
 20260801130000_sandbox_template_packages.sql h1:rSz8nIo2sKw+y6mZaWEqj5bN6VlI0pABsaBZOSuD/2U=
 20260801140000_drop_graph_schema.sql h1:OYPD/0ogS7UJcAVAokPgEnkxemvhsEKSTJgSlVsefJs=
+20260802130000_drop_zombie_tables.sql h1:sp2G9yfPR/kE5fDmVSnKigOad7u4Ho17s1krSX/SePw=
+20260802140000_drop_dead_columns.sql h1:S1yvRV+yHDR7BnqnLZQj5nTdcUzRfUiSr+44/a66Ytc=
 20260802150000_index_constraint_hardening.sql h1:eOJNT7a87asZo5STZWpBBR7oMp+asprRgsSAZpw51ug=
+20260802160000_principals_org_parent_user_uniq.sql h1:B8hqxahVm/Yk+5FuDycfTyjS1+FPHhheD17BuJ+5tnA=

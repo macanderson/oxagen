@@ -66,8 +66,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  withSystemDb: mockWithSystemDb,
-
+    withSystemDb: mockWithSystemDb,
   };
 });
 
@@ -116,23 +115,15 @@ vi.mock("@oxagen/oxagen/contracts/org.create", async () => {
   const { z } = await import("zod");
   const realSchema = z.object({
     name: z.string().min(1),
-    slug: z.string().min(2).max(40).regex(/^[a-z0-9-]+$/),
+    slug: z
+      .string()
+      .min(2)
+      .max(40)
+      .regex(/^[a-z0-9-]+$/),
     type: z.enum(["personal", "business"]).default("business"),
     website: z.string().optional(),
     industry: z.string().optional(),
     employeeSize: z.string().optional(),
-    billingEmail: z.string().optional(),
-    billingAddress: z
-      .object({
-        line1: z.string(),
-        line2: z.string().optional(),
-        city: z.string(),
-        region: z.string().optional(),
-        postalCode: z.string(),
-        country: z.string(),
-        placeId: z.string().optional(),
-      })
-      .optional(),
     planSlug: z.string().optional(),
   });
   return {
@@ -174,7 +165,9 @@ import { createOrgAction } from "./actions";
 // Helpers
 // ---------------------------------------------------------------------------
 
-const mockSession = { user: { id: "user-abc", email: "user@example.com", name: "Alice" } };
+const mockSession = {
+  user: { id: "user-abc", email: "user@example.com", name: "Alice" },
+};
 
 function makeFormData(overrides: Record<string, string> = {}): FormData {
   const fd = new FormData();
@@ -182,15 +175,17 @@ function makeFormData(overrides: Record<string, string> = {}): FormData {
   fd.set("slug", overrides.slug ?? "acme-inc");
   fd.set("type", overrides.type ?? "business");
   // Optional fields always present (may be empty string)
-  for (const key of ["website", "industry", "employeeSize", "billingEmail", "avatarUrl",
-    "addressLine1", "addressLine2", "addressCity", "addressRegion",
-    "addressPostalCode", "addressCountry", "addressPlaceId"]) {
+  for (const key of ["website", "industry", "employeeSize", "avatarUrl"]) {
     fd.set(key, overrides[key] ?? "");
   }
   return fd;
 }
 
-function makeSuccessfulDb(orgId = "org-123", orgSlug = "acme-inc", workspaceSlug = "default") {
+function makeSuccessfulDb(
+  orgId = "org-123",
+  orgSlug = "acme-inc",
+  workspaceSlug = "default",
+) {
   return {
     // Namespace-collision lookup: deriveNamespace reads every existing
     // organization namespace before the org insert. No org namespaces are
@@ -201,7 +196,9 @@ function makeSuccessfulDb(orgId = "org-123", orgSlug = "acme-inc", workspaceSlug
     insert: (table: unknown) => ({
       values: (_data: unknown) => ({
         returning: () => {
-          const name = getTableName(table as Parameters<typeof getTableName>[0]);
+          const name = getTableName(
+            table as Parameters<typeof getTableName>[0],
+          );
           if (name === "organizations") {
             return Promise.resolve([{ id: orgId, slug: orgSlug }]);
           }
@@ -244,9 +241,11 @@ describe("createOrgAction", () => {
     mockOrgCreateParse.mockReturnValue(null);
     mockWsCreateParse.mockReturnValue(null);
     // Default: DB succeeds
-    mockWithSystemDb.mockImplementation(async (fn: (tx: unknown) => unknown) => {
-      return wrapWithSuccessfulDb(fn as (tx: unknown) => Promise<unknown>);
-    });
+    mockWithSystemDb.mockImplementation(
+      async (fn: (tx: unknown) => unknown) => {
+        return wrapWithSuccessfulDb(fn as (tx: unknown) => Promise<unknown>);
+      },
+    );
   });
 
   // ---------------------------------------------------------------------------
@@ -333,7 +332,9 @@ describe("createOrgAction", () => {
     expect(result.ok).toBe(false);
     if (!result.ok) {
       // Raw driver/SQL error text must NEVER reach the user (information leak).
-      expect(result.error).toBe("Failed to create organization. Please try again.");
+      expect(result.error).toBe(
+        "Failed to create organization. Please try again.",
+      );
       expect(result.error).not.toContain("disk full");
     }
   });
@@ -366,7 +367,9 @@ describe("createOrgAction", () => {
   it("ingests a trusted OAuth image URL via ingestImageFromUrl", async () => {
     const oauthUrl = "https://lh3.googleusercontent.com/photo.jpg";
     mockIsIngestibleImageUrl.mockReturnValue(true);
-    mockIngestImageFromUrl.mockResolvedValue({ url: "https://abc.public.blob.vercel-storage.com/ingested.jpg" });
+    mockIngestImageFromUrl.mockResolvedValue({
+      url: "https://abc.public.blob.vercel-storage.com/ingested.jpg",
+    });
 
     await createOrgAction(makeFormData({ avatarUrl: oauthUrl }));
 
@@ -401,97 +404,33 @@ describe("createOrgAction", () => {
   // Billing address / billingProfile insert
   // ---------------------------------------------------------------------------
 
-  it("inserts billing profile when billing email is provided", async () => {
-    let billingInsertCalled = false;
-    mockWithSystemDb.mockImplementation(async (fn: (tx: unknown) => unknown) => {
-      const tx = {
-        select: (_cols: unknown) => ({
-          from: (_table: unknown) => Promise.resolve([] as { namespace: string }[]),
-        }),
-        insert: (table: unknown) => ({
-          values: (_data: unknown) => {
-            const name = getTableName(table as Parameters<typeof getTableName>[0]);
-            if (name === "org_billing_profiles") {
-              billingInsertCalled = true;
-            }
-            return {
-              returning: () => {
-                if (name === "organizations") return Promise.resolve([{ id: "org-123", slug: "acme-inc" }]);
-                if (name === "workspaces") return Promise.resolve([{ id: "ws-456", slug: "default" }]);
-                return Promise.resolve([{ id: "row-misc" }]);
-              },
-            };
-          },
-        }),
-      };
-      return fn(tx);
-    });
-
-    const result = await createOrgAction(
-      makeFormData({ billingEmail: "billing@acme.com" }),
-    );
-
-    expect(result.ok).toBe(true);
-    expect(billingInsertCalled).toBe(true);
-  });
-
-  it("inserts billing profile with full address when all address fields present", async () => {
-    let billingInsertCalled = false;
-    mockWithSystemDb.mockImplementation(async (fn: (tx: unknown) => unknown) => {
-      const tx = {
-        select: (_cols: unknown) => ({
-          from: (_table: unknown) => Promise.resolve([] as { namespace: string }[]),
-        }),
-        insert: (table: unknown) => ({
-          values: (_data: unknown) => {
-            const name = getTableName(table as Parameters<typeof getTableName>[0]);
-            if (name === "org_billing_profiles") billingInsertCalled = true;
-            return {
-              returning: () => {
-                if (name === "organizations") return Promise.resolve([{ id: "org-123", slug: "acme-inc" }]);
-                if (name === "workspaces") return Promise.resolve([{ id: "ws-456", slug: "default" }]);
-                return Promise.resolve([{ id: "row-misc" }]);
-              },
-            };
-          },
-        }),
-      };
-      return fn(tx);
-    });
-
-    const result = await createOrgAction(
-      makeFormData({
-        addressLine1: "123 Main St",
-        addressCity: "Springfield",
-        addressPostalCode: "12345",
-        addressCountry: "US",
-        addressRegion: "il",
-      }),
-    );
-
-    expect(result.ok).toBe(true);
-    expect(billingInsertCalled).toBe(true);
-  });
-
-  // ---------------------------------------------------------------------------
-  // (h) Seed wiring
-  // ---------------------------------------------------------------------------
-
   it("calls all four *System seeders with correct orgId and workspaceId on success", async () => {
     const result = await createOrgAction(makeFormData());
     expect(result.ok).toBe(true);
 
     expect(mockSeedRegistry).toHaveBeenCalledOnce();
-    expect(mockSeedRegistry).toHaveBeenCalledWith({ orgId: "org-123", workspaceId: "ws-456" });
+    expect(mockSeedRegistry).toHaveBeenCalledWith({
+      orgId: "org-123",
+      workspaceId: "ws-456",
+    });
 
     expect(mockSeedCapabilities).toHaveBeenCalledOnce();
-    expect(mockSeedCapabilities).toHaveBeenCalledWith({ orgId: "org-123", workspaceId: "ws-456" });
+    expect(mockSeedCapabilities).toHaveBeenCalledWith({
+      orgId: "org-123",
+      workspaceId: "ws-456",
+    });
 
     expect(mockSeedSkills).toHaveBeenCalledOnce();
-    expect(mockSeedSkills).toHaveBeenCalledWith({ orgId: "org-123", workspaceId: "ws-456" });
+    expect(mockSeedSkills).toHaveBeenCalledWith({
+      orgId: "org-123",
+      workspaceId: "ws-456",
+    });
 
     expect(mockSeedEnvironment).toHaveBeenCalledOnce();
-    expect(mockSeedEnvironment).toHaveBeenCalledWith({ orgId: "org-123", workspaceId: "ws-456" });
+    expect(mockSeedEnvironment).toHaveBeenCalledWith({
+      orgId: "org-123",
+      workspaceId: "ws-456",
+    });
   });
 
   it("calls bootstrapWorkspaceAgents inside the tx with correct args on success", async () => {
@@ -515,7 +454,9 @@ describe("createOrgAction", () => {
   });
 
   it("seed failure in seedWorkspaceDefaultCapabilitiesSystem does NOT reject the action", async () => {
-    mockSeedCapabilities.mockRejectedValue(new Error("capabilities seed failed"));
+    mockSeedCapabilities.mockRejectedValue(
+      new Error("capabilities seed failed"),
+    );
     const result = await createOrgAction(makeFormData());
     expect(result.ok).toBe(true);
   });

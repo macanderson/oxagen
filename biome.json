@@ -17,7 +17,8 @@
       "!**/coverage/**",
       "!**/*.gen.ts",
       "!**/routeTree.gen.ts",
-      "!pnpm-lock.yaml"
+      "!pnpm-lock.yaml",
+      "!**/storage-manifest.json"
     ]
   },
   "formatter": {
@@ -40,7 +41,10 @@
     }
   },
   "json": {
-    "formatter": { "enabled": true, "trailingCommas": "none" }
+    "formatter": {
+      "enabled": true,
+      "trailingCommas": "none"
+    }
   },
   "linter": {
     "enabled": false

@@ -16,17 +16,6 @@ import { billingSchema } from "./_schemas";
 import { auditMixin, citext, idMixin, uuidv7Default } from "./_mixins";
 import { organizations } from "./org";
 
-// ── Append-only audit mixin (no updated_* columns) ──────────────────────────
-// Used on immutable/append-only tables (usage_records, credit_ledger) where
-// UPDATE is prohibited. Drizzle will not generate updated_* columns so a
-// fresh `drizzle-kit generate` cannot produce an ALTER TABLE to add them.
-const appendOnlyAuditMixin = () => ({
-  createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
-    .notNull()
-    .defaultNow(),
-  createdByUserId: uuid("created_by_user_id"),
-});
-
 export const plans = billingSchema.table(
   "plans",
   {
@@ -257,8 +246,10 @@ export const usageRecords = billingSchema.table(
       t.metric,
       t.periodStart,
       t.periodEnd,
+    statusCheck: check(
+      "invoices_status_check",
+      sql`${t.status} IN ('draft', 'open', 'paid', 'uncollectible', 'void')`,
     ),
-    orgIdx: index("usage_records_org_idx").on(t.orgId),
   }),
 );
 
@@ -426,38 +417,6 @@ export const stripeEvents = billingSchema.table(
       t.stripeEventId,
     ),
     typeIdx: index("stripe_events_type_idx").on(t.eventType),
-  }),
-);
-
-// org_billing_profiles: mutable 1:1 companion to org.organizations. Isolates
-// billing PII (email, postal address, Google Place ID) in the billing schema.
-// Not addressed by humans via a URL slug, so no public_id — bare UUID PK only.
-// Address region uses ISO 3166-2 subdivision code; country uses ISO 3166-1 α-2.
-export const orgBillingProfiles = billingSchema.table(
-  "org_billing_profiles",
-  {
-    id: uuid("id").primaryKey().default(uuidv7Default),
-    // FK → org.organizations.id — CASCADE so the profile disappears when the
-    // org is deleted. Policy §0 mandates FKs where the invariant exists.
-    orgId: uuid("org_id")
-      .notNull()
-      .references(() => organizations.id, { onDelete: "cascade" }),
-    billingEmail: citext("billing_email"),
-    addressLine1: text("address_line1"),
-    addressLine2: text("address_line2"),
-    addressCity: text("address_city"),
-    // ISO 3166-2 subdivision code, e.g. 'CA' for California.
-    addressRegion: text("address_region"),
-    addressPostalCode: text("address_postal_code"),
-    // ISO 3166-1 alpha-2, e.g. 'US'.
-    addressCountry: text("address_country"),
-    // Google Places place_id — allows re-fetching or re-validating the address.
-    addressPlaceId: text("address_place_id"),
-    ...auditMixin(),
-  },
-  (t) => ({
-    // 1:1 uniqueness: one billing profile per org.
-    orgIdx: uniqueIndex("org_billing_profiles_org_idx").on(t.orgId),
   }),
 );
 

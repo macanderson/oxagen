@@ -169,14 +169,12 @@ describe("ingestion.pipeline Inngest function", () => {
       mocks.getConnector.mockReturnValue({ normalizeRecord: () => NORMALIZED });
       mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) =>
         fn({
-          execute: vi
-            .fn()
-            .mockResolvedValue([
-              {
-                oxagen_entity_type: "task",
-                property_mappings: { title: "name" },
-              },
-            ]),
+          execute: vi.fn().mockResolvedValue([
+            {
+              oxagen_entity_type: "task",
+              property_mappings: { title: "name" },
+            },
+          ]),
         }),
       );
     });
@@ -237,14 +235,12 @@ describe("ingestion.pipeline Inngest function", () => {
     it("applies property mappings from the entity_type_mappings row", async () => {
       mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) =>
         fn({
-          execute: vi
-            .fn()
-            .mockResolvedValue([
-              {
-                oxagen_entity_type: "task",
-                property_mappings: { title: "name" },
-              },
-            ]),
+          execute: vi.fn().mockResolvedValue([
+            {
+              oxagen_entity_type: "task",
+              property_mappings: { title: "name" },
+            },
+          ]),
         }),
       );
 

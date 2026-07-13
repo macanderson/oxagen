@@ -414,9 +414,11 @@ export const agentExecutions = agentSchema.table(
       mode: "date",
     }),
     // AgentInstance shape (agent-schema.ts §4): self-reference for subagent/A2A
-    // lineage (app-enforced, no FK), per-run debug posture, live thread state.
+    // lineage (app-enforced, no FK).
     parentExecutionId: uuid("parent_execution_id"),
-    debug: jsonb("debug").notNull().default(sql`'{}'::jsonb`),
+    // Live: schema.reconcile.dispatch writes reconcile progress counters here
+    // and schema.reconcile.status reads them back. (The sibling `debug` column
+    // was dropped in 20260802140000 — genuinely unreferenced.)
     state: jsonb("state").notNull().default(sql`'{}'::jsonb`),
   },
   (t) => ({
@@ -709,10 +711,6 @@ export const a2aTasks = agentSchema.table(
     // when the task ran the generic chat baseline (no skillId, or an
     // unknown/inactive one, which falls back rather than 500ing).
     agentId: uuid("agent_id"),
-    // Set only when this task was opened from inside a leased subagent run
-    // (agent.subagent_runs.id), so a fanout child and the A2A task it opened
-    // can be joined. App-enforced ref, no cross-table FK (spec §3.3).
-    fanoutRunId: uuid("fanout_run_id"),
   },
   (t) => ({
     orgIdx: index("a2a_tasks_org_idx").on(t.orgId, t.workspaceId),
