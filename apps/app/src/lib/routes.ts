@@ -268,6 +268,8 @@ export const workspace = {
   // Evals — score what actually ran and got billed (eval.* capability family).
   evals: {
     root: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/evals`,
+    dataset: (ctx: Required<ScopeContext>, datasetId: string): string =>
+      `${wsBase(ctx)}/evals/datasets/${encodeURIComponent(datasetId)}`,
     run: (ctx: Required<ScopeContext>, runId: string): string =>
       `${wsBase(ctx)}/evals/runs/${encodeURIComponent(runId)}`,
   },

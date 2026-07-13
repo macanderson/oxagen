@@ -1512,6 +1512,18 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./eval.run.get")).evalRunGetHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "list_eval_runs",
+    async () =>
+      (await import("./eval.run.list"))
+        .evalRunListHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "get_eval_run_series",
+    async () =>
+      (await import("./eval.run.series"))
+        .evalRunSeriesHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "get_routing_policy",
     async () =>
       (await import("./router.policy.get"))
