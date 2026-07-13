@@ -2,14 +2,20 @@ import type { CapabilityHandler } from "@oxagen/oxagen";
 import { schemaLabelUpsert } from "@oxagen/oxagen/contracts/schema.label.upsert";
 import { schema as db, withTenantDb } from "@oxagen/database";
 import { eq, and, isNull } from "drizzle-orm";
-import { getOrCreateRegistry, getOrCreateDraftSchema } from "./schema.versioning";
+import {
+  getOrCreateRegistry,
+  getOrCreateDraftSchema,
+} from "./schema.versioning";
 import { logger } from "./logger";
 
-export const schemaLabelUpsertHandler: CapabilityHandler<typeof schemaLabelUpsert> = async (
-  input,
-  ctx,
-) => {
-  const registry = await getOrCreateRegistry(ctx.orgId, ctx.workspaceId, ctx.userId);
+export const schemaLabelUpsertHandler: CapabilityHandler<
+  typeof schemaLabelUpsert
+> = async (input, ctx) => {
+  const registry = await getOrCreateRegistry(
+    ctx.orgId,
+    ctx.workspaceId,
+    ctx.userId,
+  );
 
   if (!registry.draftVersionId) {
     throw new Error("No draft version found for registry");
@@ -68,12 +74,12 @@ export const schemaLabelUpsertHandler: CapabilityHandler<typeof schemaLabelUpser
           displayName: input.displayName,
           description: input.description,
           naturalKeyProps: input.naturalKeyProps ?? [],
-          metadata: {},
           createdByUserId: ctx.userId,
           updatedByUserId: ctx.userId,
         })
         .returning();
-      if (!inserted) throw new Error(`Failed to insert node label ${input.name}`);
+      if (!inserted)
+        throw new Error(`Failed to insert node label ${input.name}`);
       labelId = inserted.publicId;
       created = true;
     }
@@ -141,7 +147,13 @@ export const schemaLabelUpsertHandler: CapabilityHandler<typeof schemaLabelUpser
   });
 
   logger.info(
-    { orgId: ctx.orgId, workspaceId: ctx.workspaceId, schemaName: input.schemaName, label: input.name, created: result.created },
+    {
+      orgId: ctx.orgId,
+      workspaceId: ctx.workspaceId,
+      schemaName: input.schemaName,
+      label: input.name,
+      created: result.created,
+    },
     "schema.label.upsert: upserted label",
   );
 

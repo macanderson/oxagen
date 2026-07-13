@@ -1,4 +1,4 @@
-h1:lW4Ka+XJ5U4ZYCp+Z84B+0XcMA8WTJJ+ilWxAWM226o=
+h1:wkxhM2/s5jsFFmlEXSSTs/Z6HexGXvZJH+GZs9tLMNw=
 20260611233016_initial_schema.sql h1:zDxoHTpnCTjbF+5PvUDeUGvyJCb6yhltPOFOw1pdqMQ=
 20260612000959_add_agent_execution_step_timing.sql h1:d6h37F1Jf3ze2TIHheAB3P9PR0hbcaenjF15U45v2ak=
 20260612052000_regrant_oxagen_app.sql h1:rkdyIpu+hw+f+fGZHzpXyfm5feAL2GK9qitZROPXTpo=
@@ -65,3 +65,4 @@ h1:lW4Ka+XJ5U4ZYCp+Z84B+0XcMA8WTJJ+ilWxAWM226o=
 20260801120000_catalog_servers_updated_by_user_id.sql h1:jUVOkeLa5woCxfF/Xhr8TkwT9U830z02klVTv/jSV4Y=
 20260801130000_sandbox_template_packages.sql h1:rSz8nIo2sKw+y6mZaWEqj5bN6VlI0pABsaBZOSuD/2U=
 20260801140000_drop_graph_schema.sql h1:OYPD/0ogS7UJcAVAokPgEnkxemvhsEKSTJgSlVsefJs=
+20260802140000_drop_dead_columns.sql h1:QXhx5xHqiCdRCzbSiYMHRq3DTTublRzfmmDqsbHZocM=

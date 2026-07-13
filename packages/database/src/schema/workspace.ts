@@ -1,4 +1,15 @@
-import { boolean, check, index, integer, jsonb, real, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import {
+  boolean,
+  check,
+  index,
+  integer,
+  jsonb,
+  real,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { workspaceSchema } from "./_schemas";
 import { auditMixin, citext, idMixin } from "./_mixins";
@@ -40,7 +51,10 @@ export const workspaces = workspaceSchema.table(
     // Namespace unique per org + immutable. Immutability is enforced by a
     // BEFORE UPDATE trigger (migration 20260709120000_namespace_identity), not
     // expressible in Drizzle DDL.
-    orgNamespaceIdx: uniqueIndex("workspaces_org_namespace_idx").on(t.orgId, t.namespace),
+    orgNamespaceIdx: uniqueIndex("workspaces_org_namespace_idx").on(
+      t.orgId,
+      t.namespace,
+    ),
     namespaceCheck: check(
       "workspaces_namespace_check",
       sql`${t.namespace} ~ '^[a-z0-9]{2,6}$'`,
@@ -70,7 +84,10 @@ export const workspaceSlugHistory = workspaceSchema.table(
   },
   (t) => ({
     // Resolver hot path: (org_id, old_slug) — workspace slugs only unique per org.
-    oldSlugIdx: index("workspace_slug_history_old_slug_idx").on(t.orgId, t.oldSlug),
+    oldSlugIdx: index("workspace_slug_history_old_slug_idx").on(
+      t.orgId,
+      t.oldSlug,
+    ),
     // Inverse lookup for admin tooling and per-workspace history listing.
     workspaceIdx: index("workspace_slug_history_workspace_idx").on(
       t.workspaceId,
@@ -87,16 +104,16 @@ export const workspaceUsers = workspaceSchema.table(
     workspaceId: uuid("workspace_id").notNull(),
     userId: uuid("user_id").notNull(),
     role: text("role").notNull(),
-    // DEPRECATED — dead column. Superseded by the IAM store
-    // (`iam.role_grants` / `iam.principal_role_assignments`), which is the sole
-    // source of truth for effective permissions. No app/handler/auth code reads
-    // or writes this; it retains its `{}` insert default only. Do NOT wire new
-    // authorization logic to it — grant via IAM instead.
-    permissions: jsonb("permissions").notNull().default(sql`'{}'::jsonb`),
-    joinedAt: timestamp("joined_at", { withTimezone: true, mode: "date" }).notNull(),
+    joinedAt: timestamp("joined_at", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
   },
   (t) => ({
-    workspaceUserIdx: uniqueIndex("workspace_users_workspace_user_idx").on(t.workspaceId, t.userId),
+    workspaceUserIdx: uniqueIndex("workspace_users_workspace_user_idx").on(
+      t.workspaceId,
+      t.userId,
+    ),
     userIdx: index("workspace_users_user_idx").on(t.userId),
     // Workspace membership role is written in BOTH casings (lowercase by the
     // workspace create path, Capitalized via IAM role names). Case-insensitive
@@ -145,8 +162,13 @@ export const workspaceMemoryPolicy = workspaceSchema.table(
       .defaultNow(),
   },
   (t) => ({
-    workspaceIdx: uniqueIndex("workspace_memory_policy_workspace_idx").on(t.workspaceId),
-    orgWorkspaceIdx: index("workspace_memory_policy_org_workspace_idx").on(t.orgId, t.workspaceId),
+    workspaceIdx: uniqueIndex("workspace_memory_policy_workspace_idx").on(
+      t.workspaceId,
+    ),
+    orgWorkspaceIdx: index("workspace_memory_policy_org_workspace_idx").on(
+      t.orgId,
+      t.workspaceId,
+    ),
   }),
 );
 
@@ -188,8 +210,13 @@ export const workspaceBudgetPolicy = workspaceSchema.table(
       .defaultNow(),
   },
   (t) => ({
-    workspaceIdx: uniqueIndex("workspace_budget_policy_workspace_idx").on(t.workspaceId),
-    orgWorkspaceIdx: index("workspace_budget_policy_org_workspace_idx").on(t.orgId, t.workspaceId),
+    workspaceIdx: uniqueIndex("workspace_budget_policy_workspace_idx").on(
+      t.workspaceId,
+    ),
+    orgWorkspaceIdx: index("workspace_budget_policy_org_workspace_idx").on(
+      t.orgId,
+      t.workspaceId,
+    ),
   }),
 );
 
@@ -226,7 +253,9 @@ export const routingPolicy = workspaceSchema.table(
     // Trailing window (days) the routing stats are computed over.
     windowDays: integer("window_days").notNull().default(30),
     // Escalate the worker one tier when the completeness judge rejects a round.
-    escalateOnRejection: boolean("escalate_on_rejection").notNull().default(true),
+    escalateOnRejection: boolean("escalate_on_rejection")
+      .notNull()
+      .default(true),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
       .notNull()
       .defaultNow(),
@@ -243,6 +272,9 @@ export const routingPolicy = workspaceSchema.table(
     workspaceIdx: uniqueIndex("routing_policy_workspace_idx")
       .on(t.workspaceId)
       .where(sql`workspace_id IS NOT NULL`),
-    orgWorkspaceIdx: index("routing_policy_org_workspace_idx").on(t.orgId, t.workspaceId),
+    orgWorkspaceIdx: index("routing_policy_org_workspace_idx").on(
+      t.orgId,
+      t.workspaceId,
+    ),
   }),
 );

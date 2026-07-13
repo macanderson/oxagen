@@ -10,7 +10,10 @@ import type {
   A2ATaskStatus,
 } from "./protocol";
 
-type Scope = Pick<CapabilityContext, "orgId" | "workspaceId" | "userId" | "apiKeyId">;
+type Scope = Pick<
+  CapabilityContext,
+  "orgId" | "workspaceId" | "userId" | "apiKeyId"
+>;
 
 /** Persisted A2A task row projected to the fields the transport needs. */
 export interface A2ATaskRow {
@@ -183,8 +186,6 @@ export async function updateTask(
     errorMessage?: string | null;
     /** Resolved skillId target (agent.agents.id) — set once, at skill resolution. */
     agentId?: string | null;
-    /** subagent_runs.id this task was opened from, if any (spec §3.3). */
-    fanoutRunId?: string | null;
   },
 ): Promise<A2ATaskRow | null> {
   return runInTenantScope(scopeOf(ctx), () =>
@@ -217,7 +218,8 @@ export async function updateTask(
             ...patch.appendMessages,
           ]
         : ((current.messageHistory as A2AMessage[]) ?? []);
-      const nextArtifacts = patch.artifacts ?? (current.artifacts as A2AArtifact[]);
+      const nextArtifacts =
+        patch.artifacts ?? (current.artifacts as A2AArtifact[]);
       const nextState = (patch.state ?? current.state) as A2ATaskState;
       const nextStatusMessage =
         patch.statusMessage !== undefined
@@ -243,9 +245,6 @@ export async function updateTask(
           // lifecycle update (e.g. the terminal-state patch) never clobbers a
           // resolution written by an earlier patch in the same task's life.
           ...(patch.agentId !== undefined ? { agentId: patch.agentId } : {}),
-          ...(patch.fanoutRunId !== undefined
-            ? { fanoutRunId: patch.fanoutRunId }
-            : {}),
         })
         .where(
           and(
