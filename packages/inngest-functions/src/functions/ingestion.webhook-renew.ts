@@ -61,18 +61,22 @@ export const [ingestionWebhookRenew] = createFunction(
 
     let renewed = 0;
     for (const sub of expiring) {
-      await step.run(`renew-${sub.id}`, async () => {
+      // NOTE: return the outcome from the step so the count survives Inngest's
+      // replay model. A closure mutation (`renewed += 1`) inside the callback is
+      // lost on replay because the step result is memoized and the callback is
+      // not re-executed, so the count is derived from the memoized return value.
+      const didRenew = await step.run(`renew-${sub.id}`, async () => {
         try {
           const result = await provisionWebhookSubscription(
             sub.connection_id,
             sub.org_id,
           );
           if (result.outcome === "subscribed") {
-            renewed += 1;
             logger.info(
               { subscriptionId: sub.id, connectionId: sub.connection_id },
               "ingestion-webhook-renew: subscription renewed",
             );
+            return true;
           } else {
             // The connection can no longer provision (reconnect needed / config
             // gone). Mark the row error so the delivery route stops trusting a
@@ -86,6 +90,7 @@ export const [ingestionWebhookRenew] = createFunction(
               "ingestion-webhook-renew: could not renew — marking subscription error",
             );
             await markSubscriptionError(sub.id);
+            return false;
           }
         } catch (err) {
           logger.warn(
@@ -97,8 +102,10 @@ export const [ingestionWebhookRenew] = createFunction(
             "ingestion-webhook-renew: renewal threw — marking subscription error",
           );
           await markSubscriptionError(sub.id);
+          return false;
         }
       });
+      if (didRenew) renewed += 1;
     }
 
     return { checked: expiring.length, renewed };
