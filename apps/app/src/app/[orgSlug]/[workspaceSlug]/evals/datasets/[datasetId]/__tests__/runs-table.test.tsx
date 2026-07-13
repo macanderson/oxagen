@@ -135,7 +135,7 @@ describe("RunsTable — date filter (server-driven)", () => {
     fireEvent.click(screen.getByTestId("evals-runs-range-7d"));
 
     await waitFor(() => expect(mockListEvalRunsAction).toHaveBeenCalledOnce());
-    const arg = mockListEvalRunsAction.mock.calls[0][0];
+    const arg = mockListEvalRunsAction.mock.calls[0]![0];
     expect(arg).toMatchObject({
       orgSlug: "acme",
       workspaceSlug: "research",
@@ -170,7 +170,7 @@ describe("RunsTable — date filter (server-driven)", () => {
     fireEvent.click(screen.getByTestId("evals-runs-range-all"));
 
     await waitFor(() => expect(mockListEvalRunsAction).toHaveBeenCalledOnce());
-    const arg = mockListEvalRunsAction.mock.calls[0][0];
+    const arg = mockListEvalRunsAction.mock.calls[0]![0];
     expect(arg.since).toBeUndefined();
   });
 });
@@ -190,7 +190,7 @@ describe("RunsTable — sorting (server-driven)", () => {
     await waitFor(() =>
       expect(mockListEvalRunsAction).toHaveBeenCalledTimes(1),
     );
-    expect(mockListEvalRunsAction.mock.calls[0][0]).toMatchObject({
+    expect(mockListEvalRunsAction.mock.calls[0]![0]).toMatchObject({
       sortBy: "score",
       sortDir: "desc",
     });
@@ -199,7 +199,7 @@ describe("RunsTable — sorting (server-driven)", () => {
     await waitFor(() =>
       expect(mockListEvalRunsAction).toHaveBeenCalledTimes(2),
     );
-    expect(mockListEvalRunsAction.mock.calls[1][0]).toMatchObject({
+    expect(mockListEvalRunsAction.mock.calls[1]![0]).toMatchObject({
       sortBy: "score",
       sortDir: "asc",
     });
@@ -216,7 +216,7 @@ describe("RunsTable — sorting (server-driven)", () => {
     );
     fireEvent.click(screen.getByTestId("evals-runs-sort-model"));
     await waitFor(() => expect(mockListEvalRunsAction).toHaveBeenCalledOnce());
-    expect(mockListEvalRunsAction.mock.calls[0][0]).toMatchObject({
+    expect(mockListEvalRunsAction.mock.calls[0]![0]).toMatchObject({
       sortBy: "model",
       sortDir: "desc",
     });
@@ -238,7 +238,7 @@ describe("RunsTable — pagination (server-driven)", () => {
     fireEvent.click(screen.getByRole("button", { name: /next page/i }));
 
     await waitFor(() => expect(mockListEvalRunsAction).toHaveBeenCalledOnce());
-    expect(mockListEvalRunsAction.mock.calls[0][0]).toMatchObject({
+    expect(mockListEvalRunsAction.mock.calls[0]![0]).toMatchObject({
       limit: 25,
       offset: 25,
     });
