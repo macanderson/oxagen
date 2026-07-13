@@ -46,7 +46,10 @@ import { ingestionBatchReconcile } from "./functions/ai.batch-reconcile";
 import { ingestionSyncRequested } from "./functions/ingestion.sync-requested";
 import { ingestionPollScheduler } from "./functions/ingestion.poll-scheduler";
 import { ingestionConnectionPoll } from "./functions/ingestion.connection-poll";
-import { playbookTriggerMatch } from "./functions/playbook.trigger.match";
+import {
+  playbookTriggerMatch,
+  playbookTriggerMatchUpdated,
+} from "./functions/playbook.trigger.match";
 import { playbookRunExecute } from "./functions/playbook.run.execute";
 import { mcpToolSnapshotRetention } from "./functions/mcp.tool-snapshot-retention";
 import { pluginCatalogSync } from "./functions/plugin.catalog-sync";
@@ -105,6 +108,7 @@ export const functions: any[] = [
   ingestionPollScheduler,
   ingestionConnectionPoll,
   playbookTriggerMatch,
+  playbookTriggerMatchUpdated,
   playbookRunExecute,
   mcpToolSnapshotRetention,
   pluginCatalogSync,

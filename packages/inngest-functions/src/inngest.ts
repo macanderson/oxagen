@@ -182,6 +182,28 @@ type Events = {
     };
   };
 
+  // Fired instead of entity.created when the upsert UPDATED an existing node
+  // (dedup Pass A hit). Same shape as entity.created plus `previousProperties`
+  // — the node's property snapshot BEFORE this write — so node.updated triggers
+  // can evaluate previous-aware operators (`changed`, status X→merged).
+  // `null` is never expected here (an update always had prior state) but the
+  // field is typed nullable to mirror upsertEntityNode's guard.
+  "ingestion/entity.updated": {
+    data: {
+      nodeId: string;
+      entityType: string;
+      propertiesSnapshot: Record<string, unknown>;
+      /** The node's properties BEFORE this write overwrote them. */
+      previousProperties?: Record<string, unknown> | null;
+      workspaceId: string;
+      orgId: string;
+      /** naturalKey of the upserted node — stable idempotency handle. */
+      naturalKey: string;
+      /** Always false for entity.updated (the node already existed). */
+      isNew: boolean;
+    };
+  };
+
   // Stage 6: async semantic inference after a node has been embedded.
   // LLM worker infers IMPLEMENTS / PART_OF / ASSIGNED_TO / etc. edges.
   "ingestion/entity.infer": {
