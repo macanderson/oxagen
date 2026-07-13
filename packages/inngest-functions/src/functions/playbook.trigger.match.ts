@@ -4,6 +4,11 @@ import { schema, withTenantDb, withSystemDb } from "@oxagen/database";
 import { and, eq, isNull } from "drizzle-orm";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { insertEvents, type EventRow } from "@oxagen/telemetry";
+import {
+  evaluateTriggerConditions,
+  type LegacyPropertyCondition,
+  type TriggerConditionConfig,
+} from "@oxagen/oxagen/trigger-conditions";
 import { logger } from "../logger";
 
 // ---------------------------------------------------------------------------
@@ -11,98 +16,37 @@ import { logger } from "../logger";
 // ---------------------------------------------------------------------------
 
 /**
- * A single condition that must hold against an entity node's properties.
- *
- * Operators:
- *   - 'eq'      value equals properties[property] (string or number, exact)
- *   - 'gt'      numeric: properties[property] > toValue
- *   - 'lt'      numeric: properties[property] < toValue
- *   - 'changed' on node creation: the property must simply be present (non-undefined)
- *
- * Rules:
- *   - A missing property (undefined in properties map) always → no match.
- *   - An empty conditions array → matches unconditionally.
- *   - Numeric coercion: both sides coerced via Number(); NaN → no match.
+ * A single legacy (flat) condition. Retained as a re-export for callers/tests;
+ * the canonical shape and evaluator now live in
+ * `@oxagen/oxagen/trigger-conditions` and support nested AND/OR trees plus the
+ * full operator set. New triggers persist a `conditionTree`; legacy flat
+ * `propertyConditions` are normalized to a tree at evaluation time.
  */
-export interface PropertyCondition {
-  property: string;
-  fromValue?: string | number;
-  toValue?: string | number;
-  operator: "eq" | "gt" | "lt" | "changed";
-}
+export type PropertyCondition = LegacyPropertyCondition;
 
 /**
- * Evaluate a list of property conditions against the current and (optionally)
- * previous properties of an entity node.
- *
- * Returns `true` when ALL conditions pass (AND semantics).
- * Returns `true` when `conditions` is empty (vacuous match).
+ * Back-compat wrapper — evaluates a flat legacy condition list by delegating to
+ * the shared tree evaluator (implicit AND). Prefer {@link evaluateTriggerConditions}.
  */
 export function evaluatePropertyConditions(
   conditions: readonly PropertyCondition[],
   properties: Readonly<Record<string, unknown>>,
   previousProperties?: Readonly<Record<string, unknown>>,
 ): boolean {
-  for (const cond of conditions) {
-    const current = properties[cond.property];
-
-    // Missing property → condition fails immediately.
-    if (current === undefined) return false;
-
-    switch (cond.operator) {
-      case "eq": {
-        // Compare as strings when toValue is a string; allow number equality too.
-        const expected = cond.toValue;
-        if (expected === undefined) return false;
-        if (typeof expected === "number") {
-          const n = Number(current);
-          if (Number.isNaN(n) || n !== expected) return false;
-        } else {
-          if (String(current) !== String(expected)) return false;
-        }
-        break;
-      }
-
-      case "gt": {
-        const threshold = Number(cond.toValue);
-        if (Number.isNaN(threshold)) return false;
-        const n = Number(current);
-        if (Number.isNaN(n) || n <= threshold) return false;
-        break;
-      }
-
-      case "lt": {
-        const threshold = Number(cond.toValue);
-        if (Number.isNaN(threshold)) return false;
-        const n = Number(current);
-        if (Number.isNaN(n) || n >= threshold) return false;
-        break;
-      }
-
-      case "changed": {
-        // On a created node there is no previous state; "changed" means the
-        // property is present (non-undefined) on the new node — which we
-        // already confirmed above. When previousProperties is available,
-        // require the value to have actually changed.
-        if (previousProperties !== undefined) {
-          const prev = previousProperties[cond.property];
-          if (prev === current) return false;
-        }
-        break;
-      }
-    }
-  }
-  return true;
+  return evaluateTriggerConditions(
+    { propertyConditions: conditions as LegacyPropertyCondition[] },
+    properties,
+    previousProperties,
+  );
 }
 
 // ---------------------------------------------------------------------------
 // Trigger config shape (from workflow.playbook_triggers.config JSONB)
 // ---------------------------------------------------------------------------
 
-interface TriggerConfig {
+interface TriggerConfig extends TriggerConditionConfig {
   entityType?: string;
   eventType?: string;
-  propertyConditions?: PropertyCondition[];
 }
 
 interface PlaybookTriggerRow {
@@ -137,16 +81,23 @@ export const [playbookTriggerMatch] = createFunction(
   },
   { event: "ingestion/entity.created" },
   async ({ event, step }) => {
-    const { nodeId, entityType, propertiesSnapshot, workspaceId, orgId, naturalKey, isNew } =
-      event.data as {
-        nodeId: string;
-        entityType: string;
-        propertiesSnapshot: Record<string, unknown>;
-        workspaceId: string;
-        orgId: string;
-        naturalKey: string;
-        isNew: boolean;
-      };
+    const {
+      nodeId,
+      entityType,
+      propertiesSnapshot,
+      workspaceId,
+      orgId,
+      naturalKey,
+      isNew,
+    } = event.data as {
+      nodeId: string;
+      entityType: string;
+      propertiesSnapshot: Record<string, unknown>;
+      workspaceId: string;
+      orgId: string;
+      naturalKey: string;
+      isNew: boolean;
+    };
 
     // ── Step 1: Load enabled event triggers for this workspace ──────────────
     const triggers = await step.run(
@@ -208,11 +159,12 @@ export const [playbookTriggerMatch] = createFunction(
     const dispatchedRunIds: string[] = [];
 
     for (const trigger of candidates) {
-      const conditions: PropertyCondition[] = Array.isArray(trigger.config.propertyConditions)
-        ? (trigger.config.propertyConditions as PropertyCondition[])
-        : [];
-
-      const matched = evaluatePropertyConditions(conditions, propertiesSnapshot);
+      // Evaluate the trigger's condition tree (or legacy flat conditions,
+      // normalized to a tree) against the node's property snapshot.
+      const matched = evaluateTriggerConditions(
+        trigger.config,
+        propertiesSnapshot,
+      );
 
       if (!matched) {
         logger.debug(
@@ -356,7 +308,10 @@ export const [playbookTriggerMatch] = createFunction(
         await insertEvents(telRows);
       } catch (telErr) {
         // Telemetry loss is preferable to losing the dispatch result.
-        logger.warn({ telErr }, "playbook-trigger-match: insertEvents failed — telemetry loss");
+        logger.warn(
+          { telErr },
+          "playbook-trigger-match: insertEvents failed — telemetry loss",
+        );
       }
     });
 
