@@ -64,7 +64,10 @@ export const aiResponseCache = aiSchema.table(
     lastHitAt: timestamp("last_hit_at", { withTimezone: true, mode: "date" }),
     // Hard expiry: created_at + ttlSeconds. Reads filter `expires_at > now()`;
     // a sweeper (or soft-delete) reclaims expired rows.
-    expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }).notNull(),
+    expiresAt: timestamp("expires_at", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
   },
   (t) => ({
     // At most one live entry per (workspace, cache_key). Partial on deleted_at
@@ -128,16 +131,34 @@ export const aiBatchJobs = aiSchema.table(
     // Arbitrary caller metadata (e.g. the ingestion connection id, file batch).
     metadata: jsonb("metadata").notNull().default(sql`'{}'::jsonb`),
     // Wall-clocks for the submit → end transition.
-    submittedAt: timestamp("submitted_at", { withTimezone: true, mode: "date" }),
-    completedAt: timestamp("completed_at", { withTimezone: true, mode: "date" }),
+    submittedAt: timestamp("submitted_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    completedAt: timestamp("completed_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
   },
   (t) => ({
     orgIdx: index("ai_batch_jobs_org_idx").on(t.orgId, t.workspaceId),
-    statusIdx: index("ai_batch_jobs_status_idx").on(t.orgId, t.workspaceId, t.status),
+    statusIdx: index("ai_batch_jobs_status_idx").on(
+      t.orgId,
+      t.workspaceId,
+      t.status,
+    ),
     // One tracking row per provider batch id.
     providerBatchUniq: uniqueIndex("ai_batch_jobs_provider_batch_uniq")
       .on(t.providerBatchId)
       .where(sql`provider_batch_id IS NOT NULL AND deleted_at IS NULL`),
+    // Batch reconcile cron (cross-tenant; statusIdx above leads with org_id,
+    // which is useless for this cross-tenant scan — 2026-07-11 audit §4.1
+    // item 8).
+    openIdx: index("ai_batch_jobs_open_idx")
+      .on(t.status)
+      .where(
+        sql`${t.status} IN ('submitted', 'in_progress') AND ${t.deletedAt} IS NULL`,
+      ),
     statusCheck: check(
       "ai_batch_jobs_status_check",
       sql`${t.status} IN ('submitted', 'in_progress', 'ended', 'canceled', 'expired', 'failed')`,

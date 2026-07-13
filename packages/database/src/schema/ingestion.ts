@@ -172,6 +172,14 @@ export const webhookSubscriptions = ingestionSchema.table(
       t.connectionId,
     ),
     statusIdx: index("webhook_subscriptions_status_idx").on(t.status),
+    // Missing CHECK constraint (2026-07-11 audit §5 item 4). No write path
+    // exists yet (§1.6 — feature intent only); this constrains the column to
+    // the lifecycle vocabulary the read side (apps/api webhook route) and
+    // sibling status columns already use, ahead of provisioning landing.
+    statusCheck: check(
+      "webhook_subscriptions_status_check",
+      sql`${t.status} IN ('active', 'paused', 'revoked', 'error')`,
+    ),
   }),
 );
 
@@ -281,6 +289,14 @@ export const setupSuggestions = ingestionSchema.table(
     connectionIdx: index("setup_suggestions_connection_idx").on(t.connectionId),
     statusIdx: index("setup_suggestions_status_idx").on(t.status),
     orgIdx: index("setup_suggestions_org_idx").on(t.orgId, t.workspaceId),
+    // Missing CHECK constraint (2026-07-11 audit §5 item 4). Only 'pending'
+    // is ever written (connection.mappings.suggest.ts); the "so the user can
+    // accept/reject them" intent plus the dead resolved_at/resolved_by
+    // columns confirm the terminal states.
+    statusCheck: check(
+      "setup_suggestions_status_check",
+      sql`${t.status} IN ('pending', 'accepted', 'rejected')`,
+    ),
   }),
 );
 
