@@ -43,8 +43,6 @@ vi.mock("./debug-section", () => ({
   },
 }));
 
-// eslint-disable-next-line import/first -- import after mocks, matching the
-// existing conversation-page.test.tsx convention.
 import { TraceSection } from "./trace-section";
 
 function trace(overrides: Partial<AgentTraceGetOutput> = {}): AgentTraceGetOutput {

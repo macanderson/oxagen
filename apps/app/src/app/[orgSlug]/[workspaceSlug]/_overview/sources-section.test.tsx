@@ -72,7 +72,7 @@ describe("SourcesTile", () => {
     expect(screen.queryByText("Source 6")).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: /view sources/i })).toHaveAttribute(
       "href",
-      "/acme/prod/knowledge/repos",
+      "/acme/prod/knowledge/sources",
     );
   });
 
@@ -85,7 +85,7 @@ describe("SourcesTile", () => {
     expect(screen.getByText(/no sources connected yet/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /connect a source/i })).toHaveAttribute(
       "href",
-      "/acme/prod/knowledge/repos",
+      "/acme/prod/knowledge/sources",
     );
   });
 

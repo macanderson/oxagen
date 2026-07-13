@@ -11,7 +11,8 @@ const renderDirectiveSchema = z.object({
 export const graphStats = registerCapability({
   name: "get_graph_stats",
   domain: "graph",
-  description: "Workspace graph statistics: node count, edge count, inferred edge count, breakdown by type.",
+  description:
+    "Workspace graph statistics: node count, edge count, inferred edge count, breakdown by type.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
@@ -28,11 +29,19 @@ export const graphStats = registerCapability({
       .boolean()
       .default(false)
       .describe("Include breakdown by node label and edge type"),
+    includeGrowth: z
+      .boolean()
+      .default(false)
+      .describe(
+        "Include node-creation time buckets (today/yesterday/this week/last week) and a 14-day daily series",
+      ),
   }),
   output: z.object({
     nodeCount: z.number().describe("Total number of nodes in the graph"),
     edgeCount: z.number().describe("Total number of edges (all types)"),
-    inferredEdgeCount: z.number().describe("Number of edges created by inference"),
+    inferredEdgeCount: z
+      .number()
+      .describe("Number of edges created by inference"),
     sourceCount: z.number().describe("Number of unique source connectors"),
     nodesByLabel: z
       .record(z.number())
@@ -42,10 +51,51 @@ export const graphStats = registerCapability({
       .record(z.number())
       .optional()
       .describe("Edge count breakdown by type (if includeByType=true)"),
-    lastModifiedAt: z.string().describe("ISO timestamp of last graph modification"),
+    lastModifiedAt: z
+      .string()
+      .describe("ISO timestamp of last graph modification"),
+    growth: z
+      .object({
+        nodesToday: z
+          .number()
+          .int()
+          .nonnegative()
+          .describe("Nodes created since the start of today (UTC)"),
+        nodesYesterday: z
+          .number()
+          .int()
+          .nonnegative()
+          .describe("Nodes created during the prior UTC day"),
+        nodesThisWeek: z
+          .number()
+          .int()
+          .nonnegative()
+          .describe("Nodes created in the last 7 days (rolling, incl today)"),
+        nodesLastWeek: z
+          .number()
+          .int()
+          .nonnegative()
+          .describe("Nodes created in the 7 days before this week"),
+        daily: z
+          .array(
+            z.object({
+              day: z.string().describe("UTC calendar day, YYYY-MM-DD"),
+              count: z.number().int().nonnegative(),
+            }),
+          )
+          .describe(
+            "Last 14 UTC days of node-creation counts, ascending, zero-filled",
+          ),
+      })
+      .optional()
+      .describe(
+        "Node-creation time buckets (present only when includeGrowth=true)",
+      ),
     render: renderDirectiveSchema
       .optional()
-      .describe("Render directive for displaying the stat boxes in the chat UI (app surface only)"),
+      .describe(
+        "Render directive for displaying the stat boxes in the chat UI (app surface only)",
+      ),
   }),
 });
 

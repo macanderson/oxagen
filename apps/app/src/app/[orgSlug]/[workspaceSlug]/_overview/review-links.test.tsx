@@ -26,7 +26,7 @@ describe("ReviewLinks", () => {
     expect(inference).toHaveAttribute("href", "/acme/prod/knowledge/inference");
 
     const memories = screen.getByRole("link", { name: /review memories/i });
-    expect(memories).toHaveAttribute("href", "/acme/prod/knowledge/memories");
+    expect(memories).toHaveAttribute("href", "/acme/prod/knowledge/memory");
 
     const ask = screen.getByRole("link", { name: /open ask/i });
     expect(ask).toHaveAttribute("href", "/acme/prod/ask");

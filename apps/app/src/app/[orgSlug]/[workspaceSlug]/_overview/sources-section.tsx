@@ -38,7 +38,7 @@ export async function SourcesTile({
   orgSlug,
   workspaceSlug,
 }: SourcesTileProps) {
-  const reposHref = workspace.knowledge.repos({ orgSlug, workspaceSlug });
+  const reposHref = workspace.knowledge.sources({ orgSlug, workspaceSlug });
 
   let connections: ConnectionListOutput["connections"] = [];
   let failed = false;
