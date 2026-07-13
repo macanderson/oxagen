@@ -23,6 +23,7 @@ import { useRouter } from "next/navigation";
 import {
   resolveConditionTree,
   type ConditionNode,
+  type ConditionLeaf,
 } from "@oxagen/oxagen/trigger-conditions";
 import {
   SchemaConditionSection,
@@ -49,6 +50,20 @@ function asString(v: unknown): string {
   return typeof v === "string" ? v : "";
 }
 
+/** Flatten a condition tree into its leaves (for the read-mode summary). */
+function collectConditionLeaves(node: ConditionNode): ConditionLeaf[] {
+  if (node.kind === "group") {
+    return node.children.flatMap(collectConditionLeaves);
+  }
+  return [node];
+}
+
+function formatConditionValue(value: ConditionLeaf["value"]): string {
+  if (value === undefined) return "";
+  if (Array.isArray(value)) return value.map(String).join(", ");
+  return String(value);
+}
+
 export function TriggerConfigPanel({
   orgSlug,
   workspaceSlug,
@@ -65,6 +80,22 @@ export function TriggerConfigPanel({
   const legacyConditions = Array.isArray(triggerConfig.propertyConditions)
     ? (triggerConfig.propertyConditions as LegacyPropertyCondition[])
     : [];
+
+  // Read-mode summary: resolve whatever is persisted (an explicit
+  // `conditionTree` or legacy flat `propertyConditions`) to a tree and flatten
+  // its leaves. New saves persist only `conditionTree`, so summarizing from the
+  // resolved tree keeps the collapsed view in sync with what was saved.
+  const summaryLeaves = collectConditionLeaves(
+    resolveConditionTree({
+      conditionTree:
+        (triggerConfig.conditionTree as ConditionNode | undefined) ?? null,
+      propertyConditions: legacyConditions.map((c) => ({
+        property: c.property,
+        operator: c.operator as "eq" | "gt" | "lt" | "changed" | undefined,
+        toValue: c.toValue,
+      })),
+    }),
+  );
 
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -178,14 +209,14 @@ export function TriggerConfigPanel({
             <dd className="font-medium text-foreground">
               {asString(triggerConfig.eventType) || "—"}
             </dd>
-            {legacyConditions.length > 0 && (
+            {summaryLeaves.length > 0 && (
               <>
                 <dt className="text-muted-foreground">Conditions</dt>
                 <dd className="text-foreground">
-                  {legacyConditions.map((c, i) => (
-                    <div key={i} className="font-mono text-xs">
-                      {c.property} {c.operator ?? "eq"}{" "}
-                      {c.toValue !== undefined ? String(c.toValue) : ""}
+                  {summaryLeaves.map((leaf, i) => (
+                    <div key={leaf.id ?? i} className="font-mono text-xs">
+                      {leaf.property} {leaf.operator}{" "}
+                      {formatConditionValue(leaf.value)}
                     </div>
                   ))}
                 </dd>
