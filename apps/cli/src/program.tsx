@@ -239,11 +239,24 @@ export function buildProgram(): Command {
           const { runOneShot } = await import("./repl/one-shot.js");
           await runOneShot(prompt, runOpts);
         } else if (process.stdout.isTTY) {
-          // Interactive REPL mode
-          const { launchRepl } = await import("./repl/interactive.js");
+          // Interactive REPL mode. The import below drags in Ink, the agent
+          // engine, and native DuckDB/onnxruntime modules — seconds cold, far
+          // longer on a loaded machine — during which nothing else paints, so
+          // animate a dependency-free splash until the REPL can own the screen.
+          const { startStartupSplash } = await import("./tui/startup-splash.js");
+          const splash = startStartupSplash();
+          let repl: typeof import("./repl/interactive.js");
+          try {
+            repl = await import("./repl/interactive.js");
+          } finally {
+            // Stop before launchRepl: the REPL enters the alternate screen
+            // buffer, and the splash line must be gone from the primary buffer
+            // first (an import error must also never strand a spinner frame).
+            splash.stop();
+          }
           // Inject the program factory: the REPL introspects/dispatches CLI
           // commands through it without ever importing this composition root.
-          await launchRepl({ ...runOpts, buildProgram });
+          await repl.launchRepl({ ...runOpts, buildProgram });
         } else {
           // Piped input — read from stdin
           const { runFromStdin } = await import("./repl/one-shot.js");
