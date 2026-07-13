@@ -1,4 +1,16 @@
-import { boolean, check, index, integer, jsonb, text, timestamp, uniqueIndex, uuid, numeric, bigint } from "drizzle-orm/pg-core";
+import {
+  boolean,
+  check,
+  index,
+  integer,
+  jsonb,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+  numeric,
+  bigint,
+} from "drizzle-orm/pg-core";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { agentSchema } from "./_schemas";
@@ -50,20 +62,28 @@ export const agents = agentSchema.table(
     // npm package name. Immutability of the live slug is enforced by the
     // agents_slug_immutable trigger; this index reserves it past deletion.
     // (ADR-024, migration 20260709130000_agent_slug_no_recycle.)
-    workspaceSlugUniq: uniqueIndex("agents_workspace_slug_uniq")
-      .on(t.workspaceId, t.slug),
+    workspaceSlugUniq: uniqueIndex("agents_workspace_slug_uniq").on(
+      t.workspaceId,
+      t.slug,
+    ),
     orgIdx: index("agents_org_idx").on(t.orgId, t.workspaceId),
     deploymentStatusIdx: index("agents_deployment_status_idx").on(
       t.orgId,
       t.workspaceId,
       t.deploymentStatus,
     ),
-    statusCheck: check("agents_status_check", sql`${t.status} IN ('draft', 'active', 'archived')`),
+    statusCheck: check(
+      "agents_status_check",
+      sql`${t.status} IN ('draft', 'active', 'archived')`,
+    ),
     deploymentStatusCheck: check(
       "agents_deployment_status_check",
       sql`${t.deploymentStatus} IN ('inactive', 'active')`,
     ),
-    slugCheck: check("agents_slug_check", sql`${t.slug} ~ '^[a-z0-9]+(-[a-z0-9]+)*$'`),
+    slugCheck: check(
+      "agents_slug_check",
+      sql`${t.slug} ~ '^[a-z0-9]+(-[a-z0-9]+)*$'`,
+    ),
   }),
 );
 
@@ -77,7 +97,9 @@ export const agentTriggers = agentSchema.table(
     ...auditMixin(),
     ...orgScopeMixin(),
     ...softDeleteMixin(),
-    agentId: uuid("agent_id").notNull().references(() => agents.id),
+    agentId: uuid("agent_id")
+      .notNull()
+      .references(() => agents.id),
     triggerType: text("trigger_type").notNull(),
     // eventSource/eventType are null for manual/schedule triggers.
     eventSource: text("event_source"),
@@ -92,7 +114,10 @@ export const agentTriggers = agentSchema.table(
   (t) => ({
     agentIdx: index("agent_triggers_agent_idx").on(t.agentId),
     orgIdx: index("agent_triggers_org_idx").on(t.orgId, t.workspaceId),
-    typeEnabledIdx: index("agent_triggers_type_enabled_idx").on(t.triggerType, t.enabled),
+    typeEnabledIdx: index("agent_triggers_type_enabled_idx").on(
+      t.triggerType,
+      t.enabled,
+    ),
     triggerTypeCheck: check(
       "agent_triggers_trigger_type_check",
       sql`${t.triggerType} IN ('manual', 'schedule', 'event')`,
@@ -105,18 +130,25 @@ export const agentVersions = agentSchema.table(
   "agent_versions",
   {
     id: uuid("id").primaryKey().default(uuidv7Default),
-    agentId: uuid("agent_id").notNull().references(() => agents.id),
+    agentId: uuid("agent_id")
+      .notNull()
+      .references(() => agents.id),
     version: integer("version").notNull(),
     isPublished: boolean("is_published").notNull().default(false),
     // checksum: SHA-256 over canonical config — immutability contract.
     checksum: text("checksum"),
     config: jsonb("config").notNull().default(sql`'{}'::jsonb`),
     createdByUserId: uuid("created_by_user_id").notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
     // No updatedAt by design — INSERT-only once published.
   },
   (t) => ({
-    agentVersionUniq: uniqueIndex("agent_versions_agent_version_uniq").on(t.agentId, t.version),
+    agentVersionUniq: uniqueIndex("agent_versions_agent_version_uniq").on(
+      t.agentId,
+      t.version,
+    ),
     agentIdx: index("agent_versions_agent_idx").on(t.agentId),
   }),
 );
@@ -140,11 +172,16 @@ export const skills = agentSchema.table(
     enabled: boolean("enabled").notNull().default(true),
     // Explicitly pinned active version, decoupled from skill_versions.is_latest.
     // Same-schema FK to skill_versions.id (forward ref — Drizzle resolves lazily).
-    activeVersionId: uuid("active_version_id").references((): AnyPgColumn => skillVersions.id),
+    activeVersionId: uuid("active_version_id").references(
+      (): AnyPgColumn => skillVersions.id,
+    ),
     // Audit of who/when last changed the active version. user-id is a
     // cross-schema reference (auth.users) — app-enforced, no FK per storage rules.
     activatedByUserId: uuid("activated_by_user_id"),
-    activatedAt: timestamp("activated_at", { withTimezone: true, mode: "date" }),
+    activatedAt: timestamp("activated_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
     // Fast-path list display (OXA-1750): last invocation + total usage count.
     lastUsedAt: timestamp("last_used_at", { withTimezone: true, mode: "date" }),
     usageCount: integer("usage_count").notNull().default(0),
@@ -152,7 +189,10 @@ export const skills = agentSchema.table(
     installedFromSlug: citext("installed_from_slug"),
   },
   (t) => ({
-    workspaceSlugIdx: uniqueIndex("skills_workspace_slug_idx").on(t.workspaceId, t.slug),
+    workspaceSlugIdx: uniqueIndex("skills_workspace_slug_idx").on(
+      t.workspaceId,
+      t.slug,
+    ),
     orgIdx: index("skills_org_idx").on(t.orgId, t.workspaceId),
     // FK → agent.skill_versions (skills_active_version_id_skill_versions_id_fk).
     // Index the FK so skill_versions mutations don't seq-scan skills.
@@ -170,14 +210,19 @@ export const skillVersions = agentSchema.table(
     skillId: uuid("skill_id").notNull(),
     body: text("body").notNull(),
     // References from the .skill.md frontmatter (graph nodes, files, etc).
-    referencesPayload: jsonb("references_payload").notNull().default(sql`'[]'::jsonb`),
+    referencesPayload: jsonb("references_payload")
+      .notNull()
+      .default(sql`'[]'::jsonb`),
   },
   (t) => ({
     skillIdx: index("skill_versions_skill_idx").on(t.skillId),
     skillLatestIdx: uniqueIndex("skill_versions_skill_latest_idx")
       .on(t.skillId)
       .where(sql`is_latest = true`),
-    skillVersionIdx: uniqueIndex("skill_versions_skill_version_idx").on(t.skillId, t.versionNumber),
+    skillVersionIdx: uniqueIndex("skill_versions_skill_version_idx").on(
+      t.skillId,
+      t.versionNumber,
+    ),
     orgIdx: index("skill_versions_org_idx").on(t.orgId, t.workspaceId),
   }),
 );
@@ -197,7 +242,10 @@ export const backgroundTasks = agentSchema.table(
     resultPayload: jsonb("result_payload"),
     failureReason: text("failure_reason"),
     startedAt: timestamp("started_at", { withTimezone: true, mode: "date" }),
-    completedAt: timestamp("completed_at", { withTimezone: true, mode: "date" }),
+    completedAt: timestamp("completed_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
     createdByUserId: uuid("created_by_user_id"),
   },
   (t) => ({
@@ -207,7 +255,10 @@ export const backgroundTasks = agentSchema.table(
       t.status,
     ),
     orgIdx: index("background_tasks_org_idx").on(t.orgId, t.workspaceId),
-    statusCheck: check("background_tasks_status_check", sql`${t.status} IN ('pending', 'running', 'completed', 'failed', 'cancelled')`),
+    statusCheck: check(
+      "background_tasks_status_check",
+      sql`${t.status} IN ('pending', 'running', 'completed', 'failed', 'cancelled')`,
+    ),
   }),
 );
 
@@ -231,7 +282,10 @@ export const approvalRequests = agentSchema.table(
     resolvedAt: timestamp("resolved_at", { withTimezone: true, mode: "date" }),
     resolvedByUserId: uuid("resolved_by_user_id"),
     note: text("note"),
-    expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }).notNull(),
+    expiresAt: timestamp("expires_at", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
   },
   (t) => ({
     orgResolutionIdx: index("approval_requests_org_resolution_idx").on(
@@ -241,8 +295,14 @@ export const approvalRequests = agentSchema.table(
     ),
     orgIdx: index("approval_requests_org_idx").on(t.orgId, t.workspaceId),
     messageIdx: index("approval_requests_message_idx").on(t.messageId),
-    resolutionCheck: check("approval_requests_resolution_check", sql`${t.resolution} IN ('approved', 'denied', 'expired') OR ${t.resolution} IS NULL`),
-    riskLevelCheck: check("approval_requests_risk_level_check", sql`${t.riskLevel} IN ('low', 'medium', 'high', 'critical')`),
+    resolutionCheck: check(
+      "approval_requests_resolution_check",
+      sql`${t.resolution} IN ('approved', 'denied', 'expired') OR ${t.resolution} IS NULL`,
+    ),
+    riskLevelCheck: check(
+      "approval_requests_risk_level_check",
+      sql`${t.riskLevel} IN ('low', 'medium', 'high', 'critical')`,
+    ),
   }),
 );
 
@@ -261,8 +321,13 @@ export const subagentFanouts = agentSchema.table(
   },
   (t) => ({
     orgIdx: index("subagent_fanouts_org_idx").on(t.orgId, t.workspaceId),
-    parentMessageIdx: index("subagent_fanouts_parent_message_idx").on(t.parentMessageId),
-    statusCheck: check("subagent_fanouts_status_check", sql`${t.status} IN ('pending', 'running', 'completed', 'partial', 'timed_out')`),
+    parentMessageIdx: index("subagent_fanouts_parent_message_idx").on(
+      t.parentMessageId,
+    ),
+    statusCheck: check(
+      "subagent_fanouts_status_check",
+      sql`${t.status} IN ('pending', 'running', 'completed', 'partial', 'timed_out')`,
+    ),
   }),
 );
 
@@ -285,13 +350,19 @@ export const subagentRuns = agentSchema.table(
     status: text("status").notNull(),
     errorReason: text("error_reason"),
     startedAt: timestamp("started_at", { withTimezone: true, mode: "date" }),
-    completedAt: timestamp("completed_at", { withTimezone: true, mode: "date" }),
+    completedAt: timestamp("completed_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
     // Durable claim/lease (docs/specs/graph-mediated-fanout-phase2 §1).
     // claimedBy = Inngest run id of the owning worker; leaseExpiresAt null means
     // unclaimed or terminal. The lease sweeper requeues expired-lease rows until
     // the attempt cap, so a dead worker's task is reclaimed without a coordinator.
     claimedBy: text("claimed_by"),
-    leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true, mode: "date" }),
+    leaseExpiresAt: timestamp("lease_expires_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
     attempts: integer("attempts").notNull().default(0),
   },
   (t) => ({
@@ -303,7 +374,10 @@ export const subagentRuns = agentSchema.table(
     claimIdx: index("subagent_runs_claim_idx")
       .on(t.orgId, t.status)
       .where(sql`${t.status} IN ('pending', 'running')`),
-    statusCheck: check("subagent_runs_status_check", sql`${t.status} IN ('pending', 'running', 'completed', 'failed')`),
+    statusCheck: check(
+      "subagent_runs_status_check",
+      sql`${t.status} IN ('pending', 'running', 'completed', 'failed')`,
+    ),
   }),
 );
 
@@ -324,28 +398,53 @@ export const agentExecutions = agentSchema.table(
     outputPayload: jsonb("output_payload"),
     failureReason: text("failure_reason"),
     startedAt: timestamp("started_at", { withTimezone: true, mode: "date" }),
-    completedAt: timestamp("completed_at", { withTimezone: true, mode: "date" }),
+    completedAt: timestamp("completed_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
     latencyMs: bigint("latency_ms", { mode: "number" }),
     inputTokens: integer("input_tokens"),
     outputTokens: integer("output_tokens"),
-    estimatedCostUsd: numeric("estimated_cost_usd", { precision: 10, scale: 6 }),
-    syncedToGraphAt: timestamp("synced_to_graph_at", { withTimezone: true, mode: "date" }),
+    estimatedCostUsd: numeric("estimated_cost_usd", {
+      precision: 10,
+      scale: 6,
+    }),
+    syncedToGraphAt: timestamp("synced_to_graph_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
     // AgentInstance shape (agent-schema.ts §4): self-reference for subagent/A2A
-    // lineage (app-enforced, no FK), per-run debug posture, live thread state.
+    // lineage (app-enforced, no FK).
     parentExecutionId: uuid("parent_execution_id"),
-    debug: jsonb("debug").notNull().default(sql`'{}'::jsonb`),
+    // Live: schema.reconcile.dispatch writes reconcile progress counters here
+    // and schema.reconcile.status reads them back. (The sibling `debug` column
+    // was dropped in 20260802140000 — genuinely unreferenced.)
     state: jsonb("state").notNull().default(sql`'{}'::jsonb`),
   },
   (t) => ({
-    orgStatusIdx: index("agent_executions_org_status_idx").on(t.orgId, t.workspaceId, t.status),
-    originIdx: index("agent_executions_origin_idx").on(t.originType, t.originId),
+    orgStatusIdx: index("agent_executions_org_status_idx").on(
+      t.orgId,
+      t.workspaceId,
+      t.status,
+    ),
+    originIdx: index("agent_executions_origin_idx").on(
+      t.originType,
+      t.originId,
+    ),
     agentIdx: index("agent_executions_agent_idx").on(t.agentId),
     // FK → agent.agent_versions. Index the FK so agent_versions mutations don't
     // seq-scan the high-write executions table (only agent_id was indexed).
-    agentVersionIdx: index("agent_executions_agent_version_idx").on(t.agentVersionId),
-    parentExecutionIdx: index("agent_executions_parent_execution_idx").on(t.parentExecutionId),
+    agentVersionIdx: index("agent_executions_agent_version_idx").on(
+      t.agentVersionId,
+    ),
+    parentExecutionIdx: index("agent_executions_parent_execution_idx").on(
+      t.parentExecutionId,
+    ),
     createdAtIdx: index("agent_executions_created_at_idx").on(t.createdAt),
-    statusCheck: check("agent_executions_status_check", sql`${t.status} IN ('planning', 'running', 'completed', 'failed', 'cancelled')`),
+    statusCheck: check(
+      "agent_executions_status_check",
+      sql`${t.status} IN ('planning', 'running', 'completed', 'failed', 'cancelled')`,
+    ),
     // Mirror of the CHECK constraint that already lives in the baseline/0007
     // migrations. Declared here so the Drizzle schema can never drift from the
     // DB again — the omission let workflow.run insert "workflow.run" (dot) and
@@ -378,20 +477,31 @@ export const agentExecutionSteps = agentSchema.table(
     inputTokens: integer("input_tokens"),
     outputTokens: integer("output_tokens"),
     startedAt: timestamp("started_at", { withTimezone: true, mode: "date" }),
-    completedAt: timestamp("completed_at", { withTimezone: true, mode: "date" }),
+    completedAt: timestamp("completed_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
     // Durable claim/lease — same semantics as subagent_runs (spec §1): a lost
     // worker's step becomes resweepable instead of stranding the execution.
     claimedBy: text("claimed_by"),
-    leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true, mode: "date" }),
+    leaseExpiresAt: timestamp("lease_expires_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
     attempts: integer("attempts").notNull().default(0),
   },
   (t) => ({
-    executionIdx: index("agent_execution_steps_execution_idx").on(t.executionId),
+    executionIdx: index("agent_execution_steps_execution_idx").on(
+      t.executionId,
+    ),
     orgIdx: index("agent_execution_steps_org_idx").on(t.orgId, t.workspaceId),
     claimIdx: index("agent_execution_steps_claim_idx")
       .on(t.orgId, t.status)
       .where(sql`${t.status} IN ('pending', 'running')`),
-    statusCheck: check("agent_execution_steps_status_check", sql`${t.status} IN ('pending', 'running', 'completed', 'failed', 'cancelled')`),
+    statusCheck: check(
+      "agent_execution_steps_status_check",
+      sql`${t.status} IN ('pending', 'running', 'completed', 'failed', 'cancelled')`,
+    ),
   }),
 );
 
@@ -417,7 +527,10 @@ export const agentToolCalls = agentSchema.table(
     stepIdx: index("agent_tool_calls_step_idx").on(t.executionStepId),
     toolIdx: index("agent_tool_calls_tool_idx").on(t.toolName),
     orgIdx: index("agent_tool_calls_org_idx").on(t.orgId, t.workspaceId),
-    statusCheck: check("agent_tool_calls_status_check", sql`${t.status} IN ('pending', 'running', 'completed', 'failed')`),
+    statusCheck: check(
+      "agent_tool_calls_status_check",
+      sql`${t.status} IN ('pending', 'running', 'completed', 'failed')`,
+    ),
   }),
 );
 
@@ -458,7 +571,10 @@ export const sandboxSessions = agentSchema.table(
     // Reap-eligible instant = last_used_at + grace; written when a turn releases
     // the session to 'idle'. NULL while a turn is active ('running'), so the
     // idle-grace reaper only ever considers genuinely released sessions.
-    graceDeadlineAt: timestamp("grace_deadline_at", { withTimezone: true, mode: "date" }),
+    graceDeadlineAt: timestamp("grace_deadline_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
     // Work-safety state, orthogonal to `status`. The reaper MUST capture
     // uncommitted work to a recovery branch before it may flush a dirty sandbox;
     // this column is the audit trail of that guarantee.
@@ -470,21 +586,33 @@ export const sandboxSessions = agentSchema.table(
     // Failure reason when recovery_status='failed' — the sandbox is RETAINED
     // (never flushed) so the work can still be recovered manually or next tick.
     recoveryError: text("recovery_error"),
-    recoveredAt: timestamp("recovered_at", { withTimezone: true, mode: "date" }),
+    recoveredAt: timestamp("recovered_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
     // When the reaper terminated the sandbox (distinct from an explicit stop).
     flushedAt: timestamp("flushed_at", { withTimezone: true, mode: "date" }),
     // Last-observed uncommitted-changes state (NULL = never checked). Powers the
     // inspector's dirty indicator; the reaper always re-checks live before flush.
     dirty: boolean("dirty"),
-    dirtyCheckedAt: timestamp("dirty_checked_at", { withTimezone: true, mode: "date" }),
+    dirtyCheckedAt: timestamp("dirty_checked_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
   },
   (t) => ({
     orgIdx: index("sandbox_sessions_org_idx").on(t.orgId, t.workspaceId),
-    statusIdx: index("sandbox_sessions_status_idx").on(t.orgId, t.workspaceId, t.status),
+    statusIdx: index("sandbox_sessions_status_idx").on(
+      t.orgId,
+      t.workspaceId,
+      t.status,
+    ),
     // At most one live durable sandbox per (workspace, sessionKey).
     sessionKeyUniq: uniqueIndex("sandbox_sessions_session_key_uniq")
       .on(t.workspaceId, t.sessionKey)
-      .where(sql`session_key IS NOT NULL AND status IN ('running','idle') AND deleted_at IS NULL`),
+      .where(
+        sql`session_key IS NOT NULL AND status IN ('running','idle') AND deleted_at IS NULL`,
+      ),
     // Reaper candidate scan: idle sessions past their grace deadline that the
     // reaper has not yet flushed. Partial to stay tiny (only live-but-idle rows).
     reapIdx: index("sandbox_sessions_reap_idx")
@@ -525,10 +653,17 @@ export const agentPlans = agentSchema.table(
     taskCount: integer("task_count").notNull().default(0),
   },
   (t) => ({
-    orgStatusIdx: index("agent_plans_org_status_idx").on(t.orgId, t.workspaceId, t.status),
+    orgStatusIdx: index("agent_plans_org_status_idx").on(
+      t.orgId,
+      t.workspaceId,
+      t.status,
+    ),
     orgIdx: index("agent_plans_org_idx").on(t.orgId, t.workspaceId),
     messageIdx: index("agent_plans_message_idx").on(t.messageId),
-    statusCheck: check("agent_plans_status_check", sql`${t.status} IN ('draft', 'awaiting_approval', 'approved', 'denied', 'amended', 'executing', 'completed')`),
+    statusCheck: check(
+      "agent_plans_status_check",
+      sql`${t.status} IN ('draft', 'awaiting_approval', 'approved', 'denied', 'amended', 'executing', 'completed')`,
+    ),
   }),
 );
 
@@ -551,7 +686,9 @@ export const a2aTasks = agentSchema.table(
     // A2A task lifecycle state (lowercase wire string). DEFAULT 'submitted'.
     state: text("state").notNull().default("submitted"),
     // The A2A Message[] history (user turn + agent reply) as wire JSON.
-    messageHistory: jsonb("message_history").notNull().default(sql`'[]'::jsonb`),
+    messageHistory: jsonb("message_history")
+      .notNull()
+      .default(sql`'[]'::jsonb`),
     // The A2A Artifact[] produced by the agent as wire JSON.
     artifacts: jsonb("artifacts").notNull().default(sql`'[]'::jsonb`),
     // The current TaskStatus.message (agent-facing status text), if any.
@@ -565,17 +702,17 @@ export const a2aTasks = agentSchema.table(
     // when the task ran the generic chat baseline (no skillId, or an
     // unknown/inactive one, which falls back rather than 500ing).
     agentId: uuid("agent_id"),
-    // Set only when this task was opened from inside a leased subagent run
-    // (agent.subagent_runs.id), so a fanout child and the A2A task it opened
-    // can be joined. App-enforced ref, no cross-table FK (spec §3.3).
-    fanoutRunId: uuid("fanout_run_id"),
   },
   (t) => ({
     orgIdx: index("a2a_tasks_org_idx").on(t.orgId, t.workspaceId),
     contextIdx: index("a2a_tasks_context_idx").on(t.workspaceId, t.contextId),
     stateIdx: index("a2a_tasks_state_idx").on(t.orgId, t.workspaceId, t.state),
     // "List this agent's A2A tasks" — paginated per performance conventions.
-    agentIdx: index("a2a_tasks_agent_idx").on(t.orgId, t.workspaceId, t.agentId),
+    agentIdx: index("a2a_tasks_agent_idx").on(
+      t.orgId,
+      t.workspaceId,
+      t.agentId,
+    ),
     stateCheck: check(
       "a2a_tasks_state_check",
       sql`${t.state} IN ('submitted','working','input-required','auth-required','completed','canceled','failed','rejected','unknown')`,
@@ -618,7 +755,10 @@ export const fileLocks = agentSchema.table(
     // the previous holder's late write fails verifyFileLease.
     fencingToken: bigint("fencing_token", { mode: "number" }).notNull(),
     action: text("action").notNull().default("write"),
-    leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true, mode: "date" }).notNull(),
+    leaseExpiresAt: timestamp("lease_expires_at", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
     // Soft-release marker (NOT a soft delete): the partial unique index below
     // keys off it, so releasing frees the resource while keeping the row for a
     // final projection. Expired-but-unreleased rows are treated as free by
@@ -635,7 +775,10 @@ export const fileLocks = agentSchema.table(
     executionIdx: index("file_locks_execution_idx")
       .on(t.orgId, t.executionId)
       .where(sql`released_at IS NULL`),
-    actionCheck: check("file_locks_action_check", sql`${t.action} IN ('read', 'write')`),
+    actionCheck: check(
+      "file_locks_action_check",
+      sql`${t.action} IN ('read', 'write')`,
+    ),
   }),
 );
 
@@ -651,12 +794,21 @@ export const fileLockFences = agentSchema.table(
     id: uuid("id").primaryKey().default(uuidv7Default),
     ...orgScopeMixin(),
     resourceKey: text("resource_key").notNull(),
-    currentToken: bigint("current_token", { mode: "number" }).notNull().default(0),
-    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    currentToken: bigint("current_token", { mode: "number" })
+      .notNull()
+      .default(0),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
   },
   (t) => ({
-    resourceUniq: uniqueIndex("file_lock_fences_resource_uniq").on(t.workspaceId, t.resourceKey),
+    resourceUniq: uniqueIndex("file_lock_fences_resource_uniq").on(
+      t.workspaceId,
+      t.resourceKey,
+    ),
     orgIdx: index("file_lock_fences_org_idx").on(t.orgId, t.workspaceId),
   }),
 );

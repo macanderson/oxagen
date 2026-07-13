@@ -175,8 +175,24 @@ export async function onInvoicePaymentFailed(
     // the FIRST time (i.e. if it's already set, preserve the original timestamp).
     const existing = await tx.query.orgBillingSettings.findFirst({
       where: eq(schema.orgBillingSettings.orgId, orgId),
-      columns: { id: true, delinquentSince: true, dunningState: true },
+      columns: {
+        id: true,
+        delinquentSince: true,
+        dunningState: true,
+        lastDunningNotifiedAt: true,
+      },
     });
+
+    // Anti-spam: email the org at most once per delinquency episode.
+    // delinquentSince marks the episode start (preserved across Stripe's
+    // payment retries; reset only after a recovery). If lastDunningNotifiedAt
+    // is already stamped at or after that start, this payment_failed is a retry
+    // of the same episode — still advance dunning state, but do not re-notify.
+    const delinquentStart = existing?.delinquentSince ?? now;
+    const shouldNotify = !(
+      existing?.lastDunningNotifiedAt != null &&
+      existing.lastDunningNotifiedAt >= delinquentStart
+    );
 
     if (existing) {
       await tx
@@ -185,6 +201,7 @@ export async function onInvoicePaymentFailed(
           dunningState: "grace",
           delinquentSince: existing.delinquentSince ?? now,
           graceEndsAt,
+          ...(shouldNotify ? { lastDunningNotifiedAt: now } : {}),
           updatedAt: now,
         })
         .where(eq(schema.orgBillingSettings.orgId, orgId));
@@ -195,6 +212,7 @@ export async function onInvoicePaymentFailed(
         dunningState: "grace",
         delinquentSince: now,
         graceEndsAt,
+        ...(shouldNotify ? { lastDunningNotifiedAt: now } : {}),
       });
     }
 
@@ -215,6 +233,8 @@ export async function onInvoicePaymentFailed(
       "billing: dunning — entered grace period after payment failure",
     );
 
+    // Skip the post-commit notification when we've already emailed this episode.
+    if (!shouldNotify) return null;
     return { orgId, orgName: orgRow?.name ?? "your organization" };
   });
 

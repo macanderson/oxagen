@@ -27,14 +27,11 @@ import { BOOK_SLUG } from "./schema/cms";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const BOOKS_DIR = join(HERE, "..", "seed-assets", "books");
 
-const OG_IMAGE_URL = "https://oxagen.sh/research-assets/book-og.png";
-
 interface EditionSeed {
   slug: string;
   file: string;
   format: "linear" | "page-flip";
   title: string;
-  description: string;
   /** Optional transform applied to the raw HTML before storing. */
   transform?: (html: string) => string;
 }
@@ -47,7 +44,10 @@ interface EditionSeed {
  * that references the old ox_fm_unlocked localStorage key.
  */
 function stripLegacyGate(html: string): string {
-  return html.replace(/<script>[\s\S]*?ox_fm_unlocked[\s\S]*?<\/script>\s*/i, "");
+  return html.replace(
+    /<script>[\s\S]*?ox_fm_unlocked[\s\S]*?<\/script>\s*/i,
+    "",
+  );
 }
 
 const EDITIONS: EditionSeed[] = [
@@ -56,10 +56,6 @@ const EDITIONS: EditionSeed[] = [
     file: "field-manual.html",
     format: "linear",
     title: "Engineering Deterministic AI Coding Agents — Field Manual",
-    description:
-      "A 14-part engineering field manual by Mac Anderson, founder & CEO of " +
-      "Oxagen: the next leap in AI coding agents is a better system around the " +
-      "model, not a bigger model. The linear reading edition.",
     transform: stripLegacyGate,
   },
   {
@@ -67,10 +63,6 @@ const EDITIONS: EditionSeed[] = [
     file: "page-flip-reader.html",
     format: "page-flip",
     title: "Engineering Deterministic AI Coding Agents — Reader",
-    description:
-      "The page-flip reader edition of Mac Anderson's 14-part field manual on " +
-      "building deterministic AI coding agents — systems that ask the model to " +
-      "think the least and get the most from every model that exists.",
   },
 ];
 
@@ -86,8 +78,6 @@ export async function seedBookEditions(): Promise<void> {
           bookSlug: BOOK_SLUG,
           format: ed.format,
           title: ed.title,
-          description: ed.description,
-          ogImageUrl: OG_IMAGE_URL,
           html,
           published: true,
         })
@@ -97,15 +87,15 @@ export async function seedBookEditions(): Promise<void> {
             bookSlug: BOOK_SLUG,
             format: ed.format,
             title: ed.title,
-            description: ed.description,
-            ogImageUrl: OG_IMAGE_URL,
             html,
             published: true,
             updatedAt: sql`now()`,
           },
         }),
     );
-    process.stdout.write(`Seeded edition "${ed.slug}" (${html.length} bytes)\n`);
+    process.stdout.write(
+      `Seeded edition "${ed.slug}" (${html.length} bytes)\n`,
+    );
   }
 }
 
@@ -118,7 +108,7 @@ if (isDirectRunEntry(import.meta.url, process.argv[1], "seed-book-editions")) {
     })
     .catch((err) => {
       process.stderr.write(
-        `Book editions seed failed: ${err instanceof Error ? err.stack ?? err.message : String(err)}\n`,
+        `Book editions seed failed: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}\n`,
       );
       process.exit(1);
     });

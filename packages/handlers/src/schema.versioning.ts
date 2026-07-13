@@ -93,7 +93,10 @@ export async function getOrCreateRegistry(
       .where(eq(db.schemaRegistries.id, registry.id))
       .returning();
 
-    logger.info({ orgId, workspaceId, registryId: registry.id, draftVersionId: draft.id }, "schema.versioning: auto-created registry");
+    logger.info(
+      { orgId, workspaceId, registryId: registry.id, draftVersionId: draft.id },
+      "schema.versioning: auto-created registry",
+    );
     return updated ?? registry;
   });
 }
@@ -288,7 +291,6 @@ export async function publishDraft(
           displayName: l.displayName,
           description: l.description,
           naturalKeyProps: l.naturalKeyProps,
-          metadata: l.metadata,
           createdByUserId: userId,
           updatedByUserId: userId,
         })
@@ -344,8 +346,12 @@ export async function publishDraft(
       );
 
     for (const p of publishedProps) {
-      const newNodeLabelId = p.nodeLabelId ? labelIdMap.get(p.nodeLabelId) : undefined;
-      const newRelTypeId = p.relationshipTypeId ? relIdMap.get(p.relationshipTypeId) : undefined;
+      const newNodeLabelId = p.nodeLabelId
+        ? labelIdMap.get(p.nodeLabelId)
+        : undefined;
+      const newRelTypeId = p.relationshipTypeId
+        ? relIdMap.get(p.relationshipTypeId)
+        : undefined;
       if (!newNodeLabelId && !newRelTypeId) continue;
       await tx.insert(db.schemaProperties).values({
         orgId,
@@ -373,7 +379,13 @@ export async function publishDraft(
       .where(eq(db.schemaRegistries.id, registryId));
 
     logger.info(
-      { orgId, workspaceId, registryId, publishedVersionId: published.id, newDraftVersionId: newDraft.id },
+      {
+        orgId,
+        workspaceId,
+        registryId,
+        publishedVersionId: published.id,
+        newDraftVersionId: newDraft.id,
+      },
       "schema.versioning: published draft and opened new draft",
     );
 
