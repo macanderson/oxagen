@@ -37,6 +37,35 @@ WHERE ranked.id <> ranked.keeper_id
       AND k.workspace_id IS NOT DISTINCT FROM pra.workspace_id
   );
 
+-- 1a-bis. Drop loser-vs-loser collisions: when two or more loser principals
+--     in the same group hold the same (role_id, org_id, workspace_id) tuple
+--     that the keeper lacks, 1a leaves them all in place. Re-pointing every
+--     one of them onto the keeper in 1b would create duplicate
+--     (keeper, role_id, org_id, workspace_id) rows and violate the
+--     pra_principal_role_org_* unique indexes. Keep the earliest such loser
+--     row per tuple and delete the rest so 1b's re-point stays collision-free.
+DELETE FROM iam.principal_role_assignments pra
+USING (
+  SELECT loser.id,
+         row_number() OVER (
+           PARTITION BY ranked.keeper_id,
+                        loser.role_id, loser.org_id, loser.workspace_id
+           ORDER BY loser.created_at, loser.id
+         ) AS rn
+  FROM iam.principal_role_assignments loser
+  JOIN (
+    SELECT id,
+           first_value(id) OVER (
+             PARTITION BY org_id, parent_user_id ORDER BY created_at, id
+           ) AS keeper_id
+    FROM iam.principals
+    WHERE parent_user_id IS NOT NULL
+  ) ranked ON ranked.id = loser.principal_id
+  WHERE ranked.id <> ranked.keeper_id
+) dups
+WHERE dups.id = pra.id
+  AND dups.rn > 1;
+
 -- 1b. Re-point the surviving loser role-assignments onto the keeper.
 UPDATE iam.principal_role_assignments pra
 SET principal_id = ranked.keeper_id
