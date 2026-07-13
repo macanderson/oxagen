@@ -12,7 +12,6 @@ import type {
   invoices,
   creditBalances,
   creditLedger,
-  usageRecords,
   conversations,
   messages,
   generatedAssets,
@@ -46,9 +45,6 @@ export type CreditBalanceRow = InferSelectModel<typeof creditBalances>;
 /** Row type for `billing.credit_ledger`. */
 export type CreditLedgerRow = InferSelectModel<typeof creditLedger>;
 
-/** Row type for `billing.usage_records`. */
-export type UsageRecordRow = InferSelectModel<typeof usageRecords>;
-
 /**
  * Convenience bundle of all billing tables exported from `@oxagen/database`.
  * Use this when you need typed access to the full billing portion of the schema.
@@ -59,7 +55,6 @@ export type BillingTables = {
   invoices: typeof invoices;
   creditBalances: typeof creditBalances;
   creditLedger: typeof creditLedger;
-  usageRecords: typeof usageRecords;
 };
 
 // ── Chat row types ───────────────────────────────────────────────────────────
@@ -87,7 +82,9 @@ export type IamRoleRow = InferSelectModel<typeof roles>;
 export type IamRoleGrantRow = InferSelectModel<typeof roleGrants>;
 
 /** Row type for `org.principal_role_assignments`. */
-export type IamPrincipalRoleAssignmentRow = InferSelectModel<typeof principalRoleAssignments>;
+export type IamPrincipalRoleAssignmentRow = InferSelectModel<
+  typeof principalRoleAssignments
+>;
 
 /** Row type for `org.access_requests`. */
 export type IamAccessRequestRow = InferSelectModel<typeof accessRequests>;
@@ -103,10 +100,14 @@ export type UserPreferences = InferSelectModel<typeof userPreferences>;
 export type NewUserPreferences = InferInsertModel<typeof userPreferences>;
 
 /** Full SELECT row from `auth.workspace_user_preferences`. */
-export type WorkspaceUserPreferences = InferSelectModel<typeof workspaceUserPreferences>;
+export type WorkspaceUserPreferences = InferSelectModel<
+  typeof workspaceUserPreferences
+>;
 
 /** INSERT shape for `auth.workspace_user_preferences` (id/timestamps optional). */
-export type NewWorkspaceUserPreferences = InferInsertModel<typeof workspaceUserPreferences>;
+export type NewWorkspaceUserPreferences = InferInsertModel<
+  typeof workspaceUserPreferences
+>;
 
 /**
  * Closed set of font-size preference values.
@@ -125,7 +126,8 @@ export type Density = (typeof densityEnum.enumValues)[number];
  * Maps to the `auth.pending_prompt_behavior` Postgres enum.
  * queue = buffer new prompt; interrupt = cancel in-flight response.
  */
-export type PendingPromptBehavior = (typeof pendingPromptBehaviorEnum.enumValues)[number];
+export type PendingPromptBehavior =
+  (typeof pendingPromptBehaviorEnum.enumValues)[number];
 
 /**
  * Closed set of Oxagen model-tier aliases (user & workspace level).

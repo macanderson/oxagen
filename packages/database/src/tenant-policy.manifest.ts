@@ -83,10 +83,9 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "eval.eval_dataset_items", policyClass: "standard" },
   { table: "eval.eval_runs", policyClass: "standard" },
 
-  // ── auth.* — credentials + api_keys use orgScopeMixin ────────────────────
+  // ── auth.* — api_keys uses orgScopeMixin ──────────────────────────────────
   // Better Auth tables (users/sessions/accounts/verifications/rate_limit/
   // user_preferences) are NOT row-scoped (no org_id; user-keyed lookups).
-  { table: "auth.credentials", policyClass: "standard" },
   { table: "auth.api_keys", policyClass: "standard" },
   // Per-(user, workspace) coding-agent defaults (default repo/environment).
   // orgScopeMixin (org_id + workspace_id both NOT NULL) + tenant_isolation RLS
@@ -99,12 +98,9 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "billing.subscriptions", policyClass: "org_only" },
   { table: "billing.payment_methods", policyClass: "org_only" },
   { table: "billing.invoices", policyClass: "org_only" },
-  { table: "billing.invoice_line_items", policyClass: "org_only" },
-  { table: "billing.usage_records", policyClass: "org_only" },
   { table: "billing.credit_balances", policyClass: "org_only" },
   { table: "billing.credit_ledger", policyClass: "org_only" },
   { table: "billing.credit_lots", policyClass: "org_only" },
-  { table: "billing.org_billing_profiles", policyClass: "org_only" },
   { table: "billing.org_billing_settings", policyClass: "org_only" },
   { table: "billing.billing_disputes", policyClass: "org_only" },
   // Reseller Revenue — org-only tenant_isolation RLS created in

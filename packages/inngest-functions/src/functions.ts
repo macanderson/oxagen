@@ -1,4 +1,3 @@
-import { billingRollupUsage } from "./functions/billing.rollup-usage";
 import { billingDunningSweep } from "./functions/billing.dunning-sweep";
 import { stripeSyncSubscription } from "./functions/stripe.sync-subscription";
 import { stripeSyncInvoice } from "./functions/stripe.sync-invoice";
@@ -67,7 +66,6 @@ import { evalRunExecute } from "./functions/eval.run.execute";
 // between the abstract DurableFunction interface and Inngest's internal Like type.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const functions: any[] = [
-  billingRollupUsage,
   billingDunningSweep,
   stripeSyncSubscription,
   stripeSyncInvoice,

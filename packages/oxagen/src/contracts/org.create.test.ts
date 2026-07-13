@@ -12,7 +12,10 @@ describe("organization.create capability", () => {
   });
 
   it("applies the default plan slug", () => {
-    const parsed = organizationCreate.input.parse({ name: "Acme", slug: "acme" });
+    const parsed = organizationCreate.input.parse({
+      name: "Acme",
+      slug: "acme",
+    });
     expect(parsed.planSlug).toBe("free");
   });
 
@@ -41,7 +44,10 @@ describe("organization.create capability", () => {
   });
 
   it("defaults type to business", () => {
-    const parsed = organizationCreate.input.parse({ name: "Acme", slug: "acme" });
+    const parsed = organizationCreate.input.parse({
+      name: "Acme",
+      slug: "acme",
+    });
     expect(parsed.type).toBe("business");
   });
 
@@ -67,48 +73,5 @@ describe("organization.create capability", () => {
     });
     expect(parsed.industry).toBe("software-it");
     expect(parsed.employeeSize).toBe("11-50");
-  });
-
-  it("requires a valid US state code when the country is US", () => {
-    expect(() =>
-      organizationCreate.input.parse({
-        name: "Acme",
-        slug: "acme",
-        billingAddress: {
-          line1: "1 Market St",
-          city: "San Francisco",
-          postalCode: "94105",
-          country: "US",
-        },
-      }),
-    ).toThrow();
-
-    const parsed = organizationCreate.input.parse({
-      name: "Acme",
-      slug: "acme",
-      billingAddress: {
-        line1: "1 Market St",
-        city: "San Francisco",
-        region: "CA",
-        postalCode: "94105",
-        country: "us",
-      },
-    });
-    expect(parsed.billingAddress?.region).toBe("CA");
-  });
-
-  it("rejects an unknown ISO country code", () => {
-    expect(() =>
-      organizationCreate.input.parse({
-        name: "Acme",
-        slug: "acme",
-        billingAddress: {
-          line1: "1 Main",
-          city: "Nowhere",
-          postalCode: "00000",
-          country: "ZZ",
-        },
-      }),
-    ).toThrow();
   });
 });
