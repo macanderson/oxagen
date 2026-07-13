@@ -8,7 +8,11 @@ export const evalRunList = registerCapability({
     "List eval runs for the workspace (optionally scoped to one dataset) with server-side date/status/model filtering, sorting, and pagination — the read that backs a sortable eval-runs table. Rolls up per-run cost and token totals from the ClickHouse metering pipe.",
   mode: "sync",
   surfaces: ["api", "mcp", "cli"],
-  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
+  // No app surface yet: the "sortable eval-runs table" this read is meant to
+  // back is not wired in apps/app (no component invokes list_eval_runs). Drop
+  // "app" from layers until that table ships — re-add it with a binding +
+  // runtime proof in apps/app/capability-ui-map.json at that point.
+  layers: ["schema", "api", "mcp", "unit", "docs"],
   scoped: true,
   noBillingGate: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "read" },
