@@ -49,10 +49,9 @@ export type UpdateWorkspaceGeneralResult =
 // Routes the workspace general-settings save through the
 // `workspace.settings.write` kernel capability — the SAME chokepoint reached
 // from the in-app agent, MCP, and CLI — so the edit is metered, audited, and
-// IAM-gated with zero surface drift. The handler writes `name`/`slug` columns
-// and stores `description` inside the `workspaces.settings` JSONB bag (the
-// `settings.description` key), read back by resolveWorkspace() so persistence
-// is observable.
+// IAM-gated with zero surface drift. The handler writes name/slug/avatarUrl and
+// the `description` column (promoted out of the settings JSONB bag — audit
+// §1.7), read back by resolveWorkspace() so persistence is observable.
 //
 // Scoped to the authenticated user's org + workspace; resolveWorkspace calls
 // notFound() if the workspace does not belong to the org, preventing
@@ -119,7 +118,7 @@ export async function updateWorkspaceGeneralAction(
       // ["api","mcp","agent"] and does NOT include "app"; passing "app" throws
       // surface_denied. (Same as the prompt.settings.write precedent.)
       // Normalize empty/omitted description to null so the handler clears the
-      // settings.description key (rather than persisting an empty string).
+      // description column (rather than persisting an empty string).
       const descriptionValue =
         description === undefined || description === "" ? null : description;
 

@@ -3,8 +3,8 @@ import { promptSettingsRead } from "@oxagen/oxagen/contracts/prompt.settings.rea
 import { loadWorkspacePromptConfig } from "@oxagen/ai";
 import { logger } from "./logger";
 
-// Reads the workspace prompt config from workspace.workspaces.settings.promptConfig
-// (via the shared loader, which normalizes the untrusted JSONB). autoImprovePrompts
+// Reads the workspace prompt config from the workspace.workspaces.prompt_config
+// column (via the shared loader, which normalizes the untrusted JSONB). autoImprovePrompts
 // defaults to ON — the beta prompt-enhancement judge is on unless turned off.
 export const promptSettingsReadHandler: CapabilityHandler<typeof promptSettingsRead> = async (
   _input,
