@@ -6,20 +6,19 @@ import { eventClient } from "./event-client";
 import { emitSecurityEvent } from "@oxagen/database/security";
 import { logger } from "./logger";
 
+// CSPRNG-backed, matching the idMixin public-id default (@oxagen/database
+// schema/_mixins.ts) rather than hand-rolling a weaker Math.random() generator.
 function generatePublicId(prefix: string): string {
-  const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
-  let id = "";
-  for (let i = 0; i < 22; i++) {
-    id += chars[Math.floor(Math.random() * chars.length)];
-  }
-  return `${prefix}_${id}`;
+  return `${prefix}_${schema.cryptoRandom(22)}`;
 }
 
 export const privacyDataExportHandler: CapabilityHandler<
   typeof privacyDataExport
 > = async (input, ctx) => {
   if (!ctx.userId) {
-    throw new Error("Unauthorized: authentication required to request a data export");
+    throw new Error(
+      "Unauthorized: authentication required to request a data export",
+    );
   }
   if (!ctx.orgId) {
     throw new Error("Forbidden: orgId is required");
@@ -89,7 +88,10 @@ export const privacyDataExportHandler: CapabilityHandler<
     data: { exportId: row.id, userId: ctx.userId!, orgId, scope: input.scope },
   });
 
-  logger.info({ exportId: row.id, scope: input.scope, orgId }, "privacy.data.export: queued");
+  logger.info(
+    { exportId: row.id, scope: input.scope, orgId },
+    "privacy.data.export: queued",
+  );
 
   return { exportId: row.id, status: "queued" as const };
 };
