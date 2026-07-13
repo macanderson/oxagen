@@ -165,7 +165,7 @@ describe("RunSetupPanel — default tier", () => {
     fireEvent.submit(screen.getByLabelText("Run eval"));
 
     await waitFor(() => expect(mockStartEvalRunAction).toHaveBeenCalledOnce());
-    const arg = mockStartEvalRunAction.mock.calls[0][0];
+    const arg = mockStartEvalRunAction.mock.calls[0]![0];
     expect(arg.target).toEqual({ kind: "model" });
     expect(arg.judgeModel).toBeUndefined();
     expect(arg).toMatchObject({
@@ -186,7 +186,7 @@ describe("RunSetupPanel — picked models", () => {
     fireEvent.submit(screen.getByLabelText("Run eval"));
 
     await waitFor(() => expect(mockStartEvalRunAction).toHaveBeenCalledOnce());
-    const arg = mockStartEvalRunAction.mock.calls[0][0];
+    const arg = mockStartEvalRunAction.mock.calls[0]![0];
     expect(arg.target).toEqual({
       kind: "model",
       model: "target/picked-model",
@@ -202,7 +202,7 @@ describe("RunSetupPanel — picked models", () => {
     fireEvent.submit(screen.getByLabelText("Run eval"));
 
     await waitFor(() => expect(mockStartEvalRunAction).toHaveBeenCalledOnce());
-    expect(mockStartEvalRunAction.mock.calls[0][0].target).toEqual({
+    expect(mockStartEvalRunAction.mock.calls[0]![0].target).toEqual({
       kind: "model",
     });
   });
@@ -223,7 +223,7 @@ describe("RunSetupPanel — agent target", () => {
     fireEvent.submit(screen.getByLabelText("Run eval"));
 
     await waitFor(() => expect(mockStartEvalRunAction).toHaveBeenCalledOnce());
-    expect(mockStartEvalRunAction.mock.calls[0][0].target).toEqual({
+    expect(mockStartEvalRunAction.mock.calls[0]![0].target).toEqual({
       kind: "agent",
       agentSlug: "support-bot",
     });
