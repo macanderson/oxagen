@@ -34,6 +34,8 @@
     "db:atlas-validate": "pnpm --filter @oxagen/database run atlas:validate",
     "db:seed-platform": "tsx --env-file-if-exists=.env.local tools/scripts/seed-platform.ts",
     "db:generate": "pnpm --filter @oxagen/database run generate",
+    "schema:manifest": "tsx packages/database/src/storage-manifest/cli.ts",
+    "schema:manifest:check": "tsx packages/database/src/storage-manifest/cli.ts --check",
     "db:check": "tsx --env-file-if-exists=.env.local tools/scripts/db-check.ts",
     "db:lint-migrations": "tsx tools/scripts/db-lint-migrations.ts",
     "db:reset": "tsx --env-file-if-exists=.env.local tools/scripts/db-reset.ts",

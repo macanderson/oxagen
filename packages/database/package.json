@@ -32,6 +32,7 @@
   "dependencies": {
     "@oxagen/compliance": "workspace:*",
     "@oxagen/config": "workspace:*",
+    "@oxagen/oxagen": "workspace:*",
     "@oxagen/telemetry": "workspace:*",
     "@oxagen/tenancy": "workspace:*",
     "drizzle-orm": "0.45.2",
