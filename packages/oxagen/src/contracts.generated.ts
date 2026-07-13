@@ -171,6 +171,8 @@ import "./contracts/eval.dataset.get";
 import "./contracts/eval.dataset.list";
 import "./contracts/eval.dataset_item.add";
 import "./contracts/eval.run.get";
+import "./contracts/eval.run.list";
+import "./contracts/eval.run.series";
 import "./contracts/eval.run.start";
 import "./contracts/eval.run.status";
 import "./contracts/form.fill";
