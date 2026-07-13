@@ -30,11 +30,6 @@ vi.mock("@/components/media/avatar-upload", () => ({
   AvatarUpload: () => <div data-testid="avatar-upload" />,
 }));
 
-// Mock BillingAddressFields (heavy)
-vi.mock("@/components/billing/billing-address-fields", () => ({
-  BillingAddressFields: () => <div data-testid="billing-address-fields" />,
-}));
-
 // Mock slugify to get predictable slug derivation
 vi.mock("@/lib/slug", () => ({
   slugify: (s: string) =>
@@ -161,13 +156,11 @@ describe("NewOrgForm — submission", () => {
   });
 
   it("navigates on success", async () => {
-    const action: NewOrgAction = vi
-      .fn()
-      .mockResolvedValue({
-        ok: true,
-        orgSlug: "my-org",
-        workspaceSlug: "default",
-      });
+    const action: NewOrgAction = vi.fn().mockResolvedValue({
+      ok: true,
+      orgSlug: "my-org",
+      workspaceSlug: "default",
+    });
     render(<NewOrgForm action={action} />);
     await userEvent.type(screen.getByLabelText(/organization name/i), "My Org");
     await userEvent.click(
@@ -182,13 +175,11 @@ describe("NewOrgForm — submission", () => {
     // Regression: window.location.assign does not unload jsdom (nor, briefly,
     // a real browser) — the button must NOT re-enable in that window, or a
     // second click re-runs the action against the already-created slug.
-    const action: NewOrgAction = vi
-      .fn()
-      .mockResolvedValue({
-        ok: true,
-        orgSlug: "my-org",
-        workspaceSlug: "default",
-      });
+    const action: NewOrgAction = vi.fn().mockResolvedValue({
+      ok: true,
+      orgSlug: "my-org",
+      workspaceSlug: "default",
+    });
     render(<NewOrgForm action={action} />);
     await userEvent.type(screen.getByLabelText(/organization name/i), "My Org");
     const button = screen.getByRole("button", { name: /create organization/i });

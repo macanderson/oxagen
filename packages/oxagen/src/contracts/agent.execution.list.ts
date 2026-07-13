@@ -14,9 +14,13 @@ export const agentExecutionList = registerCapability({
     "List recent top-level agent runs (executions) for the workspace, newest first, with keyset pagination — each row's status, origin, duration, token/cost figures.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "e2e", "docs", "app"],
+  layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
   scoped: true,
-  agent: { requiresApproval: false, riskLevel: "low", category: "introspection" },
+  agent: {
+    requiresApproval: false,
+    riskLevel: "low",
+    category: "introspection",
+  },
   sensitivity: "low",
   defaultEffect: "deny",
   defaultRoles: {
@@ -35,7 +39,9 @@ export const agentExecutionList = registerCapability({
       .string()
       .datetime()
       .optional()
-      .describe("Keyset cursor: return runs created strictly before this ISO timestamp"),
+      .describe(
+        "Keyset cursor: return runs created strictly before this ISO timestamp",
+      ),
     status: z
       .enum(["planning", "running", "completed", "failed", "cancelled"])
       .optional()
@@ -67,9 +73,13 @@ export const agentExecutionList = registerCapability({
     nextCursor: z
       .string()
       .nullable()
-      .describe("Pass as `before` to fetch the next page; null when no more rows"),
+      .describe(
+        "Pass as `before` to fetch the next page; null when no more rows",
+      ),
   }),
 });
 
 export type AgentExecutionListInput = z.output<typeof agentExecutionList.input>;
-export type AgentExecutionListOutput = z.output<typeof agentExecutionList.output>;
+export type AgentExecutionListOutput = z.output<
+  typeof agentExecutionList.output
+>;

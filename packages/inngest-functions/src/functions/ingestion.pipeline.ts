@@ -1,4 +1,3 @@
- 
 import { createFunction } from "../create-function";
 import { withTenantDb } from "@oxagen/database";
 import { sql } from "drizzle-orm";
@@ -56,7 +55,14 @@ export const [ingestionPipeline] = createFunction(
   },
   { event: "ingestion/entity.received" },
   async ({ event, step, runId }) => {
-    const { connectionId, workspaceId, orgId, connectorType, sourceRecordType, payload } = event.data as {
+    const {
+      connectionId,
+      workspaceId,
+      orgId,
+      connectorType,
+      sourceRecordType,
+      payload,
+    } = event.data as {
       connectionId: string;
       workspaceId: string;
       orgId: string;
@@ -80,15 +86,17 @@ export const [ingestionPipeline] = createFunction(
           semanticInference?: DeliveryConfig["semanticInference"];
         };
 
-    const normalizeResult: NormalizeResult = await step.run("normalize-and-map", async () => {
-      const connector = getConnector(connectorType);
+    const normalizeResult: NormalizeResult = await step.run(
+      "normalize-and-map",
+      async () => {
+        const connector = getConnector(connectorType);
 
-      // Load the customer's entity type mapping for this (connection, sourceRecordType)
-      // JOINed with the connection's delivery_config in one query. A missing mapping
-      // row (customer never mapped this record type) means skip.
-      const row = await runInTenantScope({ orgId, workspaceId }, () =>
-        withTenantDb(async (tx) => {
-          const rows = await tx.execute(sql`
+        // Load the customer's entity type mapping for this (connection, sourceRecordType)
+        // JOINed with the connection's delivery_config in one query. A missing mapping
+        // row (customer never mapped this record type) means skip.
+        const row = await runInTenantScope({ orgId, workspaceId }, () =>
+          withTenantDb(async (tx) => {
+            const rows = await tx.execute(sql`
             SELECT etm.oxagen_entity_type,
                    etm.property_mappings,
                    sc.delivery_config
@@ -98,81 +106,109 @@ export const [ingestionPipeline] = createFunction(
             AND    etm.source_record_type = ${sourceRecordType}
             LIMIT  1
           `);
-          const first = rows[0] as
-            | {
-                oxagen_entity_type: string;
-                property_mappings: Record<string, string> | null;
-                delivery_config: DeliveryConfig | null;
-              }
-            | undefined;
-          return first ?? null;
-        }),
-      );
+            const first = rows[0] as
+              | {
+                  oxagen_entity_type: string;
+                  property_mappings: Record<string, string> | null;
+                  delivery_config: DeliveryConfig | null;
+                }
+              | undefined;
+            return first ?? null;
+          }),
+        );
 
-      if (!row) return { kind: "skipped" as const };
+        if (!row) return { kind: "skipped" as const };
 
-      const deliveryConfig = row.delivery_config ?? null;
+        const deliveryConfig = row.delivery_config ?? null;
 
-      // ── Stage 1 gate: record-type allow-list ──────────────────────────────
-      const typeFilter = applyRecordTypeFilter(
-        sourceRecordType,
-        deliveryConfig?.recordTypeFilters ?? [],
-      );
-      if (typeFilter.filtered) {
-        return { kind: "filtered" as const, reason: typeFilter.reason ?? "record_type_not_allowed" };
-      }
-
-      const normalized = connector.normalizeRecord(sourceRecordType, payload);
-
-      // ── Stage 2 gates: path + label exclude-globs ─────────────────────────
-      const pathFilter = applyPathFilter(normalized.properties, deliveryConfig?.pathFilters ?? []);
-      if (pathFilter.filtered) {
-        return { kind: "filtered" as const, reason: pathFilter.reason ?? "path_filtered" };
-      }
-      const labelFilter = applyLabelFilter(normalized.properties, deliveryConfig?.labelFilters ?? []);
-      if (labelFilter.filtered) {
-        return { kind: "filtered" as const, reason: labelFilter.reason ?? "label_filtered" };
-      }
-
-      const entityTypeMapping: EntityTypeMapping = {
-        oxagenEntityType: row.oxagen_entity_type,
-        propertyMappings: row.property_mappings ?? {},
-      };
-
-      // Apply property renames from the customer-configured mapping.
-      const mappedProperties: Record<string, unknown> = { ...normalized.properties };
-      for (const [sourceField, canonicalName] of Object.entries(entityTypeMapping.propertyMappings)) {
-        if (sourceField in mappedProperties) {
-          mappedProperties[canonicalName] = mappedProperties[sourceField];
-          if (canonicalName !== sourceField) delete mappedProperties[sourceField];
+        // ── Stage 1 gate: record-type allow-list ──────────────────────────────
+        const typeFilter = applyRecordTypeFilter(
+          sourceRecordType,
+          deliveryConfig?.recordTypeFilters ?? [],
+        );
+        if (typeFilter.filtered) {
+          return {
+            kind: "filtered" as const,
+            reason: typeFilter.reason ?? "record_type_not_allowed",
+          };
         }
-      }
 
-      const sourceRef: SourceRef = {
-        connectorType,
-        connectionId,
-        externalId: normalized.externalId,
-        externalUrl: normalized.externalUrl,
-      };
+        const normalized = connector.normalizeRecord(sourceRecordType, payload);
 
-      const mutation: EntityMutation = {
-        workspaceId,
-        orgId,
-        connectionId,
-        entityType: entityTypeMapping.oxagenEntityType,
-        sourceRecordType,
-        naturalKey: `${connectorType}:${connectionId}:${normalized.externalId}`,
-        operation: "insert",
-        displayName: normalized.displayName,
-        properties: mappedProperties,
-        sourceRef,
-      };
+        // ── Stage 2 gates: path + label exclude-globs ─────────────────────────
+        const pathFilter = applyPathFilter(
+          normalized.properties,
+          deliveryConfig?.pathFilters ?? [],
+        );
+        if (pathFilter.filtered) {
+          return {
+            kind: "filtered" as const,
+            reason: pathFilter.reason ?? "path_filtered",
+          };
+        }
+        const labelFilter = applyLabelFilter(
+          normalized.properties,
+          deliveryConfig?.labelFilters ?? [],
+        );
+        if (labelFilter.filtered) {
+          return {
+            kind: "filtered" as const,
+            reason: labelFilter.reason ?? "label_filtered",
+          };
+        }
 
-      return { kind: "ok" as const, mutation, semanticInference: deliveryConfig?.semanticInference };
-    });
+        const entityTypeMapping: EntityTypeMapping = {
+          oxagenEntityType: row.oxagen_entity_type,
+          propertyMappings: row.property_mappings ?? {},
+        };
+
+        // Apply property renames from the customer-configured mapping.
+        const mappedProperties: Record<string, unknown> = {
+          ...normalized.properties,
+        };
+        for (const [sourceField, canonicalName] of Object.entries(
+          entityTypeMapping.propertyMappings,
+        )) {
+          if (sourceField in mappedProperties) {
+            mappedProperties[canonicalName] = mappedProperties[sourceField];
+            if (canonicalName !== sourceField)
+              delete mappedProperties[sourceField];
+          }
+        }
+
+        const sourceRef: SourceRef = {
+          connectorType,
+          connectionId,
+          externalId: normalized.externalId,
+          externalUrl: normalized.externalUrl,
+        };
+
+        const mutation: EntityMutation = {
+          workspaceId,
+          orgId,
+          connectionId,
+          entityType: entityTypeMapping.oxagenEntityType,
+          sourceRecordType,
+          naturalKey: `${connectorType}:${connectionId}:${normalized.externalId}`,
+          operation: "insert",
+          displayName: normalized.displayName,
+          properties: mappedProperties,
+          sourceRef,
+        };
+
+        return {
+          kind: "ok" as const,
+          mutation,
+          semanticInference: deliveryConfig?.semanticInference,
+        };
+      },
+    );
 
     if (normalizeResult.kind === "skipped") {
-      logger.debug({ connectionId, sourceRecordType }, "ingestion-pipeline: no mapping, skipping");
+      logger.debug(
+        { connectionId, sourceRecordType },
+        "ingestion-pipeline: no mapping, skipping",
+      );
       return { skipped: true };
     }
 
@@ -188,64 +224,77 @@ export const [ingestionPipeline] = createFunction(
     const semanticInference = normalizeResult.semanticInference;
 
     // ── Step 2: Dedup Pass A — exact naturalKey lookup in Neo4j ─────────────
-    const dedupPassA = await step.run("dedup-pass-a", async (): Promise<{
-      found: boolean;
-      nodeId?: string;
-    }> => {
-      return runInTenantScope({ orgId, workspaceId }, async () => {
-        const session = scopedSession();
-        try {
-          const result = await session.run(
-            `MATCH (n:EntityNode {naturalKey: $naturalKey, orgId: $orgId})
+    const dedupPassA = await step.run(
+      "dedup-pass-a",
+      async (): Promise<{
+        found: boolean;
+        nodeId?: string;
+      }> => {
+        return runInTenantScope({ orgId, workspaceId }, async () => {
+          const session = scopedSession();
+          try {
+            const result = await session.run(
+              `MATCH (n:EntityNode {naturalKey: $naturalKey, orgId: $orgId})
              RETURN n.publicId AS nodeId`,
-            { naturalKey: mutation.naturalKey, orgId },
-          );
-          const record = result.records[0];
-          if (record) {
-            return { found: true, nodeId: record.get("nodeId") as string };
+              { naturalKey: mutation.naturalKey, orgId },
+            );
+            const record = result.records[0];
+            if (record) {
+              return { found: true, nodeId: record.get("nodeId") as string };
+            }
+            return { found: false };
+          } finally {
+            await session.close();
           }
-          return { found: false };
-        } finally {
-          await session.close();
-        }
-      });
-    });
+        });
+      },
+    );
 
     // ── Step 3: Dedup Pass B — embedding similarity match ───────────────────
-    const dedup = await step.run("dedup-pass-b", async (): Promise<{
-      action: "updated_principal" | "created_principal" | "created_alias" | "confirmed_alias";
-      principalNodeId: string;
-      confidence: number;
-    }> => {
-      if (dedupPassA.found && dedupPassA.nodeId) {
-        return {
-          action: "updated_principal",
-          principalNodeId: dedupPassA.nodeId,
-          confidence: 1.0,
-        };
-      }
+    const dedup = await step.run(
+      "dedup-pass-b",
+      async (): Promise<{
+        action:
+          | "updated_principal"
+          | "created_principal"
+          | "created_alias"
+          | "confirmed_alias";
+        principalNodeId: string;
+        confidence: number;
+      }> => {
+        if (dedupPassA.found && dedupPassA.nodeId) {
+          return {
+            action: "updated_principal",
+            principalNodeId: dedupPassA.nodeId,
+            confidence: 1.0,
+          };
+        }
 
-      // Pass A missed — run full dedup (embedding similarity + alias creation).
-      const resolved = await runInTenantScope({ orgId, workspaceId }, () =>
-        resolveEntity(mutation, orgId),
-      );
-
-      // A strict-mode rejection means this entity is non-conformant — the
-      // pipeline step cannot return a null principalNodeId (the rest of the
-      // pipeline would have no node to embed). Throw so Inngest retries or
-      // surfaces the failure; the handler upstream logs and filters these.
-      if (resolved.action === "rejected_nonconformant" || resolved.principalNodeId === null) {
-        throw new Error(
-          `ingestion-pipeline: entity rejected as non-conformant (naturalKey=${mutation.naturalKey})`,
+        // Pass A missed — run full dedup (embedding similarity + alias creation).
+        const resolved = await runInTenantScope({ orgId, workspaceId }, () =>
+          resolveEntity(mutation, orgId),
         );
-      }
 
-      return {
-        action: resolved.action,
-        principalNodeId: resolved.principalNodeId,
-        confidence: resolved.confidence,
-      };
-    });
+        // A strict-mode rejection means this entity is non-conformant — the
+        // pipeline step cannot return a null principalNodeId (the rest of the
+        // pipeline would have no node to embed). Throw so Inngest retries or
+        // surfaces the failure; the handler upstream logs and filters these.
+        if (
+          resolved.action === "rejected_nonconformant" ||
+          resolved.principalNodeId === null
+        ) {
+          throw new Error(
+            `ingestion-pipeline: entity rejected as non-conformant (naturalKey=${mutation.naturalKey})`,
+          );
+        }
+
+        return {
+          action: resolved.action,
+          principalNodeId: resolved.principalNodeId,
+          confidence: resolved.confidence,
+        };
+      },
+    );
 
     // ── Step 4: Upsert entity node in Neo4j ──────────────────────────────────
     // Each Inngest step.run is memoized and re-executed as its own (potentially
@@ -258,14 +307,27 @@ export const [ingestionPipeline] = createFunction(
     // `runId` (OXA-1932) is threaded through to upsertEntityNode so a retried
     // execution of THIS step re-derives the same schema_conformance_events
     // event_id instead of minting a fresh one — see upsert-entity.ts.
-    await step.run("upsert-node", () =>
-      runInTenantScope({ orgId, workspaceId }, () => upsertEntityNode(mutation, orgId, { runId })),
+    // The upsert returns the node's PREVIOUS property snapshot (the JSON stored
+    // before this write overwrote it) so the trigger matcher can evaluate
+    // previous-aware operators (`changed`, status went X→merged, …) on
+    // node.updated. `null` on a first-time create. Only consumed on the update
+    // branch of the emit below — the create-vs-update decision itself is made
+    // from `dedup.action`, so the double-write (dedup-pass-b may also upsert a
+    // brand-new node) never corrupts the previous-state we forward.
+    const upsertResult = await step.run("upsert-node", () =>
+      runInTenantScope({ orgId, workspaceId }, () =>
+        upsertEntityNode(mutation, orgId, { runId }),
+      ),
     );
+    const previousProperties = upsertResult?.previousProperties ?? null;
 
     // The customer's semantic-inference toggle gates embedding and the async
     // semantic-edge inference event. An absent DeliveryConfig.semanticInference
     // means "run inference" (backward compatible) — see shouldRunInference.
-    const inferenceEnabled = shouldRunInference(sourceRecordType, semanticInference);
+    const inferenceEnabled = shouldRunInference(
+      sourceRecordType,
+      semanticInference,
+    );
 
     // ── Step 5: Embed ─────────────────────────────────────────────────────────
     // renderEntityText is pure (no DB/Neo4j); only the embedEntity write —
@@ -273,7 +335,11 @@ export const [ingestionPipeline] = createFunction(
     // Skipped entirely when the customer disabled semantic inference for this
     // source / record type (the node is still upserted by Step 4).
     if (inferenceEnabled) {
-      const text = renderEntityText(mutation.entityType, mutation.displayName, mutation.properties);
+      const text = renderEntityText(
+        mutation.entityType,
+        mutation.displayName,
+        mutation.properties,
+      );
       await step.run("embed", () =>
         runInTenantScope({ orgId, workspaceId }, () =>
           embedEntity({
@@ -291,23 +357,44 @@ export const [ingestionPipeline] = createFunction(
     // ── Step 6: Fire async downstream events ─────────────────────────────────
     // Events are sent in a single step.sendEvent call to keep the step count
     // stable and avoid an extra Inngest checkpoint round-trip.
-    //   - ingestion/entity.created  → consumed by playbook.trigger.match. Always
-    //     fired: the entity IS in the graph, so automations must still see it
-    //     regardless of the semantic-inference toggle.
+    //   - ingestion/entity.created  → consumed by playbook.trigger.match on a
+    //     first-time create (node.created triggers). Always fired for creates.
+    //   - ingestion/entity.updated  → consumed by playbook.trigger.match on an
+    //     update (node.updated triggers). Carries `previousProperties` so
+    //     previous-aware operators (`changed`, X→merged) can fire.
     //   - ingestion/entity.infer    → consumed by semantic edge inference. Only
     //     fired when the customer's semantic-inference toggle allows it.
-    const createdEvent = {
-      name: "ingestion/entity.created" as never,
-      data: {
-        nodeId: dedup.principalNodeId,
-        entityType: mutation.entityType,
-        propertiesSnapshot: mutation.properties,
-        workspaceId: mutation.workspaceId,
-        orgId: mutation.orgId,
-        naturalKey: mutation.naturalKey,
-        isNew: dedup.action === "created_principal",
-      },
-    };
+    // The create-vs-update decision is driven by `dedup.action`, the pipeline's
+    // authoritative signal (Pass A hit → updated_principal; brand-new →
+    // created_principal). Always fired regardless of the semantic-inference
+    // toggle: the entity IS in the graph, so automations must still see it.
+    const isCreate = dedup.action === "created_principal";
+    const changeEvent = isCreate
+      ? {
+          name: "ingestion/entity.created" as never,
+          data: {
+            nodeId: dedup.principalNodeId,
+            entityType: mutation.entityType,
+            propertiesSnapshot: mutation.properties,
+            workspaceId: mutation.workspaceId,
+            orgId: mutation.orgId,
+            naturalKey: mutation.naturalKey,
+            isNew: true,
+          },
+        }
+      : {
+          name: "ingestion/entity.updated" as never,
+          data: {
+            nodeId: dedup.principalNodeId,
+            entityType: mutation.entityType,
+            propertiesSnapshot: mutation.properties,
+            previousProperties,
+            workspaceId: mutation.workspaceId,
+            orgId: mutation.orgId,
+            naturalKey: mutation.naturalKey,
+            isNew: false,
+          },
+        };
     const inferEvent = {
       name: "ingestion/entity.infer" as never,
       data: {
@@ -320,11 +407,16 @@ export const [ingestionPipeline] = createFunction(
     };
     await step.sendEvent(
       "schedule-inference",
-      inferenceEnabled ? [createdEvent, inferEvent] : [createdEvent],
+      inferenceEnabled ? [changeEvent, inferEvent] : [changeEvent],
     );
 
     logger.info(
-      { naturalKey: mutation.naturalKey, action: dedup.action, orgId, inferenceEnabled },
+      {
+        naturalKey: mutation.naturalKey,
+        action: dedup.action,
+        orgId,
+        inferenceEnabled,
+      },
       "ingestion-pipeline: done",
     );
     return { naturalKey: mutation.naturalKey, action: dedup.action };

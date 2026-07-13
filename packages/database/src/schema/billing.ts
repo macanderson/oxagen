@@ -1,19 +1,19 @@
-import { bigint, boolean, check, index, integer, jsonb, numeric, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import {
+  bigint,
+  boolean,
+  check,
+  index,
+  integer,
+  jsonb,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { billingSchema } from "./_schemas";
 import { auditMixin, citext, idMixin, uuidv7Default } from "./_mixins";
 import { organizations } from "./org";
-
-// ── Append-only audit mixin (no updated_* columns) ──────────────────────────
-// Used on immutable/append-only tables (usage_records, credit_ledger) where
-// UPDATE is prohibited. Drizzle will not generate updated_* columns so a
-// fresh `drizzle-kit generate` cannot produce an ALTER TABLE to add them.
-const appendOnlyAuditMixin = () => ({
-  createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
-    .notNull()
-    .defaultNow(),
-  createdByUserId: uuid("created_by_user_id"),
-});
 
 export const plans = billingSchema.table(
   "plans",
@@ -37,7 +37,10 @@ export const plans = billingSchema.table(
   },
   (t) => ({
     slugIdx: uniqueIndex("plans_slug_idx").on(t.slug),
-    tierCheck: check("plans_tier_check", sql`${t.tier} IN ('free','build','scale','enterprise')`),
+    tierCheck: check(
+      "plans_tier_check",
+      sql`${t.tier} IN ('free','build','scale','enterprise')`,
+    ),
   }),
 );
 
@@ -60,15 +63,23 @@ export const subscriptions = billingSchema.table(
     status: text("status").notNull(),
     // CHECK: billing_interval IN ('month','year') — Stripe only emits these two
     billingInterval: text("billing_interval").notNull(),
-    currentPeriodStart: timestamp("current_period_start", { withTimezone: true, mode: "date" }).notNull(),
-    currentPeriodEnd: timestamp("current_period_end", { withTimezone: true, mode: "date" }).notNull(),
+    currentPeriodStart: timestamp("current_period_start", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+    currentPeriodEnd: timestamp("current_period_end", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
     cancelAtPeriodEnd: boolean("cancel_at_period_end").notNull().default(false),
     canceledAt: timestamp("canceled_at", { withTimezone: true, mode: "date" }),
     trialEnd: timestamp("trial_end", { withTimezone: true, mode: "date" }),
     seatCount: integer("seat_count").notNull().default(1),
   },
   (t) => ({
-    stripeSubIdx: uniqueIndex("subscriptions_stripe_sub_idx").on(t.stripeSubscriptionId),
+    stripeSubIdx: uniqueIndex("subscriptions_stripe_sub_idx").on(
+      t.stripeSubscriptionId,
+    ),
     // Spec §6.13: composite index over (org_id, status) targets the
     // "active subscription for org" hot path.
     orgStatusIdx: index("subscriptions_org_status_idx").on(t.orgId, t.status),
@@ -80,7 +91,10 @@ export const subscriptions = billingSchema.table(
       "subscriptions_billing_interval_check",
       sql`${t.billingInterval} IN ('month','year')`,
     ),
-    statusCheck: check("subscriptions_status_check", sql`${t.status} IN ('active', 'past_due', 'canceled', 'trialing', 'unpaid', 'incomplete', 'incomplete_expired', 'paused')`),
+    statusCheck: check(
+      "subscriptions_status_check",
+      sql`${t.status} IN ('active', 'past_due', 'canceled', 'trialing', 'unpaid', 'incomplete', 'incomplete_expired', 'paused')`,
+    ),
     // Partial unique: one 'active' subscription per org.
     // Allows multiple non-active subscriptions (past_due, canceled, etc.)
     // without blocking legitimate Stripe lifecycle events.
@@ -111,7 +125,9 @@ export const paymentMethods = billingSchema.table(
     isDefault: boolean("is_default").notNull().default(false),
   },
   (t) => ({
-    stripePmIdx: uniqueIndex("payment_methods_stripe_pm_idx").on(t.stripePaymentMethodId),
+    stripePmIdx: uniqueIndex("payment_methods_stripe_pm_idx").on(
+      t.stripePaymentMethodId,
+    ),
     orgIdx: index("payment_methods_org_idx").on(t.orgId),
   }),
 );
@@ -134,8 +150,14 @@ export const invoices = billingSchema.table(
     amountPaidCents: integer("amount_paid_cents").notNull().default(0),
     amountRemainingCents: integer("amount_remaining_cents").notNull(),
     currency: text("currency").notNull().default("usd"),
-    periodStart: timestamp("period_start", { withTimezone: true, mode: "date" }).notNull(),
-    periodEnd: timestamp("period_end", { withTimezone: true, mode: "date" }).notNull(),
+    periodStart: timestamp("period_start", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+    periodEnd: timestamp("period_end", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
     dueAt: timestamp("due_at", { withTimezone: true, mode: "date" }),
     paidAt: timestamp("paid_at", { withTimezone: true, mode: "date" }),
     hostedInvoiceUrl: text("hosted_invoice_url"),
@@ -147,71 +169,10 @@ export const invoices = billingSchema.table(
     // FK → billing.subscriptions. Index the FK so a subscription delete/update
     // doesn't seq-scan invoices to enforce the constraint.
     subscriptionIdx: index("invoices_subscription_idx").on(t.subscriptionId),
-    statusCheck: check("invoices_status_check", sql`${t.status} IN ('draft', 'open', 'paid', 'uncollectible', 'void')`),
-  }),
-);
-
-// invoice_line_items is an append-only join/detail table. No public_id —
-// the only lookup path is by invoice_id. Dropping public_id removes the
-// superfluous unique index and .$defaultFn() overhead on every insert.
-export const invoiceLineItems = billingSchema.table(
-  "invoice_line_items",
-  {
-    id: uuid("id").primaryKey().default(uuidv7Default),
-    // FK → org.organizations.id — denormalized for tenant isolation.
-    orgId: uuid("org_id")
-      .notNull()
-      .references(() => organizations.id),
-    // FK → billing.invoices.id
-    invoiceId: uuid("invoice_id")
-      .notNull()
-      .references(() => invoices.id, { onDelete: "cascade" }),
-    description: text("description").notNull(),
-    quantity: numeric("quantity", { precision: 18, scale: 4 }).notNull(),
-    unitAmountCents: integer("unit_amount_cents").notNull(),
-    totalCents: integer("total_cents").notNull(),
-    metric: text("metric"),
-    metadata: jsonb("metadata").notNull().default(sql`'{}'::jsonb`),
-  },
-  (t) => ({
-    invoiceIdx: index("invoice_line_items_invoice_idx").on(t.invoiceId),
-    orgIdx: index("invoice_line_items_org_idx").on(t.orgId),
-  }),
-);
-
-// usage_records is append-only: metered consumption events written once by the
-// billing engine. Dropping updated_at / updated_by_user_id enforces immutability
-// at the schema level — Drizzle will never generate a SET updated_at = ... for
-// this table.
-export const usageRecords = billingSchema.table(
-  "usage_records",
-  {
-    ...idMixin("usg"),
-    ...appendOnlyAuditMixin(),
-    // FK → org.organizations.id
-    orgId: uuid("org_id")
-      .notNull()
-      .references(() => organizations.id),
-    // FK → billing.subscriptions.id
-    subscriptionId: uuid("subscription_id")
-      .notNull()
-      .references(() => subscriptions.id),
-    metric: text("metric").notNull(),
-    quantity: numeric("quantity", { precision: 20, scale: 6 }).notNull(),
-    unitCostMicros: bigint("unit_cost_micros", { mode: "bigint" }).notNull(),
-    totalCostMicros: bigint("total_cost_micros", { mode: "bigint" }).notNull(),
-    periodStart: timestamp("period_start", { withTimezone: true, mode: "date" }).notNull(),
-    periodEnd: timestamp("period_end", { withTimezone: true, mode: "date" }).notNull(),
-    sourceQueryId: text("source_query_id"),
-  },
-  (t) => ({
-    uniqIdx: uniqueIndex("usage_records_sub_metric_period_idx").on(
-      t.subscriptionId,
-      t.metric,
-      t.periodStart,
-      t.periodEnd,
+    statusCheck: check(
+      "invoices_status_check",
+      sql`${t.status} IN ('draft', 'open', 'paid', 'uncollectible', 'void')`,
     ),
-    orgIdx: index("usage_records_org_idx").on(t.orgId),
   }),
 );
 
@@ -230,8 +191,13 @@ export const creditBalances = billingSchema.table(
     // Note: default uses sql`0` not BigInt 0n to avoid a drizzle-kit
     // snapshot-serialization bug (BigInt in JSON.stringify) affecting
     // drizzle-kit ≤0.31. sql`0` is DB-level 0; the column type is bigint.
-    balanceCents: bigint("balance_cents", { mode: "bigint" }).notNull().default(sql`0`),
-    lastEventAt: timestamp("last_event_at", { withTimezone: true, mode: "date" }),
+    balanceCents: bigint("balance_cents", { mode: "bigint" })
+      .notNull()
+      .default(sql`0`),
+    lastEventAt: timestamp("last_event_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
   },
   (t) => ({
     orgIdx: uniqueIndex("credit_balances_org_idx").on(t.orgId),
@@ -260,10 +226,15 @@ export const creditLedger = billingSchema.table(
     referenceType: text("reference_type"),
     referenceId: uuid("reference_id"),
     createdByUserId: uuid("created_by_user_id"),
-    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
   },
   (t) => ({
-    organizationCreatedIdx: index("credit_ledger_org_created_idx").on(t.orgId, t.createdAt),
+    organizationCreatedIdx: index("credit_ledger_org_created_idx").on(
+      t.orgId,
+      t.createdAt,
+    ),
     deltaNonZeroCheck: check(
       "credit_ledger_delta_non_zero",
       sql`${t.deltaCents} <> 0`,
@@ -313,7 +284,9 @@ export const creditLots = billingSchema.table(
     // CHECK: 0 <= remaining_cents <= original_cents
     remainingCents: bigint("remaining_cents", { mode: "bigint" }).notNull(),
     // When this lot was granted.
-    grantedAt: timestamp("granted_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    grantedAt: timestamp("granted_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
     // Nullable = this lot never expires. Otherwise: end-of-grant-month for
     // subscription allotments, granted_at + 1yr for purchase packs.
     expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }),
@@ -347,45 +320,17 @@ export const stripeEvents = billingSchema.table(
     eventType: text("event_type").notNull(),
     apiVersion: text("api_version"),
     payload: jsonb("payload").notNull(),
-    receivedAt: timestamp("received_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    receivedAt: timestamp("received_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
   },
   (t) => ({
     // Idempotency: ON CONFLICT (stripe_event_id) DO NOTHING in the webhook
     // path collapses retries to a no-op.
-    stripeEventIdx: uniqueIndex("stripe_events_stripe_event_idx").on(t.stripeEventId),
+    stripeEventIdx: uniqueIndex("stripe_events_stripe_event_idx").on(
+      t.stripeEventId,
+    ),
     typeIdx: index("stripe_events_type_idx").on(t.eventType),
-  }),
-);
-
-// org_billing_profiles: mutable 1:1 companion to org.organizations. Isolates
-// billing PII (email, postal address, Google Place ID) in the billing schema.
-// Not addressed by humans via a URL slug, so no public_id — bare UUID PK only.
-// Address region uses ISO 3166-2 subdivision code; country uses ISO 3166-1 α-2.
-export const orgBillingProfiles = billingSchema.table(
-  "org_billing_profiles",
-  {
-    id: uuid("id").primaryKey().default(uuidv7Default),
-    // FK → org.organizations.id — CASCADE so the profile disappears when the
-    // org is deleted. Policy §0 mandates FKs where the invariant exists.
-    orgId: uuid("org_id")
-      .notNull()
-      .references(() => organizations.id, { onDelete: "cascade" }),
-    billingEmail: citext("billing_email"),
-    addressLine1: text("address_line1"),
-    addressLine2: text("address_line2"),
-    addressCity: text("address_city"),
-    // ISO 3166-2 subdivision code, e.g. 'CA' for California.
-    addressRegion: text("address_region"),
-    addressPostalCode: text("address_postal_code"),
-    // ISO 3166-1 alpha-2, e.g. 'US'.
-    addressCountry: text("address_country"),
-    // Google Places place_id — allows re-fetching or re-validating the address.
-    addressPlaceId: text("address_place_id"),
-    ...auditMixin(),
-  },
-  (t) => ({
-    // 1:1 uniqueness: one billing profile per org.
-    orgIdx: uniqueIndex("org_billing_profiles_org_idx").on(t.orgId),
   }),
 );
 
@@ -411,20 +356,29 @@ export const orgBillingSettings = billingSchema.table(
     // ── Auto-reload ───────────────────────────────────────────────────────────
     autoReloadEnabled: boolean("auto_reload_enabled").notNull().default(false),
     // Trigger reload when effective balance falls below this (credit cents).
-    autoReloadThresholdCents: bigint("auto_reload_threshold_cents", { mode: "bigint" })
+    autoReloadThresholdCents: bigint("auto_reload_threshold_cents", {
+      mode: "bigint",
+    })
       .notNull()
       .default(sql`500`),
     // Face-value credits to purchase on each reload (credit cents).
-    autoReloadAmountCents: bigint("auto_reload_amount_cents", { mode: "bigint" })
+    autoReloadAmountCents: bigint("auto_reload_amount_cents", {
+      mode: "bigint",
+    })
       .notNull()
       .default(sql`2000`),
     // Saved card to charge off-session; NULL → the customer's default PM.
     autoReloadPaymentMethodId: text("auto_reload_payment_method_id"),
-    lastAutoReloadAt: timestamp("last_auto_reload_at", { withTimezone: true, mode: "date" }),
+    lastAutoReloadAt: timestamp("last_auto_reload_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
 
     // ── Low-balance warning ─────────────────────────────────────────────────────
     // Surface a dismissible re-up banner when balance drops below this.
-    lowBalanceThresholdCents: bigint("low_balance_threshold_cents", { mode: "bigint" })
+    lowBalanceThresholdCents: bigint("low_balance_threshold_cents", {
+      mode: "bigint",
+    })
       .notNull()
       .default(sql`500`),
 
@@ -432,13 +386,25 @@ export const orgBillingSettings = billingSchema.table(
     // CHECK: dunning_state IN ('active','grace','suspended').
     dunningState: text("dunning_state").notNull().default("active"),
     // First failed-charge timestamp; cleared on recovery.
-    delinquentSince: timestamp("delinquent_since", { withTimezone: true, mode: "date" }),
+    delinquentSince: timestamp("delinquent_since", {
+      withTimezone: true,
+      mode: "date",
+    }),
     // Grace window end. While now() < grace_ends_at usage is still allowed.
-    graceEndsAt: timestamp("grace_ends_at", { withTimezone: true, mode: "date" }),
+    graceEndsAt: timestamp("grace_ends_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
     // Hard-suspension timestamp once grace elapses and the invoice is still open.
-    suspendedAt: timestamp("suspended_at", { withTimezone: true, mode: "date" }),
+    suspendedAt: timestamp("suspended_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
     // Last time we emailed/notified the customer about the delinquency.
-    lastDunningNotifiedAt: timestamp("last_dunning_notified_at", { withTimezone: true, mode: "date" }),
+    lastDunningNotifiedAt: timestamp("last_dunning_notified_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
     ...auditMixin(),
   },
   (t) => ({
@@ -473,11 +439,15 @@ export const billingDisputes = billingSchema.table(
     // won, lost, etc. Passthrough string — no CHECK (Stripe owns the vocabulary).
     status: text("status").notNull(),
     // Credits reversed from the org's lots when the dispute was opened.
-    clawedBackCents: bigint("clawed_back_cents", { mode: "bigint" }).notNull().default(sql`0`),
+    clawedBackCents: bigint("clawed_back_cents", { mode: "bigint" })
+      .notNull()
+      .default(sql`0`),
     resolvedAt: timestamp("resolved_at", { withTimezone: true, mode: "date" }),
   },
   (t) => ({
-    stripeDisputeIdx: uniqueIndex("billing_disputes_stripe_dispute_idx").on(t.stripeDisputeId),
+    stripeDisputeIdx: uniqueIndex("billing_disputes_stripe_dispute_idx").on(
+      t.stripeDisputeId,
+    ),
     orgIdx: index("billing_disputes_org_idx").on(t.orgId, t.status),
   }),
 );
@@ -494,10 +464,15 @@ export const stripeEventProcessing = billingSchema.table(
     stripeEventId: uuid("stripe_event_id")
       .notNull()
       .references(() => stripeEvents.id, { onDelete: "cascade" }),
-    processedAt: timestamp("processed_at", { withTimezone: true, mode: "date" }),
+    processedAt: timestamp("processed_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
     processingError: text("processing_error"),
   },
   (t) => ({
-    eventIdx: uniqueIndex("stripe_event_processing_event_idx").on(t.stripeEventId),
+    eventIdx: uniqueIndex("stripe_event_processing_event_idx").on(
+      t.stripeEventId,
+    ),
   }),
 );

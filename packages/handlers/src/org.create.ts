@@ -1,15 +1,25 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { organizationCreate } from "@oxagen/oxagen/contracts/org.create";
-import { schema, withSystemDb, isUniqueViolation, deriveNamespace } from "@oxagen/database";
+import {
+  schema,
+  withSystemDb,
+  isUniqueViolation,
+  deriveNamespace,
+} from "@oxagen/database";
 import { emitSecurityEventAsync } from "@oxagen/database/security";
 import { eq } from "drizzle-orm";
 import { grantFreeCredits } from "@oxagen/billing";
 import { logger } from "./logger";
 import { bootstrapOrgIAM } from "./iam-provision";
 
-export const organizationCreateHandler: CapabilityHandler<typeof organizationCreate> = async (input, ctx) => {
+export const organizationCreateHandler: CapabilityHandler<
+  typeof organizationCreate
+> = async (input, ctx) => {
   if (!ctx.userId) {
-    logger.warn({ orgId: ctx.orgId }, "organization.create: rejected — no authenticated user");
+    logger.warn(
+      { orgId: ctx.orgId },
+      "organization.create: rejected — no authenticated user",
+    );
     throw new Error("organization.create requires an authenticated user");
   }
   // tenancy: system bypass via withSystemDb (bootstrap — creates the org's own root
@@ -28,7 +38,13 @@ export const organizationCreateHandler: CapabilityHandler<typeof organizationCre
   }
 
   let orgId: string;
-  let result: { publicId: string; name: string; slug: string; type: string; createdAt: string };
+  let result: {
+    publicId: string;
+    name: string;
+    slug: string;
+    type: string;
+    createdAt: string;
+  };
 
   try {
     const txResult = await withSystemDb(async (tx) => {
@@ -58,7 +74,8 @@ export const organizationCreateHandler: CapabilityHandler<typeof organizationCre
           // undefined for personal accounts, so the DB columns stay null.
           website: input.type === "business" ? (input.website ?? null) : null,
           industry: input.type === "business" ? (input.industry ?? null) : null,
-          employeeSize: input.type === "business" ? (input.employeeSize ?? null) : null,
+          employeeSize:
+            input.type === "business" ? (input.employeeSize ?? null) : null,
           createdByUserId: ctx.userId,
           updatedByUserId: ctx.userId,
         })
@@ -95,31 +112,6 @@ export const organizationCreateHandler: CapabilityHandler<typeof organizationCre
         tx,
       });
 
-      // Persist billing profile when either billing email or address is supplied.
-      // A missing profile simply means not yet collected; the org itself is valid.
-      // Country code is normalised to uppercase here (the contract validates length
-      // only; the uppercase transform was removed to avoid Zod inference issues).
-      if (input.billingEmail !== undefined || input.billingAddress !== undefined) {
-        await tx.insert(schema.orgBillingProfiles).values({
-          orgId: org.id,
-          billingEmail: input.billingEmail ?? null,
-          addressLine1: input.billingAddress?.line1 ?? null,
-          addressLine2: input.billingAddress?.line2 ?? null,
-          addressCity: input.billingAddress?.city ?? null,
-          // Only uppercase for US (2-letter state codes); non-US regions are
-          // free-text (e.g. "Île-de-France") and must not be forcibly uppercased.
-          addressRegion:
-            input.billingAddress?.country?.toUpperCase() === "US"
-              ? (input.billingAddress.region?.toUpperCase() ?? null)
-              : (input.billingAddress?.region ?? null),
-          addressPostalCode: input.billingAddress?.postalCode ?? null,
-          addressCountry: input.billingAddress?.country.toUpperCase() ?? null,
-          addressPlaceId: input.billingAddress?.placeId ?? null,
-          createdByUserId: ctx.userId,
-          updatedByUserId: ctx.userId,
-        });
-      }
-
       return {
         publicId: org.publicId,
         name: org.name,
@@ -154,14 +146,23 @@ export const organizationCreateHandler: CapabilityHandler<typeof organizationCre
       userAgent: null,
       requestId: ctx.requestId,
     }).catch((err: unknown) => {
-      logger.error({ err, orgId: txResult.id }, "organization.create: failed to record security event");
+      logger.error(
+        { err, orgId: txResult.id },
+        "organization.create: failed to record security event",
+      );
     });
   } catch (err) {
     if (isUniqueViolation(err)) {
-      logger.warn({ slug: input.slug, orgId: ctx.orgId }, "organization.create: slug conflict");
+      logger.warn(
+        { slug: input.slug, orgId: ctx.orgId },
+        "organization.create: slug conflict",
+      );
       throw new Error(`slug "${input.slug}" already in use`);
     }
-    logger.error({ err, orgId: ctx.orgId }, "organization.create: transaction failed");
+    logger.error(
+      { err, orgId: ctx.orgId },
+      "organization.create: transaction failed",
+    );
     throw err;
   }
 
@@ -170,7 +171,10 @@ export const organizationCreateHandler: CapabilityHandler<typeof organizationCre
   // grantFreeCredits is idempotent — INSERT … ON CONFLICT DO NOTHING — so a
   // second attempt is always safe, even if the first partially succeeded.
   await grantFreeCredits(orgId).catch(async (firstErr: unknown) => {
-    const firstErrMsg = firstErr instanceof Error ? `${firstErr.message}\n${firstErr.stack}` : String(firstErr);
+    const firstErrMsg =
+      firstErr instanceof Error
+        ? `${firstErr.message}\n${firstErr.stack}`
+        : String(firstErr);
     logger.warn(
       { err: firstErr, firstErrMsg, orgId },
       "organization.create: grantFreeCredits failed on first attempt — retrying once",
@@ -179,7 +183,10 @@ export const organizationCreateHandler: CapabilityHandler<typeof organizationCre
     // the org creation itself is not surfaced as a failure to the caller.
     // The orgId is logged at error level so ops can re-run the grant manually.
     await grantFreeCredits(orgId).catch((retryErr: unknown) => {
-      const retryErrMsg = retryErr instanceof Error ? `${retryErr.message}\n${retryErr.stack}` : String(retryErr);
+      const retryErrMsg =
+        retryErr instanceof Error
+          ? `${retryErr.message}\n${retryErr.stack}`
+          : String(retryErr);
       logger.error(
         { err: retryErr, retryErrMsg, orgId },
         "organization.create: grantFreeCredits failed after retry — org created, credits not granted; re-apply manually",

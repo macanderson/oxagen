@@ -7,7 +7,9 @@ export default defineConfig({
   out: "./drizzle",
   dialect: "postgresql",
   dbCredentials: {
-    url: process.env.DATABASE_URL ?? "postgres://oxagen:oxagen@localhost:5432/oxagen",
+    url:
+      process.env.DATABASE_URL ??
+      "postgres://oxagen:oxagen@localhost:5432/oxagen",
   },
   schemaFilter: [
     "auth",
@@ -25,7 +27,12 @@ export default defineConfig({
     "plugin",
     "notification",
     "privacy",
-    "graph",
+    "schema_registry",
+    "environments",
+    "ai",
+    "eval",
+    "cms",
+    "ratelimit",
   ],
   verbose: true,
   strict: true,

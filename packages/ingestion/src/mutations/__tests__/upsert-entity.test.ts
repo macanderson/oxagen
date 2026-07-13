@@ -47,7 +47,11 @@ function makeMutation(overrides: Partial<EntityMutation> = {}): EntityMutation {
     operation: "insert",
     displayName: "Fix the bug",
     properties: { title: "Fix the bug", state: "open" },
-    sourceRef: { connectorType: "github", connectionId: "conn-1", externalId: "42" },
+    sourceRef: {
+      connectorType: "github",
+      connectionId: "conn-1",
+      externalId: "42",
+    },
     ...overrides,
   };
 }
@@ -74,7 +78,10 @@ describe("upsertEntityNode", () => {
     expect(result.nodeId).toBe("uuid-node-1");
     expect(mocks.sessionRun).toHaveBeenCalledOnce();
 
-    const [cypher, params] = mocks.sessionRun.mock.calls[0] as [string, Record<string, unknown>];
+    const [cypher, params] = mocks.sessionRun.mock.calls[0] as [
+      string,
+      Record<string, unknown>,
+    ];
     // §3.3 dual-write: the real label is PRIMARY, `:EntityNode` secondary. The
     // entityType "task" is canonicalised to the PascalCase label `Task`.
     expect(cypher).toContain("MERGE (n:`Task`:`EntityNode`");
@@ -86,7 +93,9 @@ describe("upsertEntityNode", () => {
     expect(params["displayName"]).toBe("Fix the bug");
     // properties must be JSON-stringified
     expect(typeof params["properties"]).toBe("string");
-    expect(JSON.parse(params["properties"] as string)).toMatchObject({ title: "Fix the bug" });
+    expect(JSON.parse(params["properties"] as string)).toMatchObject({
+      title: "Fix the bug",
+    });
   });
 
   it("canonicalises a multi-word snake entityType to a PascalCase label, slug kept on entityType", async () => {
@@ -94,9 +103,15 @@ describe("upsertEntityNode", () => {
       records: [{ get: vi.fn().mockReturnValue("uuid-node-1") }],
     });
 
-    await upsertEntityNode(makeMutation({ entityType: "pull_request" }), "org-1");
+    await upsertEntityNode(
+      makeMutation({ entityType: "pull_request" }),
+      "org-1",
+    );
 
-    const [cypher, params] = mocks.sessionRun.mock.calls[0] as [string, Record<string, unknown>];
+    const [cypher, params] = mocks.sessionRun.mock.calls[0] as [
+      string,
+      Record<string, unknown>,
+    ];
     // Neo4j :Label and the display `label` are PascalCase; the registry slug
     // "pull_request" is preserved verbatim on `entityType`.
     expect(cypher).toContain("MERGE (n:`PullRequest`:`EntityNode`");
@@ -114,7 +129,10 @@ describe("upsertEntityNode", () => {
 
     const [cypher, params] = await (async () => {
       await upsertEntityNode(makeMutation(), "org-1");
-      return mocks.sessionRun.mock.calls[0] as [string, Record<string, unknown>];
+      return mocks.sessionRun.mock.calls[0] as [
+        string,
+        Record<string, unknown>,
+      ];
     })();
 
     // The universal anchor label is added on every write.
@@ -135,14 +153,19 @@ describe("upsertEntityNode", () => {
     });
 
     await upsertEntityNode(makeMutation({ displayName: undefined }), "org-1");
-    const [, params] = mocks.sessionRun.mock.calls[0] as [string, Record<string, unknown>];
+    const [, params] = mocks.sessionRun.mock.calls[0] as [
+      string,
+      Record<string, unknown>,
+    ];
     expect(params["displayName"]).toBe("github:conn-1:42");
   });
 
   it("closes session even on error", async () => {
     mocks.sessionRun.mockRejectedValueOnce(new Error("Neo4j down"));
 
-    await expect(upsertEntityNode(makeMutation(), "org-1")).rejects.toThrow("Neo4j down");
+    await expect(upsertEntityNode(makeMutation(), "org-1")).rejects.toThrow(
+      "Neo4j down",
+    );
     expect(mocks.sessionClose).toHaveBeenCalledOnce();
   });
 
@@ -169,8 +192,111 @@ describe("upsertEntityNode", () => {
 
     await upsertEntityNode(makeMutation(), "org-42");
 
-    const [, params] = mocks.sessionRun.mock.calls[0] as [string, Record<string, unknown>];
+    const [, params] = mocks.sessionRun.mock.calls[0] as [
+      string,
+      Record<string, unknown>,
+    ];
     expect(params["orgId"]).toBe("org-42");
+  });
+
+  // ── previousProperties + isNew capture (Phase 2 automation triggers) ────────
+  // The MERGE now captures the pre-overwrite state via a WITH between the
+  // branches and the main SET, and RETURNs `isNew` + `previousProperties`
+  // alongside `nodeId`. A per-key record mock lets us assert the mapping.
+
+  /** A record whose `.get(key)` returns the mapped value (undefined otherwise). */
+  function recordFrom(values: Record<string, unknown>) {
+    return {
+      records: [
+        {
+          get: vi.fn((key: string) =>
+            key in values ? values[key] : undefined,
+          ),
+        },
+      ],
+    };
+  }
+
+  it("captures pre-overwrite state via a WITH and RETURNs isNew + previousProperties", async () => {
+    mocks.sessionRun.mockResolvedValueOnce(
+      recordFrom({
+        nodeId: "uuid-node-1",
+        isNew: true,
+        previousProperties: null,
+      }),
+    );
+
+    await upsertEntityNode(makeMutation(), "org-1");
+
+    const [cypher] = mocks.sessionRun.mock.calls[0] as [
+      string,
+      Record<string, unknown>,
+    ];
+    // The scratch flag drives isNew; the WITH reads the OLD properties BEFORE
+    // the SET clobbers them; both are returned.
+    expect(cypher).toContain("n._isNew           = true");
+    expect(cypher).toContain("n._isNew           = false");
+    expect(cypher).toContain(
+      "WITH n, n._isNew AS isNew, n.properties AS previousProperties",
+    );
+    expect(cypher).toContain(
+      "RETURN n.publicId AS nodeId, isNew, previousProperties",
+    );
+    // The scratch flag is cleared so it never persists on the node.
+    expect(cypher).toContain("n._isNew           = null");
+  });
+
+  it("returns isNew=true and previousProperties=null on a create (ON CREATE)", async () => {
+    mocks.sessionRun.mockResolvedValueOnce(
+      recordFrom({
+        nodeId: "uuid-node-1",
+        isNew: true,
+        previousProperties: null,
+      }),
+    );
+
+    const result = await upsertEntityNode(makeMutation(), "org-1");
+
+    expect(result.nodeId).toBe("uuid-node-1");
+    expect(result.isNew).toBe(true);
+    expect(result.previousProperties).toBeNull();
+  });
+
+  it("returns isNew=false and the parsed prior JSON object on an update (ON MATCH)", async () => {
+    // The stored `n.properties` is a JSON STRING — the OLD state before this
+    // write overwrote it. It is JSON.parsed back into an object.
+    mocks.sessionRun.mockResolvedValueOnce(
+      recordFrom({
+        nodeId: "uuid-node-1",
+        isNew: false,
+        previousProperties: JSON.stringify({
+          status: "open",
+          title: "Fix the bug",
+        }),
+      }),
+    );
+
+    const result = await upsertEntityNode(makeMutation(), "org-1");
+
+    expect(result.isNew).toBe(false);
+    expect(result.previousProperties).toEqual({
+      status: "open",
+      title: "Fix the bug",
+    });
+  });
+
+  it("returns previousProperties=null when the stored JSON is malformed (guarded, never throws)", async () => {
+    mocks.sessionRun.mockResolvedValueOnce(
+      recordFrom({
+        nodeId: "uuid-node-1",
+        isNew: false,
+        previousProperties: "{not valid json",
+      }),
+    );
+
+    const result = await upsertEntityNode(makeMutation(), "org-1");
+
+    expect(result.previousProperties).toBeNull();
   });
 });
 
@@ -179,7 +305,10 @@ describe("upsertEntityNode", () => {
 import type { PinnedSchema } from "../../validate/schema";
 
 /** A pinned schema requiring a `title` property on the `task` label. */
-function pinnedSchema(mode: PinnedSchema["enforcementMode"], floor = 0.5): PinnedSchema {
+function pinnedSchema(
+  mode: PinnedSchema["enforcementMode"],
+  floor = 0.5,
+): PinnedSchema {
   return {
     registryId: "scr_1",
     versionId: "scv_42",
@@ -237,7 +366,9 @@ describe("upsertEntityNode — §8 enforcement modes", () => {
     expect(mocks.sessionRun).not.toHaveBeenCalled();
     // A rejected conformance event was emitted.
     const chCalls = mocks.chInsert.mock.calls;
-    expect(chCalls.some(([table]) => table === "schema_conformance_events")).toBe(true);
+    expect(
+      chCalls.some(([table]) => table === "schema_conformance_events"),
+    ).toBe(true);
   });
 
   it("lenient: a non-conformant write IS written + scored + stamped with the version id", async () => {
@@ -250,7 +381,10 @@ describe("upsertEntityNode — §8 enforcement modes", () => {
     expect(typeof result.conformanceScore).toBe("number");
     expect(result.conformanceScore).toBeLessThan(1); // missing required → < 1
     // The MERGE ran and stamped conformance props.
-    const params = mocks.sessionRun.mock.calls[0]?.[1] as Record<string, unknown>;
+    const params = mocks.sessionRun.mock.calls[0]?.[1] as Record<
+      string,
+      unknown
+    >;
     expect(params["conformanceScore"]).toBe(result.conformanceScore);
     expect(params["schemaVersionId"]).toBe("scv_42");
     // observed-label + conformance events emitted.
@@ -267,7 +401,10 @@ describe("upsertEntityNode — §8 enforcement modes", () => {
 
     expect(result.nodeId).toBe("uuid-node-1");
     expect(result.conformanceScore).toBeUndefined();
-    const params = mocks.sessionRun.mock.calls[0]?.[1] as Record<string, unknown>;
+    const params = mocks.sessionRun.mock.calls[0]?.[1] as Record<
+      string,
+      unknown
+    >;
     // No schema evaluated → conformance props are null (not stamped).
     expect(params["conformanceScore"]).toBeNull();
     expect(params["schemaVersionId"]).toBeNull();
@@ -306,7 +443,10 @@ describe("upsertEntityNode — §8 enforcement modes", () => {
       // Simulated Inngest retry: SAME mutation, SAME runId, whole function
       // re-invoked from scratch (exactly what step.run replays on failure).
       vi.clearAllMocks();
-      mocks.scopedSession.mockReturnValue({ run: mocks.sessionRun, close: mocks.sessionClose });
+      mocks.scopedSession.mockReturnValue({
+        run: mocks.sessionRun,
+        close: mocks.sessionClose,
+      });
       mocks.sessionRun.mockResolvedValue({
         records: [{ get: vi.fn().mockReturnValue("uuid-node-1") }],
       });
@@ -315,7 +455,9 @@ describe("upsertEntityNode — §8 enforcement modes", () => {
       const rows = conformanceRows();
       expect(rows).toHaveLength(1);
       expect(typeof rows[0]!["event_id"]).toBe("string");
-      expect(rows[0]!["event_id"]).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+      expect(rows[0]!["event_id"]).toMatch(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+      );
     });
 
     it("computes the identical event_id across two independent calls given identical inputs (retry simulation without re-clearing mocks)", async () => {
@@ -338,8 +480,14 @@ describe("upsertEntityNode — §8 enforcement modes", () => {
       const mutation = makeMutation({ properties: { state: "open" } });
       const pinned = singleRowSchema();
 
-      await upsertEntityNode(mutation, "org-1", { pinnedSchema: pinned, runId: "run-day-1" });
-      await upsertEntityNode(mutation, "org-1", { pinnedSchema: pinned, runId: "run-day-2" });
+      await upsertEntityNode(mutation, "org-1", {
+        pinnedSchema: pinned,
+        runId: "run-day-1",
+      });
+      await upsertEntityNode(mutation, "org-1", {
+        pinnedSchema: pinned,
+        runId: "run-day-2",
+      });
 
       const rows = conformanceRows();
       expect(rows).toHaveLength(2);
@@ -351,30 +499,45 @@ describe("upsertEntityNode — §8 enforcement modes", () => {
       // triggers BOTH the primary outcome row and the alert marker row for
       // the SAME (mutation, versionId, outcome) — they must not collide.
       const mutation = makeMutation({ properties: { state: "open" } });
-      const opts = { pinnedSchema: pinnedSchema("lenient", 0.99), runId: "run-alert-1" };
+      const opts = {
+        pinnedSchema: pinnedSchema("lenient", 0.99),
+        runId: "run-alert-1",
+      };
 
       await upsertEntityNode(mutation, "org-1", opts);
 
       const rows = conformanceRows();
       expect(rows).toHaveLength(2);
-      expect(rows.every((r) => r["outcome"] === "written_below_floor")).toBe(true);
+      expect(rows.every((r) => r["outcome"] === "written_below_floor")).toBe(
+        true,
+      );
       expect(rows[0]!["event_id"]).not.toBe(rows[1]!["event_id"]);
     });
 
     it("retrying a below-floor write reproduces BOTH the primary row's and the alert row's event_id unchanged", async () => {
       const mutation = makeMutation({ properties: { state: "open" } });
-      const opts = { pinnedSchema: pinnedSchema("lenient", 0.99), runId: "run-alert-retry" };
+      const opts = {
+        pinnedSchema: pinnedSchema("lenient", 0.99),
+        runId: "run-alert-retry",
+      };
 
       await upsertEntityNode(mutation, "org-1", opts);
-      const [firstPrimary, firstAlert] = conformanceRows().map((r) => r["event_id"]);
+      const [firstPrimary, firstAlert] = conformanceRows().map(
+        (r) => r["event_id"],
+      );
 
       vi.clearAllMocks();
-      mocks.scopedSession.mockReturnValue({ run: mocks.sessionRun, close: mocks.sessionClose });
+      mocks.scopedSession.mockReturnValue({
+        run: mocks.sessionRun,
+        close: mocks.sessionClose,
+      });
       mocks.sessionRun.mockResolvedValue({
         records: [{ get: vi.fn().mockReturnValue("uuid-node-1") }],
       });
       await upsertEntityNode(mutation, "org-1", opts);
-      const [retryPrimary, retryAlert] = conformanceRows().map((r) => r["event_id"]);
+      const [retryPrimary, retryAlert] = conformanceRows().map(
+        (r) => r["event_id"],
+      );
 
       expect(retryPrimary).toBe(firstPrimary);
       expect(retryAlert).toBe(firstAlert);
@@ -405,11 +568,21 @@ describe("upsertEmbedding", () => {
   });
 
   it("runs MATCH + SET Cypher on publicId", async () => {
-    await upsertEmbedding("node-uuid", [0.1, 0.2, 0.3], "text-embedding-3-small", "org-1");
+    await upsertEmbedding(
+      "node-uuid",
+      [0.1, 0.2, 0.3],
+      "text-embedding-3-small",
+      "org-1",
+    );
 
     expect(mocks.sessionRun).toHaveBeenCalledOnce();
-    const [cypher, params] = mocks.sessionRun.mock.calls[0] as [string, Record<string, unknown>];
-    expect(cypher).toContain("MATCH (n:EntityNode {publicId: $nodeId, orgId: $orgId})");
+    const [cypher, params] = mocks.sessionRun.mock.calls[0] as [
+      string,
+      Record<string, unknown>,
+    ];
+    expect(cypher).toContain(
+      "MATCH (n:EntityNode {publicId: $nodeId, orgId: $orgId})",
+    );
     expect(cypher).toContain("SET n.embedding");
     expect(params["nodeId"]).toBe("node-uuid");
     expect(params["vector"]).toEqual([0.1, 0.2, 0.3]);
@@ -425,7 +598,10 @@ describe("upsertEmbedding", () => {
   // previously omitted it, relying solely on scopedSession auto-injection.
   it("binds orgId explicitly in the local params object (regression: previously relied solely on scopedSession auto-injection)", async () => {
     await upsertEmbedding("node-uuid", [0.1], "model", "org-77");
-    const [, params] = mocks.sessionRun.mock.calls[0] as [string, Record<string, unknown>];
+    const [, params] = mocks.sessionRun.mock.calls[0] as [
+      string,
+      Record<string, unknown>,
+    ];
     expect(params["orgId"]).toBe("org-77");
   });
 });
@@ -441,14 +617,22 @@ describe("createAliasEdge", () => {
   });
 
   it("runs MERGE ALIAS_OF with correct params", async () => {
-    await createAliasEdge("alias-id", "principal-id", {
-      confidence: 0.95,
-      matchReason: "email_match",
-      tentative: false,
-    }, "org-1");
+    await createAliasEdge(
+      "alias-id",
+      "principal-id",
+      {
+        confidence: 0.95,
+        matchReason: "email_match",
+        tentative: false,
+      },
+      "org-1",
+    );
 
     expect(mocks.sessionRun).toHaveBeenCalledOnce();
-    const [cypher, params] = mocks.sessionRun.mock.calls[0] as [string, Record<string, unknown>];
+    const [cypher, params] = mocks.sessionRun.mock.calls[0] as [
+      string,
+      Record<string, unknown>,
+    ];
     expect(cypher).toContain("MERGE (alias)-[r:ALIAS_OF]->(principal)");
     expect(params["aliasNodeId"]).toBe("alias-id");
     expect(params["principalNodeId"]).toBe("principal-id");
@@ -456,7 +640,9 @@ describe("createAliasEdge", () => {
     expect(params["matchReason"]).toBe("email_match");
     expect(params["tentative"]).toBe(false);
     // Bi-temporal validity stamped on create (validFrom falls back to now).
-    expect(cypher).toContain("r.validFrom = coalesce(datetime($validFrom), datetime())");
+    expect(cypher).toContain(
+      "r.validFrom = coalesce(datetime($validFrom), datetime())",
+    );
     expect(cypher).toContain("r.recordedAt = datetime()");
     expect(params["validFrom"]).toBeNull();
   });
@@ -464,12 +650,20 @@ describe("createAliasEdge", () => {
   // OXA-2062: both MATCH clauses reference $orgId but the local params object
   // previously omitted it, relying solely on scopedSession auto-injection.
   it("binds orgId explicitly in the local params object (regression: previously relied solely on scopedSession auto-injection)", async () => {
-    await createAliasEdge("alias-id", "principal-id", {
-      confidence: 0.5,
-      matchReason: "x",
-      tentative: true,
-    }, "org-99");
-    const [, params] = mocks.sessionRun.mock.calls[0] as [string, Record<string, unknown>];
+    await createAliasEdge(
+      "alias-id",
+      "principal-id",
+      {
+        confidence: 0.5,
+        matchReason: "x",
+        tentative: true,
+      },
+      "org-99",
+    );
+    const [, params] = mocks.sessionRun.mock.calls[0] as [
+      string,
+      Record<string, unknown>,
+    ];
     expect(params["orgId"]).toBe("org-99");
   });
 });
@@ -492,15 +686,28 @@ describe("upsertInferredEdges", () => {
 
   it("runs one MERGE per edge with correct params", async () => {
     const edges = [
-      { fromNodeId: "from-1", toNodeId: "to-1", edgeType: "REFERENCES", confidence: 0.8 },
-      { fromNodeId: "from-1", toNodeId: "to-2", edgeType: "PART_OF", confidence: 0.9 },
+      {
+        fromNodeId: "from-1",
+        toNodeId: "to-1",
+        edgeType: "REFERENCES",
+        confidence: 0.8,
+      },
+      {
+        fromNodeId: "from-1",
+        toNodeId: "to-2",
+        edgeType: "PART_OF",
+        confidence: 0.9,
+      },
     ];
 
     await upsertInferredEdges(edges, "org-1");
 
     expect(mocks.sessionRun).toHaveBeenCalledTimes(2);
 
-    const [cypher1, params1] = mocks.sessionRun.mock.calls[0] as [string, Record<string, unknown>];
+    const [cypher1, params1] = mocks.sessionRun.mock.calls[0] as [
+      string,
+      Record<string, unknown>,
+    ];
     expect(cypher1).toContain("REFERENCES");
     expect(params1["fromNodeId"]).toBe("from-1");
     expect(params1["toNodeId"]).toBe("to-1");
@@ -509,7 +716,10 @@ describe("upsertInferredEdges", () => {
     expect(cypher1).toContain("r.recordedAt = datetime()");
     expect(params1["validFrom"]).toBeNull();
 
-    const [cypher2] = mocks.sessionRun.mock.calls[1] as [string, Record<string, unknown>];
+    const [cypher2] = mocks.sessionRun.mock.calls[1] as [
+      string,
+      Record<string, unknown>,
+    ];
     expect(cypher2).toContain("PART_OF");
   });
 
@@ -535,7 +745,14 @@ describe("upsertInferredEdges", () => {
   it("throws for unsupported edge types", async () => {
     await expect(
       upsertInferredEdges(
-        [{ fromNodeId: "f", toNodeId: "t", edgeType: "UNKNOWN_EDGE", confidence: 0.5 }],
+        [
+          {
+            fromNodeId: "f",
+            toNodeId: "t",
+            edgeType: "UNKNOWN_EDGE",
+            confidence: 0.5,
+          },
+        ],
         "org-1",
       ),
     ).rejects.toThrow('unsupported edgeType "UNKNOWN_EDGE"');
@@ -543,7 +760,14 @@ describe("upsertInferredEdges", () => {
 
   it("closes session on success", async () => {
     await upsertInferredEdges(
-      [{ fromNodeId: "f", toNodeId: "t", edgeType: "SIMILAR_TO", confidence: 0.75 }],
+      [
+        {
+          fromNodeId: "f",
+          toNodeId: "t",
+          edgeType: "SIMILAR_TO",
+          confidence: 0.75,
+        },
+      ],
       "org-1",
     );
     expect(mocks.sessionClose).toHaveBeenCalledOnce();
@@ -554,10 +778,20 @@ describe("upsertInferredEdges", () => {
   // on scopedSession auto-injection.
   it("binds orgId explicitly in the local params object (regression: previously relied solely on scopedSession auto-injection)", async () => {
     await upsertInferredEdges(
-      [{ fromNodeId: "f", toNodeId: "t", edgeType: "PART_OF", confidence: 0.6 }],
+      [
+        {
+          fromNodeId: "f",
+          toNodeId: "t",
+          edgeType: "PART_OF",
+          confidence: 0.6,
+        },
+      ],
       "org-55",
     );
-    const [, params] = mocks.sessionRun.mock.calls[0] as [string, Record<string, unknown>];
+    const [, params] = mocks.sessionRun.mock.calls[0] as [
+      string,
+      Record<string, unknown>,
+    ];
     expect(params["orgId"]).toBe("org-55");
   });
 });
@@ -584,8 +818,13 @@ describe("upsertSourceConnectionMeta", () => {
       "org-1",
     );
     expect(mocks.sessionRun).toHaveBeenCalledOnce();
-    const [cypher, params] = mocks.sessionRun.mock.calls[0] as [string, Record<string, unknown>];
-    expect(cypher).toContain("MERGE (sc:SourceConnection {id: $connectionId, orgId: $orgId})");
+    const [cypher, params] = mocks.sessionRun.mock.calls[0] as [
+      string,
+      Record<string, unknown>,
+    ];
+    expect(cypher).toContain(
+      "MERGE (sc:SourceConnection {id: $connectionId, orgId: $orgId})",
+    );
     expect(params["connectionId"]).toBe("conn-1");
     expect(params["workspaceId"]).toBe("ws-1");
   });
@@ -604,7 +843,10 @@ describe("upsertSourceConnectionMeta", () => {
       },
       "org-88",
     );
-    const [, params] = mocks.sessionRun.mock.calls[0] as [string, Record<string, unknown>];
+    const [, params] = mocks.sessionRun.mock.calls[0] as [
+      string,
+      Record<string, unknown>,
+    ];
     expect(params["orgId"]).toBe("org-88");
   });
 

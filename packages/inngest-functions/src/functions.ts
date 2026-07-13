@@ -1,4 +1,3 @@
-import { billingRollupUsage } from "./functions/billing.rollup-usage";
 import { billingDunningSweep } from "./functions/billing.dunning-sweep";
 import { stripeSyncSubscription } from "./functions/stripe.sync-subscription";
 import { stripeSyncInvoice } from "./functions/stripe.sync-invoice";
@@ -46,7 +45,10 @@ import { ingestionBatchReconcile } from "./functions/ai.batch-reconcile";
 import { ingestionSyncRequested } from "./functions/ingestion.sync-requested";
 import { ingestionPollScheduler } from "./functions/ingestion.poll-scheduler";
 import { ingestionConnectionPoll } from "./functions/ingestion.connection-poll";
-import { playbookTriggerMatch } from "./functions/playbook.trigger.match";
+import {
+  playbookTriggerMatch,
+  playbookTriggerMatchUpdated,
+} from "./functions/playbook.trigger.match";
 import { playbookRunExecute } from "./functions/playbook.run.execute";
 import { mcpToolSnapshotRetention } from "./functions/mcp.tool-snapshot-retention";
 import { pluginCatalogSync } from "./functions/plugin.catalog-sync";
@@ -64,7 +66,6 @@ import { evalRunExecute } from "./functions/eval.run.execute";
 // between the abstract DurableFunction interface and Inngest's internal Like type.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const functions: any[] = [
-  billingRollupUsage,
   billingDunningSweep,
   stripeSyncSubscription,
   stripeSyncInvoice,
@@ -105,6 +106,7 @@ export const functions: any[] = [
   ingestionPollScheduler,
   ingestionConnectionPoll,
   playbookTriggerMatch,
+  playbookTriggerMatchUpdated,
   playbookRunExecute,
   mcpToolSnapshotRetention,
   pluginCatalogSync,

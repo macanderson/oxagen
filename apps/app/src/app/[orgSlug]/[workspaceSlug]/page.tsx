@@ -13,12 +13,15 @@
  */
 import { notFound } from "next/navigation";
 import { getSessionOrRedirect } from "@/lib/session";
-import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
+import {
+  resolveOrg,
+  resolveWorkspace,
+  assertOrgMember,
+} from "@/lib/resolve-org";
 import { PageHeader } from "@/components/ui/page-header";
 import { Section, LoadingState } from "./_shared/components";
 import { MeteringKpiStrip } from "./_overview/metering-kpi-strip";
 import { GraphHero } from "./_overview/graph-hero";
-import { ActivityPanel } from "./_overview/activity-panel";
 import { AutomationsPanel } from "./_overview/automations-panel";
 import { UsagePanel } from "./_overview/usage-panel";
 import { MemoriesPanel } from "./_overview/memories-panel";
@@ -64,15 +67,10 @@ export default async function WorkspaceOverviewPage({ params }: PageProps) {
         <GraphHero {...tileProps} />
       </Section>
 
-      {/* Activity + Automations */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <Section fallback={<LoadingState variant="cards" />}>
-          <ActivityPanel {...tileProps} />
-        </Section>
-        <Section fallback={<LoadingState variant="cards" />}>
-          <AutomationsPanel {...tileProps} />
-        </Section>
-      </div>
+      {/* Automations */}
+      <Section fallback={<LoadingState variant="cards" />}>
+        <AutomationsPanel {...tileProps} />
+      </Section>
 
       {/* Usage charts + Memory capture */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">

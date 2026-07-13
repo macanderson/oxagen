@@ -106,8 +106,10 @@ test("access: Enterprise org renders own session + own review row with self-acti
     fullPage: true,
   });
 
-  // Reviews tab.
-  await page.getByRole("link", { name: "Reviews" }).click();
+  // Reviews tab. PageTabs renders each tab as <Link role="tab">, so it must be
+  // located by the "tab" role — getByRole("link") no longer matches (the
+  // element's ARIA role is overridden to "tab"), which timed out the click.
+  await page.getByRole("tab", { name: "Reviews" }).click();
   await expect(page).toHaveURL(/\/access\/reviews/);
   await page.waitForLoadState("domcontentloaded");
 
@@ -116,8 +118,11 @@ test("access: Enterprise org renders own session + own review row with self-acti
   ).toBeVisible({
     timeout: 15_000,
   });
-  // The org creator's own row: Owner role badge + "You" self badge.
-  await expect(page.getByText("Owner", { exact: true }).first()).toBeVisible();
+  // The org creator's own row: Owner role badge + "You" self badge. The badge
+  // renders the raw org-role value ({m.role}, e.g. "owner") with a `capitalize`
+  // CSS class — Playwright matches the DOM text, not the CSS-transformed
+  // rendering, so match the role case-insensitively rather than exact "Owner".
+  await expect(page.getByText(/^owner$/i).first()).toBeVisible();
   await expect(page.getByText("You", { exact: true })).toBeVisible();
 
   // Confirm is present but disabled for the self row (isSelf gate) — the

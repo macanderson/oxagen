@@ -241,6 +241,29 @@ export const MANIFEST_REFERENCE: ManifestSectionRef[] = [
     ],
   },
   {
+    key: "packages",
+    label: "Packages",
+    summary:
+      "Per-ecosystem package lists baked into the sandbox image at provision time.",
+    fields: [
+      {
+        path: "packages[].manager",
+        type: "enum",
+        values:
+          "apt | cargo | gem | go | npm | pnpm | yarn | pip | poetry | uv",
+        description:
+          "The package manager used to install this group's packages into the image.",
+      },
+      {
+        path: "packages[].names",
+        type: "string[]",
+        values: "each non-empty; may carry an ecosystem version pin",
+        description:
+          "Packages to install through the manager, e.g. `fastapi`, `pydantic==2.5`, `left-pad@1.3.0`. An empty list is dropped by the UI before submit.",
+      },
+    ],
+  },
+  {
     key: "secretKeys",
     label: "Secret keys",
     summary: "The vault key NAMES (never values) this template expects.",
