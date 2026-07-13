@@ -118,8 +118,11 @@ test("access: Enterprise org renders own session + own review row with self-acti
   ).toBeVisible({
     timeout: 15_000,
   });
-  // The org creator's own row: Owner role badge + "You" self badge.
-  await expect(page.getByText("Owner", { exact: true }).first()).toBeVisible();
+  // The org creator's own row: Owner role badge + "You" self badge. The badge
+  // renders the raw org-role value ({m.role}, e.g. "owner") with a `capitalize`
+  // CSS class — Playwright matches the DOM text, not the CSS-transformed
+  // rendering, so match the role case-insensitively rather than exact "Owner".
+  await expect(page.getByText(/^owner$/i).first()).toBeVisible();
   await expect(page.getByText("You", { exact: true })).toBeVisible();
 
   // Confirm is present but disabled for the self row (isSelf gate) — the
