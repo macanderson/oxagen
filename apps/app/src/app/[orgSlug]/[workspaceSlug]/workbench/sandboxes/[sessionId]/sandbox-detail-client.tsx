@@ -37,6 +37,7 @@ import {
   type ListSandboxFilesFn,
   type ReadSandboxFileFn,
 } from "@/components/sandbox/sandbox-files-drawer";
+import { SandboxEnvPanel } from "@/components/sandbox/sandbox-env-panel";
 import type { SandboxSummary, SandboxStatus } from "@/lib/workbench/sandboxes";
 import {
   listSandboxLogsAction,
@@ -58,6 +59,14 @@ const STATUS_TONE: Record<SandboxStatus, "success" | "warning" | "secondary"> =
     stopped: "secondary",
     gone: "secondary",
   };
+
+/**
+ * The canonical workspace root inside every durable sandbox — mirrors
+ * `WORKSPACE_ROOT` in `@oxagen/sandbox` (a server-only module). The terminal is
+ * seeded here so a first `ls` lands where cloned repos + the warm scaffold live
+ * and where the file browser lists; keep the two in lockstep.
+ */
+const WORKSPACE_ROOT = "/work";
 
 export interface SandboxDetailClientProps {
   orgSlug: string;
@@ -343,43 +352,59 @@ export function SandboxDetailClient({
         </p>
       ) : null}
 
-      {/* Terminal — the hero, full content width. */}
-      <section className="flex flex-col gap-2">
-        <div className="flex flex-col gap-0.5">
-          <h2 className="text-sm font-semibold">Terminal</h2>
-          <p className="text-xs text-muted-foreground">
-            The shell an agent drives — run commands directly against this
-            sandbox and watch the CLI output.
-          </p>
-        </div>
-        <SandboxTerminal
-          sessionId={sessionId}
-          runCommand={runCommand}
-          disabled={!runnable}
-          welcome={
-            runnable
-              ? undefined
-              : "This sandbox isn't runnable (stopped or you lack manage rights). Open Files to browse the workspace."
-          }
-        />
-      </section>
-
+      {/* Attribute bar — the top full-width row: status / image / driver /
+          started / reap at a glance, above everything else. */}
       <SandboxStatePanel summary={summary} />
 
-      <section className="flex flex-col gap-2">
-        <div className="flex flex-col gap-0.5">
-          <h2 className="text-sm font-semibold">Logs</h2>
-          <p className="text-xs text-muted-foreground">
-            Captured output from this sandbox. Flip Debug to include command
-            echoes, timings, and lifecycle notes.
-          </p>
+      {/* Workbench: terminal (5/8) on the left, the environment + logs rail
+          (3/8) on the right at lg+; everything stacks to one column on mobile. */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-8 lg:items-start">
+        {/* Terminal — the hero, 5/8 on the left. */}
+        <section className="flex min-w-0 flex-col gap-2 lg:col-span-5">
+          <div className="flex flex-col gap-0.5">
+            <h2 className="text-sm font-semibold">Terminal</h2>
+            <p className="text-xs text-muted-foreground">
+              The shell an agent drives — run commands directly against this
+              sandbox and watch the CLI output.
+            </p>
+          </div>
+          <SandboxTerminal
+            sessionId={sessionId}
+            runCommand={runCommand}
+            initialCwd={WORKSPACE_ROOT}
+            disabled={!runnable}
+            welcome={
+              runnable
+                ? undefined
+                : "This sandbox isn't runnable (stopped or you lack manage rights). Open Files to browse the workspace."
+            }
+          />
+        </section>
+
+        {/* Right rail — environment + logs, 3/8 on the right. */}
+        <div className="flex min-w-0 flex-col gap-4 lg:col-span-3">
+          <SandboxEnvPanel
+            image={summary.image}
+            runCommand={runCommand}
+            disabled={!runnable}
+          />
+
+          <section className="flex min-w-0 flex-col gap-2">
+            <div className="flex flex-col gap-0.5">
+              <h2 className="text-sm font-semibold">Logs</h2>
+              <p className="text-xs text-muted-foreground">
+                Captured output — flip Debug for command echoes, timings, and
+                lifecycle notes.
+              </p>
+            </div>
+            <SandboxLogsConsole
+              sessionId={sessionId}
+              loadLogs={loadLogs}
+              disabled={!canManage}
+            />
+          </section>
         </div>
-        <SandboxLogsConsole
-          sessionId={sessionId}
-          loadLogs={loadLogs}
-          disabled={!canManage}
-        />
-      </section>
+      </div>
     </div>
   );
 }
