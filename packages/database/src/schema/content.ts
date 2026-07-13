@@ -62,9 +62,7 @@ export const generatedAssets = contentSchema.table(
     // Optional linkage to the chat turn that produced the asset.
     conversationId: uuid("conversation_id"),
     messageId: uuid("message_id"),
-    metadata: jsonb("metadata")
-      .notNull()
-      .default(sql`'{}'::jsonb`),
+    metadata: jsonb("metadata").notNull().default(sql`'{}'::jsonb`),
     // NULL until the async Inngest job syncs this asset to Neo4j as a Document node.
     syncedToGraphAt: timestamp("synced_to_graph_at", { withTimezone: true }),
   },
@@ -81,6 +79,10 @@ export const generatedAssets = contentSchema.table(
     conversationCreatedIdx: index(
       "generated_assets_conversation_created_idx",
     ).on(t.conversationId, t.createdAt),
+    // Assets list (unbounded, unindexed sort — 2026-07-11 audit §4.1 item 7).
+    wsKindCreatedIdx: index("generated_assets_ws_kind_created_idx")
+      .on(t.workspaceId, t.kind, t.status, t.createdAt)
+      .where(sql`${t.deletedAt} IS NULL`),
     kindCheck: check(
       "generated_assets_kind_check",
       sql`${t.kind} IN ('image', 'video', 'document', 'spreadsheet', 'presentation', 'pdf', 'archive')`,
@@ -112,11 +114,14 @@ export const documents = contentSchema.table(
     ...softDeleteMixin(),
     title: text("title").notNull(),
     content: text("content").notNull().default(""),
-    metadata: jsonb("metadata")
-      .notNull()
-      .default(sql`'{}'::jsonb`),
+    metadata: jsonb("metadata").notNull().default(sql`'{}'::jsonb`),
   },
   (t) => ({
     orgIdx: index("documents_org_idx").on(t.orgId, t.workspaceId),
+    // Documents list (unbounded, unindexed sort — also add .limit()! —
+    // 2026-07-11 audit §4.1 item 7).
+    workspaceCreatedIdx: index("documents_workspace_created_idx")
+      .on(t.workspaceId, t.createdAt)
+      .where(sql`${t.deletedAt} IS NULL`),
   }),
 );

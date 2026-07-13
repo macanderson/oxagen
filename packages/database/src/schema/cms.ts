@@ -19,7 +19,14 @@
 // never at a public URL, they are returned by the redeem route after a code is
 // validated and consumed.
 
-import { boolean, check, index, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import {
+  boolean,
+  check,
+  index,
+  text,
+  timestamp,
+  uuid,
+} from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { cmsSchema } from "./_schemas";
 import { citext, idMixin, auditMixin } from "./_mixins";
@@ -85,7 +92,10 @@ export const DEFAULT_EDITION_SLUG: EditionSlug = "page-flip-reader";
 // ── Enums ─────────────────────────────────────────────────────────────────────
 
 export const companySizeEnum = cmsSchema.enum("company_size", COMPANY_SIZES);
-export const referralSourceEnum = cmsSchema.enum("referral_source", REFERRAL_SOURCES);
+export const referralSourceEnum = cmsSchema.enum(
+  "referral_source",
+  REFERRAL_SOURCES,
+);
 
 // ── cms.leads ─────────────────────────────────────────────────────────────────
 
@@ -136,7 +146,8 @@ export const leads = cmsSchema.table(
     marketingConsent: boolean("marketing_consent").notNull().default(true),
   },
   (t) => ({
-    emailIdx: index("cms_leads_email_idx").on(t.email),
+    // cms_leads_email_idx was dropped (2026-07-11 audit §4.2): duplicate of
+    // the email.unique() constraint declared above (citext, both unique).
     trackingIdx: index("cms_leads_tracking_code_idx").on(t.trackingCode),
     createdIdx: index("cms_leads_created_at_idx").on(t.createdAt),
   }),
