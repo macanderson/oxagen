@@ -45,6 +45,26 @@ function truncate(text: string, max: number): string {
   return `${text.slice(0, max - 1).trimEnd()}…`;
 }
 
+// Count memories captured in the last 7 days vs the prior 7 days. `Date.now()`
+// lives here (a plain helper), not in the component render body, so the
+// react-hooks purity rule doesn't flag the impure call — same idiom as the
+// imported timeAgo() formatter.
+function countMemoryDeltas(memories: AgentMemoryRecord[]): {
+  last7d: number;
+  prior7d: number;
+} {
+  const now = Date.now();
+  let last7d = 0;
+  let prior7d = 0;
+  for (const m of memories) {
+    const age = now - new Date(m.createdAt).getTime();
+    if (age < 0) continue;
+    if (age <= 7 * DAY_MS) last7d += 1;
+    else if (age <= 14 * DAY_MS) prior7d += 1;
+  }
+  return { last7d, prior7d };
+}
+
 export async function MemoriesPanel({
   orgId,
   workspaceId,
@@ -80,15 +100,7 @@ export async function MemoriesPanel({
     failed = true;
   }
 
-  const now = Date.now();
-  let last7d = 0;
-  let prior7d = 0;
-  for (const m of memories) {
-    const age = now - new Date(m.createdAt).getTime();
-    if (age < 0) continue;
-    if (age <= 7 * DAY_MS) last7d += 1;
-    else if (age <= 14 * DAY_MS) prior7d += 1;
-  }
+  const { last7d, prior7d } = countMemoryDeltas(memories);
 
   const recent = memories.slice(0, RECENT_ROWS);
 
