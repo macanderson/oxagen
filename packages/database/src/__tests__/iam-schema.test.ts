@@ -149,7 +149,10 @@ describe("principalRoleAssignments unique index", () => {
     const cfg = getTableConfig(principalRoleAssignments);
     const compositeIndex = cfg.indexes.find((idx) => {
       const colNames = idx.config.columns
-        .filter((c): c is { name: string } => typeof c === "object" && c !== null && "name" in c)
+        .filter(
+          (c): c is { name: string } =>
+            typeof c === "object" && c !== null && "name" in c,
+        )
         .map((c) => c.name);
       return colNames.includes("principal_id") && colNames.includes("role_id");
     });
@@ -167,6 +170,33 @@ describe("principalRoleAssignments unique index", () => {
   it("has an assigned_at column", () => {
     const cols = sqlColumnNames(principalRoleAssignments);
     expect(cols).toContain("assigned_at");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 6b. principals has a partial unique index on (org_id, parent_user_id)
+// ---------------------------------------------------------------------------
+
+describe("principals org/parent_user uniqueness", () => {
+  it("has a UNIQUE index on (org_id, parent_user_id)", () => {
+    const cfg = getTableConfig(principals);
+    const idx = cfg.indexes.find((i) => {
+      const colNames = i.config.columns
+        .filter(
+          (c): c is { name: string } =>
+            typeof c === "object" && c !== null && "name" in c,
+        )
+        .map((c) => c.name);
+      return colNames.includes("org_id") && colNames.includes("parent_user_id");
+    });
+    expect(
+      idx,
+      "Expected a unique index on (org_id, parent_user_id) in principals",
+    ).toBeDefined();
+    // Deterministic principal resolution in fetch-authz depends on uniqueness.
+    expect(idx?.config.unique).toBe(true);
+    // Partial: org-level service principals (parent_user_id NULL) are exempt.
+    expect(idx?.config.where).toBeDefined();
   });
 });
 

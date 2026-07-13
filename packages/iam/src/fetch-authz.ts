@@ -75,7 +75,11 @@ const UNRESOLVED_SERVICE_PRINCIPAL_ID = "00000000-0000-0000-0000-0000000000ff";
  * creator-inheritance path is the no-migration fix that unblocks API keys on
  * enterprise orgs today.
  */
-function denyAuthz(orgId: string, workspaceId: string, capability: string): AuthzData {
+function denyAuthz(
+  orgId: string,
+  workspaceId: string,
+  capability: string,
+): AuthzData {
   return {
     principal: {
       id: UNRESOLVED_SERVICE_PRINCIPAL_ID,
@@ -204,12 +208,19 @@ async function _fetchAuthz(args: FetchAuthzArgs): Promise<AuthzData> {
     }
 
     const principalRows = await tx
-      .select()
+      .select({
+        id: schema.principals.id,
+        kind: schema.principals.kind,
+        orgId: schema.principals.orgId,
+        workspaceId: schema.principals.workspaceId,
+      })
       .from(schema.principals)
       .where(
         and(
           eq(schema.principals.orgId, orgId),
-          // Match by the effective user's ID stored in parent_user_id.
+          // Match by the effective user's ID stored in parent_user_id. The
+          // partial unique index principals_org_parent_user_uniq makes this at
+          // most one row, so LIMIT 1 is deterministic.
           eq(schema.principals.parentUserId, effectiveUserId as string),
         ),
       )

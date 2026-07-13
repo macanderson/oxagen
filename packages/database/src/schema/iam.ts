@@ -65,6 +65,15 @@ export const principals = iamSchema.table(
     orgKindIdx: index("principals_org_kind_idx").on(t.orgId, t.kind),
     workspaceIdx: index("principals_workspace_idx").on(t.workspaceId),
     idpSubjectIdx: index("principals_idp_subject_idx").on(t.idpSubject),
+    // One principal per (org, delegated-human). fetch-authz.ts resolves a
+    // human/API-key to its principal via WHERE org_id=? AND parent_user_id=?
+    // LIMIT 1; without this, concurrent provisioning could insert duplicates
+    // and the LIMIT 1 would pick one non-deterministically (an owner could
+    // resolve to a role-less principal and be spuriously denied). Partial so
+    // org-level service principals (parent_user_id NULL) are unconstrained.
+    orgParentUserUniq: uniqueIndex("principals_org_parent_user_uniq")
+      .on(t.orgId, t.parentUserId)
+      .where(sql`${t.parentUserId} IS NOT NULL`),
     kindCheck: check(
       "principals_kind_check",
       sql`${t.kind} IN ('human', 'agent', 'service')`,
