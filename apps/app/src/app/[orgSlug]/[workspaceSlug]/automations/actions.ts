@@ -16,6 +16,7 @@ import "@oxagen/handlers/register";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { logger } from "@oxagen/handlers/logger";
+import { conditionTreeSchema } from "@oxagen/oxagen/trigger-conditions";
 import { workspace } from "@/lib/routes";
 import { resolveAutomationsScope } from "@/lib/automations/scope";
 import {
@@ -58,14 +59,27 @@ const propertyConditionSchema = z.object({
 });
 const triggerConfigSchema = z.object({
   entityType: z.string().optional(),
-  eventType: z.enum(["node.created", "node.updated", "node.deleted"]).optional(),
+  eventType: z
+    .enum(["node.created", "node.updated", "node.deleted"])
+    .optional(),
+  // Nested schema-driven condition tree (preferred). The full validator (depth
+  // guard + leaf/group shape) is reused from the shared trigger-conditions
+  // module; the contract re-validates on invoke.
+  conditionTree: conditionTreeSchema.optional(),
   propertyConditions: z.array(propertyConditionSchema).optional(),
   cronExpression: z.string().optional(),
   timezone: z.string().optional(),
 });
 const stepSchema = z.object({
   name: z.string().min(1),
-  stepType: z.enum(["agent", "tool", "condition", "webhook", "prompt", "human_input"]),
+  stepType: z.enum([
+    "agent",
+    "tool",
+    "condition",
+    "webhook",
+    "prompt",
+    "human_input",
+  ]),
   config: z.record(z.unknown()).optional(),
 });
 
@@ -84,12 +98,25 @@ export async function createAutomationAction(
 ): Promise<AutomationActionResult<{ automation: AutomationCreateOutput }>> {
   const parsed = createSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid input",
+    };
   }
-  const { orgSlug, workspaceSlug, name, description, triggerType, triggerConfig, steps } =
-    parsed.data;
+  const {
+    orgSlug,
+    workspaceSlug,
+    name,
+    description,
+    triggerType,
+    triggerConfig,
+    steps,
+  } = parsed.data;
 
-  const { ctx, canManage } = await resolveAutomationsScope(orgSlug, workspaceSlug);
+  const { ctx, canManage } = await resolveAutomationsScope(
+    orgSlug,
+    workspaceSlug,
+  );
   if (!canManage) return { ok: false, error: MANAGE_DENIED };
 
   try {
@@ -112,7 +139,8 @@ export async function createAutomationAction(
     );
     return {
       ok: false,
-      error: err instanceof Error ? err.message : "Failed to create the automation.",
+      error:
+        err instanceof Error ? err.message : "Failed to create the automation.",
     };
   }
 }
@@ -126,11 +154,17 @@ export async function enableAutomationAction(
 ): Promise<AutomationActionResult<{ result: AutomationEnableOutput }>> {
   const parsed = idSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid input",
+    };
   }
   const { orgSlug, workspaceSlug, automationId } = parsed.data;
 
-  const { ctx, canManage } = await resolveAutomationsScope(orgSlug, workspaceSlug);
+  const { ctx, canManage } = await resolveAutomationsScope(
+    orgSlug,
+    workspaceSlug,
+  );
   if (!canManage) return { ok: false, error: MANAGE_DENIED };
 
   try {
@@ -144,7 +178,8 @@ export async function enableAutomationAction(
     );
     return {
       ok: false,
-      error: err instanceof Error ? err.message : "Failed to enable the automation.",
+      error:
+        err instanceof Error ? err.message : "Failed to enable the automation.",
     };
   }
 }
@@ -156,11 +191,17 @@ export async function disableAutomationAction(
 ): Promise<AutomationActionResult<{ result: AutomationDisableOutput }>> {
   const parsed = idSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid input",
+    };
   }
   const { orgSlug, workspaceSlug, automationId } = parsed.data;
 
-  const { ctx, canManage } = await resolveAutomationsScope(orgSlug, workspaceSlug);
+  const { ctx, canManage } = await resolveAutomationsScope(
+    orgSlug,
+    workspaceSlug,
+  );
   if (!canManage) return { ok: false, error: MANAGE_DENIED };
 
   try {
@@ -174,7 +215,10 @@ export async function disableAutomationAction(
     );
     return {
       ok: false,
-      error: err instanceof Error ? err.message : "Failed to disable the automation.",
+      error:
+        err instanceof Error
+          ? err.message
+          : "Failed to disable the automation.",
     };
   }
 }
@@ -192,11 +236,17 @@ export async function triggerAutomationAction(
 ): Promise<AutomationActionResult<{ result: AutomationTriggerOutput }>> {
   const parsed = triggerSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid input",
+    };
   }
   const { orgSlug, workspaceSlug, automationId, payload } = parsed.data;
 
-  const { ctx, canManage } = await resolveAutomationsScope(orgSlug, workspaceSlug);
+  const { ctx, canManage } = await resolveAutomationsScope(
+    orgSlug,
+    workspaceSlug,
+  );
   if (!canManage) return { ok: false, error: MANAGE_DENIED };
 
   try {
@@ -210,7 +260,10 @@ export async function triggerAutomationAction(
     );
     return {
       ok: false,
-      error: err instanceof Error ? err.message : "Failed to trigger the automation.",
+      error:
+        err instanceof Error
+          ? err.message
+          : "Failed to trigger the automation.",
     };
   }
 }
@@ -230,12 +283,24 @@ export async function updateAutomationAction(
 ): Promise<AutomationActionResult<{ result: AutomationUpdateOutput }>> {
   const parsed = updateSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid input",
+    };
   }
-  const { orgSlug, workspaceSlug, automationId, name, description, triggerConfig } =
-    parsed.data;
+  const {
+    orgSlug,
+    workspaceSlug,
+    automationId,
+    name,
+    description,
+    triggerConfig,
+  } = parsed.data;
 
-  const { ctx, canManage } = await resolveAutomationsScope(orgSlug, workspaceSlug);
+  const { ctx, canManage } = await resolveAutomationsScope(
+    orgSlug,
+    workspaceSlug,
+  );
   if (!canManage) return { ok: false, error: MANAGE_DENIED };
 
   try {
@@ -246,7 +311,12 @@ export async function updateAutomationAction(
       triggerConfig,
     });
     revalidateAutomations(orgSlug, workspaceSlug);
-    revalidatePath(workspace.automations.automation({ orgSlug, workspaceSlug }, automationId));
+    revalidatePath(
+      workspace.automations.automation(
+        { orgSlug, workspaceSlug },
+        automationId,
+      ),
+    );
     return { ok: true, result };
   } catch (err) {
     logger.error(
@@ -255,7 +325,8 @@ export async function updateAutomationAction(
     );
     return {
       ok: false,
-      error: err instanceof Error ? err.message : "Failed to update the automation.",
+      error:
+        err instanceof Error ? err.message : "Failed to update the automation.",
     };
   }
 }

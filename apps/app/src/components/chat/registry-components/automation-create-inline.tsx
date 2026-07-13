@@ -30,11 +30,18 @@ import {
   enableAutomationInlineAction,
 } from "@/app/actions/automation-inline.action";
 import type { AutomationCreateOutput } from "@oxagen/oxagen/contracts/automation.create";
+import {
+  resolveConditionTree,
+  type ConditionNode,
+} from "@oxagen/oxagen/trigger-conditions";
+import {
+  SchemaConditionSection,
+  type EventType,
+} from "@/components/automations/condition-builder";
 import { cn } from "@/lib/utils";
 
 import {
   TRIGGER_TYPE_OPTIONS,
-  emptyCondition,
   emptyStep,
   type AutomationCreateInlineProps,
   type AutomationStep,
@@ -42,7 +49,6 @@ import {
   type PropertyCondition,
 } from "./automation-create-inline-types";
 import { CreatedState, EnabledState } from "./automation-create-inline-status";
-import { EventTriggerConfig } from "./automation-create-inline-event-config";
 import { ScheduleTriggerConfig } from "./automation-create-inline-schedule-config";
 import { StepsEditor } from "./automation-create-inline-steps";
 
@@ -57,6 +63,7 @@ export default function AutomationCreateInline({
   entityType: initialEntityType = "",
   eventType: initialEventType,
   propertyConditions: initialConditions,
+  conditionTree: initialConditionTree,
   cronExpression: initialCron = "",
   timezone: initialTimezone = "UTC",
   steps: initialSteps,
@@ -65,15 +72,24 @@ export default function AutomationCreateInline({
 }: AutomationCreateInlineProps): React.ReactElement {
   const [name, setName] = React.useState(suggestedName);
   const [description, setDescription] = React.useState(suggestedDescription);
-  const [triggerType, setTriggerType] = React.useState<"event" | "schedule" | "api">(
-    initialTriggerType,
-  );
+  const [triggerType, setTriggerType] = React.useState<
+    "event" | "schedule" | "api"
+  >(initialTriggerType);
   const [entityType, setEntityType] = React.useState(initialEntityType);
-  const [eventType, setEventType] = React.useState<"node.created" | "node.updated" | "node.deleted" | "">(
+  const [eventType, setEventType] = React.useState<EventType | "">(
     initialEventType ?? "",
   );
-  const [conditions, setConditions] = React.useState<PropertyCondition[]>(() =>
-    initialConditions && initialConditions.length > 0 ? initialConditions : [],
+  // Seed the schema-driven tree from an explicit conditionTree, else lift any
+  // legacy flat propertyConditions the agent scaffolded into an AND-group.
+  const [conditionTree, setConditionTree] = React.useState<ConditionNode>(() =>
+    resolveConditionTree({
+      conditionTree: initialConditionTree ?? null,
+      propertyConditions: (initialConditions ?? []).map((c) => ({
+        property: c.property,
+        operator: c.operator,
+        toValue: c.toValue,
+      })),
+    }),
   );
   const [cronExpression, setCronExpression] = React.useState(initialCron);
   const [timezone, setTimezone] = React.useState(initialTimezone);
@@ -84,9 +100,8 @@ export default function AutomationCreateInline({
   const [formState, setFormState] = React.useState<FormState>("editing");
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
   const [enableError, setEnableError] = React.useState<string | null>(null);
-  const [createdAutomation, setCreatedAutomation] = React.useState<AutomationCreateOutput | null>(
-    null,
-  );
+  const [createdAutomation, setCreatedAutomation] =
+    React.useState<AutomationCreateOutput | null>(null);
 
   const nameId = React.useId();
   const descId = React.useId();
@@ -98,22 +113,6 @@ export default function AutomationCreateInline({
 
   const isSubmitting = formState === "submitting";
   const isEnabling = formState === "enabling";
-
-  // ── Condition helpers ────────────────────────────────────────────────────────
-
-  function addCondition(): void {
-    setConditions((prev) => [...prev, emptyCondition()]);
-  }
-
-  function removeCondition(idx: number): void {
-    setConditions((prev) => prev.filter((_, i) => i !== idx));
-  }
-
-  function updateCondition(idx: number, patch: Partial<PropertyCondition>): void {
-    setConditions((prev) =>
-      prev.map((c, i) => (i === idx ? { ...c, ...patch } : c)),
-    );
-  }
 
   // ── Step helpers ─────────────────────────────────────────────────────────────
 
@@ -142,7 +141,9 @@ export default function AutomationCreateInline({
 
   // ── Submit ───────────────────────────────────────────────────────────────────
 
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>): Promise<void> {
+  async function handleSubmit(
+    e: React.FormEvent<HTMLFormElement>,
+  ): Promise<void> {
     e.preventDefault();
     setFormState("submitting");
     setErrorMessage(null);
@@ -156,15 +157,16 @@ export default function AutomationCreateInline({
       triggerConfig: {
         entityType: entityType.trim() !== "" ? entityType.trim() : undefined,
         eventType: eventType !== "" ? eventType : undefined,
-        propertyConditions:
-          conditions.length > 0
-            ? conditions.map((c) => ({
-                property: c.property,
-                operator: c.operator,
-                toValue: c.toValue !== "" ? c.toValue : undefined,
-              }))
+        // Only send the tree when it actually constrains anything — an empty
+        // root group matches vacuously, so omit it to keep the config clean.
+        conditionTree:
+          triggerType === "event" &&
+          conditionTree.kind === "group" &&
+          conditionTree.children.length > 0
+            ? conditionTree
             : undefined,
-        cronExpression: cronExpression.trim() !== "" ? cronExpression.trim() : undefined,
+        cronExpression:
+          cronExpression.trim() !== "" ? cronExpression.trim() : undefined,
         timezone: timezone.trim() !== "" ? timezone.trim() : undefined,
       },
       steps: steps.map((s) => ({
@@ -213,7 +215,9 @@ export default function AutomationCreateInline({
         fallbackName={name}
         enableError={enableError}
         isEnabling={isEnabling}
-        onEnable={() => { void handleEnable(); }}
+        onEnable={() => {
+          void handleEnable();
+        }}
       />
     );
   }
@@ -222,10 +226,7 @@ export default function AutomationCreateInline({
 
   if (formState === "enabled") {
     return (
-      <EnabledState
-        createdAutomation={createdAutomation}
-        fallbackName={name}
-      />
+      <EnabledState createdAutomation={createdAutomation} fallbackName={name} />
     );
   }
 
@@ -240,7 +241,9 @@ export default function AutomationCreateInline({
 
   return (
     <form
-      onSubmit={(e) => { void handleSubmit(e); }}
+      onSubmit={(e) => {
+        void handleSubmit(e);
+      }}
       aria-label="Create automation"
       className={cn(
         "rounded-2xl border border-border bg-card p-5 space-y-5 w-full max-w-lg",
@@ -249,8 +252,13 @@ export default function AutomationCreateInline({
     >
       {/* Header */}
       <div className="flex items-center gap-2.5">
-        <Zap className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-        <span className="text-sm font-semibold text-foreground">Create automation</span>
+        <Zap
+          className="h-4 w-4 shrink-0 text-muted-foreground"
+          aria-hidden="true"
+        />
+        <span className="text-sm font-semibold text-foreground">
+          Create automation
+        </span>
       </div>
 
       {/* Name */}
@@ -293,7 +301,10 @@ export default function AutomationCreateInline({
       {/* Trigger type */}
       <div className="space-y-1.5">
         <Label htmlFor={triggerTypeId} className="flex items-center gap-1.5">
-          <TriggerIcon className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+          <TriggerIcon
+            className="h-3.5 w-3.5 text-muted-foreground"
+            aria-hidden="true"
+          />
           Trigger type
         </Label>
         <Select
@@ -305,7 +316,11 @@ export default function AutomationCreateInline({
           name="triggerType"
           items={TRIGGER_TYPE_OPTIONS}
         >
-          <SelectTrigger id={triggerTypeId} aria-label="Trigger type" data-testid="trigger-type-select">
+          <SelectTrigger
+            id={triggerTypeId}
+            aria-label="Trigger type"
+            data-testid="trigger-type-select"
+          >
             <SelectValue placeholder="Select trigger type" />
           </SelectTrigger>
           <SelectPopup>
@@ -318,19 +333,18 @@ export default function AutomationCreateInline({
         </Select>
       </div>
 
-      {/* Event trigger config */}
+      {/* Event trigger config — schema-driven entity/event + condition tree. */}
       {triggerType === "event" && (
-        <EventTriggerConfig
+        <SchemaConditionSection
+          slugs={{ orgSlug, workspaceSlug }}
           entityType={entityType}
           onEntityTypeChange={setEntityType}
-          entityTypeId={entityTypeId}
           eventType={eventType}
           onEventTypeChange={setEventType}
-          eventTypeId={eventTypeId}
-          conditions={conditions}
-          onAddCondition={addCondition}
-          onRemoveCondition={removeCondition}
-          onUpdateCondition={updateCondition}
+          conditionTree={conditionTree}
+          onConditionTreeChange={setConditionTree}
+          entityFieldId={entityTypeId}
+          eventFieldId={eventTypeId}
           disabled={isSubmitting}
         />
       )}
