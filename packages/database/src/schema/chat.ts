@@ -1,4 +1,11 @@
-import { boolean, check, index, jsonb, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import {
+  check,
+  index,
+  jsonb,
+  text,
+  timestamp,
+  uuid,
+} from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { chatSchema } from "./_schemas";
 import { auditMixin, idMixin, orgScopeMixin, softDeleteMixin } from "./_mixins";
@@ -34,7 +41,10 @@ export const conversations = chatSchema.table(
   (t) => ({
     orgIdx: index("conversations_org_idx").on(t.orgId, t.workspaceId),
     userIdx: index("conversations_user_idx").on(t.userId),
-    statusCheck: check("conversations_status_check", sql`${t.status} IN ('active', 'archived', 'deleted')`),
+    statusCheck: check(
+      "conversations_status_check",
+      sql`${t.status} IN ('active', 'archived', 'deleted')`,
+    ),
     // The history nav lists a user's non-deleted conversations in a workspace
     // ordered by recency, split by archive state. This composite index serves
     // that scan without a sort: filter (workspaceId, userId, deletedAt,
@@ -61,18 +71,23 @@ export const messages = chatSchema.table(
     content: text("content").notNull(),
     contentBlocks: jsonb("content_blocks").notNull(),
     branchReason: text("branch_reason"),
-    isActiveInBranch: boolean("is_active_in_branch").notNull().default(true),
     metadata: jsonb("metadata").notNull().default(sql`'{}'::jsonb`),
   },
   (t) => ({
     // Spec §6.9: tree traversal needs (conversation_id, parent_message_id)
     // for fast walk-from-leaf-to-root reconstruction.
-    conversationParentIdx: index("messages_conversation_parent_idx").on(t.conversationId, t.parentMessageId),
+    conversationParentIdx: index("messages_conversation_parent_idx").on(
+      t.conversationId,
+      t.parentMessageId,
+    ),
     // The chat history loader filters conversation_id (+ tenant) and ORDER BYs
     // created_at DESC (chat.stream route, conversation-page). The parent index
     // above serves the equality but forces an in-memory sort on created_at;
     // this composite serves the equality + sort in one scan.
-    conversationCreatedIdx: index("messages_conversation_created_idx").on(t.conversationId, t.createdAt),
+    conversationCreatedIdx: index("messages_conversation_created_idx").on(
+      t.conversationId,
+      t.createdAt,
+    ),
     orgIdx: index("messages_org_idx").on(t.orgId, t.workspaceId),
   }),
 );

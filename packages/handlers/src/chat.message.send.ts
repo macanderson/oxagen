@@ -18,12 +18,14 @@ import { logger } from "./logger";
  * generated asynchronously using generateObjectFor. This happens in the
  * background and doesn't block the message send response.
  */
-export const chatMessageSendHandler: CapabilityHandler<typeof chatMessageSend> = async (
-  input,
-  ctx,
-) => {
+export const chatMessageSendHandler: CapabilityHandler<
+  typeof chatMessageSend
+> = async (input, ctx) => {
   if (!ctx.userId) {
-    logger.warn({ orgId: ctx.orgId }, "chat.message.send: rejected — no authenticated user");
+    logger.warn(
+      { orgId: ctx.orgId },
+      "chat.message.send: rejected — no authenticated user",
+    );
     throw new Error("chat.message.send requires an authenticated user");
   }
 
@@ -72,7 +74,6 @@ export const chatMessageSendHandler: CapabilityHandler<typeof chatMessageSend> =
         content: input.content,
         contentBlocks: input.contentBlocks,
         branchReason: input.branchReason,
-        isActiveInBranch: true,
         metadata: {},
         createdByUserId: ctx.userId,
         updatedByUserId: ctx.userId,
@@ -94,13 +95,13 @@ export const chatMessageSendHandler: CapabilityHandler<typeof chatMessageSend> =
         content: "",
         contentBlocks: [],
         branchReason: null,
-        isActiveInBranch: true,
         metadata: { status: "pending" },
         createdByUserId: ctx.userId,
         updatedByUserId: ctx.userId,
       })
       .returning({ id: schema.messages.id });
-    if (!assistantMessage) throw new Error("assistant message insert returned no row");
+    if (!assistantMessage)
+      throw new Error("assistant message insert returned no row");
 
     await tx
       .update(schema.conversations)
@@ -163,7 +164,9 @@ async function generateConversationTitleAsync(
 ): Promise<void> {
   try {
     const titleSchema = z.object({
-      title: z.string().describe("A concise 3-8 word title for this conversation"),
+      title: z
+        .string()
+        .describe("A concise 3-8 word title for this conversation"),
     });
 
     const { object } = await generateObjectFor({
