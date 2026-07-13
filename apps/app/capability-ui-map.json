@@ -375,8 +375,8 @@
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/knowledge/sources/connections-section.tsx",
       "entry": "ConnectionsSection RSC invoke(connection.list) → KnowledgeConnectionsClient",
       "testid": "connection-row-{publicId}",
-      "proof": null,
-      "verifiedAt": null,
+      "proof": "apps/app/e2e/knowledge-connect-wizard.spec.ts",
+      "verifiedAt": "2026-07-12",
       "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
     "get_graph_stats": {
