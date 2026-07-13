@@ -8,17 +8,27 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const chInsert = vi.fn(async (_table: string, _rows: readonly Record<string, unknown>[]) => {});
-const chSelect = vi.fn(async <T>(_q: { query: string; params?: Record<string, unknown> }) => ({
-  data: [] as T[],
-}));
+const chInsert = vi.fn(
+  async (_table: string, _rows: readonly Record<string, unknown>[]) => {},
+);
+const chSelect = vi.fn(
+  async <T>(_q: { query: string; params?: Record<string, unknown> }) => ({
+    data: [] as T[],
+  }),
+);
 
 vi.mock("./tenant", () => ({
-  chInsert: (table: string, rows: readonly Record<string, unknown>[]) => chInsert(table, rows),
-  chSelect: (q: { query: string; params?: Record<string, unknown> }) => chSelect(q),
+  chInsert: (table: string, rows: readonly Record<string, unknown>[]) =>
+    chInsert(table, rows),
+  chSelect: (q: { query: string; params?: Record<string, unknown> }) =>
+    chSelect(q),
 }));
 
-import { insertEvalItemResults, selectEvalItemResults } from "./eval-item-results";
+import {
+  insertEvalItemResults,
+  selectEvalItemResults,
+  selectEvalRunCostRollup,
+} from "./eval-item-results";
 import type { EvalItemResultRow } from "./eval-item-results";
 
 const row: EvalItemResultRow = {
@@ -64,11 +74,20 @@ describe("insertEvalItemResults", () => {
   });
 
   it("passes through multiple rows unmodified", async () => {
-    const second: EvalItemResultRow = { ...row, item_id: "item-2", passed: 0, status: "failed" };
+    const second: EvalItemResultRow = {
+      ...row,
+      item_id: "item-2",
+      passed: 0,
+      status: "failed",
+    };
     await insertEvalItemResults([row, second]);
     const [, rows] = chInsert.mock.calls[0]!;
     expect(rows).toHaveLength(2);
-    expect(rows[1]).toMatchObject({ item_id: "item-2", passed: 0, status: "failed" });
+    expect(rows[1]).toMatchObject({
+      item_id: "item-2",
+      passed: 0,
+      status: "failed",
+    });
   });
 });
 
@@ -78,7 +97,10 @@ describe("selectEvalItemResults", () => {
     const result = await selectEvalItemResults("run-1");
     expect(result).toEqual([row]);
     expect(chSelect).toHaveBeenCalledTimes(1);
-    const call = chSelect.mock.calls[0]![0] as { query: string; params?: Record<string, unknown> };
+    const call = chSelect.mock.calls[0]![0] as {
+      query: string;
+      params?: Record<string, unknown>;
+    };
     expect(call.query).toContain("FROM eval_item_results");
     expect(call.query).toContain("run_id = {runId:String}");
     expect(call.params).toEqual({ runId: "run-1" });
@@ -88,5 +110,67 @@ describe("selectEvalItemResults", () => {
     chSelect.mockResolvedValueOnce({ data: [] });
     const result = await selectEvalItemResults("run-empty");
     expect(result).toEqual([]);
+  });
+});
+
+describe("selectEvalRunCostRollup", () => {
+  it("no-ops to an empty map on an empty id list (does not query)", async () => {
+    const result = await selectEvalRunCostRollup([]);
+    expect(result.size).toBe(0);
+    expect(chSelect).not.toHaveBeenCalled();
+  });
+
+  it("groups by run_id and coerces string sums to numbers", async () => {
+    chSelect.mockResolvedValueOnce({
+      data: [
+        {
+          run_id: "run-1",
+          cost_usd_micros: "500",
+          input_tokens: "1000",
+          output_tokens: "400",
+        },
+        {
+          run_id: "run-2",
+          cost_usd_micros: 250,
+          input_tokens: 300,
+          output_tokens: 120,
+        },
+      ],
+    });
+    const result = await selectEvalRunCostRollup(["run-1", "run-2"]);
+    expect(result.get("run-1")).toEqual({
+      costUsdMicros: 500,
+      inputTokens: 1000,
+      outputTokens: 400,
+    });
+    expect(result.get("run-2")).toEqual({
+      costUsdMicros: 250,
+      inputTokens: 300,
+      outputTokens: 120,
+    });
+    const call = chSelect.mock.calls[0]![0] as {
+      query: string;
+      params?: Record<string, unknown>;
+    };
+    expect(call.query).toContain("FROM eval_item_results");
+    expect(call.query).toContain("run_id IN {runIds:Array(String)}");
+    expect(call.query).toContain("GROUP BY run_id");
+    expect(call.params).toEqual({ runIds: ["run-1", "run-2"] });
+  });
+
+  it("omits runs with no rows from the map (caller defaults them to zero)", async () => {
+    chSelect.mockResolvedValueOnce({
+      data: [
+        {
+          run_id: "run-1",
+          cost_usd_micros: "10",
+          input_tokens: "5",
+          output_tokens: "3",
+        },
+      ],
+    });
+    const result = await selectEvalRunCostRollup(["run-1", "run-missing"]);
+    expect(result.has("run-1")).toBe(true);
+    expect(result.has("run-missing")).toBe(false);
   });
 });

@@ -236,6 +236,8 @@ contract-first design, IAM enforcement, and instrumentation.
 - [eval.run.start](eval.run.start.md) — Start an eval run: enqueue a background job that runs every dataset item through a target and scores it with an LLM judge; async, metered through @oxagen/ai
 - [eval.run.status](eval.run.status.md) — Poll an eval run's lifecycle: status, progress counts, and mean score once available
 - [eval.run.get](eval.run.get.md) — Fetch an eval run's summary and per-item results: output, judge scores, pass/fail, tokens, latency, and cost
+- [eval.run.list](eval.run.list.md) — List eval runs with server-side date/status/model filtering, sorting, and pagination; rolls up per-run cost and token totals from the metering pipe
+- [eval.run.series](eval.run.series.md) — Bucketed score-over-time series plus a per-model breakdown (avg score, pass rate, time series) — the read that backs score-trend and model-comparison charts
 
 ## Form (1)
 

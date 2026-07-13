@@ -12,6 +12,8 @@
 //      *referenced* (the literal `${GITHUB_TOKEN}`) inside a double-quoted URL,
 //      then scrubbed from .git/config immediately after the clone.
 
+import { WORKSPACE_ROOT } from "@oxagen/sandbox";
+
 /** The per-repo shape persisted on session metadata and accepted by the clone composer. */
 export interface SessionRepoRef {
   owner: string;
@@ -20,7 +22,7 @@ export interface SessionRepoRef {
 }
 
 /**
- * Deterministic /workspace directory name per repo. The base name is the repo;
+ * Deterministic /work directory name per repo. The base name is the repo;
  * the first collision on a bare repo name is disambiguated with an `-<owner>`
  * suffix, and any further collision appends a numeric suffix — so the mapping is
  * always total and unique regardless of duplicate or same-named inputs.
@@ -43,7 +45,7 @@ export interface ComposeRepoCloneOptions {
 }
 
 /**
- * Compose the `&&`-chained shell script that clones every repo into /workspace.
+ * Compose the `&&`-chained shell script that clones every repo into /work.
  * Returns "" when there are no repos. The whole chain is joined with `&&` so a
  * failure at any step short-circuits the rest and exits non-zero, which the
  * runner surfaces as a 422 instead of returning a half-provisioned sandbox.
@@ -58,9 +60,9 @@ export function composeRepoCloneScript(
 ): string {
   if (repos.length === 0) return "";
   const dirs = resolveRepoDirs(repos);
-  const steps: string[] = ["mkdir -p /workspace"];
+  const steps: string[] = [`mkdir -p ${WORKSPACE_ROOT}`];
   repos.forEach((r, i) => {
-    const path = `/workspace/${dirs[i]!}`;
+    const path = `${WORKSPACE_ROOT}/${dirs[i]!}`;
     // Token URL uses DOUBLE quotes so $GITHUB_TOKEN expands at runtime; owner/repo
     // are charset-validated so no shell-active char can appear inside. Only the
     // literal `${GITHUB_TOKEN}` is emitted — never the token value.

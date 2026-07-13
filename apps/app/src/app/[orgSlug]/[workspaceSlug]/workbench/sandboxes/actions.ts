@@ -42,6 +42,10 @@ import {
   type SandboxRenameResult,
 } from "@/lib/workbench/sandboxes";
 import { templateById } from "@/components/sandbox/warm-up-templates";
+import {
+  PACKAGE_MANAGERS,
+  isValidPackageToken,
+} from "@/components/sandbox/sandbox-runtimes";
 
 const scopeShape = {
   orgSlug: z.string().min(1),
@@ -73,12 +77,22 @@ function seedSessionKey(name: string): string {
   return `sbx_${slug || "sandbox"}_${crypto.randomUUID().slice(0, 8)}`;
 }
 
-/** A single repo to clone into `/workspace/<repo>` while the sandbox provisions. */
+/** A single repo to clone into `/work/<repo>` while the sandbox provisions. */
 const repoRefSchema = z.object({
   owner: z.string().trim().min(1).max(200),
   repo: z.string().trim().min(1).max(200),
   /** Defaults to the repo's default branch server-side when omitted. */
   branch: z.string().trim().min(1).max(200).optional(),
+});
+
+/**
+ * Packages to install once at warm time, grouped by manager. Names are
+ * re-validated to a safe charset server-side (defense in depth) before they can
+ * reach the composed shell command — only applied to the built-in presets.
+ */
+const setupPackageGroupSchema = z.object({
+  manager: z.enum(["npm", "pip", "apt"]),
+  names: z.array(z.string().trim().min(1).max(214)).max(50),
 });
 
 const startSchema = z.object({
@@ -96,7 +110,32 @@ const startSchema = z.object({
   sessionKey: z.string().min(1).max(200).optional(),
   /** As many repos as the caller wants pre-cloned, capped well below any driver limit. */
   repos: z.array(repoRefSchema).max(8).optional(),
+  /** Optional warm-time package installs (preset path only). */
+  setupPackages: z.array(setupPackageGroupSchema).max(3).optional(),
 });
+
+/**
+ * Compose the `&&`-chained install commands for the requested package groups,
+ * rejecting any token that isn't a valid package name so nothing shell-active
+ * can be smuggled into the setup command. Returns the install segments (may be
+ * empty) or throws with a clear message on the first invalid token.
+ */
+function composeSetupInstalls(
+  groups: z.infer<typeof setupPackageGroupSchema>[] | undefined,
+): string[] {
+  if (!groups || groups.length === 0) return [];
+  const steps: string[] = [];
+  for (const group of groups) {
+    const names = group.names.map((n) => n.trim()).filter((n) => n.length > 0);
+    if (names.length === 0) continue;
+    const invalid = names.filter((n) => !isValidPackageToken(n));
+    if (invalid.length > 0) {
+      throw new Error(`Invalid package name: ${invalid.join(", ")}`);
+    }
+    steps.push(PACKAGE_MANAGERS[group.manager].install(names));
+  }
+  return steps;
+}
 
 export async function startSandboxAction(
   input: z.input<typeof startSchema>,
@@ -108,8 +147,15 @@ export async function startSandboxAction(
       error: parsed.error.issues[0]?.message ?? "Invalid input.",
     };
   }
-  const { orgSlug, workspaceSlug, name, templateId, sessionKey, repos } =
-    parsed.data;
+  const {
+    orgSlug,
+    workspaceSlug,
+    name,
+    templateId,
+    sessionKey,
+    repos,
+    setupPackages,
+  } = parsed.data;
   const { ctx, canManage } = await resolveWorkbenchScope(
     orgSlug,
     workspaceSlug,
@@ -128,6 +174,16 @@ export async function startSandboxAction(
   // bare slug. A saved template governs provider/runtime/resources server-side,
   // so we pass its id through (previously dropped) and let the base image default.
   const isSavedTemplate = templateId.startsWith("sbx_");
+
+  let installSteps: string[];
+  try {
+    // Warm-time package installs apply to presets only; a saved template owns
+    // its own setup. Validate + compose (throws on an invalid token).
+    installSteps = isSavedTemplate ? [] : composeSetupInstalls(setupPackages);
+  } catch (err) {
+    return { ok: false, error: errMessage(err, "Invalid package selection.") };
+  }
+
   const startInput = isSavedTemplate
     ? {
         label: name,
@@ -138,12 +194,17 @@ export async function startSandboxAction(
       }
     : (() => {
         const template = templateById(templateId);
+        // Preset setup first, then the requested installs — both run once at
+        // create time (the handler runs the whole chain in the workspace root).
+        const setupParts = [
+          template.setupCmd.length > 0 ? template.setupCmd : "",
+          ...installSteps,
+        ].filter((s) => s.length > 0);
         return {
           image: template.image,
           label: name,
           sessionKey: key,
-          setupCmd:
-            template.setupCmd.length > 0 ? template.setupCmd : undefined,
+          setupCmd: setupParts.length > 0 ? setupParts.join(" && ") : undefined,
           network: "allow" as const,
           repos,
         };

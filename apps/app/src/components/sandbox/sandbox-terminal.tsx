@@ -84,6 +84,13 @@ export interface SandboxTerminalProps {
   /** Durable-session id (sbx_…) — shown in the prompt, not otherwise used here. */
   sessionId: string;
   runCommand: RunCommandFn;
+  /**
+   * Working directory the session starts in — shown in the prompt and threaded
+   * into the first command so a `cd`-less `ls` lands where the files actually
+   * live (the workspace root, `/work`). Falls back to the last history row's
+   * cwd, then to the image default. A later command's reported cwd overrides it.
+   */
+  initialCwd?: string;
   /** Pre-seed the scrollback (e.g. a warm-up command's output). */
   initialHistory?: TerminalEntry[];
   /** Disable input (e.g. session stopped, or viewer lacks manage rights). */
@@ -171,6 +178,7 @@ function PromptGlyph({
 export function SandboxTerminal({
   sessionId,
   runCommand,
+  initialCwd,
   initialHistory = [],
   disabled = false,
   welcome,
@@ -189,16 +197,19 @@ export function SandboxTerminal({
   // state (for the live prompt). Survives command→command but resets on a full
   // page refresh, which remounts this component — exactly the requested
   // lifetime. Seeded from the last history row that carried a cwd.
-  const initialCwd = useMemo(() => {
+  const seededCwd = useMemo(() => {
+    // An explicit initialCwd (the workspace root) wins; otherwise fall back to
+    // the last history row that carried a cwd, then the image default.
+    if (initialCwd) return initialCwd;
     for (let i = initialHistory.length - 1; i >= 0; i--) {
       const c = initialHistory[i]?.cwd;
       if (c) return c;
     }
     return undefined;
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- seed once from the initial prop
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- seed once from the initial props
   }, []);
-  const cwdRef = useRef<string | undefined>(initialCwd);
-  const [cwd, setCwd] = useState<string | undefined>(initialCwd);
+  const cwdRef = useRef<string | undefined>(seededCwd);
+  const [cwd, setCwd] = useState<string | undefined>(seededCwd);
 
   // FIFO queue of not-yet-started commands and a single-flight drain guard.
   const queueRef = useRef<Array<{ key: number; command: string }>>([]);

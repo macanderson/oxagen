@@ -172,6 +172,70 @@ describe("startSandboxAction", () => {
     expect(arg.setupCmd).toBeUndefined();
   });
 
+  it("appends warm-time npm packages to the preset setupCmd", async () => {
+    resolveWorkbenchScope.mockResolvedValue(scope(true));
+    startSandbox.mockResolvedValue({ sessionId: "sbx_pkg", reused: false });
+    await startSandboxAction({
+      ...SCOPE,
+      name: "node deps",
+      templateId: "node",
+      setupPackages: [{ manager: "npm", names: ["express", "zod"] }],
+    });
+    const [, arg] = startSandbox.mock.calls[0] as [
+      unknown,
+      { setupCmd?: string },
+    ];
+    expect(arg.setupCmd).toContain("npm install express zod");
+    // The preset's own setup still runs first, joined with the install via &&.
+    expect(arg.setupCmd).toMatch(/npm init.*&&.*npm install express zod/s);
+  });
+
+  it("composes a pip install for a python preset", async () => {
+    resolveWorkbenchScope.mockResolvedValue(scope(true));
+    startSandbox.mockResolvedValue({ sessionId: "sbx_py", reused: false });
+    await startSandboxAction({
+      ...SCOPE,
+      name: "py deps",
+      templateId: "python",
+      setupPackages: [{ manager: "pip", names: ["requests", "pydantic==2.5"] }],
+    });
+    const [, arg] = startSandbox.mock.calls[0] as [
+      unknown,
+      { setupCmd?: string },
+    ];
+    expect(arg.setupCmd).toContain("pip install requests pydantic==2.5");
+  });
+
+  it("rejects a shell-active package token before warming", async () => {
+    resolveWorkbenchScope.mockResolvedValue(scope(true));
+    const res = await startSandboxAction({
+      ...SCOPE,
+      name: "evil box",
+      templateId: "node",
+      setupPackages: [{ manager: "npm", names: ["express; rm -rf /"] }],
+    });
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error).toMatch(/invalid package/i);
+    expect(startSandbox).not.toHaveBeenCalled();
+  });
+
+  it("ignores warm-time packages for a saved template", async () => {
+    resolveWorkbenchScope.mockResolvedValue(scope(true));
+    startSandbox.mockResolvedValue({ sessionId: "sbx_st", reused: false });
+    await startSandboxAction({
+      ...SCOPE,
+      name: "saved box",
+      templateId: "sbx_tmpl",
+      setupPackages: [{ manager: "npm", names: ["express"] }],
+    });
+    const [, arg] = startSandbox.mock.calls[0] as [
+      unknown,
+      { setupCmd?: string; sandboxTemplateId?: string },
+    ];
+    expect(arg.sandboxTemplateId).toBe("sbx_tmpl");
+    expect(arg.setupCmd).toBeUndefined();
+  });
+
   it("flags the unavailable-driver case", async () => {
     resolveWorkbenchScope.mockResolvedValue(scope(true));
     startSandbox.mockRejectedValue(new Error("Durable sandbox not available"));

@@ -7,7 +7,6 @@ import { PageContextProvider } from "@/lib/page-context";
 import { CommandMenu } from "@/components/shell/ask/command-menu";
 import { FillOverlay } from "@/components/shell/ask/fill-overlay";
 import type { ResolvedOrg } from "@/lib/resolve-org";
-import { AccountTabs } from "./account-tabs";
 
 export default async function AccountLayout({
   children,
@@ -30,7 +29,10 @@ export default async function AccountLayout({
         id: schema.organizations.id,
       })
       .from(schema.orgUsers)
-      .innerJoin(schema.organizations, eq(schema.organizations.id, schema.orgUsers.orgId))
+      .innerJoin(
+        schema.organizations,
+        eq(schema.organizations.id, schema.orgUsers.orgId),
+      )
       .where(eq(schema.orgUsers.userId, session.user.id)),
   );
 
@@ -80,7 +82,10 @@ export default async function AccountLayout({
         user={user}
         agentBar={false}
       >
-        <AccountTabs />
+        {/* Account navigation lives solely in the mode-aware AppShell sidebar
+            (account mode: Profile / Preferences / Security / Privacy) and its
+            mobile bottom-bar equivalent — there is deliberately NO in-page
+            secondary tab strip, which merely duplicated the sidebar. */}
         {children}
       </AppShell>
 

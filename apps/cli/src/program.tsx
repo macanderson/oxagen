@@ -2539,6 +2539,80 @@ export function buildProgram(): Command {
       const { evalRunGet } = await import("./commands/eval.js");
       await evalRunGet(runId, opts);
     });
+  evalCmd
+    .command("runs-list")
+    .description(
+      "List eval runs with date/status/model filters, sorting, and pagination",
+    )
+    .option("--dataset <id>", "Restrict to one dataset (its public id)")
+    .option("--since <iso>", "Only runs created at/after this ISO datetime")
+    .option("--until <iso>", "Only runs created at/before this ISO datetime")
+    .option(
+      "--status <state>",
+      "pending|queued|running|completed|failed|cancelled",
+    )
+    .option("--model <slug>", "Only runs whose target model matches exactly")
+    .option("--sort <key>", "score|created|model|status (default created)")
+    .option("--dir <dir>", "asc|desc (default desc)")
+    .option("--limit <n>", "Page size (1-100, default 25)")
+    .option("--offset <n>", "Page offset (default 0)")
+    .option("--json", "Output JSON")
+    .action(
+      async (opts: {
+        dataset?: string;
+        since?: string;
+        until?: string;
+        status?: string;
+        model?: string;
+        sort?: string;
+        dir?: string;
+        limit?: string;
+        offset?: string;
+        json?: boolean;
+      }) => {
+        const { evalRunsList } = await import("./commands/eval.js");
+        await evalRunsList({
+          dataset: opts.dataset,
+          since: opts.since,
+          until: opts.until,
+          status: opts.status,
+          model: opts.model,
+          sort: opts.sort,
+          dir: opts.dir,
+          limit: opts.limit ? Number(opts.limit) : undefined,
+          offset: opts.offset ? Number(opts.offset) : undefined,
+          json: opts.json,
+        });
+      },
+    );
+  evalCmd
+    .command("runs-series")
+    .description(
+      "Bucketed score-over-time series plus a per-model breakdown for charts",
+    )
+    .option("--dataset <id>", "Restrict to one dataset (its public id)")
+    .option("--since <iso>", "Only runs created at/after this ISO datetime")
+    .option("--until <iso>", "Only runs created at/before this ISO datetime")
+    .option("--bucket <unit>", "day|week (default day)")
+    .option("--json", "Output JSON")
+    .action(
+      async (opts: {
+        dataset?: string;
+        since?: string;
+        until?: string;
+        bucket?: string;
+        json?: boolean;
+      }) => {
+        const { evalRunsSeries } = await import("./commands/eval.js");
+        await evalRunsSeries({
+          dataset: opts.dataset,
+          since: opts.since,
+          until: opts.until,
+          bucket: opts.bucket,
+          json: opts.json,
+        });
+      },
+    );
 
   // ── router: Verified-Outcome Market Router ──────────────────────────────────
 
@@ -2617,7 +2691,10 @@ export function buildProgram(): Command {
     .option("--threshold <n>", "Verified-success threshold 0..1 (e.g. 0.95)")
     .option("--min-samples <n>", "Minimum samples before a model is trusted")
     .option("--window <days>", "Trailing stats window in days")
-    .option("--escalate <bool>", "Escalate a tier on judge rejection (true/false)")
+    .option(
+      "--escalate <bool>",
+      "Escalate a tier on judge rejection (true/false)",
+    )
     .option("--json", "Output JSON")
     .action(
       async (opts: {
@@ -2631,9 +2708,16 @@ export function buildProgram(): Command {
       }) => {
         const { routerPolicySet } = await import("./commands/router.js");
         await routerPolicySet({
-          scope: opts.scope === "org" ? "org" : opts.scope === "workspace" ? "workspace" : undefined,
+          scope:
+            opts.scope === "org"
+              ? "org"
+              : opts.scope === "workspace"
+                ? "workspace"
+                : undefined,
           mode:
-            opts.mode === "off" || opts.mode === "shadow" || opts.mode === "enforce"
+            opts.mode === "off" ||
+            opts.mode === "shadow" ||
+            opts.mode === "enforce"
               ? opts.mode
               : undefined,
           threshold: opts.threshold ? Number(opts.threshold) : undefined,
