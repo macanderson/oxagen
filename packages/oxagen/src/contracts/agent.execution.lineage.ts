@@ -30,7 +30,9 @@ const touchedFileEntry = z.object({
   ),
   edgeType: z
     .string()
-    .describe("Relationship type connecting the execution to the file (TOUCHED_FILE)"),
+    .describe(
+      "Relationship type connecting the execution to the file (TOUCHED_FILE)",
+    ),
 });
 
 export const agentExecutionLineage = registerCapability({
@@ -40,9 +42,13 @@ export const agentExecutionLineage = registerCapability({
     "Get one agent execution's file-level lineage as a graph — the :Execution node plus every :SourceFile it touched via TOUCHED_FILE edges. Proves, as a real queryable graph, exactly which files an agent run modified.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"] as const,
-  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
+  layers: ["schema", "api", "mcp", "unit", "docs"],
   scoped: true,
-  agent: { requiresApproval: false, riskLevel: "low", category: "introspection" },
+  agent: {
+    requiresApproval: false,
+    riskLevel: "low",
+    category: "introspection",
+  },
   sensitivity: "low",
   defaultEffect: "deny",
   defaultRoles: {
@@ -52,20 +58,32 @@ export const agentExecutionLineage = registerCapability({
   input: z.object({
     executionId: z
       .string()
-      .describe("publicId / id of the :Execution graph node whose lineage to fetch"),
+      .describe(
+        "publicId / id of the :Execution graph node whose lineage to fetch",
+      ),
   }),
   output: z.object({
     found: z
       .boolean()
-      .describe("True if the execution exists as a node in this org + workspace"),
+      .describe(
+        "True if the execution exists as a node in this org + workspace",
+      ),
     execution: knowledgeNodeRefSchema
       .nullable()
-      .describe("The execution node, resolved to a citable KnowledgeNodeRef; null when not found"),
+      .describe(
+        "The execution node, resolved to a citable KnowledgeNodeRef; null when not found",
+      ),
     files: z
       .array(touchedFileEntry)
-      .describe("Every source file this execution touched, with its TOUCHED_FILE edge"),
+      .describe(
+        "Every source file this execution touched, with its TOUCHED_FILE edge",
+      ),
   }),
 });
 
-export type AgentExecutionLineageInput = z.output<typeof agentExecutionLineage.input>;
-export type AgentExecutionLineageOutput = z.output<typeof agentExecutionLineage.output>;
+export type AgentExecutionLineageInput = z.output<
+  typeof agentExecutionLineage.input
+>;
+export type AgentExecutionLineageOutput = z.output<
+  typeof agentExecutionLineage.output
+>;

@@ -15,6 +15,7 @@ const template = {
   network: { mode: "public" as const },
   secretSelection: "all" as const,
   literalEnv: {},
+  packages: [],
   tools: [],
 };
 
@@ -24,9 +25,13 @@ describe("sandbox.template.list contract", () => {
   });
   it("accepts an empty input and an environmentId filter", () => {
     expect(() => sandboxTemplateList.input.parse({})).not.toThrow();
-    expect(() => sandboxTemplateList.input.parse({ environmentId: "env_1" })).not.toThrow();
+    expect(() =>
+      sandboxTemplateList.input.parse({ environmentId: "env_1" }),
+    ).not.toThrow();
   });
   it("accepts a valid output array", () => {
-    expect(() => sandboxTemplateList.output.parse({ templates: [template] })).not.toThrow();
+    expect(() =>
+      sandboxTemplateList.output.parse({ templates: [template] }),
+    ).not.toThrow();
   });
 });

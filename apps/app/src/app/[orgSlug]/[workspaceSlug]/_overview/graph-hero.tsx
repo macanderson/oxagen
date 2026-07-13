@@ -23,7 +23,7 @@ import Link from "next/link";
 import { Network, Boxes, GitGraph, Sparkles, Github, Plug } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { workspace } from "@/lib/routes";
-import { EmptyState } from "../_shared/components";
+import { EmptyState, ErrorState } from "../_shared/components";
 import { GraphMiniViz } from "./graph-mini-viz";
 import type { MiniEdge, MiniNode } from "./graph-mini-canvas";
 import { DeltaChip } from "./hud/delta-chip";
@@ -177,6 +177,13 @@ export async function GraphHero({
     </div>
   );
 
+  // The stats + export reads back the node counts and the mini-viz — the core
+  // of the panel. If BOTH reject (e.g. a graph-store outage) we can't tell an
+  // empty graph from an unreachable one, so surface an error rather than
+  // falsely claiming "No graph data yet". Per-cell fail-open is preserved for
+  // partial failures (e.g. only connection.list or suggest_semantic_edges).
+  const coreFailed =
+    statsRes.status !== "fulfilled" && exportRes.status !== "fulfilled";
   const isEmpty = (stats?.nodeCount ?? 0) === 0 && nodes.length === 0;
 
   const cells: StatCell[] = [
@@ -201,7 +208,12 @@ export async function GraphHero({
     <Card className="flex flex-col gap-4 p-4" data-testid="overview-graph-hero">
       {header}
 
-      {isEmpty ? (
+      {coreFailed ? (
+        <ErrorState
+          title="Knowledge graph unavailable"
+          description="Could not load your knowledge graph. This is usually temporary — try again shortly."
+        />
+      ) : isEmpty ? (
         <EmptyState
           icon={Network}
           title="No graph data yet"

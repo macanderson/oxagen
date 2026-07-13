@@ -18,9 +18,11 @@ import {
   sandboxProviderSchema,
   sandboxResourcesSchema,
   sandboxNetworkModeSchema,
+  sandboxPackageManagerSchema,
   sandboxToolKindSchema,
   type SandboxProvider,
   type SandboxNetworkMode,
+  type SandboxPackageManager,
   type SandboxToolKind,
 } from "@oxagen/oxagen/contracts/sandbox-template-manifest";
 
@@ -156,6 +158,33 @@ export const NETWORK_MODE_META: Record<
     help: "Route through an SSH bastion host you control.",
     provisionable: false,
   },
+};
+
+// ── Package managers — options derived from sandboxPackageManagerSchema.
+// Adding a manager to the schema enum automatically extends this dropdown; the
+// per-manager copy below is keyed by the union member so TypeScript fails the
+// build if the schema gains/loses a manager and this file isn't updated. The
+// `placeholder` is the example spec shown in the chip input for that ecosystem
+// (a name, optionally with that ecosystem's own version-pin syntax). ─────────
+
+export const PACKAGE_MANAGER_OPTIONS = schemaEnumOptions<SandboxPackageManager>(
+  sandboxPackageManagerSchema,
+);
+
+export const PACKAGE_MANAGER_META: Record<
+  SandboxPackageManager,
+  { label: string; placeholder: string }
+> = {
+  apt: { label: "apt", placeholder: "git curl ripgrep" },
+  cargo: { label: "cargo", placeholder: "ripgrep serde@1" },
+  gem: { label: "gem", placeholder: "rails bundler" },
+  go: { label: "go", placeholder: "github.com/user/pkg@latest" },
+  npm: { label: "npm", placeholder: "react next typescript" },
+  pnpm: { label: "pnpm", placeholder: "react next typescript" },
+  yarn: { label: "yarn", placeholder: "react next typescript" },
+  pip: { label: "pip", placeholder: "fastapi pydantic==2.5" },
+  poetry: { label: "poetry", placeholder: "fastapi pydantic@^2.5" },
+  uv: { label: "uv", placeholder: "fastapi pydantic==2.5" },
 };
 
 // ── Tool kinds — options derived from sandboxToolKindSchema ──────────────────

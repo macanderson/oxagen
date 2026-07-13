@@ -44,6 +44,7 @@ import { IdentitySection } from "@/components/sandbox/templates/identity-section
 import { ProviderRuntimeSection } from "@/components/sandbox/templates/provider-runtime-section";
 import { ResourcesSection } from "@/components/sandbox/templates/resources-section";
 import { NetworkSection } from "@/components/sandbox/templates/network-section";
+import { PackagesSection } from "@/components/sandbox/templates/packages-section";
 import { SecretsEnvSection } from "@/components/sandbox/templates/secrets-env-section";
 import { ToolsSection } from "@/components/sandbox/templates/tools-section";
 import { DefaultsSection } from "@/components/sandbox/templates/defaults-section";
@@ -58,6 +59,7 @@ import {
   buildLiteralEnv,
   buildSecretSelection,
   cleanTools,
+  cleanPackages,
   validateManifestInput,
   type ManifestFieldError,
   type TemplateFormState,
@@ -88,6 +90,7 @@ interface Props {
       network?: SandboxTemplateSummary["network"];
       secretSelection?: SandboxTemplateSummary["secretSelection"];
       literalEnv?: SandboxTemplateSummary["literalEnv"];
+      packages?: SandboxTemplateSummary["packages"];
       tools?: SandboxTemplateTool[];
       setAsDefault?: boolean;
     },
@@ -104,6 +107,7 @@ interface Props {
       network?: SandboxTemplateSummary["network"];
       secretSelection?: SandboxTemplateSummary["secretSelection"];
       literalEnv?: SandboxTemplateSummary["literalEnv"];
+      packages?: SandboxTemplateSummary["packages"];
       isActive?: boolean;
     },
   ) => Promise<ActionResult<{ template: SandboxTemplateSummary }>>;
@@ -484,6 +488,7 @@ function TemplateDialog({
       const network = {
         mode: state.networkMode,
       } as SandboxTemplateSummary["network"];
+      const packages = cleanPackages(state);
       const tools = cleanTools(state);
 
       if (mode === "create") {
@@ -499,6 +504,7 @@ function TemplateDialog({
           network,
           secretSelection,
           literalEnv,
+          packages,
           tools,
           setAsDefault,
         });
@@ -520,6 +526,7 @@ function TemplateDialog({
         network,
         secretSelection,
         literalEnv,
+        packages,
       });
       if (!res.ok) {
         setError(res.error);
@@ -602,6 +609,11 @@ function TemplateDialog({
               <NetworkSection
                 networkMode={state.networkMode}
                 onNetworkModeChange={(networkMode) => patch({ networkMode })}
+              />
+
+              <PackagesSection
+                packages={state.packages}
+                onPackagesChange={(packages) => patch({ packages })}
               />
 
               <SecretsEnvSection
@@ -782,6 +794,10 @@ function ImportDialog({
                 <dd>{parsed.provider}</dd>
                 <dt>network</dt>
                 <dd>{parsed.network.mode}</dd>
+                <dt>packages</dt>
+                <dd>
+                  {parsed.packages.reduce((n, g) => n + g.names.length, 0)}
+                </dd>
                 <dt>tools</dt>
                 <dd>{parsed.tools.length}</dd>
                 <dt>secret keys</dt>
