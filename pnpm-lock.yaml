@@ -998,6 +998,9 @@ importers:
       '@oxagen/config':
         specifier: workspace:*
         version: link:../config
+      '@oxagen/oxagen':
+        specifier: workspace:*
+        version: link:../oxagen
       '@oxagen/telemetry':
         specifier: workspace:*
         version: link:../telemetry
