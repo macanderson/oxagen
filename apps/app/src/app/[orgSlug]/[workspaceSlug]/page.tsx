@@ -15,9 +15,12 @@ import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
 import { PageHeader } from "@/components/ui/page-header";
 import { Section, LoadingState } from "./_shared/components";
-import { SpendTile } from "./_overview/spend-section";
-import { RunsTile } from "./_overview/runs-section";
-import { GraphTile } from "./_overview/graph-section";
+import { MeteringKpiStrip } from "./_overview/metering-kpi-strip";
+import { GraphHero } from "./_overview/graph-hero";
+import { ActivityPanel } from "./_overview/activity-panel";
+import { AutomationsPanel } from "./_overview/automations-panel";
+import { UsagePanel } from "./_overview/usage-panel";
+import { MemoriesPanel } from "./_overview/memories-panel";
 import { SourcesTile } from "./_overview/sources-section";
 import { ReviewLinks } from "./_overview/review-links";
 
@@ -50,15 +53,26 @@ export default async function WorkspaceOverviewPage({ params }: PageProps) {
         description="Spend, activity, graph grounding, and source health for this workspace."
       />
 
+      <Section fallback={<LoadingState variant="cards" />}>
+        <MeteringKpiStrip {...tileProps} />
+      </Section>
+
+      <Section fallback={<LoadingState variant="cards" />}>
+        <GraphHero {...tileProps} />
+      </Section>
+
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <Section fallback={<LoadingState variant="cards" />}>
-          <SpendTile {...tileProps} />
+          <ActivityPanel {...tileProps} />
         </Section>
         <Section fallback={<LoadingState variant="cards" />}>
-          <RunsTile {...tileProps} />
+          <AutomationsPanel {...tileProps} />
         </Section>
         <Section fallback={<LoadingState variant="cards" />}>
-          <GraphTile {...tileProps} />
+          <UsagePanel {...tileProps} />
+        </Section>
+        <Section fallback={<LoadingState variant="cards" />}>
+          <MemoriesPanel {...tileProps} />
         </Section>
         <Section fallback={<LoadingState variant="cards" />}>
           <SourcesTile {...tileProps} />
