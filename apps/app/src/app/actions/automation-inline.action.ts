@@ -11,10 +11,18 @@ import { invoke } from "@oxagen/oxagen";
 // Bind every foundation handler into the shared kernel so invoke() resolves at
 // runtime without needing the caller to know which package owns the handler.
 import "@oxagen/handlers/register";
-import type { AutomationCreateInput, AutomationCreateOutput } from "@oxagen/oxagen/contracts/automation.create";
+import type { ConditionNode } from "@oxagen/oxagen/trigger-conditions";
+import type {
+  AutomationCreateInput,
+  AutomationCreateOutput,
+} from "@oxagen/oxagen/contracts/automation.create";
 import type { AutomationEnableOutput } from "@oxagen/oxagen/contracts/automation.enable";
 import { getSessionOrRedirect } from "@/lib/session";
-import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
+import {
+  resolveOrg,
+  resolveWorkspace,
+  assertOrgMember,
+} from "@/lib/resolve-org";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -32,12 +40,19 @@ export interface AutomationCreateInlineInput {
       operator: "eq" | "gt" | "lt" | "changed";
       toValue?: unknown;
     }>;
+    conditionTree?: ConditionNode;
     cronExpression?: string;
     timezone?: string;
   };
   steps?: Array<{
     name: string;
-    stepType: "agent" | "tool" | "condition" | "webhook" | "prompt" | "human_input";
+    stepType:
+      | "agent"
+      | "tool"
+      | "condition"
+      | "webhook"
+      | "prompt"
+      | "human_input";
     config?: Record<string, unknown>;
   }>;
 }

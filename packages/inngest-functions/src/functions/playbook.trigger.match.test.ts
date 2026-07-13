@@ -20,13 +20,26 @@ type HandlerCtx = {
     sendEvent: (name: string, payload: unknown) => Promise<void>;
   };
 };
+// createFunction is now called TWICE — once for ingestion/entity.created and
+// once for ingestion/entity.updated — both delegating to the shared
+// matchTriggersForEvent. Capture each handler by its trigger event so tests can
+// exercise the create path (default `capturedHandler`) and the update path
+// (`capturedHandlerUpdated`) independently.
 let capturedHandler: ((ctx: HandlerCtx) => unknown) | null = null;
+let capturedHandlerUpdated: ((ctx: HandlerCtx) => unknown) | null = null;
 let capturedCreateFunctionArgs: unknown[] | null = null;
+let capturedCreateFunctionArgsUpdated: unknown[] | null = null;
 
 mocks.createFunction.mockImplementation(
   (opts: unknown, trigger: unknown, handler: typeof capturedHandler) => {
-    capturedHandler = handler;
-    capturedCreateFunctionArgs = [opts, trigger];
+    const eventName = (trigger as { event?: string } | undefined)?.event;
+    if (eventName === "ingestion/entity.updated") {
+      capturedHandlerUpdated = handler;
+      capturedCreateFunctionArgsUpdated = [opts, trigger];
+    } else {
+      capturedHandler = handler;
+      capturedCreateFunctionArgs = [opts, trigger];
+    }
     return {};
   },
 );
@@ -87,7 +100,9 @@ const BASE_EVENT = {
   isNew: true,
 };
 
-function makeStep(overrides: Partial<HandlerCtx["step"]> = {}): HandlerCtx["step"] {
+function makeStep(
+  overrides: Partial<HandlerCtx["step"]> = {},
+): HandlerCtx["step"] {
   return {
     run: vi.fn(async (_name: string, fn: () => unknown) => fn()),
     sendEvent: vi.fn().mockResolvedValue(undefined),
@@ -422,7 +437,10 @@ describe("playbook.trigger.match Inngest function", () => {
     );
 
     const step = makeStep();
-    const result = await capturedHandler!({ event: { data: BASE_EVENT }, step });
+    const result = await capturedHandler!({
+      event: { data: BASE_EVENT },
+      step,
+    });
     expect(result).toEqual({ evaluated: 0, matched: 0, dispatched: 0 });
   });
 
@@ -437,7 +455,10 @@ describe("playbook.trigger.match Inngest function", () => {
                   id: "plt-2",
                   playbookId: "plb-2",
                   pinnedVersionId: null,
-                  config: { entityType: "PullRequest", eventType: "node.created" },
+                  config: {
+                    entityType: "PullRequest",
+                    eventType: "node.created",
+                  },
                 },
               ]),
           }),
@@ -446,15 +467,165 @@ describe("playbook.trigger.match Inngest function", () => {
     );
 
     const step = makeStep();
-    const result = await capturedHandler!({ event: { data: BASE_EVENT }, step });
+    const result = await capturedHandler!({
+      event: { data: BASE_EVENT },
+      step,
+    });
     expect(result).toMatchObject({ evaluated: 0, matched: 0, dispatched: 0 });
   });
 
   it("dispatches a run when entityType matches and all conditions pass", async () => {
     setupHappyPath();
     const step = makeStep();
-    const result = await capturedHandler!({ event: { data: BASE_EVENT }, step });
+    const result = await capturedHandler!({
+      event: { data: BASE_EVENT },
+      step,
+    });
     expect(result).toMatchObject({ evaluated: 1, matched: 1, dispatched: 1 });
+  });
+
+  // ── node.updated path (Phase 2) ──────────────────────────────────────────
+  const UPDATED_EVENT = {
+    nodeId: "neo4j-pr-1",
+    entityType: "PullRequest",
+    propertiesSnapshot: { status: "merged", title: "Fix crash" },
+    previousProperties: { status: "open", title: "Fix crash" },
+    workspaceId: "ws-1",
+    orgId: "org-1",
+    naturalKey: "github:conn-1:pr-42",
+    isNew: false,
+  };
+
+  const andTree = (child: Record<string, unknown>) => ({
+    kind: "group",
+    id: "root",
+    combinator: "and",
+    children: [child],
+  });
+
+  function setupUpdatedTrigger(config: Record<string, unknown>) {
+    let systemCallCount = 0;
+    mocks.withSystemDb.mockImplementation((fn: (tx: unknown) => unknown) => {
+      systemCallCount++;
+      if (systemCallCount === 1) {
+        return fn({
+          select: () => ({
+            from: () => ({
+              where: () =>
+                Promise.resolve([
+                  {
+                    id: "plt-pr-1",
+                    playbookId: "plb-uuid-1",
+                    pinnedVersionId: null,
+                    config,
+                  },
+                ]),
+            }),
+          }),
+        });
+      }
+      return fn({
+        query: {
+          playbooks: { findFirst: vi.fn().mockResolvedValue(PLAYBOOK_ROW) },
+        },
+      });
+    });
+    mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) =>
+      fn({
+        insert: () => ({
+          values: () => ({ returning: vi.fn().mockResolvedValue([MOCK_RUN]) }),
+        }),
+      }),
+    );
+  }
+
+  it("registers the updated variant with its own id + event", () => {
+    expect(capturedCreateFunctionArgsUpdated).not.toBeNull();
+    const [opts, trigger] = capturedCreateFunctionArgsUpdated as [
+      Record<string, unknown>,
+      Record<string, unknown>,
+    ];
+    expect(opts).toMatchObject({
+      id: "playbook-trigger-match-updated",
+      retries: 3,
+    });
+    expect(trigger).toMatchObject({ event: "ingestion/entity.updated" });
+  });
+
+  it("fires a node.updated trigger when a PR status becomes merged (flagship)", async () => {
+    setupUpdatedTrigger({
+      entityType: "PullRequest",
+      eventType: "node.updated",
+      conditionTree: andTree({
+        kind: "condition",
+        id: "c1",
+        property: "status",
+        operator: "eq",
+        value: "merged",
+      }),
+    });
+    const step = makeStep();
+    const result = await capturedHandlerUpdated!({
+      event: { data: UPDATED_EVENT },
+      step,
+    });
+    expect(result).toMatchObject({ evaluated: 1, matched: 1, dispatched: 1 });
+  });
+
+  it("threads previousProperties: 'changed' fires only on a real change", async () => {
+    const changedTree = andTree({
+      kind: "condition",
+      id: "c1",
+      property: "status",
+      operator: "changed",
+    });
+
+    setupUpdatedTrigger({
+      entityType: "PullRequest",
+      eventType: "node.updated",
+      conditionTree: changedTree,
+    });
+    const changed = await capturedHandlerUpdated!({
+      event: { data: UPDATED_EVENT },
+      step: makeStep(),
+    });
+    expect(changed).toMatchObject({ matched: 1, dispatched: 1 });
+
+    // Same value on both sides → 'changed' must NOT match.
+    setupUpdatedTrigger({
+      entityType: "PullRequest",
+      eventType: "node.updated",
+      conditionTree: changedTree,
+    });
+    const unchanged = await capturedHandlerUpdated!({
+      event: {
+        data: { ...UPDATED_EVENT, previousProperties: { status: "merged" } },
+      },
+      step: makeStep(),
+    });
+    expect(unchanged).toMatchObject({ matched: 0, dispatched: 0 });
+  });
+
+  it("does NOT fire a node.updated trigger on a create event (eventType mismatch)", async () => {
+    setupUpdatedTrigger({
+      entityType: "PullRequest",
+      eventType: "node.updated",
+      conditionTree: andTree({
+        kind: "condition",
+        id: "c1",
+        property: "status",
+        operator: "eq",
+        value: "merged",
+      }),
+    });
+    // The CREATE handler must filter out a node.updated trigger.
+    const result = await capturedHandler!({
+      event: {
+        data: { ...UPDATED_EVENT, isNew: true, previousProperties: undefined },
+      },
+      step: makeStep(),
+    });
+    expect(result).toMatchObject({ evaluated: 0, matched: 0, dispatched: 0 });
   });
 
   it("does NOT dispatch when property condition fails (branch != main)", async () => {
@@ -475,7 +646,11 @@ describe("playbook.trigger.match Inngest function", () => {
                       entityType: "Commit",
                       eventType: "node.created",
                       propertyConditions: [
-                        { property: "git_branch", operator: "eq", toValue: "main" },
+                        {
+                          property: "git_branch",
+                          operator: "eq",
+                          toValue: "main",
+                        },
                       ],
                     },
                   },
@@ -489,11 +664,17 @@ describe("playbook.trigger.match Inngest function", () => {
 
     const eventOnDevelop = {
       ...BASE_EVENT,
-      propertiesSnapshot: { ...BASE_EVENT.propertiesSnapshot, git_branch: "develop" },
+      propertiesSnapshot: {
+        ...BASE_EVENT.propertiesSnapshot,
+        git_branch: "develop",
+      },
     };
 
     const step = makeStep();
-    const result = await capturedHandler!({ event: { data: eventOnDevelop }, step });
+    const result = await capturedHandler!({
+      event: { data: eventOnDevelop },
+      step,
+    });
     expect(result).toMatchObject({ evaluated: 1, matched: 0, dispatched: 0 });
   });
 
@@ -526,14 +707,19 @@ describe("playbook.trigger.match Inngest function", () => {
       return fn({
         query: {
           playbooks: {
-            findFirst: vi.fn().mockResolvedValue({ id: "plb-1", activeVersionId: null }),
+            findFirst: vi
+              .fn()
+              .mockResolvedValue({ id: "plb-1", activeVersionId: null }),
           },
         },
       });
     });
 
     const step = makeStep();
-    const result = await capturedHandler!({ event: { data: BASE_EVENT }, step });
+    const result = await capturedHandler!({
+      event: { data: BASE_EVENT },
+      step,
+    });
     // matched=1 but dispatched=0 because playbook had no active version
     expect(result).toMatchObject({ evaluated: 1, matched: 1, dispatched: 0 });
   });
@@ -591,9 +777,15 @@ describe("playbook.trigger.match Inngest function", () => {
     const step = makeStep();
     await capturedHandler!({ event: { data: BASE_EVENT }, step });
     expect(mocks.insertEvents).toHaveBeenCalledTimes(1);
-    const rows = mocks.insertEvents.mock.calls[0]![0] as Array<{ event_type: string }>;
-    expect(rows.some((r) => r.event_type === "playbook_trigger.evaluated")).toBe(true);
-    expect(rows.some((r) => r.event_type === "playbook_trigger.dispatched")).toBe(true);
+    const rows = mocks.insertEvents.mock.calls[0]![0] as Array<{
+      event_type: string;
+    }>;
+    expect(
+      rows.some((r) => r.event_type === "playbook_trigger.evaluated"),
+    ).toBe(true);
+    expect(
+      rows.some((r) => r.event_type === "playbook_trigger.dispatched"),
+    ).toBe(true);
   });
 
   it("does not throw when insertEvents fails (telemetry loss is non-fatal)", async () => {
@@ -602,7 +794,10 @@ describe("playbook.trigger.match Inngest function", () => {
 
     const step = makeStep();
     // Should resolve successfully despite telemetry failure
-    const result = await capturedHandler!({ event: { data: BASE_EVENT }, step });
+    const result = await capturedHandler!({
+      event: { data: BASE_EVENT },
+      step,
+    });
     expect(result).toMatchObject({ dispatched: 1 });
     expect(mocks.loggerWarn).toHaveBeenCalledWith(
       expect.objectContaining({ telErr: expect.any(Error) }),

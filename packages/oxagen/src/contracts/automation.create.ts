@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
+import { triggerConfigSchema } from "../trigger-conditions";
 
 export const automationCreate = registerCapability({
   name: "create_automation",
@@ -33,57 +34,7 @@ export const automationCreate = registerCapability({
       .describe(
         "How this automation is triggered: 'event' = graph node change, 'schedule' = cron, 'api' = manual",
       ),
-    triggerConfig: z
-      .object({
-        // event trigger fields
-        entityType: z
-          .string()
-          .optional()
-          .describe("Graph entity type to watch, e.g. 'Contact', 'Deal'"),
-        eventType: z
-          .enum(["node.created", "node.updated", "node.deleted"])
-          .optional()
-          .describe("Graph event type — required when triggerType='event'"),
-        propertyConditions: z
-          .array(
-            z.object({
-              property: z
-                .string()
-                .describe("Property name to evaluate, e.g. 'status', 'value'"),
-              fromValue: z
-                .unknown()
-                .optional()
-                .describe("Previous value the property must have had"),
-              toValue: z
-                .unknown()
-                .optional()
-                .describe("New value the property must now have"),
-              operator: z
-                .enum(["eq", "gt", "lt", "changed"])
-                .default("eq")
-                .describe(
-                  "Comparison operator: eq=exact match, changed=any change, gt/lt=numeric comparison",
-                ),
-            }),
-          )
-          .optional()
-          .describe(
-            "Property conditions to filter which node changes fire the trigger",
-          ),
-        // schedule trigger fields
-        cronExpression: z
-          .string()
-          .optional()
-          .describe(
-            "POSIX cron expression — required when triggerType='schedule', e.g. '0 9 * * 1' for Monday 9am",
-          ),
-        timezone: z
-          .string()
-          .optional()
-          .describe(
-            "IANA timezone for schedule, e.g. 'America/New_York'. Default: UTC",
-          ),
-      })
+    triggerConfig: triggerConfigSchema
       .default({})
       .describe("Trigger-type-specific configuration"),
     steps: z
