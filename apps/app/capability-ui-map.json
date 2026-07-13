@@ -1054,111 +1054,12 @@
       "verifiedAt": "2026-07-12",
       "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
     },
-    "list_subagent_fanouts": {
-      "route": "/[orgSlug]/[workspaceSlug]/activity/fleet",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/activity/fleet/page.tsx",
-      "entry": "Fleet list table (fleet-list-section -> fleet-list-client)",
-      "testid": "fleet-list-table",
-      "proof": "apps/app/e2e/activity-fleet.spec.ts",
-      "verifiedAt": "2026-07-12",
-      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
-    },
-    "get_subagent_fanout": {
-      "route": "/[orgSlug]/[workspaceSlug]/activity/fleet",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/activity/fleet/page.tsx",
-      "entry": "Fan-out detail via ?fanout=<id> (child table)",
-      "testid": "fleet-child-table",
-      "proof": "apps/app/e2e/activity-fleet.spec.ts",
-      "verifiedAt": "2026-07-12",
-      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
-    },
-    "aggregate_subagents": {
-      "route": "/[orgSlug]/[workspaceSlug]/activity/fleet",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/activity/fleet/page.tsx",
-      "entry": "Fan-out detail timeline/aggregate strip",
-      "testid": "fleet-timeline",
-      "proof": "apps/app/e2e/activity-fleet.spec.ts",
-      "verifiedAt": "2026-07-12",
-      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
-    },
-    "get_subagent_result": {
-      "route": "/[orgSlug]/[workspaceSlug]/activity/fleet",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/activity/fleet/child-drawer.tsx",
-      "entry": "Child detail drawer payload viewer (GET /api/v1/agent/subagent/result)",
-      "testid": "child-drawer-input",
-      "proof": "apps/app/e2e/activity-fleet.spec.ts",
-      "verifiedAt": "2026-07-12",
-      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
-    },
-    "list_subagent_siblings": {
-      "route": "/[orgSlug]/[workspaceSlug]/activity/fleet",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/activity/fleet/child-drawer.tsx",
-      "entry": "Child detail drawer Siblings section (GET /api/v1/agent/subagent/siblings)",
-      "testid": "child-drawer-siblings-list",
-      "proof": "apps/app/e2e/activity-fleet.spec.ts",
-      "verifiedAt": "2026-07-12",
-      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
-    },
-    "get_subagent_logs": {
-      "route": "/[orgSlug]/[workspaceSlug]/activity/fleet",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/activity/fleet/child-drawer.tsx",
-      "entry": "Download logfile action (POST /api/v1/agent/subagent/logs)",
-      "testid": "fleet-download-logs-btn",
-      "proof": "apps/app/e2e/activity-fleet.spec.ts",
-      "verifiedAt": "2026-07-12",
-      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
-    },
-    "cancel_subagent": {
-      "route": "/[orgSlug]/[workspaceSlug]/activity/fleet",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/activity/fleet/actions.ts",
-      "entry": "Cancel action (list row + detail header) with confirm dialog",
-      "testid": "fleet-detail-cancel-btn",
-      "proof": "apps/app/e2e/activity-fleet.spec.ts",
-      "verifiedAt": "2026-07-12",
-      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
-    },
-    "debug_execution": {
-      "route": "/[orgSlug]/[workspaceSlug]/activity/[executionId]",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/activity/[executionId]/debug-section.tsx",
-      "entry": "Run detail page load, status=failed only — DebugSection invokes debug_execution and renders <DebugPanel> above the span tree",
-      "testid": "run-debug-panel",
-      "proof": "apps/app/e2e/activity-failed-run-debug.spec.ts",
-      "verifiedAt": "2026-07-12",
-      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
-    },
-    "get_execution_lineage": {
-      "route": "/[orgSlug]/[workspaceSlug]/activity/[executionId]",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/activity/[executionId]/lineage-section.tsx",
-      "entry": "Run detail page load — LineageSection invokes get_execution_lineage and renders the :Execution→:SourceFile touch graph (NodeRef chips) when TOUCHED_FILE edges exist",
-      "testid": null,
-      "proof": "apps/app/e2e/activity-failed-run-debug.spec.ts",
-      "verifiedAt": "2026-07-12",
-      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
-    },
     "get_usage_breakdown": {
       "route": "/[orgSlug]/billing/usage",
       "page": "apps/app/src/app/[orgSlug]/billing/usage/page.tsx",
       "entry": "Usage dashboard page load (assertOrgMember + assertBillingManager, then invoke) renders KPI tiles, daily trend, and per-model/surface/workspace/capability/principal breakdown tables",
       "testid": null,
       "proof": "apps/app/e2e/billing-usage-breakdown.spec.ts",
-      "verifiedAt": "2026-07-12",
-      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
-    },
-    "list_executions": {
-      "route": "/[orgSlug]/[workspaceSlug]/activity",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/activity/page.tsx",
-      "entry": "Activity Runs tab — ActivitySection lists recent executions with keyset pagination (?before=) on page load",
-      "testid": null,
-      "proof": "apps/app/e2e/agent-execution-list.spec.ts",
-      "verifiedAt": "2026-07-12",
-      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
-    },
-    "get_execution_trace": {
-      "route": "/[orgSlug]/[workspaceSlug]/activity/[executionId]",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/activity/[executionId]/page.tsx",
-      "entry": "Run detail page load — TraceSection renders the span tree (steps, tool calls, durations, tokens, cost)",
-      "testid": null,
-      "proof": "apps/app/e2e/agent-trace-get.spec.ts",
       "verifiedAt": "2026-07-12",
       "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
     },

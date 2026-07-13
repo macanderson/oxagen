@@ -10,7 +10,6 @@
 
 import type { PlanTier } from "@oxagen/oxagen/types";
 import {
-  Activity,
   ArrowLeft,
   BookOpen,
   Bot,
@@ -135,17 +134,6 @@ const workspaceConfig: SidebarConfig = {
           : `/${ctx.orgSlug}`,
       group: "primary",
     },
-    {
-      id: "activity",
-      label: "Activity",
-      icon: Activity,
-      // Recent agent runs + per-run span-tree trace viewer.
-      href: (ctx) =>
-        ctx.workspaceSlug
-          ? workspace.activity.root(ctx as Required<ScopeContext>)
-          : `/${ctx.orgSlug}`,
-      group: "primary",
-    },
     // Workbench group — everything about building with agents. All four are
     // first-class sidebar destinations (there is deliberately NO Workbench
     // secondary nav): Agents (the builder), Agent Tools (the equip hub with
@@ -169,15 +157,14 @@ const workspaceConfig: SidebarConfig = {
       // Score what actually ran and got billed against a dataset — the
       // eval.* capability family's dataset list + run-detail surface.
       // Previously a true nav orphan (no sidebar entry, no in-page inbound
-      // links) despite being fully built. group: "primary" places it right
-      // after Activity in the desktop sidebar (group-filtered render, see
-      // sidebar.tsx) since both surfaces read from the same execution
-      // history; it is declared here (after the "agents" entry, ahead of the
-      // tools-group items below, in raw array order) so the mobile bottom
-      // bar's unfiltered first-4 cut (MAX_BAR_ITEMS, mobile-bottom-bar.tsx)
-      // is unaffected — Evals overflows into the mobile "More" sheet
-      // alongside Agent Tools/Environments/Sandboxes/Marketplace/Settings
-      // rather than displacing Agents from the visible bar.
+      // links) despite being fully built. group: "primary" surfaces it in the
+      // desktop sidebar (group-filtered render, see sidebar.tsx); it is
+      // declared here (after the "agents" entry, ahead of the tools-group
+      // items below, in raw array order) so the mobile bottom bar's unfiltered
+      // first-4 cut (MAX_BAR_ITEMS, mobile-bottom-bar.tsx) is unaffected —
+      // Evals overflows into the mobile "More" sheet alongside Agent
+      // Tools/Environments/Sandboxes/Marketplace/Settings rather than
+      // displacing Agents from the visible bar.
       href: (ctx) =>
         ctx.workspaceSlug
           ? workspace.evals.root(ctx as Required<ScopeContext>)
@@ -616,11 +603,6 @@ export function enumerateNavTargets(
       label: "Repos",
       href: workspace.workbench.repos(wsCtx),
       parent: "repos",
-    });
-    targets.push({
-      label: "Activity · Fleet",
-      href: workspace.activity.fleet(wsCtx),
-      parent: "activity",
     });
 
     // Knowledge tabs
