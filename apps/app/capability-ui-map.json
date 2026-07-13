@@ -249,7 +249,7 @@
       "page": "apps/app/src/app/account/preferences/preferences-form.tsx",
       "entry": "\"Save preferences\" submit",
       "testid": null,
-      "proof": "apps/app/e2e/account-tabs.spec.ts",
+      "proof": "apps/app/e2e/account-nav.spec.ts",
       "verifiedAt": "2026-07-12",
       "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
     },
@@ -774,6 +774,7 @@
       "proof": "apps/app/e2e/governance-hub.spec.ts",
       "verifiedAt": "2026-07-12",
       "verifiedBy": "session_e448d4cc"
+    },
     "list_automations": {
       "route": "/[orgSlug]/[workspaceSlug]/automations",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/automations/page.tsx",
@@ -914,7 +915,8 @@
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/automations/workflows/page.tsx",
       "entry": "Swarm row → detail drawer ResearchSwarmCard poll",
       "testid": null,
-      "proof": "apps/app/e2e/automations-workflows.spec.ts",
+      "proof": "apps/app/e2e/automations-workflows.spec.ts"
+    },
     "sync_repo": {
       "route": "/[orgSlug]/[workspaceSlug]/workbench/repos",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/repos/repos-client.tsx",
