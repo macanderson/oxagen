@@ -84,8 +84,13 @@ test.describe("sandbox template — Packages editor round-trip", () => {
     ).toBeVisible();
 
     // The Manifest preview reflects the 2 packages before we ever save.
+    // Assert on the manifest JSON element itself — a bare getByText("packages")
+    // is a strict-mode violation (the page's description copy also says
+    // "packages"), and checking the JSON key is the actual intent anyway.
     await page.getByTestId("sandbox-template-manifest-tab").click();
-    await expect(page.getByText("packages")).toBeVisible();
+    await expect(page.getByTestId("manifest-preview-json")).toContainText(
+      '"packages"',
+    );
     await page.screenshot({
       path: path.join(SCREENSHOTS_DIR, "01-packages-configured.png"),
       fullPage: true,
