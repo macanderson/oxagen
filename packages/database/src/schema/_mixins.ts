@@ -62,6 +62,14 @@ export const auditMixin = () => ({
   updatedByUserId: uuid("updated_by_user_id"),
 });
 
+/** append_only_audit_mixin — created timestamp and authoring user only (no updated fields). */
+export const appendOnlyAuditMixin = () => ({
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+    .notNull()
+    .defaultNow(),
+  createdByUserId: uuid("created_by_user_id"),
+});
+
 /** soft_delete_mixin — hard deletes prohibited on org-scoped tables. */
 export const softDeleteMixin = () => ({
   deletedAt: timestamp("deleted_at", { withTimezone: true, mode: "date" }),
