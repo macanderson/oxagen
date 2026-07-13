@@ -19,7 +19,10 @@ import { Button } from "@/components/ui/button";
 import { CardGrid } from "@/components/lists/card-grid";
 import { ListToolbar } from "@/components/lists/list-toolbar";
 import { ListPagination } from "@/components/lists/list-pagination";
-import { useListControls, type ListSortOption } from "@/lib/lists/use-list-controls";
+import {
+  useListControls,
+  type ListSortOption,
+} from "@/lib/lists/use-list-controls";
 import { toCsv, downloadCsv, type CsvColumn } from "@/lib/lists/csv";
 import { workspace } from "@/lib/routes";
 import type { EvalDatasetListOutput } from "@oxagen/oxagen/contracts/eval.dataset.list";
@@ -44,8 +47,16 @@ const SORT_OPTIONS: ListSortOption<Dataset>[] = [
     label: "Newest",
     compare: (a, b) => b.createdAt.localeCompare(a.createdAt),
   },
-  { id: "name", label: "Name A–Z", compare: (a, b) => a.name.localeCompare(b.name) },
-  { id: "items", label: "Most items", compare: (a, b) => b.itemCount - a.itemCount },
+  {
+    id: "name",
+    label: "Name A–Z",
+    compare: (a, b) => a.name.localeCompare(b.name),
+  },
+  {
+    id: "items",
+    label: "Most items",
+    compare: (a, b) => b.itemCount - a.itemCount,
+  },
 ];
 
 const CSV_COLUMNS: CsvColumn[] = [
@@ -68,7 +79,11 @@ function formatDate(iso: string): string {
   }
 }
 
-export function DatasetsClient({ datasets, orgSlug, workspaceSlug }: DatasetsClientProps) {
+export function DatasetsClient({
+  datasets,
+  orgSlug,
+  workspaceSlug,
+}: DatasetsClientProps) {
   const controls = useListControls(datasets, {
     searchKeys: ["name", "slug", (d) => d.description ?? ""],
     sortOptions: SORT_OPTIONS,
@@ -97,13 +112,19 @@ export function DatasetsClient({ datasets, orgSlug, workspaceSlug }: DatasetsCli
           data-testid="evals-datasets-empty-state"
         >
           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-            <FlaskConical className="h-6 w-6 text-muted-foreground" aria-hidden="true" />
+            <FlaskConical
+              className="h-6 w-6 text-muted-foreground"
+              aria-hidden="true"
+            />
           </div>
           <div className="flex flex-col gap-1">
-            <p className="text-sm font-semibold text-foreground">No eval datasets yet</p>
+            <p className="text-sm font-semibold text-foreground">
+              No eval datasets yet
+            </p>
             <p className="max-w-xs text-xs text-muted-foreground">
-              Create a dataset from manual examples or pull real inputs from historical traces,
-              then run it against a target and grade the output with a judge model.
+              Create a dataset from manual examples or pull real inputs from
+              historical traces, then run it against a target and grade the
+              output with a judge model.
             </p>
           </div>
           {newDatasetButton}
@@ -131,7 +152,10 @@ export function DatasetsClient({ datasets, orgSlug, workspaceSlug }: DatasetsCli
         onExport={() =>
           downloadCsv(
             "eval-datasets.csv",
-            toCsv(CSV_COLUMNS, controls.allFilteredRows as unknown as Record<string, unknown>[]),
+            toCsv(
+              CSV_COLUMNS,
+              controls.allFilteredRows as unknown as Record<string, unknown>[],
+            ),
           )
         }
       >
@@ -147,7 +171,10 @@ export function DatasetsClient({ datasets, orgSlug, workspaceSlug }: DatasetsCli
           {controls.pageRows.map((dataset) => (
             <Link
               key={dataset.datasetId}
-              href={workspace.evals.dataset({ orgSlug, workspaceSlug }, dataset.datasetId)}
+              href={workspace.evals.dataset(
+                { orgSlug, workspaceSlug },
+                dataset.datasetId,
+              )}
               className="flex flex-col gap-2 rounded-lg border bg-card p-4 text-left transition-colors hover:border-border-hover hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               data-testid={`dataset-card-${dataset.slug}`}
             >

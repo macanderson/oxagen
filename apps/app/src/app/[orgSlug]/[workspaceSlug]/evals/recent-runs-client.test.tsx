@@ -64,11 +64,17 @@ describe("RecentRunsClient", () => {
     render(<RecentRunsClient runs={[]} allTimeTotal={0} {...PROPS} />);
 
     expect(screen.getByTestId("evals-recent-runs")).toBeInTheDocument();
-    expect(screen.getByTestId("evals-recent-runs-empty-state")).toBeInTheDocument();
-    expect(screen.getByText(/open a dataset and launch one/i)).toBeInTheDocument();
+    expect(
+      screen.getByTestId("evals-recent-runs-empty-state"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/open a dataset and launch one/i),
+    ).toBeInTheDocument();
     // Header stat strip still renders.
     expect(screen.getByText("Runs all-time")).toBeInTheDocument();
-    expect(screen.queryByTestId("evals-recent-runs-table")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("evals-recent-runs-table"),
+    ).not.toBeInTheDocument();
   });
 
   // ---------------------------------------------------------------------------
@@ -95,7 +101,9 @@ describe("RecentRunsClient", () => {
     );
 
     // Dataset link → dataset detail route.
-    const datasetLinks = screen.getAllByRole("link", { name: "Support triage" });
+    const datasetLinks = screen.getAllByRole("link", {
+      name: "Support triage",
+    });
     expect(datasetLinks[0]).toHaveAttribute(
       "href",
       "/acme/research/evals/datasets/evd_one",
@@ -126,7 +134,9 @@ describe("RecentRunsClient", () => {
   it("formats a default-tier model target and an agent target", () => {
     const { rerender } = render(
       <RecentRunsClient
-        runs={[makeRun({ target: { kind: "model", model: null, agentSlug: null } })]}
+        runs={[
+          makeRun({ target: { kind: "model", model: null, agentSlug: null } }),
+        ]}
         allTimeTotal={1}
         {...PROPS}
       />,
@@ -135,7 +145,11 @@ describe("RecentRunsClient", () => {
 
     rerender(
       <RecentRunsClient
-        runs={[makeRun({ target: { kind: "agent", model: null, agentSlug: "triage-bot" } })]}
+        runs={[
+          makeRun({
+            target: { kind: "agent", model: null, agentSlug: "triage-bot" },
+          }),
+        ]}
         allTimeTotal={1}
         {...PROPS}
       />,
@@ -155,7 +169,9 @@ describe("RecentRunsClient", () => {
         {...PROPS}
       />,
     );
-    expect(within(screen.getByTestId("evals-recent-run-row")).getByText("Pass")).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId("evals-recent-run-row")).getByText("Pass"),
+    ).toBeInTheDocument();
 
     rerender(
       <RecentRunsClient
@@ -164,7 +180,9 @@ describe("RecentRunsClient", () => {
         {...PROPS}
       />,
     );
-    expect(within(screen.getByTestId("evals-recent-run-row")).getByText("Below")).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId("evals-recent-run-row")).getByText("Below"),
+    ).toBeInTheDocument();
   });
 
   it("shows a dash for pass and score when avgScore is null", () => {

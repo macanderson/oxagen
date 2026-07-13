@@ -69,8 +69,9 @@ export function RunSetupPanel({
   const [starting, setStarting] = React.useState(false);
   const [runError, setRunError] = React.useState<string | null>(null);
   const [runId, setRunId] = React.useState<string | null>(null);
-  const [runStatus, setRunStatus] =
-    React.useState<EvalRunStatusOutput | null>(null);
+  const [runStatus, setRunStatus] = React.useState<EvalRunStatusOutput | null>(
+    null,
+  );
   const [polling, setPolling] = React.useState(false);
 
   // Poll eval.run.status while a run is active — every 2s, capped at ~30s.

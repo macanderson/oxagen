@@ -44,7 +44,11 @@ export async function RecentRunsSection({
     const result = (await runInTenantScope({ orgId, workspaceId }, () =>
       // list_eval_runs exposes surfaces ["api","mcp","cli"] — passing a surface
       // opt from the app would throw surface_denied; omit so no allowlist runs.
-      invoke("list_eval_runs", { limit: 8, sortBy: "created", sortDir: "desc" }, ctx),
+      invoke(
+        "list_eval_runs",
+        { limit: 8, sortBy: "created", sortDir: "desc" },
+        ctx,
+      ),
     )) as EvalRunListOutput;
     runs = result.runs;
     allTimeTotal = result.allTimeTotal;

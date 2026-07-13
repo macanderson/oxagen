@@ -27,16 +27,26 @@
  */
 
 import * as React from "react";
-import { render, screen, waitFor, cleanup, fireEvent } from "@testing-library/react";
+import {
+  render,
+  screen,
+  waitFor,
+  cleanup,
+  fireEvent,
+} from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-const { mockCreateDatasetAction, mockCreateTraceDatasetAction, mockAddToast, mockRefresh } =
-  vi.hoisted(() => ({
-    mockCreateDatasetAction: vi.fn(),
-    mockCreateTraceDatasetAction: vi.fn(),
-    mockAddToast: vi.fn(),
-    mockRefresh: vi.fn(),
-  }));
+const {
+  mockCreateDatasetAction,
+  mockCreateTraceDatasetAction,
+  mockAddToast,
+  mockRefresh,
+} = vi.hoisted(() => ({
+  mockCreateDatasetAction: vi.fn(),
+  mockCreateTraceDatasetAction: vi.fn(),
+  mockAddToast: vi.fn(),
+  mockRefresh: vi.fn(),
+}));
 
 vi.mock("./actions", () => ({
   createDatasetAction: mockCreateDatasetAction,
@@ -81,9 +91,12 @@ vi.mock("@/components/ui/segmented-control", () => ({
       })}
     </div>
   ),
-  SegmentedControlItem: ({ children }: { children: React.ReactNode; value: string }) => (
-    <>{children}</>
-  ),
+  SegmentedControlItem: ({
+    children,
+  }: {
+    children: React.ReactNode;
+    value: string;
+  }) => <>{children}</>,
 }));
 
 vi.mock("@/components/ui/select", () => ({
@@ -99,9 +112,13 @@ vi.mock("@/components/ui/select", () => ({
       {children}
     </div>
   ),
-  SelectTrigger: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  SelectTrigger: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
   SelectValue: () => null,
-  SelectPopup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  SelectPopup: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
   SelectItem: ({ children }: { children: React.ReactNode; value: string }) => (
     <div>{children}</div>
   ),
@@ -131,7 +148,9 @@ describe("CreateDatasetForm", () => {
     expect(screen.getByLabelText("Description")).toBeInTheDocument();
     expect(screen.queryByLabelText("Lookback window")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Max items")).not.toBeInTheDocument();
-    expect(screen.getByTestId("evals-create-manual-submit")).toBeInTheDocument();
+    expect(
+      screen.getByTestId("evals-create-manual-submit"),
+    ).toBeInTheDocument();
   });
 
   // ---------------------------------------------------------------------------
@@ -145,7 +164,9 @@ describe("CreateDatasetForm", () => {
 
     expect(screen.getByText("Lookback window")).toBeInTheDocument();
     expect(screen.getByLabelText("Max items")).toBeInTheDocument();
-    expect(screen.getByTestId("evals-create-traces-submit")).toBeInTheDocument();
+    expect(
+      screen.getByTestId("evals-create-traces-submit"),
+    ).toBeInTheDocument();
   });
 
   // ---------------------------------------------------------------------------
@@ -163,8 +184,12 @@ describe("CreateDatasetForm", () => {
 
     render(<CreateDatasetForm {...PROPS} onCreated={onCreated} />);
 
-    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Smoke dataset" } });
-    fireEvent.change(screen.getByLabelText("Description"), { target: { value: "desc" } });
+    fireEvent.change(screen.getByLabelText("Name"), {
+      target: { value: "Smoke dataset" },
+    });
+    fireEvent.change(screen.getByLabelText("Description"), {
+      target: { value: "desc" },
+    });
     fireEvent.click(screen.getByTestId("evals-create-manual-submit"));
 
     await waitFor(() => expect(mockCreateDatasetAction).toHaveBeenCalledOnce());
@@ -200,10 +225,14 @@ describe("CreateDatasetForm", () => {
     render(<CreateDatasetForm {...PROPS} onCreated={vi.fn()} />);
 
     fireEvent.click(screen.getByRole("radio", { name: "From traces" }));
-    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Recent traces" } });
+    fireEvent.change(screen.getByLabelText("Name"), {
+      target: { value: "Recent traces" },
+    });
     fireEvent.click(screen.getByTestId("evals-create-traces-submit"));
 
-    await waitFor(() => expect(mockCreateTraceDatasetAction).toHaveBeenCalledOnce());
+    await waitFor(() =>
+      expect(mockCreateTraceDatasetAction).toHaveBeenCalledOnce(),
+    );
 
     expect(mockCreateTraceDatasetAction).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -226,7 +255,9 @@ describe("CreateDatasetForm", () => {
 
     fireEvent.click(screen.getByTestId("evals-create-manual-submit"));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(/name is required/i);
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      /name is required/i,
+    );
     expect(mockCreateDatasetAction).not.toHaveBeenCalled();
   });
 
@@ -235,15 +266,22 @@ describe("CreateDatasetForm", () => {
   // ---------------------------------------------------------------------------
 
   it("shows an inline error and toast when the action returns ok:false, preserving form state", async () => {
-    mockCreateDatasetAction.mockResolvedValue({ ok: false, error: "Slug already taken" });
+    mockCreateDatasetAction.mockResolvedValue({
+      ok: false,
+      error: "Slug already taken",
+    });
     const onCreated = vi.fn();
 
     render(<CreateDatasetForm {...PROPS} onCreated={onCreated} />);
 
-    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Dup" } });
+    fireEvent.change(screen.getByLabelText("Name"), {
+      target: { value: "Dup" },
+    });
     fireEvent.click(screen.getByTestId("evals-create-manual-submit"));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("Slug already taken");
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Slug already taken",
+    );
     expect(mockAddToast).toHaveBeenCalledWith(
       expect.objectContaining({ title: "Failed to create dataset" }),
     );
@@ -267,17 +305,23 @@ describe("CreateDatasetForm", () => {
 
     render(<CreateDatasetForm {...PROPS} onCreated={vi.fn()} />);
 
-    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Pending" } });
+    fireEvent.change(screen.getByLabelText("Name"), {
+      target: { value: "Pending" },
+    });
     fireEvent.click(screen.getByTestId("evals-create-manual-submit"));
 
     await waitFor(() => {
       expect(screen.getByTestId("evals-create-manual-submit")).toBeDisabled();
-      expect(screen.getByTestId("evals-create-manual-submit")).toHaveTextContent(/creating/i);
+      expect(
+        screen.getByTestId("evals-create-manual-submit"),
+      ).toHaveTextContent(/creating/i);
     });
 
     resolve({ ok: true });
     await waitFor(() =>
-      expect(screen.getByTestId("evals-create-manual-submit")).not.toBeDisabled(),
+      expect(
+        screen.getByTestId("evals-create-manual-submit"),
+      ).not.toBeDisabled(),
     );
   });
 });

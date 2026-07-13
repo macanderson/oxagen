@@ -20,8 +20,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { SegmentedControl, SegmentedControlItem } from "@/components/ui/segmented-control";
-import { Select, SelectTrigger, SelectValue, SelectPopup, SelectItem } from "@/components/ui/select";
+import {
+  SegmentedControl,
+  SegmentedControlItem,
+} from "@/components/ui/segmented-control";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectPopup,
+  SelectItem,
+} from "@/components/ui/select";
 import { useToast } from "@/components/ui/toast";
 import {
   Dialog,
@@ -47,7 +56,11 @@ export interface CreateDatasetFormProps {
   onCreated: () => void;
 }
 
-export function CreateDatasetForm({ orgSlug, workspaceSlug, onCreated }: CreateDatasetFormProps) {
+export function CreateDatasetForm({
+  orgSlug,
+  workspaceSlug,
+  onCreated,
+}: CreateDatasetFormProps) {
   const router = useRouter();
   const { add: addToast } = useToast();
 
@@ -112,7 +125,11 @@ export function CreateDatasetForm({ orgSlug, workspaceSlug, onCreated }: CreateD
   };
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4" aria-label="Create dataset">
+    <form
+      onSubmit={handleSubmit}
+      className="flex flex-col gap-4"
+      aria-label="Create dataset"
+    >
       <div className="flex flex-col gap-1.5">
         <Label id="create-dataset-mode-label">Source</Label>
         <SegmentedControl
@@ -156,8 +173,15 @@ export function CreateDatasetForm({ orgSlug, workspaceSlug, onCreated }: CreateD
         <>
           <div className="flex flex-col gap-1.5">
             <Label id="dataset-since-hours-label">Lookback window</Label>
-            <Select value={sinceHours} onValueChange={(v) => v && setSinceHours(v)} disabled={submitting}>
-              <SelectTrigger size="default" aria-labelledby="dataset-since-hours-label">
+            <Select
+              value={sinceHours}
+              onValueChange={(v) => v && setSinceHours(v)}
+              disabled={submitting}
+            >
+              <SelectTrigger
+                size="default"
+                aria-labelledby="dataset-since-hours-label"
+              >
                 <SelectValue />
               </SelectTrigger>
               <SelectPopup>
@@ -195,10 +219,16 @@ export function CreateDatasetForm({ orgSlug, workspaceSlug, onCreated }: CreateD
         type="submit"
         disabled={submitting}
         data-testid={
-          mode === "manual" ? "evals-create-manual-submit" : "evals-create-traces-submit"
+          mode === "manual"
+            ? "evals-create-manual-submit"
+            : "evals-create-traces-submit"
         }
       >
-        {submitting ? "Creating…" : mode === "manual" ? "Create dataset" : "Create from traces"}
+        {submitting
+          ? "Creating…"
+          : mode === "manual"
+            ? "Create dataset"
+            : "Create from traces"}
       </Button>
     </form>
   );
@@ -219,11 +249,15 @@ export function CreateDatasetDialog({
 }: CreateDatasetDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogPopup className="max-h-[85vh] overflow-y-auto" data-testid="evals-create-dataset-dialog">
+      <DialogPopup
+        className="max-h-[85vh] overflow-y-auto"
+        data-testid="evals-create-dataset-dialog"
+      >
         <DialogHeader>
           <DialogTitle>New dataset</DialogTitle>
           <DialogDescription>
-            Create a dataset manually or seed it from real, already-metered traces.
+            Create a dataset manually or seed it from real, already-metered
+            traces.
           </DialogDescription>
         </DialogHeader>
 

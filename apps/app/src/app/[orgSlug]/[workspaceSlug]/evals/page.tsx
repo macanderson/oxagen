@@ -14,7 +14,11 @@ import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { FlaskConical } from "lucide-react";
 import { getSessionOrRedirect } from "@/lib/session";
-import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
+import {
+  resolveOrg,
+  resolveWorkspace,
+  assertOrgMember,
+} from "@/lib/resolve-org";
 import { PageHeader } from "@/components/ui/page-header";
 import { TableSkeleton } from "@/components/loading";
 import { DatasetsSection } from "./datasets-section";
@@ -44,11 +48,15 @@ export default async function EvalsPage({ params }: PageProps) {
       />
 
       <div className="flex items-start gap-3 rounded-lg border border-dashed border-border/60 bg-card/50 px-4 py-3">
-        <FlaskConical className="mt-0.5 h-4 w-4 flex-shrink-0 text-muted-foreground" aria-hidden="true" />
+        <FlaskConical
+          className="mt-0.5 h-4 w-4 flex-shrink-0 text-muted-foreground"
+          aria-hidden="true"
+        />
         <p className="text-xs text-muted-foreground">
-          Datasets sourced from manual entry or historical traces. Each run evaluates every item
-          against a target (a model or an agent) and grades the output with a judge model — every
-          call metered, so eval cost is visible cost.
+          Datasets sourced from manual entry or historical traces. Each run
+          evaluates every item against a target (a model or an agent) and grades
+          the output with a judge model — every call metered, so eval cost is
+          visible cost.
         </p>
       </div>
 

@@ -120,7 +120,9 @@ export function RecentRunsClient({
           </span>
         </div>
         <div className="flex flex-col">
-          <span className="text-xs text-muted-foreground">Avg score (recent)</span>
+          <span className="text-xs text-muted-foreground">
+            Avg score (recent)
+          </span>
           <span className="text-sm font-semibold tabular-nums text-foreground">
             {formatScore(avgRecentScore)}
           </span>
@@ -138,10 +140,15 @@ export function RecentRunsClient({
           data-testid="evals-recent-runs-empty-state"
         >
           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-            <FlaskConical className="h-6 w-6 text-muted-foreground" aria-hidden="true" />
+            <FlaskConical
+              className="h-6 w-6 text-muted-foreground"
+              aria-hidden="true"
+            />
           </div>
           <div className="flex flex-col gap-1">
-            <p className="text-sm font-semibold text-foreground">No eval runs yet</p>
+            <p className="text-sm font-semibold text-foreground">
+              No eval runs yet
+            </p>
             <p className="max-w-xs text-xs text-muted-foreground">
               No eval runs yet — open a dataset and launch one.
             </p>
@@ -204,7 +211,11 @@ export function RecentRunsClient({
                   {formatTarget(run.target)}
                 </td>
                 <td className="px-4 py-2">
-                  <Badge variant={statusVariant(run.status)} size="sm" className="capitalize">
+                  <Badge
+                    variant={statusVariant(run.status)}
+                    size="sm"
+                    className="capitalize"
+                  >
                     {run.status}
                   </Badge>
                 </td>

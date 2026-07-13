@@ -187,14 +187,18 @@ describe("RunsTable — sorting (server-driven)", () => {
     );
 
     fireEvent.click(screen.getByTestId("evals-runs-sort-score"));
-    await waitFor(() => expect(mockListEvalRunsAction).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(mockListEvalRunsAction).toHaveBeenCalledTimes(1),
+    );
     expect(mockListEvalRunsAction.mock.calls[0][0]).toMatchObject({
       sortBy: "score",
       sortDir: "desc",
     });
 
     fireEvent.click(screen.getByTestId("evals-runs-sort-score"));
-    await waitFor(() => expect(mockListEvalRunsAction).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(mockListEvalRunsAction).toHaveBeenCalledTimes(2),
+    );
     expect(mockListEvalRunsAction.mock.calls[1][0]).toMatchObject({
       sortBy: "score",
       sortDir: "asc",

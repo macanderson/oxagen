@@ -166,9 +166,7 @@ export function EvalCharts({
           <div className="flex flex-col gap-3">
             <div className="flex flex-wrap gap-4 text-[11px] text-muted-foreground">
               {(series?.byModel ?? [])
-                .filter((m) =>
-                  modelData.some((d) => d.key === m.model),
-                )
+                .filter((m) => modelData.some((d) => d.key === m.model))
                 .map((m, i) => (
                   <span key={m.model} className="flex items-center gap-1.5">
                     <span
@@ -186,12 +184,7 @@ export function EvalCharts({
               <LineChart
                 height={240}
                 data={modelData}
-                series={
-                  <LineSeries
-                    type="grouped"
-                    colorScheme={[...colors]}
-                  />
-                }
+                series={<LineSeries type="grouped" colorScheme={[...colors]} />}
                 xAxis={<LinearXAxis type="time" />}
                 yAxis={<LinearYAxis type="value" domain={[0, 1]} />}
               />

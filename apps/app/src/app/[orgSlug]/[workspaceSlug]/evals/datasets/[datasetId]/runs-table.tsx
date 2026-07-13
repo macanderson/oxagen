@@ -311,7 +311,10 @@ export function RunsTable({
                       {run.name ?? run.runId}
                     </Link>
                   </td>
-                  <td className="px-4 py-2 text-foreground" title={formatTarget(run.target)}>
+                  <td
+                    className="px-4 py-2 text-foreground"
+                    title={formatTarget(run.target)}
+                  >
                     {formatTarget(run.target)}
                   </td>
                   <td
@@ -370,11 +373,13 @@ function SortHeader({
 }) {
   const Icon = active ? (dir === "asc" ? ArrowUp : ArrowDown) : ChevronsUpDown;
   return (
-    <th className="px-4 py-2 font-medium">
+    <th
+      className="px-4 py-2 font-medium"
+      aria-sort={active ? (dir === "asc" ? "ascending" : "descending") : "none"}
+    >
       <button
         type="button"
         onClick={onClick}
-        aria-sort={active ? (dir === "asc" ? "ascending" : "descending") : "none"}
         className={cn(
           "inline-flex items-center gap-1 uppercase tracking-wide transition-colors hover:text-foreground",
           active ? "text-foreground" : "text-muted-foreground",
