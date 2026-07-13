@@ -45,6 +45,8 @@ import { ingestionBatchReconcile } from "./functions/ai.batch-reconcile";
 import { ingestionSyncRequested } from "./functions/ingestion.sync-requested";
 import { ingestionPollScheduler } from "./functions/ingestion.poll-scheduler";
 import { ingestionConnectionPoll } from "./functions/ingestion.connection-poll";
+import { ingestionWebhookProvision } from "./functions/ingestion.webhook-provision";
+import { ingestionWebhookRenew } from "./functions/ingestion.webhook-renew";
 import {
   playbookTriggerMatch,
   playbookTriggerMatchUpdated,
@@ -105,6 +107,8 @@ export const functions: any[] = [
   ingestionSyncRequested,
   ingestionPollScheduler,
   ingestionConnectionPoll,
+  ingestionWebhookProvision,
+  ingestionWebhookRenew,
   playbookTriggerMatch,
   playbookTriggerMatchUpdated,
   playbookRunExecute,

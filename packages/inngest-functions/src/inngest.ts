@@ -261,6 +261,16 @@ type Events = {
     };
   };
 
+  // Provision (register) the provider webhook subscription for a webhook
+  // connection once it is active. Consumed by ingestion-webhook-provision.
+  "ingestion/webhook.provision": {
+    data: {
+      connectionId: string;
+      orgId: string;
+      workspaceId: string;
+    };
+  };
+
   // ── GitHub source-code ingestion ───────────────────────────────────────────
 
   // Kick off the initial sync for a newly-connected GitHub repository.

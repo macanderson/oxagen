@@ -1,6 +1,13 @@
 import { z } from "zod";
-import { registerConnector, type ConnectorDefinition, type NormalizedRecord, type RecordTypeSample } from "../types";
+import {
+  registerConnector,
+  type ConnectorDefinition,
+  type NormalizedRecord,
+  type RecordTypeSample,
+} from "../types";
 import { verifyGoogleChannelToken } from "./verify-channel-token";
+import { subscribeGoogleWatchChannel } from "./subscribe-watch-channel";
+import type { WebhookSubscriptionResult } from "../types";
 
 const connectionConfigSchema = z.object({
   labelIds: z.array(z.string()).optional(),
@@ -11,7 +18,9 @@ const connectionConfigSchema = z.object({
 type Config = typeof connectionConfigSchema;
 
 function asRecord(raw: unknown): Record<string, unknown> {
-  return raw !== null && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  return raw !== null && typeof raw === "object"
+    ? (raw as Record<string, unknown>)
+    : {};
 }
 
 function asString(v: unknown): string | undefined {
@@ -61,9 +70,13 @@ const googleGmail: ConnectorDefinition<Config> = {
         const headers = asArray(payload["headers"]);
         const getHeader = (name: string) =>
           asString(
-            asRecord(headers.find((h) => asString(asRecord(h)["name"])?.toLowerCase() === name.toLowerCase()))?.[
-              "value"
-            ],
+            asRecord(
+              headers.find(
+                (h) =>
+                  asString(asRecord(h)["name"])?.toLowerCase() ===
+                  name.toLowerCase(),
+              ),
+            )?.["value"],
           );
         return {
           externalId: asString(r["id"]) ?? "",
@@ -73,7 +86,9 @@ const googleGmail: ConnectorDefinition<Config> = {
             from: getHeader("from"),
             to: getHeader("to"),
             snippet: asString(r["snippet"]),
-            labelIds: asArray(r["labelIds"]).filter((l) => typeof l === "string"),
+            labelIds: asArray(r["labelIds"]).filter(
+              (l) => typeof l === "string",
+            ),
             date: getHeader("date"),
             threadId: asString(r["threadId"]),
           },
@@ -81,12 +96,35 @@ const googleGmail: ConnectorDefinition<Config> = {
       }
 
       default:
-        throw new Error(`google-gmail.normalizeRecord: unknown sourceRecordType "${sourceRecordType}"`);
+        throw new Error(
+          `google-gmail.normalizeRecord: unknown sourceRecordType "${sourceRecordType}"`,
+        );
     }
   },
 
   // Gmail push (via Pub/Sub watch) channels echo the watch `channel.token` back as
   // the X-Goog-Channel-Token header — verify it against the stored channel secret.
+  // Gmail uses users.watch (Pub/Sub-backed). We register the watch and store
+  // the channel token as the shared secret; verifyWebhook checks the echoed
+  // X-Goog-Channel-Token header. labelIds scope the watch when configured.
+  async subscribeWebhooks(
+    auth,
+    config,
+    webhookUrl,
+  ): Promise<WebhookSubscriptionResult> {
+    return subscribeGoogleWatchChannel({
+      connectorLabel: "google-gmail",
+      auth,
+      watchUrl: "https://gmail.googleapis.com/gmail/v1/users/me/watch",
+      webhookUrl,
+      recordTypes: ["message"],
+      extraBody:
+        config.labelIds && config.labelIds.length > 0
+          ? { labelIds: config.labelIds }
+          : undefined,
+    });
+  },
+
   verifyWebhook(_payload, headers, secret): boolean {
     return verifyGoogleChannelToken(headers, secret);
   },
