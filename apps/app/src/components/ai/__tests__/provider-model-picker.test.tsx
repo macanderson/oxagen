@@ -257,7 +257,7 @@ describe("ProviderModelPicker", () => {
     const ProviderModelPicker = await importPicker();
     render(<ProviderModelPicker value={null} onChange={vi.fn()} />);
     const selects = screen.getAllByTestId("select");
-    const modelSelect = selects[selects.length - 1];
+    const modelSelect = selects[selects.length - 1]!;
     expect(modelSelect).toHaveAttribute("data-disabled", "true");
   });
 });

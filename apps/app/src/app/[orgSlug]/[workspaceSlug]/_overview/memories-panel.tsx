@@ -46,15 +46,15 @@ function truncate(text: string, max: number): string {
 }
 
 /**
- * Count memories captured in the last 7 days vs the prior 7 days. `Date.now()`
- * lives here (a plain helper) rather than the component body — calling an impure
- * function during render is rejected by the React purity lint rule.
+ * Count memories captured in the last 7 days vs the 7 days before that. `now` is
+ * a default parameter (not a bare impure call in the component render body) so
+ * the React compiler doesn't flag an impure call during render — same pattern as
+ * activity-panel.tsx's `lastNDayKeys`.
  */
-function weeklyDelta(memories: AgentMemoryRecord[]): {
-  last7d: number;
-  prior7d: number;
-} {
-  const now = Date.now();
+function bucketByRecency(
+  memories: AgentMemoryListOutput["memories"],
+  now = Date.now(),
+): { last7d: number; prior7d: number } {
   let last7d = 0;
   let prior7d = 0;
   for (const m of memories) {
@@ -101,7 +101,8 @@ export async function MemoriesPanel({
     failed = true;
   }
 
-  const { last7d, prior7d } = weeklyDelta(memories);
+  const { last7d, prior7d } = bucketByRecency(memories);
+
   const recent = memories.slice(0, RECENT_ROWS);
 
   return (
