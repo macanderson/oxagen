@@ -26,8 +26,8 @@ interface GraphTileProps {
 
 export async function GraphTile({ orgId, workspaceId, userId, orgSlug, workspaceSlug }: GraphTileProps) {
   const ctx = { orgSlug, workspaceSlug };
-  const exploreHref = workspace.knowledge.explore(ctx);
-  const reposHref = workspace.knowledge.repos(ctx);
+  const exploreHref = workspace.knowledge.graph(ctx);
+  const reposHref = workspace.knowledge.sources(ctx);
 
   let stats: GraphStatsData | null = null;
   let failed = false;

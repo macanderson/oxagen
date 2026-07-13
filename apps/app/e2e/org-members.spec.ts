@@ -80,7 +80,7 @@ test("org members: fresh-org roster, seat banner, and the real seat-limit gate",
 
   // Roster: the creator, as owner. The read-only role badge (rather than the
   // RoleSelector) proves the self-row correctly suppresses mutating controls.
-  await expect(page.getByText(email)).toBeVisible();
+  await expect(page.getByText(email).first()).toBeVisible();
   await expect(page.getByText("owner", { exact: true })).toBeVisible();
 
   // Seat usage banner — free tier, 1 license, already consumed by the creator.
