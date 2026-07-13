@@ -49,6 +49,8 @@ contract-first design, IAM enforcement, and instrumentation.
 - [agent.memory.write](agent.memory.write.md) — Persist a two-axis memory (class + kind, confidence + enforcement) tied to a graph node
 - [agent.plan.approve](agent.plan.approve.md) — Approve, deny, or amend a previously-proposed plan; approval releases the agent stream to execute the plan's side-effectful steps
 - [agent.plan.create](agent.plan.create.md) — Create a structured hierarchical execution plan with tasks, dependencies, and approval gates; approval via agent.plan.approve is required before execution
+- [agent.plan.get](agent.plan.get.md) — Fetch a single execution plan by id, including its status, tasks, and approval state
+- [agent.plan.list](agent.plan.list.md) — List a workspace's execution plans, newest first, optionally filtered by status; cursor-paginated
 - [agent.repo.edit](agent.repo.edit.md) — Run the coding agent to edit files in a connected GitHub repo and open a pull request with the changes
 - [list_sandboxes](list-sandboxes.md) — List the durable sandbox sessions in the current workspace (id, key, image, status, driver, last-used/expiry timestamps), most-recently-used first
 - [agent.sandbox.exec](agent.sandbox.exec.md) — Run a shell command inside a durable sandbox session; filesystem/process state persists across calls; returns stdout, stderr, exit code

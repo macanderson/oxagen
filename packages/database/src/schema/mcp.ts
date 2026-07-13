@@ -93,10 +93,7 @@ export const mcpCredentials = mcpSchema.table(
     oauthClientSecretEnc: bytea("oauth_client_secret_enc"),
     tokenKmsKeyId: text("token_kms_key_id"),
     oauthClientId: text("oauth_client_id"),
-    scopes: text("scopes")
-      .array()
-      .notNull()
-      .default(sql`'{}'::text[]`),
+    scopes: text("scopes").array().notNull().default(sql`'{}'::text[]`),
     expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }),
     status: text("status").notNull().default("active"), // active | needs_reauth | revoked
     lastRefreshedAt: timestamp("last_refreshed_at", {
@@ -110,6 +107,12 @@ export const mcpCredentials = mcpSchema.table(
       t.orgListingId,
     ),
     orgIdx: index("credentials_org_idx").on(t.orgId),
+    // OAuth refresh watcher: a 30-min cross-tenant cron scans for expiring
+    // OAuth credentials with no covering index today (2026-07-11 audit
+    // §4.1 item 3).
+    oauthExpiringIdx: index("credentials_oauth_expiring_idx")
+      .on(t.expiresAt)
+      .where(sql`${t.authKind} = 'oauth' AND ${t.status} = 'active'`),
     authKindCheck: check(
       "credentials_auth_kind_check",
       sql`${t.authKind} IN ('oauth','secret')`,
@@ -142,9 +145,7 @@ export const mcpServers = mcpSchema.table(
     transportType: text("transport_type").notNull(),
     endpointUrl: text("endpoint_url").notNull(),
     authStrategy: text("auth_strategy").notNull(),
-    authConfig: jsonb("auth_config")
-      .notNull()
-      .default(sql`'{}'::jsonb`),
+    authConfig: jsonb("auth_config").notNull().default(sql`'{}'::jsonb`),
     healthStatus: text("health_status").notNull(),
     lastHealthcheckAt: timestamp("last_healthcheck_at", {
       withTimezone: true,
@@ -161,6 +162,30 @@ export const mcpServers = mcpSchema.table(
     wsListingUniq: uniqueIndex("mcp_servers_ws_listing_uniq")
       .on(t.workspaceId, t.orgListingId)
       .where(sql`org_listing_id IS NOT NULL`),
+    // Missing CHECK constraints on enum-shaped text (2026-07-11 audit §5
+    // item 4). Value sets confirmed against live write paths:
+    //   healthStatus  — agent.mcp.set_enabled.ts, plugin.set_enabled.ts,
+    //                    the oauth/callback route.
+    //   transportType — the agent.mcp.register/list contracts only declare
+    //                    'streamable-http' | 'stdio', but the "connect a
+    //                    custom MCP server" flow (mcp-actions.ts ->
+    //                    plugin.org.install -> plugin.set_enabled.ts) also
+    //                    writes 'sse' — the UI explicitly offers SSE, so it
+    //                    MUST be included or that flow starts throwing.
+    //   authStrategy  — agent.mcp.resolve.ts / plugin-types/mcp.ts /
+    //                    file-mcp.ts.
+    healthStatusCheck: check(
+      "mcp_servers_health_status_check",
+      sql`${t.healthStatus} IN ('healthy', 'degraded', 'unreachable', 'unknown')`,
+    ),
+    transportTypeCheck: check(
+      "mcp_servers_transport_type_check",
+      sql`${t.transportType} IN ('streamable-http', 'sse', 'stdio')`,
+    ),
+    authStrategyCheck: check(
+      "mcp_servers_auth_strategy_check",
+      sql`${t.authStrategy} IN ('none', 'bearer', 'header')`,
+    ),
   }),
 );
 
@@ -244,17 +269,11 @@ export const mcpCatalogServers = mcpSchema.table(
     title: text("title"),
     description: text("description").notNull(),
     /** Icon entries as JSON — matches the SHARED ICON DATA CONTRACT. */
-    icons: jsonb("icons")
-      .notNull()
-      .default(sql`'[]'::jsonb`),
+    icons: jsonb("icons").notNull().default(sql`'[]'::jsonb`),
     /** Local package install descriptors from the registry. */
-    packages: jsonb("packages")
-      .notNull()
-      .default(sql`'[]'::jsonb`),
+    packages: jsonb("packages").notNull().default(sql`'[]'::jsonb`),
     /** Remote transport descriptors (hosted endpoints). */
-    remotes: jsonb("remotes")
-      .notNull()
-      .default(sql`'[]'::jsonb`),
+    remotes: jsonb("remotes").notNull().default(sql`'[]'::jsonb`),
     /** Derived transport types (e.g. ["streamable-http", "stdio"]). */
     transportTypes: text("transport_types")
       .array()
@@ -296,6 +315,19 @@ export const mcpCatalogServers = mcpSchema.table(
     ),
     // Full-text search on name + title + description (GIN trigram).
     // Created as a raw SQL index in the migration for pg_trgm support.
+    // Missing CHECK constraints (2026-07-11 audit §5 item 4): status and
+    // auth_kind were documented in column comments above ("Registry-managed
+    // status: active | deprecated | deleted"; "Derived auth kind: oauth |
+    // secret | none" — same vocabulary as mcp_servers.auth_strategy's
+    // oauth|secret arm) but never enforced.
+    statusCheck: check(
+      "catalog_servers_status_check",
+      sql`${t.status} IN ('active', 'deprecated', 'deleted')`,
+    ),
+    authKindCheck: check(
+      "catalog_servers_auth_kind_check",
+      sql`${t.authKind} IN ('oauth', 'secret', 'none')`,
+    ),
   }),
 );
 

@@ -441,6 +441,15 @@ export const agentExecutions = agentSchema.table(
       t.parentExecutionId,
     ),
     createdAtIdx: index("agent_executions_created_at_idx").on(t.createdAt),
+    // Activity feed / execution list (agent.execution.list.ts,
+    // command.menu.search.ts — 2026-07-11 audit §4.1 item 1). Distinct from
+    // orgStatusIdx above, which leads with (org_id, workspace_id, status) —
+    // this composite serves the feed's created_at DESC sort directly.
+    orgWsCreatedIdx: index("agent_executions_org_ws_created_idx").on(
+      t.orgId,
+      t.workspaceId,
+      t.createdAt,
+    ),
     statusCheck: check(
       "agent_executions_status_check",
       sql`${t.status} IN ('planning', 'running', 'completed', 'failed', 'cancelled')`,

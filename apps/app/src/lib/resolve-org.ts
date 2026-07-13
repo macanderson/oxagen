@@ -193,14 +193,9 @@ export const resolveWorkspace = cache(
 function mapWorkspaceRow(
   row: typeof schema.workspaces.$inferSelect,
 ): ResolvedWorkspace {
-  // Mirror mapWorkspaceSettingsRow: read description out of the settings
-  // JSONB bag (same `settings.description` key the write handler targets).
-  const settings =
-    row.settings && typeof row.settings === "object"
-      ? (row.settings as Record<string, unknown>)
-      : {};
-  const description =
-    typeof settings.description === "string" ? settings.description : "";
+  // description is a real column now (promoted out of the settings JSONB bag —
+  // audit §1.7), matching mapWorkspaceSettingsRow.
+  const description = row.description ?? "";
   return {
     id: row.id,
     publicId: row.publicId,

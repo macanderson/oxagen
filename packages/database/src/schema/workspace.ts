@@ -4,6 +4,7 @@ import {
   index,
   integer,
   jsonb,
+  numeric,
   real,
   text,
   timestamp,
@@ -36,6 +37,14 @@ export const workspaces = workspaceSchema.table(
     // the contract layer. Same column name as users/organizations for
     // consistency, even though it may carry the spec string, not a plain URL.
     avatarUrl: text("avatar_url"),
+    // Human-readable blurb. Promoted out of the settings JSONB bag (2026-07-11
+    // audit §1.7) so workspace.settings.write and prompt.settings.write update
+    // disjoint columns and can no longer clobber each other's key.
+    description: text("description"),
+    // Workspace prompt customization ({additionalInstructions, overrides,
+    // autoImprovePrompts}). Own column for the same reason; prompt.settings.write
+    // merges it atomically via jsonb `||`.
+    promptConfig: jsonb("prompt_config").notNull().default(sql`'{}'::jsonb`),
     settings: jsonb("settings").notNull().default(sql`'{}'::jsonb`),
     // Workspace-level model defaults. NULL means the workspace sets no default
     // for that dimension and the user's own preference (or the system default)
@@ -59,7 +68,9 @@ export const workspaces = workspaceSchema.table(
       "workspaces_namespace_check",
       sql`${t.namespace} ~ '^[a-z0-9]{2,6}$'`,
     ),
-    orgIdx: index("workspaces_org_idx").on(t.orgId),
+    // workspaces_org_idx was dropped (2026-07-11 audit §4.2): a strict prefix
+    // of the unique (org_id, slug) index above, so it served no query the
+    // wider index didn't already cover.
   }),
 );
 
@@ -104,6 +115,12 @@ export const workspaceUsers = workspaceSchema.table(
     workspaceId: uuid("workspace_id").notNull(),
     userId: uuid("user_id").notNull(),
     role: text("role").notNull(),
+    // DEPRECATED — dead column. Superseded by the IAM store
+    // (`iam.role_grants` / `iam.principal_role_assignments`), which is the sole
+    // source of truth for effective permissions. No app/handler/auth code reads
+    // or writes this; it retains its `{}` insert default only. Do NOT wire new
+    // authorization logic to it — grant via IAM instead.
+    permissions: jsonb("permissions").notNull().default(sql`'{}'::jsonb`),
     joinedAt: timestamp("joined_at", {
       withTimezone: true,
       mode: "date",
@@ -162,6 +179,9 @@ export const workspaceMemoryPolicy = workspaceSchema.table(
       .defaultNow(),
   },
   (t) => ({
+    // workspace_memory_policy_workspace_idx was dropped (2026-07-11 audit
+    // §4.2): duplicate of the workspaceId.unique() constraint above (identical
+    // single column, both unique).
     workspaceIdx: uniqueIndex("workspace_memory_policy_workspace_idx").on(
       t.workspaceId,
     ),
@@ -195,7 +215,10 @@ export const workspaceBudgetPolicy = workspaceSchema.table(
     // Whether the governed budget is active for this workspace.
     enabled: boolean("enabled").notNull().default(true),
     // Governed ceiling/default in USD; NULL when no amount is set yet.
-    limitUsd: real("limit_usd"),
+    // numeric(12,2), not real/float4 (2026-07-11 audit §5 item 1): this value
+    // feeds direct comparisons/arithmetic in packages/billing/src/turn-budget.ts
+    // and float rounding error is not acceptable for a dollar ceiling.
+    limitUsd: numeric("limit_usd", { precision: 12, scale: 2, mode: "number" }),
     // Enforcement mode at the ceiling: "grace" | "prompt" | "enforce".
     mode: text("mode").notNull().default("enforce"),
     // grace mode: fraction ABOVE the limit allowed before a hard stop (0.25 = 25%).
@@ -210,6 +233,9 @@ export const workspaceBudgetPolicy = workspaceSchema.table(
       .defaultNow(),
   },
   (t) => ({
+    // workspace_budget_policy_workspace_idx was dropped (2026-07-11 audit
+    // §4.2): duplicate of the workspaceId.unique() constraint above (identical
+    // single column, both unique).
     workspaceIdx: uniqueIndex("workspace_budget_policy_workspace_idx").on(
       t.workspaceId,
     ),

@@ -180,17 +180,17 @@ describe("resolveWorkspace", () => {
       orgId: "org-1",
       name: "Production",
       slug: "prod",
-      // description is derived from the settings JSONB bag; absent settings → "".
+      // description is a real column now; absent → "".
       description: "",
       // avatarUrl maps straight off the row; absent → null.
       avatarUrl: null,
     });
   });
 
-  // (c2) Reads description out of the settings JSONB bag (settings.description)
-  // — the SAME key the workspace.settings.write handler writes. This is the
+  // (c2) Reads description off the promoted `description` column — the SAME
+  // column the workspace.settings.write handler writes. This is the
   // read-back-source === write-target invariant for OXA-1465.
-  it("reads description from the settings.description JSONB key", async () => {
+  it("reads description from the description column", async () => {
     setMockRows([
       {
         id: "ws-3",
@@ -198,15 +198,15 @@ describe("resolveWorkspace", () => {
         orgId: "org-3",
         name: "Research",
         slug: "research",
-        settings: { description: "saved description", promptConfig: { x: 1 } },
+        description: "saved description",
       },
     ]);
     const result = await resolveWorkspace("org-3", "research");
     expect(result.description).toBe("saved description");
   });
 
-  // (c3) Non-string / missing settings.description normalizes to "".
-  it("falls back to an empty description when settings has no string description", async () => {
+  // (c3) Null description column normalizes to "".
+  it("falls back to an empty description when the column is null", async () => {
     setMockRows([
       {
         id: "ws-4",
@@ -214,7 +214,7 @@ describe("resolveWorkspace", () => {
         orgId: "org-4",
         name: "NoDesc",
         slug: "nodesc",
-        settings: { description: 42 },
+        description: null,
       },
     ]);
     const result = await resolveWorkspace("org-4", "nodesc");

@@ -56,6 +56,8 @@ import "./contracts/agent.memory_policy.write";
 import "./contracts/agent.memory_promotion.list";
 import "./contracts/agent.plan.approve";
 import "./contracts/agent.plan.create";
+import "./contracts/agent.plan.get";
+import "./contracts/agent.plan.list";
 import "./contracts/agent.repo.edit";
 import "./contracts/agent.sandbox.exec";
 import "./contracts/agent.sandbox.list";

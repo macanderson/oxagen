@@ -146,7 +146,8 @@ export const leads = cmsSchema.table(
     marketingConsent: boolean("marketing_consent").notNull().default(true),
   },
   (t) => ({
-    emailIdx: index("cms_leads_email_idx").on(t.email),
+    // cms_leads_email_idx was dropped (2026-07-11 audit §4.2): duplicate of
+    // the email.unique() constraint declared above (citext, both unique).
     trackingIdx: index("cms_leads_tracking_code_idx").on(t.trackingCode),
     createdIdx: index("cms_leads_created_at_idx").on(t.createdAt),
   }),
