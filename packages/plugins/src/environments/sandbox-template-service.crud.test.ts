@@ -21,7 +21,10 @@
  * `insertReturning`. Seed the queues in the exact order the service issues them.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { SandboxTemplateManifest } from "@oxagen/oxagen/contracts";
+import type {
+  SandboxTemplateManifest,
+  SandboxTemplatePackages,
+} from "@oxagen/oxagen/contracts";
 
 // ── Capture state ─────────────────────────────────────────────────────────────
 
@@ -827,5 +830,101 @@ describe("listAgentBindings", () => {
     expect(result).toHaveLength(1);
     expect(result[0]!.environmentName).toBe("Prod");
     expect(result[0]!.isPrimary).toBe(true);
+  });
+});
+
+// ── packages round-trip (create → get/list → update → export) ────────────────────
+
+describe("sandbox-template packages", () => {
+  const initial: SandboxTemplatePackages = [
+    { manager: "npm", names: ["react", "typescript"] },
+  ];
+  const changed: SandboxTemplatePackages = [
+    { manager: "pip", names: ["fastapi", "pydantic==2.5"] },
+  ];
+
+  it("createTemplate persists packages and returns them in the summary", async () => {
+    // env lookup, reloaded template row (carries packages), tools.
+    state.selectQueue = [[envRow()], [tplRow({ packages: initial })], []];
+    state.insertReturning = [[{ id: "sbx-int", publicId: "sbx-pub" }]];
+
+    const result = await createTemplate(actor, {
+      environmentId: "env-pub",
+      name: "Base Runner",
+      slug: "base-runner",
+      packages: initial,
+    });
+
+    // The insert carried the packages payload through to the DB.
+    const values = templateInserts()[0]!.values as Record<string, unknown>;
+    expect(values.packages).toEqual(initial);
+    // The reloaded summary surfaces them.
+    expect(result.packages).toEqual(initial);
+  });
+
+  it("defaults packages to [] when the create input omits them", async () => {
+    // tplRow() has no packages key → toSummary coalesces to [].
+    state.selectQueue = [[envRow()], [tplRow()], []];
+    state.insertReturning = [[{ id: "sbx-int", publicId: "sbx-pub" }]];
+
+    const result = await createTemplate(actor, {
+      environmentId: "env-pub",
+      name: "Base Runner",
+      slug: "base-runner",
+    });
+
+    const values = templateInserts()[0]!.values as Record<string, unknown>;
+    expect(values.packages).toEqual([]);
+    expect(result.packages).toEqual([]);
+  });
+
+  it("getTemplate returns the stored packages", async () => {
+    state.selectQueue = [[tplRow({ packages: initial })], []];
+    const result = await getTemplate(actor, { templateId: "sbx-pub" });
+    expect(result.packages).toEqual(initial);
+  });
+
+  it("listTemplates carries packages on each summary", async () => {
+    state.selectQueue = [[tplRow({ packages: initial })], []];
+    const result = await listTemplates(actor);
+    expect(result).toHaveLength(1);
+    expect(result[0]!.packages).toEqual(initial);
+  });
+
+  it("updateTemplate writes the new packages and reflects them in the summary", async () => {
+    // existing row (old packages), reloaded row (new packages), tools.
+    state.selectQueue = [
+      [tplRow({ packages: initial })],
+      [tplRow({ packages: changed })],
+      [],
+    ];
+    const result = await updateTemplate(actor, {
+      templateId: "sbx-pub",
+      packages: changed,
+    });
+    // The update SET carried the new packages payload.
+    expect(templateUpdates()[0]!.set.packages).toEqual(changed);
+    // The reloaded summary reflects the change.
+    expect(result.packages).toEqual(changed);
+  });
+
+  it("updateTemplate leaves packages untouched when the input omits them", async () => {
+    state.selectQueue = [
+      [tplRow({ packages: initial })],
+      [tplRow({ packages: initial })],
+      [],
+    ];
+    await updateTemplate(actor, { templateId: "sbx-pub", name: "Renamed" });
+    // packages is only written when input.packages !== undefined.
+    expect("packages" in templateUpdates()[0]!.set).toBe(false);
+  });
+
+  it("exportTemplate includes the template's packages in the manifest", async () => {
+    // getTemplate: reloaded row + tools; then listSecretKeys is mocked below.
+    state.selectQueue = [[tplRow({ packages: initial })], []];
+    vaultMocks.listSecretKeys.mockResolvedValue([]);
+
+    const manifest = await exportTemplate(actor, { templateId: "sbx-pub" });
+    expect(manifest.packages).toEqual(initial);
   });
 });
