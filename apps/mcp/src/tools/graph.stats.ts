@@ -9,6 +9,9 @@ export const schema = {
   includeByType: graphStats.input.shape.includeByType.describe(
     "Include breakdown by node label and edge type in the response",
   ),
+  includeGrowth: graphStats.input.shape.includeGrowth.describe(
+    "Include node-creation growth buckets (today/yesterday/this week/last week) and a 14-day daily series",
+  ),
 };
 
 export const metadata: ToolMetadata = {
