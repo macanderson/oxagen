@@ -54,7 +54,7 @@ describe("GraphTile", () => {
     expect(screen.getByText("120")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /explore graph/i })).toHaveAttribute(
       "href",
-      "/acme/prod/knowledge/explore",
+      "/acme/prod/knowledge/graph",
     );
   });
 
@@ -73,7 +73,7 @@ describe("GraphTile", () => {
     expect(screen.getByText(/no graph data yet/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /connect a source/i })).toHaveAttribute(
       "href",
-      "/acme/prod/knowledge/repos",
+      "/acme/prod/knowledge/sources",
     );
   });
 
