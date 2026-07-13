@@ -19,7 +19,14 @@
 // never at a public URL, they are returned by the redeem route after a code is
 // validated and consumed.
 
-import { boolean, check, index, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import {
+  boolean,
+  check,
+  index,
+  text,
+  timestamp,
+  uuid,
+} from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { cmsSchema } from "./_schemas";
 import { citext, idMixin, auditMixin } from "./_mixins";
@@ -85,7 +92,10 @@ export const DEFAULT_EDITION_SLUG: EditionSlug = "page-flip-reader";
 // ── Enums ─────────────────────────────────────────────────────────────────────
 
 export const companySizeEnum = cmsSchema.enum("company_size", COMPANY_SIZES);
-export const referralSourceEnum = cmsSchema.enum("referral_source", REFERRAL_SOURCES);
+export const referralSourceEnum = cmsSchema.enum(
+  "referral_source",
+  REFERRAL_SOURCES,
+);
 
 // ── cms.leads ─────────────────────────────────────────────────────────────────
 
@@ -160,8 +170,6 @@ export const bookEditions = cmsSchema.table(
     bookSlug: text("book_slug").notNull(),
     format: text("format").notNull(),
     title: text("title").notNull(),
-    description: text("description").notNull(),
-    ogImageUrl: text("og_image_url"),
     html: text("html").notNull(),
     published: boolean("published").notNull().default(true),
   },

@@ -90,15 +90,19 @@ function makeDb(state: DbState) {
   };
 }
 
-const dbStateHolder: { instance: ReturnType<typeof makeDb> | null } = { instance: null };
+const dbStateHolder: { instance: ReturnType<typeof makeDb> | null } = {
+  instance: null,
+};
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
     db: () => dbStateHolder.instance,
-    withTenantDb: async (fn: (tx: unknown) => unknown) => fn(dbStateHolder.instance),
-    withSystemDb: async (fn: (tx: unknown) => unknown) => fn(dbStateHolder.instance),
+    withTenantDb: async (fn: (tx: unknown) => unknown) =>
+      fn(dbStateHolder.instance),
+    withSystemDb: async (fn: (tx: unknown) => unknown) =>
+      fn(dbStateHolder.instance),
   };
 });
 
@@ -221,7 +225,12 @@ describe("getOrgBillingStatus", () => {
 
   it("pastDue is true when subscription status is past_due", async () => {
     const state = makeDbState();
-    state.settingsRow = { dunningState: "active", delinquentSince: null, graceEndsAt: null, suspendedAt: null };
+    state.settingsRow = {
+      dunningState: "active",
+      delinquentSince: null,
+      graceEndsAt: null,
+      suspendedAt: null,
+    };
     state.subRow = { status: "past_due" };
     dbStateHolder.instance = makeDb(state);
     const status = await getOrgBillingStatus("org-abc");
@@ -232,14 +241,24 @@ describe("getOrgBillingStatus", () => {
 describe("assertOrgCanConsume", () => {
   it("resolves without throwing when state is active", async () => {
     const state = makeDbState();
-    state.settingsRow = { dunningState: "active", delinquentSince: null, graceEndsAt: null, suspendedAt: null };
+    state.settingsRow = {
+      dunningState: "active",
+      delinquentSince: null,
+      graceEndsAt: null,
+      suspendedAt: null,
+    };
     dbStateHolder.instance = makeDb(state);
     await expect(assertOrgCanConsume("org-abc")).resolves.toBeUndefined();
   });
 
   it("resolves without throwing when state is grace", async () => {
     const state = makeDbState();
-    state.settingsRow = { dunningState: "grace", delinquentSince: new Date(), graceEndsAt: new Date(), suspendedAt: null };
+    state.settingsRow = {
+      dunningState: "grace",
+      delinquentSince: new Date(),
+      graceEndsAt: new Date(),
+      suspendedAt: null,
+    };
     dbStateHolder.instance = makeDb(state);
     await expect(assertOrgCanConsume("org-abc")).resolves.toBeUndefined();
   });
@@ -256,12 +275,19 @@ describe("assertOrgCanConsume", () => {
     };
     dbStateHolder.instance = makeDb(state);
 
-    await expect(assertOrgCanConsume("org-abc")).rejects.toThrow(BillingSuspendedError);
+    await expect(assertOrgCanConsume("org-abc")).rejects.toThrow(
+      BillingSuspendedError,
+    );
   });
 
   it("BillingSuspendedError has correct code", async () => {
     const state = makeDbState();
-    state.settingsRow = { dunningState: "suspended", delinquentSince: null, graceEndsAt: null, suspendedAt: null };
+    state.settingsRow = {
+      dunningState: "suspended",
+      delinquentSince: null,
+      graceEndsAt: null,
+      suspendedAt: null,
+    };
     dbStateHolder.instance = makeDb(state);
 
     let caught: unknown;
@@ -271,7 +297,9 @@ describe("assertOrgCanConsume", () => {
       caught = e;
     }
     expect(caught).toBeInstanceOf(BillingSuspendedError);
-    expect((caught as InstanceType<typeof BillingSuspendedError>).code).toBe("billing_suspended");
+    expect((caught as InstanceType<typeof BillingSuspendedError>).code).toBe(
+      "billing_suspended",
+    );
   });
 });
 
@@ -299,7 +327,11 @@ describe("onInvoicePaymentFailed", () => {
 
   it("updates existing settings row to grace state", async () => {
     const state = makeDbState();
-    state.settingsRow = { id: "settings-uuid-1", dunningState: "active", delinquentSince: null };
+    state.settingsRow = {
+      id: "settings-uuid-1",
+      dunningState: "active",
+      delinquentSince: null,
+    };
     dbStateHolder.instance = makeDb(state);
 
     await onInvoicePaymentFailed(makeInvoice({ orgId: "org-abc" }));
@@ -332,7 +364,9 @@ describe("onInvoicePaymentFailed", () => {
     state.subRow = { orgId: "org-from-sub" };
     dbStateHolder.instance = makeDb(state);
 
-    await onInvoicePaymentFailed(makeInvoice({ orgId: null, subscriptionId: "sub_test_001" }));
+    await onInvoicePaymentFailed(
+      makeInvoice({ orgId: null, subscriptionId: "sub_test_001" }),
+    );
 
     // If we reached insert, org was resolved.
     expect(state.insertCalled).toBe(true);
@@ -344,7 +378,9 @@ describe("onInvoicePaymentFailed", () => {
     state.subRow = null;
     dbStateHolder.instance = makeDb(state);
 
-    await onInvoicePaymentFailed(makeInvoice({ orgId: null, subscriptionId: null }));
+    await onInvoicePaymentFailed(
+      makeInvoice({ orgId: null, subscriptionId: null }),
+    );
 
     expect(state.insertCalled).toBe(false);
     expect(state.updateSets).toHaveLength(0);
@@ -387,13 +423,51 @@ describe("onInvoicePaymentFailed", () => {
     expect(notifyOrgManagersMock).toHaveBeenCalledOnce();
   });
 
+  it("does not re-notify on a Stripe retry within the same delinquency episode", async () => {
+    // lastDunningNotifiedAt stamped at/after delinquentSince = already emailed
+    // this episode; a subsequent payment_failed must advance state but not spam.
+    const episodeStart = new Date("2026-03-01T00:00:00Z");
+    const state = makeDbState();
+    state.settingsRow = {
+      id: "settings-uuid-1",
+      dunningState: "grace",
+      delinquentSince: episodeStart,
+      lastDunningNotifiedAt: episodeStart,
+    };
+    dbStateHolder.instance = makeDb(state);
+
+    await onInvoicePaymentFailed(makeInvoice({ orgId: "org-abc" }));
+
+    // State still advanced, but no second email.
+    expect(state.updateSets[0]?.dunningState).toBe("grace");
+    expect(notifyOrgManagersMock).not.toHaveBeenCalled();
+  });
+
+  it("stamps lastDunningNotifiedAt when it emails a fresh delinquency episode", async () => {
+    const state = makeDbState();
+    state.settingsRow = {
+      id: "settings-uuid-1",
+      dunningState: "active",
+      delinquentSince: null,
+      lastDunningNotifiedAt: null,
+    };
+    dbStateHolder.instance = makeDb(state);
+
+    await onInvoicePaymentFailed(makeInvoice({ orgId: "org-abc" }));
+
+    expect(state.updateSets[0]?.lastDunningNotifiedAt).toBeInstanceOf(Date);
+    expect(notifyOrgManagersMock).toHaveBeenCalledOnce();
+  });
+
   it("notification is not sent when orgId cannot be resolved", async () => {
     const state = makeDbState();
     state.settingsRow = null;
     state.subRow = null;
     dbStateHolder.instance = makeDb(state);
 
-    await onInvoicePaymentFailed(makeInvoice({ orgId: null, subscriptionId: null }));
+    await onInvoicePaymentFailed(
+      makeInvoice({ orgId: null, subscriptionId: null }),
+    );
 
     expect(notifyOrgManagersMock).not.toHaveBeenCalled();
   });
@@ -449,8 +523,18 @@ describe("sweepDunning", () => {
     const past = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const state = makeDbState();
     state.settingsMany = [
-      { id: "settings-uuid-1", orgId: "org-abc", dunningState: "grace", graceEndsAt: past },
-      { id: "settings-uuid-2", orgId: "org-xyz", dunningState: "grace", graceEndsAt: past },
+      {
+        id: "settings-uuid-1",
+        orgId: "org-abc",
+        dunningState: "grace",
+        graceEndsAt: past,
+      },
+      {
+        id: "settings-uuid-2",
+        orgId: "org-xyz",
+        dunningState: "grace",
+        graceEndsAt: past,
+      },
     ];
     dbStateHolder.instance = makeDb(state);
 

@@ -52,8 +52,6 @@ export const principals = iamSchema.table(
     displayName: text("display_name").notNull(),
     // CHECK: status IN ('active','suspended','deleted')
     status: text("status").notNull().default("active"),
-    // MFA lifecycle — 'none' | 'pending' | 'enrolled' | 'bypass'
-    mfaStatus: text("mfa_status").notNull().default("none"),
     // Link to the identity provider subject (e.g. OAuth sub, SSO nameId).
     idpSubject: text("idp_subject"),
     // For delegated agents: the human principal they act on behalf of.

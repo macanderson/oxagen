@@ -41,7 +41,10 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 });
 vi.mock("@oxagen/tenancy", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/tenancy")>();
-  return { ...real, runInTenantScope: (_s: unknown, fn: () => unknown) => fn() };
+  return {
+    ...real,
+    runInTenantScope: (_s: unknown, fn: () => unknown) => fn(),
+  };
 });
 
 import {
@@ -74,8 +77,18 @@ describe("toA2ATask", () => {
     contextId: "ctx_1",
     state: "completed",
     messageHistory: [
-      { kind: "message", role: "user", parts: [{ kind: "text", text: "a" }], messageId: "m1" },
-      { kind: "message", role: "agent", parts: [{ kind: "text", text: "b" }], messageId: "m2" },
+      {
+        kind: "message",
+        role: "user",
+        parts: [{ kind: "text", text: "a" }],
+        messageId: "m1",
+      },
+      {
+        kind: "message",
+        role: "agent",
+        parts: [{ kind: "text", text: "b" }],
+        messageId: "m2",
+      },
     ],
     artifacts: [{ artifactId: "art_1", parts: [{ kind: "text", text: "b" }] }],
     statusMessage: null,
@@ -180,7 +193,12 @@ describe("task store CRUD", () => {
           contextId: "ctx_1",
           state: "working",
           messageHistory: [
-            { kind: "message", role: "user", parts: [{ kind: "text", text: "a" }], messageId: "m1" },
+            {
+              kind: "message",
+              role: "user",
+              parts: [{ kind: "text", text: "a" }],
+              messageId: "m1",
+            },
           ],
           artifacts: [],
           statusMessage: null,
@@ -193,7 +211,12 @@ describe("task store CRUD", () => {
       state: "completed",
       artifacts: [{ artifactId: "art", parts: [{ kind: "text", text: "b" }] }],
       appendMessages: [
-        { kind: "message", role: "agent", parts: [{ kind: "text", text: "b" }], messageId: "m2" },
+        {
+          kind: "message",
+          role: "agent",
+          parts: [{ kind: "text", text: "b" }],
+          messageId: "m2",
+        },
       ],
     });
     expect(row!.id).toBe("00000000-0000-0000-0000-000000000001");
@@ -202,7 +225,7 @@ describe("task store CRUD", () => {
     expect(row!.artifacts).toHaveLength(1);
   });
 
-  it("threads agentId/fanoutRunId only when explicitly provided in the patch", async () => {
+  it("threads agentId only when explicitly provided in the patch", async () => {
     enqueue(
       [
         {
@@ -233,8 +256,26 @@ describe("task store CRUD", () => {
 
   it("flattens message history across a context", async () => {
     enqueue([
-      { messageHistory: [{ kind: "message", role: "user", parts: [{ kind: "text", text: "a" }], messageId: "m1" }] },
-      { messageHistory: [{ kind: "message", role: "agent", parts: [{ kind: "text", text: "b" }], messageId: "m2" }] },
+      {
+        messageHistory: [
+          {
+            kind: "message",
+            role: "user",
+            parts: [{ kind: "text", text: "a" }],
+            messageId: "m1",
+          },
+        ],
+      },
+      {
+        messageHistory: [
+          {
+            kind: "message",
+            role: "agent",
+            parts: [{ kind: "text", text: "b" }],
+            messageId: "m2",
+          },
+        ],
+      },
     ]);
     const history = await loadContextHistory(CTX, "ctx_1");
     expect(history.map((m) => m.messageId)).toEqual(["m1", "m2"]);

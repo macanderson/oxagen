@@ -40,7 +40,6 @@ function makeRow(
     content: overrides.content ?? "hello",
     contentBlocks: overrides.contentBlocks ?? null,
     branchReason: overrides.branchReason ?? null,
-    isActiveInBranch: overrides.isActiveInBranch ?? true,
     metadata: overrides.metadata ?? {},
     createdByUserId: overrides.createdByUserId ?? "user-1",
     updatedByUserId: overrides.updatedByUserId ?? "user-1",
@@ -71,12 +70,31 @@ describe("walkActiveBranch", () => {
 
   // 3. Linear chain with a real leafId
   it("returns the full chain root→leaf when leafId points to the last message", () => {
-    const m1 = makeRow({ id: "m1", parentMessageId: null, role: "user", content: "u1" });
-    const m2 = makeRow({ id: "m2", parentMessageId: "m1", role: "assistant", content: "a1" });
-    const m3 = makeRow({ id: "m3", parentMessageId: "m2", role: "user", content: "u2" });
+    const m1 = makeRow({
+      id: "m1",
+      parentMessageId: null,
+      role: "user",
+      content: "u1",
+    });
+    const m2 = makeRow({
+      id: "m2",
+      parentMessageId: "m1",
+      role: "assistant",
+      content: "a1",
+    });
+    const m3 = makeRow({
+      id: "m3",
+      parentMessageId: "m2",
+      role: "user",
+      content: "u2",
+    });
 
     const result = walkActiveBranch([m1, m2, m3], "m3");
-    expect(result.map((r) => r.publicId)).toEqual(["pub_m1", "pub_m2", "pub_m3"]);
+    expect(result.map((r) => r.publicId)).toEqual([
+      "pub_m1",
+      "pub_m2",
+      "pub_m3",
+    ]);
     expect(result[0]?.role).toBe("user");
     expect(result[1]?.role).toBe("assistant");
     expect(result[2]?.role).toBe("user");
@@ -95,8 +113,16 @@ describe("walkActiveBranch", () => {
   // 5. Branched tree: two children of m2 — leafId selects the non-default branch
   it("returns the branch ending at the selected leaf, not the default branch", () => {
     const m1 = makeRow({ id: "m1", parentMessageId: null, content: "root" });
-    const m2 = makeRow({ id: "m2", parentMessageId: "m1", content: "branch A" });
-    const m3 = makeRow({ id: "m3", parentMessageId: "m1", content: "branch B" });
+    const m2 = makeRow({
+      id: "m2",
+      parentMessageId: "m1",
+      content: "branch A",
+    });
+    const m3 = makeRow({
+      id: "m3",
+      parentMessageId: "m1",
+      content: "branch B",
+    });
 
     // leafId selects m3 (branch B)
     const result = walkActiveBranch([m1, m2, m3], "m3");
@@ -128,15 +154,29 @@ describe("walkActiveBranch", () => {
 
   // 8. contentBlocks preserved when present; undefined when absent
   it("preserves contentBlocks array when the row has them", () => {
-    const blocks = [{ type: "approval-request" as const, approvalId: "ap-1", resolution: undefined }];
-    const m1 = makeRow({ id: "m1", parentMessageId: null, contentBlocks: blocks as unknown as DbMessageRow["contentBlocks"] });
+    const blocks = [
+      {
+        type: "approval-request" as const,
+        approvalId: "ap-1",
+        resolution: undefined,
+      },
+    ];
+    const m1 = makeRow({
+      id: "m1",
+      parentMessageId: null,
+      contentBlocks: blocks as unknown as DbMessageRow["contentBlocks"],
+    });
 
     const result = walkActiveBranch([m1], "m1");
     expect(result[0]?.contentBlocks).toEqual(blocks);
   });
 
   it("returns undefined contentBlocks when the row has null/non-array contentBlocks", () => {
-    const m1 = makeRow({ id: "m1", parentMessageId: null, contentBlocks: null });
+    const m1 = makeRow({
+      id: "m1",
+      parentMessageId: null,
+      contentBlocks: null,
+    });
 
     const result = walkActiveBranch([m1], "m1");
     expect(result[0]?.contentBlocks).toBeUndefined();
@@ -168,7 +208,11 @@ describe("walkActiveBranch", () => {
   });
 
   it("returns undefined attachments when metadata.attachments is an empty array", () => {
-    const m1 = makeRow({ id: "m1", parentMessageId: null, metadata: { attachments: [] } });
+    const m1 = makeRow({
+      id: "m1",
+      parentMessageId: null,
+      metadata: { attachments: [] },
+    });
     const result = walkActiveBranch([m1], "m1");
     expect(result[0]?.attachments).toBeUndefined();
   });
@@ -184,14 +228,20 @@ describe("walkActiveBranch", () => {
     const m1 = makeRow({
       id: "m1",
       parentMessageId: null,
-      metadata: { attachments: [good, { publicId: "gen_bad" }, "not-an-object", null] },
+      metadata: {
+        attachments: [good, { publicId: "gen_bad" }, "not-an-object", null],
+      },
     });
     const result = walkActiveBranch([m1], "m1");
     expect(result[0]?.attachments).toEqual([good]);
   });
 
   it("returns undefined attachments when metadata is null", () => {
-    const m1 = makeRow({ id: "m1", parentMessageId: null, metadata: null as never });
+    const m1 = makeRow({
+      id: "m1",
+      parentMessageId: null,
+      metadata: null as never,
+    });
     const result = walkActiveBranch([m1], "m1");
     expect(result[0]?.attachments).toBeUndefined();
   });
