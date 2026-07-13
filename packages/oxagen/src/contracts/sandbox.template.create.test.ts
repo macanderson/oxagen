@@ -15,7 +15,15 @@ const template = {
   network: { mode: "public" as const },
   secretSelection: "all" as const,
   literalEnv: { SWEBENCH_SPLIT: "verified" },
-  tools: [{ id: "sbt_1", kind: "capability" as const, ref: "agent.code.execute", config: {} }],
+  packages: [{ manager: "pip" as const, names: ["fastapi", "pydantic==2.5"] }],
+  tools: [
+    {
+      id: "sbt_1",
+      kind: "capability" as const,
+      ref: "agent.code.execute",
+      config: {},
+    },
+  ],
 };
 
 describe("sandbox.template.create contract", () => {
@@ -46,14 +54,48 @@ describe("sandbox.template.create contract", () => {
         slug: "t",
         provider: "docker",
         runtime: "node:22",
-        resources: { vcpu: 4, memoryMb: 8192, timeoutMs: 300000, diskMb: 20480 },
+        resources: {
+          vcpu: 4,
+          memoryMb: 8192,
+          timeoutMs: 300000,
+          diskMb: 20480,
+        },
         network: { mode: "static_egress" },
         secretSelection: { keyPublicIds: ["sk_1"] },
         literalEnv: { A: "b" },
+        packages: [{ manager: "npm", names: ["react", "typescript"] }],
         tools: [{ kind: "agent_skill", ref: "swe-bench" }],
         setAsDefault: true,
       }),
     ).not.toThrow();
+  });
+  it("accepts packages as optional input and defaults names to []", () => {
+    // Omitted entirely — packages is optional on the create input.
+    expect(() =>
+      sandboxTemplateCreate.input.parse({
+        environmentId: "env_1",
+        name: "T",
+        slug: "t",
+      }),
+    ).not.toThrow();
+    // A group with names omitted parses (names defaults to []).
+    const parsed = sandboxTemplateCreate.input.parse({
+      environmentId: "env_1",
+      name: "T",
+      slug: "t",
+      packages: [{ manager: "apt" }],
+    });
+    expect(parsed.packages).toEqual([{ manager: "apt", names: [] }]);
+  });
+  it("rejects an unknown package manager in the input", () => {
+    expect(() =>
+      sandboxTemplateCreate.input.parse({
+        environmentId: "env_1",
+        name: "T",
+        slug: "t",
+        packages: [{ manager: "conda", names: [] }],
+      }),
+    ).toThrow();
   });
   it("rejects resources above the bounds", () => {
     expect(() =>
@@ -66,9 +108,25 @@ describe("sandbox.template.create contract", () => {
     ).toThrow();
   });
   it("rejects input missing the required environmentId", () => {
-    expect(() => sandboxTemplateCreate.input.parse({ name: "T", slug: "t" })).toThrow();
+    expect(() =>
+      sandboxTemplateCreate.input.parse({ name: "T", slug: "t" }),
+    ).toThrow();
   });
   it("accepts a valid output", () => {
-    expect(() => sandboxTemplateCreate.output.parse({ template })).not.toThrow();
+    expect(() =>
+      sandboxTemplateCreate.output.parse({ template }),
+    ).not.toThrow();
+  });
+  it("carries packages through the summary output shape", () => {
+    const out = sandboxTemplateCreate.output.parse({ template });
+    expect(out.template.packages).toEqual([
+      { manager: "pip", names: ["fastapi", "pydantic==2.5"] },
+    ]);
+  });
+  it("rejects an output whose summary omits packages (required array)", () => {
+    const { packages: _omit, ...withoutPackages } = template;
+    expect(() =>
+      sandboxTemplateCreate.output.parse({ template: withoutPackages }),
+    ).toThrow();
   });
 });

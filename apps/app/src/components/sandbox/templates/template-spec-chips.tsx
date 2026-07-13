@@ -10,8 +10,21 @@ import { NETWORK_MODE_META, PROVIDER_META } from "./manifest-field-meta";
 
 type ChipTemplate = Pick<
   SandboxTemplateSummary,
-  "provider" | "runtime" | "resources" | "network" | "secretSelection" | "tools"
+  | "provider"
+  | "runtime"
+  | "resources"
+  | "network"
+  | "secretSelection"
+  | "packages"
+  | "tools"
 >;
+
+/** Total package specs across every manager group. */
+export function templatePackageCount(
+  packages: ChipTemplate["packages"],
+): number {
+  return packages.reduce((n, group) => n + group.names.length, 0);
+}
 
 export function templateResourceSummary(
   resources: ChipTemplate["resources"],
@@ -34,8 +47,16 @@ function truncateImageRef(ref: string): string {
 }
 
 export function TemplateSpecChips({ template }: { template: ChipTemplate }) {
-  const { provider, runtime, resources, network, secretSelection, tools } =
-    template;
+  const {
+    provider,
+    runtime,
+    resources,
+    network,
+    secretSelection,
+    packages,
+    tools,
+  } = template;
+  const packageCount = templatePackageCount(packages);
   return (
     <div
       className="flex flex-wrap items-center gap-1"
@@ -70,6 +91,11 @@ export function TemplateSpecChips({ template }: { template: ChipTemplate }) {
       <Badge variant="outline" size="sm">
         {tools.length} tool{tools.length === 1 ? "" : "s"}
       </Badge>
+      {packageCount > 0 && (
+        <Badge variant="outline" size="sm">
+          {packageCount} package{packageCount === 1 ? "" : "s"}
+        </Badge>
+      )}
     </div>
   );
 }
