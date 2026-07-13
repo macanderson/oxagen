@@ -8,7 +8,11 @@ export const evalRunSeries = registerCapability({
     "Bucketed score-over-time series for eval runs (optionally scoped to one dataset), plus a per-model breakdown (avg score, pass rate, and a time series) — the read that backs score-trend and model-comparison charts. Score only; no cost metric in v1.",
   mode: "sync",
   surfaces: ["api", "mcp", "cli"],
-  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
+  // No app surface yet: the score-trend / model-comparison charts this read is
+  // meant to back are not wired in apps/app (no component invokes
+  // get_eval_run_series). Drop "app" from layers until those charts ship —
+  // re-add it with a binding + runtime proof in capability-ui-map.json then.
+  layers: ["schema", "api", "mcp", "unit", "docs"],
   scoped: true,
   noBillingGate: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "read" },
