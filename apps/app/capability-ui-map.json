@@ -1065,57 +1065,75 @@
     },
     "create_dataset": {
       "route": "/[orgSlug]/[workspaceSlug]/evals",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/evals/create-dataset-drawer.tsx",
-      "entry": "New dataset drawer → Manual mode → createDatasetAction",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/evals/create-dataset-dialog.tsx",
+      "entry": "New dataset dialog → Manual mode → createDatasetAction",
       "testid": "evals-create-manual-submit",
       "proof": "apps/app/e2e/evals-write-path.spec.ts",
-      "verifiedAt": "2026-07-12",
-      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+      "verifiedAt": null,
+      "verifiedBy": "session_evals-redesign"
     },
     "create_trace_dataset": {
       "route": "/[orgSlug]/[workspaceSlug]/evals",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/evals/create-dataset-drawer.tsx",
-      "entry": "New dataset drawer → From traces mode → createTraceDatasetAction",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/evals/create-dataset-dialog.tsx",
+      "entry": "New dataset dialog → From traces mode → createTraceDatasetAction",
       "testid": "evals-create-traces-submit",
       "proof": "apps/app/e2e/evals-write-path.spec.ts",
-      "verifiedAt": "2026-07-12",
-      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+      "verifiedAt": null,
+      "verifiedBy": "session_evals-redesign"
     },
     "add_dataset_item": {
-      "route": "/[orgSlug]/[workspaceSlug]/evals",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/evals/dataset-detail-drawer.tsx",
-      "entry": "Dataset detail drawer → Add item form → addDatasetItemAction",
+      "route": "/[orgSlug]/[workspaceSlug]/evals/datasets/[datasetId]",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/evals/datasets/[datasetId]/dataset-items-panel.tsx",
+      "entry": "Dataset detail page → Items panel → Add item form → addDatasetItemAction",
       "testid": "evals-add-item-submit",
       "proof": "apps/app/e2e/evals-write-path.spec.ts",
-      "verifiedAt": "2026-07-12",
-      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+      "verifiedAt": null,
+      "verifiedBy": "session_evals-redesign"
     },
     "get_dataset": {
-      "route": "/[orgSlug]/[workspaceSlug]/evals",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/evals/dataset-detail-drawer.tsx",
-      "entry": "Dataset card click → drawer open → getDatasetAction loads items",
-      "testid": "evals-dataset-drawer",
+      "route": "/[orgSlug]/[workspaceSlug]/evals/datasets/[datasetId]",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/evals/datasets/[datasetId]/dataset-detail-section.tsx",
+      "entry": "Dataset card click → dataset detail page → get_dataset RSC + getDatasetAction (Load more)",
+      "testid": "evals-dataset-detail",
       "proof": "apps/app/e2e/evals-write-path.spec.ts",
-      "verifiedAt": "2026-07-12",
-      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+      "verifiedAt": null,
+      "verifiedBy": "session_evals-redesign"
     },
     "start_eval_run": {
-      "route": "/[orgSlug]/[workspaceSlug]/evals",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/evals/dataset-detail-drawer.tsx",
-      "entry": "Dataset detail drawer → Run eval launcher → startEvalRunAction",
+      "route": "/[orgSlug]/[workspaceSlug]/evals/datasets/[datasetId]",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/evals/datasets/[datasetId]/run-setup-panel.tsx",
+      "entry": "Dataset detail page → Run setup panel (provider/model pickers) → startEvalRunAction",
       "testid": "evals-run-start",
       "proof": "apps/app/e2e/evals-write-path.spec.ts",
-      "verifiedAt": "2026-07-12",
-      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+      "verifiedAt": null,
+      "verifiedBy": "session_evals-redesign"
     },
     "get_eval_status": {
-      "route": "/[orgSlug]/[workspaceSlug]/evals",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/evals/dataset-detail-drawer.tsx",
-      "entry": "Run launcher status poll → getEvalRunStatusAction (evals-run-status chip)",
+      "route": "/[orgSlug]/[workspaceSlug]/evals/datasets/[datasetId]",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/evals/datasets/[datasetId]/run-setup-panel.tsx",
+      "entry": "Run setup panel status poll → getEvalRunStatusAction (evals-run-status chip)",
       "testid": "evals-run-status",
       "proof": "apps/app/e2e/evals-write-path.spec.ts",
-      "verifiedAt": "2026-07-12",
-      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+      "verifiedAt": null,
+      "verifiedBy": "session_evals-redesign"
+    },
+    "list_eval_runs": {
+      "route": "/[orgSlug]/[workspaceSlug]/evals/datasets/[datasetId]",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/evals/datasets/[datasetId]/runs-table.tsx",
+      "entry": "Dataset detail page → Runs table (date filter / sort / paginate) → listEvalRunsAction; also the home Recent runs section (list_eval_runs RSC)",
+      "testid": "evals-runs-table",
+      "proof": "apps/app/e2e/evals-write-path.spec.ts",
+      "verifiedAt": null,
+      "verifiedBy": "session_evals-redesign"
+    },
+    "get_eval_run_series": {
+      "route": "/[orgSlug]/[workspaceSlug]/evals/datasets/[datasetId]",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/evals/datasets/[datasetId]/eval-charts.tsx",
+      "entry": "Dataset detail page → performance charts (score-over-time + model comparison + gauges) fed by get_eval_run_series",
+      "testid": "evals-charts",
+      "proof": "apps/app/e2e/evals-write-path.spec.ts",
+      "verifiedAt": null,
+      "verifiedBy": "session_evals-redesign"
     }
   }
 }
