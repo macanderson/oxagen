@@ -54,7 +54,7 @@ export interface SandboxSummary {
   /** ISO time the session's work was recovered to a branch. */
   recoveredAt?: string | null;
   /**
-   * Repos cloned into `/workspace/<repo>` at warm time, when any were
+   * Repos cloned into `/work/<repo>` at warm time, when any were
    * requested. Absent until the sibling repo-aware warm-flow change starts
    * returning it — the UI treats a missing/empty array as "no repos".
    */
@@ -181,7 +181,7 @@ export async function startSandbox(
     /** Workspace environment (env_…) whose vault secrets bind to the session. */
     environmentId?: string;
     /**
-     * Repos to clone into `/workspace/<repo>` during provisioning (max 8,
+     * Repos to clone into `/work/<repo>` during provisioning (max 8,
      * enforced by the action's zod schema). Each entry's `branch` defaults to
      * the repo's default branch server-side when omitted.
      */

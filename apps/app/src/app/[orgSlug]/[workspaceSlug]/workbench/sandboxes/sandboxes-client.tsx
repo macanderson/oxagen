@@ -1,42 +1,36 @@
 "use client";
 
 /**
- * sandboxes-client.tsx — the Workbench → Sandboxes list + "warm a sandbox" panel.
+ * sandboxes-client.tsx — the Workbench → Sandboxes list.
  *
- * Two truthfulness rules drive the list: (1) a sandbox's user-assigned name is
- * always its primary on-screen label — the sbx_ id is demoted to a small,
- * copyable secondary chip, never the headline (an unlabeled session reads as
- * "Untitled sandbox", never its id); (2) the default view shows ONLY sessions
- * the provider currently agrees are running/idle — a cleaned-out, stopped, or
- * reaped sandbox never lingers in the list looking alive. A "Show inactive"
- * toggle opts into the full history for debugging. A ~8s visibility-paused
- * poll (mirroring SandboxLogsConsole's live-tail pattern) keeps the list
- * truthful without a manual refresh, and every mutation (warm/rename/stop)
- * re-polls immediately afterward.
+ * Redesigned for calm: creation lives behind a single "New sandbox" primary
+ * action (see sandbox-create-dialog.tsx) instead of an always-open form, and
+ * each session is one compact row — name + status first, everything else demoted
+ * to a single muted metadata line — so the list reads as a list, not a wall of
+ * chips.
  *
- * Warming supports both the built-in presets and any saved sandbox template
- * (grouped separately in the picker), plus an optional set of GitHub repos to
- * clone into `/workspace/<repo>` — see sandbox-repo-picker.tsx.
+ * Two truthfulness rules still drive it: (1) a sandbox's user-assigned name is
+ * its primary on-screen label — the sbx_ id is never the headline (an unlabeled
+ * session reads as "Untitled sandbox"); (2) the default view shows ONLY sessions
+ * the provider currently agrees are running/idle — an Active / All segmented
+ * filter opts into the full history. A ~8s visibility-paused poll keeps the list
+ * truthful without a manual refresh, and every mutation re-polls immediately.
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Boxes, Pencil, Play, Square, Terminal } from "lucide-react";
+import { Boxes, GitBranch, Pencil, Plus, Square } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { StatusDot } from "@/components/ui/status-dot";
-import { Switch } from "@/components/ui/switch";
 import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardPanel,
-} from "@/components/ui/card";
+  SegmentedControl,
+  SegmentedControlItem,
+} from "@/components/ui/segmented-control";
 import {
   Dialog,
   DialogPopup,
@@ -46,33 +40,12 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectPopup,
-  SelectGroup,
-  SelectLabel,
-  SelectItem,
-} from "@/components/ui/select";
-import { CopyableId } from "@/components/knowledge/graph-explorer/copyable-id";
 import { workspace } from "@/lib/routes";
 import type { SandboxSummary, SandboxStatus } from "@/lib/workbench/sandboxes";
 import type { RepoOption } from "@/components/chat/repo-selector";
 import type { SandboxTemplateSummary } from "./sandbox-template-actions";
+import { SandboxCreateDialog } from "./sandbox-create-dialog";
 import {
-  WARM_UP_TEMPLATES,
-  DEFAULT_TEMPLATE_ID,
-  templateById,
-} from "@/components/sandbox/warm-up-templates";
-import { SandboxTemplateCard } from "@/components/sandbox/sandbox-template-card";
-import {
-  SandboxRepoPicker,
-  toSandboxRepoInputs,
-  type SandboxRepoSelection,
-} from "@/components/sandbox/sandbox-repo-picker";
-import {
-  startSandboxAction,
   stopSandboxAction,
   renameSandboxAction,
   refreshSandboxesAction,
@@ -90,6 +63,7 @@ const STATUS_DOT: Record<
 };
 
 const POLL_MS = 8_000;
+
 /** Sessions the provider currently agrees are live — everything else is "inactive". */
 function isActiveStatus(status: SandboxStatus): boolean {
   return status === "running" || status === "idle";
@@ -112,9 +86,9 @@ export interface SandboxesClientProps {
   initialSandboxes: SandboxSummary[];
   canManage: boolean;
   unavailable: boolean;
-  /** Saved sandbox templates (Settings → Environments), selectable alongside the built-in presets. */
+  /** Saved sandbox templates (Settings → Environments), selectable in the create flow. */
   templates: SandboxTemplateSummary[];
-  /** The workspace's usable GitHub repos, for the warm flow's repo picker. */
+  /** The workspace's usable GitHub repos, for the create flow's repo picker. */
   repoOptions: RepoOption[];
 }
 
@@ -133,36 +107,17 @@ export function SandboxesClient({
     [orgSlug, workspaceSlug],
   );
 
-  // ── Warm-up form state ──────────────────────────────────────────────────────
-  const [templateId, setTemplateId] = useState(DEFAULT_TEMPLATE_ID);
-  const [name, setName] = useState("");
-  const [repoRows, setRepoRows] = useState<SandboxRepoSelection[]>([]);
-  const [warmError, setWarmError] = useState<string | null>(null);
-  const [warming, setWarming] = useState(false);
+  // ── Create dialog ───────────────────────────────────────────────────────────
+  const [creating, setCreating] = useState(false);
 
-  const savedTemplates = useMemo(
-    () => templates.filter((t) => t.isActive),
-    [templates],
-  );
-  const isSavedTemplate = templateId.startsWith("sbx_");
-  const presetTemplate = useMemo(
-    () => (isSavedTemplate ? null : templateById(templateId)),
-    [templateId, isSavedTemplate],
-  );
-  const selectedSavedTemplate = isSavedTemplate
-    ? (savedTemplates.find((t) => t.id === templateId) ?? null)
-    : null;
-
-  const trimmedName = name.trim();
-  const canWarm = canManage && !warming && trimmedName.length > 0;
-
-  // ── Session list state — truthful (default active-only) + live-tail poll ────
+  // ── Session list — truthful (default active-only) + live-tail poll ──────────
   const [sandboxes, setSandboxes] = useState<SandboxSummary[]>(() =>
     initialSandboxes.filter((s) => isActiveStatus(s.status)),
   );
-  const [showInactive, setShowInactive] = useState(false);
+  const [filter, setFilter] = useState<"active" | "all">("active");
   const [listError, setListError] = useState<string | null>(null);
   const [stoppingId, setStoppingId] = useState<string | null>(null);
+  const showInactive = filter === "all";
 
   const refresh = useCallback(
     async (activeOnly: boolean) => {
@@ -237,319 +192,176 @@ export function SandboxesClient({
     }
   };
 
-  const onWarm = async () => {
-    setWarmError(null);
-    setWarming(true);
-    const res = await startSandboxAction({
-      ...scope,
-      name: trimmedName,
-      templateId,
-      repos: toSandboxRepoInputs(repoRows, repoOptions),
-    });
-    setWarming(false);
-    if (res.ok) {
-      router.push(
-        workspace.workbench.sandbox(
-          { orgSlug, workspaceSlug },
-          res.sandbox.sessionId,
-        ),
-      );
-      return;
-    }
-    setWarmError(res.error);
+  const onWarmed = (sessionId: string) => {
+    setCreating(false);
+    router.push(workspace.workbench.sandbox(scope, sessionId));
   };
 
   return (
-    <div className="flex flex-col gap-8">
-      {/* Warm-up panel */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Play className="h-4 w-4" aria-hidden />
-            Warm a sandbox
-          </CardTitle>
-          <CardDescription>
-            Name it, pick a template, optionally pre-clone repos, and provision
-            a durable sandbox — its one-time setup runs at create time so an
-            agent wakes up to a ready workspace.
-          </CardDescription>
-        </CardHeader>
-        <CardPanel className="flex flex-col gap-4">
-          {unavailable ? (
-            <div
-              role="status"
-              className="rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-warning-foreground"
-            >
-              Durable sandboxes aren&apos;t configured for this environment
-              (SANDBOX_ENABLED + a Modal driver are required). You can still
-              browse recorded sessions below; warming a new one will fail until
-              it&apos;s enabled.
-            </div>
+    <div className="flex flex-col gap-4">
+      {/* Toolbar */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="flex items-baseline gap-2 text-lg font-semibold">
+          Sessions
+          {sandboxes.length > 0 ? (
+            <span className="text-sm font-normal tabular-nums text-muted-foreground">
+              {sandboxes.length}
+            </span>
           ) : null}
-
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
-            <div className="flex flex-1 flex-col gap-1.5">
-              <Label htmlFor="sandbox-name">Name</Label>
-              <Input
-                id="sandbox-name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. acme-api refactor"
-                maxLength={80}
-                autoComplete="off"
-                aria-describedby="sandbox-name-hint"
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="sandbox-template">Template</Label>
-              <Select
-                value={templateId}
-                onValueChange={(v) => setTemplateId(v ?? DEFAULT_TEMPLATE_ID)}
-              >
-                <SelectTrigger
-                  id="sandbox-template"
-                  className="w-full sm:w-64"
-                  aria-label="Sandbox template"
-                >
-                  <SelectValue placeholder="Choose a template">
-                    {(value: string | null) => {
-                      if (!value) return "Choose a template";
-                      if (value.startsWith("sbx_")) {
-                        return (
-                          savedTemplates.find((t) => t.id === value)?.name ??
-                          value
-                        );
-                      }
-                      return templateById(value).label;
-                    }}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectPopup>
-                  {savedTemplates.length > 0 ? (
-                    <SelectGroup>
-                      <SelectLabel>Saved templates</SelectLabel>
-                      {savedTemplates.map((t) => (
-                        <SelectItem key={t.id} value={t.id}>
-                          {t.name}
-                        </SelectItem>
-                      ))}
-                    </SelectGroup>
-                  ) : null}
-                  <SelectGroup>
-                    <SelectLabel>Presets</SelectLabel>
-                    {WARM_UP_TEMPLATES.map((t) => (
-                      <SelectItem key={t.id} value={t.id}>
-                        {t.label}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                </SelectPopup>
-              </Select>
-            </div>
+        </h2>
+        <div className="flex items-center gap-2">
+          <SegmentedControl
+            value={filter}
+            onValueChange={(v) => setFilter(v === "all" ? "all" : "active")}
+            aria-label="Filter sandboxes"
+          >
+            <SegmentedControlItem value="active">Active</SegmentedControlItem>
+            <SegmentedControlItem value="all">All</SegmentedControlItem>
+          </SegmentedControl>
+          {canManage ? (
             <Button
               type="button"
-              onClick={() => void onWarm()}
-              disabled={!canWarm}
-              className="shrink-0"
+              size="sm"
+              onClick={() => setCreating(true)}
+              className="gap-1"
+              data-testid="sandbox-new"
             >
-              {warming ? "Warming…" : "Warm sandbox"}
+              <Plus className="h-4 w-4" aria-hidden />
+              New sandbox
             </Button>
-          </div>
-          <p id="sandbox-name-hint" className="text-xs text-muted-foreground">
-            A name so you can tell your sandboxes apart later — it doesn&apos;t
-            need to be unique.
-          </p>
-
-          {presetTemplate ? (
-            <SandboxTemplateCard template={presetTemplate} />
-          ) : selectedSavedTemplate ? (
-            <div className="flex flex-col gap-2 rounded-xl border border-border bg-muted/30 p-4">
-              <span className="text-sm font-semibold text-foreground">
-                {selectedSavedTemplate.name}
-              </span>
-              {selectedSavedTemplate.description ? (
-                <p className="text-xs leading-relaxed text-muted-foreground">
-                  {selectedSavedTemplate.description}
-                </p>
-              ) : null}
-              <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                <span>provider: {selectedSavedTemplate.provider}</span>
-                {selectedSavedTemplate.runtime ? (
-                  <span>runtime: {selectedSavedTemplate.runtime}</span>
-                ) : null}
-                <span>network: {selectedSavedTemplate.network.mode}</span>
-              </div>
-            </div>
           ) : null}
-
-          <div className="flex flex-col gap-1.5">
-            <Label>Repos to clone</Label>
-            <SandboxRepoPicker
-              repositories={repoOptions}
-              rows={repoRows}
-              onRowsChange={setRepoRows}
-              connectIntegrationsHref={workspace.marketplace.integrations(
-                scope,
-              )}
-              disabled={warming}
-            />
-          </div>
-
-          {!canManage ? (
-            <p className="text-xs text-muted-foreground">
-              Only workspace owners and admins can warm sandboxes.
-            </p>
-          ) : null}
-          {warmError ? (
-            <p role="alert" className="text-sm text-error">
-              {warmError}
-            </p>
-          ) : null}
-        </CardPanel>
-      </Card>
-
-      {/* Session list */}
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center justify-between gap-2">
-          <h2 className="flex items-baseline gap-2 text-lg font-semibold">
-            Sessions
-            {sandboxes.length > 0 ? (
-              <span className="text-sm font-normal tabular-nums text-muted-foreground">
-                {sandboxes.length}
-              </span>
-            ) : null}
-          </h2>
-          <label className="flex min-h-9 cursor-pointer items-center gap-2 text-xs text-muted-foreground">
-            <Switch
-              checked={showInactive}
-              onCheckedChange={(c) => setShowInactive(c === true)}
-              aria-label="Show inactive sandboxes"
-            />
-            Show inactive
-          </label>
         </div>
-        {listError ? (
-          <p role="alert" className="text-sm text-error">
-            {listError}
-          </p>
-        ) : null}
-        {sandboxes.length === 0 ? (
-          <EmptyState
-            variant="dashed"
-            icon={<Boxes />}
-            title={
-              showInactive ? "No sandbox sessions yet" : "No active sandboxes"
-            }
-            description={
-              showInactive
-                ? "Warm one above to give an agent a ready workspace."
-                : 'Warm one above, or toggle "Show inactive" to see stopped sessions.'
-            }
-          />
-        ) : (
-          <ul className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-            {sandboxes.map((s) => {
-              const active = isActiveStatus(s.status);
-              return (
-                <li
-                  key={s.sessionId}
-                  className="flex flex-col gap-2 rounded-xl border border-border bg-background p-4 transition-colors hover:border-ring"
-                  data-status={s.status}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <Link
-                      href={workspace.workbench.sandbox(scope, s.sessionId)}
-                      className="flex min-w-0 flex-1 flex-col gap-2 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                      <span
-                        className={
-                          "flex items-center gap-2 text-sm font-medium " +
-                          (active ? "" : "text-muted-foreground")
-                        }
-                      >
-                        <Terminal
-                          className="h-4 w-4 shrink-0 text-muted-foreground"
-                          aria-hidden
-                        />
-                        {s.label ? (
-                          <span className="truncate">{s.label}</span>
-                        ) : (
-                          <span className="italic text-muted-foreground">
-                            Untitled sandbox
-                          </span>
-                        )}
-                      </span>
-                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                        <CopyableId value={s.sessionId} label="id" max={18} />
-                        <span>image: {s.image}</span>
-                        <span>driver: {s.driver}</span>
-                        <span>last used: {relativeTime(s.lastUsedAt)}</span>
-                      </div>
-                      {s.repos && s.repos.length > 0 ? (
-                        <ul className="flex flex-wrap gap-1.5">
-                          {s.repos.map((r) => (
-                            <li key={`${r.owner}/${r.repo}`}>
-                              <Badge
-                                variant="muted"
-                                size="sm"
-                                className="font-mono font-normal"
-                              >
-                                {r.owner}/{r.repo}
-                                {r.branch ? `@${r.branch}` : ""}
-                              </Badge>
-                            </li>
-                          ))}
-                        </ul>
-                      ) : null}
-                    </Link>
-                    <div className="flex shrink-0 flex-col items-end gap-2">
-                      <div className="flex items-center gap-1.5">
-                        {s.recoveryStatus === "failed" ? (
-                          <Badge variant="error" size="sm">
-                            recovery failed
-                          </Badge>
-                        ) : null}
-                        <StatusDot
-                          status={STATUS_DOT[s.status]}
-                          pulse={s.status === "running"}
-                          size="sm"
-                          label={s.status}
-                          className="text-xs capitalize text-muted-foreground"
-                        />
-                      </div>
-                      {canManage ? (
-                        <div className="flex items-center gap-1">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon-sm"
-                            aria-label="Rename sandbox"
-                            onClick={() => openRename(s)}
-                          >
-                            <Pencil className="size-3.5" aria-hidden />
-                          </Button>
-                          {active ? (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon-sm"
-                              aria-label="Stop sandbox"
-                              onClick={() => void onStop(s.sessionId)}
-                              disabled={stoppingId === s.sessionId}
-                            >
-                              <Square className="size-3.5" aria-hidden />
-                            </Button>
-                          ) : null}
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        )}
       </div>
+
+      {listError ? (
+        <p role="alert" className="text-sm text-error">
+          {listError}
+        </p>
+      ) : null}
+
+      {sandboxes.length === 0 ? (
+        <EmptyState
+          variant="dashed"
+          icon={<Boxes />}
+          title={
+            showInactive ? "No sandbox sessions yet" : "No active sandboxes"
+          }
+          description={
+            canManage
+              ? "Warm one to give an agent a ready workspace — its terminal, files, and packages live here."
+              : "No sandboxes are running in this workspace right now."
+          }
+          action={
+            canManage ? (
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => setCreating(true)}
+                className="gap-1"
+              >
+                <Plus className="h-4 w-4" aria-hidden />
+                New sandbox
+              </Button>
+            ) : undefined
+          }
+        />
+      ) : (
+        <ul className="flex flex-col gap-2">
+          {sandboxes.map((s) => {
+            const active = isActiveStatus(s.status);
+            const repoCount = s.repos?.length ?? 0;
+            return (
+              <li
+                key={s.sessionId}
+                data-status={s.status}
+                className="group flex items-center gap-3 rounded-xl border border-border bg-background p-3.5 transition-colors hover:border-ring hover:bg-muted/20"
+              >
+                <StatusDot
+                  status={STATUS_DOT[s.status]}
+                  pulse={s.status === "running"}
+                  size="sm"
+                  label={s.status}
+                  className="shrink-0"
+                />
+                <Link
+                  href={workspace.workbench.sandbox(scope, s.sessionId)}
+                  className="flex min-w-0 flex-1 flex-col gap-0.5 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <span className="flex items-center gap-2">
+                    <span
+                      className={
+                        "truncate text-sm font-medium " +
+                        (active ? "text-foreground" : "text-muted-foreground")
+                      }
+                    >
+                      {s.label ?? "Untitled sandbox"}
+                    </span>
+                    {s.recoveryStatus === "failed" ? (
+                      <Badge variant="error" size="sm" className="shrink-0">
+                        recovery failed
+                      </Badge>
+                    ) : null}
+                  </span>
+                  <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+                    <span className="capitalize">{s.status}</span>
+                    <span aria-hidden>·</span>
+                    <span className="font-mono">{s.image}</span>
+                    <span aria-hidden>·</span>
+                    <span>{relativeTime(s.lastUsedAt)}</span>
+                    {repoCount > 0 ? (
+                      <>
+                        <span aria-hidden>·</span>
+                        <span className="inline-flex items-center gap-1">
+                          <GitBranch className="h-3 w-3" aria-hidden />
+                          {repoCount} repo{repoCount === 1 ? "" : "s"}
+                        </span>
+                      </>
+                    ) : null}
+                  </span>
+                </Link>
+                {canManage ? (
+                  <div className="flex shrink-0 items-center gap-0.5">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label="Rename sandbox"
+                      onClick={() => openRename(s)}
+                    >
+                      <Pencil className="size-3.5" aria-hidden />
+                    </Button>
+                    {active ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label="Stop sandbox"
+                        onClick={() => void onStop(s.sessionId)}
+                        disabled={stoppingId === s.sessionId}
+                      >
+                        <Square className="size-3.5" aria-hidden />
+                      </Button>
+                    ) : null}
+                  </div>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      {/* Create flow */}
+      <SandboxCreateDialog
+        open={creating}
+        onOpenChange={setCreating}
+        orgSlug={orgSlug}
+        workspaceSlug={workspaceSlug}
+        canManage={canManage}
+        unavailable={unavailable}
+        templates={templates}
+        repoOptions={repoOptions}
+        onWarmed={onWarmed}
+      />
 
       {/* Rename dialog */}
       <Dialog

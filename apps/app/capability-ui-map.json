@@ -388,15 +388,6 @@
       "verifiedAt": null,
       "verifiedBy": "web-app-2.0-phase-2"
     },
-    "get_graph_stats": {
-      "route": "/[orgSlug]/[workspaceSlug]",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/page.tsx",
-      "entry": "Overview → Graph grounding tile (GraphTile RSC → GraphStatsBoxes / zero state) on page load",
-      "testid": "overview-graph-tile",
-      "proof": "apps/app/e2e/workspace-overview.spec.ts",
-      "verifiedAt": "2026-07-12",
-      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
-    },
     "get_node": {
       "route": "/[orgSlug]/[workspaceSlug]/knowledge/graph/[nodeId]",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/knowledge/graph/[nodeId]/page.tsx",
@@ -915,7 +906,9 @@
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/automations/workflows/page.tsx",
       "entry": "Swarm row → detail drawer ResearchSwarmCard poll",
       "testid": null,
-      "proof": "apps/app/e2e/automations-workflows.spec.ts"
+      "proof": "apps/app/e2e/automations-workflows.spec.ts",
+      "verifiedAt": null,
+      "verifiedBy": null
     },
     "sync_repo": {
       "route": "/[orgSlug]/[workspaceSlug]/workbench/repos",

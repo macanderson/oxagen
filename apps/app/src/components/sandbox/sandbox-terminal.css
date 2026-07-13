@@ -2,12 +2,12 @@
  * sandbox-terminal.css — the dedicated theme for the interactive sandbox
  * terminal (NOT the shared code-surface used by chat scrollback cards).
  *
- * The chat `code-surface` is deliberately theme-aware and low-contrast so a
- * captured-output card blends into the page. This surface is the opposite: a
- * real, premium terminal console that reads as a distinct, recessed device in
- * BOTH light and dark themes. It stays dark in both (a light "terminal" reads
- * as a card, not a shell) — light text on a deep graphite in light mode, near
- * black in dark mode — so contrast is high (≈13:1) either way.
+ * The console is theme-aware in BOTH directions: a genuinely LIGHT surface in
+ * light mode (a soft, near-white paper with dark ink — high contrast without the
+ * harsh near-black slab that overpowered the light app) and a deep, recessed
+ * near-black console in dark mode. Each theme carries its own ANSI palette so
+ * colours stay readable against their own background (bright ANSI on dark; the
+ * same hues darkened for light).
  *
  * It is fully self-contained: it defines the ANSI colour classes that the
  * shared `parseAnsiLine` emits (`.ansi-dim/.ansi-fg/.ansi-magenta/.ansi-cyan`)
@@ -17,34 +17,35 @@
  */
 
 .sandbox-term {
-  /* Light theme: a deep, cool graphite console — distinct from the white page
-   * chrome but not pure black, so it harmonises with a light app. */
-  --term-bg: #1b2130;
-  --term-bg-elevated: #212838;
-  --term-fg: #e8edf5;
-  --term-fg-muted: #9aa6bd;
-  --term-fg-faint: #6d7994;
-  --term-border: #2c3346;
+  /* Light theme: a soft, near-white paper console — clearly a distinct device
+   * (faintly cool, recessed) but low-contrast against a light app, not a black
+   * slab. Dark ink for high legibility. */
+  --term-bg: #f6f8fb;
+  --term-bg-elevated: #ffffff;
+  --term-fg: #1b2230;
+  --term-fg-muted: #5a6474;
+  --term-fg-faint: #8a95a6;
+  --term-border: #e2e7ee;
 
-  /* Prompt chrome. */
-  --term-glyph: #6ee7a8; /* the ❯ prompt marker (starship-green) */
-  --term-path: #57c7ff; /* the cwd shown before the prompt */
-  --term-accent: #7cc4ff; /* caret + focus ring */
+  /* Prompt chrome — darkened so it reads on a light surface. */
+  --term-glyph: #12915a; /* the ❯ prompt marker (green-600-ish) */
+  --term-path: #2563eb; /* the cwd shown before the prompt (blue-600) */
+  --term-accent: #2563eb; /* caret + focus ring */
 
-  /* ANSI palette — bright, tuned for a dark console, shared by both themes
-   * (the surface is dark in both). Red/green/yellow/blue drive the scoped
-   * `text-*` overrides below; magenta/cyan/dim/fg drive the `.ansi-*` classes. */
-  --term-red: #ff7b72;
-  --term-green: #7ee787;
-  --term-yellow: #f2cc60;
-  --term-blue: #79c0ff;
-  --term-magenta: #d2a8ff;
-  --term-cyan: #56d4dd;
-  --term-dim: #7683a0;
+  /* ANSI palette — hues tuned for a LIGHT console (darkened so they read on
+   * near-white). Red/green/yellow/blue drive the scoped `text-*` overrides
+   * below; magenta/cyan/dim/fg drive the `.ansi-*` classes. */
+  --term-red: #d1352c;
+  --term-green: #137a41;
+  --term-yellow: #a8620a; /* amber, not yellow — yellow is invisible on white */
+  --term-blue: #1a66d6;
+  --term-magenta: #8b3fd6;
+  --term-cyan: #0e7d94;
+  --term-dim: #94a0b3;
 
   color: var(--term-fg);
   border-color: var(--term-border);
-  /* A faint top-down depth gradient so the console reads as a recessed device. */
+  /* A faint top-down depth gradient so the console still reads as a device. */
   background-color: var(--term-bg);
   background-image: linear-gradient(
     180deg,
@@ -54,7 +55,8 @@
   caret-color: var(--term-accent);
 }
 
-/* Dark theme: sink deeper than the page's dark cards for a true console feel. */
+/* Dark theme: sink deeper than the page's dark cards for a true console feel,
+ * with the original bright ANSI palette that reads against near-black. */
 .dark .sandbox-term {
   --term-bg: #0a0e17;
   --term-bg-elevated: #101623;
@@ -62,6 +64,18 @@
   --term-fg-muted: #8b98ac;
   --term-fg-faint: #5f6b80;
   --term-border: #1e2634;
+
+  --term-glyph: #6ee7a8;
+  --term-path: #57c7ff;
+  --term-accent: #7cc4ff;
+
+  --term-red: #ff7b72;
+  --term-green: #7ee787;
+  --term-yellow: #f2cc60;
+  --term-blue: #79c0ff;
+  --term-magenta: #d2a8ff;
+  --term-cyan: #56d4dd;
+  --term-dim: #7683a0;
 }
 
 /* ── Text / border roles ─────────────────────────────────────────────────── */
@@ -95,9 +109,9 @@
   color: var(--term-red);
 }
 
-/* Native caret + selection tuned for the dark console. */
+/* Native caret + selection tuned per theme via --term-accent. */
 .sandbox-term ::selection {
-  background-color: color-mix(in srgb, var(--term-accent) 30%, transparent);
+  background-color: color-mix(in srgb, var(--term-accent) 24%, transparent);
 }
 
 /* ── ANSI classes emitted by parseAnsiLine ───────────────────────────────── */
