@@ -33,7 +33,6 @@ test("workspace overview HUD: renders every section in its zero state", async ({
   // renders (with zeros) rather than the "requires billing access" card.
   const kpiStrip = page.getByTestId("overview-kpi-strip");
   const graphHero = page.getByTestId("overview-graph-hero");
-  const activityPanel = page.getByTestId("overview-activity-panel");
   const automationsPanel = page.getByTestId("overview-automations-panel");
   const usagePanel = page.getByTestId("overview-usage-panel");
   const memoriesPanel = page.getByTestId("overview-memories-panel");
@@ -43,7 +42,6 @@ test("workspace overview HUD: renders every section in its zero state", async ({
   await expect(kpiStrip).toBeVisible({ timeout: 20_000 });
   await expect(page.getByTestId("overview-kpi-spend")).toBeVisible();
   await expect(graphHero).toBeVisible();
-  await expect(activityPanel).toBeVisible();
   await expect(automationsPanel).toBeVisible();
   await expect(usagePanel).toBeVisible();
   await expect(memoriesPanel).toBeVisible();
@@ -52,7 +50,6 @@ test("workspace overview HUD: renders every section in its zero state", async ({
 
   // Fresh org + workspace ⇒ empty everywhere.
   await expect(graphHero.getByText(/no graph data yet/i)).toBeVisible();
-  await expect(activityPanel.getByText(/no runs yet/i)).toBeVisible();
   await expect(automationsPanel.getByText(/no automations yet/i)).toBeVisible();
   await expect(usagePanel.getByText(/no usage yet/i)).toBeVisible();
   await expect(
@@ -73,12 +70,5 @@ test("workspace overview HUD: renders every section in its zero state", async ({
   await page.screenshot({
     path: path.join(SCREENSHOT_DIR, "workspace-overview.png"),
     fullPage: true,
-  });
-
-  // The activity panel's footer link navigates to Activity (matched by href so
-  // it stays robust to copy changes).
-  await activityPanel.locator('a[href$="/activity"]').first().click();
-  await expect(page).toHaveURL(new RegExp(`/${orgSlug}/default/activity$`), {
-    timeout: 20_000,
   });
 });

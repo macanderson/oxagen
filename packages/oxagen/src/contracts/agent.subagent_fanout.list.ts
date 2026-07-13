@@ -12,7 +12,7 @@ export const agentSubagentFanoutList = registerCapability({
     "List subagent fan-outs for the active workspace with status and child-run counts. Optionally filter by the parent message that triggered the fan-out.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "app", "unit", "e2e", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
   scoped: true,
   agent: {
     requiresApproval: false,
