@@ -77,9 +77,14 @@ test("parent routes resolve to their default sub-page without erroring", async (
 
   for (const { from, to } of redirects) {
     await gotoStable(page, from);
-    await page.waitForURL(to, { timeout: 20_000 });
-    expect(page.url(), `bare parent ${from} should resolve to ${to}`).toMatch(
+    // Poll the URL only (toHaveURL) — NOT waitForURL, which also waits for the
+    // "load" lifecycle event. PPR-streamed pages (the Overview page especially)
+    // can keep "load" pending or re-fire it on RSC prefetch, so the redirect
+    // lands correctly but "load" never settles and waitForURL times out even
+    // though page.url() already matches.
+    await expect(page, `bare parent ${from} should resolve to ${to}`).toHaveURL(
       to,
+      { timeout: 20_000 },
     );
     await expectHealthyPage(page);
   }
