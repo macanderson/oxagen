@@ -85,8 +85,21 @@ export function SchemaConditionSection({
         Event configuration
       </p>
 
-      {/* No-schema CTA — the section is disabled until a schema exists. */}
-      {!loading && !hasSchema && (
+      {/* Error state — the registry failed to load; this is distinct from a
+          genuinely empty schema, so we don't tell the user "no schema". */}
+      {!loading && error && (
+        <div
+          className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+          data-testid="schema-error"
+          role="alert"
+        >
+          Couldn’t load the workspace schema. {error}
+        </div>
+      )}
+
+      {/* No-schema CTA — the section is disabled until a schema exists. Only
+          shown when the registry loaded successfully with no labels. */}
+      {!loading && !error && !hasSchema && (
         <div
           className="flex items-start gap-3 rounded-lg border border-border bg-background p-3 text-sm"
           data-testid="no-schema-cta"
@@ -110,11 +123,6 @@ export function SchemaConditionSection({
             >
               Define a schema →
             </a>
-            {error && (
-              <p className="text-xs text-destructive" role="alert">
-                {error}
-              </p>
-            )}
           </div>
         </div>
       )}
