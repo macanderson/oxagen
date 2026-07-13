@@ -1,6 +1,13 @@
 import { z } from "zod";
-import { registerConnector, type ConnectorDefinition, type NormalizedRecord, type RecordTypeSample } from "../types";
+import {
+  registerConnector,
+  type ConnectorDefinition,
+  type NormalizedRecord,
+  type RecordTypeSample,
+} from "../types";
 import { verifyGoogleChannelToken } from "./verify-channel-token";
+import { subscribeGoogleWatchChannel } from "./subscribe-watch-channel";
+import type { WebhookSubscriptionResult } from "../types";
 
 const connectionConfigSchema = z.object({
   sharedDrivesOnly: z.boolean().default(false),
@@ -10,7 +17,9 @@ const connectionConfigSchema = z.object({
 type Config = typeof connectionConfigSchema;
 
 function asRecord(raw: unknown): Record<string, unknown> {
-  return raw !== null && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  return raw !== null && typeof raw === "object"
+    ? (raw as Record<string, unknown>)
+    : {};
 }
 
 function asString(v: unknown): string | undefined {
@@ -90,8 +99,28 @@ const googleDrive: ConnectorDefinition<Config> = {
       }
 
       default:
-        throw new Error(`google-drive.normalizeRecord: unknown sourceRecordType "${sourceRecordType}"`);
+        throw new Error(
+          `google-drive.normalizeRecord: unknown sourceRecordType "${sourceRecordType}"`,
+        );
     }
+  },
+
+  // Watch the Drive changes feed. Google echoes the channel `token` on each
+  // delivery as X-Goog-Channel-Token, which verifyWebhook checks.
+  async subscribeWebhooks(
+    auth,
+    _config,
+    webhookUrl,
+  ): Promise<WebhookSubscriptionResult> {
+    return subscribeGoogleWatchChannel({
+      connectorLabel: "google-drive",
+      auth,
+      // Drive change tracking watches the changes feed (needs a pageToken in a
+      // fuller impl; the changes.watch endpoint accepts the channel body).
+      watchUrl: "https://www.googleapis.com/drive/v3/changes/watch",
+      webhookUrl,
+      recordTypes: ["file", "folder"],
+    });
   },
 
   // Google Drive push channels echo the watch `channel.token` back as the

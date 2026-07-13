@@ -166,12 +166,23 @@ export const webhookSubscriptions = ingestionSchema.table(
       withTimezone: true,
       mode: "date",
     }),
+    // Provider subscription expiry (Graph ~3d, Google watch ~7d). The renewal
+    // cron (ingestion.webhook-renew) re-subscribes rows nearing this. NULL for
+    // providers whose subscriptions do not expire.
+    expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
   },
   (t) => ({
     connectionIdx: index("webhook_subscriptions_connection_idx").on(
       t.connectionId,
     ),
     statusIdx: index("webhook_subscriptions_status_idx").on(t.status),
+    // Partial index backing the renewal scan (active + expiring rows only).
+    renewalIdx: index("webhook_subscriptions_renewal_idx")
+      .on(t.expiresAt)
+      .where(sql`${t.status} = 'active' AND ${t.expiresAt} IS NOT NULL`),
   }),
 );
 
