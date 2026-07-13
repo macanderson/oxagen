@@ -1,7 +1,10 @@
 // @vitest-environment jsdom
 /// <reference types="@testing-library/jest-dom" />
 /**
- * create-dataset-drawer.test.tsx — component tests for CreateDatasetForm.
+ * create-dataset-dialog.test.tsx — component tests for CreateDatasetForm.
+ *
+ * CreateDatasetForm is deliberately split out from the Dialog shell so it can
+ * be unit-tested without mounting the Dialog portal machinery.
  *
  * Covers:
  *   (a) Initial render — Manual mode by default, name/description visible,
@@ -104,7 +107,7 @@ vi.mock("@/components/ui/select", () => ({
   ),
 }));
 
-import { CreateDatasetForm } from "./create-dataset-drawer";
+import { CreateDatasetForm } from "./create-dataset-dialog";
 
 const PROPS = { orgSlug: "acme", workspaceSlug: "research" };
 

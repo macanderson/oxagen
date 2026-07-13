@@ -18,6 +18,7 @@ import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org
 import { PageHeader } from "@/components/ui/page-header";
 import { TableSkeleton } from "@/components/loading";
 import { DatasetsSection } from "./datasets-section";
+import { RecentRunsSection } from "./recent-runs-section";
 
 interface PageProps {
   params: Promise<{ orgSlug: string; workspaceSlug: string }>;
@@ -53,6 +54,16 @@ export default async function EvalsPage({ params }: PageProps) {
 
       <Suspense fallback={<TableSkeleton rows={4} cols={5} />}>
         <DatasetsSection
+          orgId={org.id}
+          workspaceId={ws.id}
+          userId={session.user.id}
+          orgSlug={orgSlug}
+          workspaceSlug={workspaceSlug}
+        />
+      </Suspense>
+
+      <Suspense fallback={<TableSkeleton rows={4} cols={8} />}>
+        <RecentRunsSection
           orgId={org.id}
           workspaceId={ws.id}
           userId={session.user.id}

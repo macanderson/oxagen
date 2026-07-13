@@ -1,14 +1,17 @@
 "use client";
 
 /**
- * create-dataset-drawer.tsx — "New dataset" affordance for Workspace → Evals.
+ * create-dataset-dialog.tsx — "New dataset" affordance for Workspace → Evals.
  *
  * Two independent halves so the form can be unit-tested without mounting the
- * Drawer/Sheet portal machinery:
+ * Dialog portal machinery:
  *   - CreateDatasetForm — the mode toggle (Manual / From traces) + fields +
  *     submit. Calls eval.dataset.create or eval.dataset.from_traces depending
  *     on the selected mode.
- *   - CreateDatasetDrawer — the Phase-0 Drawer shell wrapping the form.
+ *   - CreateDatasetDialog — the Dialog shell wrapping the form. The evals home
+ *     LINKS to a full dataset detail page, so creation is the only remaining
+ *     modal here; a centred Dialog (not a slide-over Drawer) matches the rest
+ *     of the app's "create" flows.
  */
 
 import * as React from "react";
@@ -20,7 +23,13 @@ import { Label } from "@/components/ui/label";
 import { SegmentedControl, SegmentedControlItem } from "@/components/ui/segmented-control";
 import { Select, SelectTrigger, SelectValue, SelectPopup, SelectItem } from "@/components/ui/select";
 import { useToast } from "@/components/ui/toast";
-import { Drawer } from "../_shared/components";
+import {
+  Dialog,
+  DialogPopup,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { createDatasetAction, createTraceDatasetAction } from "./actions";
 
 type Mode = "manual" | "traces";
@@ -34,7 +43,7 @@ const SINCE_HOURS_OPTIONS = [
 export interface CreateDatasetFormProps {
   orgSlug: string;
   workspaceSlug: string;
-  /** Called after a successful create — the caller closes the drawer / refreshes. */
+  /** Called after a successful create — the caller closes the dialog / refreshes. */
   onCreated: () => void;
 }
 
@@ -195,31 +204,35 @@ export function CreateDatasetForm({ orgSlug, workspaceSlug, onCreated }: CreateD
   );
 }
 
-export interface CreateDatasetDrawerProps {
+export interface CreateDatasetDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   orgSlug: string;
   workspaceSlug: string;
 }
 
-export function CreateDatasetDrawer({
+export function CreateDatasetDialog({
   open,
   onOpenChange,
   orgSlug,
   workspaceSlug,
-}: CreateDatasetDrawerProps) {
+}: CreateDatasetDialogProps) {
   return (
-    <Drawer
-      open={open}
-      onOpenChange={onOpenChange}
-      title="New dataset"
-      description="Create a dataset manually or seed it from real, already-metered traces."
-    >
-      <CreateDatasetForm
-        orgSlug={orgSlug}
-        workspaceSlug={workspaceSlug}
-        onCreated={() => onOpenChange(false)}
-      />
-    </Drawer>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogPopup className="max-h-[85vh] overflow-y-auto" data-testid="evals-create-dataset-dialog">
+        <DialogHeader>
+          <DialogTitle>New dataset</DialogTitle>
+          <DialogDescription>
+            Create a dataset manually or seed it from real, already-metered traces.
+          </DialogDescription>
+        </DialogHeader>
+
+        <CreateDatasetForm
+          orgSlug={orgSlug}
+          workspaceSlug={workspaceSlug}
+          onCreated={() => onOpenChange(false)}
+        />
+      </DialogPopup>
+    </Dialog>
   );
 }
