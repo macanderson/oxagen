@@ -13,7 +13,8 @@ export const schema = {
     "Display name for the organization",
   ),
   slug: organizationCreateInputBase.shape.slug.describe("URL-safe unique slug"),
-  planSlug: organizationCreateInputBase.shape.planSlug.describe("Initial plan slug"),
+  planSlug:
+    organizationCreateInputBase.shape.planSlug.describe("Initial plan slug"),
   type: organizationCreateInputBase.shape.type.describe(
     "Organization type. Use 'personal' for individual accounts, 'business' for teams and companies.",
   ),
@@ -25,12 +26,6 @@ export const schema = {
   ),
   employeeSize: organizationCreateInputBase.shape.employeeSize.describe(
     "Employee size range slug (business type only; e.g. '2-10', '51-200')",
-  ),
-  billingEmail: organizationCreateInputBase.shape.billingEmail.describe(
-    "Billing contact email address",
-  ),
-  billingAddress: organizationCreateInputBase.shape.billingAddress.describe(
-    "Billing address. Country and region are ISO standard codes.",
   ),
 };
 
@@ -48,6 +43,8 @@ export default async function organizationCreateTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(organizationCreate.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(organizationCreate.name, args, ctx, {
+    surface: "mcp",
+  });
   return organizationCreate.output.parse(output);
 }

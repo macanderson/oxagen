@@ -93,26 +93,6 @@ export const users = authSchema.table(
   }),
 );
 
-export const credentials = authSchema.table(
-  "credentials",
-  {
-    ...idMixin("crd"),
-    ...auditMixin(),
-    ...orgScopeMixin(),
-    ...softDeleteMixin(),
-    provider: text("provider").notNull(),
-    credentialType: text("credential_type").notNull(),
-    encryptedPayload: bytea("encrypted_payload").notNull(),
-    kmsKeyId: text("kms_key_id"),
-    expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }),
-    lastUsedAt: timestamp("last_used_at", { withTimezone: true, mode: "date" }),
-  },
-  (t) => ({
-    orgIdx: index("credentials_org_idx").on(t.orgId, t.workspaceId),
-    providerIdx: index("credentials_provider_idx").on(t.orgId, t.provider),
-  }),
-);
-
 export const apiKeys = authSchema.table(
   "api_keys",
   {

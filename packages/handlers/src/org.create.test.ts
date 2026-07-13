@@ -30,7 +30,9 @@ mocks.txInsertOrgReturning.mockResolvedValue([
 const orgValuesStub = { returning: mocks.txInsertOrgReturning };
 mocks.txInsertOrg.mockReturnValue({ values: () => orgValuesStub });
 // Stub orgUsers insert: insert().values() (no returning)
-mocks.txInsertOrgUsers.mockReturnValue({ values: vi.fn(async () => undefined) });
+mocks.txInsertOrgUsers.mockReturnValue({
+  values: vi.fn(async () => undefined),
+});
 
 // withSystemDb passthrough: runs the callback with a fake tx.
 // The handler calls withSystemDb twice:
@@ -61,14 +63,14 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  // db() is no longer called by organization.create — kept for safety in case
-  // any transitive dep still references it in tests.
-  db: () => ({
-    query: { organizations: { findFirst: mocks.orgFindFirst } },
-  }),
-  withSystemDb: async (fn: (tx: Record<string, unknown>) => Promise<unknown>): Promise<unknown> =>
-    mocks.withSystemDbFn(fn) as Promise<unknown>,
-
+    // db() is no longer called by organization.create — kept for safety in case
+    // any transitive dep still references it in tests.
+    db: () => ({
+      query: { organizations: { findFirst: mocks.orgFindFirst } },
+    }),
+    withSystemDb: async (
+      fn: (tx: Record<string, unknown>) => Promise<unknown>,
+    ): Promise<unknown> => mocks.withSystemDbFn(fn) as Promise<unknown>,
   };
 });
 
@@ -148,7 +150,15 @@ describe("organizationCreateHandler (@oxagen/handlers)", () => {
   it("throws when userId is null (unauthenticated request)", async () => {
     const anonCtx: CapabilityContext = { ...CTX, userId: null };
     await expect(
-      organizationCreateHandler({ name: "Test", slug: "test", planSlug: "free", type: "business" as const }, anonCtx),
+      organizationCreateHandler(
+        {
+          name: "Test",
+          slug: "test",
+          planSlug: "free",
+          type: "business" as const,
+        },
+        anonCtx,
+      ),
     ).rejects.toThrow("organization.create requires an authenticated user");
   });
 
@@ -158,7 +168,15 @@ describe("organizationCreateHandler (@oxagen/handlers)", () => {
     mocks.orgFindFirst.mockResolvedValueOnce({ id: "existing_id" });
 
     await expect(
-      organizationCreateHandler({ name: "Clone", slug: "acme", planSlug: "free", type: "business" as const }, CTX),
+      organizationCreateHandler(
+        {
+          name: "Clone",
+          slug: "acme",
+          planSlug: "free",
+          type: "business" as const,
+        },
+        CTX,
+      ),
     ).rejects.toThrow('slug "acme" already in use');
   });
 
@@ -173,7 +191,9 @@ describe("organizationCreateHandler (@oxagen/handlers)", () => {
         callIdx++;
         if (callIdx === 1) {
           // slug check — simulate no match
-          return fn({ query: { organizations: { findFirst: async () => null } } } as unknown as Parameters<typeof fn>[0]);
+          return fn({
+            query: { organizations: { findFirst: async () => null } },
+          } as unknown as Parameters<typeof fn>[0]);
         }
         // main body — simulate unique_violation
         const err = Object.assign(new Error("dup"), { code: "23505" });
@@ -182,7 +202,15 @@ describe("organizationCreateHandler (@oxagen/handlers)", () => {
     );
 
     await expect(
-      organizationCreateHandler({ name: "Race", slug: "race-slug", planSlug: "free", type: "business" as const }, CTX),
+      organizationCreateHandler(
+        {
+          name: "Race",
+          slug: "race-slug",
+          planSlug: "free",
+          type: "business" as const,
+        },
+        CTX,
+      ),
     ).rejects.toThrow('slug "race-slug" already in use');
   });
 
@@ -192,14 +220,24 @@ describe("organizationCreateHandler (@oxagen/handlers)", () => {
       async (fn: (tx: Record<string, unknown>) => Promise<unknown>) => {
         callIdx++;
         if (callIdx === 1) {
-          return fn({ query: { organizations: { findFirst: async () => null } } } as unknown as Parameters<typeof fn>[0]);
+          return fn({
+            query: { organizations: { findFirst: async () => null } },
+          } as unknown as Parameters<typeof fn>[0]);
         }
         throw new Error("connection refused");
       },
     );
 
     await expect(
-      organizationCreateHandler({ name: "Bad", slug: "bad-slug", planSlug: "free", type: "business" as const }, CTX),
+      organizationCreateHandler(
+        {
+          name: "Bad",
+          slug: "bad-slug",
+          planSlug: "free",
+          type: "business" as const,
+        },
+        CTX,
+      ),
     ).rejects.toThrow("connection refused");
   });
 
@@ -207,7 +245,12 @@ describe("organizationCreateHandler (@oxagen/handlers)", () => {
 
   it("returns the new org's publicId, name, slug, type, and ISO createdAt", async () => {
     const result = await organizationCreateHandler(
-      { name: "Acme Corp", slug: "acme", planSlug: "pro", type: "business" as const },
+      {
+        name: "Acme Corp",
+        slug: "acme",
+        planSlug: "pro",
+        type: "business" as const,
+      },
       CTX,
     );
 
@@ -219,7 +262,15 @@ describe("organizationCreateHandler (@oxagen/handlers)", () => {
   });
 
   it("runs the org insert inside a withSystemDb bypass and then calls grantFreeCredits", async () => {
-    await organizationCreateHandler({ name: "Tx Test", slug: "tx-test", planSlug: "free", type: "business" as const }, CTX);
+    await organizationCreateHandler(
+      {
+        name: "Tx Test",
+        slug: "tx-test",
+        planSlug: "free",
+        type: "business" as const,
+      },
+      CTX,
+    );
     // The org creation (orgs + orgUsers) must happen inside withSystemDb so the
     // bootstrap writes succeed without an active tenant scope (RLS bypass) and
     // membership is never visible without the org row.
@@ -236,7 +287,15 @@ describe("organizationCreateHandler (@oxagen/handlers)", () => {
   });
 
   it("calls bootstrapOrgIAM inside the transaction so IAM is atomic with org creation", async () => {
-    await organizationCreateHandler({ name: "IAM Test", slug: "iam-test", planSlug: "free", type: "business" as const }, CTX);
+    await organizationCreateHandler(
+      {
+        name: "IAM Test",
+        slug: "iam-test",
+        planSlug: "free",
+        type: "business" as const,
+      },
+      CTX,
+    );
     expect(mocks.bootstrapOrgIAM).toHaveBeenCalledTimes(1);
     expect(mocks.bootstrapOrgIAM).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -245,193 +304,6 @@ describe("organizationCreateHandler (@oxagen/handlers)", () => {
         actorUserId: "u_1",
       }),
     );
-  });
-
-  // ── billing profile branch (lines 94–113) ───────────────────────────────
-
-  it("inserts a billing profile row when billingEmail is provided", async () => {
-    // The third tx.insert call (after org + orgUsers) is the billing profile.
-    // Track which insert is which by call count.
-    const billingProfileInsertValues: Record<string, unknown>[] = [];
-
-    mocks.withSystemDbFn.mockImplementation(
-      async (fn: (tx: Record<string, unknown>) => Promise<unknown>) => {
-        let insertCount = 0;
-        const tx = {
-          query: {
-            organizations: { findFirst: mocks.orgFindFirst },
-          },
-          select: () => ({ from: async () => [] }),
-          insert: (table: unknown): unknown => {
-            insertCount++;
-            if (insertCount === 1) return mocks.txInsertOrg(table) as unknown;
-            if (insertCount === 2) return mocks.txInsertOrgUsers(table) as unknown;
-            // Third insert: billing profile
-            return {
-              values: (v: Record<string, unknown>) => {
-                billingProfileInsertValues.push(v);
-                return Promise.resolve();
-              },
-            };
-          },
-        };
-        return fn(tx as unknown as Parameters<typeof fn>[0]);
-      },
-    );
-
-    await organizationCreateHandler(
-      {
-        name: "Billing Corp",
-        slug: "billing-corp",
-        planSlug: "pro",
-        type: "business" as const,
-        billingEmail: "billing@example.com",
-      },
-      CTX,
-    );
-
-    expect(billingProfileInsertValues).toHaveLength(1);
-    expect(billingProfileInsertValues[0]?.["billingEmail"]).toBe("billing@example.com");
-    expect(billingProfileInsertValues[0]?.["orgId"]).toBe("internal_org_id");
-  });
-
-  it("inserts a billing profile with US address — region and country uppercased", async () => {
-    const billingProfileInsertValues: Record<string, unknown>[] = [];
-
-    mocks.withSystemDbFn.mockImplementation(
-      async (fn: (tx: Record<string, unknown>) => Promise<unknown>) => {
-        let insertCount = 0;
-        const tx = {
-          query: {
-            organizations: { findFirst: mocks.orgFindFirst },
-          },
-          select: () => ({ from: async () => [] }),
-          insert: (table: unknown): unknown => {
-            insertCount++;
-            if (insertCount === 1) return mocks.txInsertOrg(table) as unknown;
-            if (insertCount === 2) return mocks.txInsertOrgUsers(table) as unknown;
-            return {
-              values: (v: Record<string, unknown>) => {
-                billingProfileInsertValues.push(v);
-                return Promise.resolve();
-              },
-            };
-          },
-        };
-        return fn(tx as unknown as Parameters<typeof fn>[0]);
-      },
-    );
-
-    await organizationCreateHandler(
-      {
-        name: "US Corp",
-        slug: "us-corp",
-        planSlug: "pro",
-        type: "business" as const,
-        billingAddress: {
-          line1: "123 Main St",
-          city: "Austin",
-          region: "tx",
-          postalCode: "78701",
-          country: "us",
-        },
-      },
-      CTX,
-    );
-
-    expect(billingProfileInsertValues).toHaveLength(1);
-    expect(billingProfileInsertValues[0]?.["addressCountry"]).toBe("US");
-    // US region should be uppercased
-    expect(billingProfileInsertValues[0]?.["addressRegion"]).toBe("TX");
-    expect(billingProfileInsertValues[0]?.["addressLine1"]).toBe("123 Main St");
-    expect(billingProfileInsertValues[0]?.["addressCity"]).toBe("Austin");
-  });
-
-  it("inserts a billing profile with non-US address — region left as-is", async () => {
-    const billingProfileInsertValues: Record<string, unknown>[] = [];
-
-    mocks.withSystemDbFn.mockImplementation(
-      async (fn: (tx: Record<string, unknown>) => Promise<unknown>) => {
-        let insertCount = 0;
-        const tx = {
-          query: {
-            organizations: { findFirst: mocks.orgFindFirst },
-          },
-          select: () => ({ from: async () => [] }),
-          insert: (table: unknown): unknown => {
-            insertCount++;
-            if (insertCount === 1) return mocks.txInsertOrg(table) as unknown;
-            if (insertCount === 2) return mocks.txInsertOrgUsers(table) as unknown;
-            return {
-              values: (v: Record<string, unknown>) => {
-                billingProfileInsertValues.push(v);
-                return Promise.resolve();
-              },
-            };
-          },
-        };
-        return fn(tx as unknown as Parameters<typeof fn>[0]);
-      },
-    );
-
-    await organizationCreateHandler(
-      {
-        name: "French Corp",
-        slug: "french-corp",
-        planSlug: "pro",
-        type: "business" as const,
-        billingAddress: {
-          line1: "12 Rue de Rivoli",
-          city: "Paris",
-          region: "Île-de-France",
-          postalCode: "75001",
-          country: "FR",
-        },
-      },
-      CTX,
-    );
-
-    expect(billingProfileInsertValues).toHaveLength(1);
-    expect(billingProfileInsertValues[0]?.["addressCountry"]).toBe("FR");
-    // Non-US region must NOT be uppercased
-    expect(billingProfileInsertValues[0]?.["addressRegion"]).toBe("Île-de-France");
-  });
-
-  it("skips billing profile insertion when neither billingEmail nor billingAddress is provided", async () => {
-    const billingProfileInsertValues: Record<string, unknown>[] = [];
-    let insertCount = 0;
-
-    mocks.withSystemDbFn.mockImplementation(
-      async (fn: (tx: Record<string, unknown>) => Promise<unknown>) => {
-        const tx = {
-          query: {
-            organizations: { findFirst: mocks.orgFindFirst },
-          },
-          select: () => ({ from: async () => [] }),
-          insert: (table: unknown): unknown => {
-            insertCount++;
-            if (insertCount === 1) return mocks.txInsertOrg(table) as unknown;
-            if (insertCount === 2) return mocks.txInsertOrgUsers(table) as unknown;
-            // Should not be called for billing profile
-            return {
-              values: (v: Record<string, unknown>) => {
-                billingProfileInsertValues.push(v);
-                return Promise.resolve();
-              },
-            };
-          },
-        };
-        return fn(tx as unknown as Parameters<typeof fn>[0]);
-      },
-    );
-
-    await organizationCreateHandler(
-      { name: "No Billing", slug: "no-billing", planSlug: "free", type: "business" as const },
-      CTX,
-    );
-
-    // No billing profile insert beyond org + orgUsers
-    expect(billingProfileInsertValues).toHaveLength(0);
   });
 
   // ── grantFreeCredits error handling with idempotent retry ───────────────
@@ -443,7 +315,12 @@ describe("organizationCreateHandler (@oxagen/handlers)", () => {
       .mockResolvedValueOnce(undefined);
 
     const result = await organizationCreateHandler(
-      { name: "Credits Retry", slug: "credits-retry", planSlug: "free", type: "business" as const },
+      {
+        name: "Credits Retry",
+        slug: "credits-retry",
+        planSlug: "free",
+        type: "business" as const,
+      },
       CTX,
     );
 
@@ -463,7 +340,12 @@ describe("organizationCreateHandler (@oxagen/handlers)", () => {
       .mockRejectedValueOnce(new Error("billing DB down"));
 
     const result = await organizationCreateHandler(
-      { name: "Credits Both Fail", slug: "credits-both-fail", planSlug: "free", type: "business" as const },
+      {
+        name: "Credits Both Fail",
+        slug: "credits-both-fail",
+        planSlug: "free",
+        type: "business" as const,
+      },
       CTX,
     );
 
@@ -479,7 +361,12 @@ describe("organizationCreateHandler (@oxagen/handlers)", () => {
     mocks.grantFreeCredits.mockResolvedValueOnce(undefined);
 
     await organizationCreateHandler(
-      { name: "Credits OK", slug: "credits-ok", planSlug: "free", type: "business" as const },
+      {
+        name: "Credits OK",
+        slug: "credits-ok",
+        planSlug: "free",
+        type: "business" as const,
+      },
       CTX,
     );
 

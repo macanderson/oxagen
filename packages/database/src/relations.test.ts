@@ -265,12 +265,11 @@ describe("plansRelations", () => {
 });
 
 describe("subscriptionsRelations", () => {
-  it("config callback returns org, plan, invoices, usageRecords relations", () => {
+  it("config callback returns org, plan, invoices relations", () => {
     const result = invokeConfig(allRelations.subscriptionsRelations);
     expect(result).toHaveProperty("org");
     expect(result).toHaveProperty("plan");
     expect(result).toHaveProperty("invoices");
-    expect(result).toHaveProperty("usageRecords");
   });
 });
 
@@ -282,24 +281,8 @@ describe("paymentMethodsRelations", () => {
 });
 
 describe("invoicesRelations", () => {
-  it("config callback returns org, subscription, lineItems relations", () => {
+  it("config callback returns org, subscription relations", () => {
     const result = invokeConfig(allRelations.invoicesRelations);
-    expect(result).toHaveProperty("org");
-    expect(result).toHaveProperty("subscription");
-    expect(result).toHaveProperty("lineItems");
-  });
-});
-
-describe("invoiceLineItemsRelations", () => {
-  it("config callback returns invoice relation", () => {
-    const result = invokeConfig(allRelations.invoiceLineItemsRelations);
-    expect(result).toHaveProperty("invoice");
-  });
-});
-
-describe("usageRecordsRelations", () => {
-  it("config callback returns org and subscription relations", () => {
-    const result = invokeConfig(allRelations.usageRecordsRelations);
     expect(result).toHaveProperty("org");
     expect(result).toHaveProperty("subscription");
   });
@@ -603,10 +586,9 @@ describe("relations.ts completeness guard", () => {
   it("all exported objects are Relations instances with a config callback", () => {
     for (const [name, rel] of Object.entries(allRelations)) {
       const asRel = rel as unknown as { config?: unknown };
-      expect(
-        typeof asRel.config,
-        `${name}.config should be a function`,
-      ).toBe("function");
+      expect(typeof asRel.config, `${name}.config should be a function`).toBe(
+        "function",
+      );
     }
   });
 });

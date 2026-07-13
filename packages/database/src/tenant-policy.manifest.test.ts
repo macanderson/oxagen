@@ -192,7 +192,13 @@ describe("tenant policy manifest", () => {
     //      reseller dedupe pass on this branch dropped it while PR #903 was
     //      merging — without this entry a future re-baseline would silently
     //      drop the table's RLS policy.
-    expect(POLICY_MANIFEST.length).toBe(96);
+    // 92 = 96 − 4 zombie tables dropped in 20260802130000_drop_zombie_tables
+    //      (2026-07-11 audit §2: written but never read anywhere):
+    //      auth.credentials, billing.usage_records, billing.org_billing_profiles,
+    //      billing.invoice_line_items. Lowering the pin for REMOVED tables is
+    //      the legitimate direction — the ratchet exists to stop tables gaining
+    //      org_id without a policy entry, not to keep dead tables alive.
+    expect(POLICY_MANIFEST.length).toBe(92);
   });
 
   it("covers slug-history tables for org + workspace renames (OXA-1779)", () => {
