@@ -1,0 +1,100 @@
+/**
+ * parent-route-redirects — every parent "default tab" route resolves to its
+ * first sub-page instead of 500-ing.
+ *
+ * Regression guard for the Next 16 Cache Components (PPR) bug where a Server
+ * Component that awaited `params` and then called redirect() degraded the
+ * redirect into a client-rendered `<meta http-equiv="refresh">` fallback. Inside
+ * the app-shell layout tree that forced client re-render threw and surfaced
+ * global-error ("Something went wrong"), so org root, Workbench, Settings,
+ * Knowledge, Marketplace, Access, Billing and Developer roots all 500'd. The
+ * redirect pages now read their slugs from the `x-url` header (requestScopeSlugs)
+ * so the redirect stays a clean HTTP 307. Workspace root is the Overview page
+ * (content, not a redirect) and is asserted to render.
+ *
+ * Screenshots go to apps/app/e2e/screenshots/ (gitignored).
+ */
+import { test, expect, type Page } from "@playwright/test";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { fileURLToPath } from "node:url";
+import { signUpFreshUser } from "./helpers/signup";
+import { gotoStable } from "./helpers/nav";
+
+const screenshotDir = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "screenshots",
+);
+
+async function expectHealthyPage(page: Page): Promise<void> {
+  // global-error boundary text — the exact symptom this fix removes.
+  await expect(page.getByText("Something went wrong")).toHaveCount(0);
+  // not-found.tsx — a bare parent must resolve, never 404.
+  await expect(page.getByText(/^404$/)).toHaveCount(0);
+}
+
+test("parent routes resolve to their default sub-page without erroring", async ({
+  page,
+}) => {
+  const { orgSlug } = await signUpFreshUser(page);
+  const ws = "default";
+
+  // Each bare parent → the sub-page it must land on.
+  const redirects: { from: string; to: RegExp }[] = [
+    // Org root → first workspace (which renders the workspace Overview page).
+    { from: `/${orgSlug}`, to: new RegExp(`/${orgSlug}/${ws}$`) },
+    // Workspace-scope section parents → first tab.
+    {
+      from: `/${orgSlug}/${ws}/workbench`,
+      to: new RegExp(`/${orgSlug}/${ws}/workbench/agents$`),
+    },
+    {
+      from: `/${orgSlug}/${ws}/settings`,
+      to: new RegExp(`/${orgSlug}/${ws}/settings/general$`),
+    },
+    {
+      from: `/${orgSlug}/${ws}/knowledge`,
+      to: new RegExp(`/${orgSlug}/${ws}/knowledge/sources$`),
+    },
+    {
+      from: `/${orgSlug}/${ws}/marketplace`,
+      to: new RegExp(`/${orgSlug}/${ws}/marketplace/agent-tools$`),
+    },
+    // Org-scope section parents → first tab.
+    {
+      from: `/${orgSlug}/access`,
+      to: new RegExp(`/${orgSlug}/access/sessions$`),
+    },
+    {
+      from: `/${orgSlug}/billing`,
+      to: new RegExp(`/${orgSlug}/billing/subscription$`),
+    },
+    {
+      from: `/${orgSlug}/developer`,
+      to: new RegExp(`/${orgSlug}/developer/mcp$`),
+    },
+  ];
+
+  for (const { from, to } of redirects) {
+    await gotoStable(page, from);
+    await page.waitForURL(to, { timeout: 20_000 });
+    expect(page.url(), `bare parent ${from} should resolve to ${to}`).toMatch(
+      to,
+    );
+    await expectHealthyPage(page);
+  }
+
+  // Workspace root is the Overview page — content, not a redirect. It must
+  // render (this is the "workspaces overview page" a workspace lands on).
+  await gotoStable(page, `/${orgSlug}/${ws}`);
+  await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible({
+    timeout: 20_000,
+  });
+  await expectHealthyPage(page);
+
+  fs.mkdirSync(screenshotDir, { recursive: true });
+  await page.screenshot({
+    path: path.join(screenshotDir, "parent-route-redirects-overview.png"),
+    fullPage: true,
+  });
+});
