@@ -63,7 +63,7 @@ export function isOverridablePromptKey(
 
 /**
  * Per-workspace prompt configuration, loaded from
- * `workspace.workspaces.settings.promptConfig`. All fields optional — an empty
+ * the `workspace.workspaces.prompt_config` column. All fields optional — an empty
  * config resolves to the untouched baseline (today's behavior).
  */
 export interface PromptConfig {

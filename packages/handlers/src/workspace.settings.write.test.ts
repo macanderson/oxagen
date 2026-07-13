@@ -29,7 +29,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 import { workspaceSettingsWriteHandler } from "./workspace.settings.write";
 import { TEST_CTX as CTX } from "./test-utils/fixtures";
 
-const EXISTING = { name: "Research", slug: "research", settings: { description: "old" } };
+const EXISTING = { name: "Research", slug: "research", description: "old" };
 
 describe("workspace.settings.write handler", () => {
   beforeEach(() => {
@@ -43,16 +43,18 @@ describe("workspace.settings.write handler", () => {
     mocks.insertValues.mockResolvedValue(undefined);
   });
 
-  it("updates name and merges description into the settings bag", async () => {
+  it("updates the name and description columns independently", async () => {
     mocks.findFirst
       .mockResolvedValueOnce(EXISTING)
-      .mockResolvedValueOnce({ name: "Research Lab", slug: "research", settings: { description: "new desc" } });
+      .mockResolvedValueOnce({ name: "Research Lab", slug: "research", description: "new desc" });
     const out = await workspaceSettingsWriteHandler({ name: "Research Lab", description: "new desc" }, CTX);
 
     expect(mocks.update).toHaveBeenCalledTimes(1);
-    const setArg = mocks.set.mock.calls[0]![0] as { name?: string; settings?: { description?: string } };
+    const setArg = mocks.set.mock.calls[0]![0] as { name?: string; description?: string | null };
     expect(setArg.name).toBe("Research Lab");
-    expect(setArg.settings?.description).toBe("new desc");
+    // description is a real column now — set directly, never via the settings bag.
+    expect(setArg.description).toBe("new desc");
+    expect("settings" in setArg).toBe(false);
     expect(out.name).toBe("Research Lab");
     expect(out.description).toBe("new desc");
   });
@@ -61,7 +63,7 @@ describe("workspace.settings.write handler", () => {
     const avatar = "avatar:v1:{\"emoji\":\"🔬\",\"bg\":\"#2563eb\",\"mode\":\"full\"}";
     mocks.findFirst
       .mockResolvedValueOnce(EXISTING)
-      .mockResolvedValueOnce({ name: "Research", slug: "research", avatarUrl: avatar, settings: { description: "old" } });
+      .mockResolvedValueOnce({ name: "Research", slug: "research", avatarUrl: avatar, description: "old" });
     const out = await workspaceSettingsWriteHandler({ avatarUrl: avatar }, CTX);
 
     const setArg = mocks.set.mock.calls[0]![0] as { avatarUrl?: string | null };
@@ -72,7 +74,7 @@ describe("workspace.settings.write handler", () => {
   it("clears the avatarUrl column when passed null", async () => {
     mocks.findFirst
       .mockResolvedValueOnce({ ...EXISTING, avatarUrl: "https://cdn.example.com/a.png" })
-      .mockResolvedValueOnce({ name: "Research", slug: "research", avatarUrl: null, settings: { description: "old" } });
+      .mockResolvedValueOnce({ name: "Research", slug: "research", avatarUrl: null, description: "old" });
     const out = await workspaceSettingsWriteHandler({ avatarUrl: null }, CTX);
 
     const setArg = mocks.set.mock.calls[0]![0] as { avatarUrl?: string | null };
@@ -80,13 +82,14 @@ describe("workspace.settings.write handler", () => {
     expect(out.avatarUrl).toBeNull();
   });
 
-  it("clears description by deleting the settings key when passed null", async () => {
+  it("clears the description column when passed null", async () => {
     mocks.findFirst
       .mockResolvedValueOnce(EXISTING)
-      .mockResolvedValueOnce({ name: "Research", slug: "research", settings: {} });
-    await workspaceSettingsWriteHandler({ description: null }, CTX);
-    const setArg = mocks.set.mock.calls[0]![0] as { settings?: Record<string, unknown> };
-    expect(setArg.settings && "description" in setArg.settings).toBe(false);
+      .mockResolvedValueOnce({ name: "Research", slug: "research", description: null });
+    const out = await workspaceSettingsWriteHandler({ description: null }, CTX);
+    const setArg = mocks.set.mock.calls[0]![0] as { description?: string | null };
+    expect(setArg.description).toBeNull();
+    expect(out.description).toBeNull();
   });
 
   it("does not issue an update when no fields are provided", async () => {

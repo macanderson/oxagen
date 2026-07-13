@@ -9,7 +9,10 @@ import type { CapabilityContext } from "@oxagen/oxagen";
 
 const mocks = vi.hoisted(() => ({
   findFirst: vi.fn(),
-  set: vi.fn((_value: unknown) => ({ where: vi.fn().mockResolvedValue(undefined) })),
+  returning: vi.fn(),
+  set: vi.fn((_value: unknown) => ({
+    where: vi.fn(() => ({ returning: mocks.returning })),
+  })),
   resolveOrgTier: vi.fn(),
   requireTier: vi.fn(),
 }));
@@ -41,8 +44,11 @@ import { promptSettingsWriteHandler } from "./prompt.settings.write";
 import { TEST_CTX as CTX } from "./test-utils/fixtures";
 
 beforeEach(() => {
-  mocks.findFirst.mockReset().mockResolvedValue({ settings: {} });
+  mocks.findFirst.mockReset();
   mocks.set.mockClear();
+  // The handler reads the post-merge prompt_config back via RETURNING; default
+  // to an empty config, override per test.
+  mocks.returning.mockReset().mockResolvedValue([{ promptConfig: {} }]);
   mocks.resolveOrgTier.mockReset().mockResolvedValue("build");
   mocks.requireTier.mockReset();
 });
@@ -55,6 +61,9 @@ describe("promptSettingsWriteHandler", () => {
   });
 
   it("writes additionalInstructions + autoImprovePrompts on any tier (no tier check)", async () => {
+    mocks.returning.mockResolvedValue([
+      { promptConfig: { additionalInstructions: "Be formal.", autoImprovePrompts: false } },
+    ]);
     const out = await promptSettingsWriteHandler(
       { additionalInstructions: "Be formal.", autoImprovePrompts: false },
       CTX,
@@ -62,6 +71,8 @@ describe("promptSettingsWriteHandler", () => {
     expect(mocks.resolveOrgTier).not.toHaveBeenCalled();
     expect(mocks.requireTier).not.toHaveBeenCalled();
     expect(mocks.set).toHaveBeenCalledTimes(1);
+    // Atomic single-statement UPDATE — never a read-modify-write.
+    expect(mocks.findFirst).not.toHaveBeenCalled();
     expect(out.additionalInstructions).toBe("Be formal.");
     expect(out.autoImprovePrompts).toBe(false);
   });
@@ -87,16 +98,23 @@ describe("promptSettingsWriteHandler", () => {
     expect(mocks.set).not.toHaveBeenCalled();
   });
 
-  it("merges into existing promptConfig, preserving other settings keys", async () => {
-    mocks.findFirst.mockResolvedValue({
-      settings: { theme: "dark", promptConfig: { additionalInstructions: "old", autoImprovePrompts: true } },
-    });
-    await promptSettingsWriteHandler({ additionalInstructions: "new" }, CTX);
+  it("merges prompt_config atomically (single UPDATE, no read-modify-write)", async () => {
+    // Postgres does the shallow jsonb `||` merge; RETURNING gives the post-merge
+    // value, so autoImprovePrompts=true survives even though we only sent
+    // additionalInstructions.
+    mocks.returning.mockResolvedValue([
+      { promptConfig: { additionalInstructions: "new", autoImprovePrompts: true } },
+    ]);
+    const out = await promptSettingsWriteHandler({ additionalInstructions: "new" }, CTX);
     expect(mocks.set).toHaveBeenCalledTimes(1);
-    const written = mocks.set.mock.calls[0]![0] as { settings: Record<string, unknown> };
-    expect(written.settings.theme).toBe("dark");
-    const pc = written.settings.promptConfig as Record<string, unknown>;
-    expect(pc.additionalInstructions).toBe("new");
-    expect(pc.autoImprovePrompts).toBe(true); // preserved
+    // No prior SELECT — the merge is a single atomic statement, so a concurrent
+    // writer cannot clobber a subkey.
+    expect(mocks.findFirst).not.toHaveBeenCalled();
+    // The set payload writes the prompt_config column (not the settings bag).
+    const written = mocks.set.mock.calls[0]![0] as Record<string, unknown>;
+    expect("promptConfig" in written).toBe(true);
+    expect("settings" in written).toBe(false);
+    expect(out.additionalInstructions).toBe("new");
+    expect(out.autoImprovePrompts).toBe(true);
   });
 });
