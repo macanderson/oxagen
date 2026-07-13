@@ -13,7 +13,13 @@ import {
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { billingSchema } from "./_schemas";
-import { auditMixin, citext, idMixin, uuidv7Default } from "./_mixins";
+import {
+  appendOnlyAuditMixin,
+  auditMixin,
+  citext,
+  idMixin,
+  uuidv7Default,
+} from "./_mixins";
 import { organizations } from "./org";
 
 export const plans = billingSchema.table(
@@ -246,9 +252,6 @@ export const usageRecords = billingSchema.table(
       t.metric,
       t.periodStart,
       t.periodEnd,
-    statusCheck: check(
-      "invoices_status_check",
-      sql`${t.status} IN ('draft', 'open', 'paid', 'uncollectible', 'void')`,
     ),
   }),
 );
