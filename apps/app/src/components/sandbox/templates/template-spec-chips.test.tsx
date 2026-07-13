@@ -13,7 +13,13 @@ afterEach(cleanup);
 
 type ChipTemplate = Pick<
   SandboxTemplateSummary,
-  "provider" | "runtime" | "resources" | "network" | "secretSelection" | "tools"
+  | "provider"
+  | "runtime"
+  | "resources"
+  | "network"
+  | "secretSelection"
+  | "packages"
+  | "tools"
 >;
 
 function makeTemplate(overrides: Partial<ChipTemplate> = {}): ChipTemplate {
@@ -23,6 +29,7 @@ function makeTemplate(overrides: Partial<ChipTemplate> = {}): ChipTemplate {
     resources: {},
     network: { mode: "public" },
     secretSelection: "all",
+    packages: [],
     tools: [],
     ...overrides,
   };
@@ -100,5 +107,35 @@ describe("TemplateSpecChips", () => {
       />,
     );
     expect(screen.getByText("1 tool")).toBeInTheDocument();
+  });
+
+  it("shows a package-count chip (summing every manager group) only when packages exist", () => {
+    const { rerender } = render(
+      <TemplateSpecChips template={makeTemplate()} />,
+    );
+    expect(screen.queryByText(/package/)).not.toBeInTheDocument();
+
+    rerender(
+      <TemplateSpecChips
+        template={makeTemplate({
+          packages: [
+            { manager: "pip", names: ["fastapi", "pydantic"] },
+            { manager: "npm", names: ["react"] },
+          ],
+        })}
+      />,
+    );
+    expect(screen.getByText("3 packages")).toBeInTheDocument();
+  });
+
+  it("singularizes the package count for exactly one package", () => {
+    render(
+      <TemplateSpecChips
+        template={makeTemplate({
+          packages: [{ manager: "pip", names: ["fastapi"] }],
+        })}
+      />,
+    );
+    expect(screen.getByText("1 package")).toBeInTheDocument();
   });
 });

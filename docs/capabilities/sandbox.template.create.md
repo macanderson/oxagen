@@ -31,13 +31,14 @@ orgs as a portable manifest. Owner/Admin only.
 | `secretSelection` | `SandboxSecretSelection?`  | unset        | `"all"` or `{ keyPublicIds: string[] }` — which vault keys resolve into the sandbox at run time |
 | `literalEnv`      | `Record<string,string>?`  | unset        | Plain, non-sensitive `KEY=value` config injected at lowest precedence — never secrets      |
 | `tools`           | `SandboxTemplateTool[]?`  | unset        | Preloaded tools: `{ kind, ref, config? }`; `kind` ∈ `capability, mcp_server, agent_skill, tool` |
+| `packages`        | `SandboxPackageGroup[]?`  | `[]`         | Per-ecosystem packages installed into the image at provision time: `{ manager, names }[]`; `manager` ∈ `apt, cargo, gem, go, npm, pnpm, yarn, pip, poetry, uv`; `names` are free-text specs that may carry a version pin in that ecosystem's syntax (e.g. `fastapi`, `pydantic==2.5`, `left-pad@1.3.0`) |
 | `setAsDefault`    | `boolean?`                 | `false`      | Promote the new template to the environment's default immediately                          |
 
 ## Output
 
 | Field      | Type                    | Notes                                                                                                                                                                          |
 | ---------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `template` | `SandboxTemplateSummary` | `{ id, environmentId, name, slug, description, isDefault, isActive, provider, runtime, resources, network, secretSelection, literalEnv, tools }`; `tools` is `{ id, kind, ref, config }[]` |
+| `template` | `SandboxTemplateSummary` | `{ id, environmentId, name, slug, description, isDefault, isActive, provider, runtime, resources, network, secretSelection, literalEnv, tools, packages }`; `tools` is `{ id, kind, ref, config }[]`; `packages` is `{ manager, names }[]` |
 
 ## Side effects
 

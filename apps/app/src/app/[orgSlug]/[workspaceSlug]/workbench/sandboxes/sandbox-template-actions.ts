@@ -23,12 +23,17 @@ import type {
   SandboxNetwork,
   SandboxSecretSelection,
   SandboxLiteralEnv,
+  SandboxTemplatePackages,
   SandboxTemplateTool,
   SandboxToolKind,
   SandboxTemplateManifest,
 } from "@oxagen/oxagen/contracts/sandbox-template-manifest";
 import { getSessionOrRedirect } from "@/lib/session";
-import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
+import {
+  resolveOrg,
+  resolveWorkspace,
+  assertOrgMember,
+} from "@/lib/resolve-org";
 import { buildWorkbenchCtx } from "@/lib/workbench/scope";
 import { loadEquipSources } from "@/lib/workbench/equip-sources";
 import { workspace as routes } from "@/lib/routes";
@@ -57,6 +62,7 @@ export interface TemplateFormInput {
   network?: SandboxNetwork;
   secretSelection?: SandboxSecretSelection;
   literalEnv?: SandboxLiteralEnv;
+  packages?: SandboxTemplatePackages;
   tools?: SandboxTemplateTool[];
   setAsDefault?: boolean;
 }
@@ -73,7 +79,10 @@ interface Scope {
   userId: string;
 }
 
-async function resolveScope(orgSlug: string, workspaceSlug: string): Promise<Scope> {
+async function resolveScope(
+  orgSlug: string,
+  workspaceSlug: string,
+): Promise<Scope> {
   const session = await getSessionOrRedirect();
   const org = await resolveOrg(orgSlug);
   const ws = await resolveWorkspace(org.id, workspaceSlug);
@@ -132,12 +141,20 @@ export async function readTemplatesAction(args: {
   workspaceSlug: string;
 }): Promise<SandboxTemplateSummary[]> {
   const scope = await resolveScope(args.orgSlug, args.workspaceSlug);
-  return runInTenantScope({ orgId: scope.orgId, workspaceId: scope.workspaceId }, async () => {
-    const out = (await invoke(sandboxTemplateList.name, {}, templateCtx(scope), {
-      surface: "agent",
-    })) as { templates: SandboxTemplateSummary[] };
-    return out.templates;
-  });
+  return runInTenantScope(
+    { orgId: scope.orgId, workspaceId: scope.workspaceId },
+    async () => {
+      const out = (await invoke(
+        sandboxTemplateList.name,
+        {},
+        templateCtx(scope),
+        {
+          surface: "agent",
+        },
+      )) as { templates: SandboxTemplateSummary[] };
+      return out.templates;
+    },
+  );
 }
 
 /**
@@ -150,29 +167,40 @@ export async function readToolSourcesAction(args: {
   workspaceSlug: string;
 }): Promise<ToolSourceOption[]> {
   const scope = await resolveScope(args.orgSlug, args.workspaceSlug);
-  return runInTenantScope({ orgId: scope.orgId, workspaceId: scope.workspaceId }, async () => {
-    try {
-      const ctx = buildWorkbenchCtx({
-        orgId: scope.orgId,
-        workspaceId: scope.workspaceId,
-        userId: scope.userId,
-      });
-      const sources = await loadEquipSources(ctx, scope.orgId, scope.workspaceId);
-      const options: ToolSourceOption[] = [];
-      for (const s of sources.skills) {
-        options.push({ kind: "agent_skill", ref: s.ref, label: s.name });
+  return runInTenantScope(
+    { orgId: scope.orgId, workspaceId: scope.workspaceId },
+    async () => {
+      try {
+        const ctx = buildWorkbenchCtx({
+          orgId: scope.orgId,
+          workspaceId: scope.workspaceId,
+          userId: scope.userId,
+        });
+        const sources = await loadEquipSources(
+          ctx,
+          scope.orgId,
+          scope.workspaceId,
+        );
+        const options: ToolSourceOption[] = [];
+        for (const s of sources.skills) {
+          options.push({ kind: "agent_skill", ref: s.ref, label: s.name });
+        }
+        for (const t of sources.tools) {
+          options.push({ kind: "capability", ref: t.name, label: t.name });
+        }
+        for (const m of sources.mcp) {
+          options.push({
+            kind: "mcp_server",
+            ref: m.ref,
+            label: m.title ?? m.name,
+          });
+        }
+        return options;
+      } catch {
+        return [];
       }
-      for (const t of sources.tools) {
-        options.push({ kind: "capability", ref: t.name, label: t.name });
-      }
-      for (const m of sources.mcp) {
-        options.push({ kind: "mcp_server", ref: m.ref, label: m.title ?? m.name });
-      }
-      return options;
-    } catch {
-      return [];
-    }
-  });
+    },
+  );
 }
 
 // ── Mutations (owner/admin) ───────────────────────────────────────────────────
@@ -182,12 +210,19 @@ async function asManager<T>(
   fn: (scope: Scope) => Promise<ActionResult<T>>,
 ): Promise<ActionResult<T>> {
   const scope = await resolveScope(args.orgSlug, args.workspaceSlug);
-  return runInTenantScope({ orgId: scope.orgId, workspaceId: scope.workspaceId }, async () => {
-    if (!(await isManager(scope))) {
-      return { ok: false, error: "Only workspace owners or admins can manage sandbox templates." };
-    }
-    return fn(scope);
-  });
+  return runInTenantScope(
+    { orgId: scope.orgId, workspaceId: scope.workspaceId },
+    async () => {
+      if (!(await isManager(scope))) {
+        return {
+          ok: false,
+          error:
+            "Only workspace owners or admins can manage sandbox templates.",
+        };
+      }
+      return fn(scope);
+    },
+  );
 }
 
 export async function createTemplateAction(
@@ -208,6 +243,7 @@ export async function createTemplateAction(
           network: args.network,
           secretSelection: args.secretSelection,
           literalEnv: args.literalEnv,
+          packages: args.packages,
           tools: args.tools,
           setAsDefault: args.setAsDefault,
         },
@@ -217,7 +253,10 @@ export async function createTemplateAction(
       revalidate(args);
       return { ok: true, template: out.template };
     } catch (err) {
-      return { ok: false, error: errorMessage(err, "Failed to create template") };
+      return {
+        ok: false,
+        error: errorMessage(err, "Failed to create template"),
+      };
     }
   });
 }
@@ -235,6 +274,7 @@ export async function updateTemplateAction(args: {
   network?: SandboxNetwork;
   secretSelection?: SandboxSecretSelection;
   literalEnv?: SandboxLiteralEnv;
+  packages?: SandboxTemplatePackages;
   isActive?: boolean;
 }): Promise<ActionResult<{ template: SandboxTemplateSummary }>> {
   return asManager(args, async (scope) => {
@@ -252,6 +292,7 @@ export async function updateTemplateAction(args: {
           network: args.network,
           secretSelection: args.secretSelection,
           literalEnv: args.literalEnv,
+          packages: args.packages,
           isActive: args.isActive,
         },
         templateCtx(scope),
@@ -260,7 +301,10 @@ export async function updateTemplateAction(args: {
       revalidate(args);
       return { ok: true, template: out.template };
     } catch (err) {
-      return { ok: false, error: errorMessage(err, "Failed to update template") };
+      return {
+        ok: false,
+        error: errorMessage(err, "Failed to update template"),
+      };
     }
   });
 }
@@ -303,7 +347,10 @@ export async function setDefaultTemplateAction(args: {
       revalidate(args);
       return { ok: true, template: out.template };
     } catch (err) {
-      return { ok: false, error: errorMessage(err, "Failed to set default template") };
+      return {
+        ok: false,
+        error: errorMessage(err, "Failed to set default template"),
+      };
     }
   });
 }
@@ -324,7 +371,10 @@ export async function deleteTemplateAction(args: {
       revalidate(args);
       return { ok: true };
     } catch (err) {
-      return { ok: false, error: errorMessage(err, "Failed to delete template") };
+      return {
+        ok: false,
+        error: errorMessage(err, "Failed to delete template"),
+      };
     }
   });
 }
@@ -337,19 +387,25 @@ export async function exportTemplateAction(args: {
   // Export is a read (Member+ allowed) — no manager gate, mirroring the
   // contract's defaultRoles which permit workspace Members.
   const scope = await resolveScope(args.orgSlug, args.workspaceSlug);
-  return runInTenantScope({ orgId: scope.orgId, workspaceId: scope.workspaceId }, async () => {
-    try {
-      const out = (await invoke(
-        sandboxTemplateExport.name,
-        { templateId: args.templateId },
-        templateCtx(scope),
-        { surface: "agent" },
-      )) as { manifest: SandboxTemplateManifest };
-      return { ok: true, manifest: out.manifest };
-    } catch (err) {
-      return { ok: false, error: errorMessage(err, "Failed to export template") };
-    }
-  });
+  return runInTenantScope(
+    { orgId: scope.orgId, workspaceId: scope.workspaceId },
+    async () => {
+      try {
+        const out = (await invoke(
+          sandboxTemplateExport.name,
+          { templateId: args.templateId },
+          templateCtx(scope),
+          { surface: "agent" },
+        )) as { manifest: SandboxTemplateManifest };
+        return { ok: true, manifest: out.manifest };
+      } catch (err) {
+        return {
+          ok: false,
+          error: errorMessage(err, "Failed to export template"),
+        };
+      }
+    },
+  );
 }
 
 export async function importTemplateAction(args: {
@@ -359,7 +415,9 @@ export async function importTemplateAction(args: {
   manifest: SandboxTemplateManifest;
   slug?: string;
   setAsDefault?: boolean;
-}): Promise<ActionResult<{ template: SandboxTemplateSummary; warnings: string[] }>> {
+}): Promise<
+  ActionResult<{ template: SandboxTemplateSummary; warnings: string[] }>
+> {
   return asManager(args, async (scope) => {
     try {
       const out = (await invoke(
@@ -376,7 +434,10 @@ export async function importTemplateAction(args: {
       revalidate(args);
       return { ok: true, template: out.template, warnings: out.warnings };
     } catch (err) {
-      return { ok: false, error: errorMessage(err, "Failed to import template") };
+      return {
+        ok: false,
+        error: errorMessage(err, "Failed to import template"),
+      };
     }
   });
 }

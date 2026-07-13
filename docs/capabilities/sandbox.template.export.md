@@ -29,7 +29,7 @@ and has no `value` field on its `secretKeys` entries.
 
 | Field      | Type                       | Notes                                                                                                                                                                                                                     |
 | ---------- | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `manifest` | `SandboxTemplateManifest` | `{ kind: "oxagen.sandbox-template", version: 1, name, slug, description?, provider, runtime?, resources, network, secretSelection, literalEnv, tools, secretKeys }`; `secretKeys` is `{ key, sensitive, memo?, required }[]` — names only, never values |
+| `manifest` | `SandboxTemplateManifest` | `{ kind: "oxagen.sandbox-template", version: 1, name, slug, description?, provider, runtime?, resources, network, secretSelection, literalEnv, tools, packages, secretKeys }`; `packages` is `{ manager, names }[]` (per-ecosystem package list, `manager` ∈ `apt, cargo, gem, go, npm, pnpm, yarn, pip, poetry, uv`); `secretKeys` is `{ key, sensitive, memo?, required }[]` — names only, never values |
 
 ## Side effects
 
