@@ -102,10 +102,10 @@ const workspaceConfig: SidebarConfig = {
       id: "overview",
       label: "Overview",
       icon: Gauge,
-      // Metering-forward workspace home (web-app-2.0). The workspace root
-      // (`/{org}/{ws}`) currently redirects to Ask until the Overview page lands
-      // in a later phase; the nav entry is placed now because the sidebar is
-      // frozen after Phase 0 (only this phase may edit it).
+      // Metering-forward workspace home (web-app-2.0): the HUD at the workspace
+      // root (`/{org}/{ws}`) — spend/tokens/runs, knowledge-graph grounding,
+      // activity, automations, memory, and source health. Ask stays the default
+      // conversational front door via the entry below.
       href: (ctx) =>
         ctx.workspaceSlug
           ? workspace.root(ctx as Required<ScopeContext>)
