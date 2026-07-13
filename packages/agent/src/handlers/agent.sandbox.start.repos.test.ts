@@ -29,7 +29,12 @@ const h = vi.hoisted(() => {
     ),
     listSecretKeys: vi.fn(
       async (): Promise<
-        Array<{ id: string; key: string; sensitive: boolean; memo: string | null }>
+        Array<{
+          id: string;
+          key: string;
+          sensitive: boolean;
+          memo: string | null;
+        }>
       > => [],
     ),
     insertEvents: vi.fn(async () => undefined),
@@ -129,12 +134,19 @@ describe("agent.sandbox.start — repos[] cloning", () => {
 
     const spec = createdSpec();
     const setupCmd = spec.setupCmd as string;
-    // Clone script first, then the caller's setupCmd — joined by &&.
-    expect(setupCmd.startsWith("mkdir -p /workspace && git clone")).toBe(true);
+    // The whole composed command runs inside WORKSPACE_ROOT (/work) first, then
+    // the clone script, then the caller's setupCmd — all joined by &&.
+    expect(
+      setupCmd.startsWith(
+        "mkdir -p /work && cd /work && mkdir -p /work && git clone",
+      ),
+    ).toBe(true);
     expect(setupCmd).toContain("--branch 'main' --single-branch");
     expect(setupCmd).toContain(
       "x-access-token:${GITHUB_TOKEN}@github.com/acme/api.git",
     );
+    expect(setupCmd).toContain("'/work/api'");
+    expect(setupCmd).not.toContain("/workspace");
     expect(setupCmd.endsWith(" && pnpm i")).toBe(true);
     // Token rides setupEnv, never the script text.
     expect(spec.setupEnv).toEqual({ GITHUB_TOKEN: "ghs_repo_token" });
@@ -174,21 +186,24 @@ describe("agent.sandbox.start — repos[] cloning", () => {
     const spec = createdSpec();
     const setupCmd = spec.setupCmd as string;
     expect(setupCmd).toContain(
-      "git clone 'https://github.com/acme/api.git' '/workspace/api'",
+      "git clone 'https://github.com/acme/api.git' '/work/api'",
     );
     expect(setupCmd).not.toContain("GITHUB_TOKEN");
     // No token resolved → no setupEnv key added.
     expect("setupEnv" in spec).toBe(false);
   });
 
-  it("leaves behavior unchanged when repos[] is absent", async () => {
+  it("still runs setupCmd in /work when repos[] is absent (no clone step, but same cwd guarantee)", async () => {
     await agentSandboxStartHandler(
       { ...START_INPUT, setupCmd: "echo hi" },
       CTX,
     );
 
     const spec = createdSpec();
-    expect(spec.setupCmd).toBe("echo hi");
+    // No repos → no clone script, but the caller's setupCmd still runs inside
+    // WORKSPACE_ROOT so its own relative paths land where list_sandbox_files
+    // looks, on every driver (Modal's durable images set no WORKDIR).
+    expect(spec.setupCmd).toBe("mkdir -p /work && cd /work && echo hi");
     expect(h.resolveGitHubToken).not.toHaveBeenCalled();
     expect("repos" in persistedMetadata()).toBe(false);
   });

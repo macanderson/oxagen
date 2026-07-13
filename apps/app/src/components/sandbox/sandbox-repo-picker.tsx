@@ -4,7 +4,7 @@
  * sandbox-repo-picker.tsx — multi-repo selection for the "warm a sandbox" flow.
  *
  * Lets a user add up to `MAX_SANDBOX_REPOS` GitHub repos, each with its own
- * branch, to be cloned into `/workspace/<repo>` while the sandbox provisions.
+ * branch, to be cloned into `/work/<repo>` while the sandbox provisions.
  * Options come from the workspace's connected GitHub repos (same source as the
  * chat composer's code-mode picker); a row can't select a repo another row in
  * this picker already has, so the same repo can't be queued twice. When the
@@ -123,7 +123,7 @@ export function SandboxRepoPicker({
         <p className="text-xs text-muted-foreground">
           Clone repos into{" "}
           <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">
-            /workspace/&lt;repo&gt;
+            /work/&lt;repo&gt;
           </code>{" "}
           as the sandbox provisions — optional, add as many as you need.
         </p>
