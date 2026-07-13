@@ -26,7 +26,7 @@ as does a `slug` collision resolved automatically or via the `slug` override.
 | Field           | Type                       | Default  | Notes                                                                                     |
 | --------------- | --------------------------- | -------- | -------------------------------------------------------------------------------------------- |
 | `environmentId` | `string`                    | required | Public id of the destination workspace environment                                          |
-| `manifest`      | `SandboxTemplateManifest`  | required | The exported v1 manifest — `{ kind, version, name, slug, description?, provider, runtime?, resources, network, secretSelection, literalEnv, tools, secretKeys }` |
+| `manifest`      | `SandboxTemplateManifest`  | required | The exported v1 manifest — `{ kind, version, name, slug, description?, provider, runtime?, resources, network, secretSelection, literalEnv, tools, packages, secretKeys }`; `packages` is `{ manager, names }[]` — per-ecosystem package list carried through import |
 | `slug`          | `string?`                   | manifest's own slug | Overrides the manifest's slug — use to resolve a slug collision in the destination workspace |
 | `setAsDefault`  | `boolean?`                  | `false`  | Promote the imported template to the environment's default immediately                      |
 
@@ -64,6 +64,7 @@ Content-Type: application/json
     "secretSelection": "all",
     "literalEnv": {},
     "tools": [],
+    "packages": [{ "manager": "pip", "names": ["fastapi", "pydantic==2.5"] }],
     "secretKeys": [{ "key": "OPENAI_API_KEY", "sensitive": true, "required": true }]
   }
 }

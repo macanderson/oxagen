@@ -21,7 +21,10 @@
  * `insertReturning`. Seed the queues in the exact order the service issues them.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { SandboxTemplateManifest } from "@oxagen/oxagen/contracts";
+import type {
+  SandboxTemplateManifest,
+  SandboxTemplatePackages,
+} from "@oxagen/oxagen/contracts";
 
 // ── Capture state ─────────────────────────────────────────────────────────────
 
@@ -98,8 +101,10 @@ function makeTx() {
             returning: async () => state.updateReturning.shift() ?? [],
             // Most update() calls in this service are awaited directly (no
             // .returning()) — keep that thenable path working too.
-            then: (res: (v: unknown) => unknown, rej: (e: unknown) => unknown) =>
-              Promise.resolve(undefined).then(res, rej),
+            then: (
+              res: (v: unknown) => unknown,
+              rej: (e: unknown) => unknown,
+            ) => Promise.resolve(undefined).then(res, rej),
           }),
         };
       },
@@ -121,7 +126,8 @@ const vaultMocks = vi.hoisted(() => ({
 }));
 
 vi.mock("../vault/vault-secret-service", async (importOriginal) => {
-  const real = await importOriginal<typeof import("../vault/vault-secret-service")>();
+  const real =
+    await importOriginal<typeof import("../vault/vault-secret-service")>();
   return {
     ...real,
     listSecretKeys: vaultMocks.listSecretKeys,
@@ -182,7 +188,13 @@ function tplRow(overrides: Record<string, unknown> = {}) {
 }
 
 function envRow(overrides: Record<string, unknown> = {}) {
-  return { id: "env-int", name: "Prod", slug: "prod", isActive: true, ...overrides };
+  return {
+    id: "env-int",
+    name: "Prod",
+    slug: "prod",
+    isActive: true,
+    ...overrides,
+  };
 }
 
 function toolSelectRow(overrides: Record<string, unknown> = {}) {
@@ -238,7 +250,11 @@ describe("createTemplate", () => {
 
   it("throws on an invalid slug before touching the DB", async () => {
     await expect(
-      createTemplate(actor, { environmentId: "env-pub", name: "x", slug: "Bad Slug!" }),
+      createTemplate(actor, {
+        environmentId: "env-pub",
+        name: "x",
+        slug: "Bad Slug!",
+      }),
     ).rejects.toThrow(/invalid slug/i);
     expect(templateInserts()).toHaveLength(0);
   });
@@ -285,8 +301,14 @@ describe("createTemplate", () => {
 describe("listTemplates", () => {
   it("returns summaries with batched tools, no env filter", async () => {
     state.selectQueue = [
-      [tplRow(), tplRow({ id: "sbx-2", publicId: "sbx-2-pub", slug: "swe-runner" })],
-      [toolSelectRow(), toolSelectRow({ sandboxTemplateId: "sbx-2", publicId: "tool-2" })],
+      [
+        tplRow(),
+        tplRow({ id: "sbx-2", publicId: "sbx-2-pub", slug: "swe-runner" }),
+      ],
+      [
+        toolSelectRow(),
+        toolSelectRow({ sandboxTemplateId: "sbx-2", publicId: "tool-2" }),
+      ],
     ];
 
     const result = await listTemplates(actor);
@@ -318,7 +340,10 @@ describe("getTemplate", () => {
 describe("updateTemplate", () => {
   it("applies the changed fields and returns the reloaded summary", async () => {
     state.selectQueue = [[tplRow()], [tplRow({ name: "Renamed" })], []];
-    const result = await updateTemplate(actor, { templateId: "sbx-pub", name: "Renamed" });
+    const result = await updateTemplate(actor, {
+      templateId: "sbx-pub",
+      name: "Renamed",
+    });
     expect(result.name).toBe("Renamed");
     expect(templateUpdates()[0]!.set.name).toBe("Renamed");
   });
@@ -351,9 +376,9 @@ describe("deleteTemplate", () => {
 
   it("refuses to delete the default template", async () => {
     state.selectQueue = [[tplRow({ isDefault: true })]];
-    await expect(deleteTemplate(actor, { templateId: "sbx-pub" })).rejects.toThrow(
-      /cannot delete the default template/i,
-    );
+    await expect(
+      deleteTemplate(actor, { templateId: "sbx-pub" }),
+    ).rejects.toThrow(/cannot delete the default template/i);
     expect(templateUpdates()).toHaveLength(0);
   });
 });
@@ -383,7 +408,13 @@ describe("setTemplateTools", () => {
     state.selectQueue = [
       [tplRow()],
       [tplRow()],
-      [toolSelectRow({ kind: "agent_skill", ref: "swe-bench", publicId: "t-new" })],
+      [
+        toolSelectRow({
+          kind: "agent_skill",
+          ref: "swe-bench",
+          publicId: "t-new",
+        }),
+      ],
     ];
 
     const result = await setTemplateTools(actor, {
@@ -407,10 +438,27 @@ describe("setTemplateTools", () => {
 
 describe("exportTemplate — secretSelection { keyPublicIds }", () => {
   it("carries only the selected key NAMES in the manifest (never ids or values)", async () => {
-    state.selectQueue = [[tplRow({ secretSelection: { keyPublicIds: ["kp1"] } })], []];
+    state.selectQueue = [
+      [tplRow({ secretSelection: { keyPublicIds: ["kp1"] } })],
+      [],
+    ];
     vaultMocks.listSecretKeys.mockResolvedValue([
-      { id: "kp1", key: "AWS_KEY", sensitive: true, memo: null, hasDefault: false, overrideEnvironmentIds: [] },
-      { id: "kp2", key: "OTHER_KEY", sensitive: false, memo: "note", hasDefault: false, overrideEnvironmentIds: [] },
+      {
+        id: "kp1",
+        key: "AWS_KEY",
+        sensitive: true,
+        memo: null,
+        hasDefault: false,
+        overrideEnvironmentIds: [],
+      },
+      {
+        id: "kp2",
+        key: "OTHER_KEY",
+        sensitive: false,
+        memo: "note",
+        hasDefault: false,
+        overrideEnvironmentIds: [],
+      },
     ]);
 
     const manifest = await exportTemplate(actor, { templateId: "sbx-pub" });
@@ -430,14 +478,31 @@ describe("exportTemplate — secretSelection { keyPublicIds }", () => {
   it("emits every live key as an optional entry when the selection is 'all'", async () => {
     state.selectQueue = [[tplRow({ secretSelection: "all" })], []];
     vaultMocks.listSecretKeys.mockResolvedValue([
-      { id: "kp1", key: "AWS_KEY", sensitive: true, memo: null, hasDefault: false, overrideEnvironmentIds: [] },
-      { id: "kp2", key: "OTHER_KEY", sensitive: false, memo: "note", hasDefault: false, overrideEnvironmentIds: [] },
+      {
+        id: "kp1",
+        key: "AWS_KEY",
+        sensitive: true,
+        memo: null,
+        hasDefault: false,
+        overrideEnvironmentIds: [],
+      },
+      {
+        id: "kp2",
+        key: "OTHER_KEY",
+        sensitive: false,
+        memo: "note",
+        hasDefault: false,
+        overrideEnvironmentIds: [],
+      },
     ]);
 
     const manifest = await exportTemplate(actor, { templateId: "sbx-pub" });
 
     expect(manifest.secretSelection).toBe("all");
-    expect(manifest.secretKeys.map((k) => k.key)).toEqual(["AWS_KEY", "OTHER_KEY"]);
+    expect(manifest.secretKeys.map((k) => k.key)).toEqual([
+      "AWS_KEY",
+      "OTHER_KEY",
+    ]);
     expect(manifest.secretKeys.every((k) => k.required === false)).toBe(true);
   });
 });
@@ -455,6 +520,7 @@ const IMPORT_MANIFEST: SandboxTemplateManifest = {
   // The manifest's ids are FOREIGN — import must ignore them and remap by name.
   secretSelection: { keyPublicIds: ["remote-kp1"] },
   literalEnv: {},
+  packages: [{ manager: "apt", names: ["git", "curl"] }],
   tools: [],
   secretKeys: [{ key: "AWS_KEY", sensitive: true, memo: null, required: true }],
 };
@@ -463,7 +529,14 @@ describe("importTemplate — secretSelection round-trip", () => {
   it("remaps the required key NAME to this workspace's local public id", async () => {
     // Same NAME, DIFFERENT local public id than the manifest carried.
     vaultMocks.listSecretKeys.mockResolvedValue([
-      { id: "local-99", key: "AWS_KEY", sensitive: true, memo: null, hasDefault: false, overrideEnvironmentIds: [] },
+      {
+        id: "local-99",
+        key: "AWS_KEY",
+        sensitive: true,
+        memo: null,
+        hasDefault: false,
+        overrideEnvironmentIds: [],
+      },
     ]);
     state.selectQueue = [
       [envRow()],
@@ -493,7 +566,10 @@ describe("importTemplate — secretSelection round-trip", () => {
     state.selectQueue = [[envRow()], [], [tplRow()], []];
     state.insertReturning = [[{ id: "new-int", publicId: "new-pub" }]];
 
-    await importTemplate(actor, { environmentId: "env-pub", manifest: IMPORT_MANIFEST });
+    await importTemplate(actor, {
+      environmentId: "env-pub",
+      manifest: IMPORT_MANIFEST,
+    });
 
     const values = templateInserts()[0]!.values as Record<string, unknown>;
     expect(values.secretSelection).toBe("all");
@@ -508,13 +584,23 @@ describe("importTemplate — secretSelection round-trip", () => {
     state.selectQueue = [[envRow()], [{ id: "existing-int" }] /* slug taken */];
 
     await expect(
-      importTemplate(actor, { environmentId: "env-pub", manifest: IMPORT_MANIFEST }),
+      importTemplate(actor, {
+        environmentId: "env-pub",
+        manifest: IMPORT_MANIFEST,
+      }),
     ).rejects.toThrow(/already exists/i);
   });
 
   it("replace-sets the manifest's tools and promotes to default when setAsDefault is true", async () => {
     vaultMocks.listSecretKeys.mockResolvedValue([
-      { id: "local-99", key: "AWS_KEY", sensitive: true, memo: null, hasDefault: false, overrideEnvironmentIds: [] },
+      {
+        id: "local-99",
+        key: "AWS_KEY",
+        sensitive: true,
+        memo: null,
+        hasDefault: false,
+        overrideEnvironmentIds: [],
+      },
     ]);
     const manifestWithTools: SandboxTemplateManifest = {
       ...IMPORT_MANIFEST,
@@ -536,7 +622,9 @@ describe("importTemplate — secretSelection round-trip", () => {
 
     expect(template.id).toBe("new-pub");
     expect(warnings).toEqual([
-      expect.stringContaining('tool "capability:execute_code" is referenced by the manifest'),
+      expect.stringContaining(
+        'tool "capability:execute_code" is referenced by the manifest',
+      ),
     ]);
     // Replace-set: old rows cleared, new rows inserted.
     expect(state.deletes).toContain(schema.sandboxTemplateTools);
@@ -590,7 +678,9 @@ describe("bindAgentEnvironment", () => {
     // Regression: the app UI sends the agent's PUBLIC id; passing it raw into
     // the uuid agent_id column made every bind throw at the driver.
     state.selectQueue = [
-      [{ id: "33333333-3333-4333-8333-333333333333" }] /* agent lookup by publicId */,
+      [
+        { id: "33333333-3333-4333-8333-333333333333" },
+      ] /* agent lookup by publicId */,
       [envRow()],
       [] /* existingForAgent: none */,
       [bindingRow()],
@@ -604,7 +694,9 @@ describe("bindAgentEnvironment", () => {
     });
 
     expect(result.isPrimary).toBe(true);
-    const inserted = state.inserts.find((i) => i.table === schema.agentEnvironmentBindings);
+    const inserted = state.inserts.find(
+      (i) => i.table === schema.agentEnvironmentBindings,
+    );
     expect(inserted?.values).toMatchObject({
       agentId: "33333333-3333-4333-8333-333333333333",
     });
@@ -627,7 +719,9 @@ describe("bindAgentEnvironment", () => {
 
     // The previous primary was demoted in the same tx.
     const demote = state.updates.find(
-      (u) => u.table === schema.agentEnvironmentBindings && u.set.isPrimary === false,
+      (u) =>
+        u.table === schema.agentEnvironmentBindings &&
+        u.set.isPrimary === false,
     );
     expect(demote).toBeDefined();
     expect(result.isPrimary).toBe(true);
@@ -638,7 +732,13 @@ describe("bindAgentEnvironment", () => {
       [envRow()], // loadEnvironment
       [tplRow()], // loadTemplateRow (sandboxTemplateId check, same environment)
       [] /* existingForAgent: none */,
-      [bindingRow({ publicId: "bind-pub-new", sandboxTemplateInternalId: "sbx-int", isPrimary: true })],
+      [
+        bindingRow({
+          publicId: "bind-pub-new",
+          sandboxTemplateInternalId: "sbx-int",
+          isPrimary: true,
+        }),
+      ],
       [envSummaryRow()],
       [{ publicId: "sbx-pub", name: "Base Runner" }], // bindingSummary's template lookup
     ];
@@ -658,8 +758,16 @@ describe("bindAgentEnvironment", () => {
   it("rebinds an existing (agent, environment) pair by updating it in place (no duplicate insert)", async () => {
     state.selectQueue = [
       [envRow()], // loadEnvironment
-      [{ id: "bind-int-1", environmentInternalId: "env-int", isPrimary: true }] /* existingForAgent */,
-      [bindingRow({ publicId: "bind-pub-rebind", sandboxTemplateInternalId: null, isPrimary: false })],
+      [
+        { id: "bind-int-1", environmentInternalId: "env-int", isPrimary: true },
+      ] /* existingForAgent */,
+      [
+        bindingRow({
+          publicId: "bind-pub-rebind",
+          sandboxTemplateInternalId: null,
+          isPrimary: false,
+        }),
+      ],
       [envSummaryRow()],
     ];
     state.updateReturning = [[{ publicId: "bind-pub-rebind" }]];
@@ -679,7 +787,9 @@ describe("bindAgentEnvironment", () => {
       (u) => u.table === schema.agentEnvironmentBindings,
     );
     expect(bindingUpdates).toHaveLength(1);
-    const inserted = state.inserts.find((i) => i.table === schema.agentEnvironmentBindings);
+    const inserted = state.inserts.find(
+      (i) => i.table === schema.agentEnvironmentBindings,
+    );
     expect(inserted).toBeUndefined();
   });
 
@@ -714,9 +824,107 @@ describe("unbindAgentEnvironment", () => {
 describe("listAgentBindings", () => {
   it("returns each binding resolved to its environment names", async () => {
     state.selectQueue = [[bindingRow()], [envSummaryRow()]];
-    const result = await listAgentBindings(actor, { agentId: "11111111-1111-4111-8111-111111111111" });
+    const result = await listAgentBindings(actor, {
+      agentId: "11111111-1111-4111-8111-111111111111",
+    });
     expect(result).toHaveLength(1);
     expect(result[0]!.environmentName).toBe("Prod");
     expect(result[0]!.isPrimary).toBe(true);
+  });
+});
+
+// ── packages round-trip (create → get/list → update → export) ────────────────────
+
+describe("sandbox-template packages", () => {
+  const initial: SandboxTemplatePackages = [
+    { manager: "npm", names: ["react", "typescript"] },
+  ];
+  const changed: SandboxTemplatePackages = [
+    { manager: "pip", names: ["fastapi", "pydantic==2.5"] },
+  ];
+
+  it("createTemplate persists packages and returns them in the summary", async () => {
+    // env lookup, reloaded template row (carries packages), tools.
+    state.selectQueue = [[envRow()], [tplRow({ packages: initial })], []];
+    state.insertReturning = [[{ id: "sbx-int", publicId: "sbx-pub" }]];
+
+    const result = await createTemplate(actor, {
+      environmentId: "env-pub",
+      name: "Base Runner",
+      slug: "base-runner",
+      packages: initial,
+    });
+
+    // The insert carried the packages payload through to the DB.
+    const values = templateInserts()[0]!.values as Record<string, unknown>;
+    expect(values.packages).toEqual(initial);
+    // The reloaded summary surfaces them.
+    expect(result.packages).toEqual(initial);
+  });
+
+  it("defaults packages to [] when the create input omits them", async () => {
+    // tplRow() has no packages key → toSummary coalesces to [].
+    state.selectQueue = [[envRow()], [tplRow()], []];
+    state.insertReturning = [[{ id: "sbx-int", publicId: "sbx-pub" }]];
+
+    const result = await createTemplate(actor, {
+      environmentId: "env-pub",
+      name: "Base Runner",
+      slug: "base-runner",
+    });
+
+    const values = templateInserts()[0]!.values as Record<string, unknown>;
+    expect(values.packages).toEqual([]);
+    expect(result.packages).toEqual([]);
+  });
+
+  it("getTemplate returns the stored packages", async () => {
+    state.selectQueue = [[tplRow({ packages: initial })], []];
+    const result = await getTemplate(actor, { templateId: "sbx-pub" });
+    expect(result.packages).toEqual(initial);
+  });
+
+  it("listTemplates carries packages on each summary", async () => {
+    state.selectQueue = [[tplRow({ packages: initial })], []];
+    const result = await listTemplates(actor);
+    expect(result).toHaveLength(1);
+    expect(result[0]!.packages).toEqual(initial);
+  });
+
+  it("updateTemplate writes the new packages and reflects them in the summary", async () => {
+    // existing row (old packages), reloaded row (new packages), tools.
+    state.selectQueue = [
+      [tplRow({ packages: initial })],
+      [tplRow({ packages: changed })],
+      [],
+    ];
+    const result = await updateTemplate(actor, {
+      templateId: "sbx-pub",
+      packages: changed,
+    });
+    // The update SET carried the new packages payload.
+    expect(templateUpdates()[0]!.set.packages).toEqual(changed);
+    // The reloaded summary reflects the change.
+    expect(result.packages).toEqual(changed);
+  });
+
+  it("updateTemplate leaves packages untouched when the input omits them", async () => {
+    state.selectQueue = [
+      [tplRow({ packages: initial })],
+      [tplRow({ packages: initial })],
+      [],
+    ];
+    await updateTemplate(actor, { templateId: "sbx-pub", name: "Renamed" });
+    // packages is only written when input.packages !== undefined.
+    expect("packages" in templateUpdates()[0]!.set).toBe(false);
+  });
+
+  it("exportTemplate includes the template's packages in the manifest", async () => {
+    // getTemplate: reloaded row + tools; then listSecretKeys is mocked below.
+    state.selectQueue = [[tplRow({ packages: initial })], []];
+    vaultMocks.listSecretKeys.mockResolvedValue([]);
+
+    const manifest = await exportTemplate(actor, { templateId: "sbx-pub" });
+    expect(manifest.packages).toEqual(initial);
   });
 });
