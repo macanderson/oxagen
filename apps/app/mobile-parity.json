@@ -1,18 +1,6 @@
 {
   "entries": [
     {
-      "file": "apps/app/src/components/activity/activity-list.tsx",
-      "match": "hidden items-center gap-3 border-b px-4 py-2 text-xs uppercase tracking-wide text-muted-foreground md:flex",
-      "kind": "reflow",
-      "equivalent": "The labeled column-header row (Status/Run/Duration/Tokens/Cost/When) is desktop-only; each run row below still renders the same status badge, run id, duration, token count, cost, and relative time inline via flex-wrap, so mobile shows identical data without the header strip."
-    },
-    {
-      "file": "apps/app/src/components/activity/span-tree.tsx",
-      "match": "hidden w-40 shrink-0",
-      "kind": "reflow",
-      "equivalent": "The graphical duration bar and the tokens/cost meta column are desktop-only decoration; the plain-text duration value is never hidden, and tapping a row surfaces the full duration/tokens/cost detail in the DetailPanel that stacks beneath the tree (grid-cols-1 below lg) instead of beside it."
-    },
-    {
       "file": "apps/app/src/components/conversations/conversation-nav.tsx",
       "match": "hidden shrink-0 flex-col overflow-hidden rounded-xl border border-border bg-background transition-[width] duration-200 ease-in-out md:flex",
       "kind": "reflow",
@@ -125,6 +113,8 @@
       "match": "mb-6 max-md:hidden",
       "kind": "reflow",
       "equivalent": "The desktop PageTabs strip (Overview/MFA/Audit/Compliance/Trust) is hidden below md; MobileSettingsNav renders immediately after with the identical tab list as a sticky bottom-sheet switcher, so every tab stays reachable on mobile."
+    },
+    {
       "file": "apps/app/src/app/[orgSlug]/billing/layout.tsx",
       "match": "mb-6 max-md:hidden",
       "kind": "reflow",
@@ -135,12 +125,6 @@
       "match": "mb-6 max-md:hidden",
       "kind": "reflow",
       "equivalent": "The desktop PageTabs strip hides below md; the same tabs array renders as MobileSettingsNav (label \"Members\") in this layout — a sticky mobile section switcher with the identical People/Invited destinations."
-    },
-    {
-      "file": "apps/app/src/app/[orgSlug]/security/layout.tsx",
-      "match": "mb-6 max-md:hidden",
-      "kind": "reflow",
-      "equivalent": "The desktop PageTabs strip hides below md; the same tabs array renders as MobileSettingsNav (label \"Security\") in this layout — a sticky mobile section switcher with the identical security tab destinations."
     },
     {
       "file": "apps/app/src/app/[orgSlug]/developer/layout.tsx",
