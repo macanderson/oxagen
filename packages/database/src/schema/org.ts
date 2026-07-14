@@ -1,4 +1,13 @@
-import { boolean, check, index, jsonb, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import {
+  boolean,
+  check,
+  index,
+  jsonb,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { orgSchema } from "./_schemas";
 import { auditMixin, citext, idMixin } from "./_mixins";
@@ -53,7 +62,10 @@ export const organizations = orgSchema.table(
       "organizations_employee_size_check",
       sql`${t.employeeSize} IS NULL OR ${t.employeeSize} IN ('1','2-10','11-50','51-200','201-500','501-1000','1001-5000','5001-10000','10000+')`,
     ),
-    statusCheck: check("organizations_status_check", sql`${t.status} IN ('active', 'suspended', 'deleted')`),
+    statusCheck: check(
+      "organizations_status_check",
+      sql`${t.status} IN ('active', 'suspended', 'deleted')`,
+    ),
   }),
 );
 
@@ -65,13 +77,10 @@ export const orgUsers = orgSchema.table(
     orgId: uuid("org_id").notNull(),
     userId: uuid("user_id").notNull(),
     role: text("role").notNull(),
-    // DEPRECATED — dead column. Superseded by the IAM store
-    // (`iam.role_grants` / `iam.principal_role_assignments`), which is the sole
-    // source of truth for effective permissions. No app/handler/auth code reads
-    // or writes this; it retains its `{}` insert default only. Do NOT wire new
-    // authorization logic to it — grant via IAM instead.
-    permissions: jsonb("permissions").notNull().default(sql`'{}'::jsonb`),
-    joinedAt: timestamp("joined_at", { withTimezone: true, mode: "date" }).notNull(),
+    joinedAt: timestamp("joined_at", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
   },
   (t) => ({
     orgUserIdx: uniqueIndex("org_users_org_user_idx").on(t.orgId, t.userId),
@@ -162,4 +171,3 @@ export const invitations = orgSchema.table(
     ),
   }),
 );
-

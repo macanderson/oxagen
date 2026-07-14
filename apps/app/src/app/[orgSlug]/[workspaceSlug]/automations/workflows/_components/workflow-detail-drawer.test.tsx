@@ -14,10 +14,10 @@
  * primitive unmocked) — so assertions on drawer content use findBy + waitFor.
  *
  * Covers:
- *   - target=null renders nothing (no progress/card stub, no fleet link).
+ *   - target=null renders nothing (no progress/card stub).
  *   - A running workflow: renders WorkflowProgress with the workflow id +
- *     tenant slugs, the title, the fleet link, and a Cancel button (canManage
- *     true, non-terminal status).
+ *     tenant slugs, the title, and a Cancel button (canManage true,
+ *     non-terminal status).
  *   - A terminal workflow (completed/failed/cancelled): Cancel is hidden even
  *     when canManage is true.
  *   - canManage=false hides Cancel regardless of status.
@@ -27,16 +27,24 @@
  *   - A swarm target renders ResearchSwarmCard with the swarm's progress and
  *     never shows Cancel.
  */
-import { render, screen, cleanup, fireEvent, waitFor, act } from "@testing-library/react";
+import {
+  render,
+  screen,
+  cleanup,
+  fireEvent,
+  waitFor,
+  act,
+} from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { workspace } from "@/lib/routes";
 import type { WorkflowDetailTarget } from "./workflow-detail-drawer";
 
-const { mockRefresh, mockAddToast, mockCancelWorkflowAction } = vi.hoisted(() => ({
-  mockRefresh: vi.fn(),
-  mockAddToast: vi.fn(),
-  mockCancelWorkflowAction: vi.fn(),
-}));
+const { mockRefresh, mockAddToast, mockCancelWorkflowAction } = vi.hoisted(
+  () => ({
+    mockRefresh: vi.fn(),
+    mockAddToast: vi.fn(),
+    mockCancelWorkflowAction: vi.fn(),
+  }),
+);
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: mockRefresh }),
@@ -47,7 +55,8 @@ vi.mock("@/components/ui/toast", () => ({
 }));
 
 vi.mock("../actions", () => ({
-  cancelWorkflowAction: (...args: unknown[]) => mockCancelWorkflowAction(...args),
+  cancelWorkflowAction: (...args: unknown[]) =>
+    mockCancelWorkflowAction(...args),
 }));
 
 vi.mock("@/components/chat/registry-components/workflow-progress", () => ({
@@ -70,10 +79,16 @@ vi.mock("@/components/chat/registry-components/research-swarm-card", () => ({
   default: ({
     output,
   }: {
-    output: { swarmId: string; status: string; completedTasks: number; totalTasks: number };
+    output: {
+      swarmId: string;
+      status: string;
+      completedTasks: number;
+      totalTasks: number;
+    };
   }) => (
     <div data-testid="research-swarm-card-stub">
-      swarm {output.swarmId} {output.completedTasks}/{output.totalTasks} ({output.status})
+      swarm {output.swarmId} {output.completedTasks}/{output.totalTasks} (
+      {output.status})
     </div>
   ),
 }));
@@ -84,7 +99,10 @@ const BASE_PROPS = { orgSlug: "acme", workspaceSlug: "main" };
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockCancelWorkflowAction.mockResolvedValue({ ok: true, result: { cancelled: true } });
+  mockCancelWorkflowAction.mockResolvedValue({
+    ok: true,
+    result: { cancelled: true },
+  });
 });
 
 afterEach(() => cleanup());
@@ -92,11 +110,15 @@ afterEach(() => cleanup());
 describe("WorkflowDetailDrawer — closed", () => {
   it("renders nothing when target is null", () => {
     render(
-      <WorkflowDetailDrawer target={null} onOpenChange={vi.fn()} canManage={true} {...BASE_PROPS} />,
+      <WorkflowDetailDrawer
+        target={null}
+        onOpenChange={vi.fn()}
+        canManage={true}
+        {...BASE_PROPS}
+      />,
     );
     expect(screen.queryByTestId("workflow-progress-stub")).toBeNull();
     expect(screen.queryByTestId("research-swarm-card-stub")).toBeNull();
-    expect(screen.queryByTestId("drawer-fleet-link")).toBeNull();
   });
 });
 
@@ -109,7 +131,7 @@ describe("WorkflowDetailDrawer — workflow target", () => {
     status: "running",
   };
 
-  it("renders WorkflowProgress with the workflow id + tenant slugs, and the fleet link", async () => {
+  it("renders WorkflowProgress with the workflow id + tenant slugs", async () => {
     render(
       <WorkflowDetailDrawer
         target={runningTarget}
@@ -121,11 +143,6 @@ describe("WorkflowDetailDrawer — workflow target", () => {
     const stub = await screen.findByTestId("workflow-progress-stub");
     expect(stub.textContent).toContain("wf-1");
     expect(stub.textContent).toContain("acme/main");
-
-    const fleetLink = await screen.findByTestId("drawer-fleet-link");
-    expect(fleetLink.getAttribute("href")).toBe(
-      workspace.activity.fleet({ orgSlug: "acme", workspaceSlug: "main" }),
-    );
   });
 
   it("shows Cancel for a non-terminal workflow when canManage is true", async () => {
@@ -190,11 +207,16 @@ describe("WorkflowDetailDrawer — workflow target", () => {
       }),
     );
     await waitFor(() => expect(mockRefresh).toHaveBeenCalled());
-    expect(mockAddToast).toHaveBeenCalledWith(expect.objectContaining({ type: "success" }));
+    expect(mockAddToast).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "success" }),
+    );
   });
 
   it("a failed cancel shows an error toast and does not refresh", async () => {
-    mockCancelWorkflowAction.mockResolvedValue({ ok: false, error: "Already terminal." });
+    mockCancelWorkflowAction.mockResolvedValue({
+      ok: false,
+      error: "Already terminal.",
+    });
     render(
       <WorkflowDetailDrawer
         target={runningTarget}
@@ -209,7 +231,10 @@ describe("WorkflowDetailDrawer — workflow target", () => {
     });
     await waitFor(() =>
       expect(mockAddToast).toHaveBeenCalledWith(
-        expect.objectContaining({ type: "error", description: "Already terminal." }),
+        expect.objectContaining({
+          type: "error",
+          description: "Already terminal.",
+        }),
       ),
     );
     expect(mockRefresh).not.toHaveBeenCalled();

@@ -4,24 +4,29 @@
  * datasets-client.tsx — renders the workspace's eval datasets as a definition-list-based
  * item list (each dataset is an independent entity read across, not compared down columns).
  *
- * Write path: "New dataset" opens CreateDatasetDrawer (manual or from-traces
- * creation); clicking a card opens DatasetDetailDrawer (item list, add-item
- * form, run launcher). Both drawers call router.refresh() on success so this
- * server-fetched dataset list stays current without a full navigation.
+ * Write path: "New dataset" opens CreateDatasetDialog (manual or from-traces
+ * creation), which calls router.refresh() on success so this server-fetched
+ * list stays current. Read path: each dataset card is a `next/link` to the
+ * full dataset detail page (route workspace.evals.dataset) — the old
+ * click-to-open detail drawer is gone.
  */
 
 import { useState } from "react";
+import Link from "next/link";
 import { FlaskConical, Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CardGrid } from "@/components/lists/card-grid";
 import { ListToolbar } from "@/components/lists/list-toolbar";
 import { ListPagination } from "@/components/lists/list-pagination";
-import { useListControls, type ListSortOption } from "@/lib/lists/use-list-controls";
+import {
+  useListControls,
+  type ListSortOption,
+} from "@/lib/lists/use-list-controls";
 import { toCsv, downloadCsv, type CsvColumn } from "@/lib/lists/csv";
+import { workspace } from "@/lib/routes";
 import type { EvalDatasetListOutput } from "@oxagen/oxagen/contracts/eval.dataset.list";
-import { CreateDatasetDrawer } from "./create-dataset-drawer";
-import { DatasetDetailDrawer } from "./dataset-detail-drawer";
+import { CreateDatasetDialog } from "./create-dataset-dialog";
 
 type Dataset = EvalDatasetListOutput["datasets"][number];
 
@@ -42,8 +47,16 @@ const SORT_OPTIONS: ListSortOption<Dataset>[] = [
     label: "Newest",
     compare: (a, b) => b.createdAt.localeCompare(a.createdAt),
   },
-  { id: "name", label: "Name A–Z", compare: (a, b) => a.name.localeCompare(b.name) },
-  { id: "items", label: "Most items", compare: (a, b) => b.itemCount - a.itemCount },
+  {
+    id: "name",
+    label: "Name A–Z",
+    compare: (a, b) => a.name.localeCompare(b.name),
+  },
+  {
+    id: "items",
+    label: "Most items",
+    compare: (a, b) => b.itemCount - a.itemCount,
+  },
 ];
 
 const CSV_COLUMNS: CsvColumn[] = [
@@ -66,7 +79,11 @@ function formatDate(iso: string): string {
   }
 }
 
-export function DatasetsClient({ datasets, orgSlug, workspaceSlug }: DatasetsClientProps) {
+export function DatasetsClient({
+  datasets,
+  orgSlug,
+  workspaceSlug,
+}: DatasetsClientProps) {
   const controls = useListControls(datasets, {
     searchKeys: ["name", "slug", (d) => d.description ?? ""],
     sortOptions: SORT_OPTIONS,
@@ -74,7 +91,6 @@ export function DatasetsClient({ datasets, orgSlug, workspaceSlug }: DatasetsCli
   });
 
   const [createOpen, setCreateOpen] = useState(false);
-  const [selectedDatasetId, setSelectedDatasetId] = useState<string | null>(null);
 
   const newDatasetButton = (
     <Button
@@ -96,19 +112,25 @@ export function DatasetsClient({ datasets, orgSlug, workspaceSlug }: DatasetsCli
           data-testid="evals-datasets-empty-state"
         >
           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-            <FlaskConical className="h-6 w-6 text-muted-foreground" aria-hidden="true" />
+            <FlaskConical
+              className="h-6 w-6 text-muted-foreground"
+              aria-hidden="true"
+            />
           </div>
           <div className="flex flex-col gap-1">
-            <p className="text-sm font-semibold text-foreground">No eval datasets yet</p>
+            <p className="text-sm font-semibold text-foreground">
+              No eval datasets yet
+            </p>
             <p className="max-w-xs text-xs text-muted-foreground">
-              Create a dataset from manual examples or pull real inputs from historical traces,
-              then run it against a target and grade the output with a judge model.
+              Create a dataset from manual examples or pull real inputs from
+              historical traces, then run it against a target and grade the
+              output with a judge model.
             </p>
           </div>
           {newDatasetButton}
         </div>
 
-        <CreateDatasetDrawer
+        <CreateDatasetDialog
           open={createOpen}
           onOpenChange={setCreateOpen}
           orgSlug={orgSlug}
@@ -130,7 +152,10 @@ export function DatasetsClient({ datasets, orgSlug, workspaceSlug }: DatasetsCli
         onExport={() =>
           downloadCsv(
             "eval-datasets.csv",
-            toCsv(CSV_COLUMNS, controls.allFilteredRows as unknown as Record<string, unknown>[]),
+            toCsv(
+              CSV_COLUMNS,
+              controls.allFilteredRows as unknown as Record<string, unknown>[],
+            ),
           )
         }
       >
@@ -144,10 +169,12 @@ export function DatasetsClient({ datasets, orgSlug, workspaceSlug }: DatasetsCli
       ) : (
         <CardGrid>
           {controls.pageRows.map((dataset) => (
-            <button
+            <Link
               key={dataset.datasetId}
-              type="button"
-              onClick={() => setSelectedDatasetId(dataset.datasetId)}
+              href={workspace.evals.dataset(
+                { orgSlug, workspaceSlug },
+                dataset.datasetId,
+              )}
               className="flex flex-col gap-2 rounded-lg border bg-card p-4 text-left transition-colors hover:border-border-hover hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               data-testid={`dataset-card-${dataset.slug}`}
             >
@@ -179,7 +206,7 @@ export function DatasetsClient({ datasets, orgSlug, workspaceSlug }: DatasetsCli
                 </span>
                 <span>{formatDate(dataset.createdAt)}</span>
               </div>
-            </button>
+            </Link>
           ))}
         </CardGrid>
       )}
@@ -197,20 +224,11 @@ export function DatasetsClient({ datasets, orgSlug, workspaceSlug }: DatasetsCli
         />
       </div>
 
-      <CreateDatasetDrawer
+      <CreateDatasetDialog
         open={createOpen}
         onOpenChange={setCreateOpen}
         orgSlug={orgSlug}
         workspaceSlug={workspaceSlug}
-      />
-      <DatasetDetailDrawer
-        open={selectedDatasetId !== null}
-        onOpenChange={(next) => {
-          if (!next) setSelectedDatasetId(null);
-        }}
-        orgSlug={orgSlug}
-        workspaceSlug={workspaceSlug}
-        datasetPublicId={selectedDatasetId}
       />
     </div>
   );

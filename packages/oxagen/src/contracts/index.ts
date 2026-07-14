@@ -84,6 +84,8 @@ import { agentMemoryEvidenceAttach } from "./agent.memory_evidence.attach";
 import { agentMemoryCitationsList } from "./agent.memory_citation.list";
 import { agentPlanApprove } from "./agent.plan.approve";
 import { agentPlanCreate } from "./agent.plan.create";
+import { agentPlanGet } from "./agent.plan.get";
+import { agentPlanList } from "./agent.plan.list";
 import { agentFileLockAcquire } from "./agent.file_lock.acquire";
 import { agentFileLockRelease } from "./agent.file_lock.release";
 import { agentFileLockList } from "./agent.file_lock.list";
@@ -462,6 +464,9 @@ export {
   sandboxNetworkSchema,
   sandboxSecretSelectionSchema,
   sandboxLiteralEnvSchema,
+  sandboxPackageManagerSchema,
+  sandboxTemplatePackageGroupSchema,
+  sandboxTemplatePackagesSchema,
   sandboxToolKindSchema,
   sandboxTemplateToolSchema,
   manifestSecretKeySchema,
@@ -476,6 +481,9 @@ export type {
   SandboxNetwork,
   SandboxSecretSelection,
   SandboxLiteralEnv,
+  SandboxPackageManager,
+  SandboxTemplatePackageGroup,
+  SandboxTemplatePackages,
   SandboxToolKind,
   SandboxTemplateTool,
   ManifestSecretKey,
@@ -583,6 +591,8 @@ export {
   agentMemoryCitationsList,
   agentPlanApprove,
   agentPlanCreate,
+  agentPlanGet,
+  agentPlanList,
   agentFileLockAcquire,
   agentFileLockRelease,
   agentFileLockList,
@@ -929,6 +939,8 @@ export const contracts = [
   agentMemoryCitationsList,
   agentPlanApprove,
   agentPlanCreate,
+  agentPlanGet,
+  agentPlanList,
   agentFileLockAcquire,
   agentFileLockRelease,
   agentFileLockList,

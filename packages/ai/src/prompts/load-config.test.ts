@@ -51,11 +51,9 @@ describe("loadWorkspacePromptConfigSafe", () => {
 
   it("passes the normalized config through on success without logging", async () => {
     mocks.withTenantDb.mockResolvedValueOnce({
-      settings: {
-        promptConfig: {
-          additionalInstructions: "Always cite sources.",
-          autoImprovePrompts: false,
-        },
+      promptConfig: {
+        additionalInstructions: "Always cite sources.",
+        autoImprovePrompts: false,
       },
     });
 

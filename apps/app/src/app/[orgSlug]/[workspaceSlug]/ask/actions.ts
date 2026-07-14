@@ -40,7 +40,10 @@ const FormSchema = z.object({
   content: z.string().min(1),
   conversationId: z.string().nullable().default(null),
   parentMessageId: z.string().nullable().default(null),
-  branchReason: z.enum(["edit", "regenerate", "tool_retry", "manual_fork"]).nullable().default(null),
+  branchReason: z
+    .enum(["edit", "regenerate", "tool_retry", "manual_fork"])
+    .nullable()
+    .default(null),
   attachments: z.array(attachmentSchema).max(8).default([]),
 });
 
@@ -56,10 +59,20 @@ const FormSchema = z.object({
 // Token usage is recorded by ClickHouse from @oxagen/ai's streamAgentReply
 // onFinish — the app does not write ClickHouse directly (§3 boundary).
 export async function sendMessageAction(
-  ctx: { orgSlug: string; workspaceSlug: string; orgId: string; workspaceId: string },
+  ctx: {
+    orgSlug: string;
+    workspaceSlug: string;
+    orgId: string;
+    workspaceId: string;
+  },
   formData: FormData,
 ): Promise<
-  | { ok: true; conversationId: string; conversationPublicId: string; userMessageId: string }
+  | {
+      ok: true;
+      conversationId: string;
+      conversationPublicId: string;
+      userMessageId: string;
+    }
   | { ok: false; error: string }
 > {
   const session = await getSessionOrRedirect();
@@ -74,7 +87,9 @@ export async function sendMessageAction(
     conversationId: raw.conversationId ? String(raw.conversationId) : null,
     parentMessageId: raw.parentMessageId ? String(raw.parentMessageId) : null,
     branchReason: raw.branchReason ? String(raw.branchReason) : null,
-    attachments: parseAttachmentsField(formData.get("attachments") ?? undefined),
+    attachments: parseAttachmentsField(
+      formData.get("attachments") ?? undefined,
+    ),
   });
   if (!parsed.success) return { ok: false, error: "Invalid message" };
 
@@ -85,116 +100,136 @@ export async function sendMessageAction(
     content: parsed.data.content,
     contentBlocks: [],
   });
-  if (!capabilityInput.success) return { ok: false, error: capabilityInput.error.issues[0]?.message ?? "Invalid" };
+  if (!capabilityInput.success)
+    return {
+      ok: false,
+      error: capabilityInput.error.issues[0]?.message ?? "Invalid",
+    };
 
-  return await runInTenantScope({ orgId: ctx.orgId, workspaceId: ctx.workspaceId }, async () => {
-    try {
-      const { conversationId, conversationPublicId, userMessageId } = await withTenantDb(async (tx) => {
-        // Resolve or create the conversation. For an existing conversation we
-        // also read its CURRENT active leaf (server-authoritative threading) and
-        // verify it belongs to this org/workspace (no cross-tenant IDOR).
-        let convId: string;
-        let convPublicId: string;
-        let currentLeaf: string | null;
-        if (capabilityInput.data.conversationId) {
-          const [existing] = await tx
-            .select({
-              id: schema.conversations.id,
-              publicId: schema.conversations.publicId,
-              leaf: schema.conversations.activeLeafMessageId,
-            })
-            .from(schema.conversations)
-            .where(
-              and(
-                eq(schema.conversations.id, capabilityInput.data.conversationId),
-                eq(schema.conversations.orgId, ctx.orgId),
-                eq(schema.conversations.workspaceId, ctx.workspaceId),
-              ),
-            )
-            .limit(1);
-          if (!existing) throw new Error("Conversation not found");
-          convId = existing.id;
-          convPublicId = existing.publicId;
-          currentLeaf = existing.leaf ?? null;
-        } else {
-          const [conv] = await tx
-            .insert(schema.conversations)
-            .values({
-              orgId: ctx.orgId,
-              workspaceId: ctx.workspaceId,
-              userId: session.user.id,
-              status: "active",
-              createdByUserId: session.user.id,
-              updatedByUserId: session.user.id,
-            })
-            .returning();
-          if (!conv) throw new Error("Conversation insert failed");
-          const typedConv = conv as ConversationRow;
-          convId = typedConv.id;
-          convPublicId = typedConv.publicId;
-          currentLeaf = null;
-        }
+  return await runInTenantScope(
+    { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+    async () => {
+      try {
+        const { conversationId, conversationPublicId, userMessageId } =
+          await withTenantDb(async (tx) => {
+            // Resolve or create the conversation. For an existing conversation we
+            // also read its CURRENT active leaf (server-authoritative threading) and
+            // verify it belongs to this org/workspace (no cross-tenant IDOR).
+            let convId: string;
+            let convPublicId: string;
+            let currentLeaf: string | null;
+            if (capabilityInput.data.conversationId) {
+              const [existing] = await tx
+                .select({
+                  id: schema.conversations.id,
+                  publicId: schema.conversations.publicId,
+                  leaf: schema.conversations.activeLeafMessageId,
+                })
+                .from(schema.conversations)
+                .where(
+                  and(
+                    eq(
+                      schema.conversations.id,
+                      capabilityInput.data.conversationId,
+                    ),
+                    eq(schema.conversations.orgId, ctx.orgId),
+                    eq(schema.conversations.workspaceId, ctx.workspaceId),
+                  ),
+                )
+                .limit(1);
+              if (!existing) throw new Error("Conversation not found");
+              convId = existing.id;
+              convPublicId = existing.publicId;
+              currentLeaf = existing.leaf ?? null;
+            } else {
+              const [conv] = await tx
+                .insert(schema.conversations)
+                .values({
+                  orgId: ctx.orgId,
+                  workspaceId: ctx.workspaceId,
+                  userId: session.user.id,
+                  status: "active",
+                  createdByUserId: session.user.id,
+                  updatedByUserId: session.user.id,
+                })
+                .returning();
+              if (!conv) throw new Error("Conversation insert failed");
+              const typedConv = conv as ConversationRow;
+              convId = typedConv.id;
+              convPublicId = typedConv.publicId;
+              currentLeaf = null;
+            }
 
-        // Thread the user message onto the conversation's CURRENT active leaf
-        // (read fresh above) — NOT the client-supplied parentMessageId, which
-        // lags the DB across turns: the composer's parent prop trails the user
-        // message while the real leaf has already advanced to the assistant
-        // reply, so mis-parenting silently drops every assistant reply from the
-        // visible branch (walkActiveBranch walks parent links from the leaf). An
-        // explicit branch op (edit/regenerate/…) is the only case that overrides
-        // the parent with a client-chosen branch point.
-        const parentMessageId =
-          parsed.data.branchReason && capabilityInput.data.parentMessageId
-            ? capabilityInput.data.parentMessageId
-            : currentLeaf;
+            // Thread the user message onto the conversation's CURRENT active leaf
+            // (read fresh above) — NOT the client-supplied parentMessageId, which
+            // lags the DB across turns: the composer's parent prop trails the user
+            // message while the real leaf has already advanced to the assistant
+            // reply, so mis-parenting silently drops every assistant reply from the
+            // visible branch (walkActiveBranch walks parent links from the leaf). An
+            // explicit branch op (edit/regenerate/…) is the only case that overrides
+            // the parent with a client-chosen branch point.
+            const parentMessageId =
+              parsed.data.branchReason && capabilityInput.data.parentMessageId
+                ? capabilityInput.data.parentMessageId
+                : currentLeaf;
 
-        const [userMsg] = await tx
-          .insert(schema.messages)
-          .values({
-            orgId: ctx.orgId,
-            workspaceId: ctx.workspaceId,
-            conversationId: convId,
-            parentMessageId: parentMessageId ?? undefined,
-            role: "user",
-            content: capabilityInput.data.content,
-            contentBlocks: capabilityInput.data.contentBlocks,
-            branchReason: capabilityInput.data.branchReason ?? undefined,
-            isActiveInBranch: true,
-            // Attachment refs (publicId + display fields) so message-bubble
-            // can render thumbnails on refresh without a second round-trip —
-            // the stream route separately re-resolves each publicId
-            // server-side (ownership + status='ready') before building image
-            // parts for the model; this metadata is display-only.
-            metadata:
-              parsed.data.attachments.length > 0
-                ? { attachments: parsed.data.attachments }
-                : {},
-            createdByUserId: session.user.id,
-            updatedByUserId: session.user.id,
-          })
-          .returning();
-        if (!userMsg) throw new Error("Message insert failed");
-        const typedMsg = userMsg as DbMessageRow;
+            const [userMsg] = await tx
+              .insert(schema.messages)
+              .values({
+                orgId: ctx.orgId,
+                workspaceId: ctx.workspaceId,
+                conversationId: convId,
+                parentMessageId: parentMessageId ?? undefined,
+                role: "user",
+                content: capabilityInput.data.content,
+                contentBlocks: capabilityInput.data.contentBlocks,
+                branchReason: capabilityInput.data.branchReason ?? undefined,
+                // Attachment refs (publicId + display fields) so message-bubble
+                // can render thumbnails on refresh without a second round-trip —
+                // the stream route separately re-resolves each publicId
+                // server-side (ownership + status='ready') before building image
+                // parts for the model; this metadata is display-only.
+                metadata:
+                  parsed.data.attachments.length > 0
+                    ? { attachments: parsed.data.attachments }
+                    : {},
+                createdByUserId: session.user.id,
+                updatedByUserId: session.user.id,
+              })
+              .returning();
+            if (!userMsg) throw new Error("Message insert failed");
+            const typedMsg = userMsg as DbMessageRow;
 
-        await tx
-          .update(schema.conversations)
-          .set({ activeLeafMessageId: typedMsg.id, updatedAt: new Date() })
-          .where(eq(schema.conversations.id, convId));
+            await tx
+              .update(schema.conversations)
+              .set({ activeLeafMessageId: typedMsg.id, updatedAt: new Date() })
+              .where(eq(schema.conversations.id, convId));
 
-        return { conversationId: convId, conversationPublicId: convPublicId, userMessageId: typedMsg.id };
-      });
+            return {
+              conversationId: convId,
+              conversationPublicId: convPublicId,
+              userMessageId: typedMsg.id,
+            };
+          });
 
-      revalidatePath(`/${ctx.orgSlug}/${ctx.workspaceSlug}/ask`);
-      return { ok: true, conversationId, conversationPublicId, userMessageId };
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to send message";
-      logger.error(
-        { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
-        "[ask] sendMessageAction failed",
-      );
-      return { ok: false, error: message };
-    }
-  });
+        revalidatePath(`/${ctx.orgSlug}/${ctx.workspaceSlug}/ask`);
+        return {
+          ok: true,
+          conversationId,
+          conversationPublicId,
+          userMessageId,
+        };
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "Failed to send message";
+        logger.error(
+          { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+          "[ask] sendMessageAction failed",
+        );
+        return { ok: false, error: message };
+      }
+    },
+  );
 }
 
 // Capability-dispatch helpers for the chat UI. All capability calls go
@@ -225,19 +260,29 @@ function capabilityContext(ctx: {
 }
 
 export async function resolveApprovalAction(
-  ctx: { orgSlug: string; workspaceSlug: string; orgId: string; workspaceId: string },
+  ctx: {
+    orgSlug: string;
+    workspaceSlug: string;
+    orgId: string;
+    workspaceId: string;
+  },
   approvalId: string,
   decision: "approved" | "denied",
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const session = await getSessionOrRedirect();
   await assertWorkspaceMember(ctx.workspaceId, session.user.id);
   const parsed = agentApprovalResolve.input.safeParse({ approvalId, decision });
-  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid" };
+  if (!parsed.success)
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid" };
   try {
     await invoke(
       "resolve_approval",
       parsed.data,
-      capabilityContext({ orgId: ctx.orgId, workspaceId: ctx.workspaceId, userId: session.user.id }),
+      capabilityContext({
+        orgId: ctx.orgId,
+        workspaceId: ctx.workspaceId,
+        userId: session.user.id,
+      }),
       { surface: "agent" },
     );
     revalidatePath(`/${ctx.orgSlug}/${ctx.workspaceSlug}/ask`);
@@ -247,25 +292,42 @@ export async function resolveApprovalAction(
       { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId, approvalId },
       "[ask] resolveApprovalAction failed",
     );
-    return { ok: false, error: err instanceof Error ? err.message : "Failed to resolve approval" };
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Failed to resolve approval",
+    };
   }
 }
 
 export async function resolveConsentAction(
-  ctx: { orgSlug: string; workspaceSlug: string; orgId: string; workspaceId: string },
+  ctx: {
+    orgSlug: string;
+    workspaceSlug: string;
+    orgId: string;
+    workspaceId: string;
+  },
   approvalId: string,
   decision: "granted" | "denied",
   grantAllTools: boolean,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const session = await getSessionOrRedirect();
   await assertWorkspaceMember(ctx.workspaceId, session.user.id);
-  const parsed = agentMcpConsentResolve.input.safeParse({ approvalId, decision, grantAllTools });
-  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid" };
+  const parsed = agentMcpConsentResolve.input.safeParse({
+    approvalId,
+    decision,
+    grantAllTools,
+  });
+  if (!parsed.success)
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid" };
   try {
     await invoke(
       "resolve_mcp_consent",
       parsed.data,
-      capabilityContext({ orgId: ctx.orgId, workspaceId: ctx.workspaceId, userId: session.user.id }),
+      capabilityContext({
+        orgId: ctx.orgId,
+        workspaceId: ctx.workspaceId,
+        userId: session.user.id,
+      }),
       { surface: "agent" },
     );
     revalidatePath(`/${ctx.orgSlug}/${ctx.workspaceSlug}/ask`);
@@ -275,12 +337,20 @@ export async function resolveConsentAction(
       { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId, approvalId },
       "[ask] resolveConsentAction failed",
     );
-    return { ok: false, error: err instanceof Error ? err.message : "Failed to resolve consent" };
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Failed to resolve consent",
+    };
   }
 }
 
 export async function resolvePlanAction(
-  ctx: { orgSlug: string; workspaceSlug: string; orgId: string; workspaceId: string },
+  ctx: {
+    orgSlug: string;
+    workspaceSlug: string;
+    orgId: string;
+    workspaceId: string;
+  },
   planId: string,
   decision: "approved" | "denied" | "amended",
   amendedSteps?: PlanStep[],
@@ -306,12 +376,17 @@ export async function resolvePlanAction(
       dependsOn: s.dependsOn,
     })),
   });
-  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid" };
+  if (!parsed.success)
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid" };
   try {
     await invoke(
       "approve_plan",
       parsed.data,
-      capabilityContext({ orgId: ctx.orgId, workspaceId: ctx.workspaceId, userId: session.user.id }),
+      capabilityContext({
+        orgId: ctx.orgId,
+        workspaceId: ctx.workspaceId,
+        userId: session.user.id,
+      }),
       { surface: "agent" },
     );
     revalidatePath(`/${ctx.orgSlug}/${ctx.workspaceSlug}/ask`);
@@ -321,30 +396,46 @@ export async function resolvePlanAction(
       { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId, planId },
       "[ask] resolvePlanAction failed",
     );
-    return { ok: false, error: err instanceof Error ? err.message : "Failed to resolve plan" };
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Failed to resolve plan",
+    };
   }
 }
 
 export async function cancelBackgroundTaskAction(
-  ctx: { orgSlug: string; workspaceSlug: string; orgId: string; workspaceId: string },
+  ctx: {
+    orgSlug: string;
+    workspaceSlug: string;
+    orgId: string;
+    workspaceId: string;
+  },
   taskId: string,
   reason?: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const session = await getSessionOrRedirect();
   await assertWorkspaceMember(ctx.workspaceId, session.user.id);
   const parsed = agentTaskBackgroundCancel.input.safeParse({ taskId, reason });
-  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid" };
+  if (!parsed.success)
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid" };
   try {
     await invoke(
       "cancel_background_task",
       parsed.data,
-      capabilityContext({ orgId: ctx.orgId, workspaceId: ctx.workspaceId, userId: session.user.id }),
+      capabilityContext({
+        orgId: ctx.orgId,
+        workspaceId: ctx.workspaceId,
+        userId: session.user.id,
+      }),
       { surface: "agent" },
     );
     revalidatePath(`/${ctx.orgSlug}/${ctx.workspaceSlug}/ask`);
     return { ok: true };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Failed to cancel task" };
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Failed to cancel task",
+    };
   }
 }
 
@@ -359,12 +450,16 @@ export async function readBackgroundTaskAction(
     if (!parsed.success) {
       throw new Error(parsed.error.issues[0]?.message ?? "Invalid task id");
     }
-    const out = await invoke(
+    const out = (await invoke(
       "get_background_task",
       parsed.data,
-      capabilityContext({ orgId: ctx.orgId, workspaceId: ctx.workspaceId, userId: session.user.id }),
+      capabilityContext({
+        orgId: ctx.orgId,
+        workspaceId: ctx.workspaceId,
+        userId: session.user.id,
+      }),
       { surface: "agent" },
-    ) as import("@oxagen/oxagen/contracts/agent.background_task.read").AgentTaskBackgroundReadOutput;
+    )) as import("@oxagen/oxagen/contracts/agent.background_task.read").AgentTaskBackgroundReadOutput;
     return {
       taskId: out.taskId,
       kind: out.kind,
@@ -381,7 +476,8 @@ export async function readBackgroundTaskAction(
     // last known state. Instead of letting the failure vanish, log it with
     // context and surface a terminal "failed" snapshot so the user sees the
     // real outcome and polling stops.
-    const failureReason = err instanceof Error ? err.message : "Failed to read task status";
+    const failureReason =
+      err instanceof Error ? err.message : "Failed to read task status";
     logger.error(
       { err, taskId, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
       "[ask] readBackgroundTaskAction failed",

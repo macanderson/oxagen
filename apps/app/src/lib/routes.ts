@@ -175,18 +175,6 @@ export const workspace = {
       `${wsBase(ctx)}/workbench/tools/mcp`,
   },
 
-  // Activity — recent agent runs + per-run span-tree trace viewer.
-  activity: {
-    root: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/activity`,
-    // Per-run span tree. executionId is the aex_* public id.
-    run: (ctx: Required<ScopeContext>, executionId: string): string =>
-      `${wsBase(ctx)}/activity/${encodeURIComponent(executionId)}`,
-    // Fleet (web-app-2.0) — subagent fan-out / fleet observability with
-    // per-child lineage + cost.
-    fleet: (ctx: Required<ScopeContext>): string =>
-      `${wsBase(ctx)}/activity/fleet`,
-  },
-
   // Automations (web-app-2.0) — human-gated agent automation: the automations
   // list + editor, the workspace-wide trigger board, and parallel workflow/swarm
   // runs. The biggest previously-headless section (automation.* + workflow.*).

@@ -53,6 +53,7 @@ const fakeTemplate = {
   network: { mode: "public" as const },
   secretSelection: "all" as const,
   literalEnv: {},
+  packages: [],
   tools: [],
 };
 
@@ -66,6 +67,7 @@ const fakeManifest = {
   network: { mode: "public" as const },
   secretSelection: "all" as const,
   literalEnv: {},
+  packages: [],
   tools: [],
   secretKeys: [],
 };
@@ -108,6 +110,7 @@ describe("sandbox.template.create handler", () => {
       network: undefined,
       secretSelection: undefined,
       literalEnv: undefined,
+      packages: undefined,
       tools: undefined,
       setAsDefault: undefined,
     };
@@ -207,6 +210,7 @@ describe("sandbox.template.update handler", () => {
       network: undefined,
       secretSelection: undefined,
       literalEnv: undefined,
+      packages: undefined,
       isActive: undefined,
     };
     await handler_sandboxTemplateUpdate(args);

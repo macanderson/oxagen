@@ -61,9 +61,14 @@ test("parent routes resolve to their default sub-page without erroring", async (
       to: new RegExp(`/${orgSlug}/${ws}/marketplace/agent-tools$`),
     },
     // Org-scope section parents → first tab.
+    // Access is enterprise-only: its layout redirects non-enterprise orgs to
+    // the org root (apps/app/src/app/[orgSlug]/access/layout.tsx), which then
+    // forwards to the first workspace. A fresh signup is not enterprise, so
+    // the healthy landing for bare /access is the workspace root — the point
+    // stands: it must resolve cleanly, never 500.
     {
       from: `/${orgSlug}/access`,
-      to: new RegExp(`/${orgSlug}/access/sessions$`),
+      to: new RegExp(`/${orgSlug}/${ws}$`),
     },
     {
       from: `/${orgSlug}/billing`,

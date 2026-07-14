@@ -3,8 +3,6 @@ import {
   ORG_TYPE_VALUES,
   INDUSTRY_VALUES,
   EMPLOYEE_SIZE_VALUES,
-  isValidCountryCode,
-  isValidUsStateCode,
 } from "@oxagen/config";
 import { registerCapability } from "../registry";
 
@@ -23,26 +21,9 @@ export const organizationCreateInputBase = z.object({
   website: z.string().trim().url().max(2048).optional(),
   industry: z.enum(INDUSTRY_VALUES).optional(),
   employeeSize: z.enum(EMPLOYEE_SIZE_VALUES).optional(),
-  // Billing fields — present on both personal and business accounts.
-  billingEmail: z.string().trim().email().max(320).optional(),
-  billingAddress: z
-    .object({
-      line1: z.string().trim().min(1).max(255),
-      line2: z.string().trim().max(255).optional(),
-      city: z.string().trim().min(1).max(120),
-      /**
-       * Subdivision: an ISO 3166-2 code (e.g. "CA") — required and validated
-       * as a US state/DC code when country is "US"; free-text region name for
-       * non-US countries where we don't enumerate subdivisions.
-       */
-      region: z.string().trim().max(100).optional(),
-      postalCode: z.string().trim().min(1).max(20),
-      /** ISO 3166-1 alpha-2 code. Normalised to uppercase in the handler. */
-      country: z.string().trim().length(2),
-      /** Google Places place_id for address provenance tracking. */
-      placeId: z.string().trim().max(255).optional(),
-    })
-    .optional(),
+  // Billing email/address were removed with billing.org_billing_profiles
+  // (migration 20260802130000): the collected data was never read — Stripe
+  // captures the billing address at checkout and is the source of truth.
 });
 
 export const organizationCreate = registerCapability({
@@ -53,7 +34,11 @@ export const organizationCreate = registerCapability({
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
   scoped: false,
-  agent: { requiresApproval: true, riskLevel: "medium", category: "organization" },
+  agent: {
+    requiresApproval: true,
+    riskLevel: "medium",
+    category: "organization",
+  },
   sensitivity: "high",
   defaultEffect: "deny",
   defaultRoles: {
@@ -85,33 +70,6 @@ export const organizationCreate = registerCapability({
         });
       }
     }
-    // Billing address country + region validation.
-    // Country is normalised to uppercase for comparison; actual storage-time
-    // normalisation happens in the handler.
-    if (data.billingAddress) {
-      const countryUpper = data.billingAddress.country.toUpperCase();
-      if (!isValidCountryCode(countryUpper)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: `"${data.billingAddress.country}" is not a valid ISO 3166-1 alpha-2 country code`,
-          path: ["billingAddress", "country"],
-        });
-      } else if (countryUpper === "US") {
-        if (!data.billingAddress.region) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: "State/region is required for US addresses",
-            path: ["billingAddress", "region"],
-          });
-        } else if (!isValidUsStateCode(data.billingAddress.region)) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: `"${data.billingAddress.region}" is not a valid US state/DC code`,
-            path: ["billingAddress", "region"],
-          });
-        }
-      }
-    }
   }),
   output: z.object({
     publicId: z.string(),
@@ -123,4 +81,6 @@ export const organizationCreate = registerCapability({
 });
 
 export type OrganizationCreateInput = z.output<typeof organizationCreate.input>;
-export type OrganizationCreateOutput = z.output<typeof organizationCreate.output>;
+export type OrganizationCreateOutput = z.output<
+  typeof organizationCreate.output
+>;

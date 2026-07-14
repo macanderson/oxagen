@@ -5,11 +5,11 @@
  * Unit tests for AutomationCreateInline:
  *   - Renders form with correct aria-label
  *   - Pre-fills name, description, trigger type from props
- *   - Shows event-config section for 'event' trigger type
+ *   - Shows event-config section (schema-driven) for 'event' trigger type
  *   - Shows schedule-config section for 'schedule' trigger type
- *   - Renders pre-filled property conditions
- *   - Editing a property-condition property/value updates state
- *   - Adding / removing a condition row
+ *   - Entity-type picker is populated from the workspace schema registry
+ *   - Building a condition and submitting produces a `conditionTree` in the
+ *     createAutomationInlineAction payload (NOT the legacy propertyConditions)
  *   - Adding / removing a step row
  *   - Submit button is disabled when name is empty
  *   - Submit calls createAutomationInlineAction and shows created state
@@ -19,7 +19,13 @@
  */
 
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, cleanup, waitFor, within } from "@testing-library/react";
+import {
+  render,
+  screen,
+  cleanup,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 afterEach(cleanup);
@@ -32,6 +38,45 @@ vi.mock("@/app/actions/automation-inline.action", () => ({
 }));
 
 vi.mock("@oxagen/oxagen/contracts/automation.create", () => ({}));
+
+// The schema-driven condition section fetches the registry. Return one label
+// ("Commit") with a string property ("git_branch") so pickers populate.
+const { mockFetchRegistry } = vi.hoisted(() => ({
+  mockFetchRegistry: vi.fn(),
+}));
+vi.mock("@/components/knowledge/schema-builder/schema-service", () => ({
+  fetchRegistry: mockFetchRegistry,
+}));
+mockFetchRegistry.mockResolvedValue({
+  registryId: "reg_1",
+  pinnedVersionId: null,
+  draftVersionId: null,
+  enforcementMode: "lenient",
+  conformanceFloor: 0.8,
+  schemas: [
+    {
+      schemaName: "core",
+      displayName: "Core",
+      source: "user",
+      enabled: true,
+      labels: [
+        {
+          name: "Commit",
+          displayName: "Commit",
+          properties: [
+            {
+              key: "git_branch",
+              dataType: "string",
+              required: false,
+              displayName: "Branch",
+            },
+          ],
+        },
+      ],
+      relationshipTypes: [],
+    },
+  ],
+});
 
 vi.mock("@/components/ui/button", () => ({
   Button: ({
@@ -78,14 +123,18 @@ vi.mock("@/components/ui/label", () => ({
 }));
 
 vi.mock("@/components/ui/input", () => ({
-  Input: (props: React.InputHTMLAttributes<HTMLInputElement> & { "data-testid"?: string }) => (
-    <input {...props} />
-  ),
+  Input: (
+    props: React.InputHTMLAttributes<HTMLInputElement> & {
+      "data-testid"?: string;
+    },
+  ) => <input {...props} />,
 }));
 
 vi.mock("@/components/ui/textarea", () => ({
   Textarea: (
-    props: React.TextareaHTMLAttributes<HTMLTextAreaElement> & { "data-testid"?: string },
+    props: React.TextareaHTMLAttributes<HTMLTextAreaElement> & {
+      "data-testid"?: string;
+    },
   ) => <textarea {...props} />,
 }));
 
@@ -95,6 +144,7 @@ vi.mock("@/components/ui/select", () => ({
     value,
     onValueChange,
     disabled,
+    "data-testid": testId,
   }: {
     children: React.ReactNode;
     value?: string;
@@ -102,6 +152,7 @@ vi.mock("@/components/ui/select", () => ({
     disabled?: boolean;
     name?: string;
     items?: Array<{ value: string; label: string }>;
+    "data-testid"?: string;
   }) => (
     <div data-value={value} data-disabled={disabled}>
       {/* Provide a native select so userEvent can interact with it */}
@@ -110,6 +161,7 @@ vi.mock("@/components/ui/select", () => ({
         onChange={(e) => onValueChange?.(e.target.value)}
         disabled={disabled}
         aria-label="select-mock"
+        data-testid={testId}
       >
         {children}
       </select>
@@ -133,11 +185,54 @@ vi.mock("@/components/ui/select", () => ({
   SelectValue: ({ placeholder }: { placeholder?: string }) => (
     <span>{placeholder}</span>
   ),
-  SelectPopup: ({ children }: { children: React.ReactNode }) => (
-    <>{children}</>
+  SelectPopup: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  SelectItem: ({
+    value,
+    children,
+  }: {
+    value: string;
+    children: React.ReactNode;
+  }) => <option value={value}>{children}</option>,
+}));
+
+vi.mock("@/components/ui/segmented-control", () => ({
+  SegmentedControl: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
   ),
-  SelectItem: ({ value, children }: { value: string; children: React.ReactNode }) => (
-    <option value={value}>{children}</option>
+  SegmentedControlItem: ({
+    children,
+    value,
+  }: {
+    children: React.ReactNode;
+    value: string;
+    disabled?: boolean;
+  }) => (
+    <button type="button" data-value={value}>
+      {children}
+    </button>
+  ),
+}));
+
+vi.mock("@/components/ui/checkbox", () => ({
+  Checkbox: (props: Record<string, unknown>) => (
+    <input type="checkbox" {...props} />
+  ),
+}));
+
+vi.mock("@/components/ui/popover", () => ({
+  Popover: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  PopoverTrigger: ({
+    children,
+    ...rest
+  }: { children: React.ReactNode } & Record<string, unknown>) => (
+    <button type="button" {...rest}>
+      {children}
+    </button>
+  ),
+  PopoverPopup: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
   ),
 }));
 
@@ -149,6 +244,8 @@ vi.mock("lucide-react", async (importOriginal) => {
     CheckCircle2: vi.fn(() => <span data-testid="icon-check" />),
     Plus: vi.fn(() => <span data-testid="icon-plus" />),
     Trash2: vi.fn(() => <span data-testid="icon-trash" />),
+    X: vi.fn(() => <span data-testid="icon-x" />),
+    Database: vi.fn(() => <span data-testid="icon-db" />),
     Calendar: vi.fn(() => <span />),
     GitBranch: vi.fn(() => <span />),
     Webhook: vi.fn(() => <span />),
@@ -175,7 +272,9 @@ describe("AutomationCreateInline", () => {
       "./automation-create-inline"
     );
     render(<AutomationCreateInline />);
-    expect(screen.getByRole("form", { name: "Create automation" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("form", { name: "Create automation" }),
+    ).toBeInTheDocument();
   });
 
   it("pre-fills name from suggestedName prop", async () => {
@@ -191,7 +290,9 @@ describe("AutomationCreateInline", () => {
       "./automation-create-inline"
     );
     render(<AutomationCreateInline suggestedName="Notify on commit" />);
-    const nameInput = screen.getByTestId("automation-name-input") as HTMLInputElement;
+    const nameInput = screen.getByTestId(
+      "automation-name-input",
+    ) as HTMLInputElement;
     expect(nameInput.value).toBe("Notify on commit");
   });
 
@@ -211,7 +312,7 @@ describe("AutomationCreateInline", () => {
     expect(screen.getByTestId("create-automation-submit")).toBeDisabled();
   });
 
-  it("shows event-config section when triggerType is 'event'", async () => {
+  it("shows the schema-driven event-config section when triggerType is 'event'", async () => {
     const { createAutomationInlineAction } = await import(
       "@/app/actions/automation-inline.action"
     );
@@ -223,15 +324,12 @@ describe("AutomationCreateInline", () => {
     const { default: AutomationCreateInline } = await import(
       "./automation-create-inline"
     );
-    render(
-      <AutomationCreateInline
-        triggerType="event"
-        entityType="Commit"
-      />,
-    );
-    expect(screen.getByTestId("entity-type-input")).toBeInTheDocument();
-    const entityInput = screen.getByTestId("entity-type-input") as HTMLInputElement;
-    expect(entityInput.value).toBe("Commit");
+    render(<AutomationCreateInline triggerType="event" />);
+    expect(screen.getByTestId("schema-condition-section")).toBeInTheDocument();
+    // Entity-type picker populates from the mocked registry (Commit label).
+    await waitFor(() => {
+      expect(screen.getByTestId("entity-type-select")).toBeInTheDocument();
+    });
   });
 
   it("shows schedule-config section when triggerType is 'schedule'", async () => {
@@ -253,19 +351,28 @@ describe("AutomationCreateInline", () => {
         timezone="America/New_York"
       />,
     );
-    const cronInput = screen.getByTestId("cron-expression-input") as HTMLInputElement;
+    const cronInput = screen.getByTestId(
+      "cron-expression-input",
+    ) as HTMLInputElement;
     expect(cronInput.value).toBe("0 9 * * 1");
     const tzInput = screen.getByTestId("timezone-input") as HTMLInputElement;
     expect(tzInput.value).toBe("America/New_York");
   });
 
-  it("renders pre-filled property conditions", async () => {
+  it("seeds the condition tree from legacy propertyConditions and submits a conditionTree", async () => {
     const { createAutomationInlineAction } = await import(
       "@/app/actions/automation-inline.action"
     );
     vi.mocked(createAutomationInlineAction).mockResolvedValue({
-      ok: false,
-      error: "noop",
+      ok: true,
+      automation: {
+        automation_id: "aut_seed",
+        playbook_id: "pb_seed",
+        name: "Seeded",
+        status: "paused",
+        triggerType: "event",
+        enabled: false,
+      },
     });
 
     const { default: AutomationCreateInline } = await import(
@@ -273,25 +380,60 @@ describe("AutomationCreateInline", () => {
     );
     render(
       <AutomationCreateInline
+        suggestedName="Seeded"
+        orgSlug="my-org"
+        workspaceSlug="default"
         triggerType="event"
+        entityType="Commit"
+        eventType="node.created"
         propertyConditions={[
           { property: "git_branch", operator: "eq", toValue: "main" },
         ]}
       />,
     );
-    const propInput = screen.getByTestId("condition-property-0") as HTMLInputElement;
-    expect(propInput.value).toBe("git_branch");
-    const valInput = screen.getByTestId("condition-value-0") as HTMLInputElement;
-    expect(valInput.value).toBe("main");
+
+    // The seeded leaf renders as a condition row.
+    await waitFor(() => {
+      expect(screen.getByTestId("condition-builder")).toBeInTheDocument();
+    });
+
+    await userEvent.click(screen.getByTestId("create-automation-submit"));
+
+    await waitFor(() => {
+      expect(createAutomationInlineAction).toHaveBeenCalled();
+    });
+    const call = vi.mocked(createAutomationInlineAction).mock.calls[0]![0];
+    expect(call.triggerConfig?.entityType).toBe("Commit");
+    expect(call.triggerConfig?.eventType).toBe("node.created");
+    expect(call.triggerConfig?.propertyConditions).toBeUndefined();
+    const tree = call.triggerConfig?.conditionTree;
+    expect(tree).toBeDefined();
+    expect(tree?.kind).toBe("group");
+    if (tree?.kind === "group") {
+      expect(tree.children).toHaveLength(1);
+      const leaf = tree.children[0]!;
+      expect(leaf.kind).toBe("condition");
+      if (leaf.kind === "condition") {
+        expect(leaf.property).toBe("git_branch");
+        expect(leaf.value).toBe("main");
+      }
+    }
   });
 
-  it("editing a condition property input updates state", async () => {
+  it("omits conditionTree when no conditions were added", async () => {
     const { createAutomationInlineAction } = await import(
       "@/app/actions/automation-inline.action"
     );
     vi.mocked(createAutomationInlineAction).mockResolvedValue({
-      ok: false,
-      error: "noop",
+      ok: true,
+      automation: {
+        automation_id: "aut_empty",
+        playbook_id: "pb_empty",
+        name: "Empty",
+        status: "paused",
+        triggerType: "event",
+        enabled: false,
+      },
     });
 
     const { default: AutomationCreateInline } = await import(
@@ -299,55 +441,19 @@ describe("AutomationCreateInline", () => {
     );
     render(
       <AutomationCreateInline
+        suggestedName="Empty"
+        orgSlug="my-org"
+        workspaceSlug="default"
         triggerType="event"
-        propertyConditions={[{ property: "status", operator: "eq", toValue: "open" }]}
       />,
     );
-    const propInput = screen.getByTestId("condition-property-0") as HTMLInputElement;
-    await userEvent.clear(propInput);
-    await userEvent.type(propInput, "priority");
-    expect(propInput.value).toBe("priority");
-  });
 
-  it("adds a new condition row when Add condition is clicked", async () => {
-    const { createAutomationInlineAction } = await import(
-      "@/app/actions/automation-inline.action"
-    );
-    vi.mocked(createAutomationInlineAction).mockResolvedValue({
-      ok: false,
-      error: "noop",
+    await userEvent.click(screen.getByTestId("create-automation-submit"));
+    await waitFor(() => {
+      expect(createAutomationInlineAction).toHaveBeenCalled();
     });
-
-    const { default: AutomationCreateInline } = await import(
-      "./automation-create-inline"
-    );
-    render(<AutomationCreateInline triggerType="event" />);
-    const addBtn = screen.getByTestId("add-condition-btn");
-    await userEvent.click(addBtn);
-    expect(screen.getByTestId("condition-property-0")).toBeInTheDocument();
-  });
-
-  it("removes a condition row when remove button is clicked", async () => {
-    const { createAutomationInlineAction } = await import(
-      "@/app/actions/automation-inline.action"
-    );
-    vi.mocked(createAutomationInlineAction).mockResolvedValue({
-      ok: false,
-      error: "noop",
-    });
-
-    const { default: AutomationCreateInline } = await import(
-      "./automation-create-inline"
-    );
-    render(
-      <AutomationCreateInline
-        triggerType="event"
-        propertyConditions={[{ property: "status", operator: "eq", toValue: "open" }]}
-      />,
-    );
-    expect(screen.getByTestId("condition-property-0")).toBeInTheDocument();
-    await userEvent.click(screen.getByTestId("condition-remove-0"));
-    expect(screen.queryByTestId("condition-property-0")).not.toBeInTheDocument();
+    const call = vi.mocked(createAutomationInlineAction).mock.calls[0]![0];
+    expect(call.triggerConfig?.conditionTree).toBeUndefined();
   });
 
   it("adds a new step row when Add step is clicked", async () => {
@@ -421,7 +527,9 @@ describe("AutomationCreateInline", () => {
     await userEvent.click(screen.getByTestId("create-automation-submit"));
 
     await waitFor(() => {
-      expect(screen.getByTestId("automation-created-state")).toBeInTheDocument();
+      expect(
+        screen.getByTestId("automation-created-state"),
+      ).toBeInTheDocument();
     });
     expect(screen.getByText("Created — disabled")).toBeInTheDocument();
     expect(screen.getByTestId("enable-automation-btn")).toBeInTheDocument();
@@ -463,9 +571,8 @@ describe("AutomationCreateInline", () => {
   });
 
   it("enable button calls enableAutomationInlineAction and shows enabled state", async () => {
-    const { createAutomationInlineAction, enableAutomationInlineAction } = await import(
-      "@/app/actions/automation-inline.action"
-    );
+    const { createAutomationInlineAction, enableAutomationInlineAction } =
+      await import("@/app/actions/automation-inline.action");
     vi.mocked(createAutomationInlineAction).mockResolvedValue({
       ok: true,
       automation: {
@@ -506,7 +613,9 @@ describe("AutomationCreateInline", () => {
     // Then enable
     await userEvent.click(screen.getByTestId("enable-automation-btn"));
     await waitFor(() => {
-      expect(screen.getByTestId("automation-enabled-state")).toBeInTheDocument();
+      expect(
+        screen.getByTestId("automation-enabled-state"),
+      ).toBeInTheDocument();
     });
     expect(screen.getByText("Automation enabled")).toBeInTheDocument();
     expect(enableAutomationInlineAction).toHaveBeenCalledWith(
@@ -519,9 +628,8 @@ describe("AutomationCreateInline", () => {
   });
 
   it("shows error when enableAutomationInlineAction fails", async () => {
-    const { createAutomationInlineAction, enableAutomationInlineAction } = await import(
-      "@/app/actions/automation-inline.action"
-    );
+    const { createAutomationInlineAction, enableAutomationInlineAction } =
+      await import("@/app/actions/automation-inline.action");
     vi.mocked(createAutomationInlineAction).mockResolvedValue({
       ok: true,
       automation: {
@@ -580,7 +688,11 @@ describe("AutomationCreateInline", () => {
       <AutomationCreateInline
         suggestedName="With Steps"
         steps={[
-          { name: "Run QA", stepType: "agent", config: { agentSlug: "qa-chat" } },
+          {
+            name: "Run QA",
+            stepType: "agent",
+            config: { agentSlug: "qa-chat" },
+          },
         ]}
       />,
     );
@@ -588,7 +700,9 @@ describe("AutomationCreateInline", () => {
     expect(screen.getByTestId("step-row-0")).toBeInTheDocument();
     const stepName = screen.getByTestId("step-name-0") as HTMLInputElement;
     expect(stepName.value).toBe("Run QA");
-    const agentSlug = screen.getByTestId("step-agent-slug-0") as HTMLInputElement;
+    const agentSlug = screen.getByTestId(
+      "step-agent-slug-0",
+    ) as HTMLInputElement;
     expect(agentSlug.value).toBe("qa-chat");
   });
 

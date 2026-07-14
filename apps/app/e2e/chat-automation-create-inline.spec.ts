@@ -26,11 +26,17 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const SCREENSHOT_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "screenshots");
+const SCREENSHOT_DIR = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "screenshots",
+);
 
 // Scripted stream events: emit a component event that renders the
 // automation-create-inline form with pre-filled props.
-function automationFormEvents(toolCallId: string, orgSlug: string): StreamEvent[] {
+function automationFormEvents(
+  toolCallId: string,
+  orgSlug: string,
+): StreamEvent[] {
   return [
     {
       type: "tool-call-start",
@@ -87,7 +93,9 @@ test.describe("chat.automation-create-inline", () => {
   test("automation-create-inline form renders with prefilled values and is editable", async ({
     page,
   }) => {
-    const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "auto-inline" });
+    const { orgSlug } = await signUpFreshUser(page, {
+      orgPrefix: "auto-inline",
+    });
 
     await page.goto(`/${orgSlug}/default/chat`);
     await expect(page).not.toHaveURL(/\/login/);
@@ -133,17 +141,20 @@ test.describe("chat.automation-create-inline", () => {
       path: path.join(SCREENSHOT_DIR, "automation-form-name-edited.png"),
     });
 
-    // Assert entity type is pre-filled
-    const entityInput = form.locator('[data-testid="entity-type-input"]');
-    if (await entityInput.isVisible()) {
-      await expect(entityInput).toHaveValue("Commit");
-    }
+    // The schema-driven event-config section renders (entity-type picker +
+    // condition builder). On a fresh workspace with no schema defined the
+    // section shows the "Define a schema" CTA instead of populated pickers —
+    // both are valid states, so assert the section is present either way.
+    const section = form.locator('[data-testid="schema-condition-section"]');
+    await expect(section).toBeVisible({ timeout: 5_000 });
 
-    // Property-condition row is prefilled and editable
-    const conditionValue = form.locator('[data-testid="condition-value-0"]');
-    if (await conditionValue.isVisible()) {
-      await expect(conditionValue).toHaveValue("main");
-    }
+    // When a schema IS defined the entity-type Select and condition builder
+    // appear; when it isn't, the no-schema CTA links to the ontology builder.
+    const noSchemaCta = form.locator('[data-testid="no-schema-cta"]');
+    const conditionBuilder = form.locator('[data-testid="condition-builder"]');
+    await expect(noSchemaCta.or(conditionBuilder).first()).toBeVisible({
+      timeout: 5_000,
+    });
 
     // The submit button is enabled and ready — the actual submit→DB path is
     // covered at the unit/handler seams (see header comment).

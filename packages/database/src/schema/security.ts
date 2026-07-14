@@ -29,7 +29,6 @@ import {
   text,
   timestamp,
   uuid,
-  uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import {
@@ -112,6 +111,10 @@ export const securityEvents = securitySchema.table(
       t.eventType,
       t.occurredAt,
     ),
+    // Session-expiry audit cron joins on request_id with no time bound
+    // (2026-07-11 audit §4.1 item 6) — was an unindexed seq-scan over the
+    // whole (monthly-growing) table.
+    requestIdIdx: index("security_events_request_id_idx").on(t.requestId),
 
     // DB-level CHECK constraints to enforce the typed union and outcome set.
     // The clause bodies are generated from the @oxagen/compliance single source
@@ -157,9 +160,9 @@ export const orgSecurityPolicy = securitySchema.table(
       .notNull()
       .defaultNow(),
   },
-  (t) => ({
-    orgIdx: uniqueIndex("org_security_policy_org_idx").on(t.orgId),
-  }),
+  // org_security_policy_org_idx was dropped (2026-07-11 audit §4.2):
+  // duplicate of the PK on org_id declared above (orgId.primaryKey()) — the
+  // table needs no ExtraConfigBuilder now that its only extra index is gone.
 );
 
 export type OrgSecurityPolicy = typeof orgSecurityPolicy.$inferSelect;

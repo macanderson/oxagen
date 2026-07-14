@@ -17,12 +17,12 @@ import { TEST_CTX as CTX } from "./test-utils/fixtures";
 describe("workspace.settings.read handler", () => {
   beforeEach(() => mocks.findFirst.mockReset());
 
-  it("maps the workspace row, pulling description from the settings bag and avatarUrl from its column", async () => {
+  it("maps the workspace row, pulling description and avatarUrl from their columns", async () => {
     mocks.findFirst.mockResolvedValue({
       name: "Research",
       slug: "research",
       avatarUrl: "avatar:v1:{\"emoji\":\"🔬\",\"bg\":\"#2563eb\",\"mode\":\"full\"}",
-      settings: { description: "R&D workspace", promptConfig: { x: 1 } },
+      description: "R&D workspace",
     });
     const out = await workspaceSettingsReadHandler({}, CTX);
     expect(out).toEqual({
@@ -34,7 +34,7 @@ describe("workspace.settings.read handler", () => {
   });
 
   it("returns null description and avatarUrl when unset", async () => {
-    mocks.findFirst.mockResolvedValue({ name: "W", slug: "w", avatarUrl: null, settings: {} });
+    mocks.findFirst.mockResolvedValue({ name: "W", slug: "w", avatarUrl: null, description: null });
     const out = await workspaceSettingsReadHandler({}, CTX);
     expect(out.description).toBeNull();
     expect(out.avatarUrl).toBeNull();

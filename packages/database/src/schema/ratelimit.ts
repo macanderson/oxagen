@@ -25,7 +25,13 @@
 // through the audited withSystemDb bypass, and the migration gives the table a
 // bypass-only RLS policy — a tenant query can never read another org's counters.
 
-import { integer, primaryKey, text, timestamp } from "drizzle-orm/pg-core";
+import {
+  index,
+  integer,
+  primaryKey,
+  text,
+  timestamp,
+} from "drizzle-orm/pg-core";
 import { ratelimitSchema } from "./_schemas";
 
 /**
@@ -46,5 +52,12 @@ export const rateLimitCounters = ratelimitSchema.table(
   },
   (t) => ({
     pk: primaryKey({ columns: [t.bucketKey, t.windowStart] }),
+    // Cleanup sweep target: the limiter opportunistically deletes windows
+    // older than a couple of windows (DELETE ... WHERE window_start < ...).
+    // A dedicated index keeps that range scan off the composite PK's leading
+    // column.
+    windowStartIdx: index("rate_limit_counters_window_start_idx").on(
+      t.windowStart,
+    ),
   }),
 );

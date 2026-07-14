@@ -72,7 +72,10 @@ function toModelMessages(history: A2AMessage[]): ModelMessage[] {
   for (const m of history) {
     const text = messageText(m);
     if (!text) continue;
-    out.push({ role: m.role === "agent" ? "assistant" : "user", content: text });
+    out.push({
+      role: m.role === "agent" ? "assistant" : "user",
+      content: text,
+    });
   }
   return out;
 }
@@ -172,7 +175,12 @@ async function insertExecutionRow(args: {
     // a spike in dropped agent_executions inserts is alertable the same way every
     // other apps/api boundary is — a lost lineage row is a fleet-lineage hole.
     logger.warn(
-      { err, orgId: args.ctx.orgId, workspaceId: args.ctx.workspaceId, originId: args.originId },
+      {
+        err,
+        orgId: args.ctx.orgId,
+        workspaceId: args.ctx.workspaceId,
+        originId: args.originId,
+      },
       "[a2a.bridge] agent_executions insert failed",
     );
     captureError({
@@ -224,7 +232,12 @@ async function updateExecutionRow(args: {
     // — a dropped terminal update leaves the execution row stuck in 'running'
     // with no token totals, undermining fleet lineage/audit.
     logger.warn(
-      { err, orgId: args.ctx.orgId, workspaceId: args.ctx.workspaceId, executionId: args.executionId },
+      {
+        err,
+        orgId: args.ctx.orgId,
+        workspaceId: args.ctx.workspaceId,
+        executionId: args.executionId,
+      },
       "[a2a.bridge] agent_executions terminal update failed",
     );
     captureError({
@@ -352,13 +365,15 @@ export async function runA2ATask(args: RunA2ATaskArgs): Promise<A2ATaskRow> {
   // falls back to today's generic behavior rather than failing the task.
   const skillId = getSkillId(inboundMessage);
   const resolvedAgent = skillId
-    ? await resolveAgentForA2A(ctx.workspaceId, skillId).catch((err: unknown) => {
-        logger.warn(
-          { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId, skillId },
-          "[a2a.bridge] resolveAgentForA2A failed — falling back to generic chat",
-        );
-        return null;
-      })
+    ? await resolveAgentForA2A(ctx.workspaceId, skillId).catch(
+        (err: unknown) => {
+          logger.warn(
+            { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId, skillId },
+            "[a2a.bridge] resolveAgentForA2A failed — falling back to generic chat",
+          );
+          return null;
+        },
+      )
     : null;
 
   // Cross-task lineage (spec §3.2): a referenced prior task's execution row
@@ -366,22 +381,13 @@ export async function runA2ATask(args: RunA2ATaskArgs): Promise<A2ATaskRow> {
   // conversation chains the same way it renders subagent fan-out chains.
   const parentExecutionId = await resolveParentExecutionId(ctx, inboundMessage);
 
-  // fanoutRunId is always null today: CapabilityContext carries no
-  // subagent_runs.id channel (agent.execute-subagent's ctx only threads
-  // orgId/workspaceId/requestId/messageId — see
-  // packages/inngest-functions/src/functions/agent.execute-subagent.ts), so
-  // there is no non-fragile way yet to detect "this A2A task was opened from
-  // inside a leased subagent run." Tracked as a follow-up wiring task rather
-  // than invented here (spec §3.3) — null is the schema's documented default
-  // for "not opened from a fanout run".
-  const fanoutRunId: string | null = null;
-
-  // Transition submitted → working; thread the resolved skill + (always-null,
-  // see above) fanout linkage onto the task row in the same write.
+  // Transition submitted → working; thread the resolved skill onto the task
+  // row in the same write. (The former fanout_run_id column was dropped in
+  // 20260802140000 — it was never populated; subagent lineage is carried by
+  // parentExecutionId above.)
   await updateTask(ctx, taskId, {
     state: "working",
     agentId: resolvedAgent?.id ?? null,
-    fanoutRunId,
   });
   statusUpdate("working", false);
 
@@ -428,27 +434,30 @@ export async function runA2ATask(args: RunA2ATaskArgs): Promise<A2ATaskRow> {
     // in ONE tenant scope so recall runs CONCURRENTLY with tool materialization
     // (no serial latency before the first token). The recalled block is injected
     // per-turn by the engine AFTER the cached system prefix (ADR-021 §2/§8).
-    const [{ tools: agentTools, nameMap: toolNameMap }, promptConfig, recalled] =
-      await runInTenantScope(scope, () =>
-        Promise.all([
-          materializeTools({
-            orgId: ctx.orgId,
-            workspaceId: ctx.workspaceId,
-            userId: ctx.userId ?? "",
-            apiKeyId: ctx.apiKeyId,
-            requestId: ctx.requestId,
-            surface: "api",
-            messageId: ctx.requestId,
-            clientIp: ctx.clientIp,
-          }),
-          loadWorkspacePromptConfig(ctx.workspaceId).catch(() => ({})),
-          recallWorkspaceMemoryMessage({
-            query: instruction,
-            executionRef: ctx.requestId,
-            ctx,
-          }),
-        ]),
-      );
+    const [
+      { tools: agentTools, nameMap: toolNameMap },
+      promptConfig,
+      recalled,
+    ] = await runInTenantScope(scope, () =>
+      Promise.all([
+        materializeTools({
+          orgId: ctx.orgId,
+          workspaceId: ctx.workspaceId,
+          userId: ctx.userId ?? "",
+          apiKeyId: ctx.apiKeyId,
+          requestId: ctx.requestId,
+          surface: "api",
+          messageId: ctx.requestId,
+          clientIp: ctx.clientIp,
+        }),
+        loadWorkspacePromptConfig(ctx.workspaceId).catch(() => ({})),
+        recallWorkspaceMemoryMessage({
+          query: instruction,
+          executionRef: ctx.requestId,
+          ctx,
+        }),
+      ]),
+    );
 
     const chatBaseline = chatSystemPrompt({
       orgSlug: "",
@@ -459,7 +468,8 @@ export async function runA2ATask(args: RunA2ATaskArgs): Promise<A2ATaskRow> {
     // Layer the addressed skill's instructions under the chat baseline (spec
     // §3.1) — additive, never a replacement, so tool-calling/UI-render
     // contracts in the baseline always still apply.
-    const skillInstructions = resolvedAgent?.activeVersion?.instructions?.trim();
+    const skillInstructions =
+      resolvedAgent?.activeVersion?.instructions?.trim();
     const baseline = skillInstructions
       ? `${chatBaseline}\n\n${skillInstructions}`
       : chatBaseline;
@@ -567,7 +577,12 @@ export async function runA2ATask(args: RunA2ATaskArgs): Promise<A2ATaskRow> {
                 ? errVal
                 : "Agent stream error";
           logger.warn(
-            { errorMessage, orgId: ctx.orgId, workspaceId: ctx.workspaceId, taskId },
+            {
+              errorMessage,
+              orgId: ctx.orgId,
+              workspaceId: ctx.workspaceId,
+              taskId,
+            },
             "[a2a.bridge] LLM stream error part",
           );
         }
@@ -579,7 +594,8 @@ export async function runA2ATask(args: RunA2ATaskArgs): Promise<A2ATaskRow> {
     outputTokens = result.usage.outputTokens ?? 0;
   } catch (err) {
     streamErrored = true;
-    errorMessage = err instanceof Error ? err.message : "Agent execution failed";
+    errorMessage =
+      err instanceof Error ? err.message : "Agent execution failed";
     logger.warn(
       { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId, taskId },
       "[a2a.bridge] task execution threw",

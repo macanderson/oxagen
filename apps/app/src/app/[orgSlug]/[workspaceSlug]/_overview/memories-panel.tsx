@@ -46,14 +46,11 @@ function truncate(text: string, max: number): string {
 }
 
 /**
- * Bucket memories into the last 7 days vs the prior 7 days by creation time.
- * The per-request `Date.now()` read lives here in a plain module function —
- * NOT in the component render — so the react-hooks purity rule
- * (react-hooks/globals), which only guards impure globals called during
- * render, has nothing to flag. This is an async Server Component, so a fresh
- * per-request timestamp is exactly what we want.
+ * Count memories captured in the last 7 days vs the prior 7 days. `Date.now()`
+ * lives here (a plain helper) rather than the component body — calling an impure
+ * function during render is rejected by the React purity lint rule.
  */
-function computeMemoryActivity(memories: AgentMemoryRecord[]): {
+function weeklyDelta(memories: AgentMemoryRecord[]): {
   last7d: number;
   prior7d: number;
 } {
@@ -104,8 +101,7 @@ export async function MemoriesPanel({
     failed = true;
   }
 
-  const { last7d, prior7d } = computeMemoryActivity(memories);
-
+  const { last7d, prior7d } = weeklyDelta(memories);
   const recent = memories.slice(0, RECENT_ROWS);
 
   return (

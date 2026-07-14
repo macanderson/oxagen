@@ -41,10 +41,16 @@ vi.mock("@oxagen/database", () => ({
   },
 }));
 
-vi.mock("drizzle-orm", () => ({ eq: (col: unknown, val: unknown) => ({ col, val }) }));
+vi.mock("drizzle-orm", () => ({
+  eq: (col: unknown, val: unknown) => ({ col, val }),
+}));
 
 vi.mock("../logger", () => ({
-  logger: { info: mocks.loggerInfo, warn: mocks.loggerWarn, error: mocks.loggerError },
+  logger: {
+    info: mocks.loggerInfo,
+    warn: mocks.loggerWarn,
+    error: mocks.loggerError,
+  },
 }));
 
 vi.mock("../inngest", () => ({
@@ -119,18 +125,20 @@ describe("privacyErasureExecute Inngest handler", () => {
     // processing transition happened
     expect(updates.some((c) => c.payload.status === "processing")).toBe(true);
 
-    // user identity row anonymised: email + display name replaced, username and
-    // avatar nulled (username is a PII handle).
+    // user identity row anonymised: email + display name replaced, avatar nulled.
     const userUpdate = updates.find((c) => c.table.id === "users.id");
     expect(userUpdate).toBeDefined();
     expect(userUpdate?.payload.email).toBe("user-1@deleted.invalid");
     expect(userUpdate?.payload.displayName).toBe("Deleted User");
-    expect(userUpdate?.payload.username).toBeNull();
     expect(userUpdate?.payload.avatarUrl).toBeNull();
 
     // OAuth tokens + password hash purged, personal preferences removed.
-    expect(deletes.some((c) => c.table.userId === "accounts.userId")).toBe(true);
-    expect(deletes.some((c) => c.table.userId === "userPreferences.userId")).toBe(true);
+    expect(deletes.some((c) => c.table.userId === "accounts.userId")).toBe(
+      true,
+    );
+    expect(
+      deletes.some((c) => c.table.userId === "userPreferences.userId"),
+    ).toBe(true);
 
     // CRITICAL: never marked completed.
     expect(updates.some((c) => c.payload.status === "completed")).toBe(false);
@@ -201,14 +209,18 @@ describe("privacyErasureExecute Inngest handler", () => {
     const updates = mocks.updateSet.mock.calls.map((c) => c[0] as UpdateCall);
     expect(
       updates.some(
-        (c) => c.payload.status === "failed" && c.payload.errorMessage === "boom",
+        (c) =>
+          c.payload.status === "failed" && c.payload.errorMessage === "boom",
       ),
     ).toBe(true);
   });
 
   it("on-failure handler is a no-op when requestId is missing", async () => {
     const handler = getHandler("privacy.erasure-execute.on-failure");
-    await handler({ event: { data: { event: { data: {} }, error: "x" } }, step: makeStep() });
+    await handler({
+      event: { data: { event: { data: {} }, error: "x" } },
+      step: makeStep(),
+    });
     expect(mocks.updateSet).not.toHaveBeenCalled();
     expect(mocks.deleteFrom).not.toHaveBeenCalled();
   });

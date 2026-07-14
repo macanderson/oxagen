@@ -40,11 +40,34 @@ export type AuthCredential =
   | { scheme: "basic_auth"; username: string; password: string }
   | { scheme: "connection_string"; connectionString: string }
   | { scheme: "service_account_json"; serviceAccountJson: string }
-  | { scheme: "aws_cross_account_role"; roleArn: string; externalId: string; region: string }
-  | { scheme: "aws_iam_keys"; accessKeyId: string; secretAccessKey: string; region: string; sessionToken?: string }
-  | { scheme: "ssh_private_key"; privateKeyPem: string; passphrase?: string; username: string; host: string; port: number }
+  | {
+      scheme: "aws_cross_account_role";
+      roleArn: string;
+      externalId: string;
+      region: string;
+    }
+  | {
+      scheme: "aws_iam_keys";
+      accessKeyId: string;
+      secretAccessKey: string;
+      region: string;
+      sessionToken?: string;
+    }
+  | {
+      scheme: "ssh_private_key";
+      privateKeyPem: string;
+      passphrase?: string;
+      username: string;
+      host: string;
+      port: number;
+    }
   | { scheme: "rsa_key_pair"; privateKeyPem: string; passphrase?: string }
-  | { scheme: "tls_mutual"; certPem: string; privateKeyPem: string; caPem?: string }
+  | {
+      scheme: "tls_mutual";
+      certPem: string;
+      privateKeyPem: string;
+      caPem?: string;
+    }
   | { scheme: "oauth2"; _marker: "oauth2" };
 
 // Sample records fetched during setup wizard preview — one per source record type.
@@ -82,7 +105,31 @@ export interface WebhookExtraction {
   record: unknown;
 }
 
-export interface ConnectorDefinition<TConfig extends z.ZodTypeAny = z.ZodTypeAny> {
+// Result of a connector's subscribeWebhooks() call — everything the provisioner
+// persists into ingestion.webhook_subscriptions for the delivery route to later
+// verify and for the renewal cron to re-subscribe before expiry.
+export interface WebhookSubscriptionResult {
+  // Provider-side subscription/channel id (Graph subscription id, Google channel
+  // resourceId/id). Needed to renew or tear down the subscription later.
+  readonly subscriptionId: string;
+  // The shared secret the provider echoes on each delivery (Graph clientState /
+  // Google X-Goog-Channel-Token). Stored encrypted; checked by verifyWebhook.
+  readonly secret?: string;
+  // When the provider subscription lapses. Drives the renewal cron; omit for
+  // providers whose subscriptions do not expire.
+  readonly expiresAt?: Date;
+  // Source record types this subscription delivers (persisted for observability
+  // and to scope re-subscription). Optional.
+  readonly recordTypes?: readonly string[];
+  // HMAC/verification metadata, persisted so the delivery route knows how the
+  // connector verifies (informational — verifyWebhook is the enforcing path).
+  readonly hmacAlgorithm?: string;
+  readonly hmacHeader?: string;
+}
+
+export interface ConnectorDefinition<
+  TConfig extends z.ZodTypeAny = z.ZodTypeAny,
+> {
   readonly connectorId: string;
   readonly displayName: string;
   readonly description: string;
@@ -109,12 +156,18 @@ export interface ConnectorDefinition<TConfig extends z.ZodTypeAny = z.ZodTypeAny
   // Returns [] for events the connector does not ingest (pings, lifecycle, etc.).
   parseWebhookEvent?(eventName: string, payload: unknown): WebhookExtraction[];
 
-  // Optional: subscribe to webhooks at the source after the connection goes active.
+  // Optional: subscribe to webhooks at the source after the connection goes
+  // active (and to RENEW an existing subscription — the connector re-registers
+  // idempotently and returns the fresh provider subscription id + expiry). The
+  // returned `secret` is the value the provider will echo back on each delivery
+  // (Graph clientState / Google channel token) and is what verifyWebhook checks;
+  // the provisioner encrypts it at rest. `expiresAt` drives the renewal cron;
+  // omit it for providers whose subscriptions never expire.
   subscribeWebhooks?(
     auth: AuthCredential,
     config: z.infer<TConfig>,
     webhookUrl: string,
-  ): Promise<{ subscriptionId: string; secret?: string }>;
+  ): Promise<WebhookSubscriptionResult>;
 
   // Optional: poll-based ingestor for incremental sync. The generic sync loop
   // (packages/inngest-functions ingestion.connection-poll) calls this once per

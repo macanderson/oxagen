@@ -7,22 +7,20 @@ import { schema, withTenantDb } from "@oxagen/database";
 import { eq } from "drizzle-orm";
 import { logger } from "./logger";
 
-function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === "object" && v !== null;
-}
-
-// `description` lives in the workspaces.settings JSONB bag (no dedicated column),
-// alongside other settings keys like promptConfig. `avatarUrl` IS a real column
-// (workspace.workspaces.avatar_url). Normalize both defensively.
+// `description` and `avatarUrl` are real columns on workspace.workspaces
+// (description was promoted out of the settings JSONB bag — audit §1.7).
 export function mapWorkspaceSettingsRow(row: {
   name: string;
   slug: string;
   avatarUrl: string | null;
-  settings: unknown;
+  description: string | null;
 }): WorkspaceSettingsReadOutput {
-  const settings = isRecord(row.settings) ? row.settings : {};
-  const description = typeof settings.description === "string" ? settings.description : null;
-  return { name: row.name, slug: row.slug, description, avatarUrl: row.avatarUrl ?? null };
+  return {
+    name: row.name,
+    slug: row.slug,
+    description: row.description ?? null,
+    avatarUrl: row.avatarUrl ?? null,
+  };
 }
 
 // Reads workspace.workspaces for the active workspace (RLS limits the row to
@@ -39,7 +37,7 @@ export const workspaceSettingsReadHandler: CapabilityHandler<typeof workspaceSet
   const row = await withTenantDb((tx) =>
     tx.query.workspaces.findFirst({
       where: eq(schema.workspaces.id, ctx.workspaceId),
-      columns: { name: true, slug: true, avatarUrl: true, settings: true },
+      columns: { name: true, slug: true, avatarUrl: true, description: true },
     }),
   );
 

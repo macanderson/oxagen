@@ -17,25 +17,25 @@
  * that surface has in chat; this page's stricter Owner/Admin-only gate is an
  * additional restriction layered on top for the dedicated actions here, not a
  * capability-level change.
- *
- * Cross-link: every launched run is a subagent fan-out — link out to
- * activity/fleet for full lineage/cost detail instead of duplicating it.
  */
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
-import { ArrowUpRight } from "lucide-react";
 import { Drawer } from "@/app/[orgSlug]/[workspaceSlug]/_shared/components";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
-import { workspace } from "@/lib/routes";
 import WorkflowProgress from "@/components/chat/registry-components/workflow-progress";
 import ResearchSwarmCard from "@/components/chat/registry-components/research-swarm-card";
 import { cancelWorkflowAction } from "../actions";
 import type { SwarmSessionRecord } from "./swarm-session-store";
 
 export type WorkflowDetailTarget =
-  | { type: "workflow"; id: string; title?: string; goal?: string; status: string }
+  | {
+      type: "workflow";
+      id: string;
+      title?: string;
+      goal?: string;
+      status: string;
+    }
   | { type: "swarm"; swarm: SwarmSessionRecord };
 
 export interface WorkflowDetailDrawerProps {
@@ -46,7 +46,11 @@ export interface WorkflowDetailDrawerProps {
   canManage: boolean;
 }
 
-const TERMINAL_WORKFLOW_STATUSES = new Set(["completed", "failed", "cancelled"]);
+const TERMINAL_WORKFLOW_STATUSES = new Set([
+  "completed",
+  "failed",
+  "cancelled",
+]);
 
 export function WorkflowDetailDrawer({
   target,
@@ -62,17 +66,23 @@ export function WorkflowDetailDrawer({
   async function handleCancel() {
     if (!target || target.type !== "workflow") return;
     setCancelling(true);
-    const res = await cancelWorkflowAction({ orgSlug, workspaceSlug, workflowId: target.id });
+    const res = await cancelWorkflowAction({
+      orgSlug,
+      workspaceSlug,
+      workflowId: target.id,
+    });
     setCancelling(false);
     if (res.ok) {
       toast.add({ title: "Workflow cancelled", type: "success" });
       router.refresh();
     } else {
-      toast.add({ title: "Couldn't cancel", description: res.error, type: "error" });
+      toast.add({
+        title: "Couldn't cancel",
+        description: res.error,
+        type: "error",
+      });
     }
   }
-
-  const fleetHref = workspace.activity.fleet({ orgSlug, workspaceSlug });
 
   // Compute title/description/cancel-eligibility via a single narrowing
   // switch rather than derived booleans — a boolean flag doesn't carry the
@@ -93,10 +103,19 @@ export function WorkflowDetailDrawer({
   }
 
   return (
-    <Drawer open={target !== null} onOpenChange={onOpenChange} title={title} description={description}>
+    <Drawer
+      open={target !== null}
+      onOpenChange={onOpenChange}
+      title={title}
+      description={description}
+    >
       <div className="flex flex-col gap-4">
         {target !== null && target.type === "workflow" && (
-          <WorkflowProgress workflowId={target.id} orgSlug={orgSlug} workspaceSlug={workspaceSlug} />
+          <WorkflowProgress
+            workflowId={target.id}
+            orgSlug={orgSlug}
+            workspaceSlug={workspaceSlug}
+          />
         )}
         {target !== null && target.type === "swarm" && (
           <ResearchSwarmCard
@@ -111,16 +130,8 @@ export function WorkflowDetailDrawer({
           />
         )}
 
-        <div className="flex items-center justify-between gap-2 border-t border-border pt-3">
-          <Link
-            href={fleetHref}
-            className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-            data-testid="drawer-fleet-link"
-          >
-            View full lineage in Fleet
-            <ArrowUpRight className="size-3" aria-hidden="true" />
-          </Link>
-          {canCancel && (
+        {canCancel && (
+          <div className="flex items-center justify-end gap-2 border-t border-border pt-3">
             <Button
               variant="ghost"
               size="sm"
@@ -130,8 +141,8 @@ export function WorkflowDetailDrawer({
             >
               {cancelling ? "Cancelling…" : "Cancel workflow"}
             </Button>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </Drawer>
   );
