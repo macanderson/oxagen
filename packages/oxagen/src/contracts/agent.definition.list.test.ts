@@ -118,6 +118,10 @@ describe("agent.definition.list capability", () => {
     ).toThrow();
   });
 
+  it("is exempt from the billing admission gate (read-only introspection)", () => {
+    expect(agentDefinitionList.noBillingGate).toBe(true);
+  });
+
   it("is registered in the capability registry", () => {
     expect(getCapability("list_agent_defs")).toBe(agentDefinitionList);
   });

@@ -10,7 +10,15 @@ export const agentTriggerList = registerCapability({
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "e2e", "docs", "app"],
   scoped: true,
-  agent: { requiresApproval: false, riskLevel: "low", category: "introspection" },
+  // Read-only introspection: consumes no AI tokens, so a zero-credit or
+  // dunning-suspended org can still SEE its automations (running them is
+  // still gated). Without this the trigger board cannot even load.
+  noBillingGate: true,
+  agent: {
+    requiresApproval: false,
+    riskLevel: "low",
+    category: "introspection",
+  },
   sensitivity: "low",
   defaultEffect: "deny",
   defaultRoles: {
