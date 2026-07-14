@@ -376,8 +376,8 @@
       "entry": "ConnectionsSection RSC invoke(connection.list) → KnowledgeConnectionsClient",
       "testid": "connection-row-{publicId}",
       "proof": "apps/app/e2e/knowledge-connect-wizard.spec.ts",
-      "verifiedAt": "2026-07-13",
-      "verifiedBy": "session_23741633-remove-account-tabs"
+      "verifiedAt": null,
+      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
     "get_graph_stats": {
       "route": "/[orgSlug]/[workspaceSlug]/knowledge/graph",
