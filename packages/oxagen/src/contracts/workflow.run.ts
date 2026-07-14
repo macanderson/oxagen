@@ -8,7 +8,7 @@ export const workflowRun = registerCapability({
     "Decompose a large parallel goal into N sub-tasks, dispatch them concurrently via Inngest, and return a live progress component. Use for 10+ parallel data-gathering steps.",
   mode: "async",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   agent: { requiresApproval: true, riskLevel: "medium", category: "workflow" },
   sensitivity: "medium",

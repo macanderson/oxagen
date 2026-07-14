@@ -27,6 +27,20 @@ const nextConfig = {
   // — do not reintroduce them. See docs/adr/ and
   // https://nextjs.org/docs/app/api-reference/config/next-config-js/cacheComponents
   cacheComponents: true,
+  typescript: {
+    // Skip the redundant in-build `tsc` pass. Type correctness is gated
+    // authoritatively by the CI `checks` job (`pnpm typecheck` →
+    // `tsc --noEmit` at an 8GB heap) and by every package's own typecheck.
+    // Running tsc a SECOND time inside `next build` (its "Running TypeScript"
+    // phase) reserves another ~5GB heap; on the 2-core CI e2e runner — shared
+    // with the Postgres/ClickHouse/Neo4j service containers — that pushed the
+    // build's RSS past the runner's RAM and got it SIGKILL'd (exit 137) mid
+    // typecheck, after an otherwise-successful compile. Dropping the redundant
+    // pass reclaims the heap, removes the OOM, and speeds every build (Vercel
+    // included) with zero loss of type safety, since the standalone typecheck
+    // still fails the PR on any type error.
+    ignoreBuildErrors: true,
+  },
   // Proxy /api/v1/* requests to the Hono API so browser calls stay same-origin
   // and the Better Auth session cookie is forwarded server-side. Only paths
   // WITHOUT a local App Router handler should fall through to this rewrite.

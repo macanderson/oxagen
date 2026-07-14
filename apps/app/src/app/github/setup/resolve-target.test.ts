@@ -40,7 +40,7 @@ function makeQueries(overrides: {
 describe("buildSourcesPath", () => {
   it("builds the repos connections URL with the github setup marker", () => {
     expect(buildSourcesPath("acme", "research")).toBe(
-      "/acme/research/knowledge/repos?setup=github",
+      "/acme/research/knowledge/sources?setup=github",
     );
   });
 });
@@ -61,7 +61,7 @@ describe("resolveGithubSetupTarget", () => {
 
     const target = await resolveGithubSetupTarget("user-1", "12345", queries);
 
-    expect(target).toBe("/acme/research/knowledge/repos?setup=github");
+    expect(target).toBe("/acme/research/knowledge/sources?setup=github");
     expect(matchInstallation).toHaveBeenCalledWith("user-1", "12345");
     expect(mostRecentMembership).not.toHaveBeenCalled();
   });
@@ -77,7 +77,7 @@ describe("resolveGithubSetupTarget", () => {
 
     const target = await resolveGithubSetupTarget("user-1", "12345", queries);
 
-    expect(target).toBe("/newest-tenant/ws-new/knowledge/repos?setup=github");
+    expect(target).toBe("/newest-tenant/ws-new/knowledge/sources?setup=github");
   });
 
   it("(d) falls back to most recent membership when no connection matches", async () => {

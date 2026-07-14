@@ -60,7 +60,7 @@ export default async function MarketplaceIntegrationsPage({
     .filter((c) => c.connectorId !== "example-saas")
     .sort((a, b) => a.displayName.localeCompare(b.displayName));
 
-  const reposHref = workspace.knowledge.repos(ctx);
+  const reposHref = workspace.knowledge.sources(ctx);
   const integrationsHref = workspace.marketplace.integrations(ctx);
 
   return (

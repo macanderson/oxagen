@@ -29,7 +29,10 @@ export default async function AccountLayout({
         id: schema.organizations.id,
       })
       .from(schema.orgUsers)
-      .innerJoin(schema.organizations, eq(schema.organizations.id, schema.orgUsers.orgId))
+      .innerJoin(
+        schema.organizations,
+        eq(schema.organizations.id, schema.orgUsers.orgId),
+      )
       .where(eq(schema.orgUsers.userId, session.user.id)),
   );
 
@@ -79,6 +82,10 @@ export default async function AccountLayout({
         user={user}
         agentBar={false}
       >
+        {/* Account navigation lives solely in the mode-aware AppShell sidebar
+            (account mode: Profile / Preferences / Security / Privacy) and its
+            mobile bottom-bar equivalent — there is deliberately NO in-page
+            secondary tab strip, which merely duplicated the sidebar. */}
         {children}
       </AppShell>
 

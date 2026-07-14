@@ -10,6 +10,7 @@ graphStatsRoute.get("/", async (c) => {
   const query = c.req.query();
   const body = graphStats.input.parse({
     includeByType: query.includeByType === "true",
+    includeGrowth: query.includeGrowth === "true",
   });
   const ctx = capabilityContext(c);
   const out = await invoke(graphStats.name, body, ctx, { surface: "api" });

@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { CapabilityIcon } from "@/components/plugins/capability-icon";
 import { KeyRound, ShieldOff, Trash2 } from "lucide-react";
 import { mcpAuthorizeUrl } from "@/lib/mcp-oauth/authorize-url";
+import { SecretDialog } from "./secret-dialog";
 
 export interface McpServerRow {
   id: string;
@@ -36,14 +37,26 @@ export interface McpServerRow {
 export interface ConnectionDisplay {
   label: string;
   variant: "success" | "warning" | "error" | "muted";
-  /** Text for the auth action button, or null when no action applies. */
-  action: "Authenticate" | "Re-authenticate" | null;
+  /**
+   * The auth action offered for this row, or null when none applies.
+   * "Authenticate"/"Re-authenticate" navigate to the OAuth authorize route;
+   * "Enter API key"/"Update API key" open the secret-entry dialog. The caller
+   * renders OAuth actions as links and secret actions as dialog triggers.
+   */
+  action:
+    | "Authenticate"
+    | "Re-authenticate"
+    | "Enter API key"
+    | "Update API key"
+    | null;
 }
 
 /**
- * Pure status → display mapping, exported for unit tests. OAuth servers are
- * the only kind whose connection state is driven by mcp.credentials; secret
- * servers show Connected once a secret is stored; "none" needs nothing.
+ * Pure status → display mapping, exported for unit tests. OAuth and secret
+ * servers both drive their connection state from mcp.credentials; "none" needs
+ * nothing. A secret server without a stored key is unusable until the key is
+ * entered — so it offers an "Enter API key" action (the OAuth-consent
+ * counterpart for API-key servers like Stripe).
  */
 export function connectionDisplay(
   authKind: string,
@@ -75,10 +88,21 @@ export function connectionDisplay(
   }
   if (authKind === "secret") {
     return credentialStatus === "active"
-      ? { label: "Connected", variant: "success", action: null }
-      : { label: "Secret required", variant: "muted", action: null };
+      ? { label: "Connected", variant: "success", action: "Update API key" }
+      : {
+          label: "Secret required",
+          variant: "warning",
+          action: "Enter API key",
+        };
   }
   return { label: "No auth needed", variant: "muted", action: null };
+}
+
+/** True for the two secret-entry actions (rendered as a dialog trigger). */
+function isSecretAction(
+  action: ConnectionDisplay["action"],
+): action is "Enter API key" | "Update API key" {
+  return action === "Enter API key" || action === "Update API key";
 }
 
 interface McpServerListProps {
@@ -101,6 +125,19 @@ interface McpServerListProps {
     workspaceSlug: string;
     orgListingId: string;
   }) => Promise<{ ok: boolean; revoked?: boolean; error?: string }>;
+  /** Stores an API key / static secret for a secret-auth server. */
+  saveSecretAction: (input: {
+    orgSlug: string;
+    workspaceSlug: string;
+    orgListingId: string;
+    secret: string;
+  }) => Promise<{ ok: boolean; error?: string }>;
+  /**
+   * orgListingId from the ?reauth= deep link (the "needs re-auth" notification).
+   * When set and present in the list, that row is scrolled into view and
+   * briefly highlighted so the user lands directly on its Re-authenticate action.
+   */
+  reauthListingId?: string | null;
 }
 
 export function McpServerList({
@@ -110,8 +147,13 @@ export function McpServerList({
   toggleAction,
   uninstallAction,
   revokeAction,
+  saveSecretAction,
+  reauthListingId,
 }: McpServerListProps) {
   const [servers, setServers] = React.useState(initialServers);
+  // The secret-auth server whose "Enter/Update API key" dialog is open, or null.
+  const [secretDialogFor, setSecretDialogFor] =
+    React.useState<McpServerRow | null>(null);
   // The parent server component re-queries and passes fresh `initialServers`
   // after a server is connected (or removed) via the form above, which calls
   // router.refresh(). useState only seeds on mount, so without this resync a
@@ -121,6 +163,23 @@ export function McpServerList({
   }, [initialServers]);
   const [pendingIds, setPendingIds] = React.useState<Set<string>>(new Set());
   const [errors, setErrors] = React.useState<Record<string, string>>({});
+
+  // Deep-link landing: scroll the reauth-target row into view and highlight it
+  // briefly. Only fires when the id actually matches an installed row, so a
+  // stale link (server since uninstalled) degrades to a normal page view.
+  const [highlightId, setHighlightId] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    if (!reauthListingId) return;
+    if (!servers.some((s) => s.id === reauthListingId)) return;
+    setHighlightId(reauthListingId);
+    const el = document.querySelector(
+      `[data-testid="mcp-server-row-${reauthListingId}"]`,
+    );
+    el?.scrollIntoView({ behavior: "smooth", block: "center" });
+    // Fade the highlight after a few seconds so it reads as a one-time cue.
+    const t = setTimeout(() => setHighlightId(null), 4000);
+    return () => clearTimeout(t);
+  }, [reauthListingId, servers]);
 
   const setError = (id: string, msg: string | null) =>
     setErrors((prev) => {
@@ -226,7 +285,8 @@ export function McpServerList({
   // each row carries interactive controls (toggle, auth, remove) that read
   // better as a card on every screen size.
   return (
-    <ul className="divide-y divide-border/30 overflow-hidden rounded-lg border border-border/40">
+    <>
+      <ul className="divide-y divide-border/30 overflow-hidden rounded-lg border border-border/40">
       {servers.map((server) => {
         const display = connectionDisplay(
           server.authKind,
@@ -235,7 +295,11 @@ export function McpServerList({
         return (
           <li
             key={server.id}
-            className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:gap-6"
+            className={`flex flex-col gap-3 px-4 py-3 transition-colors sm:flex-row sm:items-center sm:gap-6 ${
+              highlightId === server.id
+                ? "bg-warning/12 ring-1 ring-inset ring-warning/40"
+                : ""
+            }`}
             data-testid={`mcp-server-row-${server.id}`}
           >
             <div className="flex min-w-0 flex-1 items-center gap-2">
@@ -301,7 +365,22 @@ export function McpServerList({
                   >
                     {display.label}
                   </Badge>
-                  {display.action ? (
+                  {isSecretAction(display.action) ? (
+                    // Secret-auth: open the API-key entry dialog (no redirect).
+                    <Button
+                      size="sm"
+                      variant={
+                        display.action === "Enter API key" ? "default" : "ghost"
+                      }
+                      onClick={() => setSecretDialogFor(server)}
+                      disabled={pendingIds.has(server.id)}
+                      data-testid={`mcp-server-set-secret-${server.id}`}
+                    >
+                      <KeyRound className="h-3 w-3" aria-hidden="true" />
+                      {display.action}
+                    </Button>
+                  ) : display.action ? (
+                    // OAuth: full-page navigation into the authorize route.
                     <Button
                       size="sm"
                       variant={
@@ -374,6 +453,30 @@ export function McpServerList({
           </li>
         );
       })}
-    </ul>
+      </ul>
+      {secretDialogFor ? (
+        <SecretDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setSecretDialogFor(null);
+          }}
+          orgSlug={orgSlug}
+          workspaceSlug={workspaceSlug}
+          orgListingId={secretDialogFor.id}
+          serverTitle={secretDialogFor.title ?? secretDialogFor.name}
+          saveAction={saveSecretAction}
+          onSaved={() => {
+            // The stored key flips the row to Connected without a full reload.
+            const savedId = secretDialogFor.id;
+            setServers((prev) =>
+              prev.map((s) =>
+                s.id === savedId ? { ...s, credentialStatus: "active" } : s,
+              ),
+            );
+            setSecretDialogFor(null);
+          }}
+        />
+      ) : null}
+    </>
   );
 }

@@ -49,6 +49,8 @@ contract-first design, IAM enforcement, and instrumentation.
 - [agent.memory.write](agent.memory.write.md) — Persist a two-axis memory (class + kind, confidence + enforcement) tied to a graph node
 - [agent.plan.approve](agent.plan.approve.md) — Approve, deny, or amend a previously-proposed plan; approval releases the agent stream to execute the plan's side-effectful steps
 - [agent.plan.create](agent.plan.create.md) — Create a structured hierarchical execution plan with tasks, dependencies, and approval gates; approval via agent.plan.approve is required before execution
+- [agent.plan.get](agent.plan.get.md) — Fetch a single execution plan by id, including its status, tasks, and approval state
+- [agent.plan.list](agent.plan.list.md) — List a workspace's execution plans, newest first, optionally filtered by status; cursor-paginated
 - [agent.repo.edit](agent.repo.edit.md) — Run the coding agent to edit files in a connected GitHub repo and open a pull request with the changes
 - [list_sandboxes](list-sandboxes.md) — List the durable sandbox sessions in the current workspace (id, key, image, status, driver, last-used/expiry timestamps), most-recently-used first
 - [agent.sandbox.exec](agent.sandbox.exec.md) — Run a shell command inside a durable sandbox session; filesystem/process state persists across calls; returns stdout, stderr, exit code
@@ -101,12 +103,13 @@ contract-first design, IAM enforcement, and instrumentation.
 
 - [asset.upload](asset.upload.md) — Ingest a binary asset from a publicly reachable source URL into object storage
 
-## Automation (6)
+## Automation (7)
 
 - [automation.create](automation.create.md) — Create a playbook and trigger for an automation with configurable trigger type (event, schedule, or manual)
 - [automation.update](automation.update.md) — Edit an existing automation: rename, change description, or replace the trigger configuration
 - [automation.disable](automation.disable.md) — Disable an automation trigger so it stops firing; safe to call without approval
 - [automation.enable](automation.enable.md) — Enable an automation trigger so it fires live; the only path from configured to live, gated by human approval
+- [automation.get](automation.get.md) — Fetch one automation's trigger config, description, active-version steps, and recent run history by its trigger public ID
 - [automation.list](automation.list.md) — List automation rules in the caller's active workspace, ordered by creation date descending
 - [automation.trigger](automation.trigger.md) — Manually trigger an automation by ID with an optional payload; creates a run record
 
@@ -115,6 +118,15 @@ contract-first design, IAM enforcement, and instrumentation.
 | Capability        | Notes                                                                         |
 | ----------------- | ----------------------------------------------------------------------------- |
 | `audit.log.query` | Query security + automation audit spines (org-scoped); admin-only, read-only. |
+
+## Capability (2)
+
+- [capability.registry.list](capability.registry.list.md) — List the platform's typed capability contracts from the live in-process registry (name, domain, surfaces, layers, sensitivity, default IAM grants, entitlement gate, audit binding); the governance catalog's data source
+- [capability.registry.get](capability.registry.get.md) — Read one typed contract as the full enforced object: identity grants, tenancy scope, input/output field specs, commercial terms, and chaining metadata
+
+## Iam (1)
+
+- [iam.role.list](iam.role.list.md) — List the org's IAM roles with capability grants and active assignment counts; read-only (writes remain provisioning-script-only)
 
 ## Billing (18)
 
@@ -226,6 +238,8 @@ contract-first design, IAM enforcement, and instrumentation.
 - [eval.run.start](eval.run.start.md) — Start an eval run: enqueue a background job that runs every dataset item through a target and scores it with an LLM judge; async, metered through @oxagen/ai
 - [eval.run.status](eval.run.status.md) — Poll an eval run's lifecycle: status, progress counts, and mean score once available
 - [eval.run.get](eval.run.get.md) — Fetch an eval run's summary and per-item results: output, judge scores, pass/fail, tokens, latency, and cost
+- [eval.run.list](eval.run.list.md) — List eval runs with server-side date/status/model filtering, sorting, and pagination; rolls up per-run cost and token totals from the metering pipe
+- [eval.run.series](eval.run.series.md) — Bucketed score-over-time series plus a per-model breakdown (avg score, pass rate, time series) — the read that backs score-trend and model-comparison charts
 
 ## Form (1)
 
@@ -295,7 +309,7 @@ contract-first design, IAM enforcement, and instrumentation.
 
 - [organization.create](organization.create.md) — Create a new organization with a globally-unique slug
 
-## Plugin (22)
+## Plugin (23)
 
 - [plugin.catalog.browse](plugin.catalog.browse.md) — Search and filter the MCP server catalog by text, category, transport, and auth kind
 - [plugin.catalog.get](plugin.catalog.get.md) — Get full detail for one catalog server entry including README, packages, and transport types
@@ -317,6 +331,7 @@ contract-first design, IAM enforcement, and instrumentation.
 - [plugin.schema.get](plugin.schema.get.md) — Fetch typed config schema for a connector plugin
 - [plugin.schema.validate](plugin.schema.validate.md) — Validate a config object against a plugin schema
 - [plugin.settings.set_auth_alerts](plugin.settings.set_auth_alerts.md) — Configure re-authentication alert preferences for the org
+- [plugin.settings.get_auth_alerts](plugin.settings.get_auth_alerts.md) — Read the org's MCP auth-alert notification setting (roles + email toggle), with the documented default when unset
 - [plugin.version.list](plugin.version.list.md) — List version history with changelog and breaking-change flags
 
 ## Privacy (2)

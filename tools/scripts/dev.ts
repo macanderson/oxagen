@@ -205,11 +205,7 @@ async function turbo(): Promise<void> {
   console.log(kleur.cyan("[dev] starting turbo dev"));
   // @oxagen/cli is an Ink commander that exits 1 without a subcommand, and
   // @oxagen/env-manager is an on-demand local tool (`pnpm env:manager`); both
-  // are excluded from the long-running dev set. @oxagen/bench-arena is the
-  // standalone benchmark dashboard + runner (port 3300) launched on demand via
-  // `pnpm bench` (stop it with `pnpm bench:kill`) — keep it out of the main
-  // stack so it doesn't add a fifth persistent server to every `pnpm dev`.
-  // Invoke the cli ad-hoc via
+  // are excluded from the long-running dev set. Invoke the cli ad-hoc via
   // `pnpm cli <command>`. Turbo 2 runs `persistent: true` tasks (see turbo.json)
   // in parallel by default — no --parallel flag needed.
   //
@@ -234,7 +230,6 @@ async function turbo(): Promise<void> {
       "--ui=stream",
       "--filter=!@oxagen/cli",
       "--filter=!@oxagen/env-manager",
-      "--filter=!@oxagen/bench-arena",
     ],
     { stdin: "inherit", stdout: "pipe", stderr: "pipe", env: { FORCE_COLOR: "1" } },
   );

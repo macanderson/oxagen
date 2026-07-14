@@ -36,6 +36,8 @@ export const PLATFORM_ALLOWLIST = new Set<string>([
   "NEXT_PHASE",
   // Standard CI signal
   "CI",
+  // no-color.org standard — set by the terminal/shell, not by operators
+  "NO_COLOR",
   // Oxagen internal platform version tag
   "PLATFORM_VERSION",
   // Turborepo remote-cache credentials (set via GitHub Actions Secrets, not app env)
@@ -44,6 +46,9 @@ export const PLATFORM_ALLOWLIST = new Set<string>([
   // Test / E2E harness only — never present in deployed environments
   "E2E_TEST",
   "PLAYWRIGHT_BASE_URL",
+  // Set automatically by the Vitest runner; used to keep CLI turn assembly
+  // (workspace MCP fetch) hermetic in unit tests. Never a deployed var.
+  "VITEST",
   // Legacy E2E aliases for canonical schema names (e2e fixtures only)
   "NEO4J_URL", // alias for NEO4J_URI
   "NEO4J_USER", // alias for NEO4J_USERNAME

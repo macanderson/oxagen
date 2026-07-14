@@ -107,7 +107,6 @@ export const evalDatasetFromTracesHandler: CapabilityHandler<
             and(
               eq(schema.messages.workspaceId, ctx.workspaceId),
               eq(schema.messages.role, "user"),
-              eq(schema.messages.isActiveInBranch, true),
               withMeteredFilter ? meteredFilter : undefined,
             ),
           )
@@ -147,7 +146,11 @@ export const evalDatasetFromTracesHandler: CapabilityHandler<
       }
 
       logger.info(
-        { datasetId: dataset.publicId, itemCount: rows.length, meteredTurns: turnIds.length },
+        {
+          datasetId: dataset.publicId,
+          itemCount: rows.length,
+          meteredTurns: turnIds.length,
+        },
         "create_trace_dataset",
       );
 

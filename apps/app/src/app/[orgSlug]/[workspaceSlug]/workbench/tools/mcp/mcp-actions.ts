@@ -87,6 +87,55 @@ export async function connectCustomMcpServer(
   }
 }
 
+const SetMcpServerSecretSchema = z.object({
+  orgSlug: z.string().min(1),
+  workspaceSlug: z.string().min(1),
+  orgListingId: z.string().min(1),
+  // The API key / static bearer token the user pastes for a secret-auth server
+  // (e.g. Stripe). Stored envelope-encrypted in mcp.credentials.secret_enc via
+  // set_plugin_secret — never logged, never returned.
+  secret: z.string().min(1).max(8192),
+});
+
+/**
+ * "Enter API key" for a secret-auth MCP server: stores the workspace's static
+ * credential (encrypted) so the server flips to Connected and its tools become
+ * usable. This is the secret-auth counterpart to the OAuth authorize flow —
+ * Stripe and other API-key servers have no consent screen, so the key is
+ * entered directly here. Wires the app surface to the `set_plugin_secret`
+ * capability (previously api/mcp-only, leaving secret servers un-activatable
+ * from the product — a UI-capability-parity gap).
+ */
+export async function setMcpServerSecret(
+  input: z.infer<typeof SetMcpServerSecretSchema>,
+): Promise<{ ok: boolean; error?: string }> {
+  const parsed = SetMcpServerSecretSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Invalid input" };
+
+  const { orgSlug, workspaceSlug, orgListingId, secret } = parsed.data;
+  const auth = await resolveAgentToolsManager(orgSlug, workspaceSlug);
+  if (!auth.ok) return { ok: false, error: auth.error };
+  const { org, ws, ctx } = auth.scope;
+
+  try {
+    await runInTenantScope({ orgId: org.id, workspaceId: ws.id }, () =>
+      invoke(
+        "set_plugin_secret",
+        { orgListingId, authKind: "secret" as const, secret },
+        ctx,
+        { surface: "agent" },
+      ),
+    );
+    revalidatePath(workspace.workbench.tools.mcp({ orgSlug, workspaceSlug }));
+    return { ok: true };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Saving the key failed",
+    };
+  }
+}
+
 const RevokeMcpCredentialSchema = z.object({
   orgSlug: z.string().min(1),
   workspaceSlug: z.string().min(1),

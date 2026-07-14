@@ -106,6 +106,9 @@ export function WorkspaceContextTabs({
 
   return (
     <Tabs
+      // Marker on the shared tabs (not the WorkspaceContextPanel wrapper) so the
+      // rail's OutputsCard — which renders these tabs directly — is findable.
+      data-component="workspace-context-panel-tabs"
       value={tab}
       onValueChange={(v) => setTab(v as PanelTab)}
       className={cn("flex min-h-0 flex-1 flex-col", className)}
@@ -149,8 +152,9 @@ export function WorkspaceContextPanel({
   className,
 }: WorkspaceContextPanelProps) {
   return (
+    // The marker now rides on the inner WorkspaceContextTabs, so this wrapper no
+    // longer carries it — avoids a duplicate when the registry panel renders.
     <div
-      data-component="workspace-context-panel-tabs"
       className={cn(
         "flex min-h-0 flex-col rounded-xl border border-border bg-card text-card-foreground shadow-sm",
         className,

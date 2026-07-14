@@ -66,21 +66,10 @@ export const users = authSchema.table(
     ...auditMixin(),
     ...softDeleteMixin(),
     email: citext("email").notNull(),
-    username: citext("username"),
     displayName: text("display_name"),
     avatarUrl: text("avatar_url"),
     status: text("status").notNull(),
-    // Better Auth tracks email verification as a boolean; we also track the
-    // verification timestamp for our own audit purposes.
     emailVerified: boolean("email_verified").notNull().default(false),
-    emailVerifiedAt: timestamp("email_verified_at", {
-      withTimezone: true,
-      mode: "date",
-    }),
-    lastLoginAt: timestamp("last_login_at", {
-      withTimezone: true,
-      mode: "date",
-    }),
     // Better Auth twoFactor plugin flag. Flipped to true only after the user
     // completes first TOTP verification (see twoFactorTable below). Enforcement
     // for privileged (owner/admin) roles reads this column. input:false on the
@@ -89,27 +78,6 @@ export const users = authSchema.table(
   },
   (t) => ({
     emailIdx: uniqueIndex("users_email_idx").on(t.email),
-    usernameIdx: uniqueIndex("users_username_idx").on(t.username),
-  }),
-);
-
-export const credentials = authSchema.table(
-  "credentials",
-  {
-    ...idMixin("crd"),
-    ...auditMixin(),
-    ...orgScopeMixin(),
-    ...softDeleteMixin(),
-    provider: text("provider").notNull(),
-    credentialType: text("credential_type").notNull(),
-    encryptedPayload: bytea("encrypted_payload").notNull(),
-    kmsKeyId: text("kms_key_id"),
-    expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }),
-    lastUsedAt: timestamp("last_used_at", { withTimezone: true, mode: "date" }),
-  },
-  (t) => ({
-    orgIdx: index("credentials_org_idx").on(t.orgId, t.workspaceId),
-    providerIdx: index("credentials_provider_idx").on(t.orgId, t.provider),
   }),
 );
 

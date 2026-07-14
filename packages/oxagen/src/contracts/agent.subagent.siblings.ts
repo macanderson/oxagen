@@ -20,7 +20,11 @@ export const agentSubagentSiblings = registerCapability({
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs"],
   scoped: true,
-  agent: { requiresApproval: false, riskLevel: "low", category: "introspection" },
+  agent: {
+    requiresApproval: false,
+    riskLevel: "low",
+    category: "introspection",
+  },
   sensitivity: "low",
   defaultEffect: "deny",
   defaultRoles: {
@@ -28,11 +32,17 @@ export const agentSubagentSiblings = registerCapability({
     workspace: { Owner: "allow", Member: "allow" },
   },
   input: z.object({
-    runId: z.string().describe("Public ID of the calling child run (sar_…) whose siblings to list"),
+    runId: z
+      .string()
+      .describe(
+        "Public ID of the calling child run (sar_…) whose siblings to list",
+      ),
   }),
   output: z.object({
     runId: z.string().describe("The calling run's public ID, echoed back"),
-    fanoutId: z.string().describe("Public ID of the fanout these runs belong to"),
+    fanoutId: z
+      .string()
+      .describe("Public ID of the fanout these runs belong to"),
     siblings: z
       .array(
         z.object({
@@ -42,14 +52,25 @@ export const agentSubagentSiblings = registerCapability({
           summary: z
             .string()
             .nullable()
-            .describe("The child's compact structural digest, when one was recorded"),
-          attempts: z.number().int().describe("How many times this run has been attempted/leased"),
+            .describe(
+              "The child's compact structural digest, when one was recorded",
+            ),
+          attempts: z
+            .number()
+            .int()
+            .describe("How many times this run has been attempted/leased"),
           errorReason: z.string().nullable(),
         }),
       )
-      .describe("Fanout siblings, EXCLUDING the calling run itself — compact rows, never payloads"),
+      .describe(
+        "Fanout siblings, EXCLUDING the calling run itself — compact rows, never payloads",
+      ),
   }),
 });
 
-export type AgentSubagentSiblingsInput = z.output<typeof agentSubagentSiblings.input>;
-export type AgentSubagentSiblingsOutput = z.output<typeof agentSubagentSiblings.output>;
+export type AgentSubagentSiblingsInput = z.output<
+  typeof agentSubagentSiblings.input
+>;
+export type AgentSubagentSiblingsOutput = z.output<
+  typeof agentSubagentSiblings.output
+>;

@@ -4,7 +4,11 @@ import type { LiveToolCall } from "./use-tool-stream";
 
 // Render each story at the real desktop rail width so the cards lay out as they
 // do in the chat shell's `<aside className="w-72">`.
-const meta = {
+// Annotate `meta` explicitly rather than using `satisfies`: the decorator's
+// inferred type otherwise references `PartialStoryFn` from a deep .pnpm path
+// that tsc cannot name in the emitted declaration (TS2883). An explicit
+// `Meta<typeof AgentActivityRail>` keeps the type nameable and portable.
+const meta: Meta<typeof AgentActivityRail> = {
   title: "Chat/AgentActivityRail",
   component: AgentActivityRail,
   decorators: [
@@ -14,9 +18,9 @@ const meta = {
       </div>
     ),
   ],
-} satisfies Meta<typeof AgentActivityRail>;
+};
 export default meta;
-type Story = StoryObj<typeof meta>;
+type Story = StoryObj<typeof AgentActivityRail>;
 
 function tc(
   over: Partial<LiveToolCall> & Pick<LiveToolCall, "toolCallId" | "capability">,

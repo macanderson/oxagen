@@ -20,7 +20,9 @@ const stackFrame = z.object({
   file: z.string().nullable(),
   line: z.number().int().nullable(),
   column: z.number().int().nullable(),
-  internal: z.boolean().describe("node-internal frame (node:…) — de-prioritised as a suspect"),
+  internal: z
+    .boolean()
+    .describe("node-internal frame (node:…) — de-prioritised as a suspect"),
   raw: z.string(),
 });
 
@@ -35,8 +37,14 @@ const relatedSpan = z.object({
 
 const suspectFile = z.object({
   path: z.string(),
-  score: z.number().describe("Deterministic weighted score; higher = more likely the fix site"),
-  reasons: z.array(z.string()).describe("Why it scored, e.g. 'stack-frame ×3', 'tool-arg'"),
+  score: z
+    .number()
+    .describe(
+      "Deterministic weighted score; higher = more likely the fix site",
+    ),
+  reasons: z
+    .array(z.string())
+    .describe("Why it scored, e.g. 'stack-frame ×3', 'tool-arg'"),
 });
 
 const failingStep = z
@@ -44,7 +52,10 @@ const failingStep = z
     stepId: z.string().nullable(),
     stepNumber: z.number().int().nullable(),
     stepType: z.string().nullable(),
-    toolName: z.string().nullable().describe("Set when the failure surfaced inside a tool call"),
+    toolName: z
+      .string()
+      .nullable()
+      .describe("Set when the failure surfaced inside a tool call"),
     toolCallId: z.string().nullable(),
     status: z.string(),
     failureReason: z.string().nullable(),
@@ -89,17 +100,36 @@ const diagnosis = z
   .nullable();
 
 const failureFrame = z.object({
-  executionId: z.string().describe("Resolved public id (aex_…) of the inspected execution"),
+  executionId: z
+    .string()
+    .describe("Resolved public id (aex_…) of the inspected execution"),
   status: z.string().describe("Root execution status"),
   failingStep,
-  errorClass: z.string().nullable().describe("From the captured error_events, else parsed from the failure reason"),
+  errorClass: z
+    .string()
+    .nullable()
+    .describe(
+      "From the captured error_events, else parsed from the failure reason",
+    ),
   message: z.string().nullable().describe("Bounded error message"),
-  topFrames: z.array(stackFrame).describe("Parsed top stack frames (deterministic, capped)"),
-  relatedSpans: z.array(relatedSpan).describe("Flattened span subtree, failed-first, bounded"),
-  suspectFiles: z.array(suspectFile).describe("Files ranked deterministically as likely fix sites"),
-  errorEvents: z.array(errorEventSummary).describe("Bounded sample of errors captured for this execution"),
-  logsSample: z.array(logLine).describe("Bounded tail of warn/error/fatal execution logs"),
-  diagnosis: diagnosis.describe("LLM root-cause diagnosis — only when summarize:true, else null"),
+  topFrames: z
+    .array(stackFrame)
+    .describe("Parsed top stack frames (deterministic, capped)"),
+  relatedSpans: z
+    .array(relatedSpan)
+    .describe("Flattened span subtree, failed-first, bounded"),
+  suspectFiles: z
+    .array(suspectFile)
+    .describe("Files ranked deterministically as likely fix sites"),
+  errorEvents: z
+    .array(errorEventSummary)
+    .describe("Bounded sample of errors captured for this execution"),
+  logsSample: z
+    .array(logLine)
+    .describe("Bounded tail of warn/error/fatal execution logs"),
+  diagnosis: diagnosis.describe(
+    "LLM root-cause diagnosis — only when summarize:true, else null",
+  ),
   truncated: z
     .object({
       spans: z.boolean(),
@@ -120,7 +150,11 @@ export const agentDebugTrace = registerCapability({
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs"],
   scoped: true,
-  agent: { requiresApproval: false, riskLevel: "low", category: "introspection" },
+  agent: {
+    requiresApproval: false,
+    riskLevel: "low",
+    category: "introspection",
+  },
   sensitivity: "low",
   defaultEffect: "deny",
   defaultRoles: {
@@ -130,18 +164,24 @@ export const agentDebugTrace = registerCapability({
   input: z.object({
     executionId: z
       .string()
-      .describe("Public ID (aex_…) or UUID of the failed execution to diagnose"),
+      .describe(
+        "Public ID (aex_…) or UUID of the failed execution to diagnose",
+      ),
     depth: z
       .number()
       .int()
       .min(1)
       .max(10)
       .optional()
-      .describe("Max child-execution depth to include in related spans (default: full bounded tree)"),
+      .describe(
+        "Max child-execution depth to include in related spans (default: full bounded tree)",
+      ),
     summarize: z
       .boolean()
       .optional()
-      .describe("When true, also run ONE model call to produce a root-cause diagnosis (default false: deterministic only)"),
+      .describe(
+        "When true, also run ONE model call to produce a root-cause diagnosis (default false: deterministic only)",
+      ),
   }),
   output: failureFrame,
 });

@@ -21,11 +21,27 @@ export function oauthErrorDescription(
   name: string,
 ): string {
   switch (reason) {
-    case "dcr_unsupported":
+    case "not_permitted":
       return (
-        `${name} doesn't support automatic client registration. ` +
-        "A platform administrator must configure a pre-registered OAuth client " +
-        "for this provider (MCP_OAUTH_PREREGISTERED_CLIENTS) before it can be connected."
+        "You don't have permission to connect MCP servers for this " +
+        "organization. Ask an organization owner or admin to authenticate " +
+        `${name}.`
+      );
+    case "not_found":
+      return (
+        `${name} could not be found in this workspace. It may have been ` +
+        "uninstalled — try installing it again."
+      );
+    case "dcr_unsupported":
+      // This provider (e.g. GitHub) can't self-register an OAuth client, so it
+      // needs a one-time setup on the Oxagen platform side before sign-in works.
+      // That's an Oxagen-operator action, NOT something the customer's own admin
+      // can do — keep the internal env-var name out of this end-user copy (it's
+      // logged server-side in the authorize route for operators instead).
+      return (
+        `${name} isn't available for OAuth sign-in yet. ` +
+        "This provider needs a one-time setup on Oxagen before it can be connected — " +
+        "please contact Oxagen support to enable it."
       );
     case "provider_error":
       return (

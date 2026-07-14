@@ -1,6 +1,6 @@
 {
   "name": "@oxagen/database",
-  "version": "1.1.3",
+  "version": "2.0.0",
   "private": true,
   "type": "module",
   "main": "./src/index.ts",
@@ -32,6 +32,7 @@
   "dependencies": {
     "@oxagen/compliance": "workspace:*",
     "@oxagen/config": "workspace:*",
+    "@oxagen/oxagen": "workspace:*",
     "@oxagen/telemetry": "workspace:*",
     "@oxagen/tenancy": "workspace:*",
     "drizzle-orm": "0.45.2",

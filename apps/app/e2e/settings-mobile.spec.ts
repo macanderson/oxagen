@@ -23,16 +23,14 @@ import path from "node:path";
 
 const SCREENSHOTS_DIR = path.resolve(import.meta.dirname, "screenshots", "settings-mobile");
 
+// web-app-2.0 Phase 2 consolidation: 9 tabs → 4 (Members folded into General;
+// Models·Budget·Prompts·Memory-policy merged into Agent Defaults; ontology
+// moved to Knowledge; Environments lives in the Workbench).
 const WORKSPACE_SECTIONS = [
   "General",
-  "Members",
-  "Models",
-  "Budget",
+  "Agent Defaults",
   "GitHub",
   "MCP Registries",
-  "Prompts",
-  "Knowledge",
-  "Memory",
 ];
 
 const ORG_SECTIONS = ["General", "Privacy"];
@@ -102,13 +100,13 @@ test.describe("settings — mobile one-thumb navigation @ 390px", () => {
     });
 
     // Selecting a section navigates and closes the sheet.
-    await sheet.getByRole("link", { name: "Members", exact: true }).click();
-    await expect(page).toHaveURL(new RegExp(`${ws}/settings/members`));
+    await sheet.getByRole("link", { name: "Agent Defaults", exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`${ws}/settings/agent-defaults`));
     await expect(sheet).not.toBeVisible();
-    await expect(trigger).toContainText("Members");
+    await expect(trigger).toContainText("Agent Defaults");
     await expectNoHorizontalOverflow(page);
     await page.screenshot({
-      path: path.join(SCREENSHOTS_DIR, "03-workspace-settings-members.png"),
+      path: path.join(SCREENSHOTS_DIR, "03-workspace-settings-agent-defaults.png"),
       fullPage: false,
     });
   });

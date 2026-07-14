@@ -34,11 +34,11 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  db: mocks.dbFn,
-  // withTenantDb: pass-through — invokes the callback with the same fake tx
-  // the handler expects. No scope GUC overhead in unit tests (OXA-1515).
-  withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => fn(mocks.dbFn()),
-
+    db: mocks.dbFn,
+    // withTenantDb: pass-through — invokes the callback with the same fake tx
+    // the handler expects. No scope GUC overhead in unit tests (OXA-1515).
+    withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn(mocks.dbFn()),
   };
 });
 
@@ -59,7 +59,6 @@ const PRINCIPAL_ROW = {
   kind: "human",
   displayName: "Test User",
   status: "active",
-  mfaStatus: "none",
   idpSubject: null,
   parentUserId: "usr_1",
   metadata: {},
@@ -72,15 +71,19 @@ const PRINCIPAL_ROW = {
 //   3: roles (no limit)
 //   4: roleGrants (no limit, only if roleIds.length > 0)
 //   5: pra (no limit)
-function buildApiKeyDbMock(overrides: {
-  apiKey?: unknown[];
-  principals?: unknown[];
-  roles?: unknown[];
-  roleGrants?: unknown[];
-  pra?: unknown[];
-} = {}) {
+function buildApiKeyDbMock(
+  overrides: {
+    apiKey?: unknown[];
+    principals?: unknown[];
+    roles?: unknown[];
+    roleGrants?: unknown[];
+    pra?: unknown[];
+  } = {},
+) {
   const apiKey = overrides.apiKey ?? [{ createdByUserId: "usr_creator" }];
-  const principals = overrides.principals ?? [{ ...PRINCIPAL_ROW, parentUserId: "usr_creator" }];
+  const principals = overrides.principals ?? [
+    { ...PRINCIPAL_ROW, parentUserId: "usr_creator" },
+  ];
   const roles = overrides.roles ?? [];
   const roleGrants = overrides.roleGrants ?? [];
   const pra = overrides.pra ?? [];
@@ -98,25 +101,33 @@ function buildApiKeyDbMock(overrides: {
     select: () => {
       selectCallIdx++;
       switch (selectCallIdx) {
-        case 1: return makeChain(apiKey);
-        case 2: return makeChain(principals);
-        case 3: return makeChainNoLimit(roles);
-        case 4: return makeChainNoLimit(roleGrants);
-        case 5: return makeChainNoLimit(pra);
-        default: return makeChain([]);
+        case 1:
+          return makeChain(apiKey);
+        case 2:
+          return makeChain(principals);
+        case 3:
+          return makeChainNoLimit(roles);
+        case 4:
+          return makeChainNoLimit(roleGrants);
+        case 5:
+          return makeChainNoLimit(pra);
+        default:
+          return makeChain([]);
       }
     },
   };
 }
 
-function buildDbMock(overrides: {
-  principals?: unknown[];
-  grants?: unknown[];
-  roles?: unknown[];
-  policies?: unknown[];
-  roleGrants?: unknown[];
-  pra?: unknown[];
-} = {}) {
+function buildDbMock(
+  overrides: {
+    principals?: unknown[];
+    grants?: unknown[];
+    roles?: unknown[];
+    policies?: unknown[];
+    roleGrants?: unknown[];
+    pra?: unknown[];
+  } = {},
+) {
   // grants/policies tables were dropped in migration 0027 — _fetchAuthz returns
   // [] for both unconditionally (never a DB query), so this mock has no chain
   // for them. The override keys remain accepted but are intentionally unused.
@@ -150,11 +161,16 @@ function buildDbMock(overrides: {
       // 3: roleGrants (batch2, only if roleIds.length > 0)
       // 4: pra (batch2, always)
       switch (selectCallIdx) {
-        case 1: return makeChain(principals);
-        case 2: return makeChainNoLimit(roles);
-        case 3: return makeChainNoLimit(roleGrants);
-        case 4: return makeChainNoLimit(pra);
-        default: return makeChain([]);
+        case 1:
+          return makeChain(principals);
+        case 2:
+          return makeChainNoLimit(roles);
+        case 3:
+          return makeChainNoLimit(roleGrants);
+        case 4:
+          return makeChainNoLimit(pra);
+        default:
+          return makeChain([]);
       }
     },
   };
@@ -177,7 +193,9 @@ describe("fetchAuthz()", () => {
   it("fails closed (deny policy, not EMPTY_AUTHZ) for a HUMAN SESSION when Postgres throws 42P01", async () => {
     mocks.dbFn.mockReturnValue({
       select: () => {
-        const err = Object.assign(new Error("relation does not exist"), { code: "42P01" });
+        const err = Object.assign(new Error("relation does not exist"), {
+          code: "42P01",
+        });
         throw err;
       },
     });
@@ -206,7 +224,9 @@ describe("fetchAuthz()", () => {
   it("logs the 42P01 fallback at ERROR level (loud alert), not warn", async () => {
     mocks.dbFn.mockReturnValue({
       select: () => {
-        const err = Object.assign(new Error("relation does not exist"), { code: "42P01" });
+        const err = Object.assign(new Error("relation does not exist"), {
+          code: "42P01",
+        });
         throw err;
       },
     });
@@ -229,7 +249,9 @@ describe("fetchAuthz()", () => {
   it("rethrows non-42P01 errors", async () => {
     mocks.dbFn.mockReturnValue({
       select: () => {
-        const err = Object.assign(new Error("connection refused"), { code: "08006" });
+        const err = Object.assign(new Error("connection refused"), {
+          code: "08006",
+        });
         throw err;
       },
     });
@@ -269,14 +291,25 @@ describe("fetchAuthz()", () => {
   // ── API-key caller authorizes AS ITS CREATOR ─────────────────────────────
 
   it("resolves an API key to its creator's principal + role grants", async () => {
-    const roleRow = { id: "role_admin", orgId: "org_1", name: "Admin", scopeKind: "org" };
+    const roleRow = {
+      id: "role_admin",
+      orgId: "org_1",
+      name: "Admin",
+      scopeKind: "org",
+    };
     mocks.dbFn.mockReturnValue(
       buildApiKeyDbMock({
         apiKey: [{ createdByUserId: "usr_creator" }],
         principals: [{ ...PRINCIPAL_ROW, parentUserId: "usr_creator" }],
         roles: [roleRow],
         pra: [{ roleId: "role_admin" }],
-        roleGrants: [{ roleId: "role_admin", capabilityId: "generate_markdown", effect: "allow" }],
+        roleGrants: [
+          {
+            roleId: "role_admin",
+            capabilityId: "generate_markdown",
+            effect: "allow",
+          },
+        ],
       }),
     );
 
@@ -320,7 +353,9 @@ describe("fetchAuthz()", () => {
   });
 
   it("fails closed when the API key has no recorded creator", async () => {
-    mocks.dbFn.mockReturnValue(buildApiKeyDbMock({ apiKey: [{ createdByUserId: null }] }));
+    mocks.dbFn.mockReturnValue(
+      buildApiKeyDbMock({ apiKey: [{ createdByUserId: null }] }),
+    );
 
     const result = await fetchAuthz({
       userId: null,
@@ -331,12 +366,18 @@ describe("fetchAuthz()", () => {
     });
 
     expect(result.policies).toHaveLength(1);
-    expect(result.policies[0]).toMatchObject({ effect: "deny", enforced: true });
+    expect(result.policies[0]).toMatchObject({
+      effect: "deny",
+      enforced: true,
+    });
   });
 
   it("fails closed when the key's creator has no principal in this org", async () => {
     mocks.dbFn.mockReturnValue(
-      buildApiKeyDbMock({ apiKey: [{ createdByUserId: "usr_creator" }], principals: [] }),
+      buildApiKeyDbMock({
+        apiKey: [{ createdByUserId: "usr_creator" }],
+        principals: [],
+      }),
     );
 
     const result = await fetchAuthz({
@@ -349,13 +390,18 @@ describe("fetchAuthz()", () => {
 
     expect(result.principal?.kind).toBe("service");
     expect(result.policies).toHaveLength(1);
-    expect(result.policies[0]).toMatchObject({ effect: "deny", enforced: true });
+    expect(result.policies[0]).toMatchObject({
+      effect: "deny",
+      enforced: true,
+    });
   });
 
   it("fails closed for an API-key caller when IAM tables are missing (42P01)", async () => {
     mocks.dbFn.mockReturnValue({
       select: () => {
-        const err = Object.assign(new Error("relation does not exist"), { code: "42P01" });
+        const err = Object.assign(new Error("relation does not exist"), {
+          code: "42P01",
+        });
         throw err;
       },
     });
@@ -370,7 +416,10 @@ describe("fetchAuthz()", () => {
 
     // Must NOT degrade to EMPTY_AUTHZ (defaultEffect) on the m2m surface.
     expect(result.policies).toHaveLength(1);
-    expect(result.policies[0]).toMatchObject({ effect: "deny", enforced: true });
+    expect(result.policies[0]).toMatchObject({
+      effect: "deny",
+      enforced: true,
+    });
   });
 
   // ── !principal early return ──────────────────────────────────────────────
@@ -393,14 +442,25 @@ describe("fetchAuthz()", () => {
   // ── PRA expiry + workspace scope filter ──────────────────────────────────
 
   it("maps PRA rows to role principalIds — assigned roles get principalId in list", async () => {
-    const roleRow = { id: "role_owner", orgId: "org_1", name: "Owner", scopeKind: "org" };
+    const roleRow = {
+      id: "role_owner",
+      orgId: "org_1",
+      name: "Owner",
+      scopeKind: "org",
+    };
     const praRow = { roleId: "role_owner" };
 
     mocks.dbFn.mockReturnValue(
       buildDbMock({
         roles: [roleRow],
         pra: [praRow],
-        roleGrants: [{ roleId: "role_owner", capabilityId: "send_message", effect: "allow" }],
+        roleGrants: [
+          {
+            roleId: "role_owner",
+            capabilityId: "send_message",
+            effect: "allow",
+          },
+        ],
       }),
     );
 
@@ -419,7 +479,12 @@ describe("fetchAuthz()", () => {
   });
 
   it("excludes principalId from role when no PRA row matches", async () => {
-    const roleRow = { id: "role_member", orgId: "org_1", name: "Member", scopeKind: "workspace" };
+    const roleRow = {
+      id: "role_member",
+      orgId: "org_1",
+      name: "Member",
+      scopeKind: "workspace",
+    };
     // No PRA rows for this principal.
     mocks.dbFn.mockReturnValue(buildDbMock({ roles: [roleRow], pra: [] }));
 
@@ -439,7 +504,12 @@ describe("fetchAuthz()", () => {
   // ── Happy path ───────────────────────────────────────────────────────────
 
   it("returns a correctly shaped AuthzData on the happy path", async () => {
-    const roleRow = { id: "role_admin", orgId: "org_1", name: "Admin", scopeKind: "org" };
+    const roleRow = {
+      id: "role_admin",
+      orgId: "org_1",
+      name: "Admin",
+      scopeKind: "org",
+    };
     const praRow = { roleId: "role_admin" };
     const roleGrantRow = {
       roleId: "role_admin",

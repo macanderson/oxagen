@@ -1,11 +1,14 @@
 import { redirect } from "next/navigation";
 import { workspace } from "@/lib/routes";
+import { requestScopeSlugs } from "@/lib/request-path";
 
-export default async function KnowledgeRoot({
-  params,
-}: {
-  params: Promise<{ orgSlug: string; workspaceSlug: string }>;
-}) {
-  const { orgSlug, workspaceSlug } = await params;
-  redirect(workspace.knowledge.repos({ orgSlug, workspaceSlug }));
+/**
+ * Knowledge root → Sources (its first tab). Slugs come from the request URL,
+ * NOT `params` — see lib/request-path.ts (awaiting `params` before `redirect()`
+ * 500s the shell under Cache Components).
+ */
+export default async function KnowledgeRoot() {
+  const { orgSlug, workspaceSlug } = await requestScopeSlugs();
+  if (!orgSlug || !workspaceSlug) redirect("/");
+  redirect(workspace.knowledge.sources({ orgSlug, workspaceSlug }));
 }

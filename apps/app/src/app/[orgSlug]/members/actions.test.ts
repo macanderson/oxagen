@@ -271,7 +271,11 @@ describe("inviteMemberAction", () => {
       role: "admin",
     });
     expect(res).toEqual({ ok: true });
+    // Revalidates BOTH /members (People tab) and /members/pending (Invited
+    // tab) — this action is also called from the Invited tab's "Resend"
+    // button, a different route than /members.
     expect(mockRevalidatePath).toHaveBeenCalledWith("/acme/members");
+    expect(mockRevalidatePath).toHaveBeenCalledWith("/acme/members/pending");
   });
 
   it("sends the invitation email once, addressed to the invitee with the invite URL", async () => {
@@ -318,6 +322,7 @@ describe("inviteMemberAction", () => {
     expect(res).toEqual({ ok: true });
     expect(mockSendEmail).toHaveBeenCalledTimes(1);
     expect(mockRevalidatePath).toHaveBeenCalledWith("/acme/members");
+    expect(mockRevalidatePath).toHaveBeenCalledWith("/acme/members/pending");
   });
 
   it("falls back to the inviter's email for inviterName when session.user.name is null", async () => {
@@ -354,7 +359,10 @@ describe("declineInvitationAction", () => {
       invitationPublicId: "inv_01",
     });
     expect(res).toEqual({ ok: true });
+    // Revalidates BOTH /members and /members/pending — this action is also
+    // called from the Invited tab's own "Revoke" button (a different route).
     expect(mockRevalidatePath).toHaveBeenCalledWith("/acme/members");
+    expect(mockRevalidatePath).toHaveBeenCalledWith("/acme/members/pending");
   });
 
   it("returns {ok:false, error} when no matching pending invitation is found", async () => {

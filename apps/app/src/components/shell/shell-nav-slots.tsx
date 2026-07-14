@@ -61,15 +61,27 @@ export function WorkspaceSwitcherSlot({
   navDataPromise: Promise<ShellNavData>;
   createWorkspaceAction?: NewWorkspaceAction;
 }) {
-  const { availableWorkspaces } = use(navDataPromise);
+  // usePathname() MUST be called before use(navDataPromise): use() can suspend
+  // (the promise is pending on a client transition), and any Hook that runs
+  // AFTER a suspending use() changes the hook count between the suspended and
+  // resumed renders — React throws "Rendered more hooks than during the
+  // previous render." Keeping every real Hook above use() holds the count
+  // stable across suspend/resume. This crash surfaced on org→workspace client
+  // navigation once /{org}/workspaces gave the org shell a stable page to
+  // navigate from. — workspaces-home-page
   const pathname = usePathname();
+  const { availableWorkspaces } = use(navDataPromise);
   const ctx = resolveSidebarCtx(pathname, {
     orgSlug: org.slug,
     workspaceSlug: workspace?.slug,
   });
   const currentWorkspace =
     (workspace
-      ? { publicId: workspace.publicId, slug: workspace.slug, name: workspace.name }
+      ? {
+          publicId: workspace.publicId,
+          slug: workspace.slug,
+          name: workspace.name,
+        }
       : availableWorkspaces.find((w) => w.slug === ctx.workspaceSlug)) ?? null;
 
   if (!currentWorkspace) return null;
@@ -102,5 +114,11 @@ export function BalanceSlot({
 }) {
   const { balance } = use(navDataPromise);
   if (!balance) return null;
-  return <BalancePill orgSlug={orgSlug} balanceCents={balance.cents} low={balance.low} />;
+  return (
+    <BalancePill
+      orgSlug={orgSlug}
+      balanceCents={balance.cents}
+      low={balance.low}
+    />
+  );
 }

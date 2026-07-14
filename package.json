@@ -1,6 +1,6 @@
 {
   "name": "oxagen-monorepo",
-  "version": "1.1.3",
+  "version": "2.0.0",
   "private": true,
   "packageManager": "pnpm@11.7.0",
   "engines": {
@@ -11,11 +11,6 @@
     "preinstall": "npx only-allow pnpm",
     "prepare": "lefthook install",
     "dev": "tsx tools/scripts/dev.ts",
-    "eval:app": "pnpm --filter @oxagen/bench-arena dev",
-    "bench": "pnpm --filter @oxagen/bench-arena dev",
-    "bench:kill": "node bench/arena/scripts/kill.mjs",
-    "bench:swe": "bash bench/swe-bench/run.sh",
-    "bench:swe:compare": "bash bench/swe-bench/compare.sh",
     "cli:dev": "tsx tools/scripts/cli-dev.ts",
     "cli:install": "tsx tools/scripts/cli-dev.ts --once",
     "kill": "tsx tools/scripts/kill.ts",
@@ -39,6 +34,8 @@
     "db:atlas-validate": "pnpm --filter @oxagen/database run atlas:validate",
     "db:seed-platform": "tsx --env-file-if-exists=.env.local tools/scripts/seed-platform.ts",
     "db:generate": "pnpm --filter @oxagen/database run generate",
+    "schema:manifest": "tsx packages/database/src/storage-manifest/cli.ts",
+    "schema:manifest:check": "tsx packages/database/src/storage-manifest/cli.ts --check",
     "db:check": "tsx --env-file-if-exists=.env.local tools/scripts/db-check.ts",
     "db:lint-migrations": "tsx tools/scripts/db-lint-migrations.ts",
     "db:reset": "tsx --env-file-if-exists=.env.local tools/scripts/db-reset.ts",

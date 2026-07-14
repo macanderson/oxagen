@@ -133,7 +133,7 @@ export function MemoryCard({
   const sentence = summarySentence(memories, nodes, variant);
   const graphHrefFor = (node: KnowledgeNodeRef): string | null =>
     node.id && tenant
-      ? `/${tenant.orgSlug}/${tenant.workspaceSlug}/knowledge/explore?focus=${encodeURIComponent(node.id)}`
+      ? `/${tenant.orgSlug}/${tenant.workspaceSlug}/knowledge/graph?focus=${encodeURIComponent(node.id)}`
       : null;
   return (
     <div

@@ -101,7 +101,7 @@ export function GithubConnectionSettings({
     window.location.href = state.status.identityUrl ?? state.status.installUrl;
   }, [state]);
 
-  const sourcesHref = workspace.knowledge.repos({ orgSlug, workspaceSlug });
+  const sourcesHref = workspace.knowledge.sources({ orgSlug, workspaceSlug });
 
   return (
     <div className="flex max-w-2xl flex-col gap-5" data-testid="github-settings">

@@ -8,7 +8,7 @@ export const evalDatasetGet = registerCapability({
     "Fetch one eval dataset by public id along with a page of its items (input, expected output, metadata). Paginated via limit + cursor to avoid loading an unbounded item set.",
   mode: "sync",
   surfaces: ["api", "mcp", "cli"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "read" },

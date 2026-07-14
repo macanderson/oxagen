@@ -108,21 +108,38 @@ function redirectBackWithError(
 }
 
 async function handleAuthorize(req: NextRequest): Promise<Response> {
-  const session = await getSession();
-  if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   const url = new URL(req.url);
   const orgSlug = url.searchParams.get("orgSlug");
   const workspaceSlug = url.searchParams.get("workspaceSlug");
   const orgListingId = url.searchParams.get("orgListingId");
 
   if (!orgSlug || !workspaceSlug || !orgListingId) {
+    // Missing params means the launcher built a bad URL — there's no valid
+    // surface to bounce back to, so a JSON 400 is the honest answer here.
     return NextResponse.json(
       { error: "missing params: orgSlug, workspaceSlug, orgListingId" },
       { status: 400 },
     );
+  }
+
+  // Resolve the bounce-back target BEFORE any auth/lookup gate. Every failure
+  // below is reached by a full-page <a> navigation, so it must redirect the
+  // user back to the launching surface with an error the result toast can
+  // translate — never strand them on a raw-JSON page. (validated: same-origin
+  // path inside this org only); default = Workbench → Agent Tools → MCP Servers.
+  const returnTo = resolveReturnTo(
+    url.searchParams.get("returnTo"),
+    orgSlug,
+    workspaceSlug,
+  );
+
+  const session = await getSession();
+  if (!session?.user) {
+    // Not signed in — send to login, then back to the launching surface. A
+    // JSON 401 would dead-end a full-page navigation.
+    const login = new URL("/login", url.origin);
+    login.searchParams.set("next", returnTo);
+    return NextResponse.redirect(login.toString());
   }
 
   logger.info(
@@ -130,10 +147,31 @@ async function handleAuthorize(req: NextRequest): Promise<Response> {
     "mcp-oauth: authorize flow started",
   );
 
-  const tenant = await resolveOrg(orgSlug);
-
-  // Owner/admin gate — only managers can initiate OAuth flows on behalf of an org.
-  await assertMcpManager(tenant.id, session.user.id);
+  // Org resolution + the owner/admin gate both signal denial by THROWING a
+  // notFound() sentinel. In a full-page navigation that must land back on the
+  // launching surface with an actionable toast (esp. the very common
+  // non-manager case), not a 404 JSON page. Catch the denial here and redirect.
+  let tenant: Awaited<ReturnType<typeof resolveOrg>>;
+  try {
+    tenant = await resolveOrg(orgSlug);
+    // Owner/admin gate — only managers can initiate OAuth flows for an org.
+    await assertMcpManager(tenant.id, session.user.id);
+  } catch (err) {
+    if (isNextRedirectError(err)) throw err;
+    if (authDenialStatus(err) !== null) {
+      logger.info(
+        { orgSlug, orgListingId, userId: session.user.id },
+        "mcp-oauth: authorize denied (unknown org or non-manager)",
+      );
+      return redirectBackWithError(
+        url.origin,
+        returnTo,
+        orgListingId,
+        "not_permitted",
+      );
+    }
+    throw err;
+  }
 
   // Resolve the listing to get the endpointUrl + verify org ownership.
   const listing = await withSystemDb(async (tx) => {
@@ -146,9 +184,11 @@ async function handleAuthorize(req: NextRequest): Promise<Response> {
   });
 
   if (!listing || listing.orgId !== tenant.id || !listing.endpointUrl) {
-    return NextResponse.json(
-      { error: "listing not found or not connectable" },
-      { status: 404 },
+    return redirectBackWithError(
+      url.origin,
+      returnTo,
+      orgListingId,
+      "not_found",
     );
   }
 
@@ -168,18 +208,16 @@ async function handleAuthorize(req: NextRequest): Promise<Response> {
   });
 
   if (!workspace) {
-    return NextResponse.json({ error: "workspace not found" }, { status: 404 });
+    return redirectBackWithError(
+      url.origin,
+      returnTo,
+      orgListingId,
+      "not_found",
+    );
   }
 
   const state = randomUUID();
   const redirectUrl = `${url.origin}/api/v1/mcp/oauth/callback`;
-  // Land back on whichever surface launched the flow (validated: same-origin
-  // path inside this org only); default = Workbench → Agent Tools → MCP Servers.
-  const returnTo = resolveReturnTo(
-    url.searchParams.get("returnTo"),
-    orgSlug,
-    workspaceSlug,
-  );
 
   // Registry metadata sometimes publishes a vanity URL that 301s to the real
   // MCP endpoint (sh.inference.ac → api.inference.sh/mcp); OAuth discovery
@@ -241,15 +279,29 @@ async function handleAuthorize(req: NextRequest): Promise<Response> {
       },
       "mcp-oauth: mcpAuth threw during authorize",
     );
+    const reason = classifyAuthError(err);
+    if (reason === "dcr_unsupported") {
+      // The end-user toast intentionally omits the remedy (they can't act on
+      // it). Log the actionable operator fix here: this provider's host needs a
+      // pre-registered OAuth client configured on the platform.
+      const host = (() => {
+        try {
+          return new URL(endpointUrl).host;
+        } catch {
+          return endpointUrl;
+        }
+      })();
+      logger.error(
+        { orgId: tenant.id, orgListingId, host, endpointUrl },
+        `mcp-oauth: ${host} does not support dynamic client registration — ` +
+          `add "${host}" to MCP_OAUTH_PREREGISTERED_CLIENTS (client_id/secret from an ` +
+          `OAuth app whose callback is ${url.origin}/api/v1/mcp/oauth/callback) to enable OAuth sign-in`,
+      );
+    }
     // This is a full-page navigation — a JSON body would strand the user on a
     // dead error page. Land back on the launching surface with a reason code
     // the result toast can translate into actionable copy.
-    return redirectBackWithError(
-      url.origin,
-      returnTo,
-      orgListingId,
-      classifyAuthError(err),
-    );
+    return redirectBackWithError(url.origin, returnTo, orgListingId, reason);
   }
 
   logger.info(

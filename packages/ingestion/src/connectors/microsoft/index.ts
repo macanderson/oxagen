@@ -1,5 +1,13 @@
+import { randomBytes } from "node:crypto";
 import { z } from "zod";
-import { registerConnector, type ConnectorDefinition, type NormalizedRecord, type RecordTypeSample } from "../types";
+import {
+  registerConnector,
+  type AuthCredential,
+  type ConnectorDefinition,
+  type NormalizedRecord,
+  type RecordTypeSample,
+  type WebhookSubscriptionResult,
+} from "../types";
 import { constantTimeStringEqual } from "../safe-compare";
 
 const connectionConfigSchema = z.object({
@@ -13,7 +21,9 @@ const connectionConfigSchema = z.object({
 type Config = typeof connectionConfigSchema;
 
 function asRecord(raw: unknown): Record<string, unknown> {
-  return raw !== null && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  return raw !== null && typeof raw === "object"
+    ? (raw as Record<string, unknown>)
+    : {};
 }
 
 function asString(v: unknown): string | undefined {
@@ -22,6 +32,45 @@ function asString(v: unknown): string | undefined {
 
 function asArray(v: unknown): unknown[] {
   return Array.isArray(v) ? v : [];
+}
+
+/** Resolve a usable bearer token from the resolved connection credential. */
+function bearerToken(auth: AuthCredential): string | null {
+  if (auth.scheme === "bearer_token") return auth.token;
+  return null;
+}
+
+/**
+ * Map configured Microsoft 365 services to Graph change-notification resource
+ * paths + the source record type each delivers. Services without a webhook
+ * resource (teams — requires a per-team/channel resource we do not yet model)
+ * are skipped; they fall back to polling.
+ */
+function graphResourcesFor(
+  services: readonly string[],
+): Array<{ resource: string; recordType: string }> {
+  const out: Array<{ resource: string; recordType: string }> = [];
+  for (const service of services) {
+    switch (service) {
+      case "outlook":
+        out.push({
+          resource: "/users/messages",
+          recordType: "outlook_message",
+        });
+        break;
+      case "calendar":
+        out.push({ resource: "/users/events", recordType: "calendar_event" });
+        break;
+      case "onedrive":
+        out.push({ resource: "/drive/root", recordType: "onedrive_file" });
+        break;
+      // sharepoint + teams need per-site/per-channel resource paths that this
+      // connector config does not carry yet — poll-only for now.
+      default:
+        break;
+    }
+  }
+  return out;
 }
 
 const microsoft: ConnectorDefinition<Config> = {
@@ -48,7 +97,9 @@ const microsoft: ConnectorDefinition<Config> = {
       case "email": {
         const from = asRecord(asRecord(r["from"])["emailAddress"]);
         const toRecipients = asArray(r["toRecipients"])
-          .map((t) => asString(asRecord(asRecord(t)["emailAddress"])["address"]))
+          .map((t) =>
+            asString(asRecord(asRecord(t)["emailAddress"])["address"]),
+          )
           .filter(Boolean);
         return {
           externalId: asString(r["id"]) ?? "",
@@ -73,7 +124,9 @@ const microsoft: ConnectorDefinition<Config> = {
         const fromUser = asRecord(asRecord(r["from"])["user"]);
         return {
           externalId: asString(r["id"]) ?? "",
-          displayName: asString(r["summary"]) ?? asString(asRecord(r["body"])["content"])?.slice(0, 100),
+          displayName:
+            asString(r["summary"]) ??
+            asString(asRecord(r["body"])["content"])?.slice(0, 100),
           properties: {
             body: asString(asRecord(r["body"])["content"]),
             fromUserId: asString(fromUser["id"]),
@@ -114,7 +167,9 @@ const microsoft: ConnectorDefinition<Config> = {
       case "calendar_event": {
         const organizer = asRecord(asRecord(r["organizer"])["emailAddress"]);
         const attendees = asArray(r["attendees"])
-          .map((a) => asString(asRecord(asRecord(a)["emailAddress"])["address"]))
+          .map((a) =>
+            asString(asRecord(asRecord(a)["emailAddress"])["address"]),
+          )
           .filter(Boolean);
         return {
           externalId: asString(r["id"]) ?? "",
@@ -136,8 +191,81 @@ const microsoft: ConnectorDefinition<Config> = {
       }
 
       default:
-        throw new Error(`microsoft.normalizeRecord: unknown sourceRecordType "${sourceRecordType}"`);
+        throw new Error(
+          `microsoft.normalizeRecord: unknown sourceRecordType "${sourceRecordType}"`,
+        );
     }
+  },
+
+  // Register a Microsoft Graph change-notification subscription per configured
+  // service, verified back on delivery via `clientState` (the returned secret).
+  // Graph caps subscription lifetime per resource; we request ~2.9 days (the
+  // common max for mail/events/drive) and let the renewal cron re-subscribe.
+  async subscribeWebhooks(
+    auth,
+    config,
+    webhookUrl,
+  ): Promise<WebhookSubscriptionResult> {
+    const token = bearerToken(auth);
+    if (!token) {
+      throw new Error(
+        "microsoft.subscribeWebhooks: connection has no usable bearer token",
+      );
+    }
+
+    // clientState doubles as the shared secret verifyWebhook checks. 32 random
+    // bytes, base64url — well under Graph's 128-char clientState limit.
+    const clientState = randomBytes(32).toString("base64url");
+    // Graph max is 4230 min for most resources; stay a hair under.
+    const expiresAt = new Date(Date.now() + 4200 * 60 * 1000);
+    const resources = graphResourcesFor(config.services);
+    if (resources.length === 0) {
+      throw new Error(
+        "microsoft.subscribeWebhooks: no webhook-capable services configured",
+      );
+    }
+
+    // One subscription per resource; return the first id (renewal re-subscribes
+    // all of them). Graph requires a separate subscription per resource path.
+    const created: string[] = [];
+    const recordTypes: string[] = [];
+    for (const { resource, recordType } of resources) {
+      const resp = await fetch(
+        "https://graph.microsoft.com/v1.0/subscriptions",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            changeType: "created,updated",
+            notificationUrl: webhookUrl,
+            resource,
+            expirationDateTime: expiresAt.toISOString(),
+            clientState,
+          }),
+        },
+      );
+      if (!resp.ok) {
+        const detail = await resp.text().catch(() => "");
+        throw new Error(
+          `microsoft.subscribeWebhooks: Graph POST /subscriptions failed (${resp.status}) for ${resource}: ${detail.slice(0, 200)}`,
+        );
+      }
+      const body = (await resp.json()) as { id?: unknown };
+      if (typeof body.id === "string") created.push(body.id);
+      recordTypes.push(recordType);
+    }
+
+    return {
+      subscriptionId: created.join(","),
+      secret: clientState,
+      expiresAt,
+      recordTypes,
+      hmacHeader: undefined,
+      hmacAlgorithm: "clientState",
+    };
   },
 
   verifyWebhook(payload, _headers, secret): boolean {
@@ -166,7 +294,9 @@ const microsoft: ConnectorDefinition<Config> = {
       return false;
     }
 
-    const notifications = (body as Record<string, unknown>)["value"] as unknown[];
+    const notifications = (body as Record<string, unknown>)[
+      "value"
+    ] as unknown[];
     if (notifications.length === 0) return false;
 
     // OXA-2051: constant-time compare — a plain `===` here leaks the secret
@@ -174,7 +304,10 @@ const microsoft: ConnectorDefinition<Config> = {
     return notifications.every((n) => {
       if (n === null || typeof n !== "object") return false;
       const clientState = (n as Record<string, unknown>)["clientState"];
-      return typeof clientState === "string" && constantTimeStringEqual(clientState, secret);
+      return (
+        typeof clientState === "string" &&
+        constantTimeStringEqual(clientState, secret)
+      );
     });
   },
 };

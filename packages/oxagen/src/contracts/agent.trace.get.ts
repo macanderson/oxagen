@@ -27,12 +27,20 @@ const toolCallNode = z.object({
   latencyMs: z.number().int().nullable(),
   inputTokens: z.number().int().nullable(),
   outputTokens: z.number().int().nullable(),
-  requestBytes: z.number().int().describe("Serialized size of the request payload"),
-  responseBytes: z.number().int().describe("Serialized size of the response payload, 0 when none"),
+  requestBytes: z
+    .number()
+    .int()
+    .describe("Serialized size of the request payload"),
+  responseBytes: z
+    .number()
+    .int()
+    .describe("Serialized size of the response payload, 0 when none"),
   responsePreview: z
     .string()
     .nullable()
-    .describe("Truncated JSON preview of the response payload, or null when none"),
+    .describe(
+      "Truncated JSON preview of the response payload, or null when none",
+    ),
 });
 
 const stepNode = z.object({
@@ -56,7 +64,10 @@ const stepNode = z.object({
 // latency/tool-call counts, which is what this reuses.
 const turnMetric = z.object({
   turnId: z.string().describe("The step's public id (aes_…)"),
-  compileMs: z.number().int().describe("The step's latencyMs, reused as the turn's duration"),
+  compileMs: z
+    .number()
+    .int()
+    .describe("The step's latencyMs, reused as the turn's duration"),
   tokens: z.number().int().describe("inputTokens + outputTokens for the step"),
   cacheHitRate: z.number(),
   toolCalls: z.number().int(),
@@ -124,7 +135,11 @@ export const agentTraceGet = registerCapability({
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
   scoped: true,
-  agent: { requiresApproval: false, riskLevel: "low", category: "introspection" },
+  agent: {
+    requiresApproval: false,
+    riskLevel: "low",
+    category: "introspection",
+  },
   sensitivity: "low",
   defaultEffect: "deny",
   defaultRoles: {

@@ -8,7 +8,7 @@ export const evalDatasetCreate = registerCapability({
     "Create an eval dataset — a named, workspace-scoped collection of cases to score a target against. Items are added separately via eval.dataset.item.add or captured from metered traces via eval.dataset.from_traces.",
   mode: "sync",
   surfaces: ["api", "mcp", "cli"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   // Management op — creates a definition row, spends no AI tokens.
   noBillingGate: true,

@@ -32,12 +32,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { schemaRegistrySchema } from "./_schemas";
-import {
-  auditMixin,
-  idMixin,
-  orgScopeMixin,
-  softDeleteMixin,
-} from "./_mixins";
+import { auditMixin, idMixin, orgScopeMixin, softDeleteMixin } from "./_mixins";
 
 // ── §4.1 schema_registry.registries ──────────────────────────────────────────
 // One non-deleted row per workspace. Holds the pin + draft pointers and
@@ -57,9 +52,7 @@ export const schemaRegistries = schemaRegistrySchema.table(
     // Draft pointer: points to the single mutable working-copy version (status='draft').
     draftVersionId: uuid("draft_version_id"),
     // Enforcement mode for property-level validation at ingestion time (§2.1 criterion 9).
-    enforcementMode: text("enforcement_mode")
-      .notNull()
-      .default("lenient"),
+    enforcementMode: text("enforcement_mode").notNull().default("lenient"),
     // When lenient mode is active, a conformance score below this floor raises
     // a schema.conformance.low event. Range 0.00–1.00.
     conformanceFloor: numeric("conformance_floor", { precision: 3, scale: 2 })
@@ -71,7 +64,10 @@ export const schemaRegistries = schemaRegistrySchema.table(
     workspaceUniq: unique("registries_workspace_uniq")
       .on(t.workspaceId)
       .nullsNotDistinct(), // partial-unique semantics enforced at DB via WHERE in Atlas migration
-    orgWorkspaceIdx: index("registries_org_workspace_idx").on(t.orgId, t.workspaceId),
+    orgWorkspaceIdx: index("registries_org_workspace_idx").on(
+      t.orgId,
+      t.workspaceId,
+    ),
     enforcementModeCheck: check(
       "registries_enforcement_mode_check",
       sql`${t.enforcementMode} IN ('strict', 'lenient', 'off')`,
@@ -101,7 +97,10 @@ export const schemaVersions = schemaRegistrySchema.table(
     // AI- or user-authored summary for the diff/changelog.
     changeSummary: text("change_summary"),
     // Set when the draft is frozen (status → 'published').
-    publishedAt: timestamp("published_at", { withTimezone: true, mode: "date" }),
+    publishedAt: timestamp("published_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
   },
   (t) => ({
     // One version number per registry (monotonic counter).
@@ -110,7 +109,10 @@ export const schemaVersions = schemaRegistrySchema.table(
       t.versionNumber,
     ),
     registryIdx: index("schema_versions_registry_idx").on(t.registryId),
-    orgWorkspaceIdx: index("schema_versions_org_workspace_idx").on(t.orgId, t.workspaceId),
+    orgWorkspaceIdx: index("schema_versions_org_workspace_idx").on(
+      t.orgId,
+      t.workspaceId,
+    ),
     statusCheck: check(
       "schema_versions_status_check",
       sql`${t.status} IN ('draft', 'published')`,
@@ -144,9 +146,15 @@ export const schemas = schemaRegistrySchema.table(
   },
   (t) => ({
     // A schema name is unique within a version snapshot.
-    versionNameUniq: unique("schemas_version_name_uniq").on(t.versionId, t.name),
+    versionNameUniq: unique("schemas_version_name_uniq").on(
+      t.versionId,
+      t.name,
+    ),
     versionIdx: index("schemas_version_idx").on(t.versionId),
-    orgWorkspaceIdx: index("schemas_org_workspace_idx").on(t.orgId, t.workspaceId),
+    orgWorkspaceIdx: index("schemas_org_workspace_idx").on(
+      t.orgId,
+      t.workspaceId,
+    ),
     sourceCheck: check(
       "schemas_source_check",
       sql`${t.source} IN ('user', 'connector', 'recommended')`,
@@ -209,15 +217,19 @@ export const nodeLabels = schemaRegistrySchema.table(
       .array()
       .notNull()
       .default(sql`'{}'`),
-    // Color/icon/UI hints.
-    metadata: jsonb("metadata").notNull().default(sql`'{}'::jsonb`),
   },
   (t) => ({
     // A label name is unique within a version snapshot.
-    versionNameUniq: unique("node_labels_version_name_uniq").on(t.versionId, t.name),
+    versionNameUniq: unique("node_labels_version_name_uniq").on(
+      t.versionId,
+      t.name,
+    ),
     versionIdx: index("node_labels_version_idx").on(t.versionId),
     schemaIdx: index("node_labels_schema_idx").on(t.schemaId),
-    orgWorkspaceIdx: index("node_labels_org_workspace_idx").on(t.orgId, t.workspaceId),
+    orgWorkspaceIdx: index("node_labels_org_workspace_idx").on(
+      t.orgId,
+      t.workspaceId,
+    ),
   }),
 );
 
@@ -250,12 +262,9 @@ export const relationshipTypes = schemaRegistrySchema.table(
   (t) => ({
     // (name, start_label, end_label) is the identity tuple within a version —
     // the same relationship type name can appear with different endpoint constraints.
-    versionNameEndpointUniq: unique("relationship_types_version_name_endpoint_uniq").on(
-      t.versionId,
-      t.name,
-      t.startLabel,
-      t.endLabel,
-    ),
+    versionNameEndpointUniq: unique(
+      "relationship_types_version_name_endpoint_uniq",
+    ).on(t.versionId, t.name, t.startLabel, t.endLabel),
     versionIdx: index("relationship_types_version_idx").on(t.versionId),
     schemaIdx: index("relationship_types_schema_idx").on(t.schemaId),
     orgWorkspaceIdx: index("relationship_types_org_workspace_idx").on(
@@ -302,12 +311,21 @@ export const schemaProperties = schemaRegistrySchema.table(
   },
   (t) => ({
     // Uniqueness within the owning label or relationship type.
-    nodeLabelKeyUniq: unique("properties_node_label_key_uniq").on(t.nodeLabelId, t.key),
-    relTypeKeyUniq: unique("properties_rel_type_key_uniq").on(t.relationshipTypeId, t.key),
+    nodeLabelKeyUniq: unique("properties_node_label_key_uniq").on(
+      t.nodeLabelId,
+      t.key,
+    ),
+    relTypeKeyUniq: unique("properties_rel_type_key_uniq").on(
+      t.relationshipTypeId,
+      t.key,
+    ),
     versionIdx: index("properties_version_idx").on(t.versionId),
     nodeLabelIdx: index("properties_node_label_idx").on(t.nodeLabelId),
     relTypeIdx: index("properties_rel_type_idx").on(t.relationshipTypeId),
-    orgWorkspaceIdx: index("properties_org_workspace_idx").on(t.orgId, t.workspaceId),
+    orgWorkspaceIdx: index("properties_org_workspace_idx").on(
+      t.orgId,
+      t.workspaceId,
+    ),
     // XOR: exactly one owner FK must be non-null.
     ownerXorCheck: check(
       "properties_owner_xor_check",

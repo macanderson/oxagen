@@ -2,7 +2,7 @@ import type {
   AgentSandboxStartInput,
   AgentSandboxStartOutput,
 } from "@oxagen/oxagen/contracts/agent.sandbox.start";
-import type { SandboxSessionSpec } from "@oxagen/sandbox";
+import { WORKSPACE_ROOT, type SandboxSessionSpec } from "@oxagen/sandbox";
 import type { CapabilityContext } from "../types";
 import {
   requireDurableDriver,
@@ -15,10 +15,7 @@ import {
 } from "./_sandbox-session";
 import { driverNetworkForMode, resolveRunTemplate } from "./_sandbox-template";
 import { injectEnvironmentSecrets } from "./_environment-env";
-import {
-  composeRepoCloneScript,
-  type SessionRepoRef,
-} from "./_sandbox-repos";
+import { composeRepoCloneScript, type SessionRepoRef } from "./_sandbox-repos";
 import { resolveGitHubToken } from "@oxagen/github/workspace-token";
 
 export type { AgentSandboxStartInput, AgentSandboxStartOutput };
@@ -82,10 +79,19 @@ export async function agentSandboxStartHandler(
   // Clone script first, then the caller's setupCmd — a failed clone short-circuits
   // the && chain and exits non-zero, so provisioning fails instead of returning a
   // half-provisioned sandbox.
-  const composedSetupCmd =
+  let composedSetupCmd =
     [cloneScript, input.setupCmd]
       .filter((s): s is string => Boolean(s))
       .join(" && ") || undefined;
+  // Force the composed command to run inside the workspace root: the Modal
+  // durable images set no WORKDIR, so a relative-path setup (warm scaffold,
+  // `git init`, etc.) would otherwise land in the image-default cwd instead of
+  // WORKSPACE_ROOT — invisible to list_sandbox_files, which always lists
+  // WORKSPACE_ROOT. Docker's driver already sets WorkingDir to the same root,
+  // so this is a no-op there but keeps every driver consistent.
+  if (composedSetupCmd) {
+    composedSetupCmd = `mkdir -p ${WORKSPACE_ROOT} && cd ${WORKSPACE_ROOT} && ${composedSetupCmd}`;
+  }
 
   const meta: SessionMeta = {
     memoryMb,

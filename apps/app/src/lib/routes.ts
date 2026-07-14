@@ -34,7 +34,21 @@ export const org = {
   /** Workspace picker — also the Org mode root. */
   root: (ctx: ScopeContext): string => `/${ctx.orgSlug}`,
 
+  /** Org workspaces listing — cards for every workspace in the org. */
+  workspaces: (ctx: ScopeContext): string => `/${ctx.orgSlug}/workspaces`,
+
   members: (ctx: ScopeContext): string => `/${ctx.orgSlug}/members`,
+
+  // Governance (web-app-2.0) — the accountability-chain hub. Renders each typed
+  // capability contract as the one enforced object (identity → scope → action →
+  // terms → outcome → audit); Policies covers IAM roles/entitlements + MCP auth.
+  governance: {
+    root: (ctx: ScopeContext): string => `/${ctx.orgSlug}/governance`,
+    capabilities: (ctx: ScopeContext): string =>
+      `/${ctx.orgSlug}/governance/capabilities`,
+    policies: (ctx: ScopeContext): string =>
+      `/${ctx.orgSlug}/governance/policies`,
+  },
 
   // Access sub-routes (only wired tabs remain: sessions, reviews)
   access: {
@@ -121,6 +135,12 @@ export const workspace = {
       `${wsBase(ctx)}/workbench/sandboxes`,
     sandbox: (ctx: Required<ScopeContext>, sessionId: string): string =>
       `${wsBase(ctx)}/workbench/sandboxes/${encodeURIComponent(sessionId)}`,
+    // Repos (web-app-2.0) — the home for the headless repo.* family: sync, fork,
+    // create, edit→PR. Detail is keyed by the source connection id.
+    repos: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/workbench/repos`,
+    repo: (ctx: Required<ScopeContext>, connectionId: string): string =>
+      `${wsBase(ctx)}/workbench/repos/${encodeURIComponent(connectionId)}`,
     // Agent Tools hub — All Tools / Skills / MCP Servers / Capabilities.
     tools: {
       root: (ctx: Required<ScopeContext>): string =>
@@ -155,65 +175,89 @@ export const workspace = {
       `${wsBase(ctx)}/workbench/tools/mcp`,
   },
 
-  // Activity — recent agent runs + per-run span-tree trace viewer.
-  activity: {
-    root: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/activity`,
-    // Per-run span tree. executionId is the aex_* public id.
-    run: (ctx: Required<ScopeContext>, executionId: string): string =>
-      `${wsBase(ctx)}/activity/${encodeURIComponent(executionId)}`,
+  // Automations (web-app-2.0) — human-gated agent automation: the automations
+  // list + editor, the workspace-wide trigger board, and parallel workflow/swarm
+  // runs. The biggest previously-headless section (automation.* + workflow.*).
+  automations: {
+    root: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/automations`,
+    automation: (ctx: Required<ScopeContext>, automationId: string): string =>
+      `${wsBase(ctx)}/automations/${encodeURIComponent(automationId)}`,
+    triggers: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/automations/triggers`,
+    workflows: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/automations/workflows`,
   },
 
-  // Knowledge
+  // Knowledge — web-app-2.0 Phase 2 IA: Sources · Graph · Inference ·
+  // Ontology · Memory. The graph explorer, node browser, and query console
+  // all live under the single /knowledge/graph surface; node detail is a
+  // child of Graph.
   knowledge: {
     root: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/knowledge`,
-    repos: (ctx: Required<ScopeContext>): string =>
-      `${wsBase(ctx)}/knowledge/repos`,
+    sources: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/knowledge/sources`,
+    sourcesConnect: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/knowledge/sources/connect`,
+    graph: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/knowledge/graph`,
     inference: (ctx: Required<ScopeContext>): string =>
       `${wsBase(ctx)}/knowledge/inference`,
-    explore: (ctx: Required<ScopeContext>): string =>
-      `${wsBase(ctx)}/knowledge/explore`,
-    memories: (ctx: Required<ScopeContext>): string =>
-      `${wsBase(ctx)}/knowledge/memories`,
-    // Inspectable detail page for a single KnowledgeNode. Mirrors the
-    // capability-meta RECORD_LINK_ROUTES["graph.node"] template so chat
+    ontology: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/knowledge/ontology`,
+    memory: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/knowledge/memory`,
+    // Inspectable detail page for a single KnowledgeNode, now nested under
+    // Graph. Mirrors capability-meta RECORD_LINK_ROUTES["graph.node"] so chat
     // deep-links and in-app navigation resolve to the same URL.
     node: (ctx: Required<ScopeContext>, nodeId: string): string =>
-      `${wsBase(ctx)}/knowledge/nodes/${encodeURIComponent(nodeId)}`,
+      `${wsBase(ctx)}/knowledge/graph/${encodeURIComponent(nodeId)}`,
   },
 
-  // Settings
+  // Settings — web-app-2.0 Phase 2 consolidation: General (with a Members
+  // sub-tab) · Agent Defaults (Models·Budget·Prompts·Memory-policy sub-tabs) ·
+  // GitHub · MCP Registries. The ontology/schema builder moved to Knowledge.
   settings: {
     root: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/settings`,
     general: (ctx: Required<ScopeContext>): string =>
       `${wsBase(ctx)}/settings/general`,
+    // Members folded into General as a sub-tab (no standalone route).
     members: (ctx: Required<ScopeContext>): string =>
-      `${wsBase(ctx)}/settings/members`,
-    models: (ctx: Required<ScopeContext>): string =>
-      `${wsBase(ctx)}/settings/models`,
+      `${wsBase(ctx)}/settings/general?tab=members`,
+    // Consolidated agent-behaviour defaults page.
+    agentDefaults: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/settings/agent-defaults`,
     github: (ctx: Required<ScopeContext>): string =>
       `${wsBase(ctx)}/settings/github`,
-    prompts: (ctx: Required<ScopeContext>): string =>
-      `${wsBase(ctx)}/settings/prompts`,
     plugins: (ctx: Required<ScopeContext>): string =>
       `${wsBase(ctx)}/settings/plugins`,
     skills: (ctx: Required<ScopeContext>): string =>
       `${wsBase(ctx)}/settings/skills`,
-    knowledge: (ctx: Required<ScopeContext>): string =>
-      `${wsBase(ctx)}/settings/knowledge`,
-    memory: (ctx: Required<ScopeContext>): string =>
-      `${wsBase(ctx)}/settings/memory`,
     // MCP server registries — the catalog sources the marketplace and MCP
     // install flows discover servers from. Registry admin is a settings
     // concern; the servers themselves are managed in Workbench → Agent Tools.
     mcpServerRegistries: (ctx: Required<ScopeContext>): string =>
       `${wsBase(ctx)}/settings/mcp-server-registries`,
+    // Deprecated sub-tab aliases — the four agent-behaviour tabs merged into
+    // Agent Defaults, and the ontology moved to Knowledge. Retained so existing
+    // callers keep compiling and revalidate the correct destination; proxy.ts
+    // 301-redirects the old URLs.
+    models: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/settings/agent-defaults`,
     budget: (ctx: Required<ScopeContext>): string =>
-      `${wsBase(ctx)}/settings/budget`,
+      `${wsBase(ctx)}/settings/agent-defaults`,
+    prompts: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/settings/agent-defaults`,
+    memory: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/settings/agent-defaults`,
+    knowledge: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/knowledge/ontology`,
   },
 
   // Evals — score what actually ran and got billed (eval.* capability family).
   evals: {
     root: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/evals`,
+    dataset: (ctx: Required<ScopeContext>, datasetId: string): string =>
+      `${wsBase(ctx)}/evals/datasets/${encodeURIComponent(datasetId)}`,
     run: (ctx: Required<ScopeContext>, runId: string): string =>
       `${wsBase(ctx)}/evals/runs/${encodeURIComponent(runId)}`,
   },
@@ -231,7 +275,7 @@ export const workspace = {
 
 export const defaultTab: Record<string, string> = {
   // Workspace-scope parents
-  knowledge: "repos",
+  knowledge: "sources",
   settings: "general",
   workbench: "agents",
   marketplace: "agent-tools",

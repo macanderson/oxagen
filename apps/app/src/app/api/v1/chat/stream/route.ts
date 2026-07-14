@@ -762,7 +762,6 @@ export async function POST(request: NextRequest): Promise<Response> {
                     // prose. The plain `content` column keeps the text for
                     // history/model context.
                     contentBlocks: persistedBlocks,
-                    isActiveInBranch: true,
                     metadata: { status: "complete" },
                     createdByUserId: session.user.id,
                     updatedByUserId: session.user.id,
@@ -830,8 +829,7 @@ export async function POST(request: NextRequest): Promise<Response> {
         // matching the CLI, where the repo is the launch cwd, pinned for the
         // whole session. Fail-open: a read failure degrades to unbound
         // (request values stand), never a dead turn.
-        let storedCodeBinding: ReturnType<typeof parseStoredCodeBinding> =
-          null;
+        let storedCodeBinding: ReturnType<typeof parseStoredCodeBinding> = null;
         if (conversationId) {
           try {
             const [conversationRow] = await runInTenantScope(

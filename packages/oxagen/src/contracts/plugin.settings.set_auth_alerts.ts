@@ -14,7 +14,9 @@ export const pluginSettingsSetAuthAlerts = registerCapability({
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   agent: { requiresApproval: true, riskLevel: "medium", category: "plugin" },
-  layers: ["api", "docs", "mcp", "unit"],
+  // "app": configurable from org Governance → Policies (binding in
+  // apps/app/capability-ui-map.json — UI Capability Parity law).
+  layers: ["api", "docs", "mcp", "unit", "app"],
   scoped: true,
   sensitivity: "medium",
   defaultEffect: "deny",

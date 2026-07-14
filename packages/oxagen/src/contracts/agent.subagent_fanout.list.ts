@@ -14,7 +14,11 @@ export const agentSubagentFanoutList = registerCapability({
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
   scoped: true,
-  agent: { requiresApproval: false, riskLevel: "low", category: "introspection" },
+  agent: {
+    requiresApproval: false,
+    riskLevel: "low",
+    category: "introspection",
+  },
   sensitivity: "low",
   defaultEffect: "deny",
   defaultRoles: {
@@ -37,17 +41,33 @@ export const agentSubagentFanoutList = registerCapability({
   output: z.object({
     fanouts: z.array(
       z.object({
-        fanoutId: z.string().describe("Public ID of the fan-out — pass to agent.subagent.fanout.get"),
+        fanoutId: z
+          .string()
+          .describe(
+            "Public ID of the fan-out — pass to agent.subagent.fanout.get",
+          ),
         parentMessageId: z.string(),
-        status: z.enum(["pending", "running", "completed", "partial", "timed_out"]),
+        status: z.enum([
+          "pending",
+          "running",
+          "completed",
+          "partial",
+          "timed_out",
+        ]),
         totalChildren: z.number().int(),
         completedChildren: z.number().int(),
         createdAt: z.string().describe("ISO timestamp the fan-out was created"),
-        updatedAt: z.string().describe("ISO timestamp of the last status change"),
+        updatedAt: z
+          .string()
+          .describe("ISO timestamp of the last status change"),
       }),
     ),
   }),
 });
 
-export type AgentSubagentFanoutListInput = z.output<typeof agentSubagentFanoutList.input>;
-export type AgentSubagentFanoutListOutput = z.output<typeof agentSubagentFanoutList.output>;
+export type AgentSubagentFanoutListInput = z.output<
+  typeof agentSubagentFanoutList.input
+>;
+export type AgentSubagentFanoutListOutput = z.output<
+  typeof agentSubagentFanoutList.output
+>;

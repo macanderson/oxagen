@@ -6,13 +6,14 @@
  *  - ../client.js     → billingProvider() (neutral BillingProvider interface)
  *
  * Scenarios:
- *  1. Happy path with org_id in metadata — upserts invoice + replaces line items.
+ *  1. Happy path with org_id in metadata — upserts the invoice header row.
  *  2. Upsert idempotency — calling twice with same invoice id runs the same
  *     upsert path (ON CONFLICT DO UPDATE), no duplicate write.
  *  3. No org_id in metadata, no subscription row → function returns early;
  *     no DB writes.
- *  4. Empty line items array — delete runs but insert skipped.
- *  5. Line items replace within transaction — delete is called before insert.
+ *  4. Provider line items are NOT mirrored — billing.invoice_line_items was
+ *     dropped (migration 20260802130000); receipts read line items straight
+ *     off the provider payload and the UI links to the Stripe-hosted invoice.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -34,50 +35,22 @@ vi.mock("./client", () => ({
 // DB mock factory
 // ---------------------------------------------------------------------------
 
-function makeDb(opts: {
-  subscriptionRow?: { orgId: string; id: string } | null;
-  invoiceInsertedId?: string | null;
-} = {}) {
+function makeDb(
+  opts: { subscriptionRow?: { orgId: string; id: string } | null } = {},
+) {
   const subscriptionRow =
     opts.subscriptionRow !== undefined
       ? opts.subscriptionRow
       : { orgId: "org-abc", id: "sub-internal-1" };
-  const invoiceInsertedId =
-    opts.invoiceInsertedId !== undefined ? opts.invoiceInsertedId : "invoice-uuid-1";
 
-  const deleteChain = {
-    where: vi.fn().mockResolvedValue(undefined),
-  };
-  const insertLineItemsChain = {
-    values: vi.fn().mockResolvedValue(undefined),
-  };
   const insertInvoiceChain = {
     values: vi.fn().mockReturnValue({
-      onConflictDoUpdate: vi.fn().mockReturnValue({
-        returning: vi.fn().mockResolvedValue(
-          invoiceInsertedId ? [{ id: invoiceInsertedId }] : [],
-        ),
-      }),
+      onConflictDoUpdate: vi.fn().mockResolvedValue(undefined),
     }),
   };
 
-  const callLog: string[] = [];
-  let insertCallIdx = 0;
-
-  const insertFn = vi.fn(() => {
-    insertCallIdx++;
-    if (insertCallIdx === 1) {
-      callLog.push("invoice-insert");
-      return insertInvoiceChain;
-    }
-    callLog.push("line-item-insert");
-    return insertLineItemsChain;
-  });
-
-  const deleteFn = vi.fn(() => {
-    callLog.push("line-item-delete");
-    return deleteChain;
-  });
+  const insertFn = vi.fn(() => insertInvoiceChain);
+  const deleteFn = vi.fn();
 
   return {
     query: {
@@ -86,27 +59,25 @@ function makeDb(opts: {
       },
     },
     // withSystemDb passes the instance as tx; syncInvoiceFromStripe calls
-    // insert/delete directly on tx (no nested transaction anymore).
+    // insert directly on tx (no nested transaction).
     insert: insertFn,
     delete: deleteFn,
-    // Keep a no-op transaction stub so any stray calls don't hard-fail.
-    transaction: vi.fn((cb: (tx: unknown) => Promise<void>) => cb({ insert: insertFn, delete: deleteFn })),
     _txInsert: insertFn,
     _txDelete: deleteFn,
-    _callLog: callLog,
   };
 }
 
-const dbState: { instance: ReturnType<typeof makeDb> | null } = { instance: null };
+const dbState: { instance: ReturnType<typeof makeDb> | null } = {
+  instance: null,
+};
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  db: () => dbState.instance,
-  withTenantDb: async (fn: (tx: unknown) => unknown) => fn(dbState.instance),
-  withSystemDb: async (fn: (tx: unknown) => unknown) => fn(dbState.instance),
-
+    db: () => dbState.instance,
+    withTenantDb: async (fn: (tx: unknown) => unknown) => fn(dbState.instance),
+    withSystemDb: async (fn: (tx: unknown) => unknown) => fn(dbState.instance),
   };
 });
 
@@ -159,15 +130,15 @@ describe("syncInvoiceFromStripe", () => {
     vi.clearAllMocks();
   });
 
-  it("happy path — upserts invoice row and inserts line items inside withSystemDb", async () => {
+  it("happy path — upserts the invoice header row inside withSystemDb", async () => {
     dbState.instance = makeDb();
     getInvoiceMock.mockResolvedValue(makeInvoice());
 
     await syncInvoiceFromStripe("in_test_001");
 
-    // withSystemDb mock passes instance as tx; insert is called twice (invoice + line items)
-    expect(dbState.instance!._txInsert).toHaveBeenCalledTimes(2);
-    expect(dbState.instance!._txDelete).toHaveBeenCalledOnce();
+    // Exactly one insert (the header upsert); nothing is deleted.
+    expect(dbState.instance!._txInsert).toHaveBeenCalledTimes(1);
+    expect(dbState.instance!._txDelete).not.toHaveBeenCalled();
   });
 
   it("upsert idempotency — second call runs same upsert path without error", async () => {
@@ -178,7 +149,7 @@ describe("syncInvoiceFromStripe", () => {
     dbState.instance = makeDb();
     await syncInvoiceFromStripe("in_test_001");
 
-    expect(dbState.instance!._txInsert).toHaveBeenCalledTimes(2);
+    expect(dbState.instance!._txInsert).toHaveBeenCalledTimes(1);
   });
 
   it("no org_id and no subscription row — returns early, no insert", async () => {
@@ -186,33 +157,22 @@ describe("syncInvoiceFromStripe", () => {
     getInvoiceMock.mockResolvedValue(
       makeInvoice({ orgId: null, subscriptionId: "sub_orphan" }),
     );
-    dbState.instance.query.subscriptions.findFirst = vi.fn().mockResolvedValue(undefined);
+    dbState.instance.query.subscriptions.findFirst = vi
+      .fn()
+      .mockResolvedValue(undefined);
 
     await syncInvoiceFromStripe("in_test_001");
 
     expect(dbState.instance!._txInsert).not.toHaveBeenCalled();
   });
 
-  it("empty line items — delete runs but line-item insert is skipped", async () => {
+  it("provider line items are ignored — only the header row is written", async () => {
     dbState.instance = makeDb();
-    getInvoiceMock.mockResolvedValue(makeInvoice({ lineItems: [] }));
+    getInvoiceMock.mockResolvedValue(makeInvoice()); // fixture carries 1 line item
 
     await syncInvoiceFromStripe("in_test_001");
 
-    expect(dbState.instance!._txDelete).toHaveBeenCalledOnce();
     expect(dbState.instance!._txInsert).toHaveBeenCalledTimes(1);
-  });
-
-  it("line items replace — delete is called before line-item insert", async () => {
-    dbState.instance = makeDb();
-    getInvoiceMock.mockResolvedValue(makeInvoice());
-
-    await syncInvoiceFromStripe("in_test_001");
-
-    const log = dbState.instance!._callLog;
-    const deleteIdx = log.indexOf("line-item-delete");
-    const insertIdx = log.indexOf("line-item-insert");
-    expect(deleteIdx).toBeGreaterThanOrEqual(0);
-    expect(insertIdx).toBeGreaterThan(deleteIdx);
+    expect(dbState.instance!._txDelete).not.toHaveBeenCalled();
   });
 });

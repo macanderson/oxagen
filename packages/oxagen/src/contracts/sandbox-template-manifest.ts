@@ -60,11 +60,11 @@ export type SandboxNetwork = z.output<typeof sandboxNetworkSchema>;
 // allow-list of key public ids.
 export const sandboxSecretSelectionSchema = z.union([
   z.literal("all"),
-  z
-    .object({ keyPublicIds: z.array(z.string().min(1)) })
-    .strict(),
+  z.object({ keyPublicIds: z.array(z.string().min(1)) }).strict(),
 ]);
-export type SandboxSecretSelection = z.output<typeof sandboxSecretSelectionSchema>;
+export type SandboxSecretSelection = z.output<
+  typeof sandboxSecretSelectionSchema
+>;
 
 // ── literal env (non-sensitive) ──────────────────────────────────────────────
 // Plain KEY=value config injected at lowest precedence. NEVER secrets.
@@ -89,6 +89,46 @@ export const sandboxTemplateToolSchema = z
   .strict();
 export type SandboxTemplateTool = z.output<typeof sandboxTemplateToolSchema>;
 
+// ── packages ─────────────────────────────────────────────────────────────────
+// Per-ecosystem package lists baked into the sandbox image at provision time.
+// Extensible enum validated here (not a DB enum). Each entry names a package
+// manager and the packages to install through it; a `name` is free text so it
+// may carry a version pin in that ecosystem's own syntax (e.g. `fastapi`,
+// `pydantic==2.5`, `left-pad@1.3.0`). Empty `names` is allowed (a manager row
+// the user has not filled in yet) and is dropped by the UI before submit.
+export const sandboxPackageManagerSchema = z.enum([
+  "apt",
+  "cargo",
+  "gem",
+  "go",
+  "npm",
+  "pnpm",
+  "yarn",
+  "pip",
+  "poetry",
+  "uv",
+]);
+export type SandboxPackageManager = z.output<
+  typeof sandboxPackageManagerSchema
+>;
+
+export const sandboxTemplatePackageGroupSchema = z
+  .object({
+    manager: sandboxPackageManagerSchema,
+    names: z.array(z.string().min(1)).default([]),
+  })
+  .strict();
+export type SandboxTemplatePackageGroup = z.output<
+  typeof sandboxTemplatePackageGroupSchema
+>;
+
+export const sandboxTemplatePackagesSchema = z.array(
+  sandboxTemplatePackageGroupSchema,
+);
+export type SandboxTemplatePackages = z.output<
+  typeof sandboxTemplatePackagesSchema
+>;
+
 // ── manifest secret key (NAMES only) ─────────────────────────────────────────
 // Env-var name pattern mirrors the vault (env-parse SECRET_KEY_PATTERN). No
 // value field exists on purpose — a manifest never carries secret material.
@@ -105,7 +145,8 @@ export const manifestSecretKeySchema = z
 export type ManifestSecretKey = z.output<typeof manifestSecretKeySchema>;
 
 // ── manifest v1 ──────────────────────────────────────────────────────────────
-export const SANDBOX_TEMPLATE_MANIFEST_KIND = "oxagen.sandbox-template" as const;
+export const SANDBOX_TEMPLATE_MANIFEST_KIND =
+  "oxagen.sandbox-template" as const;
 
 export const sandboxTemplateManifestSchema = z
   .object({
@@ -120,9 +161,14 @@ export const sandboxTemplateManifestSchema = z
     network: sandboxNetworkSchema.default({ mode: "public" }),
     secretSelection: sandboxSecretSelectionSchema.default("all"),
     literalEnv: sandboxLiteralEnvSchema.default({}),
+    packages: sandboxTemplatePackagesSchema.default([]),
     tools: z.array(sandboxTemplateToolSchema).default([]),
     secretKeys: z.array(manifestSecretKeySchema).default([]),
   })
   .strict();
-export type SandboxTemplateManifest = z.output<typeof sandboxTemplateManifestSchema>;
-export type SandboxTemplateManifestInput = z.input<typeof sandboxTemplateManifestSchema>;
+export type SandboxTemplateManifest = z.output<
+  typeof sandboxTemplateManifestSchema
+>;
+export type SandboxTemplateManifestInput = z.input<
+  typeof sandboxTemplateManifestSchema
+>;

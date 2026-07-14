@@ -17,7 +17,10 @@
 
 import { scopedSession } from "@oxagen/ontology/tenant";
 import { sanitizeLabel } from "@oxagen/ontology/labels";
-import { edgeValidityOnCreateSet, edgeValidityParams } from "@oxagen/ontology/temporal";
+import {
+  edgeValidityOnCreateSet,
+  edgeValidityParams,
+} from "@oxagen/ontology/temporal";
 import { chInsert, deterministicEventId } from "@oxagen/telemetry";
 import { randomUUID } from "node:crypto";
 import type { EntityMutation } from "../types";
@@ -66,6 +69,43 @@ export interface UpsertEntityResult {
   reason?: "schema_nonconformant";
   /** Conformance score (0.0–1.0) when a schema was evaluated. */
   conformanceScore?: number;
+  /**
+   * True when this write CREATED the node (MERGE ON CREATE), false when it
+   * updated an existing one (ON MATCH). Undefined on a strict rejection (no
+   * write happened). Drives `node.created` vs `node.updated` automation
+   * triggers downstream.
+   */
+  isNew?: boolean;
+  /**
+   * The node's properties BEFORE this write overwrote them, parsed from the
+   * stored JSON string. `null` on create (there was no prior state) or when the
+   * stored JSON was absent/malformed. On an update this is the pre-overwrite
+   * snapshot the trigger matcher passes as `previousProperties` so
+   * previous-aware operators (`changed`, etc.) can fire.
+   */
+  previousProperties?: Record<string, unknown> | null;
+}
+
+/**
+ * Parse the pre-overwrite `n.properties` JSON string returned by the MERGE.
+ * `null` on create (no prior state) or when the stored value is absent /
+ * malformed / not a JSON object — never throws.
+ */
+function parsePreviousProperties(raw: unknown): Record<string, unknown> | null {
+  if (typeof raw !== "string" || raw.length === 0) return null;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (
+      parsed !== null &&
+      typeof parsed === "object" &&
+      !Array.isArray(parsed)
+    ) {
+      return parsed as Record<string, unknown>;
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -97,7 +137,14 @@ export async function upsertEntityNode(
 
     if (pinnedSchema.enforcementMode === "strict" && !validation.valid) {
       // strict: DO NOT write. Emit a rejected conformance event and bail.
-      await emitConformanceEvent(mutation, pinnedSchema, validation, "rejected", null, opts);
+      await emitConformanceEvent(
+        mutation,
+        pinnedSchema,
+        validation,
+        "rejected",
+        null,
+        opts,
+      );
       return {
         nodeId: null,
         rejected: true,
@@ -111,7 +158,8 @@ export async function upsertEntityNode(
   const label = resolveNodeLabel(mutation.entityType);
   // `sanitizeLabel` produced an injection-safe identifier → safe to interpolate.
   // When it is already "EntityNode", don't double-apply the secondary label.
-  const labelClause = label === "EntityNode" ? "`EntityNode`" : `\`${label}\`:\`EntityNode\``;
+  const labelClause =
+    label === "EntityNode" ? "`EntityNode`" : `\`${label}\`:\`EntityNode\``;
 
   // Conformance props are attached on lenient writes (§8). undefined when no
   // schema was evaluated, so existing nodes are not stamped spuriously.
@@ -120,14 +168,24 @@ export async function upsertEntityNode(
 
   const session = scopedSession();
   let nodeId: string;
+  let isNew: boolean;
+  let previousProperties: Record<string, unknown> | null;
   try {
     const result = await session.run(
+      // The WITH between the MERGE branches and the main SET captures the
+      // pre-overwrite state: `_isNew` (whether this MERGE created the node) and
+      // `n.properties` (the OLD JSON string) are read BEFORE the SET below
+      // clobbers them. `_isNew` is a scratch flag cleared (= null) by the SET so
+      // it never persists on the node.
       `MERGE (n:${labelClause} {naturalKey: $naturalKey, orgId: $orgId})
        ON CREATE SET
          n.publicId         = randomUUID(),
-         n.createdAt        = datetime()
+         n.createdAt        = datetime(),
+         n._isNew           = true
        ON MATCH SET
-         n.syncedAt         = datetime()
+         n.syncedAt         = datetime(),
+         n._isNew           = false
+       WITH n, n._isNew AS isNew, n.properties AS previousProperties
        SET
          n:GraphNode,
          n.entityType       = $entityType,
@@ -141,8 +199,9 @@ export async function upsertEntityNode(
          n.is_system        = false,
          n.conformanceScore = $conformanceScore,
          n.schemaVersionId  = $schemaVersionId,
-         n.updatedAt        = datetime()
-       RETURN n.publicId AS nodeId`,
+         n.updatedAt        = datetime(),
+         n._isNew           = null
+       RETURN n.publicId AS nodeId, isNew, previousProperties`,
       {
         naturalKey: mutation.naturalKey,
         orgId,
@@ -165,9 +224,19 @@ export async function upsertEntityNode(
     );
     const record = result.records[0];
     if (!record) {
-      throw new Error(`upsertEntityNode: no record returned for naturalKey=${mutation.naturalKey}`);
+      throw new Error(
+        `upsertEntityNode: no record returned for naturalKey=${mutation.naturalKey}`,
+      );
     }
     nodeId = record.get("nodeId") as string;
+    // `isNew` is a Neo4j boolean (true on CREATE, false on MATCH). Coerce
+    // defensively — an absent/odd value is treated as an update (not new).
+    isNew = record.get("isNew") === true;
+    // `previousProperties` is the OLD JSON string (null on create). Parse it,
+    // guarding against null/malformed → null.
+    previousProperties = parsePreviousProperties(
+      record.get("previousProperties"),
+    );
   } finally {
     await session.close();
   }
@@ -177,7 +246,8 @@ export async function upsertEntityNode(
 
   // ── §4.10 conformance event + §8 below-floor signal (lenient writes) ────────
   if (validation && pinnedSchema) {
-    const belowFloor = validation.conformanceScore < pinnedSchema.conformanceFloor;
+    const belowFloor =
+      validation.conformanceScore < pinnedSchema.conformanceFloor;
     await emitConformanceEvent(
       mutation,
       pinnedSchema,
@@ -188,12 +258,20 @@ export async function upsertEntityNode(
     );
     if (belowFloor) {
       // Best-effort low-conformance alert event (does not block the write).
-      await emitConformanceLowEvent(mutation, pinnedSchema, validation, nodeId, opts);
+      await emitConformanceLowEvent(
+        mutation,
+        pinnedSchema,
+        validation,
+        nodeId,
+        opts,
+      );
     }
   }
 
   return {
     nodeId,
+    isNew,
+    previousProperties,
     conformanceScore: validation ? validation.conformanceScore : undefined,
   };
 }
@@ -218,7 +296,8 @@ async function emitObservedLabel(
         label_or_type: label,
         property_keys: Object.keys(mutation.properties),
         connection_id: opts.connectionId ?? null,
-        source_record_type: opts.sourceRecordType ?? mutation.sourceRecordType ?? "",
+        source_record_type:
+          opts.sourceRecordType ?? mutation.sourceRecordType ?? "",
         occurred_at: new Date().toISOString(),
       },
     ]);
@@ -281,7 +360,8 @@ async function emitConformanceEvent(
           .filter((e) => e.code === "type")
           .map((e) => e.message),
         connection_id: opts.connectionId ?? null,
-        source_record_type: opts.sourceRecordType ?? mutation.sourceRecordType ?? "",
+        source_record_type:
+          opts.sourceRecordType ?? mutation.sourceRecordType ?? "",
         occurred_at: new Date().toISOString(),
       },
     ]);
@@ -304,7 +384,15 @@ async function emitConformanceLowEvent(
 ): Promise<void> {
   // Distinct `role` keeps the alert row's deterministic event_id separate from
   // the primary outcome row's, even though both share outcome="written_below_floor".
-  await emitConformanceEvent(mutation, pinnedSchema, validation, "written_below_floor", nodeId, opts, "low_alert");
+  await emitConformanceEvent(
+    mutation,
+    pinnedSchema,
+    validation,
+    "written_below_floor",
+    nodeId,
+    opts,
+    "low_alert",
+  );
 }
 
 export interface AliasEdgeProps {
@@ -446,14 +534,19 @@ const EDGE_TYPE_QUERIES: Record<string, string> = {
   PART_OF: inferredEdgeQuery("PART_OF"),
 };
 
-export async function upsertInferredEdges(edges: InferredEdge[], orgId: string): Promise<void> {
+export async function upsertInferredEdges(
+  edges: InferredEdge[],
+  orgId: string,
+): Promise<void> {
   if (edges.length === 0) return;
   const session = scopedSession();
   try {
     for (const edge of edges) {
       const query = EDGE_TYPE_QUERIES[edge.edgeType];
       if (!query) {
-        throw new Error(`upsertInferredEdges: unsupported edgeType "${edge.edgeType}". Allowed: ${Object.keys(EDGE_TYPE_QUERIES).join(", ")}`);
+        throw new Error(
+          `upsertInferredEdges: unsupported edgeType "${edge.edgeType}". Allowed: ${Object.keys(EDGE_TYPE_QUERIES).join(", ")}`,
+        );
       }
       await session.run(query, {
         fromNodeId: edge.fromNodeId,

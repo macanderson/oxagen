@@ -123,6 +123,17 @@ export interface ResolveCredentialOptions {
   config: McpServerConfig;
   /** Optional: fetch credential from remote API. Return null if unavailable. */
   remoteFetch?: (serverName: string) => Promise<StoredCredential | null>;
+  /**
+   * Whether a credential obtained via `remoteFetch` is cached to the local
+   * credential file (~/.config/oxagen/credentials/<name>.json). Defaults to
+   * true to preserve the original behavior for file-based OAuth servers.
+   *
+   * The CLI→platform bridge passes `false`: a workspace-installed server's
+   * credential is a workspace secret resolved server-side per turn, and must
+   * NOT be persisted to the client's disk (see apps/cli/src/mcp/workspace-servers.ts
+   * for the security rationale). It stays in memory for the duration of the turn.
+   */
+  persistRemote?: boolean;
 }
 
 /**
@@ -220,8 +231,12 @@ export async function resolveCredential(
     try {
       const remote = await opts.remoteFetch(serverName);
       if (remote) {
-        // Cache locally for next time
-        writeCredential(serverName, remote);
+        // Cache locally for next time — UNLESS the caller opted out. Workspace
+        // credentials resolved through the platform bridge are deliberately not
+        // written to disk (persistRemote === false).
+        if (opts.persistRemote !== false) {
+          writeCredential(serverName, remote);
+        }
         const expired = remote.expiresAt
           ? new Date(remote.expiresAt).getTime() < Date.now()
           : false;

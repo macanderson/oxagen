@@ -21,6 +21,7 @@
  */
 import { readdirSync, existsSync, writeFileSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 
 const ARGS = new Set(process.argv.slice(2));
 const JSON_MODE = ARGS.has("--json");
@@ -37,6 +38,76 @@ const BARREL = join(ROOT, "packages/oxagen/src/contracts.generated.ts");
 
 function slugify(name) {
   return name.replace(/\./g, "-");
+}
+
+// ── Combined-route content scan ───────────────────────────────────────────────
+// Several api routes dispatch MANY capabilities from one file (e.g. schema.ts
+// mounts 22 schema.* capabilities). A per-capability filename check alone can
+// never see those — it needs to look INSIDE the route files for evidence that
+// each capability is actually wired. Built once and cached: reading ~266 route
+// files per capability would be O(files × capabilities) instead of O(files).
+const CONTRACT_IMPORT_RE =
+  /from\s*["']@oxagen\/oxagen\/contracts\/([^"']+)["']/g;
+
+/**
+ * Pure indexer: given the raw contents of every apps/api/src/routes/v1/*.ts
+ * file, return the set of contract stems any of them import plus the
+ * concatenated source (for a literal-name fallback scan). No filesystem
+ * access, so it's directly unit-testable.
+ *
+ * @param {{name: string, content: string}[]} files
+ */
+export function buildApiRouteIndex(files) {
+  const importedStems = new Set();
+  let content = "";
+  for (const { content: src } of files) {
+    CONTRACT_IMPORT_RE.lastIndex = 0;
+    let m;
+    while ((m = CONTRACT_IMPORT_RE.exec(src))) importedStems.add(m[1]);
+    content += src + "\n";
+  }
+  return { importedStems, content };
+}
+
+/**
+ * Pure evidence check for the "api" layer. Primary evidence (a dedicated
+ * per-capability route file) is resolved by the caller via `hasDirectFile` so
+ * this function needs no disk access to test. Fallback evidence (dispatched
+ * from a combined multi-capability route file) is either of:
+ *   - the capability's contract module is imported by some route file
+ *     (`from ".../contracts/<stem>"`, matched against either candidate stem)
+ *   - the route source contains the capability's exact registered name as a
+ *     quoted string literal (covers dispatch sites where the imported
+ *     identifier doesn't textually match either stem)
+ *
+ * @param {{stems: string[], capName: string, hasDirectFile: boolean, routeIndex: {importedStems: Set<string>, content: string}}} args
+ */
+export function apiLayerSatisfied({
+  stems,
+  capName,
+  hasDirectFile,
+  routeIndex,
+}) {
+  if (hasDirectFile) return true;
+  if (stems.some((s) => routeIndex.importedStems.has(s))) return true;
+  return (
+    routeIndex.content.includes(`"${capName}"`) ||
+    routeIndex.content.includes(`'${capName}'`) ||
+    routeIndex.content.includes(`\`${capName}\``)
+  );
+}
+
+let apiRouteIndexCache = null;
+function getApiRouteIndex() {
+  if (apiRouteIndexCache) return apiRouteIndexCache;
+  const dir = join(ROOT, "apps/api/src/routes/v1");
+  const files = existsSync(dir)
+    ? readdirSync(dir)
+        .filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts"))
+        .map((f) => ({ name: f, content: readFileSync(join(dir, f), "utf8") }))
+    : [];
+  apiRouteIndexCache = buildApiRouteIndex(files);
+  return apiRouteIndexCache;
 }
 
 // Regenerate the contract barrel from the contents of ./contracts. This is the
@@ -71,6 +142,14 @@ function writeContractBarrel(files) {
  *      tool registration that maps the capability into the MCP protocol surface.
  *      As of this writing, 38+ such files exist and are actively used.
  *
+ * The "api" layer is satisfied by a dedicated per-capability file at
+ * apps/api/src/routes/v1/<stem>.ts OR by evidence inside a combined
+ * multi-capability route file (schema.ts, connection.ts, integration.ts,
+ * repo.ts, semantic-edge.ts, workflow.ts, plugin-schema.ts, reseller.ts) —
+ * see apiLayerSatisfied/buildApiRouteIndex above. Filename-only checking
+ * cannot see those combined files' contents, so it used to falsely report
+ * every capability they dispatch as an api gap.
+ *
  * @param {string} layer - the layer name from the contract's layers[]
  * @param {string} capName - the capability name (e.g. "org.create")
  * @param {string[]} capSurfaces - the capability's surfaces[] array
@@ -83,12 +162,15 @@ function writeContractBarrel(files) {
  */
 function layerSatisfied(layer, capName, capSurfaces, fileStem) {
   const slug = slugify(capName);
-  const stems = fileStem && fileStem !== capName ? [capName, fileStem] : [capName];
+  const stems =
+    fileStem && fileStem !== capName ? [capName, fileStem] : [capName];
   // The mcp layer is satisfied when the capability declares "mcp" in surfaces[]
   // AND a tool file exists at apps/mcp/src/tools/<capability>.ts (xmcp registration).
   if (layer === "mcp") {
     if (!capSurfaces.includes("mcp")) return false;
-    return stems.some((s) => existsSync(join(ROOT, `apps/mcp/src/tools/${s}.ts`)));
+    return stems.some((s) =>
+      existsSync(join(ROOT, `apps/mcp/src/tools/${s}.ts`)),
+    );
   }
   // The "app" layer (human-operable UI in apps/app) is not a file-existence
   // check — it is a route-binding + runtime-proof promise owned by a dedicated
@@ -96,9 +178,23 @@ function layerSatisfied(layer, capName, capSurfaces, fileStem) {
   // manifest doesn't report false "app missing" gaps; check:ui-parity is the
   // authority for app-surface completeness.
   if (layer === "app") return true;
+  // The "api" layer has a fallback beyond filename existence: a combined
+  // multi-capability route file (schema.ts, connection.ts, etc.) can satisfy
+  // MANY capabilities without any of them having a dedicated file — see
+  // apiLayerSatisfied above.
+  if (layer === "api") {
+    const hasDirectFile = stems.some((s) =>
+      existsSync(join(ROOT, `apps/api/src/routes/v1/${s}.ts`)),
+    );
+    return apiLayerSatisfied({
+      stems,
+      capName,
+      hasDirectFile,
+      routeIndex: getApiRouteIndex(),
+    });
+  }
   const candidates = {
     schema: [join(ROOT, "packages/database/src/schema")],
-    api: stems.map((s) => join(ROOT, `apps/api/src/routes/v1/${s}.ts`)),
     unit: stems.map((s) => join(CAP_DIR, `${s}.test.ts`)),
     e2e: [join(ROOT, `apps/app/e2e/${slug}.spec.ts`)],
     docs: stems.map((s) => join(ROOT, `docs/capabilities/${s}.md`)),
@@ -171,9 +267,13 @@ function main() {
     arr.push(cap.file);
     filesByName.set(cap.name, arr);
   }
-  const duplicates = [...filesByName.entries()].filter(([, files]) => files.length > 1);
+  const duplicates = [...filesByName.entries()].filter(
+    ([, files]) => files.length > 1,
+  );
   if (duplicates.length) {
-    console.error("DUPLICATE CAPABILITY NAMES — two contract files claim one name:");
+    console.error(
+      "DUPLICATE CAPABILITY NAMES — two contract files claim one name:",
+    );
     for (const [name, files] of duplicates) {
       console.error(`  - "${name}": ${files.join(", ")}`);
     }
@@ -236,9 +336,12 @@ function main() {
         `::warning title=Manifest gap::${capability} missing layer(s): ${missing.join(", ")}`,
       );
     }
-    console.error("\nMANIFEST GAPS — feature incomplete (tracked in Linear, not blocking):");
+    console.error(
+      "\nMANIFEST GAPS — feature incomplete (tracked in Linear, not blocking):",
+    );
     for (const { capability, missing } of gaps) {
-      for (const layer of missing) console.error(`  - ${capability}: missing "${layer}"`);
+      for (const layer of missing)
+        console.error(`  - ${capability}: missing "${layer}"`);
     }
     // --strict restores the hard gate; default is warn-only (exit 0).
     if (STRICT) {
@@ -253,4 +356,12 @@ function main() {
   info("All declared layers satisfied.");
 }
 
-main();
+// Only run when executed directly (not when imported by the test) — mirrors
+// check_ui_parity.mjs so importing the pure exports above never has the side
+// effect of rewriting the barrel/manifest during a test run.
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(process.argv[1]).href
+) {
+  main();
+}

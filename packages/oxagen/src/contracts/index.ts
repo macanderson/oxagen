@@ -61,6 +61,7 @@ import { documentsPdfCreate } from "./document.pdf.create";
 import { markdownGenerate } from "./markdown.generate";
 import { mermaidGenerate } from "./mermaid.generate";
 import { agentMcpList } from "./agent.mcp.list";
+import { agentMcpResolve } from "./agent.mcp.resolve";
 import { agentMcpRegister } from "./agent.mcp.register";
 import { agentMcpSetEnabled } from "./agent.mcp.set_enabled";
 import { agentMcpDelete } from "./agent.mcp.delete";
@@ -83,6 +84,8 @@ import { agentMemoryEvidenceAttach } from "./agent.memory_evidence.attach";
 import { agentMemoryCitationsList } from "./agent.memory_citation.list";
 import { agentPlanApprove } from "./agent.plan.approve";
 import { agentPlanCreate } from "./agent.plan.create";
+import { agentPlanGet } from "./agent.plan.get";
+import { agentPlanList } from "./agent.plan.list";
 import { agentFileLockAcquire } from "./agent.file_lock.acquire";
 import { agentFileLockRelease } from "./agent.file_lock.release";
 import { agentFileLockList } from "./agent.file_lock.list";
@@ -168,6 +171,10 @@ import { pluginRegistryAdd } from "./plugin.registry.add";
 import { pluginRegistryList } from "./plugin.registry.list";
 import { pluginRegistryRemove } from "./plugin.registry.remove";
 import { pluginSettingsSetAuthAlerts } from "./plugin.settings.set_auth_alerts";
+import { pluginSettingsGetAuthAlerts } from "./plugin.settings.get_auth_alerts";
+import { capabilityRegistryList } from "./capability.registry.list";
+import { capabilityRegistryGet } from "./capability.registry.get";
+import { iamRoleList } from "./iam.role.list";
 import { workflowRun } from "./workflow.run";
 import { workflowStatus } from "./workflow.status";
 import { workflowCancel } from "./workflow.cancel";
@@ -183,6 +190,7 @@ import { automationCreate } from "./automation.create";
 import { automationTrigger } from "./automation.trigger";
 import { automationEnable } from "./automation.enable";
 import { automationDisable } from "./automation.disable";
+import { automationGet } from "./automation.get";
 import { workspaceMemberList } from "./workspace.member.list";
 import { workspaceInviteSend } from "./workspace.invite.send";
 import { skillWorkspaceList } from "./skill.workspace.list";
@@ -338,6 +346,8 @@ import { evalDatasetFromTraces } from "./eval.dataset.from_traces";
 import { evalRunStart } from "./eval.run.start";
 import { evalRunStatus } from "./eval.run.status";
 import { evalRunGet } from "./eval.run.get";
+import { evalRunList } from "./eval.run.list";
+import { evalRunSeries } from "./eval.run.series";
 import { routerPolicyGet } from "./router.policy.get";
 import { routerPolicySet } from "./router.policy.set";
 import { routerStatsList } from "./router.stats.list";
@@ -454,6 +464,9 @@ export {
   sandboxNetworkSchema,
   sandboxSecretSelectionSchema,
   sandboxLiteralEnvSchema,
+  sandboxPackageManagerSchema,
+  sandboxTemplatePackageGroupSchema,
+  sandboxTemplatePackagesSchema,
   sandboxToolKindSchema,
   sandboxTemplateToolSchema,
   manifestSecretKeySchema,
@@ -468,6 +481,9 @@ export type {
   SandboxNetwork,
   SandboxSecretSelection,
   SandboxLiteralEnv,
+  SandboxPackageManager,
+  SandboxTemplatePackageGroup,
+  SandboxTemplatePackages,
   SandboxToolKind,
   SandboxTemplateTool,
   ManifestSecretKey,
@@ -554,6 +570,7 @@ export {
   markdownGenerate,
   mermaidGenerate,
   agentMcpList,
+  agentMcpResolve,
   agentMcpRegister,
   agentMcpSetEnabled,
   agentMcpDelete,
@@ -574,6 +591,8 @@ export {
   agentMemoryCitationsList,
   agentPlanApprove,
   agentPlanCreate,
+  agentPlanGet,
+  agentPlanList,
   agentFileLockAcquire,
   agentFileLockRelease,
   agentFileLockList,
@@ -663,6 +682,10 @@ export {
   pluginRegistryList,
   pluginRegistryRemove,
   pluginSettingsSetAuthAlerts,
+  pluginSettingsGetAuthAlerts,
+  capabilityRegistryList,
+  capabilityRegistryGet,
+  iamRoleList,
   workflowRun,
   workflowStatus,
   workflowCancel,
@@ -678,6 +701,7 @@ export {
   automationTrigger,
   automationEnable,
   automationDisable,
+  automationGet,
   workspaceMemberList,
   workspaceInviteSend,
   skillWorkspaceList,
@@ -831,6 +855,8 @@ export {
   evalRunStart,
   evalRunStatus,
   evalRunGet,
+  evalRunList,
+  evalRunSeries,
   routerPolicyGet,
   routerPolicySet,
   routerStatsList,
@@ -892,6 +918,7 @@ export const contracts = [
   markdownGenerate,
   mermaidGenerate,
   agentMcpList,
+  agentMcpResolve,
   agentMcpRegister,
   agentMcpSetEnabled,
   agentMcpDelete,
@@ -912,6 +939,8 @@ export const contracts = [
   agentMemoryCitationsList,
   agentPlanApprove,
   agentPlanCreate,
+  agentPlanGet,
+  agentPlanList,
   agentFileLockAcquire,
   agentFileLockRelease,
   agentFileLockList,
@@ -1001,6 +1030,10 @@ export const contracts = [
   pluginRegistryList,
   pluginRegistryRemove,
   pluginSettingsSetAuthAlerts,
+  pluginSettingsGetAuthAlerts,
+  capabilityRegistryList,
+  capabilityRegistryGet,
+  iamRoleList,
   workflowRun,
   workflowStatus,
   workflowCancel,
@@ -1016,6 +1049,7 @@ export const contracts = [
   automationTrigger,
   automationEnable,
   automationDisable,
+  automationGet,
   workspaceMemberList,
   workspaceInviteSend,
   skillWorkspaceList,
@@ -1172,6 +1206,8 @@ export const contracts = [
   evalRunStart,
   evalRunStatus,
   evalRunGet,
+  evalRunList,
+  evalRunSeries,
   routerPolicyGet,
   routerPolicySet,
   routerStatsList,

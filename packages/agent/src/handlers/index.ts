@@ -10,106 +10,111 @@ export type CapabilityHandlerFn = (
   ctx: CapabilityContext,
 ) => Promise<unknown>;
 
-type LoaderEntry = () => Promise<{ default?: CapabilityHandlerFn } & Record<string, unknown>>;
+type LoaderEntry = () => Promise<
+  { default?: CapabilityHandlerFn } & Record<string, unknown>
+>;
 
 // Single source of truth mapping capability name → handler module.
 const LOADERS: Record<string, LoaderEntry> = {
-  "execute_code": () => import("./agent.code.execute"),
+  execute_code: () => import("./agent.code.execute"),
   // Durable sandbox sessions — long-lived, reconnectable sandboxes that persist
   // across agent turns (clone → build → snapshot → PR). The one-shot
   // agent.code.execute and these durable peers share the @oxagen/sandbox driver.
-  "start_sandbox": () => import("./agent.sandbox.start"),
-  "run_sandbox_command": () => import("./agent.sandbox.exec"),
-  "snapshot_sandbox": () => import("./agent.sandbox.snapshot"),
-  "stop_sandbox": () => import("./agent.sandbox.stop"),
-  "rename_sandbox": () => import("./agent.sandbox.rename"),
-  "list_sandboxes": () => import("./agent.sandbox.list"),
-  "list_sandbox_files": () => import("./agent.sandbox_file.list"),
-  "list_sandbox_logs": () => import("./agent.sandbox_log.list"),
-  "read_sandbox_file": () => import("./agent.sandbox_file.read"),
+  start_sandbox: () => import("./agent.sandbox.start"),
+  run_sandbox_command: () => import("./agent.sandbox.exec"),
+  snapshot_sandbox: () => import("./agent.sandbox.snapshot"),
+  stop_sandbox: () => import("./agent.sandbox.stop"),
+  rename_sandbox: () => import("./agent.sandbox.rename"),
+  list_sandboxes: () => import("./agent.sandbox.list"),
+  list_sandbox_files: () => import("./agent.sandbox_file.list"),
+  list_sandbox_logs: () => import("./agent.sandbox_log.list"),
+  read_sandbox_file: () => import("./agent.sandbox_file.read"),
   // Browser automation inside a durable session — all seven thin wrappers live
   // in one module (browser.ts) that drives `browserctl` via execInSession.
-  "navigate_page": () => import("./browser"),
-  "screenshot_page": () => import("./browser"),
-  "fill_page": () => import("./browser"),
-  "submit_page": () => import("./browser"),
-  "click_page": () => import("./browser"),
-  "refresh_page": () => import("./browser"),
-  "read_page": () => import("./browser"),
+  navigate_page: () => import("./browser"),
+  screenshot_page: () => import("./browser"),
+  fill_page: () => import("./browser"),
+  submit_page: () => import("./browser"),
+  click_page: () => import("./browser"),
+  refresh_page: () => import("./browser"),
+  read_page: () => import("./browser"),
   // Cross-LLM proof-of-done: an independent vision model judges the screenshots.
-  "verify_feature": () => import("./agent.feature.verify"),
+  verify_feature: () => import("./agent.feature.verify"),
   // Code-execution surface peers of agent.code.execute (OXA-1352). Co-located
   // here so the whole sandboxed code surface registers through one path.
-  "diff_code": () => import("./code.diff"),
-  "patch_code": () => import("./code.patch"),
-  "format_code": () => import("./code.format"),
-  "list_agent_tools": () => import("./agent.tool.list"),
-  "register_mcp_server": () => import("./agent.mcp.register"),
-  "list_mcp_servers": () => import("./agent.mcp.list"),
-  "set_mcp_enabled": () => import("./agent.mcp.set_enabled"),
-  "delete_mcp_server": () => import("./agent.mcp.delete"),
-  "resolve_mcp_consent": () => import("./agent.mcp_consent.resolve"),
-  "list_mcp_consents": () => import("./agent.mcp_consent.list"),
-  "approve_plan": () => import("./agent.plan.approve"),
-  "create_plan": () => import("./agent.plan.create"),
-  "start_background_task": () => import("./agent.background_task.start"),
-  "get_background_task": () => import("./agent.background_task.read"),
-  "cancel_background_task": () => import("./agent.background_task.cancel"),
-  "recall_memory": () => import("./agent.memory.recall"),
-  "write_memory": () => import("./agent.memory.write"),
-  "list_memories": () => import("./agent.memory.list"),
-  "update_memory": () => import("./agent.memory.update"),
-  "delete_memory": () => import("./agent.memory.delete"),
-  "save_memory": () => import("./agent.memory.remember"),
+  diff_code: () => import("./code.diff"),
+  patch_code: () => import("./code.patch"),
+  format_code: () => import("./code.format"),
+  list_agent_tools: () => import("./agent.tool.list"),
+  register_mcp_server: () => import("./agent.mcp.register"),
+  list_mcp_servers: () => import("./agent.mcp.list"),
+  resolve_mcp_servers: () => import("./agent.mcp.resolve"),
+  set_mcp_enabled: () => import("./agent.mcp.set_enabled"),
+  delete_mcp_server: () => import("./agent.mcp.delete"),
+  resolve_mcp_consent: () => import("./agent.mcp_consent.resolve"),
+  list_mcp_consents: () => import("./agent.mcp_consent.list"),
+  approve_plan: () => import("./agent.plan.approve"),
+  create_plan: () => import("./agent.plan.create"),
+  get_plan: () => import("./agent.plan.get"),
+  list_plans: () => import("./agent.plan.list"),
+  start_background_task: () => import("./agent.background_task.start"),
+  get_background_task: () => import("./agent.background_task.read"),
+  cancel_background_task: () => import("./agent.background_task.cancel"),
+  recall_memory: () => import("./agent.memory.recall"),
+  write_memory: () => import("./agent.memory.write"),
+  list_memories: () => import("./agent.memory.list"),
+  update_memory: () => import("./agent.memory.update"),
+  delete_memory: () => import("./agent.memory.delete"),
+  save_memory: () => import("./agent.memory.remember"),
   // Bulk memory import: parse uploaded docs → drafts, then commit the edited set.
-  "parse_memory_import": () => import("./agent.memory_import.parse"),
-  "commit_memory_import": () => import("./agent.memory_import.commit"),
+  parse_memory_import: () => import("./agent.memory_import.parse"),
+  commit_memory_import: () => import("./agent.memory_import.commit"),
   // Two-axis memory: confidence ladder promotion + the citation/evidence
   // mechanism that drives it (docs/specs/two-axis-memory).
-  "promote_memory": () => import("./agent.memory.promote"),
-  "list_memory_promotions": () => import("./agent.memory_promotion.list"),
-  "cite_memory": () => import("./agent.memory.cite"),
+  promote_memory: () => import("./agent.memory.promote"),
+  list_memory_promotions: () => import("./agent.memory_promotion.list"),
+  cite_memory: () => import("./agent.memory.cite"),
   // @-mention citations: any :GraphNode a user references in chat gets the
   // same citation_count bookkeeping as automatic memory citations.
-  "cite_reference": () => import("./reference.cite"),
-  "attach_memory_evidence": () => import("./agent.memory_evidence.attach"),
-  "list_memory_citations": () => import("./agent.memory_citation.list"),
-  "resolve_approval": () => import("./agent.approval.resolve"),
-  "list_agent_skills": () => import("./agent.skill.list"),
-  "load_skill": () => import("./agent.skill.load"),
-  "aggregate_subagents": () => import("./agent.subagent.aggregate"),
-  "cancel_subagent": () => import("./agent.subagent.cancel"),
-  "dispatch_subagent": () => import("./agent.subagent.dispatch"),
+  cite_reference: () => import("./reference.cite"),
+  attach_memory_evidence: () => import("./agent.memory_evidence.attach"),
+  list_memory_citations: () => import("./agent.memory_citation.list"),
+  resolve_approval: () => import("./agent.approval.resolve"),
+  list_agent_skills: () => import("./agent.skill.list"),
+  load_skill: () => import("./agent.skill.load"),
+  aggregate_subagents: () => import("./agent.subagent.aggregate"),
+  cancel_subagent: () => import("./agent.subagent.cancel"),
+  dispatch_subagent: () => import("./agent.subagent.dispatch"),
   // Agent file locking (docs/specs/agent-file-locking/plan.md §7) — manual
   // acquire/force-release/introspection over the same HOLDS_LOCK edge
   // write_file/edit_file in @oxagen/agent-engine's tools.ts acquire automatically.
-  "acquire_file_lock": () => import("./agent.file_lock.acquire"),
-  "release_file_lock": () => import("./agent.file_lock.release"),
-  "list_file_locks": () => import("./agent.file_lock.list"),
-  "get_subagent_fanout": () => import("./agent.subagent_fanout.get"),
-  "get_subagent_result": () => import("./agent.subagent_result.get"),
-  "list_subagent_siblings": () => import("./agent.subagent.siblings"),
-  "list_subagent_fanouts": () => import("./agent.subagent_fanout.list"),
-  "list_executions": () => import("./agent.execution.list"),
-  "get_execution_trace": () => import("./agent.trace.get"),
-  "debug_execution": () => import("./agent.debug.trace"),
+  acquire_file_lock: () => import("./agent.file_lock.acquire"),
+  release_file_lock: () => import("./agent.file_lock.release"),
+  list_file_locks: () => import("./agent.file_lock.list"),
+  get_subagent_fanout: () => import("./agent.subagent_fanout.get"),
+  get_subagent_result: () => import("./agent.subagent_result.get"),
+  list_subagent_siblings: () => import("./agent.subagent.siblings"),
+  list_subagent_fanouts: () => import("./agent.subagent_fanout.list"),
+  list_executions: () => import("./agent.execution.list"),
+  get_execution_trace: () => import("./agent.trace.get"),
+  debug_execution: () => import("./agent.debug.trace"),
   // Fleet-wide error triage overview — clusters ClickHouse error_events by
   // fingerprint. Pure SQL (ADR-021 §1), the counterpart to the single-execution
   // failure frame above.
-  "list_error_clusters": () => import("./telemetry.error.cluster"),
-  "get_execution_lineage": () => import("./agent.execution.lineage"),
-  "render_agent_ui": () => import("./agent.ui.render"),
-  "create_agent_def": () => import("./agent.definition.create"),
-  "update_agent_def": () => import("./agent.definition.update"),
-  "publish_agent_def": () => import("./agent.definition.publish"),
-  "get_agent_def": () => import("./agent.definition.get"),
-  "list_agent_defs": () => import("./agent.definition.list"),
-  "get_a2a_card": () => import("./a2a.card.get"),
-  "deploy_agent": () => import("./agent.deploy"),
-  "create_trigger": () => import("./agent.trigger.create"),
-  "update_trigger": () => import("./agent.trigger.update"),
-  "delete_trigger": () => import("./agent.trigger.delete"),
-  "list_triggers": () => import("./agent.trigger.list"),
+  list_error_clusters: () => import("./telemetry.error.cluster"),
+  get_execution_lineage: () => import("./agent.execution.lineage"),
+  render_agent_ui: () => import("./agent.ui.render"),
+  create_agent_def: () => import("./agent.definition.create"),
+  update_agent_def: () => import("./agent.definition.update"),
+  publish_agent_def: () => import("./agent.definition.publish"),
+  get_agent_def: () => import("./agent.definition.get"),
+  list_agent_defs: () => import("./agent.definition.list"),
+  get_a2a_card: () => import("./a2a.card.get"),
+  deploy_agent: () => import("./agent.deploy"),
+  create_trigger: () => import("./agent.trigger.create"),
+  update_trigger: () => import("./agent.trigger.update"),
+  delete_trigger: () => import("./agent.trigger.delete"),
+  list_triggers: () => import("./agent.trigger.list"),
 };
 
 /** Capability names this package supplies handlers for. Consumed by
@@ -128,14 +133,19 @@ function toHandlerExportName(capName: string): string {
   return `${camel}Handler`;
 }
 
-export async function resolveHandler(capName: string): Promise<CapabilityHandlerFn> {
+export async function resolveHandler(
+  capName: string,
+): Promise<CapabilityHandlerFn> {
   const cached = cache.get(capName);
   if (cached) return cached;
   const loader = LOADERS[capName];
-  if (!loader) throw new Error(`No handler registered for capability ${capName}`);
+  if (!loader)
+    throw new Error(`No handler registered for capability ${capName}`);
   const mod = await loader();
   const exportName = toHandlerExportName(capName);
-  let handler = (mod[exportName] ?? mod.default) as CapabilityHandlerFn | undefined;
+  let handler = (mod[exportName] ?? mod.default) as
+    | CapabilityHandlerFn
+    | undefined;
   if (typeof handler !== "function") {
     // ADR-022 snake_case capability names ("agent.sandbox_file.list",
     // "agent.background_task.start", …) don't camelize to their module's

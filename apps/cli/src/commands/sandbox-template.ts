@@ -32,6 +32,11 @@ interface TemplateTool {
   config: Record<string, unknown>;
 }
 
+interface TemplatePackageGroup {
+  manager: string;
+  names: string[];
+}
+
 interface TemplateSummary {
   id: string;
   environmentId: string;
@@ -51,6 +56,7 @@ interface TemplateSummary {
   network: { mode: string; config?: Record<string, unknown> };
   secretSelection: "all" | { keyPublicIds: string[] };
   literalEnv: Record<string, string>;
+  packages: TemplatePackageGroup[];
   tools: TemplateTool[];
 }
 
@@ -79,19 +85,27 @@ async function resolveEnvironmentId(slugOrId: string): Promise<string> {
     "environment/list",
     {},
   );
-  const match = environments.find((e) => e.slug.toLowerCase() === slugOrId.toLowerCase());
+  const match = environments.find(
+    (e) => e.slug.toLowerCase() === slugOrId.toLowerCase(),
+  );
   if (!match) throw new ApiError(`No environment with slug '${slugOrId}'.`);
   return match.id;
 }
 
-async function resolveTemplateId(slugOrId: string, environmentId?: string): Promise<string> {
+async function resolveTemplateId(
+  slugOrId: string,
+  environmentId?: string,
+): Promise<string> {
   if (slugOrId.startsWith("sbx_")) return slugOrId;
   const { templates } = await apiPostOrThrow<{ templates: TemplateSummary[] }>(
     "sandbox/template/list",
     environmentId ? { environmentId } : {},
   );
-  const match = templates.find((t) => t.slug.toLowerCase() === slugOrId.toLowerCase());
-  if (!match) throw new ApiError(`No sandbox template with slug '${slugOrId}'.`);
+  const match = templates.find(
+    (t) => t.slug.toLowerCase() === slugOrId.toLowerCase(),
+  );
+  if (!match)
+    throw new ApiError(`No sandbox template with slug '${slugOrId}'.`);
   return match.id;
 }
 
@@ -103,14 +117,13 @@ export async function handleTemplateList(
 ): Promise<void> {
   const out = createOutput({ json: opts.json }, writer);
   try {
-    const environmentId = opts.env ? await resolveEnvironmentId(opts.env) : undefined;
-    const { templates } = await apiPostOrThrow<{ templates: TemplateSummary[] }>(
-      "sandbox/template/list",
-      environmentId ? { environmentId } : {},
-    );
-    out.data(templates, () =>
-      renderTemplateTable(templates),
-    );
+    const environmentId = opts.env
+      ? await resolveEnvironmentId(opts.env)
+      : undefined;
+    const { templates } = await apiPostOrThrow<{
+      templates: TemplateSummary[];
+    }>("sandbox/template/list", environmentId ? { environmentId } : {});
+    out.data(templates, () => renderTemplateTable(templates));
   } catch (err) {
     out.error(err, "api");
   }
@@ -127,7 +140,10 @@ function renderTemplateTable(templates: TemplateSummary[]): string {
     String(t.tools.length),
     t.id,
   ]);
-  return captureTable(["NAME", "SLUG", "PROVIDER", "DEFAULT", "ACTIVE", "TOOLS", "ID"], rows);
+  return captureTable(
+    ["NAME", "SLUG", "PROVIDER", "DEFAULT", "ACTIVE", "TOOLS", "ID"],
+    rows,
+  );
 }
 
 // ── get ──────────────────────────────────────────────────────────────────────
@@ -139,7 +155,9 @@ export async function handleTemplateGet(
 ): Promise<void> {
   const out = createOutput({ json: opts.json }, writer);
   try {
-    const environmentId = opts.env ? await resolveEnvironmentId(opts.env) : undefined;
+    const environmentId = opts.env
+      ? await resolveEnvironmentId(opts.env)
+      : undefined;
     const templateId = await resolveTemplateId(slugOrId, environmentId);
     const { template } = await apiPostOrThrow<{ template: TemplateSummary }>(
       "sandbox/template/get",
@@ -168,9 +186,18 @@ function renderTemplateDetail(t: TemplateSummary): string {
     res.timeoutMs !== undefined ? `${res.timeoutMs} ms` : null,
     res.diskMb !== undefined ? `${res.diskMb} MiB disk` : null,
   ].filter((v): v is string => v !== null);
-  lines.push(`  resources: ${resParts.length ? resParts.join(", ") : "‹driver defaults›"}`);
+  lines.push(
+    `  resources: ${resParts.length ? resParts.join(", ") : "‹driver defaults›"}`,
+  );
   const literalKeys = Object.keys(t.literalEnv);
   if (literalKeys.length) lines.push(`  literalEnv: ${literalKeys.join(", ")}`);
+  const packageGroups = t.packages.filter((g) => g.names.length > 0);
+  if (packageGroups.length) {
+    lines.push(`  packages:`);
+    for (const group of packageGroups) {
+      lines.push(`    - ${group.manager}: ${group.names.join(" ")}`);
+    }
+  }
   if (t.tools.length) {
     lines.push(`  tools:`);
     for (const tool of t.tools) lines.push(`    - ${tool.kind}:${tool.ref}`);
@@ -200,11 +227,18 @@ export async function handleTemplateCreate(
   writer: CommandWriter = stdoutWriter,
 ): Promise<void> {
   const out = createOutput({ json: opts.json }, writer);
-  if (!opts.env) return usageError(out, "create requires --env <environment slug|id>.");
+  if (!opts.env)
+    return usageError(out, "create requires --env <environment slug|id>.");
   if (!opts.name) return usageError(out, "create requires --name <name>.");
   if (!opts.slug) return usageError(out, "create requires --slug <slug>.");
-  if (opts.provider && !PROVIDERS.includes(opts.provider as (typeof PROVIDERS)[number])) {
-    return usageError(out, `Invalid --provider "${opts.provider}". Use one of: ${PROVIDERS.join(", ")}.`);
+  if (
+    opts.provider &&
+    !PROVIDERS.includes(opts.provider as (typeof PROVIDERS)[number])
+  ) {
+    return usageError(
+      out,
+      `Invalid --provider "${opts.provider}". Use one of: ${PROVIDERS.join(", ")}.`,
+    );
   }
   if (
     opts.networkMode &&
@@ -221,7 +255,11 @@ export async function handleTemplateCreate(
     literalEnv = {};
     for (const pair of opts.envVar) {
       const eq = pair.indexOf("=");
-      if (eq <= 0) return usageError(out, `Invalid --env-var "${pair}". Expected KEY=value.`);
+      if (eq <= 0)
+        return usageError(
+          out,
+          `Invalid --env-var "${pair}". Expected KEY=value.`,
+        );
       literalEnv[pair.slice(0, eq)] = pair.slice(eq + 1);
     }
   }
@@ -250,8 +288,10 @@ export async function handleTemplateCreate(
       "sandbox/template/create",
       body,
     );
-    out.data(template, () =>
-      `✓ created template ${template.name} (${template.slug}) ${template.id}${template.isDefault ? " ★ default" : ""}`,
+    out.data(
+      template,
+      () =>
+        `✓ created template ${template.name} (${template.slug}) ${template.id}${template.isDefault ? " ★ default" : ""}`,
     );
   } catch (err) {
     out.error(err, "api");
@@ -260,7 +300,12 @@ export async function handleTemplateCreate(
 
 /** Parse the four numeric resource flags; emit a usage error + return null on a bad value. */
 function parseNumericResources(
-  opts: { vcpu?: string; memoryMb?: string; timeoutMs?: string; diskMb?: string },
+  opts: {
+    vcpu?: string;
+    memoryMb?: string;
+    timeoutMs?: string;
+    diskMb?: string;
+  },
   out: ReturnType<typeof createOutput>,
 ): Record<string, number> | null {
   const spec: Array<[keyof typeof opts, string, string]> = [
@@ -275,7 +320,10 @@ function parseNumericResources(
     if (raw === undefined) continue;
     const n = Number(raw);
     if (!Number.isInteger(n) || n <= 0) {
-      out.error(`Invalid ${flag} "${raw}". Expected a positive integer.`, "usage");
+      out.error(
+        `Invalid ${flag} "${raw}". Expected a positive integer.`,
+        "usage",
+      );
       process.exitCode = 2;
       return null;
     }
@@ -293,13 +341,20 @@ export async function handleTemplateRemove(
 ): Promise<void> {
   const out = createOutput({ json: opts.json }, writer);
   if (!opts.yes) {
-    out.info(`This soft-deletes template '${slugOrId}'. Rerun with --yes to confirm.`);
+    out.info(
+      `This soft-deletes template '${slugOrId}'. Rerun with --yes to confirm.`,
+    );
     return;
   }
   try {
-    const environmentId = opts.env ? await resolveEnvironmentId(opts.env) : undefined;
+    const environmentId = opts.env
+      ? await resolveEnvironmentId(opts.env)
+      : undefined;
     const templateId = await resolveTemplateId(slugOrId, environmentId);
-    const res = await apiPostOrThrow<{ ok: boolean }>("sandbox/template/delete", { templateId });
+    const res = await apiPostOrThrow<{ ok: boolean }>(
+      "sandbox/template/delete",
+      { templateId },
+    );
     out.data(res, () => `✓ removed template ${slugOrId}`);
   } catch (err) {
     out.error(err, "api");
@@ -315,13 +370,18 @@ export async function handleTemplateSetDefault(
 ): Promise<void> {
   const out = createOutput({ json: opts.json }, writer);
   try {
-    const environmentId = opts.env ? await resolveEnvironmentId(opts.env) : undefined;
+    const environmentId = opts.env
+      ? await resolveEnvironmentId(opts.env)
+      : undefined;
     const templateId = await resolveTemplateId(slugOrId, environmentId);
     const { template } = await apiPostOrThrow<{ template: TemplateSummary }>(
       "sandbox/template/set-default",
       { templateId },
     );
-    out.data(template, () => `✓ default template: ${template.name} (${template.slug})`);
+    out.data(
+      template,
+      () => `✓ default template: ${template.name} (${template.slug})`,
+    );
   } catch (err) {
     out.error(err, "api");
   }
@@ -336,7 +396,9 @@ export async function handleTemplateExport(
 ): Promise<void> {
   const out = createOutput({ json: opts.json }, writer);
   try {
-    const environmentId = opts.env ? await resolveEnvironmentId(opts.env) : undefined;
+    const environmentId = opts.env
+      ? await resolveEnvironmentId(opts.env)
+      : undefined;
     const templateId = await resolveTemplateId(slugOrId, environmentId);
     const { manifest } = await apiPostOrThrow<{ manifest: unknown }>(
       "sandbox/template/export",
@@ -367,7 +429,11 @@ interface ManifestPreview {
   provider?: unknown;
   description?: unknown;
   tools?: Array<{ kind?: unknown; ref?: unknown }>;
-  secretKeys?: Array<{ key?: unknown; required?: unknown; sensitive?: unknown }>;
+  secretKeys?: Array<{
+    key?: unknown;
+    required?: unknown;
+    sensitive?: unknown;
+  }>;
 }
 
 async function readStdin(): Promise<string> {
@@ -377,11 +443,19 @@ async function readStdin(): Promise<string> {
 }
 
 export async function handleTemplateImport(
-  opts: { env?: string; file?: string; slug?: string; setDefault?: boolean; yes?: boolean; json?: boolean },
+  opts: {
+    env?: string;
+    file?: string;
+    slug?: string;
+    setDefault?: boolean;
+    yes?: boolean;
+    json?: boolean;
+  },
   writer: CommandWriter = stdoutWriter,
 ): Promise<void> {
   const out = createOutput({ json: opts.json }, writer);
-  if (!opts.env) return usageError(out, "import requires --env <environment slug|id>.");
+  if (!opts.env)
+    return usageError(out, "import requires --env <environment slug|id>.");
 
   let raw: string;
   try {
@@ -403,7 +477,9 @@ export async function handleTemplateImport(
   const warnings = previewWarnings(manifest, opts.slug);
   const effectiveSlug = opts.slug ?? String(manifest.slug ?? "");
   const tools = Array.isArray(manifest.tools) ? manifest.tools : [];
-  const secretKeys = Array.isArray(manifest.secretKeys) ? manifest.secretKeys : [];
+  const secretKeys = Array.isArray(manifest.secretKeys)
+    ? manifest.secretKeys
+    : [];
 
   if (!opts.yes) {
     // Preview: nothing reaches the server. Emit the summary + warnings, then stop.
@@ -427,10 +503,10 @@ export async function handleTemplateImport(
     const body: Record<string, unknown> = { environmentId, manifest };
     if (opts.slug) body.slug = opts.slug;
     if (opts.setDefault) body.setAsDefault = true;
-    const res = await apiPostOrThrow<{ template: TemplateSummary; warnings: string[] }>(
-      "sandbox/template/import",
-      body,
-    );
+    const res = await apiPostOrThrow<{
+      template: TemplateSummary;
+      warnings: string[];
+    }>("sandbox/template/import", body);
     out.data(res, () => {
       const head = `✓ imported template ${res.template.name} (${res.template.slug}) ${res.template.id}${res.template.isDefault ? " ★ default" : ""}`;
       const warnLines = res.warnings.map((w) => `  ⚠ ${w}`);
@@ -441,18 +517,30 @@ export async function handleTemplateImport(
   }
 }
 
-function previewWarnings(manifest: ManifestPreview, slugOverride?: string): string[] {
+function previewWarnings(
+  manifest: ManifestPreview,
+  slugOverride?: string,
+): string[] {
   const warnings: string[] = [];
   if (manifest.kind !== "oxagen.sandbox-template") {
-    warnings.push(`unexpected manifest kind '${String(manifest.kind)}' (expected 'oxagen.sandbox-template')`);
+    warnings.push(
+      `unexpected manifest kind '${String(manifest.kind)}' (expected 'oxagen.sandbox-template')`,
+    );
   }
   if (manifest.version !== 1) {
-    warnings.push(`unexpected manifest version '${String(manifest.version)}' (expected 1)`);
+    warnings.push(
+      `unexpected manifest version '${String(manifest.version)}' (expected 1)`,
+    );
   }
   if (!manifest.name) warnings.push("manifest is missing 'name'");
-  if (!slugOverride && !manifest.slug) warnings.push("manifest is missing 'slug' (pass --slug to override)");
-  const secretKeys = Array.isArray(manifest.secretKeys) ? manifest.secretKeys : [];
-  const required = secretKeys.filter((k) => k.required).map((k) => String(k.key));
+  if (!slugOverride && !manifest.slug)
+    warnings.push("manifest is missing 'slug' (pass --slug to override)");
+  const secretKeys = Array.isArray(manifest.secretKeys)
+    ? manifest.secretKeys
+    : [];
+  const required = secretKeys
+    .filter((k) => k.required)
+    .map((k) => String(k.key));
   if (required.length) {
     warnings.push(
       `required secret key(s) will be created empty — fill them before provisioning: ${required.join(", ")}`,
@@ -478,8 +566,10 @@ function renderImportPreview(summary: {
     `  provider:  ${String(summary.provider)}`,
     `  default:   ${summary.setAsDefault ? "yes" : "no"}`,
   ];
-  if (summary.tools.length) lines.push(`  tools:     ${summary.tools.join(", ")}`);
-  if (summary.secretKeys.length) lines.push(`  secrets:   ${summary.secretKeys.join(", ")}`);
+  if (summary.tools.length)
+    lines.push(`  tools:     ${summary.tools.join(", ")}`);
+  if (summary.secretKeys.length)
+    lines.push(`  secrets:   ${summary.secretKeys.join(", ")}`);
   for (const w of summary.warnings) lines.push(`  ⚠ ${w}`);
   lines.push("rerun with --yes to import");
   return lines.join("\n");
@@ -487,7 +577,10 @@ function renderImportPreview(summary: {
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
-function usageError(out: ReturnType<typeof createOutput>, message: string): void {
+function usageError(
+  out: ReturnType<typeof createOutput>,
+  message: string,
+): void {
   process.exitCode = 2;
   out.error(message, "usage");
 }
@@ -495,6 +588,9 @@ function usageError(out: ReturnType<typeof createOutput>, message: string): void
 /** Render an aligned table to a string (createOutput.data owns the write). */
 function captureTable(headers: string[], rows: string[][]): string {
   const lines: string[] = [];
-  printTable(headers, rows, { write: (l) => void lines.push(l), writeErr: () => {} });
+  printTable(headers, rows, {
+    write: (l) => void lines.push(l),
+    writeErr: () => {},
+  });
   return lines.join("\n");
 }

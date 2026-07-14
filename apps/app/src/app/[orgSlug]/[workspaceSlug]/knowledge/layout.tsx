@@ -16,10 +16,11 @@ export default async function KnowledgeLayout({
   const ctx: Required<ScopeContext> = { orgSlug, workspaceSlug };
 
   const tabs = [
-    { label: "Repos", href: workspace.knowledge.repos(ctx) },
+    { label: "Sources", href: workspace.knowledge.sources(ctx) },
+    { label: "Graph", href: workspace.knowledge.graph(ctx) },
     { label: "Inference", href: workspace.knowledge.inference(ctx) },
-    { label: "Explore", href: workspace.knowledge.explore(ctx) },
-    { label: "Memories", href: workspace.knowledge.memories(ctx) },
+    { label: "Ontology", href: workspace.knowledge.ontology(ctx) },
+    { label: "Memory", href: workspace.knowledge.memory(ctx) },
   ];
 
   return (
@@ -27,7 +28,7 @@ export default async function KnowledgeLayout({
       <div className="flex items-center justify-between gap-4">
         <PageHeader
           title="Knowledge"
-          description="Data connections, ontology, and agent memories."
+          description="Sources, graph, inference, ontology, and agent memory."
           breadcrumb={
             <Breadcrumb
               items={[

@@ -26,12 +26,18 @@ export interface SetWorkspaceSecretInput {
   oauthClientSecret?: string | null;
   scopes?: string[];
   expiresAt?: Date | null;
+  lastRefreshedAt?: Date | null;
 }
 
 /** Returns the credential row id. Throws if no encryption key is configured. */
-export async function setWorkspaceSecret(input: SetWorkspaceSecretInput): Promise<string> {
+export async function setWorkspaceSecret(
+  input: SetWorkspaceSecretInput,
+): Promise<string> {
   const kms = resolveCredentialKms();
-  if (!kms) throw new Error("[plugins] AUTH_TOKEN_ENCRYPTION_KEY required to store credentials");
+  if (!kms)
+    throw new Error(
+      "[plugins] AUTH_TOKEN_ENCRYPTION_KEY required to store credentials",
+    );
   const enc = await encryptCredentialSecrets(
     {
       secret: input.secret,
@@ -55,8 +61,10 @@ export async function setWorkspaceSecret(input: SetWorkspaceSecretInput): Promis
     updatedAt: new Date(),
   };
   if (input.secret !== undefined) set["secretEnc"] = enc.secretEnc;
-  if (input.accessToken !== undefined) set["accessTokenEnc"] = enc.accessTokenEnc;
-  if (input.refreshToken !== undefined) set["refreshTokenEnc"] = enc.refreshTokenEnc;
+  if (input.accessToken !== undefined)
+    set["accessTokenEnc"] = enc.accessTokenEnc;
+  if (input.refreshToken !== undefined)
+    set["refreshTokenEnc"] = enc.refreshTokenEnc;
   if (input.oauthClientSecret !== undefined) {
     set["oauthClientSecretEnc"] = enc.oauthClientSecretEnc;
   }
@@ -70,9 +78,13 @@ export async function setWorkspaceSecret(input: SetWorkspaceSecretInput): Promis
   ) {
     set["tokenKmsKeyId"] = enc.tokenKmsKeyId;
   }
-  if (input.oauthClientId !== undefined) set["oauthClientId"] = input.oauthClientId ?? null;
+  if (input.oauthClientId !== undefined)
+    set["oauthClientId"] = input.oauthClientId ?? null;
   if (input.scopes !== undefined) set["scopes"] = input.scopes;
   if (input.expiresAt !== undefined) set["expiresAt"] = input.expiresAt ?? null;
+  if (input.lastRefreshedAt !== undefined) {
+    set["lastRefreshedAt"] = input.lastRefreshedAt ?? null;
+  }
 
   return withSystemDb(async (tx) => {
     const [row] = await tx
@@ -90,10 +102,14 @@ export async function setWorkspaceSecret(input: SetWorkspaceSecretInput): Promis
         oauthClientId: input.oauthClientId ?? null,
         scopes: input.scopes ?? [],
         expiresAt: input.expiresAt ?? null,
+        lastRefreshedAt: input.lastRefreshedAt ?? null,
         status: "active",
       })
       .onConflictDoUpdate({
-        target: [schema.mcpCredentials.workspaceId, schema.mcpCredentials.orgListingId],
+        target: [
+          schema.mcpCredentials.workspaceId,
+          schema.mcpCredentials.orgListingId,
+        ],
         set,
       })
       .returning({ id: schema.mcpCredentials.id });

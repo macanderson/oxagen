@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { PageHeader } from "@/components/ui/page-header";
 import { workspace } from "@/lib/routes";
 import type { ScopeContext } from "@/lib/scope";
+import { requestScopeSlugs } from "@/lib/request-path";
 import { resolveWorkbenchScope } from "@/lib/workbench/scope";
 import { loadEquipSources } from "@/lib/workbench/equip-sources";
 import { AgentBuilder } from "../agent-builder";
@@ -16,17 +17,19 @@ export const metadata: Metadata = {
   title: "New Agent | Workbench",
 };
 
-interface PageProps {
-  params: Promise<{ orgSlug: string; workspaceSlug: string }>;
-}
-
 /**
  * Workbench → Agents → New. Gathers the four Equip pools (skills / tools /
  * subagents / MCP servers) and renders the Agent Builder in "create" mode.
  * Non-managers are bounced back to the list — building is Owner/Admin-only.
+ *
+ * Slugs come from the request URL (requestScopeSlugs), NOT `params`: the
+ * non-manager `redirect()` below regresses to a client meta-refresh and 500s
+ * the shell if `params` is awaited first under Cache Components. See
+ * lib/request-path.ts.
  */
-export default async function NewAgentPage({ params }: PageProps) {
-  const { orgSlug, workspaceSlug } = await params;
+export default async function NewAgentPage() {
+  const { orgSlug, workspaceSlug } = await requestScopeSlugs();
+  if (!orgSlug || !workspaceSlug) notFound();
   const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };
 
   const { ctx, org, ws, canManage } = await resolveWorkbenchScope(

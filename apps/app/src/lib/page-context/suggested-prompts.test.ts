@@ -73,11 +73,17 @@ function ctx(
 
 describe("invariant: always exactly 3 SuggestedPrompts", () => {
   const cases: [string, SuggestionCtx][] = [
-    ["settings with form + entity", ctx("/acme/prod/settings/general", wsEntity, mockForm)],
+    [
+      "settings with form + entity",
+      ctx("/acme/prod/settings/general", wsEntity, mockForm),
+    ],
     ["billing no entity no form", ctx("/acme/billing/subscription")],
     ["conversation with ws entity", ctx("/acme/prod/ask", wsEntity)],
     ["default no entity no form", ctx("/acme/prod")],
-    ["account with user entity + form", ctx("/account/profile", profileEntity, mockForm)],
+    [
+      "account with user entity + form",
+      ctx("/account/profile", profileEntity, mockForm),
+    ],
     ["knowledge no extras", ctx("/acme/prod/knowledge")],
   ];
 
@@ -134,7 +140,9 @@ describe("B: billing route, no entity, no form", () => {
   });
 
   it("no fill chip (no form registered)", () => {
-    const fillChip = prompts.find((p) => p.label.toLowerCase().startsWith("fill"));
+    const fillChip = prompts.find((p) =>
+      p.label.toLowerCase().startsWith("fill"),
+    );
     expect(fillChip).toBeUndefined();
   });
 });
@@ -153,7 +161,9 @@ describe("C: conversation route with workspace entity", () => {
 
   it("conversation chips reference conversation context", () => {
     const convChip = prompts.find(
-      (p) => p.prompt.toLowerCase().includes("conversation") || p.prompt.toLowerCase().includes("thread"),
+      (p) =>
+        p.prompt.toLowerCase().includes("conversation") ||
+        p.prompt.toLowerCase().includes("thread"),
     );
     expect(convChip).toBeDefined();
   });
@@ -201,7 +211,7 @@ describe("E: account route with user entity + form", () => {
 // ---------------------------------------------------------------------------
 
 describe("F: knowledge route", () => {
-  const prompts = deriveSuggestions(ctx("/acme/prod/knowledge/repos"));
+  const prompts = deriveSuggestions(ctx("/acme/prod/knowledge/sources"));
 
   it("prompts are knowledge-specific", () => {
     const texts = prompts.map((p) => p.prompt.toLowerCase()).join(" ");
@@ -219,11 +229,10 @@ describe("classifyRoute", () => {
     ["/acme/prod/settings/general", "settings"],
     ["/acme/prod/ask", "conversation"],
     ["/acme/prod/chat", "conversation"],
-    ["/acme/prod/knowledge/repos", "knowledge"],
+    ["/acme/prod/knowledge/sources", "knowledge"],
     ["/acme/prod/agents", "default"],
     ["/acme/prod/agents/repo-review", "default"],
     ["/acme/prod/automation/agents", "default"],
-    ["/acme/prod/activity/runs", "default"],
     ["/account/profile", "account"],
     ["/acme/members", "members"],
     ["/acme/developer/mcp", "developer"],
@@ -293,7 +302,10 @@ describe("deriveConversationSuggestions — build-oriented fallback", () => {
 
   const history: ConversationMessageSummary[] = [
     turn("user", "how do I summarize incidents?"),
-    turn("assistant", "You can pull incidents from your source and cluster them."),
+    turn(
+      "assistant",
+      "You can pull incidents from your source and cluster them.",
+    ),
   ];
 
   it("returns exactly 3 suggestions", () => {

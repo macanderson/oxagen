@@ -51,7 +51,10 @@ const WandSendSchema = z.object({
   content: z.string().min(1),
   conversationId: z.string().nullable().default(null),
   parentMessageId: z.string().nullable().default(null),
-  branchReason: z.enum(["edit", "regenerate", "tool_retry", "manual_fork"]).nullable().default(null),
+  branchReason: z
+    .enum(["edit", "regenerate", "tool_retry", "manual_fork"])
+    .nullable()
+    .default(null),
 });
 
 // ---------------------------------------------------------------------------
@@ -64,19 +67,21 @@ async function assertWorkspaceMember(
   workspaceId: string,
   userId: string,
 ): Promise<boolean> {
-  return runInTenantScope({ orgId, workspaceId }, () =>
-    withTenantDb((tx) =>
-      tx
-        .select({ id: schema.workspaceUsers.id })
-        .from(schema.workspaceUsers)
-        .where(
-          and(
-            eq(schema.workspaceUsers.workspaceId, workspaceId),
-            eq(schema.workspaceUsers.userId, userId),
-          ),
-        )
-        .limit(1),
-    ),
+  return runInTenantScope(
+    { orgId, workspaceId },
+    () =>
+      withTenantDb((tx) =>
+        tx
+          .select({ id: schema.workspaceUsers.id })
+          .from(schema.workspaceUsers)
+          .where(
+            and(
+              eq(schema.workspaceUsers.workspaceId, workspaceId),
+              eq(schema.workspaceUsers.userId, userId),
+            ),
+          )
+          .limit(1),
+      ),
     // Membership is proven by the row count — a zero-row result means the user
     // is NOT a workspace member. The previous `.then(() => true)` discarded the
     // rows and granted access to any caller whenever the DB query succeeded.
@@ -113,7 +118,12 @@ async function resolveWorkspaceFromSlugs(
       tx
         .select({ id: schema.workspaces.id })
         .from(schema.workspaces)
-        .where(and(eq(schema.workspaces.orgId, org.id), eq(schema.workspaces.slug, workspaceSlug)))
+        .where(
+          and(
+            eq(schema.workspaces.orgId, org.id),
+            eq(schema.workspaces.slug, workspaceSlug),
+          ),
+        )
         .limit(1),
     );
     const ws = wsRows[0];
@@ -149,10 +159,13 @@ function buildCapabilityContext(opts: {
 // submitting. This action resolves them to IDs server-side.
 // ---------------------------------------------------------------------------
 
-export async function wandSendAction(
-  formData: FormData,
-): Promise<
-  | { ok: true; conversationId: string; conversationPublicId: string; userMessageId: string }
+export async function wandSendAction(formData: FormData): Promise<
+  | {
+      ok: true;
+      conversationId: string;
+      conversationPublicId: string;
+      userMessageId: string;
+    }
   | { ok: false; error: string }
 > {
   const session = await getSessionOrRedirect();
@@ -168,21 +181,38 @@ export async function wandSendAction(
   });
 
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid message" };
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid message",
+    };
   }
 
-  const { orgSlug, workspaceSlug, content, conversationId, parentMessageId, branchReason } =
-    parsed.data;
+  const {
+    orgSlug,
+    workspaceSlug,
+    content,
+    conversationId,
+    parentMessageId,
+    branchReason,
+  } = parsed.data;
 
   // Resolve IDs from slugs server-side — never trust client-supplied IDs.
   const resolved = await resolveWorkspaceFromSlugs(orgSlug, workspaceSlug);
   if (!resolved) {
-    return { ok: false, error: "Workspace not found. Please navigate to a workspace and try again." };
+    return {
+      ok: false,
+      error:
+        "Workspace not found. Please navigate to a workspace and try again.",
+    };
   }
   const { orgId, workspaceId } = resolved;
 
   // Assert user is a member of the workspace (explicit IAM gate in apps/app).
-  const isMember = await assertWorkspaceMember(orgId, workspaceId, session.user.id);
+  const isMember = await assertWorkspaceMember(
+    orgId,
+    workspaceId,
+    session.user.id,
+  );
   if (!isMember) {
     return { ok: false, error: "You don't have access to this workspace." };
   }
@@ -196,99 +226,113 @@ export async function wandSendAction(
     contentBlocks: [],
   });
   if (!capabilityInput.success) {
-    return { ok: false, error: capabilityInput.error.issues[0]?.message ?? "Invalid" };
+    return {
+      ok: false,
+      error: capabilityInput.error.issues[0]?.message ?? "Invalid",
+    };
   }
 
   return await runInTenantScope({ orgId, workspaceId }, async () => {
     try {
-      const { conversationId: convId, conversationPublicId, userMessageId } =
-        await withTenantDb(async (tx) => {
-          let cId: string;
-          let cPublicId: string;
-          let currentLeaf: string | null;
+      const {
+        conversationId: convId,
+        conversationPublicId,
+        userMessageId,
+      } = await withTenantDb(async (tx) => {
+        let cId: string;
+        let cPublicId: string;
+        let currentLeaf: string | null;
 
-          if (capabilityInput.data.conversationId) {
-            const [existing] = await tx
-              .select({
-                id: schema.conversations.id,
-                publicId: schema.conversations.publicId,
-                leaf: schema.conversations.activeLeafMessageId,
-              })
-              .from(schema.conversations)
-              .where(
-                and(
-                  eq(schema.conversations.id, capabilityInput.data.conversationId),
-                  eq(schema.conversations.orgId, orgId),
-                  eq(schema.conversations.workspaceId, workspaceId),
+        if (capabilityInput.data.conversationId) {
+          const [existing] = await tx
+            .select({
+              id: schema.conversations.id,
+              publicId: schema.conversations.publicId,
+              leaf: schema.conversations.activeLeafMessageId,
+            })
+            .from(schema.conversations)
+            .where(
+              and(
+                eq(
+                  schema.conversations.id,
+                  capabilityInput.data.conversationId,
                 ),
-              )
-              .limit(1);
-            if (!existing) throw new Error("Conversation not found");
-            cId = existing.id;
-            cPublicId = existing.publicId;
-            currentLeaf = existing.leaf ?? null;
-          } else {
-            const [conv] = await tx
-              .insert(schema.conversations)
-              .values({
-                orgId,
-                workspaceId,
-                userId: session.user.id,
-                status: "active",
-                createdByUserId: session.user.id,
-                updatedByUserId: session.user.id,
-              })
-              .returning();
-            if (!conv) throw new Error("Conversation insert failed");
-            const typedConv = conv as ConversationRow;
-            cId = typedConv.id;
-            cPublicId = typedConv.publicId;
-            currentLeaf = null;
-          }
-
-          // Thread the user message onto the server-authoritative active leaf —
-          // mirrors the sendMessageAction threading in [workspaceSlug]/ask/actions.ts.
-          const parentMsgId =
-            branchReason && capabilityInput.data.parentMessageId
-              ? capabilityInput.data.parentMessageId
-              : currentLeaf;
-
-          const [userMsg] = await tx
-            .insert(schema.messages)
+                eq(schema.conversations.orgId, orgId),
+                eq(schema.conversations.workspaceId, workspaceId),
+              ),
+            )
+            .limit(1);
+          if (!existing) throw new Error("Conversation not found");
+          cId = existing.id;
+          cPublicId = existing.publicId;
+          currentLeaf = existing.leaf ?? null;
+        } else {
+          const [conv] = await tx
+            .insert(schema.conversations)
             .values({
               orgId,
               workspaceId,
-              conversationId: cId,
-              parentMessageId: parentMsgId ?? undefined,
-              role: "user",
-              content,
-              contentBlocks: [],
-              branchReason: branchReason ?? undefined,
-              isActiveInBranch: true,
-              metadata: {},
+              userId: session.user.id,
+              status: "active",
               createdByUserId: session.user.id,
               updatedByUserId: session.user.id,
             })
             .returning();
-          if (!userMsg) throw new Error("Message insert failed");
-          const typedMsg = userMsg as DbMessageRow;
+          if (!conv) throw new Error("Conversation insert failed");
+          const typedConv = conv as ConversationRow;
+          cId = typedConv.id;
+          cPublicId = typedConv.publicId;
+          currentLeaf = null;
+        }
 
-          await tx
-            .update(schema.conversations)
-            .set({ activeLeafMessageId: typedMsg.id, updatedAt: new Date() })
-            .where(eq(schema.conversations.id, cId));
+        // Thread the user message onto the server-authoritative active leaf —
+        // mirrors the sendMessageAction threading in [workspaceSlug]/ask/actions.ts.
+        const parentMsgId =
+          branchReason && capabilityInput.data.parentMessageId
+            ? capabilityInput.data.parentMessageId
+            : currentLeaf;
 
-          return {
+        const [userMsg] = await tx
+          .insert(schema.messages)
+          .values({
+            orgId,
+            workspaceId,
             conversationId: cId,
-            conversationPublicId: cPublicId,
-            userMessageId: typedMsg.id,
-          };
-        });
+            parentMessageId: parentMsgId ?? undefined,
+            role: "user",
+            content,
+            contentBlocks: [],
+            branchReason: branchReason ?? undefined,
+            metadata: {},
+            createdByUserId: session.user.id,
+            updatedByUserId: session.user.id,
+          })
+          .returning();
+        if (!userMsg) throw new Error("Message insert failed");
+        const typedMsg = userMsg as DbMessageRow;
+
+        await tx
+          .update(schema.conversations)
+          .set({ activeLeafMessageId: typedMsg.id, updatedAt: new Date() })
+          .where(eq(schema.conversations.id, cId));
+
+        return {
+          conversationId: cId,
+          conversationPublicId: cPublicId,
+          userMessageId: typedMsg.id,
+        };
+      });
 
       revalidatePath(`/${orgSlug}/${workspaceSlug}/ask`);
-      return { ok: true, conversationId: convId, conversationPublicId, userMessageId };
+      return {
+        ok: true,
+        conversationId: convId,
+        conversationPublicId,
+        userMessageId,
+      };
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to send message";
+      const message =
+        err instanceof Error ? err.message : "Failed to send message";
       return { ok: false, error: message };
     }
   });
@@ -329,8 +373,13 @@ export async function loadAgentConversationAction(
   if (!resolved) return { ok: false, error: "No active workspace." };
   const { orgId, workspaceId } = resolved;
 
-  const isMember = await assertWorkspaceMember(orgId, workspaceId, session.user.id);
-  if (!isMember) return { ok: false, error: "You don't have access to this workspace." };
+  const isMember = await assertWorkspaceMember(
+    orgId,
+    workspaceId,
+    session.user.id,
+  );
+  if (!isMember)
+    return { ok: false, error: "You don't have access to this workspace." };
 
   return runInTenantScope({ orgId, workspaceId }, async () => {
     try {
@@ -371,7 +420,8 @@ export async function loadAgentConversationAction(
         title: conv.title ?? null,
       };
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to load conversation";
+      const message =
+        err instanceof Error ? err.message : "Failed to load conversation";
       return { ok: false as const, error: message };
     }
   });
@@ -402,11 +452,17 @@ export async function wandResolveApprovalAction(
   // invoke() from apps/app skips IAM role checks, so without this any
   // authenticated user who knows/guesses an orgSlug + workspaceSlug +
   // approvalId could resolve approvals in a workspace they don't belong to).
-  const isMember = await assertWorkspaceMember(orgId, workspaceId, session.user.id);
-  if (!isMember) return { ok: false, error: "You don't have access to this workspace." };
+  const isMember = await assertWorkspaceMember(
+    orgId,
+    workspaceId,
+    session.user.id,
+  );
+  if (!isMember)
+    return { ok: false, error: "You don't have access to this workspace." };
 
   const parsed = agentApprovalResolve.input.safeParse({ approvalId, decision });
-  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid" };
+  if (!parsed.success)
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid" };
 
   try {
     await invoke(
@@ -418,7 +474,10 @@ export async function wandResolveApprovalAction(
     revalidatePath(`/${orgSlug}/${workspaceSlug}/ask`);
     return { ok: true };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Failed to resolve approval" };
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Failed to resolve approval",
+    };
   }
 }
 
@@ -446,11 +505,21 @@ export async function wandResolveConsentAction(
   // Assert user is a member of the workspace (explicit IAM gate in apps/app —
   // see wandResolveApprovalAction above for why this cannot rely on invoke()'s
   // kernel IAM check from this surface).
-  const isMember = await assertWorkspaceMember(orgId, workspaceId, session.user.id);
-  if (!isMember) return { ok: false, error: "You don't have access to this workspace." };
+  const isMember = await assertWorkspaceMember(
+    orgId,
+    workspaceId,
+    session.user.id,
+  );
+  if (!isMember)
+    return { ok: false, error: "You don't have access to this workspace." };
 
-  const parsed = agentMcpConsentResolve.input.safeParse({ approvalId, decision, grantAllTools });
-  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid" };
+  const parsed = agentMcpConsentResolve.input.safeParse({
+    approvalId,
+    decision,
+    grantAllTools,
+  });
+  if (!parsed.success)
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid" };
 
   try {
     await invoke(
@@ -462,7 +531,10 @@ export async function wandResolveConsentAction(
     revalidatePath(`/${orgSlug}/${workspaceSlug}/ask`);
     return { ok: true };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Failed to resolve consent" };
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Failed to resolve consent",
+    };
   }
 }
 
@@ -486,8 +558,13 @@ export async function wandResolvePlanAction(
   // Assert user is a member of the workspace (explicit IAM gate in apps/app —
   // see wandResolveApprovalAction above for why this cannot rely on invoke()'s
   // kernel IAM check from this surface).
-  const isMember = await assertWorkspaceMember(orgId, workspaceId, session.user.id);
-  if (!isMember) return { ok: false, error: "You don't have access to this workspace." };
+  const isMember = await assertWorkspaceMember(
+    orgId,
+    workspaceId,
+    session.user.id,
+  );
+  if (!isMember)
+    return { ok: false, error: "You don't have access to this workspace." };
 
   const verbMap: Record<typeof decision, "approve" | "deny" | "amend"> = {
     approved: "approve",
@@ -506,7 +583,8 @@ export async function wandResolvePlanAction(
       dependsOn: s.dependsOn,
     })),
   });
-  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid" };
+  if (!parsed.success)
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid" };
 
   try {
     await invoke(
@@ -518,9 +596,9 @@ export async function wandResolvePlanAction(
     revalidatePath(`/${orgSlug}/${workspaceSlug}/ask`);
     return { ok: true };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Failed to resolve plan" };
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Failed to resolve plan",
+    };
   }
 }
-
-
-

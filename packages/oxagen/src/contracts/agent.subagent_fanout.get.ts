@@ -14,7 +14,11 @@ export const agentSubagentFanoutGet = registerCapability({
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
   scoped: true,
-  agent: { requiresApproval: false, riskLevel: "low", category: "introspection" },
+  agent: {
+    requiresApproval: false,
+    riskLevel: "low",
+    category: "introspection",
+  },
   sensitivity: "low",
   defaultEffect: "deny",
   defaultRoles: {
@@ -40,17 +44,33 @@ export const agentSubagentFanoutGet = registerCapability({
         errorReason: z.string().nullable(),
         startedAt: z.string().nullable(),
         completedAt: z.string().nullable(),
-        durationMs: z.number().int().nullable().describe("Wall-clock duration once the run has completed"),
-        inputBytes: z.number().int().describe("Serialized size of the input payload"),
-        outputBytes: z.number().int().describe("Serialized size of the output payload, 0 when none"),
+        durationMs: z
+          .number()
+          .int()
+          .nullable()
+          .describe("Wall-clock duration once the run has completed"),
+        inputBytes: z
+          .number()
+          .int()
+          .describe("Serialized size of the input payload"),
+        outputBytes: z
+          .number()
+          .int()
+          .describe("Serialized size of the output payload, 0 when none"),
         outputPreview: z
           .string()
           .nullable()
-          .describe("Truncated JSON preview of the output payload, or null when none"),
+          .describe(
+            "Truncated JSON preview of the output payload, or null when none",
+          ),
       }),
     ),
   }),
 });
 
-export type AgentSubagentFanoutGetInput = z.output<typeof agentSubagentFanoutGet.input>;
-export type AgentSubagentFanoutGetOutput = z.output<typeof agentSubagentFanoutGet.output>;
+export type AgentSubagentFanoutGetInput = z.output<
+  typeof agentSubagentFanoutGet.input
+>;
+export type AgentSubagentFanoutGetOutput = z.output<
+  typeof agentSubagentFanoutGet.output
+>;

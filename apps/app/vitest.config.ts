@@ -31,6 +31,13 @@ export default defineConfig({
         // tests. Same rationale as route.ts. (The rendered components —
         // span-tree, activity-list, format — ARE unit-tested.)
         "src/app/**/activity/**/*-section.tsx",
+        // Automations RSC data-fetch sections + Server Actions drive the real
+        // kernel invoke() → Postgres path (automation.* / agent.trigger.* /
+        // workflow.* / research.swarm.*); they are exercised by the
+        // automations*.spec.ts e2e suites against the real DB, not unit-tested
+        // in isolation. Same rationale as route.ts and the activity sections.
+        "src/app/**/automations/**/*-section.tsx",
+        "src/app/**/automations/**/actions.ts",
         "src/proxy.ts",
         "src/test/**",
         // Knowledge section is out of scope this session (do not touch) — exclude
