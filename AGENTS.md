@@ -128,6 +128,8 @@ Cross-domain Postgres queries use `src/relations.ts` (Drizzle). Never write raw 
 | `pnpm check:manifest` | Enforces API ↔ MCP capability parity (`tools/scripts/check_manifest.mjs`) |
 | `pnpm check:manifest --json` | Machine-readable parity output (filter for genuine `api`/`mcp` gaps) |
 | `pnpm check:ui-parity` | Enforces app-layer capability → UI binding (`capability-ui-map.json`) |
+| `pnpm check:mobile-parity` | Enforces mobile feature parity (ADR-026) — no desktop-only features without registered reflow/hidden justification |
+| `pnpm check:connector-schemas` | Verifies all 16 built-in plugin connector schemas are registered |
 | `pnpm check:contracts` | Ensures every contract file is in the barrel index + naming compliance |
 | `pnpm check:vision` | LLM-judges PR diff against `docs/VISION.md` |
 | `pnpm env:check` | Validates `.env.local` against the env registry |
@@ -136,10 +138,16 @@ Cross-domain Postgres queries use `src/relations.ts` (Drizzle). Never write raw 
 | `pnpm db:atlas-validate` | Validates Atlas schema against current DB state |
 | `pnpm db:seed-iam` | Seed IAM roles and permissions |
 | `pnpm db:seed-skills` | Seed agent skill definitions |
-| `pnpm release:patch/minor/major` | Version bump + Vercel deploy + NPM publish + release notes |
+| `pnpm release:patch/minor/major` | Lockstep version bump (all packages) + AI-generated release notes (via Vercel AI Gateway) + git tag + Vercel `PLATFORM_VERSION` sync + optional NPM publish |
 | `pnpm test:e2e` | Run Playwright e2e tests (`apps/app`) |
 
 **Narrow test runs** (never run all tests): `pnpm --filter @oxagen/<pkg> test:unit -- <file>.test.ts`
+
+**Gate gotcha**: `pnpm gate` runs turbo with `--filter=...[origin/main]`, so it only executes against packages changed since `origin/main`. If `HEAD == origin/main` (e.g. verifying a clean tree), turbo finds zero affected packages and the gate appears to pass without running anything. To force a full run, use `turbo run lint typecheck test:unit test:coverage build` directly.
+
+**Test parallelism**: running all test packages in parallel (`turbo run test:unit`) can cause resource-contention failures on a local machine — large packages (app, cli, handlers, agent) OOM or timeout under concurrent load. Use `turbo run test:unit --concurrency=1` or `TURBO_CONCURRENCY=1 pnpm gate` for reliable local runs.
+
+**Release script flags**: `tsx tools/scripts/release.ts major --dry-run` (preview without writing), `--set X.Y.Z` (exact version), `--no-vercel` / `--no-npm` / `--no-git` / `--no-notes` (skip individual steps), `--from <ref>` (regenerate notes for an existing tag).
 
 ## Key Patterns
 
@@ -154,7 +162,11 @@ Cross-domain Postgres queries use `src/relations.ts` (Drizzle). Never write raw 
 
 ## Local Development
 
+**Docker via Colima** (macOS): `colima start` before `pnpm dev`. The Docker socket is at `~/.colima/default/docker.sock`. If `docker ps` fails with "Cannot connect to the Docker daemon", restart Colima: `colima stop && colima start`.
+
 **Docker services** (`docker-compose.dev.yml`): Postgres 16 (`:5433`, user/pass `oxagen`/`oxagen`), Neo4j 5.24 (`:7474` UI, `:7687` Bolt`, pass `oxagen-dev`), ClickHouse 24.8 (`:8123` HTTP, `:9000` native`). Host port 5433 avoids collision with a system Postgres on 5432.
+
+**Migration targeting**: `tsx --env-file=.env.local` does NOT override a shell-exported `DATABASE_URL`. Always `unset DATABASE_URL` before targeting local vs prod. Migration files go in `packages/database/atlas/migrations/`, never in `apps/`. After editing migration files, regenerate the checksum: `atlas migrate hash --dir "file://packages/database/atlas/migrations"` from the `packages/database` directory. Echo the target DB URL before any mutation script to confirm you're hitting the right database.
 
 **App ports**: `apps/app` → `:3000`, `apps/docs` → `:3300`, API → `:4000`, MCP → `:4100`.
 
@@ -164,7 +176,7 @@ Cross-domain Postgres queries use `src/relations.ts` (Drizzle). Never write raw 
 
 `.github/workflows/pipeline.yml` runs: lint → typecheck → unit tests → build → `check:manifest` → `check:contracts` → `db:lint-migrations`. Gate mirrors this exactly. `vision-gate.yml` additionally LLM-judges the PR diff against `docs/VISION.md` (advisory). CI runs inside `ghcr.io/oxageninc/oxagen-ci-*` containers with Atlas baked in.
 
-**Pre-commit hooks** (lefthook): Biome format (staged files), ESLint fix (staged files), staged-file typecheck via `tools/scripts/typecheck-staged.mjs`. **Pre-push hooks**: `check:contracts` + `env:check` only — no test suites (those run in CI).
+**Pre-commit hooks** (lefthook): Biome format (staged files), ESLint fix (staged files), staged-file typecheck via `tools/scripts/typecheck-staged.mjs`, atlas-validate (only when migration files are staged). **Pre-push hooks**: `check:contracts` + `env:check` only — no test suites (those run in CI).
 
 ## Git Workflow
 
