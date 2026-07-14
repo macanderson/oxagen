@@ -35,7 +35,9 @@ vi.mock("@oxagen/database", () => {
     }),
   });
   return {
-    withTenantDb: vi.fn((fn: (tx: ReturnType<typeof makeTx>) => unknown) => fn(makeTx())),
+    withTenantDb: vi.fn((fn: (tx: ReturnType<typeof makeTx>) => unknown) =>
+      fn(makeTx()),
+    ),
     schema: {
       pluginInstalledPlugins: {
         publicId: "pip_publicId",
@@ -90,16 +92,29 @@ beforeEach(() => {
 });
 
 describe("listWorkspaceSkills", () => {
-  it("maps skill.workspace.list output ids to the agentTool ref shape", async () => {
+  it("maps skill.workspace.list output slugs (not public ids) to the agentTool ref shape", async () => {
     mockInvoke.mockResolvedValue({
-      skills: [{ id: "skill_1", name: "Deploy", description: "Deploys things", enabled: true }],
+      skills: [
+        {
+          id: "skl_7ynqzvhq293g37ycfwaxn9",
+          slug: "deploy",
+          name: "Deploy",
+          description: "Deploys things",
+          enabled: true,
+        },
+      ],
     });
 
     const result = await listWorkspaceSkills(ctx);
 
     expect(mockInvoke).toHaveBeenCalledWith("list_workspace_skills", {}, ctx);
     expect(result).toEqual([
-      { ref: "skill_1", name: "Deploy", description: "Deploys things", enabled: true },
+      {
+        ref: "deploy",
+        name: "Deploy",
+        description: "Deploys things",
+        enabled: true,
+      },
     ]);
   });
 
@@ -145,8 +160,20 @@ describe("listInstalledMcpServers", () => {
     const result = await listInstalledMcpServers(ctx, "org-1", "ws-1");
 
     expect(result).toEqual([
-      { ref: "srv_1", name: "GitHub", title: "GitHub MCP", description: "Repo access", enabled: true },
-      { ref: "srv_2", name: "Local Tool", title: null, description: null, enabled: false },
+      {
+        ref: "srv_1",
+        name: "GitHub",
+        title: "GitHub MCP",
+        description: "Repo access",
+        enabled: true,
+      },
+      {
+        ref: "srv_2",
+        name: "Local Tool",
+        title: null,
+        description: null,
+        enabled: false,
+      },
     ]);
   });
 
@@ -169,7 +196,12 @@ describe("loadEquipSources", () => {
     mockInvoke.mockResolvedValue({ skills: [] });
     mockListAgentTools.mockResolvedValue([{ name: "get_pr" } as never]);
     mockListAgents.mockResolvedValue([
-      { agentId: "a1", publicId: "pub_a1", slug: "researcher", name: "Researcher" } as never,
+      {
+        agentId: "a1",
+        publicId: "pub_a1",
+        slug: "researcher",
+        name: "Researcher",
+      } as never,
     ]);
     dbState.rows = [];
 
@@ -177,7 +209,9 @@ describe("loadEquipSources", () => {
 
     expect(result.skills).toEqual([]);
     expect(result.tools).toEqual([{ name: "get_pr" }]);
-    expect(result.subagents).toEqual([{ ref: "pub_a1", name: "Researcher", slug: "researcher" }]);
+    expect(result.subagents).toEqual([
+      { ref: "pub_a1", name: "Researcher", slug: "researcher" },
+    ]);
     expect(result.mcp).toEqual([]);
   });
 });
