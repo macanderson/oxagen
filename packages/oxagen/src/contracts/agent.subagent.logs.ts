@@ -33,7 +33,7 @@ export const agentSubagentLogs = registerCapability({
     "output (e.g. each result), so the run is traceable down to individual queries and results.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "app", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs"],
   agent: { requiresApproval: false, riskLevel: "low", category: "agent" },
   scoped: true,
   sensitivity: "low",

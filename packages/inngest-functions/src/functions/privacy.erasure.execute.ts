@@ -57,124 +57,128 @@ import { logger } from "../logger";
  * Sessions were already revoked by the handler at request time (immediate
  * effect). For ORG scope no erasure is attempted here (semantics undecided).
  */
-export const [privacyErasureExecute, privacyErasureExecuteOnFailure] = createFunction(
-  {
-    id: "privacy.erasure-execute",
-    retries: 3,
-    concurrency: { limit: 2, key: "event.data.requestId" },
-    onFailure: async ({ event, step }) => {
-      const failureData = event.data as {
-        event?: { data?: { requestId?: string } };
-        error?: unknown;
+export const [privacyErasureExecute, privacyErasureExecuteOnFailure] =
+  createFunction(
+    {
+      id: "privacy.erasure-execute",
+      retries: 3,
+      concurrency: { limit: 2, key: "event.data.requestId" },
+      onFailure: async ({ event, step }) => {
+        const failureData = event.data as {
+          event?: { data?: { requestId?: string } };
+          error?: unknown;
+        };
+        const requestId = failureData.event?.data?.requestId;
+        if (!requestId) return;
+
+        const errorMessage =
+          typeof failureData.error === "object" &&
+          failureData.error !== null &&
+          "message" in failureData.error
+            ? String((failureData.error as { message: unknown }).message)
+            : String(failureData.error ?? "unknown error");
+
+        await step.run("mark-failed", async () => {
+          await withSystemDb((tx) =>
+            tx
+              .update(schema.privacyErasureRequests)
+              .set({ status: "failed", errorMessage, updatedAt: new Date() })
+              .where(eq(schema.privacyErasureRequests.id, requestId)),
+          );
+        });
+
+        logger.error(
+          { requestId, error: errorMessage },
+          "privacy.erasure-execute failed",
+        );
+      },
+    },
+    { event: "privacy/erasure.execute" },
+    async ({ event, step }) => {
+      const { requestId, userId, orgId, scope, scheduledAt } = event.data as {
+        requestId: string;
+        userId: string;
+        orgId: string;
+        scope: "user" | "org";
+        scheduledAt: string;
       };
-      const requestId = failureData.event?.data?.requestId;
-      if (!requestId) return;
 
-      const errorMessage =
-        typeof failureData.error === "object" &&
-        failureData.error !== null &&
-        "message" in failureData.error
-          ? String((failureData.error as { message: unknown }).message)
-          : String(failureData.error ?? "unknown error");
+      // Enforce grace period: if we've been triggered before scheduledAt (clock
+      // skew, early retry), sleep until the scheduled time.
+      const scheduledMs = new Date(scheduledAt).getTime();
+      const nowMs = Date.now();
+      if (scheduledMs > nowMs) {
+        await step.sleep("grace-period-wait", scheduledAt);
+      }
 
-      await step.run("mark-failed", async () => {
+      // Step 1: mark processing
+      await step.run("mark-processing", async () => {
         await withSystemDb((tx) =>
           tx
             .update(schema.privacyErasureRequests)
-            .set({ status: "failed", errorMessage, updatedAt: new Date() })
+            .set({ status: "processing", updatedAt: new Date() })
             .where(eq(schema.privacyErasureRequests.id, requestId)),
         );
       });
 
-      logger.error({ requestId, error: errorMessage }, "privacy.erasure-execute failed");
+      // Step 2: partial erasure — purge the clearly-owned, single-store auth PII
+      // for USER scope. This is a real, immediate mitigation, NOT the full
+      // cascade. All statements are scoped by userId, idempotent, and run in one
+      // transaction so a mid-step crash leaves the auth store consistent. See the
+      // file header for why the full cross-store cascade is not attempted here.
+      await step.run("execute-erasure", async () => {
+        logger.info(
+          { requestId, userId, orgId, scope },
+          "privacy.erasure-execute: purging owned auth PII (partial — full cross-store cascade blocked, OXA-1721)",
+        );
+
+        if (scope === "user") {
+          await withSystemDb(async (tx) => {
+            // Anonymise the identity row: scrub display_name / email / avatar_url.
+            await tx
+              .update(schema.users)
+              .set({
+                displayName: "Deleted User",
+                email: `${userId}@deleted.invalid`,
+                avatarUrl: null,
+                updatedAt: new Date(),
+              })
+              .where(eq(schema.users.id, userId));
+
+            // Purge OAuth tokens (plaintext + envelope-encrypted) and the password
+            // hash — unambiguously the subject's credentials.
+            await tx
+              .delete(schema.accounts)
+              .where(eq(schema.accounts.userId, userId));
+
+            // Remove the subject's personal preferences (theme/language/timezone
+            // and notification settings are personal data tied to the person).
+            await tx
+              .delete(schema.userPreferences)
+              .where(eq(schema.userPreferences.userId, userId));
+          });
+        }
+      });
+
+      // Step 3: FAIL LOUD. The full cross-store cascade is blocked on four
+      // unresolved items (see file header): ClickHouse `user_email` erasure policy
+      // (undecided), the missing Neo4j erase-by-owner path, the pending blob
+      // cascade, and ambiguous org-scope Postgres semantics. We refuse to mark the
+      // request `completed` while personal data still remains in those stores, so
+      // a data subject is never falsely told their data was fully erased. Throwing
+      // a NonRetriableError routes to the on-failure handler, which marks the
+      // request `failed` with this message for operator follow-up.
+      throw new NonRetriableError(
+        "[privacy.erasure-execute] full cross-store erasure cascade not implemented " +
+          `(OXA-1721); refusing to mark erasure request ${requestId} (scope=${scope}) ` +
+          "as completed. Owned auth PII was purged (users/accounts/user_preferences). " +
+          "STILL RESIDUAL — each blocked on a decision: " +
+          "(1) ClickHouse claude_telemetry/claude_sessions store raw user_email — no " +
+          "erasure/retention policy defined (PRIVACY+LEGAL decision); " +
+          "(2) Neo4j has no owner-scoped erase path — needs graph-layer delete-by-owner; " +
+          "(3) blob generated_assets cascade pending (SOP §7) — needs enumerate-by-user + @oxagen/storage delete; " +
+          "(4) org-scope Postgres cascade (created_by/updated_by across all tables, " +
+          "workspaces/plugins/billing/agents/chat/content) — semantics ambiguous, not enumerated.",
+      );
     },
-  },
-  { event: "privacy/erasure.execute" },
-  async ({ event, step }) => {
-    const { requestId, userId, orgId, scope, scheduledAt } = event.data as {
-      requestId: string;
-      userId: string;
-      orgId: string;
-      scope: "user" | "org";
-      scheduledAt: string;
-    };
-
-    // Enforce grace period: if we've been triggered before scheduledAt (clock
-    // skew, early retry), sleep until the scheduled time.
-    const scheduledMs = new Date(scheduledAt).getTime();
-    const nowMs = Date.now();
-    if (scheduledMs > nowMs) {
-      await step.sleep("grace-period-wait", scheduledAt);
-    }
-
-    // Step 1: mark processing
-    await step.run("mark-processing", async () => {
-      await withSystemDb((tx) =>
-        tx
-          .update(schema.privacyErasureRequests)
-          .set({ status: "processing", updatedAt: new Date() })
-          .where(eq(schema.privacyErasureRequests.id, requestId)),
-      );
-    });
-
-    // Step 2: partial erasure — purge the clearly-owned, single-store auth PII
-    // for USER scope. This is a real, immediate mitigation, NOT the full
-    // cascade. All statements are scoped by userId, idempotent, and run in one
-    // transaction so a mid-step crash leaves the auth store consistent. See the
-    // file header for why the full cross-store cascade is not attempted here.
-    await step.run("execute-erasure", async () => {
-      logger.info(
-        { requestId, userId, orgId, scope },
-        "privacy.erasure-execute: purging owned auth PII (partial — full cross-store cascade blocked, OXA-1721)",
-      );
-
-      if (scope === "user") {
-        await withSystemDb(async (tx) => {
-          // Anonymise the identity row. username is a unique citext handle and
-          // is PII, so it is nulled alongside display_name / email / avatar_url.
-          await tx
-            .update(schema.users)
-            .set({
-              displayName: "Deleted User",
-              email: `${userId}@deleted.invalid`,
-              username: null,
-              avatarUrl: null,
-              updatedAt: new Date(),
-            })
-            .where(eq(schema.users.id, userId));
-
-          // Purge OAuth tokens (plaintext + envelope-encrypted) and the password
-          // hash — unambiguously the subject's credentials.
-          await tx.delete(schema.accounts).where(eq(schema.accounts.userId, userId));
-
-          // Remove the subject's personal preferences (theme/language/timezone
-          // and notification settings are personal data tied to the person).
-          await tx
-            .delete(schema.userPreferences)
-            .where(eq(schema.userPreferences.userId, userId));
-        });
-      }
-    });
-
-    // Step 3: FAIL LOUD. The full cross-store cascade is blocked on four
-    // unresolved items (see file header): ClickHouse `user_email` erasure policy
-    // (undecided), the missing Neo4j erase-by-owner path, the pending blob
-    // cascade, and ambiguous org-scope Postgres semantics. We refuse to mark the
-    // request `completed` while personal data still remains in those stores, so
-    // a data subject is never falsely told their data was fully erased. Throwing
-    // a NonRetriableError routes to the on-failure handler, which marks the
-    // request `failed` with this message for operator follow-up.
-    throw new NonRetriableError(
-      "[privacy.erasure-execute] full cross-store erasure cascade not implemented " +
-        `(OXA-1721); refusing to mark erasure request ${requestId} (scope=${scope}) ` +
-        "as completed. Owned auth PII was purged (users/accounts/user_preferences). " +
-        "STILL RESIDUAL — each blocked on a decision: " +
-        "(1) ClickHouse claude_telemetry/claude_sessions store raw user_email — no " +
-        "erasure/retention policy defined (PRIVACY+LEGAL decision); " +
-        "(2) Neo4j has no owner-scoped erase path — needs graph-layer delete-by-owner; " +
-        "(3) blob generated_assets cascade pending (SOP §7) — needs enumerate-by-user + @oxagen/storage delete; " +
-        "(4) org-scope Postgres cascade (created_by/updated_by across all tables, " +
-        "workspaces/plugins/billing/agents/chat/content) — semantics ambiguous, not enumerated.",
-    );
-  },
-);
+  );

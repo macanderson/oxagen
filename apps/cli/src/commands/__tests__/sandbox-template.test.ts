@@ -7,7 +7,15 @@
  * resolve to public ids via the list endpoints; `import` never writes without
  * `--yes` (preview-then-commit, like `oxagen secret import`).
  */
-import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+  type Mock,
+} from "vitest";
 import type { CommandWriter } from "../../lib/capture-writer.js";
 
 vi.mock("../../lib/api.js", async (importOriginal) => {
@@ -40,7 +48,10 @@ function makeWriter(): { writer: CommandWriter; out: string[]; err: string[] } {
   const out: string[] = [];
   const err: string[] = [];
   return {
-    writer: { write: (l) => void out.push(l), writeErr: (l) => void err.push(l) },
+    writer: {
+      write: (l) => void out.push(l),
+      writeErr: (l) => void err.push(l),
+    },
     out,
     err,
   };
@@ -60,7 +71,15 @@ const TEMPLATE = {
   network: { mode: "public" },
   secretSelection: "all" as const,
   literalEnv: { SWEBENCH_SPLIT: "verified" },
-  tools: [{ id: "sbt_1", kind: "capability" as const, ref: "agent.code.execute", config: {} }],
+  packages: [{ manager: "pip", names: ["swebench", "datasets"] }],
+  tools: [
+    {
+      id: "sbt_1",
+      kind: "capability" as const,
+      ref: "agent.code.execute",
+      config: {},
+    },
+  ],
 };
 
 let prevExit: typeof process.exitCode;
@@ -97,12 +116,16 @@ describe("handleTemplateList", () => {
 
   it("resolves --env slug to an env id and filters the list", async () => {
     mockPost
-      .mockResolvedValueOnce({ environments: [{ id: "env_9", slug: "staging" }] })
+      .mockResolvedValueOnce({
+        environments: [{ id: "env_9", slug: "staging" }],
+      })
       .mockResolvedValueOnce({ templates: [] });
     const { writer, out } = makeWriter();
     await handleTemplateList({ env: "staging" }, writer);
     expect(mockPost).toHaveBeenNthCalledWith(1, "environment/list", {});
-    expect(mockPost).toHaveBeenNthCalledWith(2, "sandbox/template/list", { environmentId: "env_9" });
+    expect(mockPost).toHaveBeenNthCalledWith(2, "sandbox/template/list", {
+      environmentId: "env_9",
+    });
     expect(out.join("\n")).toContain("(no templates)");
   });
 
@@ -122,7 +145,9 @@ describe("handleTemplateGet", () => {
     const { writer } = makeWriter();
     await handleTemplateGet("sbx_abc", { json: true }, writer);
     expect(mockPost).toHaveBeenCalledOnce();
-    expect(mockPost).toHaveBeenCalledWith("sandbox/template/get", { templateId: "sbx_abc" });
+    expect(mockPost).toHaveBeenCalledWith("sandbox/template/get", {
+      templateId: "sbx_abc",
+    });
   });
 
   it("resolves a slug to its id via the list endpoint", async () => {
@@ -132,9 +157,14 @@ describe("handleTemplateGet", () => {
     const { writer, out } = makeWriter();
     await handleTemplateGet("swe-bench-prewarmed", {}, writer);
     expect(mockPost).toHaveBeenNthCalledWith(1, "sandbox/template/list", {});
-    expect(mockPost).toHaveBeenNthCalledWith(2, "sandbox/template/get", { templateId: "sbx_abc" });
+    expect(mockPost).toHaveBeenNthCalledWith(2, "sandbox/template/get", {
+      templateId: "sbx_abc",
+    });
     expect(out.join("\n")).toContain("SWE-bench prewarmed");
     expect(out.join("\n")).toContain("★ default");
+    // The packages group renders under a "packages:" heading, one line per manager.
+    expect(out.join("\n")).toContain("packages:");
+    expect(out.join("\n")).toContain("pip: swebench datasets");
   });
 
   it("fails cleanly when the slug is unknown (exit 1, no get call)", async () => {
@@ -158,7 +188,10 @@ describe("handleTemplateCreate", () => {
 
   it("rejects an invalid --provider (exit 2, no API call)", async () => {
     const { writer, err } = makeWriter();
-    await handleTemplateCreate({ env: "s", name: "n", slug: "x", provider: "aws" }, writer);
+    await handleTemplateCreate(
+      { env: "s", name: "n", slug: "x", provider: "aws" },
+      writer,
+    );
     expect(err[0]).toContain('Invalid --provider "aws"');
     expect(process.exitCode).toBe(2);
     expect(mockPost).not.toHaveBeenCalled();
@@ -166,7 +199,10 @@ describe("handleTemplateCreate", () => {
 
   it("rejects an invalid --network-mode (exit 2, no API call)", async () => {
     const { writer, err } = makeWriter();
-    await handleTemplateCreate({ env: "s", name: "n", slug: "x", networkMode: "vpc" }, writer);
+    await handleTemplateCreate(
+      { env: "s", name: "n", slug: "x", networkMode: "vpc" },
+      writer,
+    );
     expect(err[0]).toContain('Invalid --network-mode "vpc"');
     expect(process.exitCode).toBe(2);
     expect(mockPost).not.toHaveBeenCalled();
@@ -174,7 +210,10 @@ describe("handleTemplateCreate", () => {
 
   it("rejects a non-integer --vcpu (exit 2, no API call)", async () => {
     const { writer, err } = makeWriter();
-    await handleTemplateCreate({ env: "s", name: "n", slug: "x", vcpu: "2.5" }, writer);
+    await handleTemplateCreate(
+      { env: "s", name: "n", slug: "x", vcpu: "2.5" },
+      writer,
+    );
     expect(err[0]).toContain('Invalid --vcpu "2.5"');
     expect(process.exitCode).toBe(2);
     expect(mockPost).not.toHaveBeenCalled();
@@ -182,7 +221,10 @@ describe("handleTemplateCreate", () => {
 
   it("rejects a malformed --env-var (exit 2, no API call)", async () => {
     const { writer, err } = makeWriter();
-    await handleTemplateCreate({ env: "s", name: "n", slug: "x", envVar: ["NOEQUALS"] }, writer);
+    await handleTemplateCreate(
+      { env: "s", name: "n", slug: "x", envVar: ["NOEQUALS"] },
+      writer,
+    );
     expect(err[0]).toContain('Invalid --env-var "NOEQUALS"');
     expect(process.exitCode).toBe(2);
     expect(mockPost).not.toHaveBeenCalled();
@@ -190,7 +232,9 @@ describe("handleTemplateCreate", () => {
 
   it("assembles the create body from flags (resources, network, literalEnv, default)", async () => {
     mockPost
-      .mockResolvedValueOnce({ environments: [{ id: "env_7", slug: "staging" }] })
+      .mockResolvedValueOnce({
+        environments: [{ id: "env_7", slug: "staging" }],
+      })
       .mockResolvedValueOnce({ template: TEMPLATE });
     const { writer, out } = makeWriter();
     await handleTemplateCreate(
@@ -238,7 +282,9 @@ describe("handleTemplateRemove", () => {
       .mockResolvedValueOnce({ ok: true });
     const { writer, out } = makeWriter();
     await handleTemplateRemove("swe-bench-prewarmed", { yes: true }, writer);
-    expect(mockPost).toHaveBeenNthCalledWith(2, "sandbox/template/delete", { templateId: "sbx_abc" });
+    expect(mockPost).toHaveBeenNthCalledWith(2, "sandbox/template/delete", {
+      templateId: "sbx_abc",
+    });
     expect(out.join("\n")).toContain("✓ removed template");
   });
 });
@@ -248,7 +294,9 @@ describe("handleTemplateSetDefault", () => {
     mockPost.mockResolvedValueOnce({ template: TEMPLATE });
     const { writer, out } = makeWriter();
     await handleTemplateSetDefault("sbx_abc", {}, writer);
-    expect(mockPost).toHaveBeenCalledWith("sandbox/template/set-default", { templateId: "sbx_abc" });
+    expect(mockPost).toHaveBeenCalledWith("sandbox/template/set-default", {
+      templateId: "sbx_abc",
+    });
     expect(out.join("\n")).toContain("✓ default template:");
   });
 });
@@ -276,7 +324,11 @@ describe("handleTemplateExport", () => {
     mockPost.mockResolvedValueOnce({ manifest: MANIFEST });
     const { writer, err } = makeWriter();
     await handleTemplateExport("sbx_abc", { out: "m.json" }, writer);
-    expect(mockWrite).toHaveBeenCalledWith("m.json", expect.stringContaining("oxagen.sandbox-template"), "utf8");
+    expect(mockWrite).toHaveBeenCalledWith(
+      "m.json",
+      expect.stringContaining("oxagen.sandbox-template"),
+      "utf8",
+    );
     expect(err.join("\n")).toContain("✓ wrote manifest to m.json");
   });
 });
@@ -314,7 +366,9 @@ describe("handleTemplateImport", () => {
   });
 
   it("warns on an unexpected manifest kind in the preview", async () => {
-    mockRead.mockReturnValueOnce(JSON.stringify({ ...MANIFEST, kind: "wrong" }));
+    mockRead.mockReturnValueOnce(
+      JSON.stringify({ ...MANIFEST, kind: "wrong" }),
+    );
     const { writer, out } = makeWriter();
     await handleTemplateImport({ env: "staging", file: "m.json" }, writer);
     expect(out.join("\n")).toContain("unexpected manifest kind 'wrong'");
@@ -332,13 +386,20 @@ describe("handleTemplateImport", () => {
   it("writes on --yes and surfaces server warnings", async () => {
     mockRead.mockReturnValueOnce(JSON.stringify(MANIFEST));
     mockPost
-      .mockResolvedValueOnce({ environments: [{ id: "env_5", slug: "staging" }] })
+      .mockResolvedValueOnce({
+        environments: [{ id: "env_5", slug: "staging" }],
+      })
       .mockResolvedValueOnce({
         template: { ...TEMPLATE, isDefault: false },
-        warnings: ["tool ref 'swe-bench' is not installed — it will be skipped at provision time"],
+        warnings: [
+          "tool ref 'swe-bench' is not installed — it will be skipped at provision time",
+        ],
       });
     const { writer, out } = makeWriter();
-    await handleTemplateImport({ env: "staging", file: "m.json", yes: true, slug: "swe-2" }, writer);
+    await handleTemplateImport(
+      { env: "staging", file: "m.json", yes: true, slug: "swe-2" },
+      writer,
+    );
     expect(mockPost).toHaveBeenNthCalledWith(2, "sandbox/template/import", {
       environmentId: "env_5",
       manifest: MANIFEST,

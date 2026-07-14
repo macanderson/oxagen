@@ -47,16 +47,16 @@ describe("composeRepoCloneScript", () => {
     const script = composeRepoCloneScript([{ owner: "acme", repo: "api" }], {
       hasToken: false,
     });
-    expect(script).toContain("mkdir -p /workspace");
+    expect(script).toContain("mkdir -p /work");
     expect(script).toContain(
-      "git clone 'https://github.com/acme/api.git' '/workspace/api'",
+      "git clone 'https://github.com/acme/api.git' '/work/api'",
     );
     // No token channel referenced for a public clone.
     expect(script).not.toContain("GITHUB_TOKEN");
     expect(script).not.toContain("x-access-token");
     // Origin scrubbed to a token-free URL.
     expect(script).toContain(
-      "git -C '/workspace/api' remote set-url origin 'https://github.com/acme/api.git'",
+      "git -C '/work/api' remote set-url origin 'https://github.com/acme/api.git'",
     );
   });
 
@@ -66,17 +66,17 @@ describe("composeRepoCloneScript", () => {
     });
     // The literal env reference is present, expanded by the shell at runtime.
     expect(script).toContain(
-      'git clone "https://x-access-token:${GITHUB_TOKEN}@github.com/acme/api.git" \'/workspace/api\'',
+      "git clone \"https://x-access-token:${GITHUB_TOKEN}@github.com/acme/api.git\" '/work/api'",
     );
     // The composer never receives a token, so no ghs_/ghp_/gho_ value can appear.
     expect(script).not.toMatch(/gh[a-z]_/);
     // Origin is rewritten to a token-free URL so the credential never persists.
     expect(script).toContain(
-      "git -C '/workspace/api' remote set-url origin 'https://github.com/acme/api.git'",
+      "git -C '/work/api' remote set-url origin 'https://github.com/acme/api.git'",
     );
     // The token-bearing URL must NOT survive as the origin.
     expect(script).not.toContain(
-      "remote set-url origin \"https://x-access-token",
+      'remote set-url origin "https://x-access-token',
     );
   });
 
@@ -86,7 +86,7 @@ describe("composeRepoCloneScript", () => {
       { hasToken: false },
     );
     expect(script).toContain(
-      "git clone --branch 'release/v2' --single-branch 'https://github.com/acme/api.git' '/workspace/api'",
+      "git clone --branch 'release/v2' --single-branch 'https://github.com/acme/api.git' '/work/api'",
     );
   });
 
@@ -104,8 +104,8 @@ describe("composeRepoCloneScript", () => {
       { owner: "globex", repo: "api" },
     ];
     const script = composeRepoCloneScript(repos, { hasToken: true });
-    expect(script).toContain("'/workspace/api'");
-    expect(script).toContain("'/workspace/api-globex'");
+    expect(script).toContain("'/work/api'");
+    expect(script).toContain("'/work/api-globex'");
     // Two clones + two scrubs + the mkdir, all joined by &&.
     expect(script.match(/git clone/g)).toHaveLength(2);
     expect(script.match(/remote set-url origin/g)).toHaveLength(2);
@@ -120,7 +120,7 @@ describe("composeRepoCloneScript", () => {
       { hasToken: false },
     );
     // The whole chain is a single && sequence: a failed clone stops the rest.
-    expect(script.startsWith("mkdir -p /workspace && ")).toBe(true);
+    expect(script.startsWith("mkdir -p /work && ")).toBe(true);
     expect(script).not.toContain(";"); // no unchained statement separators
     // mkdir + (clone+scrub)*2 = 5 steps → 4 joiners.
     expect(script.split(" && ")).toHaveLength(5);
@@ -131,7 +131,18 @@ describe("composeRepoCloneScript", () => {
       [{ owner: "acme", repo: "api", branch: "feature/x" }],
       { hasToken: false },
     );
-    expect(script).toContain("'/workspace/api'");
+    expect(script).toContain("'/work/api'");
     expect(script).toContain("'feature/x'");
+  });
+
+  it("never leaks the old /workspace root — every path is under WORKSPACE_ROOT (/work)", () => {
+    const script = composeRepoCloneScript(
+      [
+        { owner: "acme", repo: "api", branch: "main" },
+        { owner: "globex", repo: "api" },
+      ],
+      { hasToken: true },
+    );
+    expect(script).not.toContain("/workspace");
   });
 });

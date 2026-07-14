@@ -1,0 +1,16 @@
+-- Drop the now-empty "graph" Postgres schema.
+--
+-- The only objects that ever lived here — graph.outbox and
+-- graph.projection_checkpoints — were created in 20260611233016_initial_schema
+-- and dropped in 20260622000000_drop_graph_outbox, which left an empty, unused
+-- schema behind. The `graphSchema = pgSchema("graph")` declaration in
+-- packages/database/src/schema/_schemas.ts is removed in the same change, so the
+-- Drizzle desired state no longer contains this schema and Atlas will not
+-- recreate it on the next diff.
+--
+-- Verified empty in production (0 tables/views/sequences/routines/types, no
+-- inbound views/FKs/column types) and prescribed for removal by the 2026-07-11
+-- Postgres schema audit (docs/audits/2026-07-11-postgres-schema-audit.md).
+-- RESTRICT (the default) is intentional: fail loudly rather than CASCADE if any
+-- object unexpectedly still lives in the schema.
+DROP SCHEMA IF EXISTS "graph";

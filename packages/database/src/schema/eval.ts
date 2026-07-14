@@ -1,5 +1,15 @@
 import { sql } from "drizzle-orm";
-import { check, index, integer, jsonb, numeric, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import {
+  check,
+  index,
+  integer,
+  jsonb,
+  numeric,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from "drizzle-orm/pg-core";
 import {
   auditMixin,
   citext,
@@ -97,11 +107,14 @@ export const evalRuns = evalSchema.table(
     // Mean overall judge score across completed items; null until the run finishes.
     avgScore: numeric("avg_score"),
     // Aggregate rubric breakdown, e.g. { correctness, faithfulness, passRate }.
-    scoreBreakdown: jsonb("score_breakdown").notNull().default(sql`'{}'::jsonb`),
-    // Inngest breadcrumb so a stuck run can be correlated to its durable job.
-    inngestEventId: text("inngest_event_id"),
+    scoreBreakdown: jsonb("score_breakdown")
+      .notNull()
+      .default(sql`'{}'::jsonb`),
     startedAt: timestamp("started_at", { withTimezone: true, mode: "date" }),
-    completedAt: timestamp("completed_at", { withTimezone: true, mode: "date" }),
+    completedAt: timestamp("completed_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
     failedAt: timestamp("failed_at", { withTimezone: true, mode: "date" }),
     failureReason: text("failure_reason"),
   },

@@ -27,6 +27,11 @@
       "includeByType": {
         "type": "boolean",
         "default": false
+      },
+      "includeGrowth": {
+        "type": "boolean",
+        "default": false,
+        "description": "Include node-creation time buckets (today/yesterday/this week/last week) and a 14-day daily series"
       }
     },
     "additionalProperties": false
@@ -66,6 +71,62 @@
       "lastModifiedAt": {
         "type": "string",
         "description": "ISO timestamp of last graph modification"
+      },
+      "growth": {
+        "type": "object",
+        "description": "Node-creation time buckets (present only when includeGrowth=true)",
+        "properties": {
+          "nodesToday": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Nodes created since the start of today (UTC)"
+          },
+          "nodesYesterday": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Nodes created during the prior UTC day"
+          },
+          "nodesThisWeek": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Nodes created in the last 7 days (rolling, incl today)"
+          },
+          "nodesLastWeek": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Nodes created in the 7 days before this week"
+          },
+          "daily": {
+            "type": "array",
+            "description": "Last 14 UTC days of node-creation counts, ascending, zero-filled",
+            "items": {
+              "type": "object",
+              "properties": {
+                "day": {
+                  "type": "string",
+                  "description": "UTC calendar day, YYYY-MM-DD"
+                },
+                "count": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "day",
+                "count"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "nodesToday",
+          "nodesYesterday",
+          "nodesThisWeek",
+          "nodesLastWeek",
+          "daily"
+        ],
+        "additionalProperties": false
       },
       "render": {
         "type": "object",

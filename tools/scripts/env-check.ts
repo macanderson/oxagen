@@ -36,6 +36,8 @@ export const PLATFORM_ALLOWLIST = new Set<string>([
   "NEXT_PHASE",
   // Standard CI signal
   "CI",
+  // no-color.org standard — set by the terminal/shell, not by operators
+  "NO_COLOR",
   // Oxagen internal platform version tag
   "PLATFORM_VERSION",
   // Turborepo remote-cache credentials (set via GitHub Actions Secrets, not app env)

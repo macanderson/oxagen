@@ -2,6 +2,7 @@
  * automation-create-inline-types.ts — Shared types, constants, and pure factory
  * functions for the automation-create-inline chat registry component.
  */
+import type { ConditionNode } from "@oxagen/oxagen/trigger-conditions";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -13,7 +14,13 @@ export interface PropertyCondition {
 
 export interface AutomationStep {
   name: string;
-  stepType: "agent" | "tool" | "condition" | "webhook" | "prompt" | "human_input";
+  stepType:
+    | "agent"
+    | "tool"
+    | "condition"
+    | "webhook"
+    | "prompt"
+    | "human_input";
   config?: Record<string, unknown>;
 }
 
@@ -28,8 +35,10 @@ export interface AutomationCreateInlineProps {
   entityType?: string;
   /** Graph event type (for 'event' triggers) */
   eventType?: "node.created" | "node.updated" | "node.deleted";
-  /** Property conditions (for 'event' triggers) */
+  /** Property conditions (for 'event' triggers) — legacy flat form, seeded into the tree. */
   propertyConditions?: PropertyCondition[];
+  /** Nested schema-driven condition tree (for 'event' triggers) — preferred form. */
+  conditionTree?: ConditionNode;
   /** POSIX cron expression (for 'schedule' triggers) */
   cronExpression?: string;
   /** IANA timezone (for 'schedule' triggers) */
@@ -41,7 +50,13 @@ export interface AutomationCreateInlineProps {
   workspaceSlug?: string;
 }
 
-export type FormState = "editing" | "submitting" | "created" | "enabling" | "enabled" | "error";
+export type FormState =
+  | "editing"
+  | "submitting"
+  | "created"
+  | "enabling"
+  | "enabled"
+  | "error";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 

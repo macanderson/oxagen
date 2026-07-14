@@ -24,7 +24,12 @@ describe("sandbox.template.import contract", () => {
       sandboxTemplateImport.input.parse({ environmentId: "env_1", manifest }),
     ).not.toThrow();
     expect(() =>
-      sandboxTemplateImport.input.parse({ environmentId: "env_1", manifest, slug: "custom", setAsDefault: true }),
+      sandboxTemplateImport.input.parse({
+        environmentId: "env_1",
+        manifest,
+        slug: "custom",
+        setAsDefault: true,
+      }),
     ).not.toThrow();
   });
   it("rejects a manifest with the wrong kind", () => {
@@ -52,9 +57,10 @@ describe("sandbox.template.import contract", () => {
           network: { mode: "public" },
           secretSelection: "all",
           literalEnv: {},
+          packages: [],
           tools: [],
         },
-        warnings: ["tool \"capability:agent.code.execute\" ..."],
+        warnings: ['tool "capability:agent.code.execute" ...'],
       }),
     ).not.toThrow();
   });

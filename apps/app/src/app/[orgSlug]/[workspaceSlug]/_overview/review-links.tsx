@@ -21,7 +21,7 @@ export function ReviewLinks({ orgSlug, workspaceSlug }: ReviewLinksProps) {
   const ctx = { orgSlug, workspaceSlug };
   const links = [
     { key: "inference", label: "Review inferred edges", icon: GitBranch, href: workspace.knowledge.inference(ctx) },
-    { key: "memories", label: "Review memories", icon: BrainCircuit, href: workspace.knowledge.memories(ctx) },
+    { key: "memories", label: "Review memories", icon: BrainCircuit, href: workspace.knowledge.memory(ctx) },
     { key: "ask", label: "Open Ask", icon: Sparkles, href: workspace.ask(ctx) },
   ] as const;
 

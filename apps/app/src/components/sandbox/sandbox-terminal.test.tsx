@@ -87,6 +87,28 @@ describe("SandboxTerminal", () => {
     );
   });
 
+  it("seeds the prompt + first command with an explicit initialCwd", async () => {
+    const runCommand = vi.fn(async () => ok({ stdout: "README.md" }));
+    render(
+      <SandboxTerminal
+        sessionId="sbx_abc123def456"
+        runCommand={runCommand}
+        initialCwd="/work"
+      />,
+    );
+
+    // The workspace root shows in the live prompt before any command runs…
+    expect(screen.getByTestId("sandbox-terminal-cwd").textContent).toBe(
+      "/work",
+    );
+
+    // …and is threaded into the very first command so a bare `ls` lands there.
+    typeCommand("ls");
+    await waitFor(() =>
+      expect(runCommand).toHaveBeenNthCalledWith(1, "ls", { cwd: "/work" }),
+    );
+  });
+
   it("keeps the prior cwd when a command reports no cwd (pre-cwd runner)", async () => {
     const runCommand = vi
       .fn()

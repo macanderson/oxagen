@@ -17,13 +17,6 @@ export const citext = customType<{ data: string; driverData: string }>({
   },
 });
 
-// ltree for hierarchical paths (workspace.folders). Spec §6.3.
-export const ltree = customType<{ data: string; driverData: string }>({
-  dataType() {
-    return "ltree";
-  },
-});
-
 // bytea for envelope-encrypted columns — Drizzle has no first-class bytea
 // helper, so we declare it via customType. The service layer is responsible
 // for encrypt/decrypt (see @oxagen/crypto); the column stores an opaque Buffer.
@@ -69,6 +62,14 @@ export const auditMixin = () => ({
   updatedByUserId: uuid("updated_by_user_id"),
 });
 
+/** append_only_audit_mixin — created timestamp and authoring user only (no updated fields). */
+export const appendOnlyAuditMixin = () => ({
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+    .notNull()
+    .defaultNow(),
+  createdByUserId: uuid("created_by_user_id"),
+});
+
 /** soft_delete_mixin — hard deletes prohibited on org-scoped tables. */
 export const softDeleteMixin = () => ({
   deletedAt: timestamp("deleted_at", { withTimezone: true, mode: "date" }),
@@ -109,7 +110,7 @@ export const jsonContractMixin = () => ({
 // Crockford base32, 22 chars ≈ 110 bits of entropy. Browser & Node both
 // provide globalThis.crypto in modern runtimes.
 const CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
-function cryptoRandom(length: number): string {
+export function cryptoRandom(length: number): string {
   const bytes = new Uint8Array(length);
   globalThis.crypto.getRandomValues(bytes);
   let out = "";

@@ -6,7 +6,9 @@ describe("sandbox.template.get contract", () => {
     expect(sandboxTemplateGet.name).toBe("get_sandbox_template");
   });
   it("requires a templateId", () => {
-    expect(() => sandboxTemplateGet.input.parse({ templateId: "sbx_1" })).not.toThrow();
+    expect(() =>
+      sandboxTemplateGet.input.parse({ templateId: "sbx_1" }),
+    ).not.toThrow();
     expect(() => sandboxTemplateGet.input.parse({})).toThrow();
   });
   it("accepts a valid output", () => {
@@ -26,6 +28,7 @@ describe("sandbox.template.get contract", () => {
           network: { mode: "public" },
           secretSelection: "all",
           literalEnv: {},
+          packages: [],
           tools: [],
         },
       }),

@@ -1,6 +1,13 @@
 import { z } from "zod";
-import { registerConnector, type ConnectorDefinition, type NormalizedRecord, type RecordTypeSample } from "../types";
+import {
+  registerConnector,
+  type ConnectorDefinition,
+  type NormalizedRecord,
+  type RecordTypeSample,
+} from "../types";
 import { verifyGoogleChannelToken } from "./verify-channel-token";
+import { subscribeGoogleWatchChannel } from "./subscribe-watch-channel";
+import type { WebhookSubscriptionResult } from "../types";
 
 const connectionConfigSchema = z.object({
   calendarIds: z.array(z.string()).optional(),
@@ -11,7 +18,9 @@ const connectionConfigSchema = z.object({
 type Config = typeof connectionConfigSchema;
 
 function asRecord(raw: unknown): Record<string, unknown> {
-  return raw !== null && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  return raw !== null && typeof raw === "object"
+    ? (raw as Record<string, unknown>)
+    : {};
 }
 
 function asString(v: unknown): string | undefined {
@@ -80,12 +89,31 @@ const googleCalendar: ConnectorDefinition<Config> = {
       }
 
       default:
-        throw new Error(`google-calendar.normalizeRecord: unknown sourceRecordType "${sourceRecordType}"`);
+        throw new Error(
+          `google-calendar.normalizeRecord: unknown sourceRecordType "${sourceRecordType}"`,
+        );
     }
   },
 
   // Google Calendar push channels echo the watch `channel.token` back as the
   // X-Goog-Channel-Token header — verify it against the stored channel secret.
+  // Watch the primary calendar events feed. Google echoes the channel token
+  // on each delivery via X-Goog-Channel-Token, which verifyWebhook checks.
+  async subscribeWebhooks(
+    auth,
+    _config,
+    webhookUrl,
+  ): Promise<WebhookSubscriptionResult> {
+    return subscribeGoogleWatchChannel({
+      connectorLabel: "google-calendar",
+      auth,
+      watchUrl:
+        "https://www.googleapis.com/calendar/v3/calendars/primary/events/watch",
+      webhookUrl,
+      recordTypes: ["calendar_event"],
+    });
+  },
+
   verifyWebhook(_payload, headers, secret): boolean {
     return verifyGoogleChannelToken(headers, secret);
   },

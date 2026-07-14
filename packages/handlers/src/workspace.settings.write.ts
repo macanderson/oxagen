@@ -6,19 +6,16 @@ import { eq } from "drizzle-orm";
 import { mapWorkspaceSettingsRow } from "./workspace.settings.read";
 import { logger } from "./logger";
 
-function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === "object" && v !== null;
-}
-
 // Postgres unique_violation — workspaces_org_slug_idx fires when a slug is
 // already taken by another workspace in the same org.
 function isUniqueViolation(err: unknown): boolean {
   return typeof err === "object" && err !== null && (err as { code?: string }).code === "23505";
 }
 
-// Partial update of workspace.workspaces for the active workspace. name/slug are
-// columns; description lives in the settings JSONB bag (read-merge-write so other
-// settings keys survive). Kernel handles metering + IAM via invoke().
+// Partial update of workspace.workspaces for the active workspace. name, slug,
+// avatarUrl and description are all real columns, each set independently — so a
+// concurrent prompt.settings.write can no longer clobber description (audit
+// §1.7). Kernel handles metering + IAM via invoke().
 export const workspaceSettingsWriteHandler: CapabilityHandler<typeof workspaceSettingsWrite> = async (
   input,
   ctx,
@@ -31,7 +28,7 @@ export const workspaceSettingsWriteHandler: CapabilityHandler<typeof workspaceSe
   const row = await withTenantDb(async (tx) => {
     const existing = await tx.query.workspaces.findFirst({
       where: eq(schema.workspaces.id, ctx.workspaceId),
-      columns: { name: true, slug: true, avatarUrl: true, settings: true },
+      columns: { name: true, slug: true, avatarUrl: true, description: true },
     });
     if (!existing) return null;
 
@@ -40,17 +37,8 @@ export const workspaceSettingsWriteHandler: CapabilityHandler<typeof workspaceSe
     if (input.slug !== undefined) updates.slug = input.slug;
     // avatarUrl is a real column: null clears, a string sets, undefined leaves it.
     if (input.avatarUrl !== undefined) updates.avatarUrl = input.avatarUrl;
-
-    // description is a key inside the settings JSONB bag — merge, don't clobber.
-    if (input.description !== undefined) {
-      const settings = isRecord(existing.settings) ? { ...existing.settings } : {};
-      if (input.description === null) {
-        delete settings.description;
-      } else {
-        settings.description = input.description;
-      }
-      updates.settings = settings;
-    }
+    // description is now a real column too: null clears, a string sets.
+    if (input.description !== undefined) updates.description = input.description;
 
     if (Object.keys(updates).length === 0) {
       return existing;
@@ -85,7 +73,7 @@ export const workspaceSettingsWriteHandler: CapabilityHandler<typeof workspaceSe
 
     return tx.query.workspaces.findFirst({
       where: eq(schema.workspaces.id, ctx.workspaceId),
-      columns: { name: true, slug: true, avatarUrl: true, settings: true },
+      columns: { name: true, slug: true, avatarUrl: true, description: true },
     });
   });
 

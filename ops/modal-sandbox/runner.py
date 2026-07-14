@@ -200,9 +200,13 @@ _FAST_ALIAS_TRAMPOLINE = (
     "command -v rg >/dev/null 2>&1 && alias grep=rg egrep=rg; "
     "command -v fd >/dev/null 2>&1 && alias find=fd && alias glob='fd --glob'; "
     "fi; "
-    # Restore the caller's working directory.  Guarded on -d so a since-deleted
-    # dir falls back to the image default instead of aborting the command.
-    'if [ -n "$OXAGEN_CWD" ] && [ -d "$OXAGEN_CWD" ]; then cd "$OXAGEN_CWD"; fi; '
+    # Restore the caller's working directory, falling back to /work — the
+    # canonical workspace root (WORKSPACE_ROOT in the TS layer, packages/
+    # sandbox/src/workspace.ts) that list_sandbox_files always lists.  The
+    # durable images set no WORKDIR, so without this fallback a caller that
+    # never threads OXAGEN_CWD would land in the image-default cwd instead.
+    'mkdir -p /work; '
+    'if [ -n "$OXAGEN_CWD" ] && [ -d "$OXAGEN_CWD" ]; then cd "$OXAGEN_CWD"; else cd /work; fi; '
     'eval "$OXAGEN_EXEC_CMD"; '
     "__oxagen_rc=$?; "
     "printf '\\036__OXAGEN_CWD__=%s' \"$(pwd 2>/dev/null)\"; "
@@ -633,9 +637,13 @@ async def sandbox_create(
         # "could not read Username …: No such device or address" a TTY-less
         # exec produces when git tries to prompt.
         setup_env = {"GIT_TERMINAL_PROMPT": "0", **(req.setup_env or {})}
+        # Run in /work — the canonical workspace root (WORKSPACE_ROOT in the TS
+        # layer) — so any relative-path setup (warm scaffold, `git init`, etc.)
+        # lands where list_sandbox_files looks instead of the image-default cwd,
+        # since the durable images set no WORKDIR.
         try:
             setup_proc = await modal.Sandbox.exec.aio(
-                sb, "sh", "-c", req.setup_cmd, env=setup_env
+                sb, "sh", "-c", f"mkdir -p /work && cd /work && ({req.setup_cmd})", env=setup_env
             )
             setup_exit = await setup_proc.wait.aio()
             setup_stderr = (

@@ -20,7 +20,7 @@ export const agentSubagentAggregate = registerCapability({
     "agent.aggregate-fanout Inngest function.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "app", "unit", "e2e", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "background" },
   sensitivity: "low",

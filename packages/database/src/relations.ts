@@ -51,8 +51,6 @@ import {
   subscriptions,
   paymentMethods,
   invoices,
-  invoiceLineItems,
-  usageRecords,
   creditBalances,
   creditLedger,
   stripeEvents,
@@ -75,11 +73,17 @@ export const organizationsRelations = relations(organizations, ({ many }) => ({
 }));
 
 export const invitationsRelations = relations(invitations, ({ one }) => ({
-  org: one(organizations, { fields: [invitations.orgId], references: [organizations.id] }),
+  org: one(organizations, {
+    fields: [invitations.orgId],
+    references: [organizations.id],
+  }),
 }));
 
 export const orgUsersRelations = relations(orgUsers, ({ one }) => ({
-  org: one(organizations, { fields: [orgUsers.orgId], references: [organizations.id] }),
+  org: one(organizations, {
+    fields: [orgUsers.orgId],
+    references: [organizations.id],
+  }),
   user: one(users, { fields: [orgUsers.userId], references: [users.id] }),
 }));
 
@@ -100,18 +104,26 @@ export const accountsRelations = relations(accounts, ({ one }) => ({
 }));
 
 export const workspacesRelations = relations(workspaces, ({ one, many }) => ({
-  org: one(organizations, { fields: [workspaces.orgId], references: [organizations.id] }),
+  org: one(organizations, {
+    fields: [workspaces.orgId],
+    references: [organizations.id],
+  }),
   members: many(workspaceUsers),
 }));
 
 export const workspaceUsersRelations = relations(workspaceUsers, ({ one }) => ({
-  workspace: one(workspaces, { fields: [workspaceUsers.workspaceId], references: [workspaces.id] }),
+  workspace: one(workspaces, {
+    fields: [workspaceUsers.workspaceId],
+    references: [workspaces.id],
+  }),
   user: one(users, { fields: [workspaceUsers.userId], references: [users.id] }),
 }));
 
-
 export const mcpServersRelations = relations(mcpServers, ({ one, many }) => ({
-  org: one(organizations, { fields: [mcpServers.orgId], references: [organizations.id] }),
+  org: one(organizations, {
+    fields: [mcpServers.orgId],
+    references: [organizations.id],
+  }),
   consents: many(mcpConsents),
   toolSnapshots: many(mcpToolSnapshots),
 }));
@@ -119,7 +131,10 @@ export const mcpServersRelations = relations(mcpServers, ({ one, many }) => ({
 // External-MCP consent grants (OXA-816). Each row links a server + the granting
 // user; the server link is the in-domain relation.
 export const mcpConsentsRelations = relations(mcpConsents, ({ one }) => ({
-  org: one(organizations, { fields: [mcpConsents.orgId], references: [organizations.id] }),
+  org: one(organizations, {
+    fields: [mcpConsents.orgId],
+    references: [organizations.id],
+  }),
   server: one(mcpServers, {
     fields: [mcpConsents.mcpServerId],
     references: [mcpServers.id],
@@ -128,34 +143,52 @@ export const mcpConsentsRelations = relations(mcpConsents, ({ one }) => ({
 }));
 
 // External-MCP tool-descriptor snapshots (OXA-820).
-export const mcpToolSnapshotsRelations = relations(mcpToolSnapshots, ({ one }) => ({
-  org: one(organizations, { fields: [mcpToolSnapshots.orgId], references: [organizations.id] }),
-  server: one(mcpServers, {
-    fields: [mcpToolSnapshots.mcpServerId],
-    references: [mcpServers.id],
+export const mcpToolSnapshotsRelations = relations(
+  mcpToolSnapshots,
+  ({ one }) => ({
+    org: one(organizations, {
+      fields: [mcpToolSnapshots.orgId],
+      references: [organizations.id],
+    }),
+    server: one(mcpServers, {
+      fields: [mcpToolSnapshots.mcpServerId],
+      references: [mcpServers.id],
+    }),
   }),
-}));
+);
 
 // External-MCP server lifecycle audit (OXA-820). Append-only; references the
 // server + the acting user, both app-enforced.
-export const mcpServerChangesRelations = relations(mcpServerChanges, ({ one }) => ({
-  org: one(organizations, { fields: [mcpServerChanges.orgId], references: [organizations.id] }),
-  server: one(mcpServers, {
-    fields: [mcpServerChanges.serverId],
-    references: [mcpServers.id],
+export const mcpServerChangesRelations = relations(
+  mcpServerChanges,
+  ({ one }) => ({
+    org: one(organizations, {
+      fields: [mcpServerChanges.orgId],
+      references: [organizations.id],
+    }),
+    server: one(mcpServers, {
+      fields: [mcpServerChanges.serverId],
+      references: [mcpServers.id],
+    }),
   }),
-}));
+);
 
 // Agent-runtime epic relations. Cross-domain joins (messages, execution
 // steps) stay app-enforced; in-domain links use Drizzle relations.
 
 export const skillsRelations = relations(skills, ({ one, many }) => ({
-  workspace: one(workspaces, { fields: [skills.workspaceId], references: [workspaces.id] }),
+  workspace: one(workspaces, {
+    fields: [skills.workspaceId],
+    references: [workspaces.id],
+  }),
   versions: many(skillVersions),
 }));
 
 export const skillVersionsRelations = relations(skillVersions, ({ one }) => ({
-  skill: one(skills, { fields: [skillVersions.skillId], references: [skills.id] }),
+  skill: one(skills, {
+    fields: [skillVersions.skillId],
+    references: [skills.id],
+  }),
   parentVersion: one(skillVersions, {
     fields: [skillVersions.parentVersionId],
     references: [skillVersions.id],
@@ -163,27 +196,36 @@ export const skillVersionsRelations = relations(skillVersions, ({ one }) => ({
   }),
 }));
 
-export const backgroundTasksRelations = relations(backgroundTasks, ({ one }) => ({
-  workspace: one(workspaces, {
-    fields: [backgroundTasks.workspaceId],
-    references: [workspaces.id],
+export const backgroundTasksRelations = relations(
+  backgroundTasks,
+  ({ one }) => ({
+    workspace: one(workspaces, {
+      fields: [backgroundTasks.workspaceId],
+      references: [workspaces.id],
+    }),
   }),
-}));
+);
 
-export const approvalRequestsRelations = relations(approvalRequests, ({ one }) => ({
-  message: one(messages, {
-    fields: [approvalRequests.messageId],
-    references: [messages.id],
+export const approvalRequestsRelations = relations(
+  approvalRequests,
+  ({ one }) => ({
+    message: one(messages, {
+      fields: [approvalRequests.messageId],
+      references: [messages.id],
+    }),
   }),
-}));
+);
 
-export const subagentFanoutsRelations = relations(subagentFanouts, ({ one, many }) => ({
-  parentMessage: one(messages, {
-    fields: [subagentFanouts.parentMessageId],
-    references: [messages.id],
+export const subagentFanoutsRelations = relations(
+  subagentFanouts,
+  ({ one, many }) => ({
+    parentMessage: one(messages, {
+      fields: [subagentFanouts.parentMessageId],
+      references: [messages.id],
+    }),
+    runs: many(subagentRuns),
   }),
-  runs: many(subagentRuns),
-}));
+);
 
 export const subagentRunsRelations = relations(subagentRuns, ({ one }) => ({
   fanout: one(subagentFanouts, {
@@ -192,16 +234,21 @@ export const subagentRunsRelations = relations(subagentRuns, ({ one }) => ({
   }),
 }));
 
-
-export const conversationsRelations = relations(conversations, ({ one, many }) => ({
-  user: one(users, { fields: [conversations.userId], references: [users.id] }),
-  activeLeafMessage: one(messages, {
-    fields: [conversations.activeLeafMessageId],
-    references: [messages.id],
-    relationName: "conversation_active_leaf",
+export const conversationsRelations = relations(
+  conversations,
+  ({ one, many }) => ({
+    user: one(users, {
+      fields: [conversations.userId],
+      references: [users.id],
+    }),
+    activeLeafMessage: one(messages, {
+      fields: [conversations.activeLeafMessageId],
+      references: [messages.id],
+      relationName: "conversation_active_leaf",
+    }),
+    messages: many(messages),
   }),
-  messages: many(messages),
-}));
+);
 
 export const messagesRelations = relations(messages, ({ one, many }) => ({
   conversation: one(conversations, {
@@ -220,44 +267,51 @@ export const plansRelations = relations(plans, ({ many }) => ({
   subscriptions: many(subscriptions),
 }));
 
-export const subscriptionsRelations = relations(subscriptions, ({ one, many }) => ({
-  org: one(organizations, { fields: [subscriptions.orgId], references: [organizations.id] }),
-  plan: one(plans, { fields: [subscriptions.planId], references: [plans.id] }),
-  invoices: many(invoices),
-  usageRecords: many(usageRecords),
-}));
+export const subscriptionsRelations = relations(
+  subscriptions,
+  ({ one, many }) => ({
+    org: one(organizations, {
+      fields: [subscriptions.orgId],
+      references: [organizations.id],
+    }),
+    plan: one(plans, {
+      fields: [subscriptions.planId],
+      references: [plans.id],
+    }),
+    invoices: many(invoices),
+  }),
+);
 
 export const paymentMethodsRelations = relations(paymentMethods, ({ one }) => ({
-  org: one(organizations, { fields: [paymentMethods.orgId], references: [organizations.id] }),
+  org: one(organizations, {
+    fields: [paymentMethods.orgId],
+    references: [organizations.id],
+  }),
 }));
 
-export const invoicesRelations = relations(invoices, ({ one, many }) => ({
-  org: one(organizations, { fields: [invoices.orgId], references: [organizations.id] }),
+export const invoicesRelations = relations(invoices, ({ one }) => ({
+  org: one(organizations, {
+    fields: [invoices.orgId],
+    references: [organizations.id],
+  }),
   subscription: one(subscriptions, {
     fields: [invoices.subscriptionId],
-    references: [subscriptions.id],
-  }),
-  lineItems: many(invoiceLineItems),
-}));
-
-export const invoiceLineItemsRelations = relations(invoiceLineItems, ({ one }) => ({
-  invoice: one(invoices, { fields: [invoiceLineItems.invoiceId], references: [invoices.id] }),
-}));
-
-export const usageRecordsRelations = relations(usageRecords, ({ one }) => ({
-  org: one(organizations, { fields: [usageRecords.orgId], references: [organizations.id] }),
-  subscription: one(subscriptions, {
-    fields: [usageRecords.subscriptionId],
     references: [subscriptions.id],
   }),
 }));
 
 export const creditBalancesRelations = relations(creditBalances, ({ one }) => ({
-  org: one(organizations, { fields: [creditBalances.orgId], references: [organizations.id] }),
+  org: one(organizations, {
+    fields: [creditBalances.orgId],
+    references: [organizations.id],
+  }),
 }));
 
 export const creditLedgerRelations = relations(creditLedger, ({ one }) => ({
-  org: one(organizations, { fields: [creditLedger.orgId], references: [organizations.id] }),
+  org: one(organizations, {
+    fields: [creditLedger.orgId],
+    references: [organizations.id],
+  }),
 }));
 
 export const stripeEventsRelations = relations(stripeEvents, ({ one }) => ({
@@ -267,12 +321,15 @@ export const stripeEventsRelations = relations(stripeEvents, ({ one }) => ({
   }),
 }));
 
-export const stripeEventProcessingRelations = relations(stripeEventProcessing, ({ one }) => ({
-  event: one(stripeEvents, {
-    fields: [stripeEventProcessing.stripeEventId],
-    references: [stripeEvents.id],
+export const stripeEventProcessingRelations = relations(
+  stripeEventProcessing,
+  ({ one }) => ({
+    event: one(stripeEvents, {
+      fields: [stripeEventProcessing.stripeEventId],
+      references: [stripeEvents.id],
+    }),
   }),
-}));
+);
 
 // ── IAM relations ─────────────────────────────────────────────────────────────
 // Cross-domain FK to org.organizations stays app-enforced (not a Drizzle FK on
@@ -280,13 +337,19 @@ export const stripeEventProcessingRelations = relations(stripeEventProcessing, (
 // links between IAM tables use Drizzle relations so the ORM can join them.
 
 export const principalsRelations = relations(principals, ({ one, many }) => ({
-  org: one(organizations, { fields: [principals.orgId], references: [organizations.id] }),
+  org: one(organizations, {
+    fields: [principals.orgId],
+    references: [organizations.id],
+  }),
   roleAssignments: many(principalRoleAssignments),
   accessRequests: many(accessRequests),
 }));
 
 export const rolesRelations = relations(roles, ({ one, many }) => ({
-  org: one(organizations, { fields: [roles.orgId], references: [organizations.id] }),
+  org: one(organizations, {
+    fields: [roles.orgId],
+    references: [organizations.id],
+  }),
   roleGrants: many(roleGrants),
   principalAssignments: many(principalRoleAssignments),
   parentRole: one(roles, {
@@ -299,51 +362,93 @@ export const rolesRelations = relations(roles, ({ one, many }) => ({
 
 export const roleGrantsRelations = relations(roleGrants, ({ one }) => ({
   role: one(roles, { fields: [roleGrants.roleId], references: [roles.id] }),
-  org: one(organizations, { fields: [roleGrants.orgId], references: [organizations.id] }),
+  org: one(organizations, {
+    fields: [roleGrants.orgId],
+    references: [organizations.id],
+  }),
 }));
 
-export const principalRoleAssignmentsRelations = relations(principalRoleAssignments, ({ one }) => ({
-  principal: one(principals, { fields: [principalRoleAssignments.principalId], references: [principals.id] }),
-  role: one(roles, { fields: [principalRoleAssignments.roleId], references: [roles.id] }),
-  org: one(organizations, { fields: [principalRoleAssignments.orgId], references: [organizations.id] }),
-}));
+export const principalRoleAssignmentsRelations = relations(
+  principalRoleAssignments,
+  ({ one }) => ({
+    principal: one(principals, {
+      fields: [principalRoleAssignments.principalId],
+      references: [principals.id],
+    }),
+    role: one(roles, {
+      fields: [principalRoleAssignments.roleId],
+      references: [roles.id],
+    }),
+    org: one(organizations, {
+      fields: [principalRoleAssignments.orgId],
+      references: [organizations.id],
+    }),
+  }),
+);
 
 export const accessRequestsRelations = relations(accessRequests, ({ one }) => ({
-  requester: one(principals, { fields: [accessRequests.requesterId], references: [principals.id] }),
-  org: one(organizations, { fields: [accessRequests.orgId], references: [organizations.id] }),
+  requester: one(principals, {
+    fields: [accessRequests.requesterId],
+    references: [principals.id],
+  }),
+  org: one(organizations, {
+    fields: [accessRequests.orgId],
+    references: [organizations.id],
+  }),
 }));
 
 // ── Agent relations ───────────────────────────────────────────────────────────
 
 export const agentsRelations = relations(agents, ({ one, many }) => ({
-  workspace: one(workspaces, { fields: [agents.workspaceId], references: [workspaces.id] }),
+  workspace: one(workspaces, {
+    fields: [agents.workspaceId],
+    references: [workspaces.id],
+  }),
   versions: many(agentVersions),
   executions: many(agentExecutions),
 }));
 
-export const agentVersionsRelations = relations(agentVersions, ({ one, many }) => ({
-  agent: one(agents, { fields: [agentVersions.agentId], references: [agents.id] }),
-  executions: many(agentExecutions),
-  stepRuns: many(playbookStepRuns),
-}));
-
-export const agentExecutionsRelations = relations(agentExecutions, ({ one, many }) => ({
-  agent: one(agents, { fields: [agentExecutions.agentId], references: [agents.id] }),
-  agentVersion: one(agentVersions, {
-    fields: [agentExecutions.agentVersionId],
-    references: [agentVersions.id],
+export const agentVersionsRelations = relations(
+  agentVersions,
+  ({ one, many }) => ({
+    agent: one(agents, {
+      fields: [agentVersions.agentId],
+      references: [agents.id],
+    }),
+    executions: many(agentExecutions),
+    stepRuns: many(playbookStepRuns),
   }),
-  workspace: one(workspaces, { fields: [agentExecutions.workspaceId], references: [workspaces.id] }),
-  steps: many(agentExecutionSteps),
-}));
+);
 
-export const agentExecutionStepsRelations = relations(agentExecutionSteps, ({ one, many }) => ({
-  execution: one(agentExecutions, {
-    fields: [agentExecutionSteps.executionId],
-    references: [agentExecutions.id],
+export const agentExecutionsRelations = relations(
+  agentExecutions,
+  ({ one, many }) => ({
+    agent: one(agents, {
+      fields: [agentExecutions.agentId],
+      references: [agents.id],
+    }),
+    agentVersion: one(agentVersions, {
+      fields: [agentExecutions.agentVersionId],
+      references: [agentVersions.id],
+    }),
+    workspace: one(workspaces, {
+      fields: [agentExecutions.workspaceId],
+      references: [workspaces.id],
+    }),
+    steps: many(agentExecutionSteps),
   }),
-  toolCalls: many(agentToolCalls),
-}));
+);
+
+export const agentExecutionStepsRelations = relations(
+  agentExecutionSteps,
+  ({ one, many }) => ({
+    execution: one(agentExecutions, {
+      fields: [agentExecutionSteps.executionId],
+      references: [agentExecutions.id],
+    }),
+    toolCalls: many(agentToolCalls),
+  }),
+);
 
 export const agentToolCallsRelations = relations(agentToolCalls, ({ one }) => ({
   executionStep: one(agentExecutionSteps, {
@@ -353,34 +458,49 @@ export const agentToolCallsRelations = relations(agentToolCalls, ({ one }) => ({
 }));
 
 export const agentPlansRelations = relations(agentPlans, ({ one }) => ({
-  workspace: one(workspaces, { fields: [agentPlans.workspaceId], references: [workspaces.id] }),
+  workspace: one(workspaces, {
+    fields: [agentPlans.workspaceId],
+    references: [workspaces.id],
+  }),
 }));
 
 // ── Playbook (workflow domain) relations ──────────────────────────────────────
 
 export const playbooksRelations = relations(playbooks, ({ one, many }) => ({
-  workspace: one(workspaces, { fields: [playbooks.workspaceId], references: [workspaces.id] }),
+  workspace: one(workspaces, {
+    fields: [playbooks.workspaceId],
+    references: [workspaces.id],
+  }),
   versions: many(playbookVersions),
   triggers: many(playbookTriggers),
   runs: many(playbookRuns),
 }));
 
-export const playbookVersionsRelations = relations(playbookVersions, ({ one, many }) => ({
-  playbook: one(playbooks, { fields: [playbookVersions.playbookId], references: [playbooks.id] }),
-  steps: many(playbookSteps),
-  edges: many(playbookEdges),
-  runs: many(playbookRuns),
-}));
-
-export const playbookStepsRelations = relations(playbookSteps, ({ one, many }) => ({
-  version: one(playbookVersions, {
-    fields: [playbookSteps.playbookVersionId],
-    references: [playbookVersions.id],
+export const playbookVersionsRelations = relations(
+  playbookVersions,
+  ({ one, many }) => ({
+    playbook: one(playbooks, {
+      fields: [playbookVersions.playbookId],
+      references: [playbooks.id],
+    }),
+    steps: many(playbookSteps),
+    edges: many(playbookEdges),
+    runs: many(playbookRuns),
   }),
-  outboundEdges: many(playbookEdges, { relationName: "edge_source" }),
-  inboundEdges: many(playbookEdges, { relationName: "edge_target" }),
-  stepRuns: many(playbookStepRuns),
-}));
+);
+
+export const playbookStepsRelations = relations(
+  playbookSteps,
+  ({ one, many }) => ({
+    version: one(playbookVersions, {
+      fields: [playbookSteps.playbookVersionId],
+      references: [playbookVersions.id],
+    }),
+    outboundEdges: many(playbookEdges, { relationName: "edge_source" }),
+    inboundEdges: many(playbookEdges, { relationName: "edge_target" }),
+    stepRuns: many(playbookStepRuns),
+  }),
+);
 
 export const playbookEdgesRelations = relations(playbookEdges, ({ one }) => ({
   version: one(playbookVersions, {
@@ -399,45 +519,66 @@ export const playbookEdgesRelations = relations(playbookEdges, ({ one }) => ({
   }),
 }));
 
-export const playbookTriggersRelations = relations(playbookTriggers, ({ one }) => ({
-  playbook: one(playbooks, { fields: [playbookTriggers.playbookId], references: [playbooks.id] }),
-  workspace: one(workspaces, { fields: [playbookTriggers.workspaceId], references: [workspaces.id] }),
-}));
+export const playbookTriggersRelations = relations(
+  playbookTriggers,
+  ({ one }) => ({
+    playbook: one(playbooks, {
+      fields: [playbookTriggers.playbookId],
+      references: [playbooks.id],
+    }),
+    workspace: one(workspaces, {
+      fields: [playbookTriggers.workspaceId],
+      references: [workspaces.id],
+    }),
+  }),
+);
 
-export const playbookRunsRelations = relations(playbookRuns, ({ one, many }) => ({
-  playbook: one(playbooks, { fields: [playbookRuns.playbookId], references: [playbooks.id] }),
-  version: one(playbookVersions, {
-    fields: [playbookRuns.playbookVersionId],
-    references: [playbookVersions.id],
+export const playbookRunsRelations = relations(
+  playbookRuns,
+  ({ one, many }) => ({
+    playbook: one(playbooks, {
+      fields: [playbookRuns.playbookId],
+      references: [playbooks.id],
+    }),
+    version: one(playbookVersions, {
+      fields: [playbookRuns.playbookVersionId],
+      references: [playbookVersions.id],
+    }),
+    workspace: one(workspaces, {
+      fields: [playbookRuns.workspaceId],
+      references: [workspaces.id],
+    }),
+    parentRun: one(playbookRuns, {
+      fields: [playbookRuns.parentRunId],
+      references: [playbookRuns.id],
+      relationName: "playbook_run_parent",
+    }),
+    childRuns: many(playbookRuns, { relationName: "playbook_run_parent" }),
+    stepRuns: many(playbookStepRuns),
+    events: many(playbookEvents),
+    approvals: many(playbookApprovals),
   }),
-  workspace: one(workspaces, { fields: [playbookRuns.workspaceId], references: [workspaces.id] }),
-  parentRun: one(playbookRuns, {
-    fields: [playbookRuns.parentRunId],
-    references: [playbookRuns.id],
-    relationName: "playbook_run_parent",
-  }),
-  childRuns: many(playbookRuns, { relationName: "playbook_run_parent" }),
-  stepRuns: many(playbookStepRuns),
-  events: many(playbookEvents),
-  approvals: many(playbookApprovals),
-}));
+);
 
-export const playbookStepRunsRelations = relations(playbookStepRuns, ({ one, many }) => ({
-  run: one(playbookRuns, {
-    fields: [playbookStepRuns.playbookRunId],
-    references: [playbookRuns.id],
+export const playbookStepRunsRelations = relations(
+  playbookStepRuns,
+  ({ one, many }) => ({
+    run: one(playbookRuns, {
+      fields: [playbookStepRuns.playbookRunId],
+      references: [playbookRuns.id],
+    }),
+    step: one(playbookSteps, {
+      fields: [playbookStepRuns.playbookStepId],
+      references: [playbookSteps.id],
+    }),
+    agentVersion: one(agentVersions, {
+      fields: [playbookStepRuns.agentVersionId],
+      references: [agentVersions.id],
+    }),
+    events: many(playbookEvents),
+    approvals: many(playbookApprovals),
   }),
-  step: one(playbookSteps, {
-    fields: [playbookStepRuns.playbookStepId],
-    references: [playbookSteps.id],
-  }),
-  agentVersion: one(agentVersions, {
-    fields: [playbookStepRuns.agentVersionId],
-    references: [agentVersions.id],
-  }),
-  events: many(playbookEvents),
-  approvals: many(playbookApprovals),
-}));
+);
 
 export const playbookEventsRelations = relations(playbookEvents, ({ one }) => ({
   run: one(playbookRuns, {
@@ -450,49 +591,60 @@ export const playbookEventsRelations = relations(playbookEvents, ({ one }) => ({
   }),
 }));
 
-export const playbookApprovalsRelations = relations(playbookApprovals, ({ one }) => ({
-  run: one(playbookRuns, {
-    fields: [playbookApprovals.playbookRunId],
-    references: [playbookRuns.id],
+export const playbookApprovalsRelations = relations(
+  playbookApprovals,
+  ({ one }) => ({
+    run: one(playbookRuns, {
+      fields: [playbookApprovals.playbookRunId],
+      references: [playbookRuns.id],
+    }),
+    stepRun: one(playbookStepRuns, {
+      fields: [playbookApprovals.stepRunId],
+      references: [playbookStepRuns.id],
+    }),
   }),
-  stepRun: one(playbookStepRuns, {
-    fields: [playbookApprovals.stepRunId],
-    references: [playbookStepRuns.id],
-  }),
-}));
+);
 
 // ── Schema Registry relations (§4.1–§4.6) ────────────────────────────────────
 // Cross-domain joins are app-enforced; in-domain FK links use Drizzle relations.
 
-export const schemaRegistriesRelations = relations(schemaRegistries, ({ one, many }) => ({
-  // The currently pinned (immutable, published) version.
-  pinnedVersion: one(schemaVersions, {
-    fields: [schemaRegistries.pinnedVersionId],
-    references: [schemaVersions.id],
-    relationName: "registry_pinned_version",
+export const schemaRegistriesRelations = relations(
+  schemaRegistries,
+  ({ one, many }) => ({
+    // The currently pinned (immutable, published) version.
+    pinnedVersion: one(schemaVersions, {
+      fields: [schemaRegistries.pinnedVersionId],
+      references: [schemaVersions.id],
+      relationName: "registry_pinned_version",
+    }),
+    // The current mutable draft version.
+    draftVersion: one(schemaVersions, {
+      fields: [schemaRegistries.draftVersionId],
+      references: [schemaVersions.id],
+      relationName: "registry_draft_version",
+    }),
+    versions: many(schemaVersions),
   }),
-  // The current mutable draft version.
-  draftVersion: one(schemaVersions, {
-    fields: [schemaRegistries.draftVersionId],
-    references: [schemaVersions.id],
-    relationName: "registry_draft_version",
-  }),
-  versions: many(schemaVersions),
-}));
+);
 
-export const schemaVersionsRelations = relations(schemaVersions, ({ one, many }) => ({
-  registry: one(schemaRegistries, {
-    fields: [schemaVersions.registryId],
-    references: [schemaRegistries.id],
+export const schemaVersionsRelations = relations(
+  schemaVersions,
+  ({ one, many }) => ({
+    registry: one(schemaRegistries, {
+      fields: [schemaVersions.registryId],
+      references: [schemaRegistries.id],
+    }),
+    parentVersion: one(schemaVersions, {
+      fields: [schemaVersions.parentVersionId],
+      references: [schemaVersions.id],
+      relationName: "schema_version_parent",
+    }),
+    childVersions: many(schemaVersions, {
+      relationName: "schema_version_parent",
+    }),
+    schemas: many(schemas),
   }),
-  parentVersion: one(schemaVersions, {
-    fields: [schemaVersions.parentVersionId],
-    references: [schemaVersions.id],
-    relationName: "schema_version_parent",
-  }),
-  childVersions: many(schemaVersions, { relationName: "schema_version_parent" }),
-  schemas: many(schemas),
-}));
+);
 
 export const schemasRelations = relations(schemas, ({ one, many }) => ({
   version: one(schemaVersions, {
@@ -503,10 +655,13 @@ export const schemasRelations = relations(schemas, ({ one, many }) => ({
   relationshipTypes: many(relationshipTypes),
 }));
 
-export const schemaActivationsRelations = relations(schemaActivations, (_helpers) => ({
-  // schema_activations is keyed on schema_name (stable string identity), not a UUID FK.
-  // Cross-workspace lookups are app-enforced; no Drizzle join needed here.
-}));
+export const schemaActivationsRelations = relations(
+  schemaActivations,
+  (_helpers) => ({
+    // schema_activations is keyed on schema_name (stable string identity), not a UUID FK.
+    // Cross-workspace lookups are app-enforced; no Drizzle join needed here.
+  }),
+);
 
 export const nodeLabelsRelations = relations(nodeLabels, ({ one, many }) => ({
   version: one(schemaVersions, {
@@ -520,30 +675,35 @@ export const nodeLabelsRelations = relations(nodeLabels, ({ one, many }) => ({
   properties: many(schemaProperties),
 }));
 
-export const relationshipTypesRelations = relations(relationshipTypes, ({ one, many }) => ({
-  version: one(schemaVersions, {
-    fields: [relationshipTypes.versionId],
-    references: [schemaVersions.id],
+export const relationshipTypesRelations = relations(
+  relationshipTypes,
+  ({ one, many }) => ({
+    version: one(schemaVersions, {
+      fields: [relationshipTypes.versionId],
+      references: [schemaVersions.id],
+    }),
+    schema: one(schemas, {
+      fields: [relationshipTypes.schemaId],
+      references: [schemas.id],
+    }),
+    properties: many(schemaProperties),
   }),
-  schema: one(schemas, {
-    fields: [relationshipTypes.schemaId],
-    references: [schemas.id],
-  }),
-  properties: many(schemaProperties),
-}));
+);
 
-export const schemaPropertiesRelations = relations(schemaProperties, ({ one }) => ({
-  version: one(schemaVersions, {
-    fields: [schemaProperties.versionId],
-    references: [schemaVersions.id],
+export const schemaPropertiesRelations = relations(
+  schemaProperties,
+  ({ one }) => ({
+    version: one(schemaVersions, {
+      fields: [schemaProperties.versionId],
+      references: [schemaVersions.id],
+    }),
+    nodeLabel: one(nodeLabels, {
+      fields: [schemaProperties.nodeLabelId],
+      references: [nodeLabels.id],
+    }),
+    relationshipType: one(relationshipTypes, {
+      fields: [schemaProperties.relationshipTypeId],
+      references: [relationshipTypes.id],
+    }),
   }),
-  nodeLabel: one(nodeLabels, {
-    fields: [schemaProperties.nodeLabelId],
-    references: [nodeLabels.id],
-  }),
-  relationshipType: one(relationshipTypes, {
-    fields: [schemaProperties.relationshipTypeId],
-    references: [relationshipTypes.id],
-  }),
-}));
-
+);

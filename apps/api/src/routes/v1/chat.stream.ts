@@ -10,7 +10,11 @@ import {
   chatSystemPrompt,
   loadWorkspacePromptConfigSafe,
 } from "@oxagen/ai";
-import { materializeTools, createApprovalRequest, waitForApproval } from "@oxagen/agent";
+import {
+  materializeTools,
+  createApprovalRequest,
+  waitForApproval,
+} from "@oxagen/agent";
 import { createPlatformAgentAi } from "@oxagen/agent/adapters";
 import { runCodingAgent } from "@oxagen/agent-engine";
 import { withTenantDb, schema } from "@oxagen/database";
@@ -138,8 +142,7 @@ chatStreamRoute.post("/", async (c) => {
         : {}),
   });
   const modelId = modelIdOf(turnModel);
-  const turnEffort =
-    effort && supportsReasoning(modelId) ? effort : undefined;
+  const turnEffort = effort && supportsReasoning(modelId) ? effort : undefined;
 
   // Load conversation history for multi-turn context.
   let historyMessages: ModelMessage[] = [];
@@ -365,7 +368,9 @@ chatStreamRoute.post("/", async (c) => {
                   riskLevel: "low",
                 }),
             );
-            const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+            const expiresAt = new Date(
+              Date.now() + 5 * 60 * 1000,
+            ).toISOString();
             emit({
               type: "approval-required",
               approvalId,
@@ -467,7 +472,6 @@ chatStreamRoute.post("/", async (c) => {
                     role: "user",
                     content,
                     contentBlocks: [],
-                    isActiveInBranch: true,
                     metadata: { surface: "api" },
                     createdByUserId: ctx.userId ?? ctx.apiKeyId ?? ctx.orgId,
                     updatedByUserId: ctx.userId ?? ctx.apiKeyId ?? ctx.orgId,
@@ -482,7 +486,6 @@ chatStreamRoute.post("/", async (c) => {
                       role: "assistant",
                       content: assistantText,
                       contentBlocks: [],
-                      isActiveInBranch: true,
                       metadata: { status: "complete", surface: "api" },
                       createdByUserId: ctx.userId ?? ctx.apiKeyId ?? ctx.orgId,
                       updatedByUserId: ctx.userId ?? ctx.apiKeyId ?? ctx.orgId,

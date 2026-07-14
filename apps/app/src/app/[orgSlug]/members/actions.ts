@@ -87,7 +87,12 @@ export async function inviteMemberAction(
 
   try {
     // Assert a license is available before creating the invitation.
-    await assertSeatAvailable(tenant.id);
+    // getOrgSeatUsage reads via withTenantDb, so the check needs the ambient
+    // tenant scope (page.tsx wraps its seat read the same way) — without it
+    // the query dies under FORCE RLS and every invite failed as "internal".
+    await runInTenantScope({ orgId: tenant.id, workspaceId: ORG_ONLY_WS }, () =>
+      assertSeatAvailable(tenant.id),
+    );
   } catch (err) {
     if (isSeatLimitError(err)) {
       return {
