@@ -56,7 +56,7 @@ async function withTimeout<T>(
 // ── Skills ──────────────────────────────────────────────────────────────────
 
 export type WorkspaceSkillRow = {
-  /** Stable public id of the skill — used as the agentTool `ref` for type "skill". */
+  /** Skill slug — the on-screen identifier, used as the agentTool `ref` for type "skill". */
   ref: string;
   name: string;
   description: string;
@@ -65,7 +65,10 @@ export type WorkspaceSkillRow = {
 
 /**
  * List the skills installed in the workspace. Backed by skill.workspace.list;
- * its output ids are skill public ids, which we surface as the agentTool `ref`.
+ * its output slugs (NOT the public `id`, which is an internal storage key —
+ * see the contract's own comment) are what we surface as the agentTool `ref`,
+ * since that's what downstream resolution (chat-stream skill binding,
+ * sandbox-template "agent_skill" tools) matches against.
  *
  * Note: skill.workspace.list's contract surfaces are ["api","mcp"] (no
  * "agent"), so we deliberately DO NOT pass an opts.surface — the kernel only
@@ -80,13 +83,14 @@ export async function listWorkspaceSkills(
     const out = (await invoke("list_workspace_skills", {}, ctx)) as {
       skills: Array<{
         id: string;
+        slug: string;
         name: string;
         description: string;
         enabled: boolean;
       }>;
     };
     return out.skills.map((s) => ({
-      ref: s.id,
+      ref: s.slug,
       name: s.name,
       description: s.description,
       enabled: s.enabled,
