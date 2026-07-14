@@ -102,17 +102,24 @@ describe("no wall-clock turn cap", () => {
 
 describe("withTimeout", () => {
   it("passes through the resolved value when the promise settles before the deadline", async () => {
-    const result = await withTimeout(Promise.resolve("ok"), 5_000, null, "test");
+    const result = await withTimeout(
+      Promise.resolve("ok"),
+      5_000,
+      null,
+      "test",
+    );
     expect(result).toBe("ok");
   });
 
   it("rejects with AgentTimeoutError when the deadline fires first", async () => {
     vi.useFakeTimers();
-    const slow = new Promise<string>(() => { /* never resolves */ });
+    const slow = new Promise<string>(() => {
+      /* never resolves */
+    });
     const raced = withTimeout(slow, 1_000, null, "slow op");
     vi.advanceTimersByTime(1_001);
     await expect(raced).rejects.toBeInstanceOf(AgentTimeoutError);
-    const err = await raced.catch((e: unknown) => e) as AgentTimeoutError;
+    const err = (await raced.catch((e: unknown) => e)) as AgentTimeoutError;
     expect(err.operation).toBe("slow op");
     expect(err.timeoutMs).toBe(1_000);
   });
@@ -126,14 +133,21 @@ describe("withTimeout", () => {
     const controller = new AbortController();
     controller.abort();
     await expect(
-      withTimeout(Promise.resolve("should not reach"), 5_000, controller.signal, "short-circuit"),
+      withTimeout(
+        Promise.resolve("should not reach"),
+        5_000,
+        controller.signal,
+        "short-circuit",
+      ),
     ).rejects.toBeInstanceOf(AgentTimeoutError);
   });
 
   it("rejects with AgentTimeoutError when signal fires before the deadline", async () => {
     vi.useFakeTimers();
     const controller = new AbortController();
-    const slow = new Promise<string>(() => { /* never resolves */ });
+    const slow = new Promise<string>(() => {
+      /* never resolves */
+    });
     const raced = withTimeout(slow, 10_000, controller.signal, "signal test");
     // Abort the signal (well before the 10s deadline).
     controller.abort();
@@ -144,7 +158,12 @@ describe("withTimeout", () => {
     vi.useFakeTimers();
     // If the timer is not unref()ed this test would hang in some environments.
     // We verify the promise resolves cleanly — the absence of a hang IS the test.
-    const resolved = withTimeout(Promise.resolve("fast"), 60_000, null, "fast op");
+    const resolved = withTimeout(
+      Promise.resolve("fast"),
+      60_000,
+      null,
+      "fast op",
+    );
     await expect(resolved).resolves.toBe("fast");
   });
 });
@@ -196,15 +215,17 @@ describe("makeTurnController", () => {
 
 // ── callModelWithTimeout (per-model-call timeout + retry) ──────────────────────
 
-const RETRY_CFG = { perModelCallMs: 1_000, retry: { maxRetries: 2, backoffMs: 0 } };
+const RETRY_CFG = {
+  perModelCallMs: 1_000,
+  retry: { maxRetries: 2, backoffMs: 0 },
+};
 
 describe("callModelWithTimeout", () => {
   it("passes through the value when the call completes before the deadline", async () => {
-    const value = await callModelWithTimeout(
-      async () => "ok",
-      RETRY_CFG,
-      { callId: "c1", model: "test/model" },
-    );
+    const value = await callModelWithTimeout(async () => "ok", RETRY_CFG, {
+      callId: "c1",
+      model: "test/model",
+    });
     expect(value).toBe("ok");
   });
 
@@ -218,9 +239,13 @@ describe("callModelWithTimeout", () => {
         // First attempt hangs until aborted; second resolves immediately.
         if (attempts === 1) {
           return new Promise<string>((_resolve, reject) => {
-            signal.addEventListener("abort", () => reject(new AgentTimeoutError("aborted", 1_000)), {
-              once: true,
-            });
+            signal.addEventListener(
+              "abort",
+              () => reject(new AgentTimeoutError("aborted", 1_000)),
+              {
+                once: true,
+              },
+            );
           });
         }
         return Promise.resolve("recovered");
@@ -233,7 +258,11 @@ describe("callModelWithTimeout", () => {
     const value = await promise;
     expect(value).toBe("recovered");
     expect(attempts).toBe(2);
-    expect(logs.some((l) => l.includes("scope=model_call") && l.includes("action=retry"))).toBe(true);
+    expect(
+      logs.some(
+        (l) => l.includes("scope=model_call") && l.includes("action=retry"),
+      ),
+    ).toBe(true);
   });
 
   it("throws after retries are exhausted", async () => {
@@ -241,9 +270,13 @@ describe("callModelWithTimeout", () => {
     const promise = callModelWithTimeout(
       (signal: AbortSignal) =>
         new Promise<string>((_resolve, reject) => {
-          signal.addEventListener("abort", () => reject(new AgentTimeoutError("aborted", 1_000)), {
-            once: true,
-          });
+          signal.addEventListener(
+            "abort",
+            () => reject(new AgentTimeoutError("aborted", 1_000)),
+            {
+              once: true,
+            },
+          );
         }),
       { perModelCallMs: 1_000, retry: { maxRetries: 1, backoffMs: 0 } },
       { callId: "c3", model: "test/model" },
@@ -262,7 +295,11 @@ describe("callModelWithTimeout", () => {
       (signal: AbortSignal) => {
         attempts++;
         return new Promise<string>((_resolve, reject) => {
-          signal.addEventListener("abort", () => reject(new Error("cancelled")), { once: true });
+          signal.addEventListener(
+            "abort",
+            () => reject(new Error("cancelled")),
+            { once: true },
+          );
         });
       },
       RETRY_CFG,
@@ -287,7 +324,11 @@ describe("createTurnRunner", () => {
     const reason = await runner.run(async () => {
       for (let i = 0; i < 200; i++) {
         await Promise.resolve();
-        runner.onProgress({ kind: "model_call_done", callId: `c${i}`, at: Date.now() });
+        runner.onProgress({
+          kind: "model_call_done",
+          callId: `c${i}`,
+          at: Date.now(),
+        });
       }
     });
     expect(reason).toBe("completed");
@@ -304,23 +345,36 @@ describe("createTurnRunner", () => {
     const reason = runner.run(
       () =>
         new Promise<void>((resolve) => {
-          runner.signal.addEventListener("abort", () => resolve(), { once: true });
+          runner.signal.addEventListener("abort", () => resolve(), {
+            once: true,
+          });
         }),
     );
     await vi.advanceTimersByTimeAsync(5_001);
     await expect(reason).resolves.toBe("inactivity");
-    expect(logs.some((l) => l.includes("scope=turn") && l.includes("reason=inactivity"))).toBe(true);
+    expect(
+      logs.some(
+        (l) => l.includes("scope=turn") && l.includes("reason=inactivity"),
+      ),
+    ).toBe(true);
   });
 
   it("does NOT abort a progressing turn even past the inactivity window", async () => {
-    // Real timers, tiny window: 5 iterations spaced 30ms apart (total 150ms ≫
-    // the 50ms window) — but each reports progress within the window, so the
-    // inactivity guard keeps resetting and never fires.
-    const runner = createTurnRunner({ turnInactivityMs: 50 });
+    // Fake timers: a real-timer version of this test (even with a wide 40ms/
+    // 300ms margin) still flaked under full monorepo test concurrency, where
+    // event-loop scheduling delays of multiple seconds were observed. Drive
+    // the clock deterministically instead of racing wall-clock jitter — 5
+    // steps of 200ms (1000ms total) each staying under the 300ms window.
+    vi.useFakeTimers();
+    const runner = createTurnRunner({ turnInactivityMs: 300 });
     const reason = await runner.run(async () => {
       for (let i = 0; i < 5; i++) {
-        await new Promise((r) => setTimeout(r, 30));
-        runner.onProgress({ kind: "tool_call_done", callId: `t${i}`, at: Date.now() });
+        await vi.advanceTimersByTimeAsync(200);
+        runner.onProgress({
+          kind: "tool_call_done",
+          callId: `t${i}`,
+          at: Date.now(),
+        });
       }
     });
     expect(reason).toBe("completed");
@@ -345,7 +399,9 @@ describe("createTurnRunner", () => {
     const reason = runner.run(
       () =>
         new Promise<void>((resolve) => {
-          runner.signal.addEventListener("abort", () => resolve(), { once: true });
+          runner.signal.addEventListener("abort", () => resolve(), {
+            once: true,
+          });
         }),
     );
     await vi.advanceTimersByTimeAsync(2_001);
@@ -391,7 +447,10 @@ describe("createTurnRunner — manual mode", () => {
   it("wires a stall probe: a live CI wait extends the window instead of aborting", async () => {
     vi.useFakeTimers();
     const probe = vi.fn().mockResolvedValue(true);
-    const runner = createTurnRunner({ turnInactivityMs: 1_000 }, { stall: { probe } });
+    const runner = createTurnRunner(
+      { turnInactivityMs: 1_000 },
+      { stall: { probe } },
+    );
     await vi.advanceTimersByTimeAsync(1_001);
     expect(probe).toHaveBeenCalledOnce();
     expect(runner.signal.aborted).toBe(false);
@@ -416,10 +475,17 @@ describe("createTurnRunner — manual mode", () => {
   it("logs scope=turn reason=inactivity through onLog when the guard fires", async () => {
     vi.useFakeTimers();
     const logs: string[] = [];
-    const runner = createTurnRunner({ turnInactivityMs: 1_000 }, { onLog: (l) => logs.push(l) });
+    const runner = createTurnRunner(
+      { turnInactivityMs: 1_000 },
+      { onLog: (l) => logs.push(l) },
+    );
     await vi.advanceTimersByTimeAsync(1_001);
     expect(runner.signal.aborted).toBe(true);
-    expect(logs.some((l) => l.includes("scope=turn") && l.includes("reason=inactivity"))).toBe(true);
+    expect(
+      logs.some(
+        (l) => l.includes("scope=turn") && l.includes("reason=inactivity"),
+      ),
+    ).toBe(true);
     runner.stop();
   });
 
@@ -544,7 +610,9 @@ describe("makeStallDetector", () => {
     expect(onStall).toHaveBeenCalledOnce();
 
     const onStall2 = vi.fn();
-    makeStallDetector(1_000, onStall2, { probe: () => Promise.reject(new Error("gh down")) });
+    makeStallDetector(1_000, onStall2, {
+      probe: () => Promise.reject(new Error("gh down")),
+    });
     await vi.advanceTimersByTimeAsync(1_001);
     expect(onStall2).toHaveBeenCalledOnce();
   });
@@ -567,7 +635,10 @@ describe("makeStallDetector", () => {
     vi.useFakeTimers();
     const onStall = vi.fn();
     const probe = vi.fn().mockResolvedValue(true);
-    const { reset } = makeStallDetector(1_000, onStall, { probe, probeCapMs: 1_500 });
+    const { reset } = makeStallDetector(1_000, onStall, {
+      probe,
+      probeCapMs: 1_500,
+    });
     await vi.advanceTimersByTimeAsync(1_001); // extend #1 (1s of 1.5s cap)
     reset(); // real progress: accumulator back to 0
     await vi.advanceTimersByTimeAsync(1_001); // extend again — budget is fresh
@@ -617,7 +688,9 @@ describe("resolveTurnInactivityMs / resolveCiWaitCapMs", () => {
   });
 
   it("defaults to DEFAULT_TIMEOUTS.turnInactivityMs and TIMEOUTS.ciWaitCapMs", () => {
-    expect(timeoutsModule.resolveTurnInactivityMs()).toBe(DEFAULT_TIMEOUTS.turnInactivityMs);
+    expect(timeoutsModule.resolveTurnInactivityMs()).toBe(
+      DEFAULT_TIMEOUTS.turnInactivityMs,
+    );
     expect(timeoutsModule.resolveCiWaitCapMs()).toBe(TIMEOUTS.ciWaitCapMs);
     expect(TIMEOUTS.ciWaitCapMs).toBe(2 * 60 * 60 * 1_000);
   });
@@ -630,7 +703,9 @@ describe("resolveTurnInactivityMs / resolveCiWaitCapMs", () => {
 
     process.env["OXAGEN_TURN_INACTIVITY_MS"] = "not-a-number";
     process.env["OXAGEN_CI_WAIT_CAP_MS"] = "-5";
-    expect(timeoutsModule.resolveTurnInactivityMs()).toBe(DEFAULT_TIMEOUTS.turnInactivityMs);
+    expect(timeoutsModule.resolveTurnInactivityMs()).toBe(
+      DEFAULT_TIMEOUTS.turnInactivityMs,
+    );
     expect(timeoutsModule.resolveCiWaitCapMs()).toBe(TIMEOUTS.ciWaitCapMs);
   });
 });
@@ -643,7 +718,15 @@ describe("toolTimeoutCategory", () => {
   });
 
   it('maps standard tools to "standard"', () => {
-    for (const name of ["read_file", "write_file", "edit_file", "glob", "grep", "list_dir", "code_graph"]) {
+    for (const name of [
+      "read_file",
+      "write_file",
+      "edit_file",
+      "glob",
+      "grep",
+      "list_dir",
+      "code_graph",
+    ]) {
       expect(toolTimeoutCategory(name)).toBe("standard");
     }
   });
@@ -676,7 +759,10 @@ describe("wrapToolsWithTimeout", () => {
       slow_tool: {
         description: "slow",
         inputSchema: z.object({}),
-        execute: () => new Promise<string>(() => { /* never resolves */ }),
+        execute: () =>
+          new Promise<string>(() => {
+            /* never resolves */
+          }),
       },
     };
     // Override toolMs for the test (wrapToolsWithTimeout uses TIMEOUTS.toolMs by default).
@@ -692,8 +778,8 @@ describe("wrapToolsWithTimeout", () => {
     const result = await promise;
     // The result must be a string (the tool-result form of the timeout error).
     expect(typeof result).toBe("string");
-    expect((result as string)).toContain("timed out");
-    expect((result as string)).toContain("tool:slow_tool");
+    expect(result as string).toContain("timed out");
+    expect(result as string).toContain("tool:slow_tool");
   });
 
   it("passes through tools without an execute function unchanged", () => {
@@ -721,7 +807,7 @@ describe("wrapToolsWithTimeout", () => {
     // @ts-expect-error — execute is callable
     const result = await wrapped.my_tool.execute({}, {});
     expect(typeof result).toBe("string");
-    expect((result as string)).toContain("timed out");
+    expect(result as string).toContain("timed out");
     // The real execute must not have been called.
     expect(result as string).not.toBe("should not run");
   });
@@ -733,7 +819,10 @@ describe("wrapToolsWithTimeout", () => {
       slow_tool: {
         description: "slow",
         inputSchema: z.object({}),
-        execute: () => new Promise<string>(() => { /* never resolves */ }),
+        execute: () =>
+          new Promise<string>(() => {
+            /* never resolves */
+          }),
       },
     };
     const wrapped = wrapToolsWithTimeout(tools);
@@ -741,10 +830,15 @@ describe("wrapToolsWithTimeout", () => {
     const promise = wrapped.slow_tool.execute({}, {});
     vi.advanceTimersByTime(TIMEOUTS.toolMs + 1);
     await promise;
-    const call = debugLogMock.mock.calls.find((c) => c[1] === "turn.tool-timeout");
+    const call = debugLogMock.mock.calls.find(
+      (c) => c[1] === "turn.tool-timeout",
+    );
     expect(call).toBeDefined();
     expect(call?.[0]).toBe("error");
-    expect(call?.[2]).toMatchObject({ tool: "slow_tool", timeoutMs: TIMEOUTS.toolMs });
+    expect(call?.[2]).toMatchObject({
+      tool: "slow_tool",
+      timeoutMs: TIMEOUTS.toolMs,
+    });
   });
 
   it("logs a turn.tool-throw error entry (with the exception) when a tool throws", async () => {
@@ -762,7 +856,9 @@ describe("wrapToolsWithTimeout", () => {
     const wrapped = wrapToolsWithTimeout(tools);
     // @ts-expect-error — execute is callable
     await expect(wrapped.bad_tool.execute({}, {})).rejects.toThrow("kaboom");
-    const call = debugLogMock.mock.calls.find((c) => c[1] === "turn.tool-throw");
+    const call = debugLogMock.mock.calls.find(
+      (c) => c[1] === "turn.tool-throw",
+    );
     expect(call).toBeDefined();
     expect(call?.[0]).toBe("error");
     expect(call?.[2]).toMatchObject({ tool: "bad_tool", error: boom });
@@ -812,7 +908,10 @@ describe("toolWrapperTimeoutMs", () => {
       const tools: ToolSet = {
         bash: {
           description: "bash",
-          inputSchema: z.object({ command: z.string(), timeout_ms: z.number().optional() }),
+          inputSchema: z.object({
+            command: z.string(),
+            timeout_ms: z.number().optional(),
+          }),
           // Resolves at 480s — inside its declared 500s budget, but past the
           // old fixed 240s wrapper that used to kill it.
           execute: () =>
@@ -823,7 +922,10 @@ describe("toolWrapperTimeoutMs", () => {
       };
       const wrapped = wrapToolsWithTimeout(tools);
       // @ts-expect-error — execute is callable
-      const promise = wrapped.bash.execute({ command: "pytest", timeout_ms: 500_000 }, {});
+      const promise = wrapped.bash.execute(
+        { command: "pytest", timeout_ms: 500_000 },
+        {},
+      );
       await vi.advanceTimersByTimeAsync(480_001);
       await expect(promise).resolves.toBe("done after 480s");
     } finally {

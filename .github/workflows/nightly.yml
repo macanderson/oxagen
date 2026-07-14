@@ -31,7 +31,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        task: [lint, typecheck, test:unit, build]
+        # "test:unit" must be quoted: an unquoted `:` inside a flow sequence
+        # is invalid YAML to strict parsers and can fail workflow parsing.
+        task: [lint, typecheck, "test:unit", build]
 
     services:
       postgres:
