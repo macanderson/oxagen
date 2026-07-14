@@ -5,7 +5,6 @@ import {
   index,
   integer,
   jsonb,
-  numeric,
   text,
   timestamp,
   uniqueIndex,
@@ -13,13 +12,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { billingSchema } from "./_schemas";
-import {
-  appendOnlyAuditMixin,
-  auditMixin,
-  citext,
-  idMixin,
-  uuidv7Default,
-} from "./_mixins";
+import { auditMixin, citext, idMixin, uuidv7Default } from "./_mixins";
 import { organizations } from "./org";
 
 export const plans = billingSchema.table(
@@ -187,74 +180,9 @@ export const invoices = billingSchema.table(
   }),
 );
 
-// invoice_line_items is an append-only join/detail table. No public_id —
-// the only lookup path is by invoice_id. Dropping public_id removes the
-// superfluous unique index and .$defaultFn() overhead on every insert.
-export const invoiceLineItems = billingSchema.table(
-  "invoice_line_items",
-  {
-    id: uuid("id").primaryKey().default(uuidv7Default),
-    // FK → org.organizations.id — denormalized for tenant isolation.
-    orgId: uuid("org_id")
-      .notNull()
-      .references(() => organizations.id),
-    // FK → billing.invoices.id
-    invoiceId: uuid("invoice_id")
-      .notNull()
-      .references(() => invoices.id, { onDelete: "cascade" }),
-    description: text("description").notNull(),
-    quantity: numeric("quantity", { precision: 18, scale: 4 }).notNull(),
-    unitAmountCents: integer("unit_amount_cents").notNull(),
-    totalCents: integer("total_cents").notNull(),
-    metric: text("metric"),
-    metadata: jsonb("metadata").notNull().default(sql`'{}'::jsonb`),
-  },
-  (t) => ({
-    invoiceIdx: index("invoice_line_items_invoice_idx").on(t.invoiceId),
-    orgIdx: index("invoice_line_items_org_idx").on(t.orgId),
-  }),
-);
-
-// usage_records is append-only: metered consumption events written once by the
-// billing engine. Dropping updated_at / updated_by_user_id enforces immutability
-// at the schema level — Drizzle will never generate a SET updated_at = ... for
-// this table.
-export const usageRecords = billingSchema.table(
-  "usage_records",
-  {
-    ...idMixin("usg"),
-    ...appendOnlyAuditMixin(),
-    // FK → org.organizations.id
-    orgId: uuid("org_id")
-      .notNull()
-      .references(() => organizations.id),
-    // FK → billing.subscriptions.id
-    subscriptionId: uuid("subscription_id")
-      .notNull()
-      .references(() => subscriptions.id),
-    metric: text("metric").notNull(),
-    quantity: numeric("quantity", { precision: 20, scale: 6 }).notNull(),
-    unitCostMicros: bigint("unit_cost_micros", { mode: "bigint" }).notNull(),
-    totalCostMicros: bigint("total_cost_micros", { mode: "bigint" }).notNull(),
-    periodStart: timestamp("period_start", {
-      withTimezone: true,
-      mode: "date",
-    }).notNull(),
-    periodEnd: timestamp("period_end", {
-      withTimezone: true,
-      mode: "date",
-    }).notNull(),
-    sourceQueryId: text("source_query_id"),
-  },
-  (t) => ({
-    uniqIdx: uniqueIndex("usage_records_sub_metric_period_idx").on(
-      t.subscriptionId,
-      t.metric,
-      t.periodStart,
-      t.periodEnd,
-    ),
-  }),
-);
+// invoice_line_items and usage_records were dropped in Batch B (#1006).
+// The tables no longer exist in the DB — these definitions were stale and
+// caused Atlas drift confusion. Removed from the schema to match reality.
 
 export const creditBalances = billingSchema.table(
   "credit_balances",
