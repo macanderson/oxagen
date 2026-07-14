@@ -29,14 +29,17 @@ function effectiveAmount(
   preset: number,
   custom: string,
 ): number {
-  return useCustom ? (parseFloat(custom) || 0) : preset;
+  return useCustom ? parseFloat(custom) || 0 : preset;
 }
 
 // ── Pure helper: confirm-destructive state machine ──────────────────────────
 
 type ConfirmState = "idle" | "confirmed" | "denied";
 
-function confirmTransition(current: ConfirmState, action: "confirm" | "deny"): ConfirmState {
+function confirmTransition(
+  current: ConfirmState,
+  action: "confirm" | "deny",
+): ConfirmState {
   if (current !== "idle") return current;
   return action === "confirm" ? "confirmed" : "denied";
 }
@@ -105,13 +108,27 @@ describe("deriveSlug", () => {
 // ── Tests: billing preset amounts ─────────────────────────────────────────────
 
 describe("credits-purchase-inline — preset amounts", () => {
-  it("10 is a preset", () => { expect(isPreset(10)).toBe(true); });
-  it("25 is a preset", () => { expect(isPreset(25)).toBe(true); });
-  it("50 is a preset", () => { expect(isPreset(50)).toBe(true); });
-  it("100 is a preset", () => { expect(isPreset(100)).toBe(true); });
-  it("7 is NOT a preset", () => { expect(isPreset(7)).toBe(false); });
-  it("0 is NOT a preset", () => { expect(isPreset(0)).toBe(false); });
-  it("exactly 4 preset amounts defined", () => { expect(PRESET_AMOUNTS).toHaveLength(4); });
+  it("10 is a preset", () => {
+    expect(isPreset(10)).toBe(true);
+  });
+  it("25 is a preset", () => {
+    expect(isPreset(25)).toBe(true);
+  });
+  it("50 is a preset", () => {
+    expect(isPreset(50)).toBe(true);
+  });
+  it("100 is a preset", () => {
+    expect(isPreset(100)).toBe(true);
+  });
+  it("7 is NOT a preset", () => {
+    expect(isPreset(7)).toBe(false);
+  });
+  it("0 is NOT a preset", () => {
+    expect(isPreset(0)).toBe(false);
+  });
+  it("exactly 4 preset amounts defined", () => {
+    expect(PRESET_AMOUNTS).toHaveLength(4);
+  });
 });
 
 // ── Tests: effective credit amount ────────────────────────────────────────────
@@ -173,24 +190,50 @@ describe("confirm-destructive-inline — state machine", () => {
 // ── Tests: model settings tier validation ─────────────────────────────────────
 
 describe("model-settings-inline — tier validation", () => {
-  it("'fast' is valid", () => { expect(isValidTier("fast")).toBe(true); });
-  it("'balanced' is valid", () => { expect(isValidTier("balanced")).toBe(true); });
-  it("'precise' is valid", () => { expect(isValidTier("precise")).toBe(true); });
-  it("'ultra' is NOT valid", () => { expect(isValidTier("ultra")).toBe(false); });
-  it("empty string is NOT valid", () => { expect(isValidTier("")).toBe(false); });
-  it("exactly 3 valid tiers defined", () => { expect(VALID_TIERS.size).toBe(3); });
+  it("'fast' is valid", () => {
+    expect(isValidTier("fast")).toBe(true);
+  });
+  it("'balanced' is valid", () => {
+    expect(isValidTier("balanced")).toBe(true);
+  });
+  it("'precise' is valid", () => {
+    expect(isValidTier("precise")).toBe(true);
+  });
+  it("'ultra' is NOT valid", () => {
+    expect(isValidTier("ultra")).toBe(false);
+  });
+  it("empty string is NOT valid", () => {
+    expect(isValidTier("")).toBe(false);
+  });
+  it("exactly 3 valid tiers defined", () => {
+    expect(VALID_TIERS.size).toBe(3);
+  });
 });
 
 // ── Tests: invite member role validation ─────────────────────────────────────
 
 describe("invite-member-inline — role validation", () => {
-  it("'owner' is valid", () => { expect(isValidRole("owner")).toBe(true); });
-  it("'admin' is valid", () => { expect(isValidRole("admin")).toBe(true); });
-  it("'member' is valid", () => { expect(isValidRole("member")).toBe(true); });
-  it("'billing' is valid", () => { expect(isValidRole("billing")).toBe(true); });
-  it("'superuser' is NOT valid", () => { expect(isValidRole("superuser")).toBe(false); });
-  it("empty string is NOT valid", () => { expect(isValidRole("")).toBe(false); });
-  it("exactly 4 valid roles defined", () => { expect(VALID_ROLES.size).toBe(4); });
+  it("'owner' is valid", () => {
+    expect(isValidRole("owner")).toBe(true);
+  });
+  it("'admin' is valid", () => {
+    expect(isValidRole("admin")).toBe(true);
+  });
+  it("'member' is valid", () => {
+    expect(isValidRole("member")).toBe(true);
+  });
+  it("'billing' is valid", () => {
+    expect(isValidRole("billing")).toBe(true);
+  });
+  it("'superuser' is NOT valid", () => {
+    expect(isValidRole("superuser")).toBe(false);
+  });
+  it("empty string is NOT valid", () => {
+    expect(isValidRole("")).toBe(false);
+  });
+  it("exactly 4 valid roles defined", () => {
+    expect(VALID_ROLES.size).toBe(4);
+  });
 });
 
 // ── Tests: create-workspace-inline submit guard ───────────────────────────────
@@ -226,23 +269,43 @@ describe("create-workspace-inline — submit disabled guard", () => {
 describe("billing-upgrade-inline — plan list", () => {
   const PLANS = ["build", "scale", "enterprise"] as const;
 
-  it("build plan defined", () => { expect(PLANS).toContain("build"); });
-  it("scale plan defined", () => { expect(PLANS).toContain("scale"); });
-  it("enterprise plan defined", () => { expect(PLANS).toContain("enterprise"); });
-  it("exactly 3 plans", () => { expect(PLANS).toHaveLength(3); });
+  it("build plan defined", () => {
+    expect(PLANS).toContain("build");
+  });
+  it("scale plan defined", () => {
+    expect(PLANS).toContain("scale");
+  });
+  it("enterprise plan defined", () => {
+    expect(PLANS).toContain("enterprise");
+  });
+  it("exactly 3 plans", () => {
+    expect(PLANS).toHaveLength(3);
+  });
 });
 
 // ── Pure helpers: workflow-progress ──────────────────────────────────────────
 
-type WorkflowStatus = "planning" | "running" | "completed" | "failed" | "cancelled";
+type WorkflowStatus =
+  | "planning"
+  | "running"
+  | "completed"
+  | "failed"
+  | "cancelled";
 
-const TERMINAL_STATUSES = new Set<WorkflowStatus>(["completed", "failed", "cancelled"]);
+const TERMINAL_STATUSES = new Set<WorkflowStatus>([
+  "completed",
+  "failed",
+  "cancelled",
+]);
 
 function isTerminal(status: WorkflowStatus): boolean {
   return TERMINAL_STATUSES.has(status);
 }
 
-function formatElapsed(startedAt: string | null, completedAt: string | null): string {
+function formatElapsed(
+  startedAt: string | null,
+  completedAt: string | null,
+): string {
   if (!startedAt) return "—";
   const start = new Date(startedAt).getTime();
   const end = completedAt ? new Date(completedAt).getTime() : start;
@@ -278,12 +341,24 @@ function progressPct(completedTasks: number, totalTasks: number): number {
 // ── Tests: workflow-progress terminal status detection ────────────────────────
 
 describe("workflow-progress — terminal status detection", () => {
-  it("'completed' is terminal", () => { expect(isTerminal("completed")).toBe(true); });
-  it("'failed' is terminal", () => { expect(isTerminal("failed")).toBe(true); });
-  it("'cancelled' is terminal", () => { expect(isTerminal("cancelled")).toBe(true); });
-  it("'running' is NOT terminal", () => { expect(isTerminal("running")).toBe(false); });
-  it("'planning' is NOT terminal", () => { expect(isTerminal("planning")).toBe(false); });
-  it("exactly 3 terminal statuses", () => { expect(TERMINAL_STATUSES.size).toBe(3); });
+  it("'completed' is terminal", () => {
+    expect(isTerminal("completed")).toBe(true);
+  });
+  it("'failed' is terminal", () => {
+    expect(isTerminal("failed")).toBe(true);
+  });
+  it("'cancelled' is terminal", () => {
+    expect(isTerminal("cancelled")).toBe(true);
+  });
+  it("'running' is NOT terminal", () => {
+    expect(isTerminal("running")).toBe(false);
+  });
+  it("'planning' is NOT terminal", () => {
+    expect(isTerminal("planning")).toBe(false);
+  });
+  it("exactly 3 terminal statuses", () => {
+    expect(TERMINAL_STATUSES.size).toBe(3);
+  });
 });
 
 // ── Tests: workflow-progress elapsed time formatting ─────────────────────────
@@ -406,6 +481,11 @@ describe("CHAT_COMPONENTS registry — coding-agent artifact ids", () => {
   });
 
   it("each new id's module resolves to a component with a default export", async () => {
+    // Cold dynamic import of three non-trivial card modules measured at
+    // ~4.9s in isolation (transform + module graph, no test-code slowness) —
+    // already at the edge of vitest's 5000ms default, so any concurrent
+    // monorepo load tips it into a false-positive timeout. 20s gives real
+    // headroom without masking an actual hang.
     const [diffModule, traceModule, treeModule] = await Promise.all([
       import("./code-diff-card"),
       import("./terminal-trace-card"),
@@ -414,5 +494,5 @@ describe("CHAT_COMPONENTS registry — coding-agent artifact ids", () => {
     expect(typeof diffModule.default).toBe("function");
     expect(typeof traceModule.default).toBe("function");
     expect(typeof treeModule.default).toBe("function");
-  });
+  }, 20_000);
 });

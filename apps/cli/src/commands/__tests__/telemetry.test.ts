@@ -18,7 +18,11 @@ import { captureWriter, type CommandWriter } from "../../lib/capture-writer.js";
  * confirmations and errors land on stderr. The plain captureWriter merges the
  * two, which cannot distinguish the streams.
  */
-function splitWriter(): { writer: CommandWriter; out: () => string; err: () => string } {
+function splitWriter(): {
+  writer: CommandWriter;
+  out: () => string;
+  err: () => string;
+} {
   const o: string[] = [];
   const e: string[] = [];
   return {
@@ -42,7 +46,12 @@ vi.mock("../../lib/config.js", () => ({
 }));
 
 import { readConfig, writeConfig } from "../../lib/config.js";
-import { telemetryStatus, telemetryOn, telemetryOff, handleTelemetry } from "../telemetry.js";
+import {
+  telemetryStatus,
+  telemetryOn,
+  telemetryOff,
+  handleTelemetry,
+} from "../telemetry.js";
 
 const mockReadConfig = readConfig as ReturnType<typeof vi.fn>;
 const mockWriteConfig = writeConfig as ReturnType<typeof vi.fn>;
@@ -56,6 +65,12 @@ let logged: () => string;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // isTelemetryEnabled() checks these directly (usage.ts) before falling back
+  // to the mocked config — a dev machine or CI runner with DO_NOT_TRACK=1 set
+  // ambiently (a common convention) would otherwise make "enabled by default"
+  // fail non-deterministically depending on where the suite runs.
+  delete process.env["DO_NOT_TRACK"];
+  delete process.env["OXAGEN_TELEMETRY"];
   setConfigReturn({});
   const cap = captureWriter();
   writer = cap.writer;
@@ -78,7 +93,9 @@ describe("telemetryStatus", () => {
   });
 
   it("shows the persisted install id when one exists", () => {
-    setConfigReturn({ telemetry: { installId: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee" } });
+    setConfigReturn({
+      telemetry: { installId: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee" },
+    });
     telemetryStatus(writer);
     expect(logged()).toContain("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
   });
@@ -96,7 +113,9 @@ describe("telemetryOn / telemetryOff", () => {
     setConfigReturn({});
     telemetryOff(writer);
     expect(mockWriteConfig).toHaveBeenCalledWith(
-      expect.objectContaining({ telemetry: expect.objectContaining({ enabled: false }) }),
+      expect.objectContaining({
+        telemetry: expect.objectContaining({ enabled: false }),
+      }),
     );
   });
 
@@ -104,16 +123,24 @@ describe("telemetryOn / telemetryOff", () => {
     setConfigReturn({ telemetry: { enabled: false } });
     telemetryOn(writer);
     expect(mockWriteConfig).toHaveBeenCalledWith(
-      expect.objectContaining({ telemetry: expect.objectContaining({ enabled: true }) }),
+      expect.objectContaining({
+        telemetry: expect.objectContaining({ enabled: true }),
+      }),
     );
   });
 
   it("preserves the existing installId/disclosed fields when toggling", () => {
-    setConfigReturn({ telemetry: { installId: "id-1", disclosed: true, enabled: false } });
+    setConfigReturn({
+      telemetry: { installId: "id-1", disclosed: true, enabled: false },
+    });
     telemetryOn(writer);
     expect(mockWriteConfig).toHaveBeenCalledWith(
       expect.objectContaining({
-        telemetry: expect.objectContaining({ installId: "id-1", disclosed: true, enabled: true }),
+        telemetry: expect.objectContaining({
+          installId: "id-1",
+          disclosed: true,
+          enabled: true,
+        }),
       }),
     );
   });
@@ -128,14 +155,18 @@ describe("handleTelemetry — subcommand dispatch", () => {
   it("dispatches on/off/status by name", () => {
     handleTelemetry("off", writer);
     expect(mockWriteConfig).toHaveBeenCalledWith(
-      expect.objectContaining({ telemetry: expect.objectContaining({ enabled: false }) }),
+      expect.objectContaining({
+        telemetry: expect.objectContaining({ enabled: false }),
+      }),
     );
 
     vi.clearAllMocks();
     setConfigReturn({});
     handleTelemetry("on", writer);
     expect(mockWriteConfig).toHaveBeenCalledWith(
-      expect.objectContaining({ telemetry: expect.objectContaining({ enabled: true }) }),
+      expect.objectContaining({
+        telemetry: expect.objectContaining({ enabled: true }),
+      }),
     );
 
     vi.clearAllMocks();
@@ -173,7 +204,9 @@ describe("telemetry output discipline (ADR-023 §4)", () => {
     expect(sp.out()).toBe("");
     expect(sp.err()).toContain("✓ Telemetry enabled.");
     expect(mockWriteConfig).toHaveBeenCalledWith(
-      expect.objectContaining({ telemetry: expect.objectContaining({ enabled: true }) }),
+      expect.objectContaining({
+        telemetry: expect.objectContaining({ enabled: true }),
+      }),
     );
   });
 

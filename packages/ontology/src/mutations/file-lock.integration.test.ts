@@ -11,6 +11,7 @@
  * `pnpm dev`) and skips cleanly when it is unreachable (e.g. the CI unit
  * lane), mirroring `packages/ingestion/src/dedup/__tests__/resolve.integration.test.ts`.
  */
+import { randomUUID } from "node:crypto";
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 
 process.env.NEO4J_URI ??= "bolt://localhost:7687";
@@ -21,14 +22,20 @@ process.env.NEO4J_DATABASE ??= "neo4j";
 const { runInTenantScope } = await import("@oxagen/tenancy");
 const { driver, closeDriver } = await import("../client");
 const { acquireFileLock } = await import("./acquire-file-lock");
-const { releaseFileLock, releaseFileLocksByExecution } = await import("./release-file-lock");
+const { releaseFileLock, releaseFileLocksByExecution } = await import(
+  "./release-file-lock"
+);
 const { sweepExpiredFileLocks } = await import("./sweep-file-locks");
 
-// Fixed, valid-UUID-shaped tenant scope, distinct from other integration
-// suites' fixture ids so a parallel test run never collides on the same
-// naturalKey+orgId node.
-const ORG_ID = "00000000-0000-4000-8000-0000000da207";
-const WORKSPACE_ID = "00000000-0000-4000-8000-0000000da208";
+// Run-unique tenant scope: turbo runs test:unit and test:coverage
+// concurrently, so this whole suite executes TWICE against the same local
+// Neo4j. With a fixed orgId the sibling run's beforeAll cleanup DETACH
+// DELETEs our in-flight nodes (release tests see released=false) and its
+// same-executionId locks inflate our batch-release counts (4 instead of 2).
+// Every mutation, ground-truth query, and cleanup here is org-scoped, so a
+// fresh UUID per process isolates concurrent runs completely.
+const ORG_ID = randomUUID();
+const WORKSPACE_ID = randomUUID();
 
 function naturalKey(suffix: string): string {
   return `github:oxa-2070-file-lock-regression:${suffix}`;
@@ -123,23 +130,25 @@ describe("agent file locking (integration, local Neo4j) — OXA-2070", () => {
     const key = naturalKey("race-target.ts");
     const now = Date.now();
 
-    const [resultA, resultB] = await runInTenantScope({ orgId: ORG_ID, workspaceId: WORKSPACE_ID }, () =>
-      Promise.all([
-        acquireFileLock({
-          naturalKey: key,
-          agentId: "oxa-2070-agent-a",
-          executionId: "turn-a",
-          workspaceId: WORKSPACE_ID,
-          now,
-        }),
-        acquireFileLock({
-          naturalKey: key,
-          agentId: "oxa-2070-agent-b",
-          executionId: "turn-b",
-          workspaceId: WORKSPACE_ID,
-          now,
-        }),
-      ]),
+    const [resultA, resultB] = await runInTenantScope(
+      { orgId: ORG_ID, workspaceId: WORKSPACE_ID },
+      () =>
+        Promise.all([
+          acquireFileLock({
+            naturalKey: key,
+            agentId: "oxa-2070-agent-a",
+            executionId: "turn-a",
+            workspaceId: WORKSPACE_ID,
+            now,
+          }),
+          acquireFileLock({
+            naturalKey: key,
+            agentId: "oxa-2070-agent-b",
+            executionId: "turn-b",
+            workspaceId: WORKSPACE_ID,
+            now,
+          }),
+        ]),
     );
     const results = [
       { agentId: "oxa-2070-agent-a", result: resultA! },
@@ -175,28 +184,32 @@ describe("agent file locking (integration, local Neo4j) — OXA-2070", () => {
     const key = naturalKey("renew-target.ts");
     const now = Date.now();
 
-    const first = await runInTenantScope({ orgId: ORG_ID, workspaceId: WORKSPACE_ID }, () =>
-      acquireFileLock({
-        naturalKey: key,
-        agentId: "oxa-2070-agent-renew",
-        executionId: "turn-renew-1",
-        workspaceId: WORKSPACE_ID,
-        ttlMs: 1_000,
-        now,
-      }),
+    const first = await runInTenantScope(
+      { orgId: ORG_ID, workspaceId: WORKSPACE_ID },
+      () =>
+        acquireFileLock({
+          naturalKey: key,
+          agentId: "oxa-2070-agent-renew",
+          executionId: "turn-renew-1",
+          workspaceId: WORKSPACE_ID,
+          ttlMs: 1_000,
+          now,
+        }),
     );
     expect(first.granted).toBe(true);
 
     const laterNow = now + 500;
-    const second = await runInTenantScope({ orgId: ORG_ID, workspaceId: WORKSPACE_ID }, () =>
-      acquireFileLock({
-        naturalKey: key,
-        agentId: "oxa-2070-agent-renew",
-        executionId: "turn-renew-2",
-        workspaceId: WORKSPACE_ID,
-        ttlMs: 1_000,
-        now: laterNow,
-      }),
+    const second = await runInTenantScope(
+      { orgId: ORG_ID, workspaceId: WORKSPACE_ID },
+      () =>
+        acquireFileLock({
+          naturalKey: key,
+          agentId: "oxa-2070-agent-renew",
+          executionId: "turn-renew-2",
+          workspaceId: WORKSPACE_ID,
+          ttlMs: 1_000,
+          now: laterNow,
+        }),
     );
     // Renewal, not a conflict — the same agentId always succeeds.
     expect(second.granted).toBe(true);
@@ -210,7 +223,9 @@ describe("agent file locking (integration, local Neo4j) — OXA-2070", () => {
       );
       // Renewal reuses the SAME edge (MERGE on (a)-[h]->(f)) — never a second one.
       expect(Number(result.records[0]!.get("c"))).toBe(1);
-      expect(Number(result.records[0]!.get("expiresAt"))).toBe(laterNow + 1_000);
+      expect(Number(result.records[0]!.get("expiresAt"))).toBe(
+        laterNow + 1_000,
+      );
     } finally {
       await s.close();
     }
@@ -222,28 +237,32 @@ describe("agent file locking (integration, local Neo4j) — OXA-2070", () => {
     const key = naturalKey("expiry-target.ts");
     const t0 = Date.now();
 
-    const first = await runInTenantScope({ orgId: ORG_ID, workspaceId: WORKSPACE_ID }, () =>
-      acquireFileLock({
-        naturalKey: key,
-        agentId: "oxa-2070-agent-expiring",
-        executionId: "turn-expiring",
-        workspaceId: WORKSPACE_ID,
-        ttlMs: 10,
-        now: t0,
-      }),
+    const first = await runInTenantScope(
+      { orgId: ORG_ID, workspaceId: WORKSPACE_ID },
+      () =>
+        acquireFileLock({
+          naturalKey: key,
+          agentId: "oxa-2070-agent-expiring",
+          executionId: "turn-expiring",
+          workspaceId: WORKSPACE_ID,
+          ttlMs: 10,
+          now: t0,
+        }),
     );
     expect(first.granted).toBe(true);
 
     // Simulate time passing well beyond the 10ms TTL.
     const afterExpiry = t0 + 60_000;
-    const second = await runInTenantScope({ orgId: ORG_ID, workspaceId: WORKSPACE_ID }, () =>
-      acquireFileLock({
-        naturalKey: key,
-        agentId: "oxa-2070-agent-fresh",
-        executionId: "turn-fresh",
-        workspaceId: WORKSPACE_ID,
-        now: afterExpiry,
-      }),
+    const second = await runInTenantScope(
+      { orgId: ORG_ID, workspaceId: WORKSPACE_ID },
+      () =>
+        acquireFileLock({
+          naturalKey: key,
+          agentId: "oxa-2070-agent-fresh",
+          executionId: "turn-fresh",
+          workspaceId: WORKSPACE_ID,
+          now: afterExpiry,
+        }),
     );
     expect(second.granted).toBe(true);
   });
@@ -254,37 +273,51 @@ describe("agent file locking (integration, local Neo4j) — OXA-2070", () => {
     const key = naturalKey("release-target.ts");
     const now = Date.now();
 
-    const acquired = await runInTenantScope({ orgId: ORG_ID, workspaceId: WORKSPACE_ID }, () =>
-      acquireFileLock({
-        naturalKey: key,
-        agentId: "oxa-2070-agent-releaser",
-        executionId: "turn-release",
-        workspaceId: WORKSPACE_ID,
-        now,
-      }),
+    const acquired = await runInTenantScope(
+      { orgId: ORG_ID, workspaceId: WORKSPACE_ID },
+      () =>
+        acquireFileLock({
+          naturalKey: key,
+          agentId: "oxa-2070-agent-releaser",
+          executionId: "turn-release",
+          workspaceId: WORKSPACE_ID,
+          now,
+        }),
     );
     expect(acquired.granted).toBe(true);
 
-    const releaseResult = await runInTenantScope({ orgId: ORG_ID, workspaceId: WORKSPACE_ID }, () =>
-      releaseFileLock({ lockId: acquired.lockId, agentId: "oxa-2070-agent-releaser" }),
+    const releaseResult = await runInTenantScope(
+      { orgId: ORG_ID, workspaceId: WORKSPACE_ID },
+      () =>
+        releaseFileLock({
+          lockId: acquired.lockId,
+          agentId: "oxa-2070-agent-releaser",
+        }),
     );
     expect(releaseResult.released).toBe(true);
 
     // A DIFFERENT agent can now acquire the same file without waiting for TTL.
-    const reacquired = await runInTenantScope({ orgId: ORG_ID, workspaceId: WORKSPACE_ID }, () =>
-      acquireFileLock({
-        naturalKey: key,
-        agentId: "oxa-2070-agent-second",
-        executionId: "turn-second",
-        workspaceId: WORKSPACE_ID,
-        now: now + 1,
-      }),
+    const reacquired = await runInTenantScope(
+      { orgId: ORG_ID, workspaceId: WORKSPACE_ID },
+      () =>
+        acquireFileLock({
+          naturalKey: key,
+          agentId: "oxa-2070-agent-second",
+          executionId: "turn-second",
+          workspaceId: WORKSPACE_ID,
+          now: now + 1,
+        }),
     );
     expect(reacquired.granted).toBe(true);
 
     // Releasing an already-released lock is idempotent, not an error.
-    const secondRelease = await runInTenantScope({ orgId: ORG_ID, workspaceId: WORKSPACE_ID }, () =>
-      releaseFileLock({ lockId: acquired.lockId, agentId: "oxa-2070-agent-releaser" }),
+    const secondRelease = await runInTenantScope(
+      { orgId: ORG_ID, workspaceId: WORKSPACE_ID },
+      () =>
+        releaseFileLock({
+          lockId: acquired.lockId,
+          agentId: "oxa-2070-agent-releaser",
+        }),
     );
     expect(secondRelease.released).toBe(false);
   });
@@ -295,7 +328,10 @@ describe("agent file locking (integration, local Neo4j) — OXA-2070", () => {
     const keyA = naturalKey("batch-a.ts");
     const keyB = naturalKey("batch-b.ts");
     const now = Date.now();
-    const executionId = "turn-batch-release";
+    // Suffixed with the run-unique ORG_ID: the ground-truth MATCH below
+    // filters on executionId alone (HOLDS_LOCK edges carry no orgId), so the
+    // id itself must be unique across concurrent runs of this suite.
+    const executionId = `turn-batch-release-${ORG_ID}`;
 
     await runInTenantScope({ orgId: ORG_ID, workspaceId: WORKSPACE_ID }, () =>
       Promise.all([
@@ -316,8 +352,9 @@ describe("agent file locking (integration, local Neo4j) — OXA-2070", () => {
       ]),
     );
 
-    const batchResult = await runInTenantScope({ orgId: ORG_ID, workspaceId: WORKSPACE_ID }, () =>
-      releaseFileLocksByExecution({ executionId }),
+    const batchResult = await runInTenantScope(
+      { orgId: ORG_ID, workspaceId: WORKSPACE_ID },
+      () => releaseFileLocksByExecution({ executionId }),
     );
     expect(batchResult.releasedCount).toBe(2);
 
@@ -351,15 +388,18 @@ describe("agent file locking (integration, local Neo4j) — OXA-2070", () => {
       }),
     );
 
-    const sweepResult = await sweepExpiredFileLocks(t0 + 60_000);
-    expect(sweepResult.sweptCount).toBeGreaterThanOrEqual(1);
+    // The sweep is system-wide by design, so a concurrent run of this suite
+    // may reap our expired lock before we do — sweptCount is then 0 here and
+    // >=1 there. The deterministic invariant is the org-scoped ground truth
+    // below: after sweeping past expiry, our lock edge no longer exists.
+    await sweepExpiredFileLocks(t0 + 60_000);
 
     const s = driver().session({ database: process.env.NEO4J_DATABASE });
     try {
       const result = await s.run(
-        `MATCH (:Agent {id: $agentId})-[l:HOLDS_LOCK]->(:SourceFile {naturalKey: $naturalKey})
+        `MATCH (:Agent {id: $agentId, orgId: $orgId})-[l:HOLDS_LOCK]->(:SourceFile {naturalKey: $naturalKey, orgId: $orgId})
          RETURN count(l) AS c`,
-        { agentId: "oxa-2070-agent-sweep", naturalKey: key },
+        { agentId: "oxa-2070-agent-sweep", naturalKey: key, orgId: ORG_ID },
       );
       expect(Number(result.records[0]!.get("c"))).toBe(0);
     } finally {

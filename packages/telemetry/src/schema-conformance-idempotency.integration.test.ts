@@ -51,7 +51,10 @@ beforeAll(async () => {
     );
     chUp = false;
   }
-});
+  // 60s: migrate() replays the full migration chain; under a whole-monorepo
+  // turbo run it can exceed vitest's 10s default hook timeout, which fails
+  // the hook instead of reaching the unreachable→skip path above.
+}, 60_000);
 
 afterAll(async () => {
   if (!chUp) return;
@@ -150,7 +153,9 @@ describe("schema_conformance_events — ReplacingMergeTree idempotency (OXA-1932
     // Force the background merge synchronously so dedup is guaranteed to have
     // applied before we query (production reads use FINAL and tolerate
     // eventual consistency; the test forces it for a deterministic assertion).
-    await ch.command({ query: "OPTIMIZE TABLE schema_conformance_events FINAL" });
+    await ch.command({
+      query: "OPTIMIZE TABLE schema_conformance_events FINAL",
+    });
 
     try {
       expect(await countByEventId(eventId)).toBe(1);
@@ -192,7 +197,9 @@ describe("schema_conformance_events — ReplacingMergeTree idempotency (OXA-1932
       ],
       format: "JSONEachRow",
     });
-    await ch.command({ query: "OPTIMIZE TABLE schema_conformance_events FINAL" });
+    await ch.command({
+      query: "OPTIMIZE TABLE schema_conformance_events FINAL",
+    });
 
     try {
       expect(await countByEventId(eventIdRun1)).toBe(1);
