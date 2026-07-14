@@ -62,7 +62,7 @@ export interface SplashSignalSource {
 }
 
 export interface StartupSplash {
-  /** Erase the splash line and restore the cursor. Safe to call twice. */
+  /** Erase the splash line. Safe to call twice. */
   stop(): void;
 }
 
