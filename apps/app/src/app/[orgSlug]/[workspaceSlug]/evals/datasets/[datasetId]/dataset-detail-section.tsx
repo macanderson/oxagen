@@ -95,7 +95,7 @@ export async function DatasetDetailSection({
             console.error("eval.run.list failed:", e);
             return null;
           }),
-        invoke("eval_run_series", { datasetPublicId, bucket: "day" }, ctx)
+        invoke("get_eval_run_series", { datasetPublicId, bucket: "day" }, ctx)
           .then((s) => s as EvalRunSeriesOutput)
           .catch((e) => {
             console.error("eval.run.series failed:", e);
