@@ -14,12 +14,20 @@
  */
 
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, within, waitFor, cleanup } from "@testing-library/react";
+import {
+  render,
+  screen,
+  within,
+  waitFor,
+  cleanup,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 // usePathname is read on every render; a hoisted ref lets individual tests
 // point the component at a different route (drives mode + active detection).
-const { pathnameRef } = vi.hoisted(() => ({ pathnameRef: { current: "/acme/prod/ask" } }));
+const { pathnameRef } = vi.hoisted(() => ({
+  pathnameRef: { current: "/acme/prod/ask" },
+}));
 
 vi.mock("next/navigation", () => ({
   usePathname: () => pathnameRef.current,
@@ -27,13 +35,31 @@ vi.mock("next/navigation", () => ({
 }));
 
 vi.mock("next/link", () => ({
-  default: ({ href, children, ...rest }: { href: string; children: React.ReactNode; [k: string]: unknown }) => (
-    <a href={href} {...rest}>{children}</a>
+  default: ({
+    href,
+    children,
+    ...rest
+  }: {
+    href: string;
+    children: React.ReactNode;
+    [k: string]: unknown;
+  }) => (
+    <a href={href} {...rest}>
+      {children}
+    </a>
   ),
 }));
 
 vi.mock("next/image", () => ({
-  default: ({ src, alt, ...rest }: { src: string; alt: string; [k: string]: unknown }) => (
+  default: ({
+    src,
+    alt,
+    ...rest
+  }: {
+    src: string;
+    alt: string;
+    [k: string]: unknown;
+  }) => (
     // eslint-disable-next-line @next/next/no-img-element -- jsdom test shim; real next/image requires Next.js runtime
     <img src={src} alt={alt} {...rest} />
   ),
@@ -41,8 +67,12 @@ vi.mock("next/image", () => ({
 
 // UserSwitcher (rendered inside the More sheet) reaches for the auth client,
 // the theme context and the router — stub them so it mounts in isolation.
-vi.mock("@oxagen/auth/client", () => ({ signOut: vi.fn().mockResolvedValue({}) }));
-vi.mock("@oxagen/ui", () => ({ useTheme: () => ({ theme: "system", setTheme: vi.fn() }) }));
+vi.mock("@oxagen/auth/client", () => ({
+  signOut: vi.fn().mockResolvedValue({}),
+}));
+vi.mock("@oxagen/ui", () => ({
+  useTheme: () => ({ theme: "system", setTheme: vi.fn() }),
+}));
 
 import { MobileBottomBar } from "./mobile-bottom-bar";
 import * as sidebarLib from "@/lib/sidebar";
@@ -57,46 +87,65 @@ afterEach(() => {
 
 describe("MobileBottomBar — primary tabs", () => {
   it("renders the workspace destinations as client-routed tabs with resolved hrefs", () => {
-    // Workspace mode has thirteen nav items in raw declaration order (ask,
-    // overview, knowledge, automations, activity, agents, evals, agent-tools,
+    // Workspace mode has twelve nav items in raw declaration order (ask,
+    // overview, knowledge, automations, agents, evals, agent-tools,
     // environments, sandboxes, repos, marketplace, settings); only the first
-    // four (MAX_BAR_ITEMS) fit the bar — everything from Activity onward
+    // four (MAX_BAR_ITEMS) fit the bar — everything from Agents onward
     // overflows into the "More" sheet, covered below.
     render(<MobileBottomBar ctx={wsCtx} user={user} />);
     const nav = screen.getByRole("navigation", { name: /mobile navigation/i });
-    expect(within(nav).getByRole("link", { name: "Ask" })).toHaveAttribute("href", "/acme/prod/ask");
-    expect(within(nav).getByRole("link", { name: "Overview" })).toHaveAttribute("href", "/acme/prod");
-    expect(within(nav).getByRole("link", { name: "Knowledge" })).toHaveAttribute("href", "/acme/prod/knowledge");
-    expect(within(nav).getByRole("link", { name: "Automations" })).toHaveAttribute(
+    expect(within(nav).getByRole("link", { name: "Ask" })).toHaveAttribute(
       "href",
-      "/acme/prod/automations",
+      "/acme/prod/ask",
     );
+    expect(within(nav).getByRole("link", { name: "Overview" })).toHaveAttribute(
+      "href",
+      "/acme/prod",
+    );
+    expect(
+      within(nav).getByRole("link", { name: "Knowledge" }),
+    ).toHaveAttribute("href", "/acme/prod/knowledge");
+    expect(
+      within(nav).getByRole("link", { name: "Automations" }),
+    ).toHaveAttribute("href", "/acme/prod/automations");
   });
 
   it("marks the current destination with aria-current=page", () => {
     render(<MobileBottomBar ctx={wsCtx} user={user} />);
-    expect(screen.getByRole("link", { name: "Ask" })).toHaveAttribute("aria-current", "page");
-    expect(screen.getByRole("link", { name: "Knowledge" })).not.toHaveAttribute("aria-current");
+    expect(screen.getByRole("link", { name: "Ask" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    expect(screen.getByRole("link", { name: "Knowledge" })).not.toHaveAttribute(
+      "aria-current",
+    );
   });
 
-  it("overflows Activity, the Workbench group, Marketplace, and Settings into the More sheet while the first four destinations stay in the bar", async () => {
+  it("overflows the Workbench group, Marketplace, and Settings into the More sheet while the first four destinations stay in the bar", async () => {
     render(<MobileBottomBar ctx={wsCtx} user={user} />);
     const nav = screen.getByRole("navigation", { name: /mobile navigation/i });
-    expect(screen.getByRole("button", { name: /more navigation/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /more navigation/i }),
+    ).toBeInTheDocument();
     // The first four (Ask, Overview, Knowledge, Automations) stay in the bar.
-    expect(within(nav).getByRole("link", { name: "Automations" })).toBeInTheDocument();
+    expect(
+      within(nav).getByRole("link", { name: "Automations" }),
+    ).toBeInTheDocument();
     // Items past MAX_BAR_ITEMS never render in the bar itself — Agents and the
-    // rest of the Workbench group now overflow (Automations displaced them).
-    expect(within(nav).queryByRole("link", { name: "Activity" })).toBeNull();
+    // rest of the Workbench group overflow (Automations occupies the fourth slot).
     expect(within(nav).queryByRole("link", { name: "Agents" })).toBeNull();
     expect(within(nav).queryByRole("link", { name: "Agent Tools" })).toBeNull();
-    expect(within(nav).queryByRole("link", { name: "Environments" })).toBeNull();
+    expect(
+      within(nav).queryByRole("link", { name: "Environments" }),
+    ).toBeNull();
     expect(within(nav).queryByRole("link", { name: "Sandboxes" })).toBeNull();
     expect(within(nav).queryByRole("link", { name: "Repos" })).toBeNull();
     expect(within(nav).queryByRole("link", { name: "Marketplace" })).toBeNull();
     expect(within(nav).queryByRole("link", { name: "Settings" })).toBeNull();
     // …but every overflow destination is reachable from the More sheet.
-    await userEvent.click(screen.getByRole("button", { name: /more navigation/i }));
+    await userEvent.click(
+      screen.getByRole("button", { name: /more navigation/i }),
+    );
     await waitFor(() => {
       expect(screen.getByRole("link", { name: "Agents" })).toHaveAttribute(
         "href",
@@ -117,16 +166,23 @@ describe("MobileBottomBar — primary tabs", () => {
 describe("MobileBottomBar — More sheet", () => {
   it("surfaces the account control in the More sheet when a user is provided", async () => {
     render(<MobileBottomBar ctx={wsCtx} user={user} />);
-    await userEvent.click(screen.getByRole("button", { name: /more navigation/i }));
+    await userEvent.click(
+      screen.getByRole("button", { name: /more navigation/i }),
+    );
     await waitFor(
-      () => expect(screen.getByRole("button", { name: /open account menu for jane/i })).toBeInTheDocument(),
+      () =>
+        expect(
+          screen.getByRole("button", { name: /open account menu for jane/i }),
+        ).toBeInTheDocument(),
       { timeout: 2000 },
     );
   });
 
   it("still shows the More tab in workspace mode with no user, since Settings overflows regardless of the account control", () => {
     render(<MobileBottomBar ctx={wsCtx} user={undefined} />);
-    expect(screen.getByRole("button", { name: /more navigation/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /more navigation/i }),
+    ).toBeInTheDocument();
     const nav = screen.getByRole("navigation", { name: /mobile navigation/i });
     expect(within(nav).queryByRole("link", { name: "Settings" })).toBeNull();
   });
@@ -134,7 +190,9 @@ describe("MobileBottomBar — More sheet", () => {
   it("marks the More tab active when the settings route is open, since Settings lives behind it", () => {
     pathnameRef.current = "/acme/prod/settings";
     render(<MobileBottomBar ctx={wsCtx} user={user} />);
-    expect(screen.getByRole("button", { name: /more navigation/i })).toHaveAttribute("aria-current", "page");
+    expect(
+      screen.getByRole("button", { name: /more navigation/i }),
+    ).toHaveAttribute("aria-current", "page");
   });
 });
 
@@ -142,9 +200,17 @@ describe("MobileBottomBar — org mode", () => {
   it("resolves org-mode destinations from the pathname when no workspace is scoped", () => {
     pathnameRef.current = "/acme/members";
     render(<MobileBottomBar ctx={{ orgSlug: "acme" }} user={user} />);
-    expect(screen.getByRole("link", { name: "Workspaces" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Members" })).toHaveAttribute("href", "/acme/members");
-    expect(screen.getByRole("link", { name: "Members" })).toHaveAttribute("aria-current", "page");
+    expect(
+      screen.getByRole("link", { name: "Workspaces" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Members" })).toHaveAttribute(
+      "href",
+      "/acme/members",
+    );
+    expect(screen.getByRole("link", { name: "Members" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
   });
 });
 
@@ -163,7 +229,9 @@ describe("MobileBottomBar — empty More guard", () => {
     });
     pathnameRef.current = "/account/profile";
     render(<MobileBottomBar ctx={{ orgSlug: "acme" }} user={undefined} />);
-    expect(screen.queryByRole("button", { name: /more navigation/i })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: /more navigation/i }),
+    ).toBeNull();
   });
 
   it("surfaces overflow account items (Privacy) in the More sheet even without a user", () => {
@@ -173,12 +241,16 @@ describe("MobileBottomBar — empty More guard", () => {
     pathnameRef.current = "/account/profile";
     render(<MobileBottomBar ctx={{ orgSlug: "acme" }} user={undefined} />);
     expect(screen.getByRole("link", { name: "Profile" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /more navigation/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /more navigation/i }),
+    ).toBeInTheDocument();
   });
 
   it("still shows the More tab in account mode when a user is present (account control)", () => {
     pathnameRef.current = "/account/profile";
     render(<MobileBottomBar ctx={{ orgSlug: "acme" }} user={user} />);
-    expect(screen.getByRole("button", { name: /more navigation/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /more navigation/i }),
+    ).toBeInTheDocument();
   });
 });

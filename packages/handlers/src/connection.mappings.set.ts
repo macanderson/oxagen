@@ -6,6 +6,7 @@ import { HTTPException } from "hono/http-exception";
 import { eventClient } from "./event-client";
 import { logger } from "./logger";
 import { assertGithubInstallationAccessible } from "./lib/github-installation-access";
+import { getConnector } from "@oxagen/ingestion/connectors";
 
 type Mapping = {
   sourceRecordType: string;
@@ -22,15 +23,37 @@ type Mapping = {
 // passes the connector's normalized fields through unchanged. User-supplied
 // mappings for the same record type always win.
 const DEFAULT_GITHUB_MAPPINGS: readonly Mapping[] = [
-  { sourceRecordType: "repository", oxagenEntityType: "source_repository", propertyMappings: {} },
-  { sourceRecordType: "pull_request", oxagenEntityType: "pull_request", propertyMappings: {} },
-  { sourceRecordType: "issue", oxagenEntityType: "issue", propertyMappings: {} },
-  { sourceRecordType: "release", oxagenEntityType: "release", propertyMappings: {} },
-  { sourceRecordType: "commit", oxagenEntityType: "commit", propertyMappings: {} },
+  {
+    sourceRecordType: "repository",
+    oxagenEntityType: "source_repository",
+    propertyMappings: {},
+  },
+  {
+    sourceRecordType: "pull_request",
+    oxagenEntityType: "pull_request",
+    propertyMappings: {},
+  },
+  {
+    sourceRecordType: "issue",
+    oxagenEntityType: "issue",
+    propertyMappings: {},
+  },
+  {
+    sourceRecordType: "release",
+    oxagenEntityType: "release",
+    propertyMappings: {},
+  },
+  {
+    sourceRecordType: "commit",
+    oxagenEntityType: "commit",
+    propertyMappings: {},
+  },
 ];
 
 /** Parse "owner/repo" full names into {owner, repo}, dropping malformed entries. */
-function parseRepos(fullNames: readonly string[] | undefined): Array<{ owner: string; repo: string }> {
+function parseRepos(
+  fullNames: readonly string[] | undefined,
+): Array<{ owner: string; repo: string }> {
   const out: Array<{ owner: string; repo: string }> = [];
   for (const full of fullNames ?? []) {
     const slash = full.indexOf("/");
@@ -48,17 +71,18 @@ function parseRepos(fullNames: readonly string[] | undefined): Array<{ owner: st
  * Multi-repo selections show the primary repo plus a `(+N more)` count.
  * Returns undefined when no repo is resolvable (nothing to rename to).
  */
-function repoSlugName(repos: ReadonlyArray<{ owner: string; repo: string }>): string | undefined {
+function repoSlugName(
+  repos: ReadonlyArray<{ owner: string; repo: string }>,
+): string | undefined {
   const [primary, ...rest] = repos;
   if (!primary) return undefined;
   const slug = `${primary.owner}/${primary.repo}`;
   return rest.length > 0 ? `${slug} (+${rest.length} more)` : slug;
 }
 
-export const connectionMappingsSetHandler: CapabilityHandler<typeof connectionMappingsSet> = async (
-  input,
-  ctx,
-) => {
+export const connectionMappingsSetHandler: CapabilityHandler<
+  typeof connectionMappingsSet
+> = async (input, ctx) => {
   // Verify connection exists and belongs to this org/workspace
   const [conn] = await withTenantDb((tx) =>
     tx
@@ -86,7 +110,8 @@ export const connectionMappingsSetHandler: CapabilityHandler<typeof connectionMa
   // "connected" is the live state in the source_connections_status_check
   // constraint (pending_setup | connected | paused | error) — "active" is not
   // a valid value and would fail the CHECK on write.
-  const willActivate = input.activateConnection && conn.status === "pending_setup";
+  const willActivate =
+    input.activateConnection && conn.status === "pending_setup";
   const isGithub = conn.connectorId === "github";
 
   // AUTHORIZATION GATE: binding a GitHub App installation lets the server mint an
@@ -105,7 +130,12 @@ export const connectionMappingsSetHandler: CapabilityHandler<typeof connectionMa
   // for lack of a mapping. User-supplied mappings take precedence per record type.
   const userTypes = new Set(input.mappings.map((m) => m.sourceRecordType));
   const mappingsToWrite: Mapping[] = isGithub
-    ? [...input.mappings, ...DEFAULT_GITHUB_MAPPINGS.filter((m) => !userTypes.has(m.sourceRecordType))]
+    ? [
+        ...input.mappings,
+        ...DEFAULT_GITHUB_MAPPINGS.filter(
+          (m) => !userTypes.has(m.sourceRecordType),
+        ),
+      ]
     : input.mappings;
 
   // Merge EVERY GitHub source-selection field the caller supplied into
@@ -115,14 +145,21 @@ export const connectionMappingsSetHandler: CapabilityHandler<typeof connectionMa
   const dcUpdates: Record<string, unknown> = {};
   if (input.owner !== undefined) dcUpdates["owner"] = input.owner;
   if (input.repo !== undefined) dcUpdates["repo"] = input.repo;
-  if (input.defaultBranch !== undefined) dcUpdates["defaultBranch"] = input.defaultBranch;
-  if (input.installationId !== undefined) dcUpdates["installationId"] = input.installationId;
-  if (input.syncDepthDays !== undefined) dcUpdates["syncDepthDays"] = input.syncDepthDays;
-  if (input.selectedRepos !== undefined) dcUpdates["selectedRepos"] = input.selectedRepos;
+  if (input.defaultBranch !== undefined)
+    dcUpdates["defaultBranch"] = input.defaultBranch;
+  if (input.installationId !== undefined)
+    dcUpdates["installationId"] = input.installationId;
+  if (input.syncDepthDays !== undefined)
+    dcUpdates["syncDepthDays"] = input.syncDepthDays;
+  if (input.selectedRepos !== undefined)
+    dcUpdates["selectedRepos"] = input.selectedRepos;
 
   const mergedDeliveryConfig =
     Object.keys(dcUpdates).length > 0
-      ? { ...((conn.deliveryConfig as Record<string, unknown> | null) ?? {}), ...dcUpdates }
+      ? {
+          ...((conn.deliveryConfig as Record<string, unknown> | null) ?? {}),
+          ...dcUpdates,
+        }
       : undefined;
 
   // Resolve the repo selection ONCE, up front, so both the auto-rename (below,
@@ -130,13 +167,22 @@ export const connectionMappingsSetHandler: CapabilityHandler<typeof connectionMa
   // the same list — the multi-repo wizard selection, else a single stored/
   // request owner/repo (legacy + OXA-1806).
   const dcForRepos =
-    ((mergedDeliveryConfig ?? conn.deliveryConfig) as Record<string, unknown> | null) ?? {};
+    ((mergedDeliveryConfig ?? conn.deliveryConfig) as Record<
+      string,
+      unknown
+    > | null) ?? {};
   let resolvedRepos = parseRepos(input.selectedRepos);
   if (resolvedRepos.length === 0) {
     const owner =
-      input.owner ?? (typeof dcForRepos["owner"] === "string" ? (dcForRepos["owner"] as string) : "");
+      input.owner ??
+      (typeof dcForRepos["owner"] === "string"
+        ? (dcForRepos["owner"] as string)
+        : "");
     const repo =
-      input.repo ?? (typeof dcForRepos["repo"] === "string" ? (dcForRepos["repo"] as string) : "");
+      input.repo ??
+      (typeof dcForRepos["repo"] === "string"
+        ? (dcForRepos["repo"] as string)
+        : "");
     if (owner && repo) resolvedRepos = [{ owner, repo }];
   }
 
@@ -168,7 +214,9 @@ export const connectionMappingsSetHandler: CapabilityHandler<typeof connectionMa
           )
       : [];
 
-    const existingByType = new Map(existingRows.map((r) => [r.sourceRecordType, r.id]));
+    const existingByType = new Map(
+      existingRows.map((r) => [r.sourceRecordType, r.id]),
+    );
 
     let createdCount = 0;
     let updatedCount = 0;
@@ -211,7 +259,9 @@ export const connectionMappingsSetHandler: CapabilityHandler<typeof connectionMa
         .update(schema.sourceConnections)
         .set({
           status: "connected",
-          ...(mergedDeliveryConfig ? { deliveryConfig: mergedDeliveryConfig } : {}),
+          ...(mergedDeliveryConfig
+            ? { deliveryConfig: mergedDeliveryConfig }
+            : {}),
           ...(autoName ? { displayName: autoName } : {}),
           updatedAt: now,
         })
@@ -220,7 +270,9 @@ export const connectionMappingsSetHandler: CapabilityHandler<typeof connectionMa
       await tx
         .update(schema.sourceConnections)
         .set({
-          ...(mergedDeliveryConfig ? { deliveryConfig: mergedDeliveryConfig } : {}),
+          ...(mergedDeliveryConfig
+            ? { deliveryConfig: mergedDeliveryConfig }
+            : {}),
           ...(autoName ? { displayName: autoName } : {}),
           updatedAt: now,
         })
@@ -246,10 +298,14 @@ export const connectionMappingsSetHandler: CapabilityHandler<typeof connectionMa
 
       const defaultBranch =
         input.defaultBranch ??
-        (typeof dc["defaultBranch"] === "string" ? (dc["defaultBranch"] as string) : "main");
+        (typeof dc["defaultBranch"] === "string"
+          ? (dc["defaultBranch"] as string)
+          : "main");
       const syncDepthDays =
         input.syncDepthDays ??
-        (typeof dc["syncDepthDays"] === "number" ? (dc["syncDepthDays"] as number) : 90);
+        (typeof dc["syncDepthDays"] === "number"
+          ? (dc["syncDepthDays"] as number)
+          : 90);
 
       if (repos.length === 0) {
         logger.warn(
@@ -278,6 +334,38 @@ export const connectionMappingsSetHandler: CapabilityHandler<typeof connectionMa
         "connection.mappings.set: queued ingestion/github.initial-sync per repo",
       );
     }
+
+    // Provision the provider webhook subscription for webhook-declared
+    // connectors (microsoft / google-*) once the connection is active. Without
+    // this the delivery route's JOIN finds no secret and every real delivery
+    // 401s. Fired after commit; the provision function is idempotent.
+    let isWebhookConnector = false;
+    try {
+      const connector = getConnector(conn.connectorId);
+      isWebhookConnector =
+        connector.deliveryMethod === "webhook" &&
+        typeof connector.subscribeWebhooks === "function";
+    } catch {
+      isWebhookConnector = false;
+    }
+    if (isWebhookConnector) {
+      await eventClient.send({
+        name: "ingestion/webhook.provision",
+        data: {
+          connectionId: conn.id,
+          orgId: ctx.orgId,
+          workspaceId: ctx.workspaceId,
+        },
+      });
+      logger.info(
+        {
+          connectionId: conn.id,
+          connectorId: conn.connectorId,
+          orgId: ctx.orgId,
+        },
+        "connection.mappings.set: queued ingestion/webhook.provision",
+      );
+    }
   }
 
   logger.info(
@@ -291,5 +379,9 @@ export const connectionMappingsSetHandler: CapabilityHandler<typeof connectionMa
     "connection.mappings.set: saved mappings",
   );
 
-  return { mappingsCreated: created, mappingsUpdated: updated, connectionStatus };
+  return {
+    mappingsCreated: created,
+    mappingsUpdated: updated,
+    connectionStatus,
+  };
 };

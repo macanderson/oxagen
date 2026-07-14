@@ -1,5 +1,37 @@
 # Changelog
 
+## v2.0.0
+
+This release ships **web-app-2.0** — a ground-up reorganization of the app's information architecture across six phases (core surfaces, knowledge, automations, workbench/marketplace, governance/security, and a settings/settings-nav merge) — alongside a unified Evals experience, a redesigned workspace Overview HUD, a Sandbox UX overhaul, and a major database hardening pass (six migration batches dropping zombie tables/columns, adding constraints, and fixing tenancy/authz correctness bugs). The standalone `bench/` benchmark suite has been retired in favor of the public `agent-arena` repo. `check:ui-parity --strict` is now a hard CI gate, and a large number of typecheck/e2e/migration regressions accumulated during the 2.0 rewrite were fixed to get `main` green.
+
+### Features
+- **web-app-2.0 rollout**: Phase 0 shared primitives + route shells, Phase 1 core surfaces, Phase 2 Knowledge refactors + Settings merge, Phase 3 Automations cluster, Phase 4 Workbench + Marketplace, Phase 5 Governance + Security, plus a re-grouped sidebar nav and collapsed legacy redirect shims into `proxy.ts` (#976–#980, #991).
+- **Evals**: unified runs into a single Evals surface — drawers converted to full pages, provider/model dropdowns, and run analytics (#985), plus the previously-missing Evals UI (#994).
+- **Workspace Overview HUD**: metering KPIs, knowledge-graph hero, and activity/automations/usage/memory panels, backed by `graph.stats` growth data (#984).
+- **Automations**: schema-driven trigger-condition builder, consolidated onto the automations surface (#991).
+- **Sandbox**: full UX overhaul — new detail layout, light-mode terminal, env/packages editors, list redesign, and a files bug fix (#986); editable Packages section (manager + chips) on sandbox templates (#995).
+- **Agent plans**: persistence for plan approvals plus `get`/`list` APIs (#1017).
+- **Ingestion**: webhook-subscription provisioning and renewal wired end-to-end (#1018).
+- **CLI**: startup splash for instant feedback while the REPL module graph loads (#1022).
+- **PSO**: storage-manifest generator and ADR-031 (Phase 1) (#1012).
+- **MCP**: secret/API-key entry UI for secret-auth servers (e.g. Stripe) (`390df4f31`); DB-backed workspace MCP servers wired into the CLI turn (`81cc30998`); fixed the dead re-auth deep link and built out the OAuth landing experience, redirect-back-with-toast on authorize failures, customer-safe GitHub OAuth error copy + operator runbook, and persisted token expiry to revive proactive refresh (`5a312a9ed`, `938b8e44c`, `785d67824`, `979f38906`).
+- **Chat**: calm three-card Agent Activity Rail (Progress/Context/Outputs) (`8305ff45e`).
+- **Org workspaces**: new listing page fixing the previously-broken Workspaces nav (`9f93abdb4`).
+- **DB**: `governance` catalog data source — capability registry `list`/`get` and IAM role `list` read APIs, plus auth-alerts get/set.
+
+### Fixes
+- **Database**: six migration/hardening batches — dropped zombie tables (`auth.credentials`, `billing.usage_records`/`org_billing_profiles`/`invoice_line_items`, empty `graph` schema, ltree remnants) (#1003, #999, #1006, #1021), dropped 16 dead columns and wired dunning anti-spam stamping (#1011), added missing indexes/constraints/CHECKs and a numeric money type (#1014), enforced one principal per `(org_id, parent_user_id)` for authz correctness (#1013), promoted workspace `description`/`promptConfig` out of settings JSONB to fix a lost-update race (#1015), and repaired a missing `appendOnlyAuditMixin`/`usage_records` syntax error plus a zombie-table resurrection that made `main` unparseable (#1020, #1021).
+- **CI/typecheck**: unbroke `main` across several rounds of typecheck failures (eval-dataset tests, provider-model-picker, memories-panel merge collision) (#1016, #989, #996, `90eea91ef`, `96d67bc56`); regenerated the contracts barrel to import `eval.run.list`/`series` and `agent.mcp.resolve`, and dropped a stray `app` layer from `list_eval_runs`/`get_eval_run_series` (#1001, #1000, `d8d5bb681`).
+- **e2e**: fixed access-review role/tab assertions and slug collisions (#1008, #1002, #997), sandbox-template-packages strict-mode locator, parent-route-redirect wait primitives, and mobile bottom-bar nav assertions for the new 2.0 IA (#1005, #998, `ec08aa485`, `d2c1e6ea0`).
+- **App**: fixed a shell hook-order crash on org→workspace navigation (`9ad8a1244`), parent "default tab" routes 500'ing under Cache Components (#988), the duplicate `/account/*` tab strip (#987), and workspace cards linking to the redirecting root instead of `/ask` directly (`33fa84c37`).
+- **Tooling**: `check:manifest` now content-scans combined route files, eliminating 78 false-positive API-gap reports (#981); gated NO_COLOR allowlisting for `env:check`, stale `mobile-parity` entries, and an atlas checksum mismatch (`2369314cf`).
+
+### Internal
+- Retired the standalone `bench/` benchmark suite (`context-eval`, `rag-eval`, `swe-bench`, `terminal-bench`, `bench/web`, `BENCHMARK.md`) — superseded by the public `agent-arena` repo (`16902570e`).
+- Removed the app's Activity section (Runs, Fleet, run-detail) (#992).
+- Ratcheted `check:ui-parity --strict` into CI as a hard gate on top of `check:manifest`/`check:contracts` (`fcddd4fb4`).
+- Regenerated `cli-settings-schema.json` for agent `mcpServers`/`skills` (`bbbd85e9c`) and the capabilities manifest/contracts barrel for the new routes above.
+
 ## v1.1.3
 
 This release lands a major wave of platform expansion since v1.1.1: the new Rust-based **Stella** coding-agent CLI (engine, tool/MCP/pipeline/fleet crates, multi-provider BYOK adapters, and a TUI), a redesigned **Workbench** (formerly Studio) with card-grid list UIs, fleet time-travel replay/bisect/resume, a verified-outcome market router, a mutation-verifier gate for agent edits, first-class sandbox multi-repo/terminal support, reseller-revenue billing, multi-tenant GitHub App connect, and a broad mobile-parity and rate-limiting hardening pass. It also carries a very large number of CI, database-migration, and coverage-gate stabilization fixes accumulated across the development window.

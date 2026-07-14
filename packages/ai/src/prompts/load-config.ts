@@ -1,7 +1,7 @@
 // Server-only helper — imports @oxagen/database. Do not import in client code.
 //
-// Reads a workspace's prompt configuration from
-// `workspace.workspaces.settings.promptConfig` and normalizes it into the
+// Reads a workspace's prompt configuration from the
+// `workspace.workspaces.prompt_config` column and normalizes it into the
 // PromptConfig shape resolvePrompt() consumes. Best-effort: any shape mismatch
 // or missing row resolves to an empty config (untouched baselines).
 
@@ -55,12 +55,10 @@ export async function loadWorkspacePromptConfig(
   const row = await withTenantDb((tx) =>
     tx.query.workspaces.findFirst({
       where: eq(schema.workspaces.id, workspaceId),
-      columns: { settings: true },
+      columns: { promptConfig: true },
     }),
   );
-  const settings = row?.settings;
-  if (!isRecord(settings)) return {};
-  return normalizePromptConfig(settings.promptConfig);
+  return normalizePromptConfig(row?.promptConfig);
 }
 
 /**

@@ -17,6 +17,8 @@ import {
   type SandboxSecretSelection,
   type SandboxTemplateManifest,
   type SandboxTemplateManifestInput,
+  type SandboxTemplatePackageGroup,
+  type SandboxTemplatePackages,
   type SandboxTemplateTool,
   type ManifestSecretKey,
 } from "@oxagen/oxagen/contracts/sandbox-template-manifest";
@@ -45,6 +47,7 @@ export interface TemplateFormState {
   secretKind: SecretSelectionKind;
   selectedKeys: string[];
   literalRows: LiteralEnvRow[];
+  packages: SandboxTemplatePackageGroup[];
   tools: SandboxTemplateTool[];
 }
 
@@ -78,6 +81,12 @@ export function initialFormState(
       ? Object.entries(template.literalEnv).map(([key, value]) => ({
           key,
           value,
+        }))
+      : [],
+    packages: template
+      ? template.packages.map((p) => ({
+          manager: p.manager,
+          names: [...p.names],
         }))
       : [],
     tools: template
@@ -133,6 +142,22 @@ export function cleanTools(state: TemplateFormState): SandboxTemplateTool[] {
 }
 
 /**
+ * Normalize the package rows for submit: trim each name, drop blank names, and
+ * drop any manager row left with no packages (a row the user added but never
+ * filled). Order is preserved.
+ */
+export function cleanPackages(
+  state: TemplateFormState,
+): SandboxTemplatePackages {
+  return state.packages
+    .map((group) => ({
+      manager: group.manager,
+      names: group.names.map((n) => n.trim()).filter((n) => n !== ""),
+    }))
+    .filter((group) => group.names.length > 0);
+}
+
+/**
  * Mirrors `exportTemplate`'s secretKeys resolution
  * (packages/plugins/src/environments/sandbox-template-service.ts) so the live
  * preview shows exactly the NAME-only entries a real export/import would
@@ -179,6 +204,7 @@ export function buildManifestInput(
     network: { mode: state.networkMode },
     secretSelection: buildSecretSelection(state),
     literalEnv: buildLiteralEnv(state),
+    packages: cleanPackages(state),
     tools: cleanTools(state),
     secretKeys: buildSecretKeys(state, opts.secretKeys),
   };

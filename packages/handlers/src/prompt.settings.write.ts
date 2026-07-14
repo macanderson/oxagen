@@ -2,7 +2,7 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { promptSettingsWrite } from "@oxagen/oxagen/contracts/prompt.settings.write";
 import { schema, withTenantDb } from "@oxagen/database";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { resolveOrgTier, requireTier } from "@oxagen/billing";
 import { logger } from "./logger";
 
@@ -10,12 +10,13 @@ function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null;
 }
 
-// Partial update of workspace.workspaces.settings.promptConfig.
+// Partial update of workspace.workspaces.prompt_config (its own column since
+// audit §1.7).
 //   - additionalInstructions + autoImprovePrompts: all plans.
 //   - overrides (full prompt replacement): ENTERPRISE-only (requireTier throws
 //     TierDeniedError otherwise — the kernel maps it to a denied result).
-// The promptConfig is one key inside the broader `settings` JSONB bag, so we
-// read-merge-write to preserve any other settings keys.
+// Merged ATOMICALLY via jsonb `||` in a single UPDATE (no read-modify-write), so
+// concurrent writers cannot lose each other's subkeys.
 export const promptSettingsWriteHandler: CapabilityHandler<typeof promptSettingsWrite> = async (
   input,
   ctx,
@@ -36,36 +37,30 @@ export const promptSettingsWriteHandler: CapabilityHandler<typeof promptSettings
     requireTier(tier, "enterprise", "prompt-overrides");
   }
 
+  // Build the partial patch from only the provided fields. `undefined` = leave
+  // unchanged (key absent from the patch); `null` = clear (merged as JSON null,
+  // which the readers coalesce). jsonb `||` is a shallow merge, so unspecified
+  // subkeys on the existing prompt_config survive.
+  const patch: Record<string, unknown> = {};
+  if (input.additionalInstructions !== undefined) {
+    patch.additionalInstructions = input.additionalInstructions;
+  }
+  if (input.overrides !== undefined) patch.overrides = input.overrides;
+  if (input.autoImprovePrompts !== undefined) {
+    patch.autoImprovePrompts = input.autoImprovePrompts;
+  }
+
   const newConfig = await withTenantDb(async (tx) => {
-    const row = await tx.query.workspaces.findFirst({
-      where: eq(schema.workspaces.id, ctx.workspaceId),
-      columns: { settings: true },
-    });
-
-    const settings: Record<string, unknown> = isRecord(row?.settings) ? { ...row.settings } : {};
-    const current: Record<string, unknown> = isRecord(settings.promptConfig)
-      ? { ...settings.promptConfig }
-      : {};
-
-    // Apply the partial update. `undefined` = leave unchanged; `null` = clear.
-    if (input.additionalInstructions !== undefined) {
-      current.additionalInstructions = input.additionalInstructions;
-    }
-    if (input.overrides !== undefined) {
-      current.overrides = input.overrides; // null clears, object replaces the set
-    }
-    if (input.autoImprovePrompts !== undefined) {
-      current.autoImprovePrompts = input.autoImprovePrompts;
-    }
-
-    settings.promptConfig = current;
-
-    await tx
+    const [updated] = await tx
       .update(schema.workspaces)
-      .set({ settings, updatedAt: new Date() })
-      .where(eq(schema.workspaces.id, ctx.workspaceId));
+      .set({
+        promptConfig: sql`coalesce(${schema.workspaces.promptConfig}, '{}'::jsonb) || ${JSON.stringify(patch)}::jsonb`,
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.workspaces.id, ctx.workspaceId))
+      .returning({ promptConfig: schema.workspaces.promptConfig });
 
-    return current;
+    return isRecord(updated?.promptConfig) ? updated.promptConfig : {};
   });
 
   logger.info(

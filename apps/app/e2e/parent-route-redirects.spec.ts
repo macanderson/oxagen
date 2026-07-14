@@ -61,9 +61,14 @@ test("parent routes resolve to their default sub-page without erroring", async (
       to: new RegExp(`/${orgSlug}/${ws}/marketplace/agent-tools$`),
     },
     // Org-scope section parents → first tab.
+    // Access is enterprise-only: its layout redirects non-enterprise orgs to
+    // the org root (apps/app/src/app/[orgSlug]/access/layout.tsx), which then
+    // forwards to the first workspace. A fresh signup is not enterprise, so
+    // the healthy landing for bare /access is the workspace root — the point
+    // stands: it must resolve cleanly, never 500.
     {
       from: `/${orgSlug}/access`,
-      to: new RegExp(`/${orgSlug}/access/sessions$`),
+      to: new RegExp(`/${orgSlug}/${ws}$`),
     },
     {
       from: `/${orgSlug}/billing`,
@@ -77,9 +82,14 @@ test("parent routes resolve to their default sub-page without erroring", async (
 
   for (const { from, to } of redirects) {
     await gotoStable(page, from);
-    await page.waitForURL(to, { timeout: 20_000 });
-    expect(page.url(), `bare parent ${from} should resolve to ${to}`).toMatch(
+    // Poll the URL only (toHaveURL) — NOT waitForURL, which also waits for the
+    // "load" lifecycle event. PPR-streamed pages (the Overview page especially)
+    // can keep "load" pending or re-fire it on RSC prefetch, so the redirect
+    // lands correctly but "load" never settles and waitForURL times out even
+    // though page.url() already matches.
+    await expect(page, `bare parent ${from} should resolve to ${to}`).toHaveURL(
       to,
+      { timeout: 20_000 },
     );
     await expectHealthyPage(page);
   }

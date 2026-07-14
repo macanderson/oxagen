@@ -183,9 +183,7 @@ import handler_orgMemberInviteDecline, {
 describe("org.member.invite.decline handler", () => {
   it("exports schema and metadata", () => {
     expect(orgMemberInviteDeclineSchema).toBeDefined();
-    expect(orgMemberInviteDeclineMetadata.name).toBe(
-      "decline_member_invite",
-    );
+    expect(orgMemberInviteDeclineMetadata.name).toBe("decline_member_invite");
   });
 
   it("calls invoke with invite decline args", async () => {
@@ -303,17 +301,12 @@ describe("organization.create handler", () => {
       website: undefined,
       industry: undefined,
       employeeSize: undefined,
-      billingEmail: undefined,
-      billingAddress: undefined,
     };
     await handler_organizationCreate(args);
 
-    expect(mocks.invoke).toHaveBeenCalledWith(
-      "create_org",
-      args,
-      fakeCtx,
-      { surface: "mcp" },
-    );
+    expect(mocks.invoke).toHaveBeenCalledWith("create_org", args, fakeCtx, {
+      surface: "mcp",
+    });
   });
 });
 
@@ -453,9 +446,7 @@ import handler_workspaceModelSettingsRead, {
 describe("workspace.model.settings.read handler", () => {
   it("exports schema and metadata", () => {
     expect(workspaceModelSettingsReadSchema).toBeDefined();
-    expect(workspaceModelSettingsReadMetadata.name).toBe(
-      "get_model_settings",
-    );
+    expect(workspaceModelSettingsReadMetadata.name).toBe("get_model_settings");
   });
 
   it("calls invoke with empty args for read", async () => {

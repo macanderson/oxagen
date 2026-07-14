@@ -42,9 +42,9 @@ describe("resolveSidebarMode", () => {
 
   it("returns 'workspace' when workspaceSlug is present and path is not /account", () => {
     expect(resolveSidebarMode("/acme/production/ask", wsCtx)).toBe("workspace");
-    expect(resolveSidebarMode("/acme/production/knowledge/sources", wsCtx)).toBe(
-      "workspace",
-    );
+    expect(
+      resolveSidebarMode("/acme/production/knowledge/sources", wsCtx),
+    ).toBe("workspace");
   });
 
   it("returns 'workspace' from pathname when ctx has no workspaceSlug (org-layout boundary)", () => {
@@ -89,26 +89,28 @@ describe("resolveSidebarMode", () => {
 // 2. getSidebarConfig — item counts per mode
 //
 // Spec:
-//   workspace: 10 items (Ask, Knowledge, Activity, Evals | Agents, Agent Tools,
+//   workspace: 9 items (Ask, Knowledge, Evals | Agents, Agent Tools,
 //       Environments, Sandboxes | Marketplace, Settings)
-//     — Activity is the agent run-trace surface (recent runs + per-run span
-//       tree). Evals scores what actually ran and got billed, next to Activity
-//       in the primary group. The Workbench "tools" group holds all four build
-//       destinations (Agents, Agent Tools, Environments, Sandboxes) as
-//       first-class items — there is deliberately NO Workbench secondary nav.
-//       Marketplace + Settings are pinned to the footer group. The old
-//       catch-all Automation area stays removed; "Workflows" is gone too
-//       (banned term).
+//     — Evals scores what actually ran and got billed, in the primary group.
+//       The Workbench "tools" group holds all four build destinations (Agents,
+//       Agent Tools, Environments, Sandboxes) as first-class items — there is
+//       deliberately NO Workbench secondary nav. Marketplace + Settings are
+//       pinned to the footer group. The old catch-all Automation area stays
+//       removed; "Workflows" is gone too (banned term). The Activity run-trace
+//       section was removed as well — agent runs are inspected in context
+//       (chat, evals) rather than in a standalone list.
 //   org:       7 items (Workspaces, Members, Access, Security, Billing, Developer, Settings)
 //   account:   5 items (Back to app, Profile, Preferences, Security, Privacy)
 // ---------------------------------------------------------------------------
 
 describe("getSidebarConfig item counts", () => {
-  it("workspace config has exactly 13 items", () => {
+  it("workspace config has exactly 12 items", () => {
     const config = getSidebarConfig("workspace");
     expect(config.mode).toBe("workspace");
-    // web-app-2.0 added Overview, Automations, and Repos to the 10-item base.
-    expect(config.items).toHaveLength(13);
+    // web-app-2.0 added Overview, Automations, and Repos to the base; the
+    // Activity run-trace surface was later removed (runs are inspected in
+    // context — chat, evals — not in a standalone section).
+    expect(config.items).toHaveLength(12);
   });
 
   it("org config has 7 items by default (access filtered for non-enterprise)", () => {
@@ -159,11 +161,10 @@ describe("getSidebarConfig item counts", () => {
     expect(ids).not.toContain("workflows");
     // The clean spec tree, in raw declaration order (the mobile bottom bar's
     // unfiltered MAX_BAR_ITEMS cut relies on this exact order — see
-    // mobile-bottom-bar.tsx). Activity is the run-trace surface; Evals
-    // (group: "primary") is declared after "agents" so it renders right after
-    // Activity in the desktop sidebar's group-filtered view (see the
-    // "workspace config 'tools' group" test below) without displacing Agents
-    // from the mobile bar's first four; the Workbench "tools" group then
+    // mobile-bottom-bar.tsx). Evals (group: "primary") is declared after
+    // "agents" so it renders in the desktop sidebar's group-filtered view (see
+    // the "workspace config 'tools' group" test below) without displacing
+    // Agents from the mobile bar's first four; the Workbench "tools" group then
     // promotes all four build destinations (Agents, Agent Tools, Environments,
     // Sandboxes) to the sidebar.
     expect(ids).toEqual([
@@ -171,7 +172,6 @@ describe("getSidebarConfig item counts", () => {
       "overview",
       "knowledge",
       "automations",
-      "activity",
       "agents",
       "evals",
       "agent-tools",
@@ -225,12 +225,6 @@ describe("href builders produce correct paths", () => {
     it("knowledge -> /{org}/{ws}/knowledge", () => {
       expect(findItem("knowledge").href(wsCtx)).toBe(
         "/acme/production/knowledge",
-      );
-    });
-
-    it("activity -> /{org}/{ws}/activity", () => {
-      expect(findItem("activity").href(wsCtx)).toBe(
-        "/acme/production/activity",
       );
     });
 

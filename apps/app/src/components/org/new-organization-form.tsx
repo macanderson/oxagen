@@ -17,7 +17,6 @@ import {
   ComboboxPopup,
   ComboboxItem,
 } from "@/components/ui/combobox";
-import { BillingAddressFields } from "@/components/billing/billing-address-fields";
 import { AvatarUpload } from "@/components/media/avatar-upload";
 import { slugify } from "@/lib/slug";
 import type { OrgSignupPrefill } from "@/lib/oauth-prefill";
@@ -175,190 +174,158 @@ export function NewOrgForm({
         <input type="hidden" name="type" value={orgType} />
       </div>
 
-      {/* Two-column body so the form gains horizontal width instead of running
-          off the top/bottom of the page: identity + business + billing email on
-          the left, billing address on the right. Collapses to one column on
-          mobile. */}
-      <div className="grid gap-x-6 gap-y-4 md:grid-cols-2 md:items-start">
-        {/* Left column — identity, business, billing email */}
-        <div className="flex flex-col gap-4">
-          {/* ── Name ─────────────────────────────────────────────────────── */}
-          <div className="space-y-1.5">
-            <Label htmlFor="name">
-              {isBusiness ? "Organization name" : "Your name"}
-            </Label>
-            <Input
-              id="name"
-              name="name"
-              required
-              maxLength={120}
-              placeholder={isBusiness ? "Acme Inc." : "Jane Smith"}
-              value={name}
-              onChange={(e) => {
-                const next = e.target.value;
-                // A hand-edit pins the name so the account-type toggle stops
-                // re-seeding it from the prefill.
-                nameManuallyEdited.current = true;
-                setName(next);
-                // Auto-populate while the user hasn't overridden the slug, and also
-                // whenever the slug is currently empty (re-armed override).
-                if (!slugManuallyEdited.current || slug === "") {
-                  slugManuallyEdited.current = false;
-                  setSlug(deriveSlug(next));
-                }
-              }}
-            />
-          </div>
-
-          {/* ── Slug ─────────────────────────────────────────────────────── */}
-          <div className="space-y-1.5">
-            <Label htmlFor="slug">Slug</Label>
-            <Input
-              id="slug"
-              name="slug"
-              required
-              pattern="[a-z0-9\-]{2,40}"
-              placeholder={isBusiness ? "acme" : "jane-smith"}
-              value={slug}
-              onChange={(e) => {
-                const next = e.target.value;
-                // An empty slug re-arms auto-population; any non-empty edit overrides it.
-                slugManuallyEdited.current = next !== "";
-                setSlug(next);
-              }}
-            />
-            <p className="text-xs text-muted-foreground">
-              Lowercase letters, digits, and hyphens. 2 to 40 chars.
-            </p>
-          </div>
-
-          {/* ── Logo ─────────────────────────────────────────────────────── */}
-          <div className="space-y-1.5">
-            <Label>
-              {isBusiness ? "Logo" : "Photo"}{" "}
-              <span className="text-muted-foreground font-normal">
-                (optional)
-              </span>
-            </Label>
-            <AvatarUpload
-              value={avatarUrl || null}
-              onChange={setAvatarUrl}
-              fallback={name.charAt(0) || slug.charAt(0)}
-              shape="square"
-              disabled={pending}
-            />
-            {/* Hidden input carries the uploaded URL into FormData on submit. */}
-            <input type="hidden" name="avatarUrl" value={avatarUrl} readOnly />
-          </div>
-
-          {/* ── Business-only fields ─────────────────────────────────────── */}
-          {isBusiness && (
-            <>
-              <div className="space-y-1.5">
-                <Label htmlFor="website">
-                  Business website{" "}
-                  <span className="text-muted-foreground font-normal">
-                    (optional)
-                  </span>
-                </Label>
-                <Input
-                  id="website"
-                  name="website"
-                  type="url"
-                  placeholder="https://acme.com"
-                  autoComplete="url"
-                  // Seeded from the email domain for business (non-consumer) emails.
-                  defaultValue={prefill?.suggestedWebsite || undefined}
-                />
-              </div>
-
-              {/* Industry — 24 options: searchable combobox (>20 option rule) */}
-              <div className="space-y-1.5">
-                <Label htmlFor="industry">
-                  Industry{" "}
-                  <span className="text-muted-foreground font-normal">
-                    (optional)
-                  </span>
-                </Label>
-                <Combobox
-                  value={industry}
-                  onValueChange={(v) => setIndustry(v ?? "")}
-                >
-                  <ComboboxTrigger id="industry" size="lg" className="w-full">
-                    <ComboboxValue placeholder="Select industry" />
-                  </ComboboxTrigger>
-                  <ComboboxPopup searchPlaceholder="Search industries…">
-                    {INDUSTRY_OPTIONS.map((opt) => (
-                      <ComboboxItem key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </ComboboxItem>
-                    ))}
-                  </ComboboxPopup>
-                </Combobox>
-                <input
-                  type="hidden"
-                  name="industry"
-                  value={industry}
-                  readOnly
-                />
-              </div>
-
-              {/* Team size — 9 options: plain select (≤20 option rule) */}
-              <div className="space-y-1.5">
-                <Label htmlFor="employeeSize">
-                  Team size{" "}
-                  <span className="text-muted-foreground font-normal">
-                    (optional)
-                  </span>
-                </Label>
-                <Select
-                  value={employeeSize}
-                  onValueChange={(v) => setEmployeeSize(v ?? "")}
-                >
-                  <SelectTrigger id="employeeSize" size="lg" className="w-full">
-                    <SelectValue placeholder="Select team size" />
-                  </SelectTrigger>
-                  <SelectPopup>
-                    {EMPLOYEE_SIZE_OPTIONS.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </SelectItem>
-                    ))}
-                  </SelectPopup>
-                </Select>
-                <input
-                  type="hidden"
-                  name="employeeSize"
-                  value={employeeSize}
-                  readOnly
-                />
-              </div>
-            </>
-          )}
-
-          {/* ── Billing email ─────────────────────────────────────────────── */}
-          <div className="space-y-1.5">
-            <Label htmlFor="billingEmail">
-              Billing email{" "}
-              <span className="text-muted-foreground font-normal">
-                (optional)
-              </span>
-            </Label>
-            <Input
-              id="billingEmail"
-              name="billingEmail"
-              type="email"
-              placeholder="billing@acme.com"
-              autoComplete="email"
-              // Seeded with the signed-in user's verified email.
-              defaultValue={prefill?.email || undefined}
-            />
-          </div>
+      {/* Single-column body: identity + business fields. (Billing email/address
+          were removed with billing.org_billing_profiles — Stripe collects the
+          billing address at checkout.) */}
+      <div className="flex flex-col gap-4">
+        {/* ── Name ─────────────────────────────────────────────────────── */}
+        <div className="space-y-1.5">
+          <Label htmlFor="name">
+            {isBusiness ? "Organization name" : "Your name"}
+          </Label>
+          <Input
+            id="name"
+            name="name"
+            required
+            maxLength={120}
+            placeholder={isBusiness ? "Acme Inc." : "Jane Smith"}
+            value={name}
+            onChange={(e) => {
+              const next = e.target.value;
+              // A hand-edit pins the name so the account-type toggle stops
+              // re-seeding it from the prefill.
+              nameManuallyEdited.current = true;
+              setName(next);
+              // Auto-populate while the user hasn't overridden the slug, and also
+              // whenever the slug is currently empty (re-armed override).
+              if (!slugManuallyEdited.current || slug === "") {
+                slugManuallyEdited.current = false;
+                setSlug(deriveSlug(next));
+              }
+            }}
+          />
         </div>
-        {/* end left column */}
 
-        {/* Right column — billing address */}
-        <BillingAddressFields />
+        {/* ── Slug ─────────────────────────────────────────────────────── */}
+        <div className="space-y-1.5">
+          <Label htmlFor="slug">Slug</Label>
+          <Input
+            id="slug"
+            name="slug"
+            required
+            pattern="[a-z0-9\-]{2,40}"
+            placeholder={isBusiness ? "acme" : "jane-smith"}
+            value={slug}
+            onChange={(e) => {
+              const next = e.target.value;
+              // An empty slug re-arms auto-population; any non-empty edit overrides it.
+              slugManuallyEdited.current = next !== "";
+              setSlug(next);
+            }}
+          />
+          <p className="text-xs text-muted-foreground">
+            Lowercase letters, digits, and hyphens. 2 to 40 chars.
+          </p>
+        </div>
+
+        {/* ── Logo ─────────────────────────────────────────────────────── */}
+        <div className="space-y-1.5">
+          <Label>
+            {isBusiness ? "Logo" : "Photo"}{" "}
+            <span className="text-muted-foreground font-normal">
+              (optional)
+            </span>
+          </Label>
+          <AvatarUpload
+            value={avatarUrl || null}
+            onChange={setAvatarUrl}
+            fallback={name.charAt(0) || slug.charAt(0)}
+            shape="square"
+            disabled={pending}
+          />
+          {/* Hidden input carries the uploaded URL into FormData on submit. */}
+          <input type="hidden" name="avatarUrl" value={avatarUrl} readOnly />
+        </div>
+
+        {/* ── Business-only fields ─────────────────────────────────────── */}
+        {isBusiness && (
+          <>
+            <div className="space-y-1.5">
+              <Label htmlFor="website">
+                Business website{" "}
+                <span className="text-muted-foreground font-normal">
+                  (optional)
+                </span>
+              </Label>
+              <Input
+                id="website"
+                name="website"
+                type="url"
+                placeholder="https://acme.com"
+                autoComplete="url"
+                // Seeded from the email domain for business (non-consumer) emails.
+                defaultValue={prefill?.suggestedWebsite || undefined}
+              />
+            </div>
+
+            {/* Industry — 24 options: searchable combobox (>20 option rule) */}
+            <div className="space-y-1.5">
+              <Label htmlFor="industry">
+                Industry{" "}
+                <span className="text-muted-foreground font-normal">
+                  (optional)
+                </span>
+              </Label>
+              <Combobox
+                value={industry}
+                onValueChange={(v) => setIndustry(v ?? "")}
+              >
+                <ComboboxTrigger id="industry" size="lg" className="w-full">
+                  <ComboboxValue placeholder="Select industry" />
+                </ComboboxTrigger>
+                <ComboboxPopup searchPlaceholder="Search industries…">
+                  {INDUSTRY_OPTIONS.map((opt) => (
+                    <ComboboxItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </ComboboxItem>
+                  ))}
+                </ComboboxPopup>
+              </Combobox>
+              <input type="hidden" name="industry" value={industry} readOnly />
+            </div>
+
+            {/* Team size — 9 options: plain select (≤20 option rule) */}
+            <div className="space-y-1.5">
+              <Label htmlFor="employeeSize">
+                Team size{" "}
+                <span className="text-muted-foreground font-normal">
+                  (optional)
+                </span>
+              </Label>
+              <Select
+                value={employeeSize}
+                onValueChange={(v) => setEmployeeSize(v ?? "")}
+              >
+                <SelectTrigger id="employeeSize" size="lg" className="w-full">
+                  <SelectValue placeholder="Select team size" />
+                </SelectTrigger>
+                <SelectPopup>
+                  {EMPLOYEE_SIZE_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectPopup>
+              </Select>
+              <input
+                type="hidden"
+                name="employeeSize"
+                value={employeeSize}
+                readOnly
+              />
+            </div>
+          </>
+        )}
       </div>
 
       {error ? <p className="text-sm text-destructive">{error}</p> : null}

@@ -6,8 +6,8 @@
  *
  * Policy assertions:
  *
- *  1. Append-only tables (usage_records, credit_ledger, stripe_events,
- *     security_events) must NOT carry updated_at or deleted_at columns.
+ *  1. Append-only tables (credit_ledger, stripe_events, security_events)
+ *     must NOT carry updated_at or deleted_at columns.
  *     Presence of those columns would allow mutation/soft-delete of immutable
  *     audit rows — a SOC2 compliance violation.
  *
@@ -33,7 +33,6 @@
 import { describe, it, expect } from "vitest";
 import { getTableConfig } from "drizzle-orm/pg-core";
 import {
-  usageRecords,
   creditLedger,
   stripeEvents,
   securityEvents,
@@ -60,7 +59,6 @@ describe("append-only tables: forbidden mutation columns", () => {
   const appendOnlyTables: Array<
     [string, Parameters<typeof getTableConfig>[0]]
   > = [
-    ["usage_records", usageRecords],
     ["credit_ledger", creditLedger],
     ["stripe_events", stripeEvents],
     ["security_events", securityEvents],

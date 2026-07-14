@@ -18,7 +18,7 @@ export const agentSubagentSiblings = registerCapability({
     "agent.subagent.result.get away.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "app", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs"],
   scoped: true,
   agent: {
     requiresApproval: false,
