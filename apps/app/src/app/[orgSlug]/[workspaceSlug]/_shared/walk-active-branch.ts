@@ -9,6 +9,7 @@
 import type { DbMessageRow } from "@oxagen/database";
 import type { ChatMessage, MessageAttachment } from "@/components/chat/chat-shell";
 import type { AssistantContentBlock } from "@/components/chat/stream-event-types";
+import { parseMessageReceipt } from "@/components/chat/stream-event-types";
 
 /**
  * Extract `metadata.attachments` (persisted by sendMessageAction/wandSendAction
@@ -58,5 +59,10 @@ export function walkActiveBranch(rows: DbMessageRow[], leafId: string | null): C
     siblingCount: r.parentMessageId ? (childCount.get(r.parentMessageId) ?? 1) : 1,
     contentBlocks: Array.isArray(r.contentBlocks) ? (r.contentBlocks as AssistantContentBlock[]) : undefined,
     attachments: attachmentsFromMetadata(r.metadata),
+    receipt: parseMessageReceipt(
+      r.metadata && typeof r.metadata === "object"
+        ? (r.metadata as { receipt?: unknown }).receipt
+        : undefined,
+    ),
   }));
 }

@@ -42,6 +42,56 @@ export interface TurnUsage {
   creditsCharged?: number;
 }
 
+/**
+ * Per-assistant-message run receipt (chat_ux_v2), persisted into
+ * `messages.metadata.receipt` when the turn completes — so history renders
+ * the same `{model} · {effort} · {$cost}` line the live turn showed, from the
+ * same numbers the usage event carried.
+ */
+export interface MessageReceipt {
+  /** Resolved gateway model id the turn ran on. */
+  model: string;
+  /** Reasoning effort the turn ran with, when applicable. */
+  effort: "low" | "medium" | "high" | null;
+  /** Wall-clock turn duration, request start → persistence. */
+  durationMs: number;
+  usage: TurnUsage;
+}
+
+/** Tolerant parse of `messages.metadata.receipt`. Null on any wrong shape. */
+export function parseMessageReceipt(raw: unknown): MessageReceipt | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const obj = raw as Record<string, unknown>;
+  if (typeof obj.model !== "string" || typeof obj.durationMs !== "number") {
+    return null;
+  }
+  const usage =
+    typeof obj.usage === "object" && obj.usage !== null
+      ? (obj.usage as Record<string, unknown>)
+      : null;
+  if (!usage) return null;
+  const num = (v: unknown): number => (typeof v === "number" ? v : 0);
+  return {
+    model: obj.model,
+    effort:
+      obj.effort === "low" || obj.effort === "medium" || obj.effort === "high"
+        ? obj.effort
+        : null,
+    durationMs: obj.durationMs,
+    usage: {
+      promptTokens: num(usage.promptTokens),
+      completionTokens: num(usage.completionTokens),
+      totalTokens: num(usage.totalTokens),
+      ...(typeof usage.cachedTokens === "number"
+        ? { cachedTokens: usage.cachedTokens }
+        : {}),
+      ...(typeof usage.creditsCharged === "number"
+        ? { creditsCharged: usage.creditsCharged }
+        : {}),
+    },
+  };
+}
+
 // "pending" is the pre-execution phase while the model is still streaming the
 // tool's arguments (tool-input-start → tool-input-delta*); it flips to
 // "running" once the full tool-call lands and execution begins. Persisted

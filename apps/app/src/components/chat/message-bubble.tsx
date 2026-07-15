@@ -14,7 +14,8 @@ import { CodeExecuteCard } from "./code-execute-card";
 import { ReasoningCard } from "./reasoning-card";
 import { ActivityTimeline, TimelineItem, type TimelineItemProps } from "./activity-timeline";
 import { CHAT_COMPONENTS, logUnknownComponent, UnknownComponentCard } from "./chat-component-registry";
-import type { AssistantContentBlock, ToolCallContentBlock } from "./stream-event-types";
+import type { AssistantContentBlock, MessageReceipt, ToolCallContentBlock } from "./stream-event-types";
+import { MessageReceiptLine } from "./message-receipt";
 import { MarkdownMessage } from "./markdown-message";
 import { MessageFooter } from "./message-footer";
 import ImagePreview from "./registry-components/image-preview";
@@ -46,6 +47,8 @@ export interface ChatMessage {
   contentBlocks?: AssistantContentBlock[];
   /** User-turn attachments (Phase 1: images), from `messages.metadata.attachments`. */
   attachments?: MessageAttachment[];
+  /** Run receipt (chat_ux_v2), from `messages.metadata.receipt`. */
+  receipt?: MessageReceipt | null;
 }
 
 export interface MessageBubbleCallbacks {
@@ -185,6 +188,10 @@ export function MessageBubble({
         ) : (
           <MarkdownMessage>{message.content}</MarkdownMessage>
         )}
+
+        {message.role === "assistant" && message.receipt ? (
+          <MessageReceiptLine receipt={message.receipt} />
+        ) : null}
 
         {showFooter ? (
           <MessageFooter
