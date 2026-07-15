@@ -13,6 +13,27 @@ export function formatCents(cents: number, currency = "USD"): string {
   }).format(cents / 100);
 }
 
+/**
+ * Compact currency for balances that can grow large — the nav credit pill and
+ * the chat session drawer's wallet row. Small balances keep full cent precision
+ * (they're read exactly), while large balances abbreviate ($12.3K, $1.2M, $3.4B)
+ * so a big credit total never dominates the surface. Where the exact figure
+ * matters to assistive tech, pair this with the precise `formatCents` in an
+ * aria-label.
+ */
+export function formatCentsCompact(cents: number, currency = "USD"): string {
+  if (!Number.isFinite(cents)) return formatCents(0, currency);
+  const dollars = cents / 100;
+  // Below $1,000 the full "$1,234.56" fits comfortably and every cent matters.
+  if (Math.abs(dollars) < 1000) return formatCents(cents, currency);
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency,
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(dollars);
+}
+
 export function formatDate(d: Date | string | null | undefined): string {
   if (!d) return "—";
   const date = typeof d === "string" ? new Date(d) : d;
@@ -35,7 +56,9 @@ export function formatDateTime(d: Date | string | null | undefined): string {
 }
 
 /** Date + time + seconds, e.g. "Jan 5, 2026, 02:03:07 PM". "—" for null/undefined/invalid. */
-export function formatDateTimeWithSeconds(d: Date | string | null | undefined): string {
+export function formatDateTimeWithSeconds(
+  d: Date | string | null | undefined,
+): string {
   if (!d) return "—";
   const date = typeof d === "string" ? new Date(d) : d;
   if (Number.isNaN(date.getTime())) return typeof d === "string" ? d : "—";
@@ -55,7 +78,8 @@ export function formatBytes(bytes: number): string {
   if (!Number.isFinite(bytes)) return "—";
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  if (bytes < 1024 * 1024 * 1024)
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
 }
 

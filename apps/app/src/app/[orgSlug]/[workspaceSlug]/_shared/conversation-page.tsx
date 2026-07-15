@@ -469,7 +469,12 @@ export async function ConversationPage({
     : undefined;
 
   return (
-    <div className="flex h-full flex-col gap-3 md:flex-row md:gap-4">
+    // `relative` anchors ConversationNav's floating mobile trigger (absolute,
+    // top-left) so it overlays the transcript instead of taking an in-flow row
+    // that shrinks the conversation's height on phones. On mobile the trigger is
+    // out of flow and the desktop aside is hidden, so the chat column is the
+    // sole in-flow child and gets the full viewport height.
+    <div className="relative flex h-full flex-col gap-3 md:flex-row md:gap-4">
       <ConversationNav
         currentPublicId={conv?.publicId ?? null}
         initialActive={initialConversations.conversations}

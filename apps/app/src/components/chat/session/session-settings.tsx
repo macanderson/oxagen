@@ -27,15 +27,23 @@ import {
   Server,
   Wallet,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, formatCentsCompact } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
-import { SegmentedControl, SegmentedControlItem } from "@/components/ui/segmented-control";
+import {
+  SegmentedControl,
+  SegmentedControlItem,
+} from "@/components/ui/segmented-control";
 import { Popover, PopoverTrigger, PopoverPopup } from "@/components/ui/popover";
-import { getModel, TEXT_TIERS, type EffortLevel, type ResolvedTierCatalog } from "@oxagen/ai/catalog";
+import {
+  getModel,
+  TEXT_TIERS,
+  type EffortLevel,
+  type ResolvedTierCatalog,
+} from "@oxagen/ai/catalog";
 import { useChatSession } from "./session-store";
 import {
   BUDGET_PRESETS_USD,
@@ -73,8 +81,10 @@ const DEFAULT_BRANCH_ROW_ID = "__repo_default__";
 // Formatting helpers
 // ---------------------------------------------------------------------------
 
+/** Wallet balance label — abbreviates large totals ($12.3K) so the drawer
+ *  footer row stays readable; small balances keep full cent precision. */
 function formatUsd(n: number): string {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
+  return formatCentsCompact(Math.round(n * 100));
 }
 
 /** Chip label: "$0.50", "$1", "$2", "$5" — whole dollars drop the cents. */
@@ -91,19 +101,30 @@ function isPresetBudget(v: number): boolean {
 // ---------------------------------------------------------------------------
 
 function buildOrgGroup(repos: RepoOption[]): SessionPickerGroup {
-  const owners = Array.from(new Set(repos.map((r) => r.owner))).sort((a, b) => a.localeCompare(b));
+  const owners = Array.from(new Set(repos.map((r) => r.owner))).sort((a, b) =>
+    a.localeCompare(b),
+  );
   return { id: "orgs", rows: owners.map((o) => ({ id: o, label: o })) };
 }
 
-function buildRepoGroup(repos: RepoOption[], org: string | null): SessionPickerGroup {
+function buildRepoGroup(
+  repos: RepoOption[],
+  org: string | null,
+): SessionPickerGroup {
   const filtered = org ? repos.filter((r) => r.owner === org) : repos;
   return {
     id: "repos",
-    rows: filtered.map((r) => ({ id: r.key, label: r.name, sublabel: r.owner })),
+    rows: filtered.map((r) => ({
+      id: r.key,
+      label: r.name,
+      sublabel: r.owner,
+    })),
   };
 }
 
-function buildEnvironmentGroup(environments: EnvironmentOption[]): SessionPickerGroup {
+function buildEnvironmentGroup(
+  environments: EnvironmentOption[],
+): SessionPickerGroup {
   return {
     id: "environments",
     rows: environments.map((e) => ({
@@ -118,11 +139,16 @@ function buildEnvironmentGroup(environments: EnvironmentOption[]): SessionPicker
   };
 }
 
-function buildBranchGroup(branches: string[] | null, defaultBranch: string | null): SessionPickerGroup {
+function buildBranchGroup(
+  branches: string[] | null,
+  defaultBranch: string | null,
+): SessionPickerGroup {
   const rows: SessionPickerRow[] = [
     {
       id: DEFAULT_BRANCH_ROW_ID,
-      label: defaultBranch ? `Repository default (${defaultBranch})` : "Repository default",
+      label: defaultBranch
+        ? `Repository default (${defaultBranch})`
+        : "Repository default",
     },
   ];
   for (const name of branches ?? []) {
@@ -157,7 +183,12 @@ function AgentRow({
 }) {
   const name = agent?.name ?? "Default assistant";
   const avatar = (
-    <AgentAvatar avatarUrl={agent?.avatarUrl ?? null} name={name} slug={agent?.slug ?? "default"} size="sm" />
+    <AgentAvatar
+      avatarUrl={agent?.avatarUrl ?? null}
+      name={name}
+      slug={agent?.slug ?? "default"}
+      size="sm"
+    />
   );
 
   if (locked) {
@@ -165,10 +196,17 @@ function AgentRow({
       <div className="flex flex-col gap-1 rounded-md px-2 py-1.5">
         <div className="flex items-center gap-2">
           {avatar}
-          <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">{name}</span>
-          <Lock className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+            {name}
+          </span>
+          <Lock
+            className="size-3.5 shrink-0 text-muted-foreground"
+            aria-hidden="true"
+          />
         </div>
-        <p className="pl-8 text-xs text-muted-foreground">Locked after the first message</p>
+        <p className="pl-8 text-xs text-muted-foreground">
+          Locked after the first message
+        </p>
         {onStartNewChat ? (
           <button
             type="button"
@@ -190,8 +228,13 @@ function AgentRow({
       className="flex min-h-11 w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       {avatar}
-      <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">{name}</span>
-      <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+      <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+        {name}
+      </span>
+      <ChevronRight
+        className="size-4 shrink-0 text-muted-foreground"
+        aria-hidden="true"
+      />
     </button>
   );
 }
@@ -263,12 +306,23 @@ function PickerFieldRow({
 }: PickerFieldRowProps) {
   const content = (
     <>
-      <Icon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+      <Icon
+        className="size-4 shrink-0 text-muted-foreground"
+        aria-hidden="true"
+      />
       <span className="min-w-0 flex-1">
         <span className="block text-xs text-muted-foreground">{label}</span>
-        <span className="block truncate text-sm font-medium text-foreground">{value}</span>
-        {sublabel ? <span className="block truncate text-xs text-muted-foreground">{sublabel}</span> : null}
-        {warning ? <span className="block text-xs text-destructive">{warning}</span> : null}
+        <span className="block truncate text-sm font-medium text-foreground">
+          {value}
+        </span>
+        {sublabel ? (
+          <span className="block truncate text-xs text-muted-foreground">
+            {sublabel}
+          </span>
+        ) : null}
+        {warning ? (
+          <span className="block text-xs text-destructive">{warning}</span>
+        ) : null}
       </span>
       {locked ? (
         <Lock
@@ -276,14 +330,20 @@ function PickerFieldRow({
           aria-label="Locked to this conversation"
         />
       ) : (
-        <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <ChevronRight
+          className="size-4 shrink-0 text-muted-foreground"
+          aria-hidden="true"
+        />
       )}
     </>
   );
 
   if (locked) {
     return (
-      <div className="flex min-h-11 w-full items-center gap-2 rounded-md px-2 py-1.5" data-locked="true">
+      <div
+        className="flex min-h-11 w-full items-center gap-2 rounded-md px-2 py-1.5"
+        data-locked="true"
+      >
         {content}
       </div>
     );
@@ -310,7 +370,11 @@ function PickerFieldRow({
 
   return (
     <Popover onOpenChange={(open) => (open ? onOpen?.() : undefined)}>
-      <PopoverTrigger render={<button type="button" aria-label={ariaLabel} className={rowClass} />}>
+      <PopoverTrigger
+        render={
+          <button type="button" aria-label={ariaLabel} className={rowClass} />
+        }
+      >
         {content}
       </PopoverTrigger>
       <PopoverPopup align="start" className="max-h-96 w-80 overflow-y-auto p-2">
@@ -360,9 +424,14 @@ export function SessionSettings({
   const [customBudgetOpen, setCustomBudgetOpen] = React.useState(false);
 
   const currentAgent = agents.find((a) => a.agentId === state.agentId) ?? null;
-  const currentRepo = state.repoKey ? (repos.find((r) => r.key === state.repoKey) ?? null) : null;
-  const currentEnv = state.envId ? (environments.find((e) => e.id === state.envId) ?? null) : null;
-  const effectiveDefaultBranch = defaultBranch ?? currentRepo?.defaultBranch ?? null;
+  const currentRepo = state.repoKey
+    ? (repos.find((r) => r.key === state.repoKey) ?? null)
+    : null;
+  const currentEnv = state.envId
+    ? (environments.find((e) => e.id === state.envId) ?? null)
+    : null;
+  const effectiveDefaultBranch =
+    defaultBranch ?? currentRepo?.defaultBranch ?? null;
 
   const issues = React.useMemo(
     () => sessionSelectionIssues(state, { repos, environments, branches }),
@@ -373,21 +442,30 @@ export function SessionSettings({
 
   const modelLabel = state.model
     ? (getModel(state.model)?.name ?? state.model)
-    : (TEXT_TIERS.find((t) => t.id === (state.tier ?? "fast"))?.name ?? "Oxagen Fast");
+    : (TEXT_TIERS.find((t) => t.id === (state.tier ?? "fast"))?.name ??
+      "Oxagen Fast");
 
   // The v2 UI only exposes low/medium/high — a legacy xhigh/max value (still
   // valid in ChatSessionState) displays as "high" without ever being written
   // back until the user picks a segment explicitly.
   const effortDisplay: "low" | "medium" | "high" =
-    state.effort === "low" ? "low" : state.effort === "medium" ? "medium" : "high";
+    state.effort === "low"
+      ? "low"
+      : state.effort === "medium"
+        ? "medium"
+        : "high";
 
   const showCustomBudget =
-    customBudgetOpen || (state.budgetUsd !== null && !isPresetBudget(state.budgetUsd));
+    customBudgetOpen ||
+    (state.budgetUsd !== null && !isPresetBudget(state.budgetUsd));
 
   /** Shared list content for a picker kind. `onSelected` fires after a pick
    * (used to pop the drawer's pushed page back to the main list); the
    * popover variant omits it so a pick doesn't force-close the popup. */
-  function pickerContentFor(kind: PickerKind, onSelected?: () => void): React.ReactNode {
+  function pickerContentFor(
+    kind: PickerKind,
+    onSelected?: () => void,
+  ): React.ReactNode {
     switch (kind) {
       case "model":
         return (
@@ -442,7 +520,9 @@ export function SessionSettings({
             groups={[buildBranchGroup(branches, effectiveDefaultBranch)]}
             selectedId={state.branch ?? DEFAULT_BRANCH_ROW_ID}
             onSelect={(id) => {
-              updateSession({ branch: id === DEFAULT_BRANCH_ROW_ID ? null : id });
+              updateSession({
+                branch: id === DEFAULT_BRANCH_ROW_ID ? null : id,
+              });
               onSelected?.();
             }}
             searchPlaceholder="Search branches"
@@ -478,7 +558,9 @@ export function SessionSettings({
           >
             <ChevronLeft className="size-5" aria-hidden="true" />
           </button>
-          <h3 className="text-sm font-semibold text-foreground">{PICKER_TITLES[pushed]}</h3>
+          <h3 className="text-sm font-semibold text-foreground">
+            {PICKER_TITLES[pushed]}
+          </h3>
         </div>
         <div className="flex-1 overflow-y-auto pt-2">
           {pickerContentFor(pushed, () => setPushed(null))}
@@ -510,7 +592,9 @@ export function SessionSettings({
           popoverContent={pickerContentFor("model")}
         />
         <div className="flex flex-col gap-1.5 px-2 py-1.5">
-          <span className="text-xs text-muted-foreground">Reasoning effort</span>
+          <span className="text-xs text-muted-foreground">
+            Reasoning effort
+          </span>
           <SegmentedControl
             className="h-11 sm:h-8"
             value={effortDisplay}
@@ -523,7 +607,11 @@ export function SessionSettings({
         </div>
         <div className="flex flex-col gap-1.5 px-2 py-1.5">
           <span className="text-xs text-muted-foreground">Per-turn budget</span>
-          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Per-turn budget">
+          <div
+            className="flex flex-wrap gap-1.5"
+            role="group"
+            aria-label="Per-turn budget"
+          >
             <BudgetChip
               label="No cap"
               pressed={state.budgetUsd === null}
@@ -548,8 +636,13 @@ export function SessionSettings({
               pressed={showCustomBudget}
               onClick={() => {
                 setCustomBudgetOpen(true);
-                if (state.budgetUsd === null || isPresetBudget(state.budgetUsd)) {
-                  updateSession({ budgetUsd: Math.max(BUDGET_MIN_USD, state.budgetUsd ?? 3) });
+                if (
+                  state.budgetUsd === null ||
+                  isPresetBudget(state.budgetUsd)
+                ) {
+                  updateSession({
+                    budgetUsd: Math.max(BUDGET_MIN_USD, state.budgetUsd ?? 3),
+                  });
                 }
               }}
             />
@@ -569,7 +662,9 @@ export function SessionSettings({
               className="w-28"
             />
           ) : null}
-          <p className="text-xs text-muted-foreground">Pauses and asks before a reply exceeds the cap.</p>
+          <p className="text-xs text-muted-foreground">
+            Pauses and asks before a reply exceeds the cap.
+          </p>
         </div>
       </section>
 
@@ -605,7 +700,10 @@ export function SessionSettings({
           icon={GitBranch}
           label="Branch"
           value={
-            state.branch ?? (effectiveDefaultBranch ? `Default (${effectiveDefaultBranch})` : "Repository default")
+            state.branch ??
+            (effectiveDefaultBranch
+              ? `Default (${effectiveDefaultBranch})`
+              : "Repository default")
           }
           warning={issueFor("branch")}
           ariaLabel={`Branch: ${state.branch ?? "repository default"}`}
@@ -628,24 +726,36 @@ export function SessionSettings({
 
       {/* Output */}
       <section className="flex flex-col gap-2 px-2">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Output</h3>
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Output
+        </h3>
         <div className="flex items-center justify-between gap-2 py-1">
-          <span className="text-sm font-medium text-foreground">Generate image</span>
+          <span className="text-sm font-medium text-foreground">
+            Generate image
+          </span>
           <Switch
             checked={state.outputs.image}
-            onCheckedChange={(checked) => updateSession({ outputs: { image: checked } })}
+            onCheckedChange={(checked) =>
+              updateSession({ outputs: { image: checked } })
+            }
             aria-label="Generate image"
           />
         </div>
         <div className="flex items-center justify-between gap-2 py-1">
-          <span className="text-sm font-medium text-foreground">Generate video</span>
+          <span className="text-sm font-medium text-foreground">
+            Generate video
+          </span>
           <Switch
             checked={state.outputs.video}
-            onCheckedChange={(checked) => updateSession({ outputs: { video: checked } })}
+            onCheckedChange={(checked) =>
+              updateSession({ outputs: { video: checked } })
+            }
             aria-label="Generate video"
           />
         </div>
-        <p className="text-xs text-muted-foreground">Stays on for this chat until turned off.</p>
+        <p className="text-xs text-muted-foreground">
+          Stays on for this chat until turned off.
+        </p>
       </section>
 
       {/* Footer */}
@@ -670,7 +780,12 @@ export function SessionSettings({
             </span>
           </button>
         ) : null}
-        <Button variant="ghost" size="sm" onClick={resetToDefaults} className="self-start">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={resetToDefaults}
+          className="self-start"
+        >
           Reset to defaults
         </Button>
       </div>
