@@ -50,18 +50,27 @@ export function useSessionSettingsData({
     void listRepoBranchesAction(
       { orgSlug, workspaceSlug },
       { owner: selectedRepo.owner, repo: selectedRepo.name },
-    ).then((result) => {
-      loadingRepoKeyRef.current = null;
-      setBranchesLoading(false);
-      if ("error" in result) return;
-      setBranchCache((prev) => ({
-        ...prev,
-        [selectedRepo.key]: {
-          branches: result.branches.map((b) => b.name),
-          defaultBranch: result.defaultBranch,
-        },
-      }));
-    });
+    )
+      .then((result) => {
+        if ("error" in result) return;
+        setBranchCache((prev) => ({
+          ...prev,
+          [selectedRepo.key]: {
+            branches: result.branches.map((b) => b.name),
+            defaultBranch: result.defaultBranch,
+          },
+        }));
+      })
+      .catch(() => {
+        // Swallow: a rejected server-action promise (transient network error,
+        // or a throw from scope resolution that runs outside the action's
+        // try/catch) still needs to release the in-flight guard below so the
+        // loader can retry instead of wedging in a permanent loading state.
+      })
+      .finally(() => {
+        loadingRepoKeyRef.current = null;
+        setBranchesLoading(false);
+      });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- branchCache is read for its CURRENT snapshot to skip a refetch; including it would re-create this callback (and re-arm the in-flight guard) on every cache write
   }, [selectedRepo, orgSlug, workspaceSlug]);
 
