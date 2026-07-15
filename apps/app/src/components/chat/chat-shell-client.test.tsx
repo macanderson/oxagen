@@ -21,14 +21,23 @@ afterEach(cleanup);
 // 5s default, and the timed-out test's stray render then breaks the next one.
 vi.setConfig({ testTimeout: 20_000 });
 
-// ── chat_ux_v2 mobile-chrome viewport stub ──────────────────────────────────
-// Controllable viewport for the mobile-chrome describe block below (mirrors
-// message-composer.test.tsx's own `mockViewport` convention) — jsdom has no
-// real matchMedia, so without this the hook always degrades to `false`.
-const { mockViewport } = vi.hoisted(() => ({ mockViewport: { isMobile: false } }));
+// ── chat_ux_v2 mobile/desktop-chrome viewport stub ──────────────────────────
+// Controllable viewport for the mobile-chrome and desktop-rail describe
+// blocks below (mirrors message-composer.test.tsx's own `mockViewport`
+// convention) — jsdom has no real matchMedia, so without this the hook always
+// degrades to `false`. `useMediaQuery` is query-aware: the rail breakpoint
+// query (`min-width: 1280px`, see RAIL_BREAKPOINT_QUERY in
+// chat-shell-client.tsx) resolves to its OWN controllable value
+// (`isRailWidth`, default true — "wide desktop") independent of `isMobile`,
+// so tests can exercise the mid-width (rail hidden, composer cog + slide-over)
+// band without also flipping the phone-width mobile chrome.
+const { mockViewport } = vi.hoisted(() => ({
+  mockViewport: { isMobile: false, isRailWidth: true },
+}));
 vi.mock("@/hooks/use-media-query", () => ({
   useIsMobile: () => mockViewport.isMobile,
-  useMediaQuery: () => mockViewport.isMobile,
+  useMediaQuery: (query: string) =>
+    query.includes("1280") ? mockViewport.isRailWidth : mockViewport.isMobile,
 }));
 
 // Sheet shim — renders children inline when open (SessionSettingsDrawer and
@@ -771,6 +780,7 @@ describe("ChatShellClient — chat_ux_v2 mobile chrome", () => {
   });
   afterEach(() => {
     mockViewport.isMobile = false;
+    mockViewport.isRailWidth = true;
   });
 
   it("mounts the mobile header, hides the Activity FAB, and wires the composer's session-settings callback", async () => {
@@ -824,5 +834,49 @@ describe("ChatShellClient — chat_ux_v2 mobile chrome", () => {
     expect(screen.queryByTestId("chat-mobile-rail-sheet")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Activity" }));
     expect(screen.getByTestId("chat-mobile-rail-sheet")).toBeInTheDocument();
+  });
+});
+
+// ── chat_ux_v2 desktop rail vs. mid-width composer cog ──────────────────────
+// At NO width may both the rail AND the composer's session-settings cog be
+// visible — wide desktop gets the always-on rail panel (no cog); the
+// md–xl mid-width band gets the cog + a slide-over instead (no rail panel).
+describe("ChatShellClient — chat_ux_v2 desktop rail vs. mid-width cog", () => {
+  beforeEach(() => {
+    capturedComposerProps = {};
+  });
+  afterEach(() => {
+    mockViewport.isMobile = false;
+    mockViewport.isRailWidth = true;
+  });
+
+  it("wide desktop (rail visible): composer gets no cog, and the rail's Session panel is already mounted", async () => {
+    mockViewport.isMobile = false;
+    mockViewport.isRailWidth = true;
+    await renderMobileChrome({ chatUxV2: true });
+    expect(capturedComposerProps.showComposerCog).toBeFalsy();
+    expect(capturedComposerProps.onOpenSessionSettings).toBeUndefined();
+    // The rail's Session panel (SessionSettingsRail wraps SessionSettings,
+    // stubbed) is always-open — no click required to reveal it.
+    expect(screen.getByTestId("session-settings-stub")).toBeInTheDocument();
+  });
+
+  it("mid-width (rail hidden): composer gets showComposerCog + onOpenSessionSettings, and the Session panel is NOT mounted until opened", async () => {
+    mockViewport.isMobile = false;
+    mockViewport.isRailWidth = false;
+    await renderMobileChrome({ chatUxV2: true });
+    expect(capturedComposerProps.showComposerCog).toBe(true);
+    expect(typeof capturedComposerProps.onOpenSessionSettings).toBe("function");
+    expect(screen.queryByTestId("session-settings-stub")).not.toBeInTheDocument();
+    (capturedComposerProps.onOpenSessionSettings as () => void)();
+    await screen.findByTestId("session-settings-stub");
+  });
+
+  it("legacy (chatUxV2 false): never passes showComposerCog regardless of rail width", async () => {
+    mockViewport.isMobile = false;
+    mockViewport.isRailWidth = false;
+    await renderMobileChrome({ chatUxV2: false });
+    expect(capturedComposerProps.showComposerCog).toBeFalsy();
+    expect(capturedComposerProps.onOpenSessionSettings).toBeUndefined();
   });
 });

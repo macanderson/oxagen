@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, cleanup } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import {
   AgentActivityRail,
   resolveContextRepo,
@@ -220,6 +220,154 @@ describe("AgentActivityRail", () => {
     expect(screen.getByTestId("progress-status-line")).toHaveTextContent(
       "Turn complete",
     );
+  });
+});
+
+describe("AgentActivityRail — chat_ux_v2 desktop rail (v2)", () => {
+  it("renders sessionPanelSlot and NO Context card", () => {
+    render(
+      <AgentActivityRail
+        {...baseProps({
+          v2: true,
+          sessionPanelSlot: <div data-testid="session-panel-slot" />,
+        })}
+      />,
+    );
+    expect(screen.getByTestId("session-panel-slot")).toBeInTheDocument();
+    expect(document.querySelector('[data-card="context"]')).not.toBeInTheDocument();
+    expect(document.querySelector('[data-card="progress"]')).toBeInTheDocument();
+    expect(document.querySelector('[data-card="outputs"]')).toBeInTheDocument();
+  });
+
+  it("Progress renders as a single collapsed 'Progress · idle' row with no body when idle", () => {
+    render(<AgentActivityRail {...baseProps({ v2: true })} />);
+    expect(screen.getByText("Progress · idle")).toBeInTheDocument();
+    expect(screen.queryByTestId("progress-empty")).not.toBeInTheDocument();
+    const header = screen.getByRole("button", { name: "Progress · idle" });
+    expect(header).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("Progress auto-expands once isStreaming flips true", () => {
+    const { rerender } = render(
+      <AgentActivityRail {...baseProps({ v2: true, isStreaming: false })} />,
+    );
+    expect(screen.getByText("Progress · idle")).toBeInTheDocument();
+    rerender(
+      <AgentActivityRail
+        {...baseProps({
+          v2: true,
+          isStreaming: true,
+          order: ["tool:a"],
+          toolCalls: { a: tc({ toolCallId: "a", capability: "read_file", status: "running" }) },
+        })}
+      />,
+    );
+    expect(screen.getByText("Progress")).toBeInTheDocument();
+    expect(screen.queryByText("Progress · idle")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /^Progress/ }),
+    ).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByTestId("progress-status-line")).toHaveTextContent("Working");
+  });
+
+  it("Progress auto-expands once the first row appears (even without isStreaming)", () => {
+    const { rerender } = render(
+      <AgentActivityRail {...baseProps({ v2: true, isStreaming: false })} />,
+    );
+    rerender(
+      <AgentActivityRail
+        {...baseProps({
+          v2: true,
+          isStreaming: false,
+          order: ["tool:a"],
+          toolCalls: { a: tc({ toolCallId: "a", capability: "read_file" }) },
+        })}
+      />,
+    );
+    expect(
+      screen.getByRole("button", { name: /^Progress/ }),
+    ).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("Files reads 'Files · 0' collapsed when there's no file tool activity yet", () => {
+    render(<AgentActivityRail {...baseProps({ v2: true })} />);
+    expect(screen.getByText("Files · 0")).toBeInTheDocument();
+    const header = screen.getByRole("button", { name: "Files · 0" });
+    expect(header).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByTestId("ws-tabs")).not.toBeInTheDocument();
+  });
+
+  it("Files auto-expands (and drops the count) once a file-producing tool call appears", () => {
+    const { rerender } = render(<AgentActivityRail {...baseProps({ v2: true })} />);
+    expect(screen.getByText("Files · 0")).toBeInTheDocument();
+    rerender(
+      <AgentActivityRail
+        {...baseProps({
+          v2: true,
+          toolCalls: { a: tc({ toolCallId: "a", capability: "edit_repo_file" }) },
+        })}
+      />,
+    );
+    expect(screen.getByText("Files")).toBeInTheDocument();
+    expect(screen.queryByText("Files · 0")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Files" })).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByTestId("ws-tabs")).toBeInTheDocument();
+  });
+
+  it("legacy (v2 false/omitted) still reads 'Outputs', open by default, no idle collapse", () => {
+    render(<AgentActivityRail {...baseProps()} />);
+    expect(screen.getByText("Outputs")).toBeInTheDocument();
+    expect(screen.getByText("Progress")).toBeInTheDocument();
+    expect(screen.queryByText("Progress · idle")).not.toBeInTheDocument();
+    expect(screen.queryByText("Files · 0")).not.toBeInTheDocument();
+  });
+
+  it("hides the muted helper captions in v2 but keeps them legacy", () => {
+    const { rerender } = render(<AgentActivityRail {...baseProps()} />);
+    expect(
+      screen.getByText("Steps appear here as the agent works through a longer task."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Files the assistant generates or edits in this conversation show up here."),
+    ).toBeInTheDocument();
+
+    rerender(
+      <AgentActivityRail
+        {...baseProps({
+          v2: true,
+          isStreaming: true,
+          order: ["tool:a"],
+          toolCalls: { a: tc({ toolCallId: "a", capability: "edit_repo_file" }) },
+        })}
+      />,
+    );
+    expect(
+      screen.queryByText("Steps appear here as the agent works through a longer task."),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Files the assistant generates or edits in this conversation show up here."),
+    ).not.toBeInTheDocument();
+  });
+
+  it("manual toggle wins over auto-expand for the rest of the session", () => {
+    const { rerender } = render(<AgentActivityRail {...baseProps({ v2: true })} />);
+    // User manually opens the idle Progress card before anything happens.
+    fireEvent.click(screen.getByRole("button", { name: "Progress · idle" }));
+    expect(screen.getByRole("button", { name: "Progress · idle" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    // User then manually collapses it again.
+    fireEvent.click(screen.getByRole("button", { name: "Progress · idle" }));
+    expect(screen.getByRole("button", { name: "Progress · idle" })).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+    // Streaming starts — auto-expand must NOT override the user's explicit choice.
+    rerender(<AgentActivityRail {...baseProps({ v2: true, isStreaming: true })} />);
+    expect(
+      screen.getByRole("button", { name: /^Progress/ }),
+    ).toHaveAttribute("aria-expanded", "false");
   });
 });
 

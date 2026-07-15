@@ -346,6 +346,84 @@ describe("MessageComposer — chat_ux_v2 mobile row", () => {
   });
 });
 
+describe("MessageComposer — chat_ux_v2 desktop condensed row", () => {
+  it("renders exactly plus/textarea/send with no cog by default (rail visible, showComposerCog omitted)", () => {
+    mockViewport.isMobile = false;
+    renderWithSession();
+    expect(screen.getByTestId("composer-v2-desktop-row")).toBeInTheDocument();
+    expect(screen.queryByTestId("composer-v2-mobile-row")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add attachment" })).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Send a message…")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Send message" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Session settings" })).not.toBeInTheDocument();
+  });
+
+  it("shows the cog when showComposerCog is true (mid-width, rail hidden)", () => {
+    mockViewport.isMobile = false;
+    renderWithSession({ showComposerCog: true, onOpenSessionSettings: vi.fn() });
+    expect(screen.getByRole("button", { name: "Session settings" })).toBeInTheDocument();
+  });
+
+  it("calls onOpenSessionSettings when the cog is clicked", () => {
+    mockViewport.isMobile = false;
+    const onOpenSessionSettings = vi.fn();
+    renderWithSession({ showComposerCog: true, onOpenSessionSettings });
+    fireEvent.click(screen.getByRole("button", { name: "Session settings" }));
+    expect(onOpenSessionSettings).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows the accent cog dot once a setting diverges from the workspace defaults", () => {
+    mockViewport.isMobile = false;
+    renderWithSession({ showComposerCog: true }, BASE_SEED, <DirtyTrigger />);
+    expect(screen.queryByTestId("composer-cog-dot")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("dirty-trigger"));
+    const dot = screen.getByTestId("composer-cog-dot");
+    expect(dot.className).toContain("bg-primary");
+  });
+
+  it("hides the legacy model/agent/effort/budget/MCP/collapse/generate controls", () => {
+    mockViewport.isMobile = false;
+    renderWithSession();
+    expect(screen.queryByTestId("model-picker")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("agent-selector")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("budget-control")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("mcp-server-picker")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("select-trigger")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Generate image" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Generate video" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Collapse composer" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Expand composer" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "More composer options" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("disables send while the input is empty — textarea is not required", () => {
+    mockViewport.isMobile = false;
+    renderWithSession();
+    const textarea = screen.getByPlaceholderText("Send a message…");
+    expect(textarea).not.toBeRequired();
+    const send = screen.getByRole("button", { name: "Send message" });
+    expect(send).toBeDisabled();
+    fireEvent.change(textarea, { target: { value: "hello" } });
+    expect(send).not.toBeDisabled();
+    fireEvent.change(textarea, { target: { value: "   " } });
+    expect(send).toBeDisabled();
+  });
+
+  it("submits through the condensed row's Send button", async () => {
+    mockViewport.isMobile = false;
+    const action = makeAction();
+    renderWithSession({ action });
+    const textarea = screen.getByPlaceholderText("Send a message…");
+    fireEvent.change(textarea, { target: { value: "Hello from v2 desktop" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send message" }));
+    await vi.waitFor(() => expect(action).toHaveBeenCalledTimes(1));
+    const fd = action.mock.calls[0]![0] as FormData;
+    expect(fd.get("content")).toBe("Hello from v2 desktop");
+  });
+});
+
 describe("MessageComposer — legacy mobile toolbar is unchanged without chat_ux_v2", () => {
   it("renders the legacy mobile toolbar (overflow button, no condensed row) with no session provider mounted", () => {
     mockViewport.isMobile = true;
@@ -364,9 +442,29 @@ describe("MessageComposer — legacy mobile toolbar is unchanged without chat_ux
     expect(screen.getByRole("button", { name: "Send message" })).toBeInTheDocument();
   });
 
-  it("does not render the condensed row on desktop even with a session provider mounted", () => {
+  it("does not render the MOBILE condensed row on desktop even with a session provider mounted (v2Desktop renders its own row instead)", () => {
     mockViewport.isMobile = false;
     renderWithSession();
     expect(screen.queryByTestId("composer-v2-mobile-row")).not.toBeInTheDocument();
+  });
+
+  it("renders the full legacy desktop toolbar unchanged with no session provider mounted", () => {
+    mockViewport.isMobile = false;
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+      />,
+    );
+    expect(screen.queryByTestId("composer-v2-desktop-row")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("composer-v2-mobile-row")).not.toBeInTheDocument();
+    expect(screen.getByTestId("model-picker")).toBeInTheDocument();
+    expect(screen.getByTestId("budget-control")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Generate image" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Generate video" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Collapse composer" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Send message" })).toBeInTheDocument();
   });
 });

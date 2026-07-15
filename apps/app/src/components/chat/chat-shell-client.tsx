@@ -40,13 +40,18 @@ import type { EnvironmentOption } from "./environment-selector";
 import type { AgentOption } from "./agent-picker/agent-picker-types";
 import type { StoredCodeBinding } from "@/app/api/v1/chat/stream/code-binding";
 import { ChatSelectionProvider } from "./agent-picker/chat-selection-context";
-import { ChatSessionProvider, useChatSession } from "./session/session-store";
+import { ChatSessionProvider } from "./session/session-store";
 import type { SessionSeed } from "./session/session-state";
 import { ChatHeaderMobile } from "./chat-header-mobile";
-import { SessionSettingsDrawer } from "./session/session-settings-host";
+import { ChatHeaderDesktop } from "./chat-header-desktop";
+import {
+  SessionSettingsDrawer,
+  SessionSettingsRail,
+  SessionSettingsSlideOver,
+} from "./session/session-settings-host";
 import { SessionSettings } from "./session/session-settings";
-import { listRepoBranchesAction } from "./session/branch-actions";
-import { useIsMobile } from "@/hooks/use-media-query";
+import { useSessionSettingsData } from "./session/use-session-settings-data";
+import { useIsMobile, useMediaQuery } from "@/hooks/use-media-query";
 import { NotificationsBell } from "@/components/shell/notifications-bell";
 import { AgentGallery } from "./agent-picker/agent-gallery";
 import {
@@ -73,6 +78,13 @@ import {
   SheetTitle,
   SheetDescription,
 } from "@/components/ui/sheet";
+
+/**
+ * chat_ux_v2 desktop rail breakpoint — Tailwind's `xl` (1280px). An 800px
+ * conversation column plus a 320px rail needs ~1280px of viewport, wider than
+ * the legacy `lg` (1024px) rail breakpoint.
+ */
+const RAIL_BREAKPOINT_QUERY = "(min-width: 1280px)";
 
 /**
  * Friendly toast title for a turn-level error, keyed off the machine `code`
@@ -445,6 +457,45 @@ export function ChatShellClient({
   // chrome; mobile without the flag keeps the legacy mobile chrome).
   const isMobileViewport = useIsMobile();
   const v2MobileChrome = chatUxV2 && isMobileViewport;
+
+  // chat_ux_v2 desktop rail breakpoint: the rail needs real width (an 800px
+  // conversation column + a 320px rail ≈ 1280px, Tailwind's `xl`) — wider than
+  // the legacy `lg` (1024px) rail. `v2DesktopChrome` covers every non-mobile
+  // viewport under the flag; `v2RailVisible`/`v2MidWidth` split it at `xl` so
+  // the rail and the composer's session-settings cog are never both visible
+  // (mid-width gets the cog + a slide-over instead of the rail — see the
+  // composer/aside/slide-over wiring below).
+  const isRailWidth = useMediaQuery(RAIL_BREAKPOINT_QUERY);
+  const v2DesktopChrome = chatUxV2 && !isMobileViewport;
+  const v2RailVisible = v2DesktopChrome && isRailWidth;
+  const v2MidWidth = v2DesktopChrome && !isRailWidth;
+  // The FAB/bottom-sheet Activity trigger's own breakpoint mirrors whichever
+  // rail breakpoint applies (xl for v2, lg for legacy) so there's never a dead
+  // zone where neither the rail nor the trigger can reach Progress/Files.
+  const railHiddenBelowClass = chatUxV2 ? "xl:hidden" : "lg:hidden";
+  const railVisibleAtClass = chatUxV2 ? "xl:block" : "lg:block";
+
+  // Scrolls the rail's Session panel into view and focuses its first control —
+  // wired to the v2 desktop header's click. Plain DOM (not component state):
+  // the panel itself is SessionSettingsRail (session/session-settings-host.tsx,
+  // owned by its own PR), so this reaches in from the outside rather than
+  // adding an imperative-handle API to that shared component.
+  const sessionPanelRef = React.useRef<HTMLDivElement>(null);
+  const handleFocusSessionPanel = React.useCallback(() => {
+    const el = sessionPanelRef.current;
+    if (!el) return;
+    const reduceMotion =
+      typeof window !== "undefined" &&
+      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    el.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "nearest" });
+    const toggle = el.querySelector<HTMLButtonElement>("button[aria-expanded]");
+    if (toggle?.getAttribute("aria-expanded") === "false") toggle.click();
+    requestAnimationFrame(() => {
+      el.querySelector<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      )?.focus();
+    });
+  }, []);
 
   // v2 mobile: the chat screen owns its own slim header, so the app shell's
   // top bar (org/workspace switchers, wallet, bell) and the ConversationNav
@@ -1386,7 +1437,15 @@ export function ChatShellClient({
       codeBinding={conversationCodeBinding ?? null}
     >
       <div className="flex h-full w-full gap-4">
-        <div className="mx-auto flex h-full min-w-0 max-w-3xl flex-1 flex-col gap-4">
+        <div
+          className={cn(
+            "mx-auto flex h-full min-w-0 flex-1 flex-col gap-4",
+            // chat_ux_v2's wider conversation column (800px vs the legacy
+            // 768px) — applies at every viewport under the flag; harmless on
+            // mobile where the column is already narrower than either cap.
+            chatUxV2 ? "max-w-[800px]" : "max-w-3xl",
+          )}
+        >
           {/* chat_ux_v2 mobile chrome: the slim header (conversations / session
           summary / activity) replaces the desktop toolbar row below on a
           phone-width viewport. Mounted only inside ChatSessionProvider — see
@@ -1405,6 +1464,21 @@ export function ChatShellClient({
               onSessionSettingsOpenChange={setSessionSettingsOpen}
               onOpenActivity={() => setMobileRailOpen(true)}
               walletBalanceCents={walletBalanceCents ?? null}
+            />
+          ) : null}
+
+          {/* chat_ux_v2 desktop chrome: the compact conversation header —
+          agent + subtitle, click-to-focus the rail's Session panel. Mounted
+          only inside ChatSessionProvider, same reasoning as the mobile
+          chrome above. Mutually exclusive with it (isMobileViewport gates
+          one or the other). */}
+          {v2DesktopChrome ? (
+            <ChatHeaderDesktop
+              agents={availableAgents ?? []}
+              repos={availableRepos ?? []}
+              environments={availableEnvironments ?? []}
+              isStreaming={isStreaming}
+              onFocusSessionPanel={handleFocusSessionPanel}
             />
           ) : null}
 
@@ -1546,7 +1620,7 @@ export function ChatShellClient({
                 className={cn(
                   "absolute bottom-3 right-3 z-20 flex h-11 items-center gap-1.5 rounded-full border border-border/60",
                   "bg-background/95 px-4 text-xs font-medium text-muted-foreground shadow-sm backdrop-blur",
-                  "lg:hidden",
+                  railHiddenBelowClass,
                   "hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 )}
               >
@@ -1616,18 +1690,28 @@ export function ChatShellClient({
               workspaceSlug={workspaceSlug}
               codeSessionPr={codeSessionPr}
               onOpenSessionSettings={
-                v2MobileChrome ? () => setSessionSettingsOpen(true) : undefined
+                v2MobileChrome || v2MidWidth
+                  ? () => setSessionSettingsOpen(true)
+                  : undefined
               }
+              showComposerCog={v2MidWidth}
             />
           </div>
         </div>
-        {/* Right rail: the calm three-card activity rail (Progress / Context /
-          Outputs). Hidden in the floating in-app panel (showFiles=false, same
-          gate the toolbar's export trigger uses) and on narrow viewports — the
-          rail needs real width to be legible; below lg it reflows into the
-          bottom sheet below. */}
+        {/* Right rail: legacy three-card activity rail (Progress / Context /
+          Outputs); chat_ux_v2 desktop swaps Context for the writable Session
+          panel (`sessionPanelSlot`). Hidden in the floating in-app panel
+          (showFiles=false, same gate the toolbar's export trigger uses) and on
+          narrow viewports — the rail needs real width to be legible; below
+          the breakpoint it reflows into the bottom sheet below. */}
         {showFiles ? (
-          <aside className="hidden w-72 shrink-0 overflow-y-auto py-1 lg:block">
+          <aside
+            className={cn(
+              "hidden shrink-0 overflow-y-auto py-1",
+              chatUxV2 ? "w-80" : "w-72",
+              railVisibleAtClass,
+            )}
+          >
             <AgentActivityRail
               order={order}
               plans={plans}
@@ -1642,15 +1726,41 @@ export function ChatShellClient({
               availableRepos={availableRepos}
               availableEnvironments={availableEnvironments}
               conversationCodeBinding={conversationCodeBinding ?? null}
+              v2={chatUxV2}
+              sessionPanelSlot={
+                // Only mount the (real, non-trivial) Session panel once the
+                // rail is ACTUALLY visible — the aside itself stays mounted
+                // at every viewport (CSS-hidden below the breakpoint, same as
+                // legacy), but there's no reason to run the panel's branch
+                // fetch or render its pickers behind `display:none` on
+                // mobile/mid-width, where the drawer/slide-over owns settings
+                // instead.
+                v2RailVisible ? (
+                  <div ref={sessionPanelRef}>
+                    <DesktopSessionPanel
+                      agents={availableAgents ?? []}
+                      repos={availableRepos ?? []}
+                      environments={availableEnvironments ?? []}
+                      modelConfig={modelConfig}
+                      orgSlug={orgSlug}
+                      workspaceSlug={workspaceSlug}
+                      walletBalanceCents={walletBalanceCents ?? null}
+                    />
+                  </div>
+                ) : undefined
+              }
             />
           </aside>
         ) : null}
 
-        {/* Below lg the rail reflows into a bottom sheet (ADR-026 mobile parity);
-          its floating trigger lives inside the message viewport above (anchored
-          to the scroll-area wrapper, so it can't cover the composer). */}
+        {/* Below the rail breakpoint the rail reflows into a bottom sheet
+          (ADR-026 mobile parity); its floating trigger lives inside the
+          message viewport above (anchored to the scroll-area wrapper, so it
+          can't cover the composer). NO sessionPanelSlot here even under
+          chatUxV2 — on mobile the drawer owns settings, and at mid-width the
+          slide-over does; this sheet is Progress/Files only. */}
         {showFiles ? (
-          <div className="lg:hidden">
+          <div className={railHiddenBelowClass}>
             <Sheet open={mobileRailOpen} onOpenChange={setMobileRailOpen}>
               <SheetPopup
                 side="bottom"
@@ -1680,6 +1790,7 @@ export function ChatShellClient({
                     availableRepos={availableRepos}
                     availableEnvironments={availableEnvironments}
                     conversationCodeBinding={conversationCodeBinding ?? null}
+                    v2={chatUxV2}
                   />
                 </div>
               </SheetPopup>
@@ -1687,6 +1798,22 @@ export function ChatShellClient({
           </div>
         ) : null}
       </div>
+      {/* chat_ux_v2 mid-width (md–xl): the rail is hidden, so Session settings
+          moves to a right slide-over — controlled by the SAME sessionSettingsOpen
+          state the mobile drawer uses (they're mutually exclusive by viewport). */}
+      {v2MidWidth ? (
+        <DesktopSessionSlideOver
+          open={sessionSettingsOpen}
+          onOpenChange={setSessionSettingsOpen}
+          agents={availableAgents ?? []}
+          repos={availableRepos ?? []}
+          environments={availableEnvironments ?? []}
+          modelConfig={modelConfig}
+          orgSlug={orgSlug}
+          workspaceSlug={workspaceSlug}
+          walletBalanceCents={walletBalanceCents ?? null}
+        />
+      ) : null}
     </ChatSelectionProvider>
   );
 
@@ -1713,10 +1840,10 @@ export function ChatShellClient({
 /**
  * MobileSessionChrome — the v2 mobile header + session-settings drawer,
  * rendered as a child of `ChatSessionProvider` (so `useChatSession()` always
- * resolves) whenever `v2MobileChrome` is true. Owns the branch-list fetch for
- * the drawer's Code section: resolves the selected repo's owner/name from the
- * session state and calls `listRepoBranchesAction`, caching the result per
- * repo key (see `SessionSettings`'s `onLoadBranches` contract).
+ * resolves) whenever `v2MobileChrome` is true. Branch-list fetch/caching for
+ * the drawer's Code section is shared with the desktop rail panel and
+ * mid-width slide-over via `useSessionSettingsData` (see
+ * `session/use-session-settings-data.ts`).
  */
 function MobileSessionChrome({
   agents,
@@ -1743,46 +1870,9 @@ function MobileSessionChrome({
   onOpenActivity: () => void;
   walletBalanceCents: number | null;
 }) {
-  const { state } = useChatSession();
   const router = useRouter();
-  const selectedRepo = state.repoKey
-    ? (repos.find((r) => r.key === state.repoKey) ?? null)
-    : null;
-
-  const [branchCache, setBranchCache] = React.useState<
-    Record<string, { branches: string[]; defaultBranch: string | null }>
-  >({});
-  const [branchesLoading, setBranchesLoading] = React.useState(false);
-  const loadingRepoKeyRef = React.useRef<string | null>(null);
-
-  const handleLoadBranches = React.useCallback(() => {
-    if (!selectedRepo) return;
-    if (branchCache[selectedRepo.key]) return; // cached — no refetch
-    if (loadingRepoKeyRef.current === selectedRepo.key) return; // in flight
-    loadingRepoKeyRef.current = selectedRepo.key;
-    setBranchesLoading(true);
-    void listRepoBranchesAction(
-      { orgSlug, workspaceSlug },
-      { owner: selectedRepo.owner, repo: selectedRepo.name },
-    ).then((result) => {
-      loadingRepoKeyRef.current = null;
-      setBranchesLoading(false);
-      if ("error" in result) return;
-      setBranchCache((prev) => ({
-        ...prev,
-        [selectedRepo.key]: {
-          branches: result.branches.map((b) => b.name),
-          defaultBranch: result.defaultBranch,
-        },
-      }));
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- branchCache is read for its CURRENT snapshot to skip a refetch; including it would re-create this callback (and re-arm the in-flight guard) on every cache write
-  }, [selectedRepo, orgSlug, workspaceSlug]);
-
-  const cached = selectedRepo ? branchCache[selectedRepo.key] : undefined;
-  const branches = cached ? cached.branches : null;
-  const defaultBranch =
-    cached?.defaultBranch ?? selectedRepo?.defaultBranch ?? null;
+  const { branches, branchesLoading, onLoadBranches, defaultBranch } =
+    useSessionSettingsData({ repos, orgSlug, workspaceSlug });
 
   return (
     <>
@@ -1810,7 +1900,7 @@ function MobileSessionChrome({
           modelConfig={modelConfig}
           branches={branches}
           branchesLoading={branchesLoading}
-          onLoadBranches={handleLoadBranches}
+          onLoadBranches={onLoadBranches}
           defaultBranch={defaultBranch}
           walletBalanceUsd={
             walletBalanceCents !== null ? walletBalanceCents / 100 : null
@@ -1822,6 +1912,108 @@ function MobileSessionChrome({
         />
       </SessionSettingsDrawer>
     </>
+  );
+}
+
+/**
+ * DesktopSessionPanel — the chat_ux_v2 desktop rail's writable Session panel:
+ * `SessionSettingsRail` chrome wrapping `SessionSettings variant="rail"`,
+ * rendered as the rail's `sessionPanelSlot` (replacing the read-only legacy
+ * Context card). Same branch-fetch hook as the mobile drawer.
+ */
+function DesktopSessionPanel({
+  agents,
+  repos,
+  environments,
+  modelConfig,
+  orgSlug,
+  workspaceSlug,
+  walletBalanceCents,
+}: {
+  agents: AgentOption[];
+  repos: RepoOption[];
+  environments: EnvironmentOption[];
+  modelConfig: ResolvedTierCatalog;
+  orgSlug: string;
+  workspaceSlug: string;
+  walletBalanceCents: number | null;
+}) {
+  const router = useRouter();
+  const { branches, branchesLoading, onLoadBranches, defaultBranch } =
+    useSessionSettingsData({ repos, orgSlug, workspaceSlug });
+
+  return (
+    <SessionSettingsRail>
+      <SessionSettings
+        variant="rail"
+        agents={agents}
+        repos={repos}
+        environments={environments}
+        modelConfig={modelConfig}
+        branches={branches}
+        branchesLoading={branchesLoading}
+        onLoadBranches={onLoadBranches}
+        defaultBranch={defaultBranch}
+        walletBalanceUsd={
+          walletBalanceCents !== null ? walletBalanceCents / 100 : null
+        }
+        onOpenWallet={() => router.push(`/${orgSlug}/billing`)}
+      />
+    </SessionSettingsRail>
+  );
+}
+
+/**
+ * DesktopSessionSlideOver — chat_ux_v2 mid-width (md–xl, rail hidden): the
+ * same Session settings surface as the rail panel, in a right slide-over
+ * reached via the composer's cog instead of always-visible rail real estate.
+ */
+function DesktopSessionSlideOver({
+  open,
+  onOpenChange,
+  agents,
+  repos,
+  environments,
+  modelConfig,
+  orgSlug,
+  workspaceSlug,
+  walletBalanceCents,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  agents: AgentOption[];
+  repos: RepoOption[];
+  environments: EnvironmentOption[];
+  modelConfig: ResolvedTierCatalog;
+  orgSlug: string;
+  workspaceSlug: string;
+  walletBalanceCents: number | null;
+}) {
+  const router = useRouter();
+  const { branches, branchesLoading, onLoadBranches, defaultBranch } =
+    useSessionSettingsData({ repos, orgSlug, workspaceSlug });
+
+  return (
+    <SessionSettingsSlideOver open={open} onOpenChange={onOpenChange}>
+      <SessionSettings
+        variant="slide-over"
+        agents={agents}
+        repos={repos}
+        environments={environments}
+        modelConfig={modelConfig}
+        branches={branches}
+        branchesLoading={branchesLoading}
+        onLoadBranches={onLoadBranches}
+        defaultBranch={defaultBranch}
+        walletBalanceUsd={
+          walletBalanceCents !== null ? walletBalanceCents / 100 : null
+        }
+        onOpenWallet={() => {
+          onOpenChange(false);
+          router.push(`/${orgSlug}/billing`);
+        }}
+      />
+    </SessionSettingsSlideOver>
   );
 }
 
