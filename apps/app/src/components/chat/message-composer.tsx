@@ -277,6 +277,111 @@ function persistComposerCollapsed(collapsed: boolean) {
   }
 }
 
+/**
+ * CondensedComposerRow — the [plus] [textarea] [cog?] [send] row shared by
+ * v2Mobile (chat_ux_v2 + phone width, cog always shown) and v2Desktop
+ * (chat_ux_v2 + non-mobile, cog shown only when the caller passes
+ * `showCog: true` at mid-width). Extracted so the two condensed surfaces
+ * can't drift on markup/behavior — only the cog's visibility differs, driven
+ * entirely by the `showCog` prop.
+ */
+function CondensedComposerRow({
+  testId,
+  canAttach,
+  pending,
+  disabled,
+  attachmentCount,
+  onAttachClick,
+  placeholder,
+  onKeyDown,
+  onChange,
+  onBlur,
+  onPaste,
+  showCog,
+  cogAriaLabel,
+  cogDotClass,
+  onOpenSessionSettings,
+  sendDisabled,
+  sendAriaLabel,
+}: {
+  testId: string;
+  canAttach: boolean;
+  pending: boolean;
+  disabled: boolean;
+  attachmentCount: number;
+  onAttachClick: () => void;
+  placeholder: string;
+  onKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
+  onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
+  onBlur: () => void;
+  onPaste?: (e: React.ClipboardEvent<HTMLTextAreaElement>) => void;
+  showCog: boolean;
+  cogAriaLabel: string;
+  cogDotClass: string | null;
+  onOpenSessionSettings?: () => void;
+  sendDisabled: boolean;
+  sendAriaLabel: string;
+}) {
+  return (
+    <div className="flex items-center gap-1" data-testid={testId}>
+      {canAttach ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          aria-label="Add attachment"
+          disabled={pending || disabled || attachmentCount >= MAX_ATTACHMENTS}
+          onClick={onAttachClick}
+          className="h-11 w-11 shrink-0 p-0"
+        >
+          <Plus className="h-4 w-4" />
+        </Button>
+      ) : null}
+      {/* No `required`: the spec bans the native browser validation tooltip —
+        an empty message simply leaves send disabled. */}
+      <Textarea
+        name="content"
+        placeholder={placeholder}
+        rows={1}
+        disabled={pending || disabled}
+        onKeyDown={onKeyDown}
+        onChange={onChange}
+        onBlur={onBlur}
+        onPaste={onPaste}
+        className="min-h-0 flex-1 resize-none border-none bg-transparent py-2 shadow-none focus-visible:ring-0"
+      />
+      {showCog ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          aria-label={cogAriaLabel}
+          onClick={onOpenSessionSettings}
+          className="relative h-11 w-11 shrink-0 p-0"
+        >
+          <SlidersHorizontal className="h-4 w-4" />
+          {cogDotClass ? (
+            <span
+              aria-hidden="true"
+              data-testid="composer-cog-dot"
+              className={cn("absolute right-2 top-2 size-1.5 rounded-full", cogDotClass)}
+            />
+          ) : null}
+        </Button>
+      ) : null}
+      <Button
+        type="submit"
+        disabled={sendDisabled}
+        size="sm"
+        aria-label={sendAriaLabel}
+        className="h-11 w-11 shrink-0 p-0"
+      >
+        <Send className="h-4 w-4" />
+      </Button>
+    </div>
+  );
+}
+
 export function MessageComposer({
   conversationId,
   parentMessageId,
@@ -303,6 +408,7 @@ export function MessageComposer({
   workspaceSlug,
   codeSessionPr,
   onOpenSessionSettings,
+  showComposerCog = false,
 }: {
   conversationId: string | null;
   parentMessageId: string | null;
@@ -366,11 +472,19 @@ export function MessageComposer({
    */
   codeSessionPr?: ComposerPrStatus | null;
   /**
-   * chat_ux_v2 mobile chrome only: opens the session-settings drawer from the
-   * condensed row's cog button. Omitted when no session provider is mounted
-   * (the cog itself only renders in that case anyway — see `v2Mobile` below).
+   * chat_ux_v2 condensed row only: opens the session-settings surface from the
+   * cog button. Always used by v2Mobile (which always shows a cog — there is
+   * no rail there); on v2Desktop only when `showComposerCog` is true.
    */
   onOpenSessionSettings?: () => void;
+  /**
+   * chat_ux_v2 desktop only: shows the condensed row's cog button at
+   * mid-width viewports where the rail is hidden (chat-shell-client.tsx owns
+   * the breakpoint check). At no width may both the rail and this cog be
+   * visible. Ignored on v2Mobile, which always shows the cog, and has no
+   * effect outside v2Desktop.
+   */
+  showComposerCog?: boolean;
 }) {
   const [pending, startTransition] = React.useTransition();
   const [error, setError] = React.useState<string | null>(null);
@@ -476,18 +590,23 @@ export function MessageComposer({
     if (stored === "1") setComposerCollapsed(true);
   }, []);
 
-  // ── chat_ux_v2 mobile chrome ───────────────────────────────────────────────
-  // A single condensed row (plus/textarea/cog/send) replaces the entire
-  // desktop toolbar ONLY when the unified session store is mounted AND the
-  // viewport is phone-width — every other surface (desktop, or mobile without
-  // the v2 session provider) renders byte-identical to before. The hook runs
-  // unconditionally per rules-of-hooks; only the boolean below branches on it.
+  // ── chat_ux_v2 condensed row (mobile + desktop) ───────────────────────────
+  // A single condensed row (plus/textarea/cog?/send) replaces the entire
+  // legacy toolbar ONLY when the unified session store is mounted — on a
+  // phone-width viewport (v2Mobile, cog always shown — there's no rail there)
+  // or any non-mobile viewport (v2Desktop, cog shown only at mid-width via
+  // `showComposerCog`, wired by chat-shell-client.tsx's breakpoint check).
+  // Every other surface (legacy toolbar, or mobile/desktop without the v2
+  // session provider) renders byte-identical to before. The hook runs
+  // unconditionally per rules-of-hooks; only the booleans below branch on it.
   const chatSession = useChatSessionContext();
   const v2Mobile = isMobile && chatSession !== null;
-  // The collapsed-composer preference never applies in v2Mobile: there is no
-  // toggle to un-collapse it there (the button is hidden), and the height
-  // budget requires the textarea always visible.
-  const collapsed = composerCollapsed && !v2Mobile;
+  const v2Desktop = !isMobile && chatSession !== null;
+  const v2Condensed = v2Mobile || v2Desktop;
+  // The collapsed-composer preference never applies in the v2 condensed row:
+  // there is no toggle to un-collapse it there (the button is hidden), and the
+  // height budget requires the textarea always visible.
+  const collapsed = composerCollapsed && !v2Condensed;
 
   const expandComposer = React.useCallback(() => {
     setComposerCollapsed(false);
@@ -688,7 +807,7 @@ export function MessageComposer({
   // Track whether the textarea currently has content so the parent can hide
   // the suggested-prompt chips while the user is typing.
   const inputHasContentRef = React.useRef(false);
-  // State mirror for the v2Mobile row: its send button disables on empty
+  // State mirror for the v2 condensed row: its send button disables on empty
   // input (the spec bans native `required` validation — no browser tooltip,
   // ever — so emptiness must gate the button, and a ref can't re-render it).
   const [inputEmpty, setInputEmpty] = React.useState(true);
@@ -1274,6 +1393,7 @@ export function MessageComposer({
         onInterrupt?.();
         const fd = buildFormData(e.currentTarget, model, attachmentsSnapshot);
         formRef.current?.reset();
+        setInputEmpty(true);
         setPendingMentions([]);
         closeMentionMenu();
         clearAttachments();
@@ -1306,6 +1426,7 @@ export function MessageComposer({
           "content",
         ) as HTMLTextAreaElement | null;
         if (ta) ta.value = "";
+        setInputEmpty(true);
         // Notify parent that input is now empty (chips should reappear).
         if (inputHasContentRef.current) {
           inputHasContentRef.current = false;
@@ -1317,6 +1438,7 @@ export function MessageComposer({
 
     const fd = buildFormData(e.currentTarget, model, attachmentsSnapshot);
     formRef.current?.reset();
+    setInputEmpty(true);
     setPendingMentions([]);
     closeMentionMenu();
     clearAttachments();
@@ -1643,8 +1765,9 @@ export function MessageComposer({
     />
   );
 
-  // Shared send-button aria-label — used by both the v2Mobile condensed row
-  // and the legacy toolbar's Send button below, so the two can never drift.
+  // Shared send-button aria-label — used by both the v2 condensed row
+  // (mobile and desktop) and the legacy toolbar's Send button below, so all
+  // three can never drift.
   const sendAriaLabel =
     isStreaming && pendingPromptBehavior === "interrupt"
       ? "Interrupt and send"
@@ -1652,9 +1775,10 @@ export function MessageComposer({
         ? "Queue message"
         : "Send message";
 
-  // v2Mobile cog dot: a broken selection (warning) takes precedence over the
-  // plain "settings differ from defaults" accent — it needs attention
-  // regardless of whether other settings also changed.
+  // v2 condensed row cog dot (mobile always, desktop at mid-width): a broken
+  // selection (warning) takes precedence over the plain "settings differ from
+  // defaults" accent — it needs attention regardless of whether other
+  // settings also changed.
   const v2SelectionIssues = React.useMemo(
     () =>
       chatSession
@@ -1688,6 +1812,10 @@ export function MessageComposer({
         className={cn(
           "flex flex-col gap-2 rounded-2xl border border-border bg-card p-3 text-card-foreground shadow-sm transition-shadow focus-within:ring-2 focus-within:ring-ring",
           collapsed && "gap-0 py-1.5",
+          // v2 condensed row (mobile or desktop) at-rest budget is ≤64px: 44px
+          // controls + 2×8px padding + 2px border = 62. p-3 (12px) would
+          // overshoot to 70.
+          v2Condensed && "py-2",
           // v2Mobile at-rest budget is ≤64px: 44px controls + 2×8px padding
           // + 2px border = 62. p-3 (12px) would overshoot to 70.
           v2Mobile && "py-2",
@@ -1710,11 +1838,11 @@ export function MessageComposer({
           />
         ) : null}
         {/* CSS-hidden (not unmounted) while collapsed so the draft text and the
-          form's `content` field survive collapse/expand round-trips. In
-          v2Mobile the textarea instead lives inline in the condensed toolbar
-          row below (see `v2Mobile` branch further down) — rendering NOTHING
-          here avoids a duplicate `name="content"` field. */}
-        {!v2Mobile ? (
+          form's `content` field survive collapse/expand round-trips. In the
+          v2 condensed row (mobile or desktop) the textarea instead lives
+          inline in the row below (see `v2Condensed` branch further down) —
+          rendering NOTHING here avoids a duplicate `name="content"` field. */}
+        {!v2Condensed ? (
           <div className="relative">
             {slashOpen ? (
               <SlashCommandMenu
@@ -1822,10 +1950,10 @@ export function MessageComposer({
           (code-mode toolbar / pin context bar) that sat ABOVE the composer and
           each duplicated the repo/env selectors. Code mode drops the pin (both
           selections are required to send anyway); pin mode keeps it. Hidden
-          while collapsed, and hidden entirely in v2Mobile (the condensed row
-          has no room for it — Code/pin selection moves into the session
-          settings drawer via the cog). */}
-        {!v2Mobile && !collapsed && (showContextControls || codeSessionPr) ? (
+          while collapsed, and hidden entirely in the v2 condensed row (mobile
+          or desktop — neither has room for it; Code/pin selection moves into
+          the session settings surface via the cog / rail panel). */}
+        {!v2Condensed && !collapsed && (showContextControls || codeSessionPr) ? (
           <ComposerContextControls
             repositories={availableRepos ?? []}
             environments={availableEnvironments ?? []}
@@ -1844,14 +1972,18 @@ export function MessageComposer({
           />
         ) : null}
 
-        {/* v2Mobile: ONE condensed row replaces the entire toolbar below —
-          plus (attach) / textarea / cog (session settings) / send. The
+        {/* v2 condensed row: ONE row replaces the entire toolbar below — plus
+          (attach) / textarea / cog (session settings, conditional on
+          v2Desktop) / send. v2Mobile always shows the cog (no rail exists on
+          phone); v2Desktop shows it only when `showComposerCog` is true (the
+          rail is hidden at mid-width — chat-shell-client.tsx's breakpoint
+          check guarantees the rail and this cog are never both visible). The
           textarea lives HERE (not in the block near the top of the form) so
           the attachment/mention strips, queue, error, and code-gate hint all
           render ABOVE this row, and the composer stays within the ≤64px
           at-rest height budget. The slash/mention popup menus anchor to this
           row's `relative` wrapper, popping up directly above it. */}
-        {v2Mobile ? (
+        {v2Condensed ? (
           <div className="relative">
             {slashOpen ? (
               <SlashCommandMenu
@@ -1875,6 +2007,35 @@ export function MessageComposer({
                 onHoverIndex={setMentionActiveIndex}
               />
             ) : null}
+            <CondensedComposerRow
+              testId={v2Mobile ? "composer-v2-mobile-row" : "composer-v2-desktop-row"}
+              canAttach={canAttach}
+              pending={pending}
+              disabled={disabled}
+              attachmentCount={visibleAttachments.length}
+              onAttachClick={() => fileInputRef.current?.click()}
+              placeholder={placeholder}
+              onKeyDown={onKeyDown}
+              onChange={handleTextareaChange}
+              onBlur={() => {
+                setSlashQuery(null);
+                closeMentionMenu();
+              }}
+              onPaste={canAttach ? handlePaste : undefined}
+              showCog={v2Mobile || showComposerCog}
+              cogAriaLabel={cogAriaLabel}
+              cogDotClass={cogDotClass}
+              onOpenSessionSettings={onOpenSessionSettings}
+              sendDisabled={
+                pending ||
+                disabled ||
+                uploadsInFlight ||
+                codeGateBlocked ||
+                // Empty input disables send (attachments alone still send).
+                (inputEmpty && visibleAttachments.length === 0)
+              }
+              sendAriaLabel={sendAriaLabel}
+            />
             <div
               className="flex items-center gap-1"
               data-testid="composer-v2-mobile-row"
