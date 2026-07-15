@@ -1478,7 +1478,11 @@ export function ChatShellClient({
               repos={availableRepos ?? []}
               environments={availableEnvironments ?? []}
               isStreaming={isStreaming}
-              onFocusSessionPanel={handleFocusSessionPanel}
+              onFocusSessionPanel={
+                v2MidWidth
+                  ? () => setSessionSettingsOpen(true)
+                  : handleFocusSessionPanel
+              }
             />
           ) : null}
 
