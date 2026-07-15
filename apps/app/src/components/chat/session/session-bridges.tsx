@@ -84,7 +84,10 @@ export function composeModelState(
       tier: state.tier,
       model: state.model,
       effort: state.effort,
-      generate: state.outputs.video ? "video" : state.outputs.image ? "image" : null,
+      // `generate` is no longer a session-owned mode — media generation is
+      // inferred from the prompt server-side (infer-media-intent.ts), so the
+      // composer never opts a turn into it. `carrier.generate` (seeded null)
+      // flows through unchanged for any explicit API-seeded carrier.
       budgetEnabled: state.budgetUsd !== null,
       budgetUsd: state.budgetUsd,
       // v2 semantics: a cap always pauses-and-asks at the ceiling.
@@ -100,17 +103,12 @@ export function modelStateToSessionPatch(next: ComposerModelState): {
   model: string | null;
   effort: ChatSessionState["effort"];
   budgetUsd: number | null;
-  outputs: { image: boolean; video: boolean };
 } {
   return {
     tier: next.tier,
     model: next.model,
     effort: next.effort ?? "medium",
     budgetUsd: next.budgetEnabled ? next.budgetUsd : null,
-    outputs: {
-      image: next.generate === "image",
-      video: next.generate === "video",
-    },
   };
 }
 

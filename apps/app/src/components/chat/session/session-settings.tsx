@@ -30,7 +30,6 @@ import {
 import { cn, formatCentsCompact } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
 import {
@@ -724,39 +723,10 @@ export function SessionSettings({
         />
       </section>
 
-      {/* Output */}
-      <section className="flex flex-col gap-2 px-2">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Output
-        </h3>
-        <div className="flex items-center justify-between gap-2 py-1">
-          <span className="text-sm font-medium text-foreground">
-            Generate image
-          </span>
-          <Switch
-            checked={state.outputs.image}
-            onCheckedChange={(checked) =>
-              updateSession({ outputs: { image: checked } })
-            }
-            aria-label="Generate image"
-          />
-        </div>
-        <div className="flex items-center justify-between gap-2 py-1">
-          <span className="text-sm font-medium text-foreground">
-            Generate video
-          </span>
-          <Switch
-            checked={state.outputs.video}
-            onCheckedChange={(checked) =>
-              updateSession({ outputs: { video: checked } })
-            }
-            aria-label="Generate video"
-          />
-        </div>
-        <p className="text-xs text-muted-foreground">
-          Stays on for this chat until turned off.
-        </p>
-      </section>
+      {/* No "Output" section: image/video generation is inferred from the
+          prompt server-side (see infer-media-intent.ts) — there is no manual
+          "Generate image / video" toggle. Just ask ("make me a logo", "create
+          a short video of …") and the turn routes to media generation. */}
 
       {/* Footer */}
       <div className="flex flex-col gap-2 border-t border-border pt-3">
