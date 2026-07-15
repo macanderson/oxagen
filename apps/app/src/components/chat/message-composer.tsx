@@ -404,6 +404,7 @@ export function MessageComposer({
   defaultAgentId,
   onSetDefaultAgent,
   workspaceBudgetGovernance,
+  walletBalanceUsd = null,
   onInputHasContentChange,
   orgSlug,
   workspaceSlug,
@@ -458,6 +459,12 @@ export function MessageComposer({
    * governance — the composer behaves exactly as before this feature.
    */
   workspaceBudgetGovernance?: WorkspaceBudgetGovernance | null;
+  /**
+   * Org wallet balance in USD for the v2 wallet gate: when a per-turn cap is
+   * set higher than the balance, send disables with inline copy. Null/omitted
+   * ⇒ no gate (balance unknown never blocks sending).
+   */
+  walletBalanceUsd?: number | null;
   /**
    * Called whenever the textarea transitions between empty and non-empty.
    * `true`  → user has typed content (hide suggested prompts).
@@ -604,6 +611,15 @@ export function MessageComposer({
   const v2Active = chatSession !== null;
   const v2Mobile = isMobile && v2Active;
   const v2Desktop = !isMobile && v2Active;
+
+  // v2 wallet gate: a per-turn cap the wallet can't cover blocks sending —
+  // the fix is the user's (add funds, or lower the cap in session settings),
+  // so this disables send with inline copy rather than failing the turn.
+  const walletGateBlocked =
+    v2Active &&
+    walletBalanceUsd != null &&
+    chatSession.state.budgetUsd !== null &&
+    walletBalanceUsd < chatSession.state.budgetUsd;
 
   // v2: the agent picker hands focus to the composer after a pick (see
   // agent-picker/focus-composer-event.ts) so "pick → type" is seamless.
@@ -1386,7 +1402,7 @@ export function MessageComposer({
     // Code mode requires BOTH a repo and an environment before the first
     // coding turn — the submit button is disabled for this too, but guard
     // here as well since Enter/Cmd+Enter bypass the button.
-    if (codeGateBlocked) return;
+    if (codeGateBlocked || walletGateBlocked) return;
     // Never submit while an upload is still in flight — the model would
     // otherwise resolve an attachment the server hasn't finished persisting.
     if (hasInFlightUploads(attachments)) return;
@@ -1414,7 +1430,6 @@ export function MessageComposer({
         onInterrupt?.();
         const fd = buildFormData(e.currentTarget, model, attachmentsSnapshot);
         formRef.current?.reset();
-        setInputEmpty(true);
         setPendingMentions([]);
         closeMentionMenu();
         clearAttachments();
@@ -1447,7 +1462,6 @@ export function MessageComposer({
           "content",
         ) as HTMLTextAreaElement | null;
         if (ta) ta.value = "";
-        setInputEmpty(true);
         // Notify parent that input is now empty (chips should reappear).
         if (inputHasContentRef.current) {
           inputHasContentRef.current = false;
@@ -1459,7 +1473,6 @@ export function MessageComposer({
 
     const fd = buildFormData(e.currentTarget, model, attachmentsSnapshot);
     formRef.current?.reset();
-    setInputEmpty(true);
     setPendingMentions([]);
     closeMentionMenu();
     clearAttachments();
@@ -1706,7 +1719,7 @@ export function MessageComposer({
       return;
     }
 
-    if (pending || disabled || codeGateBlocked) return;
+    if (pending || disabled || codeGateBlocked || walletGateBlocked) return;
 
     if (enterToSubmit) {
       if (!e.shiftKey) {
@@ -1837,9 +1850,6 @@ export function MessageComposer({
           // controls + 2×8px padding + 2px border = 62. p-3 (12px) would
           // overshoot to 70.
           v2Condensed && "py-2",
-          // v2Mobile at-rest budget is ≤64px: 44px controls + 2×8px padding
-          // + 2px border = 62. p-3 (12px) would overshoot to 70.
-          v2Mobile && "py-2",
           isDragOver && "ring-2 ring-primary",
         )}
       >
@@ -1964,6 +1974,14 @@ export function MessageComposer({
             Select a repository and environment to start coding.
           </p>
         ) : null}
+        {walletGateBlocked && !collapsed ? (
+          <p
+            className="text-xs text-destructive"
+            data-testid="wallet-gate-hint"
+          >
+            Wallet balance is below your cap. Add funds or lower the cap.
+          </p>
+        ) : null}
 
         {/* Compact context controls — a single small row UNDER the textarea:
           org/repository on the bottom-left, environment (+ the open-PR chip and
@@ -2052,85 +2070,12 @@ export function MessageComposer({
                 disabled ||
                 uploadsInFlight ||
                 codeGateBlocked ||
+                walletGateBlocked ||
                 // Empty input disables send (attachments alone still send).
                 (inputEmpty && visibleAttachments.length === 0)
               }
               sendAriaLabel={sendAriaLabel}
             />
-            <div
-              className="flex items-center gap-1"
-              data-testid="composer-v2-mobile-row"
-            >
-              {canAttach ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  aria-label="Add attachment"
-                  disabled={
-                    pending ||
-                    disabled ||
-                    visibleAttachments.length >= MAX_ATTACHMENTS
-                  }
-                  onClick={() => fileInputRef.current?.click()}
-                  className="h-11 w-11 shrink-0 p-0"
-                >
-                  <Plus className="h-4 w-4" />
-                </Button>
-              ) : null}
-              {/* No `required`: the spec bans the native browser validation
-                tooltip — an empty message simply leaves send disabled. */}
-              <Textarea
-                name="content"
-                placeholder={placeholder}
-                rows={1}
-                disabled={pending || disabled}
-                onKeyDown={onKeyDown}
-                onChange={handleTextareaChange}
-                onBlur={() => {
-                  setSlashQuery(null);
-                  closeMentionMenu();
-                }}
-                onPaste={canAttach ? handlePaste : undefined}
-                className="min-h-0 flex-1 resize-none border-none bg-transparent py-2 shadow-none focus-visible:ring-0"
-              />
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                aria-label={cogAriaLabel}
-                onClick={onOpenSessionSettings}
-                className="relative h-11 w-11 shrink-0 p-0"
-              >
-                <SlidersHorizontal className="h-4 w-4" />
-                {cogDotClass ? (
-                  <span
-                    aria-hidden="true"
-                    data-testid="composer-cog-dot"
-                    className={cn(
-                      "absolute right-2 top-2 size-1.5 rounded-full",
-                      cogDotClass,
-                    )}
-                  />
-                ) : null}
-              </Button>
-              <Button
-                type="submit"
-                disabled={
-                  pending ||
-                  disabled ||
-                  uploadsInFlight ||
-                  codeGateBlocked ||
-                  // Empty input disables send (attachments alone still send).
-                  (inputEmpty && visibleAttachments.length === 0)
-                }
-                size="sm"
-                aria-label={sendAriaLabel}
-                className="h-11 w-11 shrink-0 p-0"
-              >
-                <Send className="h-4 w-4" />
-              </Button>
-            </div>
           </div>
         ) : (
           <>
@@ -2298,7 +2243,11 @@ export function MessageComposer({
                   // Also disabled while code mode is on but repo/environment aren't
                   // both selected yet (see codeGateBlocked).
                   disabled={
-                    pending || disabled || uploadsInFlight || codeGateBlocked
+                    pending ||
+                    disabled ||
+                    uploadsInFlight ||
+                    codeGateBlocked ||
+                    walletGateBlocked
                   }
                   size="sm"
                   aria-label={

@@ -1268,6 +1268,12 @@ export async function POST(request: NextRequest): Promise<Response> {
           effectiveTurnBudgetPolicy,
           modelId,
           {
+            // Live cumulative cost per engine step — powers the client's
+            // "≈ $0.31" streaming estimate (chat_ux_v2). Only budgeted turns
+            // have a guard, so unbudgeted turns emit no ticks.
+            onTick: (costUsd, limitUsd) => {
+              emit({ type: "budget-tick", costUsd, limitUsd });
+            },
             // grace mode: informational, non-blocking — the turn keeps running
             // past its base limit but inside the grace cushion.
             onWithinGrace: (verdict) => {

@@ -468,3 +468,43 @@ describe("MessageComposer — legacy mobile toolbar is unchanged without chat_ux
     expect(screen.getByRole("button", { name: "Send message" })).toBeInTheDocument();
   });
 });
+
+describe("MessageComposer — v2 wallet gate", () => {
+  it("disables send with inline copy when the cap exceeds the wallet balance", () => {
+    mockViewport.isMobile = true;
+    renderWithSession(
+      { walletBalanceUsd: 1 },
+      { ...BASE_SEED, budgetUsd: 2 },
+    );
+    expect(
+      screen.getByText(
+        "Wallet balance is below your cap. Add funds or lower the cap.",
+      ),
+    ).toBeInTheDocument();
+    const textarea = screen.getByPlaceholderText("Send a message…");
+    fireEvent.change(textarea, { target: { value: "hello" } });
+    expect(screen.getByRole("button", { name: "Send message" })).toBeDisabled();
+  });
+
+  it("no gate when the wallet covers the cap or no cap is set", () => {
+    mockViewport.isMobile = true;
+    renderWithSession(
+      { walletBalanceUsd: 5 },
+      { ...BASE_SEED, budgetUsd: 2 },
+    );
+    expect(screen.queryByTestId("wallet-gate-hint")).toBeNull();
+    cleanup();
+    mockViewport.isMobile = true;
+    renderWithSession({ walletBalanceUsd: 1 }, BASE_SEED);
+    expect(screen.queryByTestId("wallet-gate-hint")).toBeNull();
+  });
+
+  it("an unknown balance (null) never blocks sending", () => {
+    mockViewport.isMobile = true;
+    renderWithSession(
+      { walletBalanceUsd: null },
+      { ...BASE_SEED, budgetUsd: 2 },
+    );
+    expect(screen.queryByTestId("wallet-gate-hint")).toBeNull();
+  });
+});

@@ -177,6 +177,43 @@ describe("model bridge (flag on)", () => {
   });
 });
 
+describe("model bridge — two writes in one handler (composedRef race)", () => {
+  function DoubleWriteProbe() {
+    const [model, setModel] = useSessionModelState(defaultModelState, null);
+    return (
+      <div>
+        <output data-testid="model2">
+          {JSON.stringify({ effort: model.effort, budgetUsd: model.budgetUsd })}
+        </output>
+        <button
+          onClick={() => {
+            // Two functional updates in ONE handler, no re-render between
+            // them. The second must see the first's result — a stale
+            // composedRef would clobber the effort write with the budget
+            // write's full-replacement patch.
+            setModel((s) => ({ ...s, effort: "high" }));
+            setModel((s) => ({ ...s, budgetEnabled: true, budgetUsd: 2 }));
+          }}
+        >
+          double-write
+        </button>
+      </div>
+    );
+  }
+
+  it("both synchronous writes land in the store", () => {
+    providerWrap(<DoubleWriteProbe />);
+    fireEvent.click(screen.getByText("double-write"));
+    expect(sessionState().effort).toBe("high");
+    expect(sessionState().budgetUsd).toBe(2);
+    const model = JSON.parse(
+      screen.getByTestId("model2").textContent ?? "{}",
+    ) as Record<string, unknown>;
+    expect(model.effort).toBe("high");
+    expect(model.budgetUsd).toBe(2);
+  });
+});
+
 describe("model bridge (flag off)", () => {
   it("behaves as plain local state", () => {
     render(<ModelProbe />);

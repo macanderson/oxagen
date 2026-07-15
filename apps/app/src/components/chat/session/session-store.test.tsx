@@ -5,7 +5,7 @@
  * keys, agent memory), and the binding force that makes header-vs-run
  * mismatches impossible.
  */
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { ChatSessionProvider, useChatSession } from "./session-store";
 import {
@@ -214,6 +214,35 @@ describe("ChatSessionProvider", () => {
     // Branch stays editable on a bound conversation.
     fireEvent.click(screen.getByText("pick-branch"));
     expect(stateOf().branch).toBe("feat/x");
+  });
+
+  it("degrades to in-memory state when localStorage throws (private mode)", () => {
+    const getSpy = vi
+      .spyOn(Storage.prototype, "getItem")
+      .mockImplementation(() => {
+        throw new Error("storage disabled");
+      });
+    const setSpy = vi
+      .spyOn(Storage.prototype, "setItem")
+      .mockImplementation(() => {
+        throw new Error("storage disabled");
+      });
+    try {
+      renderProvider();
+      // Writes still update in-memory state without crashing…
+      fireEvent.click(screen.getByText("pick-branch"));
+      expect(stateOf().branch).toBe("feat/x");
+      // …and the send-time bookkeeping (agent memory + draft migration,
+      // both storage-backed) survives too.
+      fireEvent.click(screen.getByText("pick-agent"));
+      fireEvent.click(screen.getByText("send"));
+      expect(
+        JSON.parse(screen.getByTestId("locks").textContent ?? "{}"),
+      ).toEqual({ agent: true, code: true });
+    } finally {
+      getSpy.mockRestore();
+      setSpy.mockRestore();
+    }
   });
 
   it("a persisted stale selection can never shadow the binding — the mismatch regression", () => {

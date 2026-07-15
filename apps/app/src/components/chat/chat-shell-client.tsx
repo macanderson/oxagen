@@ -320,6 +320,7 @@ export function ChatShellClient({
     turnError,
     turnWarning,
     turnBudgetNotice,
+    turnCostUsd,
     suggestedPrompts,
     consume,
     reset,
@@ -1618,6 +1619,20 @@ export function ChatShellClient({
                           </TimelineItem>
                         ))}
                       </ActivityTimeline>
+                      {/* Live cost estimate while a budgeted turn streams
+                      (chat_ux_v2): "≈ $0.31" next to the in-progress
+                      message, from per-step budget-tick events. */}
+                      {chatUxV2 &&
+                      isStreaming &&
+                      turnCostUsd !== undefined ? (
+                        <p
+                          data-testid="live-cost-estimate"
+                          aria-live="polite"
+                          className="text-[11px] tabular-nums text-muted-foreground/80"
+                        >
+                          ≈ ${turnCostUsd.toFixed(2)}
+                        </p>
+                      ) : null}
                       {turnUsage !== undefined ? (
                         <div id="turn-result">
                           <MessageFooter
@@ -1730,6 +1745,9 @@ export function ChatShellClient({
                 setDefaultAgentAction ? handleSetDefaultAgent : undefined
               }
               workspaceBudgetGovernance={workspaceBudgetGovernance}
+              walletBalanceUsd={
+                walletBalanceCents != null ? walletBalanceCents / 100 : null
+              }
               orgSlug={orgSlug}
               workspaceSlug={workspaceSlug}
               codeSessionPr={codeSessionPr}

@@ -347,6 +347,18 @@ export type StreamEvent =
     }
   | {
       /**
+       * Live cumulative cost while a BUDGETED turn streams (chat_ux_v2):
+       * emitted per engine step from the budget guard's onTick hook, powering
+       * the "≈ $0.31" estimate near the in-progress message. Unbudgeted turns
+       * never emit it. Distinct from budget-notice, which carries the
+       * blocking/toast-worthy states.
+       */
+      type: "budget-tick";
+      costUsd: number;
+      limitUsd: number;
+    }
+  | {
+      /**
        * A NON-fatal advisory — the turn itself SUCCEEDED. Emitted e.g. when
        * persisting the assistant reply to history failed, so the user knows this
        * turn may be missing after a refresh. Surfaced as a toast like `error`,

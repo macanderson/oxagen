@@ -225,6 +225,12 @@ export interface ToolStreamState {
    */
   turnBudgetNotice: LiveBudgetNotice | undefined;
   /**
+   * Live cumulative cost of the in-flight turn from "budget-tick" events
+   * (chat_ux_v2 — the "≈ $0.31" streaming estimate). Only budgeted turns emit
+   * ticks; undefined otherwise. Reset per turn.
+   */
+  turnCostUsd: number | undefined;
+  /**
    * Conversation-aware "next step" suggestion chips from a "suggested-prompts"
    * event (fast-model generated, arrives near [DONE]); null until one arrives.
    * Reset per turn along with the rest of the state on stream start, so the
@@ -254,6 +260,7 @@ export const INITIAL_STATE: ToolStreamState = {
   turnError: undefined,
   turnWarning: undefined,
   turnBudgetNotice: undefined,
+  turnCostUsd: undefined,
   suggestedPrompts: null,
 };
 
@@ -643,6 +650,9 @@ export function reducer(state: ToolStreamState, action: Action): ToolStreamState
         },
       };
     }
+    case "budget-tick": {
+      return { ...state, turnCostUsd: e.costUsd };
+    }
     case "warning": {
       // Non-fatal advisory (e.g. persist-to-history failed). Stash for the shell
       // to toast; the turn is NOT failed, so we do NOT clear activeTextKey or
@@ -697,6 +707,8 @@ export interface UseToolStreamResult extends ToolStreamState {
   /** Latest per-turn budget notice ("stopped" | "within_grace"). Undefined
    *  until a "budget-notice" event arrives. */
   turnBudgetNotice: LiveBudgetNotice | undefined;
+  /** Live cumulative cost of the in-flight budgeted turn ("budget-tick"). */
+  turnCostUsd: number | undefined;
   /** Conversation-aware next-step suggestion chips for the LATEST turn, or null
    *  until a "suggested-prompts" event arrives (the chip component falls back to
    *  the static page-context heuristics while null). */
