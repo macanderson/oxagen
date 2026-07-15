@@ -1813,6 +1813,9 @@ export function MessageComposer({
           // controls + 2×8px padding + 2px border = 62. p-3 (12px) would
           // overshoot to 70.
           v2Condensed && "py-2",
+          // v2Mobile at-rest budget is ≤64px: 44px controls + 2×8px padding
+          // + 2px border = 62. p-3 (12px) would overshoot to 70.
+          v2Mobile && "py-2",
           isDragOver && "ring-2 ring-primary",
         )}
       >
@@ -2030,6 +2033,80 @@ export function MessageComposer({
               }
               sendAriaLabel={sendAriaLabel}
             />
+            <div
+              className="flex items-center gap-1"
+              data-testid="composer-v2-mobile-row"
+            >
+              {canAttach ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  aria-label="Add attachment"
+                  disabled={
+                    pending ||
+                    disabled ||
+                    visibleAttachments.length >= MAX_ATTACHMENTS
+                  }
+                  onClick={() => fileInputRef.current?.click()}
+                  className="h-11 w-11 shrink-0 p-0"
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              ) : null}
+              {/* No `required`: the spec bans the native browser validation
+                tooltip — an empty message simply leaves send disabled. */}
+              <Textarea
+                name="content"
+                placeholder={placeholder}
+                rows={1}
+                disabled={pending || disabled}
+                onKeyDown={onKeyDown}
+                onChange={handleTextareaChange}
+                onBlur={() => {
+                  setSlashQuery(null);
+                  closeMentionMenu();
+                }}
+                onPaste={canAttach ? handlePaste : undefined}
+                className="min-h-0 flex-1 resize-none border-none bg-transparent py-2 shadow-none focus-visible:ring-0"
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                aria-label={cogAriaLabel}
+                onClick={onOpenSessionSettings}
+                className="relative h-11 w-11 shrink-0 p-0"
+              >
+                <SlidersHorizontal className="h-4 w-4" />
+                {cogDotClass ? (
+                  <span
+                    aria-hidden="true"
+                    data-testid="composer-cog-dot"
+                    className={cn(
+                      "absolute right-2 top-2 size-1.5 rounded-full",
+                      cogDotClass,
+                    )}
+                  />
+                ) : null}
+              </Button>
+              <Button
+                type="submit"
+                disabled={
+                  pending ||
+                  disabled ||
+                  uploadsInFlight ||
+                  codeGateBlocked ||
+                  // Empty input disables send (attachments alone still send).
+                  (inputEmpty && visibleAttachments.length === 0)
+                }
+                size="sm"
+                aria-label={sendAriaLabel}
+                className="h-11 w-11 shrink-0 p-0"
+              >
+                <Send className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         ) : (
           <>
