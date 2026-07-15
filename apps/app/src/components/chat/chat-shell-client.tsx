@@ -1957,6 +1957,45 @@ function MobileSessionChrome({
   const router = useRouter();
   const { branches, branchesLoading, onLoadBranches, defaultBranch } =
     useSessionSettingsData({ repos, orgSlug, workspaceSlug });
+  const { state } = useChatSession();
+  const selectedRepo = state.repoKey
+    ? (repos.find((r) => r.key === state.repoKey) ?? null)
+    : null;
+
+  const [branchCache, setBranchCache] = React.useState<
+    Record<string, { branches: string[]; defaultBranch: string | null }>
+  >({});
+  const [branchesLoading, setBranchesLoading] = React.useState(false);
+  const loadingRepoKeyRef = React.useRef<string | null>(null);
+
+  const handleLoadBranches = React.useCallback(() => {
+    if (!selectedRepo) return;
+    if (branchCache[selectedRepo.key]) return; // cached — no refetch
+    if (loadingRepoKeyRef.current === selectedRepo.key) return; // in flight
+    loadingRepoKeyRef.current = selectedRepo.key;
+    setBranchesLoading(true);
+    void listRepoBranchesAction(
+      { orgSlug, workspaceSlug },
+      { owner: selectedRepo.owner, repo: selectedRepo.name },
+    ).then((result) => {
+      loadingRepoKeyRef.current = null;
+      setBranchesLoading(false);
+      if ("error" in result) return;
+      setBranchCache((prev) => ({
+        ...prev,
+        [selectedRepo.key]: {
+          branches: result.branches.map((b) => b.name),
+          defaultBranch: result.defaultBranch,
+        },
+      }));
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- branchCache is read for its CURRENT snapshot to skip a refetch; including it would re-create this callback (and re-arm the in-flight guard) on every cache write
+  }, [selectedRepo, orgSlug, workspaceSlug]);
+
+  const cached = selectedRepo ? branchCache[selectedRepo.key] : undefined;
+  const branches = cached ? cached.branches : null;
+  const defaultBranch =
+    cached?.defaultBranch ?? selectedRepo?.defaultBranch ?? null;
 
   return (
     <>
