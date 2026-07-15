@@ -40,8 +40,14 @@ import type { EnvironmentOption } from "./environment-selector";
 import type { AgentOption } from "./agent-picker/agent-picker-types";
 import type { StoredCodeBinding } from "@/app/api/v1/chat/stream/code-binding";
 import { ChatSelectionProvider } from "./agent-picker/chat-selection-context";
-import { ChatSessionProvider } from "./session/session-store";
+import { ChatSessionProvider, useChatSession } from "./session/session-store";
 import type { SessionSeed } from "./session/session-state";
+import { ChatHeaderMobile } from "./chat-header-mobile";
+import { SessionSettingsDrawer } from "./session/session-settings-host";
+import { SessionSettings } from "./session/session-settings";
+import { listRepoBranchesAction } from "./session/branch-actions";
+import { useIsMobile } from "@/hooks/use-media-query";
+import { NotificationsBell } from "@/components/shell/notifications-bell";
 import { AgentGallery } from "./agent-picker/agent-gallery";
 import {
   resolveDefaultRepoKey,
@@ -427,6 +433,15 @@ export function ChatShellClient({
   // Below-lg reflow of the right rail (trace + workspace context): the same
   // panels open in a bottom sheet — mobile feature parity per ADR-026.
   const [mobileRailOpen, setMobileRailOpen] = React.useState(false);
+  // chat_ux_v2 mobile chrome: the session-settings full-screen drawer, opened
+  // from the mobile header's center tap or the composer's cog button.
+  const [sessionSettingsOpen, setSessionSettingsOpen] = React.useState(false);
+  // Phone-width viewport (SSR-safe — false until after hydration). Gates the
+  // v2 mobile header/FAB-removal/nav-autohide behavior below, alongside
+  // `chatUxV2` — neither alone is sufficient (desktop v2 keeps the legacy
+  // chrome; mobile without the flag keeps the legacy mobile chrome).
+  const isMobileViewport = useIsMobile();
+  const v2MobileChrome = chatUxV2 && isMobileViewport;
   const setStreamErrorRef = useLatestRef(setStreamError);
 
   // Latest conversationId, read inside the send callback (whose deps don't
@@ -824,8 +839,80 @@ export function ChatShellClient({
     if (shouldAutoScrollRef.current) scrollToBottom();
   }, [messages, scrollToBottom]);
 
+  // ── chat_ux_v2 mobile bottom-nav auto-hide ─────────────────────────────────
+  // Dispatches `oxagen:mobile-nav-visibility` (consumed by MobileBottomBar) so
+  // the bar tucks away while the user reads/scrolls the transcript or has the
+  // on-screen keyboard open, and reappears once they scroll back up or blur
+  // the composer — maximising the ≥70%-of-viewport conversation budget on a
+  // phone without adding a second scroll listener anywhere else. Declared
+  // ahead of `handleScroll` below so it can call these directly.
+  const navHiddenRef = React.useRef(false);
+  const dispatchNavVisibility = React.useCallback((hidden: boolean) => {
+    if (navHiddenRef.current === hidden) return;
+    navHiddenRef.current = hidden;
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(
+        new CustomEvent("oxagen:mobile-nav-visibility", { detail: { hidden } }),
+      );
+    }
+  }, []);
+  // Only re-evaluates hide/show once scroll movement since the last decision
+  // crosses the 8px threshold (in either direction) — a fixed per-event delta
+  // would rarely fire since scroll events carry only a few px each.
+  const scrollDecisionPointRef = React.useRef(0);
+  const navRafRef = React.useRef<number | null>(null);
+  const scheduleNavVisibilityCheck = React.useCallback(
+    (scrollTop: number) => {
+      if (navRafRef.current !== null) cancelAnimationFrame(navRafRef.current);
+      navRafRef.current = requestAnimationFrame(() => {
+        navRafRef.current = null;
+        const delta = scrollTop - scrollDecisionPointRef.current;
+        if (delta > 8) {
+          dispatchNavVisibility(true);
+          scrollDecisionPointRef.current = scrollTop;
+        } else if (delta < -8) {
+          dispatchNavVisibility(false);
+          scrollDecisionPointRef.current = scrollTop;
+        }
+      });
+    },
+    [dispatchNavVisibility],
+  );
+  React.useEffect(() => {
+    return () => {
+      if (navRafRef.current !== null) cancelAnimationFrame(navRafRef.current);
+    };
+  }, []);
+  // Show the bar again if v2-mobile chrome turns off (viewport resize to
+  // desktop, or the flag itself) mid-hide, so it never gets stuck hidden.
+  React.useEffect(() => {
+    if (!v2MobileChrome) dispatchNavVisibility(false);
+  }, [v2MobileChrome, dispatchNavVisibility]);
+  // Keyboard-open heuristic: the composer's textarea is always `name="content"`
+  // (both the legacy toolbar and the v2Mobile condensed row) — a document-level
+  // focusin/focusout listener (they bubble, unlike focus/blur) detects it
+  // without threading a new callback prop through MessageComposer.
+  React.useEffect(() => {
+    if (!v2MobileChrome) return;
+    const isComposerTextarea = (el: EventTarget | null): boolean =>
+      el instanceof HTMLTextAreaElement && el.name === "content";
+    const onFocusIn = (e: FocusEvent) => {
+      if (isComposerTextarea(e.target)) dispatchNavVisibility(true);
+    };
+    const onFocusOut = (e: FocusEvent) => {
+      if (isComposerTextarea(e.target)) dispatchNavVisibility(false);
+    };
+    document.addEventListener("focusin", onFocusIn);
+    document.addEventListener("focusout", onFocusOut);
+    return () => {
+      document.removeEventListener("focusin", onFocusIn);
+      document.removeEventListener("focusout", onFocusOut);
+    };
+  }, [v2MobileChrome, dispatchNavVisibility]);
+
   // Detect when the user scrolls up mid-turn — disable auto-scroll so we
   // don't yank them back. Re-enable automatically once they're near the bottom.
+  const v2MobileChromeRef = useLatestRef(v2MobileChrome);
   const handleScroll = React.useCallback(() => {
     const el = scrollContainerRef.current;
     if (!el) return;
@@ -833,7 +920,9 @@ export function ChatShellClient({
     // and 1px rounding differences across browsers).
     const fromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
     shouldAutoScrollRef.current = fromBottom < 80;
-  }, []);
+    if (v2MobileChromeRef.current) scheduleNavVisibilityCheck(el.scrollTop);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- v2MobileChromeRef is a stable ref via useLatestRef; adding it would defeat the pattern
+  }, [scheduleNavVisibilityCheck]);
 
   // Stable identity: this object is passed to the memoized <MessageTree>. Rebuilt
   // inline it would change every render (every streaming token re-renders this
@@ -1282,10 +1371,31 @@ export function ChatShellClient({
     >
       <div className="flex h-full w-full gap-4">
         <div className="mx-auto flex h-full min-w-0 max-w-3xl flex-1 flex-col gap-4">
+          {/* chat_ux_v2 mobile chrome: the slim header (conversations / session
+          summary / activity) replaces the desktop toolbar row below on a
+          phone-width viewport. Mounted only inside ChatSessionProvider — see
+          the chatUxV2 wrap at the bottom of this component — so its call to
+          useChatSession() always resolves. */}
+          {v2MobileChrome ? (
+            <MobileSessionChrome
+              agents={availableAgents ?? []}
+              repos={availableRepos ?? []}
+              environments={availableEnvironments ?? []}
+              modelConfig={modelConfig}
+              orgSlug={orgSlug}
+              workspaceSlug={workspaceSlug}
+              isStreaming={isStreaming}
+              sessionSettingsOpen={sessionSettingsOpen}
+              onSessionSettingsOpenChange={setSessionSettingsOpen}
+              onOpenActivity={() => setMobileRailOpen(true)}
+            />
+          ) : null}
+
           {/* Toolbar row: export trigger (right-aligned). Hidden in the floating
           in-app panel (showFiles=false) — conversation files live on the full
-          /ask page, in the side-panel's "Files" tab. */}
-          {showFiles && conversationPublicId ? (
+          /ask page, in the side-panel's "Files" tab. Desktop-only in v2
+          mobile chrome — the mobile header above replaces it. */}
+          {showFiles && conversationPublicId && !v2MobileChrome ? (
             <div className="flex shrink-0 items-center justify-end gap-1">
               <ConversationExportMenu
                 conversationId={conversationPublicId}
@@ -1406,8 +1516,10 @@ export function ChatShellClient({
           </div>
             {/* Below lg the trace rail lives in a bottom sheet (ADR-026 mobile
             parity); this floating trigger sits inside the message viewport —
-            always above the composer, never over its Send/collapse controls. */}
-            {showFiles ? (
+            always above the composer, never over its Send/collapse controls.
+            v2 mobile chrome reaches the same sheet through the header's
+            Activity icon instead — the FAB would duplicate it. */}
+            {showFiles && !v2MobileChrome ? (
               <button
                 type="button"
                 data-testid="chat-mobile-rail-trigger"
@@ -1452,32 +1564,41 @@ export function ChatShellClient({
             </div>
           ) : null}
 
-          <MessageComposer
-            conversationId={conversationId}
-            parentMessageId={activeLeafMessageId}
-            action={wrappedSendAction}
-            disabled={hasPendingApproval}
-            modelConfig={modelConfig}
-            enterToSubmit={enterToSubmit}
-            pendingPromptBehavior={pendingPromptBehavior}
-            isStreaming={isStreaming}
-            onInterrupt={handleInterrupt}
-            initialModelState={initialModelState}
-            availableMcpServers={availableMcpServers}
-            availableRepos={availableRepos}
-            availableEnvironments={availableEnvironments}
-            availableAgents={availableAgents}
-            defaultRepoKey={defaultRepoKey}
-            defaultEnvId={defaultEnvId}
-            defaultAgentId={currentDefaultAgentId}
-            onSetDefaultAgent={
-              setDefaultAgentAction ? handleSetDefaultAgent : undefined
-            }
-            workspaceBudgetGovernance={workspaceBudgetGovernance}
-            orgSlug={orgSlug}
-            workspaceSlug={workspaceSlug}
-            codeSessionPr={codeSessionPr}
-          />
+          {/* v2 mobile chrome: reserve the home-indicator safe area on the
+          composer's own wrapper — once the bottom nav auto-hides (see the
+          scroll/focus effects above) the composer can end up flush with the
+          bottom edge of the screen. */}
+          <div className={v2MobileChrome ? "pb-[env(safe-area-inset-bottom)]" : undefined}>
+            <MessageComposer
+              conversationId={conversationId}
+              parentMessageId={activeLeafMessageId}
+              action={wrappedSendAction}
+              disabled={hasPendingApproval}
+              modelConfig={modelConfig}
+              enterToSubmit={enterToSubmit}
+              pendingPromptBehavior={pendingPromptBehavior}
+              isStreaming={isStreaming}
+              onInterrupt={handleInterrupt}
+              initialModelState={initialModelState}
+              availableMcpServers={availableMcpServers}
+              availableRepos={availableRepos}
+              availableEnvironments={availableEnvironments}
+              availableAgents={availableAgents}
+              defaultRepoKey={defaultRepoKey}
+              defaultEnvId={defaultEnvId}
+              defaultAgentId={currentDefaultAgentId}
+              onSetDefaultAgent={
+                setDefaultAgentAction ? handleSetDefaultAgent : undefined
+              }
+              workspaceBudgetGovernance={workspaceBudgetGovernance}
+              orgSlug={orgSlug}
+              workspaceSlug={workspaceSlug}
+              codeSessionPr={codeSessionPr}
+              onOpenSessionSettings={
+                v2MobileChrome ? () => setSessionSettingsOpen(true) : undefined
+              }
+            />
+          </div>
         </div>
         {/* Right rail: the calm three-card activity rail (Progress / Context /
           Outputs). Hidden in the floating in-app panel (showFiles=false, same
@@ -1565,6 +1686,108 @@ export function ChatShellClient({
     >
       {shell}
     </ChatSessionProvider>
+  );
+}
+
+/**
+ * MobileSessionChrome — the v2 mobile header + session-settings drawer,
+ * rendered as a child of `ChatSessionProvider` (so `useChatSession()` always
+ * resolves) whenever `v2MobileChrome` is true. Owns the branch-list fetch for
+ * the drawer's Code section: resolves the selected repo's owner/name from the
+ * session state and calls `listRepoBranchesAction`, caching the result per
+ * repo key (see `SessionSettings`'s `onLoadBranches` contract).
+ */
+function MobileSessionChrome({
+  agents,
+  repos,
+  environments,
+  modelConfig,
+  orgSlug,
+  workspaceSlug,
+  isStreaming,
+  sessionSettingsOpen,
+  onSessionSettingsOpenChange,
+  onOpenActivity,
+}: {
+  agents: AgentOption[];
+  repos: RepoOption[];
+  environments: EnvironmentOption[];
+  modelConfig: ResolvedTierCatalog;
+  orgSlug: string;
+  workspaceSlug: string;
+  isStreaming: boolean;
+  sessionSettingsOpen: boolean;
+  onSessionSettingsOpenChange: (open: boolean) => void;
+  onOpenActivity: () => void;
+}) {
+  const { state } = useChatSession();
+  const selectedRepo = state.repoKey
+    ? (repos.find((r) => r.key === state.repoKey) ?? null)
+    : null;
+
+  const [branchCache, setBranchCache] = React.useState<
+    Record<string, { branches: string[]; defaultBranch: string | null }>
+  >({});
+  const [branchesLoading, setBranchesLoading] = React.useState(false);
+  const loadingRepoKeyRef = React.useRef<string | null>(null);
+
+  const handleLoadBranches = React.useCallback(() => {
+    if (!selectedRepo) return;
+    if (branchCache[selectedRepo.key]) return; // cached — no refetch
+    if (loadingRepoKeyRef.current === selectedRepo.key) return; // in flight
+    loadingRepoKeyRef.current = selectedRepo.key;
+    setBranchesLoading(true);
+    void listRepoBranchesAction(
+      { orgSlug, workspaceSlug },
+      { owner: selectedRepo.owner, repo: selectedRepo.name },
+    ).then((result) => {
+      loadingRepoKeyRef.current = null;
+      setBranchesLoading(false);
+      if ("error" in result) return;
+      setBranchCache((prev) => ({
+        ...prev,
+        [selectedRepo.key]: {
+          branches: result.branches.map((b) => b.name),
+          defaultBranch: result.defaultBranch,
+        },
+      }));
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- branchCache is read for its CURRENT snapshot to skip a refetch; including it would re-create this callback (and re-arm the in-flight guard) on every cache write
+  }, [selectedRepo, orgSlug, workspaceSlug]);
+
+  const cached = selectedRepo ? branchCache[selectedRepo.key] : undefined;
+  const branches = cached ? cached.branches : null;
+  const defaultBranch = cached?.defaultBranch ?? selectedRepo?.defaultBranch ?? null;
+
+  return (
+    <>
+      <ChatHeaderMobile
+        agents={agents}
+        repos={repos}
+        environments={environments}
+        isStreaming={isStreaming}
+        onOpenSettings={() => onSessionSettingsOpenChange(true)}
+        onOpenActivity={onOpenActivity}
+        notificationsSlot={<NotificationsBell />}
+      />
+      <SessionSettingsDrawer
+        open={sessionSettingsOpen}
+        onOpenChange={onSessionSettingsOpenChange}
+      >
+        <SessionSettings
+          variant="drawer"
+          agents={agents}
+          repos={repos}
+          environments={environments}
+          modelConfig={modelConfig}
+          branches={branches}
+          branchesLoading={branchesLoading}
+          onLoadBranches={handleLoadBranches}
+          defaultBranch={defaultBranch}
+          walletBalanceUsd={null}
+        />
+      </SessionSettingsDrawer>
+    </>
   );
 }
 

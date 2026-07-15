@@ -20,6 +20,7 @@ import {
   within,
   waitFor,
   cleanup,
+  fireEvent,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
@@ -211,6 +212,36 @@ describe("MobileBottomBar — org mode", () => {
       "aria-current",
       "page",
     );
+  });
+});
+
+describe("MobileBottomBar — chat_ux_v2 auto-hide", () => {
+  it("translates the bar off-screen when the visibility event fires hidden=true, and back when hidden=false", () => {
+    render(<MobileBottomBar ctx={wsCtx} user={user} />);
+    const nav = screen.getByRole("navigation", { name: /mobile navigation/i });
+    expect(nav.className).not.toContain("translate-y-full");
+    expect(nav).not.toHaveAttribute("data-hidden");
+
+    fireEvent(
+      window,
+      new CustomEvent("oxagen:mobile-nav-visibility", { detail: { hidden: true } }),
+    );
+    expect(nav.className).toContain("translate-y-full");
+    expect(nav).toHaveAttribute("data-hidden", "true");
+
+    fireEvent(
+      window,
+      new CustomEvent("oxagen:mobile-nav-visibility", { detail: { hidden: false } }),
+    );
+    expect(nav.className).not.toContain("translate-y-full");
+    expect(nav).not.toHaveAttribute("data-hidden");
+  });
+
+  it("ignores an event with a malformed detail payload", () => {
+    render(<MobileBottomBar ctx={wsCtx} user={user} />);
+    const nav = screen.getByRole("navigation", { name: /mobile navigation/i });
+    fireEvent(window, new CustomEvent("oxagen:mobile-nav-visibility", { detail: {} }));
+    expect(nav.className).not.toContain("translate-y-full");
   });
 });
 

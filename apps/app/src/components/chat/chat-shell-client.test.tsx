@@ -10,7 +10,7 @@
  */
 
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { render, screen, cleanup } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import * as React from "react";
 import type { McpServerSummary } from "./mcp-types";
 
@@ -20,6 +20,43 @@ afterEach(cleanup);
 // under coverage instrumentation on a loaded CI runner it can blow past the
 // 5s default, and the timed-out test's stray render then breaks the next one.
 vi.setConfig({ testTimeout: 20_000 });
+
+// ── chat_ux_v2 mobile-chrome viewport stub ──────────────────────────────────
+// Controllable viewport for the mobile-chrome describe block below (mirrors
+// message-composer.test.tsx's own `mockViewport` convention) — jsdom has no
+// real matchMedia, so without this the hook always degrades to `false`.
+const { mockViewport } = vi.hoisted(() => ({ mockViewport: { isMobile: false } }));
+vi.mock("@/hooks/use-media-query", () => ({
+  useIsMobile: () => mockViewport.isMobile,
+  useMediaQuery: () => mockViewport.isMobile,
+}));
+
+// Sheet shim — renders children inline when open (SessionSettingsDrawer and
+// the Activity bottom sheet both build on this; the real Base UI Dialog
+// portal isn't needed to assert this component's own wiring).
+vi.mock("@/components/ui/sheet", () => ({
+  Sheet: ({ children, open }: { children: React.ReactNode; open?: boolean }) =>
+    open ? <div data-testid="sheet-root">{children}</div> : null,
+  SheetPopup: ({
+    children,
+    "data-testid": testId,
+  }: {
+    children: React.ReactNode;
+    side?: string;
+    "data-testid"?: string;
+  }) => <div data-testid={testId ?? "sheet-popup"}>{children}</div>,
+  SheetHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  SheetTitle: ({ children }: { children: React.ReactNode }) => <h2>{children}</h2>,
+  SheetDescription: ({ children }: { children: React.ReactNode }) => <p>{children}</p>,
+}));
+
+// SessionSettings stub — the real component pulls in the full picker suite
+// (popovers, avatars, segmented controls); this file only asserts that
+// MobileSessionChrome mounts and wires it, not its own internals (covered by
+// session-settings.test.tsx).
+vi.mock("./session/session-settings", () => ({
+  SessionSettings: () => <div data-testid="session-settings-stub" />,
+}));
 
 // ── Next.js navigation stubs ────────────────────────────────────────────────
 const mockReplace = vi.fn();
@@ -140,6 +177,19 @@ vi.mock("./subagent-fanout", () => ({ SubagentFanout: () => null }));
 // Mock MessageFooter to avoid pulling in server-only imports from
 // message-footer-actions (which uses "use server" / server-only).
 vi.mock("./message-footer", () => ({ MessageFooter: () => null }));
+// chat_ux_v2 mobile chrome: chat-shell-client.tsx imports these directly
+// (branch-actions is a "use server" file, and NotificationsBell's own
+// ./notifications actions module is too) — both transitively load
+// @oxagen/auth's env-validated config, which throws outside a real Next.js
+// runtime. Mock them the same way message-footer-actions is mocked above;
+// mounting behavior (gated on chatUxV2) is exercised by the mobile-chrome
+// describe block further down.
+vi.mock("./session/branch-actions", () => ({
+  listRepoBranchesAction: vi.fn().mockResolvedValue({ branches: [], defaultBranch: null }),
+}));
+vi.mock("@/components/shell/notifications-bell", () => ({
+  NotificationsBell: () => <div data-testid="notifications-bell-stub" />,
+}));
 vi.mock("@/lib/utils", () => ({
   cn: (...args: unknown[]) => args.filter(Boolean).join(" "),
 }));
@@ -184,6 +234,28 @@ function makeServer(overrides?: Partial<McpServerSummary>): McpServerSummary {
 async function renderClient(props: Partial<{
   availableMcpServers: McpServerSummary[];
 }> = {}) {
+  const { ChatShellClient } = await import("./chat-shell-client");
+  return render(
+    <ChatShellClient
+      conversationId={null}
+      conversationPublicId={null}
+      activeLeafMessageId={null}
+      messages={[]}
+      sendAction={noop}
+      resolveApprovalAction={async () => ({ ok: true })}
+      resolveConsentAction={async () => ({ ok: true })}
+      resolvePlanAction={async () => ({ ok: true })}
+      orgSlug="test-org"
+      workspaceSlug="test-ws"
+      modelConfig={modelConfig}
+      {...props}
+    />,
+  );
+}
+
+/** Like `renderClient`, but exposes `chatUxV2` — the mobile-chrome describe
+ * block below is the only one that needs to flip it. */
+async function renderMobileChrome(props: { chatUxV2?: boolean } = {}) {
   const { ChatShellClient } = await import("./chat-shell-client");
   return render(
     <ChatShellClient
@@ -684,5 +756,73 @@ describe("ChatShellClient — turn error surfaces a toast (not inline JSON)", ()
     mockStream.overrides = {};
     await renderClient();
     expect(toastAdd).not.toHaveBeenCalled();
+  });
+});
+
+// ── chat_ux_v2 mobile chrome ─────────────────────────────────────────────────
+// The mobile header + FAB removal + session-settings drawer wiring mount ONLY
+// when BOTH chatUxV2 is true AND the viewport is phone-width — neither alone
+// is sufficient (desktop v2 keeps the legacy toolbar/FAB; mobile without the
+// flag keeps the legacy mobile chrome).
+
+describe("ChatShellClient — chat_ux_v2 mobile chrome", () => {
+  beforeEach(() => {
+    capturedComposerProps = {};
+  });
+  afterEach(() => {
+    mockViewport.isMobile = false;
+  });
+
+  it("mounts the mobile header, hides the Activity FAB, and wires the composer's session-settings callback", async () => {
+    mockViewport.isMobile = true;
+    await renderMobileChrome({ chatUxV2: true });
+    expect(
+      document.querySelector('[data-component="chat-header-mobile"]'),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId("chat-mobile-rail-trigger")).not.toBeInTheDocument();
+    expect(typeof capturedComposerProps.onOpenSessionSettings).toBe("function");
+  });
+
+  it("keeps the legacy desktop chrome (FAB present, no mobile header) when chatUxV2 is false", async () => {
+    mockViewport.isMobile = true;
+    await renderMobileChrome({ chatUxV2: false });
+    expect(
+      document.querySelector('[data-component="chat-header-mobile"]'),
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId("chat-mobile-rail-trigger")).toBeInTheDocument();
+    expect(capturedComposerProps.onOpenSessionSettings).toBeUndefined();
+  });
+
+  it("keeps the legacy chrome on a desktop viewport even with chatUxV2 true", async () => {
+    mockViewport.isMobile = false;
+    await renderMobileChrome({ chatUxV2: true });
+    expect(
+      document.querySelector('[data-component="chat-header-mobile"]'),
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId("chat-mobile-rail-trigger")).toBeInTheDocument();
+  });
+
+  it("opens the session-settings drawer when the header's center summary is tapped", async () => {
+    mockViewport.isMobile = true;
+    await renderMobileChrome({ chatUxV2: true });
+    expect(screen.queryByTestId("session-settings-stub")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Session settings" }));
+    expect(screen.getByTestId("session-settings-stub")).toBeInTheDocument();
+  });
+
+  it("opens the session-settings drawer via the composer's wired onOpenSessionSettings callback", async () => {
+    mockViewport.isMobile = true;
+    await renderMobileChrome({ chatUxV2: true });
+    expect(screen.queryByTestId("session-settings-stub")).not.toBeInTheDocument();
+    (capturedComposerProps.onOpenSessionSettings as () => void)();
+    await screen.findByTestId("session-settings-stub");
+  });
+
+  it("opens the Activity bottom sheet via the header's activity button", async () => {
+    mockViewport.isMobile = true;
+    await renderMobileChrome({ chatUxV2: true });
+    expect(screen.queryByTestId("chat-mobile-rail-sheet")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Activity" }));
+    expect(screen.getByTestId("chat-mobile-rail-sheet")).toBeInTheDocument();
   });
 });

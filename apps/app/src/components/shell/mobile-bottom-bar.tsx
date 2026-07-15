@@ -63,9 +63,28 @@ function tabClass(isActive: boolean): string {
   );
 }
 
+/**
+ * Custom DOM event dispatched by the chat surface (chat-shell-client.tsx,
+ * chat_ux_v2 mobile chrome only) to tuck the bar away while the user reads
+ * the transcript or has the on-screen keyboard open, maximising the
+ * conversation's share of the viewport. Flag-independent — any surface can
+ * dispatch it; the bar just listens.
+ */
+const NAV_VISIBILITY_EVENT = "oxagen:mobile-nav-visibility";
+
 export function MobileBottomBar({ ctx, user, planTier }: MobileBottomBarProps) {
   const [moreOpen, setMoreOpen] = React.useState(false);
+  const [hidden, setHidden] = React.useState(false);
   const pathname = usePathname();
+
+  React.useEffect(() => {
+    function onVisibility(e: Event) {
+      const detail = (e as CustomEvent<{ hidden: boolean }>).detail;
+      if (detail && typeof detail.hidden === "boolean") setHidden(detail.hidden);
+    }
+    window.addEventListener(NAV_VISIBILITY_EVENT, onVisibility);
+    return () => window.removeEventListener(NAV_VISIBILITY_EVENT, onVisibility);
+  }, []);
   const effectiveCtx = resolveSidebarCtx(pathname, ctx);
   const mode = resolveSidebarMode(pathname, ctx);
   const config = getSidebarConfig(mode, planTier);
@@ -99,9 +118,12 @@ export function MobileBottomBar({ ctx, user, planTier }: MobileBottomBarProps) {
         // bottom overlays (e.g. the PWA install toast) offset above it via
         // `--pwa-toast-bottom` instead of covering the tabs.
         data-mobile-bottom-bar=""
+        data-hidden={hidden ? "true" : undefined}
         className={cn(
           "fixed inset-x-0 bottom-0 z-40 flex items-stretch justify-around md:hidden",
           "border-t border-app-topbar-border bg-app-topbar-bg pb-[env(safe-area-inset-bottom)]",
+          "transition-transform duration-200 motion-reduce:transition-none",
+          hidden && "translate-y-full",
         )}
       >
         {barItems.map((item) => {

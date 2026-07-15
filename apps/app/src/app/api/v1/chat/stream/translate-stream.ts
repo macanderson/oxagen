@@ -2,6 +2,7 @@ import type {
   AssistantContentBlock,
   RenderDirective,
   StreamEvent,
+  TurnUsage as ClientTurnUsage,
 } from "@/components/chat/stream-event-types";
 import { resolveRenderDirective } from "@oxagen/oxagen/capability-meta";
 import { meterCreditsForUsage } from "@oxagen/billing";
@@ -47,12 +48,16 @@ export interface TurnUsage {
  * step's own `finish` part carries only that step's usage; summing them in the
  * client would show wrong, growing credit numbers). It sits in the same position
  * as before — the last event before persistence and the `[DONE]` sentinel.
+ *
+ * Returns the client-shape usage it emitted so the caller can persist the SAME
+ * numbers (message receipts) — one computation, no way for the live event and
+ * the stored receipt to disagree.
  */
 export function emitUsageEvent(
   emit: (event: StreamEvent) => void,
   usage: TurnUsage,
   modelId: string,
-): void {
+): ClientTurnUsage {
   const inputTokens = usage.inputTokens ?? 0;
   const outputTokens = usage.outputTokens ?? 0;
   const totalTokens = usage.totalTokens ?? 0;
@@ -66,16 +71,15 @@ export function emitUsageEvent(
   } catch {
     // Pricing lookup failed (e.g. unknown model id) — omit creditsCharged.
   }
-  emit({
-    type: "usage",
-    usage: {
-      promptTokens: inputTokens,
-      completionTokens: outputTokens,
-      totalTokens,
-      ...(cachedTokens > 0 ? { cachedTokens } : {}),
-      ...(creditsCharged !== undefined ? { creditsCharged } : {}),
-    },
-  });
+  const clientUsage: ClientTurnUsage = {
+    promptTokens: inputTokens,
+    completionTokens: outputTokens,
+    totalTokens,
+    ...(cachedTokens > 0 ? { cachedTokens } : {}),
+    ...(creditsCharged !== undefined ? { creditsCharged } : {}),
+  };
+  emit({ type: "usage", usage: clientUsage });
+  return clientUsage;
 }
 
 /** The stateful translator: consumes one raw part at a time, emits SSE events. */

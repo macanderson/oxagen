@@ -48,6 +48,7 @@ import type {
   StreamEvent,
   AssistantContentBlock,
   MemoryRecallHit,
+  MessageReceipt,
 } from "@/components/chat/stream-event-types";
 import { autoTitleConversation } from "./auto-title";
 import {
@@ -679,6 +680,8 @@ export async function POST(request: NextRequest): Promise<Response> {
     : historyMessages;
 
   const requestId = randomUUID();
+  // Wall-clock anchor for the per-message receipt's duration (chat_ux_v2).
+  const turnStartedAtMs = Date.now();
 
   // Extract client IP for IAM ip_ranges condition evaluation. x-forwarded-for
   // is set by Vercel/Next.js edge; take the first hop (leftmost = original
@@ -736,6 +739,7 @@ export async function POST(request: NextRequest): Promise<Response> {
       async function persistAssistantTurn(
         assistantText: string,
         persistedBlocks: AssistantContentBlock[],
+        receipt?: MessageReceipt,
       ): Promise<void> {
         if (
           !conversationId ||
@@ -762,7 +766,12 @@ export async function POST(request: NextRequest): Promise<Response> {
                     // prose. The plain `content` column keeps the text for
                     // history/model context.
                     contentBlocks: persistedBlocks,
-                    metadata: { status: "complete" },
+                    // The receipt (model · effort · cost · duration · tokens)
+                    // rides in metadata so history renders the same numbers
+                    // the live usage event carried. Absent on partial turns.
+                    metadata: receipt
+                      ? { status: "complete", receipt }
+                      : { status: "complete" },
                     createdByUserId: session.user.id,
                     updatedByUserId: session.user.id,
                   })
@@ -1739,9 +1748,14 @@ export async function POST(request: NextRequest): Promise<Response> {
         // charged per step inside streamAgentReply's onFinish — the ledger fans
         // out to one row per step sharing this turn's messageId, summing to the
         // same total the client sees here (C4).
-        emitUsageEvent(emit, result.usage, modelId);
+        const emittedUsage = emitUsageEvent(emit, result.usage, modelId);
 
-        await persistAssistantTurn(assistantText, blocksToPersist);
+        await persistAssistantTurn(assistantText, blocksToPersist, {
+          model: modelId,
+          effort: turnEffort ?? null,
+          durationMs: Date.now() - turnStartedAtMs,
+          usage: emittedUsage,
+        });
 
         // Auto-title new conversations using the fast model (fire-and-forget).
         // Only fires on the first turn; the isNull predicate in
