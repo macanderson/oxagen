@@ -1184,6 +1184,21 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "manual",
     placeholder: "",
   },
+  NEXT_PUBLIC_CHAT_UX_V2: {
+    group: "Public URLs",
+    description:
+      "chat_ux_v2 feature flag (apps/app chat UX overhaul, browser-exposed). " +
+      '"1" enables the new session-settings chat surface environment-wide; ' +
+      "unset/anything else = off. A per-browser cookie override " +
+      "(?chat_ux_v2=1|0) wins over this default. Validated as an optional " +
+      '"0"|"1" enum by baseEnvSchema.',
+    secret: false,
+    clientExposed: true,
+    services: ["app"],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "",
+  },
 
   // ── Security / RLS enforcement ───────────────────────────────────────────────
   TENANT_RLS_ENFORCEMENT_ENABLED: {
