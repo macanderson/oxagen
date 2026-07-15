@@ -87,6 +87,8 @@ import {
   type PendingAttachment,
 } from "./attachment-chip";
 import { extractVideoFrames } from "./extract-video-frames";
+import { AttachTray } from "./attach-tray";
+import { AttachPopover } from "./attach-popover";
 
 /** Images attach directly; videos attach too (Phase 2) — a video-capable model
  * receives the video file, otherwise the server falls back to keyframes the
@@ -100,6 +102,26 @@ const MAX_ATTACHMENTS = 8;
  * Kept low so a video + its frames stays well under the server's 16-attachment
  * cap even with a couple of videos in one turn. */
 const VIDEO_KEYFRAME_COUNT = 3;
+
+/**
+ * Mirrors `ASSET_LIMITS` from packages/storage/src/assets.ts for the three
+ * kinds this composer ever submits. Duplicated rather than imported: that
+ * package's barrel (`@oxagen/storage`) re-exports the Vercel Blob adapter and
+ * pulls in `node:crypto`, which breaks the client bundle — the same
+ * client-bundle-safety rule already documented above for `@oxagen/ai`'s
+ * dependency-free `slash-commands`/`mentions` subpaths. A stale value here
+ * only makes the client-side pre-check slightly off; the server re-validates
+ * every upload regardless, so this is never a security boundary.
+ */
+const ATTACHMENT_SIZE_LIMITS: Record<"image" | "video" | "document", number> = {
+  image: 5 * 1024 * 1024,
+  video: 100 * 1024 * 1024,
+  document: 25 * 1024 * 1024,
+};
+
+/** A file paired with the server upload kind it will be sent as — the shape
+ * `queueAttachmentBatch`, `addFiles`, and `addClassifiedFiles` all share. */
+type ClassifiedFile = { file: File; kind: "image" | "video" | "document" };
 
 /** The serializable subset of an uploaded attachment sent to the server —
  * mirrors `conversationAssetItem` minus fields the composer never needs, plus
@@ -293,6 +315,7 @@ function CondensedComposerRow({
   disabled,
   attachmentCount,
   onAttachClick,
+  attachTrigger,
   placeholder,
   onKeyDown,
   onChange,
@@ -311,6 +334,14 @@ function CondensedComposerRow({
   disabled: boolean;
   attachmentCount: number;
   onAttachClick: () => void;
+  /**
+   * v2Desktop only: replaces the default plus Button entirely with a
+   * self-contained trigger (AttachPopover owns its own button + popup) —
+   * `onAttachClick` is then never invoked. v2Mobile omits this and opens the
+   * AttachTray bottom sheet from `onAttachClick` instead (a popover is
+   * banned on touch surfaces per the v2 design rules).
+   */
+  attachTrigger?: React.ReactNode;
   placeholder: string;
   onKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
   onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
@@ -326,17 +357,19 @@ function CondensedComposerRow({
   return (
     <div className="flex items-center gap-1" data-testid={testId}>
       {canAttach ? (
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          aria-label="Add attachment"
-          disabled={pending || disabled || attachmentCount >= MAX_ATTACHMENTS}
-          onClick={onAttachClick}
-          className="h-11 w-11 shrink-0 p-0"
-        >
-          <Plus className="h-4 w-4" />
-        </Button>
+        attachTrigger ?? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            aria-label="Add attachment"
+            disabled={pending || disabled || attachmentCount >= MAX_ATTACHMENTS}
+            onClick={onAttachClick}
+            className="h-11 w-11 shrink-0 p-0"
+          >
+            <Plus className="h-4 w-4" />
+          </Button>
+        )
       ) : null}
       {/* No `required`: the spec bans the native browser validation tooltip —
         an empty message simply leaves send disabled. */}
@@ -581,6 +614,9 @@ export function MessageComposer({
   const isMobile = useIsMobile();
   // Bottom sheet holding the overflow toolbar controls on phones.
   const [overflowOpen, setOverflowOpen] = React.useState(false);
+  // chat_ux_v2 mobile only: the attach tray bottom sheet opened by the
+  // condensed row's plus button (see AttachTray / v2Mobile below).
+  const [attachTrayOpen, setAttachTrayOpen] = React.useState(false);
 
   // ── Collapsible composer ───────────────────────────────────────────────────
   // Collapsed: textarea + attachment strip + agent toolbar hidden; only a slim
@@ -1019,6 +1055,12 @@ export function MessageComposer({
 
   // ── Attachments (Phase 1: image-only) ─────────────────────────────────────
   const [attachments, setAttachments] = React.useState<PendingAttachment[]>([]);
+  // Inline "that file is too big" copy shown near the strip (spec-style, not
+  // a toast) — set by queueAttachmentBatch when a client-side size pre-check
+  // rejects a pick before it ever reaches the server.
+  const [attachmentSizeError, setAttachmentSizeError] = React.useState<
+    string | null
+  >(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   // In-flight XHRs keyed by attachment id, so `removeAttachment` can abort an
   // upload the user cancels mid-flight instead of racing a stale response.
@@ -1031,7 +1073,12 @@ export function MessageComposer({
   }, []);
 
   const uploadAttachment = React.useCallback(
-    (id: string, file: Blob, kind: "image" | "video", filename: string) => {
+    (
+      id: string,
+      file: Blob,
+      kind: "image" | "video" | "document",
+      filename: string,
+    ) => {
       const xhr = new XMLHttpRequest();
       xhrsRef.current.set(id, xhr);
 
@@ -1157,6 +1204,7 @@ export function MessageComposer({
         progress: 0,
         hidden: true,
         keyframeForVideoLocalId: videoLocalId,
+        attemptKind: "image",
       }));
       setAttachments((prev) => [...prev, ...keyframes]);
       queueMicrotask(() => {
@@ -1167,44 +1215,97 @@ export function MessageComposer({
     [newLocalId, uploadAttachment],
   );
 
-  /** Add newly picked/pasted/dropped files as pending attachments and start uploading each. */
-  const addFiles = React.useCallback(
-    (files: FileList | File[]) => {
-      const incoming = Array.from(files).filter(
-        (f) => f.type.startsWith("image/") || f.type.startsWith("video/"),
+  /**
+   * Shared attachment-queueing core: size-checks a pre-classified batch
+   * against `ATTACHMENT_SIZE_LIMITS`, respects the MAX_ATTACHMENTS room
+   * limit, and kicks off uploads (+ video keyframe sampling). Used by both
+   * `addFiles` (legacy paste/drop/paperclip path — image/video only) and
+   * `addClassifiedFiles` (chat_ux_v2 attach tray/popover — image/video/
+   * document, since the server's "document" kind additionally accepts PDF)
+   * so the two paths can never drift on size-checking, room-capping, or
+   * upload dispatch.
+   */
+  const queueAttachmentBatch = React.useCallback(
+    (classified: ClassifiedFile[]) => {
+      if (classified.length === 0) return;
+      let oversizeLimitMb: number | null = null;
+      const withinLimit = classified.filter(({ file, kind }) => {
+        if (file.size > ATTACHMENT_SIZE_LIMITS[kind]) {
+          oversizeLimitMb = ATTACHMENT_SIZE_LIMITS[kind] / (1024 * 1024);
+          return false;
+        }
+        return true;
+      });
+      setAttachmentSizeError(
+        oversizeLimitMb !== null
+          ? `That file is over ${oversizeLimitMb} MB. Try a smaller one.`
+          : null,
       );
-      if (incoming.length === 0) return;
+      if (withinLimit.length === 0) return;
       setAttachments((prev) => {
         // Only VISIBLE attachments count toward the strip cap; hidden keyframes
         // are added later out-of-band.
         const room = MAX_ATTACHMENTS - prev.filter((a) => !a.hidden).length;
         if (room <= 0) return prev;
-        const accepted = incoming.slice(0, room);
-        const next: PendingAttachment[] = accepted.map((file) => ({
+        const accepted = withinLimit.slice(0, room);
+        const next: PendingAttachment[] = accepted.map(({ file, kind }) => ({
           id: newLocalId(),
           file,
           previewUrl: URL.createObjectURL(file),
           status: "uploading",
           progress: 0,
+          attemptKind: kind,
         }));
         // Kick off uploads outside the updater (setState updaters must stay
         // pure) — deferred via microtask so this runs after the state commits.
         queueMicrotask(() => {
-          for (const a of next) {
-            const isVideo = a.file.type.startsWith("video/");
-            uploadAttachment(
-              a.id,
-              a.file,
-              isVideo ? "video" : "image",
-              a.file.name,
-            );
-            if (isVideo) void attachVideoKeyframes(a.id, a.file);
-          }
+          accepted.forEach(({ file, kind }, i) => {
+            const a = next[i]!;
+            uploadAttachment(a.id, file, kind, file.name);
+            if (kind === "video") void attachVideoKeyframes(a.id, file);
+          });
         });
         return [...prev, ...next];
       });
     },
     [attachVideoKeyframes, newLocalId, uploadAttachment],
+  );
+
+  /** Add newly picked/pasted/dropped files as pending attachments and start
+   * uploading each — legacy path, image/video only (the paperclip button,
+   * paste, and drag-drop never offered a document picker). */
+  const addFiles = React.useCallback(
+    (files: FileList | File[]) => {
+      const classified: ClassifiedFile[] = Array.from(files).flatMap(
+        (file): ClassifiedFile[] => {
+          if (file.type.startsWith("video/")) return [{ file, kind: "video" }];
+          if (file.type.startsWith("image/")) return [{ file, kind: "image" }];
+          return [];
+        },
+      );
+      queueAttachmentBatch(classified);
+    },
+    [queueAttachmentBatch],
+  );
+
+  /** chat_ux_v2 attach tray/popover: classifies across all three
+   * server-supported kinds, including `application/pdf` as "document" (the
+   * legacy `addFiles` path never offered a document picker, so it stays
+   * image/video-only above). */
+  const addClassifiedFiles = React.useCallback(
+    (files: FileList | File[]) => {
+      const classified: ClassifiedFile[] = Array.from(files).flatMap(
+        (file): ClassifiedFile[] => {
+          if (file.type.startsWith("video/")) return [{ file, kind: "video" }];
+          if (file.type === "application/pdf")
+            return [{ file, kind: "document" }];
+          if (file.type.startsWith("image/")) return [{ file, kind: "image" }];
+          return [];
+        },
+      );
+      queueAttachmentBatch(classified);
+    },
+    [queueAttachmentBatch],
   );
 
   const removeAttachment = React.useCallback((id: string) => {
@@ -1227,6 +1328,26 @@ export function MessageComposer({
       return prev.filter((a) => !removeIds.has(a.id));
     });
   }, []);
+
+  /** Re-attempt a failed upload with the exact same file + kind (applies to
+   * every surface, legacy and v2 alike — a strict upgrade over the prior
+   * "remove and re-pick" workaround). No-ops if the attachment isn't in the
+   * `error` state or predates `attemptKind` tracking. */
+  const retryAttachment = React.useCallback(
+    (id: string) => {
+      const target = attachments.find((a) => a.id === id);
+      if (!target || target.status !== "error" || !target.attemptKind) return;
+      setAttachments((prev) =>
+        prev.map((a) =>
+          a.id === id
+            ? { ...a, status: "uploading", progress: 0, error: undefined }
+            : a,
+        ),
+      );
+      uploadAttachment(id, target.file, target.attemptKind, target.file.name);
+    },
+    [attachments, uploadAttachment],
+  );
 
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) addFiles(e.target.files);
@@ -1394,6 +1515,7 @@ export function MessageComposer({
   function clearAttachments() {
     for (const a of attachmentsRef.current) URL.revokeObjectURL(a.previewUrl);
     setAttachments([]);
+    setAttachmentSizeError(null);
   }
 
   const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
@@ -1926,9 +2048,21 @@ export function MessageComposer({
                 key={a.id}
                 attachment={a}
                 onRemove={removeAttachment}
+                onRetry={retryAttachment}
+                compact={v2Active}
               />
             ))}
           </div>
+        ) : null}
+        {/* Inline size-rejection copy (spec-style, near the strip — never a
+          toast) — set by queueAttachmentBatch's client-side pre-check. */}
+        {attachmentSizeError && !collapsed ? (
+          <p
+            className="text-xs text-destructive"
+            data-testid="attachment-size-error"
+          >
+            {attachmentSizeError}
+          </p>
         ) : null}
         {/* Pending @-mention strip — the structured references attached to this
           draft. Each chip is hover-inspectable; removing one only detaches the
@@ -2052,7 +2186,22 @@ export function MessageComposer({
               pending={pending}
               disabled={disabled}
               attachmentCount={visibleAttachments.length}
-              onAttachClick={() => fileInputRef.current?.click()}
+              // v2Mobile: opens the AttachTray bottom sheet below. v2Desktop
+              // supplies its own trigger (attachTrigger) so this never fires
+              // there — see CondensedComposerRow's attachTrigger doc.
+              onAttachClick={() => setAttachTrayOpen(true)}
+              attachTrigger={
+                v2Desktop ? (
+                  <AttachPopover
+                    disabled={
+                      pending ||
+                      disabled ||
+                      visibleAttachments.length >= MAX_ATTACHMENTS
+                    }
+                    onPickFiles={addClassifiedFiles}
+                  />
+                ) : undefined
+              }
               placeholder={placeholder}
               onKeyDown={onKeyDown}
               onChange={handleTextareaChange}
@@ -2310,6 +2459,20 @@ export function MessageComposer({
           </>
         )}
       </form>
+
+      {/* chat_ux_v2 mobile only: the attach tray opened by the condensed
+        row's plus button (see onAttachClick above). v2Desktop uses
+        AttachPopover instead — attachTrigger renders it inline within the
+        row itself, so it needs no sibling mount point here. */}
+      {v2Mobile && canAttach ? (
+        <AttachTray
+          open={attachTrayOpen}
+          onOpenChange={setAttachTrayOpen}
+          onCapturePhoto={addFiles}
+          onPickPhotos={addFiles}
+          onPickDocuments={addClassifiedFiles}
+        />
+      ) : null}
 
       {/* Mobile overflow sheet: the non-essential toolbar controls as
         thumb-friendly full-width rows (≥44px tall). Portaled to the body, so

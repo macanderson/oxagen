@@ -42,6 +42,15 @@ export interface PendingAttachment {
   keyframeForVideoLocalId?: string;
   /** True for derived attachments (video keyframes) not shown as their own chip. */
   hidden?: boolean;
+  /**
+   * The upload kind actually sent to the server for this attempt (Phase 2 —
+   * multimodal attach). Set at creation time and reused by RETRY to resend
+   * an identical request: it's not always re-derivable from `file.type`
+   * alone (e.g. a PDF picked via the v2 attach tray's "Choose files" row
+   * uploads as kind="document", even though `application/pdf` doesn't start
+   * with "document/").
+   */
+  attemptKind?: "image" | "video" | "document";
 }
 
 /** True when every attachment finished uploading (used to gate the send button). */
@@ -52,70 +61,107 @@ export function hasInFlightUploads(attachments: readonly PendingAttachment[]): b
 export function AttachmentChip({
   attachment,
   onRemove,
+  onRetry,
+  compact = false,
 }: {
   attachment: PendingAttachment;
   onRemove: (id: string) => void;
+  /**
+   * Re-attempt a failed upload with the same file + kind. Omitted (the
+   * default) hides the retry affordance — callers that never fail an
+   * upload deterministically (none currently) can skip wiring it.
+   */
+  onRetry?: (id: string) => void;
+  /**
+   * chat_ux_v2 only: shrinks the chip from 64px to a 40px thumbnail and adds
+   * a filename caption under non-image chips. Legacy callers omit this so
+   * their existing layout stays byte-identical.
+   */
+  compact?: boolean;
 }) {
   const isImage = attachment.file.type.startsWith("image/");
   const isVideo = attachment.file.type.startsWith("video/");
   const displayName = attachment.name ?? attachment.file.name;
 
   return (
-    <div
-      className={cn(
-        "group relative flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-muted",
-        attachment.status === "error" && "border-destructive/50 bg-destructive/5",
-      )}
-      data-testid="attachment-chip"
-      data-status={attachment.status}
-      aria-label={`Attachment: ${displayName}${attachment.status === "uploading" ? ` (uploading, ${attachment.progress}%)` : ""}${attachment.status === "error" ? " (upload failed)" : ""}`}
-    >
-      {isImage ? (
-        <Image
-          src={attachment.previewUrl}
-          alt={displayName}
-          fill
-          unoptimized
-          className="object-cover"
-        />
-      ) : isVideo ? (
-        <Film className="size-6 text-muted-foreground" aria-hidden="true" />
-      ) : (
-        <FileText className="size-6 text-muted-foreground" aria-hidden="true" />
-      )}
-
-      {attachment.status === "uploading" ? (
-        <div
-          className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/50 text-white"
-          role="progressbar"
-          aria-valuenow={attachment.progress}
-          aria-valuemin={0}
-          aria-valuemax={100}
-        >
-          <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-          <span className="text-[10px] tabular-nums">{attachment.progress}%</span>
-        </div>
-      ) : null}
-
-      {attachment.status === "error" ? (
-        <div
-          className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-destructive/80 text-destructive-foreground"
-          title={attachment.error ?? "Upload failed"}
-        >
-          <AlertCircle className="size-4" aria-hidden="true" />
-        </div>
-      ) : null}
-
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        aria-label={`Remove ${displayName}`}
-        onClick={() => onRemove(attachment.id)}
-        className="absolute right-0.5 top-0.5 h-4 w-4 rounded-full bg-black/60 p-0 text-white opacity-0 hover:bg-black/80 group-hover:opacity-100 focus-visible:opacity-100"
+    <div className={cn("flex flex-col items-center", compact ? "w-10 gap-0.5" : "gap-1")}>
+      <div
+        className={cn(
+          "group relative shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-muted flex",
+          compact ? "h-10 w-10" : "h-16 w-16",
+          attachment.status === "error" && "border-destructive/50 bg-destructive/5",
+        )}
+        data-testid="attachment-chip"
+        data-status={attachment.status}
+        aria-label={`Attachment: ${displayName}${attachment.status === "uploading" ? ` (uploading, ${attachment.progress}%)` : ""}${attachment.status === "error" ? " (upload failed)" : ""}`}
       >
-        <X className="size-2.5" />
-      </Button>
+        {isImage ? (
+          <Image
+            src={attachment.previewUrl}
+            alt={displayName}
+            fill
+            unoptimized
+            className="object-cover"
+          />
+        ) : isVideo ? (
+          <Film className="size-6 text-muted-foreground" aria-hidden="true" />
+        ) : (
+          <FileText className="size-6 text-muted-foreground" aria-hidden="true" />
+        )}
+
+        {attachment.status === "uploading" ? (
+          <div
+            className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/50 text-white"
+            role="progressbar"
+            aria-valuenow={attachment.progress}
+            aria-valuemin={0}
+            aria-valuemax={100}
+          >
+            <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+            <span className="text-[10px] tabular-nums">{attachment.progress}%</span>
+          </div>
+        ) : null}
+
+        {attachment.status === "error" ? (
+          <div
+            className="absolute inset-0 flex flex-col items-center justify-center gap-0.5 bg-destructive/80 text-destructive-foreground"
+            title={attachment.error ?? "Upload failed"}
+          >
+            <AlertCircle className="size-4" aria-hidden="true" />
+            {onRetry ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                aria-label={`Retry upload for ${displayName}`}
+                onClick={() => onRetry(attachment.id)}
+                className="h-4 rounded px-1 text-[9px] leading-none text-destructive-foreground hover:bg-white/20"
+              >
+                Retry
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
+
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          aria-label={`Remove ${displayName}`}
+          onClick={() => onRemove(attachment.id)}
+          className="absolute right-0.5 top-0.5 h-4 w-4 rounded-full bg-black/60 p-0 text-white opacity-0 hover:bg-black/80 group-hover:opacity-100 focus-visible:opacity-100"
+        >
+          <X className="size-2.5" />
+        </Button>
+      </div>
+      {compact && !isImage ? (
+        <span
+          className="max-w-10 truncate text-[9px] leading-none text-muted-foreground"
+          title={displayName}
+        >
+          {displayName}
+        </span>
+      ) : null}
     </div>
   );
 }

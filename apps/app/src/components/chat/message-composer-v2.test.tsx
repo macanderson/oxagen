@@ -11,11 +11,36 @@
  * matchMedia via `@/hooks/use-media-query`).
  */
 import * as React from "react";
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import type { ResolvedTierCatalog } from "@oxagen/ai/catalog";
 
 afterEach(cleanup);
+
+// Minimal XHR stub (no real network I/O) — this file never asserts on upload
+// completion, only that a picked file is queued as an "uploading" chip, so a
+// no-op stand-in is enough (message-composer.test.tsx's FakeXHR is the one
+// that exercises full upload lifecycles).
+class NoopXHR {
+  upload: { onprogress: ((e: unknown) => void) | null } = { onprogress: null };
+  onload: (() => void) | null = null;
+  onerror: (() => void) | null = null;
+  onabort: (() => void) | null = null;
+  open(): void {
+    // no-op — this stub never actually sends a request.
+  }
+  send(): void {
+    // no-op — this stub never actually sends a request.
+  }
+  abort(): void {
+    // no-op — this stub never actually sends a request.
+  }
+}
+beforeEach(() => {
+  vi.stubGlobal("XMLHttpRequest", NoopXHR);
+  URL.createObjectURL = vi.fn(() => "blob:mock-preview");
+  URL.revokeObjectURL = vi.fn();
+});
 
 vi.mock("@/lib/utils", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/utils")>()),
@@ -55,6 +80,35 @@ vi.mock("@/components/ui/sheet", () => ({
 
 vi.mock("./agent-picker/agent-context-chip", () => ({
   AgentContextChip: () => <div data-testid="agent-selector" />,
+}));
+
+// Popover shim — Trigger/Close clone their `render` element with `children`
+// inside (the Base UI render-prop slot pattern), Popup renders inline. Same
+// convention as session-settings.test.tsx.
+vi.mock("@/components/ui/popover", () => ({
+  Popover: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  PopoverTrigger: ({
+    render,
+    children,
+  }: {
+    render: React.ReactElement;
+    children?: React.ReactNode;
+  }) => React.cloneElement(render, undefined, children),
+  PopoverClose: ({
+    render,
+    children,
+  }: {
+    render: React.ReactElement;
+    children?: React.ReactNode;
+  }) => React.cloneElement(render, undefined, children),
+  PopoverPopup: ({
+    children,
+    "data-testid": testId,
+  }: {
+    children: React.ReactNode;
+    className?: string;
+    "data-testid"?: string;
+  }) => <div data-testid={testId ?? "attach-popover"}>{children}</div>,
 }));
 
 const mockSupportsReasoning = vi.fn((_model: unknown) => false);
@@ -344,6 +398,46 @@ describe("MessageComposer — chat_ux_v2 mobile row", () => {
     const fd = action.mock.calls[0]![0] as FormData;
     expect(fd.get("content")).toBe("Hello from v2 mobile");
   });
+
+  it("the plus button opens the attach tray with Take photo / Choose photos / Choose files — no popover, no Record voice", () => {
+    mockViewport.isMobile = true;
+    renderWithSession();
+    expect(screen.queryByTestId("attach-tray")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Add attachment" }));
+    expect(screen.getByTestId("attach-tray")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Take photo" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Choose photos" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Choose files" })).toBeInTheDocument();
+    expect(screen.queryByTestId("attach-popover")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /record voice/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("picking a photo from the tray adds an attachment chip and closes the tray", async () => {
+    mockViewport.isMobile = true;
+    const { container } = renderWithSession();
+    fireEvent.click(screen.getByRole("button", { name: "Add attachment" }));
+    // AttachTray's own hidden inputs are siblings of (not nested inside) the
+    // "attach-tray" SheetPopup, and share the exact "image/*,video/*,multiple"
+    // shape with the legacy shared file input (always mounted whenever
+    // canAttach is true) — so disambiguate by DOM order: the legacy input is
+    // rendered first (inside the form, near the top), AttachTray's is
+    // rendered later (as a form sibling), so it's the LAST match.
+    const photosInputs = container.querySelectorAll(
+      'input[accept="image/*,video/*"]',
+    );
+    const photosInput = photosInputs[
+      photosInputs.length - 1
+    ] as HTMLInputElement;
+    fireEvent.change(photosInput, {
+      target: { files: [new File(["x"], "photo.png", { type: "image/png" })] },
+    });
+    await vi.waitFor(() =>
+      expect(screen.getByTestId("attachment-chip")).toBeInTheDocument(),
+    );
+    expect(screen.queryByTestId("attach-tray")).not.toBeInTheDocument();
+  });
 });
 
 describe("MessageComposer — chat_ux_v2 desktop condensed row", () => {
@@ -422,6 +516,42 @@ describe("MessageComposer — chat_ux_v2 desktop condensed row", () => {
     const fd = action.mock.calls[0]![0] as FormData;
     expect(fd.get("content")).toBe("Hello from v2 desktop");
   });
+
+  it("the plus button is an attach popover with a single Upload files action — no tray, no Record voice", () => {
+    mockViewport.isMobile = false;
+    renderWithSession();
+    fireEvent.click(screen.getByRole("button", { name: "Add attachment" }));
+    expect(screen.getByTestId("attach-popover")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Upload files" })).toBeInTheDocument();
+    expect(screen.queryByTestId("attach-tray")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /record voice/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("Upload files accepts every server-supported kind (image, video, document/pdf)", () => {
+    mockViewport.isMobile = false;
+    renderWithSession();
+    // Scope to the popover — the legacy shared file input (rendered whenever
+    // canAttach is true) is a narrower "image/*,video/*" and would otherwise
+    // be matched first by an unscoped query.
+    const popover = screen.getByTestId("attach-popover");
+    const input = popover.querySelector('input[type="file"]') as HTMLInputElement;
+    expect(input.accept).toBe("image/*,video/*,application/pdf");
+  });
+
+  it("picking a file via Upload files adds an attachment chip", async () => {
+    mockViewport.isMobile = false;
+    renderWithSession();
+    const popover = screen.getByTestId("attach-popover");
+    const input = popover.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, {
+      target: { files: [new File(["p"], "spec.pdf", { type: "application/pdf" })] },
+    });
+    await vi.waitFor(() =>
+      expect(screen.getByTestId("attachment-chip")).toBeInTheDocument(),
+    );
+  });
 });
 
 describe("MessageComposer — legacy mobile toolbar is unchanged without chat_ux_v2", () => {
@@ -433,6 +563,8 @@ describe("MessageComposer — legacy mobile toolbar is unchanged without chat_ux
         parentMessageId={null}
         action={makeAction()}
         modelConfig={DEFAULT_MODEL_CONFIG}
+        orgSlug="acme"
+        workspaceSlug="default"
       />,
     );
     expect(screen.queryByTestId("composer-v2-mobile-row")).not.toBeInTheDocument();
@@ -440,6 +572,12 @@ describe("MessageComposer — legacy mobile toolbar is unchanged without chat_ux
       screen.getByRole("button", { name: "More composer options" }),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Send message" })).toBeInTheDocument();
+    // The legacy paperclip stays a direct file-picker trigger — no tray/popover.
+    expect(
+      screen.getByRole("button", { name: "Attach image or video" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId("attach-tray")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("attach-popover")).not.toBeInTheDocument();
   });
 
   it("does not render the MOBILE condensed row on desktop even with a session provider mounted (v2Desktop renders its own row instead)", () => {
