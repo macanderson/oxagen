@@ -2479,6 +2479,124 @@ describe("MessageComposer — attachments", () => {
     // The video carries no keyframeForVideo of its own.
     expect(parsed[0]!.keyframeForVideo).toBeUndefined();
   });
+
+  it("shows an inline size error and never uploads a file over the kind's limit", async () => {
+    const user = userEvent.setup();
+    const { MessageComposer } = await import("./message-composer");
+    const { container } = render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        orgSlug="acme"
+        workspaceSlug="main"
+      />,
+    );
+
+    const fileInput = container.querySelector(
+      'input[type="file"]',
+    ) as HTMLInputElement;
+    // Images cap at 5 MiB (packages/storage/src/assets.ts ASSET_LIMITS.image).
+    const oversizeBytes = new Uint8Array(5 * 1024 * 1024 + 1);
+    const oversized = new File([oversizeBytes], "huge.png", {
+      type: "image/png",
+    });
+    await user.upload(fileInput, oversized);
+
+    expect(
+      screen.getByTestId("attachment-size-error"),
+    ).toHaveTextContent("That file is over 5 MB. Try a smaller one.");
+    // Never dispatched — the pre-check rejects it before any XHR is opened.
+    expect(FakeXHR.instances).toHaveLength(0);
+    expect(screen.queryByTestId("attachment-chip")).not.toBeInTheDocument();
+  });
+
+  it("clears the size error once a valid file is picked afterward", async () => {
+    const user = userEvent.setup();
+    const { MessageComposer } = await import("./message-composer");
+    const { container } = render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        orgSlug="acme"
+        workspaceSlug="main"
+      />,
+    );
+
+    const fileInput = container.querySelector(
+      'input[type="file"]',
+    ) as HTMLInputElement;
+    const oversized = new File(
+      [new Uint8Array(5 * 1024 * 1024 + 1)],
+      "huge.png",
+      { type: "image/png" },
+    );
+    await user.upload(fileInput, oversized);
+    expect(screen.getByTestId("attachment-size-error")).toBeInTheDocument();
+
+    await user.upload(
+      fileInput,
+      new File(["bytes"], "photo.png", { type: "image/png" }),
+    );
+    expect(screen.queryByTestId("attachment-size-error")).not.toBeInTheDocument();
+  });
+
+  it("retrying a failed upload re-sends the same file and kind, and can succeed", async () => {
+    const user = userEvent.setup();
+    const { MessageComposer } = await import("./message-composer");
+    const { container } = render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        orgSlug="acme"
+        workspaceSlug="main"
+      />,
+    );
+
+    const fileInput = container.querySelector(
+      'input[type="file"]',
+    ) as HTMLInputElement;
+    await user.upload(
+      fileInput,
+      new File(["bytes"], "photo.png", { type: "image/png" }),
+    );
+    act(() => {
+      FakeXHR.instances[0]!.respond(415, { error: "Unsupported image type" });
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId("attachment-chip")).toHaveAttribute(
+        "data-status",
+        "error",
+      ),
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: /retry upload for photo\.png/i }),
+    );
+
+    // Retry re-sends through the SAME upload pipeline: a fresh XHR, same kind.
+    expect(FakeXHR.instances).toHaveLength(2);
+    expect(FakeXHR.instances[1]!.body?.get("kind")).toBe("image");
+    expect(screen.getByTestId("attachment-chip")).toHaveAttribute(
+      "data-status",
+      "uploading",
+    );
+
+    act(() => {
+      FakeXHR.instances[1]!.respond(201, UPLOADED_ITEM);
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId("attachment-chip")).toHaveAttribute(
+        "data-status",
+        "uploaded",
+      ),
+    );
+  });
 });
 
 // ── code mode ──────────────────────────────────────────────────────────────────

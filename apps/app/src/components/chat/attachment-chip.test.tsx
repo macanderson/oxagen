@@ -55,6 +55,7 @@ vi.mock("next/image", () => ({
 vi.mock("lucide-react", () => ({
   X: () => <span data-testid="icon-x" />,
   FileText: () => <span data-testid="icon-file" />,
+  Film: () => <span data-testid="icon-film" />,
   Loader2: () => <span data-testid="icon-loader" />,
   AlertCircle: () => <span data-testid="icon-alert" />,
 }));
@@ -114,6 +115,75 @@ describe("AttachmentChip", () => {
     await user.click(screen.getByRole("button", { name: /remove photo\.png/i }));
 
     expect(onRemove).toHaveBeenCalledWith("att-42");
+  });
+
+  it("shows no retry affordance when onRetry is omitted, even on error", () => {
+    const attachment = makeAttachment({ status: "error", error: "Upload failed" });
+    render(<AttachmentChip attachment={attachment} onRemove={vi.fn()} />);
+    expect(screen.queryByRole("button", { name: /retry/i })).not.toBeInTheDocument();
+  });
+
+  it("calls onRetry with the attachment id when the retry button is clicked", async () => {
+    const user = userEvent.setup();
+    const onRetry = vi.fn();
+    const attachment = makeAttachment({
+      id: "att-9",
+      status: "error",
+      error: "Upload failed",
+    });
+    render(<AttachmentChip attachment={attachment} onRemove={vi.fn()} onRetry={onRetry} />);
+
+    await user.click(screen.getByRole("button", { name: /retry upload for photo\.png/i }));
+
+    expect(onRetry).toHaveBeenCalledWith("att-9");
+  });
+
+  it("no retry affordance while uploading or once uploaded", () => {
+    render(
+      <AttachmentChip
+        attachment={makeAttachment({ status: "uploading", progress: 10 })}
+        onRemove={vi.fn()}
+        onRetry={vi.fn()}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: /retry/i })).not.toBeInTheDocument();
+    cleanup();
+    render(
+      <AttachmentChip
+        attachment={makeAttachment({ status: "uploaded" })}
+        onRemove={vi.fn()}
+        onRetry={vi.fn()}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: /retry/i })).not.toBeInTheDocument();
+  });
+
+  it("default (non-compact) rendering has no filename caption for a non-image kind", () => {
+    const attachment = makeAttachment({
+      file: new File(["v"], "clip.mp4", { type: "video/mp4" }),
+      name: "clip.mp4",
+      kind: "video",
+      mimeType: "video/mp4",
+    });
+    render(<AttachmentChip attachment={attachment} onRemove={vi.fn()} />);
+    expect(screen.queryByText("clip.mp4")).not.toBeInTheDocument();
+  });
+
+  it("compact mode adds a visible filename caption under a non-image chip", () => {
+    const attachment = makeAttachment({
+      file: new File(["v"], "clip.mp4", { type: "video/mp4" }),
+      name: "clip.mp4",
+      kind: "video",
+      mimeType: "video/mp4",
+    });
+    render(<AttachmentChip attachment={attachment} onRemove={vi.fn()} compact />);
+    expect(screen.getByText("clip.mp4")).toBeInTheDocument();
+  });
+
+  it("compact mode does NOT add a caption for an image chip (thumbnail already shows it)", () => {
+    render(<AttachmentChip attachment={makeAttachment()} onRemove={vi.fn()} compact />);
+    // "photo.png" only appears as the thumbnail's alt text, never as a caption span.
+    expect(screen.queryAllByText("photo.png")).toHaveLength(0);
   });
 });
 
