@@ -90,4 +90,11 @@ export interface ChatShellProps {
    * `code-binding.ts`). When present the composer's agent + repo + environment
    * selection is FORCED to it and locked read-only. Null/omitted ⇒ unbound. */
   conversationCodeBinding?: StoredCodeBinding | null;
+  /**
+   * chat_ux_v2 flag, resolved ONCE server-side (env default + cookie
+   * override — see lib/flags.ts). True mounts the unified ChatSessionProvider
+   * so all run-context state lives in one store; false leaves the legacy
+   * stores byte-identical.
+   */
+  chatUxV2?: boolean;
 }

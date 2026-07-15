@@ -47,6 +47,7 @@ import {
   type ComposerPrStatus,
 } from "./composer-pr-status-chip";
 import { useChatSelectionContext } from "./agent-picker/chat-selection-context";
+import { useSessionSelectionBridge } from "./session/session-bridges";
 import type { LiveFanout, LivePlan, LiveToolCall } from "./use-tool-stream";
 import type { TurnUsage } from "./stream-event-types";
 import type { RepoOption } from "./repo-selector";
@@ -292,7 +293,12 @@ function ContextCard({
   orgSlug,
   workspaceSlug,
 }: ContextCardProps) {
-  const selection = useChatSelectionContext();
+  // chat_ux_v2: the unified session store (when mounted) is the source of
+  // truth — the legacy selection provider is only read when no session store
+  // wraps the tree, so this card can never disagree with the composer.
+  const sessionSelection = useSessionSelectionBridge();
+  const legacySelection = useChatSelectionContext();
+  const selection = sessionSelection ?? legacySelection;
   const binding = conversationCodeBinding ?? null;
 
   const repo = React.useMemo(

@@ -19,6 +19,12 @@ afterEach(cleanup);
 
 // ── module mocks ──────────────────────────────────────────────────────────────
 
+// AsyncShell resolves the chat_ux_v2 cookie via next/headers — outside a real
+// request scope cookies() never resolves, so stub it to "no cookie set".
+vi.mock("next/headers", () => ({
+  cookies: vi.fn(async () => ({ get: () => undefined })),
+}));
+
 vi.mock("@oxagen/ai", () => ({
   resolvedTierCatalog: vi.fn(() => ({ models: [] })),
 }));

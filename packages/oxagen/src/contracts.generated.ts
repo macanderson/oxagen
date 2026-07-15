@@ -247,6 +247,7 @@ import "./contracts/prompt.settings.write";
 import "./contracts/reference.cite";
 import "./contracts/reference.search";
 import "./contracts/repo.branch.create";
+import "./contracts/repo.branch.list";
 import "./contracts/repo.ci.status";
 import "./contracts/repo.configure";
 import "./contracts/repo.create";

@@ -32,6 +32,23 @@ function hasSession(request: NextRequest): boolean {
 export function proxy(request: NextRequest): NextResponse {
   const { pathname, search } = request.nextUrl;
 
+  // 0. chat_ux_v2 flag override: `?chat_ux_v2=1|0` persists a per-browser
+  //    cookie override (see lib/flags.ts) and redirects to the same URL
+  //    without the param, so the flag can be flipped in any environment
+  //    without a redeploy. Edge-safe: cookies + redirect only.
+  const chatUxV2Param = request.nextUrl.searchParams.get("chat_ux_v2");
+  if (chatUxV2Param === "1" || chatUxV2Param === "0") {
+    const cleaned = request.nextUrl.clone();
+    cleaned.searchParams.delete("chat_ux_v2");
+    const flagResponse = NextResponse.redirect(cleaned);
+    flagResponse.cookies.set("chat_ux_v2", chatUxV2Param, {
+      path: "/",
+      maxAge: 60 * 60 * 24 * 90,
+      sameSite: "lax",
+    });
+    return flagResponse;
+  }
+
   // 1. Permanent redirect of the pre-rename onboarding URL. The dynamic org
   //    route segment was renamed but NOT reshaped (`/acme/...` resolves
   //    identically), so the only literal path that moved is this entrypoint.

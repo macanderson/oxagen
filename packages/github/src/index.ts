@@ -8,6 +8,7 @@ export type {
   GitHubCommitStatus,
   GitHubCiChecks,
   GitHubPrFile,
+  GitHubBranch,
 } from "./types";
 export { createGitHubClient } from "./fetch-client";
 export { GitHubWorkspace } from "./github-workspace";

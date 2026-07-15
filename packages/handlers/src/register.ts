@@ -949,6 +949,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .repoBranchCreateHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "list_branches",
+    async () =>
+      (await import("./repo.branch.list"))
+        .repoBranchListHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "open_pr",
     async () =>
       (await import("./repo.pr.open")).repoPrOpenHandler as CapabilityHandlerFn,

@@ -240,6 +240,7 @@ import { pluginSchemaGet } from "./plugin.schema.get";
 import { pluginSchemaValidate } from "./plugin.schema.validate";
 import { pluginVersionList } from "./plugin.version.list";
 import { repoBranchCreate } from "./repo.branch.create";
+import { repoBranchList } from "./repo.branch.list";
 import { repoConfigure } from "./repo.configure";
 import { repoCreate } from "./repo.create";
 import { repoFilePut } from "./repo.file.put";
@@ -751,6 +752,7 @@ export {
   pluginSchemaValidate,
   pluginVersionList,
   repoBranchCreate,
+  repoBranchList,
   repoConfigure,
   repoCreate,
   repoFilePut,
@@ -1101,6 +1103,7 @@ export const contracts = [
   pluginSchemaValidate,
   pluginVersionList,
   repoBranchCreate,
+  repoBranchList,
   repoConfigure,
   repoCreate,
   repoFilePut,

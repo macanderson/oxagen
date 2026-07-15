@@ -9,6 +9,7 @@ import {
   resolveInitialAgentId,
   DRAFT_PREFIX,
 } from "./agent-context";
+import { useSessionSelectionBridge } from "../session/session-bridges";
 
 /**
  * chat-selection-context.tsx — the shared agent/repo/environment selection for
@@ -86,11 +87,14 @@ export function useChatSelectionContext(): ChatSelectionStore | null {
 }
 
 /**
- * The composer's selection state: the shared provider store when one wraps the
- * composer (the chat surface), else a self-contained local store. Always call
- * both hooks (rules-of-hooks) and pick the shared store when present.
+ * The composer's selection state: the unified session store when the
+ * chat_ux_v2 provider wraps the tree (see ../session/session-bridges.tsx),
+ * else the shared provider store when one wraps the composer (the chat
+ * surface), else a self-contained local store. Always call every hook
+ * (rules-of-hooks) and pick the highest-priority store present.
  */
 export function useComposerSelectionState(): ChatSelectionStore {
+  const sessionBridge = useSessionSelectionBridge();
   const shared = useChatSelectionContext();
   const [agentId, setAgentId] = React.useState<string | null>(null);
   const [repoKey, setRepoKey] = React.useState<string | null>(null);
@@ -145,7 +149,7 @@ export function useComposerSelectionState(): ChatSelectionStore {
       lockLocal,
     ],
   );
-  return shared ?? local;
+  return sessionBridge ?? shared ?? local;
 }
 
 export interface ChatSelectionProviderProps {

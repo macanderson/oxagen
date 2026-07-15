@@ -156,6 +156,26 @@ describe("proxy — IA realignment redirects (§16)", () => {
   });
 });
 
+describe("proxy — chat_ux_v2 flag override", () => {
+  it("persists ?chat_ux_v2=1 as a cookie and redirects to the cleaned URL", () => {
+    const res = proxy(req("/acme/prod/ask?chat_ux_v2=1&c=cnv_1"));
+    expect(res.headers.get("location")).toBe(`${ORIGIN}/acme/prod/ask?c=cnv_1`);
+    expect(res.cookies.get("chat_ux_v2")?.value).toBe("1");
+  });
+
+  it("persists the off override too", () => {
+    const res = proxy(req("/acme/prod/ask?chat_ux_v2=0"));
+    expect(res.headers.get("location")).toBe(`${ORIGIN}/acme/prod/ask`);
+    expect(res.cookies.get("chat_ux_v2")?.value).toBe("0");
+  });
+
+  it("ignores garbage values — no cookie, no redirect", () => {
+    const res = proxy(req("/acme/prod/ask?chat_ux_v2=yes"));
+    expect(res.cookies.get("chat_ux_v2")).toBeUndefined();
+    expect(res.headers.get("location")).toBeNull();
+  });
+});
+
 describe("proxy — no redirect loop", () => {
   it("leaves unrelated workspace and org routes untouched", () => {
     // The renamed Knowledge targets themselves must NOT redirect (no loop).

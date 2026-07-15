@@ -8,6 +8,7 @@ import { repoCreate } from "@oxagen/oxagen/contracts/repo.create";
 import { repoFilePut } from "@oxagen/oxagen/contracts/repo.file.put";
 import { repoFork } from "@oxagen/oxagen/contracts/repo.fork";
 import { repoBranchCreate } from "@oxagen/oxagen/contracts/repo.branch.create";
+import { repoBranchList } from "@oxagen/oxagen/contracts/repo.branch.list";
 import { repoPrOpen } from "@oxagen/oxagen/contracts/repo.pr.open";
 import { repoPrGet } from "@oxagen/oxagen/contracts/repo.pr.get";
 import { repoPrDiff } from "@oxagen/oxagen/contracts/repo.pr.diff";
@@ -95,6 +96,17 @@ repoRoute.post("/branch", async (c) => {
   const ctx = capabilityContext(c);
   const out = await invoke(repoBranchCreate.name, body, ctx, { surface: "api" });
   return c.json(out, 201);
+});
+
+// GET /repos/branches — list branches in a GitHub repository
+repoRoute.get("/branches", async (c) => {
+  const body = repoBranchList.input.parse({
+    owner: c.req.query("owner"),
+    repo: c.req.query("repo"),
+  });
+  const ctx = capabilityContext(c);
+  const out = await invoke(repoBranchList.name, body, ctx, { surface: "api" });
+  return c.json(out);
 });
 
 // POST /repos/pulls — open a pull request in a GitHub repository

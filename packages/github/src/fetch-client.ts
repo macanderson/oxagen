@@ -1,4 +1,5 @@
 import type {
+  GitHubBranch,
   GitHubCheckRun,
   GitHubCiChecks,
   GitHubClient,
@@ -163,6 +164,12 @@ interface GHPullFile {
   deletions: number;
   changes: number;
   patch?: string;
+}
+
+interface GHBranchListItem {
+  name: string;
+  commit: { sha: string };
+  protected: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -596,6 +603,34 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
     }));
   }
 
+  async function listBranches(args: {
+    owner: string;
+    repo: string;
+  }): Promise<GitHubBranch[]> {
+    const perPage = 100;
+    const maxPages = 3;
+    const branches: GitHubBranch[] = [];
+
+    for (let page = 1; page <= maxPages; page++) {
+      const data = await request<GHBranchListItem[]>(
+        "GET",
+        `/repos/${args.owner}/${args.repo}/branches?per_page=${perPage}&page=${page}`,
+      );
+      branches.push(
+        ...data.map((b) => ({
+          name: b.name,
+          sha: b.commit.sha,
+          protected: b.protected,
+        })),
+      );
+      // Short-circuit once a page comes back under-full — no need to fetch
+      // further pages that would return empty.
+      if (data.length < perPage) break;
+    }
+
+    return branches;
+  }
+
   return {
     getAuthenticatedUser,
     getRepoInfo,
@@ -610,6 +645,7 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
     listPullRequestComments,
     listCiChecks,
     listPullRequestFiles,
+    listBranches,
   };
 }
 

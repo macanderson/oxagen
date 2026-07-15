@@ -342,3 +342,98 @@ describe("listPullRequestFiles", () => {
     expect(files[2]?.status).toBe("renamed");
   });
 });
+
+// ---------------------------------------------------------------------------
+// listBranches
+// ---------------------------------------------------------------------------
+
+describe("listBranches", () => {
+  it("maps a single page of branches to the typed shape", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      makeResponse([
+        { name: "main", commit: { sha: "sha-main" }, protected: true },
+        { name: "feature/x", commit: { sha: "sha-x" }, protected: false },
+      ]),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const client = createGitHubClient({ token: "tok" });
+
+    const branches = await client.listBranches({ owner: "acme", repo: "repo" });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(
+      "https://api.github.com/repos/acme/repo/branches?per_page=100&page=1",
+    );
+    expect(branches).toEqual([
+      { name: "main", sha: "sha-main", protected: true },
+      { name: "feature/x", sha: "sha-x", protected: false },
+    ]);
+  });
+
+  it("returns an empty array for an empty repository", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(makeResponse([]));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = createGitHubClient({ token: "tok" });
+
+    const branches = await client.listBranches({ owner: "acme", repo: "empty" });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(branches).toEqual([]);
+  });
+
+  it("paginates across multiple full pages and stops on the first short page", async () => {
+    const page = (start: number, count: number) =>
+      Array.from({ length: count }, (_, i) => ({
+        name: `branch-${start + i}`,
+        commit: { sha: `sha-${start + i}` },
+        protected: false,
+      }));
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(makeResponse(page(0, 100)))
+      .mockResolvedValueOnce(makeResponse(page(100, 100)))
+      .mockResolvedValueOnce(makeResponse(page(200, 40)));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = createGitHubClient({ token: "tok" });
+
+    const branches = await client.listBranches({ owner: "acme", repo: "big" });
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(branches).toHaveLength(240);
+    expect(branches[0]).toEqual({ name: "branch-0", sha: "sha-0", protected: false });
+    expect(branches[239]).toEqual({
+      name: "branch-239",
+      sha: "sha-239",
+      protected: false,
+    });
+    const pages = fetchMock.mock.calls.map(
+      ([url]) => new URL(url as string).searchParams.get("page"),
+    );
+    expect(pages).toEqual(["1", "2", "3"]);
+  });
+
+  it("caps at 3 pages (300 branches) even if the third page is full", async () => {
+    const page = (start: number, count: number) =>
+      Array.from({ length: count }, (_, i) => ({
+        name: `branch-${start + i}`,
+        commit: { sha: `sha-${start + i}` },
+        protected: false,
+      }));
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(makeResponse(page(0, 100)))
+      .mockResolvedValueOnce(makeResponse(page(100, 100)))
+      .mockResolvedValueOnce(makeResponse(page(200, 100)));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = createGitHubClient({ token: "tok" });
+
+    const branches = await client.listBranches({ owner: "acme", repo: "huge" });
+
+    // Exactly 3 pages fetched — a would-be 4th page is never requested.
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(branches).toHaveLength(300);
+  });
+});

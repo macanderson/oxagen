@@ -1,6 +1,6 @@
 /**
  * Tests for the read-only GitHub capability handlers:
- *   repo.ci.status, repo.pr.get, repo.pr.diff.
+ *   repo.ci.status, repo.pr.get, repo.pr.diff, repo.branch.list.
  *
  * Strategy mirrors github-caps.test.ts: mock @oxagen/github so
  * createGitHubClient returns spy methods, mock @oxagen/database withTenantDb to
@@ -22,6 +22,8 @@ const mocks = vi.hoisted(() => {
   const listPullRequestComments = vi.fn();
   const listCiChecks = vi.fn();
   const listPullRequestFiles = vi.fn();
+  const listBranches = vi.fn();
+  const getRepoInfo = vi.fn();
   const withTenantDb = vi.fn();
 
   const mockClient = {
@@ -29,6 +31,8 @@ const mocks = vi.hoisted(() => {
     listPullRequestComments,
     listCiChecks,
     listPullRequestFiles,
+    listBranches,
+    getRepoInfo,
   };
 
   return {
@@ -36,6 +40,8 @@ const mocks = vi.hoisted(() => {
     listPullRequestComments,
     listCiChecks,
     listPullRequestFiles,
+    listBranches,
+    getRepoInfo,
     mockClient,
     withTenantDb,
   };
@@ -78,6 +84,7 @@ import type { CapabilityContext } from "@oxagen/oxagen";
 import { repoCiStatusHandler } from "../repo.ci.status";
 import { repoPrGetHandler } from "../repo.pr.get";
 import { repoPrDiffHandler } from "../repo.pr.diff";
+import { repoBranchListHandler } from "../repo.branch.list";
 
 const ctx: CapabilityContext = {
   orgId: "org-1",
@@ -383,5 +390,69 @@ describe("repo.pr.diff handler", () => {
     const out = await repoPrDiffHandler({ owner: "a", repo: "b", number: 4 }, ctx);
     expect(out.files[0]?.binary).toBe(false);
     expect(out.summary).toBe("1 file, +0 -0");
+  });
+});
+
+// ── repo.branch.list handler ──────────────────────────────────────────────
+
+describe("repo.branch.list handler", () => {
+  it("calls listBranches and getRepoInfo, marking the default branch", async () => {
+    mocks.listBranches.mockResolvedValueOnce([
+      { name: "main", sha: "sha-main", protected: true },
+      { name: "feature/x", sha: "sha-x", protected: false },
+    ]);
+    mocks.getRepoInfo.mockResolvedValueOnce({
+      fullName: "acme/repo",
+      htmlUrl: "https://github.com/acme/repo",
+      defaultBranch: "main",
+    });
+
+    const out = await repoBranchListHandler({ owner: "acme", repo: "repo" }, ctx);
+
+    expect(mocks.listBranches).toHaveBeenCalledWith({ owner: "acme", repo: "repo" });
+    expect(mocks.getRepoInfo).toHaveBeenCalledWith({ owner: "acme", repo: "repo" });
+    expect(out.defaultBranch).toBe("main");
+    expect(out.branches).toEqual([
+      { name: "main", sha: "sha-main", isDefault: true, protected: true },
+      { name: "feature/x", sha: "sha-x", isDefault: false, protected: false },
+    ]);
+  });
+
+  it("returns an empty branches array for an empty repository", async () => {
+    mocks.listBranches.mockResolvedValueOnce([]);
+    mocks.getRepoInfo.mockResolvedValueOnce({
+      fullName: "acme/empty",
+      htmlUrl: "https://github.com/acme/empty",
+      defaultBranch: "main",
+    });
+
+    const out = await repoBranchListHandler({ owner: "acme", repo: "empty" }, ctx);
+
+    expect(out.branches).toEqual([]);
+    expect(out.defaultBranch).toBe("main");
+  });
+
+  it("resolves defaultBranch to null when the repo-info lookup fails, without failing the whole call", async () => {
+    mocks.listBranches.mockResolvedValueOnce([
+      { name: "main", sha: "sha-main", protected: true },
+    ]);
+    mocks.getRepoInfo.mockRejectedValueOnce(new Error("boom"));
+
+    const out = await repoBranchListHandler({ owner: "acme", repo: "repo" }, ctx);
+
+    expect(out.defaultBranch).toBeNull();
+    expect(out.branches).toEqual([
+      { name: "main", sha: "sha-main", isDefault: false, protected: true },
+    ]);
+  });
+
+  it("propagates a token resolution failure", async () => {
+    delete process.env.GITHUB_PERSONAL_ACCESS_TOKEN;
+
+    await expect(
+      repoBranchListHandler({ owner: "acme", repo: "repo" }, ctx),
+    ).rejects.toThrow("No GitHub connection for this workspace");
+
+    expect(mocks.listBranches).not.toHaveBeenCalled();
   });
 });
