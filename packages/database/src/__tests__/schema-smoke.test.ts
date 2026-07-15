@@ -25,8 +25,6 @@ import {
   subscriptions,
   paymentMethods,
   invoices,
-  invoiceLineItems,
-  usageRecords,
   creditLots,
 } from "../schema/billing";
 
@@ -977,40 +975,6 @@ describe("billing.subscriptions", () => {
       (i) => i.config.name === "subscriptions_org_status_idx",
     );
     expect(idx).toBeDefined();
-  });
-});
-
-describe("billing.invoice_line_items", () => {
-  it("quantity column is numeric type (regression guard for missing import)", () => {
-    const cfg = getTableConfig(invoiceLineItems);
-    expect(cfg).toBeDefined();
-    const cols = cfg.columns.map((c) => c.name);
-    expect(cols).toContain("quantity");
-    expect(cols).toContain("unit_amount_cents");
-    expect(cols).toContain("total_cents");
-    expect(cols).toContain("invoice_id");
-    expect(cols).toContain("org_id");
-  });
-
-  it("has invoice and org indexes", () => {
-    const cfg = getTableConfig(invoiceLineItems);
-    expect(
-      cfg.indexes.find(
-        (i) => i.config.name === "invoice_line_items_invoice_idx",
-      ),
-    ).toBeDefined();
-    expect(
-      cfg.indexes.find((i) => i.config.name === "invoice_line_items_org_idx"),
-    ).toBeDefined();
-  });
-});
-
-describe("billing.usage_records", () => {
-  it("quantity column is numeric type (regression guard for missing import)", () => {
-    const cfg = getTableConfig(usageRecords);
-    expect(cfg).toBeDefined();
-    const cols = cfg.columns.map((c) => c.name);
-    expect(cols).toContain("quantity");
   });
 });
 

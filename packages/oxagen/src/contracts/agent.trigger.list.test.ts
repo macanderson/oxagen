@@ -28,6 +28,10 @@ describe("agent.trigger.list capability", () => {
     expect(out.triggers[0]!.connectionId).toBeNull();
   });
 
+  it("is exempt from the billing admission gate (read-only introspection)", () => {
+    expect(agentTriggerList.noBillingGate).toBe(true);
+  });
+
   it("is registered in the capability registry", () => {
     expect(getCapability("list_triggers")).toBe(agentTriggerList);
   });
