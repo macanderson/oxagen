@@ -688,10 +688,15 @@ export function MessageComposer({
   // Track whether the textarea currently has content so the parent can hide
   // the suggested-prompt chips while the user is typing.
   const inputHasContentRef = React.useRef(false);
+  // State mirror for the v2Mobile row: its send button disables on empty
+  // input (the spec bans native `required` validation — no browser tooltip,
+  // ever — so emptiness must gate the button, and a ref can't re-render it).
+  const [inputEmpty, setInputEmpty] = React.useState(true);
   const handleTextareaChange = React.useCallback(
     (e: React.ChangeEvent<HTMLTextAreaElement>) => {
       const value = e.target.value;
       const hasContent = value.length > 0;
+      setInputEmpty(value.trim().length === 0);
       if (hasContent !== inputHasContentRef.current) {
         inputHasContentRef.current = hasContent;
         onInputHasContentChangeRef.current?.(hasContent);
@@ -752,6 +757,7 @@ export function MessageComposer({
       if (command.clientAction === "pin") {
         if (ta) {
           ta.value = "";
+          setInputEmpty(true);
           if (inputHasContentRef.current) {
             inputHasContentRef.current = false;
             onInputHasContentChangeRef.current?.(false);
@@ -1662,7 +1668,11 @@ export function MessageComposer({
   );
   const v2HasIssues = v2SelectionIssues.length > 0;
   const v2IsDirty = chatSession?.isDirty ?? false;
-  const cogDotClass = v2HasIssues ? "bg-destructive" : v2IsDirty ? "bg-primary" : null;
+  const cogDotClass = v2HasIssues
+    ? "bg-destructive"
+    : v2IsDirty
+      ? "bg-primary"
+      : null;
   const cogAriaLabel = `Session settings${
     v2HasIssues ? ", attention needed" : v2IsDirty ? ", settings changed" : ""
   }`;
@@ -1678,6 +1688,9 @@ export function MessageComposer({
         className={cn(
           "flex flex-col gap-2 rounded-2xl border border-border bg-card p-3 text-card-foreground shadow-sm transition-shadow focus-within:ring-2 focus-within:ring-ring",
           collapsed && "gap-0 py-1.5",
+          // v2Mobile at-rest budget is ≤64px: 44px controls + 2×8px padding
+          // + 2px border = 62. p-3 (12px) would overshoot to 70.
+          v2Mobile && "py-2",
           isDragOver && "ring-2 ring-primary",
         )}
       >
@@ -1883,9 +1896,10 @@ export function MessageComposer({
                   <Plus className="h-4 w-4" />
                 </Button>
               ) : null}
+              {/* No `required`: the spec bans the native browser validation
+                tooltip — an empty message simply leaves send disabled. */}
               <Textarea
                 name="content"
-                required
                 placeholder={placeholder}
                 rows={1}
                 disabled={pending || disabled}
@@ -1921,7 +1935,12 @@ export function MessageComposer({
               <Button
                 type="submit"
                 disabled={
-                  pending || disabled || uploadsInFlight || codeGateBlocked
+                  pending ||
+                  disabled ||
+                  uploadsInFlight ||
+                  codeGateBlocked ||
+                  // Empty input disables send (attachments alone still send).
+                  (inputEmpty && visibleAttachments.length === 0)
                 }
                 size="sm"
                 aria-label={sendAriaLabel}
@@ -1932,227 +1951,232 @@ export function MessageComposer({
             </div>
           </div>
         ) : (
-        <>
-        {/* Toolbar. Collapsed: a slim single row (~40px) with a tap-to-expand
+          <>
+            {/* Toolbar. Collapsed: a slim single row (~40px) with a tap-to-expand
           affordance, the send button, and the expand chevron. Expanded on
           desktop: the full control row (flex-wrap as an overflow safety net).
           Expanded on mobile: only the essentials inline (attach, code mode,
           send) — everything else lives in the bottom overflow sheet. */}
-        <div
-          className={cn(
-            "flex items-center gap-1",
-            !composerCollapsed && "flex-wrap",
-          )}
-        >
-          {composerCollapsed ? (
-            <button
-              type="button"
-              data-testid="composer-expand-affordance"
-              onClick={expandComposer}
-              className="h-10 min-w-0 flex-1 truncate rounded-md px-2 text-left text-sm text-muted-foreground hover:bg-muted"
+            <div
+              className={cn(
+                "flex items-center gap-1",
+                !composerCollapsed && "flex-wrap",
+              )}
             >
-              {placeholder}
-            </button>
-          ) : (
-            <>
-              {/* Model picker + agent picker + reasoning effort — inline on
+              {composerCollapsed ? (
+                <button
+                  type="button"
+                  data-testid="composer-expand-affordance"
+                  onClick={expandComposer}
+                  className="h-10 min-w-0 flex-1 truncate rounded-md px-2 text-left text-sm text-muted-foreground hover:bg-muted"
+                >
+                  {placeholder}
+                </button>
+              ) : (
+                <>
+                  {/* Model picker + agent picker + reasoning effort — inline on
                 desktop, in the overflow sheet on mobile. The agent picker:
                 selecting a code agent reveals the repo/code tooling + UI (and
                 runs the turn in the sandbox); a chat agent / the default keeps
                 the plain composer. Renders nothing when the workspace has no
                 agents, so agent-less workspaces are unaffected. */}
-              {!isMobile && (
-                <>
-                  <ModelPicker
-                    value={model}
-                    onChange={setModel}
-                    modelConfig={modelConfig}
-                  />
-                  <AgentContextChip
-                    agents={availableAgents ?? []}
-                    repos={availableRepos ?? []}
-                    environments={availableEnvironments ?? []}
-                    defaultRepoKey={defaultRepoKey ?? null}
-                    defaultEnvId={defaultEnvId ?? null}
-                    defaultAgentId={defaultAgentId ?? null}
-                    onSetDefaultAgent={onSetDefaultAgent}
-                    selectedAgentId={selectedAgentId}
-                    selectedRepoKey={selectedRepoKey}
-                    selectedEnvId={selectedEnvId}
-                    onApply={applyAgentSelection}
-                    locked={selectionLocked}
-                  />
-                  {showEffortControl && effortSelect}
-                </>
-              )}
+                  {!isMobile && (
+                    <>
+                      <ModelPicker
+                        value={model}
+                        onChange={setModel}
+                        modelConfig={modelConfig}
+                      />
+                      <AgentContextChip
+                        agents={availableAgents ?? []}
+                        repos={availableRepos ?? []}
+                        environments={availableEnvironments ?? []}
+                        defaultRepoKey={defaultRepoKey ?? null}
+                        defaultEnvId={defaultEnvId ?? null}
+                        defaultAgentId={defaultAgentId ?? null}
+                        onSetDefaultAgent={onSetDefaultAgent}
+                        selectedAgentId={selectedAgentId}
+                        selectedRepoKey={selectedRepoKey}
+                        selectedEnvId={selectedEnvId}
+                        onApply={applyAgentSelection}
+                        locked={selectionLocked}
+                      />
+                      {showEffortControl && effortSelect}
+                    </>
+                  )}
 
-              {/* Attach image or video — opens the native file picker;
+                  {/* Attach image or video — opens the native file picker;
                 paste/drag-drop also work. Essential — always inline. */}
-              {canAttach ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  aria-label="Attach image or video"
-                  disabled={
-                    pending ||
-                    disabled ||
-                    visibleAttachments.length >= MAX_ATTACHMENTS
-                  }
-                  onClick={() => fileInputRef.current?.click()}
-                  className={cn("p-0", isMobile ? "h-11 w-11" : "h-8 w-8")}
-                >
-                  <Paperclip className="h-4 w-4" />
-                </Button>
-              ) : null}
+                  {canAttach ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      aria-label="Attach image or video"
+                      disabled={
+                        pending ||
+                        disabled ||
+                        visibleAttachments.length >= MAX_ATTACHMENTS
+                      }
+                      onClick={() => fileInputRef.current?.click()}
+                      className={cn("p-0", isMobile ? "h-11 w-11" : "h-8 w-8")}
+                    >
+                      <Paperclip className="h-4 w-4" />
+                    </Button>
+                  ) : null}
 
-              {/* Image / video generation toggles — inline on desktop, in the
+                  {/* Image / video generation toggles — inline on desktop, in the
                 overflow sheet on mobile. */}
-              {!isMobile && (
-                <>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    aria-label="Generate image"
-                    aria-pressed={model.generate === "image"}
-                    onClick={() => toggleGenerate("image")}
-                    className={cn(
-                      "h-8 w-8 p-0",
-                      model.generate === "image" &&
-                        "bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary",
-                    )}
-                  >
-                    <ImageIcon className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    aria-label="Generate video"
-                    aria-pressed={model.generate === "video"}
-                    onClick={() => toggleGenerate("video")}
-                    className={cn(
-                      "h-8 w-8 p-0",
-                      model.generate === "video" &&
-                        "bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary",
-                    )}
-                  >
-                    <Video className="h-4 w-4" />
-                  </Button>
-                </>
-              )}
+                  {!isMobile && (
+                    <>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        aria-label="Generate image"
+                        aria-pressed={model.generate === "image"}
+                        onClick={() => toggleGenerate("image")}
+                        className={cn(
+                          "h-8 w-8 p-0",
+                          model.generate === "image" &&
+                            "bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary",
+                        )}
+                      >
+                        <ImageIcon className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        aria-label="Generate video"
+                        aria-pressed={model.generate === "video"}
+                        onClick={() => toggleGenerate("video")}
+                        className={cn(
+                          "h-8 w-8 p-0",
+                          model.generate === "video" &&
+                            "bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary",
+                        )}
+                      >
+                        <Video className="h-4 w-4" />
+                      </Button>
+                    </>
+                  )}
 
-              {/* Code mode is governed SOLELY by the selected agent's identity
+                  {/* Code mode is governed SOLELY by the selected agent's identity
                 (a code agent turns it on and reveals the repo/environment
                 pickers below) — there is no manual toggle. Selecting a coding
                 agent is the deliberate act that enters the agentic coding flow. */}
 
-              {!isMobile && (
-                <>
-                  {/* MCP server activation picker — only when servers are available */}
-                  {(availableMcpServers?.length ?? 0) > 0 && (
-                    <McpServerPicker
-                      servers={availableMcpServers!}
-                      activeServerIds={activeServerIds}
-                      onActiveServerIdsChange={setActiveServerIds}
-                    />
-                  )}
+                  {!isMobile && (
+                    <>
+                      {/* MCP server activation picker — only when servers are available */}
+                      {(availableMcpServers?.length ?? 0) > 0 && (
+                        <McpServerPicker
+                          servers={availableMcpServers!}
+                          activeServerIds={activeServerIds}
+                          onActiveServerIdsChange={setActiveServerIds}
+                        />
+                      )}
 
-                  {/* Per-turn dollar budget — off by default. Every change is
+                      {/* Per-turn dollar budget — off by default. Every change is
                     re-clamped against workspace governance (OXA-2081) so a
                     "ceiling" can never be exceeded, even transiently, by a
                     member's own edit. */}
-                  {budgetControl}
+                      {budgetControl}
+                    </>
+                  )}
+
+                  {/* Mobile: overflow controls live in a bottom sheet. */}
+                  {isMobile && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      aria-label="More composer options"
+                      aria-expanded={overflowOpen}
+                      data-testid="composer-overflow-btn"
+                      onClick={() => setOverflowOpen(true)}
+                      className="h-11 w-11 p-0"
+                    >
+                      <SlidersHorizontal className="h-4 w-4" />
+                    </Button>
+                  )}
                 </>
               )}
+              <div className="ml-auto flex items-center gap-1.5">
+                {isStreaming && queue.length > 0 ? (
+                  <span className="text-xs tabular-nums text-muted-foreground">
+                    {queue.length} queued
+                  </span>
+                ) : null}
+                <Button
+                  type="submit"
+                  // Disabled while any attachment upload is still in flight — sending
+                  // now would resolve a publicId the server hasn't finished persisting.
+                  // Also disabled while code mode is on but repo/environment aren't
+                  // both selected yet (see codeGateBlocked).
+                  disabled={
+                    pending || disabled || uploadsInFlight || codeGateBlocked
+                  }
+                  size="sm"
+                  aria-label={
+                    isStreaming && pendingPromptBehavior === "interrupt"
+                      ? "Interrupt and send"
+                      : isStreaming
+                        ? "Queue message"
+                        : "Send message"
+                  }
+                  className={cn(isMobile && !composerCollapsed && "h-11")}
+                  style={
+                    !pending &&
+                    !disabled &&
+                    !uploadsInFlight &&
+                    !codeGateBlocked
+                      ? {
+                          background: "var(--primary)",
+                          border: "none",
+                          color: "var(--primary-foreground)",
+                        }
+                      : undefined
+                  }
+                >
+                  <Send className="h-3.5 w-3.5" />
+                  {pending
+                    ? "Sending…"
+                    : uploadsInFlight
+                      ? "Uploading…"
+                      : isStreaming && pendingPromptBehavior === "interrupt"
+                        ? "Interrupt"
+                        : "Send"}
+                </Button>
 
-              {/* Mobile: overflow controls live in a bottom sheet. */}
-              {isMobile && (
+                {/* Collapse / expand the whole composer — persists to localStorage. */}
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
-                  aria-label="More composer options"
-                  aria-expanded={overflowOpen}
-                  data-testid="composer-overflow-btn"
-                  onClick={() => setOverflowOpen(true)}
-                  className="h-11 w-11 p-0"
+                  aria-label={
+                    composerCollapsed ? "Expand composer" : "Collapse composer"
+                  }
+                  aria-expanded={!composerCollapsed}
+                  data-testid="composer-collapse-toggle"
+                  onClick={
+                    composerCollapsed ? expandComposer : collapseComposer
+                  }
+                  className={cn(
+                    "p-0",
+                    isMobile && !composerCollapsed ? "h-11 w-11" : "h-8 w-8",
+                  )}
                 >
-                  <SlidersHorizontal className="h-4 w-4" />
+                  {composerCollapsed ? (
+                    <ChevronUp className="h-4 w-4" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4" />
+                  )}
                 </Button>
-              )}
-            </>
-          )}
-          <div className="ml-auto flex items-center gap-1.5">
-            {isStreaming && queue.length > 0 ? (
-              <span className="text-xs tabular-nums text-muted-foreground">
-                {queue.length} queued
-              </span>
-            ) : null}
-            <Button
-              type="submit"
-              // Disabled while any attachment upload is still in flight — sending
-              // now would resolve a publicId the server hasn't finished persisting.
-              // Also disabled while code mode is on but repo/environment aren't
-              // both selected yet (see codeGateBlocked).
-              disabled={
-                pending || disabled || uploadsInFlight || codeGateBlocked
-              }
-              size="sm"
-              aria-label={
-                isStreaming && pendingPromptBehavior === "interrupt"
-                  ? "Interrupt and send"
-                  : isStreaming
-                    ? "Queue message"
-                    : "Send message"
-              }
-              className={cn(isMobile && !composerCollapsed && "h-11")}
-              style={
-                !pending && !disabled && !uploadsInFlight && !codeGateBlocked
-                  ? {
-                      background: "var(--primary)",
-                      border: "none",
-                      color: "var(--primary-foreground)",
-                    }
-                  : undefined
-              }
-            >
-              <Send className="h-3.5 w-3.5" />
-              {pending
-                ? "Sending…"
-                : uploadsInFlight
-                  ? "Uploading…"
-                  : isStreaming && pendingPromptBehavior === "interrupt"
-                    ? "Interrupt"
-                    : "Send"}
-            </Button>
-
-            {/* Collapse / expand the whole composer — persists to localStorage. */}
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              aria-label={
-                composerCollapsed ? "Expand composer" : "Collapse composer"
-              }
-              aria-expanded={!composerCollapsed}
-              data-testid="composer-collapse-toggle"
-              onClick={composerCollapsed ? expandComposer : collapseComposer}
-              className={cn(
-                "p-0",
-                isMobile && !composerCollapsed ? "h-11 w-11" : "h-8 w-8",
-              )}
-            >
-              {composerCollapsed ? (
-                <ChevronUp className="h-4 w-4" />
-              ) : (
-                <ChevronDown className="h-4 w-4" />
-              )}
-            </Button>
-          </div>
-        </div>
-        </>
+              </div>
+            </div>
+          </>
         )}
       </form>
 

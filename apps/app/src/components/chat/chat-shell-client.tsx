@@ -442,6 +442,19 @@ export function ChatShellClient({
   // chrome; mobile without the flag keeps the legacy mobile chrome).
   const isMobileViewport = useIsMobile();
   const v2MobileChrome = chatUxV2 && isMobileViewport;
+
+  // v2 mobile: the chat screen owns its own slim header, so the app shell's
+  // top bar (org/workspace switchers, wallet, bell) and the ConversationNav
+  // mobile trigger hide via CSS keyed on this body attribute (see
+  // globals.css). Set/cleared on mount so client-side navigation away from
+  // the chat restores the shell chrome.
+  React.useEffect(() => {
+    if (!v2MobileChrome) return;
+    document.body.dataset.chatUxV2Mobile = "1";
+    return () => {
+      delete document.body.dataset.chatUxV2Mobile;
+    };
+  }, [v2MobileChrome]);
   const setStreamErrorRef = useLatestRef(setStreamError);
 
   // Latest conversationId, read inside the send callback (whose deps don't
@@ -1410,110 +1423,110 @@ export function ChatShellClient({
             would scroll away with the messages, and the old `fixed` placement
             floated the pill over the composer's Send button on phones. */}
           <div className="relative min-h-0 flex-1">
-          <div
-            ref={scrollContainerRef}
-            // `relative` is load-bearing: it makes this scroll container the
-            // containing block for its absolutely-positioned descendants (e.g. the
-            // `.sr-only` labels inside message-footer icon buttons). Without it
-            // those abs elements anchor to the initial containing block, escape this
-            // container's `overflow` clipping, and inflate the document height —
-            // letting the whole page scroll past the composer on mobile and desktop.
-            className="relative h-full overflow-y-auto pr-2"
-            onScroll={handleScroll}
-          >
-            {messages.length === 0 && !hasLiveContent ? (
-              <div className="flex h-full flex-col items-center justify-center gap-4 text-center text-sm text-muted-foreground">
-                {/* Agent gallery hero — pick who to chat with before the first turn.
+            <div
+              ref={scrollContainerRef}
+              // `relative` is load-bearing: it makes this scroll container the
+              // containing block for its absolutely-positioned descendants (e.g. the
+              // `.sr-only` labels inside message-footer icon buttons). Without it
+              // those abs elements anchor to the initial containing block, escape this
+              // container's `overflow` clipping, and inflate the document height —
+              // letting the whole page scroll past the composer on mobile and desktop.
+              className="relative h-full overflow-y-auto pr-2"
+              onScroll={handleScroll}
+            >
+              {messages.length === 0 && !hasLiveContent ? (
+                <div className="flex h-full flex-col items-center justify-center gap-4 text-center text-sm text-muted-foreground">
+                  {/* Agent gallery hero — pick who to chat with before the first turn.
                 Renders nothing for a workspace with no agents, which keeps the
                 plain "Start a conversation" empty state. */}
-                <AgentGallery
-                  agents={availableAgents ?? []}
-                  repos={availableRepos ?? []}
-                  environments={availableEnvironments ?? []}
-                  defaultRepoKey={defaultRepoKey}
-                  defaultEnvId={defaultEnvId}
-                  defaultAgentId={currentDefaultAgentId}
-                  onSetDefaultAgent={
-                    setDefaultAgentAction ? handleSetDefaultAgent : undefined
-                  }
-                />
-                {(availableAgents?.length ?? 0) === 0 ? (
-                  <div>
-                    <p className="font-medium">Start a conversation.</p>
-                    <p>Send a message below to begin.</p>
-                  </div>
-                ) : null}
-                {/* Suggested chips in empty state */}
-                <SuggestedPromptChips
-                  action={wrappedSendAction}
-                  conversationId={conversationId}
-                  parentMessageId={activeLeafMessageId}
-                />
-              </div>
-            ) : (
-              <div className="flex flex-col gap-4">
-                <MessageTree
-                  messages={messages}
-                  callbacks={callbacks}
-                  orgSlug={orgSlug}
-                  workspaceSlug={workspaceSlug}
-                />
-                {/* Live turn: the ordered chain of thought/action, rendered as a
+                  <AgentGallery
+                    agents={availableAgents ?? []}
+                    repos={availableRepos ?? []}
+                    environments={availableEnvironments ?? []}
+                    defaultRepoKey={defaultRepoKey}
+                    defaultEnvId={defaultEnvId}
+                    defaultAgentId={currentDefaultAgentId}
+                    onSetDefaultAgent={
+                      setDefaultAgentAction ? handleSetDefaultAgent : undefined
+                    }
+                  />
+                  {(availableAgents?.length ?? 0) === 0 ? (
+                    <div>
+                      <p className="font-medium">Start a conversation.</p>
+                      <p>Send a message below to begin.</p>
+                    </div>
+                  ) : null}
+                  {/* Suggested chips in empty state */}
+                  <SuggestedPromptChips
+                    action={wrappedSendAction}
+                    conversationId={conversationId}
+                    parentMessageId={activeLeafMessageId}
+                  />
+                </div>
+              ) : (
+                <div className="flex flex-col gap-4">
+                  <MessageTree
+                    messages={messages}
+                    callbacks={callbacks}
+                    orgSlug={orgSlug}
+                    workspaceSlug={workspaceSlug}
+                  />
+                  {/* Live turn: the ordered chain of thought/action, rendered as a
                 connected timeline before the RSC revalidate replaces it with
                 the persisted message. */}
-                {hasLiveContent ? (
-                  <div data-live-turn>
-                    <ActivityTimeline>
-                      {/* Show the thinking bubble when streaming has started but no
+                  {hasLiveContent ? (
+                    <div data-live-turn>
+                      <ActivityTimeline>
+                        {/* Show the thinking bubble when streaming has started but no
                       timeline entries have arrived yet — covers the gap between
                       the user submitting and the first SSE event landing. */}
-                      {isStreaming && timelineEntries.length === 0 ? (
-                        <TimelineItem
-                          key="thinking-bubble"
-                          tone="thinking"
-                          isActive={true}
-                          isLast={true}
-                        >
-                          <ThinkingBubble />
-                        </TimelineItem>
+                        {isStreaming && timelineEntries.length === 0 ? (
+                          <TimelineItem
+                            key="thinking-bubble"
+                            tone="thinking"
+                            isActive={true}
+                            isLast={true}
+                          >
+                            <ThinkingBubble />
+                          </TimelineItem>
+                        ) : null}
+                        {timelineEntries.map((entry, i) => (
+                          <TimelineItem
+                            key={entry.key}
+                            // Anchor id for the coding-trace-panel rail's deep links
+                            // (`#turn-entry-<key>`) — see chat-component-registry's
+                            // sibling `coding-trace-panel.tsx`.
+                            id={`turn-entry-${entry.key}`}
+                            tone={entry.rendered.tone}
+                            // The pulsing ring only animates an in-flight node while the
+                            // turn is actually streaming.
+                            isActive={entry.rendered.active && isStreaming}
+                            isLast={
+                              i === timelineEntries.length - 1 &&
+                              turnUsage === undefined
+                            }
+                          >
+                            {entry.rendered.node}
+                          </TimelineItem>
+                        ))}
+                      </ActivityTimeline>
+                      {turnUsage !== undefined ? (
+                        <div id="turn-result">
+                          <MessageFooter
+                            text={Object.values(textSegments)
+                              .map((s) => s.text)
+                              .join("")}
+                            usage={turnUsage}
+                            orgSlug={orgSlug}
+                            workspaceSlug={workspaceSlug}
+                          />
+                        </div>
                       ) : null}
-                      {timelineEntries.map((entry, i) => (
-                        <TimelineItem
-                          key={entry.key}
-                          // Anchor id for the coding-trace-panel rail's deep links
-                          // (`#turn-entry-<key>`) — see chat-component-registry's
-                          // sibling `coding-trace-panel.tsx`.
-                          id={`turn-entry-${entry.key}`}
-                          tone={entry.rendered.tone}
-                          // The pulsing ring only animates an in-flight node while the
-                          // turn is actually streaming.
-                          isActive={entry.rendered.active && isStreaming}
-                          isLast={
-                            i === timelineEntries.length - 1 &&
-                            turnUsage === undefined
-                          }
-                        >
-                          {entry.rendered.node}
-                        </TimelineItem>
-                      ))}
-                    </ActivityTimeline>
-                    {turnUsage !== undefined ? (
-                      <div id="turn-result">
-                        <MessageFooter
-                          text={Object.values(textSegments)
-                            .map((s) => s.text)
-                            .join("")}
-                          usage={turnUsage}
-                          orgSlug={orgSlug}
-                          workspaceSlug={workspaceSlug}
-                        />
-                      </div>
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
-            )}
-          </div>
+                    </div>
+                  ) : null}
+                </div>
+              )}
+            </div>
             {/* Below lg the trace rail lives in a bottom sheet (ADR-026 mobile
             parity); this floating trigger sits inside the message viewport —
             always above the composer, never over its Send/collapse controls.
@@ -1568,7 +1581,11 @@ export function ChatShellClient({
           composer's own wrapper — once the bottom nav auto-hides (see the
           scroll/focus effects above) the composer can end up flush with the
           bottom edge of the screen. */}
-          <div className={v2MobileChrome ? "pb-[env(safe-area-inset-bottom)]" : undefined}>
+          <div
+            className={
+              v2MobileChrome ? "pb-[env(safe-area-inset-bottom)]" : undefined
+            }
+          >
             <MessageComposer
               conversationId={conversationId}
               parentMessageId={activeLeafMessageId}
@@ -1757,7 +1774,8 @@ function MobileSessionChrome({
 
   const cached = selectedRepo ? branchCache[selectedRepo.key] : undefined;
   const branches = cached ? cached.branches : null;
-  const defaultBranch = cached?.defaultBranch ?? selectedRepo?.defaultBranch ?? null;
+  const defaultBranch =
+    cached?.defaultBranch ?? selectedRepo?.defaultBranch ?? null;
 
   return (
     <>
@@ -1768,6 +1786,9 @@ function MobileSessionChrome({
         isStreaming={isStreaming}
         onOpenSettings={() => onSessionSettingsOpenChange(true)}
         onOpenActivity={onOpenActivity}
+        onOpenConversations={() =>
+          window.dispatchEvent(new CustomEvent("oxagen:open-conversations"))
+        }
         notificationsSlot={<NotificationsBell />}
       />
       <SessionSettingsDrawer

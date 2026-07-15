@@ -145,3 +145,17 @@ html[data-density="spacious"] {
     transform: scale(1.04);
   }
 }
+
+/* ── chat_ux_v2 mobile chat chrome ─────────────────────────────────────── */
+/*
+ * While a v2 mobile chat surface is mounted (chat-shell-client sets the body
+ * attribute below md), the chat screen owns its own slim header — so the app
+ * shell's top bar and the ConversationNav mobile trigger hide. Client-side
+ * navigation away from the chat removes the attribute and restores both.
+ */
+@media (max-width: 767px) {
+  body[data-chat-ux-v2-mobile="1"] [data-shell-topbar],
+  body[data-chat-ux-v2-mobile="1"] [data-conversation-nav-trigger] {
+    display: none;
+  }
+}

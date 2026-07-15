@@ -302,6 +302,29 @@ describe("MessageComposer — chat_ux_v2 mobile row", () => {
     ).toBeInTheDocument();
   });
 
+  it("disables send while the input is empty — no native required validation", () => {
+    mockViewport.isMobile = true;
+    renderWithSession();
+    const textarea = screen.getByPlaceholderText("Send a message…");
+    // The spec bans the browser "Please fill out this field." tooltip: the
+    // field must NOT be `required`; emptiness gates the button instead.
+    expect(textarea).not.toBeRequired();
+    const send = screen.getByRole("button", { name: "Send message" });
+    expect(send).toBeDisabled();
+    fireEvent.change(textarea, { target: { value: "hello" } });
+    expect(send).not.toBeDisabled();
+    fireEvent.change(textarea, { target: { value: "   " } });
+    expect(send).toBeDisabled();
+  });
+
+  it("keeps the at-rest row within the 64px budget paddings (py-2 on the form)", () => {
+    mockViewport.isMobile = true;
+    renderWithSession();
+    const row = screen.getByTestId("composer-v2-mobile-row");
+    const form = row.closest("form");
+    expect(form?.className).toContain("py-2");
+  });
+
   it("calls onOpenSessionSettings when the cog button is tapped", () => {
     mockViewport.isMobile = true;
     const onOpenSessionSettings = vi.fn();
