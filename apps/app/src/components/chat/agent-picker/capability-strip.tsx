@@ -15,6 +15,9 @@ import type { AgentToolRef } from "./agent-picker-types";
 /** Max named chips shown before collapsing the rest into a "+N" overflow chip. */
 const MAX_NAMED_CHIPS = 4;
 
+/** chat_ux_v2 cap — a tighter row asks for fewer named chips than the legacy strip. */
+export const MAX_NAMED_CHIPS_V2 = 3;
+
 type ToolKind = AgentToolRef["type"];
 
 // Display order — skills and MCP servers are the most meaningful to a human
@@ -102,17 +105,50 @@ function orderedRefs(toolRefs: readonly AgentToolRef[]): AgentToolRef[] {
   );
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const ULID_RE = /^[0-9A-Z]{26}$/;
+
+/**
+ * True when a raw ref reads as an opaque id (UUID, ULID, or a long
+ * separator-free alphanumeric token like a nanoid) rather than a
+ * human-readable slug. A chip built from one of these would leak a raw
+ * id/UUID to the user, so chat_ux_v2 folds it into the overflow count
+ * instead of ever rendering it as a named chip (see `CapabilityStrip`).
+ */
+export function looksLikeOpaqueId(ref: string): boolean {
+  const tail = ref.split(/[/.:]/).filter(Boolean).pop() ?? ref;
+  if (UUID_RE.test(tail) || ULID_RE.test(tail)) return true;
+  return (
+    tail.length >= 16 &&
+    !/[-_\s]/.test(tail) &&
+    /[0-9]/.test(tail) &&
+    /[a-zA-Z]/.test(tail)
+  );
+}
+
 export interface CapabilityStripProps {
   toolRefs: AgentToolRef[];
+  /**
+   * chat_ux_v2: caps named chips at `MAX_NAMED_CHIPS_V2` (vs. the legacy
+   * `MAX_NAMED_CHIPS`), never surfaces a chip that looks like a raw id/UUID
+   * (folded into the overflow count instead), and labels the overflow chip
+   * "+N skills" rather than a bare "+N". Defaults to false — legacy render
+   * stays byte-identical.
+   */
+  v2?: boolean;
   className?: string;
 }
 
-export function CapabilityStrip({ toolRefs, className }: CapabilityStripProps) {
+export function CapabilityStrip({ toolRefs, v2 = false, className }: CapabilityStripProps) {
   if (toolRefs.length === 0) return null;
 
   const summary = summarizeToolRefs(toolRefs);
   const ordered = orderedRefs(toolRefs);
-  const named = ordered.slice(0, MAX_NAMED_CHIPS);
+  const maxNamed = v2 ? MAX_NAMED_CHIPS_V2 : MAX_NAMED_CHIPS;
+  // v2 never lets an opaque-id-looking ref become a named chip — it's
+  // excluded from the eligible pool up front and simply counted in overflow.
+  const eligible = v2 ? ordered.filter((t) => !looksLikeOpaqueId(t.ref)) : ordered;
+  const named = eligible.slice(0, maxNamed);
   const overflow = ordered.length - named.length;
 
   return (
@@ -136,6 +172,7 @@ export function CapabilityStrip({ toolRefs, className }: CapabilityStripProps) {
       {overflow > 0 && (
         <span className="inline-flex items-center rounded border border-border bg-muted/50 px-1.5 py-0.5 text-[10px] leading-none text-muted-foreground">
           <Puzzle className="mr-1 size-3 shrink-0" />+{overflow}
+          {v2 ? " skills" : ""}
         </span>
       )}
     </div>

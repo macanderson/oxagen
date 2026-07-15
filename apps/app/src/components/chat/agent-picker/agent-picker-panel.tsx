@@ -15,6 +15,10 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { SearchInput } from "@/components/ui/search-input";
 import { AgentAvatar } from "./agent-avatar";
+import { AgentInfoButton } from "./agent-info-button";
+import { FOCUS_COMPOSER_EVENT } from "./focus-composer-event";
+import { pushRecentAgentId, readRecentAgentIds } from "../session/recent-agents";
+import { useChatSessionContext } from "../session/session-store";
 import { RepoSelector, type RepoOption } from "../repo-selector";
 import {
   EnvironmentSelector,
@@ -31,6 +35,16 @@ import type { AgentSelectionApply } from "./chat-selection-context";
  * one-line description, and a capability strip; a star per row sets the user's
  * default. Choosing a code agent slides in an inline repo + environment setup
  * step; choosing a chat agent (or the Default assistant) applies immediately.
+ *
+ * chat_ux_v2 (`useChatSessionContext() !== null`) changes three things, all
+ * gated on the same `v2` boolean: (1) a "Recent" row of up to 5 avatars for
+ * quick re-pick, persisted per workspace (`session/recent-agents.ts`); (2)
+ * EVERY pick — a Recent avatar or a list row, code agent or chat agent —
+ * applies immediately (no repo/env setup step: a code agent's session is
+ * prefilled from its remembered code context, see `session-store.tsx`'s
+ * agent-switch overlay) and focuses the composer (`FOCUS_COMPOSER_EVENT`);
+ * (3) each row gets an "About {name}" info affordance. Flag off keeps every
+ * existing behavior byte-identical.
  */
 
 export interface AgentPickerPanelProps {
@@ -55,6 +69,8 @@ export interface AgentPickerPanelProps {
   /** Called after a selection is applied — popover closes / gallery collapses. */
   onDismiss?: () => void;
   variant: "popover" | "gallery";
+  /** Scopes the v2 "Recent" row's persisted recency to this workspace. */
+  workspaceSlug?: string;
   className?: string;
 }
 
@@ -113,10 +129,26 @@ export function AgentPickerPanel({
   onApply,
   onDismiss,
   variant,
+  workspaceSlug,
   className,
 }: AgentPickerPanelProps) {
   const reduce = useReducedMotion();
   const [query, setQuery] = React.useState("");
+  // chat_ux_v2: the unified session provider is mounted — see the module doc
+  // for the three behavior changes this flips on.
+  const v2 = useChatSessionContext() !== null;
+  const [recentIds, setRecentIds] = React.useState<string[]>([]);
+  React.useEffect(() => {
+    if (v2) setRecentIds(readRecentAgentIds(workspaceSlug));
+  }, [v2, workspaceSlug]);
+  const recentAgents = React.useMemo(
+    () =>
+      recentIds
+        .map((id) => agents.find((a) => a.agentId === id))
+        .filter((a): a is AgentOption => a !== undefined)
+        .slice(0, 5),
+    [recentIds, agents],
+  );
   // Inline code-agent setup step: when set, the repo/env sub-view is shown for
   // the pending agent instead of the list.
   const [setupAgent, setSetupAgent] = React.useState<AgentOption | null>(null);
@@ -147,6 +179,20 @@ export function AgentPickerPanel({
 
   const applyAgent = React.useCallback(
     (agent: AgentOption | null) => {
+      // v2: every pick applies immediately — no embedded repo/env setup step.
+      // A code agent's session prefills from its remembered code context (the
+      // session store's agent-switch overlay); the rail/drawer is the adjust
+      // surface. Record recency and hand focus to the composer.
+      if (v2) {
+        onApply({ agentId: agent?.agentId ?? null });
+        if (agent) {
+          pushRecentAgentId(workspaceSlug, agent.agentId);
+          setRecentIds(readRecentAgentIds(workspaceSlug));
+        }
+        window.dispatchEvent(new CustomEvent(FOCUS_COMPOSER_EVENT));
+        onDismiss?.();
+        return;
+      }
       if (agent && agent.isCode) {
         // Prefill the setup step from the live selection, else workspace defaults.
         setSetupAgent(agent);
@@ -158,6 +204,8 @@ export function AgentPickerPanel({
       onDismiss?.();
     },
     [
+      v2,
+      workspaceSlug,
       onApply,
       onDismiss,
       selectedRepoKey,
@@ -304,6 +352,33 @@ export function AgentPickerPanel({
                 }}
               />
             </div>
+            {v2 && recentAgents.length > 0 ? (
+              <div className="border-b border-border px-2.5 py-2" data-testid="recent-agents-row">
+                <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">
+                  Recent
+                </p>
+                <div className="flex items-center gap-2">
+                  {recentAgents.map((agent) => (
+                    <button
+                      key={agent.agentId}
+                      type="button"
+                      aria-label={`Chat with ${agent.name}`}
+                      title={agent.name}
+                      onClick={() => applyAgent(agent)}
+                      className="rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <AgentAvatar
+                        avatarUrl={agent.avatarUrl}
+                        name={agent.name}
+                        slug={agent.slug}
+                        size="md"
+                        shape="square"
+                      />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
             <motion.div
               role="listbox"
               aria-label="Agents"
@@ -359,6 +434,14 @@ export function AgentPickerPanel({
                             onSetDefaultAgent(isDefault ? null : agent.agentId)
                         : undefined
                     }
+                    infoSlot={
+                      v2 ? (
+                        <AgentInfoButton
+                          agent={agent}
+                          onChat={() => applyAgent(agent)}
+                        />
+                      ) : undefined
+                    }
                   />
                 );
               })}
@@ -388,6 +471,8 @@ interface AgentRowProps {
   isDefault?: boolean;
   onSelect: () => void;
   onToggleDefault?: () => void;
+  /** v2 "About {name}" affordance rendered after the row body. */
+  infoSlot?: React.ReactNode;
 }
 
 const AgentRow = React.forwardRef<HTMLButtonElement, AgentRowProps>(
@@ -405,6 +490,7 @@ const AgentRow = React.forwardRef<HTMLButtonElement, AgentRowProps>(
       isDefault,
       onSelect,
       onToggleDefault,
+      infoSlot,
     },
     ref,
   ) {
@@ -450,6 +536,7 @@ const AgentRow = React.forwardRef<HTMLButtonElement, AgentRowProps>(
             ) : null}
           </span>
         </button>
+        {infoSlot}
         {onToggleDefault ? (
           <button
             type="button"

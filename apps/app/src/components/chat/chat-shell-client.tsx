@@ -40,7 +40,8 @@ import type { EnvironmentOption } from "./environment-selector";
 import type { AgentOption } from "./agent-picker/agent-picker-types";
 import type { StoredCodeBinding } from "@/app/api/v1/chat/stream/code-binding";
 import { ChatSelectionProvider } from "./agent-picker/chat-selection-context";
-import { ChatSessionProvider } from "./session/session-store";
+import { ChatSessionProvider, useChatSession } from "./session/session-store";
+import { AgentAvatar } from "./agent-picker/agent-avatar";
 import type { SessionSeed } from "./session/session-state";
 import { ChatHeaderMobile } from "./chat-header-mobile";
 import { ChatHeaderDesktop } from "./chat-header-desktop";
@@ -1478,11 +1479,7 @@ export function ChatShellClient({
               repos={availableRepos ?? []}
               environments={availableEnvironments ?? []}
               isStreaming={isStreaming}
-              onFocusSessionPanel={
-                v2MidWidth
-                  ? () => setSessionSettingsOpen(true)
-                  : handleFocusSessionPanel
-              }
+              onFocusSessionPanel={handleFocusSessionPanel}
             />
           ) : null}
 
@@ -1518,32 +1515,61 @@ export function ChatShellClient({
             >
               {messages.length === 0 && !hasLiveContent ? (
                 <div className="flex h-full flex-col items-center justify-center gap-4 text-center text-sm text-muted-foreground">
-                  {/* Agent gallery hero — pick who to chat with before the first turn.
-                Renders nothing for a workspace with no agents, which keeps the
-                plain "Start a conversation" empty state. */}
-                  <AgentGallery
-                    agents={availableAgents ?? []}
-                    repos={availableRepos ?? []}
-                    environments={availableEnvironments ?? []}
-                    defaultRepoKey={defaultRepoKey}
-                    defaultEnvId={defaultEnvId}
-                    defaultAgentId={currentDefaultAgentId}
-                    onSetDefaultAgent={
-                      setDefaultAgentAction ? handleSetDefaultAgent : undefined
-                    }
-                  />
+                  {/* v2 mobile with an agent already picked: a focused empty
+                state — centered avatar + name + description; the starter
+                prompts dock above the composer (below). Everywhere else the
+                gallery hero renders as before. V2MobileEmptyState resolves
+                the agent from the session store (it renders inside the
+                provider) and falls back to the gallery when none is picked. */}
+                  {v2MobileChrome ? (
+                    <V2MobileEmptyState
+                      agents={availableAgents ?? []}
+                      gallery={
+                        <AgentGallery
+                          agents={availableAgents ?? []}
+                          repos={availableRepos ?? []}
+                          environments={availableEnvironments ?? []}
+                          defaultRepoKey={defaultRepoKey}
+                          defaultEnvId={defaultEnvId}
+                          defaultAgentId={currentDefaultAgentId}
+                          onSetDefaultAgent={
+                            setDefaultAgentAction
+                              ? handleSetDefaultAgent
+                              : undefined
+                          }
+                          workspaceSlug={workspaceSlug}
+                        />
+                      }
+                    />
+                  ) : (
+                    <AgentGallery
+                      agents={availableAgents ?? []}
+                      repos={availableRepos ?? []}
+                      environments={availableEnvironments ?? []}
+                      defaultRepoKey={defaultRepoKey}
+                      defaultEnvId={defaultEnvId}
+                      defaultAgentId={currentDefaultAgentId}
+                      onSetDefaultAgent={
+                        setDefaultAgentAction ? handleSetDefaultAgent : undefined
+                      }
+                      workspaceSlug={workspaceSlug}
+                    />
+                  )}
                   {(availableAgents?.length ?? 0) === 0 ? (
                     <div>
                       <p className="font-medium">Start a conversation.</p>
                       <p>Send a message below to begin.</p>
                     </div>
                   ) : null}
-                  {/* Suggested chips in empty state */}
-                  <SuggestedPromptChips
-                    action={wrappedSendAction}
-                    conversationId={conversationId}
-                    parentMessageId={activeLeafMessageId}
-                  />
+                  {/* Suggested chips inside the centered empty state — legacy
+                only; v2 docks them directly above the composer instead. */}
+                  {!chatUxV2 ? (
+                    <SuggestedPromptChips
+                      action={wrappedSendAction}
+                      conversationId={conversationId}
+                      parentMessageId={activeLeafMessageId}
+                    />
+                  ) : null}
                 </div>
               ) : (
                 <div className="flex flex-col gap-4">
@@ -1633,9 +1659,12 @@ export function ChatShellClient({
               </button>
             ) : null}
           </div>
-          {/* Suggested prompt chips — shown above the composer once there are messages
-          (empty state renders its own chips above; this avoids duplication). */}
-          {messages.length > 0 || hasLiveContent ? (
+          {/* Suggested prompt chips. Legacy: shown above the composer once
+          there are messages (the empty state renders its own centered set).
+          v2 INVERTS this: suggestions exist ONLY in the empty state, docked
+          directly above the composer, left-aligned, at most 3, sentence case
+          — and disappear permanently after the first user message. */}
+          {!chatUxV2 && (messages.length > 0 || hasLiveContent) ? (
             <SuggestedPromptChips
               action={wrappedSendAction}
               conversationId={conversationId}
@@ -1643,6 +1672,17 @@ export function ChatShellClient({
               suggestions={suggestedPrompts}
               conversationHistory={conversationHistory}
               className="justify-center"
+            />
+          ) : null}
+          {chatUxV2 && messages.length === 0 && !hasLiveContent ? (
+            <SuggestedPromptChips
+              action={wrappedSendAction}
+              conversationId={conversationId}
+              parentMessageId={activeLeafMessageId}
+              sentenceCase
+              maxPrompts={3}
+              stacked={v2MobileChrome}
+              align={v2MobileChrome ? "center" : "start"}
             />
           ) : null}
 
@@ -1842,6 +1882,46 @@ export function ChatShellClient({
 }
 
 /**
+ * V2MobileEmptyState — the focused mobile empty state once an agent is
+ * picked: centered avatar + name + one-line description (the starter prompts
+ * dock above the composer, outside this block). Falls back to the provided
+ * gallery while no agent is selected. Rendered INSIDE ChatSessionProvider so
+ * it can resolve the picked agent from the session store.
+ */
+function V2MobileEmptyState({
+  agents,
+  gallery,
+}: {
+  agents: AgentOption[];
+  gallery: React.ReactNode;
+}) {
+  const { state } = useChatSession();
+  const agent = state.agentId
+    ? (agents.find((a) => a.agentId === state.agentId) ?? null)
+    : null;
+  if (!agent) return <>{gallery}</>;
+  const description = agent.summary ?? agent.description;
+  return (
+    <div
+      className="flex flex-col items-center gap-2 px-6"
+      data-testid="v2-mobile-empty-state"
+    >
+      <AgentAvatar
+        avatarUrl={agent.avatarUrl}
+        name={agent.name}
+        slug={agent.slug}
+        size="lg"
+        shape="square"
+      />
+      <p className="text-base font-semibold text-foreground">{agent.name}</p>
+      {description ? (
+        <p className="line-clamp-2 text-sm">{description}</p>
+      ) : null}
+    </div>
+  );
+}
+
+/**
  * MobileSessionChrome — the v2 mobile header + session-settings drawer,
  * rendered as a child of `ChatSessionProvider` (so `useChatSession()` always
  * resolves) whenever `v2MobileChrome` is true. Branch-list fetch/caching for
@@ -1877,45 +1957,6 @@ function MobileSessionChrome({
   const router = useRouter();
   const { branches, branchesLoading, onLoadBranches, defaultBranch } =
     useSessionSettingsData({ repos, orgSlug, workspaceSlug });
-  const { state } = useChatSession();
-  const selectedRepo = state.repoKey
-    ? (repos.find((r) => r.key === state.repoKey) ?? null)
-    : null;
-
-  const [branchCache, setBranchCache] = React.useState<
-    Record<string, { branches: string[]; defaultBranch: string | null }>
-  >({});
-  const [branchesLoading, setBranchesLoading] = React.useState(false);
-  const loadingRepoKeyRef = React.useRef<string | null>(null);
-
-  const handleLoadBranches = React.useCallback(() => {
-    if (!selectedRepo) return;
-    if (branchCache[selectedRepo.key]) return; // cached — no refetch
-    if (loadingRepoKeyRef.current === selectedRepo.key) return; // in flight
-    loadingRepoKeyRef.current = selectedRepo.key;
-    setBranchesLoading(true);
-    void listRepoBranchesAction(
-      { orgSlug, workspaceSlug },
-      { owner: selectedRepo.owner, repo: selectedRepo.name },
-    ).then((result) => {
-      loadingRepoKeyRef.current = null;
-      setBranchesLoading(false);
-      if ("error" in result) return;
-      setBranchCache((prev) => ({
-        ...prev,
-        [selectedRepo.key]: {
-          branches: result.branches.map((b) => b.name),
-          defaultBranch: result.defaultBranch,
-        },
-      }));
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- branchCache is read for its CURRENT snapshot to skip a refetch; including it would re-create this callback (and re-arm the in-flight guard) on every cache write
-  }, [selectedRepo, orgSlug, workspaceSlug]);
-
-  const cached = selectedRepo ? branchCache[selectedRepo.key] : undefined;
-  const branches = cached ? cached.branches : null;
-  const defaultBranch =
-    cached?.defaultBranch ?? selectedRepo?.defaultBranch ?? null;
 
   return (
     <>

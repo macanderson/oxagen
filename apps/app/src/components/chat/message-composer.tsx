@@ -43,6 +43,7 @@ import type { McpServerSummary } from "./mcp-types";
 import { McpServerPicker } from "./mcp-server-picker";
 import { BudgetControl } from "./budget-control";
 import { useSessionModelState } from "./session/session-bridges";
+import { FOCUS_COMPOSER_EVENT } from "./agent-picker/focus-composer-event";
 import { useChatSessionContext } from "./session/session-store";
 import { sessionSelectionIssues } from "./session/session-state";
 import { ComposerContextControls } from "./composer-context-controls";
@@ -600,8 +601,24 @@ export function MessageComposer({
   // session provider) renders byte-identical to before. The hook runs
   // unconditionally per rules-of-hooks; only the booleans below branch on it.
   const chatSession = useChatSessionContext();
-  const v2Mobile = isMobile && chatSession !== null;
-  const v2Desktop = !isMobile && chatSession !== null;
+  const v2Active = chatSession !== null;
+  const v2Mobile = isMobile && v2Active;
+  const v2Desktop = !isMobile && v2Active;
+
+  // v2: the agent picker hands focus to the composer after a pick (see
+  // agent-picker/focus-composer-event.ts) so "pick → type" is seamless.
+  React.useEffect(() => {
+    if (!v2Active) return;
+    const focus = () => {
+      (
+        formRef.current?.elements.namedItem(
+          "content",
+        ) as HTMLTextAreaElement | null
+      )?.focus();
+    };
+    window.addEventListener(FOCUS_COMPOSER_EVENT, focus);
+    return () => window.removeEventListener(FOCUS_COMPOSER_EVENT, focus);
+  }, [v2Active]);
   const v2Condensed = v2Mobile || v2Desktop;
   // The collapsed-composer preference never applies in the v2 condensed row:
   // there is no toggle to un-collapse it there (the button is hidden), and the
@@ -1247,14 +1264,18 @@ export function MessageComposer({
   const showEffortControl =
     model.generate === null && supportsReasoning(resolvedTextModel);
 
-  // Placeholder text varies by media mode.
+  // Placeholder text varies by media mode; in v2 a selected agent names the
+  // recipient ("Message Software Architect…") so the pick → type flow reads
+  // as addressing someone.
   const placeholder = disabled
     ? (disabledReason ?? "Composer paused.")
     : model.generate === "image"
       ? "Describe the image you want…"
       : model.generate === "video"
         ? "Describe the video you want…"
-        : "Send a message…";
+        : v2Active && selectedAgent
+          ? `Message ${selectedAgent.name}…`
+          : "Send a message…";
 
   function toggleGenerate(kind: "image" | "video") {
     if (model.generate === kind) {

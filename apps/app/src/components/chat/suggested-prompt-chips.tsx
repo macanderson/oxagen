@@ -15,6 +15,7 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 import { useSuggestedPrompts } from "@/lib/page-context/suggested-prompts";
+import { toSentenceCase } from "@/lib/to-sentence-case";
 import type { ConversationMessageSummary } from "@/lib/page-context/suggested-prompts";
 import type { ComposerAction } from "./message-composer";
 
@@ -64,6 +65,14 @@ export interface SuggestedPromptChipsProps {
    * Additional className applied to the outer <div> container.
    */
   className?: string;
+  /** chat_ux_v2 copy pass: render chip labels in sentence case. */
+  sentenceCase?: boolean;
+  /** Cap the number of rendered chips (v2 empty state shows at most 3). */
+  maxPrompts?: number;
+  /** v2 mobile empty state: full-width, vertically stacked chips. */
+  stacked?: boolean;
+  /** Horizontal alignment of the chip row (v2 desktop docks left). */
+  align?: "center" | "start";
 }
 
 /**
@@ -90,13 +99,24 @@ export function SuggestedPromptChips({
   inputHasContent = false,
   conversationHistory,
   suggestions,
+  sentenceCase = false,
+  maxPrompts,
+  stacked = false,
+  align = "center",
   className,
 }: SuggestedPromptChipsProps) {
   // Always call the hook (Rules of Hooks) — it's the fallback source. When the
   // per-turn LLM suggestions are present they take precedence.
   const fallbackPrompts = useSuggestedPrompts(conversationHistory);
-  const prompts =
+  const sourcePrompts =
     suggestions && suggestions.length > 0 ? suggestions : fallbackPrompts;
+  // chat_ux_v2 copy pass: chips are sentence case, capped at 3.
+  const prompts = React.useMemo(() => {
+    const capped =
+      maxPrompts !== undefined ? sourcePrompts.slice(0, maxPrompts) : sourcePrompts;
+    if (!sentenceCase) return capped;
+    return capped.map((p) => ({ ...p, label: toSentenceCase(p.label) }));
+  }, [sourcePrompts, maxPrompts, sentenceCase]);
 
   // Re-trigger the entrance animation whenever the trio changes (each new turn
   // emits a fresh set), so the chips gently fade/slide in rather than snapping.
@@ -153,7 +173,14 @@ export function SuggestedPromptChips({
       ) : null}
     <div
       key={animationKey}
-      className="flex flex-wrap items-center justify-center gap-2 animate-in fade-in slide-in-from-bottom-1 duration-300"
+      className={cn(
+        "gap-2 animate-in fade-in slide-in-from-bottom-1 duration-300",
+        stacked
+          ? "flex w-full flex-col items-stretch"
+          : align === "start"
+            ? "flex flex-wrap items-center justify-start"
+            : "flex flex-wrap items-center justify-center",
+      )}
       role="group"
       aria-label="Suggested prompts"
     >
@@ -176,6 +203,8 @@ export function SuggestedPromptChips({
             "transition-all hover:bg-muted hover:border-border/80 hover:shadow-sm",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
             "active:scale-95",
+            // v2 mobile empty state: thumb-friendly full-width rows.
+            stacked && "min-h-11 w-full justify-center rounded-xl text-sm",
             // Activating state
             activatingIndex === index && "opacity-60 pointer-events-none",
             // Disabled while any chip is activating
