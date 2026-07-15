@@ -40,6 +40,8 @@ import type { EnvironmentOption } from "./environment-selector";
 import type { AgentOption } from "./agent-picker/agent-picker-types";
 import type { StoredCodeBinding } from "@/app/api/v1/chat/stream/code-binding";
 import { ChatSelectionProvider } from "./agent-picker/chat-selection-context";
+import { ChatSessionProvider } from "./session/session-store";
+import type { SessionSeed } from "./session/session-state";
 import { AgentGallery } from "./agent-picker/agent-gallery";
 import {
   resolveDefaultRepoKey,
@@ -179,6 +181,7 @@ export function ChatShellClient({
   onConversationCreated,
   reloadMessages,
   showFiles = true,
+  chatUxV2 = false,
 }: {
   conversationId: string | null;
   /** publicId used for the files-panel fetch. */
@@ -274,6 +277,8 @@ export function ChatShellClient({
    * via "Open in conversations").
    */
   showFiles?: boolean;
+  /** chat_ux_v2 flag resolved server-side — mounts the unified session store. */
+  chatUxV2?: boolean;
 }) {
   const {
     plans,
@@ -1246,7 +1251,24 @@ export function ChatShellClient({
     [setDefaultAgentAction, defaultAgentId],
   );
 
-  return (
+  // chat_ux_v2: the workspace-default seed for the unified session store —
+  // also the "Reset to defaults" target and the cog-dot baseline.
+  const sessionSeed = React.useMemo<SessionSeed>(
+    () => ({
+      defaultAgentId: currentDefaultAgentId,
+      defaultRepoKey,
+      defaultEnvId,
+      textModel: initialModelState?.model ?? null,
+      textTier: initialModelState?.tier ?? null,
+      budgetUsd:
+        initialModelState?.budgetEnabled && initialModelState.budgetUsd
+          ? initialModelState.budgetUsd
+          : null,
+    }),
+    [currentDefaultAgentId, defaultRepoKey, defaultEnvId, initialModelState],
+  );
+
+  const shell = (
     <ChatSelectionProvider
       agents={availableAgents ?? []}
       boundAgentId={agentId ?? null}
@@ -1524,6 +1546,25 @@ export function ChatShellClient({
         ) : null}
       </div>
     </ChatSelectionProvider>
+  );
+
+  if (!chatUxV2) return shell;
+  // chat_ux_v2: the unified session store wraps the whole shell. The legacy
+  // stores above keep rendering, but every read/write is bridged onto this
+  // one store (see session/session-bridges.tsx), so the run payload and every
+  // display agree by construction.
+  return (
+    <ChatSessionProvider
+      workspaceSlug={workspaceSlug}
+      conversationId={conversationId}
+      boundAgentId={agentId ?? null}
+      isNewConversation={!conversationId}
+      hasMessages={messages.length > 0 || isStreaming}
+      seed={sessionSeed}
+      codeBinding={conversationCodeBinding ?? null}
+    >
+      {shell}
+    </ChatSessionProvider>
   );
 }
 

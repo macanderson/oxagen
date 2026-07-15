@@ -41,6 +41,7 @@ import {
 import type { McpServerSummary } from "./mcp-types";
 import { McpServerPicker } from "./mcp-server-picker";
 import { BudgetControl } from "./budget-control";
+import { useSessionModelState } from "./session/session-bridges";
 import { ComposerContextControls } from "./composer-context-controls";
 import type { ComposerPrStatus } from "./composer-pr-status-chip";
 import { SlashCommandMenu } from "./slash-command-menu";
@@ -365,13 +366,23 @@ export function MessageComposer({
   const [error, setError] = React.useState<string | null>(null);
   // Seed once at mount, applying any workspace budget governance (OXA-2081)
   // on top of the server-resolved default — a "default" governance pre-fills
-  // an unset control, a "ceiling" clamps it. Lazy initializer: governance is
-  // resolved server-side and doesn't change over the composer's lifetime.
-  const [model, setModel] = React.useState<ComposerModelState>(() =>
-    applyWorkspaceBudgetGovernance(
-      initialModelState ?? defaultModelState,
-      workspaceBudgetGovernance ?? null,
-    ),
+  // an unset control, a "ceiling" clamps it. Governance is resolved
+  // server-side and doesn't change over the composer's lifetime. When the
+  // chat_ux_v2 session provider wraps the tree, model/effort/budget/generate
+  // live in the unified session store (see session-bridges.tsx); otherwise
+  // this behaves as the plain local state it always was.
+  const seededInitialModelState = React.useMemo(
+    () =>
+      applyWorkspaceBudgetGovernance(
+        initialModelState ?? defaultModelState,
+        workspaceBudgetGovernance ?? null,
+      ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- seed once; both inputs are server-resolved and stable for the mount
+    [],
+  );
+  const [model, setModel] = useSessionModelState(
+    seededInitialModelState,
+    workspaceBudgetGovernance ?? null,
   );
   const [activeServerIds, setActiveServerIds] = React.useState<Set<string>>(
     new Set(),

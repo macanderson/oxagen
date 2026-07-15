@@ -1,4 +1,6 @@
 import { Suspense } from "react";
+import { cookies } from "next/headers";
+import { chatUxV2Enabled, CHAT_UX_V2_COOKIE } from "@/lib/flags";
 import { type ChatMessage } from "./message-bubble";
 import { type ComposerAction } from "./message-composer";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -156,8 +158,15 @@ async function AsyncShell({
 }) {
   const messages = await promise;
   const modelConfig = resolvedTierCatalog();
+  // chat_ux_v2 resolved ONCE here (env default + per-browser cookie override)
+  // and passed down as a boolean — client code never re-derives it, so server
+  // and client can't disagree about which state tree is live.
+  const chatUxV2 = chatUxV2Enabled(
+    (await cookies()).get(CHAT_UX_V2_COOKIE)?.value ?? null,
+  );
   return (
     <ChatShellClient
+      chatUxV2={chatUxV2}
       conversationId={conversationId}
       conversationPublicId={conversationPublicId}
       activeLeafMessageId={activeLeafMessageId}
