@@ -8,6 +8,7 @@ import {
   CapabilityStrip,
   summarizeToolRefs,
   prettifyRef,
+  looksLikeOpaqueId,
 } from "./capability-strip";
 import type { AgentToolRef } from "./agent-picker-types";
 
@@ -68,5 +69,66 @@ describe("CapabilityStrip", () => {
     }));
     render(<CapabilityStrip toolRefs={many} />);
     expect(screen.getByText("+3")).toBeInTheDocument();
+  });
+});
+
+describe("looksLikeOpaqueId", () => {
+  it("flags a UUID", () => {
+    expect(looksLikeOpaqueId("913d6df1-4b2a-4c3d-9e1f-abcdef123456")).toBe(true);
+  });
+
+  it("flags a ULID", () => {
+    expect(looksLikeOpaqueId("01ARZ3NDEKTSV4RRFFQ69G5FAV")).toBe(true);
+  });
+
+  it("flags a long separator-free alphanumeric token (nanoid-style)", () => {
+    expect(looksLikeOpaqueId("a1b2c3d4e5f6g7h8i9j0")).toBe(true);
+  });
+
+  it("does not flag a human-readable slug", () => {
+    expect(looksLikeOpaqueId("skills/code-review")).toBe(false);
+    expect(looksLikeOpaqueId("oxagen.repo.edit")).toBe(false);
+  });
+
+  it("does not flag a short id-like token", () => {
+    expect(looksLikeOpaqueId("github")).toBe(false);
+  });
+});
+
+describe("CapabilityStrip — chat_ux_v2", () => {
+  it("caps named chips at 3 (not 4) in v2", () => {
+    const many: AgentToolRef[] = Array.from({ length: 5 }, (_, i) => ({
+      type: "skill" as const,
+      ref: `skills/s-${i}`,
+    }));
+    render(<CapabilityStrip toolRefs={many} v2 />);
+    expect(screen.getByText("S 0")).toBeInTheDocument();
+    expect(screen.getByText("S 1")).toBeInTheDocument();
+    expect(screen.getByText("S 2")).toBeInTheDocument();
+    expect(screen.queryByText("S 3")).not.toBeInTheDocument();
+    expect(screen.getByText("+2 skills")).toBeInTheDocument();
+  });
+
+  it("renders the legacy bare +N overflow label when v2 is false", () => {
+    const many: AgentToolRef[] = Array.from({ length: 5 }, (_, i) => ({
+      type: "skill" as const,
+      ref: `skills/s-${i}`,
+    }));
+    render(<CapabilityStrip toolRefs={many} />);
+    expect(screen.getByText("+1")).toBeInTheDocument();
+    expect(screen.queryByText("+1 skills")).not.toBeInTheDocument();
+  });
+
+  it("never renders a raw id/UUID as a named chip in v2 — it folds into overflow", () => {
+    const refs: AgentToolRef[] = [
+      { type: "skill", ref: "skills/code-review" },
+      { type: "skill", ref: "skills/write-tests" },
+      { type: "mcp_server", ref: "913d6df1-4b2a-4c3d-9e1f-abcdef123456" },
+    ];
+    render(<CapabilityStrip toolRefs={refs} v2 />);
+    expect(screen.getByText("Code Review")).toBeInTheDocument();
+    expect(screen.getByText("Write Tests")).toBeInTheDocument();
+    expect(screen.queryByText(/913d6df1/)).not.toBeInTheDocument();
+    expect(screen.getByText("+1 skills")).toBeInTheDocument();
   });
 });

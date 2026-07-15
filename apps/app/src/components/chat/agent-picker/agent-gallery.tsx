@@ -22,6 +22,8 @@ export interface AgentGalleryProps {
   defaultEnvId: string | null;
   defaultAgentId: string | null;
   onSetDefaultAgent?: (agentId: string | null) => void;
+  /** Scopes the v2 "Recent" row's persisted recency (see AgentPickerPanel). */
+  workspaceSlug?: string;
   className?: string;
 }
 
@@ -33,6 +35,7 @@ export function AgentGallery({
   defaultEnvId,
   defaultAgentId,
   onSetDefaultAgent,
+  workspaceSlug,
   className,
 }: AgentGalleryProps) {
   const {
@@ -74,6 +77,7 @@ export function AgentGallery({
         selectedRepoKey={selectedRepoKey}
         selectedEnvId={selectedEnvId}
         onApply={applyAgentSelection}
+        workspaceSlug={workspaceSlug}
       />
     </div>
   );
