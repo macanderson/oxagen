@@ -154,6 +154,11 @@ export function useSessionModelState(
     }
     const next =
       typeof action === "function" ? action(composedRef.current) : action;
+    // Sync the ref NOW, not in the post-render effect: two setModel calls in
+    // the same handler must chain (the second reads the first's result), and
+    // since modelStateToSessionPatch is a FULL replacement of the session
+    // fields, a stale read here would silently clobber the first write.
+    composedRef.current = next;
     update(modelStateToSessionPatch(next));
     // Keep the carrier in sync for the session-unowned fields.
     setCarrier(next);

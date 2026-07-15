@@ -20,9 +20,19 @@ afterEach(cleanup);
 // ── module mocks ──────────────────────────────────────────────────────────────
 
 // AsyncShell resolves the chat_ux_v2 cookie via next/headers — outside a real
-// request scope cookies() never resolves, so stub it to "no cookie set".
+// request scope cookies() never resolves, so stub it to "no cookie set" by
+// default; individual tests set `mockCookieJar` to simulate the chat_ux_v2
+// override cookie.
+const { mockCookieJar } = vi.hoisted(() => ({
+  mockCookieJar: { value: undefined as string | undefined },
+}));
 vi.mock("next/headers", () => ({
-  cookies: vi.fn(async () => ({ get: () => undefined })),
+  cookies: vi.fn(async () => ({
+    get: (name: string) =>
+      name === "chat_ux_v2" && mockCookieJar.value !== undefined
+        ? { name, value: mockCookieJar.value }
+        : undefined,
+  })),
 }));
 
 vi.mock("@oxagen/ai", () => ({
@@ -34,6 +44,7 @@ vi.mock("./chat-shell-client", () => ({
     <div
       data-testid="chat-shell-client"
       data-conversation-id={String(props.conversationId)}
+      data-chat-ux-v2={String(props.chatUxV2)}
       data-org-slug={String(props.orgSlug)}
       data-workspace-slug={String(props.workspaceSlug)}
     />
@@ -167,6 +178,48 @@ describe("ChatShell", () => {
     expect(client).toHaveAttribute("data-conversation-id", "conv_abc");
     expect(client).toHaveAttribute("data-org-slug", "acme");
     expect(client).toHaveAttribute("data-workspace-slug", "ws-1");
+    // No cookie, no env default → the flag resolves off.
+    expect(client).toHaveAttribute("data-chat-ux-v2", "false");
+  });
+
+  it("resolves the chat_ux_v2 cookie override into the chatUxV2 prop", async () => {
+    mockCookieJar.value = "1";
+    try {
+      await act(async () => {
+        render(
+          <ChatShell {...makeProps({ messagesPromise: Promise.resolve([]) })} />,
+        );
+      });
+      await waitFor(() => {
+        expect(screen.getByTestId("chat-shell-client")).toHaveAttribute(
+          "data-chat-ux-v2",
+          "true",
+        );
+      });
+    } finally {
+      mockCookieJar.value = undefined;
+    }
+  });
+
+  it("a chat_ux_v2=0 cookie forces the flag off even with the env default on", async () => {
+    vi.stubEnv("NEXT_PUBLIC_CHAT_UX_V2", "1");
+    mockCookieJar.value = "0";
+    try {
+      await act(async () => {
+        render(
+          <ChatShell {...makeProps({ messagesPromise: Promise.resolve([]) })} />,
+        );
+      });
+      await waitFor(() => {
+        expect(screen.getByTestId("chat-shell-client")).toHaveAttribute(
+          "data-chat-ux-v2",
+          "false",
+        );
+      });
+    } finally {
+      mockCookieJar.value = undefined;
+      vi.unstubAllEnvs();
+    }
   });
 
   it("works with null conversationId", async () => {
