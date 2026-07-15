@@ -145,8 +145,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true,
-        "app": true
+        "docs": true
       }
     },
     {
@@ -389,8 +388,7 @@
         "api": true,
         "mcp": true,
         "unit": false,
-        "docs": true,
-        "app": true
+        "docs": true
       }
     },
     {
@@ -409,8 +407,7 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": true,
-        "app": true
+        "docs": true
       }
     },
     {
@@ -941,13 +938,17 @@
       "file": "agent.plan.get.ts",
       "domain": "agent",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -955,13 +956,17 @@
       "file": "agent.plan.list.ts",
       "domain": "agent",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -1201,7 +1206,6 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "app": true,
         "unit": true,
         "e2e": false,
         "docs": true
@@ -1221,7 +1225,6 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "app": true,
         "unit": true,
         "docs": true
       }
@@ -1259,7 +1262,6 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "app": true,
         "unit": true,
         "docs": true
       }
@@ -1278,7 +1280,6 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "app": true,
         "unit": true,
         "docs": true
       }
@@ -1297,7 +1298,6 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "app": true,
         "unit": true,
         "e2e": false,
         "docs": true
@@ -1317,7 +1317,6 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "app": true,
         "unit": true,
         "e2e": false,
         "docs": true
@@ -1337,7 +1336,6 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "app": true,
         "unit": true,
         "docs": true
       }
@@ -1377,8 +1375,7 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": true,
-        "app": true
+        "docs": true
       }
     },
     {
@@ -1649,7 +1646,12 @@
       "file": "automation.get.ts",
       "domain": "automation",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent", "cli"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent",
+        "cli"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -2231,7 +2233,11 @@
       "file": "capability.registry.get.ts",
       "domain": "capability",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "api": true,
         "mcp": true,
@@ -2245,7 +2251,11 @@
       "file": "capability.registry.list.ts",
       "domain": "capability",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "api": true,
         "mcp": true,
@@ -3059,8 +3069,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true,
-        "app": true
+        "docs": true
       }
     },
     {
@@ -3073,35 +3082,6 @@
         "mcp",
         "cli"
       ],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true,
-        "app": true
-      }
-    },
-    {
-      "name": "list_eval_runs",
-      "file": "eval.run.list.ts",
-      "domain": "eval",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "cli"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
-      }
-    },
-    {
-      "name": "get_eval_run_series",
-      "file": "eval.run.series.ts",
-      "domain": "eval",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "cli"],
       "layers": {
         "schema": true,
         "api": true,
@@ -3457,7 +3437,11 @@
       "file": "iam.role.list.ts",
       "domain": "iam",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -4227,7 +4211,11 @@
       "file": "plugin.settings.get_auth_alerts.ts",
       "domain": "plugin",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "api": true,
         "docs": true,
@@ -4393,6 +4381,22 @@
         "unit": false,
         "docs": true,
         "app": true
+      }
+    },
+    {
+      "name": "list_branches",
+      "file": "repo.branch.list.ts",
+      "domain": "repo",
+      "mode": "sync",
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "api": true,
+        "mcp": true,
+        "unit": true
       }
     },
     {

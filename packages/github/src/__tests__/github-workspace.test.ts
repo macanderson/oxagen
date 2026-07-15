@@ -21,6 +21,7 @@ function makeClient(overrides: Partial<GitHubClient> = {}): GitHubClient {
     listPullRequestComments: vi.fn(),
     listCiChecks: vi.fn(),
     listPullRequestFiles: vi.fn(),
+    listBranches: vi.fn(),
     ...overrides,
   };
 }

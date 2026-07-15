@@ -91,6 +91,13 @@ export interface GitHubPrFile {
   patch: string | null;
 }
 
+/** A single branch entry from the branch listing endpoint. */
+export interface GitHubBranch {
+  name: string;
+  sha: string;
+  protected: boolean;
+}
+
 /**
  * Vendor-neutral interface for GitHub write operations.
  * Backed by @octokit/rest; swap the backing by providing a different
@@ -234,6 +241,12 @@ export interface GitHubClient {
     repo: string;
     number: number;
   }): Promise<GitHubPrFile[]>;
+
+  /**
+   * List branches in a repository, paginated up to 300 branches (3 pages of
+   * 100). Stops early once a page returns fewer than 100 entries.
+   */
+  listBranches(args: { owner: string; repo: string }): Promise<GitHubBranch[]>;
 }
 
 /** Options accepted by createGitHubClient. */
