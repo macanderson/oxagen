@@ -94,15 +94,23 @@ export function ConversationNav(props: ConversationNavProps) {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [collapsed, setCollapsed] = useCollapsed();
 
+  // chat_ux_v2 mobile: the chat header's conversations button opens this
+  // sheet via a window event — its own trigger bar is CSS-hidden while the
+  // v2 chat chrome is mounted (see globals.css), so the sheet stays the one
+  // implementation of "browse conversations" on mobile.
+  useEffect(() => {
+    const open = () => setSheetOpen(true);
+    window.addEventListener("oxagen:open-conversations", open);
+    return () => window.removeEventListener("oxagen:open-conversations", open);
+  }, []);
+
   return (
     <>
       {/* Mobile: trigger bar + slide-in Sheet. */}
-      <div className="md:hidden">
+      <div className="md:hidden" data-conversation-nav-trigger>
         <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
           <SheetTrigger
-            render={
-              <Button variant="outline" size="sm" className="gap-2" />
-            }
+            render={<Button variant="outline" size="sm" className="gap-2" />}
           >
             <MessagesSquare className="size-4" />
             Conversations
@@ -112,7 +120,10 @@ export function ConversationNav(props: ConversationNavProps) {
               <SheetTitle>Conversations</SheetTitle>
             </SheetHeader>
             <div className="min-h-0 flex-1 py-2">
-              <ConversationList {...props} onNavigate={() => setSheetOpen(false)} />
+              <ConversationList
+                {...props}
+                onNavigate={() => setSheetOpen(false)}
+              />
             </div>
           </SheetPopup>
         </Sheet>
