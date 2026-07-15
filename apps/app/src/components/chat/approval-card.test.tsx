@@ -246,3 +246,86 @@ describe("ApprovalCard", () => {
     // No error expected
   });
 });
+
+// ── chat_ux_v2 budget pause card ─────────────────────────────────────────────
+import { ChatSessionProvider } from "./session/session-store";
+import type { SessionSeed } from "./session/session-state";
+
+const SEED: SessionSeed = {
+  defaultAgentId: null,
+  defaultRepoKey: null,
+  defaultEnvId: null,
+  textModel: null,
+  textTier: "fast",
+  budgetUsd: null,
+};
+
+function withSession(children: React.ReactNode) {
+  return render(
+    <ChatSessionProvider
+      workspaceSlug="ws"
+      conversationId={null}
+      boundAgentId={null}
+      isNewConversation
+      hasMessages={false}
+      seed={SEED}
+    >
+      {children}
+    </ChatSessionProvider>,
+  );
+}
+
+describe("ApprovalCard — chat_ux_v2 budget pause specialization", () => {
+  const budgetProps = {
+    approvalId: "a-budget",
+    capability: "budget.turn.continue",
+    inputPreview: { costUsd: 2, limitUsd: 2, message: "…" },
+    riskLevel: "low" as const,
+    expiresAt: FUTURE,
+  };
+
+  it("renders the spec card copy with Stop and Continue", () => {
+    withSession(<ApprovalCard {...budgetProps} />);
+    expect(screen.getByText("Paused at your $2.00 cap")).toBeInTheDocument();
+    expect(
+      screen.getByText("Spent $2.00 on this reply so far"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Stop")).toBeInTheDocument();
+    expect(screen.getByText("Continue for $2.00 more")).toBeInTheDocument();
+    // The generic approval chrome must not double-render.
+    expect(screen.queryByText("Approval required")).toBeNull();
+  });
+
+  it("Continue approves and Stop denies through onResolved", async () => {
+    const onResolved = vi.fn().mockResolvedValue({ ok: true });
+    withSession(<ApprovalCard {...budgetProps} onResolved={onResolved} />);
+    await userEvent.click(screen.getByText("Continue for $2.00 more"));
+    await waitFor(() =>
+      expect(onResolved).toHaveBeenCalledWith("a-budget", "approved"),
+    );
+    cleanup();
+    const onResolved2 = vi.fn().mockResolvedValue({ ok: true });
+    withSession(<ApprovalCard {...budgetProps} onResolved={onResolved2} />);
+    await userEvent.click(screen.getByText("Stop"));
+    await waitFor(() =>
+      expect(onResolved2).toHaveBeenCalledWith("a-budget", "denied"),
+    );
+  });
+
+  it("falls back to the generic card without the session provider (flag off)", () => {
+    render(<ApprovalCard {...budgetProps} />);
+    expect(screen.getByText("Approval required")).toBeInTheDocument();
+    expect(screen.queryByText("Paused at your $2.00 cap")).toBeNull();
+  });
+
+  it("a non-budget capability keeps the generic card even in v2", () => {
+    withSession(
+      <ApprovalCard
+        {...budgetProps}
+        capability="search"
+        inputPreview={{ q: "x" }}
+      />,
+    );
+    expect(screen.getByText("Approval required")).toBeInTheDocument();
+  });
+});

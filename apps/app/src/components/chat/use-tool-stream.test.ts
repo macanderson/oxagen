@@ -844,3 +844,33 @@ describe("warning events", () => {
     expect(s.turnWarning).toEqual({ message: "just so you know" });
   });
 });
+
+describe("budget-tick (chat_ux_v2 live cost estimate)", () => {
+  it("stores the latest cumulative cost and resets with the turn", () => {
+    let s = reducer(
+      INITIAL_STATE,
+      event({ type: "budget-tick", costUsd: 0.12, limitUsd: 2 }),
+    );
+    expect(s.turnCostUsd).toBe(0.12);
+    s = reducer(s, event({ type: "budget-tick", costUsd: 0.31, limitUsd: 2 }));
+    expect(s.turnCostUsd).toBe(0.31);
+    s = reducer(s, { type: "reset" });
+    expect(s.turnCostUsd).toBeUndefined();
+  });
+
+  it("does not disturb the blocking budget-notice state", () => {
+    let s = reducer(
+      INITIAL_STATE,
+      event({
+        type: "budget-notice",
+        state: "within_grace",
+        costUsd: 2.1,
+        limitUsd: 2,
+        mode: "grace",
+      }),
+    );
+    s = reducer(s, event({ type: "budget-tick", costUsd: 2.2, limitUsd: 2 }));
+    expect(s.turnBudgetNotice?.state).toBe("within_grace");
+    expect(s.turnCostUsd).toBe(2.2);
+  });
+});

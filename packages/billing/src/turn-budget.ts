@@ -239,6 +239,13 @@ export interface TurnBudgetGuardHooks {
   onStop?: (verdict: TurnBudgetVerdict) => void;
   /** "grace" mode: invoked each step the turn runs PAST the limit but within the cushion. */
   onWithinGrace?: (verdict: TurnBudgetVerdict) => void;
+  /**
+   * Invoked on EVERY evaluation with the cumulative turn cost so far and the
+   * current (possibly raised) ceiling — powers live "≈ $0.31" cost estimates
+   * while a budgeted turn streams. Fires before the mode ladder, including on
+   * steps that continue untouched.
+   */
+  onTick?: (costUsd: number, limitUsd: number) => void;
 }
 
 /**
@@ -268,6 +275,7 @@ export function createTurnBudgetGuard(
 
   return async (usage: TurnUsageSnapshot) => {
     const cost = turnCostUsd(model, usage, rateCard);
+    hooks.onTick?.(cost, limitUsd);
     const verdict = evaluateTurnBudget({ ...policy, limitUsd }, cost);
     switch (verdict.action) {
       case "continue":

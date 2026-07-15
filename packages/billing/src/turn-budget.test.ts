@@ -151,6 +151,23 @@ describe("createTurnBudgetGuard", () => {
     expect(onStop).toHaveBeenCalledOnce();
   });
 
+  it("onTick fires on every evaluation with cumulative cost and the live ceiling", async () => {
+    const onTick = vi.fn();
+    const onPause = vi.fn().mockResolvedValue(true);
+    const guard = createTurnBudgetGuard(
+      policy({ mode: "prompt", limitUsd: 50 }),
+      "claude-opus-4-8",
+      { onTick, onPause },
+    )!;
+    await guard({ outputTokens: 100_000 }); // $7.5, continue
+    expect(onTick).toHaveBeenCalledWith(7.5, 50);
+    await guard(million); // $75 → pause → approved, ceiling → 125
+    expect(onTick).toHaveBeenCalledWith(75, 50);
+    await guard(million); // ticks against the RAISED ceiling
+    expect(onTick).toHaveBeenLastCalledWith(75, 125);
+    expect(onTick).toHaveBeenCalledTimes(3);
+  });
+
   it("grace: flags the grace window, then hard-stops past the cushion", async () => {
     const onWithinGrace = vi.fn();
     const onStop = vi.fn();
