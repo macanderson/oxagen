@@ -188,6 +188,7 @@ export function ChatShellClient({
   reloadMessages,
   showFiles = true,
   chatUxV2 = false,
+  walletBalanceCents = null,
 }: {
   conversationId: string | null;
   /** publicId used for the files-panel fetch. */
@@ -285,6 +286,8 @@ export function ChatShellClient({
   showFiles?: boolean;
   /** chat_ux_v2 flag resolved server-side — mounts the unified session store. */
   chatUxV2?: boolean;
+  /** Org credit balance in cents for the drawer's wallet footer row. */
+  walletBalanceCents?: number | null;
 }) {
   const {
     plans,
@@ -1401,6 +1404,7 @@ export function ChatShellClient({
               sessionSettingsOpen={sessionSettingsOpen}
               onSessionSettingsOpenChange={setSessionSettingsOpen}
               onOpenActivity={() => setMobileRailOpen(true)}
+              walletBalanceCents={walletBalanceCents ?? null}
             />
           ) : null}
 
@@ -1725,6 +1729,7 @@ function MobileSessionChrome({
   sessionSettingsOpen,
   onSessionSettingsOpenChange,
   onOpenActivity,
+  walletBalanceCents,
 }: {
   agents: AgentOption[];
   repos: RepoOption[];
@@ -1736,8 +1741,10 @@ function MobileSessionChrome({
   sessionSettingsOpen: boolean;
   onSessionSettingsOpenChange: (open: boolean) => void;
   onOpenActivity: () => void;
+  walletBalanceCents: number | null;
 }) {
   const { state } = useChatSession();
+  const router = useRouter();
   const selectedRepo = state.repoKey
     ? (repos.find((r) => r.key === state.repoKey) ?? null)
     : null;
@@ -1805,7 +1812,13 @@ function MobileSessionChrome({
           branchesLoading={branchesLoading}
           onLoadBranches={handleLoadBranches}
           defaultBranch={defaultBranch}
-          walletBalanceUsd={null}
+          walletBalanceUsd={
+            walletBalanceCents !== null ? walletBalanceCents / 100 : null
+          }
+          onOpenWallet={() => {
+            onSessionSettingsOpenChange(false);
+            router.push(`/${orgSlug}/billing`);
+          }}
         />
       </SessionSettingsDrawer>
     </>
