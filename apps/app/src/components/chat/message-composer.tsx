@@ -1393,6 +1393,7 @@ export function MessageComposer({
         onInterrupt?.();
         const fd = buildFormData(e.currentTarget, model, attachmentsSnapshot);
         formRef.current?.reset();
+        setInputEmpty(true);
         setPendingMentions([]);
         closeMentionMenu();
         clearAttachments();
@@ -1425,6 +1426,7 @@ export function MessageComposer({
           "content",
         ) as HTMLTextAreaElement | null;
         if (ta) ta.value = "";
+        setInputEmpty(true);
         // Notify parent that input is now empty (chips should reappear).
         if (inputHasContentRef.current) {
           inputHasContentRef.current = false;
@@ -1436,6 +1438,7 @@ export function MessageComposer({
 
     const fd = buildFormData(e.currentTarget, model, attachmentsSnapshot);
     formRef.current?.reset();
+    setInputEmpty(true);
     setPendingMentions([]);
     closeMentionMenu();
     clearAttachments();
