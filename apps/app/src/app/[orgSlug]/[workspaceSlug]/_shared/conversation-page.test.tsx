@@ -45,6 +45,15 @@ vi.mock("drizzle-orm", () => ({
   and: vi.fn(),
   desc: vi.fn(),
   isNull: vi.fn(),
+  // Tagged-template helper — @oxagen/billing (isLowBalance import chain)
+  // evaluates sql`…` at module scope, so the mock must provide it.
+  sql: Object.assign(vi.fn(), { raw: vi.fn() }),
+}));
+
+// Wallet balance for the session drawer footer — resolved in the page's
+// parallel load. Mocked so the RSC render needs no billing store.
+vi.mock("@oxagen/billing", () => ({
+  isLowBalance: vi.fn(async () => ({ balanceCents: 500, low: false })),
 }));
 
 vi.mock("@oxagen/database", () => ({

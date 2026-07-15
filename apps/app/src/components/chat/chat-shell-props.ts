@@ -97,4 +97,9 @@ export interface ChatShellProps {
    * stores byte-identical.
    */
   chatUxV2?: boolean;
+  /**
+   * Org credit balance in cents for the session drawer's wallet footer row
+   * (chat_ux_v2). Null hides the row (balance read failed / not wired).
+   */
+  walletBalanceCents?: number | null;
 }

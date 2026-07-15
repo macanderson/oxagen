@@ -11,6 +11,7 @@ import type { CapabilityContext } from "@oxagen/oxagen";
 import type { BackgroundTaskSnapshot } from "@/components/chat/background-task-tray";
 import type { PlanStep } from "@/components/chat/stream-event-types";
 import { loadEffectiveModelDefaults } from "@oxagen/ai";
+import { isLowBalance } from "@oxagen/billing";
 import { buildSeededModelState } from "@/components/chat/model-state";
 import type { WorkspaceBudgetGovernance } from "@/components/chat/model-state";
 import type { McpServerSummary } from "@/components/chat/mcp-types";
@@ -273,6 +274,7 @@ export async function ConversationPage({
     workspaceBudgetGovernance,
     availableAgents,
     workspacePrefs,
+    walletBalance,
   ] = await Promise.all([
     Promise.resolve(
       listCapabilities()
@@ -429,6 +431,15 @@ export async function ConversationPage({
         repoDefaultPrompted: false,
       }),
     ),
+    // Wallet balance for the chat_ux_v2 session drawer's footer row (same
+    // loader + scope the shell's balance pill uses: credit_lots is org-only
+    // under RLS, so the scope's workspaceId is the all-zeros org-only
+    // sentinel). Fail-open null — the drawer just hides the wallet row rather
+    // than blocking the chat page.
+    runInTenantScope(
+      { orgId: tenant.id, workspaceId: "00000000-0000-0000-0000-000000000000" },
+      () => isLowBalance(tenant.id),
+    ).catch((err: unknown) => logAndFallback(err, "wallet-balance read", null)),
   ]);
 
   // Bind the workspace scope into the nav's server actions so the client only
@@ -500,6 +511,7 @@ export async function ConversationPage({
             workspaceBudgetGovernance={workspaceBudgetGovernance}
             agentId={boundAgentId ?? null}
             conversationCodeBinding={conversationCodeBinding}
+            walletBalanceCents={walletBalance?.balanceCents ?? null}
           />
         </div>
       </div>
