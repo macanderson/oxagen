@@ -6,6 +6,7 @@ import {
   ChevronUp,
   ImageIcon,
   Paperclip,
+  Plus,
   Send,
   SlidersHorizontal,
   Video,
@@ -42,6 +43,8 @@ import type { McpServerSummary } from "./mcp-types";
 import { McpServerPicker } from "./mcp-server-picker";
 import { BudgetControl } from "./budget-control";
 import { useSessionModelState } from "./session/session-bridges";
+import { useChatSessionContext } from "./session/session-store";
+import { sessionSelectionIssues } from "./session/session-state";
 import { ComposerContextControls } from "./composer-context-controls";
 import type { ComposerPrStatus } from "./composer-pr-status-chip";
 import { SlashCommandMenu } from "./slash-command-menu";
@@ -299,6 +302,7 @@ export function MessageComposer({
   orgSlug,
   workspaceSlug,
   codeSessionPr,
+  onOpenSessionSettings,
 }: {
   conversationId: string | null;
   parentMessageId: string | null;
@@ -361,6 +365,12 @@ export function MessageComposer({
    * `agent.repo.edit` / `repo.pr.open` tool result in the conversation.
    */
   codeSessionPr?: ComposerPrStatus | null;
+  /**
+   * chat_ux_v2 mobile chrome only: opens the session-settings drawer from the
+   * condensed row's cog button. Omitted when no session provider is mounted
+   * (the cog itself only renders in that case anyway — see `v2Mobile` below).
+   */
+  onOpenSessionSettings?: () => void;
 }) {
   const [pending, startTransition] = React.useTransition();
   const [error, setError] = React.useState<string | null>(null);
@@ -465,6 +475,19 @@ export function MessageComposer({
     }
     if (stored === "1") setComposerCollapsed(true);
   }, []);
+
+  // ── chat_ux_v2 mobile chrome ───────────────────────────────────────────────
+  // A single condensed row (plus/textarea/cog/send) replaces the entire
+  // desktop toolbar ONLY when the unified session store is mounted AND the
+  // viewport is phone-width — every other surface (desktop, or mobile without
+  // the v2 session provider) renders byte-identical to before. The hook runs
+  // unconditionally per rules-of-hooks; only the boolean below branches on it.
+  const chatSession = useChatSessionContext();
+  const v2Mobile = isMobile && chatSession !== null;
+  // The collapsed-composer preference never applies in v2Mobile: there is no
+  // toggle to un-collapse it there (the button is hidden), and the height
+  // budget requires the textarea always visible.
+  const collapsed = composerCollapsed && !v2Mobile;
 
   const expandComposer = React.useCallback(() => {
     setComposerCollapsed(false);
@@ -1614,6 +1637,36 @@ export function MessageComposer({
     />
   );
 
+  // Shared send-button aria-label — used by both the v2Mobile condensed row
+  // and the legacy toolbar's Send button below, so the two can never drift.
+  const sendAriaLabel =
+    isStreaming && pendingPromptBehavior === "interrupt"
+      ? "Interrupt and send"
+      : isStreaming
+        ? "Queue message"
+        : "Send message";
+
+  // v2Mobile cog dot: a broken selection (warning) takes precedence over the
+  // plain "settings differ from defaults" accent — it needs attention
+  // regardless of whether other settings also changed.
+  const v2SelectionIssues = React.useMemo(
+    () =>
+      chatSession
+        ? sessionSelectionIssues(chatSession.state, {
+            repos: availableRepos ?? [],
+            environments: availableEnvironments ?? [],
+            branches: null,
+          })
+        : [],
+    [chatSession, availableRepos, availableEnvironments],
+  );
+  const v2HasIssues = v2SelectionIssues.length > 0;
+  const v2IsDirty = chatSession?.isDirty ?? false;
+  const cogDotClass = v2HasIssues ? "bg-destructive" : v2IsDirty ? "bg-primary" : null;
+  const cogAriaLabel = `Session settings${
+    v2HasIssues ? ", attention needed" : v2IsDirty ? ", settings changed" : ""
+  }`;
+
   return (
     <div className="flex flex-col">
       <form
@@ -1624,7 +1677,7 @@ export function MessageComposer({
         onDrop={canAttach ? handleDrop : undefined}
         className={cn(
           "flex flex-col gap-2 rounded-2xl border border-border bg-card p-3 text-card-foreground shadow-sm transition-shadow focus-within:ring-2 focus-within:ring-ring",
-          composerCollapsed && "gap-0 py-1.5",
+          collapsed && "gap-0 py-1.5",
           isDragOver && "ring-2 ring-primary",
         )}
       >
@@ -1644,52 +1697,57 @@ export function MessageComposer({
           />
         ) : null}
         {/* CSS-hidden (not unmounted) while collapsed so the draft text and the
-          form's `content` field survive collapse/expand round-trips. */}
-        <div className="relative">
-          {slashOpen ? (
-            <SlashCommandMenu
-              commands={slashCommands}
-              activeIndex={slashActiveIndex}
-              onSelect={applySlashCommand}
-              onHoverIndex={setSlashActiveIndex}
+          form's `content` field survive collapse/expand round-trips. In
+          v2Mobile the textarea instead lives inline in the condensed toolbar
+          row below (see `v2Mobile` branch further down) — rendering NOTHING
+          here avoids a duplicate `name="content"` field. */}
+        {!v2Mobile ? (
+          <div className="relative">
+            {slashOpen ? (
+              <SlashCommandMenu
+                commands={slashCommands}
+                activeIndex={slashActiveIndex}
+                onSelect={applySlashCommand}
+                onHoverIndex={setSlashActiveIndex}
+              />
+            ) : null}
+            {mentionOpen ? (
+              <MentionMenu
+                stage={mentionStage}
+                types={mentionTypes}
+                results={mentionResults}
+                selectedType={mentionTypeSel}
+                activeIndex={mentionActiveIndex}
+                loading={mentionLoading}
+                query={mentionQuery}
+                onSelectType={applyMentionType}
+                onSelectResult={applyMentionResult}
+                onHoverIndex={setMentionActiveIndex}
+              />
+            ) : null}
+            <Textarea
+              name="content"
+              required
+              placeholder={placeholder}
+              rows={isMobile ? 2 : 3}
+              disabled={pending || disabled}
+              onKeyDown={onKeyDown}
+              onChange={handleTextareaChange}
+              onBlur={() => {
+                setSlashQuery(null);
+                closeMentionMenu();
+              }}
+              onPaste={canAttach ? handlePaste : undefined}
+              className={cn(
+                "border-none bg-transparent shadow-none focus-visible:ring-0",
+                composerCollapsed && "hidden",
+              )}
             />
-          ) : null}
-          {mentionOpen ? (
-            <MentionMenu
-              stage={mentionStage}
-              types={mentionTypes}
-              results={mentionResults}
-              selectedType={mentionTypeSel}
-              activeIndex={mentionActiveIndex}
-              loading={mentionLoading}
-              query={mentionQuery}
-              onSelectType={applyMentionType}
-              onSelectResult={applyMentionResult}
-              onHoverIndex={setMentionActiveIndex}
-            />
-          ) : null}
-          <Textarea
-            name="content"
-            required
-            placeholder={placeholder}
-            rows={isMobile ? 2 : 3}
-            disabled={pending || disabled}
-            onKeyDown={onKeyDown}
-            onChange={handleTextareaChange}
-            onBlur={() => {
-              setSlashQuery(null);
-              closeMentionMenu();
-            }}
-            onPaste={canAttach ? handlePaste : undefined}
-            className={cn(
-              "border-none bg-transparent shadow-none focus-visible:ring-0",
-              composerCollapsed && "hidden",
-            )}
-          />
-        </div>
+          </div>
+        ) : null}
         {/* Pending attachment strip — thumbnails with upload progress/remove.
           Hidden video keyframes are excluded (they ride with their video). */}
-        {visibleAttachments.length > 0 && !composerCollapsed ? (
+        {visibleAttachments.length > 0 && !collapsed ? (
           <div className="flex flex-wrap gap-2" data-testid="attachment-strip">
             {visibleAttachments.map((a) => (
               <AttachmentChip
@@ -1703,7 +1761,7 @@ export function MessageComposer({
         {/* Pending @-mention strip — the structured references attached to this
           draft. Each chip is hover-inspectable; removing one only detaches the
           reference (the "@Label" text stays as plain words). */}
-        {pendingMentions.length > 0 && !composerCollapsed ? (
+        {pendingMentions.length > 0 && !collapsed ? (
           <div className="flex flex-wrap gap-1.5" data-testid="mention-strip">
             {pendingMentions.map((m, index) => (
               <MentionChip
@@ -1722,7 +1780,7 @@ export function MessageComposer({
         ) : null}
         {/* Queued messages (queue mode): ordered list with reorder / edit /
           remove / send-now controls. */}
-        {!composerCollapsed && (
+        {!collapsed && (
           <MessageQueue
             items={queue.map((q) => ({ id: q.id, content: q.content }))}
             isStreaming={isStreaming}
@@ -1736,7 +1794,7 @@ export function MessageComposer({
         {disabled && disabledReason ? (
           <p className="text-xs text-muted-foreground">{disabledReason}</p>
         ) : null}
-        {codeGateBlocked && !composerCollapsed ? (
+        {codeGateBlocked && !collapsed ? (
           <p
             className="text-xs text-muted-foreground"
             data-testid="code-mode-gate-hint"
@@ -1751,8 +1809,10 @@ export function MessageComposer({
           (code-mode toolbar / pin context bar) that sat ABOVE the composer and
           each duplicated the repo/env selectors. Code mode drops the pin (both
           selections are required to send anyway); pin mode keeps it. Hidden
-          while collapsed. */}
-        {!composerCollapsed && (showContextControls || codeSessionPr) ? (
+          while collapsed, and hidden entirely in v2Mobile (the condensed row
+          has no room for it — Code/pin selection moves into the session
+          settings drawer via the cog). */}
+        {!v2Mobile && !collapsed && (showContextControls || codeSessionPr) ? (
           <ComposerContextControls
             repositories={availableRepos ?? []}
             environments={availableEnvironments ?? []}
@@ -1771,6 +1831,108 @@ export function MessageComposer({
           />
         ) : null}
 
+        {/* v2Mobile: ONE condensed row replaces the entire toolbar below —
+          plus (attach) / textarea / cog (session settings) / send. The
+          textarea lives HERE (not in the block near the top of the form) so
+          the attachment/mention strips, queue, error, and code-gate hint all
+          render ABOVE this row, and the composer stays within the ≤64px
+          at-rest height budget. The slash/mention popup menus anchor to this
+          row's `relative` wrapper, popping up directly above it. */}
+        {v2Mobile ? (
+          <div className="relative">
+            {slashOpen ? (
+              <SlashCommandMenu
+                commands={slashCommands}
+                activeIndex={slashActiveIndex}
+                onSelect={applySlashCommand}
+                onHoverIndex={setSlashActiveIndex}
+              />
+            ) : null}
+            {mentionOpen ? (
+              <MentionMenu
+                stage={mentionStage}
+                types={mentionTypes}
+                results={mentionResults}
+                selectedType={mentionTypeSel}
+                activeIndex={mentionActiveIndex}
+                loading={mentionLoading}
+                query={mentionQuery}
+                onSelectType={applyMentionType}
+                onSelectResult={applyMentionResult}
+                onHoverIndex={setMentionActiveIndex}
+              />
+            ) : null}
+            <div
+              className="flex items-center gap-1"
+              data-testid="composer-v2-mobile-row"
+            >
+              {canAttach ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  aria-label="Add attachment"
+                  disabled={
+                    pending ||
+                    disabled ||
+                    visibleAttachments.length >= MAX_ATTACHMENTS
+                  }
+                  onClick={() => fileInputRef.current?.click()}
+                  className="h-11 w-11 shrink-0 p-0"
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              ) : null}
+              <Textarea
+                name="content"
+                required
+                placeholder={placeholder}
+                rows={1}
+                disabled={pending || disabled}
+                onKeyDown={onKeyDown}
+                onChange={handleTextareaChange}
+                onBlur={() => {
+                  setSlashQuery(null);
+                  closeMentionMenu();
+                }}
+                onPaste={canAttach ? handlePaste : undefined}
+                className="min-h-0 flex-1 resize-none border-none bg-transparent py-2 shadow-none focus-visible:ring-0"
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                aria-label={cogAriaLabel}
+                onClick={onOpenSessionSettings}
+                className="relative h-11 w-11 shrink-0 p-0"
+              >
+                <SlidersHorizontal className="h-4 w-4" />
+                {cogDotClass ? (
+                  <span
+                    aria-hidden="true"
+                    data-testid="composer-cog-dot"
+                    className={cn(
+                      "absolute right-2 top-2 size-1.5 rounded-full",
+                      cogDotClass,
+                    )}
+                  />
+                ) : null}
+              </Button>
+              <Button
+                type="submit"
+                disabled={
+                  pending || disabled || uploadsInFlight || codeGateBlocked
+                }
+                size="sm"
+                aria-label={sendAriaLabel}
+                className="h-11 w-11 shrink-0 p-0"
+              >
+                <Send className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        ) : (
+        <>
         {/* Toolbar. Collapsed: a slim single row (~40px) with a tap-to-expand
           affordance, the send button, and the expand chevron. Expanded on
           desktop: the full control row (flex-wrap as an overflow safety net).
@@ -1990,13 +2152,16 @@ export function MessageComposer({
             </Button>
           </div>
         </div>
+        </>
+        )}
       </form>
 
       {/* Mobile overflow sheet: the non-essential toolbar controls as
         thumb-friendly full-width rows (≥44px tall). Portaled to the body, so
         interactive children here are OUTSIDE the form — every control is a
-        type="button"/stateful picker, never a submit. */}
-      {isMobile && !composerCollapsed ? (
+        type="button"/stateful picker, never a submit. Never in v2Mobile — its
+        four essential controls are all inline in the condensed row above. */}
+      {isMobile && !composerCollapsed && !v2Mobile ? (
         <Sheet open={overflowOpen} onOpenChange={setOverflowOpen}>
           <SheetPopup
             side="bottom"
