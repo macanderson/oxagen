@@ -39,57 +39,69 @@ export function AttachPopover({
   const inputRef = React.useRef<HTMLInputElement>(null);
 
   return (
-    <Popover>
-      <PopoverTrigger
-        render={
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            aria-label="Add attachment"
-            disabled={disabled}
-            className="h-11 w-11 shrink-0 p-0"
-          />
-        }
-      >
-        <Paperclip className="h-4 w-4" />
-      </PopoverTrigger>
-      <PopoverPopup
-        side="top"
-        align="start"
-        data-testid="attach-popover"
-        className="w-48 p-1"
-      >
-        <input
-          ref={inputRef}
-          type="file"
-          accept="image/*,video/*,application/pdf"
-          multiple
-          hidden
-          aria-hidden="true"
-          tabIndex={-1}
-          onChange={(e) => {
-            if (e.target.files && e.target.files.length > 0)
-              onPickFiles(e.target.files);
-            // Reset so picking the SAME file again still fires onChange.
-            e.target.value = "";
-          }}
-        />
-        <PopoverClose
+    <>
+      {/* Hidden native input rendered OUTSIDE PopoverPopup so it stays mounted
+        after the popover closes. PopoverPopup is portalled and not
+        keepMounted (it has exit-animation styles), so Base UI removes it —
+        and anything nested inside it — from the DOM shortly after close.
+        Clicking "Upload files" opens the OS file dialog AND closes the
+        popover synchronously; if the input lived inside the popup it would be
+        unmounted before the user finished picking, so the `change` event
+        would fire on a detached node and React's delegated listener would
+        never see it (onPickFiles would silently never run). Keeping the input
+        at the top level mirrors AttachTray's mobile pattern. */}
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*,video/*,application/pdf"
+        multiple
+        hidden
+        aria-hidden="true"
+        tabIndex={-1}
+        onChange={(e) => {
+          if (e.target.files && e.target.files.length > 0)
+            onPickFiles(e.target.files);
+          // Reset so picking the SAME file again still fires onChange.
+          e.target.value = "";
+        }}
+      />
+      <Popover>
+        <PopoverTrigger
           render={
             <Button
               type="button"
               variant="ghost"
-              aria-label="Upload files"
-              onClick={() => inputRef.current?.click()}
-              className="h-11 w-full justify-start gap-2 px-2 text-sm"
+              size="sm"
+              aria-label="Add attachment"
+              disabled={disabled}
+              className="h-11 w-11 shrink-0 p-0"
             />
           }
         >
-          <Paperclip className="h-4 w-4" aria-hidden="true" />
-          Upload files
-        </PopoverClose>
-      </PopoverPopup>
-    </Popover>
+          <Paperclip className="h-4 w-4" />
+        </PopoverTrigger>
+        <PopoverPopup
+          side="top"
+          align="start"
+          data-testid="attach-popover"
+          className="w-48 p-1"
+        >
+          <PopoverClose
+            render={
+              <Button
+                type="button"
+                variant="ghost"
+                aria-label="Upload files"
+                onClick={() => inputRef.current?.click()}
+                className="h-11 w-full justify-start gap-2 px-2 text-sm"
+              />
+            }
+          >
+            <Paperclip className="h-4 w-4" aria-hidden="true" />
+            Upload files
+          </PopoverClose>
+        </PopoverPopup>
+      </Popover>
+    </>
   );
 }
