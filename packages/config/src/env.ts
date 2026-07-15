@@ -253,6 +253,11 @@ export const baseEnvSchema = z.object({
   // Browser-exposed docs-site origin override (apps/app docs links). Optional —
   // getDocsBaseUrl() resolves a correct dev/prod default when unset.
   NEXT_PUBLIC_DOCS_URL: z.string().url().optional(),
+  // chat_ux_v2 feature flag (apps/app chat UX overhaul). "1" enables the new
+  // session-settings chat surface environment-wide; unset/anything else = off.
+  // A per-browser cookie override (`?chat_ux_v2=1|0`, see apps/app proxy.ts)
+  // wins over this default. Remove once the v2 surface fully replaces v1.
+  NEXT_PUBLIC_CHAT_UX_V2: z.enum(["0", "1"]).optional(),
   // MCP protocol endpoint origin surfaced by system.install.instructions.
   // Optional — the handler falls back to the prod MCP URL when unset.
   MCP_URL: z.string().url().optional(),
