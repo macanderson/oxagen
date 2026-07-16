@@ -83,6 +83,22 @@ export function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
 }
 
+/**
+ * First name from a Better Auth `user.name` (which stores a full display name).
+ * Returns null when there's nothing usable to greet with, so callers can fall
+ * back to a name-less greeting rather than rendering "Welcome, !".
+ *
+ * An email-looking name (some providers backfill `name` with the address) is
+ * rejected: greeting someone as "Welcome, mac+local@oxagen.sh!" reads worse
+ * than a plain "Welcome!".
+ */
+export function firstNameOf(name: string | null | undefined): string | null {
+  if (!name) return null;
+  const first = name.trim().split(/\s+/)[0];
+  if (!first || first.includes("@")) return null;
+  return first;
+}
+
 /** Truncate a string to at most `max` characters, appending an ellipsis. */
 export function truncate(value: string, max: number): string {
   if (value.length <= max) return value;

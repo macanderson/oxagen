@@ -40,8 +40,7 @@ import type { EnvironmentOption } from "./environment-selector";
 import type { AgentOption } from "./agent-picker/agent-picker-types";
 import type { StoredCodeBinding } from "@/app/api/v1/chat/stream/code-binding";
 import { ChatSelectionProvider } from "./agent-picker/chat-selection-context";
-import { ChatSessionProvider, useChatSession } from "./session/session-store";
-import { AgentAvatar } from "./agent-picker/agent-avatar";
+import { ChatSessionProvider } from "./session/session-store";
 import type { SessionSeed } from "./session/session-state";
 import { ChatHeaderMobile } from "./chat-header-mobile";
 import { ChatHeaderDesktop } from "./chat-header-desktop";
@@ -54,7 +53,6 @@ import { SessionSettings } from "./session/session-settings";
 import { useSessionSettingsData } from "./session/use-session-settings-data";
 import { useIsMobile, useMediaQuery } from "@/hooks/use-media-query";
 import { NotificationsBell } from "@/components/shell/notifications-bell";
-import { AgentGallery } from "./agent-picker/agent-gallery";
 import {
   resolveDefaultRepoKey,
   resolveDefaultEnvId,
@@ -202,6 +200,7 @@ export function ChatShellClient({
   showFiles = true,
   chatUxV2 = false,
   walletBalanceCents = null,
+  userFirstName = null,
 }: {
   conversationId: string | null;
   /** publicId used for the files-panel fetch. */
@@ -301,6 +300,9 @@ export function ChatShellClient({
   chatUxV2?: boolean;
   /** Org credit balance in cents for the drawer's wallet footer row. */
   walletBalanceCents?: number | null;
+  /** The signed-in user's first name, for the new-conversation welcome line.
+   *  Null/omitted ⇒ a plain "Welcome!" with no name. */
+  userFirstName?: string | null;
 }) {
   const {
     plans,
@@ -1534,62 +1536,23 @@ export function ChatShellClient({
               onScroll={handleScroll}
             >
               {messages.length === 0 && !hasLiveContent ? (
-                <div className="flex h-full flex-col items-center justify-center gap-4 text-center text-sm text-muted-foreground">
-                  {/* v2 mobile with an agent already picked: a focused empty
-                state — centered avatar + name + description; the starter
-                prompts dock above the composer (below). Everywhere else the
-                gallery hero renders as before. V2MobileEmptyState resolves
-                the agent from the session store (it renders inside the
-                provider) and falls back to the gallery when none is picked. */}
-                  {v2MobileChrome ? (
-                    <V2MobileEmptyState
-                      agents={availableAgents ?? []}
-                      gallery={
-                        <AgentGallery
-                          agents={availableAgents ?? []}
-                          repos={availableRepos ?? []}
-                          environments={availableEnvironments ?? []}
-                          defaultRepoKey={defaultRepoKey}
-                          defaultEnvId={defaultEnvId}
-                          defaultAgentId={currentDefaultAgentId}
-                          onSetDefaultAgent={
-                            setDefaultAgentAction
-                              ? handleSetDefaultAgent
-                              : undefined
-                          }
-                          workspaceSlug={workspaceSlug}
-                        />
-                      }
-                    />
-                  ) : (
-                    <AgentGallery
-                      agents={availableAgents ?? []}
-                      repos={availableRepos ?? []}
-                      environments={availableEnvironments ?? []}
-                      defaultRepoKey={defaultRepoKey}
-                      defaultEnvId={defaultEnvId}
-                      defaultAgentId={currentDefaultAgentId}
-                      onSetDefaultAgent={
-                        setDefaultAgentAction ? handleSetDefaultAgent : undefined
-                      }
-                      workspaceSlug={workspaceSlug}
-                    />
-                  )}
-                  {(availableAgents?.length ?? 0) === 0 ? (
-                    <div>
-                      <p className="font-medium">Start a conversation.</p>
-                      <p>Send a message below to begin.</p>
-                    </div>
-                  ) : null}
-                  {/* Suggested chips inside the centered empty state — legacy
-                only; v2 docks them directly above the composer instead. */}
-                  {!chatUxV2 ? (
-                    <SuggestedPromptChips
-                      action={wrappedSendAction}
-                      conversationId={conversationId}
-                      parentMessageId={activeLeafMessageId}
-                    />
-                  ) : null}
+                /* A new conversation is deliberately EMPTY and quiet: just a
+                  welcome line, with the cursor already in the composer (see the
+                  composer's autoFocus) so the user can simply start typing.
+                  No agent gallery and no starter prompt chips — choosing an
+                  agent (and, for a code agent, its org → repository → branch)
+                  happens in the composer's agent picker, and that choice is
+                  then immutable for the conversation. */
+                <div
+                  className="flex h-full flex-col items-center justify-center gap-1 px-6 text-center"
+                  data-testid="chat-empty-state"
+                >
+                  <p className="text-xl font-semibold text-foreground">
+                    {userFirstName ? `Welcome, ${userFirstName}!` : "Welcome!"}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    What would you like to do?
+                  </p>
                 </div>
               ) : (
                 <div className="flex flex-col gap-4">
@@ -1703,17 +1666,10 @@ export function ChatShellClient({
             COMPLETED turn — it's a "what would you do next" prompt, not a
             mid-stream distraction. Falls back to the static heuristic only
             until the first server suggestion lands. */}
-          {chatUxV2 && messages.length === 0 && !hasLiveContent ? (
-            <SuggestedPromptChips
-              action={wrappedSendAction}
-              conversationId={conversationId}
-              parentMessageId={activeLeafMessageId}
-              sentenceCase
-              maxPrompts={3}
-              stacked={v2MobileChrome}
-              align={v2MobileChrome ? "center" : "start"}
-            />
-          ) : null}
+          {/* NOTE: no starter chips on the empty state — a new conversation is
+          just the welcome line + a focused composer (see the empty state
+          above). Suggestions only appear AFTER the first turn, as the single
+          dismissable next-step pill below. */}
           {!isStreaming && messages.length > 0 ? (
             <SuggestedPromptChips
               action={wrappedSendAction}
@@ -1929,45 +1885,9 @@ export function ChatShellClient({
   );
 }
 
-/**
- * V2MobileEmptyState — the focused mobile empty state once an agent is
- * picked: centered avatar + name + one-line description (the starter prompts
- * dock above the composer, outside this block). Falls back to the provided
- * gallery while no agent is selected. Rendered INSIDE ChatSessionProvider so
- * it can resolve the picked agent from the session store.
- */
-function V2MobileEmptyState({
-  agents,
-  gallery,
-}: {
-  agents: AgentOption[];
-  gallery: React.ReactNode;
-}) {
-  const { state } = useChatSession();
-  const agent = state.agentId
-    ? (agents.find((a) => a.agentId === state.agentId) ?? null)
-    : null;
-  if (!agent) return <>{gallery}</>;
-  const description = agent.summary ?? agent.description;
-  return (
-    <div
-      className="flex flex-col items-center gap-2 px-6"
-      data-testid="v2-mobile-empty-state"
-    >
-      <AgentAvatar
-        avatarUrl={agent.avatarUrl}
-        name={agent.name}
-        slug={agent.slug}
-        size="lg"
-        shape="square"
-      />
-      <p className="text-base font-semibold text-foreground">{agent.name}</p>
-      {description ? (
-        <p className="line-clamp-2 text-sm">{description}</p>
-      ) : null}
-    </div>
-  );
-}
+/* The empty state no longer renders an agent hero or gallery — a new
+   conversation is just the welcome line + a focused composer. Agent (and code
+   org/repo/branch) selection lives in the composer's agent picker. */
 
 /**
  * MobileSessionChrome — the v2 mobile header + session-settings drawer,

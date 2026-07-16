@@ -102,4 +102,6 @@ export interface ChatShellProps {
    * (chat_ux_v2). Null hides the row (balance read failed / not wired).
    */
   walletBalanceCents?: number | null;
+  /** Signed-in user's first name, for the new-conversation welcome line. */
+  userFirstName?: string | null;
 }
