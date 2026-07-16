@@ -71,7 +71,7 @@ describe("SandboxLogsConsole", () => {
     );
 
     await waitFor(() => {
-      expect(loadLogs).toHaveBeenCalledWith({ level: "normal" });
+      expect(loadLogs).toHaveBeenCalledWith({ level: "normal", limit: 500 });
     });
 
     const rows = await screen.findAllByTestId("sandbox-logs-line");
@@ -98,21 +98,21 @@ describe("SandboxLogsConsole", () => {
       />,
     );
 
-    // Initial load is the non-debug view.
+    // Initial load is the non-debug view. Every call carries the row cap.
     await waitFor(() =>
-      expect(loadLogs).toHaveBeenCalledWith({ level: "normal" }),
+      expect(loadLogs).toHaveBeenCalledWith({ level: "normal", limit: 500 }),
     );
 
     // Toggle Debug ON → the loader is re-called with no level (everything).
     fireEvent.click(screen.getByTestId("sandbox-logs-debug-toggle"));
     await waitFor(() =>
-      expect(loadLogs).toHaveBeenLastCalledWith({ level: undefined }),
+      expect(loadLogs).toHaveBeenLastCalledWith({ level: undefined, limit: 500 }),
     );
 
     // Toggle back OFF → returns to the "normal" view.
     fireEvent.click(screen.getByTestId("sandbox-logs-debug-toggle"));
     await waitFor(() =>
-      expect(loadLogs).toHaveBeenLastCalledWith({ level: "normal" }),
+      expect(loadLogs).toHaveBeenLastCalledWith({ level: "normal", limit: 500 }),
     );
   });
 
@@ -128,6 +128,31 @@ describe("SandboxLogsConsole", () => {
       />,
     );
     expect(await screen.findByText("sandbox gone")).toBeTruthy();
+  });
+
+  it("keeps loaded lines and shows an inline error banner when a refresh fails", async () => {
+    // First load succeeds; the next (Refresh-triggered) load throws. A transient
+    // poll failure must NOT wipe the scrollback — the lines stay, the error is a
+    // banner alongside them.
+    const loadLogs = vi.fn(async () => LINES);
+    render(
+      <SandboxLogsConsole
+        sessionId="sbx_abc123def456"
+        loadLogs={loadLogs}
+        pollMs={NO_POLL}
+      />,
+    );
+
+    const rows = await screen.findAllByTestId("sandbox-logs-line");
+    expect(rows).toHaveLength(3);
+
+    // Queue a one-time failure for the manual refresh.
+    loadLogs.mockRejectedValueOnce(new Error("poll failed"));
+    fireEvent.click(screen.getByTestId("sandbox-logs-refresh"));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("poll failed");
+    // The previously-loaded lines are still on screen.
+    expect(screen.getAllByTestId("sandbox-logs-line")).toHaveLength(3);
   });
 
   it("does not load when disabled", () => {

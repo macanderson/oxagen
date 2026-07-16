@@ -48,6 +48,10 @@ export interface SandboxLogsConsoleProps {
 
 const DEFAULT_POLL_MS = 3000;
 
+// Cap the scrollback fetched per poll — a hard upper bound on rows rendered
+// (unvirtualized), so a long-running session can't grow the DOM unboundedly.
+const SANDBOX_LOGS_LIMIT = 500;
+
 type Stream = "stdout" | "stderr" | "system";
 
 /** Normalise an unknown stream value to a known tag; unknowns read as stdout. */
@@ -130,7 +134,7 @@ export function SandboxLogsConsole({
     setLoading(true);
     setError(null);
     try {
-      const next = await loadLogs({ level });
+      const next = await loadLogs({ level, limit: SANDBOX_LOGS_LIMIT });
       setLines(next);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load logs.");
@@ -199,6 +203,18 @@ export function SandboxLogsConsole({
         </div>
       </div>
 
+      {/* A transient poll failure with lines already loaded shows a compact
+          banner ABOVE the scrollback rather than blowing it away — and sits
+          outside the auto-scrolling log so live-tail can't scroll it off. */}
+      {error && lines.length > 0 ? (
+        <div
+          role="alert"
+          className="code-border text-error border-b px-3 py-1.5 text-xs"
+        >
+          {error}
+        </div>
+      ) : null}
+
       <div
         ref={scrollRef}
         role="log"
@@ -206,7 +222,7 @@ export function SandboxLogsConsole({
         aria-live="polite"
         className="max-h-[28rem] min-h-[10rem] flex-1 overflow-y-auto overflow-x-auto p-3 font-mono text-xs leading-relaxed"
       >
-        {error ? (
+        {error && lines.length === 0 ? (
           <div role="alert" className="text-error">
             {error}
           </div>
