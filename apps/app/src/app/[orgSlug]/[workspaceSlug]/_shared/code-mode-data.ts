@@ -60,6 +60,10 @@ export interface CodeModeOptions {
 
 const EMPTY: CodeModeOptions = { repos: [], environments: [] };
 
+/** Max GitHub connections enriched (one connection.get each) for the repo
+ * picker — bounds the blocking fan-out on the chat page's critical path. */
+const CODE_MODE_CONNECTION_LIMIT = 10;
+
 /**
  * Loads the repo + environment options for the code-mode pickers. Never
  * throws — a failure on either read degrades to an empty list so the chat
@@ -90,7 +94,18 @@ export async function loadCodeModeOptions(
 
       // Only "connected" GitHub connections have a live sandbox target — a
       // pending_setup/paused/error connection has no reliable owner/repo yet.
-      const usableConnections = connectionsResult.connections.filter((c) => c.status === "connected");
+      const allUsable = connectionsResult.connections.filter((c) => c.status === "connected");
+      // Bound the per-connection connection.get fan-out: this runs on the
+      // chat page's blocking path, so an unbounded workspace must not turn
+      // into an unbounded burst of handler calls (same idiom as
+      // workflows.ts ENRICH_LIMIT / agents.ts limit=3).
+      const usableConnections = allUsable.slice(0, CODE_MODE_CONNECTION_LIMIT);
+      if (allUsable.length > usableConnections.length) {
+        logger.warn(
+          { orgId, workspaceId, total: allUsable.length, limit: CODE_MODE_CONNECTION_LIMIT },
+          "code-mode-data: repo picker truncated to the first connections — raise CODE_MODE_CONNECTION_LIMIT or batch deliveryConfig into connection.list if this fires in practice",
+        );
+      }
 
       const repoLists = await Promise.all(
         usableConnections.map(async (c) => {
