@@ -5,7 +5,7 @@ import type { CapabilityContext } from "@oxagen/oxagen";
 // The handler issues three withTenantDb calls in order:
 //   1. skill lookup     → select(...).from(...).where(...).limit(1)
 //   2. count            → select({ total: count() }).from(...).where(...)   (terminates at .where)
-//   3. version page     → select(...).from(...).where(...).orderBy(...).limit(...).offset(...)
+//   3. version page     → select(...).from(...).leftJoin(users).where(...).orderBy(...).limit(...).offset(...)
 // We queue one result per withTenantDb call; each tx stub resolves every
 // terminal method the handler may call to the next queued result.
 const mocks = vi.hoisted(() => ({
@@ -51,7 +51,10 @@ vi.mock("@oxagen/database", async (importOriginal) => {
                 }),
               }),
             };
-            return { where: () => whereResult };
+            const whereFn = () => whereResult;
+            // The version-page query LEFT JOINs users for the author email
+            // before .where(); route it back to the same where builder.
+            return { where: whereFn, leftJoin: () => ({ where: whereFn }) };
           },
         }),
       };
@@ -76,17 +79,15 @@ const makeVersionRow = (overrides: Record<string, unknown> = {}) => ({
   publicId: "slv_002",
   versionNumber: 2,
   isLatest: true,
+  changeSummary: null,
   createdAt: new Date("2024-06-01T00:00:00.000Z"),
   createdByUserId: "u_1",
+  createdByEmail: "u1@example.com",
   ...overrides,
 });
 
 /** Queue the three withTenantDb results (skill, count, versions) for one call sequence. */
-function enqueue(
-  skill: unknown,
-  count: unknown,
-  versions: unknown,
-): void {
+function enqueue(skill: unknown, count: unknown, versions: unknown): void {
   mocks.dbCallResults.length = 0;
   mocks.dbCallResults.push(
     () => Promise.resolve(skill),
@@ -135,16 +136,44 @@ describe("skillVersionListHandler (@oxagen/handlers)", () => {
     expect(v.versionNumber).toBe(2);
     expect(v.isLatest).toBe(true);
     expect(v.isActive).toBe(true); // matches activeVersionId
+    expect(v.changeSummary).toBeNull();
     expect(v.createdBy).toBe("u_1");
+    expect(v.createdByEmail).toBe("u1@example.com");
     expect(typeof v.createdAt).toBe("string");
     expect(result.total).toBe(1);
+  });
+
+  it("passes through changeSummary and null createdByEmail", async () => {
+    enqueue(
+      [SKILL_ROW],
+      [{ total: 1 }],
+      [
+        makeVersionRow({
+          changeSummary: "tighten wording",
+          createdByEmail: null,
+        }),
+      ],
+    );
+    const result = await skillVersionListHandler(
+      { skill_id: "skl_abc", limit: 20, offset: 0 },
+      CTX,
+    );
+    expect(result.versions[0]!.changeSummary).toBe("tighten wording");
+    expect(result.versions[0]!.createdByEmail).toBeNull();
   });
 
   it("marks isActive=false when version does not match active_version_id", async () => {
     enqueue(
       [SKILL_ROW],
       [{ total: 1 }],
-      [makeVersionRow({ id: "uuid-ver-1", publicId: "slv_001", versionNumber: 1, isLatest: false })],
+      [
+        makeVersionRow({
+          id: "uuid-ver-1",
+          publicId: "slv_001",
+          versionNumber: 1,
+          isLatest: false,
+        }),
+      ],
     );
     const result = await skillVersionListHandler(
       { skill_id: "skl_abc", limit: 20, offset: 0 },
@@ -154,7 +183,11 @@ describe("skillVersionListHandler (@oxagen/handlers)", () => {
   });
 
   it("marks isActive=false when skill has no activeVersionId", async () => {
-    enqueue([{ ...SKILL_ROW, activeVersionId: null }], [{ total: 1 }], [makeVersionRow()]);
+    enqueue(
+      [{ ...SKILL_ROW, activeVersionId: null }],
+      [{ total: 1 }],
+      [makeVersionRow()],
+    );
     const result = await skillVersionListHandler(
       { skill_id: "skl_abc", limit: 20, offset: 0 },
       CTX,
@@ -163,7 +196,11 @@ describe("skillVersionListHandler (@oxagen/handlers)", () => {
   });
 
   it("returns null createdBy when createdByUserId is null", async () => {
-    enqueue([SKILL_ROW], [{ total: 1 }], [makeVersionRow({ createdByUserId: null })]);
+    enqueue(
+      [SKILL_ROW],
+      [{ total: 1 }],
+      [makeVersionRow({ createdByUserId: null })],
+    );
     const result = await skillVersionListHandler(
       { skill_id: "skl_abc", limit: 20, offset: 0 },
       CTX,
@@ -176,9 +213,24 @@ describe("skillVersionListHandler (@oxagen/handlers)", () => {
       [SKILL_ROW],
       [{ total: 3 }],
       [
-        makeVersionRow({ id: "uuid-ver-3", publicId: "slv_003", versionNumber: 3, isLatest: true }),
-        makeVersionRow({ id: "uuid-ver-2", publicId: "slv_002", versionNumber: 2, isLatest: false }),
-        makeVersionRow({ id: "uuid-ver-1", publicId: "slv_001", versionNumber: 1, isLatest: false }),
+        makeVersionRow({
+          id: "uuid-ver-3",
+          publicId: "slv_003",
+          versionNumber: 3,
+          isLatest: true,
+        }),
+        makeVersionRow({
+          id: "uuid-ver-2",
+          publicId: "slv_002",
+          versionNumber: 2,
+          isLatest: false,
+        }),
+        makeVersionRow({
+          id: "uuid-ver-1",
+          publicId: "slv_001",
+          versionNumber: 1,
+          isLatest: false,
+        }),
       ],
     );
     const result = await skillVersionListHandler(
@@ -203,27 +255,39 @@ describe("skillVersionListHandler (@oxagen/handlers)", () => {
   it("propagates DB error from skill lookup", async () => {
     rejectAt(0, new Error("DB connection failed"));
     await expect(
-      skillVersionListHandler({ skill_id: "skl_abc", limit: 20, offset: 0 }, CTX),
+      skillVersionListHandler(
+        { skill_id: "skl_abc", limit: 20, offset: 0 },
+        CTX,
+      ),
     ).rejects.toThrow("DB connection failed");
   });
 
   it("propagates DB error from count query", async () => {
     rejectAt(1, new Error("count query failed"), [SKILL_ROW]);
     await expect(
-      skillVersionListHandler({ skill_id: "skl_abc", limit: 20, offset: 0 }, CTX),
+      skillVersionListHandler(
+        { skill_id: "skl_abc", limit: 20, offset: 0 },
+        CTX,
+      ),
     ).rejects.toThrow("count query failed");
   });
 
   it("propagates DB error from version page query", async () => {
     rejectAt(2, new Error("version page failed"), [SKILL_ROW], [{ total: 1 }]);
     await expect(
-      skillVersionListHandler({ skill_id: "skl_abc", limit: 20, offset: 0 }, CTX),
+      skillVersionListHandler(
+        { skill_id: "skl_abc", limit: 20, offset: 0 },
+        CTX,
+      ),
     ).rejects.toThrow("version page failed");
   });
 
   it("tenant isolation: skill from different workspace returns empty", async () => {
     enqueue([], [{ total: 0 }], []);
-    const alienCtx: CapabilityContext = makeCTX({ workspaceId: "ws_other", orgId: "org_other" });
+    const alienCtx: CapabilityContext = makeCTX({
+      workspaceId: "ws_other",
+      orgId: "org_other",
+    });
     const result = await skillVersionListHandler(
       { skill_id: "skl_abc", limit: 20, offset: 0 },
       alienCtx,

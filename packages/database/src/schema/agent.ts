@@ -213,6 +213,10 @@ export const skillVersions = agentSchema.table(
     referencesPayload: jsonb("references_payload")
       .notNull()
       .default(sql`'[]'::jsonb`),
+    // Author-supplied summary of what changed in this version (commit message).
+    changeSummary: text("change_summary"),
+    // checksum: SHA-256 hex over body — immutability contract (see agent_versions).
+    checksum: text("checksum"),
   },
   (t) => ({
     skillIdx: index("skill_versions_skill_idx").on(t.skillId),

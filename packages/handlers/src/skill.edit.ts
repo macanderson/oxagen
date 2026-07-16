@@ -3,15 +3,22 @@ import { skillEdit } from "@oxagen/oxagen/contracts/skill.edit";
 import { logger } from "./logger";
 import { createNewSkillVersion } from "./skill-version-create";
 
-export const skillEditHandler: CapabilityHandler<typeof skillEdit> = async (input, ctx) => {
+export const skillEditHandler: CapabilityHandler<typeof skillEdit> = async (
+  input,
+  ctx,
+) => {
   if (!ctx.userId) {
-    logger.warn({ orgId: ctx.orgId }, "skill.edit: rejected — no authenticated user");
+    logger.warn(
+      { orgId: ctx.orgId },
+      "skill.edit: rejected — no authenticated user",
+    );
     throw new Error("skill.edit requires an authenticated user");
   }
 
   const result = await createNewSkillVersion({
     skillPublicId: input.skill_id,
     body: input.body,
+    changeSummary: input.change_summary,
     activate: input.activate,
     orgId: ctx.orgId,
     workspaceId: ctx.workspaceId,

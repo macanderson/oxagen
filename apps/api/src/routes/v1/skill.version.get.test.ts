@@ -46,14 +46,14 @@ describe("GET skill/version", () => {
     );
   });
 
-  it("falls back to an empty string for version_id when absent", async () => {
+  it("omits version_id when absent so the handler resolves the active version", async () => {
     await skillVersionGetRoute.fetch(
       new Request("http://localhost/?skill_id=skl_1"),
     );
 
     expect(mocks.invoke).toHaveBeenCalledWith(
       "get_skill_version",
-      { skill_id: "skl_1", version_id: "" },
+      { skill_id: "skl_1", version_id: undefined },
       fakeCtx,
       { surface: "api" },
     );

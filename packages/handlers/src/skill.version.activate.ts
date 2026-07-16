@@ -1,18 +1,18 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { skillVersionActivate } from "@oxagen/oxagen/contracts/skill.version.activate";
 import { schema, withTenantDb } from "@oxagen/database";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, or } from "drizzle-orm";
 import { logger } from "./logger";
 
-export const skillVersionActivateHandler: CapabilityHandler<typeof skillVersionActivate> = async (
-  input,
-  ctx,
-) => {
+export const skillVersionActivateHandler: CapabilityHandler<
+  typeof skillVersionActivate
+> = async (input, ctx) => {
   const { skillId, versionNumber } = input;
   const now = new Date();
 
   const result = await withTenantDb(async (tx) => {
-    // 1. Resolve the skill by publicId within this tenant's workspace.
+    // 1. Resolve the skill by publicId or slug within this tenant's workspace
+    //    (same dual resolution as skill.enable).
     const [skill] = await tx
       .select({
         id: schema.skills.id,
@@ -23,7 +23,10 @@ export const skillVersionActivateHandler: CapabilityHandler<typeof skillVersionA
       .from(schema.skills)
       .where(
         and(
-          eq(schema.skills.publicId, skillId),
+          or(
+            eq(schema.skills.publicId, skillId),
+            eq(schema.skills.slug, skillId),
+          ),
           eq(schema.skills.workspaceId, ctx.workspaceId),
           eq(schema.skills.orgId, ctx.orgId),
           isNull(schema.skills.deletedAt),

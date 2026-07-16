@@ -34,8 +34,19 @@
 
 import * as React from "react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent, cleanup, waitFor, act } from "@testing-library/react";
-import { SkillDetailPanel, type SkillDetailData, type SkillVersion } from "./skill-detail-panel";
+import {
+  render,
+  screen,
+  fireEvent,
+  cleanup,
+  waitFor,
+  act,
+} from "@testing-library/react";
+import {
+  SkillDetailPanel,
+  type SkillDetailData,
+  type SkillVersion,
+} from "./skill-detail-panel";
 
 afterEach(() => {
   cleanup();
@@ -54,10 +65,17 @@ vi.mock("@/components/ui/toast", () => ({
   useToast: () => ({ add: mockToastAdd }),
 }));
 
-vi.mock("lucide-react", () => new Proxy({} as Record<string | symbol, unknown>, {
-  get: (_t, prop) => (prop === "then" ? undefined : () => <svg aria-hidden="true" data-icon={String(prop)} />),
-  has: (_t, prop) => prop !== "then",
-}));
+vi.mock(
+  "lucide-react",
+  () =>
+    new Proxy({} as Record<string | symbol, unknown>, {
+      get: (_t, prop) =>
+        prop === "then"
+          ? undefined
+          : () => <svg aria-hidden="true" data-icon={String(prop)} />,
+      has: (_t, prop) => prop !== "then",
+    }),
+);
 
 vi.mock("@/components/ui/button", () => ({
   Button: ({
@@ -102,6 +120,40 @@ vi.mock("@/components/ui/badge", () => ({
   }) => <span data-testid="badge">{children}</span>,
 }));
 
+vi.mock("@/components/ui/dialog", () => ({
+  Dialog: ({
+    open,
+    children,
+  }: {
+    open: boolean;
+    onOpenChange?: (open: boolean) => void;
+    children: React.ReactNode;
+  }) => (open ? <div data-testid="dialog-root">{children}</div> : null),
+  DialogPopup: ({
+    children,
+    "data-testid": testId,
+  }: {
+    children: React.ReactNode;
+    className?: string;
+    "data-testid"?: string;
+  }) => <div data-testid={testId ?? "dialog-popup"}>{children}</div>,
+  DialogHeader: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  DialogTitle: ({ children }: { children: React.ReactNode }) => (
+    <h2>{children}</h2>
+  ),
+  DialogDescription: ({ children }: { children: React.ReactNode }) => (
+    <p>{children}</p>
+  ),
+  DialogFooter: ({
+    children,
+  }: {
+    children: React.ReactNode;
+    className?: string;
+  }) => <div>{children}</div>,
+}));
+
 vi.mock("@/components/ui/textarea", () => ({
   Textarea: ({
     value,
@@ -131,19 +183,26 @@ vi.mock("@/components/ui/textarea", () => ({
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
-const makeSkill = (overrides: Partial<SkillDetailData> = {}): SkillDetailData => ({
+const makeSkill = (
+  overrides: Partial<SkillDetailData> = {},
+): SkillDetailData => ({
   id: "skill-1",
   slug: "my-skill",
   name: "My Skill",
   description: "Does something useful",
   source: "custom",
+  installedFromSlug: null,
   activeVersion: "v1.2.0",
+  activeVersionIsPinned: true,
   content: "# My Skill\n\nSome content here.",
   updatedAt: "2026-01-01T00:00:00Z",
   ...overrides,
 });
 
-const makeVersion = (overrides: Partial<SkillVersion> & { id: string }): SkillVersion => ({
+const makeVersion = (
+  overrides: Partial<SkillVersion> & { id: string },
+): SkillVersion => ({
+  versionNumber: 1,
   version: "v1.0.0",
   commitMessage: "Initial commit",
   createdAt: "2026-01-01T00:00:00Z",
@@ -152,8 +211,19 @@ const makeVersion = (overrides: Partial<SkillVersion> & { id: string }): SkillVe
   ...overrides,
 });
 
-const v1 = makeVersion({ id: "ver-1", version: "v1.0.0", isActive: false });
-const v2 = makeVersion({ id: "ver-2", version: "v1.2.0", isActive: true, commitMessage: "Add feature" });
+const v1 = makeVersion({
+  id: "ver-1",
+  versionNumber: 1,
+  version: "v1.0.0",
+  isActive: false,
+});
+const v2 = makeVersion({
+  id: "ver-2",
+  versionNumber: 2,
+  version: "v1.2.0",
+  isActive: true,
+  commitMessage: "Add feature",
+});
 
 const defaultEditAction = vi.fn();
 const defaultActivateAction = vi.fn();
@@ -218,7 +288,10 @@ describe("SkillDetailPanel — rendering: meta section", () => {
 
   it("renders active version badge when activeVersion is set", () => {
     // Use a unique version string not present in default version rows
-    renderPanel({ skill: makeSkill({ activeVersion: "v99.0.0" }), versions: [] });
+    renderPanel({
+      skill: makeSkill({ activeVersion: "v99.0.0" }),
+      versions: [],
+    });
     expect(screen.getByText("v99.0.0")).toBeInTheDocument();
   });
 
@@ -279,7 +352,9 @@ describe("SkillDetailPanel — edit flow", () => {
     renderPanel({ canManage: true });
     fireEvent.click(screen.getByTestId("skill-edit-btn"));
 
-    expect(screen.getByTestId("skill-commit-message-input")).toBeInTheDocument();
+    expect(
+      screen.getByTestId("skill-commit-message-input"),
+    ).toBeInTheDocument();
   });
 
   it("editor panel contains Save New Version button", () => {
@@ -314,7 +389,10 @@ describe("SkillDetailPanel — edit flow", () => {
   });
 
   it("Save button is enabled when textarea has content", () => {
-    renderPanel({ skill: makeSkill({ content: "Some content" }), canManage: true });
+    renderPanel({
+      skill: makeSkill({ content: "Some content" }),
+      canManage: true,
+    });
     fireEvent.click(screen.getByTestId("skill-edit-btn"));
 
     const saveBtn = screen.getByTestId("skill-save-btn");
@@ -425,7 +503,7 @@ describe("SkillDetailPanel — download flow", () => {
     vi.clearAllMocks();
   });
 
-  it("clicking Download button calls exportAction without versionId", async () => {
+  it("clicking Download button calls exportAction without versionNumber", async () => {
     defaultExportAction.mockResolvedValue({
       ok: true,
       content: "# Skill",
@@ -466,7 +544,7 @@ describe("SkillDetailPanel — download flow", () => {
       orgSlug: "acme",
       workspaceSlug: "main",
       skillSlug: "my-skill",
-      versionId: undefined,
+      versionNumber: undefined,
     });
 
     expect(createObjectURL).toHaveBeenCalled();
@@ -513,6 +591,92 @@ describe("SkillDetailPanel — download flow", () => {
         }),
       );
     });
+  });
+});
+
+describe("SkillDetailPanel — pin confirmation", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  async function saveNewVersion() {
+    fireEvent.click(screen.getByTestId("skill-edit-btn"));
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("skill-save-btn"));
+    });
+  }
+
+  it("opens the pin dialog after a successful save that returns a versionNumber", async () => {
+    defaultEditAction.mockResolvedValue({
+      ok: true,
+      version: "v3",
+      versionNumber: 3,
+    });
+    renderPanel({ canManage: true });
+
+    await saveNewVersion();
+
+    expect(screen.getByTestId("skill-pin-dialog")).toBeInTheDocument();
+    expect(
+      screen.getByText("Pin v3 as the default version?"),
+    ).toBeInTheDocument();
+  });
+
+  it("does not open the pin dialog when save fails", async () => {
+    defaultEditAction.mockResolvedValue({ ok: false, error: "Conflict" });
+    renderPanel({ canManage: true });
+
+    await saveNewVersion();
+
+    expect(screen.queryByTestId("skill-pin-dialog")).not.toBeInTheDocument();
+  });
+
+  it("confirming pins the new version via activateAction and closes the dialog", async () => {
+    defaultEditAction.mockResolvedValue({
+      ok: true,
+      version: "v3",
+      versionNumber: 3,
+    });
+    defaultActivateAction.mockResolvedValue({ ok: true });
+    renderPanel({ canManage: true });
+
+    await saveNewVersion();
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("skill-pin-confirm-btn"));
+    });
+
+    expect(defaultActivateAction).toHaveBeenCalledWith({
+      orgSlug: "acme",
+      workspaceSlug: "main",
+      skillSlug: "my-skill",
+      versionNumber: 3,
+    });
+    await waitFor(() => {
+      expect(screen.queryByTestId("skill-pin-dialog")).not.toBeInTheDocument();
+    });
+  });
+
+  it("dismissing keeps the current pinned version (no activate call)", async () => {
+    defaultEditAction.mockResolvedValue({
+      ok: true,
+      version: "v3",
+      versionNumber: 3,
+    });
+    renderPanel({ canManage: true });
+
+    await saveNewVersion();
+    fireEvent.click(screen.getByTestId("skill-pin-dismiss-btn"));
+
+    expect(defaultActivateAction).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("skill-pin-dialog")).not.toBeInTheDocument();
+  });
+
+  it("labels the meta badge when the shown version is latest-unpinned", () => {
+    renderPanel({
+      skill: makeSkill({ activeVersion: "v2", activeVersionIsPinned: false }),
+      versions: [],
+    });
+    expect(screen.getByText(/latest, unpinned/)).toBeInTheDocument();
   });
 });
 
@@ -569,26 +733,36 @@ describe("SkillDetailPanel — version history", () => {
 
   it("inactive version does NOT show Activate button when canManage=false", () => {
     renderPanel({ versions: [v1], canManage: false });
-    expect(screen.queryByTestId("skill-version-activate-ver-1")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("skill-version-activate-ver-1"),
+    ).not.toBeInTheDocument();
   });
 
   it("inactive version shows Activate button when canManage=true", () => {
     renderPanel({ versions: [v1], canManage: true });
-    expect(screen.getByTestId("skill-version-activate-ver-1")).toBeInTheDocument();
+    expect(
+      screen.getByTestId("skill-version-activate-ver-1"),
+    ).toBeInTheDocument();
   });
 
   it("active version does NOT show Activate button even when canManage=true", () => {
     renderPanel({ versions: [v2], canManage: true });
-    expect(screen.queryByTestId("skill-version-activate-ver-2")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("skill-version-activate-ver-2"),
+    ).not.toBeInTheDocument();
   });
 
   it("per-version Download button is visible for each version", () => {
     renderPanel({ versions: [v1, v2] });
-    expect(screen.getByTestId("skill-version-download-ver-1")).toBeInTheDocument();
-    expect(screen.getByTestId("skill-version-download-ver-2")).toBeInTheDocument();
+    expect(
+      screen.getByTestId("skill-version-download-ver-1"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByTestId("skill-version-download-ver-2"),
+    ).toBeInTheDocument();
   });
 
-  it("clicking per-version Download calls exportAction with versionId", async () => {
+  it("clicking per-version Download calls exportAction with versionNumber", async () => {
     defaultExportAction.mockResolvedValue({
       ok: true,
       content: "# Skill",
@@ -621,7 +795,7 @@ describe("SkillDetailPanel — version history", () => {
       orgSlug: "acme",
       workspaceSlug: "main",
       skillSlug: "my-skill",
-      versionId: "ver-1",
+      versionNumber: 1,
     });
 
     vi.restoreAllMocks();
@@ -645,7 +819,7 @@ describe("SkillDetailPanel — activate flow", () => {
       orgSlug: "acme",
       workspaceSlug: "main",
       skillSlug: "my-skill",
-      versionId: "ver-1",
+      versionNumber: 1,
     });
   });
 
@@ -659,13 +833,16 @@ describe("SkillDetailPanel — activate flow", () => {
 
     await waitFor(() => {
       expect(mockToastAdd).toHaveBeenCalledWith(
-        expect.objectContaining({ title: "Version activated" }),
+        expect.objectContaining({ title: "v1 is now the workspace default" }),
       );
     });
   });
 
   it("shows error toast when activateAction fails", async () => {
-    defaultActivateAction.mockResolvedValue({ ok: false, error: "Already active" });
+    defaultActivateAction.mockResolvedValue({
+      ok: false,
+      error: "Already active",
+    });
     renderPanel({ versions: [v1, v2], canManage: true });
 
     await act(async () => {
@@ -685,7 +862,11 @@ describe("SkillDetailPanel — activate flow", () => {
 
   it("Activate button shows 'Activating…' while in progress", async () => {
     let resolve: (v: { ok: boolean }) => void = () => {};
-    defaultActivateAction.mockReturnValue(new Promise((r) => { resolve = r; }));
+    defaultActivateAction.mockReturnValue(
+      new Promise((r) => {
+        resolve = r;
+      }),
+    );
 
     renderPanel({ versions: [v1, v2], canManage: true });
     fireEvent.click(screen.getByTestId("skill-version-activate-ver-1"));

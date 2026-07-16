@@ -18,8 +18,14 @@ export const skillVersionActivate = registerCapability({
     workspace: { Owner: "allow", Admin: "allow" },
   },
   input: z.object({
-    skillId: z.string().describe("Public ID of the skill (e.g. 'skl_...')"),
-    versionNumber: z.number().int().min(1).describe("Version number to activate"),
+    skillId: z
+      .string()
+      .describe("Public ID of the skill (e.g. 'skl_...') or its slug"),
+    versionNumber: z
+      .number()
+      .int()
+      .min(1)
+      .describe("Version number to activate"),
   }),
   output: z.object({
     skillId: z.string().describe("Public ID of the skill"),
@@ -28,5 +34,9 @@ export const skillVersionActivate = registerCapability({
   }),
 });
 
-export type SkillVersionActivateInput = z.output<typeof skillVersionActivate.input>;
-export type SkillVersionActivateOutput = z.output<typeof skillVersionActivate.output>;
+export type SkillVersionActivateInput = z.output<
+  typeof skillVersionActivate.input
+>;
+export type SkillVersionActivateOutput = z.output<
+  typeof skillVersionActivate.output
+>;

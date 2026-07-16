@@ -57,11 +57,11 @@ const {
   const mockFrom = vi.fn(() => ({ where: mockWhere }));
   const mockSelect = vi.fn(() => ({ from: mockFrom }));
   const mockTx = { select: mockSelect };
-  const mockWithTenantDb = vi.fn(
-    (fn: (tx: typeof mockTx) => unknown) => fn(mockTx),
+  const mockWithTenantDb = vi.fn((fn: (tx: typeof mockTx) => unknown) =>
+    fn(mockTx),
   );
-  const mockRunInTenantScope = vi.fn(
-    (_scope: unknown, fn: () => unknown) => fn(),
+  const mockRunInTenantScope = vi.fn((_scope: unknown, fn: () => unknown) =>
+    fn(),
   );
 
   return {
@@ -99,12 +99,21 @@ vi.mock("@/lib/routes", () => ({
   workspace: {
     workbench: {
       tools: {
-        skills: ({ orgSlug, workspaceSlug }: { orgSlug: string; workspaceSlug: string }) =>
-          `/${orgSlug}/${workspaceSlug}/workbench/tools/skills`,
+        skills: ({
+          orgSlug,
+          workspaceSlug,
+        }: {
+          orgSlug: string;
+          workspaceSlug: string;
+        }) => `/${orgSlug}/${workspaceSlug}/workbench/tools/skills`,
         skill: (
-          { orgSlug, workspaceSlug }: { orgSlug: string; workspaceSlug: string },
+          {
+            orgSlug,
+            workspaceSlug,
+          }: { orgSlug: string; workspaceSlug: string },
           skillSlug: string,
-        ) => `/${orgSlug}/${workspaceSlug}/workbench/tools/skills/${encodeURIComponent(skillSlug)}`,
+        ) =>
+          `/${orgSlug}/${workspaceSlug}/workbench/tools/skills/${encodeURIComponent(skillSlug)}`,
       },
     },
   },
@@ -134,7 +143,12 @@ function setup({ wsRole = "owner" }: { wsRole?: string } = {}) {
 }
 
 function baseInstall(overrides: Record<string, string> = {}) {
-  return { orgSlug: "acme", workspaceSlug: "research", skillSlug: "summarizer", ...overrides };
+  return {
+    orgSlug: "acme",
+    workspaceSlug: "research",
+    skillSlug: "summarizer",
+    ...overrides,
+  };
 }
 
 function baseEdit(overrides: Record<string, string> = {}) {
@@ -147,18 +161,23 @@ function baseEdit(overrides: Record<string, string> = {}) {
   };
 }
 
-function baseActivate(overrides: Record<string, string> = {}) {
+function baseActivate(overrides: Record<string, string | number> = {}) {
   return {
     orgSlug: "acme",
     workspaceSlug: "research",
     skillSlug: "summarizer",
-    versionId: "ver_abc123",
+    versionNumber: 2,
     ...overrides,
   };
 }
 
 function baseExport(overrides: Record<string, string> = {}) {
-  return { orgSlug: "acme", workspaceSlug: "research", skillSlug: "summarizer", ...overrides };
+  return {
+    orgSlug: "acme",
+    workspaceSlug: "research",
+    skillSlug: "summarizer",
+    ...overrides,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -172,13 +191,21 @@ describe("installSkill", () => {
   });
 
   it("returns ok:false for empty orgSlug", async () => {
-    const result = await installSkill({ orgSlug: "", workspaceSlug: "research", skillSlug: "summarizer" });
+    const result = await installSkill({
+      orgSlug: "",
+      workspaceSlug: "research",
+      skillSlug: "summarizer",
+    });
     expect(result.ok).toBe(false);
     expect(mockInvoke).not.toHaveBeenCalled();
   });
 
   it("returns ok:false for empty skillSlug", async () => {
-    const result = await installSkill({ orgSlug: "acme", workspaceSlug: "research", skillSlug: "" });
+    const result = await installSkill({
+      orgSlug: "acme",
+      workspaceSlug: "research",
+      skillSlug: "",
+    });
     expect(result.ok).toBe(false);
     expect(mockInvoke).not.toHaveBeenCalled();
   });
@@ -198,10 +225,16 @@ describe("installSkill", () => {
 
     expect(result.ok).toBe(true);
     expect(mockInvoke).toHaveBeenCalledOnce();
-    const [capability, payload] = mockInvoke.mock.calls[0] as [string, { skillSlug: string }];
+    // Contract: skill.workspace.install takes the builtin template `slug`.
+    const [capability, payload] = mockInvoke.mock.calls[0] as [
+      string,
+      { slug: string },
+    ];
     expect(capability).toBe("install_skill");
-    expect(payload.skillSlug).toBe("summarizer");
-    expect(mockRevalidatePath).toHaveBeenCalledWith("/acme/research/workbench/tools/skills");
+    expect(payload.slug).toBe("summarizer");
+    expect(mockRevalidatePath).toHaveBeenCalledWith(
+      "/acme/research/workbench/tools/skills",
+    );
   });
 
   it("returns ok:false when invoke throws", async () => {
@@ -250,25 +283,47 @@ describe("editSkill", () => {
     expect(result.error).toMatch(/only workspace owners and admins/i);
   });
 
-  it("calls invoke with skill.version.upload and returns versionId + version", async () => {
-    mockInvoke.mockResolvedValue({ versionId: "ver_123", version: "v2" });
+  it("calls invoke with skill.version.upload as a draft and returns version info", async () => {
+    mockInvoke.mockResolvedValue({
+      version_id: "slv_123",
+      version_number: 2,
+      skill_id: "skl_1",
+      activated: false,
+    });
 
-    const result = await editSkill({ ...baseEdit(), commitMessage: "Added detail" });
+    const result = await editSkill({
+      ...baseEdit(),
+      commitMessage: "Added detail",
+    });
 
     expect(result.ok).toBe(true);
-    expect(result.versionId).toBe("ver_123");
+    expect(result.versionId).toBe("slv_123");
     expect(result.version).toBe("v2");
+    expect(result.versionNumber).toBe(2);
     expect(mockInvoke).toHaveBeenCalledOnce();
 
+    // Contract shapes: skill_id (slug accepted), body, change_summary — and
+    // activate:false so the edit is a draft until the user confirms the pin.
     const [capability, payload] = mockInvoke.mock.calls[0] as [
       string,
-      { skillSlug: string; content: string; commitMessage?: string },
+      {
+        skill_id: string;
+        body: string;
+        change_summary?: string;
+        activate: boolean;
+      },
     ];
     expect(capability).toBe("upload_skill_version");
-    expect(payload.skillSlug).toBe("summarizer");
-    expect(payload.content).toBe("You are a summarizer.");
-    expect(payload.commitMessage).toBe("Added detail");
-    expect(mockRevalidatePath).toHaveBeenCalled();
+    expect(payload.skill_id).toBe("summarizer");
+    expect(payload.body).toBe("You are a summarizer.");
+    expect(payload.change_summary).toBe("Added detail");
+    expect(payload.activate).toBe(false);
+    expect(mockRevalidatePath).toHaveBeenCalledWith(
+      "/acme/research/workbench/tools/skills",
+    );
+    expect(mockRevalidatePath).toHaveBeenCalledWith(
+      "/acme/research/workbench/tools/skills/summarizer",
+    );
   });
 
   it("returns ok:false when invoke throws", async () => {
@@ -290,8 +345,11 @@ describe("activateVersion", () => {
     setup();
   });
 
-  it("returns ok:false for empty versionId", async () => {
-    const result = await activateVersion({ ...baseActivate(), versionId: "" });
+  it("returns ok:false for a non-positive versionNumber", async () => {
+    const result = await activateVersion({
+      ...baseActivate(),
+      versionNumber: 0,
+    });
     expect(result.ok).toBe(false);
     expect(mockInvoke).not.toHaveBeenCalled();
   });
@@ -311,14 +369,17 @@ describe("activateVersion", () => {
     expect(result.ok).toBe(true);
     expect(mockInvoke).toHaveBeenCalledOnce();
 
+    // Contract shapes: skillId (slug accepted) + integer versionNumber.
     const [capability, payload] = mockInvoke.mock.calls[0] as [
       string,
-      { skillSlug: string; versionId: string },
+      { skillId: string; versionNumber: number },
     ];
     expect(capability).toBe("activate_skill_version");
-    expect(payload.skillSlug).toBe("summarizer");
-    expect(payload.versionId).toBe("ver_abc123");
-    expect(mockRevalidatePath).toHaveBeenCalledWith("/acme/research/workbench/tools/skills");
+    expect(payload.skillId).toBe("summarizer");
+    expect(payload.versionNumber).toBe(2);
+    expect(mockRevalidatePath).toHaveBeenCalledWith(
+      "/acme/research/workbench/tools/skills",
+    );
   });
 
   it("returns ok:false when invoke throws", async () => {
@@ -341,14 +402,21 @@ describe("exportSkill", () => {
   });
 
   it("returns ok:false for empty skillSlug", async () => {
-    const result = await exportSkill({ orgSlug: "acme", workspaceSlug: "research", skillSlug: "" });
+    const result = await exportSkill({
+      orgSlug: "acme",
+      workspaceSlug: "research",
+      skillSlug: "",
+    });
     expect(result.ok).toBe(false);
     expect(mockInvoke).not.toHaveBeenCalled();
   });
 
   it("allows export for a viewer workspace role (no manage check)", async () => {
     setup({ wsRole: "viewer" });
-    mockInvoke.mockResolvedValue({ content: "# Skill content", filename: "summarizer.md" });
+    mockInvoke.mockResolvedValue({
+      content: "# Skill content",
+      filename: "summarizer.md",
+    });
 
     // viewer should NOT be blocked on export (read is open to all workspace members)
     const result = await exportSkill(baseExport());
@@ -356,7 +424,10 @@ describe("exportSkill", () => {
   });
 
   it("calls invoke with skill.export and returns content + filename", async () => {
-    mockInvoke.mockResolvedValue({ content: "# My skill", filename: "summarizer.md" });
+    mockInvoke.mockResolvedValue({
+      content: "# My skill",
+      filename: "summarizer.md",
+    });
 
     const result = await exportSkill(baseExport());
 
@@ -364,21 +435,28 @@ describe("exportSkill", () => {
     expect(result.content).toBe("# My skill");
     expect(result.filename).toBe("summarizer.md");
 
+    // Contract shapes: skillId (slug accepted) + optional integer versionNumber.
     const [capability, payload] = mockInvoke.mock.calls[0] as [
       string,
-      { skillSlug: string; versionId?: string },
+      { skillId: string; versionNumber?: number },
     ];
     expect(capability).toBe("export_skill");
-    expect(payload.skillSlug).toBe("summarizer");
+    expect(payload.skillId).toBe("summarizer");
   });
 
-  it("passes versionId through when provided", async () => {
-    mockInvoke.mockResolvedValue({ content: "v1 content", filename: "summarizer-v1.md" });
+  it("passes versionNumber through when provided", async () => {
+    mockInvoke.mockResolvedValue({
+      content: "v1 content",
+      filename: "summarizer-v1.md",
+    });
 
-    await exportSkill({ ...baseExport(), versionId: "ver_v1" });
+    await exportSkill({ ...baseExport(), versionNumber: 1 });
 
-    const [, payload] = mockInvoke.mock.calls[0] as [string, { versionId?: string }];
-    expect(payload.versionId).toBe("ver_v1");
+    const [, payload] = mockInvoke.mock.calls[0] as [
+      string,
+      { versionNumber?: number },
+    ];
+    expect(payload.versionNumber).toBe(1);
   });
 
   it("returns ok:false when invoke throws", async () => {

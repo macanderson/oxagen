@@ -19,7 +19,7 @@ export const skillVersionList = registerCapability({
     workspace: { Owner: "allow", Admin: "allow", Member: "allow" },
   },
   input: z.object({
-    skill_id: z.string().describe("Public skill ID (skl_…)"),
+    skill_id: z.string().describe("Public skill ID (skl_…) or its slug"),
     limit: z
       .number()
       .int()
@@ -45,9 +45,22 @@ export const skillVersionList = registerCapability({
         isLatest: z.boolean(),
         isActive: z
           .boolean()
-          .describe("True when this version matches the skill's active_version_id"),
+          .describe(
+            "True when this version matches the skill's active_version_id",
+          ),
+        changeSummary: z
+          .string()
+          .nullable()
+          .describe("Author-supplied summary of what changed in this version"),
         createdAt: z.string().datetime(),
-        createdBy: z.string().nullable().describe("User ID who created this version"),
+        createdBy: z
+          .string()
+          .nullable()
+          .describe("User ID who created this version"),
+        createdByEmail: z
+          .string()
+          .nullable()
+          .describe("Email of the author, when resolvable"),
       }),
     ),
     total: z.number().int().describe("Total number of versions for this skill"),

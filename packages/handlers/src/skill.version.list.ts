@@ -1,14 +1,14 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { skillVersionList } from "@oxagen/oxagen/contracts/skill.version.list";
 import { schema, withTenantDb } from "@oxagen/database";
-import { and, eq, isNull, desc, count } from "drizzle-orm";
+import { and, eq, isNull, desc, count, or } from "drizzle-orm";
 import { logger } from "./logger";
 
-export const skillVersionListHandler: CapabilityHandler<typeof skillVersionList> = async (
-  input,
-  ctx,
-) => {
-  // Resolve the skill row by publicId to get the internal UUID and active version.
+export const skillVersionListHandler: CapabilityHandler<
+  typeof skillVersionList
+> = async (input, ctx) => {
+  // Resolve the skill row by publicId or slug (same dual resolution as
+  // skill.enable) to get the internal UUID and active version.
   const [skillRow] = await withTenantDb((tx) =>
     tx
       .select({
@@ -19,7 +19,10 @@ export const skillVersionListHandler: CapabilityHandler<typeof skillVersionList>
       .from(schema.skills)
       .where(
         and(
-          eq(schema.skills.publicId, input.skill_id),
+          or(
+            eq(schema.skills.publicId, input.skill_id),
+            eq(schema.skills.slug, input.skill_id),
+          ),
           eq(schema.skills.workspaceId, ctx.workspaceId),
           isNull(schema.skills.deletedAt),
         ),
@@ -53,7 +56,8 @@ export const skillVersionListHandler: CapabilityHandler<typeof skillVersionList>
 
   const total = countRow?.total ?? 0;
 
-  // Fetch version page, newest first.
+  // Fetch version page, newest first. LEFT JOIN the author for display email
+  // (nullable — system-created rows and removed users resolve to null).
   const rows = await withTenantDb((tx) =>
     tx
       .select({
@@ -61,10 +65,16 @@ export const skillVersionListHandler: CapabilityHandler<typeof skillVersionList>
         versionNumber: schema.skillVersions.versionNumber,
         isLatest: schema.skillVersions.isLatest,
         id: schema.skillVersions.id,
+        changeSummary: schema.skillVersions.changeSummary,
         createdAt: schema.skillVersions.createdAt,
         createdByUserId: schema.skillVersions.createdByUserId,
+        createdByEmail: schema.users.email,
       })
       .from(schema.skillVersions)
+      .leftJoin(
+        schema.users,
+        eq(schema.skillVersions.createdByUserId, schema.users.id),
+      )
       .where(
         and(
           eq(schema.skillVersions.skillId, skillRow.id),
@@ -93,9 +103,12 @@ export const skillVersionListHandler: CapabilityHandler<typeof skillVersionList>
       id: r.publicId,
       versionNumber: r.versionNumber,
       isLatest: r.isLatest,
-      isActive: skillRow.activeVersionId != null && r.id === skillRow.activeVersionId,
+      isActive:
+        skillRow.activeVersionId != null && r.id === skillRow.activeVersionId,
+      changeSummary: r.changeSummary ?? null,
       createdAt: r.createdAt.toISOString(),
       createdBy: r.createdByUserId ?? null,
+      createdByEmail: r.createdByEmail ?? null,
     })),
     total,
   };

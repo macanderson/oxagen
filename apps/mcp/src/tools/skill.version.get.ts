@@ -7,10 +7,10 @@ import { buildContext } from "../context";
 export const schema = {
   ...skillVersionGet.input.shape,
   skill_id: skillVersionGet.input.shape.skill_id.describe(
-    "Public skill ID (skl_…) that owns the version",
+    "Public skill ID (skl_…) or slug that owns the version",
   ),
   version_id: skillVersionGet.input.shape.version_id.describe(
-    "Public version ID (slv_…) to fetch",
+    "Public version ID (slv_…) to fetch; omit for the pinned active version",
   ),
 };
 
@@ -24,8 +24,12 @@ export const metadata: ToolMetadata = {
   },
 };
 
-export default async function skillVersionGetTool(args: InferSchema<typeof schema>) {
+export default async function skillVersionGetTool(
+  args: InferSchema<typeof schema>,
+) {
   const ctx = await buildContext(headers());
-  const output = await invoke(skillVersionGet.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(skillVersionGet.name, args, ctx, {
+    surface: "mcp",
+  });
   return skillVersionGet.output.parse(output);
 }

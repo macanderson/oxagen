@@ -8,9 +8,12 @@ export const skillVersionGetRoute = new Hono<AppEnv>();
 
 skillVersionGetRoute.get("/", async (c) => {
   const skill_id = c.req.query("skill_id") ?? "";
-  const version_id = c.req.query("version_id") ?? "";
+  // version_id is optional: omitted → the skill's pinned active version.
+  const version_id = c.req.query("version_id") || undefined;
   const input = skillVersionGet.input.parse({ skill_id, version_id });
   const ctx = capabilityContext(c);
-  const out = await invoke(skillVersionGet.name, input, ctx, { surface: "api" });
+  const out = await invoke(skillVersionGet.name, input, ctx, {
+    surface: "api",
+  });
   return c.json(out);
 });

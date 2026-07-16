@@ -3,6 +3,7 @@ import { skillCreate } from "@oxagen/oxagen/contracts/skill.create";
 import { schema, withTenantDb, isUniqueViolation } from "@oxagen/database";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { logger } from "./logger";
+import { skillBodyChecksum } from "./skill-checksum";
 
 export const skillCreateHandler: CapabilityHandler<typeof skillCreate> = async (
   input,
@@ -104,6 +105,7 @@ export const skillCreateHandler: CapabilityHandler<typeof skillCreate> = async (
           versionNumber: 1,
           isLatest: true,
           body,
+          checksum: skillBodyChecksum(body),
           referencesPayload: [],
           createdByUserId: ctx.userId ?? undefined,
           updatedByUserId: ctx.userId ?? undefined,

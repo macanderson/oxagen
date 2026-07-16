@@ -31,6 +31,7 @@ interface SkillListItem {
   name: string;
   description: string;
   source: string;
+  installedFromSlug: string | null;
   activeVersion: string | null;
   updatedAt: string | null;
 }
@@ -43,7 +44,10 @@ interface SkillMetrics {
 
 export default async function WorkbenchSkillsPage({ params }: PageProps) {
   const { orgSlug, workspaceSlug } = await params;
-  const { ctx, canManage } = await resolveWorkbenchScope(orgSlug, workspaceSlug);
+  const { ctx, canManage } = await resolveWorkbenchScope(
+    orgSlug,
+    workspaceSlug,
+  );
 
   // Fetch installed skills list.
   //
@@ -87,6 +91,7 @@ export default async function WorkbenchSkillsPage({ params }: PageProps) {
       name: s.name,
       description: s.description,
       source: s.source,
+      installedFromSlug: s.installedFromSlug ?? null,
       activeVersion: s.activeVersion,
       updatedAt: s.updatedAt,
       lastUsedAt: m?.lastUsedAt ?? null,
@@ -99,8 +104,9 @@ export default async function WorkbenchSkillsPage({ params }: PageProps) {
       <div className="flex flex-col gap-1">
         <h2 className="text-lg font-semibold">Skills</h2>
         <p className="text-sm text-muted-foreground">
-          Agent skills available in this workspace. Skills extend what agents can do by providing
-          reusable, versioned prompt playbooks — author your own or install from the marketplace.
+          Agent skills available in this workspace. Skills extend what agents
+          can do by providing reusable, versioned prompt playbooks — author your
+          own or install from the marketplace.
         </p>
       </div>
       <SkillsPanel

@@ -2,14 +2,16 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 
 // ── hoisted stubs ─────────────────────────────────────────────────────────────
 // skill.edit delegates to createNewSkillVersion, which inside one withTenantDb
-// transaction: looks up the skill, finds the max version, ALWAYS clears
-// is_latest on skillVersions (update #1), inserts the new version, and ONLY
-// when activate=true updates the skills row (update #2). We route the two
+// transaction: looks up the skill, finds the max version, loads the prior
+// latest row (lineage + carried-forward references), clears its is_latest
+// (update #1, only when a prior latest exists), inserts the new version, and
+// ONLY when activate=true updates the skills row (update #2). We route the two
 // updates to separate spies by table identity so the "does NOT update
 // active_version_id when activate=false" assertion targets the skills update.
 const mocks = vi.hoisted(() => ({
   selectWhere: vi.fn(),
   selectMaxWhere: vi.fn(),
+  selectPriorLatestWhere: vi.fn(),
   insertReturning: vi.fn(),
   versionUpdateWhere: vi.fn(),
   skillUpdateWhere: vi.fn(),
@@ -37,10 +39,10 @@ vi.mock("@oxagen/database", async (importOriginal) => {
           from: (_table: unknown) => ({
             where: (_cond: unknown) => {
               selectCallCount++;
-              if (selectCallCount % 2 === 1) {
-                return mocks.selectWhere();
-              }
-              return mocks.selectMaxWhere();
+              if (selectCallCount === 1) return mocks.selectWhere();
+              if (selectCallCount === 2) return mocks.selectMaxWhere();
+              // 3rd: prior-latest lookup — chains .limit(1)
+              return { limit: (_n: number) => mocks.selectPriorLatestWhere() };
             },
           }),
         }),
@@ -52,7 +54,10 @@ vi.mock("@oxagen/database", async (importOriginal) => {
         }),
         update: (table: unknown) => ({
           set: (_vals: unknown) => ({
-            where: table === skills ? mocks.skillUpdateWhere : mocks.versionUpdateWhere,
+            where:
+              table === skills
+                ? mocks.skillUpdateWhere
+                : mocks.versionUpdateWhere,
           }),
         }),
       });
@@ -66,15 +71,22 @@ import { makeCTX } from "./test-utils/fixtures";
 // ─────────────────────────────────────────────────────────────────────────────
 
 const SKILL_ROW = { id: "skill-uuid-edit", publicId: "skl_edit" };
-const VERSION_ROW = { id: "ver-uuid-e1", publicId: "slv_edit1", versionNumber: 3 };
+const VERSION_ROW = {
+  id: "ver-uuid-e1",
+  publicId: "slv_edit1",
+  versionNumber: 3,
+};
 
-function setupHappyPath(overrides: Partial<{
-  skill_id: string;
-  body: string;
-  activate: boolean;
-}> = {}) {
+function setupHappyPath(
+  overrides: Partial<{
+    skill_id: string;
+    body: string;
+    activate: boolean;
+  }> = {},
+) {
   mocks.selectWhere.mockReset();
   mocks.selectMaxWhere.mockReset();
+  mocks.selectPriorLatestWhere.mockReset();
   mocks.insertReturning.mockReset();
   mocks.versionUpdateWhere.mockReset();
   mocks.skillUpdateWhere.mockReset();
@@ -82,6 +94,9 @@ function setupHappyPath(overrides: Partial<{
 
   mocks.selectWhere.mockResolvedValue([SKILL_ROW]);
   mocks.selectMaxWhere.mockResolvedValue([{ maxVersion: 2 }]);
+  mocks.selectPriorLatestWhere.mockResolvedValue([
+    { id: "ver-uuid-e0", referencesPayload: [] },
+  ]);
   mocks.insertReturning.mockResolvedValue([VERSION_ROW]);
   mocks.versionUpdateWhere.mockResolvedValue([]);
   mocks.skillUpdateWhere.mockResolvedValue([]);
@@ -137,7 +152,9 @@ describe("skillEditHandler (@oxagen/handlers)", () => {
   it("throws when body is not valid .skill.md", async () => {
     const input = setupHappyPath({ body: "# No frontmatter" });
 
-    await expect(skillEditHandler(input, CTX)).rejects.toThrow(/missing YAML frontmatter/i);
+    await expect(skillEditHandler(input, CTX)).rejects.toThrow(
+      /missing YAML frontmatter/i,
+    );
   });
 
   it("throws when body frontmatter fails schema validation (missing description)", async () => {
@@ -154,21 +171,29 @@ body`;
     const input = setupHappyPath();
     mocks.selectWhere.mockResolvedValueOnce([]);
 
-    await expect(skillEditHandler(input, CTX)).rejects.toThrow(/skill not found/);
+    await expect(skillEditHandler(input, CTX)).rejects.toThrow(
+      /skill not found/,
+    );
   });
 
   it("throws when no authenticated user", async () => {
     const input = setupHappyPath();
     const anonCtx = makeCTX({ userId: null });
 
-    await expect(skillEditHandler(input, anonCtx)).rejects.toThrow(/authenticated user/);
+    await expect(skillEditHandler(input, anonCtx)).rejects.toThrow(
+      /authenticated user/,
+    );
   });
 
   it("propagates DB error", async () => {
     const input = setupHappyPath();
-    mocks.insertReturning.mockRejectedValueOnce(new Error("unique constraint violated"));
+    mocks.insertReturning.mockRejectedValueOnce(
+      new Error("unique constraint violated"),
+    );
 
-    await expect(skillEditHandler(input, CTX)).rejects.toThrow("unique constraint violated");
+    await expect(skillEditHandler(input, CTX)).rejects.toThrow(
+      "unique constraint violated",
+    );
   });
 
   it("immutability: does not attempt to modify any prior version rows (only clears is_latest)", async () => {
@@ -176,9 +201,7 @@ body`;
     await skillEditHandler(input, CTX);
 
     // insert is called exactly once (new version row only)
-    const versionInserts = mocks.insertedValues.filter(
-      (v) => "body" in v,
-    );
+    const versionInserts = mocks.insertedValues.filter((v) => "body" in v);
     expect(versionInserts).toHaveLength(1);
   });
 });

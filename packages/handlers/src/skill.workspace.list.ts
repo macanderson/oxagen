@@ -4,10 +4,9 @@ import { schema, withTenantDb } from "@oxagen/database";
 import { and, eq, isNull } from "drizzle-orm";
 import { logger } from "./logger";
 
-export const skillWorkspaceListHandler: CapabilityHandler<typeof skillWorkspaceList> = async (
-  _input,
-  ctx,
-) => {
+export const skillWorkspaceListHandler: CapabilityHandler<
+  typeof skillWorkspaceList
+> = async (_input, ctx) => {
   // LEFT JOIN skill_versions on the pinned active version so the list can show
   // the active version number without an N+1 per-row lookup. The join is null
   // when a skill has no pinned active version yet → activeVersion is null.
@@ -19,6 +18,7 @@ export const skillWorkspaceListHandler: CapabilityHandler<typeof skillWorkspaceL
         name: schema.skills.name,
         description: schema.skills.description,
         source: schema.skills.source,
+        installedFromSlug: schema.skills.installedFromSlug,
         enabled: schema.skills.enabled,
         updatedAt: schema.skills.updatedAt,
         activeVersionNumber: schema.skillVersions.versionNumber,
@@ -49,6 +49,7 @@ export const skillWorkspaceListHandler: CapabilityHandler<typeof skillWorkspaceL
       name: r.name,
       description: r.description ?? "",
       source: r.source,
+      installedFromSlug: r.installedFromSlug ?? null,
       enabled: r.enabled,
       activeVersion:
         r.activeVersionNumber != null ? `v${r.activeVersionNumber}` : null,

@@ -4,6 +4,7 @@ import { schema, withTenantDb, isUniqueViolation } from "@oxagen/database";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { createBuiltinSkillRegistry } from "@oxagen/skills";
 import { logger } from "./logger";
+import { skillBodyChecksum } from "./skill-checksum";
 
 // Builtin templates are resolved from EMBEDDED module data, never a runtime
 // filesystem read: serverless bundlers drop packages/skills/skills/*.md, so a
@@ -19,12 +20,13 @@ function slugFromName(name: string): string {
   return name.trim().toLowerCase().replace(/\s+/g, "-");
 }
 
-export const skillWorkspaceInstallHandler: CapabilityHandler<typeof skillWorkspaceInstall> = async (
-  input,
-  ctx,
-) => {
+export const skillWorkspaceInstallHandler: CapabilityHandler<
+  typeof skillWorkspaceInstall
+> = async (input, ctx) => {
   if (!ctx.workspaceId) {
-    throw new Error("[skill.workspace.install] workspaceId is required (scoped capability)");
+    throw new Error(
+      "[skill.workspace.install] workspaceId is required (scoped capability)",
+    );
   }
 
   const { slug: templateSlug, custom } = input;
@@ -60,7 +62,10 @@ export const skillWorkspaceInstallHandler: CapabilityHandler<typeof skillWorkspa
     skillBody = builtin.body;
     skillDescription = builtin.description;
     skillSource = "builtin";
-    referencesPayload = builtin.references.map((r) => ({ path: r.path, body: r.body }));
+    referencesPayload = builtin.references.map((r) => ({
+      path: r.path,
+      body: r.body,
+    }));
     installedFromSlug = templateSlug;
   } else {
     // Custom upload path.
@@ -69,7 +74,10 @@ export const skillWorkspaceInstallHandler: CapabilityHandler<typeof skillWorkspa
     skillBody = custom!.body;
     skillDescription = "";
     skillSource = "tenant";
-    referencesPayload = (custom!.references ?? []).map((path) => ({ path, body: "" }));
+    referencesPayload = (custom!.references ?? []).map((path) => ({
+      path,
+      body: "",
+    }));
     installedFromSlug = null;
   }
 
@@ -147,67 +155,75 @@ export const skillWorkspaceInstallHandler: CapabilityHandler<typeof skillWorkspa
   let result: { publicId: string; slug: string; activeVersion: number };
   try {
     result = await withTenantDb(async (tx) => {
-    // Insert the skill identity row (without activeVersionId — set after version insert).
-    const [skillRow] = await tx
-      .insert(schema.skills)
-      .values({
-        orgId: ctx.orgId,
-        workspaceId: ctx.workspaceId!,
-        name: skillName,
-        slug: targetSlug,
-        description: skillDescription || null,
-        source: skillSource,
-        enabled: true,
-        installedFromSlug: installedFromSlug ?? undefined,
-        createdByUserId: ctx.userId ?? undefined,
-        updatedByUserId: ctx.userId ?? undefined,
-      })
-      .returning({
-        id: schema.skills.id,
-        publicId: schema.skills.publicId,
-        slug: schema.skills.slug,
-      });
+      // Insert the skill identity row (without activeVersionId — set after version insert).
+      const [skillRow] = await tx
+        .insert(schema.skills)
+        .values({
+          orgId: ctx.orgId,
+          workspaceId: ctx.workspaceId!,
+          name: skillName,
+          slug: targetSlug,
+          description: skillDescription || null,
+          source: skillSource,
+          enabled: true,
+          installedFromSlug: installedFromSlug ?? undefined,
+          createdByUserId: ctx.userId ?? undefined,
+          updatedByUserId: ctx.userId ?? undefined,
+        })
+        .returning({
+          id: schema.skills.id,
+          publicId: schema.skills.publicId,
+          slug: schema.skills.slug,
+        });
 
-    if (!skillRow) {
-      throw new Error("[skill.workspace.install] Skill insert returned no row.");
-    }
+      if (!skillRow) {
+        throw new Error(
+          "[skill.workspace.install] Skill insert returned no row.",
+        );
+      }
 
-    // Insert version 1 (is_latest=true).
-    const [versionRow] = await tx
-      .insert(schema.skillVersions)
-      .values({
-        orgId: ctx.orgId,
-        workspaceId: ctx.workspaceId!,
-        skillId: skillRow.id,
-        versionNumber: 1,
-        isLatest: true,
-        body: skillBody,
-        referencesPayload: referencesPayload,
-        createdByUserId: ctx.userId ?? undefined,
-        updatedByUserId: ctx.userId ?? undefined,
-      })
-      .returning({ id: schema.skillVersions.id, versionNumber: schema.skillVersions.versionNumber });
+      // Insert version 1 (is_latest=true).
+      const [versionRow] = await tx
+        .insert(schema.skillVersions)
+        .values({
+          orgId: ctx.orgId,
+          workspaceId: ctx.workspaceId!,
+          skillId: skillRow.id,
+          versionNumber: 1,
+          isLatest: true,
+          body: skillBody,
+          checksum: skillBodyChecksum(skillBody),
+          referencesPayload: referencesPayload,
+          createdByUserId: ctx.userId ?? undefined,
+          updatedByUserId: ctx.userId ?? undefined,
+        })
+        .returning({
+          id: schema.skillVersions.id,
+          versionNumber: schema.skillVersions.versionNumber,
+        });
 
-    if (!versionRow) {
-      throw new Error("[skill.workspace.install] Skill version insert returned no row.");
-    }
+      if (!versionRow) {
+        throw new Error(
+          "[skill.workspace.install] Skill version insert returned no row.",
+        );
+      }
 
-    // Back-fill activeVersionId now that we have the version id.
-    await tx
-      .update(schema.skills)
-      .set({
-        activeVersionId: versionRow.id,
-        activatedByUserId: ctx.userId ?? undefined,
-        activatedAt: sql`now()`,
-        updatedAt: sql`now()`,
-      })
-      .where(eq(schema.skills.id, skillRow.id));
+      // Back-fill activeVersionId now that we have the version id.
+      await tx
+        .update(schema.skills)
+        .set({
+          activeVersionId: versionRow.id,
+          activatedByUserId: ctx.userId ?? undefined,
+          activatedAt: sql`now()`,
+          updatedAt: sql`now()`,
+        })
+        .where(eq(schema.skills.id, skillRow.id));
 
-    return {
-      publicId: skillRow.publicId,
-      slug: skillRow.slug,
-      activeVersion: versionRow.versionNumber,
-    };
+      return {
+        publicId: skillRow.publicId,
+        slug: skillRow.slug,
+        activeVersion: versionRow.versionNumber,
+      };
     });
   } catch (err) {
     if (isUniqueViolation(err)) {
