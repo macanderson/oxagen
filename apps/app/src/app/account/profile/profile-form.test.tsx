@@ -230,6 +230,20 @@ describe("ProfileForm", () => {
     expect(nameInput).toBeInTheDocument();
   });
 
+  it("renders timezone and language as read-only text (not inputs) with a Preferences link", () => {
+    render(<ProfileForm {...defaultProps} />);
+
+    // Values shown as plain text, underscores humanized — not editable/disabled inputs.
+    expect(screen.getByText("America/New York")).toBeInTheDocument();
+    expect(screen.getByText("en")).toBeInTheDocument();
+    expect(screen.queryByDisplayValue("America/New York")).toBeNull();
+    expect(screen.queryByDisplayValue("America/New_York")).toBeNull();
+
+    // Link out to where they're actually changed.
+    const link = screen.getByRole("link", { name: /preferences/i });
+    expect(link).toHaveAttribute("href", "/account/preferences");
+  });
+
   it("renders the Save changes button", () => {
     render(<ProfileForm {...defaultProps} />);
     expect(

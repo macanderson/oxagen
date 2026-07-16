@@ -12,7 +12,6 @@
  */
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
-import { FlaskConical } from "lucide-react";
 import { getSessionOrRedirect } from "@/lib/session";
 import {
   resolveOrg,
@@ -44,21 +43,8 @@ export default async function EvalsPage({ params }: PageProps) {
     <div className="flex flex-col gap-5">
       <PageHeader
         title="Evals"
-        description="Score what actually ran and got billed — datasets of real inputs, graded by an LLM judge, priced through the same metering pipe as every other capability."
+        description="Datasets of real inputs — hand-authored or pulled from traces — run against a model or agent and graded by an LLM judge, every call metered so eval cost is visible cost."
       />
-
-      <div className="flex items-start gap-3 rounded-lg border border-dashed border-border/60 bg-card/50 px-4 py-3">
-        <FlaskConical
-          className="mt-0.5 h-4 w-4 flex-shrink-0 text-muted-foreground"
-          aria-hidden="true"
-        />
-        <p className="text-xs text-muted-foreground">
-          Datasets sourced from manual entry or historical traces. Each run
-          evaluates every item against a target (a model or an agent) and grades
-          the output with a judge model — every call metered, so eval cost is
-          visible cost.
-        </p>
-      </div>
 
       <Suspense fallback={<TableSkeleton rows={4} cols={5} />}>
         <DatasetsSection
