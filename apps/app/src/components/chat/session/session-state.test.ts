@@ -128,12 +128,6 @@ describe("applySessionPatch cascades", () => {
     expect(withTier.model).toBeNull();
   });
 
-  it("merges partial output toggles without dropping the sibling", () => {
-    const state = base({ outputs: { image: true, video: false } });
-    const next = applySessionPatch(state, { outputs: { video: true } });
-    expect(next.outputs).toEqual({ image: true, video: true });
-  });
-
   it("branch can be set explicitly alongside a repo change", () => {
     const next = applySessionPatch(base(), {
       repoKey: "con_1::acme/site",
@@ -155,7 +149,10 @@ describe("seedSessionState", () => {
   });
 
   it("prefers an explicit default model over the tier", () => {
-    const seeded = seedSessionState({ ...SEED, textModel: "anthropic/claude-sonnet-5" });
+    const seeded = seedSessionState({
+      ...SEED,
+      textModel: "anthropic/claude-sonnet-5",
+    });
     expect(seeded.model).toBe("anthropic/claude-sonnet-5");
     expect(seeded.tier).toBeNull();
   });
@@ -230,33 +227,52 @@ describe("applyCodeBinding", () => {
 describe("computeSessionLocks", () => {
   it("locks the agent after the first message", () => {
     expect(
-      computeSessionLocks({ hasMessages: true, codeBinding: null, clientLocked: false }),
+      computeSessionLocks({
+        hasMessages: true,
+        codeBinding: null,
+        clientLocked: false,
+      }),
     ).toEqual({ agent: true, code: false });
   });
   it("locks agent and code once a binding exists", () => {
     expect(
-      computeSessionLocks({ hasMessages: false, codeBinding: BINDING, clientLocked: false }),
+      computeSessionLocks({
+        hasMessages: false,
+        codeBinding: BINDING,
+        clientLocked: false,
+      }),
     ).toEqual({ agent: true, code: true });
   });
   it("client lock covers the send→revalidate gap", () => {
     expect(
-      computeSessionLocks({ hasMessages: false, codeBinding: null, clientLocked: true }),
+      computeSessionLocks({
+        hasMessages: false,
+        codeBinding: null,
+        clientLocked: true,
+      }),
     ).toEqual({ agent: true, code: true });
   });
   it("a brand-new chat is fully unlocked", () => {
     expect(
-      computeSessionLocks({ hasMessages: false, codeBinding: null, clientLocked: false }),
+      computeSessionLocks({
+        hasMessages: false,
+        codeBinding: null,
+        clientLocked: false,
+      }),
     ).toEqual({ agent: false, code: false });
   });
 });
 
 describe("sessionSelectionIssues", () => {
   it("flags a repo that no longer resolves", () => {
-    const issues = sessionSelectionIssues(base({ repoKey: "con_9::gone/repo" }), {
-      repos: REPOS,
-      environments: ENVS,
-      branches: null,
-    });
+    const issues = sessionSelectionIssues(
+      base({ repoKey: "con_9::gone/repo" }),
+      {
+        repos: REPOS,
+        environments: ENVS,
+        branches: null,
+      },
+    );
     expect(issues).toHaveLength(1);
     expect(issues[0]?.field).toBe("repo");
   });
@@ -264,7 +280,11 @@ describe("sessionSelectionIssues", () => {
   it("flags a deleted branch only when the branch list is loaded", () => {
     const state = base({ repoKey: "con_1::acme/platform", branch: "feat/x" });
     expect(
-      sessionSelectionIssues(state, { repos: REPOS, environments: ENVS, branches: null }),
+      sessionSelectionIssues(state, {
+        repos: REPOS,
+        environments: ENVS,
+        branches: null,
+      }),
     ).toHaveLength(0);
     const issues = sessionSelectionIssues(state, {
       repos: REPOS,
@@ -273,7 +293,9 @@ describe("sessionSelectionIssues", () => {
     });
     expect(issues).toHaveLength(1);
     expect(issues[0]?.field).toBe("branch");
-    expect(issues[0]?.message).toBe("Branch feat/x was deleted. Pick another branch.");
+    expect(issues[0]?.message).toBe(
+      "Branch feat/x was deleted. Pick another branch.",
+    );
   });
 
   it("flags a removed environment", () => {
@@ -313,12 +335,6 @@ describe("sessionDiffersFromDefaults", () => {
     ).toBe(true);
     expect(
       sessionDiffersFromDefaults({ ...defaults, budgetUsd: 2 }, defaults),
-    ).toBe(true);
-    expect(
-      sessionDiffersFromDefaults(
-        { ...defaults, outputs: { image: true, video: false } },
-        defaults,
-      ),
     ).toBe(true);
   });
 });
@@ -369,18 +385,20 @@ describe("persistence codecs", () => {
       repoKey: "con_1::acme/platform",
       branch: "feat/x",
       envId: "env_1",
-      outputs: { image: true, video: false },
     });
-    expect(decodeSessionState(encodeSessionState(state), defaultChatSessionState)).toEqual(
-      state,
-    );
+    expect(
+      decodeSessionState(encodeSessionState(state), defaultChatSessionState),
+    ).toEqual(state);
   });
 
   it("rejects wrong versions and corrupt JSON", () => {
     expect(decodeSessionState(null, defaultChatSessionState)).toBeNull();
     expect(decodeSessionState("not json", defaultChatSessionState)).toBeNull();
     expect(
-      decodeSessionState(JSON.stringify({ v: 99, agentId: "x" }), defaultChatSessionState),
+      decodeSessionState(
+        JSON.stringify({ v: 99, agentId: "x" }),
+        defaultChatSessionState,
+      ),
     ).toBeNull();
   });
 
@@ -392,7 +410,6 @@ describe("persistence codecs", () => {
         tier: "warp-speed",
         effort: "impossible",
         budgetUsd: -4,
-        outputs: { image: "yes" },
       }),
       defaultChatSessionState,
     );
@@ -400,15 +417,22 @@ describe("persistence codecs", () => {
     expect(decoded?.tier).toBe(defaultChatSessionState.tier);
     expect(decoded?.effort).toBe(defaultChatSessionState.effort);
     expect(decoded?.budgetUsd).toBeNull();
-    expect(decoded?.outputs).toEqual({ image: false, video: false });
   });
 });
 
 describe("storage keys", () => {
   it("scopes conversation, draft, and agent-memory keys", () => {
-    expect(sessionStorageKey("ws", "cnv_1")).toBe("oxagen:chat-session:v1:conv:cnv_1");
-    expect(sessionStorageKey("ws", null)).toBe("oxagen:chat-session:v1:draft:ws");
-    expect(sessionStorageKey(undefined, null)).toBe("oxagen:chat-session:v1:draft:_");
-    expect(agentMemoryKey("ws", "agt_1")).toBe("oxagen:chat-session:v1:agent:ws:agt_1");
+    expect(sessionStorageKey("ws", "cnv_1")).toBe(
+      "oxagen:chat-session:v1:conv:cnv_1",
+    );
+    expect(sessionStorageKey("ws", null)).toBe(
+      "oxagen:chat-session:v1:draft:ws",
+    );
+    expect(sessionStorageKey(undefined, null)).toBe(
+      "oxagen:chat-session:v1:draft:_",
+    );
+    expect(agentMemoryKey("ws", "agt_1")).toBe(
+      "oxagen:chat-session:v1:agent:ws:agt_1",
+    );
   });
 });

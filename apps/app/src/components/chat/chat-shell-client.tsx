@@ -345,6 +345,22 @@ export function ChatShellClient({
     [messages],
   );
 
+  // The per-turn LLM suggestions arrive in transient stream state that the
+  // reconcile `reset()` (awaitingReconcileRef below) wipes once the persisted
+  // turn lands. Capture the last non-empty set into shell-local state so the
+  // single post-turn "next step" pill keeps showing the LLM-derived suggestion
+  // after reconcile instead of snapping back to the static heuristic fallback.
+  // Cleared at the start of each new turn (in wrappedSendAction).
+  const [lastSuggestions, setLastSuggestions] = React.useState<ReadonlyArray<{
+    label: string;
+    prompt: string;
+  }> | null>(null);
+  React.useEffect(() => {
+    if (suggestedPrompts && suggestedPrompts.length > 0) {
+      setLastSuggestions(suggestedPrompts);
+    }
+  }, [suggestedPrompts]);
+
   // Surface a turn-level failure (provider/gateway error, billing block such as
   // insufficient_credits, or an unexpected server throw) as a toast — instead of
   // letting the raw error envelope render inline as unreadable JSON.
@@ -623,8 +639,11 @@ export function ChatShellClient({
         return sendAction(formData);
       }
 
-      // Reset prior turn's live state and show the streaming affordance.
+      // Reset prior turn's live state and show the streaming affordance. Also
+      // drop the captured next-step suggestion — the previous turn's LLM pill is
+      // stale the instant a new turn begins; a fresh one arrives at turn close.
       resetRef.current();
+      setLastSuggestions(null);
       setStreamErrorRef.current(null);
       setIsStreamingRef.current(true);
 
@@ -1674,21 +1693,16 @@ export function ChatShellClient({
               </button>
             ) : null}
           </div>
-          {/* Suggested prompt chips. Legacy: shown above the composer once
-          there are messages (the empty state renders its own centered set).
-          v2 INVERTS this: suggestions exist ONLY in the empty state, docked
-          directly above the composer, left-aligned, at most 3, sentence case
-          — and disappear permanently after the first user message. */}
-          {!chatUxV2 && (messages.length > 0 || hasLiveContent) ? (
-            <SuggestedPromptChips
-              action={wrappedSendAction}
-              conversationId={conversationId}
-              parentMessageId={activeLeafMessageId}
-              suggestions={suggestedPrompts}
-              conversationHistory={conversationHistory}
-              className="justify-center"
-            />
-          ) : null}
+          {/* Suggested prompts.
+          • Empty state (v2): up to 3 left-aligned starter chips docked above
+            the composer — the pre-first-message hint.
+          • After the first prompt: exactly ONE LLM-derived next-step
+            suggestion, dismissable via the "×" inside the pill. It is grounded
+            on the per-turn server suggestion (captured into `lastSuggestions`
+            so it survives the turn-close reconcile) and only shows for a
+            COMPLETED turn — it's a "what would you do next" prompt, not a
+            mid-stream distraction. Falls back to the static heuristic only
+            until the first server suggestion lands. */}
           {chatUxV2 && messages.length === 0 && !hasLiveContent ? (
             <SuggestedPromptChips
               action={wrappedSendAction}
@@ -1698,6 +1712,22 @@ export function ChatShellClient({
               maxPrompts={3}
               stacked={v2MobileChrome}
               align={v2MobileChrome ? "center" : "start"}
+            />
+          ) : null}
+          {!isStreaming && messages.length > 0 ? (
+            <SuggestedPromptChips
+              action={wrappedSendAction}
+              conversationId={conversationId}
+              parentMessageId={activeLeafMessageId}
+              suggestions={lastSuggestions ?? suggestedPrompts}
+              conversationHistory={conversationHistory}
+              sentenceCase={chatUxV2}
+              maxPrompts={1}
+              dismissable
+              align={chatUxV2 && !v2MobileChrome ? "start" : "center"}
+              className={
+                chatUxV2 && !v2MobileChrome ? undefined : "justify-center"
+              }
             />
           ) : null}
 

@@ -13,9 +13,20 @@ import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 
 vi.mock("@/components/ui/popover", () => ({
   Popover: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-  PopoverTrigger: ({ render, children }: { render: React.ReactElement; children?: React.ReactNode }) =>
-    React.cloneElement(render, undefined, children),
-  PopoverPopup: ({ children, className }: { children: React.ReactNode; className?: string }) => (
+  PopoverTrigger: ({
+    render,
+    children,
+  }: {
+    render: React.ReactElement;
+    children?: React.ReactNode;
+  }) => React.cloneElement(render, undefined, children),
+  PopoverPopup: ({
+    children,
+    className,
+  }: {
+    children: React.ReactNode;
+    className?: string;
+  }) => (
     <div role="dialog" aria-label="Session picker" className={className}>
       {children}
     </div>
@@ -49,9 +60,27 @@ const CODER: AgentOption = {
 };
 
 const REPOS: RepoOption[] = [
-  { key: "con_1::acme/platform", connectionId: "con_1", owner: "acme", name: "platform", defaultBranch: "main" },
-  { key: "con_1::acme/site", connectionId: "con_1", owner: "acme", name: "site", defaultBranch: "main" },
-  { key: "con_2::umbrella/labs", connectionId: "con_2", owner: "umbrella", name: "labs", defaultBranch: "develop" },
+  {
+    key: "con_1::acme/platform",
+    connectionId: "con_1",
+    owner: "acme",
+    name: "platform",
+    defaultBranch: "main",
+  },
+  {
+    key: "con_1::acme/site",
+    connectionId: "con_1",
+    owner: "acme",
+    name: "site",
+    defaultBranch: "main",
+  },
+  {
+    key: "con_2::umbrella/labs",
+    connectionId: "con_2",
+    owner: "umbrella",
+    name: "labs",
+    defaultBranch: "develop",
+  },
 ];
 
 const ENVIRONMENTS: EnvironmentOption[] = [
@@ -91,7 +120,10 @@ function StateProbe() {
 }
 
 function stateOf(): Record<string, unknown> {
-  return JSON.parse(screen.getByTestId("state").textContent ?? "{}") as Record<string, unknown>;
+  return JSON.parse(screen.getByTestId("state").textContent ?? "{}") as Record<
+    string,
+    unknown
+  >;
 }
 
 interface HarnessProps {
@@ -163,14 +195,6 @@ describe("SessionSettings — Session section", () => {
     expect(stateOf().budgetUsd).toBe(0.05);
   });
 
-  it("output toggles write outputs.image / outputs.video", () => {
-    renderHarness();
-    fireEvent.click(screen.getByLabelText("Generate image"));
-    expect((stateOf().outputs as { image: boolean }).image).toBe(true);
-    fireEvent.click(screen.getByLabelText("Generate video"));
-    expect((stateOf().outputs as { video: boolean }).video).toBe(true);
-  });
-
   it('"Reset to defaults" restores the seeded state', () => {
     renderHarness();
     fireEvent.click(screen.getByRole("button", { name: "High" }));
@@ -184,8 +208,12 @@ describe("SessionSettings — Agent row", () => {
   it("shows the locked explanation and a new-chat action once the agent is locked", () => {
     const onStartNewChat = vi.fn();
     renderHarness({ hasMessages: true, onStartNewChat });
-    expect(screen.getByText("Locked after the first message")).toBeInTheDocument();
-    fireEvent.click(screen.getByText("Start a new chat with a different agent"));
+    expect(
+      screen.getByText("Locked after the first message"),
+    ).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByText("Start a new chat with a different agent"),
+    );
     expect(onStartNewChat).toHaveBeenCalledTimes(1);
   });
 
@@ -223,7 +251,6 @@ describe("SessionSettings — Code section", () => {
         repoKey: "con_1::acme/platform",
         branch: "feat/gone",
         envId: "env_1",
-        outputs: { image: false, video: false },
       }),
     );
     renderHarness({

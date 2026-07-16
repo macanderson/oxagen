@@ -17,8 +17,19 @@ afterEach(cleanup);
 
 // Mock next/link — render the href as an <a> for testability
 vi.mock("next/link", () => ({
-  default: ({ href, children, ...props }: { href: string; children: React.ReactNode; [key: string]: unknown }) =>
-    <a href={href} {...props}>{children}</a>,
+  default: ({
+    href,
+    children,
+    ...props
+  }: {
+    href: string;
+    children: React.ReactNode;
+    [key: string]: unknown;
+  }) => (
+    <a href={href} {...props}>
+      {children}
+    </a>
+  ),
 }));
 
 describe("BalancePill", () => {
@@ -57,5 +68,13 @@ describe("BalancePill", () => {
   it("displays zero balance correctly", () => {
     render(<BalancePill orgSlug="acme" balanceCents={0} />);
     expect(screen.getByRole("link")).toHaveTextContent("$0.00");
+  });
+
+  it("abbreviates a large balance in the visible label but keeps the exact figure in the aria-label", () => {
+    // $12,345.00 balance → compact "$12.3K" visible, exact "$12,345.00" in a11y.
+    render(<BalancePill orgSlug="acme" balanceCents={1_234_500} />);
+    const link = screen.getByRole("link");
+    expect(link).toHaveTextContent("$12.3K");
+    expect(link.getAttribute("aria-label")).toContain("$12,345.00");
   });
 });

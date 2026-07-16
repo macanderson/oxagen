@@ -106,14 +106,31 @@ export function ConversationNav(props: ConversationNavProps) {
 
   return (
     <>
-      {/* Mobile: trigger bar + slide-in Sheet. */}
-      <div className="md:hidden" data-conversation-nav-trigger>
+      {/* Mobile: a compact trigger that FLOATS over the top-left of the
+          conversation (never a full-width bar that steals a row of height) +
+          slide-in Sheet. Absolutely positioned so it overlays the transcript
+          instead of pushing it down — the parent page flex is `relative` (see
+          conversation-page.tsx). The transcript's own scroll leaves top room
+          for it (mobile top padding). The v2 mobile chat header owns its own
+          conversations entry point, so this element is CSS-hidden under
+          `body[data-chat-ux-v2-mobile]` (globals.css). */}
+      <div
+        className="absolute left-2 top-2 z-30 md:hidden"
+        data-conversation-nav-trigger
+      >
         <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
           <SheetTrigger
-            render={<Button variant="outline" size="sm" className="gap-2" />}
+            render={
+              <Button
+                variant="outline"
+                size="sm"
+                aria-label="Conversations"
+                className="h-9 gap-1.5 rounded-full border-border/60 bg-background/95 px-3 shadow-sm backdrop-blur"
+              />
+            }
           >
             <MessagesSquare className="size-4" />
-            Conversations
+            <span className="text-xs font-medium">Conversations</span>
           </SheetTrigger>
           <SheetPopup side="left" className="flex w-80 flex-col p-0">
             <SheetHeader className="border-b border-border px-4 py-3">

@@ -49,8 +49,6 @@ export interface ChatSessionState {
   branch: string | null;
   /** Selected environment id. */
   envId: string | null;
-  /** Session-scoped output toggles ("Stays on for this chat until turned off"). */
-  outputs: { image: boolean; video: boolean };
 }
 
 /** The fields the Code section owns — remembered per agent per workspace. */
@@ -78,16 +76,13 @@ export const defaultChatSessionState: ChatSessionState = {
   repoKey: null,
   branch: null,
   envId: null,
-  outputs: { image: false, video: false },
 };
 
 // ---------------------------------------------------------------------------
 // The single write path
 // ---------------------------------------------------------------------------
 
-export type ChatSessionPatch = Partial<
-  Omit<ChatSessionState, "outputs"> & { outputs: Partial<ChatSessionState["outputs"]> }
->;
+export type ChatSessionPatch = Partial<ChatSessionState>;
 
 /**
  * Apply a patch with the Code-section cascade rules:
@@ -106,7 +101,6 @@ export function applySessionPatch(
   const next: ChatSessionState = {
     ...state,
     ...patch,
-    outputs: patch.outputs ? { ...state.outputs, ...patch.outputs } : state.outputs,
   };
 
   if (patch.org !== undefined && patch.org !== state.org) {
@@ -307,8 +301,8 @@ export function sessionSelectionIssues(
 
 /**
  * True when any setting differs from the workspace-default seed — drives the
- * cog's accent dot. Output toggles count; a transient branch equal to the
- * repo default does not (null and the literal default mean the same thing).
+ * cog's accent dot. A transient branch equal to the repo default does not count
+ * (null and the literal default mean the same thing).
  */
 export function sessionDiffersFromDefaults(
   state: ChatSessionState,
@@ -323,9 +317,7 @@ export function sessionDiffersFromDefaults(
     state.org !== defaults.org ||
     state.repoKey !== defaults.repoKey ||
     (state.branch ?? null) !== (defaults.branch ?? null) ||
-    state.envId !== defaults.envId ||
-    state.outputs.image !== defaults.outputs.image ||
-    state.outputs.video !== defaults.outputs.video
+    state.envId !== defaults.envId
   );
 }
 
@@ -412,10 +404,6 @@ export function decodeSessionState(
   const obj = parsed as Record<string, unknown>;
   if (obj.v !== SESSION_STATE_VERSION) return null;
   const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
-  const outputs =
-    typeof obj.outputs === "object" && obj.outputs !== null
-      ? (obj.outputs as Record<string, unknown>)
-      : {};
   return {
     agentId: str(obj.agentId),
     tier: TIERS.includes(obj.tier as TextTier) ? (obj.tier as TextTier) : obj.tier === null ? null : base.tier,
@@ -431,10 +419,6 @@ export function decodeSessionState(
     repoKey: str(obj.repoKey),
     branch: str(obj.branch),
     envId: str(obj.envId),
-    outputs: {
-      image: outputs.image === true,
-      video: outputs.video === true,
-    },
   };
 }
 

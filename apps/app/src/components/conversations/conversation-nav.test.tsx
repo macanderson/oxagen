@@ -51,8 +51,18 @@ vi.mock("@/components/ui/toast", () => ({
 }));
 
 vi.mock("next/link", () => ({
-  default: ({ href, children, ...rest }: { href: string; children: React.ReactNode; [k: string]: unknown }) => (
-    <a href={href} {...rest}>{children}</a>
+  default: ({
+    href,
+    children,
+    ...rest
+  }: {
+    href: string;
+    children: React.ReactNode;
+    [k: string]: unknown;
+  }) => (
+    <a href={href} {...rest}>
+      {children}
+    </a>
   ),
 }));
 
@@ -93,21 +103,40 @@ describe("ConversationNav — mobile trigger", () => {
     const buttons = screen.getAllByRole("button");
     expect(buttons.length).toBeGreaterThan(0);
   });
+
+  it("floats the mobile trigger over the conversation (absolute, phone-only)", () => {
+    // Regression guard: the mobile trigger must be OUT of normal flow so it
+    // overlays the transcript instead of stealing a row of height on phones.
+    const { container } = render(<ConversationNav {...defaultProps} />);
+    const trigger = container.querySelector<HTMLElement>(
+      "[data-conversation-nav-trigger]",
+    );
+    expect(trigger).toBeInTheDocument();
+    expect(trigger?.className).toContain("absolute");
+    // Still phone-only — the desktop aside owns conversations at md+.
+    expect(trigger?.className).toContain("md:hidden");
+  });
 });
 
 describe("ConversationNav — desktop collapse", () => {
   it("starts expanded (heading + collapse control visible) by default", () => {
     render(<ConversationNav {...defaultProps} />);
-    expect(screen.getByRole("heading", { name: "Conversations" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Conversations" }),
+    ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /collapse conversations/i }),
     ).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /show conversations/i })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: /show conversations/i }),
+    ).toBeNull();
   });
 
   it("collapses to an icon rail when the collapse control is clicked", () => {
     render(<ConversationNav {...defaultProps} />);
-    fireEvent.click(screen.getByRole("button", { name: /collapse conversations/i }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /collapse conversations/i }),
+    );
     // Heading + list gone; the expand affordance takes its place.
     expect(screen.queryByRole("heading", { name: "Conversations" })).toBeNull();
     expect(
@@ -117,16 +146,28 @@ describe("ConversationNav — desktop collapse", () => {
 
   it("persists the collapsed flag to localStorage", () => {
     render(<ConversationNav {...defaultProps} />);
-    fireEvent.click(screen.getByRole("button", { name: /collapse conversations/i }));
-    expect(window.localStorage.getItem("oxagen.conversation-nav.collapsed")).toBe("1");
+    fireEvent.click(
+      screen.getByRole("button", { name: /collapse conversations/i }),
+    );
+    expect(
+      window.localStorage.getItem("oxagen.conversation-nav.collapsed"),
+    ).toBe("1");
   });
 
   it("re-expands from the collapsed rail", () => {
     render(<ConversationNav {...defaultProps} />);
-    fireEvent.click(screen.getByRole("button", { name: /collapse conversations/i }));
-    fireEvent.click(screen.getByRole("button", { name: /show conversations/i }));
-    expect(screen.getByRole("heading", { name: "Conversations" })).toBeInTheDocument();
-    expect(window.localStorage.getItem("oxagen.conversation-nav.collapsed")).toBe("0");
+    fireEvent.click(
+      screen.getByRole("button", { name: /collapse conversations/i }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: /show conversations/i }),
+    );
+    expect(
+      screen.getByRole("heading", { name: "Conversations" }),
+    ).toBeInTheDocument();
+    expect(
+      window.localStorage.getItem("oxagen.conversation-nav.collapsed"),
+    ).toBe("0");
   });
 
   it("initialises collapsed when localStorage already has the flag set", () => {
@@ -142,8 +183,22 @@ describe("ConversationNav — desktop collapse", () => {
 describe("ConversationNav — with conversations", () => {
   it("renders conversation titles via ConversationList", () => {
     const conversations = [
-      { publicId: "c-1", title: "First chat", archivedAt: null, updatedAt: new Date().toISOString(), createdAt: new Date().toISOString(), status: "active" },
-      { publicId: "c-2", title: "Second chat", archivedAt: null, updatedAt: new Date().toISOString(), createdAt: new Date().toISOString(), status: "active" },
+      {
+        publicId: "c-1",
+        title: "First chat",
+        archivedAt: null,
+        updatedAt: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+        status: "active",
+      },
+      {
+        publicId: "c-2",
+        title: "Second chat",
+        archivedAt: null,
+        updatedAt: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+        status: "active",
+      },
     ];
     render(<ConversationNav {...defaultProps} initialActive={conversations} />);
     // ConversationList renders each title

@@ -63,6 +63,7 @@ import {
   type TurnSuggestion,
 } from "./suggest-prompts";
 import { streamMediaGeneration } from "./media-generation";
+import { inferMediaIntent } from "./infer-media-intent";
 import { createTurnTranslator, emitUsageEvent } from "./translate-stream";
 import { formatStreamError } from "./stream-parts";
 import {
@@ -446,10 +447,21 @@ export async function POST(request: NextRequest): Promise<Response> {
     effort && supportsReasoning(modelIdOf(turnModel)) ? effort : undefined;
 
   // ── Media-generation branch ───────────────────────────────────────────────
-  // When the composer requests image/video generation, this turn does NOT run
-  // the text agent. Resolve the media model (explicit per-turn → effective
-  // workspace/user default → tier default inside streamMediaGeneration).
-  if (generate) {
+  // This turn generates an image/video instead of running the text agent when
+  // media intent is present. The app no longer has manual "Generate image /
+  // video" toggles — an explicit `generate` (legacy/API clients) still wins,
+  // but otherwise we INFER intent from the prompt ("make me a logo", "create a
+  // short video of waves"). inferMediaIntent is conservative and never fires on
+  // attachment or code-mode turns, so ordinary chat is unaffected. Resolve the
+  // media model (explicit per-turn → effective workspace/user default → tier
+  // default inside streamMediaGeneration).
+  const effectiveGenerate =
+    generate ??
+    inferMediaIntent(content, {
+      hasAttachments: attachments.length > 0,
+      isCodeMode: codeModeRaw != null,
+    });
+  if (effectiveGenerate) {
     let resolvedMediaModel = mediaModel;
     if (!resolvedMediaModel) {
       try {
@@ -458,7 +470,7 @@ export async function POST(request: NextRequest): Promise<Response> {
           workspaceId: workspace.id,
         });
         resolvedMediaModel =
-          generate === "image"
+          effectiveGenerate === "image"
             ? (mediaDefaults.image.model ?? null)
             : (mediaDefaults.video.model ?? null);
       } catch {
@@ -466,7 +478,7 @@ export async function POST(request: NextRequest): Promise<Response> {
       }
     }
     return streamMediaGeneration({
-      kind: generate,
+      kind: effectiveGenerate,
       prompt: content,
       mediaModel: resolvedMediaModel,
       mediaTier: mediaTier ?? "basic",

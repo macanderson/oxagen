@@ -6,6 +6,7 @@ import { describe, it, expect } from "vitest";
 import {
   cn,
   formatCents,
+  formatCentsCompact,
   formatDate,
   formatDateTime,
   formatDateTimeWithSeconds,
@@ -89,6 +90,35 @@ describe("formatCents", () => {
 });
 
 // ---------------------------------------------------------------------------
+// formatCentsCompact — abbreviated currency for large balances
+// ---------------------------------------------------------------------------
+
+describe("formatCentsCompact", () => {
+  it("keeps full cent precision below $1,000", () => {
+    expect(formatCentsCompact(0)).toBe("$0.00");
+    expect(formatCentsCompact(500)).toBe("$5.00");
+    expect(formatCentsCompact(99999)).toBe("$999.99");
+  });
+
+  it("abbreviates large balances so they don't dominate the surface", () => {
+    expect(formatCentsCompact(1_234_500)).toBe("$12.3K"); // $12,345
+    expect(formatCentsCompact(120_000_000)).toBe("$1.2M"); // $1,200,000
+    expect(formatCentsCompact(100_000_000)).toBe("$1M"); // $1,000,000
+    expect(formatCentsCompact(500_000_000)).toBe("$5M"); // $5,000,000
+  });
+
+  it("abbreviates exactly at the $1,000 boundary", () => {
+    // $1,000.00 = 100,000 cents → compact "$1K"
+    expect(formatCentsCompact(100_000)).toBe("$1K");
+  });
+
+  it("is resilient to non-finite input", () => {
+    expect(formatCentsCompact(Number.NaN)).toBe("$0.00");
+    expect(formatCentsCompact(Number.POSITIVE_INFINITY)).toBe("$0.00");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // formatDate — medium date format
 // ---------------------------------------------------------------------------
 
@@ -158,7 +188,9 @@ describe("formatDateTimeWithSeconds", () => {
   });
 
   it("formats date + time + seconds", () => {
-    const result = formatDateTimeWithSeconds(new Date("2026-01-05T14:03:07.000Z"));
+    const result = formatDateTimeWithSeconds(
+      new Date("2026-01-05T14:03:07.000Z"),
+    );
     expect(result).toMatch(/Jan 5, 2026/);
     expect(result).toMatch(/\d{2}:\d{2}:\d{2}/);
   });

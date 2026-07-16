@@ -72,10 +72,18 @@ vi.mock("@/components/ui/sheet", () => ({
     side?: string;
     "data-testid"?: string;
   }) => <div data-testid={testId ?? "sheet-popup"}>{children}</div>,
-  SheetHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  SheetPanel: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  SheetTitle: ({ children }: { children: React.ReactNode }) => <h2>{children}</h2>,
-  SheetDescription: ({ children }: { children: React.ReactNode }) => <p>{children}</p>,
+  SheetHeader: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  SheetPanel: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  SheetTitle: ({ children }: { children: React.ReactNode }) => (
+    <h2>{children}</h2>
+  ),
+  SheetDescription: ({ children }: { children: React.ReactNode }) => (
+    <p>{children}</p>
+  ),
 }));
 
 vi.mock("./agent-picker/agent-context-chip", () => ({
@@ -119,7 +127,8 @@ vi.mock("@oxagen/ai/catalog", () => ({
 }));
 
 vi.mock("./model-picker", async () => {
-  const state = await vi.importActual<typeof import("./model-state")>("./model-state");
+  const state =
+    await vi.importActual<typeof import("./model-state")>("./model-state");
   return {
     ...state,
     ModelPicker: () => <div data-testid="model-picker" />,
@@ -192,8 +201,12 @@ vi.mock("@/components/ui/select", () => ({
     <div data-testid="select-trigger">{children}</div>
   ),
   SelectValue: () => null,
-  SelectPopup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  SelectItem: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  SelectPopup: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  SelectItem: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
 }));
 
 vi.mock("next/image", () => ({
@@ -297,10 +310,16 @@ describe("MessageComposer — chat_ux_v2 mobile row", () => {
     mockViewport.isMobile = true;
     renderWithSession();
     expect(screen.getByTestId("composer-v2-mobile-row")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Add attachment" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Add attachment" }),
+    ).toBeInTheDocument();
     expect(screen.getByPlaceholderText("Send a message…")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Session settings" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Send message" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Session settings" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Send message" }),
+    ).toBeInTheDocument();
   });
 
   it("hides the model/agent/effort/budget/MCP/overflow controls in the condensed row", () => {
@@ -314,8 +333,12 @@ describe("MessageComposer — chat_ux_v2 mobile row", () => {
     expect(
       screen.queryByRole("button", { name: "More composer options" }),
     ).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Generate image" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Generate video" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Generate image" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Generate video" }),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Collapse composer" }),
     ).not.toBeInTheDocument();
@@ -328,7 +351,9 @@ describe("MessageComposer — chat_ux_v2 mobile row", () => {
     mockViewport.isMobile = true;
     renderWithSession();
     expect(screen.queryByTestId("composer-cog-dot")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Session settings" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Session settings" }),
+    ).toBeInTheDocument();
   });
 
   it("shows an accent cog dot once a setting diverges from the workspace defaults", () => {
@@ -339,7 +364,9 @@ describe("MessageComposer — chat_ux_v2 mobile row", () => {
     const dot = screen.getByTestId("composer-cog-dot");
     expect(dot.className).toContain("bg-primary");
     expect(
-      screen.getByRole("button", { name: "Session settings, settings changed" }),
+      screen.getByRole("button", {
+        name: "Session settings, settings changed",
+      }),
     ).toBeInTheDocument();
   });
 
@@ -348,11 +375,16 @@ describe("MessageComposer — chat_ux_v2 mobile row", () => {
     // A repoKey the composer's `availableRepos` doesn't resolve is a broken
     // selection per sessionSelectionIssues — availableRepos is omitted here
     // (defaults to []), so the seeded key never resolves.
-    renderWithSession({}, { ...BASE_SEED, defaultRepoKey: "con_x::ghost/repo" });
+    renderWithSession(
+      {},
+      { ...BASE_SEED, defaultRepoKey: "con_x::ghost/repo" },
+    );
     const dot = screen.getByTestId("composer-cog-dot");
     expect(dot.className).toContain("bg-destructive");
     expect(
-      screen.getByRole("button", { name: "Session settings, attention needed" }),
+      screen.getByRole("button", {
+        name: "Session settings, attention needed",
+      }),
     ).toBeInTheDocument();
   });
 
@@ -405,9 +437,15 @@ describe("MessageComposer — chat_ux_v2 mobile row", () => {
     expect(screen.queryByTestId("attach-tray")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Add attachment" }));
     expect(screen.getByTestId("attach-tray")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Take photo" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Choose photos" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Choose files" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Take photo" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Choose photos" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Choose files" }),
+    ).toBeInTheDocument();
     expect(screen.queryByTestId("attach-popover")).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /record voice/i }),
@@ -445,17 +483,30 @@ describe("MessageComposer — chat_ux_v2 desktop condensed row", () => {
     mockViewport.isMobile = false;
     renderWithSession();
     expect(screen.getByTestId("composer-v2-desktop-row")).toBeInTheDocument();
-    expect(screen.queryByTestId("composer-v2-mobile-row")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Add attachment" })).toBeInTheDocument();
+    expect(
+      screen.queryByTestId("composer-v2-mobile-row"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Add attachment" }),
+    ).toBeInTheDocument();
     expect(screen.getByPlaceholderText("Send a message…")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Send message" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Session settings" })).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Send message" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Session settings" }),
+    ).not.toBeInTheDocument();
   });
 
   it("shows the cog when showComposerCog is true (mid-width, rail hidden)", () => {
     mockViewport.isMobile = false;
-    renderWithSession({ showComposerCog: true, onOpenSessionSettings: vi.fn() });
-    expect(screen.getByRole("button", { name: "Session settings" })).toBeInTheDocument();
+    renderWithSession({
+      showComposerCog: true,
+      onOpenSessionSettings: vi.fn(),
+    });
+    expect(
+      screen.getByRole("button", { name: "Session settings" }),
+    ).toBeInTheDocument();
   });
 
   it("calls onOpenSessionSettings when the cog is clicked", () => {
@@ -483,10 +534,18 @@ describe("MessageComposer — chat_ux_v2 desktop condensed row", () => {
     expect(screen.queryByTestId("budget-control")).not.toBeInTheDocument();
     expect(screen.queryByTestId("mcp-server-picker")).not.toBeInTheDocument();
     expect(screen.queryByTestId("select-trigger")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Generate image" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Generate video" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Collapse composer" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Expand composer" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Generate image" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Generate video" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Collapse composer" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Expand composer" }),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "More composer options" }),
     ).not.toBeInTheDocument();
@@ -522,31 +581,40 @@ describe("MessageComposer — chat_ux_v2 desktop condensed row", () => {
     renderWithSession();
     fireEvent.click(screen.getByRole("button", { name: "Add attachment" }));
     expect(screen.getByTestId("attach-popover")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Upload files" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Upload files" }),
+    ).toBeInTheDocument();
     expect(screen.queryByTestId("attach-tray")).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /record voice/i }),
     ).not.toBeInTheDocument();
   });
 
+  // The AttachPopover's hidden native input is rendered OUTSIDE PopoverPopup (so
+  // it survives the popover closing on click — see attach-popover.tsx), so it is
+  // NOT a descendant of the `attach-popover` element. Disambiguate it from the
+  // legacy shared "image/*,video/*" input by its pdf-inclusive accept.
+  const attachPopoverInput = (): HTMLInputElement => {
+    const input = Array.from(
+      document.querySelectorAll<HTMLInputElement>('input[type="file"]'),
+    ).find((el) => el.accept.includes("application/pdf"));
+    if (!input) throw new Error("AttachPopover file input not found");
+    return input;
+  };
+
   it("Upload files accepts every server-supported kind (image, video, document/pdf)", () => {
     mockViewport.isMobile = false;
     renderWithSession();
-    // Scope to the popover — the legacy shared file input (rendered whenever
-    // canAttach is true) is a narrower "image/*,video/*" and would otherwise
-    // be matched first by an unscoped query.
-    const popover = screen.getByTestId("attach-popover");
-    const input = popover.querySelector('input[type="file"]') as HTMLInputElement;
-    expect(input.accept).toBe("image/*,video/*,application/pdf");
+    expect(attachPopoverInput().accept).toBe("image/*,video/*,application/pdf");
   });
 
   it("picking a file via Upload files adds an attachment chip", async () => {
     mockViewport.isMobile = false;
     renderWithSession();
-    const popover = screen.getByTestId("attach-popover");
-    const input = popover.querySelector('input[type="file"]') as HTMLInputElement;
-    fireEvent.change(input, {
-      target: { files: [new File(["p"], "spec.pdf", { type: "application/pdf" })] },
+    fireEvent.change(attachPopoverInput(), {
+      target: {
+        files: [new File(["p"], "spec.pdf", { type: "application/pdf" })],
+      },
     });
     await vi.waitFor(() =>
       expect(screen.getByTestId("attachment-chip")).toBeInTheDocument(),
@@ -567,11 +635,15 @@ describe("MessageComposer — legacy mobile toolbar is unchanged without chat_ux
         workspaceSlug="default"
       />,
     );
-    expect(screen.queryByTestId("composer-v2-mobile-row")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("composer-v2-mobile-row"),
+    ).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "More composer options" }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Send message" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Send message" }),
+    ).toBeInTheDocument();
     // The legacy paperclip stays a direct file-picker trigger — no tray/popover.
     expect(
       screen.getByRole("button", { name: "Attach image or video" }),
@@ -583,7 +655,9 @@ describe("MessageComposer — legacy mobile toolbar is unchanged without chat_ux
   it("does not render the MOBILE condensed row on desktop even with a session provider mounted (v2Desktop renders its own row instead)", () => {
     mockViewport.isMobile = false;
     renderWithSession();
-    expect(screen.queryByTestId("composer-v2-mobile-row")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("composer-v2-mobile-row"),
+    ).not.toBeInTheDocument();
   });
 
   it("renders the full legacy desktop toolbar unchanged with no session provider mounted", () => {
@@ -596,24 +670,35 @@ describe("MessageComposer — legacy mobile toolbar is unchanged without chat_ux
         modelConfig={DEFAULT_MODEL_CONFIG}
       />,
     );
-    expect(screen.queryByTestId("composer-v2-desktop-row")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("composer-v2-mobile-row")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("composer-v2-desktop-row"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("composer-v2-mobile-row"),
+    ).not.toBeInTheDocument();
     expect(screen.getByTestId("model-picker")).toBeInTheDocument();
     expect(screen.getByTestId("budget-control")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Generate image" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Generate video" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Collapse composer" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Send message" })).toBeInTheDocument();
+    // Manual media-generation toggles were removed — media intent is now
+    // inferred from the prompt server-side, so no "Generate image/video" button.
+    expect(
+      screen.queryByRole("button", { name: "Generate image" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Generate video" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Collapse composer" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Send message" }),
+    ).toBeInTheDocument();
   });
 });
 
 describe("MessageComposer — v2 wallet gate", () => {
   it("disables send with inline copy when the cap exceeds the wallet balance", () => {
     mockViewport.isMobile = true;
-    renderWithSession(
-      { walletBalanceUsd: 1 },
-      { ...BASE_SEED, budgetUsd: 2 },
-    );
+    renderWithSession({ walletBalanceUsd: 1 }, { ...BASE_SEED, budgetUsd: 2 });
     expect(
       screen.getByText(
         "Wallet balance is below your cap. Add funds or lower the cap.",
@@ -626,10 +711,7 @@ describe("MessageComposer — v2 wallet gate", () => {
 
   it("no gate when the wallet covers the cap or no cap is set", () => {
     mockViewport.isMobile = true;
-    renderWithSession(
-      { walletBalanceUsd: 5 },
-      { ...BASE_SEED, budgetUsd: 2 },
-    );
+    renderWithSession({ walletBalanceUsd: 5 }, { ...BASE_SEED, budgetUsd: 2 });
     expect(screen.queryByTestId("wallet-gate-hint")).toBeNull();
     cleanup();
     mockViewport.isMobile = true;

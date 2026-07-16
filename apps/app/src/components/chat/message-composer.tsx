@@ -4,12 +4,10 @@ import {
   Brain,
   ChevronDown,
   ChevronUp,
-  ImageIcon,
   Paperclip,
   Plus,
   Send,
   SlidersHorizontal,
-  Video,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -1414,32 +1412,11 @@ export function MessageComposer({
           ? `Message ${selectedAgent.name}…`
           : "Send a message…";
 
-  function toggleGenerate(kind: "image" | "video") {
-    if (model.generate === kind) {
-      // Toggle off — return to text defaults.
-      setModel((s) => ({
-        ...s,
-        generate: null,
-        mediaTier: "basic",
-        mediaModel: null,
-      }));
-    } else {
-      // Toggle on — switch to this kind, pre-filling mediaModel from the
-      // workspace/user seeded preference when available. When a seeded model
-      // is present the tier is not needed (model wins), so clear mediaTier
-      // to avoid sending a redundant field; otherwise fall back to "basic".
-      setModel((s) => {
-        const seeded =
-          kind === "image" ? s.seededImageModel : s.seededVideoModel;
-        return {
-          ...s,
-          generate: kind,
-          mediaTier: seeded ? null : "basic",
-          mediaModel: seeded ?? null,
-        };
-      });
-    }
-  }
+  // Image/video generation is no longer a manual composer mode — the server
+  // infers it from the prompt (infer-media-intent.ts). `model.generate` stays a
+  // latent field of ComposerModelState (still honored for explicit API callers
+  // and the model picker's media catalog), so `generate === null` below is a
+  // defensive guard, never toggled on from the app UI.
 
   /** Build a FormData for the current form state + a given model snapshot. */
   function buildFormData(
@@ -2301,42 +2278,10 @@ export function MessageComposer({
                     </Button>
                   ) : null}
 
-                  {/* Image / video generation toggles — inline on desktop, in the
-                overflow sheet on mobile. */}
-                  {!isMobile && (
-                    <>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        aria-label="Generate image"
-                        aria-pressed={model.generate === "image"}
-                        onClick={() => toggleGenerate("image")}
-                        className={cn(
-                          "h-8 w-8 p-0",
-                          model.generate === "image" &&
-                            "bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary",
-                        )}
-                      >
-                        <ImageIcon className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        aria-label="Generate video"
-                        aria-pressed={model.generate === "video"}
-                        onClick={() => toggleGenerate("video")}
-                        className={cn(
-                          "h-8 w-8 p-0",
-                          model.generate === "video" &&
-                            "bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary",
-                        )}
-                      >
-                        <Video className="h-4 w-4" />
-                      </Button>
-                    </>
-                  )}
+                  {/* No manual image/video generation toggles: the system infers
+                media intent from the prompt server-side (infer-media-intent.ts)
+                and routes the turn to media generation when it's clearly asked
+                for. Attaching an image/video is the paperclip above. */}
 
                   {/* Code mode is governed SOLELY by the selected agent's identity
                 (a code agent turns it on and reveals the repo/environment
@@ -2527,36 +2472,8 @@ export function MessageComposer({
                   {effortSelect}
                 </div>
               )}
-              <Button
-                type="button"
-                variant="ghost"
-                aria-label="Generate image"
-                aria-pressed={model.generate === "image"}
-                onClick={() => toggleGenerate("image")}
-                className={cn(
-                  "h-11 w-full justify-start gap-2 px-2 text-sm",
-                  model.generate === "image" &&
-                    "bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary",
-                )}
-              >
-                <ImageIcon className="h-4 w-4" />
-                Generate image
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                aria-label="Generate video"
-                aria-pressed={model.generate === "video"}
-                onClick={() => toggleGenerate("video")}
-                className={cn(
-                  "h-11 w-full justify-start gap-2 px-2 text-sm",
-                  model.generate === "video" &&
-                    "bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary",
-                )}
-              >
-                <Video className="h-4 w-4" />
-                Generate video
-              </Button>
+              {/* Image/video generation is inferred from the prompt, so there
+                  are no manual "Generate image/video" rows here anymore. */}
               {(availableMcpServers?.length ?? 0) > 0 && (
                 <div className="flex min-h-11 items-center justify-between gap-2">
                   <span className="text-sm">MCP servers</span>

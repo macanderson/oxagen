@@ -3,7 +3,7 @@
  * message-composer.test.tsx
  *
  * Unit tests for MessageComposer:
- *   - Renders textarea, image/video toggles, send button
+ *   - Renders textarea, send button
  *   - MCP picker shown only when availableMcpServers is non-empty
  *   - Submit encodes conversationId, parentMessageId, model tier, activeServerIds
  *   - disabled prop blocks submit
@@ -17,7 +17,6 @@
  *   - Queue drain: isStreaming false→true→false dispatches queued message
  *   - activeServerIds encoded in queue-drain FormData via ref
  *   - Error message shown on action failure
- *   - Image/video toggle changes placeholder
  *   - Effort select shown when model supports reasoning
  */
 
@@ -404,24 +403,6 @@ describe("MessageComposer — rendering", () => {
     expect(screen.getByPlaceholderText("Send a message…")).toBeInTheDocument();
   });
 
-  it("renders image and video toggle buttons", async () => {
-    const { MessageComposer } = await import("./message-composer");
-    render(
-      <MessageComposer
-        conversationId={null}
-        parentMessageId={null}
-        action={makeAction()}
-        modelConfig={DEFAULT_MODEL_CONFIG}
-      />,
-    );
-    expect(
-      screen.getByRole("button", { name: "Generate image" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Generate video" }),
-    ).toBeInTheDocument();
-  });
-
   it("renders send button with 'Send message' label", async () => {
     const { MessageComposer } = await import("./message-composer");
     render(
@@ -745,81 +726,6 @@ describe("MessageComposer — submit", () => {
   });
 });
 
-describe("MessageComposer — image / video toggles", () => {
-  it("changes placeholder to image prompt on image toggle", async () => {
-    const { MessageComposer } = await import("./message-composer");
-    render(
-      <MessageComposer
-        conversationId={null}
-        parentMessageId={null}
-        action={makeAction()}
-        modelConfig={DEFAULT_MODEL_CONFIG}
-      />,
-    );
-    await userEvent.click(
-      screen.getByRole("button", { name: "Generate image" }),
-    );
-    expect(
-      screen.getByPlaceholderText("Describe the image you want…"),
-    ).toBeInTheDocument();
-  });
-
-  it("toggles image mode off when clicked again", async () => {
-    const { MessageComposer } = await import("./message-composer");
-    render(
-      <MessageComposer
-        conversationId={null}
-        parentMessageId={null}
-        action={makeAction()}
-        modelConfig={DEFAULT_MODEL_CONFIG}
-      />,
-    );
-    const imgBtn = screen.getByRole("button", { name: "Generate image" });
-    await userEvent.click(imgBtn);
-    await userEvent.click(imgBtn);
-    expect(screen.getByPlaceholderText("Send a message…")).toBeInTheDocument();
-  });
-
-  it("changes placeholder to video prompt on video toggle", async () => {
-    const { MessageComposer } = await import("./message-composer");
-    render(
-      <MessageComposer
-        conversationId={null}
-        parentMessageId={null}
-        action={makeAction()}
-        modelConfig={DEFAULT_MODEL_CONFIG}
-      />,
-    );
-    await userEvent.click(
-      screen.getByRole("button", { name: "Generate video" }),
-    );
-    expect(
-      screen.getByPlaceholderText("Describe the video you want…"),
-    ).toBeInTheDocument();
-  });
-
-  it("switches from image mode to video mode", async () => {
-    const { MessageComposer } = await import("./message-composer");
-    render(
-      <MessageComposer
-        conversationId={null}
-        parentMessageId={null}
-        action={makeAction()}
-        modelConfig={DEFAULT_MODEL_CONFIG}
-      />,
-    );
-    await userEvent.click(
-      screen.getByRole("button", { name: "Generate image" }),
-    );
-    await userEvent.click(
-      screen.getByRole("button", { name: "Generate video" }),
-    );
-    expect(
-      screen.getByPlaceholderText("Describe the video you want…"),
-    ).toBeInTheDocument();
-  });
-});
-
 describe("MessageComposer — keyboard", () => {
   it("enterToSubmit=true: Enter triggers submit", async () => {
     const action = makeAction();
@@ -1115,52 +1021,6 @@ describe("MessageComposer — queue drain", () => {
   });
 });
 
-describe("MessageComposer — media FormData encoding", () => {
-  it("encodes generate=image and mediaTier in FormData", async () => {
-    const action = makeAction();
-    const { MessageComposer } = await import("./message-composer");
-    render(
-      <MessageComposer
-        conversationId={null}
-        parentMessageId={null}
-        action={action}
-        modelConfig={DEFAULT_MODEL_CONFIG}
-      />,
-    );
-    await userEvent.click(
-      screen.getByRole("button", { name: "Generate image" }),
-    );
-    await userEvent.type(screen.getByRole("textbox"), "a cat");
-    await userEvent.click(screen.getByRole("button", { name: "Send message" }));
-    await waitFor(() => expect(action).toHaveBeenCalled());
-    const fd = action.mock.calls[0][0] as FormData;
-    expect(fd.get("generate")).toBe("image");
-    expect(fd.get("mediaTier")).toBe("basic");
-  });
-
-  it("encodes generate=video and mediaTier in FormData", async () => {
-    const action = makeAction();
-    const { MessageComposer } = await import("./message-composer");
-    render(
-      <MessageComposer
-        conversationId={null}
-        parentMessageId={null}
-        action={action}
-        modelConfig={DEFAULT_MODEL_CONFIG}
-      />,
-    );
-    await userEvent.click(
-      screen.getByRole("button", { name: "Generate video" }),
-    );
-    await userEvent.type(screen.getByRole("textbox"), "a sunset");
-    await userEvent.click(screen.getByRole("button", { name: "Send message" }));
-    await waitFor(() => expect(action).toHaveBeenCalled());
-    const fd = action.mock.calls[0][0] as FormData;
-    expect(fd.get("generate")).toBe("video");
-    expect(fd.get("mediaTier")).toBe("basic");
-  });
-});
-
 describe("MessageComposer — keyboard guards", () => {
   it("enterToSubmit=true: Enter while disabled is a no-op", async () => {
     const action = makeAction();
@@ -1211,48 +1071,7 @@ describe("MessageComposer — keyboard guards", () => {
   });
 });
 
-describe("MessageComposer — queue drain with generate mode", () => {
-  it("drains a queued image-mode message with generate=image in FormData", async () => {
-    const action = makeAction();
-    const { MessageComposer } = await import("./message-composer");
-    const { rerender } = render(
-      <MessageComposer
-        conversationId={null}
-        parentMessageId={null}
-        action={action}
-        modelConfig={DEFAULT_MODEL_CONFIG}
-        isStreaming
-        pendingPromptBehavior="queue"
-      />,
-    );
-    // Switch to image mode then queue a message
-    await userEvent.click(
-      screen.getByRole("button", { name: "Generate image" }),
-    );
-    await userEvent.type(screen.getByRole("textbox"), "a castle");
-    await userEvent.click(
-      screen.getByRole("button", { name: "Queue message" }),
-    );
-
-    // End stream
-    rerender(
-      <MessageComposer
-        conversationId={null}
-        parentMessageId={null}
-        action={action}
-        modelConfig={DEFAULT_MODEL_CONFIG}
-        isStreaming={false}
-        pendingPromptBehavior="queue"
-      />,
-    );
-    await act(async () => {
-      await new Promise((r) => setTimeout(r, 50));
-    });
-    await waitFor(() => expect(action).toHaveBeenCalled());
-    const fd = action.mock.calls[0][0] as FormData;
-    expect(fd.get("generate")).toBe("image");
-  });
-
+describe("MessageComposer — queue drain: model & refs", () => {
   it("drains a queued message using ms.model when set", async () => {
     const action = makeAction();
     const { MessageComposer } = await import("./message-composer");
@@ -1435,80 +1254,6 @@ describe("MessageComposer — model branch (explicit model.model)", () => {
   });
 });
 
-describe("MessageComposer — seeded media model branch", () => {
-  it("encodes mediaModel= when seededImageModel is set and image mode toggled on", async () => {
-    const action = makeAction();
-    const { MessageComposer } = await import("./message-composer");
-    render(
-      <MessageComposer
-        conversationId={null}
-        parentMessageId={null}
-        action={action}
-        modelConfig={DEFAULT_MODEL_CONFIG}
-        initialModelState={{
-          tier: "fast",
-          generate: null,
-          model: null,
-          effort: null,
-          mediaTier: null,
-          mediaModel: null,
-          seededImageModel: "flux-2-max",
-          seededVideoModel: null,
-          budgetEnabled: false,
-          budgetUsd: null,
-          budgetMode: "prompt",
-          budgetGracePct: 0.25,
-        }}
-      />,
-    );
-    await userEvent.click(
-      screen.getByRole("button", { name: "Generate image" }),
-    );
-    await userEvent.type(screen.getByRole("textbox"), "A landscape");
-    await userEvent.click(screen.getByRole("button", { name: "Send message" }));
-    await waitFor(() => expect(action).toHaveBeenCalled());
-    const fd = action.mock.calls[0][0] as FormData;
-    expect(fd.get("mediaModel")).toBe("flux-2-max");
-    expect(fd.get("mediaTier")).toBeNull();
-  });
-});
-
-describe("MessageComposer — explicit mediaModel in FormData", () => {
-  it("encodes mediaModel= when initialModelState has mediaModel set", async () => {
-    const action = makeAction();
-    const { MessageComposer } = await import("./message-composer");
-    render(
-      <MessageComposer
-        conversationId={null}
-        parentMessageId={null}
-        action={action}
-        modelConfig={DEFAULT_MODEL_CONFIG}
-        initialModelState={{
-          tier: null,
-          generate: "image",
-          model: null,
-          effort: null,
-          mediaTier: null,
-          mediaModel: "gpt-image-1",
-          seededImageModel: null,
-          seededVideoModel: null,
-          budgetEnabled: false,
-          budgetUsd: null,
-          budgetMode: "prompt",
-          budgetGracePct: 0.25,
-        }}
-      />,
-    );
-    await userEvent.type(screen.getByRole("textbox"), "A cat");
-    await userEvent.click(screen.getByRole("button", { name: "Send message" }));
-    await waitFor(() => expect(action).toHaveBeenCalled());
-    const fd = action.mock.calls[0][0] as FormData;
-    expect(fd.get("generate")).toBe("image");
-    expect(fd.get("mediaModel")).toBe("gpt-image-1");
-    expect(fd.get("mediaTier")).toBeNull();
-  });
-});
-
 describe("MessageComposer — keyboard guard: disabled in onKeyDown", () => {
   it("Enter key while disabled=true in onKeyDown is a no-op", async () => {
     const action = makeAction();
@@ -1573,42 +1318,6 @@ describe("MessageComposer — null tier in initialModelState", () => {
     const fd = action.mock.calls[0][0] as FormData;
     // tier=null falls back to "fast" in buildFormData (covers tier ?? "fast" branches)
     expect(fd.get("tier")).toBe("fast");
-  });
-});
-
-describe("MessageComposer — null mediaTier fallback in buildFormData", () => {
-  it("uses 'basic' mediaTier fallback when mediaTier is null and no mediaModel", async () => {
-    const action = makeAction();
-    const { MessageComposer } = await import("./message-composer");
-    render(
-      <MessageComposer
-        conversationId={null}
-        parentMessageId={null}
-        action={action}
-        modelConfig={DEFAULT_MODEL_CONFIG}
-        initialModelState={{
-          tier: "fast",
-          generate: "image",
-          model: null,
-          effort: null,
-          mediaTier: null,
-          mediaModel: null,
-          seededImageModel: null,
-          seededVideoModel: null,
-          budgetEnabled: false,
-          budgetUsd: null,
-          budgetMode: "prompt",
-          budgetGracePct: 0.25,
-        }}
-      />,
-    );
-    await userEvent.type(screen.getByRole("textbox"), "image null mediaTier");
-    await userEvent.click(screen.getByRole("button", { name: "Send message" }));
-    await waitFor(() => expect(action).toHaveBeenCalled());
-    const fd = action.mock.calls[0][0] as FormData;
-    expect(fd.get("generate")).toBe("image");
-    // mediaTier=null falls back to "basic" (covers mediaTier ?? "basic" branch)
-    expect(fd.get("mediaTier")).toBe("basic");
   });
 });
 
@@ -1706,119 +1415,6 @@ describe("MessageComposer — queue drain: null tier fallback", () => {
     const fd = action.mock.calls[0][0] as FormData;
     // Drain path: ms.tier=null → ms.tier ?? "fast" = "fast" (covers lines 251, 253)
     expect(fd.get("tier")).toBe("fast");
-  });
-});
-
-describe("MessageComposer — queue drain: mediaModel set", () => {
-  it("encodes mediaModel in drained FormData when ms.mediaModel is set", async () => {
-    const action = makeAction();
-    const { MessageComposer } = await import("./message-composer");
-    const mediaModelState = {
-      tier: "fast" as const,
-      generate: "image" as const,
-      model: null as null,
-      effort: null as null,
-      mediaTier: null as null,
-      mediaModel: "flux-2-max",
-      seededImageModel: null as null,
-      seededVideoModel: null as null,
-      budgetEnabled: false as const,
-      budgetUsd: null as null,
-      budgetMode: "prompt" as const,
-      budgetGracePct: 0.25 as const,
-    };
-    const { rerender } = render(
-      <MessageComposer
-        conversationId={null}
-        parentMessageId={null}
-        action={action}
-        modelConfig={DEFAULT_MODEL_CONFIG}
-        isStreaming
-        pendingPromptBehavior="queue"
-        initialModelState={mediaModelState}
-      />,
-    );
-    await userEvent.type(screen.getByRole("textbox"), "image with mediaModel");
-    await userEvent.click(
-      screen.getByRole("button", { name: "Queue message" }),
-    );
-    rerender(
-      <MessageComposer
-        conversationId={null}
-        parentMessageId={null}
-        action={action}
-        modelConfig={DEFAULT_MODEL_CONFIG}
-        isStreaming={false}
-        pendingPromptBehavior="queue"
-        initialModelState={mediaModelState}
-      />,
-    );
-    await act(async () => {
-      await new Promise((r) => setTimeout(r, 50));
-    });
-    await waitFor(() => expect(action).toHaveBeenCalled());
-    const fd = action.mock.calls[0][0] as FormData;
-    // Drain path: ms.mediaModel is set → fd.set("mediaModel", ...) (covers line 260-261)
-    expect(fd.get("generate")).toBe("image");
-    expect(fd.get("mediaModel")).toBe("flux-2-max");
-  });
-});
-
-describe("MessageComposer — queue drain: null mediaTier fallback", () => {
-  it("uses 'basic' mediaTier fallback when draining a queued message with null mediaTier", async () => {
-    const action = makeAction();
-    const { MessageComposer } = await import("./message-composer");
-    const nullMediaTierState = {
-      tier: "fast" as const,
-      generate: "image" as const,
-      model: null as null,
-      effort: null as null,
-      mediaTier: null as null,
-      mediaModel: null as null,
-      seededImageModel: null as null,
-      seededVideoModel: null as null,
-      budgetEnabled: false as const,
-      budgetUsd: null as null,
-      budgetMode: "prompt" as const,
-      budgetGracePct: 0.25 as const,
-    };
-    const { rerender } = render(
-      <MessageComposer
-        conversationId={null}
-        parentMessageId={null}
-        action={action}
-        modelConfig={DEFAULT_MODEL_CONFIG}
-        isStreaming
-        pendingPromptBehavior="queue"
-        initialModelState={nullMediaTierState}
-      />,
-    );
-    await userEvent.type(
-      screen.getByRole("textbox"),
-      "image null mediaTier drain",
-    );
-    await userEvent.click(
-      screen.getByRole("button", { name: "Queue message" }),
-    );
-    rerender(
-      <MessageComposer
-        conversationId={null}
-        parentMessageId={null}
-        action={action}
-        modelConfig={DEFAULT_MODEL_CONFIG}
-        isStreaming={false}
-        pendingPromptBehavior="queue"
-        initialModelState={nullMediaTierState}
-      />,
-    );
-    await act(async () => {
-      await new Promise((r) => setTimeout(r, 50));
-    });
-    await waitFor(() => expect(action).toHaveBeenCalled());
-    const fd = action.mock.calls[0][0] as FormData;
-    // Drain path: ms.mediaTier=null → ms.mediaTier ?? "basic" = "basic" (covers line 263)
-    expect(fd.get("generate")).toBe("image");
-    expect(fd.get("mediaTier")).toBe("basic");
   });
 });
 
@@ -2504,9 +2100,9 @@ describe("MessageComposer — attachments", () => {
     });
     await user.upload(fileInput, oversized);
 
-    expect(
-      screen.getByTestId("attachment-size-error"),
-    ).toHaveTextContent("That file is over 5 MB. Try a smaller one.");
+    expect(screen.getByTestId("attachment-size-error")).toHaveTextContent(
+      "That file is over 5 MB. Try a smaller one.",
+    );
     // Never dispatched — the pre-check rejects it before any XHR is opened.
     expect(FakeXHR.instances).toHaveLength(0);
     expect(screen.queryByTestId("attachment-chip")).not.toBeInTheDocument();
@@ -2541,7 +2137,9 @@ describe("MessageComposer — attachments", () => {
       fileInput,
       new File(["bytes"], "photo.png", { type: "image/png" }),
     );
-    expect(screen.queryByTestId("attachment-size-error")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("attachment-size-error"),
+    ).not.toBeInTheDocument();
   });
 
   it("retrying a failed upload re-sends the same file and kind, and can succeed", async () => {
@@ -2738,7 +2336,10 @@ describe("MessageComposer — code mode (agent-governed)", () => {
     await userEvent.click(screen.getByRole("button", { name: "Send message" }));
     await waitFor(() => expect(action).toHaveBeenCalledTimes(1));
     const fd = action.mock.calls[0][0] as FormData;
-    const code = JSON.parse(fd.get("code") as string) as Record<string, unknown>;
+    const code = JSON.parse(fd.get("code") as string) as Record<
+      string,
+      unknown
+    >;
     expect(code).toEqual({
       connectionId: "con_1",
       owner: "acme",
@@ -2770,9 +2371,9 @@ describe("MessageComposer — code mode (agent-governed)", () => {
     // Environment auto-fills (isDefault) but the repo is ambiguous (2 options,
     // no default) — the gate stays blocked until the user picks a repo.
     await waitFor(() =>
-      expect(
-        screen.getByTestId("code-mode-gate-hint"),
-      ).toHaveTextContent("Select a repository and environment to start coding."),
+      expect(screen.getByTestId("code-mode-gate-hint")).toHaveTextContent(
+        "Select a repository and environment to start coding.",
+      ),
     );
     expect(screen.getByRole("button", { name: "Send message" })).toBeDisabled();
   });
@@ -2865,7 +2466,9 @@ describe("MessageComposer — code mode (agent-governed)", () => {
     expect(
       screen.getAllByTestId("locked-context-control").length,
     ).toBeGreaterThan(0);
-    const lockedRepo = container.querySelector('[aria-label="Select repository"]');
+    const lockedRepo = container.querySelector(
+      '[aria-label="Select repository"]',
+    );
     expect(lockedRepo).not.toBeNull();
   });
 });
@@ -3128,33 +2731,12 @@ describe("MessageComposer — mobile toolbar", () => {
     await userEvent.click(screen.getByTestId("composer-overflow-btn"));
     expect(screen.getByTestId("composer-overflow-sheet")).toBeInTheDocument();
     expect(screen.getByTestId("model-picker")).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Generate image" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Generate video" }),
-    ).toBeInTheDocument();
+    // Manual "Generate image/video" toggles were removed — media intent is now
+    // inferred server-side, so the overflow sheet no longer carries them.
+    expect(screen.queryByRole("button", { name: "Generate image" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Generate video" })).toBeNull();
     expect(screen.getByTestId("mcp-server-picker")).toBeInTheDocument();
     expect(screen.getByTestId("budget-control")).toBeInTheDocument();
-  });
-
-  it("toggling image generation from the sheet switches the composer to image mode", async () => {
-    const { MessageComposer } = await import("./message-composer");
-    render(
-      <MessageComposer
-        conversationId={null}
-        parentMessageId={null}
-        action={makeAction()}
-        modelConfig={DEFAULT_MODEL_CONFIG}
-      />,
-    );
-    await userEvent.click(screen.getByTestId("composer-overflow-btn"));
-    await userEvent.click(
-      screen.getByRole("button", { name: "Generate image" }),
-    );
-    expect(
-      screen.getByPlaceholderText("Describe the image you want…"),
-    ).toBeInTheDocument();
   });
 
   it("uses a 2-row textarea and 44px inline touch targets on mobile", async () => {
@@ -3189,9 +2771,6 @@ describe("MessageComposer — mobile toolbar", () => {
     );
     expect(screen.getByRole("textbox")).toHaveAttribute("rows", "3");
     expect(screen.getByTestId("model-picker")).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Generate image" }),
-    ).toBeInTheDocument();
     expect(screen.getByTestId("mcp-server-picker")).toBeInTheDocument();
     expect(screen.getByTestId("budget-control")).toBeInTheDocument();
     expect(screen.queryByTestId("composer-overflow-btn")).toBeNull();

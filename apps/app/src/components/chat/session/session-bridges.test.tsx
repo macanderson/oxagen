@@ -82,9 +82,6 @@ function ModelProbe() {
       >
         set-budget
       </button>
-      <button onClick={() => setModel((s) => ({ ...s, generate: "image" }))}>
-        gen-image
-      </button>
     </div>
   );
 }
@@ -95,10 +92,9 @@ function SessionEcho() {
 }
 
 function sessionState(): Record<string, unknown> {
-  return JSON.parse(screen.getByTestId("session").textContent ?? "{}") as Record<
-    string,
-    unknown
-  >;
+  return JSON.parse(
+    screen.getByTestId("session").textContent ?? "{}",
+  ) as Record<string, unknown>;
 }
 
 function providerWrap(children: React.ReactNode) {
@@ -164,16 +160,6 @@ describe("model bridge (flag on)", () => {
     expect(model.effort).toBe("high");
     expect(model.budgetEnabled).toBe(true);
     expect(model.budgetUsd).toBe(2);
-  });
-
-  it("generate toggles map onto session output toggles", () => {
-    providerWrap(<ModelProbe />);
-    fireEvent.click(screen.getByText("gen-image"));
-    expect(sessionState().outputs).toEqual({ image: true, video: false });
-    const model = JSON.parse(
-      screen.getByTestId("model").textContent ?? "{}",
-    ) as Record<string, unknown>;
-    expect(model.generate).toBe("image");
   });
 });
 

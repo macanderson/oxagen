@@ -13,8 +13,17 @@
 
 import { afterEach, describe, it, expect, vi } from "vitest";
 import * as React from "react";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
-import { buildChipFormData, SuggestedPromptChips } from "./suggested-prompt-chips";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
+import {
+  buildChipFormData,
+  SuggestedPromptChips,
+} from "./suggested-prompt-chips";
 import { deriveSuggestions } from "@/lib/page-context/suggested-prompts";
 
 // Stub ONLY the hook (the static fallback source) so render tests are
@@ -96,7 +105,11 @@ describe("chip count invariant — always exactly 3", () => {
 
   for (const pathname of pathnames) {
     it(`deriveSuggestions returns exactly 3 for "${pathname}"`, () => {
-      const chips = deriveSuggestions({ pathname, entity: null, fillableForm: null });
+      const chips = deriveSuggestions({
+        pathname,
+        entity: null,
+        fillableForm: null,
+      });
       expect(chips).toHaveLength(3);
     });
   }
@@ -153,7 +166,9 @@ describe("auto-submit contract — action is invoked with FormData on click", ()
     // This test encodes the design invariant: chips do NOT populate a text input
     // and then programmatically click submit. They directly call the ComposerAction
     // with a FormData — the same code path as the composer's own submit handler.
-    const mockAction = vi.fn().mockResolvedValue({ ok: true, conversationId: "c1" });
+    const mockAction = vi
+      .fn()
+      .mockResolvedValue({ ok: true, conversationId: "c1" });
     const prompt = "Summarize this conversation so far.";
     const fd = buildChipFormData(prompt, null, null);
 
@@ -173,9 +188,21 @@ describe("auto-submit contract — action is invoked with FormData on click", ()
     // This test verifies buildChipFormData always sets a non-empty "content" field,
     // meaning the guard never fires for a chip-generated payload.
     const allChips = [
-      ...deriveSuggestions({ pathname: "/acme/prod/ask", entity: null, fillableForm: null }),
-      ...deriveSuggestions({ pathname: "/acme/billing", entity: null, fillableForm: null }),
-      ...deriveSuggestions({ pathname: "/acme/prod/settings", entity: null, fillableForm: null }),
+      ...deriveSuggestions({
+        pathname: "/acme/prod/ask",
+        entity: null,
+        fillableForm: null,
+      }),
+      ...deriveSuggestions({
+        pathname: "/acme/billing",
+        entity: null,
+        fillableForm: null,
+      }),
+      ...deriveSuggestions({
+        pathname: "/acme/prod/settings",
+        entity: null,
+        fillableForm: null,
+      }),
     ];
     for (const { prompt } of allChips) {
       const fd = buildChipFormData(prompt, null, null);
@@ -195,7 +222,9 @@ describe("auto-submit contract — action is invoked with FormData on click", ()
 describe("handleActivate error surfacing contract — action ok:false is NOT silently ignored", () => {
   it("action returning { ok: false } resolves without throwing", async () => {
     // Simulate what handleActivate does: call action(fd), check result
-    const mockAction = vi.fn().mockResolvedValue({ ok: false, error: "Billing gate" });
+    const mockAction = vi
+      .fn()
+      .mockResolvedValue({ ok: false, error: "Billing gate" });
     const fd = buildChipFormData("Test prompt", null, null);
     const result = await mockAction(fd);
     // The guard must be possible to evaluate
@@ -210,7 +239,7 @@ describe("handleActivate error surfacing contract — action ok:false is NOT sil
       error: "Auth expired" as string | undefined,
     });
     const fd = buildChipFormData("Another prompt", "conv-1", "msg-1");
-    const result = await mockAction(fd) as { ok: boolean; error?: string };
+    const result = (await mockAction(fd)) as { ok: boolean; error?: string };
     if (!result.ok) {
       const errorMsg = result.error ?? "Failed to send message";
       expect(errorMsg).toBe("Auth expired");
@@ -218,9 +247,11 @@ describe("handleActivate error surfacing contract — action ok:false is NOT sil
   });
 
   it("undefined error falls back to default message", async () => {
-    const mockAction = vi.fn().mockResolvedValue({ ok: false, error: undefined });
+    const mockAction = vi
+      .fn()
+      .mockResolvedValue({ ok: false, error: undefined });
     const fd = buildChipFormData("Prompt without error detail", null, null);
-    const result = await mockAction(fd) as { ok: boolean; error?: string };
+    const result = (await mockAction(fd)) as { ok: boolean; error?: string };
     const errorMsg = result.error ?? "Failed to send message";
     expect(errorMsg).toBe("Failed to send message");
   });
@@ -233,7 +264,7 @@ describe("handleActivate error surfacing contract — action ok:false is NOT sil
       userMessageId: "msg-new",
     });
     const fd = buildChipFormData("Success prompt", null, null);
-    const result = await mockAction(fd) as { ok: boolean; error?: string };
+    const result = (await mockAction(fd)) as { ok: boolean; error?: string };
     expect(result.ok).toBe(true);
     expect(result.error).toBeUndefined();
   });
@@ -294,5 +325,86 @@ describe("SuggestedPromptChips — suggestions prop override", () => {
     const [fd] = action.mock.calls[0] as [FormData];
     expect(fd.get("content")).toBe("Automate this on a schedule.");
     expect(fd.get("conversationId")).toBe("conv-1");
+  });
+});
+
+// ── Dismissable single pill (post-first-message next-step) ────────────────────
+// After the first message the shell renders ONE dismissable pill: the label
+// still auto-submits, and a trailing "×" waves it away for the current turn.
+// A fresh suggestion (new turn) resets the dismissal so the next pill shows.
+
+describe("SuggestedPromptChips — dismissable single pill", () => {
+  afterEach(cleanup);
+
+  const single = [
+    { label: "Verify The Fix", prompt: "Run the tests to verify the fix." },
+  ];
+
+  function renderPill(
+    props: Partial<React.ComponentProps<typeof SuggestedPromptChips>> = {},
+  ) {
+    const action = vi.fn().mockResolvedValue({ ok: true });
+    const utils = render(
+      React.createElement(SuggestedPromptChips, {
+        action,
+        conversationId: "conv-1",
+        parentMessageId: "msg-1",
+        suggestions: single,
+        maxPrompts: 1,
+        dismissable: true,
+        ...props,
+      }),
+    );
+    return { action, ...utils };
+  }
+
+  it("renders exactly one pill with a dismiss control", () => {
+    renderPill();
+    expect(screen.getByText("Verify The Fix")).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Dismiss suggestion" }),
+    ).toBeTruthy();
+  });
+
+  it("hides the suggestion when the dismiss control is clicked", () => {
+    renderPill();
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss suggestion" }));
+    expect(screen.queryByText("Verify The Fix")).toBeNull();
+  });
+
+  it("still auto-submits the prompt when the label is clicked", async () => {
+    const { action } = renderPill();
+    fireEvent.click(screen.getByText("Verify The Fix"));
+    await waitFor(() => expect(action).toHaveBeenCalledOnce());
+    const [fd] = action.mock.calls[0] as [FormData];
+    expect(fd.get("content")).toBe("Run the tests to verify the fix.");
+  });
+
+  it("re-shows (undismissed) when a fresh suggestion arrives", () => {
+    const action = vi.fn().mockResolvedValue({ ok: true });
+    const { rerender } = render(
+      React.createElement(SuggestedPromptChips, {
+        action,
+        conversationId: "c",
+        parentMessageId: "m",
+        suggestions: single,
+        maxPrompts: 1,
+        dismissable: true,
+      }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss suggestion" }));
+    expect(screen.queryByText("Verify The Fix")).toBeNull();
+    // A new turn emits a different suggestion → the dismissal resets.
+    rerender(
+      React.createElement(SuggestedPromptChips, {
+        action,
+        conversationId: "c",
+        parentMessageId: "m",
+        suggestions: [{ label: "Ship It", prompt: "Open a PR and push." }],
+        maxPrompts: 1,
+        dismissable: true,
+      }),
+    );
+    expect(screen.getByText("Ship It")).toBeTruthy();
   });
 });
