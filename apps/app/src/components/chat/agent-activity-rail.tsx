@@ -65,7 +65,6 @@ interface RailCardProps {
   cardId: string;
   title: string;
   /** One-line descriptor rendered muted at the foot of the card body. */
-  helper: string;
   /** Small count/state pill shown right-aligned in the header. */
   badge?: React.ReactNode;
   /** Pulsing dot in the header while the turn is streaming. */
@@ -77,29 +76,24 @@ interface RailCardProps {
    */
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
-  /** Hides the muted helper caption entirely — v2 drops it as a duplicated
-   * descriptor now that the header states are self-explanatory. Defaults to
-   * shown (legacy). */
-  showHelper?: boolean;
   children: React.ReactNode;
 }
 
 /**
  * One titled, collapsible rail card: header (icon · title · live dot · badge ·
- * chevron) over a bordered body that ends with the muted `helper` descriptor,
- * mirroring the reference rail's calm "title + subtext" rhythm.
+ * chevron) over a bordered body. No trailing helper caption — every card body
+ * renders either real content or a self-explanatory empty state, so a repeated
+ * one-line descriptor under it was pure duplication (ux pass 2026-07-16).
  */
 function RailCard({
   icon: Icon,
   cardId,
   title,
-  helper,
   badge,
   live = false,
   defaultOpen = true,
   open: controlledOpen,
   onOpenChange,
-  showHelper = true,
   children,
 }: RailCardProps) {
   const [uncontrolledOpen, setUncontrolledOpen] = React.useState(defaultOpen);
@@ -149,11 +143,6 @@ function RailCard({
       {open ? (
         <div className="border-t border-border/60 px-3 pb-3 pt-2.5">
           {children}
-          {showHelper ? (
-            <p className="mt-2.5 text-[11px] leading-relaxed text-muted-foreground">
-              {helper}
-            </p>
-          ) : null}
         </div>
       ) : null}
     </section>
@@ -236,12 +225,10 @@ function ProgressCard({
       icon={ListTodo}
       cardId="progress"
       title={idle ? "Progress · idle" : "Progress"}
-      helper="Steps appear here as the agent works through a longer task."
       live={isStreaming}
       badge={hasContent ? totalRows : undefined}
       open={v2 ? open : undefined}
       onOpenChange={v2 ? onOpenChange : undefined}
-      showHelper={!v2}
     >
       {hasContent ? (
         <div className="flex flex-col gap-2">
@@ -391,7 +378,6 @@ function ContextCard({
       icon={FolderGit2}
       cardId="context"
       title="Context"
-      helper="The repository, branch, and checks this task is grounded in."
     >
       {repo ? (
         <div className="flex flex-col gap-2 text-xs" data-testid="context-grounded">
@@ -514,10 +500,8 @@ function OutputsCard({
       icon={FolderOpen}
       cardId="outputs"
       title={v2 ? (idle ? "Files · 0" : "Files") : "Outputs"}
-      helper="Files the assistant generates or edits in this conversation show up here."
       open={v2 ? open : undefined}
       onOpenChange={v2 ? onOpenChange : undefined}
-      showHelper={!v2}
     >
       {/* Definite height so the tabs' inner `flex-1` panels can scroll. */}
       <div className="flex h-56 flex-col">

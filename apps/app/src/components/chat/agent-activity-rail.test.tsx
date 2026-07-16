@@ -323,14 +323,14 @@ describe("AgentActivityRail — chat_ux_v2 desktop rail (v2)", () => {
     expect(screen.queryByText("Files · 0")).not.toBeInTheDocument();
   });
 
-  it("hides the muted helper captions in v2 but keeps them legacy", () => {
+  it("never renders the redundant helper captions (ux pass 2026-07-16: card bodies self-explain in both modes)", () => {
     const { rerender } = render(<AgentActivityRail {...baseProps()} />);
     expect(
-      screen.getByText("Steps appear here as the agent works through a longer task."),
-    ).toBeInTheDocument();
+      screen.queryByText("Steps appear here as the agent works through a longer task."),
+    ).not.toBeInTheDocument();
     expect(
-      screen.getByText("Files the assistant generates or edits in this conversation show up here."),
-    ).toBeInTheDocument();
+      screen.queryByText("Files the assistant generates or edits in this conversation show up here."),
+    ).not.toBeInTheDocument();
 
     rerender(
       <AgentActivityRail
