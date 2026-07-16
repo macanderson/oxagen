@@ -49,11 +49,18 @@ export function WorkspaceSwitcher({
             <Button
               variant="outline"
               size="sm"
-              className="gap-2 max-md:min-h-11"
+              // min-w-0 lets this flex item shrink below its content width so
+              // the inner `truncate` span can actually truncate; without it the
+              // header's right cluster paints over the overflowing label on
+              // narrow (375px) viewports.
+              className="min-w-0 gap-2 max-md:min-h-11"
             />
           }
         >
-          <span className="truncate">{current.name}</span>
+          {/* min-w floor keeps at least a few characters legible when the
+              header squeezes; below that the shell clips rather than letting
+              siblings paint over the label. */}
+          <span className="min-w-12 truncate">{current.name}</span>
           <ChevronsUpDown className="h-3.5 w-3.5 opacity-50" />
         </MenuTrigger>
         <MenuPopup align="start" className="w-56">

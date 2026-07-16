@@ -11,7 +11,7 @@
 
 import Link from "next/link";
 import { Wallet } from "lucide-react";
-import { formatCents, formatCentsCompact, cn } from "@/lib/utils";
+import { formatCents, formatCentsCompact, formatCentsWhole, cn } from "@/lib/utils";
 
 export interface BalancePillProps {
   orgSlug: string;
@@ -36,8 +36,11 @@ export function BalancePill({ orgSlug, balanceCents, low }: BalancePillProps) {
       <Wallet className="size-3.5 shrink-0 opacity-70" aria-hidden="true" />
       {/* Visible label abbreviates a large balance ($12.3K) so the pill stays
           compact in the top bar; the aria-label above carries the exact figure
-          for assistive tech. */}
-      {formatCentsCompact(balanceCents)}
+          for assistive tech. On phones the header has ~375px for five controls,
+          so cents are dropped there ("$1,003") — the exact figure is one tap
+          away on the billing page and always in the aria-label. */}
+      <span className="max-sm:hidden">{formatCentsCompact(balanceCents)}</span>
+      <span className="sm:hidden">{formatCentsWhole(balanceCents)}</span>
     </Link>
   );
 }

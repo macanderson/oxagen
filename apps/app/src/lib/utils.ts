@@ -38,6 +38,23 @@ export function formatCentsCompact(cents: number, currency = "USD"): string {
   }).format(dollars);
 }
 
+/**
+ * Whole-dollar currency for width-starved surfaces (the phone-width nav credit
+ * pill). Drops cents ("$1,003") below the compact threshold and defers to
+ * `formatCentsCompact` above it, so large balances still abbreviate. Pair with
+ * the precise `formatCents` in an aria-label wherever the exact figure matters.
+ */
+export function formatCentsWhole(cents: number, currency = "USD"): string {
+  if (!Number.isFinite(cents)) return formatCents(0, currency);
+  const dollars = cents / 100;
+  if (Math.abs(dollars) >= 10_000) return formatCentsCompact(cents, currency);
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency,
+    maximumFractionDigits: 0,
+  }).format(dollars);
+}
+
 export function formatDate(d: Date | string | null | undefined): string {
   if (!d) return "—";
   const date = typeof d === "string" ? new Date(d) : d;

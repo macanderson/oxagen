@@ -8,6 +8,7 @@ import {
   cn,
   formatCents,
   formatCentsCompact,
+  formatCentsWhole,
   formatDate,
   formatDateTime,
   formatDateTimeWithSeconds,
@@ -124,6 +125,27 @@ describe("formatCentsCompact", () => {
   it("is resilient to non-finite input", () => {
     expect(formatCentsCompact(Number.NaN)).toBe("$0.00");
     expect(formatCentsCompact(Number.POSITIVE_INFINITY)).toBe("$0.00");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// formatCentsWhole — whole-dollar currency for width-starved surfaces
+// ---------------------------------------------------------------------------
+
+describe("formatCentsWhole", () => {
+  it("drops cents below the compact threshold", () => {
+    expect(formatCentsWhole(100_359)).toBe("$1,004"); // $1,003.59 rounds
+    expect(formatCentsWhole(500)).toBe("$5");
+    expect(formatCentsWhole(0)).toBe("$0");
+  });
+
+  it("defers to compact abbreviation from $10,000 up", () => {
+    expect(formatCentsWhole(1_000_000)).toBe("$10K");
+    expect(formatCentsWhole(120_000_000)).toBe("$1.2M");
+  });
+
+  it("is resilient to non-finite input", () => {
+    expect(formatCentsWhole(Number.NaN)).toBe("$0.00");
   });
 });
 
