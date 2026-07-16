@@ -38,6 +38,7 @@ import { Button } from "@/components/ui/button";
 import { HeroBackdrop } from "@/components/brand/hero-backdrop";
 import { Tooltip, TooltipTrigger, TooltipPopup } from "@/components/ui/tooltip";
 import { useSidebar } from "./sidebar-context";
+import { cn } from "@/lib/utils";
 import type { ResolvedOrg, ResolvedWorkspace } from "@/lib/resolve-org";
 import type { SessionUser } from "./user-switcher";
 import type { ScopeContext } from "@/lib/scope";
@@ -88,6 +89,12 @@ export function ShellFrame({
     orgSlug: org.slug,
     workspaceSlug: workspace?.slug,
   });
+
+  // The conversation page (/{org}/{workspace}/ask) treats the transcript as
+  // the page's primary real estate, so the shell's standard content padding
+  // shrinks to a slim gutter there — the conversation reaches (nearly) to the
+  // panel edges on every side. All other routes keep the roomier default.
+  const isConversationRoute = /^\/[^/]+\/[^/]+\/ask(?:\/|$)/.test(pathname);
 
   return (
     <div className="relative isolate flex h-dvh w-full overflow-hidden bg-background md:gap-2 md:p-2">
@@ -180,7 +187,10 @@ export function ShellFrame({
 
         <main
           id="main-content"
-          className="flex-1 overflow-y-auto p-4 max-md:pb-[calc(var(--bottom-bar-h)+var(--bottom-bar-gap)+env(safe-area-inset-bottom))] md:p-6 md:pb-6"
+          className={cn(
+            "flex-1 overflow-y-auto max-md:pb-[calc(var(--bottom-bar-h)+var(--bottom-bar-gap)+env(safe-area-inset-bottom))]",
+            isConversationRoute ? "p-2 md:p-3" : "p-4 md:p-6 md:pb-6",
+          )}
         >
           {children}
         </main>

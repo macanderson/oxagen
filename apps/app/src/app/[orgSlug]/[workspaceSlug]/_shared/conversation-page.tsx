@@ -483,11 +483,12 @@ export async function ConversationPage({
         actions={conversationNavActions}
       />
       <div className="min-h-0 min-w-0 flex-1">
-        {/* Wider than the old max-w-4xl so the conversation (max-w-3xl) and the
-          three-card activity rail (w-72) both breathe on desktop; below lg the
-          rail reflows into a bottom sheet and the conversation uses the full
-          width up to this cap. */}
-        <div className="mx-auto h-full max-w-6xl">
+        {/* No width cap: the conversation is the page's primary real estate,
+          so it claims every pixel the (collapsible) conversation nav leaves
+          free — collapsing the nav hands its width to the transcript instead
+          of widening dead gutters. The activity rail is a fixed-width flex
+          sibling inside ChatShell. */}
+        <div className="h-full">
           <ChatShell
             conversationId={conversationId}
             conversationPublicId={conv?.publicId ?? null}
