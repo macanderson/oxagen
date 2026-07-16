@@ -477,7 +477,15 @@ export async function runA2ATask(args: RunA2ATaskArgs): Promise<A2ATaskRow> {
     const turnBudgetPolicy: TurnBudgetPolicy = ctx.userId
       ? await budgetPolicyReadHandler({}, ctx)
           .then(turnBudgetPolicyFromSaved)
-          .catch(() => TURN_BUDGET_OFF)
+          // FAIL-OPEN but never silent: a persistent read failure disables
+          // per-turn spend enforcement — that must be observable in logs.
+          .catch((err) => {
+            logger.warn(
+              { err: String(err) },
+              "[a2a] budget.policy.read failed — failing open to TURN_BUDGET_OFF",
+            );
+            return TURN_BUDGET_OFF;
+          })
       : TURN_BUDGET_OFF;
     const budgetGuard = createTurnBudgetGuard(turnBudgetPolicy, modelId, {
       onStop: (verdict) => {

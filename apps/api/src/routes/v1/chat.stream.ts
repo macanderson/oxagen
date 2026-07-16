@@ -334,7 +334,13 @@ chatStreamRoute.post("/", async (c) => {
             return turnBudgetPolicyFromSaved(
               await budgetPolicyReadHandler({}, capCtx),
             );
-          } catch {
+          } catch (err) {
+            // FAIL-OPEN but never silent: a persistent read failure disables
+            // per-turn spend enforcement — that must be observable in logs.
+            console.warn(
+              "[chat/stream] budget.policy.read failed — failing open to TURN_BUDGET_OFF:",
+              String(err),
+            );
             return TURN_BUDGET_OFF;
           }
         };
