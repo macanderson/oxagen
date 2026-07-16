@@ -1,5 +1,6 @@
 import { ExternalLink, FileText } from "lucide-react";
 import { Panel } from "@/components/ui/panel";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatCents, formatDate } from "@/lib/utils";
@@ -22,7 +23,12 @@ export function InvoiceList({ invoices }: { invoices: Invoice[] }) {
   return (
     <Panel title="Invoices">
         {invoices.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No invoices yet.</p>
+          <EmptyState
+            icon={<FileText />}
+            title="No invoices yet"
+            description="Invoices appear here after your first billing cycle."
+            variant="muted"
+          />
         ) : (
           <ul className="divide-y divide-border/60">
             {invoices.map((inv) => {
