@@ -32,6 +32,10 @@ export const skillWorkspaceList = registerCapability({
         description: z.string(),
         // "builtin" | "tenant" (+ future provenance) — drives the source badge.
         source: z.string(),
+        // Builtin/template slug this skill was installed from (workspace-seeded
+        // copies of packages/skills templates carry it). Lets the UI badge
+        // template-derived skills as Built-in instead of Custom.
+        installedFromSlug: z.string().nullable(),
         enabled: z.boolean(),
         // Pinned active version rendered in the list (e.g. "v1"); null when no
         // version is pinned yet.
@@ -44,4 +48,6 @@ export const skillWorkspaceList = registerCapability({
 });
 
 export type SkillWorkspaceListInput = z.output<typeof skillWorkspaceList.input>;
-export type SkillWorkspaceListOutput = z.output<typeof skillWorkspaceList.output>;
+export type SkillWorkspaceListOutput = z.output<
+  typeof skillWorkspaceList.output
+>;

@@ -6,6 +6,12 @@
  * - Sets is_latest = true on the new row and clears is_latest on the prior
  *   latest row (partial-unique index on skill_versions enforces one is_latest
  *   per skill).
+ * - Records lineage: parent_version_id points at the prior latest row, and the
+ *   prior row's references_payload is carried forward (references are seeded
+ *   with resolved bodies at install time and cannot be re-resolved server-side
+ *   for tenant edits — dropping them would lose data).
+ * - Stamps checksum = SHA-256 hex over body (immutability contract, mirrors
+ *   agent_versions.checksum).
  * - By default also sets skills.active_version_id to the new version; caller
  *   can opt out with activate=false.
  * - Prior version rows are NEVER modified beyond clearing is_latest.
@@ -13,14 +19,17 @@
  */
 import { schema, withTenantDb } from "@oxagen/database";
 import { parseSkill } from "@oxagen/skills";
-import { and, eq, isNull, max, sql } from "drizzle-orm";
+import { and, eq, isNull, max, or } from "drizzle-orm";
+import { skillBodyChecksum } from "./skill-checksum";
 import { logger } from "./logger";
 
 export interface CreateSkillVersionOptions {
-  /** Public ID of the skill (skl_…) */
+  /** Public ID of the skill (skl_…) or its workspace-unique slug */
   skillPublicId: string;
   /** Raw .skill.md body (must include YAML frontmatter) */
   body: string;
+  /** Author-supplied summary of what changed (commit message) */
+  changeSummary?: string;
   /** Whether to set this version as the skill's active_version_id. Default: true */
   activate: boolean;
   orgId: string;
@@ -38,19 +47,31 @@ export interface CreatedSkillVersion {
 export async function createNewSkillVersion(
   opts: CreateSkillVersionOptions,
 ): Promise<CreatedSkillVersion> {
-  const { skillPublicId, body, activate, orgId, workspaceId, userId } = opts;
+  const {
+    skillPublicId,
+    body,
+    changeSummary,
+    activate,
+    orgId,
+    workspaceId,
+    userId,
+  } = opts;
 
   // Validate the body is parseable before touching the DB.
   parseSkill(body, { source: "tenant" });
 
   return withTenantDb(async (tx) => {
-    // 1. Resolve skill internal UUID from publicId within this tenant scope.
+    // 1. Resolve skill internal UUID from publicId or slug within this tenant
+    //    scope (same dual resolution as skill.enable).
     const [skillRow] = await tx
       .select({ id: schema.skills.id, publicId: schema.skills.publicId })
       .from(schema.skills)
       .where(
         and(
-          eq(schema.skills.publicId, skillPublicId),
+          or(
+            eq(schema.skills.publicId, skillPublicId),
+            eq(schema.skills.slug, skillPublicId),
+          ),
           eq(schema.skills.orgId, orgId),
           eq(schema.skills.workspaceId, workspaceId),
           isNull(schema.skills.deletedAt),
@@ -69,18 +90,32 @@ export async function createNewSkillVersion(
 
     const nextVersion = (maxRow?.maxVersion ?? 0) + 1;
 
-    // 3. Clear is_latest on the existing latest version (if any).
-    //    The partial unique index (WHERE is_latest = true) enforces uniqueness,
-    //    so we must clear first within the transaction before inserting.
-    await tx
-      .update(schema.skillVersions)
-      .set({ isLatest: false })
+    // 2b. Load the prior latest version — it is the new row's parent, the
+    //     source of the carried-forward references payload, and the row whose
+    //     is_latest flag must be cleared.
+    const [priorLatest] = await tx
+      .select({
+        id: schema.skillVersions.id,
+        referencesPayload: schema.skillVersions.referencesPayload,
+      })
+      .from(schema.skillVersions)
       .where(
         and(
           eq(schema.skillVersions.skillId, skillRow.id),
           eq(schema.skillVersions.isLatest, true),
         ),
-      );
+      )
+      .limit(1);
+
+    // 3. Clear is_latest on the existing latest version (if any).
+    //    The partial unique index (WHERE is_latest = true) enforces uniqueness,
+    //    so we must clear first within the transaction before inserting.
+    if (priorLatest) {
+      await tx
+        .update(schema.skillVersions)
+        .set({ isLatest: false })
+        .where(eq(schema.skillVersions.id, priorLatest.id));
+    }
 
     // 4. Insert the new immutable version row.
     const [newVersion] = await tx
@@ -92,9 +127,11 @@ export async function createNewSkillVersion(
         body,
         versionNumber: nextVersion,
         isLatest: true,
-        parentVersionId: null,
+        parentVersionId: priorLatest?.id ?? null,
         publishedAt: new Date(),
-        referencesPayload: sql`'[]'::jsonb`,
+        referencesPayload: priorLatest?.referencesPayload ?? [],
+        changeSummary: changeSummary ?? null,
+        checksum: skillBodyChecksum(body),
         createdByUserId: userId ?? undefined,
         updatedByUserId: userId ?? undefined,
       })
@@ -121,10 +158,11 @@ export async function createNewSkillVersion(
 
     logger.info(
       {
-        skillPublicId,
+        skillPublicId: skillRow.publicId,
         skillId: skillRow.id,
         versionPublicId: newVersion.publicId,
         versionNumber: newVersion.versionNumber,
+        parentVersionId: priorLatest?.id ?? null,
         activate,
         orgId,
         workspaceId,
@@ -135,7 +173,7 @@ export async function createNewSkillVersion(
     return {
       versionId: newVersion.publicId,
       versionNumber: newVersion.versionNumber,
-      skillId: skillPublicId,
+      skillId: skillRow.publicId,
       activated: activate,
     };
   });

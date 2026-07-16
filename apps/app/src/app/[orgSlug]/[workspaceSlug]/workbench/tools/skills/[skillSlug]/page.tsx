@@ -1,10 +1,11 @@
 /**
  * page.tsx — Workspace → Workbench → Skills → [skillSlug] detail view.
  *
- * Shows version history, edit-to-new-version, activate, and download for a
- * single installed skill. Data is loaded via:
- *   invoke('list_skill_versions')   — version history
- *   invoke('get_skill_version')    — active version content
+ * Shows version history, edit-to-new-version (draft + confirm-pin), activate,
+ * and download for a single installed skill. Data is loaded via:
+ *   invoke('get_skill_version')    — skill meta + pinned active version content
+ *                                    (slug-based; version_id omitted → active)
+ *   invoke('list_skill_versions')  — version history
  *
  * Passes server actions (editSkill, activateVersion, exportSkill) as props so
  * the "use client" SkillDetailPanel component can call them without crossing
@@ -15,6 +16,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { invoke } from "@oxagen/oxagen";
 import "@oxagen/handlers/register";
+import type { SkillVersionGetOutput } from "@oxagen/oxagen/contracts/skill.version.get";
+import type { SkillVersionListOutput } from "@oxagen/oxagen/contracts/skill.version.list";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft } from "lucide-react";
 import { workspace } from "@/lib/routes";
@@ -27,58 +30,85 @@ import { editSkill, activateVersion, exportSkill } from "../skill-actions";
 export async function generateMetadata({
   params,
 }: {
-  params: Promise<{ orgSlug: string; workspaceSlug: string; skillSlug: string }>;
+  params: Promise<{
+    orgSlug: string;
+    workspaceSlug: string;
+    skillSlug: string;
+  }>;
 }): Promise<Metadata> {
   const { skillSlug } = await params;
   return { title: `${skillSlug} | Skills | Workbench` };
 }
 
 interface PageProps {
-  params: Promise<{ orgSlug: string; workspaceSlug: string; skillSlug: string }>;
+  params: Promise<{
+    orgSlug: string;
+    workspaceSlug: string;
+    skillSlug: string;
+  }>;
 }
 
 export default async function WorkbenchSkillDetailPage({ params }: PageProps) {
   const { orgSlug, workspaceSlug, skillSlug } = await params;
-  const { ctx, canManage } = await resolveWorkbenchScope(orgSlug, workspaceSlug);
+  const { ctx, canManage } = await resolveWorkbenchScope(
+    orgSlug,
+    workspaceSlug,
+  );
+  const slug = decodeURIComponent(skillSlug);
 
-  // Fetch skill detail + active version content.
+  // Fetch skill meta + active-version content in one call. skill_id accepts
+  // the slug (dual publicId/slug resolution); version_id omitted resolves the
+  // pinned active version, falling back to latest.
+  //
+  // No { surface: "agent" }: this capability is exposed on ["api","mcp"] only,
+  // so asserting the agent surface throws surface_denied. apps/app omits
+  // opts.surface as a trusted server caller.
   let skill: SkillDetailData | null = null;
   try {
-    // No { surface: "agent" }: this capability is exposed on ["api","mcp"] only,
-    // so asserting the agent surface throws surface_denied (caught below as a
-    // false not-found). apps/app omits opts.surface as a trusted server caller.
-    const out = await invoke("get_skill_version", { skillSlug }, ctx);
-    const typed = out as {
-      id: string;
-      slug: string;
-      name: string;
-      description: string;
-      source: string;
-      activeVersion: string | null;
-      content: string | null;
-      updatedAt: string | null;
+    const out = (await invoke(
+      "get_skill_version",
+      { skill_id: slug },
+      ctx,
+    )) as SkillVersionGetOutput;
+    skill = {
+      id: out.skill_id,
+      slug: out.skill_slug,
+      name: out.skill_name,
+      description: out.skill_description,
+      source: out.skill_source,
+      installedFromSlug: out.installedFromSlug,
+      activeVersion: `v${out.versionNumber}`,
+      activeVersionIsPinned: out.isActive,
+      content: out.body,
+      updatedAt: out.createdAt,
     };
-    skill = typed;
-  } catch {
-    // Could not load skill — show not-found below.
+  } catch (err) {
+    // Only a genuinely missing skill renders the not-found state. Anything
+    // else (invalid input, authz, kernel failure) must surface — swallowing
+    // it here is exactly how a contract mismatch masqueraded as "skill not
+    // found in this workspace" for every skill.
+    const message = err instanceof Error ? err.message : "";
+    if (!/not found/i.test(message)) throw err;
   }
 
   // Fetch version history.
   let versions: SkillVersion[] = [];
   if (skill) {
     try {
-      const out = await invoke("list_skill_versions", { skillSlug }, ctx);
-      const typed = out as {
-        versions: Array<{
-          id: string;
-          version: string;
-          commitMessage: string | null;
-          createdAt: string;
-          createdByEmail: string | null;
-          isActive: boolean;
-        }>;
-      };
-      versions = typed.versions ?? [];
+      const out = (await invoke(
+        "list_skill_versions",
+        { skill_id: slug },
+        ctx,
+      )) as SkillVersionListOutput;
+      versions = (out.versions ?? []).map((v) => ({
+        id: v.id,
+        versionNumber: v.versionNumber,
+        version: `v${v.versionNumber}`,
+        commitMessage: v.changeSummary,
+        createdAt: v.createdAt,
+        createdByEmail: v.createdByEmail,
+        isActive: v.isActive,
+      }));
     } catch {
       // Non-fatal: render with empty history.
     }
@@ -100,8 +130,7 @@ export default async function WorkbenchSkillDetailPage({ params }: PageProps) {
           All Skills
         </Button>
         <p className="text-sm text-muted-foreground">
-          Skill{" "}
-          <span className="font-mono">{decodeURIComponent(skillSlug)}</span> was not found in this
+          Skill <span className="font-mono">{slug}</span> was not found in this
           workspace.
         </p>
       </div>

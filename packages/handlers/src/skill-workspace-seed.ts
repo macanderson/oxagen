@@ -20,6 +20,7 @@ import type { Tx } from "@oxagen/database";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { createBuiltinSkillRegistry } from "@oxagen/skills";
 import { logger } from "./logger";
+import { skillBodyChecksum } from "./skill-checksum";
 
 // Builtin skills are resolved from EMBEDDED module data (createBuiltinSkillRegistry),
 // never a runtime filesystem read. Serverless bundlers drop the sibling
@@ -116,7 +117,11 @@ async function runSeed(
         versionNumber: 1,
         isLatest: true,
         body: template.body,
-        referencesPayload: template.references.map((r) => ({ path: r.path, body: r.body })),
+        checksum: skillBodyChecksum(template.body),
+        referencesPayload: template.references.map((r) => ({
+          path: r.path,
+          body: r.body,
+        })),
       })
       .onConflictDoNothing()
       .returning({

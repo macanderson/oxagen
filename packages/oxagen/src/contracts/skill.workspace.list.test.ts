@@ -36,6 +36,7 @@ describe("skill.workspace.list capability", () => {
     name: "web-search",
     description: "Search the web for information.",
     source: "tenant",
+    installedFromSlug: null,
     enabled: true,
     activeVersion: "v1",
     updatedAt: "2026-07-01T12:00:00.000Z",
@@ -61,7 +62,14 @@ describe("skill.workspace.list capability", () => {
 
   it("parses a skill with enabled=false", () => {
     const parsed = skillWorkspaceList.output.parse({
-      skills: [validSkill({ id: "skill-002", slug: "code-execute", name: "code-execute", enabled: false })],
+      skills: [
+        validSkill({
+          id: "skill-002",
+          slug: "code-execute",
+          name: "code-execute",
+          enabled: false,
+        }),
+      ],
     });
     expect(parsed.skills[0]?.enabled).toBe(false);
   });
@@ -76,7 +84,9 @@ describe("skill.workspace.list capability", () => {
 
   it("rejects a skill missing the required slug field", () => {
     const { slug: _omit, ...noSlug } = validSkill();
-    expect(() => skillWorkspaceList.output.parse({ skills: [noSlug] })).toThrow();
+    expect(() =>
+      skillWorkspaceList.output.parse({ skills: [noSlug] }),
+    ).toThrow();
   });
 
   it("rejects a skill missing the name field", () => {

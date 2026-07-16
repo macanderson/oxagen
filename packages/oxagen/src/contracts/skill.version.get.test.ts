@@ -22,10 +22,9 @@ describe("skill.version.get capability", () => {
     ).toThrow();
   });
 
-  it("rejects missing version_id", () => {
-    expect(() =>
-      skillVersionGet.input.parse({ skill_id: "skl_abc" }),
-    ).toThrow();
+  it("accepts missing version_id (resolves the pinned active version)", () => {
+    const parsed = skillVersionGet.input.parse({ skill_id: "skl_abc" });
+    expect(parsed.version_id).toBeUndefined();
   });
 
   it("rejects empty input", () => {
@@ -44,12 +43,19 @@ describe("skill.version.get capability", () => {
     const parsed = skillVersionGet.output.parse({
       id: "slv_001",
       skill_id: "skl_abc",
+      skill_slug: "test-skill",
+      skill_name: "Test Skill",
+      skill_description: "A test skill",
+      skill_source: "tenant",
+      installedFromSlug: null,
       versionNumber: 1,
       isLatest: true,
       isActive: true,
       body: "---\nname: test-skill\n---\n# Test Skill",
       frontmatter: { name: "test-skill" },
       referencesPayload: [],
+      changeSummary: null,
+      checksum: null,
       createdAt: "2024-01-01T00:00:00.000Z",
       createdBy: "u_1",
     });
@@ -68,12 +74,19 @@ describe("skill.version.get capability", () => {
     const parsed = skillVersionGet.output.parse({
       id: "slv_002",
       skill_id: "skl_abc",
+      skill_slug: "test-skill",
+      skill_name: "Test Skill",
+      skill_description: "A test skill",
+      skill_source: "tenant",
+      installedFromSlug: null,
       versionNumber: 2,
       isLatest: false,
       isActive: false,
       body: "# Body",
       frontmatter: {},
       referencesPayload: [],
+      changeSummary: null,
+      checksum: null,
       createdAt: "2024-02-01T00:00:00.000Z",
       createdBy: null,
     });
@@ -88,12 +101,19 @@ describe("skill.version.get capability", () => {
     const parsed = skillVersionGet.output.parse({
       id: "slv_003",
       skill_id: "skl_abc",
+      skill_slug: "test-skill",
+      skill_name: "Test Skill",
+      skill_description: "A test skill",
+      skill_source: "tenant",
+      installedFromSlug: null,
       versionNumber: 3,
       isLatest: true,
       isActive: true,
       body: "# Body",
       frontmatter: { version: "3" },
       referencesPayload: refs,
+      changeSummary: null,
+      checksum: null,
       createdAt: "2024-03-01T00:00:00.000Z",
       createdBy: "u_2",
     });
@@ -104,12 +124,19 @@ describe("skill.version.get capability", () => {
     const parsed = skillVersionGet.output.parse({
       id: "slv_004",
       skill_id: "skl_abc",
+      skill_slug: "test-skill",
+      skill_name: "Test Skill",
+      skill_description: "A test skill",
+      skill_source: "tenant",
+      installedFromSlug: null,
       versionNumber: 4,
       isLatest: true,
       isActive: false,
       body: "---\nname: nested\ntags: [a, b]\n---\n",
       frontmatter: { name: "nested", tags: ["a", "b"] },
       referencesPayload: [],
+      changeSummary: null,
+      checksum: null,
       createdAt: "2024-04-01T00:00:00.000Z",
       createdBy: "u_3",
     });
@@ -121,11 +148,18 @@ describe("skill.version.get capability", () => {
       skillVersionGet.output.parse({
         id: "slv_001",
         skill_id: "skl_abc",
+        skill_slug: "test-skill",
+        skill_name: "Test Skill",
+        skill_description: "A test skill",
+        skill_source: "tenant",
+        installedFromSlug: null,
         versionNumber: 1,
         isLatest: true,
         isActive: true,
         frontmatter: {},
         referencesPayload: [],
+        changeSummary: null,
+        checksum: null,
         createdAt: "2024-01-01T00:00:00.000Z",
         createdBy: null,
       }),
@@ -137,11 +171,18 @@ describe("skill.version.get capability", () => {
       skillVersionGet.output.parse({
         id: "slv_001",
         skill_id: "skl_abc",
+        skill_slug: "test-skill",
+        skill_name: "Test Skill",
+        skill_description: "A test skill",
+        skill_source: "tenant",
+        installedFromSlug: null,
         versionNumber: 1,
         isLatest: true,
         isActive: true,
         body: "# Body",
         referencesPayload: [],
+        changeSummary: null,
+        checksum: null,
         createdAt: "2024-01-01T00:00:00.000Z",
         createdBy: null,
       }),
@@ -153,12 +194,19 @@ describe("skill.version.get capability", () => {
       skillVersionGet.output.parse({
         id: "slv_001",
         skill_id: "skl_abc",
+        skill_slug: "test-skill",
+        skill_name: "Test Skill",
+        skill_description: "A test skill",
+        skill_source: "tenant",
+        installedFromSlug: null,
         versionNumber: 1,
         isLatest: true,
         isActive: true,
         body: "# Body",
         frontmatter: {},
         referencesPayload: [],
+        changeSummary: null,
+        checksum: null,
         createdAt: "not-a-date",
         createdBy: null,
       }),

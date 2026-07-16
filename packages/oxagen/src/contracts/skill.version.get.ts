@@ -19,12 +19,33 @@ export const skillVersionGet = registerCapability({
     workspace: { Owner: "allow", Admin: "allow", Member: "allow" },
   },
   input: z.object({
-    skill_id: z.string().describe("Public skill ID (skl_…)"),
-    version_id: z.string().describe("Public version ID (slv_…)"),
+    skill_id: z.string().describe("Public skill ID (skl_…) or its slug"),
+    version_id: z
+      .string()
+      .optional()
+      .describe(
+        "Public version ID (slv_…). Omit to get the skill's pinned active version (falling back to latest when no version is pinned)",
+      ),
   }),
   output: z.object({
     id: z.string().describe("Public version ID (slv_…)"),
     skill_id: z.string(),
+    // Parent-skill metadata so a detail surface can render skill + version
+    // from one call (the app detail route resolves by slug with no prior id).
+    skill_slug: z.string().describe("Workspace-unique skill slug"),
+    skill_name: z.string(),
+    skill_description: z
+      .string()
+      .describe("Skill description (empty string when unset)"),
+    skill_source: z
+      .string()
+      .describe('"builtin" | "tenant" (+ future provenance)'),
+    installedFromSlug: z
+      .string()
+      .nullable()
+      .describe(
+        "Builtin/template slug this skill was installed from, when applicable",
+      ),
     versionNumber: z.number().int(),
     isLatest: z.boolean(),
     isActive: z
@@ -37,8 +58,19 @@ export const skillVersionGet = registerCapability({
     referencesPayload: z
       .array(z.unknown())
       .describe("Graph node + file references from frontmatter"),
+    changeSummary: z
+      .string()
+      .nullable()
+      .describe("Author-supplied summary of what changed in this version"),
+    checksum: z
+      .string()
+      .nullable()
+      .describe("SHA-256 hex over body; null on rows predating checksums"),
     createdAt: z.string().datetime(),
-    createdBy: z.string().nullable().describe("User ID who created this version"),
+    createdBy: z
+      .string()
+      .nullable()
+      .describe("User ID who created this version"),
   }),
 });
 

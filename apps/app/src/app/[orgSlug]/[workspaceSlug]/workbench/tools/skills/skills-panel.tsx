@@ -18,7 +18,10 @@ import { formatDate } from "@/lib/utils";
 import { Download, ExternalLink, Plus, Search, Sparkles } from "lucide-react";
 import { CardGrid } from "@/components/lists/card-grid";
 import { ListPagination } from "@/components/lists/list-pagination";
-import { useListControls, type ListSortOption } from "@/lib/lists/use-list-controls";
+import {
+  useListControls,
+  type ListSortOption,
+} from "@/lib/lists/use-list-controls";
 import { toCsv, downloadCsv, type CsvColumn } from "@/lib/lists/csv";
 import {
   NewSkillDialog,
@@ -34,6 +37,7 @@ export interface SkillRow {
   name: string;
   description: string;
   source: "builtin" | "tenant" | string;
+  installedFromSlug: string | null;
   activeVersion: string | null;
   updatedAt: string | null;
   lastUsedAt: string | null;
@@ -51,13 +55,27 @@ interface SkillsPanelProps {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+// Workspace-seeded copies of packages/skills templates are stored as
+// source="tenant" rows with installed_from_slug provenance — presenting those
+// as "Custom" misleads (every fresh workspace would show 14 "Custom" skills
+// the user never wrote). Badge template-derived skills as Built-in.
+export function effectiveSource(
+  row: Pick<SkillRow, "source" | "installedFromSlug">,
+): string {
+  if (row.source === "builtin" || row.installedFromSlug != null)
+    return "builtin";
+  return row.source;
+}
+
 function sourceLabel(source: string): string {
   if (source === "builtin") return "Built-in";
   if (source === "tenant") return "Custom";
   return source;
 }
 
-function sourceBadgeVariant(source: string): "default" | "secondary" | "outline" {
+function sourceBadgeVariant(
+  source: string,
+): "default" | "secondary" | "outline" {
   if (source === "builtin") return "secondary";
   if (source === "tenant") return "default";
   return "outline";
@@ -121,7 +139,10 @@ export function SkillsPanel({
       {/* Header: search + count + export + create */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-2 flex-1 max-w-sm min-w-56">
-          <Search className="h-4 w-4 text-muted-foreground flex-shrink-0" aria-hidden="true" />
+          <Search
+            className="h-4 w-4 text-muted-foreground flex-shrink-0"
+            aria-hidden="true"
+          />
           <Input
             type="search"
             placeholder="Search skills..."
@@ -134,7 +155,8 @@ export function SkillsPanel({
         </div>
         <div className="flex items-center gap-3">
           <div className="text-sm text-muted-foreground">
-            {controls.filteredTotal} skill{controls.filteredTotal !== 1 ? "s" : ""}
+            {controls.filteredTotal} skill
+            {controls.filteredTotal !== 1 ? "s" : ""}
           </div>
           <Button
             variant="outline"
@@ -145,7 +167,10 @@ export function SkillsPanel({
                 "skills.csv",
                 toCsv(
                   CSV_COLUMNS,
-                  controls.allFilteredRows as unknown as Record<string, unknown>[],
+                  controls.allFilteredRows as unknown as Record<
+                    string,
+                    unknown
+                  >[],
                 ),
               )
             }
@@ -197,11 +222,11 @@ export function SkillsPanel({
                     </span>
                   </div>
                   <Badge
-                    variant={sourceBadgeVariant(skill.source)}
+                    variant={sourceBadgeVariant(effectiveSource(skill))}
                     className="text-xs shrink-0"
                     data-testid={`skill-source-badge-${skill.slug}`}
                   >
-                    {sourceLabel(skill.source)}
+                    {sourceLabel(effectiveSource(skill))}
                   </Badge>
                 </div>
                 {skill.description ? (
@@ -216,7 +241,9 @@ export function SkillsPanel({
                   </div>
                   <div className="flex justify-between gap-2">
                     <dt>Uses</dt>
-                    <dd className="tabular-nums">{skill.usageCount.toLocaleString()}</dd>
+                    <dd className="tabular-nums">
+                      {skill.usageCount.toLocaleString()}
+                    </dd>
                   </div>
                   <div className="flex justify-between gap-2">
                     <dt>Updated</dt>
@@ -234,7 +261,12 @@ export function SkillsPanel({
                     className="h-7"
                     aria-label={`Manage ${skill.name}`}
                     data-testid={`skill-detail-link-${skill.slug}`}
-                    endIcon={<ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />}
+                    endIcon={
+                      <ExternalLink
+                        className="h-3.5 w-3.5"
+                        aria-hidden="true"
+                      />
+                    }
                     render={
                       <Link
                         href={`/${orgSlug}/${workspaceSlug}/workbench/tools/skills/${encodeURIComponent(skill.slug)}`}
@@ -280,7 +312,10 @@ export function SkillsPanelSkeleton() {
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="flex flex-col gap-3 rounded-lg border bg-card p-4">
+          <div
+            key={i}
+            className="flex flex-col gap-3 rounded-lg border bg-card p-4"
+          >
             <Skeleton className="h-4 w-32" />
             <Skeleton className="h-3 w-24" />
             <Skeleton className="h-3 w-full" />

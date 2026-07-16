@@ -139,10 +139,17 @@ vi.mock("@/components/ui/skeleton", () => ({
   ),
 }));
 
-vi.mock("lucide-react", () => new Proxy({} as Record<string | symbol, unknown>, {
-  get: (_t, prop) => (prop === "then" ? undefined : () => <svg aria-hidden="true" data-icon={String(prop)} />),
-  has: (_t, prop) => prop !== "then",
-}));
+vi.mock(
+  "lucide-react",
+  () =>
+    new Proxy({} as Record<string | symbol, unknown>, {
+      get: (_t, prop) =>
+        prop === "then"
+          ? undefined
+          : () => <svg aria-hidden="true" data-icon={String(prop)} />,
+      has: (_t, prop) => prop !== "then",
+    }),
+);
 
 // ---------------------------------------------------------------------------
 // Import under test
@@ -161,6 +168,7 @@ function makeSkill(overrides: Partial<SkillRow> = {}): SkillRow {
     name: "Summarize Text",
     description: "Condenses long documents into summaries.",
     source: "builtin",
+    installedFromSlug: null,
     activeVersion: "1.2.3",
     updatedAt: "2025-01-15T00:00:00Z",
     lastUsedAt: "2025-03-01T00:00:00Z",
@@ -174,7 +182,10 @@ const DEFAULT_PROPS = {
   workspaceSlug: "main",
   canManage: true,
   createAction: vi.fn(async () => ({ ok: true as const, slug: "new-skill" })),
-  draftAction: vi.fn(async () => ({ ok: false as const, error: "not wired in tests" })),
+  draftAction: vi.fn(async () => ({
+    ok: false as const,
+    error: "not wired in tests",
+  })),
 } satisfies Partial<React.ComponentProps<typeof SkillsPanel>>;
 
 // ---------------------------------------------------------------------------

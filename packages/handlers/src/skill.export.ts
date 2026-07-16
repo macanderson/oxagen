@@ -1,7 +1,7 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { skillExport } from "@oxagen/oxagen/contracts/skill.export";
 import { schema, withTenantDb } from "@oxagen/database";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, or } from "drizzle-orm";
 import { logger } from "./logger";
 
 /**
@@ -25,10 +25,13 @@ function buildSkillMd(opts: {
   return `---\n${yamlBlock}\n---\n\n${opts.body.trimEnd()}\n`;
 }
 
-export const skillExportHandler: CapabilityHandler<typeof skillExport> = async (input, ctx) => {
+export const skillExportHandler: CapabilityHandler<typeof skillExport> = async (
+  input,
+  ctx,
+) => {
   const { skillId, versionNumber } = input;
 
-  // 1. Resolve the skill row (confirms ownership + not deleted).
+  // 1. Resolve the skill row by publicId or slug (confirms ownership + not deleted).
   const [skill] = await withTenantDb((tx) =>
     tx
       .select({
@@ -41,7 +44,10 @@ export const skillExportHandler: CapabilityHandler<typeof skillExport> = async (
       .from(schema.skills)
       .where(
         and(
-          eq(schema.skills.publicId, skillId),
+          or(
+            eq(schema.skills.publicId, skillId),
+            eq(schema.skills.slug, skillId),
+          ),
           eq(schema.skills.workspaceId, ctx.workspaceId),
           isNull(schema.skills.deletedAt),
         ),

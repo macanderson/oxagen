@@ -22,6 +22,8 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { invoke } from "@oxagen/oxagen";
 import "@oxagen/handlers/register";
+import type { SkillVersionUploadOutput } from "@oxagen/oxagen/contracts/skill.version.upload";
+import type { SkillExportOutput } from "@oxagen/oxagen/contracts/skill.export";
 import { workspace } from "@/lib/routes";
 import type { ScopeContext } from "@/lib/scope";
 import { resolveWorkbenchScope } from "@/lib/workbench/scope";
@@ -31,6 +33,14 @@ import { resolveAgentToolsManager } from "@/lib/agent-tools/authz";
 
 function skillsPath(ctx: Required<ScopeContext>): string {
   return workspace.workbench.tools.skills(ctx);
+}
+
+function revalidateSkill(
+  routeCtx: Required<ScopeContext>,
+  skillSlug: string,
+): void {
+  revalidatePath(skillsPath(routeCtx));
+  revalidatePath(workspace.workbench.tools.skill(routeCtx, skillSlug));
 }
 
 // ── installSkill ──────────────────────────────────────────────────────────────
@@ -53,12 +63,17 @@ export async function installSkill(
   const { ctx } = auth.scope;
 
   try {
-    await invoke("install_skill", { skillSlug: parsed.data.skillSlug }, ctx);
+    // install_skill takes the builtin template slug to copy (contract:
+    // skill.workspace.install — `slug`, not `skillSlug`).
+    await invoke("install_skill", { slug: parsed.data.skillSlug }, ctx);
     const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };
     revalidatePath(skillsPath(routeCtx));
     return { ok: true };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Install failed" };
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Install failed",
+    };
   }
 }
 
@@ -74,7 +89,13 @@ const EditSkillSchema = z.object({
 
 export async function editSkill(
   input: z.infer<typeof EditSkillSchema>,
-): Promise<{ ok: boolean; versionId?: string; version?: string; error?: string }> {
+): Promise<{
+  ok: boolean;
+  versionId?: string;
+  version?: string;
+  versionNumber?: number;
+  error?: string;
+}> {
   const parsed = EditSkillSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Invalid input" };
 
@@ -84,21 +105,32 @@ export async function editSkill(
   const { ctx } = auth.scope;
 
   try {
-    const out = await invoke(
+    // activate: false — a saved edit is a draft version until the user
+    // explicitly confirms pinning it as the workspace default (the detail
+    // panel asks right after save). Mirrors the agent draft→publish model.
+    const out = (await invoke(
       "upload_skill_version",
       {
-        skillSlug: parsed.data.skillSlug,
-        content: parsed.data.content,
-        commitMessage: parsed.data.commitMessage,
+        skill_id: parsed.data.skillSlug,
+        body: parsed.data.content,
+        change_summary: parsed.data.commitMessage,
+        activate: false,
       },
       ctx,
-    );
-    const typed = out as { versionId: string; version: string };
+    )) as SkillVersionUploadOutput;
     const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };
-    revalidatePath(skillsPath(routeCtx));
-    return { ok: true, versionId: typed.versionId, version: typed.version };
+    revalidateSkill(routeCtx, parsed.data.skillSlug);
+    return {
+      ok: true,
+      versionId: out.version_id,
+      version: `v${out.version_number}`,
+      versionNumber: out.version_number,
+    };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Edit failed" };
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Edit failed",
+    };
   }
 }
 
@@ -108,7 +140,7 @@ const ActivateVersionSchema = z.object({
   orgSlug: z.string().min(1),
   workspaceSlug: z.string().min(1),
   skillSlug: z.string().min(1),
-  versionId: z.string().min(1),
+  versionNumber: z.number().int().min(1),
 });
 
 export async function activateVersion(
@@ -125,14 +157,20 @@ export async function activateVersion(
   try {
     await invoke(
       "activate_skill_version",
-      { skillSlug: parsed.data.skillSlug, versionId: parsed.data.versionId },
+      {
+        skillId: parsed.data.skillSlug,
+        versionNumber: parsed.data.versionNumber,
+      },
       ctx,
     );
     const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };
-    revalidatePath(skillsPath(routeCtx));
+    revalidateSkill(routeCtx, parsed.data.skillSlug);
     return { ok: true };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Activate failed" };
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Activate failed",
+    };
   }
 }
 
@@ -142,12 +180,17 @@ const ExportSkillSchema = z.object({
   orgSlug: z.string().min(1),
   workspaceSlug: z.string().min(1),
   skillSlug: z.string().min(1),
-  versionId: z.string().optional(),
+  versionNumber: z.number().int().min(1).optional(),
 });
 
 export async function exportSkill(
   input: z.infer<typeof ExportSkillSchema>,
-): Promise<{ ok: boolean; content?: string; filename?: string; error?: string }> {
+): Promise<{
+  ok: boolean;
+  content?: string;
+  filename?: string;
+  error?: string;
+}> {
   const parsed = ExportSkillSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Invalid input" };
 
@@ -156,15 +199,20 @@ export async function exportSkill(
   // Read is allowed for all workspace members — no canManage check here.
 
   try {
-    const out = await invoke(
+    const out = (await invoke(
       "export_skill",
-      { skillSlug: parsed.data.skillSlug, versionId: parsed.data.versionId },
+      {
+        skillId: parsed.data.skillSlug,
+        versionNumber: parsed.data.versionNumber,
+      },
       ctx,
-    );
-    const typed = out as { content: string; filename: string };
-    return { ok: true, content: typed.content, filename: typed.filename };
+    )) as SkillExportOutput;
+    return { ok: true, content: out.content, filename: out.filename };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Export failed" };
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Export failed",
+    };
   }
 }
 
@@ -193,10 +241,15 @@ export interface SkillDraftResult {
 
 export async function draftSkillAction(
   input: z.infer<typeof DraftSkillSchema>,
-): Promise<{ ok: true; draft: SkillDraftResult } | { ok: false; error: string }> {
+): Promise<
+  { ok: true; draft: SkillDraftResult } | { ok: false; error: string }
+> {
   const parsed = DraftSkillSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid input",
+    };
   }
 
   const { orgSlug, workspaceSlug, prompt } = parsed.data;
@@ -209,7 +262,10 @@ export async function draftSkillAction(
     const typed = out as { draft: SkillDraftResult };
     return { ok: true, draft: typed.draft };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Draft failed" };
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Draft failed",
+    };
   }
 }
 
@@ -250,10 +306,22 @@ export async function createSkillAction(
 ): Promise<{ ok: true; slug: string } | { ok: false; error: string }> {
   const parsed = CreateSkillSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid input",
+    };
   }
 
-  const { orgSlug, workspaceSlug, name, slug, description, weight, body, activate } = parsed.data;
+  const {
+    orgSlug,
+    workspaceSlug,
+    name,
+    slug,
+    description,
+    weight,
+    body,
+    activate,
+  } = parsed.data;
   const auth = await resolveAgentToolsManager(orgSlug, workspaceSlug);
   if (!auth.ok) return { ok: false, error: auth.error };
   const { ctx } = auth.scope;
@@ -288,6 +356,9 @@ export async function createSkillAction(
     revalidatePath(workspace.workbench.tools.skill(routeCtx, typed.slug));
     return { ok: true, slug: typed.slug };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Create failed" };
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Create failed",
+    };
   }
 }

@@ -2,18 +2,20 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 
 // ── hoisted stubs ─────────────────────────────────────────────────────────────
 // createNewSkillVersion runs a single withTenantDb transaction issuing, in order:
-//   1. skill lookup        → select(...).from(skills).where(...)            (no .limit)
-//   2. max version lookup  → select(...).from(skillVersions).where(...)     (no .limit)
-//   3. clear is_latest     → update(skillVersions).set(...).where(...)      (ALWAYS)
-//   4. insert version      → insert(skillVersions).values(...).returning(...)
-//   5. activate skill      → update(skills).set(...).where(...)             (ONLY if activate)
+//   1. skill lookup        → select(...).from(skills).where(...)              (no .limit)
+//   2. max version lookup  → select(...).from(skillVersions).where(...)       (no .limit)
+//   3. prior-latest lookup → select(...).from(skillVersions).where(...).limit(1)
+//   4. clear is_latest     → update(skillVersions).set(...).where(...)        (only when a prior latest exists)
+//   5. insert version      → insert(skillVersions).values(...).returning(...)
+//   6. activate skill      → update(skills).set(...).where(...)               (ONLY if activate)
 // The two updates target different tables; we route them to separate spies by
 // comparing the table identity against the real schema so the "skips skills
-// update" assertion checks the correct (skills) update, not the always-run
-// is_latest clear on skillVersions.
+// update" assertion checks the correct (skills) update, not the is_latest
+// clear on skillVersions.
 const mocks = vi.hoisted(() => ({
   selectWhere: vi.fn(),
   selectMaxWhere: vi.fn(),
+  selectPriorLatestWhere: vi.fn(),
   insertReturning: vi.fn(),
   versionUpdateWhere: vi.fn(),
   skillUpdateWhere: vi.fn(),
@@ -42,12 +44,16 @@ vi.mock("@oxagen/database", async (importOriginal) => {
           from: (_table: unknown) => ({
             where: (_cond: unknown) => {
               selectCallCount++;
-              if (selectCallCount % 2 === 1) {
-                // odd calls: skill lookup
+              if (selectCallCount === 1) {
+                // 1st: skill lookup (awaited directly, no .limit)
                 return mocks.selectWhere();
               }
-              // even calls: max version lookup
-              return mocks.selectMaxWhere();
+              if (selectCallCount === 2) {
+                // 2nd: max version lookup (awaited directly, no .limit)
+                return mocks.selectMaxWhere();
+              }
+              // 3rd: prior-latest lookup — chains .limit(1)
+              return { limit: (_n: number) => mocks.selectPriorLatestWhere() };
             },
           }),
         }),
@@ -63,7 +69,10 @@ vi.mock("@oxagen/database", async (importOriginal) => {
           set: (_vals: unknown) => ({
             // Route by table identity: the skills-table update is the activation
             // step (only when activate=true); the skillVersions update clears is_latest.
-            where: table === skills ? mocks.skillUpdateWhere : mocks.versionUpdateWhere,
+            where:
+              table === skills
+                ? mocks.skillUpdateWhere
+                : mocks.versionUpdateWhere,
           }),
         }),
       });
@@ -79,6 +88,7 @@ import { TEST_CTX, makeCTX } from "./test-utils/fixtures";
 const BASE_INPUT = {
   skill_id: "skl_abc",
   body: VALID_BODY,
+  change_summary: undefined as string | undefined,
   activate: true,
   workspace_id: undefined as string | undefined,
 };
@@ -86,10 +96,15 @@ const BASE_INPUT = {
 const SKILL_ROW = { id: "skill-uuid-1", publicId: "skl_abc" };
 const VERSION_ROW = { id: "ver-uuid-1", publicId: "slv_xyz", versionNumber: 2 };
 const MAX_ROW = [{ maxVersion: 1 }];
+const PRIOR_LATEST_ROW = {
+  id: "ver-uuid-0",
+  referencesPayload: [{ path: "refs/example.md", body: "ref body" }],
+};
 
 function setupHappyPath(overrides: Partial<typeof BASE_INPUT> = {}) {
   mocks.selectWhere.mockReset();
   mocks.selectMaxWhere.mockReset();
+  mocks.selectPriorLatestWhere.mockReset();
   mocks.insertReturning.mockReset();
   mocks.versionUpdateWhere.mockReset();
   mocks.skillUpdateWhere.mockReset();
@@ -97,6 +112,7 @@ function setupHappyPath(overrides: Partial<typeof BASE_INPUT> = {}) {
 
   mocks.selectWhere.mockResolvedValue([SKILL_ROW]);
   mocks.selectMaxWhere.mockResolvedValue(MAX_ROW);
+  mocks.selectPriorLatestWhere.mockResolvedValue([PRIOR_LATEST_ROW]);
   mocks.insertReturning.mockResolvedValue([VERSION_ROW]);
   mocks.versionUpdateWhere.mockResolvedValue([]);
   mocks.skillUpdateWhere.mockResolvedValue([]);
@@ -175,6 +191,45 @@ describe("skillVersionUploadHandler (@oxagen/handlers)", () => {
     expect(mocks.skillUpdateWhere).toHaveBeenCalledTimes(1);
   });
 
+  it("stamps checksum, lineage, and carried-forward references on the new row", async () => {
+    const input = setupHappyPath({ change_summary: "tighten wording" });
+    await skillVersionUploadHandler(input, CTX);
+
+    const inserted = mocks.insertedValues[0] as {
+      checksum: string;
+      parentVersionId: string | null;
+      referencesPayload: unknown;
+      changeSummary: string | null;
+    };
+    expect(inserted.checksum).toMatch(/^[0-9a-f]{64}$/);
+    expect(inserted.parentVersionId).toBe("ver-uuid-0");
+    expect(inserted.referencesPayload).toEqual(
+      PRIOR_LATEST_ROW.referencesPayload,
+    );
+    expect(inserted.changeSummary).toBe("tighten wording");
+  });
+
+  it("records null lineage and skips the is_latest clear for the first version", async () => {
+    const input = setupHappyPath();
+    mocks.selectMaxWhere.mockResolvedValueOnce([{ maxVersion: null }]);
+    mocks.selectPriorLatestWhere.mockResolvedValueOnce([]);
+    mocks.insertReturning.mockResolvedValueOnce([
+      { id: "ver-uuid-1a", publicId: "slv_v1", versionNumber: 1 },
+    ]);
+
+    await skillVersionUploadHandler(input, CTX);
+
+    const inserted = mocks.insertedValues[0] as {
+      parentVersionId: string | null;
+      referencesPayload: unknown;
+      changeSummary: string | null;
+    };
+    expect(inserted.parentVersionId).toBeNull();
+    expect(inserted.referencesPayload).toEqual([]);
+    expect(inserted.changeSummary).toBeNull();
+    expect(mocks.versionUpdateWhere).not.toHaveBeenCalled();
+  });
+
   it("throws when skill not found", async () => {
     const input = setupHappyPath();
     mocks.selectWhere.mockResolvedValueOnce([]);
@@ -205,13 +260,17 @@ describe("skillVersionUploadHandler (@oxagen/handlers)", () => {
     const input = setupHappyPath();
     mocks.insertReturning.mockRejectedValueOnce(new Error("DB write failed"));
 
-    await expect(skillVersionUploadHandler(input, CTX)).rejects.toThrow("DB write failed");
+    await expect(skillVersionUploadHandler(input, CTX)).rejects.toThrow(
+      "DB write failed",
+    );
   });
 
   it("propagates DB error from skill lookup", async () => {
     const input = setupHappyPath();
     mocks.selectWhere.mockRejectedValueOnce(new Error("connection lost"));
 
-    await expect(skillVersionUploadHandler(input, CTX)).rejects.toThrow("connection lost");
+    await expect(skillVersionUploadHandler(input, CTX)).rejects.toThrow(
+      "connection lost",
+    );
   });
 });
