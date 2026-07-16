@@ -24,8 +24,15 @@ import {
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { ExplorerEdge, ExplorerNode } from "./types";
 
-const { NODES, EDGES, expandMock, reloadMock, addSubgraphMock, canvasProps } =
-  vi.hoisted(() => {
+const {
+  NODES,
+  EDGES,
+  expandMock,
+  reloadMock,
+  addSubgraphMock,
+  canvasProps,
+  explorerState,
+} = vi.hoisted(() => {
     const NODES = [
       {
         id: "n1",
@@ -60,6 +67,13 @@ const { NODES, EDGES, expandMock, reloadMock, addSubgraphMock, canvasProps } =
       reloadMock: vi.fn(),
       addSubgraphMock: vi.fn(),
       canvasProps: { current: null as Record<string, unknown> | null },
+      // Mutable so a test can drive the empty / filtered-empty branches; reset
+      // to the populated defaults in the global beforeEach.
+      explorerState: {
+        nodes: NODES as unknown[],
+        edges: EDGES as unknown[],
+        stats: null as unknown,
+      },
     };
   });
 
@@ -69,9 +83,9 @@ vi.mock("@/lib/tenant/tenant-context", () => ({
 
 vi.mock("./use-explorer-data", () => ({
   useExplorerData: () => ({
-    nodes: NODES,
-    edges: EDGES,
-    stats: null,
+    nodes: explorerState.nodes,
+    edges: explorerState.edges,
+    stats: explorerState.stats,
     status: "ready",
     error: null,
     truncated: false,
@@ -186,6 +200,9 @@ function selectNode(id = "n1") {
 
 beforeEach(() => {
   canvasProps.current = null;
+  explorerState.nodes = NODES;
+  explorerState.edges = EDGES;
+  explorerState.stats = null;
 });
 
 afterEach(() => {
@@ -304,5 +321,51 @@ describe("GraphExplorer — node fixtures", () => {
     const edges: ExplorerEdge[] = EDGES;
     expect(nodes).toHaveLength(2);
     expect(edges).toHaveLength(1);
+  });
+});
+
+describe("GraphExplorer — empty and filtered-empty states", () => {
+  beforeEach(asDesktop);
+
+  const statsWith = (nodeCount: number) => ({
+    nodeCount,
+    edgeCount: 0,
+    inferredEdgeCount: 0,
+    nodesByLabel: [],
+    edgesByType: [],
+  });
+
+  it("offers to reveal agent activity when the seed is empty but nodes exist", () => {
+    explorerState.nodes = [];
+    explorerState.edges = [];
+    explorerState.stats = statsWith(4);
+    render(<GraphExplorer />);
+    // Must NOT claim "no data" while the stats rail reports 4 nodes.
+    expect(screen.queryByText(/no graph data yet/i)).toBeNull();
+    expect(screen.getByText(/4 nodes hidden by filters/i)).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /show agent activity/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("shows the true empty state when the whole graph is empty", () => {
+    explorerState.nodes = [];
+    explorerState.edges = [];
+    explorerState.stats = statsWith(0);
+    render(<GraphExplorer />);
+    expect(screen.getByText(/no graph data yet/i)).toBeInTheDocument();
+    expect(screen.queryByText(/hidden by filters/i)).toBeNull();
+  });
+
+  it("offers to clear filters when every node type is hidden", () => {
+    render(<GraphExplorer />);
+    expect(screen.getByTestId("mock-canvas")).toBeInTheDocument();
+    // Hide every node type via the filter panel's "None" control.
+    fireEvent.click(screen.getByRole("button", { name: "None" }));
+    expect(screen.queryByTestId("mock-canvas")).not.toBeInTheDocument();
+    expect(screen.getByText(/2 nodes hidden by filters/i)).toBeInTheDocument();
+    // Clearing filters brings the canvas back.
+    fireEvent.click(screen.getByRole("button", { name: /clear filters/i }));
+    expect(screen.getByTestId("mock-canvas")).toBeInTheDocument();
   });
 });

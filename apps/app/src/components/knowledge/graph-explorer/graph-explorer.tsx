@@ -21,6 +21,7 @@ import {
   AlertTriangle,
   RefreshCw,
   SlidersHorizontal,
+  EyeOff,
 } from "lucide-react";
 import { NodeLabels } from "@oxagen/ontology/types";
 import { useTenant } from "@/lib/tenant/tenant-context";
@@ -416,7 +417,20 @@ export function GraphExplorer({ focusNodeId }: GraphExplorerProps = {}) {
           ) : data.status === "loading" ? (
             <CanvasSkeleton />
           ) : data.nodes.length === 0 ? (
-            <EmptyState />
+            // The graph really is empty ONLY when the whole-graph stats agree.
+            // When stats report nodes but the seed came back empty, they were
+            // all excluded server-side by the default "hide agent activity"
+            // toggle — say so and offer to reveal them, never claim "no data".
+            systemHidden && (data.stats?.nodeCount ?? 0) > 0 ? (
+              <FilteredEmptyState
+                count={data.stats?.nodeCount ?? 0}
+                description="They're agent-activity nodes (executions, tools, generated files), hidden by default."
+                actionLabel="Show agent activity"
+                onAction={() => setSystemHidden(false)}
+              />
+            ) : (
+              <EmptyState />
+            )
           ) : view === "table" ? (
             <GraphTableView
               tenant={slugs}
@@ -430,6 +444,16 @@ export function GraphExplorer({ focusNodeId }: GraphExplorerProps = {}) {
               }
               selectedNodeId={selection?.type === "node" ? selection.id : null}
               onSelectNode={(id) => setSelection({ type: "node", id })}
+            />
+          ) : visibleNodes.length === 0 ? (
+            // Nodes are loaded but every one is hidden by the type-visibility
+            // filters — a blank canvas here reads as "empty graph". Offer a
+            // one-click clear instead.
+            <FilteredEmptyState
+              count={data.nodes.length}
+              description="Every node type is hidden by the visibility filters."
+              actionLabel="Clear filters"
+              onAction={() => setHiddenNodeTypes(new Set())}
             />
           ) : (
             <GraphCanvasView
@@ -669,6 +693,49 @@ function EmptyState() {
           Connect a data source and run a sync to populate the knowledge graph.
           Entities and their relationships will appear here.
         </p>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Shown when the graph is NOT empty but the current view has nothing to draw —
+ * every node was filtered out (agent-activity toggle, or type visibility). It
+ * names the hidden count and offers the one action that brings them back, so
+ * the user is never told "no data" while data plainly exists in the stats rail.
+ */
+function FilteredEmptyState({
+  count,
+  description,
+  actionLabel,
+  onAction,
+}: {
+  count: number;
+  description: string;
+  actionLabel: string;
+  onAction: () => void;
+}) {
+  return (
+    <div className="flex h-full w-full items-center justify-center p-8">
+      <div className="max-w-sm text-center">
+        <EyeOff
+          className="mx-auto mb-3 size-8 text-muted-foreground"
+          aria-hidden="true"
+        />
+        <h3 className="text-sm font-semibold text-foreground">
+          {count.toLocaleString()} {count === 1 ? "node" : "nodes"} hidden by
+          filters
+        </h3>
+        <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+        <Button
+          variant="outline"
+          size="sm"
+          className="mt-4"
+          startIcon={<Network className="size-3.5" />}
+          onClick={onAction}
+        >
+          {actionLabel}
+        </Button>
       </div>
     </div>
   );
