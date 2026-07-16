@@ -134,12 +134,16 @@ export async function ConversationPage({
   searchParams,
   actions,
 }: ConversationPageProps) {
-  const session = await getSessionOrRedirect();
   const [
     { orgSlug, workspaceSlug },
     { c: conversationPublicId, new: forceNew, agent: boundAgentId },
   ] = await Promise.all([params, searchParams]);
-  const tenant = await resolveOrg(orgSlug);
+  // Session and org resolution are independent DB round-trips — overlap them
+  // on this hottest-path page (same pattern as billing/revenue/page.tsx).
+  const [session, tenant] = await Promise.all([
+    getSessionOrRedirect(),
+    resolveOrg(orgSlug),
+  ]);
   const workspace = await resolveWorkspace(tenant.id, workspaceSlug);
 
   let conversationId: string | null = null;
