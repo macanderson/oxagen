@@ -432,6 +432,34 @@ describe("MessageComposer — rendering", () => {
     expect(screen.getByPlaceholderText("Send a message…")).toBeInTheDocument();
   });
 
+  it("autofocuses the prompt on desktop so a new chat is type-ready", async () => {
+    mockViewport.isMobile = false;
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+      />,
+    );
+    expect(screen.getByPlaceholderText("Send a message…")).toHaveFocus();
+  });
+
+  it("does NOT autofocus on mobile — the keyboard would eat the conversation viewport", async () => {
+    mockViewport.isMobile = true;
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+      />,
+    );
+    expect(screen.getByPlaceholderText("Send a message…")).not.toHaveFocus();
+  });
+
   it("renders send button with 'Send message' label", async () => {
     const { MessageComposer } = await import("./message-composer");
     render(

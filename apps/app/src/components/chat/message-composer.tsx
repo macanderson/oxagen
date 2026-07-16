@@ -308,6 +308,7 @@ function persistComposerCollapsed(collapsed: boolean) {
  */
 function CondensedComposerRow({
   testId,
+  autoFocus,
   canAttach,
   pending,
   disabled,
@@ -327,6 +328,10 @@ function CondensedComposerRow({
   sendAriaLabel,
 }: {
   testId: string;
+  /** Land the cursor in the prompt on mount. Desktop only — see the call
+   *  sites: autofocusing on a phone opens the keyboard immediately and eats
+   *  the conversation viewport. */
+  autoFocus: boolean;
   canAttach: boolean;
   pending: boolean;
   disabled: boolean;
@@ -375,9 +380,7 @@ function CondensedComposerRow({
         name="content"
         placeholder={placeholder}
         rows={1}
-        // Land the cursor in the prompt on mount so a new conversation is
-        // type-ready with no click (the empty state is just a welcome line).
-        autoFocus
+        autoFocus={autoFocus}
         disabled={pending || disabled}
         onKeyDown={onKeyDown}
         onChange={onChange}
@@ -1976,8 +1979,10 @@ export function MessageComposer({
               placeholder={placeholder}
               rows={isMobile ? 2 : 3}
               // Land the cursor in the prompt on mount so a new conversation is
-              // type-ready with no click (the empty state is just a welcome line).
-              autoFocus
+              // type-ready with no click (the empty state is just a welcome
+              // line). Desktop only: on a phone this pops the keyboard on load
+              // and eats the conversation viewport.
+              autoFocus={!isMobile}
               disabled={pending || disabled}
               onKeyDown={onKeyDown}
               onChange={handleTextareaChange}
@@ -2128,6 +2133,7 @@ export function MessageComposer({
             ) : null}
             <CondensedComposerRow
               testId={v2Mobile ? "composer-v2-mobile-row" : "composer-v2-desktop-row"}
+              autoFocus={!isMobile}
               canAttach={canAttach}
               pending={pending}
               disabled={disabled}
