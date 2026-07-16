@@ -25,12 +25,6 @@
       "equivalent": "The persistent AgentBottomBar quick-launcher is desktop chrome; on mobile the bottom edge is owned by MobileBottomBar, whose primary \"Ask\" tab routes to the identical agent conversation surface, and in-flight conversation state lives in that surface itself."
     },
     {
-      "file": "apps/app/src/components/chat/chat-shell-client.tsx",
-      "match": "hidden w-72 shrink-0 overflow-y-auto py-1 lg:block",
-      "kind": "reflow",
-      "equivalent": "The right rail (CodingTracePanel + WorkspaceContextPanel) is desktop-only layout; below lg the identical panels open in a bottom Sheet via the floating chat-mobile-rail-trigger button rendered in the same file (mobileRailOpen state)."
-    },
-    {
       "file": "apps/app/src/components/shell/shell-frame.tsx",
       "match": "hidden min-w-0 flex-1 sm:block",
       "kind": "reflow",
