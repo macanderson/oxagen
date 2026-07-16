@@ -24,8 +24,12 @@ export function formatCents(cents: number, currency = "USD"): string {
 export function formatCentsCompact(cents: number, currency = "USD"): string {
   if (!Number.isFinite(cents)) return formatCents(0, currency);
   const dollars = cents / 100;
-  // Below $1,000 the full "$1,234.56" fits comfortably and every cent matters.
-  if (Math.abs(dollars) < 1000) return formatCents(cents, currency);
+  // Abbreviate only once the string is genuinely long. A four-figure balance
+  // like "$1,003.59" costs little width, and compacting it to "$1K" would hide
+  // whether the user has $1,000 or $1,499 — which is exactly what they're
+  // reading the number to find out before topping up. Five figures and beyond
+  // ("$12,345.67", "$1,234,567.89") is where the number starts to dominate.
+  if (Math.abs(dollars) < 10_000) return formatCents(cents, currency);
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency,
