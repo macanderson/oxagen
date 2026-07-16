@@ -1,5 +1,5 @@
 import { withTenantDb, schema } from "@oxagen/database";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { runInTenantScope } from "@oxagen/tenancy";
 import type { CapabilityContext } from "@oxagen/oxagen";
 import type {
@@ -104,9 +104,20 @@ export async function createTask(
 }
 
 /**
- * Load the full A2A message history for a conversation (contextId), oldest →
- * newest, flattened across every task that shares the contextId. Used to give
- * the agent multi-turn continuity within an A2A conversation.
+ * How much A2A conversation history a new turn re-loads. Without a cap this
+ * query re-fetched EVERY task's full messageHistory JSON for the contextId on
+ * every message/send — O(N²) cumulative cost over an N-turn conversation.
+ * Mirrors the chat route's HISTORY_LIMIT = 50: the model receives the last
+ * 50 messages, loaded from at most the 50 most recent tasks.
+ */
+const A2A_HISTORY_TASK_LIMIT = 50;
+const A2A_HISTORY_MESSAGE_LIMIT = 50;
+
+/**
+ * Load the recent A2A message history for a conversation (contextId), oldest →
+ * newest, flattened across the most recent tasks that share the contextId
+ * (bounded — see A2A_HISTORY_*_LIMIT). Used to give the agent multi-turn
+ * continuity within an A2A conversation.
  */
 export async function loadContextHistory(
   ctx: CapabilityContext,
@@ -124,8 +135,14 @@ export async function loadContextHistory(
             isNull(schema.a2aTasks.deletedAt),
           ),
         )
-        .orderBy(schema.a2aTasks.createdAt);
-      return rows.flatMap((r) => (r.messageHistory as A2AMessage[]) ?? []);
+        .orderBy(desc(schema.a2aTasks.createdAt))
+        .limit(A2A_HISTORY_TASK_LIMIT);
+      // Query is newest-first so LIMIT keeps the most recent tasks; restore
+      // oldest → newest for the model, then keep only the message tail.
+      return rows
+        .reverse()
+        .flatMap((r) => (r.messageHistory as A2AMessage[]) ?? [])
+        .slice(-A2A_HISTORY_MESSAGE_LIMIT);
     }),
   );
 }
