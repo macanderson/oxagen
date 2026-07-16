@@ -159,6 +159,46 @@ describe("ReposClient", () => {
     expect(screen.getByTestId("repos-empty-state")).toBeInTheDocument();
   });
 
+  it("hides the inoperable toolbar and puts Create repo inside the empty state", () => {
+    render(
+      <ReposClient
+        orgSlug="acme"
+        workspaceSlug="eng"
+        canManage={true}
+        initialRepos={[]}
+        unavailable={false}
+      />,
+    );
+    // Refresh / Edit / Fork / top Create are inoperable with zero repos —
+    // the whole top toolbar is hidden.
+    expect(screen.queryByTestId("repos-refresh-btn")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("repos-edit-file-btn")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("repos-fork-btn")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("repos-create-btn")).not.toBeInTheDocument();
+    // Create repo is offered as the secondary action inside the empty card.
+    const empty = screen.getByTestId("repos-empty-state");
+    expect(
+      within(empty).getByTestId("repos-empty-create-btn"),
+    ).toBeInTheDocument();
+  });
+
+  it("shows the top toolbar (not the empty create) once repos exist", () => {
+    render(
+      <ReposClient
+        orgSlug="acme"
+        workspaceSlug="eng"
+        canManage={true}
+        initialRepos={[makeRow()]}
+        unavailable={false}
+      />,
+    );
+    expect(screen.getByTestId("repos-refresh-btn")).toBeInTheDocument();
+    expect(screen.getByTestId("repos-create-btn")).toBeInTheDocument();
+    expect(
+      screen.queryByTestId("repos-empty-create-btn"),
+    ).not.toBeInTheDocument();
+  });
+
   it("renders a parsed owner/repo row linking to the detail page", () => {
     render(
       <ReposClient
