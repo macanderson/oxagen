@@ -124,3 +124,21 @@ describe("archive.create capability", () => {
     ).toThrow();
   });
 });
+
+describe("archive.create entries capacity guard", () => {
+  it("rejects more than 100 entries (memory/event-loop DoS guard)", () => {
+    const entries = Array.from({ length: 101 }, (_, i) => ({
+      name: `f${i}.txt`,
+      text: "x",
+    }));
+    expect(() => archiveCreate.input.parse({ entries })).toThrow(/at most 100/i);
+  });
+
+  it("accepts exactly 100 entries", () => {
+    const entries = Array.from({ length: 100 }, (_, i) => ({
+      name: `f${i}.txt`,
+      text: "x",
+    }));
+    expect(archiveCreate.input.parse({ entries }).entries).toHaveLength(100);
+  });
+});
