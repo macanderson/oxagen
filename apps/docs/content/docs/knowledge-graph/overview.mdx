@@ -1,0 +1,85 @@
+---
+title: Knowledge graph overview
+description: The workspace knowledge graph — nodes, typed edges, semantic search, ontology traversal, text ingestion, and inferred relationships.
+---
+
+## What the knowledge graph is
+
+Every workspace has a **knowledge graph**: a Neo4j-backed graph of the entities the workspace
+cares about — people, companies, deals, documents, repositories, source files, agent memories,
+executions — connected by typed relationships. Connected sources ([GitHub](/docs/connections/github),
+documents, integrations) feed it automatically; agents and users extend it directly.
+
+The graph is the agent's primary context source. When you ask "what do we know about X",
+the agent searches the graph before anything else.
+
+Every node carries the org and workspace it belongs to, and all reads run through a scoped
+session guard — the same [tenant-isolation guarantee](/docs/security/tenant-isolation-rls) as
+the relational store.
+
+## Nodes and edges
+
+Nodes carry a domain **label** (e.g. `Person`, `Company`, `Feature`), a display name, a
+description, and arbitrary properties. Edges are typed relationships in
+`UPPER_SNAKE_CASE` (e.g. `EMPLOYS`, `DEPENDS_ON`).
+
+| Capability | What it does |
+|---|---|
+| `graph.node.upsert` / `graph.node.get` / `graph.node.delete` | Create-or-update (by external id or natural key), read, and remove nodes |
+| `graph.node.list` / `graph.node.search` | Paginated browse and lexical (substring) search |
+| `graph.edge.upsert` / `graph.edge.delete` | Merge or remove a typed relationship |
+| `graph.node_label.add` / `get` / `remove` | Multi-label management on a node |
+| `graph.stats` | Node/edge counts, breakdowns by type, growth series |
+
+Customer entities and product-owned artifacts (executions, code files, memories) share the
+graph but are distinguished by an `is_system` flag, so explorers can hide system nodes.
+
+### Single-valued facts and time
+
+Edge upserts accept an `observedAt` valid-time and a `supersede` flag: superseding closes any
+other currently-open edge of the same type from the same source instead of leaving a
+contradiction — history is preserved, not overwritten. Reads (`ontology.query`,
+`ontology.neighbors`) accept `asOf` (what was true in the world at a time) and `asKnownAt`
+(what was recorded at a time), so you can query the graph bitemporally.
+
+## Finding things
+
+- **`graph.search`** — natural-language *semantic* (vector) search across everything: entities,
+  source code, memories, documents, executions. The first call for any "what do we know about X"
+  question.
+- **`graph.node.search`** — *lexical* substring match on names and descriptions, optionally
+  filtered by label. Use it when you know what the thing is called.
+- **`ontology.neighbors`** — the one-hop neighborhood of a node you already have.
+- **`ontology.query`** — multi-hop traversal (depth 1–5) from a start node over named
+  relationship types; returns the reachable subgraph.
+- **`graph.cypher`** — escape hatch. With `nlQuery: true`, natural language is translated to
+  read-only Cypher by a model; raw Cypher (reads and writes) is restricted to privileged roles.
+
+## Getting text into the graph
+
+**`graph.ingest`** extracts entities and relationships from free text (a web page, a document,
+meeting notes) and commits them as nodes and edges with confidence labels. It reads the
+workspace graph prompt — and the [schema registry](/docs/knowledge-graph/schema-registry)'s
+types — to decide what is worth extracting, and upserts idempotently so re-ingesting a source
+updates the graph rather than duplicating it.
+
+## Inferred relationships (semantic edges)
+
+Beyond edges your sources assert, Oxagen can **infer** cross-source relationships with a model:
+
+1. `semantic.edge.infer` runs inference across nodes (optionally scoped to sources) with a
+   confidence threshold. Edges at or above the threshold are auto-accepted; edges below are
+   staged for review.
+2. `semantic.edge.suggest` lists the staged candidates pending human review.
+3. `semantic.edge.approve` approves (materialising a permanent typed relationship marked with
+   inference provenance) or rejects (soft-dismissed with an audit trail).
+4. `semantic.edge.list` browses inferred edges by type, source, and confidence band.
+
+## Where you'll meet the graph
+
+- The **agent** grounds answers in graph context and cites the entities it found.
+- [Agent memory](/docs/agent/memory) is stored as graph nodes.
+- [Automations](/docs/automations/overview) watch graph node events (`node.created` / `updated` / `deleted`).
+- The **CLI** exposes graph search and traversal — see [CLI: knowledge graph](/docs/cli/knowledge-graph).
+- All of the capabilities above are also mounted on the [API](/docs/api/overview) and
+  [MCP](/docs/mcp/overview) surfaces with identical behavior and audit records.

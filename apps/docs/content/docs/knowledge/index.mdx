@@ -1,0 +1,46 @@
+---
+title: Knowledge graph
+description: The workspace knowledge graph — entities, relationships, sources, semantic search, and how agents ground their answers in it.
+---
+
+Every workspace has a **knowledge graph**: a tenant-isolated Neo4j graph holding the entities your connected sources produce (people, companies, repositories, files, commits, documents), the relationships between them, and the agent's own memories and execution lineage. It is the primary context store for every agent in the workspace — before an agent searches the web, it searches the graph.
+
+Explore it in **Workspace → Knowledge**.
+
+## What lives in the graph
+
+| Node kind | Examples | Origin |
+|---|---|---|
+| Entities | `Person`, `Company`, `Deal`, `Topic` | Connected sources, document ingestion, agent extraction |
+| Code | `SourceFile`, symbols, chunks | [GitHub connections](/docs/connections/github) |
+| Memories | Observations, rules, facts | [Agent memory](/docs/agent/memory) |
+| Executions | Agent runs and the files they touched | Automatic lineage capture |
+| Documents & assets | Ingested documents, generated files | Uploads and agent output |
+
+Product-owned nodes (executions, code, memories) are flagged `is_system` so the graph explorer can show your business ontology on its own.
+
+## Sources
+
+**Knowledge → Sources** lists the data source connections feeding the graph. Each connection maps its source record types to your entity types (a mapping step you confirm at setup), then syncs on a cadence — webhook, polling, or manual. You can pause a connection, re-sync it incrementally or in full, or delete it in three modes: connection only (keep data), data only (keep config), or full.
+
+## Searching the graph
+
+Two complementary searches:
+
+- **Semantic search** — embeds a natural-language query and ranks all graph content (entities, code, memories, documents) by vector similarity. This is what the agent uses for "what do we know about X".
+- **Lexical search** — substring match on node names and descriptions, useful when you know what something is called.
+
+From any node you can walk its neighbors one hop at a time, or traverse multiple hops along named relationship types. Reads support bitemporal queries: "as of" a valid time (what was true in the world) and "as known at" a transaction time (what we had recorded).
+
+## Semantic inference
+
+Oxagen can infer relationships across sources with an LLM pass — for example linking a `PullRequest` to the `Feature` it implements. Each inferred edge carries a confidence score:
+
+- Edges **at or above** the auto-accept threshold are materialised as permanent relationships, marked with `inferred` provenance.
+- Edges **below** it are staged in **Knowledge → Inference** for human review, where you approve or reject each candidate with an audit trail.
+
+Inference prompts are configurable per source — see [Inference prompts](/docs/connections/inference-prompts).
+
+## Governing the graph's shape
+
+The graph's vocabulary — which entity types, properties, and relationship types are allowed — is governed by the workspace [schema registry](/docs/knowledge/schema-registry).

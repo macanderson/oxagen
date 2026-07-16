@@ -1,0 +1,68 @@
+---
+title: Schema registry
+description: Define the node labels, relationship types, and properties your workspace graph should conform to — versioned, validated, and AI-assisted.
+---
+
+## What the schema registry is
+
+The **schema registry** is the workspace's declared vocabulary for its knowledge graph: which
+node labels exist (`Customer`, `Contract`, `PullRequest`), what properties each carries and of
+what type, and which relationship types connect which labels. It grounds three things:
+
+- **Extraction** — `graph.ingest` and connector inference use the registry's descriptions and
+  examples to decide what entities to extract and how to shape them.
+- **Validation** — nodes and relationships can be scored for conformance against the schema.
+- **Automations** — event-trigger conditions are typed against the watched label's properties.
+
+Schemas are grouped by name (e.g. a `crm` schema and an `engineering` schema can coexist), and
+each can be enabled or disabled independently with `schema.toggle`.
+
+## Defining a schema
+
+| Capability | What it does |
+|---|---|
+| `schema.list` | List the workspace's schemas with enabled state |
+| `schema.label.upsert` / `schema.label.delete` | Create or update a node label — display name, description, properties, natural-key properties for dedup |
+| `schema.relationship.upsert` / `schema.relationship.delete` | Create or update a relationship type — `UPPER_SNAKE_CASE` name, start/end label constraints, cardinality |
+| `schema.property.upsert` / `schema.property.delete` | Add or edit a property on a label or relationship type |
+| `schema.delete` | Drop an entire named schema from the draft |
+
+Properties are typed (`string`, `number`, `integer`, `boolean`, `date`, `datetime`, `url`,
+`email`, `enum`, `json`, `array`) and can carry validation constraints, enum values, and a
+grounding `description` + `example` that the extraction model uses as few-shot context.
+
+## AI-assisted setup
+
+You do not have to author a schema by hand:
+
+- **`schema.recommend`** reads the graph you already have — stats, observed labels, sampled
+  nodes — and proposes a starter schema or additions.
+- **`schema.chat`** is an iterative builder: describe changes in plain language, review the
+  proposed mutations, and apply.
+- **`schema.setup`** runs the full interactive walkthrough: recommend → Q&A → apply → activate.
+
+## Versions
+
+Schema edits accumulate in a **draft version**. Versions are explicit and auditable:
+
+| Capability | What it does |
+|---|---|
+| `schema.version.create` | Snapshot the draft as a new version |
+| `schema.version.list` / `schema.version.diff` | Browse versions and compare two of them |
+| `schema.version.pin` | Pin the version the workspace validates and extracts against |
+
+Validation and extraction use the pinned version by default, so an in-progress draft never
+changes live behavior until you pin it.
+
+## Validation and reconciliation
+
+- `schema.validate.node` / `schema.validate.relationship` — score a node's or relationship's
+  properties against the schema and return field-level errors.
+- `schema.reconcile.dispatch` / `schema.reconcile.status` — run a background pass over existing
+  graph data to measure and report conformance against the pinned schema.
+
+## Related
+
+- [Knowledge graph overview](/docs/knowledge-graph/overview) — the graph the schema governs.
+- [Automations](/docs/automations/overview) — condition trees typed by the registry.
+- [Inference prompts](/docs/connections/inference-prompts) — per-connection extraction prompts that work alongside the schema.

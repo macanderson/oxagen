@@ -1,0 +1,102 @@
+---
+title: Automations
+description: Event-, schedule-, and API-triggered playbooks — watch the knowledge graph for changes, run steps in response, and keep a human on the enable switch.
+---
+
+## What an automation is
+
+An **automation** is a playbook plus a trigger. The trigger decides *when* the playbook fires;
+the playbook's steps decide *what happens* when it does. Automations let a workspace react to
+its own knowledge graph — a deal changing status, a new commit landing, a pull request opening —
+or run work on a schedule, without anyone typing a prompt.
+
+Like everything else in Oxagen, automations run through the `invoke()` kernel: every run is
+IAM-checked, metered, and audit-logged, and run history is queryable per automation.
+
+## Trigger types
+
+| Type | Fires when | Key configuration |
+|---|---|---|
+| `event` | A node in the workspace knowledge graph is created, updated, or deleted | `entityType` (node label, e.g. `Contact`, `Commit`), `eventType` (`node.created` / `node.updated` / `node.deleted`), optional conditions |
+| `schedule` | A cron expression matches | `cronExpression` (POSIX cron, e.g. `0 9 * * 1`), `timezone` (IANA, default UTC) |
+| `api` | It is invoked explicitly | Nothing — trigger it via `automation.trigger` with an optional payload |
+
+### Event conditions
+
+Event triggers can filter on the watched node's properties with a **condition tree** — nested
+AND/OR groups of typed conditions. Property keys, operators, and enum values come from the
+[workspace schema registry](/docs/knowledge-graph/schema-registry), so conditions are validated
+against what the label actually stores.
+
+Supported operators: `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `contains`, `in`, `not_in`,
+`before`, `after`, `changed`, `exists`, `not_exists`.
+
+```json
+{
+  "kind": "group",
+  "id": "root",
+  "combinator": "and",
+  "children": [
+    { "kind": "condition", "id": "c1", "property": "status", "operator": "eq", "value": "won" },
+    { "kind": "condition", "id": "c2", "property": "value", "operator": "gte", "value": 10000 }
+  ]
+}
+```
+
+## Steps
+
+The `steps` array scaffolds what the playbook does when the trigger fires. Each step has a
+`name`, a `stepType`, and a type-specific `config`:
+
+| Step type | What it does |
+|---|---|
+| `agent` | Run a deployed workspace agent, e.g. `{ "agentSlug": "qa-chat" }` |
+| `tool` | Invoke a capability |
+| `condition` | Branch on a condition |
+| `webhook` | Call an external HTTP endpoint |
+| `prompt` | Run a prompt against a model |
+| `human_input` | Pause and wait for a person |
+
+Steps are optional at creation time — an empty array creates a blank playbook you can configure
+later in the playbook designer.
+
+## The human enable gate
+
+Automations created by an AI agent **always start disabled**, regardless of what the creation
+request asked for. Only a direct human-origin call (the app UI, or an API key without an in-chat
+message context) can create an automation that starts enabled — and even then, `enabled` must be
+set explicitly. MCP and in-chat agent calls are always treated as AI-origin.
+
+To go live, a human enables the automation via `automation.enable` (or the toggle in the app).
+Disabling via `automation.disable` is always allowed and takes effect immediately.
+
+## Capabilities
+
+| Capability | What it does |
+|---|---|
+| `automation.create` | Create the playbook + trigger (AI-origin creations start disabled) |
+| `automation.list` | List a workspace's automations |
+| `automation.get` | One automation's trigger config, steps, and recent run history |
+| `automation.update` | Rename, re-describe, or replace the trigger configuration |
+| `automation.enable` / `automation.disable` | Flip the trigger live / dormant |
+| `automation.trigger` | Fire an `api`-type automation with an optional payload |
+
+All are available on the API (`POST /v1/:org_slug/:workspace_slug/automation/...`), MCP, and
+in-app agent surfaces, and produce identical audit records on each.
+
+## Examples
+
+**Notify on a merged PR** — event trigger on `PullRequest`, `node.updated`, condition
+`state eq merged`, one `webhook` step.
+
+**Weekly digest** — schedule trigger `0 9 * * 1` in `America/New_York`, one `agent` step that
+runs a summarization agent.
+
+**Manually-triggered runbook** — `api` trigger, a chain of `tool` and `human_input` steps,
+fired from CI or a script via `automation.trigger`.
+
+## Related
+
+- [Knowledge graph overview](/docs/knowledge-graph/overview) — the node/edge events that event triggers watch.
+- [Building agents](/docs/agent/building-agents) — agents you can run as automation steps.
+- [Audit logging](/docs/security/audit-logging) — where automation run events land.

@@ -1,4 +1,4 @@
 {
   "title": "Capabilities",
-  "pages": ["skill.author"]
+  "pages": ["index", "skill.author"]
 }
