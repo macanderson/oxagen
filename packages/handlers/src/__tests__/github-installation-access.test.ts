@@ -165,3 +165,21 @@ describe("assertGithubInstallationAccessible", () => {
     expect(status).toBe(403);
   });
 });
+
+describe("GitHub API call hygiene", () => {
+  it("passes an abort/timeout signal to every /user/installations fetch (paged loop must not hang on a stalled page)", async () => {
+    mockHasToken();
+    const fetchMock = mockInstallationsPages(
+      { total_count: 150, installations: Array.from({ length: 100 }, (_, i) => ({ id: i })) },
+      { total_count: 150, installations: [{ id: 9876 }] },
+    );
+
+    await assertGithubInstallationAccessible(CTX, "9876");
+
+    expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(2);
+    for (const call of fetchMock.mock.calls) {
+      const init = call[1] as { signal?: unknown };
+      expect(init.signal).toBeInstanceOf(AbortSignal);
+    }
+  });
+});
