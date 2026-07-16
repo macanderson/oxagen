@@ -1,0 +1,50 @@
+---
+title: Billing & usage
+description: Plans, usage credits, metered consumption, per-turn budgets, and reseller re-billing.
+---
+
+Everything an agent, API call, or MCP tool does in Oxagen is metered at the `invoke()` boundary, so billing is a direct readout of governed activity — not a separate estimate. Org admins manage it under **Organization → Billing**.
+
+## Subscription
+
+Each organization has a plan with monthly or yearly intervals. Plan changes go through Stripe Checkout: Oxagen returns a checkout URL, the user completes payment there, and the subscription updates on webhook confirmation. The current plan and period bounds are visible on **Billing → Subscription**.
+
+## Usage credits
+
+Model and capability consumption debits **usage credits**. When plan-included credits run out, anyone with billing permission can purchase additional credits (minimum $5) — again via Stripe Checkout. Every debit is recorded per invocation, so credits reconcile exactly against the audit trail.
+
+## Usage breakdown
+
+**Billing → Usage** aggregates any time window by:
+
+- model,
+- surface (agent, API, MCP, CLI),
+- workspace,
+- capability,
+- acting principal (per-seat / per-agent metering),
+
+plus a daily time series of tokens and cost. The same breakdown is available programmatically for FinOps pipelines.
+
+## Budgets
+
+Budgets put a dollar ceiling on each agent turn, evaluated as the turn runs:
+
+| Mode | Behaviour at the limit |
+|---|---|
+| `grace` | Allow overage within a configured grace percentage, then stop |
+| `prompt` | Pause and ask the user whether to continue |
+| `enforce` | Hard stop the moment the limit is crossed |
+
+Two layers combine:
+
+- **Personal budget** — each user's own per-turn limit and mode.
+- **Workspace budget policy** — set by an org/workspace admin, either as a soft `default` (seeds members who have not set their own) or a hard `ceiling` (members cannot exceed it, and the mode can only get stricter).
+
+## Reseller re-billing
+
+Organizations that resell Oxagen usage to their own customers get a re-billing pipeline on **Billing → Revenue**:
+
+1. **Customers** — end-customer accounts you bill.
+2. **Attribution rules** — evaluated in priority order to attribute observed usage to a customer.
+3. **Price plans** — markup or per-unit pricing applied to each customer's usage slice.
+4. **Rebill runs** — preview a period's line items per customer, then push invoices through your own connected Stripe key (stored fingerprinted; never readable back).

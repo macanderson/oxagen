@@ -1,0 +1,46 @@
+---
+title: Custom agents
+description: Define, version, publish, and deploy your own agents — instructions, graph access, tools, triggers, and environment bindings.
+---
+
+Beyond the built-in workspace agent, you can define **custom agents**: named agents with their own instructions, scoped graph access, an explicit tool set, and triggers that start them automatically. Manage them in **Workspace → Workbench → Agents**.
+
+## Lifecycle
+
+An agent definition separates *identity* from *configuration*:
+
+1. **Draft** — creating an agent inserts the identity (name, immutable slug) and a v1 config snapshot. Drafts are inactive and cannot be triggered.
+2. **Versioned edits** — every config change snapshots a **new unpublished version**; published versions are immutable and never edited in place.
+3. **Publish** — publishing computes a SHA-256 checksum over the canonical config and makes that version the agent's active version.
+4. **Deploy** — activation requires a published version. Deactivating is always allowed and makes the agent's triggers dormant.
+
+The audit consequence: what an agent was configured to do at any point in time is provable from the version history.
+
+## Configuration
+
+| Section | What it controls |
+|---|---|
+| Instructions | The agent's system prompt, layered over the workspace baseline |
+| Graph access | Which ontology it can read (or extend), the retrieval strategy (semantic / lexical / hybrid / explicit), and a traversal budget (max hops, max nodes, min relevance) |
+| Tools | Explicitly equipped capabilities, skills, MCP servers, or other agents |
+| Triggers | What starts it: `manual`, `schedule` (cron), or `event` (source events, with branch and path-glob filters) |
+
+AI can draft all of this for you: describe the agent in plain language and Oxagen proposes a complete config grounded in the workspace's real skills, ontologies, and capabilities — you review and save. Revisions work the same way and always land as a new unpublished version, so an AI edit never silently changes what is live.
+
+## Triggers
+
+Triggers bind an agent to a start condition and can be enabled or disabled independently of the agent's deployment status:
+
+- `manual` — started by a person or an API call.
+- `schedule` — a cron expression.
+- `event` — an event from a connected source (e.g. a GitHub push), filtered by branches, path globs, or payload conditions.
+
+A trigger only fires when the agent is deployed **active**.
+
+## Environments and sandboxes
+
+Coding agents run in a sandbox resolved from the agent's **environment binding**: bind an agent to an [environment](/docs/configuration/environments-and-secrets) (and optionally a specific sandbox template within it), and mark one binding primary. Without a binding, the workspace's default environment and its default template apply. The bound environment's secrets are injected into the sandbox at run time.
+
+## A2A exposure
+
+Every **deployed, active** agent is advertised as a skill on the workspace's [A2A agent card](/docs/a2a/overview), keyed by its slug. External agents address it by putting the slug in `message.metadata.skillId`; the task then runs under that agent's instructions. Unknown or inactive slugs fall back to the workspace baseline agent rather than erroring.

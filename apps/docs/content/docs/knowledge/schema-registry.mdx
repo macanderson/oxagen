@@ -1,0 +1,34 @@
+---
+title: Schema registry
+description: Define and enforce the workspace ontology — node labels, properties, and relationship types — with drafts, versions, and AI-assisted setup.
+---
+
+The **schema registry** defines what your knowledge graph is allowed to contain: the node labels (entity types), their typed properties, and the relationship types between them. Extraction, ingestion, and validation all read from the pinned schema version, so the graph stays consistent no matter which source or agent writes to it.
+
+Manage it in **Workspace → Knowledge → Ontology**.
+
+## Concepts
+
+| Concept | Meaning |
+|---|---|
+| Schema | A named group of labels and relationship types (e.g. `sales`, `engineering`) |
+| Label | A node type such as `Customer` or `Contract`, with typed properties and a natural key for deduplication |
+| Relationship type | An edge type such as `SIGNED_CONTRACT`, optionally constrained to start/end labels and a cardinality |
+| Property | A typed field (`string`, `number`, `date`, `enum`, `array`, …) with optional validation constraints and a grounding description/example used by extraction prompts |
+| Version | Schemas are edited in a draft version and activated explicitly; the pinned version is what enforcement uses |
+
+## AI-assisted setup
+
+You do not have to author a schema by hand:
+
+1. **Recommend** — Oxagen reads your existing graph (node counts, observed labels, sampled entities) and proposes a starter schema or additions to it.
+2. **Refine in chat** — an iterative builder takes plain-language instructions ("split Contact into Lead and Customer", "add a renewal_date to Contract") and returns proposed mutations to the draft.
+3. **Activate** — the draft becomes the pinned version.
+
+## Enforcement
+
+Validation runs when nodes and relationships are written, returning a conformance score and field-level errors. Enforcement has three modes — `strict` (reject nonconforming writes), `lenient` (accept and flag), and `off`. Property descriptions and examples double as few-shot grounding for extraction, so a well-described schema directly improves extraction quality.
+
+## Why it matters
+
+Event [automations](/docs/automations) build their condition trees from the schema's properties and enum values; entity mapping during [source setup](/docs/knowledge) reuses schema labels; and agents extracting entities from documents shape them to the schema. The registry is the single contract all of them share.
