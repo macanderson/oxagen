@@ -192,6 +192,27 @@ describe("referenceSearchHandler", () => {
     expect(web?.properties.defaultBranch).toBe("main");
   });
 
+  it("loads repositories and branches from a single sourceConnections query", async () => {
+    setRows("sourceConnections", [
+      {
+        publicId: "con_a",
+        status: "active",
+        deliveryConfig: { owner: "acme", repo: "web", defaultBranch: "main" },
+      },
+    ]);
+
+    const { results } = await referenceSearchHandler(
+      { query: "", types: ["repository", "branch"], limit: 10 },
+      ctx,
+    );
+
+    // The repository and branch arms share one memoized SELECT — the identical
+    // sourceConnections query runs once, not once per type.
+    expect(mockWithTenantDb).toHaveBeenCalledTimes(1);
+    expect(results.some((r) => r.type === "repository")).toBe(true);
+    expect(results.some((r) => r.type === "branch")).toBe(true);
+  });
+
   it("restricts sources to the requested types", async () => {
     setRows("sourceConnections", [
       { publicId: "con_a", status: "active", deliveryConfig: { owner: "acme", repo: "web" } },
