@@ -96,6 +96,15 @@ describe("NodeRef", () => {
     // Label is the best remaining human identifier.
     expect(screen.getAllByText("Feature").length).toBeGreaterThan(0);
   });
+
+  it("cites by the domain label when displayName is only the server's id fallback", () => {
+    // The graph.node.list handler coalesces displayName → name → publicId, so an
+    // unnamed node arrives with displayName === its own UUID. That is not a human
+    // label — the chip must cite by the domain label, never the UUID.
+    render(<NodeRef node={makeNode({ displayName: SOURCE_UUID, properties: {} })} />);
+    expect(screen.getAllByText("Feature").length).toBeGreaterThan(0);
+    expect(screen.queryByText(SOURCE_UUID)).toBeNull();
+  });
 });
 
 describe("sourceNodeRef / targetNodeRef", () => {

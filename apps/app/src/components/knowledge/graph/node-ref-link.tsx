@@ -25,7 +25,7 @@ import { ArrowUpRight } from "lucide-react";
 import type { KnowledgeNodeRef } from "@oxagen/oxagen/contracts/semantic.edge.list";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { NodeRef } from "./node-ref";
+import { NodeRef, nodeCitationLabel } from "./node-ref";
 
 export interface NodeRefLinkProps {
   node: KnowledgeNodeRef;
@@ -40,7 +40,7 @@ export interface NodeRefLinkProps {
 
 /** A `NodeRef` inspect chip plus a distinct, non-nested "open detail" control. */
 export function NodeRefLink({ node, href, className }: NodeRefLinkProps) {
-  const label = node.displayName?.trim() || node.label;
+  const label = nodeCitationLabel(node);
 
   return (
     <span className={cn("inline-flex max-w-full items-center gap-0.5", className)}>
