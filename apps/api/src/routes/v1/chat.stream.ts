@@ -16,7 +16,7 @@ import {
   waitForApproval,
 } from "@oxagen/agent";
 import { createPlatformAgentAi } from "@oxagen/agent/adapters";
-import { runCodingAgent } from "@oxagen/agent-engine";
+import { runCodingAgent, DEFAULT_MAX_AGENT_STEPS } from "@oxagen/agent-engine";
 import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { invoke } from "@oxagen/oxagen/kernel";
@@ -74,12 +74,6 @@ const BodySchema = z.object({
 
 const HISTORY_LIMIT = 50;
 const VALID_ROLES = new Set(["user", "assistant", "system"]);
-
-// Runaway backstop for the agentic tool loop, NOT a functional limit. A turn
-// ends naturally the moment the model returns a step with no tool call (its
-// final answer); this cap only fires if the model loops on tools without ever
-// settling. Matches the app chat route + agent-engine defaults.
-const MAX_AGENT_STEPS = 256;
 
 export const chatStreamRoute = new Hono<AppEnv>();
 
@@ -455,7 +449,8 @@ chatStreamRoute.post("/", async (c) => {
           }),
           model: modelId,
           ...(turnEffort ? { effort: turnEffort } : {}),
-          maxSteps: MAX_AGENT_STEPS,
+          // Runaway backstop for the agentic tool loop, NOT a functional limit.
+          maxSteps: DEFAULT_MAX_AGENT_STEPS,
           // Byte-identical client behaviour: no step retries (a retry would
           // re-forward a step's already-streamed parts) and no context-overflow
           // re-run — an overflow surfaces via the catch as a single `error` event,

@@ -37,7 +37,7 @@ import {
 } from "@oxagen/agent/adapters";
 import { resolveGitHubToken } from "@oxagen/handlers/lib/github-token";
 import { parseMentions } from "@oxagen/ai/mentions";
-import { runCodingAgent } from "@oxagen/agent-engine";
+import { runCodingAgent, DEFAULT_MAX_AGENT_STEPS } from "@oxagen/agent-engine";
 import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { invoke, isCodeAgentType } from "@oxagen/oxagen";
@@ -290,15 +290,6 @@ const ATTACHMENT_VISION_TIER_FALLBACK = [
   "fast",
   "precise",
 ] as const;
-
-// Runaway backstop for the agentic tool loop, NOT a functional limit. A turn
-// ends naturally the moment the model returns a step with no tool call (its
-// final answer); this cap only fires if the model loops on tools without ever
-// settling — e.g. retrying a failing tool forever — so it bounds billed LLM
-// calls (each step is one) before a stuck loop burns unbounded credits. Set
-// high enough to never be hit in normal chat/coding use. Matches the CLI loop
-// (loop.ts) and agent-engine (engine.ts) defaults. `stopWhen: stepCountIs(...)`.
-const MAX_AGENT_STEPS = 256;
 
 // POST /api/v1/chat/stream
 //
@@ -1656,10 +1647,9 @@ export async function POST(request: NextRequest): Promise<Response> {
           }),
           model: modelId,
           ...(turnEffort ? { effort: turnEffort } : {}),
-          // Runaway backstop for the agentic tool loop (matches the old
-          // stopWhen: stepCountIs(MAX_AGENT_STEPS)). Loop ends naturally on the
-          // model's final answer.
-          maxSteps: MAX_AGENT_STEPS,
+          // Runaway backstop for the agentic tool loop, NOT a functional limit.
+          // Loop ends naturally on the model's final answer.
+          maxSteps: DEFAULT_MAX_AGENT_STEPS,
           // Resilience: allow a small number of transient retries so a single
           // 429/5xx from the gateway does not kill the whole turn, and re-enable
           // the engine's context-overflow compaction retry (engine.ts:372) so an

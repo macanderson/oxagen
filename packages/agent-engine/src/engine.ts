@@ -47,6 +47,17 @@ const DEFAULT_SYSTEM = buildCodingCorePrompt();
  */
 export const DEFAULT_AGENT_MODEL = "anthropic/claude-fable-5";
 
+/**
+ * Default cap on tool-using steps per turn — a runaway backstop for the agentic
+ * loop, NOT a functional limit. A turn ends naturally the moment the model
+ * returns a step with no tool call (its final answer); this cap only fires if
+ * the model loops on tools without ever settling, bounding billed LLM calls
+ * (one per step) before a stuck loop burns unbounded credits. Exported as the
+ * single source of truth so every surface (REST chat, A2A bridge, app chat)
+ * shares one value instead of hardcoding a literal that can silently drift.
+ */
+export const DEFAULT_MAX_AGENT_STEPS = 256;
+
 /** Parse `git diff` output for the set of changed file paths (`+++ b/<path>` headers). */
 export function changedFilesFromDiff(diff: string): string[] {
   const files = new Set<string>();
@@ -276,7 +287,7 @@ export async function runCodingAgent(
   ];
 
   const model = opts.model ?? DEFAULT_AGENT_MODEL;
-  const maxSteps = opts.maxSteps ?? 256;
+  const maxSteps = opts.maxSteps ?? DEFAULT_MAX_AGENT_STEPS;
   const contextWindow = opts.contextWindow ?? contextWindowFor(model);
   const compactionThreshold = opts.compactionThreshold ?? 0.8;
   const maxRetries = opts.maxRetries ?? 4;

@@ -7,7 +7,7 @@ import {
 } from "@oxagen/ai";
 import { materializeTools, resolveAgentForA2A } from "@oxagen/agent";
 import { createPlatformAgentAi } from "@oxagen/agent/adapters";
-import { runCodingAgent } from "@oxagen/agent-engine";
+import { runCodingAgent, DEFAULT_MAX_AGENT_STEPS } from "@oxagen/agent-engine";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { insertEvents, captureError } from "@oxagen/telemetry";
 import { schema, withTenantDb } from "@oxagen/database";
@@ -36,11 +36,6 @@ import {
 } from "./protocol";
 import { loadTask, updateTask, type A2ATaskRow } from "./task-store";
 import { publish } from "./stream-registry";
-
-// Runaway backstop for the agentic tool loop, NOT a functional limit. A turn
-// ends naturally when the model returns a step with no tool call. Matches the
-// REST chat route + agent-engine defaults.
-const MAX_AGENT_STEPS = 256;
 
 /** Convert the budget.policy.read output to the engine's TurnBudgetPolicy shape. */
 function turnBudgetPolicyFromSaved(saved: {
@@ -521,7 +516,8 @@ export async function runA2ATask(args: RunA2ATaskArgs): Promise<A2ATaskRow> {
         config: promptConfig,
       }),
       model: modelId,
-      maxSteps: MAX_AGENT_STEPS,
+      // Runaway backstop for the agentic tool loop, NOT a functional limit.
+      maxSteps: DEFAULT_MAX_AGENT_STEPS,
       // Byte-identical behaviour: no step retries / no overflow re-run — an
       // overflow surfaces via the catch as a task failure, as before.
       maxRetries: 0,

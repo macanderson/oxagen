@@ -22,6 +22,7 @@ export {
   isErrorResult,
   stringifyCapped,
   DEFAULT_AGENT_MODEL,
+  DEFAULT_MAX_AGENT_STEPS,
 } from "./engine";
 
 // Stage A4 — model router + rate card.

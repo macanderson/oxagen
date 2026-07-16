@@ -134,6 +134,11 @@ vi.mock("@oxagen/agent/adapters", () => ({
 }));
 vi.mock("@oxagen/agent-engine", () => ({
   runCodingAgent: h.runCodingAgent,
+  // The bridge imports DEFAULT_MAX_AGENT_STEPS for the maxSteps backstop; a
+  // factory mock must declare every named export the source touches or Vitest
+  // throws on access. The value is inert here (the runCodingAgent double ignores
+  // maxSteps) — it only needs to exist. Mirrors the engine default.
+  DEFAULT_MAX_AGENT_STEPS: 256,
 }));
 vi.mock("@oxagen/billing", () => ({
   // Budget off in these tests (CTX.userId is null) — the guard is undefined so
