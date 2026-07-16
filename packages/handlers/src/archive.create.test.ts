@@ -153,16 +153,17 @@ describe("archiveCreateHandler — assetId entries", () => {
 
     mocks.storageGet.mockResolvedValue({ body: fakeStream });
 
-    // Stub the DB chain
-    const limit = vi.fn().mockResolvedValue([
+    // Stub the batched DB chain — select().from().where() resolves the rows
+    // (no per-entry .limit() anymore). publicId keys the in-memory asset map.
+    const where = vi.fn().mockResolvedValue([
       {
+        publicId: "gen_SOMEEXISTING",
         storageKey: "generated/documents/org_1/abc.docx",
         orgId: "org_1",
         status: "ready",
         deletedAt: null,
       },
     ]);
-    const where = vi.fn().mockReturnValue({ limit });
     const from = vi.fn().mockReturnValue({ where });
     mocks.dbSelect.mockReturnValue({ from });
 
@@ -182,8 +183,7 @@ describe("archiveCreateHandler — assetId entries", () => {
   });
 
   it("throws when assetId not found in DB", async () => {
-    const limit = vi.fn().mockResolvedValue([]);
-    const where = vi.fn().mockReturnValue({ limit });
+    const where = vi.fn().mockResolvedValue([]);
     const from = vi.fn().mockReturnValue({ where });
     mocks.dbSelect.mockReturnValue({ from });
 
@@ -199,15 +199,15 @@ describe("archiveCreateHandler — assetId entries", () => {
   });
 
   it("throws when assetId belongs to a different org (IDOR guard)", async () => {
-    const limit = vi.fn().mockResolvedValue([
+    const where = vi.fn().mockResolvedValue([
       {
+        publicId: "gen_OTHER",
         storageKey: "generated/documents/OTHER_ORG/file.docx",
         orgId: "OTHER_ORG", // different from ctx.orgId
         status: "ready",
         deletedAt: null,
       },
     ]);
-    const where = vi.fn().mockReturnValue({ limit });
     const from = vi.fn().mockReturnValue({ where });
     mocks.dbSelect.mockReturnValue({ from });
 
@@ -220,6 +220,47 @@ describe("archiveCreateHandler — assetId entries", () => {
         CTX,
       ),
     ).rejects.toThrow("gen_OTHER");
+  });
+
+  it("batch-loads N asset entries with a single DB select", async () => {
+    // The metadata for every referenced asset is fetched in ONE inArray query
+    // (was one SELECT per entry — the N+1 this change removes). Blob bytes are
+    // still fetched per entry, in parallel.
+    const rows = [
+      { publicId: "gen_A", storageKey: "k/a", orgId: "org_1", status: "ready", deletedAt: null },
+      { publicId: "gen_B", storageKey: "k/b", orgId: "org_1", status: "ready", deletedAt: null },
+      { publicId: "gen_C", storageKey: "k/c", orgId: "org_1", status: "ready", deletedAt: null },
+    ];
+    const where = vi.fn().mockResolvedValue(rows);
+    const from = vi.fn().mockReturnValue({ where });
+    mocks.dbSelect.mockReturnValue({ from });
+
+    // Each entry's blob is read independently — hand out a fresh stream per call
+    // (a ReadableStream can only be consumed once).
+    mocks.storageGet.mockImplementation((key: string) =>
+      Promise.resolve({
+        body: makeReadableStream(new Uint8Array([key.charCodeAt(key.length - 1)])),
+      }),
+    );
+
+    await archiveCreateHandler(
+      {
+        archiveName: "batch",
+        entries: [
+          { name: "a.docx", assetId: "gen_A" },
+          { name: "b.docx", assetId: "gen_B" },
+          { name: "c.docx", assetId: "gen_C" },
+        ],
+      },
+      CTX,
+    );
+
+    // ONE select for all three asset entries.
+    expect(mocks.dbSelect).toHaveBeenCalledTimes(1);
+    // All three blobs were still fetched.
+    expect(mocks.storageGet).toHaveBeenCalledTimes(3);
+    const zipArg = mocks.zipSync.mock.calls[0]?.[0] as Record<string, Uint8Array>;
+    expect(Object.keys(zipArg).sort()).toEqual(["a.docx", "b.docx", "c.docx"]);
   });
 });
 
