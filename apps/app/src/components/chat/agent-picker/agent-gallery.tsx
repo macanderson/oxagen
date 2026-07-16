@@ -24,6 +24,8 @@ export interface AgentGalleryProps {
   onSetDefaultAgent?: (agentId: string | null) => void;
   /** Scopes the v2 "Recent" row's persisted recency (see AgentPickerPanel). */
   workspaceSlug?: string;
+  /** With `workspaceSlug`, scopes the code-agent setup step's branch fetch. */
+  orgSlug?: string;
   className?: string;
 }
 
@@ -36,11 +38,13 @@ export function AgentGallery({
   defaultAgentId,
   onSetDefaultAgent,
   workspaceSlug,
+  orgSlug,
   className,
 }: AgentGalleryProps) {
   const {
     selectedAgentId,
     selectedRepoKey,
+    selectedBranch,
     selectedEnvId,
     applyAgentSelection,
   } = useComposerSelectionState();
@@ -76,8 +80,10 @@ export function AgentGallery({
         selectedAgentId={selectedAgentId}
         selectedRepoKey={selectedRepoKey}
         selectedEnvId={selectedEnvId}
+        selectedBranch={selectedBranch}
         onApply={applyAgentSelection}
         workspaceSlug={workspaceSlug}
+        orgSlug={orgSlug}
       />
     </div>
   );

@@ -58,6 +58,7 @@ export function ChatShell({
   agentId,
   conversationCodeBinding,
   walletBalanceCents,
+  userFirstName,
 }: ChatShellProps) {
   return (
     <>
@@ -65,6 +66,7 @@ export function ChatShell({
         <AsyncShell
           promise={messagesPromise}
           walletBalanceCents={walletBalanceCents}
+          userFirstName={userFirstName}
           conversationId={conversationId}
           conversationPublicId={conversationPublicId ?? null}
           activeLeafMessageId={activeLeafMessageId}
@@ -129,6 +131,7 @@ async function AsyncShell({
   agentId,
   conversationCodeBinding,
   walletBalanceCents,
+  userFirstName,
 }: {
   promise: Promise<ChatMessage[]>;
   conversationId: string | null;
@@ -159,6 +162,7 @@ async function AsyncShell({
   agentId?: string | null;
   conversationCodeBinding?: ChatShellProps["conversationCodeBinding"];
   walletBalanceCents?: number | null;
+  userFirstName?: string | null;
 }) {
   const messages = await promise;
   const modelConfig = resolvedTierCatalog();
@@ -172,6 +176,7 @@ async function AsyncShell({
     <ChatShellClient
       chatUxV2={chatUxV2}
       walletBalanceCents={walletBalanceCents}
+      userFirstName={userFirstName}
       conversationId={conversationId}
       conversationPublicId={conversationPublicId}
       activeLeafMessageId={activeLeafMessageId}

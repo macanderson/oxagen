@@ -1,6 +1,7 @@
 /**
  * utils.test.ts — unit tests for cn, formatCents, formatDate, formatDateTime,
- * formatDateTimeWithSeconds, formatBytes, truncate, formatDuration.
+ * formatDateTimeWithSeconds, formatBytes, firstNameOf, truncate,
+ * formatDuration.
  */
 import { describe, it, expect } from "vitest";
 import {
@@ -11,6 +12,7 @@ import {
   formatDateTime,
   formatDateTimeWithSeconds,
   formatBytes,
+  firstNameOf,
   truncate,
   formatDuration,
 } from "./utils";
@@ -94,10 +96,17 @@ describe("formatCents", () => {
 // ---------------------------------------------------------------------------
 
 describe("formatCentsCompact", () => {
-  it("keeps full cent precision below $1,000", () => {
+  it("keeps full cent precision below $10,000", () => {
     expect(formatCentsCompact(0)).toBe("$0.00");
     expect(formatCentsCompact(500)).toBe("$5.00");
     expect(formatCentsCompact(99999)).toBe("$999.99");
+  });
+
+  it("keeps a four-figure balance exact — 'about $1K' is not good enough when you're deciding whether to top up", () => {
+    // Regression: the threshold used to be $1,000, so a real $1,003.59 balance
+    // rendered as "$1K" — hiding whether the user had $1,000 or $1,499.
+    expect(formatCentsCompact(100_359)).toBe("$1,003.59");
+    expect(formatCentsCompact(999_999)).toBe("$9,999.99");
   });
 
   it("abbreviates large balances so they don't dominate the surface", () => {
@@ -107,9 +116,9 @@ describe("formatCentsCompact", () => {
     expect(formatCentsCompact(500_000_000)).toBe("$5M"); // $5,000,000
   });
 
-  it("abbreviates exactly at the $1,000 boundary", () => {
-    // $1,000.00 = 100,000 cents → compact "$1K"
-    expect(formatCentsCompact(100_000)).toBe("$1K");
+  it("abbreviates from the $10,000 boundary up", () => {
+    // $10,000.00 = 1,000,000 cents → compact "$10K"
+    expect(formatCentsCompact(1_000_000)).toBe("$10K");
   });
 
   it("is resilient to non-finite input", () => {
@@ -224,6 +233,48 @@ describe("formatBytes", () => {
   it("returns '—' for NaN/Infinity instead of 'NaN GB'", () => {
     expect(formatBytes(NaN)).toBe("—");
     expect(formatBytes(Infinity)).toBe("—");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// firstNameOf — the chat empty state's "Welcome, {firstName}!" greeting
+// ---------------------------------------------------------------------------
+
+describe("firstNameOf", () => {
+  it("returns the first whitespace-separated token of a full name", () => {
+    expect(firstNameOf("Mac Anderson")).toBe("Mac");
+  });
+
+  it("returns a single-token name unchanged", () => {
+    expect(firstNameOf("Mac")).toBe("Mac");
+  });
+
+  it("takes only the first token of a multi-part name", () => {
+    expect(firstNameOf("Ada King Lovelace")).toBe("Ada");
+  });
+
+  it("trims surrounding whitespace and collapses runs between tokens", () => {
+    expect(firstNameOf("   Mac   Anderson  ")).toBe("Mac");
+    expect(firstNameOf("\n\tMac\tAnderson")).toBe("Mac");
+  });
+
+  it("returns null for a missing name", () => {
+    expect(firstNameOf(null)).toBeNull();
+    expect(firstNameOf(undefined)).toBeNull();
+  });
+
+  it("returns null for an empty or whitespace-only name", () => {
+    expect(firstNameOf("")).toBeNull();
+    expect(firstNameOf("   ")).toBeNull();
+  });
+
+  it("returns null for an email — greeting someone by their address is worse than no name", () => {
+    expect(firstNameOf("mac@oxagen.sh")).toBeNull();
+    expect(firstNameOf("mac@oxagen.sh extra")).toBeNull();
+  });
+
+  it("keeps a real name even when a later token looks like an email", () => {
+    expect(firstNameOf("Mac mac@oxagen.sh")).toBe("Mac");
   });
 });
 

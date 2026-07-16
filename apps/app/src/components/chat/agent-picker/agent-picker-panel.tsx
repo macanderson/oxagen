@@ -6,6 +6,7 @@ import {
   Bot,
   Check,
   Code2,
+  GitBranch,
   MessageSquare,
   Shield,
   Star,
@@ -14,11 +15,19 @@ import { fadeInUp, staggerContainer, transition } from "@oxagen/ui/lib/motion";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { SearchInput } from "@/components/ui/search-input";
+import {
+  Select,
+  SelectPopup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { AgentAvatar } from "./agent-avatar";
 import { AgentInfoButton } from "./agent-info-button";
 import { FOCUS_COMPOSER_EVENT } from "./focus-composer-event";
 import { pushRecentAgentId, readRecentAgentIds } from "../session/recent-agents";
 import { useChatSessionContext } from "../session/session-store";
+import { useRepoBranches } from "../session/use-session-settings-data";
 import { RepoSelector, type RepoOption } from "../repo-selector";
 import {
   EnvironmentSelector,
@@ -33,8 +42,16 @@ import type { AgentSelectionApply } from "./chat-selection-context";
  * as a composer popover (`variant="popover"`) or as an empty-state gallery hero
  * (`variant="gallery"`). Lists the workspace's agents with avatar, type, a
  * one-line description, and a capability strip; a star per row sets the user's
- * default. Choosing a code agent slides in an inline repo + environment setup
- * step; choosing a chat agent (or the Default assistant) applies immediately.
+ * default. Choosing a code agent slides in an inline setup step that picks the
+ * agent's whole target up front — repository → branch → environment — so the
+ * conversation starts fully bound; choosing a chat agent (or the Default
+ * assistant) applies immediately.
+ *
+ * The branch row needs `orgSlug` + `workspaceSlug` to fetch a branch list (see
+ * `useRepoBranches`); without them the setup step degrades to repo +
+ * environment rather than showing a picker it can't populate. Branch is always
+ * OPTIONAL: null means "the repository's default branch", the convention the
+ * whole session model uses.
  *
  * chat_ux_v2 (`useChatSessionContext() !== null`) changes three things, all
  * gated on the same `v2` boolean: (1) a "Recent" row of up to 5 avatars for
@@ -64,14 +81,35 @@ export interface AgentPickerPanelProps {
   /** Current code-session repo/env selection, to preselect the setup step. */
   selectedRepoKey: string | null;
   selectedEnvId: string | null;
-  /** Apply an agent (+ optional repo/env) to the composer. */
+  /** Current branch selection (null = the repo's default), to preselect. */
+  selectedBranch?: string | null;
+  /** Apply an agent (+ optional repo/branch/env) to the composer. */
   onApply: (sel: AgentSelectionApply) => void;
   /** Called after a selection is applied — popover closes / gallery collapses. */
   onDismiss?: () => void;
   variant: "popover" | "gallery";
-  /** Scopes the v2 "Recent" row's persisted recency to this workspace. */
+  /**
+   * Scopes the v2 "Recent" row's persisted recency to this workspace, and (with
+   * `orgSlug`) scopes the setup step's branch fetch. Omit both ⇒ no branch row.
+   */
   workspaceSlug?: string;
+  /** Org scope for the setup step's branch fetch. Omitted ⇒ no branch row. */
+  orgSlug?: string;
   className?: string;
+}
+
+/**
+ * Sentinel `<SelectItem>` value for "use the repository's default branch"
+ * (branch: null) — a Select can't carry null. Matches the equivalent sentinel
+ * in `session/session-settings.tsx`.
+ */
+const DEFAULT_BRANCH_VALUE = "__repo_default__";
+
+/** The "Repository default (main)" row/placeholder label. */
+function defaultBranchLabel(defaultBranch: string | null): string {
+  return defaultBranch
+    ? `Repository default (${defaultBranch})`
+    : "Repository default";
 }
 
 /** Small pill marking an agent as code- or chat-capable. */
@@ -126,10 +164,12 @@ export function AgentPickerPanel({
   selectedAgentId,
   selectedRepoKey,
   selectedEnvId,
+  selectedBranch = null,
   onApply,
   onDismiss,
   variant,
   workspaceSlug,
+  orgSlug,
   className,
 }: AgentPickerPanelProps) {
   const reduce = useReducedMotion();
@@ -153,7 +193,33 @@ export function AgentPickerPanel({
   // the pending agent instead of the list.
   const [setupAgent, setSetupAgent] = React.useState<AgentOption | null>(null);
   const [setupRepoKey, setSetupRepoKey] = React.useState<string | null>(null);
+  // null = the repository's default branch — never force a choice.
+  const [setupBranch, setSetupBranch] = React.useState<string | null>(null);
   const [setupEnvId, setSetupEnvId] = React.useState<string | null>(null);
+
+  // The setup step's branch list, fetched from the SAME machinery the
+  // SessionSettings hosts use (`list_branches` via `listRepoBranchesAction`).
+  // It keys off the step's PENDING repo, not the session's — the panel can
+  // render outside a ChatSessionProvider, so it can't read the store.
+  const setupRepo = React.useMemo(
+    () => (setupRepoKey ? (repos.find((r) => r.key === setupRepoKey) ?? null) : null),
+    [repos, setupRepoKey],
+  );
+  const { branches, branchesLoading, defaultBranch, onLoadBranches } =
+    useRepoBranches({ repo: setupRepo, orgSlug, workspaceSlug });
+  // Without an org+workspace scope there is nothing to fetch — degrade to
+  // repo + environment rather than render a picker that can never populate.
+  const showBranchRow = Boolean(orgSlug && workspaceSlug);
+
+  // Cascade (the law in `session-state.ts`): changing the repo resets the
+  // branch — a branch belongs to the repo you picked it from.
+  const selectSetupRepo = React.useCallback(
+    (repo: RepoOption) => {
+      if (repo.key !== setupRepoKey) setSetupBranch(null);
+      setSetupRepoKey(repo.key);
+    },
+    [setupRepoKey],
+  );
 
   // The workspace default agent surfaces first (right after the Default
   // assistant row), so a user's preferred agent leads the list; the filled star
@@ -179,11 +245,16 @@ export function AgentPickerPanel({
 
   const applyAgent = React.useCallback(
     (agent: AgentOption | null) => {
-      // v2: every pick applies immediately — no embedded repo/env setup step.
-      // A code agent's session prefills from its remembered code context (the
-      // session store's agent-switch overlay); the rail/drawer is the adjust
-      // surface. Record recency and hand focus to the composer.
-      if (v2) {
+      // v2, NON-code agent: applies immediately — there is nothing to set up.
+      // Record recency and hand focus to the composer.
+      //
+      // A CODE agent deliberately falls through to the setup step below in BOTH
+      // trees: its target (org → repository → branch → environment) is chosen
+      // once, up front, and is then immutable for the conversation, so the pick
+      // is the only moment it can be chosen. v2 used to apply a code agent
+      // immediately and prefill from remembered context, leaving the rail as the
+      // adjust surface — that contradicts the immutable-target model.
+      if (v2 && !agent?.isCode) {
         onApply({ agentId: agent?.agentId ?? null });
         if (agent) {
           pushRecentAgentId(workspaceSlug, agent.agentId);
@@ -197,6 +268,8 @@ export function AgentPickerPanel({
         // Prefill the setup step from the live selection, else workspace defaults.
         setSetupAgent(agent);
         setSetupRepoKey(selectedRepoKey ?? defaultRepoKey);
+        // No workspace default branch exists — null is the repo's default.
+        setSetupBranch(selectedBranch);
         setSetupEnvId(selectedEnvId ?? defaultEnvId);
         return;
       }
@@ -210,6 +283,7 @@ export function AgentPickerPanel({
       onDismiss,
       selectedRepoKey,
       selectedEnvId,
+      selectedBranch,
       defaultRepoKey,
       defaultEnvId,
     ],
@@ -217,16 +291,35 @@ export function AgentPickerPanel({
 
   const confirmSetup = React.useCallback(() => {
     if (!setupAgent) return;
+    // The whole target, atomically: repo → branch → environment. `branch: null`
+    // is meaningful (the repo's default), so it's always sent rather than
+    // omitted — the conversation starts fully bound either way.
     onApply({
       agentId: setupAgent.agentId,
       repoKey: setupRepoKey,
+      branch: setupBranch,
       envId: setupEnvId,
     });
+    // Recency + composer focus belong to CONFIRMING an agent, not to the
+    // immediate-apply path alone: a code agent now reaches the store through
+    // here in both trees, and it would otherwise never enter the Recent row and
+    // would leave the user with no cursor after picking.
+    pushRecentAgentId(workspaceSlug, setupAgent.agentId);
+    setRecentIds(readRecentAgentIds(workspaceSlug));
+    window.dispatchEvent(new CustomEvent(FOCUS_COMPOSER_EVENT));
     // Return to the list (the popover also closes via onDismiss); the gallery
     // has no dismiss, so without this it would stay stuck on the setup step.
     setSetupAgent(null);
     onDismiss?.();
-  }, [setupAgent, setupRepoKey, setupEnvId, onApply, onDismiss]);
+  }, [
+    setupAgent,
+    setupRepoKey,
+    setupBranch,
+    setupEnvId,
+    workspaceSlug,
+    onApply,
+    onDismiss,
+  ]);
 
   const handleListKeyDown = React.useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -295,16 +388,79 @@ export function AgentPickerPanel({
               <span className="font-medium text-foreground">
                 {setupAgent.name}
               </span>{" "}
-              work? Pick the repository and environment for this session.
+              work?{" "}
+              {showBranchRow
+                ? "Pick the repository, branch, and environment for this session."
+                : "Pick the repository and environment for this session."}
             </p>
             <div className="flex flex-col gap-2">
               <RepoSelector
                 repositories={repos}
                 selectedKey={setupRepoKey}
-                onSelectRepo={(repo) => setSetupRepoKey(repo.key)}
+                onSelectRepo={selectSetupRepo}
                 className="w-full sm:w-full"
                 ariaLabel="Session repository"
               />
+              {showBranchRow ? (
+                <div
+                  className="flex w-full min-w-0 items-center gap-2"
+                  data-testid="setup-branch-row"
+                >
+                  <GitBranch className="size-4 shrink-0 text-muted-foreground" />
+                  <Select
+                    value={setupBranch ?? DEFAULT_BRANCH_VALUE}
+                    onValueChange={(value) =>
+                      setSetupBranch(
+                        value === DEFAULT_BRANCH_VALUE ? null : value,
+                      )
+                    }
+                    // Fetch lazily, on first open — opening the setup step must
+                    // not spend a GitHub call on a branch list nobody looked at.
+                    onOpenChange={(open) => {
+                      if (open) onLoadBranches();
+                    }}
+                    disabled={!setupRepoKey}
+                  >
+                    <SelectTrigger
+                      className="min-h-11 w-full sm:min-h-0 sm:w-full"
+                      aria-label="Session branch"
+                    >
+                      {/* Function child: the value is set programmatically (and
+                          the items aren't mounted until the popup first opens),
+                          so resolve the label here — the sentinel must read as
+                          "Repository default", never as its raw id. */}
+                      <SelectValue placeholder={defaultBranchLabel(defaultBranch)}>
+                        {(value: string | null) =>
+                          value && value !== DEFAULT_BRANCH_VALUE
+                            ? value
+                            : defaultBranchLabel(defaultBranch)
+                        }
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectPopup>
+                      <SelectItem value={DEFAULT_BRANCH_VALUE}>
+                        {defaultBranchLabel(defaultBranch)}
+                      </SelectItem>
+                      {branchesLoading ? (
+                        <p className="px-3 py-2 text-xs text-muted-foreground">
+                          Loading branches…
+                        </p>
+                      ) : null}
+                      {/* The default branch is already the sentinel row —
+                          listing it again would be two rows that do the same
+                          thing for a target that's immutable once the
+                          conversation starts. */}
+                      {(branches ?? [])
+                        .filter((name) => name !== defaultBranch)
+                        .map((name) => (
+                          <SelectItem key={name} value={name}>
+                            {name}
+                          </SelectItem>
+                        ))}
+                    </SelectPopup>
+                  </Select>
+                </div>
+              ) : null}
               <EnvironmentSelector
                 environments={environments}
                 selectedEnvId={setupEnvId}

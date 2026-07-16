@@ -36,6 +36,12 @@ export interface AgentSelectionApply {
   agentId: string | null;
   /** Repo key for a code agent's session (undefined = leave unchanged). */
   repoKey?: string | null;
+  /**
+   * Branch for a code agent's session (undefined = leave unchanged; null = the
+   * repository's default branch, the convention everywhere — see
+   * `session-state.ts`'s `branch: string | null`).
+   */
+  branch?: string | null;
   /** Environment id for a code agent's session (undefined = leave unchanged). */
   envId?: string | null;
 }
@@ -43,6 +49,8 @@ export interface AgentSelectionApply {
 export interface ChatSelectionStore {
   selectedAgentId: string | null;
   selectedRepoKey: string | null;
+  /** Explicit branch for a code agent's session; null = the repo's default. */
+  selectedBranch: string | null;
   selectedEnvId: string | null;
   /**
    * True once the conversation's coding target is LOCKED — either a server
@@ -98,6 +106,7 @@ export function useComposerSelectionState(): ChatSelectionStore {
   const shared = useChatSelectionContext();
   const [agentId, setAgentId] = React.useState<string | null>(null);
   const [repoKey, setRepoKey] = React.useState<string | null>(null);
+  const [branch, setBranch] = React.useState<string | null>(null);
   const [envId, setEnvId] = React.useState<string | null>(null);
   const [locked, setLocked] = React.useState(false);
   // Latest-lock ref so the guarded setters see the current lock state without
@@ -110,8 +119,19 @@ export function useComposerSelectionState(): ChatSelectionStore {
     if (lockedRef.current) return;
     setAgentId(id);
   }, []);
+  // Latest-repo ref so the cascade below can compare against the current repo
+  // without a setState updater (an updater must stay pure — React may invoke it
+  // twice — so the branch reset can't live inside one).
+  const repoKeyRef = React.useRef(repoKey);
+  React.useEffect(() => {
+    repoKeyRef.current = repoKey;
+  }, [repoKey]);
   const setRepoGuarded = React.useCallback((key: string | null) => {
     if (lockedRef.current) return;
+    // Cascade (mirrors `applySessionPatch`): a new repo invalidates the branch
+    // — it belongs to the repo you just left.
+    if (key !== repoKeyRef.current) setBranch(null);
+    repoKeyRef.current = key;
     setRepoKey(key);
   }, []);
   const setEnvGuarded = React.useCallback((id: string | null) => {
@@ -121,7 +141,17 @@ export function useComposerSelectionState(): ChatSelectionStore {
   const applyLocal = React.useCallback((sel: AgentSelectionApply) => {
     if (lockedRef.current) return;
     setAgentId(sel.agentId);
-    if (sel.repoKey !== undefined) setRepoKey(sel.repoKey);
+    if (sel.repoKey !== undefined) {
+      // Same cascade as the setter — but the apply is atomic, so an explicit
+      // branch in the SAME apply is the user's choice for the new repo and
+      // wins over the reset.
+      if (sel.repoKey !== repoKeyRef.current && sel.branch === undefined) {
+        setBranch(null);
+      }
+      repoKeyRef.current = sel.repoKey;
+      setRepoKey(sel.repoKey);
+    }
+    if (sel.branch !== undefined) setBranch(sel.branch);
     if (sel.envId !== undefined) setEnvId(sel.envId);
   }, []);
   const lockLocal = React.useCallback(() => setLocked(true), []);
@@ -129,6 +159,7 @@ export function useComposerSelectionState(): ChatSelectionStore {
     () => ({
       selectedAgentId: agentId,
       selectedRepoKey: repoKey,
+      selectedBranch: branch,
       selectedEnvId: envId,
       selectionLocked: locked,
       setSelectedAgentId: setAgentGuarded,
@@ -140,6 +171,7 @@ export function useComposerSelectionState(): ChatSelectionStore {
     [
       agentId,
       repoKey,
+      branch,
       envId,
       locked,
       setAgentGuarded,
@@ -214,6 +246,9 @@ export function ChatSelectionProvider({
   const [selectedRepoKey, setSelectedRepoKey] = React.useState<string | null>(
     () => boundRepoKey,
   );
+  // null = the repository's default branch (the convention everywhere). A
+  // binding pins the repo, not a feature branch, so it seeds no branch.
+  const [selectedBranch, setSelectedBranch] = React.useState<string | null>(null);
   const [selectedEnvId, setSelectedEnvId] = React.useState<string | null>(
     () => codeBinding?.environmentId ?? null,
   );
@@ -244,8 +279,18 @@ export function ChatSelectionProvider({
     [workspaceSlug, conversationId],
   );
 
+  // Latest-repo ref so the org→repo→branch cascade can compare against the
+  // current repo without a setState updater (updaters must stay pure).
+  const repoKeyRef = React.useRef(selectedRepoKey);
+  React.useEffect(() => {
+    repoKeyRef.current = selectedRepoKey;
+  }, [selectedRepoKey]);
+
   const setRepoKeyGuarded = React.useCallback((key: string | null) => {
     if (lockedRef.current) return;
+    // Cascade (mirrors `applySessionPatch`): a new repo invalidates the branch.
+    if (key !== repoKeyRef.current) setSelectedBranch(null);
+    repoKeyRef.current = key;
     setSelectedRepoKey(key);
   }, []);
   const setEnvIdGuarded = React.useCallback((id: string | null) => {
@@ -257,7 +302,16 @@ export function ChatSelectionProvider({
     (sel: AgentSelectionApply) => {
       if (lockedRef.current) return;
       commitAgentId(sel.agentId);
-      if (sel.repoKey !== undefined) setSelectedRepoKey(sel.repoKey);
+      if (sel.repoKey !== undefined) {
+        // The apply is atomic: an explicit branch in the SAME apply is the
+        // user's choice for the new repo and wins over the cascade reset.
+        if (sel.repoKey !== repoKeyRef.current && sel.branch === undefined) {
+          setSelectedBranch(null);
+        }
+        repoKeyRef.current = sel.repoKey;
+        setSelectedRepoKey(sel.repoKey);
+      }
+      if (sel.branch !== undefined) setSelectedBranch(sel.branch);
       if (sel.envId !== undefined) setSelectedEnvId(sel.envId);
     },
     [commitAgentId],
@@ -325,6 +379,7 @@ export function ChatSelectionProvider({
     () => ({
       selectedAgentId,
       selectedRepoKey,
+      selectedBranch,
       selectedEnvId,
       selectionLocked,
       setSelectedAgentId: commitAgentId,
@@ -336,6 +391,7 @@ export function ChatSelectionProvider({
     [
       selectedAgentId,
       selectedRepoKey,
+      selectedBranch,
       selectedEnvId,
       selectionLocked,
       commitAgentId,

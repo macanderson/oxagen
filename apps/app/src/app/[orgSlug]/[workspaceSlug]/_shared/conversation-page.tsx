@@ -4,6 +4,7 @@ import { runInTenantScope } from "@oxagen/tenancy";
 import type { ConversationRow, DbMessageRow } from "@oxagen/database";
 import { resolveOrg, resolveWorkspace } from "@/lib/resolve-org";
 import { getSessionOrRedirect } from "@/lib/session";
+import { firstNameOf } from "@/lib/utils";
 import { ChatShell, type ChatMessage } from "@/components/chat/chat-shell";
 import type { AgentCapability } from "@/components/chat/plan-card";
 import { listCapabilities, getSurfaces, invoke } from "@oxagen/oxagen";
@@ -517,6 +518,7 @@ export async function ConversationPage({
             agentId={boundAgentId ?? null}
             conversationCodeBinding={conversationCodeBinding}
             walletBalanceCents={walletBalance?.balanceCents ?? null}
+            userFirstName={firstNameOf(session.user.name)}
           />
         </div>
       </div>

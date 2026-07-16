@@ -27,7 +27,7 @@ import {
   SheetDescription,
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
-import { useIsMobile } from "@/hooks/use-media-query";
+import { useIsMobile, MOBILE_BREAKPOINT_QUERY } from "@/hooks/use-media-query";
 import { supportsReasoning, getModel } from "@oxagen/ai/catalog";
 import type { ResolvedTierCatalog, EffortLevel } from "@oxagen/ai/catalog";
 import {
@@ -44,7 +44,7 @@ import { useSessionModelState } from "./session/session-bridges";
 import { FOCUS_COMPOSER_EVENT } from "./agent-picker/focus-composer-event";
 import { useChatSessionContext } from "./session/session-store";
 import { sessionSelectionIssues } from "./session/session-state";
-import { ComposerContextControls } from "./composer-context-controls";
+import { ComposerPrStatusChip } from "./composer-pr-status-chip";
 import type { ComposerPrStatus } from "./composer-pr-status-chip";
 import { SlashCommandMenu } from "./slash-command-menu";
 // Import from the client-safe subpath, NOT the @oxagen/ai barrel: the barrel
@@ -231,13 +231,17 @@ function codePayload(
   codeMode: boolean,
   repo: RepoOption | null,
   environment: EnvironmentOption | null,
+  selectedBranch: string | null,
 ): CodeModePayload | null {
   if (!codeMode || !repo || !environment) return null;
   return {
     connectionId: repo.connectionId,
     owner: repo.owner,
     name: repo.name,
-    defaultBranch: repo.defaultBranch,
+    // The branch the sandbox checks out / the agent context reports. Honour
+    // the user's explicit branch pick (SELECTION store); `null` means "the
+    // repository's default branch", so fall back to it.
+    defaultBranch: selectedBranch ?? repo.defaultBranch,
     environmentId: environment.id,
     environmentName: environment.name,
     sandboxSessionId: null,
@@ -559,6 +563,7 @@ export function MessageComposer({
   const {
     selectedAgentId,
     selectedRepoKey,
+    selectedBranch,
     selectedEnvId,
     selectionLocked,
     setSelectedRepoKey,
@@ -607,6 +612,31 @@ export function MessageComposer({
   const codeGateBlocked = codeMode && (!selectedRepo || !selectedEnvId);
 
   const formRef = React.useRef<HTMLFormElement>(null);
+
+  // Land the cursor in the prompt on mount so a new conversation is type-ready
+  // with no click (the empty state is just a welcome line) — DESKTOP ONLY: on a
+  // phone this pops the on-screen keyboard on load and eats the conversation
+  // viewport.
+  //
+  // Deliberately NOT React's `autoFocus`: that fires during the mount commit,
+  // and `useIsMobile()` is SSR-safe — it reports `false` on the hydration render
+  // and only flips after. `autoFocus={!isMobile}` therefore focused on a phone
+  // too (verified in a real 390px browser). Reading matchMedia here gives the
+  // true viewport at effect time.
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    // Only SKIP on an affirmative mobile match: every real browser has
+    // matchMedia, so its absence means a non-browser host (jsdom), not a phone —
+    // suppressing focus there would be the wrong default.
+    const isPhoneViewport =
+      typeof window.matchMedia === "function" &&
+      window.matchMedia(MOBILE_BREAKPOINT_QUERY).matches;
+    if (isPhoneViewport) return;
+    const ta = formRef.current?.elements.namedItem(
+      "content",
+    ) as HTMLTextAreaElement | null;
+    ta?.focus();
+  }, []);
 
   // ── Responsive layout (mobile ≤767px) ──────────────────────────────────────
   const isMobile = useIsMobile();
@@ -752,32 +782,11 @@ export function MessageComposer({
     // listed so this only re-runs on a conversation switch (pinKey change).
   }, [pinKey, setSelectedRepoKey, setSelectedEnvId]);
 
-  // Toggle the pin, persisting a snapshot of the current selection (pin) or
-  // clearing it (unpin). Writes happen here and in the selector handlers below,
-  // never in a pinKey-keyed effect, so switching conversations can never write
-  // the previous chat's selection under the new key.
-  const togglePin = React.useCallback(() => {
-    if (isPinned) {
-      setIsPinned(false);
-      writeStoredPins(pinKey, null);
-    } else {
-      setIsPinned(true);
-      writeStoredPins(pinKey, {
-        repoKey: selectedRepoKey,
-        envId: selectedEnvId,
-      });
-    }
-  }, [isPinned, pinKey, selectedRepoKey, selectedEnvId]);
-  const handleSelectRepoKey = (key: string) => {
-    setSelectedRepoKey(key);
-    if (isPinned)
-      writeStoredPins(pinKey, { repoKey: key, envId: selectedEnvId });
-  };
-  const handleSelectEnvId = (id: string) => {
-    setSelectedEnvId(id);
-    if (isPinned)
-      writeStoredPins(pinKey, { repoKey: selectedRepoKey, envId: id });
-  };
+  // No pin toggle and no per-turn repo/env selection handlers: the chat context
+  // is chosen ONCE when the agent is picked (a code agent's setup step asks for
+  // org → repository → branch) and is immutable for the rest of the
+  // conversation. The hydration effect above still reads a pin stored by an
+  // earlier version, so those conversations keep sending their `pinnedContext`.
 
   // ── Slash commands ────────────────────────────────────────────────────────
   // `slashQuery` is the text after a lone leading slash ("/ci" -> "ci"), or
@@ -786,8 +795,16 @@ export function MessageComposer({
   // (its system prompt documents the commands — see @oxagen/ai slash-commands).
   const [slashQuery, setSlashQuery] = React.useState<string | null>(null);
   const [slashActiveIndex, setSlashActiveIndex] = React.useState(0);
+  // `clientAction` commands (today: `/pin`) are filtered OUT of the app's menu.
+  // Pinning a repo/environment per turn no longer exists here — the chat context
+  // is chosen once at agent-pick time and is immutable for the conversation — so
+  // offering `/pin` would be a control that cannot do anything. The command stays
+  // in @oxagen/ai for the CLI, which still has its own pin semantics.
   const slashCommands = React.useMemo(
-    () => (slashQuery === null ? [] : matchSlashCommands(slashQuery)),
+    () =>
+      slashQuery === null
+        ? []
+        : matchSlashCommands(slashQuery).filter((c) => !c.clientAction),
     [slashQuery],
   );
   const slashOpen = slashQuery !== null && slashCommands.length > 0;
@@ -845,6 +862,7 @@ export function MessageComposer({
     isPinned,
     selectedEnv,
     selectedAgentId,
+    selectedBranch,
   });
   React.useEffect(() => {
     codeStateRef.current = {
@@ -854,6 +872,7 @@ export function MessageComposer({
       isPinned,
       selectedEnv,
       selectedAgentId,
+      selectedBranch,
     };
   }, [
     codeMode,
@@ -862,6 +881,7 @@ export function MessageComposer({
     isPinned,
     selectedEnv,
     selectedAgentId,
+    selectedBranch,
   ]);
 
   // Stable ref for the callback so the textarea onChange handler never
@@ -940,18 +960,8 @@ export function MessageComposer({
       const ta = formRef.current?.elements.namedItem(
         "content",
       ) as HTMLTextAreaElement | null;
-      if (command.clientAction === "pin") {
-        if (ta) {
-          ta.value = "";
-          setInputEmpty(true);
-          if (inputHasContentRef.current) {
-            inputHasContentRef.current = false;
-            onInputHasContentChangeRef.current?.(false);
-          }
-        }
-        togglePin();
-        return;
-      }
+      // No `clientAction` branch: those commands are filtered out of this
+      // menu (see `slashCommands` above) — the app has no per-turn pinning.
       if (ta) {
         ta.value = `/${command.name} `;
         ta.focus();
@@ -962,7 +972,7 @@ export function MessageComposer({
         }
       }
     },
-    [togglePin],
+    [],
   );
 
   // Stage 1 → 2: the user picked a reference type. Reset the typed filter back
@@ -1464,7 +1474,7 @@ export function MessageComposer({
       fd.set("activeServerIds", JSON.stringify([...activeServerIds]));
     }
     fd.set("budget", JSON.stringify(budgetPayload(modelSnapshot)));
-    const code = codePayload(codeMode, selectedRepo, selectedEnv);
+    const code = codePayload(codeMode, selectedRepo, selectedEnv, selectedBranch);
     if (code) fd.set("code", JSON.stringify(code));
     if (selectedAgentId) fd.set("agentId", selectedAgentId);
     // Pinned chat context — only when pinned and NOT in code mode (code mode
@@ -1634,6 +1644,7 @@ export function MessageComposer({
         currentCode.codeMode,
         currentCode.selectedRepo,
         currentCode.selectedEnv,
+        currentCode.selectedBranch,
       );
       if (code) fd.set("code", JSON.stringify(code));
       if (currentCode.selectedAgentId)
@@ -1845,13 +1856,6 @@ export function MessageComposer({
   // guard can't run — degrade to a text-only composer rather than uploading
   // with a malformed request.
   const canAttach = Boolean(orgSlug) && Boolean(workspaceSlug);
-  const hasRepos = (availableRepos?.length ?? 0) > 0;
-  const hasEnvironments = (availableEnvironments?.length ?? 0) > 0;
-  // The compact context controls show whenever there's a repo or environment
-  // to choose from — in both pin mode and code mode (they share the selection
-  // state and render as one small footer row).
-  const showContextControls = hasRepos || hasEnvironments;
-
   // Shared between the desktop toolbar row and the mobile overflow sheet —
   // exactly one of the two renders at a time (see `isMobile` branches below).
   const effortSelect = (
@@ -2094,32 +2098,24 @@ export function MessageComposer({
           </p>
         ) : null}
 
-        {/* Compact context controls — a single small row UNDER the textarea:
-          org/repository on the bottom-left, environment (+ the open-PR chip and
-          pin toggle) on the bottom-right. Replaces the two former heavy bars
-          (code-mode toolbar / pin context bar) that sat ABOVE the composer and
-          each duplicated the repo/env selectors. Code mode drops the pin (both
-          selections are required to send anyway); pin mode keeps it. Hidden
-          while collapsed, and hidden entirely in the v2 condensed row (mobile
-          or desktop — neither has room for it; Code/pin selection moves into
-          the session settings surface via the cog / rail panel). */}
-        {!v2Condensed && !collapsed && (showContextControls || codeSessionPr) ? (
-          <ComposerContextControls
-            repositories={availableRepos ?? []}
-            environments={availableEnvironments ?? []}
-            selectedRepoKey={selectedRepoKey}
-            selectedEnvId={selectedEnvId}
-            onSelectRepo={(repo) => handleSelectRepoKey(repo.key)}
-            onSelectEnv={handleSelectEnvId}
-            mode={codeMode ? "code" : "pin"}
-            isPinned={isPinned}
-            onTogglePin={togglePin}
-            pr={codeSessionPr ?? null}
-            orgSlug={orgSlug}
-            workspaceSlug={workspaceSlug}
-            disabled={pending || disabled}
-            locked={selectionLocked}
-          />
+        {/* NO repo / environment / pin selectors under the prompt. The chat
+          context is chosen ONCE, up front, when the agent is picked (a code
+          agent's setup step asks for org → repository → branch), and is then
+          immutable for the life of the conversation — so a per-turn selector
+          here would imply an editability the model doesn't have. The current
+          repository/branch is shown read-only behind the settings cog instead
+          (see SessionSettings / the composer options sheet). Only the open-PR
+          status chip remains: it is read-only output, not a control. */}
+        {/* The chip's CI fetch is org/workspace-scoped, so it only renders when
+          both slugs are known (the embedded panel omits them). */}
+        {!v2Condensed && !collapsed && codeSessionPr && orgSlug && workspaceSlug ? (
+          <div className="flex items-center justify-end px-1 pb-1">
+            <ComposerPrStatusChip
+              pr={codeSessionPr}
+              orgSlug={orgSlug}
+              workspaceSlug={workspaceSlug}
+            />
+          </div>
         ) : null}
 
         {/* v2 condensed row: ONE row replaces the entire toolbar below — plus
@@ -2251,8 +2247,11 @@ export function MessageComposer({
                         selectedAgentId={selectedAgentId}
                         selectedRepoKey={selectedRepoKey}
                         selectedEnvId={selectedEnvId}
+                        selectedBranch={selectedBranch}
                         onApply={applyAgentSelection}
                         locked={selectionLocked}
+                        orgSlug={orgSlug}
+                        workspaceSlug={workspaceSlug}
                       />
                       {showEffortControl && effortSelect}
                     </>
@@ -2439,6 +2438,27 @@ export function MessageComposer({
               </SheetDescription>
             </SheetHeader>
             <SheetPanel className="gap-1">
+              {/* Read-only code context: the repository (and branch, when one
+                was chosen over the repo's default) this chat is grounded in. It
+                is NOT editable here — the target is chosen once with the agent
+                and is immutable for the conversation — so this row exists to
+                answer "what am I on?", which used to require the composer's
+                selector. Branch comes from the SELECTION store, not the session
+                store: this sheet only renders when the session store is absent
+                (see the `!v2Mobile` gate below), so reading the session here
+                could only ever yield null. */}
+              {selectedRepo ? (
+                <div
+                  className="flex min-h-11 items-center justify-between gap-2"
+                  data-testid="composer-options-code-context"
+                >
+                  <span className="text-sm">Repository</span>
+                  <span className="truncate text-sm text-muted-foreground">
+                    {selectedRepo.owner}/{selectedRepo.name}
+                    {selectedBranch ? ` · ${selectedBranch}` : ""}
+                  </span>
+                </div>
+              ) : null}
               <div className="flex min-h-11 items-center justify-between gap-2">
                 <span className="text-sm">Model</span>
                 <ModelPicker

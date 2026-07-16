@@ -122,12 +122,11 @@ vi.mock("./message-composer", () => ({
 
 // ── UI/component stubs ───────────────────────────────────────────────────────
 vi.mock("./message-tree", () => ({ MessageTree: () => null }));
-// Stub the empty-state gallery: its real import chain (agent-picker-panel →
-// motion/react, lucide-react, @oxagen/ui) takes ~19s to load under vitest,
-// which pushes the file's first test past the 20s timeout.
-vi.mock("./agent-picker/agent-gallery", () => ({
-  AgentGallery: () => <div data-testid="agent-gallery" />,
-}));
+// The empty state deliberately renders neither the agent gallery nor starter
+// prompt chips (a new conversation is just a welcome line + a focused
+// composer), so there is no gallery to stub here. SuggestedPromptChips is
+// still mounted — as the single dismissable next-step pill AFTER the first
+// message — and stays stubbed.
 vi.mock("./suggested-prompt-chips", () => ({ SuggestedPromptChips: () => null }));
 vi.mock("./coding-trace-panel", () => ({
   // The AgentActivityRail's ProgressCard renders CodingTraceStages (driven by
@@ -242,6 +241,7 @@ function makeServer(overrides?: Partial<McpServerSummary>): McpServerSummary {
 
 async function renderClient(props: Partial<{
   availableMcpServers: McpServerSummary[];
+  userFirstName: string | null;
 }> = {}) {
   const { ChatShellClient } = await import("./chat-shell-client");
   return render(
@@ -285,6 +285,64 @@ async function renderMobileChrome(props: { chatUxV2?: boolean } = {}) {
 }
 
 // ── Tests ────────────────────────────────────────────────────────────────────
+
+describe("ChatShellClient — new-conversation empty state", () => {
+  it("is a quiet welcome — no agent gallery, no starter prompt chips", async () => {
+    await renderClient();
+    const empty = screen.getByTestId("chat-empty-state");
+    expect(empty).toBeInTheDocument();
+    expect(empty).toHaveTextContent("What would you like to do?");
+    // Choosing an agent (and, for a code agent, its org → repo → branch) is the
+    // composer's agent picker's job now — the empty state must not compete.
+    expect(screen.queryByTestId("agent-gallery")).not.toBeInTheDocument();
+    // The composer is still there, and the cursor is already in it.
+    expect(screen.getByTestId("message-composer")).toBeInTheDocument();
+  });
+
+  it("greets the user by first name when one is known", async () => {
+    await renderClient({ userFirstName: "Mac" });
+    expect(screen.getByTestId("chat-empty-state")).toHaveTextContent(
+      "Welcome, Mac!",
+    );
+  });
+
+  it("falls back to a plain welcome when no first name is known", async () => {
+    await renderClient({ userFirstName: null });
+    const empty = screen.getByTestId("chat-empty-state");
+    expect(empty).toHaveTextContent("Welcome!");
+    // Not "Welcome, null!" / "Welcome, !" — the name is dropped entirely.
+    expect(empty.textContent).not.toMatch(/Welcome,/);
+  });
+
+  it("omits the empty state once the conversation has messages", async () => {
+    const { ChatShellClient } = await import("./chat-shell-client");
+    render(
+      <ChatShellClient
+        conversationId="conv_1"
+        conversationPublicId="conv_1"
+        activeLeafMessageId="m1"
+        messages={[
+          {
+            id: "m1",
+            parentId: null,
+            role: "user",
+            content: "hi",
+            createdAt: new Date().toISOString(),
+          } as never,
+        ]}
+        sendAction={noop}
+        resolveApprovalAction={async () => ({ ok: true })}
+        resolveConsentAction={async () => ({ ok: true })}
+        resolvePlanAction={async () => ({ ok: true })}
+        orgSlug="test-org"
+        workspaceSlug="test-ws"
+        modelConfig={modelConfig}
+        userFirstName="Mac"
+      />,
+    );
+    expect(screen.queryByTestId("chat-empty-state")).not.toBeInTheDocument();
+  });
+});
 
 describe("ChatShellClient — availableMcpServers prop forwarding", () => {
   beforeEach(() => { capturedComposerProps = {}; });

@@ -37,6 +37,7 @@ function SelectionProbe() {
         {JSON.stringify({
           agent: sel.selectedAgentId,
           repo: sel.selectedRepoKey,
+          branch: sel.selectedBranch,
           env: sel.selectedEnvId,
           locked: sel.selectionLocked,
         })}
@@ -54,6 +55,30 @@ function SelectionProbe() {
         }
       >
         apply
+      </button>
+      <button
+        onClick={() =>
+          sel.applyAgentSelection({
+            agentId: "agt_code",
+            repoKey: "con_1::acme/platform",
+            branch: "release/1.x",
+            envId: "env_1",
+          })
+        }
+      >
+        apply-with-branch
+      </button>
+      <button
+        onClick={() =>
+          sel.applyAgentSelection({
+            agentId: "agt_code",
+            repoKey: "con_1::acme/platform",
+            branch: null,
+            envId: "env_1",
+          })
+        }
+      >
+        apply-default-branch
       </button>
     </div>
   );
@@ -133,6 +158,42 @@ describe("selection bridge (flag on)", () => {
       agent: string;
     };
     expect(sel.agent).toBe("agt_x");
+  });
+
+  it("a branch chosen in the agent picker lands in the unified store", () => {
+    providerWrap(<SelectionProbe />);
+    fireEvent.click(screen.getByText("apply-with-branch"));
+    const s = sessionState();
+    expect(s.repoKey).toBe("con_1::acme/platform");
+    // The whole code target arrives in ONE patch, so applySessionPatch's
+    // repo→branch cascade must not wipe the branch the user just picked.
+    expect(s.branch).toBe("release/1.x");
+    expect(s.envId).toBe("env_1");
+    const sel = JSON.parse(screen.getByTestId("sel").textContent ?? "{}") as {
+      branch: string;
+    };
+    expect(sel.branch).toBe("release/1.x");
+  });
+
+  it("an explicit branch: null applies the repository default", () => {
+    providerWrap(<SelectionProbe />);
+    fireEvent.click(screen.getByText("apply-with-branch"));
+    expect(sessionState().branch).toBe("release/1.x");
+    // The picker always sends the whole target, so keeping "Repository
+    // default" arrives as an explicit null — it must clear the branch even
+    // though the repo itself didn't change (no cascade fires here).
+    fireEvent.click(screen.getByText("apply-default-branch"));
+    expect(sessionState().branch).toBeNull();
+  });
+
+  it("an apply that omits branch leaves the branch untouched", () => {
+    providerWrap(<SelectionProbe />);
+    fireEvent.click(screen.getByText("apply-with-branch"));
+    // `branch: undefined` is documented as "leave unchanged" — the same repo
+    // re-applied without a branch must not silently drop the user's choice.
+    fireEvent.click(screen.getByText("apply"));
+    expect(sessionState().repoKey).toBe("con_1::acme/platform");
+    expect(sessionState().branch).toBe("release/1.x");
   });
 });
 
