@@ -85,7 +85,7 @@ export default function HomePage(): ReactNode {
             <div className="mt-8 flex flex-wrap items-center gap-3">
               <Link
                 href="/docs/getting-started"
-                className="lp-grad-surface inline-flex h-11 items-center rounded-lg px-6 text-sm font-semibold text-white shadow-sm transition-transform hover:scale-[1.02] active:scale-100"
+                className="lp-grad-surface inline-flex h-11 items-center rounded-lg px-6 text-sm font-semibold text-ink-dark shadow-sm transition-transform hover:scale-[1.02] active:scale-100"
               >
                 Get started
               </Link>
@@ -222,7 +222,7 @@ export default function HomePage(): ReactNode {
           <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
             <Link
               href="/docs/getting-started"
-              className="lp-grad-surface inline-flex h-11 items-center rounded-lg px-6 text-sm font-semibold text-white shadow-sm transition-transform hover:scale-[1.02] active:scale-100"
+              className="lp-grad-surface inline-flex h-11 items-center rounded-lg px-6 text-sm font-semibold text-ink-dark shadow-sm transition-transform hover:scale-[1.02] active:scale-100"
             >
               Get started
             </Link>
