@@ -133,8 +133,11 @@ describe("runCodingAgent – stream-stall watchdog", () => {
   it("DEFERS the watchdog while a tool executes: a long tool call does NOT false-stall", async () => {
     // Tool execution blocks the fullStream read: the SDK emits tool-call, then
     // the next read stays pending for the WHOLE tool run, then tool-result. With
-    // streamStallMs=50 and a 130ms tool, the watchdog fires twice mid-run but
-    // must DEFER (a tool is in flight) rather than aborting + retrying.
+    // streamStallMs=50 and a 400ms tool, the watchdog fires several times mid-run
+    // but must DEFER (a tool is in flight) rather than aborting + retrying. The
+    // wide 350ms margin (vs. the 50ms window) keeps this deterministic under CI
+    // load — a narrow margin lets timer starvation slip the stall past the tool's
+    // completion and spuriously retry.
     let streamCalls = 0;
     const ai: AgentAi = {
       stream() {
@@ -147,8 +150,9 @@ describe("runCodingAgent – stream-stall watchdog", () => {
               toolName: "bash",
               input: { command: "pnpm test" },
             };
-            // The "tool" runs 130ms — far past the 50ms stall window.
-            await new Promise((r) => setTimeout(r, 130));
+            // The "tool" runs 400ms — far past the 50ms stall window, so the
+            // watchdog fires repeatedly mid-run and every firing must defer.
+            await new Promise((r) => setTimeout(r, 400));
             yield {
               type: "tool-result",
               toolCallId: "t1",
