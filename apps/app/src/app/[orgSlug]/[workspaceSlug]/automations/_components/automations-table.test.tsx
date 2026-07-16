@@ -174,6 +174,24 @@ vi.mock("./trigger-now-dialog", () => ({
     ) : null,
 }));
 
+// new-automation-button owns the create dialog; the table only wires it into
+// the empty state. Stub it so this file asserts the wiring (button present when
+// canManage) without pulling in the full create-dialog subtree — that's covered
+// by new-automation-button.test.tsx.
+vi.mock("./new-automation-button", () => ({
+  NewAutomationButton: ({
+    orgSlug,
+    workspaceSlug,
+  }: {
+    orgSlug: string;
+    workspaceSlug: string;
+  }) => (
+    <button type="button" data-testid="new-automation" data-org={orgSlug} data-ws={workspaceSlug}>
+      New automation
+    </button>
+  ),
+}));
+
 import { AutomationsTable } from "./automations-table";
 
 type Row = AutomationListOutput[number];
@@ -211,6 +229,17 @@ describe("AutomationsTable — empty state", () => {
     render(<AutomationsTable automations={[]} canManage={true} {...BASE_PROPS} />);
     expect(screen.getByText("No automations yet")).toBeTruthy();
     expect(screen.queryByTestId("automations-table")).toBeNull();
+  });
+
+  it("offers a create action inside the empty state when the user can manage", () => {
+    render(<AutomationsTable automations={[]} canManage={true} {...BASE_PROPS} />);
+    expect(screen.getByTestId("new-automation")).toBeTruthy();
+  });
+
+  it("omits the create action from the empty state for read-only members", () => {
+    render(<AutomationsTable automations={[]} canManage={false} {...BASE_PROPS} />);
+    expect(screen.getByText("No automations yet")).toBeTruthy();
+    expect(screen.queryByTestId("new-automation")).toBeNull();
   });
 });
 
