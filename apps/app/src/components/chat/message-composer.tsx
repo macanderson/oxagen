@@ -27,7 +27,7 @@ import {
   SheetDescription,
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
-import { useIsMobile } from "@/hooks/use-media-query";
+import { useIsMobile, MOBILE_BREAKPOINT_QUERY } from "@/hooks/use-media-query";
 import { supportsReasoning, getModel } from "@oxagen/ai/catalog";
 import type { ResolvedTierCatalog, EffortLevel } from "@oxagen/ai/catalog";
 import {
@@ -308,7 +308,6 @@ function persistComposerCollapsed(collapsed: boolean) {
  */
 function CondensedComposerRow({
   testId,
-  autoFocus,
   canAttach,
   pending,
   disabled,
@@ -328,10 +327,6 @@ function CondensedComposerRow({
   sendAriaLabel,
 }: {
   testId: string;
-  /** Land the cursor in the prompt on mount. Desktop only — see the call
-   *  sites: autofocusing on a phone opens the keyboard immediately and eats
-   *  the conversation viewport. */
-  autoFocus: boolean;
   canAttach: boolean;
   pending: boolean;
   disabled: boolean;
@@ -380,7 +375,6 @@ function CondensedComposerRow({
         name="content"
         placeholder={placeholder}
         rows={1}
-        autoFocus={autoFocus}
         disabled={pending || disabled}
         onKeyDown={onKeyDown}
         onChange={onChange}
@@ -614,6 +608,31 @@ export function MessageComposer({
   const codeGateBlocked = codeMode && (!selectedRepo || !selectedEnvId);
 
   const formRef = React.useRef<HTMLFormElement>(null);
+
+  // Land the cursor in the prompt on mount so a new conversation is type-ready
+  // with no click (the empty state is just a welcome line) — DESKTOP ONLY: on a
+  // phone this pops the on-screen keyboard on load and eats the conversation
+  // viewport.
+  //
+  // Deliberately NOT React's `autoFocus`: that fires during the mount commit,
+  // and `useIsMobile()` is SSR-safe — it reports `false` on the hydration render
+  // and only flips after. `autoFocus={!isMobile}` therefore focused on a phone
+  // too (verified in a real 390px browser). Reading matchMedia here gives the
+  // true viewport at effect time.
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    // Only SKIP on an affirmative mobile match: every real browser has
+    // matchMedia, so its absence means a non-browser host (jsdom), not a phone —
+    // suppressing focus there would be the wrong default.
+    const isPhoneViewport =
+      typeof window.matchMedia === "function" &&
+      window.matchMedia(MOBILE_BREAKPOINT_QUERY).matches;
+    if (isPhoneViewport) return;
+    const ta = formRef.current?.elements.namedItem(
+      "content",
+    ) as HTMLTextAreaElement | null;
+    ta?.focus();
+  }, []);
 
   // ── Responsive layout (mobile ≤767px) ──────────────────────────────────────
   const isMobile = useIsMobile();
@@ -1978,11 +1997,6 @@ export function MessageComposer({
               required
               placeholder={placeholder}
               rows={isMobile ? 2 : 3}
-              // Land the cursor in the prompt on mount so a new conversation is
-              // type-ready with no click (the empty state is just a welcome
-              // line). Desktop only: on a phone this pops the keyboard on load
-              // and eats the conversation viewport.
-              autoFocus={!isMobile}
               disabled={pending || disabled}
               onKeyDown={onKeyDown}
               onChange={handleTextareaChange}
@@ -2133,7 +2147,6 @@ export function MessageComposer({
             ) : null}
             <CondensedComposerRow
               testId={v2Mobile ? "composer-v2-mobile-row" : "composer-v2-desktop-row"}
-              autoFocus={!isMobile}
               canAttach={canAttach}
               pending={pending}
               disabled={disabled}

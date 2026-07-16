@@ -53,6 +53,10 @@ const { mockViewport } = vi.hoisted(() => ({
 vi.mock("@/hooks/use-media-query", () => ({
   useIsMobile: () => mockViewport.isMobile,
   useMediaQuery: () => mockViewport.isMobile,
+  // The composer imports this constant to read matchMedia directly for
+  // its desktop-only focus; a full-replacement mock must re-export it or
+  // the import is undefined at runtime.
+  MOBILE_BREAKPOINT_QUERY: "(max-width: 767px)",
 }));
 
 // Sheet shim — renders children inline when open (the real component portals
@@ -447,7 +451,21 @@ describe("MessageComposer — rendering", () => {
   });
 
   it("does NOT autofocus on mobile — the keyboard would eat the conversation viewport", async () => {
+    // The composer reads matchMedia DIRECTLY for this (not the isMobile hook):
+    // useIsMobile is SSR-safe and reports false on the hydration render, so a
+    // mount-time autoFocus fired on phones too. Stub the real signal, or this
+    // test passes while the app misbehaves — which is exactly what happened.
     mockViewport.isMobile = true;
+    vi.stubGlobal(
+      "matchMedia",
+      (query: string) =>
+        ({
+          matches: query === "(max-width: 767px)",
+          media: query,
+          addEventListener: vi.fn(),
+          removeEventListener: vi.fn(),
+        }) as unknown as MediaQueryList,
+    );
     const { MessageComposer } = await import("./message-composer");
     render(
       <MessageComposer
@@ -458,6 +476,7 @@ describe("MessageComposer — rendering", () => {
       />,
     );
     expect(screen.getByPlaceholderText("Send a message…")).not.toHaveFocus();
+    vi.unstubAllGlobals();
   });
 
   it("renders send button with 'Send message' label", async () => {

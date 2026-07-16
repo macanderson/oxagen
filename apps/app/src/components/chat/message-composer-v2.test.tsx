@@ -54,6 +54,10 @@ const { mockViewport } = vi.hoisted(() => ({
 vi.mock("@/hooks/use-media-query", () => ({
   useIsMobile: () => mockViewport.isMobile,
   useMediaQuery: () => mockViewport.isMobile,
+  // The composer imports this constant to read matchMedia directly for
+  // its desktop-only focus; a full-replacement mock must re-export it or
+  // the import is undefined at runtime.
+  MOBILE_BREAKPOINT_QUERY: "(max-width: 767px)",
 }));
 
 afterEach(() => {
