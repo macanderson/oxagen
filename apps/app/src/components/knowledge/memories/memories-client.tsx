@@ -1986,48 +1986,55 @@ export function MemoriesClient({
         />
       )}
 
-      {/* Stats row — per-class counts, the primary epistemic axis */}
-      <div className="grid grid-cols-3 gap-2" data-testid="memory-stats-row">
-        {ALL_CLASSES.map((cls) => {
-          const cfg = CLASS_CONFIG[cls];
-          const Icon = cfg.icon;
-          return (
-            <div
-              key={cls}
-              className="flex items-center gap-2 rounded-lg border border-border/50 px-3 py-2"
-            >
-              <Icon
-                className={`h-3.5 w-3.5 flex-shrink-0 ${cfg.color.split(" ").slice(1).join(" ")}`}
-              />
-              <div className="flex flex-col min-w-0">
-                <span className="text-sm font-semibold tabular-nums text-foreground">
-                  {classCounts[cls]}
-                </span>
-                <span className="text-[10px] text-muted-foreground truncate">
-                  {cfg.label}
-                </span>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+      {/* Stats + filters — only meaningful once at least one memory exists, so
+          they stay hidden on an empty workspace (the empty state then sits
+          directly under the header, not below a full but inert control bar). */}
+      {records.length > 0 && (
+        <>
+          {/* Stats row — per-class counts, the primary epistemic axis */}
+          <div className="grid grid-cols-3 gap-2" data-testid="memory-stats-row">
+            {ALL_CLASSES.map((cls) => {
+              const cfg = CLASS_CONFIG[cls];
+              const Icon = cfg.icon;
+              return (
+                <div
+                  key={cls}
+                  className="flex items-center gap-2 rounded-lg border border-border/50 px-3 py-2"
+                >
+                  <Icon
+                    className={`h-3.5 w-3.5 flex-shrink-0 ${cfg.color.split(" ").slice(1).join(" ")}`}
+                  />
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-sm font-semibold tabular-nums text-foreground">
+                      {classCounts[cls]}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground truncate">
+                      {cfg.label}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
 
-      {/* Filters */}
-      <FilterBar
-        availableKinds={availableKinds}
-        activeKinds={activeKinds}
-        toggleKind={toggleKind}
-        activeClasses={activeClasses}
-        toggleClass={toggleClass}
-        searchQuery={searchQuery}
-        setSearchQuery={setSearchQuery}
-        minConfidence={minConfidence}
-        setMinConfidence={setMinConfidence}
-        minCitations={minCitations}
-        setMinCitations={setMinCitations}
-        sortBy={sortBy}
-        setSortBy={setSortBy}
-      />
+          {/* Filters */}
+          <FilterBar
+            availableKinds={availableKinds}
+            activeKinds={activeKinds}
+            toggleKind={toggleKind}
+            activeClasses={activeClasses}
+            toggleClass={toggleClass}
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
+            minConfidence={minConfidence}
+            setMinConfidence={setMinConfidence}
+            minCitations={minCitations}
+            setMinCitations={setMinCitations}
+            sortBy={sortBy}
+            setSortBy={setSortBy}
+          />
+        </>
+      )}
 
       {/* Record list */}
       {filtered.length > 0 ? (
