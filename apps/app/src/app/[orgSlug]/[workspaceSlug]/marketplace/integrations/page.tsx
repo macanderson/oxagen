@@ -111,7 +111,11 @@ export default async function MarketplaceIntegrationsPage({
                 </CardDescription>
               </CardHeader>
               <CardFooter className="flex flex-col gap-2">
+                {/* Outline, not filled: a catalog of 9+ connectors would
+                    otherwise be a wall of equal-weight primaries. Each card's
+                    Connect is a peer action, so it reads as secondary. */}
                 <Button
+                  variant="outline"
                   size="sm"
                   className="w-full"
                   render={
