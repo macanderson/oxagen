@@ -231,13 +231,17 @@ function codePayload(
   codeMode: boolean,
   repo: RepoOption | null,
   environment: EnvironmentOption | null,
+  selectedBranch: string | null,
 ): CodeModePayload | null {
   if (!codeMode || !repo || !environment) return null;
   return {
     connectionId: repo.connectionId,
     owner: repo.owner,
     name: repo.name,
-    defaultBranch: repo.defaultBranch,
+    // The branch the sandbox checks out / the agent context reports. Honour
+    // the user's explicit branch pick (SELECTION store); `null` means "the
+    // repository's default branch", so fall back to it.
+    defaultBranch: selectedBranch ?? repo.defaultBranch,
     environmentId: environment.id,
     environmentName: environment.name,
     sandboxSessionId: null,
@@ -858,6 +862,7 @@ export function MessageComposer({
     isPinned,
     selectedEnv,
     selectedAgentId,
+    selectedBranch,
   });
   React.useEffect(() => {
     codeStateRef.current = {
@@ -867,6 +872,7 @@ export function MessageComposer({
       isPinned,
       selectedEnv,
       selectedAgentId,
+      selectedBranch,
     };
   }, [
     codeMode,
@@ -875,6 +881,7 @@ export function MessageComposer({
     isPinned,
     selectedEnv,
     selectedAgentId,
+    selectedBranch,
   ]);
 
   // Stable ref for the callback so the textarea onChange handler never
@@ -1467,7 +1474,7 @@ export function MessageComposer({
       fd.set("activeServerIds", JSON.stringify([...activeServerIds]));
     }
     fd.set("budget", JSON.stringify(budgetPayload(modelSnapshot)));
-    const code = codePayload(codeMode, selectedRepo, selectedEnv);
+    const code = codePayload(codeMode, selectedRepo, selectedEnv, selectedBranch);
     if (code) fd.set("code", JSON.stringify(code));
     if (selectedAgentId) fd.set("agentId", selectedAgentId);
     // Pinned chat context — only when pinned and NOT in code mode (code mode
@@ -1637,6 +1644,7 @@ export function MessageComposer({
         currentCode.codeMode,
         currentCode.selectedRepo,
         currentCode.selectedEnv,
+        currentCode.selectedBranch,
       );
       if (code) fd.set("code", JSON.stringify(code));
       if (currentCode.selectedAgentId)
