@@ -1,14 +1,17 @@
 # CLAUDE.md
 
-## Mission — the Stripe for agents
+## Mission
 
-**Oxagen is the metered, governed, graph-grounded control plane for teams that build and resell AI agents — the neutral Stripe-for-agents.** The full positioning, market gaps, and drift tests live in `docs/VISION.md`. It is the north star for every feature decision.
+Oxagen is a metered, governed, graph-grounded control plane for teams that build and resell AI agents. The full positioning and drift tests live in `docs/VISION.md`, the reference for feature direction. The platform centers on three things:
 
-- **The wedge (own this intersection):** (a) capability-parity typed contracts that make every MCP tool inherently governed and un-poisonable — the one enforced object binding identity → knowledge scope → permitted action → commercial terms → verified outcome → audit record (the accountability chain nobody else bundles); (b) the Neo4j graph + ontology that grounds agent answers in cited, time-aware context; (c) the ClickHouse→Stripe loop that turns observed usage directly into customer billing.
-- **Moats:** knowledge graph = accuracy moat; vendor-neutral BYOK = trust moat.
-- **Do not fight on the front line of:** connector breadth (Glean), standalone evals (Braintrust), framework mindshare (LangGraph). Those are fast-follows after the wedge is won, never the lead.
-- **Agent duty:** when recommending, designing, or prioritizing features, steer toward this future. Prefer work that deepens metering→billing, contract governance, graph grounding, vendor neutrality, or fleet lineage. If a request drifts from the wedge, say so explicitly and propose the vision-aligned alternative alongside doing what was asked.
-- **CI enforcement:** the Vision Gate (`.github/workflows/vision-gate.yml` → `tools/scripts/vision-gate.mjs`, `pnpm check:vision`) LLM-judges every PR diff against `docs/VISION.md` and posts an advisory verdict (advances / neutral / drifts). A `drifts` verdict is a signal to justify the exception in the PR description or redirect the work — routine maintenance, fixes, tests, and tooling are neutral by definition.
+- **Contract governance:** capability-parity typed contracts binding identity → knowledge scope → permitted action → commercial terms → verified outcome → audit record.
+- **Graph grounding:** a Neo4j graph + ontology grounding agent answers in cited, time-aware context.
+- **Metering → billing:** a ClickHouse→Stripe loop turning observed usage into customer billing.
+
+Vendor-neutral BYOK (own model keys, own Neo4j endpoint) is a design constraint, not an add-on.
+
+- **When recommending or prioritizing features,** prefer work that deepens metering→billing, contract governance, graph grounding, vendor neutrality, or fleet lineage. If a request diverges from that direction, say so and propose the aligned alternative alongside doing what was asked.
+- **CI enforcement:** the Vision Gate (`.github/workflows/vision-gate.yml` → `tools/scripts/vision-gate.mjs`, `pnpm check:vision`) LLM-judges every PR diff against `docs/VISION.md` and posts an advisory verdict (advances / neutral / drifts). A `drifts` verdict signals to justify the exception in the PR description or redirect the work — routine maintenance, fixes, tests, and tooling are neutral by definition.
 
 ## Prime directive — fix every issue you encounter
 

@@ -1,8 +1,8 @@
 # AGENTS.md
 
-**Mission: Oxagen is the metered, governed, graph-grounded control plane for teams that build and resell AI agents — the neutral Stripe-for-agents.** [`docs/VISION.md`](docs/VISION.md) is the north star for every feature decision; CI's Vision Gate (`pnpm check:vision`) judges every PR diff against it.
+Oxagen is a metered, governed, graph-grounded control plane for teams that build and resell AI agents. [`docs/VISION.md`](docs/VISION.md) is the reference for feature direction; CI's Vision Gate (`pnpm check:vision`) judges every PR diff against it.
 
-Enterprise AI platform. Monorepo. Built around one primitive: a **capability kernel** that every surface (API, MCP, web app, CLI) calls through a single `invoke()` function — which is where governance (IAM + entitlement), metering (ClickHouse→Stripe), and lineage are enforced.
+Monorepo built around one primitive: a **capability kernel** that every surface (API, MCP, web app, CLI) calls through a single `invoke()` function — where governance (IAM + entitlement), metering (ClickHouse→Stripe), and lineage are enforced.
 
 ## Layout
 

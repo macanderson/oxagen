@@ -1,17 +1,6 @@
-```text
-═══════════════════════════════════════════════════════════════════════
-        ██████╗  ██╗  ██╗ █████╗  ██████╗ ███████╗███╗   ██╗
-        ██╔═══██╗╚██╗██╔╝██╔══██╗██╔════╝ ██╔════╝████╗  ██║
-        ██║   ██║ ╚███╔╝ ███████║██║  ███╗█████╗  ██╔██╗ ██║
-        ██║   ██║ ██╔██╗ ██╔══██║██║   ██║██╔══╝  ██║╚██╗██║
-        ╚██████╔╝██╔╝ ██╗██║  ██║╚██████╔╝███████╗██║ ╚████║
-        ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝  ╚═══╝
-═══════════════════════════════════════════════════════════════════════
-```
-
 # Oxagen Platform
 
-> **The metered, governed, graph-grounded control plane for teams that build and resell AI agents — the neutral Stripe for agents.**
+A metered, governed, graph-grounded control plane for teams that build and resell AI agents.
 
 <p align="center">
   <a href="https://github.com/oxageninc/oxagen-platform/actions/workflows/pipeline.yml">
@@ -33,39 +22,30 @@
 
 ---
 
-## What Is Oxagen?
+## What It Does
 
-Companies that build and resell AI agents have no infrastructure layer of their own. Observability tools show them their spend; nothing lets them **meter what their agents actually did and bill their customers for it**. Agent frameworks give them orchestration; nothing makes every tool call **governed, typed, and un-poisonable by construction**. RAG stacks give them retrieval; nothing grounds agent answers in a **cited, time-aware knowledge graph** they can defend to an enterprise buyer.
+Oxagen combines three concerns that agent frameworks, observability tools, and RAG stacks each handle separately:
 
-Oxagen is that layer. It owns the intersection no incumbent bundles:
+1. **Governance** — every capability is a typed contract with IAM and entitlement enforcement, exposed with parity across API, MCP, CLI, and UI. There is no ungoverned tool surface; MCP tools are schema-enforced and metered.
+2. **Grounding** — a Neo4j knowledge graph plus ontology grounds agent answers in cited, time-aware context.
+3. **Monetization** — a ClickHouse→Stripe loop turns observed agent usage into customer billing, so teams reselling agents can meter usage and invoice their own customers.
 
-1. **Governance** — every capability on the platform is a typed contract with IAM and entitlement enforcement, exposed with parity across API, MCP, CLI, and UI. There is no ungoverned tool surface; MCP tools are inherently schema-enforced and metered, which is a structurally stronger answer to tool poisoning than gateway inspection.
-2. **Grounding** — a Neo4j knowledge graph plus ontology grounds agent answers in cited, time-aware context. Accuracy is the product; citations are the proof.
-3. **Monetization** — a ClickHouse→Stripe loop turns observed agent usage directly into customer billing. Not a spend dashboard: revenue infrastructure for teams reselling AI.
+The platform is vendor-neutral: bring your own model keys and your own Neo4j endpoint.
 
-The knowledge graph is the **accuracy moat**. Vendor-neutral BYOK — your model keys, your Neo4j endpoint, no cloud gravity — is the **trust moat**.
-
-The full positioning, market analysis, and drift tests live in [`docs/VISION.md`](docs/VISION.md). It is the north star for every feature decision, and CI enforces it: the **Vision Gate** ([`vision-gate.yml`](.github/workflows/vision-gate.yml), `pnpm check:vision`) LLM-judges every PR diff against the vision and posts an advisory verdict.
+The full positioning and drift tests live in [`docs/VISION.md`](docs/VISION.md). CI enforces it via the **Vision Gate** ([`vision-gate.yml`](.github/workflows/vision-gate.yml), `pnpm check:vision`), which LLM-judges every PR diff against the vision and posts an advisory verdict.
 
 ```mermaid
 graph LR
-    A["🤖 Agent / customer action"] --> B["invoke()<br/>capability kernel"]
-    B --> C["Typed contract<br/>Zod schema"]
+    A["Agent / customer action"] --> B["invoke() capability kernel"]
+    B --> C["Typed contract (Zod schema)"]
     C --> D["IAM gate"]
     D --> E["Entitlement gate"]
     E --> F["Billing admission"]
     F --> G["Handler"]
-    G --> H["📈 ClickHouse<br/>usage events"]
-    H --> I["💳 Stripe<br/>meters → invoices"]
-    G --> J["📊 Neo4j<br/>lineage + citations"]
-
-    style B fill:#00d4ff,color:#000
-    style H fill:#16213e,color:#fff
-    style I fill:#635bff,color:#fff
-    style J fill:#16213e,color:#fff
+    G --> H["ClickHouse usage events"]
+    H --> I["Stripe meters → invoices"]
+    G --> J["Neo4j lineage + citations"]
 ```
-
-**Every action is governed. Every token is metered. Every answer is cited. Every step is billable.**
 
 ---
 
@@ -73,41 +53,38 @@ graph LR
 
 ### The capability kernel
 
-Every feature on the platform is a **capability**: a dot-notation name (`chat.message.send`, `workflow.run`, `semantic.edge.suggest`) declared once as a typed contract in `packages/oxagen/src/contracts/` and dispatched through a single `invoke()` path. The kernel injects three gates on every call — IAM policy resolution, plugin entitlement, and billing admission — and emits metering and lineage as a side effect of execution, not as optional instrumentation.
+Every feature is a **capability**: a snake_case name (`send_message`, `run_workflow`, `suggest_semantic_edges`) declared once as a typed contract in `packages/oxagen/src/contracts/` and dispatched through a single `invoke()` path. The kernel injects three gates on every call — IAM policy resolution, plugin entitlement, and billing admission — and emits metering and lineage as a side effect of execution.
 
-Capabilities are exposed with **parity across four surfaces**: the REST API (`apps/api`), the MCP server (`apps/mcp`), the CLI (`apps/cli`), and the web app (`apps/app`). `pnpm check:manifest` verifies the parity; nothing ships as a one-off endpoint or an ungoverned tool.
+Capabilities are exposed with parity across four surfaces: the REST API (`apps/api`), the MCP server (`apps/mcp`), the CLI (`apps/cli`), and the web app (`apps/app`). `pnpm check:manifest` verifies the parity.
 
 ```mermaid
 graph TB
-    A["📦 packages/oxagen<br/>Typed capability contracts<br/>Single source of truth"]
+    A["packages/oxagen — typed capability contracts (source of truth)"]
 
-    B["🌐 REST API<br/>apps/api · Hono"]
-    C["🔧 MCP Server<br/>apps/mcp · streamable HTTP"]
-    D["💻 Web App<br/>apps/app · Next.js RSC"]
-    E["⌨️ CLI<br/>apps/cli · Commander + Ink"]
+    B["REST API — apps/api · Hono"]
+    C["MCP Server — apps/mcp · streamable HTTP"]
+    D["Web App — apps/app · Next.js RSC"]
+    E["CLI — apps/cli · Commander + Ink"]
 
     A --> B
     A --> C
     A --> D
     A --> E
 
-    F["✅ pnpm check:manifest<br/>parity enforced in CI"]
+    F["pnpm check:manifest — parity enforced in CI"]
     B -.-> F
     C -.-> F
     D -.-> F
     E -.-> F
-
-    style A fill:#00d4ff,color:#000,stroke:#00d4ff,stroke-width:3px
-    style F fill:#e94560,color:#fff
 ```
 
 ### The metering→billing loop
 
-Every `invoke()` call, agent step, and LLM call (all LLM traffic goes through `@oxagen/ai`, never raw SDK imports) emits usage events into ClickHouse: org, workspace, user, run, model, tokens, duration, surface. Those events price against Stripe meters (`pnpm billing:stripe-sync`), so a team reselling agents can meter observed usage and bill *their* customers through it. Fan-out primitives (`agent.subagent.dispatch` / `agent.subagent.aggregate`) carry the same discipline into fleets: every subagent step emits typed lineage plus cost.
+Every `invoke()` call, agent step, and LLM call (all LLM traffic goes through `@oxagen/ai`, never raw SDK imports) emits usage events into ClickHouse: org, workspace, user, run, model, tokens, duration, surface. Those events price against Stripe meters (`pnpm billing:stripe-sync`), so a team reselling agents can meter observed usage and bill their customers. Fan-out primitives (`agent.subagent.dispatch` / `agent.subagent.aggregate`) carry the same discipline into fleets: every subagent step emits typed lineage plus cost.
 
 ### The knowledge graph
 
-Connectors ingest fragmented sources (SaaS apps, databases, documents, events) through a universal pipeline into a per-workspace Neo4j graph governed by an ontology. Agents query it through governed capabilities (`ontology.query`, `ontology.neighbors`) and answer with **citations to nodes and edges carrying time-aware validity** — inspectable in the UI down to the property bag. Ingestion dual-writes: Postgres holds the operational record (sync cursors, connection health), Neo4j holds the graph index, ClickHouse observes the telemetry.
+Connectors ingest fragmented sources (SaaS apps, databases, documents, events) through a universal pipeline into a per-workspace Neo4j graph governed by an ontology. Agents query it through governed capabilities (`ontology.query`, `ontology.neighbors`) and answer with citations to nodes and edges carrying time-aware validity, inspectable in the UI down to the property bag. Ingestion dual-writes: Postgres holds the operational record (sync cursors, connection health), Neo4j holds the graph index, ClickHouse observes the telemetry.
 
 ### Vendor neutrality
 
@@ -157,7 +134,7 @@ oxagen-platform/
 
 ## Four-Store Architecture
 
-Storage boundaries are hard architectural law (see [`AGENTS.md`](AGENTS.md) and `docs/adr/`):
+Storage boundaries are enforced (see [`AGENTS.md`](AGENTS.md) and `docs/adr/`):
 
 | Store | Holds | Never holds |
 |---|---|---|
@@ -178,7 +155,7 @@ Tenant isolation is enforced at every layer: Postgres RLS (raw `db()` is banned 
 - **pnpm** 11+ (`npm i -g pnpm`) — the repo pins `pnpm@11.7.0` via `packageManager`
 - **Docker** (local Postgres :5433, Neo4j :7687, ClickHouse :8123)
 
-### 5-Minute Setup
+### Setup
 
 ```bash
 git clone https://github.com/oxageninc/oxagen-platform.git
@@ -221,13 +198,13 @@ oxagen login                    # browser OAuth + PKCE; oxagen logout to clear t
 oxagen "summarize this repo"    # one-shot agent prompt (omit the prompt for the interactive TUI)
 ```
 
-The CLI supports a local BYOK mode (no platform login) via `AI_GATEWAY_API_KEY` or `ANTHROPIC_API_KEY`. It collects anonymous, allowlist-validated usage telemetry — see [`TELEMETRY.md`](TELEMETRY.md) for the exact disclosure and one-command opt-out. Full command reference: [`apps/cli/README.md`](apps/cli/README.md).
+The CLI supports a local BYOK mode (no platform login) via `AI_GATEWAY_API_KEY` or `ANTHROPIC_API_KEY`. It collects anonymous, allowlist-validated usage telemetry — see [`TELEMETRY.md`](TELEMETRY.md) for the disclosure and one-command opt-out. Full command reference: [`apps/cli/README.md`](apps/cli/README.md).
 
 ---
 
 ## Development Workflow
 
-`main` is a shared, contested branch worked in parallel by multiple humans and agents. **Never commit or push directly to `main`.**
+`main` is a shared branch worked in parallel by multiple humans and agents. **Never commit or push directly to `main`.**
 
 ```bash
 git fetch origin                                # sync first
@@ -248,7 +225,7 @@ gh run watch                                    # confirm CI green
 - **New code requires new tests.** Coverage thresholds are ratchets — they only go up.
 - **New user-facing flows require E2E tests** in `apps/app/e2e/` with screenshots of success states.
 - **New capabilities require the full parity stack**: contract → API route → MCP tool → CLI command → docs. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the step-by-step.
-- **Nothing merges unverified.** Test output, CI status, or a rendered result — always proof, never "should work."
+- **Nothing merges unverified.** Always include proof: test output, CI status, or a rendered result.
 
 ---
 
@@ -269,10 +246,10 @@ gh run watch                                    # confirm CI green
 
 ## Tech Stack
 
-| Layer | Technology | Why |
+| Layer | Technology | Notes |
 |---|---|---|
 | **Frontend** | Next.js 16 + React 19 | App Router, streaming RSC, Turbopack |
-| **API** | Hono | Type-safe routes, zero-overhead middleware |
+| **API** | Hono | Type-safe routes |
 | **AI** | Vercel AI SDK via `@oxagen/ai` | Streaming, structured output, metered + vendor-neutral |
 | **Transactional DB** | PostgreSQL 16 | ACID, RLS, Drizzle + Atlas migrations |
 | **Graph** | Neo4j 5+ | Ontology, lineage, vectors, time-aware facts |
@@ -282,28 +259,16 @@ gh run watch                                    # confirm CI green
 | **Auth** | Better Auth | Passkeys, OAuth, org/workspace RBAC |
 | **Storage** | Vercel Blob via `@oxagen/storage` | Signed URLs, Postgres reference rows |
 | **Language** | TypeScript 6 | Strict mode, no `any` |
-| **Testing** | Vitest + Playwright | Fast unit, real-browser E2E |
+| **Testing** | Vitest + Playwright | Unit + browser E2E |
 
 ---
 
 ## Security
 
-Security posture in brief: typed contracts with deny-by-default IAM on every capability, tenant isolation across all four stores, BYOK secrets that never leave your control, and full audit lineage on every invocation. To report a vulnerability, see [`SECURITY.md`](SECURITY.md) — please do not open public issues for security reports.
+Typed contracts with deny-by-default IAM on every capability, tenant isolation across all four stores, BYOK secrets, and audit lineage on every invocation. To report a vulnerability, see [`SECURITY.md`](SECURITY.md) — please do not open public issues for security reports.
 
 ---
 
 ## License
 
 **Proprietary.** Copyright © 2024–present Oxagen Inc. All rights reserved. See [`LICENSE`](LICENSE).
-
----
-
-<div align="center">
-
-### Meter it. Govern it. Ground it. Bill it.
-
-[**Web App**](https://app.oxagen.sh) · [**API**](https://api.oxagen.sh) · [**Docs**](https://docs.oxagen.sh) · [**GitHub**](https://github.com/oxageninc/oxagen-platform)
-
-Made with ❤️ by the Oxagen team.
-
-</div>
