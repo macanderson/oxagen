@@ -28,7 +28,7 @@ vi.mock("./node-ref", () => ({
     const name = node.displayName?.trim();
     if (name && name !== node.id) return name;
     if (node.label && node.label !== "Node") return node.label;
-    return name ?? node.id ?? "Unknown node";
+    return node.label || "Unknown node";
   },
 }));
 

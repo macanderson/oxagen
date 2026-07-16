@@ -105,6 +105,18 @@ describe("NodeRef", () => {
     expect(screen.getAllByText("Feature").length).toBeGreaterThan(0);
     expect(screen.queryByText(SOURCE_UUID)).toBeNull();
   });
+
+  it("never renders the raw UUID even with no name and only the base label", () => {
+    // Worst case: displayName coalesced to the id AND no domain label ("Node").
+    // The generic base label is still preferred over the raw id.
+    render(
+      <NodeRef
+        node={makeNode({ label: "Node", displayName: SOURCE_UUID, properties: {} })}
+      />,
+    );
+    expect(screen.queryByText(SOURCE_UUID)).toBeNull();
+    expect(screen.getAllByText("Node").length).toBeGreaterThan(0);
+  });
 });
 
 describe("sourceNodeRef / targetNodeRef", () => {

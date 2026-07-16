@@ -64,7 +64,10 @@ export function nodeCitationLabel(node: KnowledgeNodeRef): string {
   const name = node.displayName?.trim();
   if (name && name !== node.id) return name;
   if (node.label && node.label !== "Node") return node.label;
-  return name ?? node.id ?? "Unknown node";
+  // No human name and no domain label — prefer even the generic base label over
+  // the raw id. A UUID is never the primary identifier; it lives only in the
+  // copyable secondary (`??` would also leak the id, or an empty displayName).
+  return node.label || "Unknown node";
 }
 
 export interface NodeRefProps {
