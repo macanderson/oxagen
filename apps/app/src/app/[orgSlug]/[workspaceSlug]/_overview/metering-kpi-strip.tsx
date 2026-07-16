@@ -138,7 +138,9 @@ export async function MeteringKpiStrip({
             : "Unavailable"
         }
         visual={
-          costSeries.length > 1 ? (
+          // ≥3 points before drawing a trend: two days of data renders as a
+          // single diagonal slash — pure noise that reads as a crash or spike.
+          costSeries.length >= 3 ? (
             <Sparkline values={costSeries} aria-label="Daily spend trend" />
           ) : undefined
         }
@@ -155,7 +157,7 @@ export async function MeteringKpiStrip({
             : "Unavailable"
         }
         visual={
-          tokenSeries.length > 1 ? (
+          tokenSeries.length >= 3 ? (
             <Sparkline values={tokenSeries} aria-label="Daily token trend" />
           ) : undefined
         }
@@ -168,7 +170,7 @@ export async function MeteringKpiStrip({
         value={usage ? usage.totals.executions.toLocaleString() : "—"}
         sub={usage ? "metered executions" : "Unavailable"}
         visual={
-          runSeries.length > 1 ? (
+          runSeries.length >= 3 ? (
             <Sparkline values={runSeries} aria-label="Daily run trend" />
           ) : undefined
         }

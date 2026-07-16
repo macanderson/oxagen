@@ -253,9 +253,12 @@ export async function GraphHero({
                   className="flex flex-col gap-1 rounded-xl border border-border bg-card p-3"
                   data-testid={`overview-graph-stat-${key}`}
                 >
-                  <span className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                    <Icon className="size-3.5 shrink-0" aria-hidden="true" />
-                    <span className="truncate">{label}</span>
+                  {/* Wrap to two lines rather than truncate — these tiles are
+                      narrow and "Inferred · pending approval" was rendering as
+                      "INFERRED · PENDING A…" even on a 1440px viewport. */}
+                  <span className="flex items-start gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                    <Icon className="mt-px size-3.5 shrink-0" aria-hidden="true" />
+                    <span className="line-clamp-2">{label}</span>
                   </span>
                   <span className="text-xl font-semibold tabular-nums leading-none text-foreground">
                     {value.toLocaleString()}

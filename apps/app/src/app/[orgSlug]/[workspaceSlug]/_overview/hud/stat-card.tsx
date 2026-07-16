@@ -39,25 +39,35 @@ export function StatCard({
   "data-testid": testId,
 }: StatCardProps) {
   const body = (
-    <div className="flex h-full items-start justify-between gap-3">
-      <div className="flex min-w-0 flex-col gap-1.5">
-        <span className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-          {Icon ? (
-            <Icon className="size-3.5 shrink-0" aria-hidden="true" />
-          ) : null}
-          <span className="truncate">{label}</span>
-        </span>
-        <span className="text-2xl font-semibold leading-none tabular-nums text-foreground">
-          {value}
-        </span>
-        {(sub || delta) && (
-          <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
-            {delta}
-            {sub}
+    <div className="flex h-full flex-col gap-1.5">
+      {/* Label owns the full card width — the trailing visual shares the row
+          with the value below instead, so a label like "Spend · month to
+          date" never truncates just because a sparkline reserved half the
+          card. `truncate` stays as the narrow-viewport backstop. */}
+      <span className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+        {Icon ? (
+          <Icon className="size-3.5 shrink-0" aria-hidden="true" />
+        ) : null}
+        <span className="truncate">{label}</span>
+      </span>
+      <div className="flex flex-1 items-end justify-between gap-3">
+        <div className="flex min-w-0 flex-col gap-1.5">
+          <span className="text-2xl font-semibold leading-none tabular-nums text-foreground">
+            {value}
           </span>
-        )}
+          {(sub || delta) && (
+            <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+              {delta}
+              {sub}
+            </span>
+          )}
+        </div>
+        {/* Muted stroke: a KPI trend is contextual detail — in brand
+            terracotta a downward line reads like a red alert. */}
+        {visual ? (
+          <div className="shrink-0 text-muted-foreground/70">{visual}</div>
+        ) : null}
       </div>
-      {visual ? <div className="shrink-0 text-primary">{visual}</div> : null}
     </div>
   );
 
