@@ -13,7 +13,11 @@ import {
   type SavedBudgetPolicy,
   type SavedWorkspaceGovernance,
 } from "./turn-budget-policy";
-import { TURN_BUDGET_OFF, resolveEffectiveTurnBudget, type TurnBudgetPolicy } from "@oxagen/billing";
+import {
+  TURN_BUDGET_OFF,
+  resolveEffectiveTurnBudget,
+  type TurnBudgetPolicy,
+} from "./turn-budget";
 
 describe("requestTurnBudgetSchema", () => {
   it("accepts a valid enabled budget", () => {
@@ -287,7 +291,7 @@ describe("route effective-policy resolution (governedBudgetFromRead + resolveEff
   });
 
   it("fails open to the member's unchanged policy when governance is null (read error)", () => {
-    // Mirrors the route's `.catch(() => null)` around the
+    // Mirrors each route's `.catch(() => null)` around the
     // workspace.budget.policy.read invoke() call — a broken/garbage read must
     // never block or alter a turn.
     const memberPolicy: TurnBudgetPolicy = {

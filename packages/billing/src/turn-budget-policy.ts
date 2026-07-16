@@ -4,14 +4,17 @@ import {
   type TurnBudgetMode,
   type TurnBudgetPolicy,
   type GovernedBudget,
-} from "@oxagen/billing";
+} from "./turn-budget";
 
 /**
- * turn-budget-policy.ts — pure per-turn budget resolution for the chat stream
- * route. Extracted from route.ts so both the wire-shape validation (the zod
- * schema) and the policy-precedence logic (per-turn request override wins;
- * omitting it falls back to the user's saved default) are unit-testable
- * without spinning up the route's Next.js request/DB/engine plumbing.
+ * turn-budget-policy.ts — pure per-turn budget resolution shared by every chat
+ * surface (the app chat route, the REST API chat route, MCP). Both the
+ * wire-shape validation (the zod schema) and the policy-precedence logic
+ * (per-turn request override wins; omitting it falls back to the user's saved
+ * default; workspace governance merges on top) live HERE so the surfaces can't
+ * drift — a budget resolved on one surface is resolved identically on all of
+ * them. Moved from apps/app/src/app/api/v1/chat/stream/ where it was
+ * app-local and the API surface had silently diverged.
  */
 
 /**
@@ -71,8 +74,8 @@ export function resolveTurnBudgetPolicy(
   return {
     enabled: requestBudget.enabled,
     // A disabled request budget carries limitUsd=null by convention (see
-    // BodySchema); normalize to 0 either way so a disabled policy never
-    // accidentally gates a turn on a stale limit value.
+    // requestTurnBudgetSchema); normalize to 0 either way so a disabled policy
+    // never accidentally gates a turn on a stale limit value.
     limitUsd: requestBudget.enabled ? (requestBudget.limitUsd ?? 0) : 0,
     mode: requestBudget.mode,
     graceOveragePct: requestBudget.graceOveragePct,
@@ -81,7 +84,7 @@ export function resolveTurnBudgetPolicy(
 
 // ── Workspace governance (OXA-2081) ─────────────────────────────────────────
 // A workspace can impose a governed budget on top of the member's own policy
-// (resolveEffectiveTurnBudget in @oxagen/billing does the actual pure merge —
+// (resolveEffectiveTurnBudget in ./turn-budget does the actual pure merge —
 // this section only adapts workspace.budget.policy.read's wire shape into the
 // GovernedBudget input that merge expects).
 
@@ -99,15 +102,15 @@ export interface SavedWorkspaceGovernance {
 
 /**
  * Convert a workspace.budget.policy.read output into the `GovernedBudget`
- * shape `resolveEffectiveTurnBudget` (from @oxagen/billing) expects for its
+ * shape `resolveEffectiveTurnBudget` (from ./turn-budget) expects for its
  * `workspace` argument. Returns `null` when the workspace has no governance
  * active (`enabled: false`) so the merge is a documented no-op rather than an
  * accidental $0 ceiling — mirrors `applyCeiling`'s own "no positive limit ⇒ no
- * ceiling" guard in @oxagen/billing.
+ * ceiling" guard in ./turn-budget.
  *
  * The CALLER must also fail-open to `null` on any read/parse error (an
  * unregistered handler, a down DB, or a denied IAM check must never block a
- * turn) — see the route's `.catch(() => null)` around the
+ * turn) — see each chat route's `.catch(() => null)` around the
  * `workspace.budget.policy.read` invoke() call.
  */
 export function governedBudgetFromRead(

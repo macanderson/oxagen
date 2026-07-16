@@ -23,7 +23,7 @@
  *
  * The schema for `pageContext` lives inline in route.ts (which is excluded from
  * coverage); this module keeps the message-building logic testable in
- * isolation, mirroring turn-budget-policy.ts.
+ * isolation, mirroring credit-gate.ts.
  */
 
 import type { ModelMessage } from "@oxagen/ai";

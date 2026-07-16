@@ -100,15 +100,13 @@ import {
   formatBudgetUsd,
   resolveEffectiveTurnBudget,
   TURN_BUDGET_OFF,
-} from "@oxagen/billing";
-import { budgetPolicyReadHandler } from "@oxagen/handlers/budget.policy.read";
-import {
   requestTurnBudgetSchema,
   resolveTurnBudgetPolicy,
   turnBudgetPolicyFromSaved,
   governedBudgetFromRead,
   type SavedWorkspaceGovernance,
-} from "./turn-budget-policy";
+} from "@oxagen/billing";
+import { budgetPolicyReadHandler } from "@oxagen/handlers/budget.policy.read";
 import {
   isCurrentUserTurnAtHead,
   CHAT_MAX_RETRIES,
@@ -208,7 +206,8 @@ const BodySchema = z.object({
   // default (budget.policy.read). An explicit object always wins, including
   // an explicit `{ enabled: false }` that turns OFF a saved default for one
   // turn. Schema (incl. the "positive limitUsd when enabled" refinement)
-  // lives in turn-budget-policy.ts so it is unit-testable in isolation.
+  // lives in @oxagen/billing (turn-budget-policy) so every chat surface
+  // validates and resolves budgets identically.
   budget: requestTurnBudgetSchema.nullable().default(null),
   // Code mode (forced repo + environment selection in the composer). When
   // present, the turn runs the coding engine against a durable sandbox with the
