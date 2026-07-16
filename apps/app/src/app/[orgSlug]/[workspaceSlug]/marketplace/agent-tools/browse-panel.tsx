@@ -21,8 +21,11 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorState } from "@/app/[orgSlug]/[workspaceSlug]/_shared/components";
 import { useToast } from "@/components/ui/toast";
 import { useTenant } from "@/lib/tenant/tenant-context";
+import { docsUrl } from "@/lib/docs-url";
 import { cn } from "@/lib/utils";
 import {
   CapabilityIcon,
@@ -157,6 +160,11 @@ export function BrowsePanel({
     async (offset = 0, replace = true) => {
       setLoading(true);
       setError(null);
+      // Bound the request: a stalled catalog response must never strand the
+      // panel on its loading skeleton with no terminal state. On timeout we
+      // abort and surface a retryable ErrorState instead of pulsing forever.
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15_000);
       try {
         const params = new URLSearchParams({
           pluginType: activeTab,
@@ -167,6 +175,7 @@ export function BrowsePanel({
         if (search.trim()) params.set("search", search.trim());
         const res = await fetch(
           `/api/v1/plugin/catalog/browse?${params.toString()}`,
+          { signal: controller.signal },
         );
         if (!res.ok) throw new Error(await res.text());
         const data = (await res.json()) as {
@@ -180,8 +189,15 @@ export function BrowsePanel({
         setNextOffset(data.nextOffset);
         setTotal(data.total);
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to load catalog");
+        setError(
+          controller.signal.aborted
+            ? "The catalog took too long to respond. Check your connection and try again."
+            : e instanceof Error
+              ? e.message
+              : "Failed to load catalog",
+        );
       } finally {
+        clearTimeout(timeout);
         setLoading(false);
       }
     },
@@ -300,6 +316,13 @@ export function BrowsePanel({
     }
   };
 
+  const activeLabel =
+    PLUGIN_TABS.find((t) => t.value === activeTab)?.label ?? "tools";
+  const noun =
+    activeTab === "mcp_server" || activeTab === "integration"
+      ? "servers"
+      : "plugins";
+
   return (
     <div className="flex flex-col gap-4">
       {/* Type tabs */}
@@ -355,7 +378,12 @@ export function BrowsePanel({
         </div>
       </nav>
 
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      {/* Inline banner is for install/bulk errors that happen while results are
+          on screen; a load failure with no results renders the ErrorState
+          block below instead (never both). */}
+      {error && servers.length > 0 && (
+        <p className="text-sm text-destructive">{error}</p>
+      )}
 
       {/* Selection toolbar — appears once one or more cards are checked. */}
       {selected.size > 0 && (
@@ -420,30 +448,65 @@ export function BrowsePanel({
             />
           ))}
         </div>
+      ) : error && servers.length === 0 ? (
+        // Load failed (or timed out) with nothing to show: a retryable error,
+        // never a bare skeleton or a misleading "none found".
+        <ErrorState
+          title={`Couldn't load ${activeLabel.toLowerCase()}`}
+          description={error}
+          retry={() => void fetchServers(0, true)}
+        />
+      ) : servers.length === 0 ? (
+        // Genuinely empty: a proper empty state with a pointing CTA — either
+        // clear the search that hid everything, or read up on this tool type.
+        <EmptyState
+          variant="dashed"
+          icon={<ShoppingBag />}
+          title={search.trim() ? "No matches" : `No ${noun} available`}
+          description={
+            search.trim()
+              ? `Nothing in ${activeLabel} matches “${search.trim()}”.`
+              : `There are no ${activeLabel.toLowerCase()} to install here yet.`
+          }
+          action={
+            search.trim() ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleSearchChange("")}
+                data-testid="marketplace-browse-clear-search"
+              >
+                Clear search
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                render={
+                  <a
+                    href={`${docsUrl()}/marketplace`}
+                    target="_blank"
+                    rel="noreferrer"
+                  />
+                }
+                data-testid="marketplace-browse-empty-docs"
+              >
+                Learn about {activeLabel.toLowerCase()}
+              </Button>
+            )
+          }
+          data-testid="marketplace-browse-empty"
+        />
       ) : (
         <>
           <p className="text-xs text-muted-foreground">
-            {total}{" "}
-            {activeTab === "mcp_server" || activeTab === "integration"
-              ? "servers"
-              : "plugins"}
+            {total} {noun}
           </p>
 
           <div
             className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
             data-testid="marketplace-browse-grid"
           >
-            {servers.length === 0 && (
-              <div className="col-span-full rounded-lg border border-border/40 bg-muted/20 px-6 py-10 text-center">
-                <ShoppingBag
-                  className="mx-auto mb-2 h-6 w-6 text-muted-foreground"
-                  aria-hidden="true"
-                />
-                <p className="text-sm text-muted-foreground">
-                  No plugins found.
-                </p>
-              </div>
-            )}
             {servers.map((srv) => (
               <Card
                 key={srv.id}

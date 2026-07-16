@@ -207,3 +207,64 @@ describe("BrowsePanel — bulk install", () => {
     ).not.toBeInTheDocument();
   });
 });
+
+describe("BrowsePanel — terminal states", () => {
+  it("renders a shared EmptyState (not the skeleton) when the catalog is empty", async () => {
+    mockCatalog([]);
+    render(
+      <BrowsePanel
+        orgSlug="acme"
+        workspaceSlug="main"
+        installAction={vi.fn(async () => ({ ok: true }))}
+        installBulkAction={vi.fn(async () => ({ ok: true }))}
+      />,
+    );
+
+    const empty = await screen.findByTestId("marketplace-browse-empty");
+    expect(empty).toHaveTextContent("No plugins available");
+    // The loading skeleton must not be the terminal state.
+    expect(
+      screen.queryByTestId("marketplace-browse-skeleton"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("renders a retryable ErrorState when the catalog fetch fails", async () => {
+    const fetchMock = vi
+      .fn()
+      // First call fails; the retry succeeds with one plugin.
+      .mockResolvedValueOnce({
+        ok: false,
+        json: async () => ({}),
+        text: async () => "registry unreachable",
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ servers: [A], nextOffset: null, total: 1 }),
+        text: async () => "",
+      });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const user = userEvent.setup();
+    render(
+      <BrowsePanel
+        orgSlug="acme"
+        workspaceSlug="main"
+        installAction={vi.fn(async () => ({ ok: true }))}
+        installBulkAction={vi.fn(async () => ({ ok: true }))}
+      />,
+    );
+
+    // ErrorState (role="alert") instead of a stranded skeleton or empty state.
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Couldn't load skills");
+    expect(alert).toHaveTextContent("registry unreachable");
+    expect(
+      screen.queryByTestId("marketplace-browse-skeleton"),
+    ).not.toBeInTheDocument();
+
+    // Retry re-fetches and recovers to the grid.
+    await user.click(screen.getByRole("button", { name: "Try again" }));
+    await screen.findByTestId(`marketplace-browse-card-${A.id}`);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+});
