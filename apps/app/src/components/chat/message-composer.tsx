@@ -648,6 +648,11 @@ export function MessageComposer({
   const v2Active = chatSession !== null;
   const v2Mobile = isMobile && v2Active;
   const v2Desktop = !isMobile && v2Active;
+  // The conversation's branch, for the READ-ONLY code-context row in the
+  // composer-options sheet. Only the unified session store tracks a branch;
+  // without it (legacy tree) the row simply shows the repository alone rather
+  // than inventing a value.
+  const conversationBranch = chatSession?.state.branch ?? null;
 
   // v2 wallet gate: a per-turn cap the wallet can't cover blocks sending —
   // the fix is the user's (add funds, or lower the cap in session settings),
@@ -2407,6 +2412,23 @@ export function MessageComposer({
               </SheetDescription>
             </SheetHeader>
             <SheetPanel className="gap-1">
+              {/* Read-only code context: the repository (and branch, when the
+                conversation is bound to one) this chat is grounded in. It is
+                NOT editable here — the target is chosen once with the agent and
+                is immutable for the conversation — so this row exists to answer
+                "what am I on?", which used to require the composer's selector. */}
+              {selectedRepo ? (
+                <div
+                  className="flex min-h-11 items-center justify-between gap-2"
+                  data-testid="composer-options-code-context"
+                >
+                  <span className="text-sm">Repository</span>
+                  <span className="truncate text-sm text-muted-foreground">
+                    {selectedRepo.owner}/{selectedRepo.name}
+                    {conversationBranch ? ` · ${conversationBranch}` : ""}
+                  </span>
+                </div>
+              ) : null}
               <div className="flex min-h-11 items-center justify-between gap-2">
                 <span className="text-sm">Model</span>
                 <ModelPicker
