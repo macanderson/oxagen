@@ -9,6 +9,8 @@ import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AgentPickerPanel } from "./agent-picker-panel";
+import { ChatSessionProvider } from "../session/session-store";
+import type { SessionSeed } from "../session/session-state";
 import { listRepoBranchesAction } from "../session/branch-actions";
 import type { AgentOption } from "./agent-picker-types";
 import type { RepoOption } from "../repo-selector";
@@ -477,5 +479,91 @@ describe("AgentPickerPanel — keyboard", () => {
       key: "ArrowDown",
     });
     expect(document.activeElement).toBe(coderRow);
+  });
+});
+
+
+// ── chat_ux_v2 path ──────────────────────────────────────────────────────────
+// `v2` is NOT a prop — the panel derives it from `useChatSessionContext() !==
+// null`, so exercising this path means mounting a real ChatSessionProvider.
+// This whole path previously had ZERO coverage, which is exactly how a code
+// agent came to skip the setup step under the flag.
+
+const V2_SEED: SessionSeed = {
+  defaultAgentId: null,
+  defaultRepoKey: null,
+  defaultEnvId: null,
+  textModel: null,
+  textTier: "fast",
+  budgetUsd: null,
+};
+
+function renderPanelV2(
+  overrides: Partial<React.ComponentProps<typeof AgentPickerPanel>> = {},
+) {
+  const onApply = vi.fn();
+  const onDismiss = vi.fn();
+  render(
+    <ChatSessionProvider
+      workspaceSlug="default"
+      conversationId={null}
+      boundAgentId={null}
+      isNewConversation={true}
+      hasMessages={false}
+      seed={V2_SEED}
+    >
+      <AgentPickerPanel
+        variant="popover"
+        agents={[CODER, CHATTER]}
+        repos={REPOS}
+        environments={ENVS}
+        defaultRepoKey={null}
+        defaultEnvId={null}
+        defaultAgentId={null}
+        selectedAgentId={null}
+        selectedRepoKey={null}
+        selectedEnvId={null}
+        onApply={onApply}
+        onDismiss={onDismiss}
+        orgSlug="acme"
+        workspaceSlug="default"
+        {...overrides}
+      />
+    </ChatSessionProvider>,
+  );
+  return { onApply, onDismiss };
+}
+
+describe("AgentPickerPanel — chat_ux_v2", () => {
+  it("applies a NON-code agent immediately — there is nothing to set up", () => {
+    const { onApply } = renderPanelV2();
+    fireEvent.click(screen.getByRole("option", { name: /Chatter/ }));
+    expect(onApply).toHaveBeenCalledWith({ agentId: "agt_chat" });
+    expect(screen.queryByLabelText("Session repository")).not.toBeInTheDocument();
+  });
+
+  it("opens the setup step for a CODE agent instead of applying — its target is chosen once, never adjusted later", () => {
+    const { onApply } = renderPanelV2();
+    fireEvent.click(screen.getByRole("option", { name: /Coder/ }));
+    // Must NOT apply on the pick: org/repo/branch/env are immutable once the
+    // conversation starts, so the pick is the only chance to choose them.
+    expect(onApply).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("Session repository")).toBeInTheDocument();
+    expect(screen.getByLabelText("Session environment")).toBeInTheDocument();
+  });
+
+  it("confirming the setup step sends the whole target atomically", () => {
+    const { onApply } = renderPanelV2({
+      defaultRepoKey: "con_1::acme/api",
+      defaultEnvId: "env_dev",
+    });
+    fireEvent.click(screen.getByRole("option", { name: /Coder/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Chat with Coder/ }));
+    expect(onApply).toHaveBeenCalledWith({
+      agentId: "agt_code",
+      repoKey: "con_1::acme/api",
+      branch: null,
+      envId: "env_dev",
+    });
   });
 });

@@ -245,11 +245,16 @@ export function AgentPickerPanel({
 
   const applyAgent = React.useCallback(
     (agent: AgentOption | null) => {
-      // v2: every pick applies immediately — no embedded repo/env setup step.
-      // A code agent's session prefills from its remembered code context (the
-      // session store's agent-switch overlay); the rail/drawer is the adjust
-      // surface. Record recency and hand focus to the composer.
-      if (v2) {
+      // v2, NON-code agent: applies immediately — there is nothing to set up.
+      // Record recency and hand focus to the composer.
+      //
+      // A CODE agent deliberately falls through to the setup step below in BOTH
+      // trees: its target (org → repository → branch → environment) is chosen
+      // once, up front, and is then immutable for the conversation, so the pick
+      // is the only moment it can be chosen. v2 used to apply a code agent
+      // immediately and prefill from remembered context, leaving the rail as the
+      // adjust surface — that contradicts the immutable-target model.
+      if (v2 && !agent?.isCode) {
         onApply({ agentId: agent?.agentId ?? null });
         if (agent) {
           pushRecentAgentId(workspaceSlug, agent.agentId);
@@ -295,11 +300,26 @@ export function AgentPickerPanel({
       branch: setupBranch,
       envId: setupEnvId,
     });
+    // Recency + composer focus belong to CONFIRMING an agent, not to the
+    // immediate-apply path alone: a code agent now reaches the store through
+    // here in both trees, and it would otherwise never enter the Recent row and
+    // would leave the user with no cursor after picking.
+    pushRecentAgentId(workspaceSlug, setupAgent.agentId);
+    setRecentIds(readRecentAgentIds(workspaceSlug));
+    window.dispatchEvent(new CustomEvent(FOCUS_COMPOSER_EVENT));
     // Return to the list (the popover also closes via onDismiss); the gallery
     // has no dismiss, so without this it would stay stuck on the setup step.
     setSetupAgent(null);
     onDismiss?.();
-  }, [setupAgent, setupRepoKey, setupBranch, setupEnvId, onApply, onDismiss]);
+  }, [
+    setupAgent,
+    setupRepoKey,
+    setupBranch,
+    setupEnvId,
+    workspaceSlug,
+    onApply,
+    onDismiss,
+  ]);
 
   const handleListKeyDown = React.useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>) => {
