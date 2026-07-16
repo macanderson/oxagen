@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chatMessageSend } from "./chat.message.send";
+import { chatMessageSend, CHAT_CONTENT_MAX_CHARS } from "./chat.message.send";
 
 describe("chat.message.send capability", () => {
   it("parses a valid input starting a new conversation", () => {
@@ -30,6 +30,27 @@ describe("chat.message.send capability", () => {
         parentMessageId: null,
         branchReason: null,
         content: "",
+      }),
+    ).toThrow();
+  });
+
+  it("accepts content exactly at the shared ingress cap", () => {
+    const parsed = chatMessageSend.input.parse({
+      conversationId: null,
+      parentMessageId: null,
+      branchReason: null,
+      content: "x".repeat(CHAT_CONTENT_MAX_CHARS),
+    });
+    expect(parsed.content).toHaveLength(CHAT_CONTENT_MAX_CHARS);
+  });
+
+  it("rejects content over the shared ingress cap (unbounded-prompt guard)", () => {
+    expect(() =>
+      chatMessageSend.input.parse({
+        conversationId: null,
+        parentMessageId: null,
+        branchReason: null,
+        content: "x".repeat(CHAT_CONTENT_MAX_CHARS + 1),
       }),
     ).toThrow();
   });

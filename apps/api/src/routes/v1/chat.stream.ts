@@ -21,6 +21,7 @@ import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { invoke } from "@oxagen/oxagen/kernel";
 import type { CapabilityContext } from "@oxagen/oxagen";
+import { CHAT_CONTENT_MAX_CHARS } from "@oxagen/oxagen/contracts/chat.message.send";
 // Per-turn dollar budget (OXA — turn-budget). The gate itself (policy shape,
 // modes, the pure evaluator, createTurnBudgetGuard) lives in @oxagen/billing —
 // this route only resolves the effective policy and wires the hooks to its own
@@ -51,7 +52,10 @@ import {
 } from "./chat-memory";
 
 const BodySchema = z.object({
-  content: z.string().min(1),
+  // Bound the message body — the shared per-message ingress cap (see
+  // CHAT_CONTENT_MAX_CHARS in the chat.message.send contract) so every chat
+  // surface rejects oversized prompts identically.
+  content: z.string().min(1).max(CHAT_CONTENT_MAX_CHARS),
   conversationId: z.string().nullable().default(null),
   // Per-turn MCP server allowlist. When non-empty, only those servers' tools
   // are loaded for this turn. Omit or pass [] to load all workspace MCPs.

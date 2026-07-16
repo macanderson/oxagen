@@ -41,6 +41,7 @@ import { runCodingAgent } from "@oxagen/agent-engine";
 import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { invoke, isCodeAgentType } from "@oxagen/oxagen";
+import { CHAT_CONTENT_MAX_CHARS } from "@oxagen/oxagen/contracts/chat.message.send";
 import { formFill } from "@oxagen/oxagen/contracts/form.fill";
 import { fieldDescriptorSchema } from "@oxagen/oxagen/contracts/form.fill";
 import { randomUUID } from "node:crypto";
@@ -120,11 +121,10 @@ import "@oxagen/handlers/register";
 import "@oxagen/agent/register";
 
 const BodySchema = z.object({
-  // Bound the message body: an unbounded `content` lets a single authed request
-  // forward an arbitrarily large prompt to the LLM, driving unbounded metering
-  // cost and blowing the per-turn token budget. 32 KiB is generous for a chat
-  // turn while capping abuse.
-  content: z.string().min(1).max(32_768),
+  // Bound the message body — the shared per-message ingress cap (see
+  // CHAT_CONTENT_MAX_CHARS in the chat.message.send contract) so every chat
+  // surface rejects oversized prompts identically.
+  content: z.string().min(1).max(CHAT_CONTENT_MAX_CHARS),
   conversationId: z.string().nullable().default(null),
   parentMessageId: z.string().nullable().default(null),
   orgSlug: z.string().min(1),

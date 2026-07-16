@@ -754,3 +754,17 @@ describe("chat stream: per-turn budget & workspace governance", () => {
     consoleWarnSpy.mockRestore();
   });
 });
+
+// ── Content ingress cap ───────────────────────────────────────────────────────
+
+describe("chat stream: content ingress cap", () => {
+  it("returns 400 when content exceeds the shared CHAT_CONTENT_MAX_CHARS cap", async () => {
+    const res = await app.fetch(post({ content: "x".repeat(32_768 + 1) }));
+    expect(res.status).toBe(400);
+  });
+
+  it("accepts content exactly at the cap", async () => {
+    const res = await app.fetch(post({ content: "x".repeat(32_768) }));
+    expect(res.status).toBe(200);
+  });
+});
