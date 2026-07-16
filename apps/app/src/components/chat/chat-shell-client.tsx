@@ -507,7 +507,10 @@ export function ChatShellClient({
     const reduceMotion =
       typeof window !== "undefined" &&
       window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-    el.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "nearest" });
+    el.scrollIntoView({
+      behavior: reduceMotion ? "auto" : "smooth",
+      block: "nearest",
+    });
     const toggle = el.querySelector<HTMLButtonElement>("button[aria-expanded]");
     if (toggle?.getAttribute("aria-expanded") === "false") toggle.click();
     requestAnimationFrame(() => {
@@ -1460,15 +1463,11 @@ export function ChatShellClient({
       codeBinding={conversationCodeBinding ?? null}
     >
       <div className="flex h-full w-full gap-4">
-        <div
-          className={cn(
-            "mx-auto flex h-full min-w-0 flex-1 flex-col gap-4",
-            // chat_ux_v2's wider conversation column (800px vs the legacy
-            // 768px) — applies at every viewport under the flag; harmless on
-            // mobile where the column is already narrower than either cap.
-            chatUxV2 ? "max-w-[800px]" : "max-w-3xl",
-          )}
-        >
+        {/* Conversation column — uncapped. The conversation is the page's
+        primary real estate: it fills every pixel the fixed-width activity
+        rail leaves free, so collapsing the outer nav/conversations panels
+        widens the transcript instead of the gutters. */}
+        <div className="flex h-full min-w-0 flex-1 flex-col gap-4">
           {/* chat_ux_v2 mobile chrome: the slim header (conversations / session
           summary / activity) replaces the desktop toolbar row below on a
           phone-width viewport. Mounted only inside ChatSessionProvider — see
@@ -1604,9 +1603,7 @@ export function ChatShellClient({
                       {/* Live cost estimate while a budgeted turn streams
                       (chat_ux_v2): "≈ $0.31" next to the in-progress
                       message, from per-step budget-tick events. */}
-                      {chatUxV2 &&
-                      isStreaming &&
-                      turnCostUsd !== undefined ? (
+                      {chatUxV2 && isStreaming && turnCostUsd !== undefined ? (
                         <p
                           data-testid="live-cost-estimate"
                           aria-live="polite"
