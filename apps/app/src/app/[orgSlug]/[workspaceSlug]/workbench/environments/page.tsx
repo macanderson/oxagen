@@ -72,32 +72,36 @@ export default async function WorkbenchEnvironmentsPage({
   // A read failure must not render as an empty grid with no trace: it looks to
   // the user like their environments/secrets were deleted. Log each failure and
   // surface a load-error flag so the panel can show a notice instead.
-  const environmentsRead = await readEnvironmentsAction({
-    orgSlug,
-    workspaceSlug,
-  }).then(
-    (data) => ({ data, failed: false as const }),
-    (err) => {
-      logger.error(
-        { err, orgSlug, workspaceSlug },
-        "environments: readEnvironmentsAction failed — rendering empty grid with load-error notice",
-      );
-      return { data: [] as EnvironmentSummary[], failed: true as const };
-    },
-  );
-  const secretKeysRead = await readSecretKeysAction({
-    orgSlug,
-    workspaceSlug,
-  }).then(
-    (data) => ({ data, failed: false as const }),
-    (err) => {
-      logger.error(
-        { err, orgSlug, workspaceSlug },
-        "environments: readSecretKeysAction failed — rendering empty grid with load-error notice",
-      );
-      return { data: [] as SecretKeySummary[], failed: true as const };
-    },
-  );
+  // The two reads have no data dependency, so run them concurrently rather than
+  // awaiting serially — halves the page's data-fetch latency.
+  const [environmentsRead, secretKeysRead] = await Promise.all([
+    readEnvironmentsAction({
+      orgSlug,
+      workspaceSlug,
+    }).then(
+      (data) => ({ data, failed: false as const }),
+      (err) => {
+        logger.error(
+          { err, orgSlug, workspaceSlug },
+          "environments: readEnvironmentsAction failed — rendering empty grid with load-error notice",
+        );
+        return { data: [] as EnvironmentSummary[], failed: true as const };
+      },
+    ),
+    readSecretKeysAction({
+      orgSlug,
+      workspaceSlug,
+    }).then(
+      (data) => ({ data, failed: false as const }),
+      (err) => {
+        logger.error(
+          { err, orgSlug, workspaceSlug },
+          "environments: readSecretKeysAction failed — rendering empty grid with load-error notice",
+        );
+        return { data: [] as SecretKeySummary[], failed: true as const };
+      },
+    ),
+  ]);
   const environments = environmentsRead.data;
   const secretKeys = secretKeysRead.data;
   const loadError = environmentsRead.failed || secretKeysRead.failed;

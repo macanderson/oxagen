@@ -1059,21 +1059,24 @@ githubOauthCallbackRoute.get("/callback", async (c) => {
   }
 
   // Determine org and workspace slugs from the state-encoded IDs.
-  // We need slugs for the redirect URL; fetch them from Postgres.
-  const orgSlugRows = await withSystemDb((tx) =>
-    tx
-      .select({ slug: schema.organizations.slug })
-      .from(schema.organizations)
-      .where(eq(schema.organizations.id, orgId))
-      .limit(1),
-  );
-  const wsSlugRows = await withSystemDb((tx) =>
-    tx
-      .select({ slug: schema.workspaces.slug })
-      .from(schema.workspaces)
-      .where(and(eq(schema.workspaces.id, workspaceId), eq(schema.workspaces.orgId, orgId)))
-      .limit(1),
-  );
+  // We need slugs for the redirect URL; fetch them from Postgres. The two
+  // lookups are independent, so run them concurrently rather than serially.
+  const [orgSlugRows, wsSlugRows] = await Promise.all([
+    withSystemDb((tx) =>
+      tx
+        .select({ slug: schema.organizations.slug })
+        .from(schema.organizations)
+        .where(eq(schema.organizations.id, orgId))
+        .limit(1),
+    ),
+    withSystemDb((tx) =>
+      tx
+        .select({ slug: schema.workspaces.slug })
+        .from(schema.workspaces)
+        .where(and(eq(schema.workspaces.id, workspaceId), eq(schema.workspaces.orgId, orgId)))
+        .limit(1),
+    ),
+  ]);
   const orgSlug = orgSlugRows[0]?.slug ?? orgId;
   const wsSlug = wsSlugRows[0]?.slug ?? workspaceId;
 
